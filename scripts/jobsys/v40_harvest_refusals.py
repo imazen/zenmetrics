@@ -14,7 +14,7 @@ def main():
     a = p.parse_args()
     reports = []
     selection = json.loads((a.bundle / "SMOKE_SELECTION.json").read_text())
-    if set(selection) != {"control", "hb4", "hc4", "palette"}:
+    if set(selection) != {"control", "hb4", "hc4", "palette", "uh4"}:
         raise ValueError("exact arm smoke selection required")
     for arm, modes in selection.items():
         smoke_attempt = modes["bounded"]
@@ -60,7 +60,7 @@ def main():
     if canonical.exists():
         canonical.rename(a.bundle / f"HARVEST_REFUSALS.before-{a.attempt}.json")
     canonical.write_text(json.dumps(reports, indent=2) + "\n")
-    print("PASS: all four actual bounded blobs verified and refused installation")
+    print("PASS: all five actual bounded blobs verified and refused installation")
 
 
 if __name__ == "__main__":

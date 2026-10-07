@@ -118,6 +118,20 @@ class Contract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 trusted_contract(kind, archive, self.inspector)
 
+    def test_upiq_requires_exact_fit_and_owner_decision_argv(self):
+        contract = {**self.contract, "research_upiq": True}
+        argv = self.argv + ["--upiq380-fit", "/var/tmp/rev4-featpot/upiq380-fit/upiq380_fit.parquet",
+            "--upiq-label-disposition", "/var/tmp/rev4-featpot/upiq380-fit/owner_disposition.json"]
+        kind, archive = self.prepare(argv, contract)
+        result = trusted_contract(kind, archive, self.inspector)
+        self.assertIsNone(result["feature_set_id"])
+        for flag in ("--upiq380-fit", "--upiq-label-disposition"):
+            bad = argv[:]
+            bad[bad.index(flag) + 1] = "/var/tmp/rev4-featpot/upiq380-fit/development.parquet"
+            kind, archive = self.prepare(bad, contract)
+            with self.assertRaisesRegex(ValueError, "binding differs"):
+                trusted_contract(kind, archive, self.inspector)
+
     def test_owner_block_and_contract_inventory_cannot_be_relabelled(self):
         blocked = copy.deepcopy(self.contract)
         blocked["launchable"] = False

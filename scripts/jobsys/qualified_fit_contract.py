@@ -75,7 +75,11 @@ def trusted_contract(kind, program_archive, inspector):
         tables = sorted([*tables, contract['hdr_tables'][spec.rsplit(':', 1)[1]]], key=lambda t:t['name'])
     contract = {**contract, 'table_admission': tables, 'route': route,
                 'research_hdr': contract.get('research_hdr', False) if v40 else bool(e29 and spec != contract['specs'][0])}
-    if contract['research_hdr']:
+    if contract['research_hdr'] or contract.get("research_upiq"):
+        if contract.get("research_upiq"):
+            if (argument(argv, "--upiq380-fit") != "/var/tmp/rev4-featpot/upiq380-fit/upiq380_fit.parquet"
+                    or argument(argv, "--upiq-label-disposition") != "/var/tmp/rev4-featpot/upiq380-fit/owner_disposition.json"):
+                raise ValueError("E31 native fit/owner decision binding differs")
         contract['feature_set_id'] = None
     contract['seed_index'] = int(argument(argv, '--seed-index'))
     if not 0 <= contract['seed_index'] < (3 if route == 'production' else 10):
@@ -102,7 +106,7 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         refuse('strict training-only flags required')
     if result.get('training_only') is not True:
         refuse('registered training-only contract cannot use a prediction result')
-    if result.get('schema') != ('e29-research-training-cell-v1' if expected.get('research_hdr') else 'rev5-qualified-training-cell-v1'):
+    if result.get('schema') != ('e31-native-hdr-research-training-cell-v1' if expected.get('research_upiq') else 'e29-research-training-cell-v1' if expected.get('research_hdr') else 'rev5-qualified-training-cell-v1'):
         refuse('result schema')
     for key in ('epochs', 'pairs_per_epoch', 'seed_index', 'wide_receipt_sha256', 'frozen_sha256',
                 'data_role_decision_sha256', 'execution_contract'):
@@ -114,10 +118,10 @@ def verify_training(result, checkpoint, kind, expected, inspector):
     tables = selection.get('strict_table_admission', [])
     if sorted(tables, key=lambda t: t.get('name', '')) != expected['table_admission']:
         refuse('table admission differs from pinned inputs')
-    decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e29-research'] if expected.get('research_hdr') else [])], check=True,
+    decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e31-research'] if expected.get('research_upiq') else ['--e29-research'] if expected.get('research_hdr') else [])], check=True,
                                         capture_output=True, text=True).stdout)
     repro = decoded['repro']
-    if (decoded['formula_revision'] != 5 or decoded['qualified_provenance'] is not (not expected.get('research_hdr', False))
+    if (decoded['formula_revision'] != 5 or decoded['qualified_provenance'] is not (not (expected.get('research_hdr', False) or expected.get('research_upiq', False)))
             or decoded['feature_set_id'] != expected['feature_set_id']
             or repro.get('checkpoint_epoch') != f"{expected['selected_epoch']:03d}"
             or repro.get('epochs') != expected['epochs']
@@ -141,8 +145,10 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         refuse('decoded checkpoint inputs differ from pinned table admission')
     admission = repro.get('table_admission', {})
     admitted = admission.get('tables', [])
-    if (admission.get('qualified_provenance') is not (not expected.get('research_hdr', False)) or admission.get('historical_replay') is not None
-            or admission.get('formula_revision') != 5 or len(admitted) != len(pinned)):
+    native = admission.get('upiq380') if expected.get('research_upiq') else None
+    native_count = 1 if expected.get('research_upiq') else 0
+    if (admission.get('qualified_provenance') is not (not (expected.get('research_hdr', False) or expected.get('research_upiq', False))) or admission.get('historical_replay') is not None
+            or admission.get('formula_revision') != 5 or len(admitted) + native_count != len(pinned)):
         refuse('decoded per-table admission incomplete')
     # The executor binds this lexical root to the manifest's hash-named extraction.
     # Rust records lexical admission paths and canonical input paths separately.
@@ -151,7 +157,21 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         if isinstance(path, str) and path.startswith(prefix):
             return '/scratch/fit-cell/' + kind['data_sha'] + '/rev4-featpot/' + path[len(prefix):]
         return path
-    input_paths = {transport_path(t['path']) for t in inputs}
+    if expected.get('research_upiq'):
+        wanted = expected['upiq_admission']
+        for key in ('table_sha256', 'manifest_sha256', 'keys_sha256', 'label_source',
+                    'label_disposition', 'label_disposition_sha256'):
+            if not isinstance(native, dict) or native.get(key) != wanted[key]:
+                refuse('decoded UPIQ TRAIN-fit/owner disposition differs: ' + key)
+        if (native.get('selected_ids') != expected['columns']
+                or native.get('native_width') != 1825 or native.get('logical_width') != 1853
+                or native.get('input_contract') != 'upiq-exr-bt709-nits-v1'
+                or selection.get('upiq380_fit_admission') != wanted):
+            refuse('decoded native UPIQ projection/fit selection differs')
+        native_input = [t for t in inputs if t['name'] == 'upiq380']
+        if len(native_input) != 1 or transport_path(native['path']) != transport_path(native_input[0]['path']):
+            refuse('decoded native UPIQ path does not cover exact fit input')
+    input_paths = {transport_path(t['path']) for t in inputs if not (native_count and t['name'] == 'upiq380')}
     if {transport_path(t.get('path')) for t in admitted} != input_paths:
         refuse('decoded admissions do not cover exact training inputs')
     input_names = {transport_path(t['path']): t['name'] for t in inputs}

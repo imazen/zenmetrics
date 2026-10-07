@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Explicit post-launch harvest and SDR assessment; never schedules a job.
 set -euo pipefail
-if [[ $# != 2 || ! "$2" =~ ^(control|e29|e32)$ ]]; then
-    printf 'usage: %s BUNDLE control|e29|e32\n' "$0" >&2
+if [[ $# != 2 || ! "$2" =~ ^(control|e29|e31|e32)$ ]]; then
+    printf 'usage: %s BUNDLE control|e29|e31|e32\n' "$0" >&2
     exit 2
 fi
 bundle=$(realpath "$1")
@@ -49,6 +49,7 @@ if [[ "$study" == control ]]; then
 else
     root="$bundle/v2e29"
     [[ "$study" != e32 ]] || root="$bundle/v2e32"
+    [[ "$study" != e31 ]] || root="$bundle/v2d1"
     out="/mnt/v/output/zensim/v40-assessment-$study-2026-10-07"
     python3 "$bundle/score.py" "${common[@]}" --study "$study" \
         --results "/var/tmp/rev4-featpot/v40-$study-results" --root "$root" --out "$out"

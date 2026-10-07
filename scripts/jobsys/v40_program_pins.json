@@ -1,6 +1,7 @@
 {
-  "schema": "v40-program-source-pins-v1",
-  "zensim_commit": "e4d98711dd140b155d776cfb027561cbb336f568",
+  "data": {
+    "benchmarks/v40_fit_contract_2026-10-07.json": "919643043c0fd02bd859ae8b3be76030da04c3f24ce72f190fc6a50ad88d8dde"
+  },
   "files": {
     "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
     "benchmarks/e29_fit_contract_2026-10-07.json": "68f4a71d4bd5c95dedd0d6797c52a8ebbd08e5f5d7345e2e4b057ee2ee43e33a",
@@ -31,11 +32,10 @@
     "scripts/rev4_featpot/v2_smoke_contract.py": "c74d967c69d0d8562fd1264f8da95213289eb277366706092e2fc0c0591a4d3f",
     "scripts/rev4_featpot/v2_teacher.py": "4b2fe7855b05c9e7204290d50eb1f465d6030acd630e338693c8637f20a802f7",
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
-    "scripts/rev4_featpot/v40_launch.py": "59ec236e9e3bdb6588bb2feb7d586339cda801dd61789c977bc891a0237a6778",
-    "scripts/rev4_featpot/v40_package.py": "6393948a8ddc146daddde8fdec8b17abf679dad616a3ab5d5daf944dc9410195",
+    "scripts/rev4_featpot/v40_launch.py": "02e0fba25d8f2a4cfd7581aaf79fb31ba3f070b1f1fa1790e4100b1e4990ee0e",
+    "scripts/rev4_featpot/v40_package.py": "8b9d2d88c13233b618c590adbf3e589d8e0118194cdff59e5b5c4997ecf6e147",
     "scripts/rev4_featpot/v40_score.py": "8cb25446c0668c321a1da4dcbd7e57a565d351a89fe96f433d500c5aca1a2d32"
   },
-  "data": {
-    "benchmarks/v40_fit_contract_2026-10-07.json": "919643043c0fd02bd859ae8b3be76030da04c3f24ce72f190fc6a50ad88d8dde"
-  }
+  "schema": "v40-program-source-pins-v1",
+  "zensim_commit": "e88f9180537a9755cfa7800fa68185166213a5ae"
 }
