@@ -102,8 +102,15 @@ def verify_training(result, checkpoint, kind, expected, inspector):
     if (admission.get('qualified_provenance') is not True or admission.get('historical_replay') is not None
             or admission.get('formula_revision') != 5 or len(admitted) != len(pinned)):
         refuse('decoded per-table admission incomplete')
-    input_paths = {t['path'] for t in inputs}
-    if {t.get('path') for t in admitted} != input_paths:
+    # The executor binds this lexical root to the manifest's hash-named extraction.
+    # Rust records lexical admission paths and canonical input paths separately.
+    def transport_path(path):
+        prefix = '/var/tmp/rev4-featpot/'
+        if isinstance(path, str) and path.startswith(prefix):
+            return '/scratch/fit-cell/' + kind['data_sha'] + '/rev4-featpot/' + path[len(prefix):]
+        return path
+    input_paths = {transport_path(t['path']) for t in inputs}
+    if {transport_path(t.get('path')) for t in admitted} != input_paths:
         refuse('decoded admissions do not cover exact training inputs')
     for table in admitted:
         d = table.get('stored_declarations', {})

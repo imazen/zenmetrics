@@ -114,6 +114,16 @@ class StrictHarvest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'decoded'):
                     self.verify(root,cell)
 
+    def test_executor_lexical_admission_and_hash_bound_physical_input(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);cell=self.cell(root)
+            self.decoded['repro']['inputs'][0]['path']='/scratch/fit-cell/'+cell.kind['data_sha']+'/rev4-featpot/v2d1/human.parquet'
+            self.decoded['repro']['table_admission']['tables'][0]['path']='/var/tmp/rev4-featpot/v2d1/human.parquet'
+            self.verify(root,cell)
+            self.decoded['repro']['inputs'][0]['path']='/scratch/fit-cell/'+('0'*64)+'/rev4-featpot/v2d1/human.parquet'
+            with self.assertRaisesRegex(ValueError,'decoded admissions'):
+                self.verify(root,cell)
+
     def test_missing_or_wrong_trusted_program_refuses(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);cell=self.cell(root)
