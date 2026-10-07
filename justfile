@@ -19,6 +19,14 @@ GMSD_MDSI_TARGETS := env_var_or_default("GMSD_MDSI_TARGETS", "")
 default:
     @just --list
 
+# E29 local preparation; caller supplies frozen source, binaries and build metadata.
+fit-pack-e29 source bin_dir build_meta out:
+    TMPDIR=$HOME/tmp/e29 ~/work/zen/scripts/run-heavy --mem 8G --jobs 1 -- python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{bin_dir}} --build-meta {{build_meta}} --profile v2e29 --out {{out}}
+
+# Local manifest generation only: this does not enqueue a fleet job.
+fit-declare-e29 ctl spec out:
+    {{ctl}} declare-fits --spec {{spec}} --out {{out}}
+
 # NEVER `cargo fmt --all` — rustfmt can follow `mod`/path-dep edges into the
 # patched sibling repos (../zensim, ../../butteraugli, …) and rewrite files
 # we don't own. `cargo metadata --no-deps` lists exactly this workspace's
