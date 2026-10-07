@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Fit program (`4d97cfa3`): add the frozen `v2r5s2recipe28` profile for E28 dataset-isolated pooled rank/Pearson training and the grouped diagnostic. Earlier program profiles remain pinned.
+
 - zenfleet-core (`3ed70624`): **Poison never overrides Done** in `LedgerView` (either order). Stale-view workers wrote Poison
   after fresh Done rows (10 completed fitv2e18 cells read as poisoned); a later Failed row still re-opens a job (audit flip).
 - zenfleet-worker (`2d2f6f52`): a failed cell logs `cell failed [<class>] <cell> (<job>): <stderr tail>`; the chunked path
