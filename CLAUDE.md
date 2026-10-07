@@ -520,11 +520,22 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-07 — same-owner timer/progress CAS contention disarmed an active
+  worker chunk; a matching-owner malformed timestamp authorized release.
+  FIXED locally (`962f5e47`).** Failed renewal CAS now re-reads ownership once:
+  a matching owner retains held/in-flight state and future timer renewal; a
+  missing/foreign owner disarms it without another PUT. The colliding progress
+  update is not persisted. Release requires a u64 timestamp and still accepts
+  fresh two-token claims. Four new regressions fail before the fix and pass
+  after with unchanged assertions; all 11 ownership regressions and the full
+  65-test worker suite pass, as do clippy and fmt in the CI-pinned snapshot.
+  The documented best-effort GET→DELETE race remains unchanged.
+
 - **2026-10-07 — stale worker shutdown could delete a later owner's claim, and
   progress renewal could overwrite that owner's lease. FIXED locally (`d3ca1108`).**
   Shutdown release now reads the claim and checks its second token against the
   acquiring worker identity. Progress writes check ownership and use the read
-  ETag with `put_update`; ownership loss or failed renewal clears the matching
+  ETag with `put_update`; confirmed ownership loss clears the matching
   held/in-flight chunk. Late callbacks preserve a newer in-flight chunk.
   Seven ownership regressions pass, including the two failures reproduced with
   old unconditional behavior; the full worker crate tests and clippy pass in
