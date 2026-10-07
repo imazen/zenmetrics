@@ -4,18 +4,19 @@
   },
   "files": {
     "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
+    "benchmarks/e29_e31_e32_shared_control_decision_2026-10-07.md": "7a787cebab8d30e9f1a6c643d53e7d1753c52262db77f94d5185ffb501d836aa",
     "benchmarks/e29_fit_contract_2026-10-07.json": "68f4a71d4bd5c95dedd0d6797c52a8ebbd08e5f5d7345e2e4b057ee2ee43e33a",
-    "benchmarks/e29_four_source_amendment_2026-10-07.md": "4cee8d595ca95bc95e5504d10d8133844e6cffa8c2d2a15175a5cd1565653910",
+    "benchmarks/e29_four_source_amendment_2026-10-07.md": "22ef42732053065a82706c91b345452e35807284a2f08dc8aa1ac331158d7c64",
     "benchmarks/e32_palette_feature_ids_2026-10-07.json": "207d6d29ed86395166444c60fb4fc788856818801e6b64bcbc36ed7b81d1773d",
     "benchmarks/e32_palette_training_transport_2026-10-07.json": "ebdc50517ae43cf61f2583c7fd1296bc68c6c1e689c3356ca910c4dcb93058b3",
     "benchmarks/shippath_human_role_D1_2026-10-07.json": "1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a",
     "benchmarks/shippath_qualified_fit_contract_2026-10-07.json": "49de01953a55f3a02eb831efb55459f213bbe8f4c66c8ff01753837502dac30d",
     "scripts/hdr/hdr_route_panel.py": "5b812d9becda5c1c6324323eb86324f9e7f8b58d6ef91a51a25c3507b9cbb4a8",
     "scripts/lib/assessment_identity.py": "2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee",
-    "scripts/lib/zen_stats.py": "3a0ba0b03baca9e4a1f57b62ac09bbfed478fcc6aa456828e3dc33a06135e972",
+    "scripts/lib/zen_stats.py": "eb8f4859f5c6c318b5f87e12b5b4cee4d33b0ae26e8d713d989a2ca13d671354",
     "scripts/rev4_featpot/e13_teacher.py": "dbd6b7533a42753825dbaa31b838ff346a01a75b332b94168b5c7c59d8ba9116",
     "scripts/rev4_featpot/e21_cheap_recipe.py": "7f60d0e23d1005eed14e42dfac91ae8bd5d5ba136023703d5ccc9a3225afa18f",
-    "scripts/rev4_featpot/e24_rev5.py": "73ce5f7edd8abbcb99c9b68d74502cbc6e9b42789fe835701317cd9af128f456",
+    "scripts/rev4_featpot/e24_rev5.py": "142522bf04491eaad981c43f22068cd679a3e057743386437a418b975304fa6e",
     "scripts/rev4_featpot/e29_consensus.py": "49ff982f35932a67e06b9bc13d3ad2d911c685bf0ee7a8b8cc91b55157e09ef4",
     "scripts/rev4_featpot/e30_four_source.py": "d7a9c2d09c1c7f427d356d5519a50a68485d472f56d8c01c4ba5fcdae8ce3a90",
     "scripts/rev4_featpot/e31_training.py": "ce9ce93749269211cd0f405e7d2df15c344816126b66166d6e0a45a54444ffbe",
@@ -32,10 +33,10 @@
     "scripts/rev4_featpot/v2_smoke_contract.py": "c74d967c69d0d8562fd1264f8da95213289eb277366706092e2fc0c0591a4d3f",
     "scripts/rev4_featpot/v2_teacher.py": "4b2fe7855b05c9e7204290d50eb1f465d6030acd630e338693c8637f20a802f7",
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
-    "scripts/rev4_featpot/v40_launch.py": "02e0fba25d8f2a4cfd7581aaf79fb31ba3f070b1f1fa1790e4100b1e4990ee0e",
+    "scripts/rev4_featpot/v40_launch.py": "dcfcf106b0664489253ce2471bc110fffc19ad10f26418573d78bc2c892dd36f",
     "scripts/rev4_featpot/v40_package.py": "8b9d2d88c13233b618c590adbf3e589d8e0118194cdff59e5b5c4997ecf6e147",
     "scripts/rev4_featpot/v40_score.py": "8cb25446c0668c321a1da4dcbd7e57a565d351a89fe96f433d500c5aca1a2d32"
   },
   "schema": "v40-program-source-pins-v1",
-  "zensim_commit": "e88f9180537a9755cfa7800fa68185166213a5ae"
+  "zensim_commit": "82ab26c5b2abd899b360388d76def704a35049b9"
 }
