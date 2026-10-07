@@ -520,6 +520,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-07 — stale worker shutdown could delete a later owner's claim, and
+  progress renewal could overwrite that owner's lease. FIXED locally (`d3ca1108`).**
+  Shutdown release now reads the claim and checks its second token against the
+  acquiring worker identity. Progress writes check ownership and use the read
+  ETag with `put_update`; ownership loss or failed renewal clears the matching
+  held/in-flight chunk. Late callbacks preserve a newer in-flight chunk.
+  Seven ownership regressions pass, including the two failures reproduced with
+  old unconditional behavior; the full worker crate tests and clippy pass in
+  the CI-pinned snapshot. Release uses separate GET and DELETE operations;
+  running execution is not cancelled on lease loss. See
+  [RUNNING_JOBS.md](docs/RUNNING_JOBS.md) for the lease contract.
+
 - **`ButteraugliOpaque`'s cached reference is a NO-OP for any image taller than
   224 px — it silently replays the full one-shot. Found 2026-08-30 (task #163),
   by reading; not a regression, a design consequence.** `resolve_auto` tries
