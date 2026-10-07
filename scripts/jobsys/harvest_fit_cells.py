@@ -38,6 +38,7 @@ PROGRAM_ROOTS = {"mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py"
                  "e5_epochs.py": "e5/v2/cells"}
 # `--root /var/tmp/rev4-featpot/<name>` moves these scripts' cells to `<name>/<suffix>` (fit_cell_exec.ROOTED).
 ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+from fit_paths import explicit_root
 
 
 # Program shas whose binaries carry tier parity (AVX-512 and scalar kernels reproduce AVX2 bit for
@@ -49,6 +50,9 @@ TIER_PARITY_PROGRAMS = frozenset()
 
 def blob_root(kind: dict) -> str:
     argv = kind["argv"]
+    explicit = explicit_root(argv, POT_ROOT)
+    if explicit is not None:
+        return explicit
     root = PROGRAM_ROOTS[argv[0]]
     if argv[0] in ROOTED and "--root" in argv:
         base = Path(argv[argv.index("--root") + 1])

@@ -152,6 +152,9 @@ V2R5S2RECIPE28_SCRIPTS = {**V2R5HDR27_SCRIPTS,
     "benchmarks/e28_admission_inventory_2026-10-07.json": "71067920cbe93f05ef12d13317e4332af8f2ec73ca37b403d8bae670e30afe47",
 }
 
+# D1 strict four-source production/E30 program; admitted coverage travels in data.
+D1_SCRIPTS = {'scripts/rev4_featpot/v2_common.py': 'cd3af4fff63c9672f834533b382a9e35d3a4ce93c3baf8287bb88bbc0e670604', 'scripts/rev4_featpot/v2_lodo_mlp.py': 'f5494f742fb7ba598efec2474eaed592655d71e382ea25c845dc77f2f61d5903', 'scripts/rev4_featpot/v2_confirm_fit.py': 'eee17172029b77597f458a23d0a8ae2260f6210aeb62e6069c5cf0877912a04a', 'scripts/rev4_featpot/v2_teacher.py': '8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c', 'scripts/rev4_featpot/v2c_wide.py': '6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291', 'scripts/rev4_featpot/v2_human_role.py': '131b2347d22497910912880454810bb866b7ac5ccfe21ff2af655d88080ccdc6', 'scripts/rev4_featpot/v2_production_pack.py': '6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982', 'scripts/rev4_featpot/rev5_bank.py': 'e42eec57fed223c19dd3b72d2a3c0476c20067ad614b9d76de16d5b95fdda0a7', 'scripts/lib/zen_stats.py': '68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a', 'scripts/lib/assessment_identity.py': '2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee', 'benchmarks/shippath_human_role_D1_2026-10-07.json': '1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a'}
+
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -178,12 +181,12 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
@@ -198,6 +201,7 @@ def main() -> None:
             raise ValueError(f"pinned data file changed: {name}")
         files[name] = path
     files["fit_cell_exec.py"] = args.executor
+    files["fit_paths.py"] = args.executor.with_name("fit_paths.py")
     for name in BINARIES:
         path = args.bin_dir / name
         if not path.is_file():
