@@ -308,3 +308,6 @@ v40-program source binaries metadata contract output:
 
 v40-image bundle image:
     docker build --build-arg FIT_PROGRAM_SHA=$(sha256sum {{bundle}}/program.tar.gz | cut -d' ' -f1) -t {{image}} {{bundle}}/image-context
+
+v40-harvest-refusals bundle attempt:
+    python3 scripts/jobsys/v40_harvest_refusals.py --bundle {{bundle}} --attempt {{attempt}}
