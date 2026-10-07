@@ -154,8 +154,8 @@ V2R5S2RECIPE28_SCRIPTS = {**V2R5HDR27_SCRIPTS,
 
 # D1 strict four-source production/E30 program; admitted coverage travels in data.
 D1_SCRIPTS = {'scripts/rev4_featpot/v2_common.py': 'cd3af4fff63c9672f834533b382a9e35d3a4ce93c3baf8287bb88bbc0e670604',
- 'scripts/rev4_featpot/v2_lodo_mlp.py': 'f5494f742fb7ba598efec2474eaed592655d71e382ea25c845dc77f2f61d5903',
- 'scripts/rev4_featpot/v2_confirm_fit.py': 'eee17172029b77597f458a23d0a8ae2260f6210aeb62e6069c5cf0877912a04a',
+ 'scripts/rev4_featpot/v2_lodo_mlp.py': '2fb93bf1b86784609fba129cf6781050b5b97e8cdd21a1a8c6497b3f7cae7def',
+ 'scripts/rev4_featpot/v2_confirm_fit.py': 'cb5aa98c818b96f3d8202c250fc1866290b0802ff17743bf48551146cca807a0',
  'scripts/rev4_featpot/v2_teacher.py': '8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c',
  'scripts/rev4_featpot/v2c_wide.py': '6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291',
  'scripts/rev4_featpot/v2_human_role.py': '131b2347d22497910912880454810bb866b7ac5ccfe21ff2af655d88080ccdc6',

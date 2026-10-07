@@ -254,7 +254,22 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict) -> dict:
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if "predictions" in result:
+    if result.get("training_only") is True:
+        selection = result.get("selection", {})
+        if ("--strict-admission" not in kind["argv"] or "--train-only" not in kind["argv"]
+                or result.get("schema") != "rev5-qualified-training-cell-v1"
+                or selection.get("epoch_rule") != "last"
+                or not isinstance(result.get("epochs"), int) or result["epochs"] < 1
+                or selection.get("selected_epoch") != result["epochs"] - 1
+                or not selection.get("strict_table_admission") or not result.get("data_role_decision_sha256")
+                or not result.get("wide_receipt_sha256") or not result.get("frozen_sha256")):
+            raise ValueError(f"unqualified/incomplete training-only result: {name}")
+        if "--pack-production" in kind["argv"]:
+            packed = Path(result.get("packed_model", ""))
+            if (packed.parent != install_dir / "refit" or
+                    digest(dest / packed.relative_to(install_dir)) != result.get("packed_model_sha256")):
+                raise ValueError(f"packed production model mismatch: {name}")
+    elif "predictions" in result:
         # v2_confirm_fit (Rev4 potential R2 confirmatory fit): one prediction vector per features-only sealed set.
         sets = result["predictions"]
         if not sets or any(len(v["pred"]) != v["rows"] for v in sets.values()):
