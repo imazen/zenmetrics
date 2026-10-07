@@ -13,7 +13,11 @@ def main():
     p.add_argument("--attempt", type=int, required=True)
     a = p.parse_args()
     reports = []
-    for arm, smoke_attempt in (("control", 2), ("hb4", 1), ("hc4", 1), ("palette", 1)):
+    selection = json.loads((a.bundle / "SMOKE_SELECTION.json").read_text())
+    if set(selection) != {"control", "hb4", "hc4", "palette"}:
+        raise ValueError("exact arm smoke selection required")
+    for arm, modes in selection.items():
+        smoke_attempt = modes["bounded"]
         key = f"{arm}-bounded-{smoke_attempt}"
         scratch = a.bundle / f"harvest-refusal-{a.attempt}-{key}"
         if scratch.exists():
@@ -52,6 +56,10 @@ def main():
         )
     with (a.bundle / f"HARVEST_REFUSALS-{a.attempt}.json").open("x") as file:
         file.write(json.dumps(reports, indent=2) + "\n")
+    canonical = a.bundle / "HARVEST_REFUSALS.json"
+    if canonical.exists():
+        canonical.rename(a.bundle / f"HARVEST_REFUSALS.before-{a.attempt}.json")
+    canonical.write_text(json.dumps(reports, indent=2) + "\n")
     print("PASS: all four actual bounded blobs verified and refused installation")
 
 
