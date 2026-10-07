@@ -799,6 +799,7 @@ Workspace conventions per the global rules:
   `:0.5.7`. `05ad070e`.
 
 ### Fixed
+- Job-worker and dashboard images build again: `Cargo.deploy.toml` mirrors the workspace `[lints]` tables the member crates inherit (fb235d0b)
 
 - `build_goldens.py` / `bench_12mp_cuda.py` hard-coded the pycvvdp version they
   recorded. `18b5f894`.
