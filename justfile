@@ -283,3 +283,10 @@ worker-tests:
 
 worker-clippy:
     cargo clippy --locked -p zenfleet-worker --all-targets -- -D warnings
+
+# CI-pinned lock check and snapshot export regression (use run-heavy).
+lock-check *args:
+    bash scripts/ci/lock.sh --check {{args}}
+
+lock-snapshot-tests:
+    python3 scripts/ci/test_lock_snapshot.py

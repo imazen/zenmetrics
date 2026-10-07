@@ -49,16 +49,10 @@ mkdir -p "$snap/work"
 
 export_tree() {
   rm -rf "$tree"; mkdir -p "$tree"
-  if [ -n "$rev" ]; then
-    # jj hides the git dir in secondary workspaces; `jj git root` finds it.
-    local gd id
-    gd="$(cd "$repo" && jj git root 2>/dev/null)" || { echo "lock.sh: cannot locate the git store (jj git root)" >&2; exit 2; }
-    id="$(cd "$repo" && jj log --no-graph --ignore-working-copy -r "$rev" -T commit_id 2>/dev/null)" \
-      || { echo "lock.sh: cannot resolve revision '$rev'" >&2; exit 2; }
-    git --git-dir="$gd" archive --format=tar "$id" | tar -x -C "$tree"
-  else
-    rsync -a --exclude=.git --exclude=.jj --exclude=target --exclude=.workongoing "$repo/" "$tree/"
-  fi
+  # Snapshot @ first so source additions/edits/deletions are included, but ignored
+  # build output and local overrides are not. --rev exports that immutable tree.
+  python3 "$here/export-snapshot.py" "$repo" "$tree" "$rev" \
+    || { echo "lock.sh: snapshot export failed" >&2; exit 2; }
   [ -r "$tree/Cargo.lock" ] || { echo "lock.sh: no Cargo.lock in the exported tree" >&2; exit 2; }
   [ -r "$tree/ci/sibling-pins.tsv" ] || { echo "lock.sh: no ci/sibling-pins.tsv in the exported tree" >&2; exit 2; }
 }
