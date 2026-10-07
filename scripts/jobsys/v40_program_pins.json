@@ -1,6 +1,6 @@
 {
   "schema": "v40-program-source-pins-v1",
-  "zensim_commit": "046a65946b3cd66ed4871ec03ce7a33c190ca16f",
+  "zensim_commit": "e4d98711dd140b155d776cfb027561cbb336f568",
   "files": {
     "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
     "benchmarks/e29_fit_contract_2026-10-07.json": "68f4a71d4bd5c95dedd0d6797c52a8ebbd08e5f5d7345e2e4b057ee2ee43e33a",
@@ -23,17 +23,17 @@
     "scripts/rev4_featpot/rev5_bank.py": "9e6b87f605e54e7e452e2d121ff34bb6479692443f8f424f02b02eaa6aacc557",
     "scripts/rev4_featpot/shippath10_launch.py": "b49eda25e9e7b121f928ad45fd9f5062313f500a961b62a0ed595001f621ac96",
     "scripts/rev4_featpot/upiq380.py": "df89562ca13f6ffe60e3542efdc6bfd3613587fd2e63a9a1704cdbf4fe657f41",
-    "scripts/rev4_featpot/v2_common.py": "c2a637c197077db5e515371257e0acafe09fbe7286933451b34c74b735305e46",
+    "scripts/rev4_featpot/v2_common.py": "bbef72a0769bb5b15346da74a1beb509a7efc8c92681e260eeefeebd57cd19af",
     "scripts/rev4_featpot/v2_confirm_fit.py": "51010567202e73a51d224829a131054ed3af710eb846dcd50fff72f876f7753a",
     "scripts/rev4_featpot/v2_human_role.py": "304efb6dfc498a520d91a8cd5ebbe4da07c292700fba03fa46c74f27f8a41cc6",
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "931ef6cfc4ab4efae2a4be56fff37f4b5577eebc34bc26b159f78dbc3e93f605",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "f46f2e5f027899930e19a1a85227fcfb8f9877db01851dd8acf0688c13ed1e1b",
     "scripts/rev4_featpot/v2_production_pack.py": "6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982",
     "scripts/rev4_featpot/v2_smoke_contract.py": "c74d967c69d0d8562fd1264f8da95213289eb277366706092e2fc0c0591a4d3f",
     "scripts/rev4_featpot/v2_teacher.py": "4b2fe7855b05c9e7204290d50eb1f465d6030acd630e338693c8637f20a802f7",
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
     "scripts/rev4_featpot/v40_launch.py": "59ec236e9e3bdb6588bb2feb7d586339cda801dd61789c977bc891a0237a6778",
     "scripts/rev4_featpot/v40_package.py": "6393948a8ddc146daddde8fdec8b17abf679dad616a3ab5d5daf944dc9410195",
-    "scripts/rev4_featpot/v40_score.py": "caf06ecef728c8c9277830934be9cb499eb0f25a5e415d9b89dd4d5175e72850"
+    "scripts/rev4_featpot/v40_score.py": "8cb25446c0668c321a1da4dcbd7e57a565d351a89fe96f433d500c5aca1a2d32"
   },
   "data": {
     "benchmarks/v40_fit_contract_2026-10-07.json": "919643043c0fd02bd859ae8b3be76030da04c3f24ce72f190fc6a50ad88d8dde"
