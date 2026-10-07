@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Workspace (`8cbf9cbb`): CI lock snapshots export the jj-tracked tree instead
+  of copying ignored working files. Exclude marked Cargo target directories and
+  repository metadata, preserving source edits and immutable revision exports.
+  The 23 sibling pins and locked resolution checks are unchanged.
+
 - zenfleet-worker (`962f5e47`): recheck ownership after renewal CAS failure
   so contention between this worker's timer and progress updates retains its
   active lease. Require a u64 claim timestamp before shutdown release.

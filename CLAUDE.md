@@ -520,6 +520,15 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
+  directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
+  marked `target*` directories even when accidentally tracked, plus repository
+  metadata. Working source additions/edits/deletions remain included; explicit
+  revisions stay immutable. `--check` still resolves against the unchanged
+  23 sibling pins, without rewriting Cargo.lock. Regression commands:
+  `just lock-snapshot-tests` and `just lock-check`. The old exporter fails
+  the cache-copy tripwires; the new exporter passes them.
+
 - **2026-10-07 — same-owner timer/progress CAS contention disarmed an active
   worker chunk; a matching-owner malformed timestamp authorized release.
   FIXED locally (`962f5e47`).** Failed renewal CAS now re-reads ownership once:
