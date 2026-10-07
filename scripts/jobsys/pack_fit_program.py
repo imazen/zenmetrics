@@ -153,7 +153,23 @@ V2R5S2RECIPE28_SCRIPTS = {**V2R5HDR27_SCRIPTS,
 }
 
 # D1 strict four-source production/E30 program; admitted coverage travels in data.
-D1_SCRIPTS = {'scripts/rev4_featpot/v2_common.py': 'cd3af4fff63c9672f834533b382a9e35d3a4ce93c3baf8287bb88bbc0e670604', 'scripts/rev4_featpot/v2_lodo_mlp.py': 'f5494f742fb7ba598efec2474eaed592655d71e382ea25c845dc77f2f61d5903', 'scripts/rev4_featpot/v2_confirm_fit.py': 'eee17172029b77597f458a23d0a8ae2260f6210aeb62e6069c5cf0877912a04a', 'scripts/rev4_featpot/v2_teacher.py': '8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c', 'scripts/rev4_featpot/v2c_wide.py': '6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291', 'scripts/rev4_featpot/v2_human_role.py': '131b2347d22497910912880454810bb866b7ac5ccfe21ff2af655d88080ccdc6', 'scripts/rev4_featpot/v2_production_pack.py': '6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982', 'scripts/rev4_featpot/rev5_bank.py': 'e42eec57fed223c19dd3b72d2a3c0476c20067ad614b9d76de16d5b95fdda0a7', 'scripts/lib/zen_stats.py': '68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a', 'scripts/lib/assessment_identity.py': '2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee', 'benchmarks/shippath_human_role_D1_2026-10-07.json': '1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a'}
+D1_SCRIPTS = {'scripts/rev4_featpot/v2_common.py': 'cd3af4fff63c9672f834533b382a9e35d3a4ce93c3baf8287bb88bbc0e670604',
+ 'scripts/rev4_featpot/v2_lodo_mlp.py': 'f5494f742fb7ba598efec2474eaed592655d71e382ea25c845dc77f2f61d5903',
+ 'scripts/rev4_featpot/v2_confirm_fit.py': 'eee17172029b77597f458a23d0a8ae2260f6210aeb62e6069c5cf0877912a04a',
+ 'scripts/rev4_featpot/v2_teacher.py': '8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c',
+ 'scripts/rev4_featpot/v2c_wide.py': '6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291',
+ 'scripts/rev4_featpot/v2_human_role.py': '131b2347d22497910912880454810bb866b7ac5ccfe21ff2af655d88080ccdc6',
+ 'scripts/rev4_featpot/v2_production_pack.py': '6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982',
+ 'scripts/rev4_featpot/rev5_bank.py': 'e42eec57fed223c19dd3b72d2a3c0476c20067ad614b9d76de16d5b95fdda0a7',
+ 'scripts/lib/zen_stats.py': '68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a',
+ 'scripts/lib/assessment_identity.py': '2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee',
+ 'benchmarks/shippath_human_role_D1_2026-10-07.json': '1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a',
+ 'scripts/rev4_featpot/e30_four_source.py': '13b86ad249e9be81d44707d28e69f2d810ecadb4ab20952d314e3694223e520d',
+ 'scripts/rev4_featpot/e21_cheap_recipe.py': '7f60d0e23d1005eed14e42dfac91ae8bd5d5ba136023703d5ccc9a3225afa18f',
+ 'scripts/rev4_featpot/e13_teacher.py': 'dbd6b7533a42753825dbaa31b838ff346a01a75b332b94168b5c7c59d8ba9116',
+ 'scripts/rev4_featpot/e24_rev5.py': 'd93c3a20728d62ef5d341320a18aacdf8e590b3c49d593197e8b7a998222b2dd',
+ 'scripts/rev4_featpot/external_sets.py': '078f98b3ad02703acd60c165f44c2902bfd0fbd3ff61946dad5a61322df9c85a',
+ 'benchmarks/costset2_2026-10-03.candidate_ids.json': '0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17'}
 
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
