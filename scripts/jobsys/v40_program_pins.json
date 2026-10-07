@@ -1,0 +1,41 @@
+{
+  "schema": "v40-program-source-pins-v1",
+  "zensim_commit": "de28ee55e792078a01c1b4e8f41f75ed7018b1d2",
+  "files": {
+    "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
+    "benchmarks/e29_fit_contract_2026-10-07.json": "68f4a71d4bd5c95dedd0d6797c52a8ebbd08e5f5d7345e2e4b057ee2ee43e33a",
+    "benchmarks/e29_four_source_amendment_2026-10-07.md": "4cee8d595ca95bc95e5504d10d8133844e6cffa8c2d2a15175a5cd1565653910",
+    "benchmarks/e32_palette_feature_ids_2026-10-07.json": "207d6d29ed86395166444c60fb4fc788856818801e6b64bcbc36ed7b81d1773d",
+    "benchmarks/e32_palette_training_transport_2026-10-07.json": "ebdc50517ae43cf61f2583c7fd1296bc68c6c1e689c3356ca910c4dcb93058b3",
+    "benchmarks/shippath_human_role_D1_2026-10-07.json": "1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a",
+    "benchmarks/shippath_qualified_fit_contract_2026-10-07.json": "49de01953a55f3a02eb831efb55459f213bbe8f4c66c8ff01753837502dac30d",
+    "scripts/hdr/hdr_route_panel.py": "5b812d9becda5c1c6324323eb86324f9e7f8b58d6ef91a51a25c3507b9cbb4a8",
+    "scripts/lib/assessment_identity.py": "2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee",
+    "scripts/lib/zen_stats.py": "3a0ba0b03baca9e4a1f57b62ac09bbfed478fcc6aa456828e3dc33a06135e972",
+    "scripts/rev4_featpot/e13_teacher.py": "dbd6b7533a42753825dbaa31b838ff346a01a75b332b94168b5c7c59d8ba9116",
+    "scripts/rev4_featpot/e21_cheap_recipe.py": "7f60d0e23d1005eed14e42dfac91ae8bd5d5ba136023703d5ccc9a3225afa18f",
+    "scripts/rev4_featpot/e24_rev5.py": "73ce5f7edd8abbcb99c9b68d74502cbc6e9b42789fe835701317cd9af128f456",
+    "scripts/rev4_featpot/e29_consensus.py": "49ff982f35932a67e06b9bc13d3ad2d911c685bf0ee7a8b8cc91b55157e09ef4",
+    "scripts/rev4_featpot/e30_four_source.py": "d7a9c2d09c1c7f427d356d5519a50a68485d472f56d8c01c4ba5fcdae8ce3a90",
+    "scripts/rev4_featpot/e31_training.py": "ce9ce93749269211cd0f405e7d2df15c344816126b66166d6e0a45a54444ffbe",
+    "scripts/rev4_featpot/e32_palette.py": "1f9c0ac961a0892f60647180b98ce2e53d399984f6e46b7e01058174a986f312",
+    "scripts/rev4_featpot/external_sets.py": "078f98b3ad02703acd60c165f44c2902bfd0fbd3ff61946dad5a61322df9c85a",
+    "scripts/rev4_featpot/rev5_bank.py": "9e6b87f605e54e7e452e2d121ff34bb6479692443f8f424f02b02eaa6aacc557",
+    "scripts/rev4_featpot/shippath10_launch.py": "b49eda25e9e7b121f928ad45fd9f5062313f500a961b62a0ed595001f621ac96",
+    "scripts/rev4_featpot/upiq380.py": "df89562ca13f6ffe60e3542efdc6bfd3613587fd2e63a9a1704cdbf4fe657f41",
+    "scripts/rev4_featpot/v2_common.py": "c2a637c197077db5e515371257e0acafe09fbe7286933451b34c74b735305e46",
+    "scripts/rev4_featpot/v2_confirm_fit.py": "51010567202e73a51d224829a131054ed3af710eb846dcd50fff72f876f7753a",
+    "scripts/rev4_featpot/v2_human_role.py": "304efb6dfc498a520d91a8cd5ebbe4da07c292700fba03fa46c74f27f8a41cc6",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "931ef6cfc4ab4efae2a4be56fff37f4b5577eebc34bc26b159f78dbc3e93f605",
+    "scripts/rev4_featpot/v2_production_pack.py": "6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982",
+    "scripts/rev4_featpot/v2_smoke_contract.py": "c74d967c69d0d8562fd1264f8da95213289eb277366706092e2fc0c0591a4d3f",
+    "scripts/rev4_featpot/v2_teacher.py": "4b2fe7855b05c9e7204290d50eb1f465d6030acd630e338693c8637f20a802f7",
+    "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
+    "scripts/rev4_featpot/v40_launch.py": "59ec236e9e3bdb6588bb2feb7d586339cda801dd61789c977bc891a0237a6778",
+    "scripts/rev4_featpot/v40_package.py": "6393948a8ddc146daddde8fdec8b17abf679dad616a3ab5d5daf944dc9410195",
+    "scripts/rev4_featpot/v40_score.py": "5d493a7c5dcd0f55c91d2f6a00ef9fcc74dc3c2c093c14e0049e9aefd5044a7c"
+  },
+  "data": {
+    "benchmarks/v40_fit_contract_2026-10-07.json": "919643043c0fd02bd859ae8b3be76030da04c3f24ce72f190fc6a50ad88d8dde"
+  }
+}
