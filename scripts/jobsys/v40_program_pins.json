@@ -1,6 +1,6 @@
 {
   "schema": "v40-program-source-pins-v1",
-  "zensim_commit": "de28ee55e792078a01c1b4e8f41f75ed7018b1d2",
+  "zensim_commit": "046a65946b3cd66ed4871ec03ce7a33c190ca16f",
   "files": {
     "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
     "benchmarks/e29_fit_contract_2026-10-07.json": "68f4a71d4bd5c95dedd0d6797c52a8ebbd08e5f5d7345e2e4b057ee2ee43e33a",
@@ -33,7 +33,7 @@
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
     "scripts/rev4_featpot/v40_launch.py": "59ec236e9e3bdb6588bb2feb7d586339cda801dd61789c977bc891a0237a6778",
     "scripts/rev4_featpot/v40_package.py": "6393948a8ddc146daddde8fdec8b17abf679dad616a3ab5d5daf944dc9410195",
-    "scripts/rev4_featpot/v40_score.py": "5d493a7c5dcd0f55c91d2f6a00ef9fcc74dc3c2c093c14e0049e9aefd5044a7c"
+    "scripts/rev4_featpot/v40_score.py": "caf06ecef728c8c9277830934be9cb499eb0f25a5e415d9b89dd4d5175e72850"
   },
   "data": {
     "benchmarks/v40_fit_contract_2026-10-07.json": "919643043c0fd02bd859ae8b3be76030da04c3f24ce72f190fc6a50ad88d8dde"
