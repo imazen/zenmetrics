@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- E28 prelaunch review: update the research program profile to admit manifests and label-free keys before payload reads, and pin its approved input inventory; prior profiles remain fixed.
+
 - Fit program (`4d97cfa3`): add the frozen `v2r5s2recipe28` profile for E28 dataset-isolated pooled rank/Pearson training and the grouped diagnostic. Earlier program profiles remain pinned.
 
 - zenfleet-core (`3ed70624`): **Poison never overrides Done** in `LedgerView` (either order). Stale-view workers wrote Poison
