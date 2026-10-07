@@ -80,6 +80,16 @@ the claim and writes only if it still names this worker, conditional on the ETag
 after one TTL. `ZEN_CLAIM_TTL_SECS` / `ZEN_STALE_CLAIM_SEC` (forwarded by `lan_score_launch.sh`) still
 set that dead-worker window. A requeue needs a worker that still serves the jobset.
 
+Worker claim ownership also governs shutdown and progress writes: SIGTERM/SIGINT
+release first reads the claim and deletes only when its second token names this
+worker. Progress renewal checks that same owner and uses the read ETag with
+`put_update`, just like the timer heartbeat. Ownership loss, unreadable claims or
+a failed CAS disarm both the held lease and its matching in-flight chunk; finishing
+a chunk disarms it too. A late result for an older chunk cannot clear a newer
+in-flight chunk. Execution already in progress is not cancelled by this change.
+Release uses a best-effort GET-then-DELETE protocol. Storage errors fall back
+to TTL reclaim. The ownership check and DELETE are separate storage operations.
+
 **Drain caveat.** `drain: true` only stops workers from *starting* new passes; a pass that is already
 running keeps claiming cells (fit jobsets that were drained still produced new DONE cells). To move
 work to a newer jobset, declare the remaining cells there and let the old jobset's workers finish, and

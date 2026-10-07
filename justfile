@@ -273,3 +273,13 @@ margarine-relocation-check pairs before after output:
 
 margarine-vendor-check:
     python3 crates/margarine/verify_sources.py
+
+# Claim ownership regressions and full worker validation; callers use run-heavy.
+worker-claim-regressions:
+    cargo test --locked -p zenfleet-worker --lib workerfix_ -- --nocapture
+
+worker-tests:
+    cargo test --locked -p zenfleet-worker
+
+worker-clippy:
+    cargo clippy --locked -p zenfleet-worker --all-targets -- -D warnings

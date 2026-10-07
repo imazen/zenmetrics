@@ -172,10 +172,48 @@ pub struct ClaimCfg {
 /// failed delete just falls back to the slower TTL-based stale-reclaim (goal E), so correctness
 /// never depends on it. Shared by the per-cell path ([`release_claim_r2`], keyed on a [`JobId`])
 /// and the chunked path ([`spawn_spot_reclaim_chunk`], keyed on a chunk id string) — one claim
-/// namespace is just `<prefix>/<key>` either way.
+/// namespace is just `<prefix>/<key>` either way. The GET must name `ZEN_WORKER`
+/// as its second token; missing identity, unreadable claims and other owners refuse
+/// deletion. Worker signal handlers use the identity that acquired the claim.
 pub fn release_claim_r2_key(endpoint: &str, bucket: &str, prefix: &str, key: &str) -> bool {
+    let Ok(worker) = std::env::var("ZEN_WORKER") else {
+        return false;
+    };
+    release_claim_r2_key_for_worker(endpoint, bucket, prefix, key, &worker)
+}
+
+fn release_claim_r2_key_for_worker(
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+    key: &str,
+    worker: &str,
+) -> bool {
     let full_key = format!("{}/{}", prefix.trim_matches('/'), key);
-    crate::s3io::delete(endpoint, bucket, &full_key).is_ok() // in-proc DELETE (was `aws delete-object`)
+    release_owned_claim(
+        || crate::s3io::get(endpoint, bucket, &full_key),
+        || crate::s3io::delete(endpoint, bucket, &full_key).is_ok(),
+        worker,
+    )
+}
+
+/// A stopped ex-owner must leave the current owner's claim intact. This GET/DELETE
+/// ownership check is best-effort, not an atomic conditional DELETE.
+fn release_owned_claim<G, D>(get: G, delete: D, worker: &str) -> bool
+where
+    G: FnOnce() -> Option<Vec<u8>>,
+    D: FnOnce() -> bool,
+{
+    if worker.is_empty() {
+        return false;
+    }
+    let Some(body) = get() else {
+        return false;
+    };
+    let Ok(body) = std::str::from_utf8(&body) else {
+        return false;
+    };
+    body.split_whitespace().nth(1) == Some(worker) && delete()
 }
 
 /// Release (delete) a per-cell claim so the job requeues immediately. See [`release_claim_r2_key`].
@@ -192,8 +230,14 @@ fn spawn_spot_reclaim(
     endpoint: &str,
     bucket: &str,
     prefix: &str,
+    worker: &str,
 ) {
-    let (endpoint, bucket, prefix) = (endpoint.to_string(), bucket.to_string(), prefix.to_string());
+    let (endpoint, bucket, prefix, worker) = (
+        endpoint.to_string(),
+        bucket.to_string(),
+        prefix.to_string(),
+        worker.to_string(),
+    );
     let Ok(mut signals) = signal_hook::iterator::Signals::new([
         signal_hook::consts::SIGTERM,
         signal_hook::consts::SIGINT,
@@ -203,7 +247,13 @@ fn spawn_spot_reclaim(
     std::thread::spawn(move || {
         if signals.forever().next().is_some() {
             if let Some(id) = inflight.lock().ok().and_then(|g| g.clone()) {
-                let released = release_claim_r2(&endpoint, &bucket, &prefix, &id);
+                let released = release_claim_r2_key_for_worker(
+                    &endpoint,
+                    &bucket,
+                    &prefix,
+                    id.as_str(),
+                    &worker,
+                );
                 eprintln!(
                     "zenfleet-worker: spot preemption — {} claim {} for fast requeue",
                     if released {
@@ -230,6 +280,7 @@ fn spawn_spot_reclaim(
     _endpoint: &str,
     _bucket: &str,
     _prefix: &str,
+    _worker: &str,
 ) {
 }
 
@@ -249,8 +300,14 @@ fn spawn_spot_reclaim_chunk(
     endpoint: &str,
     bucket: &str,
     prefix: &str,
+    worker: &str,
 ) {
-    let (endpoint, bucket, prefix) = (endpoint.to_string(), bucket.to_string(), prefix.to_string());
+    let (endpoint, bucket, prefix, worker) = (
+        endpoint.to_string(),
+        bucket.to_string(),
+        prefix.to_string(),
+        worker.to_string(),
+    );
     let Ok(mut signals) = signal_hook::iterator::Signals::new([
         signal_hook::consts::SIGTERM,
         signal_hook::consts::SIGINT,
@@ -274,7 +331,8 @@ fn spawn_spot_reclaim_chunk(
             );
             let _ = io::stderr().flush();
             if let Some(cid) = inflight.lock().ok().and_then(|g| g.clone()) {
-                let released = release_claim_r2_key(&endpoint, &bucket, &prefix, &cid);
+                let released =
+                    release_claim_r2_key_for_worker(&endpoint, &bucket, &prefix, &cid, &worker);
                 eprintln!(
                     "zenfleet-worker: spot preemption — {} chunk claim {cid} for fast requeue \
                      (its cells re-enter the gap; any already-flushed cells in it stay Done)",
@@ -300,6 +358,7 @@ fn spawn_spot_reclaim_chunk(
     _endpoint: &str,
     _bucket: &str,
     _prefix: &str,
+    _worker: &str,
 ) {
 }
 
@@ -329,6 +388,28 @@ where
 /// Read by [`spawn_chunk_heartbeat`]; written by [`track_chunk_held`] (add on a won claim)
 /// and by the progress-renewal closure (remove once the chunk reports `done >= total`).
 type HeldChunks = Arc<Mutex<std::collections::BTreeSet<String>>>;
+type ChunkInflight = Arc<Mutex<Option<String>>>;
+
+/// Disarm only this chunk: an older heartbeat must not clear a later won claim.
+fn track_chunk_renewal(
+    held: &HeldChunks,
+    inflight: &ChunkInflight,
+    cid: &str,
+    outcome: &HeartbeatOutcome,
+    finished: bool,
+) {
+    if !finished && *outcome == HeartbeatOutcome::Renewed {
+        return;
+    }
+    if let Ok(mut g) = held.lock() {
+        g.remove(cid);
+    }
+    if let Ok(mut g) = inflight.lock()
+        && g.as_deref() == Some(cid)
+    {
+        *g = None;
+    }
+}
 
 /// Wrap a chunk `claim_chunk` function so a **won** claim is recorded in `held`. A lost claim is
 /// never recorded: the heartbeat must only ever renew leases this worker actually owns.
@@ -367,6 +448,35 @@ where
     G: FnOnce() -> Option<(String, String)>,
     P: FnOnce(&str, &str) -> bool,
 {
+    update_chunk_claim(get, put, worker, now, None)
+}
+
+fn renew_chunk_claim<G, P>(
+    get: G,
+    put: P,
+    worker: &str,
+    now: u64,
+    done: u32,
+    total: u32,
+) -> HeartbeatOutcome
+where
+    G: FnOnce() -> Option<(String, String)>,
+    P: FnOnce(&str, &str) -> bool,
+{
+    update_chunk_claim(get, put, worker, now, Some(&format!("{done}/{total}")))
+}
+
+fn update_chunk_claim<G, P>(
+    get: G,
+    put: P,
+    worker: &str,
+    now: u64,
+    progress: Option<&str>,
+) -> HeartbeatOutcome
+where
+    G: FnOnce() -> Option<(String, String)>,
+    P: FnOnce(&str, &str) -> bool,
+{
     let Some((body, etag)) = get() else {
         return HeartbeatOutcome::Lost;
     };
@@ -375,7 +485,7 @@ where
     if tok.next() != Some(worker) {
         return HeartbeatOutcome::NotOwner;
     }
-    let progress = tok.next().unwrap_or("0/1");
+    let progress = progress.unwrap_or_else(|| tok.next().unwrap_or("0/1"));
     if put(&format!("{now} {worker} {progress}"), &etag) {
         HeartbeatOutcome::Renewed
     } else {
@@ -400,6 +510,7 @@ fn needs_chunk_heartbeat(desired: &[DesiredJob]) -> bool {
 /// TTL. Ownership is re-checked on every beat ([`heartbeat_chunk_claim`]).
 fn spawn_chunk_heartbeat(
     held: HeldChunks,
+    inflight: ChunkInflight,
     endpoint: &str,
     bucket: &str,
     prefix: &str,
@@ -438,11 +549,9 @@ fn spawn_chunk_heartbeat(
                     &worker,
                     now,
                 );
-                if out != HeartbeatOutcome::Renewed
-                    && let Ok(mut g) = held.lock()
-                {
-                    // Not ours any more (or gone): stop renewing it.
-                    g.remove(&cid);
+                track_chunk_renewal(&held, &inflight, &cid, &out, false);
+                if out != HeartbeatOutcome::Renewed {
+                    // Not ours any more (or gone): renewal and signal release are disarmed.
                     eprintln!(
                         "zenfleet-worker: lease heartbeat for chunk {cid}: {out:?}; no longer renewed"
                     );
@@ -2858,13 +2967,20 @@ fn run_chunked(
             // requeue immediately instead of waiting out the full claim TTL. Same pattern as the
             // per-cell path's `inflight` below, just keyed on the chunk id string.
             let chunk_inflight: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-            spawn_spot_reclaim_chunk(chunk_inflight.clone(), &t.endpoint, &cc.bucket, &cc.prefix);
+            spawn_spot_reclaim_chunk(
+                chunk_inflight.clone(),
+                &t.endpoint,
+                &cc.bucket,
+                &cc.prefix,
+                &cfg.worker,
+            );
             // Long-cell lease safety: a fit chunk is one multi-hour cell, so renew held chunk
             // claims on a timer (see `spawn_chunk_heartbeat`), not only on cell completion.
             let held: HeldChunks = Arc::new(Mutex::new(Default::default()));
             if needs_chunk_heartbeat(desired) {
                 spawn_chunk_heartbeat(
                     held.clone(),
+                    chunk_inflight.clone(),
                     &t.endpoint,
                     &cc.bucket,
                     &cc.prefix,
@@ -2882,7 +2998,7 @@ fn run_chunked(
                 // Wrapped so a WON claim also records the chunk id for spot-reclaim (see above).
                 track_chunk_held(
                     held.clone(),
-                    track_chunk_inflight(chunk_inflight, |cid| {
+                    track_chunk_inflight(chunk_inflight.clone(), |cid| {
                         claim_or_steal_r2_key(
                             &t.endpoint,
                             &cc.bucket,
@@ -2907,20 +3023,40 @@ fn run_chunked(
                     );
                     let mut p = params;
                     let held_renew = held.clone();
+                    let inflight_renew = chunk_inflight.clone();
                     p.renew = Some(std::sync::Arc::new(
                         move |cid: &str, done: u32, total: u32| {
-                            if done >= total
-                                && let Ok(mut g) = held_renew.lock()
-                            {
-                                g.remove(cid);
-                            }
                             let now = std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_secs())
                                 .unwrap_or(0);
                             let key = format!("{}/{}", pfx.trim_matches('/'), cid);
-                            let body = format!("{now} {wk} {done}/{total}");
-                            let _ = crate::s3io::put(&ep, &bkt, &key, body.as_bytes());
+                            let out = renew_chunk_claim(
+                                || {
+                                    let (body, etag) = crate::s3io::get_with_etag(&ep, &bkt, &key)?;
+                                    Some((String::from_utf8_lossy(&body).into_owned(), etag))
+                                },
+                                |body, etag| {
+                                    crate::s3io::put_update(&ep, &bkt, &key, body.as_bytes(), etag)
+                                        .unwrap_or(false)
+                                },
+                                &wk,
+                                now,
+                                done,
+                                total,
+                            );
+                            track_chunk_renewal(
+                                &held_renew,
+                                &inflight_renew,
+                                cid,
+                                &out,
+                                done >= total,
+                            );
+                            if out != HeartbeatOutcome::Renewed {
+                                eprintln!(
+                                    "zenfleet-worker: progress renewal for chunk {cid}: {out:?}; no longer renewed"
+                                );
+                            }
                         },
                     ));
                     p
@@ -3200,7 +3336,13 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                     // to delete the claim is safe (not an async-signal handler). Best-effort — if the
                     // release misses, TTL stale-reclaim (goal E) still requeues it.
                     let inflight: Arc<Mutex<Option<JobId>>> = Arc::new(Mutex::new(None));
-                    spawn_spot_reclaim(inflight.clone(), &t.endpoint, &cc.bucket, &cc.prefix);
+                    spawn_spot_reclaim(
+                        inflight.clone(),
+                        &t.endpoint,
+                        &cc.bucket,
+                        &cc.prefix,
+                        &cfg.worker,
+                    );
                     execute_gap_claimed(
                         &desired,
                         &view,
@@ -4081,6 +4223,194 @@ mod tests {
             ),
             HeartbeatOutcome::Lost
         );
+    }
+
+    /// E26 loop: a stopped duplicate still remembers this chunk, but the claim
+    /// belongs to a later generation. Its SIGTERM release must not free that lease.
+    #[test]
+    fn workerfix_sigterm_ex_owner_does_not_restart_e26_claim_loop() {
+        let claim = std::cell::RefCell::new(Some(b"200 new-owner 0/1".to_vec()));
+        let inflight = Arc::new(Mutex::new(Some("chunk-tail".to_string())));
+        for ex_owner in ["old-owner", "older-owner", "oldest-owner"] {
+            assert_eq!(inflight.lock().unwrap().as_deref(), Some("chunk-tail"));
+            assert!(!release_owned_claim(
+                || claim.borrow().clone(),
+                || {
+                    *claim.borrow_mut() = None;
+                    true
+                },
+                ex_owner,
+            ));
+            assert_eq!(
+                claim.borrow().as_deref(),
+                Some(b"200 new-owner 0/1".as_slice())
+            );
+        }
+        // The real owner can still release for fast requeue.
+        assert!(release_owned_claim(
+            || claim.borrow().clone(),
+            || {
+                *claim.borrow_mut() = None;
+                true
+            },
+            "new-owner",
+        ));
+        assert!(claim.borrow().is_none());
+    }
+
+    #[test]
+    fn workerfix_release_refuses_missing_malformed_and_other_owner_claims() {
+        for body in [
+            None,
+            Some(b"".to_vec()),
+            Some(b"100".to_vec()),
+            Some(b"100 worker-other 0/1".to_vec()),
+            Some(vec![0xff]),
+        ] {
+            assert!(!release_owned_claim(
+                || body,
+                || panic!("unowned/unreadable claim must not be deleted"),
+                "worker",
+            ));
+        }
+        assert!(!release_owned_claim(
+            || panic!("missing identity must not access storage"),
+            || panic!("missing identity must not delete"),
+            "",
+        ));
+        assert!(release_owned_claim(
+            || Some(b"100 worker".to_vec()),
+            || true,
+            "worker"
+        ));
+        assert!(!release_owned_claim(
+            || Some(b"100 worker 0/1".to_vec()),
+            || false,
+            "worker"
+        ));
+    }
+
+    #[test]
+    fn workerfix_non_owner_progress_renew_cannot_clobber_new_owner() {
+        let claim =
+            std::cell::RefCell::new(("200 new-owner 0/1".to_string(), "etag-new".to_string()));
+        let original = claim.borrow().clone();
+        let out = renew_chunk_claim(
+            || Some(claim.borrow().clone()),
+            |body, _| {
+                claim.borrow_mut().0 = body.to_string();
+                true
+            },
+            "old-owner",
+            300,
+            1,
+            1,
+        );
+        assert_eq!(
+            *claim.borrow(),
+            original,
+            "ex-owner completion must not rewrite a live claim"
+        );
+        assert_eq!(out, HeartbeatOutcome::NotOwner);
+    }
+
+    #[test]
+    fn workerfix_owner_progress_renew_is_conditional_and_updates_progress() {
+        let wrote = std::cell::RefCell::new(None);
+        assert_eq!(
+            renew_chunk_claim(
+                || Some(("100 owner 0/4".to_string(), "etag-before".to_string())),
+                |body, etag| {
+                    *wrote.borrow_mut() = Some((body.to_string(), etag.to_string()));
+                    true
+                },
+                "owner",
+                200,
+                1,
+                4,
+            ),
+            HeartbeatOutcome::Renewed
+        );
+        assert_eq!(
+            wrote.into_inner(),
+            Some(("200 owner 1/4".to_string(), "etag-before".to_string()))
+        );
+    }
+
+    #[test]
+    fn workerfix_progress_renew_losing_cas_preserves_new_owner() {
+        let claim =
+            std::cell::RefCell::new(("100 owner 0/1".to_string(), "etag-before".to_string()));
+        let newer = ("150 new-owner 0/1".to_string(), "etag-after".to_string());
+        let out = renew_chunk_claim(
+            || {
+                let read = claim.borrow().clone();
+                *claim.borrow_mut() = newer.clone(); // steal between GET and PUT
+                Some(read)
+            },
+            |body, etag| {
+                let mut current = claim.borrow_mut();
+                if current.1 != etag {
+                    return false;
+                }
+                current.0 = body.to_string();
+                true
+            },
+            "owner",
+            200,
+            1,
+            1,
+        );
+        assert_eq!(out, HeartbeatOutcome::Lost);
+        assert_eq!(*claim.borrow(), newer);
+    }
+
+    #[test]
+    fn workerfix_progress_renew_unreadable_claim_does_not_create_or_overwrite() {
+        assert_eq!(
+            renew_chunk_claim(
+                || None,
+                |_, _| panic!("no readable claim: no PUT"),
+                "owner",
+                200,
+                1,
+                1,
+            ),
+            HeartbeatOutcome::Lost
+        );
+    }
+
+    #[test]
+    fn workerfix_ownership_loss_disarms_matching_chunk_without_clearing_next() {
+        for outcome in [HeartbeatOutcome::NotOwner, HeartbeatOutcome::Lost] {
+            let cid = "chunk-tail";
+            let held: HeldChunks = Arc::new(Mutex::new([cid.to_string()].into_iter().collect()));
+            let inflight: ChunkInflight = Arc::new(Mutex::new(Some(cid.to_string())));
+            track_chunk_renewal(&held, &inflight, cid, &outcome, false);
+            assert!(held.lock().unwrap().is_empty());
+            assert!(
+                inflight.lock().unwrap().is_none(),
+                "SIGTERM must not retain a lost chunk"
+            );
+        }
+        let held: HeldChunks = Arc::new(Mutex::new(
+            ["old".to_string(), "next".to_string()]
+                .into_iter()
+                .collect(),
+        ));
+        let inflight: ChunkInflight = Arc::new(Mutex::new(Some("next".to_string())));
+        track_chunk_renewal(&held, &inflight, "old", &HeartbeatOutcome::Lost, false);
+        assert_eq!(
+            *held.lock().unwrap(),
+            ["next".to_string()].into_iter().collect()
+        );
+        assert_eq!(inflight.lock().unwrap().as_deref(), Some("next"));
+        track_chunk_renewal(&held, &inflight, "next", &HeartbeatOutcome::Renewed, false);
+        assert!(held.lock().unwrap().contains("next"));
+        assert_eq!(inflight.lock().unwrap().as_deref(), Some("next"));
+        track_chunk_renewal(&held, &inflight, "next", &HeartbeatOutcome::Renewed, true);
+        assert!(held.lock().unwrap().is_empty());
+        assert!(inflight.lock().unwrap().is_none());
     }
 
     /// Only won claims enter the held set (a lost claim is another worker's lease), and the
