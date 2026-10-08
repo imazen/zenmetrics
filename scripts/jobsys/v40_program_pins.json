@@ -35,8 +35,8 @@
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
     "scripts/rev4_featpot/v40_launch.py": "dcfcf106b0664489253ce2471bc110fffc19ad10f26418573d78bc2c892dd36f",
     "scripts/rev4_featpot/v40_package.py": "8b9d2d88c13233b618c590adbf3e589d8e0118194cdff59e5b5c4997ecf6e147",
-    "scripts/rev4_featpot/v40_score.py": "8cb25446c0668c321a1da4dcbd7e57a565d351a89fe96f433d500c5aca1a2d32"
+    "scripts/rev4_featpot/v40_score.py": "dd550d18d64d694d9dc6e664ff31c9fdc0c851ad5bde610507bf59534448184f"
   },
   "schema": "v40-program-source-pins-v1",
-  "zensim_commit": "3cc0382ede994e011e83edcb17fd47298904664a"
+  "zensim_commit": "7e6fc683c515dc832bd519d2d9c34f001d55eb39"
 }
