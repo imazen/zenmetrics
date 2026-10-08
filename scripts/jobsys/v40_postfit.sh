@@ -42,17 +42,36 @@ done
 control=/var/tmp/rev4-featpot/v40-control-results
 pins="$bundle/V40_CONTROL_PINS.json"
 common=(--bundle "$bundle" --control "$control" --tools "$bundle/committed-tools" --control-pins "$pins")
+score_stdout=$(mktemp "$TMPDIR/v40-scorer-$study.XXXXXX")
 if [[ "$study" == control ]]; then
+    if [[ -e "$pins" || -e "$bundle/E29_CONTROL_PINS.json" ]]; then
+        printf 'REFUSED: fresh control artifacts required\n' >&2
+        exit 1
+    fi
     python3 "$bundle/score.py" "${common[@]}" --study e29 --freeze-control \
-        --results "$control" --root "$bundle/v2e29" --out "$bundle/control-freeze-unused"
+        --results "$control" --root "$bundle/v2e29" --out "$bundle/control-freeze-unused" > "$score_stdout"
+    cat "$score_stdout"
+    test -s "$score_stdout" || { printf 'REFUSED: empty scorer output\n' >&2; exit 1; }
+    command python3 "$bundle/score.py" "${common[@]}" --study e29 --freeze-control \
+        --results "$control" --root "$bundle/v2e29" --out "$bundle/control-freeze-unused" \
+        --verify-artifacts --scorer-output "$score_stdout"
     printf '==== V40 CONTROL FROZEN: %s\n' "$pins"
 else
     root="$bundle/v2e29"
     [[ "$study" != e32 ]] || root="$bundle/v2e32"
     [[ "$study" != e31 ]] || root="$bundle/v2d1"
-    out="/mnt/v/output/zensim/v40-assessment-$study-2026-10-07"
+    out="$bundle/assessment-$study"
+    if [[ -e "$out" ]]; then
+        printf 'REFUSED: fresh assessment artifacts required\n' >&2
+        exit 1
+    fi
     python3 "$bundle/score.py" "${common[@]}" --study "$study" \
-        --results "/var/tmp/rev4-featpot/v40-$study-results" --root "$root" --out "$out"
+        --results "/var/tmp/rev4-featpot/v40-$study-results" --root "$root" --out "$out" > "$score_stdout"
+    cat "$score_stdout"
+    test -s "$score_stdout" || { printf 'REFUSED: empty scorer output\n' >&2; exit 1; }
+    command python3 "$bundle/score.py" "${common[@]}" --study "$study" \
+        --results "/var/tmp/rev4-featpot/v40-$study-results" --root "$root" --out "$out" \
+        --verify-artifacts --scorer-output "$score_stdout"
     printf '==== V40 %s SDR RESULT: %s\n' "$study" "$out/decision.json"
 fi
 # HDR/external/UPIQ are separate commands requiring an exact exposure freeze.
