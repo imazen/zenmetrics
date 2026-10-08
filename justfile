@@ -19,6 +19,14 @@ GMSD_MDSI_TARGETS := env_var_or_default("GMSD_MDSI_TARGETS", "")
 default:
     @just --list
 
+# E29 local preparation; caller supplies frozen source, binaries and build metadata.
+fit-pack-e29 source bin_dir build_meta out:
+    TMPDIR=$HOME/tmp/e29 ~/work/zen/scripts/run-heavy --mem 8G --jobs 1 -- python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{bin_dir}} --build-meta {{build_meta}} --profile v2e29 --out {{out}}
+
+# Local manifest generation only: this does not enqueue a fleet job.
+fit-declare-e29 ctl spec out:
+    {{ctl}} declare-fits --spec {{spec}} --out {{out}}
+
 # NEVER `cargo fmt --all` — rustfmt can follow `mod`/path-dep edges into the
 # patched sibling repos (../zensim, ../../butteraugli, …) and rewrite files
 # we don't own. `cargo metadata --no-deps` lists exactly this workspace's
@@ -290,3 +298,21 @@ lock-check *args:
 
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
+
+# Local V40 package verification; no enqueue or publication.
+v40-fit-tools:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools
+
+v40-program source binaries metadata contract output:
+    python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{binaries}} --build-meta {{metadata}} --profile v40 --data benchmarks/v40_fit_contract_2026-10-07.json={{contract}} --out {{output}}
+
+v40-image bundle image:
+    docker build --build-arg FIT_PROGRAM_SHA=$(sha256sum {{bundle}}/program.tar.gz | cut -d' ' -f1) -t {{image}} {{bundle}}/image-context
+
+v40-harvest-refusals bundle attempt:
+    python3 scripts/jobsys/v40_harvest_refusals.py --bundle {{bundle}} --attempt {{attempt}}
+
+v40-postfit-checks:
+    bash -n scripts/jobsys/v40_postfit.sh
+    shellcheck scripts/jobsys/v40_postfit.sh
+    bash -c 'bash scripts/jobsys/v40_postfit.sh /nonexistent uh4 > "$HOME/tmp/v40/postfit-refusal.log" 2>&1; test "$?" -eq 2'
