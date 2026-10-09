@@ -3,13 +3,13 @@
 zenmetrics is a pure-Rust collection of full-reference image-quality metrics,
 with one CLI that scores any `(reference, distorted)` pair with any of them.
 
-It covers the perceptual metrics codec work leans on (SSIMULACRA2,
-Butteraugli, ColorVideoVDP, DSSIM, VMAF, HDR-VDP), the classical IQA set
-(SSIM, MS-SSIM, IW-SSIM, GMSD, FSIM, VSI, HaarPSI, VIF, MAD, NLPD, PSNR-HVS),
-and the exact variants the JPEG AIC-4 dataset publishes. Each metric is
-checked against its reference implementation; the measured residuals are in
-[DIVERGENCES.md](DIVERGENCES.md). Six of them also run on the GPU (CUDA,
-Vulkan, Metal, DX12) through CubeCL. `#![forbid(unsafe_code)]` throughout.
+Most metrics are ports of the authors' published method, checked against a
+reference implementation; the table below says which, and by how much, and
+[DIVERGENCES.md](DIVERGENCES.md) explains each difference. Where a dataset or tool computed
+a metric with its own conventions (the JPEG AIC-4 scores, libvmaf), that
+variant is available too, so published numbers can be reproduced. Six metrics
+also run on the GPU (CUDA, Vulkan, Metal, DX12) through CubeCL.
+`#![forbid(unsafe_code)]` throughout.
 
 ## Quick start
 
@@ -51,77 +51,42 @@ need a GPU; `zenmetrics list-formats` prints the decoders.
 
 ## Metrics
 
-All of these take sRGB 8-bit input through `--metric` in the default build,
-except where noted. "Matches" names the implementation each port is
-validated against; [docs/METRIC_PROVENANCE.md](docs/METRIC_PROVENANCE.md) has
-the papers, oracle commits and gated tolerances.
+Listed by name. "Validated against" is the implementation each port is
+checked against; "Worst difference" is the largest deviation we have measured
+from it, or the test's bound where marked ≤ ([DIVERGENCES.md](DIVERGENCES.md)
+has the conditions for each).
+[docs/METRIC_PROVENANCE.md](docs/METRIC_PROVENANCE.md) records oracle commits
+and tolerances. If you are an author and something here misdescribes your
+work, please open an issue.
 
-**Perceptual**
+| Metric | Authors | `--metric` | Validated against | Worst difference |
+|---|---|---|---|---|
+| Butteraugli | Jyrki Alakuijala, Google ([google/butteraugli](https://github.com/google/butteraugli)) | `butteraugli` (max-norm and libjxl 3-norm), `butteraugli-gpu` | libjxl's implementation, via the [`butteraugli`](https://github.com/imazen/butteraugli) crate | GPU vs CPU 1e-4 relative |
+| ColorVideoVDP | Rafał K. Mantiuk, Param Hanji, Maliha Ashraf, Yuta Asano, Alexandre Chapiro. ACM TOG 43(4), 2024 ([doi](https://doi.org/10.1145/3658144)) | `cvvdp` (requires `--display-model`), `cvvdp-gpu`; the `score-video` subcommand for video | pycvvdp 0.5.7 | 1.2e-5 JOD images, 2e-6 JOD video |
+| DSSIM | Kornel Lesiński ([kornelski/dssim](https://github.com/kornelski/dssim)) | `dssim`, `dssim-gpu` | `dssim-core` (called directly) | GPU twin tested against `dssim-core` |
+| FSIM | Lin Zhang, Lei Zhang, Xuanqin Mou, David Zhang. IEEE TIP 20(8), 2011 ([doi](https://doi.org/10.1109/TIP.2011.2109730)) | `fsim` (FSIMc), `fsim-y` (FSIM on luma) | authors' `FR_FSIMc.m`, GNU Octave | 5e-8 |
+| GMSD | Wufeng Xue, Lei Zhang, Xuanqin Mou, Alan C. Bovik. IEEE TIP 23(2), 2014 ([doi](https://doi.org/10.1109/TIP.2013.2293423)) | `gmsd` | [libgmsd](https://github.com/clunietp/libgmsd), Tom Clunie's C port of the authors' `GMSD.m` | similarity map bit-identical on even sizes |
+| HaarPSI | Rafael Reisenhofer, Sebastian Bosse, Gitta Kutyniok, Thomas Wiegand. Signal Processing: Image Communication 61, 2018 ([doi](https://doi.org/10.1016/j.image.2017.11.001)) | `haarpsi`, `haarpsi-y` (luma) | authors' `HaarPSI.m`, GNU Octave | 5e-5 |
+| HDR-VDP-2 | Rafał K. Mantiuk, Kil Joong Kim, Allan G. Rempel, Wolfgang Heidrich. ACM TOG 30(4), 2011 ([doi](https://doi.org/10.1145/1964921.1964935)); 2.2 recalibration: Manish Narwaria, Rafał K. Mantiuk, Matthieu Perreira Da Silva, Patrick Le Callet. JEI 24(1), 2015 ([doi](https://doi.org/10.1117/1.JEI.24.1.010501)) | `hdrvdp` (absolute-luminance input, via `--hdr`) | official HDR-VDP 2.2.2 MATLAB release, GNU Octave | Q 7.8e-4 |
+| HDR-VDP-3 | Rafał K. Mantiuk, Dounia Hammou, Param Hanji. arXiv:2304.13625, 2023 ([arXiv](https://arxiv.org/abs/2304.13625)) | `hdrvdp3` (`--hdr` plus explicit viewing conditions) | official HDR-VDP 3.0.7 MATLAB release | identical at print precision on 3 image pairs |
+| IW-SSIM | Zhou Wang, Qiang Li. IEEE TIP 20(5), 2011 ([doi](https://doi.org/10.1109/TIP.2010.2092435)) | `iwssim`, `iwssim-gpu`; `iwssim-piq` (jpeg-ai-qaf's unrounded-luma convention, used for the AIC-4 scores) | [Python-IW-SSIM](https://github.com/Jack-guo-xy/Python-IW-SSIM) @ `f9de37c` | 1e-5 identical inputs, 5e-3 distorted |
+| MAD | Eric C. Larson, Damon M. Chandler. JEI 19(1), 2010 ([doi](https://doi.org/10.1117/1.3267105)) | `mad` (also reports the two strategy indices) | authors' MATLAB and C release, GNU Octave | 1.3e-6 relative |
+| mDCT-PSNR | Thomas Richter. QoMEX 2009 ([doi](https://doi.org/10.1109/QOMEX.2009.5246978)) | `mdctpsnr` | author's [mDCTpsnr](https://github.com/thorfdbg/mDCTpsnr), as compiled | 4e-6 dB |
+| MDSI | Hossein Ziaei Nafchi, Atena Shahkolaei, Rachid Hedjam, Mohamed Cheriet. IEEE Access 4, 2016 ([doi](https://doi.org/10.1109/ACCESS.2016.2604042)) | `mdsi` | implemented from the paper; not yet compared with the authors' code | — |
+| MS-GMSD | Bo Zhang, Pedro V. Sander, Amine Bermak. ICASSP 2017 ([doi](https://doi.org/10.1109/ICASSP.2017.7952357)) | `ms-gmsd`, `ms-gmsdc` (with chroma) | implemented from the paper | — |
+| MS-SSIM | Zhou Wang, Eero P. Simoncelli, Alan C. Bovik. Asilomar 2003 ([doi](https://doi.org/10.1109/ACSSC.2003.1292216)) | `msssim`; `msssim-libvmaf` (libvmaf's `float_ms_ssim` convention) | authors' `msssim.m`, GNU Octave; libvmaf | 8.8e-6; libvmaf ≤2e-4 |
+| NLPD | Valero Laparra, Johannes Ballé, Alexander Berardino, Eero P. Simoncelli. HVEI 2016 ([doi](https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103)) | `nlpd`; `nlpd-iqa` (IQA_pytorch's single-channel configuration, used for the AIC-4 scores) | authors' PyTorch implementation; IQA_pytorch | 1e-5 |
+| PSNR | — | `psnr` (RGB); `psnr-y` (BT.709 luma), `psnr-y601` (BT.601), `psnr-y-studio601` (studio-swing BT.601, the JPEG and AIC-4 convention), `psnr-y-libvmaf` (studio-swing BT.709, as libvmaf) | — | — |
+| PSNR-HVS, PSNR-HVS-M | Karen Egiazarian, Jaakko Astola, Nikolay Ponomarenko, Vladimir Lukin, Federica Battisti, Marco Carli. VPQM 2006; Nikolay Ponomarenko, Flavia Silvestri, Karen Egiazarian, Marco Carli, Jaakko Astola, Vladimir Lukin. VPQM 2007 | `psnrhvs`, `psnrhvs-y` (luma); `psnrhvs-daala` (the Daala/Xiph integer-DCT version in libvmaf) | authors' `psnrhvsm.m`, GNU Octave; libvmaf | 4e-4 dB; libvmaf ≤2e-4 dB |
+| SSIM | Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, Eero P. Simoncelli. IEEE TIP 13(4), 2004 ([doi](https://doi.org/10.1109/TIP.2003.819861)) | `ssim` (Gaussian window, mean of R, G, B); `ssim-libvmaf` (libvmaf's `float_ssim` convention) | `ssim`: not yet compared with the authors' code; `ssim-libvmaf`: libvmaf | libvmaf ≤2e-4 |
+| SSIMULACRA 2 | Jon Sneyers, Cloudinary ([cloudinary/ssimulacra2](https://github.com/cloudinary/ssimulacra2)) | `ssim2`, `ssim2-gpu` | the C++ reference, via the [`fast-ssim2`](https://github.com/imazen/fast-ssim2) crate | tracked in `fast-ssim2` |
+| VIF | Hamid R. Sheikh, Alan C. Bovik. IEEE TIP 15(2), 2006 ([doi](https://doi.org/10.1109/TIP.2005.859378)) | `vifvec` (wavelet-domain vector GSM, as in the paper); `vif` (the authors' pixel-domain multi-scale VIFp release) | authors' `vifvec.m` with matlabPyrTools; `vifp_mscale.m`; GNU Octave | 1e-9; 5e-13 |
+| VMAF | Zhi Li et al., Netflix, 2016 ([Netflix/vmaf](https://github.com/Netflix/vmaf)) | `vmaf` (v0.6.1), `vmaf-neg`, `vmaf-4k`, `vmaf-v1` (v1.0.16) | libvmaf 3.2.1 | features ≤1e-4, score ≤0.02 |
+| VSI | Lin Zhang, Ying Shen, Hongyu Li. IEEE TIP 23(10), 2014 ([doi](https://doi.org/10.1109/TIP.2014.2346028)) | `vsi` | authors' `VSI.m`, GNU Octave | 1e-4 |
+| zensim | Imazen ([imazen/zensim](https://github.com/imazen/zensim)) | `zensim`, `zensim-gpu` | our own metric; the crate defines it | GPU vs CPU 2e-4 |
 
-| `--metric` | What it is | Scale | Matches |
-|---|---|---|---|
-| `ssim2` | SSIMULACRA2 (via [`fast-ssim2`](https://github.com/imazen/fast-ssim2)) | 0–100, higher is better | Cloudinary `ssimulacra2` |
-| `butteraugli` | Butteraugli; emits max and libjxl 3-norm | distance, 0 = identical | libjxl butteraugli |
-| `cvvdp` | ColorVideoVDP, still images (`--display-model` required) | JOD 0–10, 10 = no visible difference | pycvvdp 0.5.7 |
-| `dssim` | DSSIM (via `dssim-core`) | distance, 0 = identical | dssim-core |
-| `zensim` | Imazen's trained metric (via [`zensim`](https://github.com/imazen/zensim)) | 0–100 | in-house |
-| `hdrvdp` | HDR-VDP 2.2.2 — absolute-luminance input only, via `--hdr` | Q, higher is better | official MATLAB 2.2.2 |
-| `hdrvdp3` | HDR-VDP 3.0.7 — `--hdr` plus explicit viewing conditions (`--hdrvdp3-ppd`) | JOD 0–10 | official MATLAB 3.0.7 |
-
-**Video-codec metrics**
-
-| `--metric` | What it is | Scale | Matches |
-|---|---|---|---|
-| `vmaf` | VMAF v0.6.1 | 0–100 | libvmaf 3.2.1 |
-| `vmaf-neg` | VMAF v0.6.1 NEG (no enhancement gain) | 0–100 | libvmaf 3.2.1 |
-| `vmaf-4k` | VMAF v0.6.1 4K model | 0–100 | libvmaf 3.2.1 |
-| `vmaf-v1` | VMAF v1.0.16 (3d0h) | 0–100 | libvmaf 3.2.1 |
-| `ssim-libvmaf` | libvmaf `float_ssim` | 0–1 | libvmaf (FFI oracle) |
-| `msssim-libvmaf` | libvmaf `float_ms_ssim` | 0–1 | libvmaf (FFI oracle) |
-| `psnrhvs-daala` | Daala/Xiph integer PSNR-HVS | dB | libvmaf `psnr_hvs` (FFI oracle) |
-
-**Structural and statistical**
-
-| `--metric` | What it is | Scale | Matches |
-|---|---|---|---|
-| `ssim` | single-scale SSIM, 11-tap Gaussian, per RGB channel | 0–1 | — |
-| `msssim` | MS-SSIM (Wang et al. 2003), luma | 0–1 | authors' `msssim.m` |
-| `iwssim` | IW-SSIM (Wang & Li 2011) | 0–1 | Python-IW-SSIM f9de37c |
-| `iwssim-piq` | IW-SSIM on unrounded luma (the AIC-4 column) | 0–1 | jpeg-ai-qaf `IW_SSIM` |
-| `vif` | VIFp, multi-scale pixel domain | ≥0, ~1 = identical | authors' `vifp_mscale.m` |
-| `vifvec` | VIF, steerable-pyramid vector GSM (a different algorithm) | ≥0, ~1 = identical | authors' `vifvec.m` |
-| `mad` | MAD (Larson & Chandler 2010) | distance, 0 = identical | official MATLAB release |
-| `nlpd` | Normalized Laplacian Pyramid Distance, RGB (Laparra et al.) | distance, 0 = identical | authors' PyTorch reference |
-| `nlpd-iqa` | NLPD, `IQA_pytorch` single-channel configuration (the AIC-4 column) | distance, 0 = identical | `IQA_pytorch` |
-
-**Gradient, phase and saliency**
-
-| `--metric` | What it is | Scale | Matches |
-|---|---|---|---|
-| `gmsd` | GMSD (Xue et al. 2014) | distance, 0 = identical | libgmsd |
-| `ms-gmsd` | multi-scale GMSD | distance, 0 = identical | paper |
-| `ms-gmsdc` | multi-scale GMSD with colour | distance, 0 = identical | paper |
-| `mdsi` | MDSI (Nafchi et al. 2016) | distance, 0 = identical | paper |
-| `fsim`, `fsim-y` | FSIMc / FSIM on luma | 0–1 | authors' `FR_FSIMc.m` |
-| `vsi` | VSI (Zhang et al. 2014) | 0–1 | authors' `VSI.m` |
-| `haarpsi`, `haarpsi-y` | HaarPSI / on luma | 0–1 | authors' `haarpsi.m` |
-
-**PSNR family**
-
-| `--metric` | What it is | Scale |
-|---|---|---|
-| `psnr` | PSNR over RGB8 | dB |
-| `psnr-y` | PSNR on full-range BT.709 luma | dB |
-| `psnr-y601` | PSNR on full-range BT.601 luma (the MATLAB `rgb2gray` convention) | dB |
-| `psnr-y-studio601` | PSNR on studio-swing BT.601 luma (the JPEG / AIC-4 `PSNR-Y` column) | dB |
-| `psnr-y-libvmaf` | PSNR on studio-swing BT.709 luma (what libvmaf's `psnr` feature reports) | dB |
-| `psnrhvs`, `psnrhvs-y` | PSNR-HVS and PSNR-HVS-M (Ponomarenko, `psnrhvsm.m`); `-y` on luma | dB |
-| `mdctpsnr` | mDCT-PSNR (Richter 2009), matches the compiled `thorfdbg/mDCTpsnr` | dB |
-
-**GPU twins** (`--features gpu-<metric>`; CUDA or wgpu): `ssim2-gpu`,
-`butteraugli-gpu`, `dssim-gpu`, `iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`. Each
-is parity-tested against its CPU twin; tolerances are in
-[docs/GPU_METRIC_PARITY.md](docs/GPU_METRIC_PARITY.md).
+The `-gpu` variants need `--features gpu-<metric>` and run on CUDA or wgpu;
+[docs/GPU_METRIC_PARITY.md](docs/GPU_METRIC_PARITY.md) has their tolerances.
 
 ### Flags that change scores
 
@@ -137,26 +102,14 @@ is parity-tested against its CPU twin; tolerances are in
   luminance and feeds each metric its HDR path. See
   [docs/HDR_COMMON_PRIMARIES_2026-09-15.md](docs/HDR_COMMON_PRIMARIES_2026-09-15.md).
 
-## What does it cost?
+## How fast are these implementations?
 
-Single-threaded, on one 3355×2516 (8.4 MP) photo pair, in the default CLI
-build. Each metric ran in its own process; the figure is the second (warm)
-call. Ryzen 9 7900X. Full table, 1 MP figures, peak memory and caveats:
-[benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t_2026-10-09.md).
-
-| Time per pair | Metrics |
-|---|---|
-| under 20 ms | `psnr`, `psnr-y`, `gmsd`, `mdsi` |
-| 0.1–0.5 s | `ssim-libvmaf`, `psnrhvs`, `haarpsi`, `vmaf`¹, `ms-gmsd`, `ms-gmsdc`, `nlpd-iqa`, `psnrhvs-daala`, `msssim`, `nlpd`, `zensim` |
-| 0.6–1.8 s | `vsi`, `iwssim`, `iwssim-piq`, `fsim`, `msssim-libvmaf`, `ssim2`, `vif`, `butteraugli`, `ssim`, `cvvdp`, `dssim` |
-| 3.8 s | `vifvec` |
-| about 1 minute | `mad` (59.7 s), `mdctpsnr` (65.8 s) |
-
-<sub>¹ at 3354×2516; `vmaf` refuses odd widths.</sub>
-
-`mad` grows about 3.8× faster than pixel count between 1 MP and 8.4 MP; the
-cause is not yet known. Only `zensim`, `dssim` and `butteraugli` use more than
-one thread in the default build (see Limitations).
+These are timings of our ports, not of the metrics: several ports are not
+optimized yet. On one 3355×2516 (8.4 MP) photo pair, single-threaded on a Ryzen
+9 7900X, most take 0.1–2 s; `psnr`, `gmsd` and `mdsi` take under 20 ms;
+our `mad` and `mdctpsnr` ports take about a minute each, and our `mad` grows
+faster than pixel count. Per-metric figures, peak memory, threading and
+caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t_2026-10-09.md).
 
 ## Other subcommands
 
@@ -194,10 +147,11 @@ one thread in the default build (see Limitations).
 - `vmaf` rejects odd image dimensions. Crop to even sizes first.
 - `hdrvdp` and `hdrvdp3` need absolute-luminance input (`--hdr`); they refuse
   sRGB pairs.
-- Deep-learning metrics (LPIPS, DISTS, TOPIQ and similar) are out of scope:
-  everything here is classical or trained-but-small Rust.
-- `ms-gmsd`, `ms-gmsdc` and `mdsi` are paper-derived; there is no author
-  software to reproduce, so their parity claims are weaker than the others'.
+- Metrics that need a neural-network runtime (LPIPS, DISTS, TOPIQ and
+  similar) are not included.
+- `ms-gmsd`, `ms-gmsdc` and `mdsi` are implemented from their papers and
+  have not yet been compared with the authors' code; `ssim` has not been
+  compared with the authors' `ssim_index.m`.
 
 ## Documentation
 
