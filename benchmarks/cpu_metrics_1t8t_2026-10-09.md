@@ -1,6 +1,6 @@
 # CPU metric cost at 1 and 8 threads, 1 MP and 8.4 MP — 2026-10-09
 
-Every CPU metric the CLI scores from sRGB8 (29; vmaf refused the 8.4 MP frame), timed through the shipped
+Every CPU metric the CLI scores from sRGB8 (29; vmaf at 8.4 MP is measured at 3354×2516, since it refuses the odd width), timed through the shipped
 dispatch (`zenmetrics_cli::metrics::run_metric_display`, `GpuRuntime::Cpu`) on one
 real photo pair: `zenmetrics-corpus` `source.png` against its q20 JPEG, mirror-tiled to
 1024×1024 and to 3355×2516 (8.4 MP, odd width). Host r7900x (Ryzen 9 7900X, Zen 4).
@@ -29,7 +29,7 @@ measured.
 | nlpd-iqa | 26.1 | 14.5 | 1.80 | 330 | 302 | 1.09 | 39.1 | 1.57 | 424 |
 | ms-gmsd | 29.5 | 12.2 | 2.42 | 298 | 247 | 1.20 | 35.2 | 1.25 | 539 |
 | ms-gmsdc | 30.3 | 12.2 | 2.49 | 297 | 258 | 1.15 | 35.2 | 1.22 | 539 |
-| vmaf | 33.0 | 32.4 | 1.02 | refused | - | - | - | - | 54 |
+| vmaf† | 33.0 | 32.4 | 1.02 | 273 | 312 | 0.87 | 32.3 | 1.03 | 373 |
 | msssim | 39.9 | 28.7 | 1.39 | 417 | 402 | 1.04 | 49.4 | 1.30 | 471 |
 | nlpd | 42.3 | 27.9 | 1.52 | 467 | 441 | 1.06 | 55.4 | 1.37 | 586 |
 | psnrhvs-daala | 46.4 | 47.8 | 0.97 | 384 | 378 | 1.02 | 45.5 | 1.03 | 103 |
@@ -48,6 +48,8 @@ measured.
 | vifvec | 489 | 470 | 1.04 | 3,828 | 3,819 | 1.00 | 454 | 0.97 | 569 |
 | mad | 1,929 | 1,598 | 1.21 | 59,680 | 60,337 | 0.99 | 7,070 | 3.84 | 1,309 |
 | mdctpsnr | 8,189 | 7,740 | 1.06 | 65,844 | 63,626 | 1.03 | 7,800 | 1.00 | 124 |
+
+† vmaf's 8.4 MP columns are at 3354×2516 (8.44 MP); the 3355×2516 frame is refused.
 
 `1t scaling vs linear` = (1t 8.4 MP time ÷ 1t 1 MP time) ÷ 8.05, the pixel ratio. 1.0
 is linear; above 1 grows faster than pixel count. Max RSS includes ~54 MiB of decoded
@@ -72,7 +74,9 @@ inputs (psnr's peak is the floor).
    frames this means pair-level parallelism (one thread per pair), not threads per pair.
 4. **vmaf refuses the 3355×2516 frame:** "VMAF requires matching, even dimensions
    >= 32". Any odd-width or odd-height image cannot be VMAF-scored through the CLI.
-   Whether libvmaf itself accepts odd sizes was not checked.
+   Whether libvmaf itself accepts odd sizes was not checked. Cropped to 3354×2516 it
+   scores 89.24 and takes 273 ms at 1 thread and 312 ms at 8 threads (zenbench, 3
+   rounds): no gain from threads, as at 1 MP (1.02×).
 5. **Memory at 8.4 MP, 1t (max RSS):** cvvdp 1,761 MiB, butteraugli 1,385, mad 1,309,
    ssim2 1,270, dssim 975, vif 907. Lowest: psnrhvs-daala 103 MiB, fsim 120, mdctpsnr
    124.

@@ -1,0 +1,2 @@
+size_label	metric	mode	cold_or_warm	w	h	mean_ns	mean_ms	n_rounds	score	content	rayon_threads	cpus
+3354x2516	vmaf	lat	na	3354	2516	312027999.3	312.0280	3	89.24107200604682	photo	8	8

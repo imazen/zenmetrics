@@ -11,6 +11,8 @@ legs:
   mt8_photo_1024.tsv           zenbench lat, 8t, 1024x1024, wall 150 s, 3 rounds
   mt8_photo_3355x2516.tsv      zenbench lat, 8t, 3355x2516, 1 round (single call per metric)
   logs/heap_st_3355x2516_*.log 1t, 3355x2516, `new-metrics-wall heap` cold+warm call, /usr/bin/time -v (max RSS)
+  mt8_photo_3354x2516.tsv      vmaf only, 8t, zenbench 3 rounds (vmaf refuses the odd 3355 width)
+  logs/heap_st_3354x2516_vmaf.log  vmaf only, 1t, cold+warm call (clean: load1 <= 0.32)
 reproduce: just cpu-metrics-1t8t benchmarks/cpu_metrics_1t8t_<date> 1024 3355x2516
 contention (5 s samples of other processes >50% CPU; another agent's cargo build/test shared the box):
   st_photo_1024        CONTENDED  15/44 samples busy, max load1 3.30
