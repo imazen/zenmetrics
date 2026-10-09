@@ -1454,8 +1454,9 @@ pub fn dump_debug(reference: &[u8], distorted: &[u8], width: usize, height: usiz
 }
 
 /// The reference's `-jnd` remap (`main.cpp`): JND units from the dB score.
-/// The AIC-4 `mDCT-PSNR` column is the plain dB score; this is only for
-/// parity with the optional flag.
+/// The AIC2026 `mDCT-PSNR` column is the plain dB score; its
+/// `proposal-mDCTPSNR` column is this remap of it (all 9,618 rows agree to
+/// 5e-9, checked 2026-10-09).
 pub fn mdct_psnr_jnd(score_db: f32) -> f32 {
     let err = 80.0 - score_db;
     let err = if err < 0.0 { 0.0 } else { err };

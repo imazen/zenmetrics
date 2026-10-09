@@ -188,7 +188,8 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `NLPD` | ~0.03–0.22 | `IQA_pytorch` `NLPD(channels=1)` (dingkeyan93, not pyiqa) — BT.709 Y `[0,1]` 8-bit-gridded, mean-of-RMS pooling | ✅ implemented — `nlpd-iqa` (med 2.6e-3 / max 6.7e-3, med-rel 2.63%, n=53; `nlpd` is the RGB/Laparra variant — ≈20.5× off, deliberately distinct) |
 | `CW-SSIM`, `CIEDE2000`, `FLIP` | — | pyiqa / colour metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
-| `proposal-*` (Butteraugli, DVIFM, mDCTPSNR) | — | AIC-4 **submitted** metrics — not public impls; DVIFM is by Maciej Pedzisz (Nokia) | ⬜ unreproducible by design |
+| `proposal-*` (Butteraugli, DVIFM, IDFIQA) | — | AIC-4 **submitted** metrics; DVIFM is by Maciej Pedzisz (Nokia); IDFIQA is by Khakpour, Yademellat & Mansouri (ICCKE 2025, PyTorch, CNN features) | ⬜ not reproduced |
+| `proposal-mDCTPSNR` | — | mDCT-PSNR's reference `-jnd` remap `0.000475997802·max(0, 80 − dB)^2.3182` (fits all 9,618 rows to 5e-9 from the `mDCT-PSNR` column) | ✅ reproducible via `mdctpsnr::mdct_psnr_jnd`; ≤3e-6 JND |
 
 ### 4.1 JND-normalized deltas
 

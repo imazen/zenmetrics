@@ -203,9 +203,13 @@ caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t
   sRGB pairs.
 - Metrics that need a neural-network runtime (LPIPS, DISTS, TOPIQ and
   similar) are not included.
-- The metrics proposed to JPEG AIC-4 are not reproduced here yet, among them
-  DVIFM, the Distortion Visibility Image Fidelity Measure by Maciej Pedzisz
-  (Nokia), and the proposal variants of Butteraugli and mDCT-PSNR.
+- Most metrics proposed to JPEG AIC-4 are not reproduced here yet: DVIFM, the
+  Distortion Visibility Image Fidelity Measure by Maciej Pedzisz (Nokia); IDFIQA
+  by Amirreza Khakpour, Sina Yademellat and Azadeh Mansouri, which needs a
+  pretrained CNN; and the proposal variant of Butteraugli. The
+  `proposal-mDCTPSNR` column is mDCT-PSNR in JND units, from the reference
+  tool's `-jnd` option, which the `mdctpsnr` crate reproduces as
+  `mdct_psnr_jnd`.
 - `ms-gmsd`, `ms-gmsdc` and `mdsi` are implemented from their papers and
   have not yet been compared with the authors' code; `ssim` has not been
   compared with the authors' `ssim_index.m`.
