@@ -1142,6 +1142,7 @@ dependencies = [
  "tempfile",
  "zenbench",
  "zenmetrics-cli",
+ "zenmetrics-corpus",
  "zensim 0.3.0",
 ]
 

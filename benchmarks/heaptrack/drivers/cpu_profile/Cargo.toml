@@ -59,7 +59,9 @@ nlpd         = { path = "../../../../crates/nlpd" }
 # cpu-metrics only: pulls nlpd + tempfile + the native-CPU backends — the same
 # dep set this crate already builds — plus the umbrella (`zenmetrics-api`)
 # native-CPU dispatch. No GPU/cubecl/codec deps enabled.
-zenmetrics-cli = { path = "../../../../crates/zenmetrics-cli", default-features = false, features = ["cpu-metrics"] }
+zenmetrics-cli = { path = "../../../../crates/zenmetrics-cli", default-features = false, features = ["cpu-metrics", "png", "jpeg"] }
+# Real-photo content class for `NMW_CONTENT=photo` (source.png + q20.jpg pair).
+zenmetrics-corpus = { path = "../../../../crates/zenmetrics-corpus" }
 # Thread-scaling cells (`par1/par4/par8`): a direct rayon dep for THIS bin's
 # pair-level parallelism only — does NOT turn on fast-ssim2's `rayon` feature
 # (the aarch64 caveat above still holds; fast-ssim2 stays off-rayon).
@@ -80,7 +82,7 @@ incremental = false
 name = "loop-wall"
 path = "src/bin/loop_wall.rs"
 
-# Task 2026-09-24: wall-time + thread-scaling + heaptrack driver for the NEW
+# Task 2026-09-24 (extended 2026-10-09 to the 09-22..27 metric batch): wall-time + thread-scaling + heaptrack driver for the NEW
 # metrics (nlpd / psnr / psnr-y / ssim / ms-ssim + the libvmaf adapter's
 # RGB→YUV420 conversion half — no `vmaf` binary required). Goes through the
 # REAL `zenmetrics_cli::metrics::run_metric` dispatch so the numbers are the

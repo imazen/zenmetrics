@@ -12,6 +12,12 @@
 //!   yuv420     (the VMAF adapter's RGB→YUV420 + file-write half;
 //!               `metrics/vmaf.rs::write_yuv420`)
 //!
+//! 2026-10-09 — extended to the 2026-09-22..27 batch (gmsd, mdsi, ms-gmsd,
+//! psnrhvs, psnrhvs-daala, haarpsi, fsim, vsi, msssim, msssim-libvmaf,
+//! ssim-libvmaf, vif, vifvec, mad, mdctpsnr, nlpd-iqa, vmaf), two extra
+//! sizes below the old floor (64, 256: tiny/small per the sweep rules, where
+//! fixed per-call cost shows) and a content axis (`NMW_CONTENT`).
+//!
 //! All metric cells go through the REAL `zenmetrics_cli::metrics::run_metric`
 //! dispatch (yuv420 calls `vmaf::write_yuv420` directly — the conversion is
 //! the in-process cost).
@@ -27,11 +33,21 @@
 //! Usage:
 //!   new-metrics-wall <size_label> <out_tsv> [metric_filter]
 //!   new-metrics-wall heap <size_label> [metric_filter]   # fixed serial reps
-//!   size_label ∈ { 512 1024 4K 8K }
-//!   metric_filter ∈ { nlpd psnr psnr-y ssim yuv420 }
+//!   size_label ∈ { 64 256 512 1024 4K 8K } or any `<W>x<H>` (e.g. 3355x2516)
+//!   metric_filter ∈ any name in `METRICS`, or `yuv420`
+//!   NMW_MODES = comma list of lat,par1,par4,par8 (default: all four)
+//!   NMW_GROUP_WALL_S / NMW_CELL_MAX_S / NMW_MIN_ROUNDS override the
+//!     per-size zenbench budget (short exploratory runs)
+//!   NMW_CONTENT ∈ { synth (default) photo }
+//!     synth — the modular-arithmetic pattern shared with cpu_wall.rs.
+//!     photo — `zenmetrics-corpus` source.png (real photo, 256²) as the
+//!             reference and its q20 JPEG as the distorted side, both
+//!             mirror-tiled to the target size so edges stay continuous
+//!             and the pair stays pixel-aligned. Real codec distortion.
 //!
 //! TSV columns (same shape as cpu_wall so the join tooling still parses):
-//!   size_label  metric  mode  cold_or_warm  w  h  mean_ns  mean_ms  n_rounds  score
+//!   size_label  metric  mode  cold_or_warm  w  h  mean_ns  mean_ms  n_rounds  score  content
+//!   rayon_threads  cpus
 //! For `par{T}` rows, mean_ns/mean_ms are per-PAIR (iter wall / T), not per
 //! iter — `n_rounds` still counts iters.
 //!
@@ -42,13 +58,15 @@ use std::env;
 use std::fs::OpenOptions;
 use std::hint::black_box;
 use std::io::Write;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use rayon::prelude::*;
 use zenbench::prelude::*;
 
 use zenmetrics_cli::decode::Rgb8Image;
-use zenmetrics_cli::metrics::{GpuRuntime, MetricKind, run_metric};
+use zenmetrics_cli::metrics::display::{CvvdpDisplay, parse_display};
+use zenmetrics_cli::metrics::{GpuRuntime, MetricKind, run_metric_display};
 
 // ---------------------------------------------------------------------------
 // Synthetic inputs — identical pattern to cpu_wall.rs / the heaptrack driver
@@ -85,23 +103,113 @@ fn synth_pair(width: u32, height: u32) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
+/// Content axis. `NMW_CONTENT=photo` loads the corpus pair and mirror-tiles
+/// it; anything else (or unset) is the synthetic pattern.
+fn content_label() -> &'static str {
+    match env::var("NMW_CONTENT").as_deref() {
+        Ok("photo") => "photo",
+        Ok("synth") | Err(_) => "synth",
+        Ok(other) => {
+            eprintln!("bad NMW_CONTENT={other} (want synth|photo)");
+            std::process::exit(64);
+        }
+    }
+}
+
+/// Mirror index: 0..n-1, n-1..0, 0..n-1, ... — continuous across tile seams.
+fn mirror(i: usize, n: usize) -> usize {
+    let m = i % (2 * n);
+    if m < n { m } else { 2 * n - 1 - m }
+}
+
+fn mirror_tile(src: &Rgb8Image, width: u32, height: u32) -> Vec<u8> {
+    let (sw, sh) = (src.width as usize, src.height as usize);
+    let (w, h) = (width as usize, height as usize);
+    let mut out = vec![0u8; w * h * 3];
+    for y in 0..h {
+        let sy = mirror(y, sh);
+        for x in 0..w {
+            let sx = mirror(x, sw);
+            let si = (sy * sw + sx) * 3;
+            let di = (y * w + x) * 3;
+            out[di..di + 3].copy_from_slice(&src.pixels[si..si + 3]);
+        }
+    }
+    out
+}
+
+fn photo_pair(width: u32, height: u32) -> (Vec<u8>, Vec<u8>) {
+    use zenmetrics_cli::decode::decode_image_to_rgb8;
+    let r = decode_image_to_rgb8(&zenmetrics_corpus::source_png()).expect("decode source.png");
+    let d = decode_image_to_rgb8(&zenmetrics_corpus::jpeg_at_quality(20)).expect("decode q20.jpg");
+    assert_eq!((r.width, r.height), (d.width, d.height), "corpus pair dims");
+    (
+        mirror_tile(&r, width, height),
+        mirror_tile(&d, width, height),
+    )
+}
+
+fn make_pair(width: u32, height: u32) -> (Vec<u8>, Vec<u8>) {
+    match content_label() {
+        "photo" => photo_pair(width, height),
+        _ => synth_pair(width, height),
+    }
+}
+
 fn size_dims(label: &str) -> Option<(u32, u32)> {
     match label {
+        "64" => Some((64, 64)),
+        "256" => Some((256, 256)),
         "512" => Some((512, 512)),
         "1024" => Some((1024, 1024)),
         // UHD raster sizes, not square — "4k"/"8k" in the request means the
         // video-raster convention (3840×2160 / 7680×4320).
         "4K" => Some((3840, 2160)),
         "8K" => Some((7680, 4320)),
-        _ => None,
+        // Any explicit `<W>x<H>`, e.g. `3355x2516` (an 8.4 MP camera frame).
+        other => {
+            let (w, h) = other.split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        }
     }
 }
 
+/// Every CPU metric the CLI scores from packed sRGB u8 (`run_metric_display`
+/// with `GpuRuntime::Cpu`). Luma-only twins (`*-y`) and the alternate VMAF
+/// models are left out: they share their parent's kernels. `cvvdp` is scored
+/// on `standard_fhd` (the CLI requires an explicit display; FHD is the AIC
+/// convention). `hdrvdp`/`hdrvdp3` are absent on purpose: they refuse sRGB8
+/// (absolute-nits input only); `crates/hdrvdp/benches/pipeline.rs` times v2.
 const METRICS: &[(&str, MetricKind)] = &[
-    ("nlpd", MetricKind::Nlpd),
     ("psnr", MetricKind::Psnr),
     ("psnr-y", MetricKind::PsnrY),
     ("ssim", MetricKind::Ssim),
+    ("ssim2", MetricKind::Ssim2),
+    ("butteraugli", MetricKind::Butteraugli),
+    ("dssim", MetricKind::Dssim),
+    ("zensim", MetricKind::Zensim),
+    ("cvvdp", MetricKind::Cvvdp),
+    ("iwssim", MetricKind::Iwssim),
+    ("iwssim-piq", MetricKind::IwssimPiq),
+    ("nlpd", MetricKind::Nlpd),
+    ("nlpd-iqa", MetricKind::NlpdIqa),
+    ("ms-gmsdc", MetricKind::MsGmsdc),
+    ("gmsd", MetricKind::Gmsd),
+    ("mdsi", MetricKind::Mdsi),
+    ("ms-gmsd", MetricKind::MsGmsd),
+    ("psnrhvs", MetricKind::Psnrhvs),
+    ("psnrhvs-daala", MetricKind::PsnrhvsDaala),
+    ("haarpsi", MetricKind::Haarpsi),
+    ("fsim", MetricKind::Fsim),
+    ("vsi", MetricKind::Vsi),
+    ("msssim", MetricKind::Msssim),
+    ("msssim-libvmaf", MetricKind::MsssimLibvmaf),
+    ("ssim-libvmaf", MetricKind::SsimLibvmaf),
+    ("vif", MetricKind::Vif),
+    ("vifvec", MetricKind::VifVec),
+    ("mad", MetricKind::Mad),
+    ("mdctpsnr", MetricKind::Mdctpsnr),
+    ("vmaf", MetricKind::Vmaf),
 ];
 
 fn mk_image(pixels: Vec<u8>, w: u32, h: u32) -> Rgb8Image {
@@ -127,8 +235,34 @@ fn score_once(metric: &str, r: &Rgb8Image, d: &Rgb8Image, lane: usize) -> f64 {
         .find(|(n, _)| *n == metric)
         .map(|(_, k)| *k)
         .unwrap_or_else(|| panic!("unknown metric {metric}"));
-    let cols = run_metric(kind, r, d, GpuRuntime::Cpu).unwrap();
+    let cols = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(cvvdp_display()))
+        .unwrap_or_else(|e| panic!("{metric}: {e}"));
     cols[0].1
+}
+
+fn cvvdp_display() -> &'static CvvdpDisplay {
+    static DISPLAY: OnceLock<CvvdpDisplay> = OnceLock::new();
+    DISPLAY.get_or_init(|| parse_display("standard_fhd").expect("standard_fhd display"))
+}
+
+/// `NMW_MODES` (comma list of `lat,par1,par4,par8`; default all) picks the
+/// timing modes, so a short budget can run `lat` alone.
+fn mode_enabled(mode: &str) -> bool {
+    match env::var("NMW_MODES") {
+        Ok(list) => list.split(',').any(|m| m.trim() == mode),
+        Err(_) => true,
+    }
+}
+
+/// Budget overrides for short exploratory runs: `NMW_GROUP_WALL_S`,
+/// `NMW_CELL_MAX_S`, `NMW_MIN_ROUNDS` replace the per-size defaults.
+fn env_override<T: std::str::FromStr>(name: &str, default: T) -> T {
+    match env::var(name) {
+        Ok(v) => v
+            .parse()
+            .unwrap_or_else(|_| panic!("{name}={v} does not parse")),
+        Err(_) => default,
+    }
 }
 
 fn main() {
@@ -141,8 +275,8 @@ fn main() {
         eprintln!(
             "usage: new-metrics-wall <size_label> <out_tsv> [metric_filter]\n  \
              or:  new-metrics-wall heap <size_label> [metric_filter]\n  \
-             size_label: 512 1024 4K 8K\n  \
-             metric_filter (optional): nlpd psnr psnr-y ssim yuv420"
+             size_label: 64 256 512 1024 4K 8K or <W>x<H>\n  \
+             metric_filter (optional): see METRICS in the source, or yuv420"
         );
         std::process::exit(64);
     }
@@ -158,7 +292,7 @@ fn main() {
         }
     };
 
-    let (rv, dv) = synth_pair(w, h);
+    let (rv, dv) = make_pair(w, h);
     let r: &'static Rgb8Image = Box::leak(Box::new(mk_image(rv, w, h)));
     let d: &'static Rgb8Image = Box::leak(Box::new(mk_image(dv, w, h)));
 
@@ -186,21 +320,51 @@ fn main() {
     ));
 
     let (group_wall, per_cell_max_time, min_rounds) = match label.as_str() {
-        "512" => (Duration::from_secs(600), Duration::from_secs(15), 8usize),
-        "1024" => (Duration::from_secs(900), Duration::from_secs(30), 6),
-        "4K" => (Duration::from_secs(1500), Duration::from_secs(90), 3),
-        "8K" => (Duration::from_secs(3600), Duration::from_secs(300), 2),
-        _ => (Duration::from_secs(600), Duration::from_secs(15), 8),
+        "64" | "256" => (Duration::from_secs(600), Duration::from_secs(5), 20usize),
+        "512" => (Duration::from_secs(1200), Duration::from_secs(15), 8usize),
+        "1024" => (Duration::from_secs(1800), Duration::from_secs(30), 6),
+        "4K" => (Duration::from_secs(3600), Duration::from_secs(90), 3),
+        "8K" => (Duration::from_secs(7200), Duration::from_secs(300), 2),
+        _ => (Duration::from_secs(3600), Duration::from_secs(120), 3),
     };
+    let group_wall = Duration::from_secs(env_override("NMW_GROUP_WALL_S", group_wall.as_secs()));
+    let per_cell_max_time =
+        Duration::from_secs(env_override("NMW_CELL_MAX_S", per_cell_max_time.as_secs()));
+    let min_rounds = env_override("NMW_MIN_ROUNDS", min_rounds);
 
     let mut metric_names: Vec<&'static str> = METRICS
         .iter()
         .map(|(n, _)| *n)
         .filter(|n| want(n))
         .collect();
-    if want("yuv420") {
+    // yuv420 timed the write half of the exec-based libvmaf adapter, which
+    // 29eb904a removed; it now runs only when asked for by name.
+    if metric_filter.as_deref() == Some("yuv420") {
         metric_names.push("yuv420");
     }
+
+    // Probe each metric once before timing. A metric that refuses this size
+    // (iwssim's 5-level pyramid needs min dim >= 176) is dropped from the
+    // suite and recorded as an `error` row instead of aborting the leg.
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut refused: Vec<(&'static str, String)> = Vec::new();
+    metric_names.retain(
+        |&m| match std::panic::catch_unwind(|| score_once(m, r, d, 0)) {
+            Ok(_) => true,
+            Err(e) => {
+                let msg = e
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "panic".into());
+                eprintln!("refused {label}/{m}: {msg}");
+                refused.push((m, msg));
+                false
+            }
+        },
+    );
+    std::panic::set_hook(prev_hook);
 
     let mut scores: Vec<(String, f64)> = Vec::new();
 
@@ -213,14 +377,19 @@ fn main() {
             for &mname in &metric_names {
                 let mname: &'static str = mname;
                 let (r, d) = (r, d);
-                g.bench(format!("{mname}__lat"), {
-                    move |b| b.iter(|| black_box(score_once(mname, r, d, 0)))
-                });
+                if mode_enabled("lat") {
+                    g.bench(format!("{mname}__lat"), {
+                        move |b| b.iter(|| black_box(score_once(mname, r, d, 0)))
+                    });
+                }
                 for (tname, pool, t) in [
                     ("par1", pool1, 1usize),
                     ("par4", pool4, 4),
                     ("par8", pool8, 8),
                 ] {
+                    if !mode_enabled(tname) {
+                        continue;
+                    }
                     g.bench(format!("{mname}__{tname}"), {
                         move |b| {
                             b.iter(|| {
@@ -258,7 +427,7 @@ fn main() {
         scores.push((mname.to_string(), s));
     }
 
-    write_tsv(&out_tsv, &label, w, h, &result, &scores);
+    write_tsv(&out_tsv, &label, w, h, &result, &scores, &refused);
 }
 
 fn lookup_score(scores: &[(String, f64)], key: &str) -> String {
@@ -276,6 +445,7 @@ fn write_tsv(
     h: u32,
     result: &SuiteResult,
     scores: &[(String, f64)],
+    refused: &[(&str, String)],
 ) {
     let need_header = !std::path::Path::new(out_tsv).exists();
     let mut f = OpenOptions::new()
@@ -286,11 +456,16 @@ fn write_tsv(
     if need_header {
         writeln!(
             f,
-            "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore"
+            "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore\tcontent\trayon_threads\tcpus"
         )
         .unwrap();
     }
 
+    let content = content_label();
+    // Thread context: RAYON_NUM_THREADS sizes the metrics' internal pools;
+    // `cpus` is the affinity-aware count (taskset narrows it).
+    let rayon_threads = env::var("RAYON_NUM_THREADS").unwrap_or_else(|_| "unset".into());
+    let cpus = std::thread::available_parallelism().map_or(0, |n| n.get());
     for comp in &result.comparisons {
         for bm in &comp.benchmarks {
             // names: "<metric>__lat" / "<metric>__par{1,4,8}"
@@ -304,11 +479,20 @@ fn write_tsv(
             let score = lookup_score(scores, metric);
             writeln!(
                 f,
-                "{label}\t{metric}\t{mode}\tna\t{w}\t{h}\t{per_pair_ns:.1}\t{mean_ms:.4}\t{}\t{score}",
+                "{label}\t{metric}\t{mode}\tna\t{w}\t{h}\t{per_pair_ns:.1}\t{mean_ms:.4}\t{}\t{score}\t{content}\t{rayon_threads}\t{cpus}",
                 comp.completed_rounds
             )
             .unwrap();
         }
+    }
+    // Metrics that refused this size: mode `error`, the message in `score`.
+    for (metric, msg) in refused {
+        let msg = msg.replace(['\t', '\n'], " ");
+        writeln!(
+            f,
+            "{label}\t{metric}\terror\tna\t{w}\t{h}\tNaN\tNaN\t0\t{msg}\t{content}\t{rayon_threads}\t{cpus}"
+        )
+        .unwrap();
     }
     eprintln!("wrote wall rows for size {label} to {out_tsv}");
 }
@@ -323,7 +507,7 @@ fn heap_mode(args: &[String]) {
         eprintln!("bad size label: {label}");
         std::process::exit(64)
     });
-    let (rv, dv) = synth_pair(w, h);
+    let (rv, dv) = make_pair(w, h);
     let r = mk_image(rv, w, h);
     let d = mk_image(dv, w, h);
     let mut order: Vec<&str> = METRICS
@@ -331,14 +515,24 @@ fn heap_mode(args: &[String]) {
         .map(|(n, _)| *n)
         .filter(|n| want(n))
         .collect();
-    if want("yuv420") {
+    if metric_filter.as_deref() == Some("yuv420") {
         order.push("yuv420");
     }
     for m in order {
         // Two reps: first = cold (alloc growth), second = steady-state.
         for rep in 0..2 {
             let t0 = std::time::Instant::now();
-            let s = score_once(m, &r, &d, 0);
+            // Keep going past a failing metric so one calibration pass
+            // reports every metric's status.
+            let s = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                score_once(m, &r, &d, 0)
+            })) {
+                Ok(s) => s,
+                Err(_) => {
+                    eprintln!("heap {label}/{m} rep{rep}: ERROR (panicked)");
+                    break;
+                }
+            };
             eprintln!(
                 "heap {label}/{m} rep{rep}: {:.3} ms score={}",
                 t0.elapsed().as_secs_f64() * 1e3,

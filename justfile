@@ -316,3 +316,11 @@ v40-postfit-checks:
     bash -n scripts/jobsys/v40_postfit.sh
     shellcheck scripts/jobsys/v40_postfit.sh
     bash -c 'bash scripts/jobsys/v40_postfit.sh /nonexistent uh4 > "$HOME/tmp/v40/postfit-refusal.log" 2>&1; test "$?" -eq 2'
+
+# Every CPU metric the CLI scores from sRGB8, at 1 and 8 threads: zenbench at
+# 1024², plus an 8.4 MP frame by default (8t zenbench, 1t one call per metric
+# with max RSS). Each leg runs under run-heavy; nothing else heavy alongside.
+cpu-metrics-1t8t out *sizes:
+    nice -n 19 cargo build --release -p cpu-profile --bin new-metrics-wall
+    scripts/cpu_metrics_1t8t.sh "{{out}}" {{sizes}}
+    python3 scripts/cpu_metrics_1t8t_analyze.py "{{out}}"
