@@ -1,0 +1,4 @@
+size_label	metric	mode	cold_or_warm	w	h	mean_ns	mean_ms	n_rounds	score	content	rayon_threads	cpus
+1024	ssim	lat	na	1024	1024	143755322.0	143.7553	1	0.9383547151140973	photo	8	8
+1024	nlpd	lat	na	1024	1024	55522101.0	55.5221	1	2.394971943723971	photo	8	8
+1024	vif	lat	na	1024	1024	106381112.0	106.3811	1	0.6608518673508136	photo	8	8

@@ -76,8 +76,8 @@ inputs (psnr's peak is the floor).
    interleaved harness moves single-threaded metrics by up to 1.6× between legs
    at 1 MP (ssim 75 ms in one leg, 117 ms in another, identical code), so the
    1 MP speedup column is not reliable at that precision. The 8.4 MP 1t figures
-   (one process per metric) are the trustworthy ones. Threaded-build numbers
-   will land in a follow-up file.
+   (one process per metric) are the trustworthy ones. Threaded-build numbers:
+   see "Threading re-check" below.
 4. **vmaf refuses the 3355×2516 frame:** "VMAF requires matching, even dimensions
    >= 32". Any odd-width or odd-height image cannot be VMAF-scored through the CLI.
    Whether libvmaf itself accepts odd sizes was not checked. Cropped to 3354×2516 it
@@ -93,3 +93,79 @@ inputs (psnr's peak is the floor).
 Not covered: hdrvdp / hdrvdp3 refuse sRGB8 by design (absolute-nits input only;
 `crates/hdrvdp/benches/pipeline.rs` times v2). Below 1024² was dropped from this pass;
 iwssim refuses images under 176 px on the short side (5-level pyramid).
+
+## Threading re-check (same day)
+
+**Why.** The first pass suggested most metrics gain nothing from threads. The
+cause was the build: see finding 3. This section turns each crate's threading
+on and measures again.
+
+**Build.** `cargo build --release -p cpu-profile --bin new-metrics-wall
+--features metrics-parallel`. The feature enables `parallel` on cvvdp, iwssim,
+fsim, vsi, haarpsi, msssim, psnrhvs, vif, mad-iqa and vmaf, and `rayon` on
+fast-ssim2 (gmsd's `parallel` was already on in the benchmark crate).
+Raw rows: `cpu_metrics_1t8t_2026-10-09/threading_recheck/`.
+
+**8.4 MP, photo pair, 8 threads (taskset 0-7), one zenbench call per metric;
+1t is the single-thread column from above.** Every score is bit-identical
+between the default and threaded builds (also checked at 1 MP).
+mdctpsnr was skipped: it has no threading code. vmaf (at 3354×2516) measured
+315 ms threaded vs 312 ms default: its `parallel` feature splits work across
+video frames, not within one image.
+
+| metric | 1t | 8t, default build | 8t, threading on | threading on vs 1t |
+|---|--:|--:|--:|--:|
+| zensim | 495 ms | 111 ms | 101 ms | 4.90× |
+| gmsd | 15 ms | 4.6 ms | 3.3 ms | 4.66× |
+| dssim | 1.75 s | 465 ms | 443 ms | 3.95× |
+| mdsi | 6.9 ms | 2.4 ms | 2.4 ms | 2.86× |
+| cvvdp | 1.65 s | 1.67 s | 687 ms | 2.40× |
+| fsim | 848 ms | 830 ms | 433 ms | 1.96× |
+| iwssim | 834 ms | 832 ms | 455 ms | 1.83× |
+| iwssim-piq | 823 ms | 833 ms | 450 ms | 1.83× |
+| butteraugli | 1.24 s | 692 ms | 677 ms | 1.82× |
+| mad | 59.68 s | 60.34 s | 33.15 s | 1.80× |
+| psnrhvs | 143 ms | 133 ms | 85 ms | 1.68× |
+| haarpsi | 165 ms | 164 ms | 114 ms | 1.45× |
+| vif | 1.01 s | 1.06 s | 736 ms | 1.38× |
+| msssim | 417 ms | 402 ms | 305 ms | 1.37× |
+| vsi | 639 ms | 601 ms | 473 ms | 1.35× |
+| ms-gmsdc | 297 ms | 258 ms | 246 ms | 1.21× |
+| ms-gmsd | 298 ms | 247 ms | 260 ms | 1.14× |
+| nlpd-iqa | 330 ms | 302 ms | 303 ms | 1.09× |
+| ssim-libvmaf | 117 ms | 118 ms | 109 ms | 1.08× |
+| ssim | 1.60 s | 1.58 s | 1.55 s | 1.03× |
+| psnrhvs-daala | 384 ms | 378 ms | 372 ms | 1.03× |
+| nlpd | 467 ms | 441 ms | 455 ms | 1.03× |
+| ssim2 | 956 ms | 923 ms | 941 ms | 1.02× |
+| msssim-libvmaf | 915 ms | 901 ms | 904 ms | 1.01× |
+| vifvec | 3.83 s | 3.82 s | 3.83 s | 1.00× |
+| psnr | 18 ms | 18 ms | 18 ms | 1.00× |
+| psnr-y | 16 ms | 16 ms | 16 ms | 1.00× |
+
+Reading it: the crates that were threaded all along (zensim, dssim, gmsd,
+mdsi, butteraugli) keep their 1.8–4.9×. Turning the features on gives
+cvvdp 2.40×, fsim 1.96×, iwssim 1.83×, mad 1.80×, psnrhvs 1.68×, haarpsi
+1.45×, vif 1.38×, msssim 1.37×, vsi 1.35×. These implementations thread some
+stages, not all, so 8 cores buy 1.4–2.4×. Little or no gain (≤1.21×)
+with every feature on: ssim (the CLI's own), nlpd, nlpd-iqa, vifvec,
+ssim-libvmaf, msssim-libvmaf, psnrhvs-daala, ms-gmsd, ms-gmsdc, and ssim2:
+fast-ssim2's `rayon` takes it from 956 ms to 941 ms here on Zen 4, in line
+with the earlier aarch64 finding that it does not parallelise as shipped.
+
+**The 1 MP harness problem.** At 1 MP the interleaved run (29 metrics in one
+zenbench group) moved single-threaded code by up to 2× between legs. Timed
+alone, the same code is stable and pinning does not matter:
+
+| single-thread @ 1 MP | ssim | nlpd | vif |
+|---|--:|--:|--:|
+| one serial call (`heap` mode), pinned to 1 core | 131 ms | 52 ms | 103 ms |
+| one serial call, 8 cores available | 140 ms | 52 ms | 104 ms |
+| zenbench, these three only, pinned / 8 cores | 143 / 144 ms | 55 / 56 ms | 107 / 106 ms |
+| interleaved with all 29 metrics, across legs | 75–117 ms | 28–47 ms | 60–88 ms |
+
+So interleaving many allocation-heavy metrics in one process changes the
+cost of the ones that follow (allocator or cache state; not root-caused).
+At 8.4 MP the interleaved and isolated figures agree within ~5%, which is
+why the threading table above uses 8.4 MP. For 1 MP work, time each metric
+in its own process or its own zenbench group.

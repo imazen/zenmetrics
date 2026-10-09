@@ -34,7 +34,7 @@
 //!   new-metrics-wall <size_label> <out_tsv> [metric_filter]
 //!   new-metrics-wall heap <size_label> [metric_filter]   # fixed serial reps
 //!   size_label ∈ { 64 256 512 1024 4K 8K } or any `<W>x<H>` (e.g. 3355x2516)
-//!   metric_filter ∈ any name in `METRICS`, or `yuv420`
+//!   metric_filter = one name in `METRICS`, a comma list of them, or `yuv420`
 //!   NMW_MODES = comma list of lat,par1,par4,par8 (default: all four)
 //!   NMW_GROUP_WALL_S / NMW_CELL_MAX_S / NMW_MIN_ROUNDS override the
 //!     per-size zenbench budget (short exploratory runs)
@@ -283,7 +283,12 @@ fn main() {
     let label = args[1].clone();
     let out_tsv = args[2].clone();
     let metric_filter: Option<String> = args.get(3).cloned();
-    let want = |m: &str| metric_filter.as_deref().map(|f| f == m).unwrap_or(true);
+    let want = |m: &str| {
+        metric_filter
+            .as_deref()
+            .map(|f| f.split(',').any(|x| x == m))
+            .unwrap_or(true)
+    };
     let (w, h) = match size_dims(&label) {
         Some(d) => d,
         None => {
@@ -502,7 +507,12 @@ fn write_tsv(
 fn heap_mode(args: &[String]) {
     let label = args.get(2).map(|s| s.as_str()).unwrap_or("1024");
     let metric_filter: Option<String> = args.get(3).cloned();
-    let want = |m: &str| metric_filter.as_deref().map(|f| f == m).unwrap_or(true);
+    let want = |m: &str| {
+        metric_filter
+            .as_deref()
+            .map(|f| f.split(',').any(|x| x == m))
+            .unwrap_or(true)
+    };
     let (w, h) = size_dims(label).unwrap_or_else(|| {
         eprintln!("bad size label: {label}");
         std::process::exit(64)

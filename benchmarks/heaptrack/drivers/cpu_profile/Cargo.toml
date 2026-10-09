@@ -16,6 +16,20 @@ path = "src/main.rs"
 name = "cpu-wall"
 path = "src/bin/cpu_wall.rs"
 
+# `metrics-parallel` turns on each metric crate's own threading (rayon) feature,
+# which the CLI build leaves off for all of them (checked with `cargo tree -e
+# features -i <crate> -p zenmetrics-cli`, 2026-10-09). Feature unification
+# reaches the CLI's copies, so `new-metrics-wall` then measures the same
+# dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
+[features]
+metrics-parallel = [
+    "cvvdp/parallel", "iwssim/parallel", "fast-ssim2/rayon",
+    "dep:fsim", "fsim/parallel", "dep:haarpsi", "haarpsi/parallel",
+    "dep:mad-iqa", "mad-iqa/parallel", "dep:msssim", "msssim/parallel",
+    "dep:psnrhvs", "psnrhvs/parallel", "dep:vif", "vif/parallel",
+    "dep:vmaf", "vmaf/parallel", "dep:vsi", "vsi/parallel",
+]
+
 [dependencies]
 zenbench     = "0.1.8"
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
@@ -56,6 +70,15 @@ rgb          = "0.8"
 bytemuck     = "1"
 # 2026-09-24 additions — the new metrics under test.
 nlpd         = { path = "../../../../crates/nlpd" }
+# Optional: only so `metrics-parallel` can name their `parallel` features.
+fsim         = { workspace = true, optional = true }
+haarpsi      = { workspace = true, optional = true }
+mad-iqa      = { workspace = true, optional = true }
+msssim       = { workspace = true, optional = true }
+psnrhvs      = { workspace = true, optional = true }
+vif          = { workspace = true, optional = true }
+vmaf         = { workspace = true, optional = true }
+vsi          = { workspace = true, optional = true }
 # cpu-metrics only: pulls nlpd + tempfile + the native-CPU backends — the same
 # dep set this crate already builds — plus the umbrella (`zenmetrics-api`)
 # native-CPU dispatch. No GPU/cubecl/codec deps enabled.

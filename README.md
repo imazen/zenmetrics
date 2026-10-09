@@ -187,7 +187,10 @@ one thread in the default build (see Limitations).
 - Most metrics run on one thread in the default build. The CLI builds eleven
   in-tree metric crates without their `parallel` (rayon) feature, and
   `fast-ssim2` without `rayon`. Turning them on leaves scores bit-identical
-  (checked at 1 MP); how much it speeds each metric up is still being measured.
+  and, at 8 threads on an 8.4 MP pair, speeds those metrics up 1.4–2.4×
+  (cvvdp 2.4×, mad 1.8×); see the threading section of the benchmark doc.
+  `cargo build --release -p cpu-profile --features metrics-parallel` builds
+  the benchmark harness that way.
 - `vmaf` rejects odd image dimensions. Crop to even sizes first.
 - `hdrvdp` and `hdrvdp3` need absolute-luminance input (`--hdr`); they refuse
   sRGB pairs.
