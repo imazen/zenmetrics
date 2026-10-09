@@ -65,13 +65,19 @@ inputs (psnr's peak is the floor).
    Not root-caused. Untested hypothesis: MAD's log-Gabor stage runs FFTs at the image
    size, and 3355 = 5·11·61, 2516 = 2²·17·37 have large prime factors. Two sizes
    cannot separate pixel count from factorization; a power-of-two 8 MP size would.
-3. **Threads stop helping at 8.4 MP for nearly everything.** Only zensim (4.5×), dssim
-   (3.8×), gmsd (3.3×), mdsi (2.9×) and butteraugli (1.8×) gain from 8 threads at
-   8.4 MP. Seven metrics that do gain at 1 MP lose it at 8.4 MP: cvvdp 1.66→0.99,
-   ssim2 1.57→1.04, vif 1.82→0.96, ssim 1.61→1.01, nlpd 1.52→1.06, nlpd-iqa 1.80→1.09,
-   ms-gmsd 2.42→1.20. Cause not investigated; a size-dependent switch to a serial path
-   (strip or tiled modes) is the first thing to check. For fleet scoring of camera-size
-   frames this means pair-level parallelism (one thread per pair), not threads per pair.
+3. **Most metrics are single-threaded in this build, by configuration.** The
+   default CLI build compiles eleven in-tree metric crates (cvvdp, iwssim, fsim,
+   vsi, haarpsi, msssim, psnrhvs, vif, mad-iqa, vmaf, gmsd) without their
+   `parallel` (rayon) feature, and fast-ssim2 without `rayon` (`cargo tree -e
+   features -i <crate> -p zenmetrics-cli`). Only zensim, dssim and butteraugli
+   are threaded there; gmsd's `parallel` was on here only because the
+   benchmark crate enables it. So the 8t columns measure the shipped build,
+   not what the algorithms can do. A follow-up run also found that this
+   interleaved harness moves single-threaded metrics by up to 1.6× between legs
+   at 1 MP (ssim 75 ms in one leg, 117 ms in another, identical code), so the
+   1 MP speedup column is not reliable at that precision. The 8.4 MP 1t figures
+   (one process per metric) are the trustworthy ones. Threaded-build numbers
+   will land in a follow-up file.
 4. **vmaf refuses the 3355×2516 frame:** "VMAF requires matching, even dimensions
    >= 32". Any odd-width or odd-height image cannot be VMAF-scored through the CLI.
    Whether libvmaf itself accepts odd sizes was not checked. Cropped to 3354×2516 it

@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Docs: README rewritten as a landing page (all `--metric`s with what they
+  match, CLI usage, per-metric cost, limitations); the previous README's
+  detailed reference moved to `docs/TECHNICAL_REFERENCE.md`. Quick start now
+  builds through `scripts/ci/clone-siblings.sh` (the workspace path-depends on
+  23 sibling repos outside this repo, which a bare `cargo install --git`
+  cannot resolve).
+
 - Benchmarks (`fbc9fd79`): `new-metrics-wall` times all 29 CPU metrics the CLI
   scores from sRGB8, on a real photo pair at any `<W>x<H>`; `just
   cpu-metrics-1t8t` runs 1-thread and 8-thread legs. First results:

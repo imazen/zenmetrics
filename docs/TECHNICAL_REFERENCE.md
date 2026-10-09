@@ -1,0 +1,990 @@
+# zenmetrics technical reference
+
+This was the top-level README until 2026-10-09. The landing page with build
+steps, the metric list and CLI usage is now [README.md](../README.md); this
+file keeps the detailed reference: GPU memory modes, the per-mode API, the
+orchestrator, CPU/GPU performance profiles and GPU CI.
+
+zenmetrics is the Imazen workspace for perceptual image-quality metrics:
+multi-vendor **GPU** implementations of the metrics we run in production, the
+**CPU** reference crates they are checked against, a unified `zenmetrics` CLI, and
+**zenfleet** — the content-addressed job system that drives codec sweeps and
+metric backfills across a heterogeneous fleet. Pure Rust, `#![forbid(unsafe_code)]`.
+
+The GPU metrics are built on CubeCL via the
+[`zenforks-cubecl`](https://crates.io/crates/zenforks-cubecl) publication of
+[tracel-ai/cubecl](https://github.com/tracel-ai/cubecl) (0.10.x — carries
+pinned-upload, PTX-cache-widening, and Metal `Atomic<f32>` capability patches for
+our use case). A single `#[cube]`-annotated kernel source dispatches across CUDA
+(NVIDIA), WGPU (Vulkan / Metal / DX12 / WebGPU), HIP (AMD ROCm), and a build-time
+CPU fallback.
+
+
+## Margarine research
+
+The unpublished [Margarine experiment](../crates/margarine/README.md) and its
+[evaluation index](../crates/margarine/DATA_PROVENANCE.md) now live here. Build its
+standalone CPU command with `just margarine-build`; full qualification remains
+in progress. It is not yet registered in the umbrella metric dispatcher.
+
+## Metric crates
+
+Six GPU metric crates plus the in-tree CPU reference crates the orchestrator's
+CPU ladder and the umbrella's `Backend::Cpu` dispatch route to. The ledger of
+every known deviation from each cited reference lives in
+[DIVERGENCES.md](../DIVERGENCES.md); papers, implementation provenance, validation
+oracles, and the tolerances we gate (incl. the JPEG AIC-4 reproduction matrix)
+live in [docs/METRIC_PROVENANCE.md](../docs/METRIC_PROVENANCE.md); the AIC-4
+JND remappings, JND-normalized tolerances, and the metric naming/qualification
+ledger live in
+[docs/AIC2026_METRICS_AND_FITTING.md](../docs/AIC2026_METRICS_AND_FITTING.md).
+
+| Crate | Metric | Range / shape | Parity reference |
+|---|---|---|---|
+| [`butteraugli-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/butteraugli-gpu) | Butteraugli | distance, max-norm (default) + libjxl 3-norm | [`butteraugli`](https://crates.io/crates/butteraugli) 0.9.4 |
+| [`ssim2-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/ssim2-gpu) | SSIMULACRA2 | 0–100, higher better | [`ssimulacra2`](https://crates.io/crates/ssimulacra2) 0.5 |
+| [`dssim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/dssim-gpu) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) 3.5 |
+| [`iwssim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim-gpu) | IW-SSIM (Wang & Li 2011) | `[0, 1]`, 1.0 = identical | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) (in-tree CPU port) |
+| [`zensim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/zensim-gpu) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) 0.3.0 |
+| [`cvvdp-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-gpu) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
+| [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
+| [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
+| [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) + **HDR-VDP-3.0.7** (`v3` module; CLI `hdrvdp3` — explicit viewing conditions required: `--hdrvdp3-ppd` mandatory) | v2: `res.Q` ~0–100, higher better; v3: `q_jod` 0–10 (10 = identical) | official HDR-VDP 2.2.2 + 3.0.7 MATLAB (Mantiuk et al.) + jpeg-ai-qaf `VDP3/` port — v3 goldens ≤1.6e-13, bit-equal to MATLAB 3.0.7 |
+| [`gmsd`](https://github.com/imazen/zenmetrics/tree/master/crates/gmsd) | GMSD (Xue et al. 2014, CPU) | distance ~0–0.35, 0 = identical | libgmsd (Ponomarenko group) |
+| [`psnrhvs`](https://github.com/imazen/zenmetrics/tree/master/crates/psnrhvs) | PSNR-HVS / PSNR-HVS-M / PSNR-HVS-Y (CPU) | dB, higher better; 100000 = identical | authors' `psnrhvsm.m` (Octave goldens) |
+| [`haarpsi`](https://github.com/imazen/zenmetrics/tree/master/crates/haarpsi) | HaarPSI / HaarPSI-Y (CPU) | similarity ~0–1, 1 = identical; NaN on zero-weight inputs | authors' MIT `HaarPSI.m` (Octave goldens) |
+| [`fsim`](https://github.com/imazen/zenmetrics/tree/master/crates/fsim) | FSIM / FSIMc / FSIM-Y (CPU) | similarity 0–1, 1 = identical; NaN on constant inputs | authors' `FR_FSIMc.m` (Octave goldens) |
+| [`vsi`](https://github.com/imazen/zenmetrics/tree/master/crates/vsi) | VSI (CPU, RGB) | similarity 0–1, 1 = identical; NaN on flat inputs | authors' `VSI.m` (Octave goldens) |
+| [`msssim`](https://github.com/imazen/zenmetrics/tree/master/crates/msssim) | MS-SSIM (CPU, luma) | similarity ~0–1, 1 = identical (constant too) | authors' `msssim.m` (Octave goldens) |
+| [`vif`](https://github.com/imazen/zenmetrics/tree/master/crates/vif) | VIFp (CPU, luma) + **vifvec** (SP5 steerable-pyramid vecGSM VIF — a different metric sharing the name; CLI `vifvec`, `cpu-vifvec`) | information ratio ≥ 0, ~1 = identical; can exceed 1; NaN on flat references | authors' `vifp_mscale.m` + `vifvec.m`/matlabPyrTools (Octave goldens; vifvec < 1e-9) |
+| [`mad-iqa`](https://github.com/imazen/zenmetrics/tree/master/crates/mad-iqa) | MAD (CPU, luma) — emits `mad`, `mad_hi`, `mad_lo` | distance ≥ 0, 0 = identical; NaN on `min(w,h) < 34` | authors' `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex (Octave goldens) |
+| [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v0.6.1 and v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; v0/NEG/4K and v1 standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
+| [`mdctpsnr`](https://github.com/imazen/zenmetrics/tree/master/crates/mdctpsnr) | mDCT-PSNR (CPU, sRGB8) — masked-DCT PSNR, Richter QoMEX 2009 | dB, higher better; +inf = identical | `thorfdbg/mDCTpsnr` compiled reference (GCC `-O3 -ffast-math`+AVX2); ≤ ~4e-6 dB goldens, AIC-4 column med 4.4e-8 / max 1.15e-5 dB |
+
+The `vmaf` crate scores planar SDR YUV420 frames directly, including CAMBI,
+chroma SpEED, integer ADM3, motion3, model fusion and temporal pooling. Its
+eight official v1.0.16 models already set the no-enhancement-gain limits
+associated with **NEG**; there is no separate upstream v1-NEG model family.
+`ModelVariant::V1_NEG` explicitly names the standard v1 model with those
+existing NEG settings. The four embedded v0.6.1 standard/4K and NEG models
+use separate ADM2, motion2 and four-scale integer VIF features; their
+feature, fusion, frame-score, streaming, and pooling paths are checked
+against libvmaf, including ADM2/VIF no-enhancement-gain limits.
+The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
+as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
+API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
+decoded planar YUV420 8/10-bit input of at least 34×34 pixels (not packed
+RGB, HDR, or 12/16-bit).
+`VmafV1Scorer` retains the parsed model across batches. `VmafV1Stream` accepts
+one pair at a time, keeps at most two recent reference luma frames for motion,
+and emits delayed scores once lookahead is available; call `finish()` to emit
+the final frame. With `--features parallel`, `VmafV1Scorer::with_threads(n)`
+uses a dedicated, explicitly bounded worker pool for independent frames
+without changing per-frame arithmetic.
+For legacy models, `score_v0_420` accepts `VmafV0Variant::{Standard,
+StandardNeg, FourK, FourKNeg}` and returns per-frame `VmafV0Features` and
+scores. `VmafV0Scorer` reuses its parsed model, offers the same bounded
+`with_threads(n)` feature, and `VmafV0Stream` retains one recent reference
+luma frame while delaying output for motion2 lookahead. `pool_v0_scores`
+accepts the same pooling methods as `pool_v1_scores`.
+
+```rust
+use vmaf::{ModelVariant, PoolingMethod, Yuv420Frame, pool_v1_scores, score_v1_420};
+
+let frames = score_v1_420(
+    &[Yuv420Frame { y: &reference_y, u: &reference_u, v: &reference_v }],
+    &[Yuv420Frame { y: &distorted_y, u: &distorted_u, v: &distorted_v }],
+    width, height, 8, ModelVariant::Standard1080p,
+)?;
+let scores: Vec<_> = frames.iter().map(|frame| frame.score).collect();
+let mean = pool_v1_scores(&scores, PoolingMethod::Mean)?;
+```
+
+Run `cargo test -p vmaf --test ffi_fusion` for feature-, score-, and
+pooling-level parity against libvmaf. On a Ryzen 9 5900XT, the
+`cargo bench -p vmaf --bench backends` cold two-frame 1280×720 phone-model
+fixture (three measured rounds, median milliseconds/frame) measured 34.299
+for pure-Rust scalar, 12.325 for libvmaf CPU auto-dispatch, and 27.142 for
+libvmaf forced scalar. Use `cargo bench -p vmaf --bench backends -- --stages`
+to profile the Rust feature stages. These are local measurements, not a claimed
+SIMD win for the Rust implementation. `--features simd` provides a
+parity-tested `magetypes` integer ADM3 DWT
+kernel, but a paired scalar/SIMD run on this Ryzen showed no end-to-end speedup
+(roughly 34 ms/frame in either configuration), so it is not enabled by default.
+For the reused two-frame scorer, the `--parallel` benchmark mode
+(`cargo bench -p vmaf --features parallel --bench backends -- --parallel`)
+measured 43.172 ms/frame with one thread, 26.371 with two, and 27.246 with
+four (only two frames are available to work on). These steady-state thread
+timings are not directly comparable to the
+cold-start libvmaf results above. ORT does not fit the official LIBSVM RBF
+models, and no VMAF GPU backend was implemented or measured on the local
+GTX 1050 (2 GiB).
+
+Before the VIF filter optimization, for v0.6.1 on the local 1280×720,
+two-frame 8-bit fixture, run
+`cargo bench -p vmaf --bench backends -- --v0` or `--v0-neg`. Median
+milliseconds/frame across three measured rounds were **111.415** Rust scalar,
+**21.907** libvmaf CPU auto-dispatch, and **82.456** libvmaf forced scalar
+for v0; v0-NEG measured **110.970**, **22.676**, and **82.618** respectively.
+`--v0 --stages` measured **91.561 ms/frame** for Rust four-scale VIF alone,
+versus **19.474** for ADM2 and **2.913** for motion2. With `--features simd`,
+v0-NEG took **111.670 ms/frame** in Rust (no measured win); with
+`--features parallel -- --v0-neg --parallel`, the reused fixed-pool scorer
+measured **119.863**, **66.057**, and **65.960 ms/frame** with one, two, and
+four workers on the two-frame fixture. The reused-pool figures exclude model
+setup and are not directly comparable to the cold-start backend figures.
+After the initial 2026-09-25 scalar VIF optimization, one targeted rerun of
+`cargo bench -p vmaf --bench backends -- --v0 --stages` on the same fixture
+measured 74.473 ms/frame for four-scale VIF, versus 91.561 above.
+Those runs were not paired and did not measure an end-to-end or SIMD speedup.
+After adding opt-in SIMD for the 8-bit scale-0 VIF vertical filter, sequential
+`--v0 --stages` runs measured 76.380 ms/frame without `--features simd` and
+47.139 with it; `--v0-neg` measured 96.943 and 68.647 ms/frame respectively.
+With `--features simd,parallel -- --v0-neg --parallel`, the reused scorer
+measured 76.623, 44.937, and 44.820 ms/frame at one, two, and four workers.
+These measurements used the same two-frame fixture on a busy machine; the
+10-bit scale-0 VIF vertical filter is also SIMD-enabled and bitwise-validated,
+but no 10-bit full-frame CPU benchmark is recorded here. The vertical filters
+for VIF scales 1–3 are SIMD-enabled as well: a paired `--v0 --stages` run
+measured 47.248 ms/frame for four-scale VIF with scale-0 SIMD alone versus
+45.879 with all-scale vertical SIMD, and a fixed 192×128 Callgrind harness
+dropped from 29.27M to 27.46M instructions (8-bit) and 29.90M to 28.72M
+(10-bit). The horizontal statistics pass is SIMD-enabled too: it loads the
+padded scratch with unaligned 16-column vectors, accumulates per-tap
+weighted sums split into low/high 16-bit lanes (each strictly below 2^32,
+so exact for all u32 inputs), and shares one scalar finalize with the
+column tail. A paired `--v0 --stages` run measured 47.979 ms/frame for
+four-scale VIF with vertical-only SIMD versus 28.947 with horizontal SIMD
+enabled, the fixed Callgrind harness dropped to 19.64M instructions
+(8-bit) and 20.89M (10-bit), and the tiny 10-bit fixture measured
+1.389 ms/call versus 0.903. The emitted v3 code uses ymm `vmovdqu`
+loads with `vpmulld`/`vpaddd` accumulation, matching libvmaf's contiguous
+AVX2 structure while substituting lo16/hi16 u32 accumulation for its
+`vpmuludq` 64-bit widening (unavailable in magetypes). The inter-scale
+decimation filter is SIMD-enabled as well: its vertical pass vectorizes
+like the statistics filters (means only), and its horizontal pass
+evaluates the stride-1 convolution at 16 positions per chunk and keeps
+the 8 even lanes, avoiding any deinterleave. A paired `--v0 --stages`
+run then measured 24.338 ms/frame for four-scale VIF (versus 28.947
+with only the statistics passes vectorized), and the Callgrind harness
+dropped to 16.60M instructions (8-bit) and 17.80M (10-bit). The SIMD
+loads use single-check `load`/`try_into` slicing rather than two-check
+`from_slice`, which cut the fixed harness to 15.38M instructions
+(8-bit) and 16.70M (10-bit) and the paired stage run to 22.782
+ms/frame. The horizontal helper also returns the `(sum + 32768) >> 16`
+sigma inputs as u32 — computed as `hi + ((lo + 32768) >> 16)` inside
+the accumulators — so `vif_pixel_finalize` no longer reconstructs u64
+sums per pixel; the Callgrind harness dropped to 14.92M (8-bit) and
+16.23M (10-bit). Only the v1 feature path remains scalar.
+
+The ADM pipeline has the same optimization treatment, measured on a fixed
+192×128 8-bit Callgrind harness (single `adm2_v0_from_luma` call). From a
+12.56M-instruction baseline, hoisting the scale-1–3 `BandI32` buffers and
+ping-ponging the inter-scale i4 decimation inputs instead of cloning them
+dropped the count to 11.56M. Precomputing the contrast-mask 3×3 window as
+per-row column sums — replacing per-pixel `dy`/`dx` filter-loop index math in
+the interior while keeping the scalar mirrored-edge path — dropped it to
+9.05M (`adm_cm_i16` 2.36M→1.15M, `adm_cm_i32` 1.79M→0.48M). The DWT2
+horizontal pass is SIMD-enabled: it evaluates the stride-1 convolution at 16
+consecutive positions per chunk over sign-extended `i16x16`→`i32x8` lanes and
+keeps the 8 even lanes as stride-2 outputs, with scalar first/last edge taps
+and tails; its approximation-band output is written directly into the i4
+decimation inputs as i32, removing a whole-band copy pass and the `BandI16.a`
+field. That dropped the harness to 8.29M instructions, and a 10-iteration
+1280×720 `adm2_v0_from_luma` run measured 16.88 ms/frame versus 18.23 after
+the contrast-mask change and 19.47 in the original stage profile. The
+contrast-sensitivity `adm_csf_i16` map (pure i32 math) and the
+`adm_cm_i16` interior threshold/x front half (all i32 ops; the two
+per-pixel i64 products stay scalar per lane) are SIMD-enabled as well,
+dropping the harness to 7.84M instructions and `adm_cm_i16` to 0.67M.
+The ADM decouple pass (gathered div-table lookups plus per-pixel f64
+angle tests) remains scalar, as do `adm_cm_i32`, `adm_csf_i32`, and the
+higher-scale `dwt2_s123` filter — those need 64-bit lane products
+(libvmaf's AVX2 uses `vpmuldq`; magetypes has no widening 32×32→64
+multiply, so a safe port would need 16-bit limb arithmetic).
+
+The motion metric's vertical 5-tap pass is SIMD-enabled for `bpc < 16`:
+each 16-pixel chunk loads `u16x16` rows, widens to `i32x8` lanes, and
+accumulates the signed filter differences in i32 — exact because samples
+below 2^15 keep every 5-tap sum under 2^31. Mirrored-edge rows and the
+width tail keep the scalar path. The horizontal pass is extracted into
+`motion_horizontal_row` and `#[autoversion]`-ed — its interior (2 ≤ j <
+width-2) is an affine 5-tap convolution whose ±4.1e9 accumulation LLVM
+vectorizes with 64-bit lanes; only the four mirrored-edge columns per row
+stay scalar. Together these dropped `motion2` from ~5.3 to **0.69**
+ms/frame on the 720p stage fixture, with a dedicated scalar-parity unit
+test covering odd widths, edge-dominated heights, and both bit depths.
+
+The remaining scalar paths use `#[autoversion]` (runtime-tier dispatch
+compiling the same scalar body under v3/neon/wasm128 target features):
+ADM decouple/decouple_s123, `adm_cm_i32`, `adm_csf_i32`,
+`adm_csf_den_scale`/`_s123`, `dwt2_s123`, and the SpEED f32 passes
+(`vif_filter1d`, `vif_dec16`, `bilinear_scale`, `filter_and_downscale`,
+`subtract_image`, `update_entropy`, `compute_independent_term`) plus
+CAMBI's mask/decimate/c-value loops. LLVM synthesizes the 64-bit lane
+products magetypes lacks, so these cover most of the "needs limb math"
+list above. On the 720p `--stages` fixture this dropped ADM2 16.85 →
+14.63, ADM3 16.43 → 13.91, CAMBI 9.46 → 8.64, and SpEED 6.34 → 6.01
+ms/frame; end-to-end medians moved to **36.21** (v0) and **26.29** (v1)
+versus libvmaf CPU auto-dispatch at ~21.8 and ~12.1 respectively on the
+same runs (libvmaf's own figures fluctuate ±20% on this machine). For
+reference, a scalar build with `target-cpu=native` measured ~87 ms/frame
+on v0 — autovectorization alone without the hand-SIMD kernels recovers
+almost none of the VIF statistics cost (75.8 → 72.7).
+
+The 8-bit scale-0 VIF statistics path is also available as a direct
+AVX2 intrinsic port of libvmaf's `vif_statistic_8_avx2`, taken when an
+`X64V3Token` is present (falling back to the magetypes path otherwise):
+`#[arcane]` functions using `archmage::intrinsics` safe unaligned
+loads/stores (`_mm256_loadu_si256`/`_mm256_storeu_si256` on array
+references) with `mullo_epi32`+`add_epi64` pair-packed mean
+accumulation, real `mul_epu32` 64-bit lanes for the square terms,
+`unpacklo`/`unpackhi`/`blend_epi32`/`shuffle_epi32` lane choreography,
+and the shared scalar `vif_finalize_sigma` for the per-pixel log
+finalize — matching libvmaf's structure intrinsic-for-intrinsic. A
+paired `--v0 --stages` run measured vif4 at 18.79 ms/frame versus
+22.32 with the magetypes path, and end-to-end v0 at 31.0 ms/frame
+versus 36.2 before the port (libvmaf CPU auto-dispatch ~22.2 on the
+same run, so the remaining gap is ~1.4×). A tier-parity unit test
+covers odd widths (17/19/31/33/47), 16-multiples, edge-dominated
+heights, and textured/uniform/dithered content — sizes the 640×360
+oracle fixture's exact 16-division never exercises.
+
+The metric each GPU crate computes is bit-comparable to its cited reference. The
+CPU side of each metric comes from an external reference crate
+([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,
+[`dssim-core`](https://crates.io/crates/dssim-core) 3.5,
+[`butteraugli`](https://crates.io/crates/butteraugli) 0.9.4,
+[`zensim`](https://github.com/imazen/zensim) 0.3.0) or an in-tree crate
+([`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp),
+[`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim)).
+
+**Feature gating (important):** the four external-crate CPU backends (ssim2 /
+dssim / butteraugli / zensim) ship in the default `cpu-metrics` bundle, but the
+two in-tree CPU ports — **`cvvdp` and `iwssim` are NOT in `cpu-metrics`.** Enable
+them explicitly (`--features orchestrator,orchestrator-cpu-cvvdp`, resp.
+`orchestrator-cpu-iwssim`). A build with neither `gpu-cvvdp` nor `cpu-cvvdp`
+reports cvvdp as unavailable — that is a build-config message, not a "cvvdp is
+GPU-only" limitation.
+
+### Supporting crates
+
+| Crate | Role |
+|---|---|
+| [`zenmetrics-api`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-api) | Umbrella: one `MetricKind` enum + one `Metric` type dispatching to every per-crate opaque scorer |
+| [`zenmetrics-gpu-core`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-gpu-core) | Shared backend / score / sRGB / stream plumbing for the `*-gpu` crates (CubeCL) |
+| [`zenmetrics-orchestrator`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-orchestrator) | Capability-aware backend chooser + persistent benchmark cache + OOM fallback ladder + warm worker pool |
+| [`zenmetrics-cli`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-cli) | the `zenmetrics` CLI (`score` / `batch` / `compare` / `sweep` / `score-pairs` / `jobexec` / `assemble` / `fleet-plan`) |
+| [`zenstats`](https://github.com/imazen/zenmetrics/tree/master/crates/zenstats) | Paper-correct IQA statistical panel (SROCC / PLCC / KROCC / OR / PWRC + bootstrap-CI A-vs-B) |
+| [`zenmetrics-corpus`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-corpus) / [`zenhdr-corpus`](https://github.com/imazen/zenmetrics/tree/master/crates/zenhdr-corpus) | Shared SDR / HDR test-image corpora (test infra) |
+| [`cvvdp-conformance`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-conformance) | pycvvdp conformance fixtures + parity harness for the cvvdp crates |
+
+## In-process scoring entry point: `zenmetrics-orchestrator`
+
+For any caller that scores **more than one** `(ref, dist)` pair — sweeps, picker
+training, RD curves, batch comparison — reach for
+[`zenmetrics-orchestrator`](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-orchestrator/README.md)
+instead of constructing metrics by hand. It adds three things every in-tree
+caller used to hand-roll:
+
+1. **Backend selection** — a persistent per-machine benchmark cache picks the
+   fastest backend that fits available VRAM, and remembers which `(metric, size)`
+   combinations OOM on this machine so it never retries them.
+2. **OOM-safe fallback ladder** — `GpuFull → GpuStrip → (cvvdp: GpuStripPair) →
+   Cpu`, each downgrade recorded in the cache.
+3. **Cached-reference auto-detect** — hashes each task's reference bytes and
+   promotes consecutive same-reference tasks to the warm-reference fast path for
+   the 1.5–3× speedup sweeps benefit from.
+
+The `zenmetrics` CLI routes scoring through the orchestrator by default. The
+legacy direct-dispatch path stays available via `--use-legacy-scheduler` (or
+`ZENMETRICS_USE_LEGACY_SCHEDULER=1`) for bit-identical regeneration of archived
+parquet sidecars; butteraugli always flows through legacy because its `Auto`
+resolves to strip-mode (single-resolution) and diverges from the legacy
+always-multires output. The orchestrator path was validated bit-identical to
+legacy across all 54 cells (6 metrics × 3 sizes × 3 qs) on RTX 5070 + 7950X. See
+the [orchestrator README](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-orchestrator/README.md)
+for the streaming + batch APIs, OOM handling, and cached-reference semantics.
+
+## Distributed sweeps: the zenfleet job system
+
+zenfleet is the canonical orchestrator for encode / score / sweep work that spans
+many machines — the in-tree system that replaced hand-rolled chunk launchers. It
+is content-addressed end to end:
+
+- **Jobs are content-addressed.** A `JobId` is `sha256(kind + sorted inputs)`, so
+  declaring the same work twice is a structural no-op.
+- **The ledger is the truth, not the queue.** Every finished job writes a row to a
+  columnar Parquet ledger in R2 (latest-wins on `(job_id, ts)`); coverage, the
+  dashboard, and the reconciler all read the ledger, so a run converges after any
+  partial pass or crash.
+- **The queue is an R2 conditional-write lease** — a worker claims a job by
+  `PutObject` with `If-None-Match: *` on `claims/<job_id>`, so exactly one worker
+  wins each job and there is no double execution.
+- **Workers are interchangeable and pull-based** (outbound HTTPS to R2 only), so a
+  NAT'd on-prem box is a first-class tier alongside vast.ai / Hetzner / cloud.
+
+Job kinds (`zenfleet_core::JobKind`): `Encode` · `Metric` · `Feature` ·
+`Diffmap` · `Resample` · `Bake`, each carrying a resource class for capability
+routing and a GC regenerability policy (expensive encodes are kept; cheap
+re-scores are LRU-cached).
+
+| Crate | Role |
+|---|---|
+| [`zenfleet-core`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-core) | Content-addressed job taxonomy, identity, status, blob addressing, and the idle / waste detector |
+| [`zenfleet-ledger`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-ledger) | Columnar Parquet ledger + blob index with latest-wins compaction |
+| [`zenfleet-ctl`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-ctl) | Declare desired jobs + query coverage / gap from the ledger |
+| [`zenfleet-worker`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-worker) | Claims the reconciler's gap, runs a handler via the `ZEN_EXEC` executor, content-addresses outputs, emits ledger rows |
+| [`zenfleet-dash`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-dash) | Railway-deployable dashboard + control API (reads the ledger; never runs workers) |
+| [`zenfleet-sweep`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-sweep) | Cloud-agnostic sweep worker binary (selects a backend via `--backend`) |
+| [`zenfleet-cloud`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-cloud) / [`-local`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-local) / [`-vastai`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-vastai) / [`-hetzner`](https://github.com/imazen/zenmetrics/tree/master/crates/zenfleet-hetzner) | Provider backends behind one common trait |
+
+The thing that does the actual encode/score is `zenmetrics jobexec` — the
+`ZEN_EXEC` reference executor: it reads one `DesiredJob` as JSON on stdin and
+writes the output bytes (encode) or a JSON score row (metric) to stdout. Drive a
+run with the one consolidated command —
+[`scripts/jobsys/fleet`](https://github.com/imazen/zenmetrics/blob/master/scripts/jobsys/fleet)
+`launch | status | watch | top | kill` (there is no other monitor; `fleet watch`
+shows boxes, $/hr burn, per-box GPU/CPU util, idle / failed-to-start boxes, and
+ledger progress in one place). Worker images bake every dependency at build time
+([`scripts/jobsys/build_executor_image.sh`](https://github.com/imazen/zenmetrics/blob/master/scripts/jobsys/build_executor_image.sh)
+copies a precompiled binary in; nothing is apt/pip-installed at boot). Full
+runbook: [`docs/RUNNING_JOBS.md`](https://github.com/imazen/zenmetrics/blob/master/docs/RUNNING_JOBS.md);
+sweep-plan contract: [`docs/PLAN_SWEEPS.md`](https://github.com/imazen/zenmetrics/blob/master/docs/PLAN_SWEEPS.md).
+
+<!-- crates.io:skip-start -->
+
+## SRCC sanity table
+
+Spearman rank correlation coefficient against published still-image
+MOS datasets, sign-normalized so higher = better. These figures are
+**illustrative, sourced externally** (the published
+[Cloudinary SSIMULACRA2 benchmark](https://github.com/cloudinary/ssimulacra2_rs)
+table for the reference metrics) — they are not regenerated by any
+harness in this repo, so treat them as an order-of-magnitude sanity
+check on metric discrimination, not a committed measurement. The
+metric each crate computes is bit-comparable to the cited reference,
+so the reference's published SRCC transfers.
+
+| Metric | TID2013 | KADID-10k | CID22 |
+|---|---|---|---|
+| `dssim-gpu` (= DSSIM) | 0.871 | 0.856 | 0.872 |
+| `ssim2-gpu` (= SSIMULACRA2) | 0.819 | 0.785 | 0.885 |
+| `butteraugli-gpu` (3-norm) | 0.664 | 0.543 | 0.794 |
+| `iwssim-gpu` (= IW-SSIM) | (not benchmarked here) | | |
+| `zensim-gpu` (= zensim) | (Imazen-internal benchmark) | | |
+| `cvvdp-gpu` (= ColorVideoVDP) | (pending — reference is pycvvdp 0.5.4) | | |
+
+## Memory modes
+
+Every GPU metric crate exposes a `MemoryMode` enum + a
+`new_with_memory_mode` constructor so callers choose how the GPU
+working set is laid out. The umbrella ([`zenmetrics-api`](../crates/zenmetrics-api/))
+re-exports a single user-facing enum and converts to each crate's own
+`MemoryMode` at the call boundary:
+
+```rust
+// zenmetrics_api::MemoryMode — the portable subset every metric accepts.
+pub enum MemoryMode {
+    /// Per-crate `resolve_auto` picks the variant that fits the cap. Default.
+    Auto,
+    /// Whole-image working set on device.
+    Full,
+    /// Vertical strips of `h_body` body rows + the crate's halo per
+    /// side. `h_body == None` lets the resolver pick the largest body
+    /// that fits the cap.
+    Strip { h_body: Option<u32> },
+    /// Reserved — every per-crate `From` maps `Tile` to `Auto` today.
+    Tile { h: u32, w: u32 },
+}
+```
+
+cvvdp-gpu additionally exposes two cvvdp-specific variants on its
+**typed** enum (`cvvdp_gpu::MemoryMode`) that the umbrella's portable
+subset does not carry, because they change the one-shot/cached-ref
+shape or the JOD value:
+
+- `StripPair { h_body }` — Mode B: ref and dist both walk in strips
+  together (no full-ref cache). Best for one-shot CLI callers; the
+  orchestrator surfaces it as `Backend::GpuStripPair`.
+- `CappedPyramid { levels }` — JOD-shifting safety net that truncates
+  pyramid depth to shrink the deepest-band blur halo. **Not
+  bit-identical to Full** — opt-in only; `Auto` never picks it.
+
+The full per-metric breakdown — which modes each crate exposes on CPU
+and GPU, and the exact constructor to invoke each — is in the
+[Modes × metrics support matrix](#modes--metrics-support-matrix) and
+[API surface](#api-surface-invoking-each-mode) sections below.
+
+### Auto policy and the orchestrator's crossover
+
+`MemoryMode::Auto` resolves per crate by:
+
+1. Reading the VRAM cap: `ZENMETRICS_VRAM_CAP_BYTES` (decimal usize)
+   when set, else a live free-VRAM probe (cubecl / `nvidia-smi`), else
+   an 8 GB default.
+2. Estimating the whole-image working-set bytes via the per-crate
+   `estimate_gpu_memory_bytes` helper (zensim-gpu additionally reserves
+   `CUBECL_OVERHEAD_BYTES` ≈ 193 MiB for the runtime pool).
+3. Picking Full when it fits and the crate is not strip-preferred;
+   else picking Strip with an auto-sized `h_body` that fits the cap.
+4. Returning `Error::TooBigForFull { needed, cap }` when neither fits.
+
+Only **butteraugli-gpu** is strip-preferred — its `resolve_auto` tries
+Strip *first* and picks it even when Full would fit, because the strip
+walker is the faster path on that crate
+([`crates/butteraugli-gpu/src/memory_mode.rs`](../crates/butteraugli-gpu/src/memory_mode.rs)).
+dssim-gpu, ssim2-gpu, iwssim-gpu, zensim-gpu, and cvvdp-gpu are
+Full-preferred — `Auto` only drops to Strip when Full exceeds the cap.
+
+When the [`zenmetrics-orchestrator`](../crates/zenmetrics-orchestrator/)
+drives scoring it does **not** rely on per-crate `Auto` alone — it runs
+a cost-model-aware backend chooser over its persistent benchmark cache.
+A `ChooserConfig::vram_safety_margin` (default 0.15) is held back, and
+the chooser picks the fastest backend that fits. For a single cold call
+(`ExecContext::OneShot`, task #146) it additionally consults the
+measured one-shot CPU/GPU crossover
+([`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`](../benchmarks/cpu_gpu_crossover_2026-05-29.tsv))
+and routes small images to CPU rather than paying the GPU
+context-init floor; the warm pool / sweep path stays `Batch` and ranks
+on warm steady-state cost. See
+[API surface](#api-surface-invoking-each-mode).
+
+### Backwards compatibility
+
+The historical `Metric::new(backend, w, h, params)` constructor is
+preserved and delegates through `new_with_memory_mode(.., MemoryMode::Auto)`.
+Existing call sites compile and behave the same unless
+`ZENMETRICS_VRAM_CAP_BYTES` is set tight enough to force a mode change.
+
+## Modes × metrics support matrix
+
+Which execution modes each metric exposes, on CPU and on GPU, verified
+against each crate's public API. Legend: ✓ supported · ✗ not supported
+in this release · n/a not applicable to that metric.
+
+- **Full** — whole-image working set.
+- **Strip** — vertical strip walker, cold `(ref, dist)` per call.
+- **warm_ref** — reference cached once, `score`/`compute` per distorted
+  image against whole-image ref state.
+- **warm_ref_strip** — reference cached, distorted image walked in
+  strips. (iwssim's GPU variant uniquely walks the *ref* in strips too —
+  `CachedRefStripPolicy::BothStripped`.)
+- **StripPair** — cvvdp-only Mode B: ref + dist walk in strips together,
+  no full-ref cache (one-shot CLI path; orchestrator `Backend::GpuStripPair`).
+- **CappedPyramid** — cvvdp-only, JOD-shifting depth cap (opt-in safety
+  net; not bit-identical to Full, never picked by `Auto`).
+
+### GPU metric crates
+
+| Crate | Full | Strip | warm_ref | warm_ref_strip | StripPair | CappedPyramid |
+|---|---|---|---|---|---|---|
+| `cvvdp-gpu` | ✓ | ✓ ¹ | ✓ | ✓ | ✓ | ✓ |
+| `ssim2-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+| `butteraugli-gpu` | ✓ | ✓ ² | ✓ | ✓ | n/a | n/a |
+| `dssim-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+| `iwssim-gpu` | ✓ | ✓ | ✓ | ✓ ³ | n/a | n/a |
+| `zensim-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+
+¹ cvvdp-gpu's `Strip` (Mode E) is the cached-ref path — `warm_reference_srgb`
++ a per-strip dist walker; the one-shot strip is `StripPair`. Verified
+[`crates/cvvdp-gpu/src/memory_mode.rs`](../crates/cvvdp-gpu/src/memory_mode.rs)
+(`MemoryMode::{Full, Strip, StripPair, CappedPyramid}`) +
+[`pipeline.rs`](../crates/cvvdp-gpu/src/pipeline.rs) (`Cvvdp::new`,
+`new_strip`, `new_strip_pair`, `new_capped_pyramid`).
+² butteraugli-gpu is the one **strip-preferred** crate — `Auto` picks
+Strip even when Full fits.
+³ iwssim-gpu's `warm_ref_strip` can keep the ref full or walk it in
+strips (`CachedRefStripPolicy`); the other crates keep the ref full and
+strip only the dist. Verified
+[`crates/zenmetrics-api/src/memory_mode.rs`](../crates/zenmetrics-api/src/memory_mode.rs).
+
+### CPU reference crates
+
+| Metric (CPU) | Full | Strip | warm_ref | warm_ref_strip |
+|---|---|---|---|---|
+| `cvvdp` (in-tree) | ✓ | ✓ | ✓ | ✓ |
+| `ssim2` (fast-ssim2 0.8.1) | ✓ | ✓ | ✓ | ✓ |
+| `butter` (butteraugli 0.9.4) | ✓ | ✓ | ✓ | ✓ |
+| `iwssim` (in-tree) | ✓ | ✓ | ✓ | ✓ |
+| `zensim` (zensim 0.3.0) | ✓ | ✓ | ✓ | ✓ |
+| `dssim` (dssim-core 3.5) | ✓ | ✗ | ✓ | ✗ |
+
+**dssim CPU has no strip walker** — `dssim-core` 3.5 exposes no strip
+API, so `dssim` CPU is Full + warm_ref only (verified
+[`crates/zenmetrics-orchestrator/src/cpu_adapter.rs`](../crates/zenmetrics-orchestrator/src/cpu_adapter.rs)
+`compute_strip` / `compute_warm_ref_strip` return an error for dssim).
+On the GPU, dssim-gpu *does* support Strip.
+
+## API surface: invoking each mode
+
+There are three layers. Pick by how many pairs you score:
+
+1. **Umbrella ([`zenmetrics-api`](../crates/zenmetrics-api/)) — one cold
+   pair, no fallback.** One enum, one constructor, one score:
+
+   ```rust
+   use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, MemoryMode};
+
+   // Auto memory mode (the default Metric::new path).
+   let mut m = Metric::new(
+       MetricKind::Cvvdp, Backend::Cuda, 1024, 1024,
+       MetricParams::default_for(MetricKind::Cvvdp),
+   )?;
+   let score = m.compute_srgb_u8(&ref_rgb, &dist_rgb)?;
+
+   // Force a specific memory mode at construction:
+   let mut m = Metric::new_with_memory_mode(
+       MetricKind::Ssim2, Backend::Cuda, 4096, 4096,
+       MetricParams::default_for(MetricKind::Ssim2),
+       MemoryMode::Strip { h_body: None },   // None → resolver auto-sizes the body
+   )?;
+
+   // Cache one reference, score many distorted images against it:
+   m.set_reference_srgb_u8(&ref_rgb)?;
+   let s1 = m.compute_with_cached_reference_srgb_u8(&dist1)?;
+   let s2 = m.compute_with_cached_reference_srgb_u8(&dist2)?;
+   # Ok::<(), zenmetrics_api::Error>(())
+   ```
+
+   The umbrella's `MemoryMode` carries the portable `{ Auto, Full,
+   Strip, Tile }` subset; it converts to each crate's own enum at the
+   boundary. cvvdp's `StripPair` / `CappedPyramid` are **not** in the
+   umbrella subset — reach for the typed crate (below) to use them.
+
+2. **Typed per-crate opaque — a mode the umbrella doesn't expose.**
+   Each crate ships `<Metric>Opaque::new` / `new_with_memory_mode` plus
+   `set_reference_srgb_u8` + `compute_with_cached_reference_srgb_u8`
+   (cvvdp-gpu names these `warm_reference_srgb` +
+   `compute_with_warm_ref_srgb`). cvvdp's extra modes:
+
+   ```rust
+   use cvvdp_gpu::{CvvdpOpaque, CvvdpParams, MemoryMode, Backend};
+
+   // Mode B one-shot strip-pair (lowest one-shot VRAM):
+   let mut s = CvvdpOpaque::new_with_memory_mode(
+       Backend::Cuda, 4096, 4096, CvvdpParams::default(),
+       MemoryMode::StripPair { h_body: Some(256) },
+   )?;
+
+   // JOD-shifting capped pyramid (opt-in; NOT bit-identical to Full):
+   let mut s = CvvdpOpaque::new_with_memory_mode(
+       Backend::Cuda, 4096, 4096, CvvdpParams::default(),
+       MemoryMode::CappedPyramid { levels: 5 },
+   )?;
+   # Ok::<(), cvvdp_gpu::Error>(())
+   ```
+
+   The typed `cvvdp_gpu::Cvvdp` pipeline also offers the matching
+   constructors directly: `Cvvdp::new`, `new_strip`, `new_strip_pair`,
+   `new_capped_pyramid`.
+
+3. **CPU strip — the in-tree `cvvdp` / `iwssim` crates.** The CPU
+   reference crates take an explicit `h_body` on the strip calls:
+
+   ```rust
+   use cvvdp::{Cvvdp, CvvdpParams};
+
+   // Strip-shape allocation up front (peak heap bounded to the strip):
+   let mut c = Cvvdp::new_strip(4096, 4096, CvvdpParams::default(), 512)?;
+   let jod = c.score_strip(&ref_rgb, &dist_rgb, 512)?;
+
+   // Or cache the reference, then strip-walk each distorted image:
+   c.warm_reference(&ref_rgb)?;
+   let jod = c.score_with_warm_ref_strip(&dist_rgb, 512)?;
+   # Ok::<(), cvvdp::Error>(())
+   ```
+
+   `h_body` must be a positive power of two — pass `512` when unsure
+   (the per-crate default). `iwssim` exposes `iwssim::STRIP_BODY_DEFAULT`
+   for the same purpose.
+
+### Orchestrator: automatic mode + backend selection
+
+For batches / sweeps, let [`zenmetrics-orchestrator`](../crates/zenmetrics-orchestrator/)
+choose. It owns a persistent benchmark cache and a pure decision
+function over it:
+
+```rust
+use zenmetrics_orchestrator::{Orchestrator, OrchestratorConfig, ExecContext, TaskShape};
+use zenmetrics_api::MetricKind;
+
+let mut orch = Orchestrator::new(OrchestratorConfig::default())?;
+orch.warm()?;   // bench-on-demand; cache-hit if fresh
+
+let task = TaskShape { metric: MetricKind::Cvvdp, width: 4096, height: 4096 };
+
+// Batch / warm-pool ranking (ranks on warm steady-state ns/px):
+let choice = orch.choose_backend_for_task(&task)?;          // ExecContext::Batch
+
+// Single cold call — apply the measured CPU/GPU one-shot crossover:
+let choice = orch.choose_backend_for_task_with_context(&task, ExecContext::OneShot)?;
+println!("{:?} @ {:.2} ns/px", choice.backend, choice.predicted_ns_per_px);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The chooser's `Backend` enum is the resolved mode: `GpuFull`,
+`GpuStrip`, `GpuStripPair` (cvvdp only), or `Cpu`. The `ExecContext`
+controls how the cold-start floor is weighed:
+
+- **`Batch`** (default) ranks on the cache's warm `ns_per_px` — correct
+  when a persistent warm worker amortizes the GPU context-init floor.
+  GPU wins at every measured size for every metric.
+- **`OneShot`** consults the measured one-shot crossover: at/below the
+  per-metric crossover size (cvvdp / ssim2 / butter / zensim through
+  16 MP, dssim through 4 MP, iwssim through 1 MP) it routes to CPU when
+  CPU is a feasible candidate, because a single cold GPU call would pay
+  the ~181 ms context-init floor that makes CPU faster at that size.
+
+For the full streaming + batch scoring APIs (`submit` / `poll` /
+`run_all` / `upload_reference`), the OOM fallback ladder, and cached-ref
+auto-detect, see
+[`crates/zenmetrics-orchestrator/README.md`](../crates/zenmetrics-orchestrator/README.md).
+
+## Performance profile
+
+GPU scoring cost splits into three components. Modelling a workload as
+
+```
+total ≈ process_start + Σ_refs(per_ref) + Σ_dists(per_dist)
+```
+
+is accurate because each piece is paid in a different scope and each was
+measured separately:
+
+- **`process_start`** — paid **once per process**: the CUDA context init
+  (`Backend::client()`, a flat ~181 ms floor that is independent of metric
+  and image size) plus the first-kernel PTX/JIT load for each metric the
+  first time it runs. On the CPU backend this term is ≈ 0 (no device
+  handshake — it starts computing immediately).
+- **`per_ref`** — paid **once per distinct reference image** you cache via
+  `set_reference_srgb_u8` (cvvdp: `warm_reference_srgb`): the metric's
+  reference-side precompute. Every new reference re-pays this cost; budget
+  one `per_ref` per distinct reference. Measured to 16.777 MP only (40 MP is
+  unmeasured — don't extrapolate). **cvvdp / ssim2 / dssim / zensim** are
+  roughly flat across references (median `setref1 ≈ setref2 ≈ …`). Two
+  exceptions: **butteraugli** eagerly allocates its full reference working set
+  on the *first* `set_reference` of a freshly-warmed instance (~250 ms/MP —
+  ≈4 s at 16 MP — then flat for later refs), so budget a one-time first-ref
+  cost per instance on top of the flat steady state; **iwssim**'s reuse-path
+  references cost ~1.8× its first reference at 16 MP (~120–160 ms vs ~68 ms,
+  and run-to-run noisy) — its per-reference cost *rises*, so size the larger
+  value at 16 MP.
+- **`per_dist`** — paid **once per scored distorted image** against a warm
+  cached reference: `score_with_warm_ref(dist)`, the steady-state per-call
+  wall.
+
+The consequence is a ~181 ms one-time GPU floor (plus per-metric JIT). For a
+**single small image on a freshly-launched process the CPU wins** — it has
+no floor to amortize. As the image grows or the batch lengthens, the GPU's
+throughput outruns the CPU even after paying the floor: for **batch / server
+use (warm context, reference cached) the GPU is faster at every measured
+size** (warm per-call is 10–100× below the CPU wall). The per-process floor
+is paid once and shared across every metric and every pair scored in that
+process — which is exactly why
+[`zenmetrics-orchestrator`](../crates/zenmetrics-orchestrator/) keeps one
+long-lived warm worker. The full warmth-scope analysis (which transitions
+re-pay which component) is in
+[`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](../docs/GPU_INPROCESS_WARMTH_2026-05-29.md);
+the clean per-reference re-measure (task #151,
+[`benchmarks/setref_clean_all_2026-05-29.tsv`](../benchmarks/setref_clean_all_2026-05-29.tsv))
+settled the per-metric first-ref behaviour: cvvdp/ssim2/dssim/zensim are flat
+across references; the prior iwssim "3×" was an n=1 transient (its real reuse
+cost is ~1.8× its first ref, not 3×); and butteraugli carries a genuine
+first-`set_reference` allocation cost (~250 ms/MP on the first call) that the
+warmed-instance median in that TSV smooths over — see the raw first-call
+samples and
+[`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](../docs/GPU_INPROCESS_WARMTH_2026-05-29.md).
+
+All numbers below are measured medians; no value is interpolated or
+extrapolated. Sizes are 512² (0.262 MP), 1024² (1.049 MP), 2048² / "2K"
+(4.194 MP), and 4096² / "16 MP" (16.777 MP).
+
+### `process_start` — CUDA context + first-kernel JIT (once per process)
+
+API: `Backend::client()` then the first `compute_*` on each metric.
+Source: [`benchmarks/gpu_coldstart_2026-05-29.tsv`](../benchmarks/gpu_coldstart_2026-05-29.tsv)
+(`client_init_ms` / `first_compute_ms` / `cold_total_ms`, warm-disk,
+7-process medians). Host: RTX 5070 (12 GiB), cuda backend, no
+`-C target-cpu=native`.
+
+`cold_total = client_init + metric_new + first_compute`. `client_init`
+(the CUDA context) is the shared ~181 ms floor; the rest is per-metric and,
+at large sizes, allocation-dominated.
+
+| Metric | `client_init` (ms) | first-kernel JIT `first_compute` 512² (ms) | `cold_total` 512² (ms) | `cold_total` 16 MP (ms) |
+|---|---|---|---|---|
+| `butteraugli-gpu` | 166.8 | 286.7 | 498.7 | 4923.9 |
+| `cvvdp-gpu` | 172.5 | 272.4 | 504.5 | 4282.7 |
+| `ssim2-gpu` | 187.1 | 129.4 | 396.2 | 6740.5 |
+| `dssim-gpu` | 185.0 | 136.5 | 376.1 | 3949.4 |
+| `iwssim-gpu` | 182.5 | 265.1 | 491.4 | 2512.5 |
+| `zensim-gpu` | 182.2 | 385.0 | 570.3 | 914.2 |
+
+The `client_init` column is flat across metrics and sizes (measured range
+166.8–191.2 ms over all 24 warm rows) — this is the once-per-process floor.
+First-ever JIT on an empty PTX disk cache inflates `first_compute` further
+(butter 1024² 303 → 1288 ms, +~1050 ms one-shot; zensim 1024² 382 → 506 ms,
++~175 ms — rows 26–27); the figures above are the warm-disk case (process
+N>1 after the box has run any GPU job).
+
+### `per_ref` — cache a reference once
+
+API (umbrella): `Metric::set_reference_srgb_u8(ref)`. Per-crate this is
+`set_reference_srgb_u8` (butter / ssim2 / dssim / iwssim / zensim) or
+`warm_reference_srgb` (cvvdp). Source (all six metrics, clean re-measure):
+[`benchmarks/setref_clean_all_2026-05-29.tsv`](../benchmarks/setref_clean_all_2026-05-29.tsv)
+(task #151 — `setref1` = first `set_reference` on a fully warm instance,
+`setref2`/`setref3`/`setref4` = distinct *different-pixel* new references
+(the reuse path), each followed by `block_on(client.sync())` **inside** the
+timed region, **n=8** samples/phase, median + min + max reported, distinct
+pixels every rep). Host: RTX 5070, cuda, no `-C target-cpu=native`. Each
+`setref1` phase shows a single rep-1 transient (a one-time first-`set_reference`
+allocation spike — iwssim 248 ms, butter up to 4166 ms @16 MP) that the
+n=8 median/min reject; that transient is exactly what an n=1 sample would
+have mistaken for the phase cost.
+
+| Metric | `setref1` 512² (ms) | `setref2` 512² (ms) | `setref1` 16 MP (ms) | `setref2` 16 MP (ms) |
+|---|---|---|---|---|
+| `cvvdp-gpu` | 1.65 | 1.59 | 16.98 | 17.17 |
+| `ssim2-gpu` | 2.48 | 2.88 | 29.34 | 29.02 |
+| `dssim-gpu` | 1.43 | 1.34 | 23.15 | 23.16 |
+| `iwssim-gpu` | 2.14 | 2.04 | 68.13 | 120.04 |
+| `zensim-gpu` | 0.62 | 0.50 | 14.59 | 14.77 |
+| `butteraugli-gpu` | 0.77 | 0.74 | 23.33 | 23.65 |
+
+For five of six metrics (cvvdp / ssim2 / dssim / zensim / butter) the
+per-reference cost is **flat**: `setref1 ≈ setref2 ≈ setref3 ≈ setref4`
+at every size, so budget one `per_ref` per distinct reference regardless
+of which reference it is. The earlier profile recorded a huge butter
+first-ref cost (34 ms @512², 3990 ms @16 MP); the task #148 clean
+re-measure isolated that to **first-instance allocation + JIT** (which
+`process_start` already accounts for), not the per-reference cost.
+
+**iwssim is NOT 3× more expensive on its first reference — the opposite.**
+A prior table here reported iwssim @16 MP at 196.5 ms `setref1` vs 67.4 ms
+`setref2` and asserted a "~3× first-ref warmup". That row came from task
+#144's `gpu_inprocess_warmth` Q3, which was a **single sample (n=1) on a
+GPU contaminated by a concurrent zensim eval** — the 196.5 ms was a
+transient. The clean n=8 #151 re-measure (two independent 16 MP runs) finds
+iwssim's `setref1` (68.1 / 73.6 ms) is the **cheapest** phase; `setref2`–
+`setref4` land at 120–163 ms. iwssim alone shows a real first-ref *discount*
+at 16 MP (subsequent distinct references cost ~1.8× the first), and is flat
+at 512² / 1024² / 2K. Budget the larger ~120–160 ms for every reference
+after the first.
+
+### `per_dist` — warm per-call score against a cached reference
+
+API: `score_with_warm_ref(dist)`. Source:
+[`benchmarks/gpu_coldstart_2026-05-29.tsv`](../benchmarks/gpu_coldstart_2026-05-29.tsv)
+(`warm_per_call_ms`, intra-process warm repeats, every call ends in a host
+readback so the wall is real GPU execution). Cross-confirmed by the
+`warm_ref` cuda rows in
+[`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`](../benchmarks/gpu_metrics_sweep_2026-05-28.tsv).
+Host: RTX 5070, cuda, no `-C target-cpu=native`.
+
+| Metric | 512² (ms) | 1024² (ms) | 2K / 4.2 MP (ms) | 16 MP (ms) |
+|---|---|---|---|---|
+| `butteraugli-gpu` | 1.54 | 3.61 | 12.93 | 50.20 |
+| `cvvdp-gpu` | 4.23 | 6.00 | 11.80 | 41.33 |
+| `ssim2-gpu` | 3.96 | 6.50 | 14.16 | 47.70 |
+| `dssim-gpu` | 4.14 | 5.21 | 12.17 | 46.81 |
+| `iwssim-gpu` | 6.53 | 9.47 | 12.78 | 39.44 |
+| `zensim-gpu` | 1.66 | 3.27 | 9.67 | 37.80 |
+
+So scoring a batch of N distorted images against one cached reference at
+16 MP on cvvdp is `~504.5 + 16.86 + N×41.33 ms` (process_start512 floor is
+size-independent; per_ref and per_dist scale with image size). The
+`gpu_metrics_sweep` `warm_ref` cuda column gives the same per-call shape
+measured by the independent sweep harness (e.g. cvvdp 4 MP 11.80 ms here vs
+7.60 ms there, ssim2 16 MP 47.70 vs 43.98 — same order, different warm-up
+counts).
+
+### CPU full-mode wall (`score(ref, dist)`)
+
+API: `score(ref, dist)` (umbrella `zenmetrics-api`, full mode — build +
+one cold score per call). Source:
+[`benchmarks/cpu_wall_all_metrics_2026-05-29.tsv`](../benchmarks/cpu_wall_all_metrics_2026-05-29.tsv)
+(`mode=full`, `cold_or_warm=cold`, `mean_ms`). Harness: zenbench 0.1.8
+interleaved round-robin (paired stats, loop-overhead compensated — not
+criterion). Host: AMD Ryzen 9 7950X, release, no `-C target-cpu=native`
+(runtime archmage SIMD dispatch only).
+
+| Metric | 512² (ms) | 1024² (ms) | 2K / 4.2 MP (ms) | 16 MP (ms) |
+|---|---|---|---|---|
+| `cvvdp` | 32.48 | 128.35 | 607.28 | 3812.26 |
+| `ssim2` | 16.67 | 70.05 | 297.76 | 2591.03 |
+| `dssim` | 30.53 | 123.48 | 546.16 | 4114.34 |
+| `butter` | 12.69 | 62.69 | 347.53 | 1690.87 |
+| `iwssim` | 59.81 | 261.88 | 1169.06 | 6665.18 |
+| `zensim` | 6.92 | 13.92 | 78.86 | 369.66 |
+
+### Per-mode performance at 16 MP
+
+These tables give the measured **wall** and **peak working-set** of
+the four common execution modes (full / strip / warm_ref /
+warm_ref_strip — see the
+[support matrix](#modes--metrics-support-matrix) for the full set,
+including cvvdp's StripPair / CappedPyramid) at a representative large
+size. Every cell is a committed-TSV value — no number is interpolated
+or extrapolated; unsupported `(metric, mode)` cells say `n/a`.
+
+The modes:
+
+- **full** — `score(ref, dist)`: whole-image working set.
+- **strip** — strip-walker, one cold `(ref, dist)` per call.
+- **warm_ref** — reference cached once (`set_reference`/`warm_reference`),
+  then `score_with_warm_ref(dist)` per distorted image (whole-image
+  ref state).
+- **warm_ref_strip** — reference cached, distorted image walked in
+  strips per call.
+
+**GPU (cuda), 16 MP = 4096².** Wall = `wall_median_ms` (per-call
+steady-state); mem = `peak_vram_human`. Source:
+[`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`](../benchmarks/gpu_metrics_sweep_2026-05-28.tsv)
+unless noted. Host: RTX 5070 (12 GiB), no `-C target-cpu=native`.
+
+| Metric | full (ms / VRAM) | strip (ms / VRAM) | warm_ref (ms / VRAM) | warm_ref_strip (ms / VRAM) |
+|---|---|---|---|---|
+| `cvvdp-gpu` | 45.5 / 3.88 GiB | 203.0 / 2.22 GiB † | 25.9 / 3.88 GiB | 108.9 / 3.88 GiB |
+| `butteraugli-gpu` | 62.3 / 3.91 GiB | 81.1 / **481 MiB** | 32.8 / 3.91 GiB | 150.9 / 4.19 GiB |
+| `ssim2-gpu` | 50.7 / 6.15 GiB | 205.1 / **1.19 GiB** | 44.0 / 6.19 GiB | 119.7 / 4.06 GiB |
+| `dssim-gpu` | 50.5 / 3.16 GiB | 277.8 / **897 MiB** | 52.2 / 3.16 GiB | 161.8 / 2.59 GiB |
+| `iwssim-gpu` | 45.3 / 2.16 GiB | 385.0 / **545 MiB** | 42.3 / 2.16 GiB | 99.8 / 802 MiB |
+| `zensim-gpu` | 38.1 / 1.16 GiB | 61.1 / **289 MiB** ‡ | 30.9 / 1.16 GiB | 488.3 / 1.22 GiB |
+
+† cvvdp's GPU strip mode is `StripPair` (Mode B, one-shot — ref+dist
+walk together); the row is the `strip_pair` cuda row. cvvdp has no
+`warm_ref_strip`-distinct VRAM win at 16 MP because its `warm_ref`
+keeps full-image ref state on device; the strip win for cvvdp shows up
+on the **CPU** path below.
+‡ zensim-gpu's standalone cold-strip VRAM at 16 MP is **289 MiB** (vs
+1.16 GiB Full — a 4.1× reduction) per the corrected re-measure
+[`crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`](../crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv);
+the wall (61.1 ms) is from the sweep TSV. The `strip` VRAM rows in
+`gpu_metrics_sweep` are flagged superseded (pre-fix code built a
+full-image ref pyramid). The `warm_ref_strip` column keeps a device
+ref cache, so it stays at 1.22 GiB by design.
+
+**CPU, wall at 16 MP = 4096².** Wall = warm per-call for the two
+`warm_ref*` modes, cold per-call for `full`/`strip`. Source:
+[`benchmarks/cpu_wall_all_metrics_2026-05-29.tsv`](../benchmarks/cpu_wall_all_metrics_2026-05-29.tsv)
+(zenbench, 7950X). Peak heap (heaptrack) is reported at the largest
+committed heaptracked size — **16 MP (4096²) for cvvdp only**; the
+other five were heaptracked at **12 MP (4000×3000)** and are marked
+`@12MP`, since no 16 MP heaptrack is committed for them and memory does
+not extrapolate across sizes. Heap source:
+[`benchmarks/cpu_metrics_full_table_2026-05-28.tsv`](../benchmarks/cpu_metrics_full_table_2026-05-28.tsv)
+(cvvdp rows corrected to the Path A `new_strip` dispatcher,
+[`crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv`](../crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv)).
+
+| Metric | full (ms / heap) | strip (ms / heap) | warm_ref (warm ms / heap) | warm_ref_strip (warm ms / heap) |
+|---|---|---|---|---|
+| `cvvdp` | 3812 / 3.66 GB | 2605 / **1.58 GB** | 1790 / 3.15 GB | 2168 / **1.55 GB** |
+| `ssim2` | 2591 / 2.01 GB@12MP | 3032 / **0.90 GB**@12MP | 1429 / 1.81 GB@12MP | 2457 / 1.21 GB@12MP |
+| `dssim` | 4114 / 2.60 GB@12MP | n/a — dssim-core 3.5 has no strip | 2938 / 2.60 GB@12MP | n/a — no strip |
+| `butter` | 1691 / 2.37 GB@12MP | 1624 / **0.80 GB**@12MP | 1472 / 2.31 GB@12MP | 1606 / 1.93 GB@12MP |
+| `iwssim` | 6665 / 1.77 GB@12MP | 9954 / **0.70 GB**@12MP | 6203 / 1.77 GB@12MP | 4898 / 0.92 GB@12MP |
+| `zensim` | 370 / 0.74 GB@12MP | 368 / 0.69 GB@12MP | 345 / 0.79 GB@12MP | 290 / 0.69 GB@12MP |
+
+**The memory win of strip vs full** is the reason strip mode exists.
+At 16 MP on the **CPU** path cvvdp drops from **3.66 GB (full)** to
+**1.58 GB (strip)** — a 2.3× reduction — with the bit-identical JOD and
+a *faster* wall (Path A `new_strip` is −43 % wall at 16 MP). At 12 MP,
+butter (2.37 → 0.80 GB), iwssim (1.77 → 0.70 GB), and ssim2 (2.01 →
+0.90 GB) show similar 2.5–3× CPU-heap reductions. On the **GPU** the
+standalone strip win is largest for zensim-gpu (1.16 GiB → 289 MiB,
+4.1×), butteraugli-gpu (3.91 GiB → 481 MiB, 8.3×), and iwssim-gpu
+(2.16 GiB → 545 MiB, 4.1×) — at the cost of more launches, so strip
+mode is the OOM-avoidance path, not the throughput path (except butter,
+which is strip-preferred). dssim's strip win is GPU-only (3.16 GiB →
+897 MiB); the dssim **CPU** path has no strip walker
+(`dssim-core` 3.5).
+
+### CPU vs GPU one-shot crossover
+
+The size below which a **single** image on a **cold process** is faster on
+CPU than GPU. `gpu_cold_total_ms` is the one-shot GPU floor (context-init +
+metric_new + first_compute). Source:
+[`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`](../benchmarks/cpu_gpu_crossover_2026-05-29.tsv)
++ [`docs/CPU_GPU_CROSSOVER_2026-05-29.md`](../docs/CPU_GPU_CROSSOVER_2026-05-29.md).
+Hosts: CPU 7950X, GPU RTX 5070, cuda, no `-C target-cpu=native`.
+
+| Metric | one-shot: CPU wins up to | one-shot: GPU wins from | batch (warm) winner |
+|---|---|---|---|
+| `cvvdp` | 16.8 MP (all measured) | — | GPU at all sizes |
+| `ssim2` | 16.8 MP (all measured) | — | GPU at all sizes |
+| `butter` | 16.8 MP (all measured) | — | GPU at all sizes |
+| `zensim` | 16.8 MP (all measured) | — | GPU at all sizes |
+| `dssim` | 4.2 MP (2048²) | 16.8 MP (4096²) | GPU at all sizes |
+| `iwssim` | 1.0 MP (1024²) | 4.2 MP (2048²) | GPU at all sizes |
+
+Crossovers stated as a bracket between two measured sizes are interpolated,
+never a fabricated MP. GPU-cold was measured only at 512² / 1024² / 2048² /
+4096²; the 12 MP and 30 MP CPU rows in the source TSV have no GPU-cold
+counterpart and are not given a one-shot winner. For **batch / warm** use
+there is no crossover in range — GPU wins everywhere.
+
+### Reproduce these numbers
+
+One runner drives all four measurement harnesses:
+
+```sh
+# full grid (512² / 1024² / 2K / 16 MP) — matches the committed TSVs
+scripts/perf/reproduce_perf_profile.sh
+
+# quick smoke (512² + 16 MP only)
+scripts/perf/reproduce_perf_profile.sh --quick
+```
+
+It invokes the existing drivers — no new measurement code:
+
+- **`process_start` + `per_dist`** —
+  [`scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py`](../scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py)
+  (builds each crate's `examples/coldstart_one`,
+  e.g. [`crates/cvvdp-gpu/examples/coldstart_one.rs`](../crates/cvvdp-gpu/examples/coldstart_one.rs)).
+- **`per_ref`** —
+  [`scripts/memory_audit/sweep_gpu_inprocess_warmth_2026-05-29.py`](../scripts/memory_audit/sweep_gpu_inprocess_warmth_2026-05-29.py)
+  (builds [`crates/zenmetrics-api/examples/inprocess_warmth.rs`](../crates/zenmetrics-api/examples/inprocess_warmth.rs)).
+- **CPU full wall** — the `cpu-wall` zenbench binary
+  (`cargo build --release -p cpu-profile --bin cpu-wall`).
+
+The GPU harnesses require a CUDA-capable host; the CPU wall runs anywhere.
+Outputs land in a timestamped scratch dir and are diffed against the
+committed TSVs. See the script header for per-harness flags.
+
+## GPU CI / Metal
+
+GPU metric kernels are validated on **CUDA** (locally, RTX 5070) and
+**Vulkan** (`cubecl-wgpu`, the `gpu-citest` job on Linux) — these are the
+backends the kernels ship against, and both run the full parity suites.
+
+The **macOS-Metal CI job is currently disabled** (`if: false` in
+`ci.yml`, 2026-06-13). On the 8 GB-unified `macos-latest` runner the
+large-image (12 MP / 4000×3000) parity tests wedge the GPU — the
+whole-image butteraugli score silently OOMs to 0 and the ssim2 device
+hangs until the job timeout — even with serialized test execution. This
+is a runner-capacity / large-image-GPU-memory limit, **not** a kernel
+correctness problem (CUDA + Vulkan parity is green). Metal coverage will
+return once the large-image path is capped or fixed for the 8 GB runner;
+work is tracked in the zenmetrics#24 Metal stream. Until then, **Metal is
+not a supported/verified backend in CI** — treat Metal results as
+unvalidated.
+
+## Documentation
+
+- [`docs/CUBECL_PORTING_GUIDE.md`](../docs/CUBECL_PORTING_GUIDE.md) — patterns
+  for porting more CUDA / scalar metrics to multi-vendor CubeCL.
+- [`docs/CUBECL_GOTCHAS.md`](../docs/CUBECL_GOTCHAS.md) — 30-entry catalogue
+  of cubecl-0.10-era traps with symptoms / fixes / examples.
+- [`docs/SSIMULACRA2_PORTING_PLAN.md`](../docs/SSIMULACRA2_PORTING_PLAN.md),
+  [`docs/SSIM2_GPU_HANDOFF.md`](../docs/SSIM2_GPU_HANDOFF.md) — the per-crate
+  porting playbooks.
+- [`crates/cvvdp-gpu/docs/PORT_STATUS.md`](../crates/cvvdp-gpu/docs/PORT_STATUS.md)
+  — ColorVideoVDP per-stage port status against pycvvdp v0.5.4
+  (host scalar reference path + GPU composition + parity test
+  matrix).
+- [`scripts/sweep/README.md`](../scripts/sweep/README.md) — operator
+  runbook for the vast.ai sweep/backfill fleet (unified Rust worker,
+  chunk claims, image/onstart lifecycle), including the cvvdp JOD
+  backfill onto the zensim training parquet store.
