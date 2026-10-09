@@ -13,6 +13,12 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Benchmarks (`34b5ff85`): `--features metrics-parallel` on the `cpu-profile`
+  harness turns on each metric crate's own threading, which the default CLI
+  build leaves off. At 8.4 MP and 8 threads it is score-identical and speeds
+  cvvdp 2.4×, fsim 2.0×, iwssim 1.8×, mad 1.8×; see the threading section of
+  `benchmarks/cpu_metrics_1t8t_2026-10-09.md`.
+
 - Docs: README rewritten as a landing page (all `--metric`s with what they
   match, CLI usage, per-metric cost, limitations); the previous README's
   detailed reference moved to `docs/TECHNICAL_REFERENCE.md`. Quick start now
