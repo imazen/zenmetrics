@@ -136,7 +136,7 @@ pub enum MetricKind {
     /// CPU-only.
     #[value(name = "nlpd-iqa")]
     NlpdIqa,
-    /// SSIMULACRA2 — CPU implementation via the `ssimulacra2` crate.
+    /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
     /// SSIMULACRA2 — GPU implementation via the `ssim2-gpu` crate

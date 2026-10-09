@@ -35,7 +35,7 @@ We do not call everything a "port". Terms used below:
 | `ssim2-gpu` | `ssim2-gpu` (in-tree GPU twin) | " | `fast-ssim2` (CPU) + third-party crates.io `ssimulacra2` for parity | in-tree GPU reimplementation | sRGB8 | " |
 | `dssim` | crates.io `dssim-core` ^3.4 | Wang et al. MS-SSIM 2003 (porneL's variant) | dssim-core itself (the canonical impl) | third-party crate | sRGB8 | 0 best, unbounded |
 | `dssim-gpu` | `dssim-gpu` (in-tree twin) | " | dssim-core | in-tree GPU | " | " |
-| `butteraugli` | sibling `butteraugli` | Alakuijala et al. 2017, doi:10.1117/12.2272310 | libjxl butteraugli v0.9.2 / 0.9.4 | sibling crate (wraps the libjxl implementation) | sRGB8 | distance; emits `*_max` + `*_pnorm3` |
+| `butteraugli` | sibling `butteraugli` | Jyrki Alakuijala, Google — no paper; [google/butteraugli](https://github.com/google/butteraugli) | libjxl butteraugli v0.9.2 / 0.9.4 | sibling crate (wraps the libjxl implementation) | sRGB8 | distance; emits `*_max` + `*_pnorm3` |
 | `butteraugli-gpu` | `butteraugli-gpu` | " | same | in-tree GPU | " | " |
 | `cvvdp` | in-tree `crates/cvvdp` | Mantiuk et al., ColorVideoVDP, ACM SIGGRAPH 2024 | `pycvvdp` **v0.5.7** (PyPI) | reference reimplementation (native SIMD CPU) | sRGB8 + display preset (default `standard_4k`) | JOD 0–10 |
 | `cvvdp-gpu` | `cvvdp-gpu` twin | " | pycvvdp v0.5.7 + CPU twin | in-tree GPU | " | " |
@@ -47,17 +47,17 @@ We do not call everything a "port". Terms used below:
 | `msssim` | in-tree `crates/msssim` | Wang, Simoncelli, Bovik 2003 (ACSSC) | authors' `ssim_mscale_new.m` | reference reimplementation | sRGB8 → BT.601 luma | [0,1] |
 | `ssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang et al., IEEE TIP 2004 (as implemented by Z. Li / tdistler iqa) | libvmaf `float_ssim` @ f85a8536 — FFI oracle (`vmaf-head-sys` dev-dep) | reference reimplementation (integer-accumulating decimate + f32/f64 rounding points preserved) | sRGB8 → studio-swing BT.601 luma — the YUV `Y` plane libvmaf consumes; NOT the MATLAB `rgb2gray` luma | [0,1] |
 | `msssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang/Simoncelli/Bovik 2003 (libvmaf's 5-scale variant) | libvmaf `float_ms_ssim` @ f85a8536 — FFI oracle | reference reimplementation (9/7 LPF pyramid, per-scale f32 means, double `pow`) | " | [0,1] |
-| `iwssim` | in-tree `crates/iwssim` | Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2096950 | `Python-IW-SSIM` f9de37c (community reimpl of the lost MATLAB ref) | reference reimplementation | sRGB8 → u8-rounded BT.601 gray (`0.2989/0.5870/0.1140`, `LumaConvention::Bt601Rounded`) | [0,1] |
+| `iwssim` | in-tree `crates/iwssim` | Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2092435 | `Python-IW-SSIM` f9de37c (the Python port linked from the authors' IW-SSIM page; not yet compared directly with the authors' MATLAB release) | reference reimplementation | sRGB8 → u8-rounded BT.601 gray (`0.2989/0.5870/0.1140`, `LumaConvention::Bt601Rounded`) | [0,1] |
 | `iwssim-piq` | in-tree `crates/iwssim` (`piq_luma` params) | " | jpeg-ai-qaf `IW_SSIM` (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 `IW-SSIM` column; upstream mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b` | same code path, `LumaConvention::YiqUnrounded` ingress | sRGB8 → unrounded `0.299R+0.587G+0.114B` | [0,1] |
 | `iwssim-gpu` | `iwssim-gpu` twin | " | CPU twin | in-tree GPU | " | " |
 | `gmsd` | in-tree `crates/gmsd` | Xue et al., IEEE TIP 23(2) 2014 | `libgmsd` de646c9a (C) | reference reimplementation | sRGB8 → luma | 0 best, unbounded |
 | `psnrhvs` / `psnrhvs-y` | in-tree `crates/psnrhvs` | Ponomarenko/Egiazarian PSNR-HVS-M (VPQM 2007) | authors' `psnrhvsm.m` | reference reimplementation | RGB per-channel 8×8 DCT (`-y` = luma plane) | dB, higher better |
 | `psnrhvs-daala` | in-tree `crates/psnrhvs` (`daala` module) | Daala/Xiph PSNR-HVS (integer bin-DCT variant adopted by libvmaf; distinct from the Ponomarenko MATLAB `psnrhvs`) | libvmaf `psnr_hvs` feature @ f85a8536 — FFI oracle | reference reimplementation (column-first `od_bin_fdct8x8`, CSF tables `csf_y`/`cb420`/`cr420`, integer-product mask accumulation, f32 `ret`) | sRGB8 → studio-swing BT.601 **YUV444** planes — the AIC-4 convention (`psnr_hvs_daala_yuv420` also exposed for YUV420 pictures) | dB; emits `psnrhvs_daala_{y,cb,cr}` + combined |
-| `haarpsi` / `haarpsi-y` | in-tree `crates/haarpsi` | Reisenhofer et al., Sci. Rep. 2018, doi:10.1038/s41598-018-21354-2 | authors' `haarpsi.m` | reference reimplementation | RGB (YIQ chroma) / luma (`-y`) | [0,1] |
+| `haarpsi` / `haarpsi-y` | in-tree `crates/haarpsi` | Reisenhofer, Bosse, Kutyniok & Wiegand, Signal Processing: Image Communication 61 (2018) 33–43, doi:10.1016/j.image.2017.11.001 | authors' `haarpsi.m` | reference reimplementation | RGB (YIQ chroma) / luma (`-y`) | [0,1] |
 | `fsim` / `fsim-y` | in-tree `crates/fsim` | Zhang et al., IEEE TIP 20(8) 2011, doi:10.1109/TIP.2011.2109730 | authors' `FR_FSIMc.m` | reference reimplementation | sRGB8 (FSIMc chroma terms) / luma (`-y`) | [0,1] |
 | `vsi` | in-tree `crates/vsi` | Zhang et al., IEEE TIP 23(10) 2014 | authors' `VSI.m` | reference reimplementation | sRGB8 (SDSP colour saliency) | [0,1] |
 | `mad` | in-tree `crates/mad-iqa` | Larson & Chandler, JEI 19(1) 2010 | official MATLAB release (larschandler.com) | reference reimplementation | sRGB8 → luma | distance; emits `mad`, `mad_hi`, `mad_lo` |
-| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "An Autoregressive Multi-DCT Domain Image Quality Metric", QoMEX 2009 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
+| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "On the mDCT-PSNR image quality index", QoMEX 2009, doi:10.1109/QOMEX.2009.5246978 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
 | `nlpd` | in-tree `crates/nlpd` | Laparra et al., normalized Laplacian pyramid distance (laparra16a-preprint) | Valerolaparra/`NLPD_Pytorch` (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | reference reimplementation | sRGB8 → RGB planes `[0,1]`; six levels, `(Σ rms^0.6)^(1/0.6)` pooling | distance; 0 = identical |
 | `nlpd-iqa` | in-tree `crates/nlpd` (`iqa` module) | " — the **dingkeyan93 `IQA_pytorch`** configuration (`NLPD(channels=1)`, alexhepburn nlpd-tensorflow lineage), NOT pyiqa and NOT the Laparra RGB reference | `IQA_pytorch` source mirrored at `/tmp/nlpd_orig.py`; semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 `NLPD` column (n=53) | reference reimplementation (f32, pad-2 downsample phase, bilinear `align_corners` upsample, mean-of-RMS pooling) | sRGB8 → BT.709 Y `[0,1]` re-quantized to the 8-bit grid (`iqa::score_rgb_u8`); `iqa::score_y_f32` for caller-supplied planes | distance; 0 = identical |
 | `zensim` | sibling `zensim` crate | — | — | **in-house** (ML-trained; not a reproduction target) | sRGB8 | 0–100 |
@@ -71,9 +71,11 @@ Notes on tricky provenance:
   crates versions banned"). `fast-ssim2` is the Imazen crate; crates.io
   `ssimulacra2` is a *third-party* crate — it appears only inside `ssim2-gpu`
   for reference parity and never reaches the scoring path.
-- `iwssim`: the authors' MATLAB source is not publicly distributed; the
-  validation oracle is the widely-used Python reimplementation pinned to
-  commit f9de37c — recorded honestly as a second-order oracle.
+- `iwssim`: the authors' MATLAB release (`iwssim_iwpsnr.zip` on Zhou Wang's
+  [IW-SSIM page](https://ece.uwaterloo.ca/~z70wang/research/iwssim/)) is
+  public; our goldens come from the Python port that page links
+  (Python-IW-SSIM, pinned to commit f9de37c), a second-order oracle. A direct
+  comparison with the MATLAB release has not been run yet.
 - `vmaf`: model weights are the published libvmaf `vmaf_v0.6.1` /
   `vmaf_v0.6.1neg` / `vmaf_4k_v0.6.1(+neg)` pickles converted at build time;
   feature extraction (adm2, motion2, vif×4) is our reimplementation.

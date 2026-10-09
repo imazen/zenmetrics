@@ -50,7 +50,7 @@ ledger live in
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
 | [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) + **HDR-VDP-3.0.7** (`v3` module; CLI `hdrvdp3` — explicit viewing conditions required: `--hdrvdp3-ppd` mandatory) | v2: `res.Q` ~0–100, higher better; v3: `q_jod` 0–10 (10 = identical) | official HDR-VDP 2.2.2 + 3.0.7 MATLAB (Mantiuk et al.) + jpeg-ai-qaf `VDP3/` port — v3 goldens ≤1.6e-13, bit-equal to MATLAB 3.0.7 |
-| [`gmsd`](https://github.com/imazen/zenmetrics/tree/master/crates/gmsd) | GMSD (Xue et al. 2014, CPU) | distance ~0–0.35, 0 = identical | libgmsd (Ponomarenko group) |
+| [`gmsd`](https://github.com/imazen/zenmetrics/tree/master/crates/gmsd) | GMSD (Xue et al. 2014, CPU) | distance ~0–0.35, 0 = identical | libgmsd (Tom Clunie's C port of the authors' `GMSD.m`) |
 | [`psnrhvs`](https://github.com/imazen/zenmetrics/tree/master/crates/psnrhvs) | PSNR-HVS / PSNR-HVS-M / PSNR-HVS-Y (CPU) | dB, higher better; 100000 = identical | authors' `psnrhvsm.m` (Octave goldens) |
 | [`haarpsi`](https://github.com/imazen/zenmetrics/tree/master/crates/haarpsi) | HaarPSI / HaarPSI-Y (CPU) | similarity ~0–1, 1 = identical; NaN on zero-weight inputs | authors' MIT `HaarPSI.m` (Octave goldens) |
 | [`fsim`](https://github.com/imazen/zenmetrics/tree/master/crates/fsim) | FSIM / FSIMc / FSIM-Y (CPU) | similarity 0–1, 1 = identical; NaN on constant inputs | authors' `FR_FSIMc.m` (Octave goldens) |
@@ -71,10 +71,11 @@ use separate ADM2, motion2 and four-scale integer VIF features; their
 feature, fusion, frame-score, streaming, and pooling paths are checked
 against libvmaf, including ADM2/VIF no-enhancement-gain limits.
 The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
-as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
-API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
-decoded planar YUV420 8/10-bit input of at least 34×34 pixels (not packed
-RGB, HDR, or 12/16-bit).
+as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. The
+crate API takes decoded planar YUV420 8/10-bit input of at least 34×34 pixels
+(not packed RGB, HDR, or 12/16-bit). The CLI exposes it as `--metric vmaf`,
+`vmaf-neg`, `vmaf-4k` and `vmaf-v1`, converting sRGB8 input itself and
+rejecting odd dimensions; it is not yet wired into the orchestrator.
 `VmafV1Scorer` retains the parsed model across batches. `VmafV1Stream` accepts
 one pair at a time, keeps at most two recent reference luma frames for motion,
 and emits delayed scores once lookahead is available; call `finish()` to emit

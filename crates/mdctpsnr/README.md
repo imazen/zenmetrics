@@ -1,8 +1,8 @@
 # mdctpsnr
 
 Pure-Rust CPU reimplementation of **mDCT-PSNR** — the masked-DCT perceptual
-image quality metric by Thomas Richter (University of Stuttgart), "An
-Autoregressive Multi-DCT Domain Image Quality Metric" (QoMEX 2009 lineage;
+image quality metric by Thomas Richter (University of Stuttgart), "On the
+mDCT-PSNR image quality index" (QoMEX 2009, doi:10.1109/QOMEX.2009.5246978;
 the metric the JPEG AIC-4 benchmark publishes in its `mDCT-PSNR` column).
 
 The port follows the author's reference implementation

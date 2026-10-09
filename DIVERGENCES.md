@@ -28,7 +28,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `hdrvdp` | official **HDR-VDP 2.2.2** MATLAB release (SourceForge) | Octave 11.1 run of official 2.2.2; UPIQ corpus | P_det 1.4e-5 rel, C_max 1e-4 rel, P_map 1.7e-2 abs, `res.Q` 7.8e-4 |
 | `hdrvdp` `v3` | official **HDR-VDP-3.0.7** MATLAB release (SourceForge) + **jpeg-ai-qaf `VDP3/`** torch port @ `0628a6b` (faithful — verified against the original, see entry) | 21-case golden corpus from the reference port + Octave run of MATLAB 3.0.7 on AIC-4 pairs | ≤ 1.6e-13 JOD worst |Q_JOD| over 21 cases; **bit-equal** to MATLAB 3.0.7 at print precision on 3 AIC-4 pairs |
 | `vmaf` | Netflix **libvmaf 3.2.1** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `crates/vmaf/tests/ffi_fusion.rs` | v0 asserted ≤ 1e-4 features (motion2 1e-8), ≤ 0.02 score; integer stat paths exact by construction |
-| `gmsd` | **libgmsd** (Ponomarenko group) + `GMSD.m` | libgmsd bit-comparison | bit-identical map on even dims; f64 rounding only in score |
+| `gmsd` | **libgmsd** (Tom Clunie's C port of the authors' `GMSD.m`) | libgmsd bit-comparison | bit-identical map on even dims; f64 rounding only in score |
 | `iwssim` | **Python-IW-SSIM** @ `f9de37c` (Jack-guo-xy) | committed JSON goldens | identical ≤ 1e-5, distorted ≤ 5e-3; strip-vs-whole ≤ 1e-6 |
 | `iwssim-piq` | same algorithm as `iwssim`; the **JPEG AIC-4 `IW-SSIM` column** (jpeg-ai-qaf `IW_SSIM` on unrounded Y) | published AIC-4 `metrics_fullres.tab` | med 3.9e-6, max 2.6e-5 over 54 pairs (2026-09-26) |
 | `psnrhvs` | authors' **`psnrhvsm.m`** (metrix MATLAB) | Octave goldens, `validation/` | ≤ ~4e-4 dB (asserted ≤ 1e-3) |
