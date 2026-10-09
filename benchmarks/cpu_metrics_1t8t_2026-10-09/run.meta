@@ -1,0 +1,19 @@
+harness=benchmarks/heaptrack/drivers/cpu_profile/src/bin/new_metrics_wall.rs (bin new-metrics-wall)
+dispatch=zenmetrics_cli::metrics::run_metric_display, GpuRuntime::Cpu; cvvdp on standard_fhd
+base_commit=b2d56903 (master) + the harness/script commit that lands with this directory
+binary_sha256_prefix=2247a762201b0cc4 (final build; the st_photo_1024 leg ran an earlier build of the same harness without the refused-size probe and WxH parsing, timing paths identical)
+host=r7900x  cpu=AMD Ryzen 9 7900X 12-Core Processor (Zen 4, 12C/24T)  ram=30 GiB
+toolchain=rustc 1.99.0 (b940084d7 2026-09-28)  zenbench=0.1.9 (resolved)  profile=release, no target-cpu=native
+content=photo: zenmetrics-corpus source.png (reference) vs q20.jpg (distorted), 256x256, mirror-tiled to size
+threads: 1t = taskset -c 2 + RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1; 8t = taskset -c 0-7 (8 physical cores) + RAYON_NUM_THREADS=8
+legs:
+  st_photo_1024.tsv            zenbench lat, 1t, 1024x1024, wall 150 s, 3 rounds
+  mt8_photo_1024.tsv           zenbench lat, 8t, 1024x1024, wall 150 s, 3 rounds
+  mt8_photo_3355x2516.tsv      zenbench lat, 8t, 3355x2516, 1 round (single call per metric)
+  logs/heap_st_3355x2516_*.log 1t, 3355x2516, `new-metrics-wall heap` cold+warm call, /usr/bin/time -v (max RSS)
+reproduce: just cpu-metrics-1t8t benchmarks/cpu_metrics_1t8t_<date> 1024 3355x2516
+contention (5 s samples of other processes >50% CPU; another agent's cargo build/test shared the box):
+  st_photo_1024        CONTENDED  15/44 samples busy, max load1 3.30
+  mt8_photo_1024       light      7/72 samples busy (first ~16 s), max load1 3.88
+  mt8_photo_3355x2516  clean      0/198, max load1 1.18
+  1t 3355x2516 calls   clean      0/59, max load1 1.10

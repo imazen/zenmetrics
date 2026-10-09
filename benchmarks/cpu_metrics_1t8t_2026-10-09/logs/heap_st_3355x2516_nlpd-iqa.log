@@ -1,0 +1,27 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24837MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 target/release/new-metrics-wall heap 3355x2516 nlpd-iqa
+heap 3355x2516/nlpd-iqa rep0: 337.501 ms score=0.09799005369563485
+heap 3355x2516/nlpd-iqa rep1: 329.646 ms score=0.09799005369563485
+	Command being timed: "taskset -c 2 target/release/new-metrics-wall heap 3355x2516 nlpd-iqa"
+	User time (seconds): 0.33
+	System time (seconds): 0.37
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.70
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 434632
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 303357
+	Voluntary context switches: 1
+	Involuntary context switches: 8
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 1s | peak-RSS 0.41GiB | min-avail 24834MiB | peak-load 1.07

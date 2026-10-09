@@ -1,0 +1,27 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24825MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 target/release/new-metrics-wall heap 3355x2516 fsim
+heap 3355x2516/fsim rep0: 848.186 ms score=0.9994539802118171
+heap 3355x2516/fsim rep1: 848.158 ms score=0.9994539802118171
+	Command being timed: "taskset -c 2 target/release/new-metrics-wall heap 3355x2516 fsim"
+	User time (seconds): 1.46
+	System time (seconds): 0.27
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.73
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 123140
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 224861
+	Voluntary context switches: 1
+	Involuntary context switches: 19
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 2s | peak-RSS 0.12GiB | min-avail 24825MiB | peak-load 1.06

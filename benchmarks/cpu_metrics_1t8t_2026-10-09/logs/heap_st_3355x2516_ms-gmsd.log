@@ -1,0 +1,27 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24822MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 target/release/new-metrics-wall heap 3355x2516 ms-gmsd
+heap 3355x2516/ms-gmsd rep0: 312.054 ms score=0.033549746494381916
+heap 3355x2516/ms-gmsd rep1: 297.520 ms score=0.033549746494381916
+	Command being timed: "taskset -c 2 target/release/new-metrics-wall heap 3355x2516 ms-gmsd"
+	User time (seconds): 0.27
+	System time (seconds): 0.37
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.65
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 552156
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 304671
+	Voluntary context switches: 16
+	Involuntary context switches: 224
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 0s | peak-RSS 0.53GiB | min-avail 24821MiB | peak-load 1.07

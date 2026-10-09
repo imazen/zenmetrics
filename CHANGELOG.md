@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Benchmarks (`fbc9fd79`): `new-metrics-wall` times all 29 CPU metrics the CLI
+  scores from sRGB8, on a real photo pair at any `<W>x<H>`; `just
+  cpu-metrics-1t8t` runs 1-thread and 8-thread legs. First results:
+  `benchmarks/cpu_metrics_1t8t_2026-10-09.md` (mad and mdctpsnr take ~60 s each
+  at 8.4 MP; most metrics gain nothing from 8 threads at that size; vmaf refuses
+  odd dimensions).
+
 - Workspace (`8cbf9cbb`): CI lock snapshots export the jj-tracked tree instead
   of copying ignored working files. Exclude marked Cargo target directories and
   repository metadata, preserving source edits and immutable revision exports.
