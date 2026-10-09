@@ -17,6 +17,12 @@ measured against:
 | AIC-HDR2025 (HDR compression JND) | **0.936** | SSIMULACRA2 0.906 |
 | UPIQ (380 HDR compression pairs, JOD) | **0.812** | this crate **0.820** |
 
+AIC-HDR2025: Jenadeleh, Sneyers, Lazzarotto, Mohammadi, Keller, Boev, Ramachandra
+Rao, Pinheiro, "Fine-Grained HDR Image Quality Assessment From Noticeably
+Distorted to Very High Fidelity", QoMEX 2025 (arXiv:2506.12505). UPIQ:
+Mikhailiuk, Pérez-Ortiz, Yue, Suen, Mantiuk, "Consolidated Dataset and Metrics
+for High-Dynamic-Range Image Quality", 2021 (arXiv:2012.10758).
+
 ## Status — chunks 1–4 of 6, plus an optimisation pass: **scores, validated against official 2.2.2 and on UPIQ**
 
 Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now takes

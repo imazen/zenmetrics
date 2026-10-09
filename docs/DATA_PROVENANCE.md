@@ -132,6 +132,12 @@ The 372 zensim features break down as (from the manifest):
 | KonJND-full | gpu_ssimulacra2 / 100                     | OK (metric-anchored, not human) |
 | AIC-3 CTC   | score.jnd (signed JND units)              | **VALIDATION ONLY** |
 
+Dataset credits: KADID-10k (Lin, Hosu, Saupe, QoMEX 2019); TID2013 (Ponomarenko,
+Jin, Ieremeiev, Lukin, Egiazarian, Astola, 2015); CID22 (Sneyers, Ben Baruch,
+Vaxman, Cloudinary); KonJND-1k (Lin, Chen, Jenadeleh, Hosu, Reips, Hamzaoui,
+Saupe, IEEE TCSVT 2022); JPEG AIC-3 (Testolina, Jenadeleh, Mohammadi, Su,
+Ascenso, Ebrahimi, Sneyers, Saupe, DCC 2025).
+
 **Important:** the 372-feature columns came from a SPECIFIC zensim
 build at extraction time (2026-05-15). zensim is actively developed
 and the feature definitions may shift between commits. If retraining

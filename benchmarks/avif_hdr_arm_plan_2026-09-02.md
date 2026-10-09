@@ -103,7 +103,7 @@ disqualifying for commercial-codec calibration.
 `reference/*.exr` at 1920×1280, plus RAW 14-bit stacks. Pixels are on Tower:
 `/mnt/tower/input/datasets/si-hdr/reference.zip` (**1,491,596,813 B**),
 `reconstructions.zip` (**12,778,645,072 B**), with `SHA256SUMS` beside them; provenance
-in `zenpapers:datasets/SI-HDR.pointer.md`. Used once already — the 2026-07-29 transfer
+in the SI-HDR dataset pointer. Used once already — the 2026-07-29 transfer
 study streamed them per-batch and deleted the pixels
 (`/mnt/v/output/zensim/sihdr-transfer-2026-07-29/run_extraction.sh`, the template for a
 disk-constrained ingest). Project page:

@@ -103,10 +103,17 @@ The `-gpu` variants need `--features gpu-<metric>` and run on CUDA or wgpu;
   luminance and feeds each metric its HDR path. See
   [docs/HDR_COMMON_PRIMARIES_2026-09-15.md](docs/HDR_COMMON_PRIMARIES_2026-09-15.md).
 
-## Datasets we validate against
+## Datasets
 
-With thanks to their authors:
+Datasets this repo validates or benchmarks against, with thanks to their
+authors:
 
+- **AIC-HDR2025**: Mohsen Jenadeleh, Jon Sneyers, Davi Lazzarotto, Shima
+  Mohammadi, Dominik Keller, Atanas Boev, Rakesh Rao Ramachandra Rao, António
+  Pinheiro. "Fine-Grained HDR Image Quality Assessment From Noticeably Distorted
+  to Very High Fidelity", QoMEX 2025
+  ([doi](https://doi.org/10.1109/QoMEX65720.2025.11219975),
+  [arXiv:2506.12505](https://arxiv.org/abs/2506.12505)).
 - **JPEG AIC2026**: Mohsen Jenadeleh, Jon Sneyers, João Ascenso, Thomas Richter,
   Alexander Karabutov, Panqi Jia, Elena Alshina, Osamu Watanabe, António
   Pinheiro, Touradj Ebrahimi, Dietmar Saupe. "JPEG AIC2026: A Large-Scale
@@ -116,13 +123,38 @@ With thanks to their authors:
   Its published metric scores are what the AIC2026 variants above reproduce;
   [docs/AIC2026_METRICS_AND_FITTING.md](docs/AIC2026_METRICS_AND_FITTING.md)
   has the per-column results.
+- **JPEG AIC-3**: Michela Testolina, Mohsen Jenadeleh, Shima Mohammadi, Shaolin
+  Su, João Ascenso, Touradj Ebrahimi, Jon Sneyers, Dietmar Saupe. "Fine-Grained
+  Subjective Visual Quality Assessment for High-Fidelity Compressed Images",
+  DCC 2025 ([doi](https://doi.org/10.1109/DCC62719.2025.00020),
+  [arXiv:2410.09501](https://arxiv.org/abs/2410.09501)).
 - **CID22**: Jon Sneyers, Elad Ben Baruch, Yaron Vaxman (Cloudinary), JPEG AIC-3
   contribution.
+- **KADID-10k**: Hanhe Lin, Vlad Hosu, Dietmar Saupe. QoMEX 2019
+  ([database](https://database.mmsp-kn.de/kadid-10k-database.html)).
+- **KADIS-700k**: Hanhe Lin, Vlad Hosu, Dietmar Saupe. "DeepFL-IQA: Weak
+  Supervision for Deep IQA Feature Learning", 2020
+  ([arXiv:2001.08113](https://arxiv.org/abs/2001.08113)).
+- **KonJND-1k**: Hanhe Lin, Guangan Chen, Mohsen Jenadeleh, Vlad Hosu,
+  Ulf-Dietrich Reips, Raouf Hamzaoui, Dietmar Saupe. "Large-scale crowdsourced
+  subjective assessment of picturewise just noticeable difference", IEEE TCSVT
+  32(9), 2022 ([doi](https://doi.org/10.1109/TCSVT.2022.3163860)).
 - **TID2013**: Nikolay Ponomarenko, Lina Jin, Oleg Ieremeiev, Vladimir Lukin,
   Karen Egiazarian, Jaakko Astola. Signal Processing: Image Communication 30,
   2015 ([doi](https://doi.org/10.1016/j.image.2014.10.009)).
-- **KADID-10k**: Hanhe Lin, Vlad Hosu, Dietmar Saupe. QoMEX 2019
-  ([database](https://database.mmsp-kn.de/kadid-10k-database.html)).
+- **UPIQ**: Aliaksei Mikhailiuk, María Pérez-Ortiz, Dingcheng Yue, Wilson Suen,
+  Rafał K. Mantiuk. "Consolidated Dataset and Metrics for High-Dynamic-Range
+  Image Quality", 2021 ([arXiv:2012.10758](https://arxiv.org/abs/2012.10758)).
+
+The JPEG AIC test methodology we follow is the group's Common Test Conditions
+on objective quality assessment: WG1 N101156 (Dietmar Saupe, Jon Sneyers, Shima
+Mohammadi, João Ascenso) and v2.0, WG1 N101246 (Dietmar Saupe, Mohsen Jenadeleh,
+Jon Sneyers). For how established metrics behave in this high-fidelity range,
+see Shima Mohammadi, Mohsen Jenadeleh, Jon Sneyers, Dietmar Saupe, João Ascenso,
+"Evaluation of Objective Image Quality Metrics for High-Fidelity Image
+Compression", IEEE Access, 2026
+([doi](https://doi.org/10.1109/ACCESS.2026.3669417),
+[arXiv:2509.13150](https://arxiv.org/abs/2509.13150)).
 
 ## How fast are these implementations?
 
@@ -171,6 +203,9 @@ caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t
   sRGB pairs.
 - Metrics that need a neural-network runtime (LPIPS, DISTS, TOPIQ and
   similar) are not included.
+- The metrics proposed to JPEG AIC-4 are not reproduced here yet, among them
+  DVIFM, the Distortion Visibility Image Fidelity Measure by Maciej Pedzisz
+  (Nokia), and the proposal variants of Butteraugli and mDCT-PSNR.
 - `ms-gmsd`, `ms-gmsdc` and `mdsi` are implemented from their papers and
   have not yet been compared with the authors' code; `ssim` has not been
   compared with the authors' `ssim_index.m`.
