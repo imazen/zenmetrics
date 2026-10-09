@@ -367,6 +367,10 @@ check on metric discrimination, not a committed measurement. The
 metric each crate computes is bit-comparable to the cited reference,
 so the reference's published SRCC transfers.
 
+Datasets: TID2013 (Ponomarenko et al., Signal Processing: Image Communication
+30, 2015), KADID-10k (Lin, Hosu & Saupe, QoMEX 2019), CID22 (Sneyers, Ben
+Baruch & Vaxman, Cloudinary; JPEG AIC-3 contribution).
+
 | Metric | TID2013 | KADID-10k | CID22 |
 |---|---|---|---|
 | `dssim-gpu` (= DSSIM) | 0.871 | 0.856 | 0.872 |

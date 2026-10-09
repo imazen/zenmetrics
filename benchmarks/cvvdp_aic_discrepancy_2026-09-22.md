@@ -33,7 +33,7 @@ so the raw sign is negative).
 | source | what it says |
 |---|---|
 | **AIC-4 Common Test Conditions v2.0**, wg1n101246 §4 (local copy `~/tmp/papers-dvifm/wg1n101246-108-ICQ-Common_Test_Conditions_on_Objective_Quality_Assessment_v2_0.md`, line 188) | ColorVideoVDP **v0.4.2**. SDR: `cvvdp -d standard_fhd`, 37.84 pixels per degree, peak 200 cd/m², black 0.2 cd/m², reflected 0.3979 cd/m². HDR: 56.55 pixels per degree, 1000 cd/m², black 0.001, reflected 0.007958. JND mapping `f(x) = 3.1889 · max(0, 10 − x)^1.0129`. |
-| AIC-4 CTC v1, wg1n101156 (same folder, `work/jpegmd/`) | Same SDR display (`standard_fhd`, 37.84 pixels per degree, 200 / 0.2 / 0.3979). Older linear mapping `3.1420 · (10 − x)`. |
+| AIC-4 CTC v1, wg1n101156 (Saupe, Sneyers, Mohammadi, Ascenso; same folder, `work/jpegmd/`) | Same SDR display (`standard_fhd`, 37.84 pixels per degree, 200 / 0.2 / 0.3979). Older linear mapping `3.1420 · (10 − x)`. |
 | pycvvdp `vvdp_data/display_models.json` (identical in 0.4.2 and 0.5.4) | `standard_fhd`: 1920×1080, 24", 0.6 m, 200 cd/m², contrast 1000, 250 lux. `standard_4k`: 3840×2160, 30", 0.7472 m, same photometry. The two differ **only in geometry**. |
 | AIC2026 readme (`/mnt/v/datasets/aic2026/readme_AIC2026.md`) and `encoding_recipes.md` | No display settings; only "CVVDP-based estimates" for choosing distortion levels. |
 | `aic4_sample.parquet` metadata | pandas schema only; no display information. |

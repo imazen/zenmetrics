@@ -31,7 +31,7 @@ We do not call everything a "port". Terms used below:
 
 | `--metric` | crate | metric paper | reference impl (validation oracle) | provenance | input convention | output |
 |---|---|---|---|---|---|---|
-| `ssim2` | sibling `fast-ssim2` (path `../fast-ssim2/fast-ssim2`, `imgref`) — **not** crates.io `ssimulacra2`, which is a third-party crate we do not maintain; that dep exists only inside `ssim2-gpu` for reference checks | SSIMULACRA2, Cloudinary (2022+, no paper) | Cloudinary `ssimulacra2` C++ (v2 lineage) | sibling crate (algorithm reimplemented in that repo, SIMD-native) | sRGB8 | ~0–100, higher better |
+| `ssim2` | sibling `fast-ssim2` (path `../fast-ssim2/fast-ssim2`, `imgref`) — **not** crates.io `ssimulacra2`, which is a third-party crate we do not maintain; that dep exists only inside `ssim2-gpu` for reference checks | SSIMULACRA 2, Jon Sneyers (Cloudinary) (2022+, no paper) | Cloudinary `ssimulacra2` C++ (v2 lineage) | sibling crate (algorithm reimplemented in that repo, SIMD-native) | sRGB8 | ~0–100, higher better |
 | `ssim2-gpu` | `ssim2-gpu` (in-tree GPU twin) | " | `fast-ssim2` (CPU) + third-party crates.io `ssimulacra2` for parity | in-tree GPU reimplementation | sRGB8 | " |
 | `dssim` | crates.io `dssim-core` ^3.4 | Wang et al. MS-SSIM 2003 (porneL's variant) | dssim-core itself (the canonical impl) | third-party crate | sRGB8 | 0 best, unbounded |
 | `dssim-gpu` | `dssim-gpu` (in-tree twin) | " | dssim-core | in-tree GPU | " | " |
@@ -57,7 +57,7 @@ We do not call everything a "port". Terms used below:
 | `fsim` / `fsim-y` | in-tree `crates/fsim` | Zhang et al., IEEE TIP 20(8) 2011, doi:10.1109/TIP.2011.2109730 | authors' `FR_FSIMc.m` | reference reimplementation | sRGB8 (FSIMc chroma terms) / luma (`-y`) | [0,1] |
 | `vsi` | in-tree `crates/vsi` | Zhang et al., IEEE TIP 23(10) 2014 | authors' `VSI.m` | reference reimplementation | sRGB8 (SDSP colour saliency) | [0,1] |
 | `mad` | in-tree `crates/mad-iqa` | Larson & Chandler, JEI 19(1) 2010 | official MATLAB release (larschandler.com) | reference reimplementation | sRGB8 → luma | distance; emits `mad`, `mad_hi`, `mad_lo` |
-| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "On the mDCT-PSNR image quality index", QoMEX 2009, doi:10.1109/QOMEX.2009.5246978 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
+| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "On the mDCT-PSNR image quality index", QoMEX 2009, doi:10.1109/QOMEX.2009.5246978 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (Thomas Richter; contributor Jon Sneyers) (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
 | `nlpd` | in-tree `crates/nlpd` | Laparra et al., normalized Laplacian pyramid distance (laparra16a-preprint) | Valerolaparra/`NLPD_Pytorch` (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | reference reimplementation | sRGB8 → RGB planes `[0,1]`; six levels, `(Σ rms^0.6)^(1/0.6)` pooling | distance; 0 = identical |
 | `nlpd-iqa` | in-tree `crates/nlpd` (`iqa` module) | " — the **dingkeyan93 `IQA_pytorch`** configuration (`NLPD(channels=1)`, alexhepburn nlpd-tensorflow lineage), NOT pyiqa and NOT the Laparra RGB reference | `IQA_pytorch` source mirrored at `/tmp/nlpd_orig.py`; semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 `NLPD` column (n=53) | reference reimplementation (f32, pad-2 downsample phase, bilinear `align_corners` upsample, mean-of-RMS pooling) | sRGB8 → BT.709 Y `[0,1]` re-quantized to the 8-bit grid (`iqa::score_rgb_u8`); `iqa::score_y_f32` for caller-supplied planes | distance; 0 = identical |
 | `zensim` | sibling `zensim` crate | — | — | **in-house** (ML-trained; not a reproduction target) | sRGB8 | 0–100 |
@@ -139,6 +139,10 @@ Tolerance classes (keep these distinct — they mean different things):
   below the f32 noise floor.
 
 ## 4. JPEG AIC-4 reproduction matrix (metrics_fullres.tab)
+
+Data: the JPEG AIC2026 dataset (Jenadeleh, Sneyers, Ascenso, Richter,
+Karabutov, Jia, Alshina, Watanabe, Pinheiro, Ebrahimi, Saupe; arXiv:2607.22783,
+2026; doi:10.18419/DARUS-6156).
 
 Measured on `S01_Ref_00.png` (1769×1988) vs `S01_AVIF_01.png` through this
 CLI + probes, against the published AIC-4 row, then extended to a 53-pair

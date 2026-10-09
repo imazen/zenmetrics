@@ -6,8 +6,8 @@ with one CLI that scores any `(reference, distorted)` pair with any of them.
 Most metrics are ports of the authors' published method, checked against a
 reference implementation; the table below says which, and by how much, and
 [DIVERGENCES.md](DIVERGENCES.md) explains each difference. Where a dataset or tool computed
-a metric with its own conventions (the JPEG AIC-4 scores, libvmaf), that
-variant is available too, so published numbers can be reproduced. Six metrics
+a metric with its own conventions (the scores published with the JPEG AIC2026
+dataset, libvmaf), that variant is available too, so published numbers can be reproduced. Six metrics
 also run on the GPU (CUDA, Vulkan, Metal, DX12) through CubeCL.
 `#![forbid(unsafe_code)]` throughout.
 
@@ -69,17 +69,17 @@ work, please open an issue.
 | HaarPSI | Rafael Reisenhofer, Sebastian Bosse, Gitta Kutyniok, Thomas Wiegand. Signal Processing: Image Communication 61, 2018 ([doi](https://doi.org/10.1016/j.image.2017.11.001)) | `haarpsi`, `haarpsi-y` (luma) | authors' `HaarPSI.m`, GNU Octave | 5e-5 |
 | HDR-VDP-2 | Rafał K. Mantiuk, Kil Joong Kim, Allan G. Rempel, Wolfgang Heidrich. ACM TOG 30(4), 2011 ([doi](https://doi.org/10.1145/1964921.1964935)); 2.2 recalibration: Manish Narwaria, Rafał K. Mantiuk, Matthieu Perreira Da Silva, Patrick Le Callet. JEI 24(1), 2015 ([doi](https://doi.org/10.1117/1.JEI.24.1.010501)) | `hdrvdp` (absolute-luminance input, via `--hdr`) | official HDR-VDP 2.2.2 MATLAB release, GNU Octave | Q 7.8e-4 |
 | HDR-VDP-3 | Rafał K. Mantiuk, Dounia Hammou, Param Hanji. arXiv:2304.13625, 2023 ([arXiv](https://arxiv.org/abs/2304.13625)) | `hdrvdp3` (`--hdr` plus explicit viewing conditions) | official HDR-VDP 3.0.7 MATLAB release | identical at print precision on 3 image pairs |
-| IW-SSIM | Zhou Wang, Qiang Li. IEEE TIP 20(5), 2011 ([doi](https://doi.org/10.1109/TIP.2010.2092435)) | `iwssim`, `iwssim-gpu`; `iwssim-piq` (jpeg-ai-qaf's unrounded-luma convention, used for the AIC-4 scores) | [Python-IW-SSIM](https://github.com/Jack-guo-xy/Python-IW-SSIM) @ `f9de37c`, the Python port linked from the authors' page; not yet compared with their MATLAB release | 1e-5 identical inputs, 5e-3 distorted |
+| IW-SSIM | Zhou Wang, Qiang Li. IEEE TIP 20(5), 2011 ([doi](https://doi.org/10.1109/TIP.2010.2092435)) | `iwssim`, `iwssim-gpu`; `iwssim-piq` (jpeg-ai-qaf's unrounded-luma convention, used for the AIC2026 published scores) | [Python-IW-SSIM](https://github.com/Jack-guo-xy/Python-IW-SSIM) @ `f9de37c`, the Python port linked from the authors' page; not yet compared with their MATLAB release | 1e-5 identical inputs, 5e-3 distorted |
 | MAD | Eric C. Larson, Damon M. Chandler. JEI 19(1), 2010 ([doi](https://doi.org/10.1117/1.3267105)) | `mad` (also reports the two strategy indices) | authors' MATLAB and C release, GNU Octave | 1.3e-6 relative |
-| mDCT-PSNR | Thomas Richter. QoMEX 2009 ([doi](https://doi.org/10.1109/QOMEX.2009.5246978)) | `mdctpsnr` | author's [mDCTpsnr](https://github.com/thorfdbg/mDCTpsnr), as compiled | 4e-6 dB |
+| mDCT-PSNR | Thomas Richter. QoMEX 2009 ([doi](https://doi.org/10.1109/QOMEX.2009.5246978)) | `mdctpsnr` | [mDCTpsnr](https://github.com/thorfdbg/mDCTpsnr) by Thomas Richter, with a contribution from Jon Sneyers, as compiled | 4e-6 dB |
 | MDSI | Hossein Ziaei Nafchi, Atena Shahkolaei, Rachid Hedjam, Mohamed Cheriet. IEEE Access 4, 2016 ([doi](https://doi.org/10.1109/ACCESS.2016.2604042)) | `mdsi` | implemented from the paper; not yet compared with the authors' code | — |
 | MS-GMSD | Bo Zhang, Pedro V. Sander, Amine Bermak. ICASSP 2017 ([doi](https://doi.org/10.1109/ICASSP.2017.7952357)) | `ms-gmsd`, `ms-gmsdc` (with chroma) | implemented from the paper | — |
 | MS-SSIM | Zhou Wang, Eero P. Simoncelli, Alan C. Bovik. Asilomar 2003 ([doi](https://doi.org/10.1109/ACSSC.2003.1292216)) | `msssim`; `msssim-libvmaf` (libvmaf's `float_ms_ssim` convention) | authors' `msssim.m`, GNU Octave; libvmaf | 8.8e-6; libvmaf ≤2e-4 |
-| NLPD | Valero Laparra, Johannes Ballé, Alexander Berardino, Eero P. Simoncelli. HVEI 2016 ([doi](https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103)) | `nlpd`; `nlpd-iqa` (IQA_pytorch's single-channel configuration, used for the AIC-4 scores) | authors' PyTorch implementation; IQA_pytorch | 1e-5 |
-| PSNR | — | `psnr` (RGB); `psnr-y` (BT.709 luma), `psnr-y601` (BT.601), `psnr-y-studio601` (studio-swing BT.601, the JPEG and AIC-4 convention), `psnr-y-libvmaf` (studio-swing BT.709, as libvmaf) | — | — |
+| NLPD | Valero Laparra, Johannes Ballé, Alexander Berardino, Eero P. Simoncelli. HVEI 2016 ([doi](https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103)) | `nlpd`; `nlpd-iqa` (IQA_pytorch's single-channel configuration, used for the AIC2026 published scores) | authors' PyTorch implementation; IQA_pytorch | 1e-5 |
+| PSNR | — | `psnr` (RGB); `psnr-y` (BT.709 luma), `psnr-y601` (BT.601), `psnr-y-studio601` (studio-swing BT.601, the JPEG and AIC2026 convention), `psnr-y-libvmaf` (studio-swing BT.709, as libvmaf) | — | — |
 | PSNR-HVS, PSNR-HVS-M | Karen Egiazarian, Jaakko Astola, Nikolay Ponomarenko, Vladimir Lukin, Federica Battisti, Marco Carli. VPQM 2006; Nikolay Ponomarenko, Flavia Silvestri, Karen Egiazarian, Marco Carli, Jaakko Astola, Vladimir Lukin. VPQM 2007 | `psnrhvs`, `psnrhvs-y` (luma); `psnrhvs-daala` (the Daala/Xiph integer-DCT version in libvmaf) | authors' `psnrhvsm.m`, GNU Octave; libvmaf | 4e-4 dB; libvmaf ≤2e-4 dB |
 | SSIM | Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, Eero P. Simoncelli. IEEE TIP 13(4), 2004 ([doi](https://doi.org/10.1109/TIP.2003.819861)) | `ssim` (Gaussian window, mean of R, G, B); `ssim-libvmaf` (libvmaf's `float_ssim` convention) | `ssim`: not yet compared with the authors' code; `ssim-libvmaf`: libvmaf | libvmaf ≤2e-4 |
-| SSIMULACRA 2 | Jon Sneyers, Cloudinary ([cloudinary/ssimulacra2](https://github.com/cloudinary/ssimulacra2)) | `ssim2`, `ssim2-gpu` | the C++ reference, via the [`fast-ssim2`](https://github.com/imazen/fast-ssim2) crate | tracked in `fast-ssim2` |
+| SSIMULACRA 2 | Jon Sneyers, Cloudinary ([cloudinary/ssimulacra2](https://github.com/cloudinary/ssimulacra2); SSIMULACRA 2.1 in [libjxl](https://github.com/libjxl/libjxl/blob/main/tools/ssimulacra2.cc)) | `ssim2`, `ssim2-gpu` | the C++ reference, via the [`fast-ssim2`](https://github.com/imazen/fast-ssim2) crate | tracked in `fast-ssim2` |
 | VIF | Hamid R. Sheikh, Alan C. Bovik. IEEE TIP 15(2), 2006 ([doi](https://doi.org/10.1109/TIP.2005.859378)) | `vifvec` (wavelet-domain vector GSM, as in the paper); `vif` (the authors' pixel-domain multi-scale VIFp release) | authors' `vifvec.m` with matlabPyrTools; `vifp_mscale.m`; GNU Octave | 1e-9; 5e-13 |
 | VMAF | Zhi Li et al., Netflix, 2016 ([Netflix/vmaf](https://github.com/Netflix/vmaf)) | `vmaf` (v0.6.1), `vmaf-neg`, `vmaf-4k`, `vmaf-v1` (v1.0.16) | libvmaf 3.2.1 | features ≤1e-4, score ≤0.02 |
 | VSI | Lin Zhang, Ying Shen, Hongyu Li. IEEE TIP 23(10), 2014 ([doi](https://doi.org/10.1109/TIP.2014.2346028)) | `vsi` | authors' `VSI.m`, GNU Octave | 1e-4 |
@@ -91,16 +91,38 @@ The `-gpu` variants need `--features gpu-<metric>` and run on CUDA or wgpu;
 ### Flags that change scores
 
 - `--display-model <preset>` is required for `cvvdp`: there is no default
-  display. The score column names it (`…_standard_fhd`). Presets come from
+  display. The JPEG AIC Common Test Conditions (WG1 N101156; Dietmar Saupe,
+  Jon Sneyers, Shima Mohammadi, João Ascenso, 2025) use `standard_fhd`. The score column names it (`…_standard_fhd`). Presets come from
   pycvvdp's `display_models.json` (`standard_fhd`, `standard_4k`,
   `standard_phone`, …).
 - `--luma-ingress yuv601-studio` makes the luma-only metrics read the
   studio-swing BT.601 plane libvmaf and JPEG AIC build, which reproduces the
-  published AIC-4 luma columns. The default, `house`, is each metric's own
+  luma-based scores published with the JPEG AIC2026 dataset. The default, `house`, is each metric's own
   documented RGB-to-luma.
 - `--hdr` decodes HDR sources (EXR, Ultra HDR JPEG, gain-map HEIC) to absolute
   luminance and feeds each metric its HDR path. See
   [docs/HDR_COMMON_PRIMARIES_2026-09-15.md](docs/HDR_COMMON_PRIMARIES_2026-09-15.md).
+
+## Datasets we validate against
+
+With thanks to their authors:
+
+- **JPEG AIC2026**: Mohsen Jenadeleh, Jon Sneyers, João Ascenso, Thomas Richter,
+  Alexander Karabutov, Panqi Jia, Elena Alshina, Osamu Watanabe, António
+  Pinheiro, Touradj Ebrahimi, Dietmar Saupe. "JPEG AIC2026: A Large-Scale
+  Dataset for Fine-Grained Assessment of Image Coding", 2026
+  ([arXiv:2607.22783](https://arxiv.org/abs/2607.22783); data
+  [doi:10.18419/DARUS-6156](https://doi.org/10.18419/DARUS-6156), CC BY-SA 4.0).
+  Its published metric scores are what the AIC2026 variants above reproduce;
+  [docs/AIC2026_METRICS_AND_FITTING.md](docs/AIC2026_METRICS_AND_FITTING.md)
+  has the per-column results.
+- **CID22**: Jon Sneyers, Elad Ben Baruch, Yaron Vaxman (Cloudinary), JPEG AIC-3
+  contribution.
+- **TID2013**: Nikolay Ponomarenko, Lina Jin, Oleg Ieremeiev, Vladimir Lukin,
+  Karen Egiazarian, Jaakko Astola. Signal Processing: Image Communication 30,
+  2015 ([doi](https://doi.org/10.1016/j.image.2014.10.009)).
+- **KADID-10k**: Hanhe Lin, Vlad Hosu, Dietmar Saupe. QoMEX 2019
+  ([database](https://database.mmsp-kn.de/kadid-10k-database.html)).
 
 ## How fast are these implementations?
 

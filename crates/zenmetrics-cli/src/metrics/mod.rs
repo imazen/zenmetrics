@@ -148,7 +148,7 @@ pub enum MetricKind {
     /// (`ButteraugliResult::score`, the per-block maximum) and
     /// `butteraugli_pnorm3` (`ButteraugliResult::pnorm_3`, the libjxl-style
     /// 3-norm aggregation matching `butteraugli_main --pnorm` and the
-    /// Cloudinary CID22 paper). One `compute()` call yields both numbers,
+    /// CID22 paper by Sneyers, Ben Baruch & Vaxman, Cloudinary). One `compute()` call yields both numbers,
     /// so emitting both is free.
     #[value(name = "butteraugli")]
     Butteraugli,

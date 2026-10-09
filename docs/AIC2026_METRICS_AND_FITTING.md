@@ -7,9 +7,16 @@ algorithmically distinct metrics are not conflated.
 
 This file was missing from the repo; it is now the authoritative record. It was
 reconstructed 2026-09-25 from `metrics_fullres.csv` (NFS export at
-`/tmp/v_ro/input/datasets/aic2026/`, DaRUS mirror), the AIC-4 paper
-(arXiv:2607.22783), and the benchmark fitting-tool mapping table provided by
-the user.
+`/tmp/v_ro/input/datasets/aic2026/`, DaRUS mirror), the AIC2026 dataset paper,
+and the benchmark fitting-tool mapping table provided by the user.
+
+Dataset: Mohsen Jenadeleh, Jon Sneyers, João Ascenso, Thomas Richter, Alexander
+Karabutov, Panqi Jia, Elena Alshina, Osamu Watanabe, António Pinheiro, Touradj
+Ebrahimi, Dietmar Saupe, "JPEG AIC2026: A Large-Scale Dataset for Fine-Grained
+Assessment of Image Coding", arXiv:2607.22783, 2026; data
+doi:10.18419/DARUS-6156 (CC BY-SA 4.0). The JPEG AIC objective-assessment
+Common Test Conditions are WG1 N101156 (Saupe, Sneyers, Mohammadi, Ascenso)
+and N101246 v2.0 (Saupe, Jenadeleh, Sneyers).
 
 ## Two different "JND" objects — do not conflate
 
