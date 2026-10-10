@@ -8,6 +8,14 @@ import tarfile
 CONTRACT = 'benchmarks/shippath_qualified_fit_contract_2026-10-07.json'
 E29_CONTRACT = 'benchmarks/e29_fit_contract_2026-10-07.json'
 V40_CONTRACT = 'benchmarks/v40_fit_contract_2026-10-07.json'
+# E33 (zensim benchmarks/e33_registration_2026-10-09.md): same variant-package shape as V40. Its arms A and
+# full-data A share a spec, so a variant is also selected by the cell's route.
+E33_CONTRACT = 'benchmarks/e33_fit_contract_2026-10-10.json'
+PACKAGES = {
+    V40_CONTRACT: ('v40-research-fit-package-v1', 'v40-research-fit-contract-v1'),
+    E33_CONTRACT: ('e33-research-fit-package-v1', 'e33-research-fit-contract-v1'),
+}
+VARIANT_SCHEMAS = tuple(variant for _, variant in PACKAGES.values())
 
 
 def sha(path):
@@ -31,17 +39,23 @@ def trusted_contract(kind, program_archive, inspector):
         raise ValueError('trusted program SHA differs from manifest')
     with tarfile.open(program_archive, 'r:gz') as tar:
         meta = json.load(tar.extractfile('build_meta.json'))
-        v40 = V40_CONTRACT in meta['files']
+        present = [name for name in PACKAGES if name in meta['files']]
+        if len(present) > 1:
+            raise ValueError('program inventory carries more than one variant package')
+        package_name = present[0] if present else None
+        v40 = package_name is not None
         if v40:
-            raw = tar.extractfile(V40_CONTRACT).read()
-            if hashlib.sha256(raw).hexdigest() != meta['files'][V40_CONTRACT]:
-                raise ValueError('V40 contract bytes differ from program inventory')
+            raw = tar.extractfile(package_name).read()
+            if hashlib.sha256(raw).hexdigest() != meta['files'][package_name]:
+                raise ValueError('variant package bytes differ from program inventory')
             package = json.loads(raw)
-            if package.get('schema') != 'v40-research-fit-package-v1':
-                raise ValueError('unregistered V40 package')
+            if package.get('schema') != PACKAGES[package_name][0]:
+                raise ValueError('unregistered variant package')
             argv = kind['argv']
+            cell_route = argument(argv, '--heldout') if argv[0] == 'v2_lodo_mlp.py' else 'production'
             matches = [c for c in package['variants'] if c['root'] == argument(argv, '--root')
-                       and c['spec'] == argument(argv, '--spec') and c['data_sha'] == kind['data_sha']]
+                       and c['spec'] == argument(argv, '--spec') and c['data_sha'] == kind['data_sha']
+                       and cell_route in c['routes']]
             if len(matches) != 1 or matches[0].get('launchable') is not True:
                 raise ValueError('unregistered or owner-blocked V40 variant')
             contract = matches[0]
@@ -51,7 +65,7 @@ def trusted_contract(kind, program_archive, inspector):
         if e29:
             inherited = json.load(tar.extractfile(CONTRACT))
             contract = {**inherited, **contract}
-    if (contract.get('schema') != ('v40-research-fit-contract-v1' if v40 else 'e29-research-fit-contract-v1' if e29 else 'shippath-qualified-fit-contract-v1')
+    if (contract.get('schema') != (PACKAGES[package_name][1] if v40 else 'e29-research-fit-contract-v1' if e29 else 'shippath-qualified-fit-contract-v1')
             or contract.get('data_sha') != kind['data_sha']
             or sha(inspector) != meta['files']['bin/inspect_qualified_checkpoint']):
         raise ValueError('trusted data/inspector identity differs from manifest-bound program')
@@ -132,7 +146,7 @@ def verify_training(result, checkpoint, kind, expected, inspector):
             or repro.get('sample_seed') != expected['sample_seed']):
         refuse('decoded checkpoint budget/epoch/revision/sampling/seed differs')
     inputs = repro.get('inputs', [])
-    if expected.get('schema') == 'v40-research-fit-contract-v1':
+    if expected.get('schema') in VARIANT_SCHEMAS:
         actual_inputs = {t['name']: {k: t.get(k) for k in
             ('loss_mode', 'n_features', 'rows', 'train_w', 'val_w', 'within_ref')} for t in inputs}
         if (result.get('train_weights') != expected['train_weights'][expected['route']]
@@ -194,6 +208,6 @@ def verify_training(result, checkpoint, kind, expected, inspector):
             continue
         if (table.get('inferred') is not False or table.get('feature_set_id') != expected.get('sdr_feature_set_id', expected['feature_set_id'])
                 or d.get('feature_set_id') != expected.get('sdr_feature_set_id', expected['feature_set_id'])
-                or d != expected_d or table.get('requested_ids') != expected['columns']):
+                or d != expected_d or table.get('requested_ids') != expected.get('requested_ids', expected['columns'])):
             refuse('decoded table feature/revision/decoder declaration differs')
     return expected['execution_contract']
