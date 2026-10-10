@@ -14,9 +14,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
+import time
 
 
 ROOT = Path("/scratch/fit-cell")
@@ -40,6 +42,62 @@ SCRIPTS = {
 ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
 sys.path.insert(0, str(PROGRAM))
 from fit_paths import explicit_root
+
+# E33 (zensim benchmarks/e33_registration_2026-10-09.md section 10.1): each registered cell carries a wall cap in the
+# program's own E33 harvest package. A cell over its cap is stopped and diagnosed, never silently retried. Programs
+# without this package (every earlier study) keep the uncapped path unchanged.
+E33_CONTRACT = "benchmarks/e33_fit_contract_2026-10-10.json"
+# Marker an E33 full-data cell prints when the registered output stage (K1-K4) refuses its spline: a deterministic
+# ineligibility result, so the cell must not be retried as if it were a box failure.
+E33_OUTPUT_STAGE_REFUSAL = "E33 output-stage refusal"
+
+
+class WallCapExceeded(RuntimeError):
+    """A fit ran past its registered wall cap and was stopped."""
+
+
+def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
+    """The registered per-cell wall cap in seconds, or None for a program with no E33 package."""
+    path = program / E33_CONTRACT
+    if not path.is_file():
+        return None
+    package = json.loads(path.read_text())
+    if package.get("schema") != "e33-research-fit-package-v1":
+        raise ValueError("E33 program carries an unregistered package")
+
+    def arg(key):
+        return argv[argv.index(key) + 1] if argv.count(key) == 1 else None
+
+    route = arg("--heldout") if argv[0] == "v2_lodo_mlp.py" else "production"
+    matches = [v for v in package["variants"] if v["root"] == arg("--root") and v["spec"] == arg("--spec")
+               and v["data_sha"] == data_sha and route in v["routes"]]
+    if len(matches) != 1:
+        raise ValueError("E33 program: the cell matches no single registered variant")
+    cap = matches[0].get("wall_cap_sec")
+    if type(cap) is not int or cap <= 0:
+        raise ValueError("E33 variant lacks a registered positive wall cap")
+    return cap
+
+
+def run_capped(command: list, env: dict, cap: int, dest: Path, name: Path) -> str:
+    """Run the fit; at `cap` seconds kill its whole process group and raise with a diagnosis."""
+    started = time.monotonic()
+    proc = subprocess.Popen(command, cwd=PROGRAM, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, start_new_session=True)
+    try:
+        stdout, _ = proc.communicate(timeout=cap)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        stdout, _ = proc.communicate()
+        log = dest / "train.log"
+        tail = log.read_text(errors="replace").splitlines()[-20:] if log.is_file() else stdout.splitlines()[-20:]
+        raise WallCapExceeded(
+            f"registered wall cap exceeded: {name} ran {time.monotonic() - started:.0f} s against its cap of {cap} s "
+            f"and was stopped (not retried; diagnose before any rerun). Partial outputs stay in {dest}. "
+            f"Last trainer lines:\n" + "\n".join(tail))
+    if proc.returncode:
+        raise RuntimeError(f"fit exited {proc.returncode}: {stdout[-4000:]}")
+    return stdout
 
 
 def cell_root(argv: list) -> str:
@@ -252,12 +310,16 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]],
-                            cwd=PROGRAM, env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True)
-    if result.returncode:
-        raise RuntimeError(f"fit exited {result.returncode}: {result.stdout[-4000:]}")
-    stdout = result.stdout
+    command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
+    cap = registered_wall_cap(argv, kind["data_sha"])
+    if cap is not None:
+        stdout = run_capped(command, env, cap, dest, name)
+    else:
+        result = subprocess.run(command, cwd=PROGRAM, env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
+        if result.returncode:
+            raise RuntimeError(f"fit exited {result.returncode}: {result.stdout[-4000:]}")
+        stdout = result.stdout
     if importance_script and "--outer" in argv:
         # The local runner (run_mlp_baseline.sh) follows every outer-fold fit with the
         # outer-fold permutation-importance step, which check_core_gates requires
@@ -310,6 +372,10 @@ def error_class_of(exc: BaseException):
     Our own validation failures (hash/receipt/argv mismatches: ValueError) stay deterministic; OSErrors here and
     OS-level errors inside the fit's output are box-level (`worker_lost`, retried elsewhere); any other fit-program
     failure is `unknown` (transient, retried up to the reconciler's attempt cap)."""
+    # E33: an over-cap cell and an output-stage refusal are results to diagnose, not box failures. No class
+    # marker leaves the worker's deterministic default, which the reconciler poisons instead of retrying.
+    if isinstance(exc, WallCapExceeded) or E33_OUTPUT_STAGE_REFUSAL in str(exc):
+        return None
     if isinstance(exc, OSError):
         return "worker_lost"
     if isinstance(exc, RuntimeError) and str(exc).startswith(("fit exited", "importance exited")):

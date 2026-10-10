@@ -1,6 +1,6 @@
 {
  "data": {
-  "benchmarks/e33_fit_contract_2026-10-10.json": "0679e019e1471567b874892ad09e60a560b55fb146b8a22ec384785835b10a6f"
+  "benchmarks/e33_fit_contract_2026-10-10.json": "3bb4705b8a07307b3dec3956f43d99ae649ea333b6c95817ac389167713ec4d7"
  },
  "files": {
   "benchmarks/costset2_2026-10-03.candidate_ids.json": "0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17",
@@ -27,7 +27,7 @@
   "scripts/rev4_featpot/shippath10_launch.py": "b49eda25e9e7b121f928ad45fd9f5062313f500a961b62a0ed595001f621ac96",
   "scripts/rev4_featpot/upiq380.py": "df89562ca13f6ffe60e3542efdc6bfd3613587fd2e63a9a1704cdbf4fe657f41",
   "scripts/rev4_featpot/v2_common.py": "a84e045540e2075f89934967434d4d43bb57f2a5d3547dc9e2345409dfd819e4",
-  "scripts/rev4_featpot/v2_confirm_fit.py": "493c10ec782267fef93200c229c2e24b07d025cb49a52381b849cd0b638b3b11",
+  "scripts/rev4_featpot/v2_confirm_fit.py": "246898643989d0eef18541449dbfbd2327425f513022b3603525d208b4ccf5ba",
   "scripts/rev4_featpot/v2_human_role.py": "304efb6dfc498a520d91a8cd5ebbe4da07c292700fba03fa46c74f27f8a41cc6",
   "scripts/rev4_featpot/v2_lodo_mlp.py": "132dca86ba51e07f399ae1c3134bc466457c966ce02add03cefb431728a87bb1",
   "scripts/rev4_featpot/v2_production_pack.py": "fb9f378b6ed52e6d0bef59583465d63f64740362d66e40bc1e6716f2c6b42698",
@@ -39,5 +39,5 @@
   "scripts/rev4_featpot/v40_score.py": "dd550d18d64d694d9dc6e664ff31c9fdc0c851ad5bde610507bf59534448184f"
  },
  "schema": "e33-program-source-pins-v1",
- "zensim_commit": "0e657b0857aa7e035e8bc243ba59beca46d15477"
+ "zensim_commit": "8ebc5e8d42b837100f16b7d41eeb428e37cdf938"
 }
