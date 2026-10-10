@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Fit jobs (`765615c4`, `8353eaa2`): zensim E33 program support.
+  `pack_fit_program --profile e33` pins the zensim scripts (`e33_program_pins.json`);
+  `qualified_fit_contract` takes one package per program, selects variants by route and reads
+  `requested_ids` from the contract. `fit_cell_exec` enforces the contract's per-variant `wall_cap_sec`:
+  an over-cap fit is killed and recorded as a deterministic, diagnosed failure that is never retried, and
+  so is the E33 output-stage refusal. Programs without an E33 contract (V40) run unchanged.
+
 - Benchmarks (`34b5ff85`): `--features metrics-parallel` on the `cpu-profile`
   harness turns on each metric crate's own threading, which the default CLI
   build leaves off. At 8.4 MP and 8 threads it is score-identical and speeds
