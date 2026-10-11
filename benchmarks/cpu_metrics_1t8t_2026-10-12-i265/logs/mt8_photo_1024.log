@@ -7,3 +7,109 @@ run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26296MiB :: env RAYON_NUM
   zenbench  1791699303-2c633d
   git: c929d32c96dad348d2fb706216b1cfb8613813c8
 ═══════════════════════════════════════════════════════════════
+
+  new_metrics_wall_1024  5 rounds × 1 calls ⚠ only 5 rounds
+                            mean ±mad ms  95% CI vs base         
+  ├─ psnr__lat                1.6 ±0.0ms  [1.6–1.6]ms            
+  ├─ psnr-y__lat              2.0 ±0.0ms  [+20.3%–+24.9%]        
+  ├─ ssim__lat               37.1 ±1.0ms  [+2168.3%–+2298.3%]     [1]
+  ├─ ssim2__lat              96.5 ±2.4ms  [+5846.7%–+6065.3%]     [2]
+  ├─ butteraugli__lat        69.2 ±2.5ms  [+4153.8%–+4322.6%]    
+  ├─ dssim__lat              33.1 ±1.8ms  [+1883.6%–+2072.6%]    
+  ├─ zensim__lat             12.1 ±0.3ms  [+635.1%–+654.4%]      
+  ├─ cvvdp__lat              59.5 ±2.0ms  [+3544.6%–+3711.6%]    
+  ├─ iwssim__lat             51.2 ±0.6ms  [+3080.8%–+3137.3%]    
+  ├─ iwssim-piq__lat         50.3 ±0.1ms  [+2927.1%–+3165.3%]     [3]
+  ├─ nlpd__lat               26.0 ±2.9ms  [+1423.8%–+1636.2%]    
+  ├─ nlpd-iqa__lat           16.8 ±1.2ms  [+938.4%–+1041.3%]     
+  ├─ ms-gmsdc__lat           22.2 ±0.5ms  [+1252.5%–+1332.6%]    
+  ├─ gmsd__lat                0.6 ±0.1ms  [-59.4%–-57.5%]         [4]
+  ├─ mdsi__lat                1.7 ±0.2ms  [-11.2%–+26.0%]         [5] [6]
+  ├─ ms-gmsd__lat            22.8 ±1.1ms  [+1265.7%–+1414.8%]     [7]
+  ├─ psnrhvs__lat             8.7 ±1.1ms  [+356.9%–+453.7%]      
+  ├─ psnrhvs-daala__lat      38.4 ±0.5ms  [+2285.3%–+2333.4%]    
+  ├─ haarpsi__lat            10.6 ±1.1ms  [+522.8%–+601.4%]      
+  ├─ fsim__lat               39.1 ±1.0ms  [+2287.1%–+2412.5%]     [8]
+  ├─ vsi__lat                53.8 ±0.5ms  [+3217.7%–+3319.5%]    
+  ├─ msssim__lat             27.5 ±1.9ms  [+1488.1%–+1756.5%]    
+  ├─ msssim-libvmaf__lat     83.9 ±0.4ms  [+5160.5%–+5187.7%]    
+  ├─ ssim-libvmaf__lat       10.0 ±1.7ms  [+467.7%–+587.7%]      
+  ├─ vif__lat                53.1 ±1.8ms  [+3136.8%–+3324.2%]    
+  ├─ vifvec__lat             93.9 ±2.6ms  [+5676.1%–+5916.4%]    
+  ├─ mad__lat               378.5 ±5.2ms  [+23420.3%–+23845.5%]  
+  ├─ mdctpsnr__lat         583.0 ±16.1ms  [+35871.4%–+37107.2%]  
+  ╰─ vmaf__lat               30.6 ±0.3ms  [+1751.0%–+1782.6%]     [9]
+
+  gmsd__lat            █ 616.50µs
+  psnr__lat            █ 1.59ms
+  mdsi__lat            █ 1.69ms
+  psnr-y__lat          █ 1.95ms
+  psnrhvs__lat         █ 8.67ms
+  ssim-libvmaf__lat    █ 10.01ms
+  haarpsi__lat         █ 10.56ms
+  zensim__lat          █ 12.15ms
+  nlpd-iqa__lat        █ 16.79ms
+  ms-gmsdc__lat        ██ 22.20ms
+  ms-gmsd__lat         ██ 22.83ms
+  nlpd__lat            ██ 25.99ms
+  msssim__lat          ██ 27.46ms
+  vmaf__lat            ██ 30.58ms
+  dssim__lat           ███ 33.13ms
+  ssim__lat            ███ 37.11ms
+  psnrhvs-daala__lat   ███ 38.42ms
+  fsim__lat            ███ 39.11ms
+  iwssim-piq__lat      ████ 50.27ms
+  iwssim__lat          ████ 51.17ms
+  vif__lat             ████ 53.09ms
+  vsi__lat             ████ 53.75ms
+  cvvdp__lat           █████ 59.51ms
+  butteraugli__lat     ██████ 69.16ms
+  msssim-libvmaf__lat  ███████ 83.87ms
+  vifvec__lat          ████████ 93.93ms
+  ssim2__lat           ████████ 96.51ms
+  mad__lat             ███████████████████████████████ 378.53ms
+  mdctpsnr__lat        ███████████████████████████████████████████████ 582.96ms
+  [1] drift r=0.90 — later rounds slower
+  [2] drift r=0.70 — later rounds slower
+  [3] drift r=0.60 — later rounds slower
+  [4] CV=29%
+  [5] CI crosses zero
+  [6] CV=22%
+  [7] drift r=0.90 — later rounds slower
+  [8] drift r=0.60 — later rounds slower
+  [9] drift r=0.80 — later rounds slower
+
+  total: 179.5s  (151 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 1024/psnr: 31.87536274198264
+sentinel 1024/psnr-y: 34.59622794311839
+sentinel 1024/ssim: 0.9383547151140973
+sentinel 1024/ssim2: 51.076591452899734
+sentinel 1024/butteraugli: 11.94013500213623
+sentinel 1024/dssim: 0.00401307122408423
+sentinel 1024/zensim: 44.4167459356094
+sentinel 1024/cvvdp: 9.464425086975098
+sentinel 1024/iwssim: 0.9931403081623312
+sentinel 1024/iwssim-piq: 0.9932556746310205
+sentinel 1024/nlpd: 2.394971943723971
+sentinel 1024/nlpd-iqa: 0.09798879079478053
+sentinel 1024/ms-gmsdc: 0.03229295298163877
+sentinel 1024/gmsd: 0.02870674988124706
+sentinel 1024/mdsi: 0.205979480164512
+sentinel 1024/ms-gmsd: 0.033512371948062045
+sentinel 1024/psnrhvs: 27.976531041918747
+sentinel 1024/psnrhvs-daala: 38.43614117655237
+sentinel 1024/haarpsi: 0.9055214205272816
+sentinel 1024/fsim: 0.9970832749303953
+sentinel 1024/vsi: 0.9984454192771071
+sentinel 1024/msssim: 0.995489349897922
+sentinel 1024/msssim-libvmaf: 0.9958671607061101
+sentinel 1024/ssim-libvmaf: 0.998246967792511
+sentinel 1024/vif: 0.6608518673508136
+sentinel 1024/vifvec: 0.6175632083957185
+sentinel 1024/mad: 17.57680019980074
+sentinel 1024/mdctpsnr: 32.809532165527344
+sentinel 1024/vmaf: 89.42498241800983
+wrote wall rows for size 1024 to benchmarks/cpu_metrics_1t8t_2026-10-12-i265/mt8_photo_1024.tsv
+run-heavy: done rc=0 184s | peak-RSS 0.46GiB | min-avail 24882MiB | peak-load 2.11

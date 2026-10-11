@@ -1,0 +1,10 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=25721MiB :: env RAYON_NUM_THREADS=8 OMP_NUM_THREADS=8 taskset -c 0-7 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall 3355x2516 benchmarks/cpu_metrics_1t8t_2026-10-12-i265/mt8_photo_3355x2516.tsv
+refused 3355x2516/vmaf: vmaf: VMAF requires matching, even dimensions >= 32
+[zenbench] calibration: int=0.19ns/iter mem_bw=93.8GiB/s mem_lat=7.7ns
+[zenbench] timer resolution: 9ns, loop overhead: 0.09ns/iter, TSC: 3.878 ticks/ns (invariant)
+[zenbench] results → /home/lilith/tmp/zenbench/zenbench-1791699504-2c7274.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1791699504-2c7274
+  git: 6b87eeb4d298faf36d88ad381338352c8b17e38e
+═══════════════════════════════════════════════════════════════

@@ -40,34 +40,70 @@ fn gaussian_taps() -> [f32; GAUSS_K] {
 /// `imfilter(im, ones(2)/4, 'symmetric', 'same')` then `im(1:2:end,
 /// 1:2:end)` — forward 2×2 box with whole-point symmetric border
 /// (`x(n+1) → x(n)`), verified against Octave.
+fn product_planes(im1: &[f32], im2: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    let mut p1 = vec![0.0f32; im1.len()];
+    let mut p2 = vec![0.0f32; im1.len()];
+    let mut pp = vec![0.0f32; im1.len()];
+    let body = |(i, (o1, o2, op)): (usize, (&mut f32, &mut f32, &mut f32))| {
+        let (a, b) = (im1[i], im2[i]);
+        *o1 = a * a;
+        *o2 = b * b;
+        *op = a * b;
+    };
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        p1.par_iter_mut()
+            .zip(p2.par_iter_mut())
+            .zip(pp.par_iter_mut())
+            .enumerate()
+            .for_each(|(i, ((a, b), c))| body((i, (a, b, c))));
+        return (p1, p2, pp);
+    }
+    for (i, ((o1, o2), op)) in p1
+        .iter_mut()
+        .zip(p2.iter_mut())
+        .zip(pp.iter_mut())
+        .enumerate()
+    {
+        body((i, (o1, o2, op)));
+    }
+    (p1, p2, pp)
+}
+
 fn decimate(x: &[f32], w: usize, h: usize) -> (usize, usize, Vec<f32>) {
     let (w2, h2) = (w.div_ceil(2), h.div_ceil(2));
     let mut out = vec![0.0f32; w2 * h2];
-    for oi in 0..h2 {
+    for_each_row(&mut out, w2, |oi, orow| {
         let i0 = oi * 2;
         let i1 = (i0 + 1).min(h - 1);
-        for oj in 0..w2 {
+        for (oj, o) in orow.iter_mut().enumerate() {
             let j0 = oj * 2;
             let j1 = (j0 + 1).min(w - 1);
-            out[oi * w2 + oj] =
-                ((x[i0 * w + j0] + x[i0 * w + j1]) + (x[i1 * w + j0] + x[i1 * w + j1])) * 0.25;
+            *o = ((x[i0 * w + j0] + x[i0 * w + j1]) + (x[i1 * w + j0] + x[i1 * w + j1])) * 0.25;
         }
-    }
+    });
     (w2, h2, out)
 }
 
 /// Shared per-level elementwise products feeding the five `'valid'`
 /// filters: `im1²`, `im2²`, `im1·im2`.
-fn product_planes(im1: &[f32], im2: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    let mut p1 = Vec::with_capacity(im1.len());
-    let mut p2 = Vec::with_capacity(im1.len());
-    let mut pp = Vec::with_capacity(im1.len());
-    for (&a, &b) in im1.iter().zip(im2) {
-        p1.push(a * a);
-        p2.push(b * b);
-        pp.push(a * b);
+/// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
+/// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
+/// otherwise the serial loop runs. Writes are disjoint per row either
+/// way, so results are bit-identical at any thread count.
+fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(row_w)
+            .enumerate()
+            .for_each(|(y, drow)| f(y, drow));
+        return;
     }
-    (p1, p2, pp)
+    for (y, drow) in out.chunks_mut(row_w).enumerate() {
+        f(y, drow);
+    }
 }
 
 /// `rayon::join` under `parallel`, sequential otherwise — each side
@@ -127,11 +163,11 @@ macro_rules! score_body {
             let out_w = w - GAUSS_K + 1;
             let out_h = h - GAUSS_K + 1;
             let filt = |src: &[f32]| -> Vec<f32> {
-                // horizontal into a `h × out_w` scratch
+                // horizontal into a `h × out_w` scratch — per-row
+                // independent (identical tap order under either driver).
                 let mut tmp = vec![0.0f32; h * out_w];
-                for y in 0..h {
+                for_each_row(&mut tmp, out_w, |y, drow| {
                     let srow = &src[y * w..y * w + w];
-                    let drow = &mut tmp[y * out_w..y * out_w + out_w];
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
                         let mut v = <$F32>::splat($token, 0.0);
@@ -153,18 +189,19 @@ macro_rules! score_body {
                         drow[x] = acc;
                         x += 1;
                     }
-                }
-                // vertical into `out_h × out_w`
+                });
+                // vertical into `out_h × out_w` — each output row reads
+                // `GAUSS_K` tmp rows, writes only its own.
                 let mut out = vec![0.0f32; out_h * out_w];
-                for y in 0..out_h {
-                    let drow = &mut out[y * out_w..y * out_w + out_w];
+                let tmp_ref = &tmp;
+                for_each_row(&mut out, out_w, |y, drow| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
                         let mut v = <$F32>::splat($token, 0.0);
                         for u in 0..GAUSS_K {
                             let xv = <$F32>::from_array(
                                 $token,
-                                core::array::from_fn(|k| tmp[(y + u) * out_w + x + k]),
+                                core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
                             );
                             v += <$F32>::splat($token, taps[u]) * xv;
                         }
@@ -174,12 +211,12 @@ macro_rules! score_body {
                     while x < out_w {
                         let mut acc = 0.0f32;
                         for u in 0..GAUSS_K {
-                            acc += taps[u] * tmp[(y + u) * out_w + x];
+                            acc += taps[u] * tmp_ref[(y + u) * out_w + x];
                         }
                         drow[x] = acc;
                         x += 1;
                     }
-                }
+                });
                 out
             };
             let ((mu1, s1p), (mu2, s2p)) =
