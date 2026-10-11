@@ -179,13 +179,13 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # crates.io 0.8.1 predates it — so the 0.8.2 requirement resolves through
 # the workspace `[patch.crates-io]` sibling pin (root Cargo.toml); move
 # back to the registry once a fast-ssim2 release ships `hdr-pu`.
-fast-ssim2  = { version = "0.8.2", optional = true, features = ["imgref", "hdr-pu"] }
-cvvdp       = { workspace = true, optional = true }
+fast-ssim2  = { version = "0.8.2", optional = true, features = ["imgref", "hdr-pu", "rayon"] }
+cvvdp       = { workspace = true, optional = true, features = ["std", "parallel"] }
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim      = { workspace = true, optional = true }
-iwssim      = { workspace = true, optional = true }
-hdrvdp      = { workspace = true, optional = true }
+iwssim      = { workspace = true, optional = true, features = ["std", "parallel"] }
+hdrvdp      = { workspace = true, optional = true, features = ["avx512", "parallel"] }
 imgref      = { workspace = true, optional = true }
 rgb         = { workspace = true, optional = true }
 bytemuck    = { workspace = true, optional = true }
