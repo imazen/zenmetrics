@@ -133,6 +133,20 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
       the score 3.7e-4 dB and the vendored-libvmaf FFI parity test
       caught it. Reverted (serial `block_row` retained). daala stays
       1.01x — parity-locked.
+- [x] **v4 tier dropped** (45e46e99): the single AVX-512 dispatch tier is
+      now `v4x` (Ice Lake+/Zen4 extension set — vbmi/vbmi2/vnni/ifma/
+      vpopcntdq/bitalg/vaes/pclmulqdq on top of F/BW/CD/DQ/VL; no bf16/
+      fp16 required). Every `+v4,+v4x` pair emitted identical
+      monomorphizations anyway (impl bodies use base-512 ops only;
+      magetypes v4x backends delegate via `token.v4()`). Cascade/
+      Skylake-SP falls to v3 8-wide — accepted (old-cloud VM edge case).
+      Bonus fix: vmaf's `*_v4` kernels called `permutexvar_epi16` (VBMI)
+      under a token that didn't prove it — now correctly v4x-gated.
+      Affected: cvvdp, fsim, gmsd, haarpsi, hdrvdp, iwssim, mad-iqa,
+      msssim, nlpd, psnrhvs, vif, vsi, vmaf, zenmetrics-math
+      (tier_v4.rs deleted), margarine (own workspace). NOTE for sol:
+      i265 has NO AVX-512 — v4x arms cannot be exercised locally;
+      verify dispatch on r7900x (Zen4) via a throwaway clone.
 - [x] **CI lint hazard — magetypes 0.9.30 deprecations**: the 0.9.29→
       0.9.30 bump (registry or git pin) emits thousands of `deprecated`
       warnings (token-first forwarders pending the 0.10 tokenless API).
