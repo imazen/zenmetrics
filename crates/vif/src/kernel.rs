@@ -50,24 +50,35 @@ fn gaussian_taps(n: usize) -> Vec<f64> {
 fn decimate(x: &[f64], w: usize, h: usize) -> (usize, usize, Vec<f64>) {
     let (w2, h2) = (w.div_ceil(2), h.div_ceil(2));
     let mut out = vec![0.0f64; w2 * h2];
-    for oi in 0..h2 {
-        for oj in 0..w2 {
-            out[oi * w2 + oj] = x[(2 * oi) * w + 2 * oj];
+    for_each_row(&mut out, w2, |oi, orow| {
+        for (oj, o) in orow.iter_mut().enumerate() {
+            *o = x[(2 * oi) * w + 2 * oj];
         }
-    }
+    });
     (w2, h2, out)
 }
 
 /// Shared per-scale elementwise products feeding the five `'valid'`
 /// filters: `im1²`, `im2²`, `im1·im2`.
 fn product_planes(im1: &[f64], im2: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-    let mut p1 = Vec::with_capacity(im1.len());
-    let mut p2 = Vec::with_capacity(im1.len());
-    let mut pp = Vec::with_capacity(im1.len());
-    for (&a, &b) in im1.iter().zip(im2) {
-        p1.push(a * a);
-        p2.push(b * b);
-        pp.push(a * b);
+    let mut p1 = vec![0.0; im1.len()];
+    let mut p2 = vec![0.0; im1.len()];
+    let mut pp = vec![0.0; im1.len()];
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        p1.par_iter_mut()
+            .zip(&mut p2)
+            .zip(&mut pp)
+            .zip(im1)
+            .zip(im2)
+            .for_each(|((((o1, o2), oc), &a), &b)| {
+                (*o1, *o2, *oc) = (a * a, b * b, a * b);
+            });
+        return (p1, p2, pp);
+    }
+    for ((((o1, o2), oc), &a), &b) in p1.iter_mut().zip(&mut p2).zip(&mut pp).zip(im1).zip(im2) {
+        (*o1, *o2, *oc) = (a * a, b * b, a * b);
     }
     (p1, p2, pp)
 }
@@ -235,11 +246,15 @@ macro_rules! score_body {
             let (p1, p2, pp) = product_planes(&im1, &im2);
             let out_w = w - nk + 1;
             let out_h = h - nk + 1;
-            let ((mu1, s1p), (mu2, s2p)) = maybe_join(
-                || (filt(&im1, w, h), filt(&p1, w, h)),
-                || (filt(&im2, w, h), filt(&p2, w, h)),
+            let (((mu1, s1p), (mu2, s2p)), s12p) = maybe_join(
+                || {
+                    maybe_join(
+                        || (filt(&im1, w, h), filt(&p1, w, h)),
+                        || (filt(&im2, w, h), filt(&p2, w, h)),
+                    )
+                },
+                || filt(&pp, w, h),
             );
-            let s12p = filt(&pp, w, h);
 
             // GSM map: the reference's exact masking order —
             //   sigma<0 → 0;  g = s12/(s1+eps);  sv = s2 − g·s12;
