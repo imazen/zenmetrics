@@ -147,19 +147,19 @@ pub(crate) fn plane_from_f32(
 ) -> Plane {
     if !subsample {
         let mut p = Plane::new(w, h);
-        for y in 0..h {
-            let dst = p.prow_mut(y as isize);
+        p.for_rows(0, h as isize, |ri, dst| {
+            let y = ri - PAD;
             dst[PAD..PAD + w].copy_from_slice(&src[y * stride..y * stride + w]);
-        }
+        });
         return p;
     }
     let (w2, h2) = (w.div_ceil(2), h.div_ceil(2));
     let mut p = Plane::new(w2, h2);
-    for y in 0..h2 {
+    p.for_rows(0, h2 as isize, |ri, dst| {
+        let y = ri - PAD;
         let r0 = y * 2;
         let r1 = r0 + 1;
         let has_r1 = r1 < h;
-        let dst = p.prow_mut(y as isize);
         for x in 0..w2 {
             let c0 = 2 * x;
             let right = c0 + 1 < w;
@@ -185,7 +185,7 @@ pub(crate) fn plane_from_f32(
             };
             dst[PAD + x] = ((a + b) + (c + d)) * 0.25;
         }
-    }
+    });
     p
 }
 
@@ -208,9 +208,9 @@ pub(crate) fn plane_from_rgb8(
         |r: f64, g: f64, b: f64| -> f32 { ((coef[0] * r + coef[1] * g) + coef[2] * b) as f32 };
     if !subsample {
         let mut p = Plane::new(w, h);
-        for y in 0..h {
+        p.for_rows(0, h as isize, |ri, dst| {
+            let y = ri - PAD;
             let row = &rgb[y * stride..y * stride + 3 * w];
-            let dst = p.prow_mut(y as isize);
             for x in 0..w {
                 dst[PAD + x] = dot(
                     row[3 * x] as f64,
@@ -218,17 +218,17 @@ pub(crate) fn plane_from_rgb8(
                     row[3 * x + 2] as f64,
                 );
             }
-        }
+        });
         return p;
     }
     let (w2, h2) = (w.div_ceil(2), h.div_ceil(2));
     let mut p = Plane::new(w2, h2);
     const Z: [u8; 3] = [0, 0, 0];
-    for y in 0..h2 {
+    p.for_rows(0, h2 as isize, |ri, dst| {
+        let y = ri - PAD;
         let r0 = y * 2;
         let r1 = r0 + 1;
         let has_r1 = r1 < h;
-        let dst = p.prow_mut(y as isize);
         for x in 0..w2 {
             let c0 = 2 * x;
             let right = c0 + 1 < w;
@@ -256,7 +256,7 @@ pub(crate) fn plane_from_rgb8(
             }
             dst[PAD + x] = dot(ch[0], ch[1], ch[2]);
         }
-    }
+    });
     p
 }
 
@@ -510,25 +510,71 @@ macro_rules! avg2_body {
 /// the same order on every tier. Returns `(Σ w·σ(ls), Σ w)` where
 /// `σ(x) = 1/(1+exp(−αx))` in f32 (libm, deterministic).
 fn pool_map(ls: &Plane, w: &Plane) -> (f64, f64) {
+    // Fixed 32-band row stripes in every build — the lane-grouped
+    // accumulators merge lane-wise in band order, so all tiers and
+    // thread counts fold identically (exact tier-parity preserved;
+    // the grouping differs from the raster fold only in f64 ULPs).
+    const BANDS: usize = 32;
+    let nblk = ls.w / 8;
+    let bs = ls.h.div_ceil(BANDS);
+    let band = |r0: usize, r1: usize| -> ([f64; 8], [f64; 8], Vec<(f32, f32)>) {
+        let mut acc_t = [0.0f64; 8];
+        let mut acc_w = [0.0f64; 8];
+        let mut tail = Vec::with_capacity(r1.saturating_sub(r0) * (ls.w % 8));
+        for r in r0..r1 {
+            let lr = ls.data(r);
+            let wr = w.data(r);
+            for g in 0..nblk {
+                let base = 8 * g;
+                for (j, (at, aw)) in acc_t.iter_mut().zip(acc_w.iter_mut()).enumerate() {
+                    let i = base + j;
+                    let l = 1.0f32 / (1.0 + libm::expf(-ALPHA * lr[i]));
+                    *at += (wr[i] * l) as f64;
+                    *aw += wr[i] as f64;
+                }
+            }
+            for i in 8 * nblk..ls.w {
+                tail.push((wr[i], lr[i]));
+            }
+        }
+        (acc_t, acc_w, tail)
+    };
+    #[cfg(feature = "parallel")]
+    let parts: Vec<([f64; 8], [f64; 8], Vec<(f32, f32)>)> = {
+        if rayon::current_num_threads() > 1 {
+            use rayon::prelude::*;
+            (0..BANDS)
+                .into_par_iter()
+                .map(|b| {
+                    let lo = (b * bs).min(ls.h);
+                    band(lo, ls.h.min(lo + bs))
+                })
+                .collect()
+        } else {
+            (0..BANDS)
+                .map(|b| {
+                    let lo = (b * bs).min(ls.h);
+                    band(lo, ls.h.min(lo + bs))
+                })
+                .collect()
+        }
+    };
+    #[cfg(not(feature = "parallel"))]
+    let parts: Vec<([f64; 8], [f64; 8], Vec<(f32, f32)>)> = (0..BANDS)
+        .map(|b| {
+            let lo = (b * bs).min(ls.h);
+            band(lo, ls.h.min(lo + bs))
+        })
+        .collect();
     let mut acc_t = [0.0f64; 8];
     let mut acc_w = [0.0f64; 8];
     let mut tail = Vec::with_capacity(ls.h * (ls.w % 8));
-    let nblk = ls.w / 8;
-    for r in 0..ls.h {
-        let lr = ls.data(r);
-        let wr = w.data(r);
-        for g in 0..nblk {
-            let base = 8 * g;
-            for (j, (at, aw)) in acc_t.iter_mut().zip(acc_w.iter_mut()).enumerate() {
-                let i = base + j;
-                let l = 1.0f32 / (1.0 + libm::expf(-ALPHA * lr[i]));
-                *at += (wr[i] * l) as f64;
-                *aw += wr[i] as f64;
-            }
+    for (pt, pw, ptail) in parts {
+        for (j, v) in pt.iter().enumerate() {
+            acc_t[j] += v;
+            acc_w[j] += pw[j];
         }
-        for i in 8 * nblk..ls.w {
-            tail.push((wr[i], lr[i]));
-        }
+        tail.extend(ptail);
     }
     let ft = [
         acc_t[0] + acc_t[4],
