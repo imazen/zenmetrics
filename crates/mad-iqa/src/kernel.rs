@@ -602,7 +602,7 @@ macro_rules! score_body {
         let lum_lut: [f32; 256] =
             core::array::from_fn(|i| (K_LUM * libm::pow(i as f64, 2.2 / 3.0)) as f32);
         let lum_px = |v: f32| -> f32 {
-            if v >= 0.0 && v < 256.0 && v == v.trunc() {
+            if (0.0..256.0).contains(&v) && v == v.trunc() {
                 lum_lut[v as usize]
             } else {
                 (K_LUM * libm::pow(v as f64, 2.2 / 3.0)) as f32

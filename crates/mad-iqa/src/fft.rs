@@ -698,66 +698,67 @@ fn fft2_cols_conj_scale(
     // buffer (parallel over blocks), then scatter back over rows (parallel,
     // fusing `conj·scale`).
     #[cfg(feature = "parallel")]
-    if let PlanKind::Bluestein { m, .. } = &hplan.kind {
-        if width >= 4 * CB && height >= 4 * CB {
-            use rayon::prelude::*;
-            let m = *m;
-            const SB: usize = 64;
-            let s = scale.unwrap_or(1.0);
-            let negate = scale.is_some();
-            let mut x0 = 0usize;
-            while x0 < width {
-                let nb_cols = (SB * CB).min(width - x0);
-                let nblocks = nb_cols.div_ceil(CB);
-                let mut cols_all = vec![Complex::default(); nblocks * height * CB];
-                {
-                    let ro: &[Complex] = buf;
-                    cols_all
-                        .par_chunks_mut(height * CB)
-                        .enumerate()
-                        .for_each_init(
-                            || {
-                                (
-                                    vec![0.0f32; m * CB],
-                                    vec![0.0f32; m * CB],
-                                    vec![Complex::default(); m],
-                                )
-                            },
-                            |(re8, im8, a), (b, block)| {
-                                let bx = x0 + b * CB;
-                                let nb = CB.min(width - bx);
-                                for y in 0..height {
-                                    for j in 0..nb {
-                                        block[j * height + y] = ro[y * width + bx + j];
-                                    }
+    if let PlanKind::Bluestein { m, .. } = &hplan.kind
+        && width >= 4 * CB
+        && height >= 4 * CB
+    {
+        use rayon::prelude::*;
+        let m = *m;
+        const SB: usize = 64;
+        let s = scale.unwrap_or(1.0);
+        let negate = scale.is_some();
+        let mut x0 = 0usize;
+        while x0 < width {
+            let nb_cols = (SB * CB).min(width - x0);
+            let nblocks = nb_cols.div_ceil(CB);
+            let mut cols_all = vec![Complex::default(); nblocks * height * CB];
+            {
+                let ro: &[Complex] = buf;
+                cols_all
+                    .par_chunks_mut(height * CB)
+                    .enumerate()
+                    .for_each_init(
+                        || {
+                            (
+                                vec![0.0f32; m * CB],
+                                vec![0.0f32; m * CB],
+                                vec![Complex::default(); m],
+                            )
+                        },
+                        |(re8, im8, a), (b, block)| {
+                            let bx = x0 + b * CB;
+                            let nb = CB.min(width - bx);
+                            for y in 0..height {
+                                for j in 0..nb {
+                                    block[j * height + y] = ro[y * width + bx + j];
                                 }
-                                let mut bufs: Vec<&mut [Complex]> =
-                                    block.chunks_mut(height).take(nb).collect();
-                                if nb == CB {
-                                    hplan.run_bluestein8(&mut bufs, re8, im8);
-                                } else {
-                                    for c in bufs {
-                                        hplan.run_bluestein(c, a);
-                                    }
+                            }
+                            let mut bufs: Vec<&mut [Complex]> =
+                                block.chunks_mut(height).take(nb).collect();
+                            if nb == CB {
+                                hplan.run_bluestein8(&mut bufs, re8, im8);
+                            } else {
+                                for c in bufs {
+                                    hplan.run_bluestein(c, a);
                                 }
-                            },
-                        );
-                }
-                buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
-                    for b in 0..nblocks {
-                        let bx = x0 + b * CB;
-                        let nb = CB.min(width - bx);
-                        for j in 0..nb {
-                            let v = cols_all[(b * CB + j) * height + y];
-                            row[bx + j] =
-                                Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
-                        }
-                    }
-                });
-                x0 += nb_cols;
+                            }
+                        },
+                    );
             }
-            return;
+            buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                for b in 0..nblocks {
+                    let bx = x0 + b * CB;
+                    let nb = CB.min(width - bx);
+                    for j in 0..nb {
+                        let v = cols_all[(b * CB + j) * height + y];
+                        row[bx + j] =
+                            Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+                    }
+                }
+            });
+            x0 += nb_cols;
         }
+        return;
     }
 
     let mut cols = vec![Complex::default(); height * CB];

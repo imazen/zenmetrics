@@ -199,10 +199,10 @@ fn gaussian_into(
                     }
                 }
                 for (x, o) in out.iter_mut().enumerate().take(xlo) {
-                    *o = htap(&row, w, x, k);
+                    *o = htap(row, w, x, k);
                 }
                 for (x, o) in out.iter_mut().enumerate().take(w).skip(xhi) {
-                    *o = htap(&row, w, x, k);
+                    *o = htap(row, w, x, k);
                 }
                 let span = xhi - xlo;
                 if span > 0 {

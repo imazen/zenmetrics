@@ -72,6 +72,24 @@ fn product_planes(im1: &[f64], im2: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     (p1, p2, pp)
 }
 
+/// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
+/// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
+/// otherwise the serial loop runs. Writes are disjoint per row either
+/// way, so results are bit-identical at any thread count.
+pub(crate) fn for_each_row(out: &mut [f64], row_w: usize, f: impl Fn(usize, &mut [f64]) + Sync) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(row_w)
+            .enumerate()
+            .for_each(|(y, drow)| f(y, drow));
+        return;
+    }
+    for (y, drow) in out.chunks_mut(row_w).enumerate() {
+        f(y, drow);
+    }
+}
+
 /// `rayon::join` under `parallel`, sequential otherwise — each side
 /// writes its own `Vec`, so results are identical at any thread count.
 pub(crate) fn maybe_join<A, B>(
@@ -135,9 +153,9 @@ macro_rules! score_body {
             let filt = |src: &[f64], w: usize, h: usize| -> Vec<f64> {
                 let out_w = w - nk + 1;
                 let mut tmp = vec![0.0f64; h * out_w];
-                for y in 0..h {
-                    let srow = &src[y * w..y * w + w];
-                    let drow = &mut tmp[y * out_w..y * out_w + out_w];
+                // Horizontal pass — per-row independent (same per-element
+                // tap order under either driver).
+                let hrow = |drow: &mut [f64], srow: &[f64]| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
                         let mut v = <$V>::splat($token, 0.0);
@@ -157,18 +175,23 @@ macro_rules! score_body {
                         drow[x] = acc;
                         x += 1;
                     }
-                }
+                };
+                crate::kernel::for_each_row(&mut tmp, out_w, |y, drow| {
+                    hrow(drow, &src[y * w..y * w + w]);
+                });
                 let out_h = h - nk + 1;
                 let mut out = vec![0.0f64; out_h * out_w];
-                for y in 0..out_h {
-                    let drow = &mut out[y * out_w..y * out_w + out_w];
+                // Vertical pass — each output row reads `nk` tmp rows,
+                // writes only its own.
+                let tmp_ref = &tmp;
+                crate::kernel::for_each_row(&mut out, out_w, |y, drow| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
                         let mut v = <$V>::splat($token, 0.0);
                         for u in 0..nk {
                             let xv = <$V>::from_array(
                                 $token,
-                                core::array::from_fn(|k| tmp[(y + u) * out_w + x + k]),
+                                core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
                             );
                             v = v + <$V>::splat($token, taps[u]) * xv;
                         }
@@ -178,12 +201,12 @@ macro_rules! score_body {
                     while x < out_w {
                         let mut acc = 0.0f64;
                         for u in 0..nk {
-                            acc += taps[u] * tmp[(y + u) * out_w + x];
+                            acc += taps[u] * tmp_ref[(y + u) * out_w + x];
                         }
                         drow[x] = acc;
                         x += 1;
                     }
-                }
+                });
                 out
             };
             if s > 0 {
