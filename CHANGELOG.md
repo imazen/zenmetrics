@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- margarine: package renamed `margarine-lab` → `margarine` (owner, 2026-10-11; the suffix added at the 2026-09-27 move had no stated reason). Bins, features and pins unchanged; recipes and the workflow use `-p margarine`.
+
 - zenmetrics-stats: `zenstats` renamed to `zenmetrics-stats` (owner decision 2026-10-11; unpublished, so no crates.io name changes). Dependents that pin an older revision keep `zenstats` until they bump; on bumping, `zenstats = { package = "zenmetrics-stats", … }` keeps `use zenstats::` paths working. Lib name is `zenmetrics_stats`.
 
 - zenstats (`553ac175`, `77999b50`, `42b57055`, `f6e75e9f`, PR #67): evaluation methods for every metric.

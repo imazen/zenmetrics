@@ -171,7 +171,7 @@ test-gmsd-mdsi-gate:
 # The unpublished Margarine research instruments; does not format sibling crates.
 margarine-check:
     python3 -m unittest discover -s crates/margarine -p 'test_*.py'
-    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
     nice -n 19 cargo test --manifest-path crates/margarine/Cargo.toml -j 2
     nice -n 19 cargo clippy --manifest-path crates/margarine/Cargo.toml --all-targets -j 2 -- -D warnings
 
@@ -189,18 +189,18 @@ margarine-resources crops output commit:
 
 # Broad-blur approximation; shared arithmetic and strided seam contracts.
 margarine-multirate-check:
-    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
     nice -n 19 cargo test --manifest-path crates/margarine/Cargo.toml --features multirate -j 2
     nice -n 19 cargo clippy --manifest-path crates/margarine/Cargo.toml --features multirate --all-targets -j 2 -- -D warnings
 
 margarine-compact-check:
-    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
     nice -n 19 cargo test --manifest-path crates/margarine/Cargo.toml --features compact -j 2
     nice -n 19 cargo clippy --manifest-path crates/margarine/Cargo.toml --features compact --all-targets -j 2 -- -D warnings
 
 # Wrap these recipes with run-heavy on Linux; one heavy command at a time.
 margarine-candidate-check features:
-    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
     nice -n 19 cargo test --manifest-path crates/margarine/Cargo.toml --features "{{features}}" -j 2
     nice -n 19 cargo test --release --manifest-path crates/margarine/Cargo.toml --features "{{features}}" -j 2
     nice -n 19 cargo clippy --manifest-path crates/margarine/Cargo.toml --features "{{features}}" --all-targets -j 2 -- -D warnings
@@ -265,7 +265,7 @@ margarine-audited-eval pairs audit binaries output candidate commit teacher="":
 
 # The named command uses the frozen primary max candidate and streamed geometry.
 margarine-build:
-    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
     nice -n 19 cargo build --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,simd-malta,row-malta --bin margarine -j 2
 
 margarine-cli-replay scored binary output commit:

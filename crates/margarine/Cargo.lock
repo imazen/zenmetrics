@@ -247,7 +247,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "margarine-lab"
+name = "margarine"
 version = "0.0.0"
 dependencies = [
  "archmage",

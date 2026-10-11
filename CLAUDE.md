@@ -23,8 +23,8 @@ See global ~/.claude/CLAUDE.md for general instructions.
   reconstructed from a public talk (the author has not released code), and
   publishing it needs the original author's consent. Its manifest says
   `publish = false` (dvifmish `0fa38910`).
-- `crates/margarine` (package `margarine-lab`) becomes `margarine-lab` throughout
-  once it is cleaned up.
+- `crates/margarine` is package `margarine` (the `-lab` suffix added when it
+  moved here on 2026-09-27 had no reason and was dropped on 2026-10-11).
 - `zen-iqa` is a third-party project; do not use `zeniqa`-like names.
 
 ## VMAF CPU optimization discipline
