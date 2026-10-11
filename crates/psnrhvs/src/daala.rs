@@ -168,105 +168,155 @@ fn calc_psnrhvs(
         }
     }
 
+    // Block rows are independent — striped partial `(ret, pixels)`
+    // sums under `parallel`, merged in band order. The per-block math
+    // is unchanged; the f32 fold order differs from the serial raster
+    // fold within float tolerance.
+    let nb_y = {
+        let mut n = 0usize;
+        let mut y = 0usize;
+        while y + 7 < h {
+            n += 1;
+            y += step;
+        }
+        n
+    };
+    let partials = crate::kernel::collect_bands(nb_y, |b| {
+        let y = b * step;
+        let mut ret = 0.0f32;
+        let mut pixels = 0u32;
+        block_row(
+            src,
+            sstride,
+            dst,
+            dstride,
+            w,
+            y,
+            step,
+            &mask,
+            csf,
+            &mut ret,
+            &mut pixels,
+        );
+        (ret, pixels)
+    });
     let mut ret = 0.0f32;
     let mut pixels = 0u32;
-    let mut y = 0usize;
-    while y + 7 < h {
-        let mut x = 0usize;
-        while x + 7 < w {
-            let mut dct_s = [0i32; 64];
-            let mut dct_d = [0i32; 64];
-            let mut s_means = [0.0f32; 4];
-            let mut d_means = [0.0f32; 4];
-            let mut s_gmean = 0.0f32;
-            let mut d_gmean = 0.0f32;
-            for i in 0..8 {
-                for j in 0..8 {
-                    let sub = ((i & 12) >> 2) + ((j & 12) >> 1);
-                    let s = src[(y + i) * sstride + (j + x)] as i32;
-                    let d = dst[(y + i) * dstride + (j + x)] as i32;
-                    dct_s[i * 8 + j] = s;
-                    dct_d[i * 8 + j] = d;
-                    s_gmean += s as f32;
-                    d_gmean += d as f32;
-                    s_means[sub] += s as f32;
-                    d_means[sub] += d as f32;
-                }
-            }
-            s_gmean /= 64.0;
-            d_gmean /= 64.0;
-            for m in s_means.iter_mut() {
-                *m /= 16.0;
-            }
-            for m in d_means.iter_mut() {
-                *m /= 16.0;
-            }
-            let mut s_vars = [0.0f32; 4];
-            let mut d_vars = [0.0f32; 4];
-            let mut s_gvar = 0.0f32;
-            let mut d_gvar = 0.0f32;
-            for i in 0..64 {
-                let sub = (((i / 8) & 12) >> 2) + (((i % 8) & 12) >> 1);
-                let ds = dct_s[i] as f32 - s_gmean;
-                let dd = dct_d[i] as f32 - d_gmean;
-                s_gvar += ds * ds;
-                d_gvar += dd * dd;
-                let vs = dct_s[i] as f32 - s_means[sub];
-                let vd = dct_d[i] as f32 - d_means[sub];
-                s_vars[sub] += vs * vs;
-                d_vars[sub] += vd * vd;
-            }
-            // `*= 1/63.f*64` / `*= 1/15.f*16` — the constant folds in f32.
-            s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
-            d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
-            for i in 0..4 {
-                s_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
-                d_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
-            }
-            if s_gvar > 0.0 {
-                s_gvar = (s_vars[0] + s_vars[1] + s_vars[2] + s_vars[3]) / s_gvar;
-            }
-            if d_gvar > 0.0 {
-                d_gvar = (d_vars[0] + d_vars[1] + d_vars[2] + d_vars[3]) / d_gvar;
-            }
-            od_bin_fdct8x8(&mut dct_s);
-            od_bin_fdct8x8(&mut dct_d);
-            let mut s_mask = 0.0f32;
-            let mut d_mask = 0.0f32;
-            for i in 0..8 {
-                for j in usize::from(i == 0)..8 {
-                    // C: `int*int` i32 product, one f32 conversion, then
-                    // `× mask` — not two f32 multiplies.
-                    s_mask += (dct_s[i * 8 + j] * dct_s[i * 8 + j]) as f32 * mask[i][j];
-                    d_mask += (dct_d[i * 8 + j] * dct_d[i * 8 + j]) as f32 * mask[i][j];
-                }
-            }
-            // C: `s_mask = sqrt(s_mask*s_gvar) / 32.f` — double sqrt of
-            // the float product, double division, float store.
-            s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;
-            d_mask = (((d_mask * d_gvar) as f64).sqrt() / 32.0) as f32;
-            if d_mask > s_mask {
-                s_mask = d_mask;
-            }
-            for i in 0..8 {
-                for j in 0..8 {
-                    let mut err = (dct_s[i * 8 + j] - dct_d[i * 8 + j]).abs() as f32;
-                    if i != 0 || j != 0 {
-                        let t = s_mask / mask[i][j];
-                        err = if err < t { 0.0 } else { err - t };
-                    }
-                    ret += (err * csf[i][j]) * (err * csf[i][j]);
-                    pixels += 1;
-                }
-            }
-            x += step;
-        }
-        y += step;
+    for (pr, pp) in partials {
+        ret += pr;
+        pixels += pp;
     }
     // `ret /= pixels; ret /= samplemax²` — both divisions in f32, as C.
     let mut ret = ret / pixels as f32;
     ret /= 255.0f32 * 255.0f32;
     ret as f64
+}
+
+/// One `step`-strided block row of `calc_psnrhvs` — the unchanged
+/// per-block math, accumulating `(ret, pixels)` for its band.
+#[allow(clippy::too_many_arguments)]
+fn block_row(
+    src: &[u8],
+    sstride: usize,
+    dst: &[u8],
+    dstride: usize,
+    w: usize,
+    y: usize,
+    step: usize,
+    mask: &[[f32; 8]; 8],
+    csf: &[[f32; 8]; 8],
+    ret: &mut f32,
+    pixels: &mut u32,
+) {
+    let mut x = 0usize;
+    while x + 7 < w {
+        let mut dct_s = [0i32; 64];
+        let mut dct_d = [0i32; 64];
+        let mut s_means = [0.0f32; 4];
+        let mut d_means = [0.0f32; 4];
+        let mut s_gmean = 0.0f32;
+        let mut d_gmean = 0.0f32;
+        for i in 0..8 {
+            for j in 0..8 {
+                let sub = ((i & 12) >> 2) + ((j & 12) >> 1);
+                let s = src[(y + i) * sstride + (j + x)] as i32;
+                let d = dst[(y + i) * dstride + (j + x)] as i32;
+                dct_s[i * 8 + j] = s;
+                dct_d[i * 8 + j] = d;
+                s_gmean += s as f32;
+                d_gmean += d as f32;
+                s_means[sub] += s as f32;
+                d_means[sub] += d as f32;
+            }
+        }
+        s_gmean /= 64.0;
+        d_gmean /= 64.0;
+        for m in s_means.iter_mut() {
+            *m /= 16.0;
+        }
+        for m in d_means.iter_mut() {
+            *m /= 16.0;
+        }
+        let mut s_vars = [0.0f32; 4];
+        let mut d_vars = [0.0f32; 4];
+        let mut s_gvar = 0.0f32;
+        let mut d_gvar = 0.0f32;
+        for i in 0..64 {
+            let sub = (((i / 8) & 12) >> 2) + (((i % 8) & 12) >> 1);
+            let ds = dct_s[i] as f32 - s_gmean;
+            let dd = dct_d[i] as f32 - d_gmean;
+            s_gvar += ds * ds;
+            d_gvar += dd * dd;
+            let vs = dct_s[i] as f32 - s_means[sub];
+            let vd = dct_d[i] as f32 - d_means[sub];
+            s_vars[sub] += vs * vs;
+            d_vars[sub] += vd * vd;
+        }
+        // `*= 1/63.f*64` / `*= 1/15.f*16` — the constant folds in f32.
+        s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
+        d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
+        for i in 0..4 {
+            s_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
+            d_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
+        }
+        if s_gvar > 0.0 {
+            s_gvar = (s_vars[0] + s_vars[1] + s_vars[2] + s_vars[3]) / s_gvar;
+        }
+        if d_gvar > 0.0 {
+            d_gvar = (d_vars[0] + d_vars[1] + d_vars[2] + d_vars[3]) / d_gvar;
+        }
+        od_bin_fdct8x8(&mut dct_s);
+        od_bin_fdct8x8(&mut dct_d);
+        let mut s_mask = 0.0f32;
+        let mut d_mask = 0.0f32;
+        for i in 0..8 {
+            for j in usize::from(i == 0)..8 {
+                // C: `int*int` i32 product, one f32 conversion, then
+                // `× mask` — not two f32 multiplies.
+                s_mask += (dct_s[i * 8 + j] * dct_s[i * 8 + j]) as f32 * mask[i][j];
+                d_mask += (dct_d[i * 8 + j] * dct_d[i * 8 + j]) as f32 * mask[i][j];
+            }
+        }
+        // C: `s_mask = sqrt(s_mask*s_gvar) / 32.f` — double sqrt of
+        // the float product, double division, float store.
+        s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;
+        d_mask = (((d_mask * d_gvar) as f64).sqrt() / 32.0) as f32;
+        if d_mask > s_mask {
+            s_mask = d_mask;
+        }
+        for i in 0..8 {
+            for j in 0..8 {
+                let mut err = (dct_s[i * 8 + j] - dct_d[i * 8 + j]).abs() as f32;
+                if i != 0 || j != 0 {
+                    let t = s_mask / mask[i][j];
+                    err = if err < t { 0.0 } else { err - t };
+                }
+                *ret += (err * csf[i][j]) * (err * csf[i][j]);
+                *pixels += 1;
+            }
+        }
+        x += step;
+    }
 }
 
 /// Per-plane PSNR-HVS scores (dB) plus the libvmaf combined score.
