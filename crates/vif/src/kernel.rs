@@ -74,7 +74,10 @@ fn product_planes(im1: &[f64], im2: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
 
 /// `rayon::join` under `parallel`, sequential otherwise — each side
 /// writes its own `Vec`, so results are identical at any thread count.
-fn maybe_join<A, B>(fa: impl FnOnce() -> A + Send, fb: impl FnOnce() -> B + Send) -> (A, B)
+pub(crate) fn maybe_join<A, B>(
+    fa: impl FnOnce() -> A + Send,
+    fb: impl FnOnce() -> B + Send,
+) -> (A, B)
 where
     A: Send,
     B: Send,

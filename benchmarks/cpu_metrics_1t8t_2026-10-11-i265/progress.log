@@ -1,0 +1,3 @@
+2026-10-11T04:42:57Z leg st_photo_1024 begin (size=1024 wall=150s cpus=2 threads=1)
+2026-10-11T04:46:02Z leg st_photo_1024 rc=0 run-heavy: done rc=0 185s | peak-RSS 0.28GiB | min-avail 26076MiB | peak-load 5.56
+2026-10-11T04:46:02Z leg mt8_photo_1024 begin (size=1024 wall=150s cpus=0-7 threads=8)

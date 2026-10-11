@@ -539,7 +539,7 @@ fn corr_dn(
     let cx = fw / 2;
     let cy = fh / 2;
     let mut out = alloc::vec![0.0; out_w * out_h];
-    for oy in 0..out_h {
+    let corr_row = |oy: usize, orow: &mut [f64]| {
         let yc = (start + oy * step) as i64;
         for ox in 0..out_w {
             let xc = (start + ox * step) as i64;
@@ -553,7 +553,22 @@ fn corr_dn(
                     acc += fv * row[ix];
                 }
             }
-            out[oy * out_w + ox] = acc;
+            orow[ox] = acc;
+        }
+    };
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(out_w)
+            .enumerate()
+            .for_each(|(oy, orow)| corr_row(oy, orow));
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        for oy in 0..out_h {
+            corr_row(oy, &mut out[oy * out_w..(oy + 1) * out_w]);
         }
     }
     (out, out_w, out_h)
@@ -591,8 +606,12 @@ fn build_bands(img: &[f64], w: usize, h: usize) -> [[Band; 2]; 4] {
 
     let mut bands: [[Option<Band>; 2]; 4] = [const { [None, None] }; 4];
     for (level, pair) in bands.iter_mut().enumerate() {
-        let (b1, _, _) = corr_dn(&lo, lw, lh, &k1, 7, 7, 1, 0);
-        let (b4, _, _) = corr_dn(&lo, lw, lh, &k4, 7, 7, 1, 0);
+        let (b1, b4) = crate::kernel::maybe_join(
+            || corr_dn(&lo, lw, lh, &k1, 7, 7, 1, 0),
+            || corr_dn(&lo, lw, lh, &k4, 7, 7, 1, 0),
+        );
+        let (b1, _, _) = b1;
+        let (b4, _, _) = b4;
         pair[0] = Some(Band {
             w: lw,
             h: lh,
@@ -737,11 +756,30 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     // reference's `j`-outer / `k`-inner cat order).
     let np = (ch - (M - 1)) * (cw - (M - 1));
     let mut mean = alloc::vec![0.0f64; n2];
-    for ty in 0..(ch - (M - 1)) {
-        for tx in 0..(cw - (M - 1)) {
-            for c in 0..M {
-                for r in 0..M {
-                    mean[c * M + r] += y[(ty + r) * w + tx + c];
+    // Each of the 81 accumulators sums its own lane in the same (ty,tx)
+    // order — parallel over elements is bit-identical.
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        mean.par_iter_mut().enumerate().for_each(|(k, m)| {
+            let (c, r) = (k / M, k % M);
+            for ty in 0..(ch - (M - 1)) {
+                for tx in 0..(cw - (M - 1)) {
+                    *m += y[(ty + r) * w + tx + c];
+                }
+            }
+        });
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        for ty in 0..(ch - (M - 1)) {
+            for tx in 0..(cw - (M - 1)) {
+                for c in 0..M {
+                    for r in 0..M {
+                        mean[c * M + r] += y[(ty + r) * w + tx + c];
+                    }
                 }
             }
         }
@@ -750,17 +788,59 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
         *m /= np as f64;
     }
     let mut cu = alloc::vec![0.0f64; n2 * n2];
-    for ty in 0..(ch - (M - 1)) {
-        for tx in 0..(cw - (M - 1)) {
-            let mut v = [0.0f64; 9];
-            for c in 0..M {
-                for r in 0..M {
-                    v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
+    // Striped partial covariance: each stripe owns a ty range and a
+    // private 81×81 buffer; the ordered merge keeps the sum order fixed
+    // for any thread count (within ~1e-14 of serial — tolerance-passed).
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let rows = ch - (M - 1);
+        let stripes = (rows / 16).clamp(1, 64);
+        let bounds: Vec<usize> = (0..=stripes).map(|s| s * rows / stripes).collect();
+        let mut partials: Vec<Vec<f64>> = (0..stripes)
+            .into_par_iter()
+            .map(|s| {
+                let mut pc = alloc::vec![0.0f64; n2 * n2];
+                for ty in bounds[s]..bounds[s + 1] {
+                    for tx in 0..(cw - (M - 1)) {
+                        let mut v = [0.0f64; 9];
+                        for c in 0..M {
+                            for r in 0..M {
+                                v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
+                            }
+                        }
+                        for i in 0..n2 {
+                            for j in i..n2 {
+                                pc[i * n2 + j] += v[i] * v[j];
+                            }
+                        }
+                    }
                 }
+                pc
+            })
+            .collect();
+        for mut pc in partials.drain(..) {
+            for (e, p) in cu.iter_mut().zip(pc.drain(..)) {
+                *e += p;
             }
-            for i in 0..n2 {
-                for j in i..n2 {
-                    cu[i * n2 + j] += v[i] * v[j];
+        }
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        for ty in 0..(ch - (M - 1)) {
+            for tx in 0..(cw - (M - 1)) {
+                let mut v = [0.0f64; 9];
+                for c in 0..M {
+                    for r in 0..M {
+                        v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
+                    }
+                }
+                for i in 0..n2 {
+                    for j in i..n2 {
+                        cu[i * n2 + j] += v[i] * v[j];
+                    }
                 }
             }
         }
@@ -778,22 +858,45 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     let nbw = cw / M;
     let nbh = ch / M;
     let mut ss = alloc::vec![0.0f64; nbw * nbh];
-    for by in 0..nbh {
-        for bx in 0..nbw {
-            let mut v = [0.0f64; 9];
-            for c in 0..M {
-                for r in 0..M {
-                    v[c * M + r] = y[(by * M + r) * w + bx * M + c];
+    // Non-overlapping blocks are independent — disjoint ss writes with a
+    // per-task LU scratch (identical per-block math either way).
+    let ss_block = |by: usize, bx: usize, lu: &mut [f64]| -> f64 {
+        let mut v = [0.0f64; 9];
+        for c in 0..M {
+            for r in 0..M {
+                v[c * M + r] = y[(by * M + r) * w + bx * M + c];
+            }
+        }
+        let mut x = v;
+        lu.copy_from_slice(&cu);
+        lu_solve(lu, &mut x, n2);
+        let mut s = 0.0;
+        for i in 0..n2 {
+            s += v[i] * x[i];
+        }
+        s / (n2 as f64)
+    };
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        ss.par_chunks_mut(nbw).enumerate().for_each_init(
+            || alloc::vec![0.0f64; n2 * n2],
+            |lu, (by, row)| {
+                for (bx, e) in row.iter_mut().enumerate() {
+                    *e = ss_block(by, bx, lu);
                 }
+            },
+        );
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        let mut lu = alloc::vec![0.0f64; n2 * n2];
+        for by in 0..nbh {
+            for bx in 0..nbw {
+                ss[by * nbw + bx] = ss_block(by, bx, &mut lu);
             }
-            let mut x = v;
-            let mut lu = cu.clone();
-            lu_solve(&mut lu, &mut x, n2);
-            let mut s = 0.0;
-            for i in 0..n2 {
-                s += v[i] * x[i];
-            }
-            ss[by * nbw + bx] = s / (n2 as f64);
         }
     }
     (ss, lambda, nbw, nbh)
@@ -819,25 +922,25 @@ fn vifsub_est(
     let nbh = ch / M;
     let mut g = alloc::vec![0.0f64; nbw * nbh];
     let mut vv = alloc::vec![0.0f64; nbw * nbh];
-    for oy in 0..nbh {
+    let est_block = |oy: usize, ox: usize| -> (f64, f64) {
         let cy = (1 + oy * M) as i64; // 0-based centre (1-based 2,5,8,…)
-        for ox in 0..nbw {
-            let cx = (1 + ox * M) as i64;
-            let (mut sx, mut sy, mut sxy, mut sx2, mut sy2) = (0.0, 0.0, 0.0, 0.0, 0.0);
-            for ky in 0..winsize {
-                let iy = reflect1(cy + ky as i64 - cx0 as i64, ch as i64);
-                let rowr = &y[iy * w..];
-                let rowd = &yn[iy * w..];
-                for kx in 0..winsize {
-                    let ix = reflect1(cx + kx as i64 - cx0 as i64, cw as i64);
-                    let (a, b) = (rowr[ix], rowd[ix]);
-                    sx += a;
-                    sy += b;
-                    sxy += a * b;
-                    sx2 += a * a;
-                    sy2 += b * b;
-                }
+        let cx = (1 + ox * M) as i64;
+        let (mut sx, mut sy, mut sxy, mut sx2, mut sy2) = (0.0, 0.0, 0.0, 0.0, 0.0);
+        for ky in 0..winsize {
+            let iy = reflect1(cy + ky as i64 - cx0 as i64, ch as i64);
+            let rowr = &y[iy * w..];
+            let rowd = &yn[iy * w..];
+            for kx in 0..winsize {
+                let ix = reflect1(cx + kx as i64 - cx0 as i64, cw as i64);
+                let (a, b) = (rowr[ix], rowd[ix]);
+                sx += a;
+                sy += b;
+                sxy += a * b;
+                sx2 += a * a;
+                sy2 += b * b;
             }
+        }
+        {
             // corrDn with win = ones/N (means) and win = ones (raw
             // sums), combined exactly as the reference does.
             let mx = sx / n;
@@ -871,8 +974,33 @@ fn vifsub_est(
             if vvi <= TOL {
                 vvi = TOL;
             }
-            g[oy * nbw + ox] = gi;
-            vv[oy * nbw + ox] = vvi;
+            (gi, vvi)
+        }
+    };
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        g.par_chunks_mut(nbw)
+            .zip(vv.par_chunks_mut(nbw))
+            .enumerate()
+            .for_each(|(oy, (gr, vr))| {
+                for (ox, (ge, ve)) in gr.iter_mut().zip(vr.iter_mut()).enumerate() {
+                    let (gi, vvi) = est_block(oy, ox);
+                    *ge = gi;
+                    *ve = vvi;
+                }
+            });
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        for oy in 0..nbh {
+            for ox in 0..nbw {
+                let (gi, vvi) = est_block(oy, ox);
+                g[oy * nbw + ox] = gi;
+                vv[oy * nbw + ox] = vvi;
+            }
         }
     }
     (g, vv, nbw, nbh)
@@ -885,8 +1013,8 @@ fn vifsub_est(
 /// Vector-GSM VIF of two `w×h` f64 planes (0–255 signal scale).
 /// Returns `NaN` when the reference would (empty/degenerate fields).
 pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
-    let rb = build_bands(r, w, h);
-    let db = build_bands(d, w, h);
+    // The two pyramid decompositions are independent.
+    let (rb, db) = crate::kernel::maybe_join(|| build_bands(r, w, h), || build_bands(d, w, h));
 
     let mut num = 0.0f64;
     let mut den = 0.0f64;
