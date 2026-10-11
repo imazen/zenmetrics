@@ -1078,6 +1078,30 @@ thread_local! {
 /// `dct_scale`, `norms`, and all three CSF tables are transpose-symmetric
 /// — see `tables_are_symmetric`.)
 fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
+    #[cfg(target_arch = "x86_64")]
+    if have_fma() {
+        // SAFETY: `have_fma()` gate above guarantees the target features;
+        // same op order as the safe impl — `mul_add` lowers to `vfmadd`.
+        return unsafe { dct_8x8_fma(block) };
+    }
+    dct_8x8_impl(block)
+}
+
+/// `dct_8x8` compiled with hardware FMA/AVX2. The butterfly's `fm` chains
+/// lower to `vfmadd` instead of `fmaf` libcalls — bitwise identical
+/// (single-rounded either way), ~10x cheaper per op.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma", enable = "avx2")]
+///
+/// # Safety
+/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
+/// [`have_fma`].
+unsafe fn dct_8x8_fma(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
+    dct_8x8_impl(block)
+}
+
+#[inline(always)]
+fn dct_8x8_impl(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
     // Pass 1 (vertical): `aan_1d` per column — `v[k][x]` is the k-th
     // vertical frequency of column `x` (register `k`, lane `x`).
     let mut v = [[0.0f32; 8]; 8];
