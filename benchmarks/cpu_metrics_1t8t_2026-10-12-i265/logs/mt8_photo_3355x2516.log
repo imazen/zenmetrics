@@ -8,3 +8,82 @@ refused 3355x2516/vmaf: vmaf: VMAF requires matching, even dimensions >= 32
   zenbench  1791699504-2c7274
   git: 6b87eeb4d298faf36d88ad381338352c8b17e38e
 ═══════════════════════════════════════════════════════════════
+
+  new_metrics_wall_3355x2516  6 rounds × 1 calls ⚠ only 6 rounds
+                             mean ±mad ms  95% CI vs base         
+  ├─ psnr__lat                12.4 ±0.1ms  [12.3–12.5]ms          
+  ├─ psnr-y__lat              15.8 ±0.1ms  [+25.8%–+30.2%]        
+  ├─ ssim__lat               403.3 ±6.0ms  [+3107.5%–+3213.2%]    
+  ├─ ssim2__lat              808.5 ±6.6ms  [+6386.9%–+6460.4%]    
+  ├─ butteraugli__lat        648.8 ±5.3ms  [+5108.7%–+5160.9%]     [1]
+  ├─ dssim__lat              392.5 ±7.1ms  [+3018.2%–+3123.7%]     [2]
+  ├─ zensim__lat              95.0 ±1.0ms  [+644.8%–+654.9%]      
+  ├─ cvvdp__lat              534.6 ±6.3ms  [+4181.0%–+4247.1%]    
+  ├─ iwssim__lat             416.2 ±6.9ms  [+3181.1%–+3353.1%]     [3]
+  ├─ iwssim-piq__lat         420.3 ±6.2ms  [+3075.3%–+3242.6%]    
+  ├─ nlpd__lat               215.3 ±5.5ms  [+1563.7%–+1716.9%]    
+  ├─ nlpd-iqa__lat           115.9 ±5.1ms  [+805.2%–+864.7%]       [4]
+  ├─ ms-gmsdc__lat           191.4 ±5.7ms  [+1398.6%–+1498.8%]    
+  ├─ gmsd__lat                 1.9 ±0.0ms  [-85.4%–-83.6%]        
+  ├─ mdsi__lat                 4.1 ±0.6ms  [-74.3%–-69.3%]         [5]
+  ├─ ms-gmsd__lat            192.7 ±6.0ms  [+1419.7%–+1488.1%]    
+  ├─ psnrhvs__lat             62.4 ±3.0ms  [+370.7%–+406.1%]      
+  ├─ psnrhvs-daala__lat      307.2 ±3.6ms  [+2354.0%–+2400.4%]     [6]
+  ├─ haarpsi__lat             87.5 ±3.2ms  [+586.3%–+624.4%]      
+  ├─ fsim__lat              331.0 ±32.5ms  [+2420.0%–+2712.7%]     [7]
+  ├─ vsi__lat                353.0 ±4.8ms  [+2692.0%–+2743.3%]    
+  ├─ msssim__lat             263.1 ±2.8ms  [+1993.3%–+2046.5%]    
+  ├─ msssim-libvmaf__lat     729.1 ±9.2ms  [+5789.5%–+5889.1%]     [8]
+  ├─ ssim-libvmaf__lat        83.1 ±1.9ms  [+568.5%–+581.2%]      
+  ├─ vif__lat                420.9 ±6.2ms  [+3231.6%–+3307.9%]     [9]
+  ├─ vifvec__lat            760.3 ±15.1ms  [+5865.2%–+6233.8%]    
+  ├─ mad__lat              5641.9 ±31.4ms  [+45233.0%–+45594.3%]   [10]
+  ╰─ mdctpsnr__lat         5492.0 ±81.0ms  [+43711.1%–+44808.7%]   [11]
+
+  gmsd__lat            █ 1.92ms
+  mdsi__lat            █ 4.10ms
+  psnr__lat            █ 12.39ms
+  psnr-y__lat          █ 15.84ms
+  psnrhvs__lat         █ 62.43ms
+  ssim-libvmaf__lat    █ 83.12ms
+  haarpsi__lat         █ 87.49ms
+  zensim__lat          █ 94.97ms
+  nlpd-iqa__lat        █ 115.90ms
+  ms-gmsdc__lat        ██ 191.41ms
+  ms-gmsd__lat         ██ 192.74ms
+  nlpd__lat            ██ 215.30ms
+  msssim__lat          ██ 263.09ms
+  psnrhvs-daala__lat   ███ 307.22ms
+  fsim__lat            ███ 331.02ms
+  vsi__lat             ███ 352.97ms
+  dssim__lat           ███ 392.46ms
+  ssim__lat            ███ 403.34ms
+  iwssim__lat          ████ 416.19ms
+  iwssim-piq__lat      ████ 420.31ms
+  vif__lat             ████ 420.86ms
+  cvvdp__lat           █████ 534.56ms
+  butteraugli__lat     ██████ 648.83ms
+  msssim-libvmaf__lat  ██████ 729.15ms
+  vifvec__lat          ██████ 760.30ms
+  ssim2__lat           ███████ 808.47ms
+  mdctpsnr__lat        ███████████████████████████████████████████████ 5.49s
+  mad__lat             ████████████████████████████████████████████████ 5.64s
+  [1] drift r=-0.94 — later rounds faster
+  [2] drift r=0.66 — later rounds slower
+  [3] drift r=-0.54 — later rounds faster
+  [4] drift r=0.54 — later rounds slower
+  [5] CV=38%
+  [6] drift r=-0.83 — later rounds faster
+  [7] drift r=-0.83 — later rounds faster
+  [8] drift r=0.70 — later rounds slower
+  [9] drift r=0.60 — later rounds slower
+  [10] drift r=0.89 — later rounds slower
+  [11] drift r=-0.71 — later rounds faster
+
+  total: 344.7s  (186 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 3355x2516/psnr: 31.94591137932091
+sentinel 3355x2516/psnr-y: 34.659660059869
+sentinel 3355x2516/ssim: 0.9378330677831319
+sentinel 3355x2516/ssim2: 49.697679962976444

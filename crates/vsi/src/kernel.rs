@@ -118,13 +118,30 @@ fn axis_taps(in_n: usize, out_n: usize) -> Axis {
     Axis { spans, taps }
 }
 
+/// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
+/// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
+/// otherwise the serial loop runs. Writes are disjoint per row either
+/// way, so results are bit-identical at any thread count.
+fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(row_w)
+            .enumerate()
+            .for_each(|(y, drow)| f(y, drow));
+        return;
+    }
+    for (y, drow) in out.chunks_mut(row_w).enumerate() {
+        f(y, drow);
+    }
+}
+
 /// Horizontal pass: `out[i,j] = Σ_t w·src[i, idx_t]`, accumulate f64.
 fn resize_h(src: &[f32], in_w: usize, in_h: usize, ax: &Axis) -> Vec<f32> {
     let out_w = ax.spans.len();
     let mut out = vec![0.0f32; in_h * out_w];
-    for i in 0..in_h {
+    for_each_row(&mut out, out_w, |i, drow| {
         let srow = &src[i * in_w..(i + 1) * in_w];
-        let drow = &mut out[i * out_w..(i + 1) * out_w];
         for (o, &(st, len)) in ax.spans.iter().enumerate() {
             let mut acc = 0.0f64;
             for &(idx, w) in &ax.taps[st as usize..(st + len) as usize] {
@@ -132,7 +149,7 @@ fn resize_h(src: &[f32], in_w: usize, in_h: usize, ax: &Axis) -> Vec<f32> {
             }
             drow[o] = acc as f32;
         }
-    }
+    });
     out
 }
 
@@ -140,8 +157,8 @@ fn resize_h(src: &[f32], in_w: usize, in_h: usize, ax: &Axis) -> Vec<f32> {
 fn resize_v(src: &[f32], w: usize, _in_h: usize, ax: &Axis) -> Vec<f32> {
     let out_h = ax.spans.len();
     let mut out = vec![0.0f32; out_h * w];
-    for (o, &(st, len)) in ax.spans.iter().enumerate() {
-        let orow = &mut out[o * w..(o + 1) * w];
+    for_each_row(&mut out, w, |o, orow| {
+        let (st, len) = ax.spans[o];
         for (x, v) in orow.iter_mut().enumerate() {
             let mut acc = 0.0f64;
             for &(idx, wt) in &ax.taps[st as usize..(st + len) as usize] {
@@ -149,7 +166,7 @@ fn resize_v(src: &[f32], w: usize, _in_h: usize, ax: &Axis) -> Vec<f32> {
             }
             *v = acc as f32;
         }
-    }
+    });
     out
 }
 
@@ -269,11 +286,31 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
         vec![0.0f32; n * n],
         vec![0.0f32; n * n],
     ];
-    for i in 0..n * n {
-        let (l, a, bb) = srgb_to_lab(dr[i], dg[i], db[i]);
-        lab[0][i] = l;
-        lab[1][i] = a;
-        lab[2][i] = bb;
+    let [ll, la, lb] = &mut lab;
+    let mut ran_par = false;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        ll.par_iter_mut()
+            .zip(la.par_iter_mut())
+            .zip(lb.par_iter_mut())
+            .enumerate()
+            .for_each(|(i, ((l, a), b))| {
+                let (lv, av, bv) = srgb_to_lab(dr[i], dg[i], db[i]);
+                *l = lv;
+                *a = av;
+                *b = bv;
+            });
+        ran_par = true;
+    }
+    let _ = ran_par;
+    if !ran_par {
+        for i in 0..n * n {
+            let (l, a, bb) = srgb_to_lab(dr[i], dg[i], db[i]);
+            ll[i] = l;
+            la[i] = a;
+            lb[i] = bb;
+        }
     }
     // 3. log-Gabor bandpass per channel: real(ifft2(fft2(ch) .* LG)).
     let plan = fft::Plan::new(n);
@@ -345,9 +382,8 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
     }
     let s = f / 2;
     let mut tmp = vec![0.0f32; w * h];
-    for i in 0..h {
+    for_each_row(&mut tmp, w, |i, trow| {
         let row = &x[i * w..(i + 1) * w];
-        let trow = &mut tmp[i * w..(i + 1) * w];
         for (j, t) in trow.iter_mut().enumerate() {
             let lo = (j + s).saturating_sub(f - 1);
             let hi = (j + s).min(w - 1);
@@ -357,24 +393,25 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
             }
             *t = acc;
         }
-    }
+    });
     let w2 = w.div_ceil(f);
     let h2 = h.div_ceil(f);
     let mut out = vec![0.0f32; w2 * h2];
     let inv = 1.0 / (f * f) as f32;
-    for oi in 0..h2 {
+    let tmp_ref = &tmp;
+    for_each_row(&mut out, w2, |oi, orow| {
         let i = oi * f;
         let lo = (i + s).saturating_sub(f - 1);
         let hi = (i + s).min(h - 1);
-        for oj in 0..w2 {
+        for (oj, o) in orow.iter_mut().enumerate() {
             let j = oj * f;
             let mut acc = 0.0f32;
             for r in lo..=hi {
-                acc += tmp[r * w + j];
+                acc += tmp_ref[r * w + j];
             }
-            out[oi * w2 + oj] = acc * inv;
+            *o = acc * inv;
         }
-    }
+    });
     (w2, h2, out)
 }
 
@@ -382,8 +419,8 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
 /// zero-padded (same as `crates/fsim`).
 fn conv2_same_3x3(y: &[f32], w: usize, h: usize, k: &[[f32; 3]; 3]) -> Vec<f32> {
     let mut out = vec![0.0f32; w * h];
-    for i in 0..h {
-        for j in 0..w {
+    for_each_row(&mut out, w, |i, orow| {
+        for (j, o) in orow.iter_mut().enumerate() {
             let mut acc = 0.0f32;
             for a in 0..3isize {
                 let r = i as isize + 1 - a;
@@ -398,9 +435,9 @@ fn conv2_same_3x3(y: &[f32], w: usize, h: usize, k: &[[f32; 3]; 3]) -> Vec<f32> 
                     acc += k[a as usize][b as usize] * y[r as usize * w + c as usize];
                 }
             }
-            out[i * w + j] = acc;
+            *o = acc;
         }
-    }
+    });
     out
 }
 
