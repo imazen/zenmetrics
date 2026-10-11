@@ -1,8 +1,11 @@
 //! Calibrate a metric's score to a JND target, leaving one source out.
 //!
 //! A thin driver over `zenmetrics_stats::jnd` and `zenmetrics_stats::resample`:
-//! no statistic is computed here that the crate does not own. For each declared
-//! map family it fits leave-one-source-out, reports out-of-fold RMSE in JND, τ̂
+//! no statistic is computed here that the crate does not own. The primary
+//! family is the knee power with its knee fixed at `--knee` (default 100, a
+//! quality score's pixel-identity value); the fitted-knee knee power, the
+//! 4-parameter logistic, the linear map and the isotonic map are reported
+//! beside it. For each family it fits leave-one-source-out, reports out-of-fold RMSE in JND, τ̂
 //! (moment and maximum likelihood) and P.1401 rmse* against each stimulus' own
 //! interval (d = 0, out of fold), and source-clustered bootstrap intervals with
 //! the maps refitted inside every draw (copy-aware folds from `Draw::expand`).
@@ -12,9 +15,21 @@
 //!
 //! ```text
 //! cargo run --release -p zenmetrics-stats --example jnd_calibrate -- \
-//!     --input scores.tsv --model A [--range-max 4] [--keep-anchors] \
+//!     --input scores.tsv --model A [--knee 100] [--range-max 4] [--keep-anchors] \
 //!     [--resamples 2000] [--seed 20261011]
 //! ```
+//!
+//! After the families, one `support` object applies the join-point rule to the
+//! primary map: its out-of-fold predictions are binned (`--bin-width`, default
+//! 0.5 JND, up to `--support-max`, default 4). A bin is evaluable when it holds
+//! at least `--min-stimuli` rows (20) from at least `min(--min-sources,
+//! sources)` sources (10), and supported when it is evaluable with out-of-fold
+//! RMSE at most `--max-rmse` (0.75 JND). Bins below the lowest evaluable bin
+//! are skipped (the knee anchors the zero there); from it upward, `j_star` is
+//! the upper edge of the last bin in the unbroken run of supported bins, or
+//! `null` when the lowest evaluable bin is not supported or none is evaluable.
+//! Binning on the prediction, not the label, keeps the held-out label out of
+//! the selection; read `j_star` from a run without `--range-max`.
 //!
 //! Anchors (rows with `jnd == 0` and `jnd_se == 0`: the scale's fixed zero,
 //! not a measurement) are excluded unless `--keep-anchors`. `--range-max J`
@@ -24,18 +39,9 @@
 
 use std::collections::HashMap;
 use zenmetrics_stats::jnd::{
-    MapFamily, Shape, excess_error_sd, fit_map, out_of_fold, rmse, rmse_star,
+    Knee, MapFamily, Shape, excess_error_sd, fit_map, out_of_fold, rmse, rmse_star,
 };
 use zenmetrics_stats::resample::{BootstrapConfig, Design, Interval, cluster_bootstrap};
-
-/// Student t 97.5th percentiles for 1..=30 degrees of freedom (standard
-/// tables), used only to widen the bootstrap SE into the small-G interval
-/// `estimate ± t(G−1) · se · √(G/(G−1))` documented in `resample`.
-const T975: [f64; 30] = [
-    12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160,
-    2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056,
-    2.052, 2.048, 2.045, 2.042,
-];
 
 struct Rows {
     source: Vec<u32>,
@@ -151,15 +157,14 @@ fn num(v: f64) -> String {
 }
 
 fn interval_json(name: &str, iv: &Interval, groups: usize) -> String {
-    let t = T975[(groups - 1).clamp(1, 30) - 1];
-    let half = t * iv.se * (groups as f64 / (groups as f64 - 1.0)).sqrt();
+    let (slo, shi) = iv.student(groups, 0.95).unwrap_or((f64::NAN, f64::NAN));
     format!(
         "\"{name}\":{{\"estimate\":{},\"percentile95\":[{},{}],\"student95\":[{},{}],\"se\":{},\"n_finite\":{}}}",
         num(iv.estimate),
         num(iv.lo),
         num(iv.hi),
-        num(iv.estimate - half),
-        num(iv.estimate + half),
+        num(slo),
+        num(shi),
         num(iv.se),
         iv.n_finite
     )
@@ -172,9 +177,23 @@ fn main() {
     let range_max: f64 =
         arg(&args, "--range-max").map_or(f64::INFINITY, |v| v.parse().expect("range"));
     let keep_anchors = args.iter().any(|a| a == "--keep-anchors");
+    let knee = arg(&args, "--knee")
+        .map_or(Some(100.0), |v| v.parse().ok())
+        .and_then(Knee::new)
+        .expect("--knee must be a finite number");
     let resamples: usize =
         arg(&args, "--resamples").map_or(2000, |v| v.parse().expect("resamples"));
     let seed: u64 = arg(&args, "--seed").map_or(20261011, |v| v.parse().expect("seed"));
+    let num_arg = |k: &str, d: f64| -> f64 { arg(&args, k).map_or(d, |v| v.parse().expect(k)) };
+    let bin_width = num_arg("--bin-width", 0.5);
+    let support_max = num_arg("--support-max", 4.0);
+    let min_stimuli = num_arg("--min-stimuli", 20.0) as usize;
+    let min_sources = num_arg("--min-sources", 10.0) as usize;
+    let max_rmse = num_arg("--max-rmse", 0.75);
+    assert!(
+        bin_width > 0.0 && support_max > 0.0,
+        "bin width and support max must be positive"
+    );
     let (r, anchors) = load(&input, &model, range_max, keep_anchors);
     let groups = r.names.len();
     assert!(groups >= 2, "need at least two sources, got {groups}");
@@ -184,12 +203,25 @@ fn main() {
         level: 0.95,
     };
     let families = [
-        ("KneePower", MapFamily::KneePower(Shape::Quality)),
-        ("Logistic4", MapFamily::Logistic4),
-        ("Linear", MapFamily::Linear),
-        ("Isotonic", MapFamily::Isotonic(Shape::Quality)),
+        (
+            "KneePowerFixed",
+            "primary",
+            MapFamily::KneePowerFixed(Shape::Quality, knee),
+        ),
+        (
+            "KneePower",
+            "report-only",
+            MapFamily::KneePower(Shape::Quality),
+        ),
+        ("Logistic4", "report-only", MapFamily::Logistic4),
+        ("Linear", "report-only", MapFamily::Linear),
+        (
+            "Isotonic",
+            "report-only",
+            MapFamily::Isotonic(Shape::Quality),
+        ),
     ];
-    for (name, fam) in families {
+    for (name, role, fam) in families {
         let full = fit_map(fam, &r.score, &r.jnd)
             .map(|m| m.params().to_vec())
             .unwrap_or_default();
@@ -214,7 +246,7 @@ fn main() {
             format!("[{},{},{},{}]", num(m[0]), num(m[1]), num(m[2]), num(m[3]))
         });
         println!(
-            "{{\"model\":\"{model}\",\"family\":\"{name}\",\"rows\":{},\"sources\":{:?},\"anchors_excluded\":{anchors},\
+            "{{\"model\":\"{model}\",\"family\":\"{name}\",\"role\":\"{role}\",\"rows\":{},\"sources\":{:?},\"anchors_excluded\":{anchors},\
 \"range_max\":{},\"full_fit_params\":{:?},\"oof_rmse_tau_ml_tau_moment_rmse_star\":{p},{},{},{},{},\"resamples\":{resamples},\"seed\":{seed}}}",
             r.score.len(),
             r.names,
@@ -230,4 +262,50 @@ fn main() {
             interval_json("rmse_star", &ivs[3], groups),
         );
     }
+    let fam = families[0].2;
+    let Ok(oof) = out_of_fold(fam, &r.score, &r.jnd, &r.source) else {
+        println!("{{\"model\":\"{model}\",\"support\":null,\"j_star\":null}}");
+        return;
+    };
+    let need_sources = min_sources.min(groups);
+    let bins = (support_max / bin_width).ceil() as usize;
+    let mut cells = Vec::new();
+    let mut j_star: Option<f64> = None;
+    let (mut started, mut stopped) = (false, false);
+    for b in 0..bins {
+        let (lo, hi) = (
+            b as f64 * bin_width,
+            ((b + 1) as f64 * bin_width).min(support_max),
+        );
+        let rows: Vec<usize> = (0..oof.len())
+            .filter(|&i| (oof[i] > lo || (b == 0 && oof[i] >= 0.0)) && oof[i] <= hi)
+            .collect();
+        let mut srcs: Vec<u32> = rows.iter().map(|&i| r.source[i]).collect();
+        srcs.sort_unstable();
+        srcs.dedup();
+        let pick = |v: &[f64]| -> Vec<f64> { rows.iter().map(|&i| v[i]).collect() };
+        let e = rmse(&pick(&oof), &pick(&r.jnd)).unwrap_or(f64::NAN);
+        let evaluable = rows.len() >= min_stimuli && srcs.len() >= need_sources;
+        let ok = evaluable && e <= max_rmse;
+        started |= evaluable;
+        if started && !stopped {
+            if ok {
+                j_star = Some(hi);
+            } else {
+                stopped = true;
+            }
+        }
+        cells.push(format!(
+            "{{\"lo\":{lo},\"hi\":{hi},\"n\":{},\"sources\":{},\"oof_rmse\":{},\"evaluable\":{evaluable},\"supported\":{ok}}}",
+            rows.len(),
+            srcs.len(),
+            num(e)
+        ));
+    }
+    println!(
+        "{{\"model\":\"{model}\",\"support_family\":\"{}\",\"rule\":{{\"bin_width\":{bin_width},\"support_max\":{support_max},\"min_stimuli\":{min_stimuli},\"min_sources\":{need_sources},\"max_rmse\":{max_rmse},\"binned_on\":\"out_of_fold_prediction\"}},\"support\":[{}],\"j_star\":{}}}",
+        families[0].0,
+        cells.join(","),
+        j_star.map_or("null".to_string(), |v| format!("{v}"))
+    );
 }
