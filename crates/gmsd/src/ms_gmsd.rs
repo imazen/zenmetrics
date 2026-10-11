@@ -33,41 +33,66 @@ impl Planes {
     pub(crate) fn half(&self) -> Self {
         let mut out = Self::empty(self.width.div_ceil(2), self.height.div_ceil(2));
         for (dest, a) in out.data.iter_mut().zip(&self.data) {
-            for y in 0..out.height {
-                for x in 0..out.width {
-                    let x0 = 2 * x + 1;
-                    let x1 = (2 * x + 2).min(self.width);
+            for_each_row(
+                &mut dest[out.pitch..out.pitch + out.height * out.pitch],
+                out.pitch,
+                |y, orow| {
                     let y0 = 2 * y + 1;
                     let y1 = (2 * y + 2).min(self.height);
-                    dest[(y + 1) * out.pitch + x + 1] = (((a[y0 * self.pitch + x0]
-                        + a[y0 * self.pitch + x1])
-                        + a[y1 * self.pitch + x0])
-                        + a[y1 * self.pitch + x1])
-                        * 0.25;
-                }
-            }
+                    for (x, o) in orow[1..1 + out.width].iter_mut().enumerate() {
+                        let x0 = 2 * x + 1;
+                        let x1 = (2 * x + 2).min(self.width);
+                        *o = (((a[y0 * self.pitch + x0] + a[y0 * self.pitch + x1])
+                            + a[y1 * self.pitch + x0])
+                            + a[y1 * self.pitch + x1])
+                            * 0.25;
+                    }
+                },
+            );
         }
         out
     }
 }
 
+/// Row-map driver — `f(y, out_row)` for every `row_w`-wide row. Under
+/// `parallel` rows are `par_chunks_mut`-mapped when the pool has >1
+/// thread; writes are disjoint per row, identical at any thread count.
+fn for_each_row(out: &mut [f64], row_w: usize, f: impl Fn(usize, &mut [f64]) + Sync) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(row_w)
+            .enumerate()
+            .for_each(|(y, drow)| f(y, drow));
+        return;
+    }
+    for (y, drow) in out.chunks_mut(row_w).enumerate() {
+        f(y, drow);
+    }
+}
+
 pub(crate) fn prepare(r: &[u8], d: &[u8], w: usize, h: usize, stride: usize) -> Planes {
     let mut p = Planes::empty(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            for (side, rgb) in [r, d].into_iter().enumerate() {
+    let pitch = p.pitch;
+    // YIQ coefficients per channel — `data` is laid out
+    // `[yr, yd, cr, cd, br, bd]` (side-major pairs).
+    const COEF: [[f64; 3]; 3] = [
+        [0.299, 0.587, 0.114],
+        [0.595716, -0.274453, -0.321263],
+        [0.211456, -0.522591, 0.311135],
+    ];
+    for k in 0..6 {
+        let (side, chan) = (k % 2, k / 2);
+        let rgb = if side == 0 { r } else { d };
+        let [a, b, c] = COEF[chan];
+        // Interior rows 1..=h — borders stay zero.
+        let dst = &mut p.data[k][pitch..pitch + h * pitch];
+        for_each_row(dst, pitch, |y, row| {
+            for (x, o) in row[1..1 + w].iter_mut().enumerate() {
                 let i = y * stride + 3 * x;
-                let (r, g, b) = (
-                    f64::from(rgb[i]),
-                    f64::from(rgb[i + 1]),
-                    f64::from(rgb[i + 2]),
-                );
-                let j = (y + 1) * p.pitch + x + 1;
-                p.data[side][j] = 0.299 * r + 0.587 * g + 0.114 * b;
-                p.data[2 + side][j] = 0.595716 * r - 0.274453 * g - 0.321263 * b;
-                p.data[4 + side][j] = 0.211456 * r - 0.522591 * g + 0.311135 * b;
+                *o = a * f64::from(rgb[i]) + b * f64::from(rgb[i + 1]) + c * f64::from(rgb[i + 2]);
             }
-        }
+        });
     }
     p
 }
@@ -148,15 +173,37 @@ pub(crate) fn map(p: &Planes, c: f64) -> Vec<f64> {
     out
 }
 
+/// Striped fold of `f(v)` over `q` — fixed 32-band order in every
+/// build so serial and parallel results are bit-identical.
+fn fold_map(q: &[f64], f: impl Fn(&f64) -> f64 + Sync) -> f64 {
+    const BANDS: usize = 32;
+    let bs = q.len().div_ceil(BANDS);
+    let body = |r: core::ops::Range<usize>| -> f64 { q[r].iter().map(&f).sum::<f64>() };
+    let mut parts = [0.0f64; BANDS];
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        parts.par_iter_mut().enumerate().for_each(|(b, p)| {
+            let lo = b * bs;
+            let hi = (lo + bs).min(q.len());
+            *p = if lo < hi { body(lo..hi) } else { 0.0 };
+        });
+        return parts.iter().sum();
+    }
+    for (b, p) in parts.iter_mut().enumerate() {
+        let lo = b * bs;
+        let hi = (lo + bs).min(q.len());
+        *p = if lo < hi { body(lo..hi) } else { 0.0 };
+    }
+    parts.iter().sum()
+}
+
 pub(crate) fn variance(q: &[f64]) -> f64 {
-    let mean = q.iter().sum::<f64>() / q.len() as f64;
-    q.iter()
-        .map(|v| {
-            let d = v - mean;
-            d * d
-        })
-        .sum::<f64>()
-        / q.len() as f64
+    let mean = fold_map(q, |&v| v) / q.len() as f64;
+    fold_map(q, |&v| {
+        let d = v - mean;
+        d * d
+    }) / q.len() as f64
 }
 
 pub(crate) fn finish(variances: [f64; 4], p: &Planes) -> (f64, f64) {

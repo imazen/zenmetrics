@@ -1,2 +1,27 @@
 run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26201MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 mad
 heap 3355x2516/mad rep0: 26450.989 ms score=18.613801284574702
+heap 3355x2516/mad rep1: 26428.011 ms score=18.613801284574702
+	Command being timed: "taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 mad"
+	User time (seconds): 48.55
+	System time (seconds): 4.32
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:52.92
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1351804
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4667534
+	Voluntary context switches: 310
+	Involuntary context switches: 2468
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 53s | peak-RSS 1.29GiB | min-avail 24947MiB | peak-load 2.39
