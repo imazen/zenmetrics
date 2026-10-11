@@ -192,10 +192,10 @@ fn every_tier_matches_scalar_bitwise() {
             assert_eq!(s, s_s);
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = archmage::X64V4Token::summon() {
+        if let Some(t) = archmage::X64V4xToken::summon() {
             let mut m = vec![0.0f32; w2 * h2];
             let mut s = vec![(0.0, 0.0); h2];
-            kernel::gmsd_band_v4(t, &band, &mut m, w2, &mut s);
+            kernel::gmsd_band_v4x(t, &band, &mut m, w2, &mut s);
             assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
             assert_eq!(s, s_s);
         }
@@ -261,10 +261,10 @@ fn rgb8_tiers_match_scalar_bitwise() {
             assert_eq!(s, s_s);
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = archmage::X64V4Token::summon() {
+        if let Some(t) = archmage::X64V4xToken::summon() {
             let mut m = vec![0.0f32; w2 * h2];
             let mut s = vec![(0.0, 0.0); h2];
-            kernel::gmsd_band_v4(t, &band, &mut m, w2, &mut s);
+            kernel::gmsd_band_v4x(t, &band, &mut m, w2, &mut s);
             assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
             assert_eq!(s, s_s);
         }

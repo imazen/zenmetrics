@@ -251,7 +251,7 @@ impl Plan {
 /// block, transposed in and out). Bit-reversal swaps whole 8-lane rows.
 ///
 /// Twiddles are splat per butterfly — cheap, and identical across lanes.
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn fft_batch8_inner(
     token: Token,
     re8: &mut [f32],
@@ -307,7 +307,7 @@ fn fft_batch8_inner(
 fn fft_batch8(re8: &mut [f32], im8: &mut [f32], n: usize, stages: &[Vec<Complex>]) {
     archmage::incant!(
         fft_batch8_inner(re8, im8, n, stages),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 

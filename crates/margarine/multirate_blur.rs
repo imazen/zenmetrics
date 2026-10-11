@@ -152,11 +152,11 @@ pub(crate) fn reduce(
 pub(crate) fn expand_row<const F: usize>(a: &[f32], b: &[f32], fy: f32, out: &mut [f32]) {
     archmage::incant!(
         expand_row_vector::<F>(a, b, fy, out),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     )
 }
 
-#[archmage::magetypes(define(f32x8), v4, v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x8), v4x, v3, neon, wasm128, scalar)]
 fn expand_row_vector<const F: usize>(token: Token, a: &[f32], b: &[f32], fy: f32, out: &mut [f32]) {
     let left = (F / 2).min(out.len());
     out[..left].fill(a[0] + fy * (b[0] - a[0]));

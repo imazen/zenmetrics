@@ -36,7 +36,7 @@
 //! All conv/similarity planes are f32; every output pixel is a
 //! fixed-order f32 expression independent of the SIMD lane count, and
 //! the f64 pooling keeps gmsd's fixed 8-lane accumulator grouping, so
-//! every tier (scalar / v3 / v4 / neon / wasm128) is **bit-identical**.
+//! every tier (scalar / v3 / v4x / neon / wasm128) is **bit-identical**.
 //! `_dev` exposes the per-tier entries for tier-parity tests and
 //! disassembly.
 
@@ -62,7 +62,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::haarpsi_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::haarpsi_core_tier_v4;
+    pub use crate::kernel::haarpsi_core_tier_v4x;
     pub use crate::kernel::{Plane, haarpsi_core_tier_scalar};
 }
 

@@ -84,8 +84,8 @@ fn verify_tiers(s: &mdsi::Source<'_>, gcs: &[f64], cs: &[f64]) -> String {
             check!("v3", mdsi::prepare_band_v3, mdsi::maps_band_v3, t);
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = archmage::X64V4Token::summon() {
-            check!("v4", mdsi::prepare_band_v4, mdsi::maps_band_v4, t);
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            check!("v4x", mdsi::prepare_band_v4x, mdsi::maps_band_v4x, t);
         }
     }
     #[cfg(target_arch = "aarch64")]
@@ -140,8 +140,8 @@ fn verify_ms_tiers(p: &ms_gmsd::Planes, map: &[f64]) -> String {
             check!("v3", ms_gmsd::ms_band_v3, t);
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = archmage::X64V4Token::summon() {
-            check!("v4", ms_gmsd::ms_band_v4, t);
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            check!("v4x", ms_gmsd::ms_band_v4x, t);
         }
     }
     #[cfg(target_arch = "aarch64")]

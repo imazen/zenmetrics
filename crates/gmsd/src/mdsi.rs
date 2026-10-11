@@ -45,7 +45,7 @@ use archmage::Wasm128Token;
 #[cfg(target_arch = "x86_64")]
 use archmage::X64V3Token;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-use archmage::X64V4Token;
+use archmage::X64V4xToken;
 use archmage::magetypes;
 
 use crate::{BAND_ROWS, Error, Result, check_rgb8};
@@ -479,7 +479,7 @@ macro_rules! prepare_entry {
 #[cfg(target_arch = "x86_64")]
 prepare_entry!(prepare_band_v3, X64V3Token);
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-prepare_entry!(prepare_band_v4, X64V4Token);
+prepare_entry!(prepare_band_v4x, X64V4xToken);
 #[cfg(target_arch = "aarch64")]
 prepare_entry!(prepare_band_neon, NeonToken);
 #[cfg(target_arch = "wasm32")]
@@ -535,7 +535,7 @@ pub(crate) fn prepare(s: &Source<'_>) -> Planes {
     let run = |i: usize, chunk: &mut [f64]| {
         archmage::incant!(
             prepare_band(s, i * BAND_ROWS, chunk),
-            [v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     };
     let body = &mut data[row_len..(oh + 1) * row_len];
@@ -560,7 +560,7 @@ pub(crate) fn prepare(s: &Source<'_>) -> Planes {
 
 /// Eight independent f64 pixels in every tier; the operation order is that
 /// of [`reference`], with no FMA and no lane reduction.
-#[magetypes(rite, define(f64x8), v4, v3, neon, wasm128, scalar)]
+#[magetypes(rite, define(f64x8), v4x, v3, neon, wasm128, scalar)]
 fn similarity_row(
     token: Token,
     data: &[f64],
@@ -647,7 +647,7 @@ macro_rules! maps_entry {
 #[cfg(target_arch = "x86_64")]
 maps_entry!(maps_band_v3, X64V3Token, similarity_row_v3);
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-maps_entry!(maps_band_v4, X64V4Token, similarity_row_v4);
+maps_entry!(maps_band_v4x, X64V4xToken, similarity_row_v4x);
 #[cfg(target_arch = "aarch64")]
 maps_entry!(maps_band_neon, NeonToken, similarity_row_neon);
 #[cfg(target_arch = "wasm32")]
@@ -677,7 +677,7 @@ pub(crate) fn maps(pl: &Planes, p: &Params) -> (Vec<f64>, Vec<f64>) {
     let run = |i: usize, q: &mut [f64], c: &mut [f64]| {
         archmage::incant!(
             maps_band(pl, i * BAND_ROWS, p, q, c),
-            [v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     };
     let band = BAND_ROWS * pl.width;

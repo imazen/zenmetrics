@@ -161,9 +161,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for t in 0..n {
                     let rf = make_frame(w, h, t, 1234);
                     let df = distort_frame(&rf, t, 9876);
-                    let ri = imgref::Img::new(bytemuck::cast_slice::<u8, [u8; 3]>(&rf), wu, hu);
-                    let di = imgref::Img::new(bytemuck::cast_slice::<u8, [u8; 3]>(&df), wu, hu);
-                    sum += fast_ssim2::compute_ssimulacra2(ri, di).unwrap();
+                    let ri = fast_ssim2::PixelSlice::new(
+                        &rf,
+                        w,
+                        h,
+                        wu * 3,
+                        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+                    )
+                    .unwrap();
+                    let di = fast_ssim2::PixelSlice::new(
+                        &df,
+                        w,
+                        h,
+                        wu * 3,
+                        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+                    )
+                    .unwrap();
+                    sum += fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap();
                 }
                 sum / n as f64
             }

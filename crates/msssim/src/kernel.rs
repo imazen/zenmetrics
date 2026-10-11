@@ -309,11 +309,11 @@ pub fn msssim_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
     score_body!(token, V, 8, a)
 }
 
-/// The `v4` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn msssim_core_tier_v4(token: archmage::X64V4Token, a: Args<'_>) -> f64 {
-    type V = magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+pub fn msssim_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, a)
 }
 
@@ -348,5 +348,5 @@ pub(crate) fn msssim_core(inputs: &crate::Inputs, w: usize, h: usize, level: usi
         h,
         level,
     };
-    archmage::incant!(msssim_core_tier(a), [v4, v3, neon, wasm128, scalar])
+    archmage::incant!(msssim_core_tier(a), [v4x, v3, neon, wasm128, scalar])
 }

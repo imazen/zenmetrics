@@ -348,9 +348,9 @@ pub fn psnrhvs_band_v3(
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-/// The AVX-512 `v4` tier (16 blocks per batch).
-pub fn psnrhvs_band_v4(
-    token: archmage::X64V4Token,
+/// The AVX-512 `v4x` tier (16 blocks per batch).
+pub fn psnrhvs_band_v4x(
+    token: archmage::X64V4xToken,
     r: &[f32],
     d: &[f32],
     stride: usize,
@@ -368,7 +368,7 @@ pub fn psnrhvs_band_v4(
         by1,
         nb_x,
         step,
-        magetypes::simd::generic::f32x16<archmage::X64V4Token>,
+        magetypes::simd::generic::f32x16<archmage::X64V4xToken>,
         16
     )
 }
@@ -466,6 +466,6 @@ pub(crate) fn psnrhvs_band(
 ) -> (f64, f64) {
     archmage::incant!(
         psnrhvs_band(r, d, stride, by0, by1, nb_x, step),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     )
 }

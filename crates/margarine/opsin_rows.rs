@@ -3,7 +3,7 @@
 #![allow(clippy::excessive_precision)] // Preserve the shared source coefficient literals.
 use crate::opsin;
 
-// The pinned backend supplies eight-lane integer bitcasts at v3, not v4.
+// The pinned backend supplies eight-lane integer bitcasts at v3, not v4x.
 // AVX-512 hosts use that same AVX2 expression for this eight-lane kernel.
 pub(crate) fn convert(a: &[f32], b: &[f32], intensity: f32, w: usize, out: &mut [f32]) {
     if w < 8 {

@@ -337,11 +337,11 @@ pub fn vifp_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
     score_body!(token, V, 4, a)
 }
 
-/// The `v4` tier (AVX-512, 8-wide f64 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 8-wide f64 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn vifp_core_tier_v4(token: archmage::X64V4Token, a: Args<'_>) -> f64 {
-    type V = magetypes::simd::generic::f64x8<archmage::X64V4Token>;
+pub fn vifp_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
+    type V = magetypes::simd::generic::f64x8<archmage::X64V4xToken>;
     score_body!(token, V, 8, a)
 }
 
@@ -375,5 +375,5 @@ pub(crate) fn vifp_core(inputs: &crate::Inputs, w: usize, h: usize) -> f64 {
         w,
         h,
     };
-    archmage::incant!(vifp_core_tier(a), [v4, v3, neon, wasm128, scalar])
+    archmage::incant!(vifp_core_tier(a), [v4x, v3, neon, wasm128, scalar])
 }

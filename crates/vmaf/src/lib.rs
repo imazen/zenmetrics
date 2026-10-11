@@ -24,7 +24,7 @@ use std::error::Error as StdError;
 use std::fmt;
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
+use archmage::X64V4xToken;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -52,8 +52,8 @@ fn v3_token() -> Option<X64V3Token> {
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline(always)]
-fn v4_token() -> Option<X64V4Token> {
-    X64V4Token::summon()
+fn v4x_token() -> Option<X64V4xToken> {
+    X64V4xToken::summon()
 }
 
 #[derive(Debug)]
@@ -603,8 +603,8 @@ fn motion_vertical16_v3(
 /// `+128 >> 8`, then the four-way `permute2x128` reorder before storing.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
-fn motion_vertical8_v4(
-    _token: X64V4Token,
+fn motion_vertical8_v4x(
+    _token: X64V4xToken,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
     out: &mut [i32; 32],
@@ -659,8 +659,8 @@ fn motion_vertical8_v4(
 /// variable i64 shift AVX2 lacked). Exact for any bpc <= 16.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
-fn motion_vertical16_v4(
-    _token: X64V4Token,
+fn motion_vertical16_v4x(
+    _token: X64V4xToken,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
     bpc: u32,
@@ -797,7 +797,7 @@ fn motion_xsad_v3(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
 /// `cvtsepi64_epi32` narrowing, plus a single-instruction epi32 reduction.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
-fn motion_xsad_v4(_token: X64V4Token, y_row: &[i32], w: usize) -> u64 {
+fn motion_xsad_v4x(_token: X64V4xToken, y_row: &[i32], w: usize) -> u64 {
     let g0 = _mm512_set1_epi32(3571);
     let g1 = _mm512_set1_epi32(16004);
     let g2 = _mm512_set1_epi32(26386);
@@ -930,11 +930,11 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             };
             #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
             if bpc == 8
-                && let Some(token) = v4_token()
+                && let Some(token) = v4x_token()
             {
                 while j + 32 <= width {
                     let mut out = [0i32; 32];
-                    motion_vertical8_v4(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    motion_vertical8_v4x(token, &prev_rows(j), &cur_rows(j), &mut out);
                     y_row[j..j + 32].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 32;
@@ -954,11 +954,11 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             }
             #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
             if bpc == 16
-                && let Some(token) = v4_token()
+                && let Some(token) = v4x_token()
             {
                 while j + 16 <= width {
                     let mut out = [0i32; 16];
-                    motion_vertical16_v4(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
+                    motion_vertical16_v4x(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
                     y_row[j..j + 16].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 16;
@@ -1011,8 +1011,8 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             continue;
         }
         #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-        if let Some(token) = v4_token() {
-            sad += motion_xsad_v4(token, &y_row, width);
+        if let Some(token) = v4x_token() {
+            sad += motion_xsad_v4x(token, &y_row, width);
         } else if let Some(token) = v3_token() {
             sad += motion_xsad_v3(token, &y_row, width);
         } else {

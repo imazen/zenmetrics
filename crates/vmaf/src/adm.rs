@@ -1,6 +1,6 @@
 use crate::{Error, ModelVariant, VmafV0Variant, pool};
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
+use archmage::X64V4xToken;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -46,12 +46,12 @@ fn neon_token() -> Option<NeonToken> {
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline(always)]
-fn v4_token() -> Option<X64V4Token> {
+fn v4x_token() -> Option<X64V4xToken> {
     #[cfg(test)]
     if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
     }
-    X64V4Token::summon()
+    X64V4xToken::summon()
 }
 
 #[cfg(all(
@@ -853,8 +853,8 @@ fn adm_decouple(
             #[cfg(target_arch = "x86_64")]
             {
                 #[cfg(feature = "avx512")]
-                let j_mid = if let Some(token) = v4_token() {
-                    adm_decouple_row_v4(
+                let j_mid = if let Some(token) = v4x_token() {
+                    adm_decouple_row_v4x(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -1569,8 +1569,8 @@ fn adm_decouple_row_neon(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_row_v4(
-    _token: X64V4Token,
+fn adm_decouple_row_v4x(
+    _token: X64V4xToken,
     ref_h: &[i16],
     ref_v: &[i16],
     ref_d: &[i16],
@@ -2557,8 +2557,8 @@ fn adm_decouple_s123_row_neon(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_s123_row_v4(
-    token: X64V4Token,
+fn adm_decouple_s123_row_v4x(
+    token: X64V4xToken,
     ref_h: &[i32],
     ref_v: &[i32],
     ref_d: &[i32],
@@ -2901,8 +2901,8 @@ fn adm_decouple_s123(
             #[cfg(target_arch = "x86_64")]
             {
                 #[cfg(feature = "avx512")]
-                let j_mid = if let Some(token) = v4_token() {
-                    adm_decouple_s123_row_v4(
+                let j_mid = if let Some(token) = v4x_token() {
+                    adm_decouple_s123_row_v4x(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -4194,8 +4194,8 @@ fn i4_adm_cm_row_neon(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn i4_adm_cm_row_v4(
-    _token: X64V4Token,
+fn i4_adm_cm_row_v4x(
+    _token: X64V4xToken,
     win: &[i32],
     ang_rows: &[&[i32]; 3],
     flt_rows: &[&[i32]; 3],
@@ -4388,8 +4388,8 @@ fn adm_cm_i32(
             #[cfg(not(feature = "simd"))]
             let jj = 0usize;
             #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-            if let Some(token) = v4_token() {
-                let (vec_inner, done) = i4_adm_cm_row_v4(
+            if let Some(token) = v4x_token() {
+                let (vec_inner, done) = i4_adm_cm_row_v4x(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -4715,8 +4715,8 @@ fn dwt2_s123_hrow_neon(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_vrow_v4<const SHIFT: u32>(
-    _token: X64V4Token,
+fn dwt2_s123_vrow_v4x<const SHIFT: u32>(
+    _token: X64V4xToken,
     s0: &[i32; 8],
     s1: &[i32; 8],
     s2: &[i32; 8],
@@ -4751,7 +4751,7 @@ fn dwt2_s123_vrow_v4<const SHIFT: u32>(
 #[inline]
 #[allow(clippy::too_many_arguments)]
 fn dwt2_s123_vrow_v4_dyn(
-    token: X64V4Token,
+    token: X64V4xToken,
     s0: &[i32; 8],
     s1: &[i32; 8],
     s2: &[i32; 8],
@@ -4764,9 +4764,9 @@ fn dwt2_s123_vrow_v4_dyn(
     hi_out: &mut [i32; 8],
 ) {
     match shift {
-        0 => dwt2_s123_vrow_v4::<0>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
-        15 => dwt2_s123_vrow_v4::<15>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
-        _ => dwt2_s123_vrow_v4::<16>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        0 => dwt2_s123_vrow_v4x::<0>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        15 => dwt2_s123_vrow_v4x::<15>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        _ => dwt2_s123_vrow_v4x::<16>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
     }
 }
 
@@ -4777,8 +4777,8 @@ fn dwt2_s123_vrow_v4_dyn(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_hrow_v4<const SHIFT: u32>(
-    _token: X64V4Token,
+fn dwt2_s123_hrow_v4x<const SHIFT: u32>(
+    _token: X64V4xToken,
     lo: &[i32],
     hi: &[i32],
     j0: usize,
@@ -4813,12 +4813,12 @@ fn dwt2_s123_hrow_v4<const SHIFT: u32>(
     }
 }
 
-/// Runtime-shift shim for `dwt2_s123_hrow_v4` — see `dwt2_s123_vrow_v4_dyn`.
+/// Runtime-shift shim for `dwt2_s123_hrow_v4x` — see `dwt2_s123_vrow_v4_dyn`.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
 fn dwt2_s123_hrow_v4_dyn(
-    token: X64V4Token,
+    token: X64V4xToken,
     lo: &[i32],
     hi: &[i32],
     j0: usize,
@@ -4835,13 +4835,13 @@ fn dwt2_s123_hrow_v4_dyn(
     d_out: &mut [i32; 8],
 ) {
     match shift {
-        0 => dwt2_s123_hrow_v4::<0>(
+        0 => dwt2_s123_hrow_v4x::<0>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
-        15 => dwt2_s123_hrow_v4::<15>(
+        15 => dwt2_s123_hrow_v4x::<15>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
-        _ => dwt2_s123_hrow_v4::<16>(
+        _ => dwt2_s123_hrow_v4x::<16>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
     }
@@ -4943,7 +4943,7 @@ fn adm_dwt2_s123_combined(
         #[cfg(not(feature = "simd"))]
         let j = 0usize;
         #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-        if let Some(t) = v4_token() {
+        if let Some(t) = v4x_token() {
             while j + 8 <= w {
                 dwt2_s123_vrow_v4_dyn(
                     t,
@@ -5089,7 +5089,7 @@ fn adm_dwt2_s123_combined(
         #[cfg(not(feature = "simd"))]
         let j = 1usize;
         #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-        if let Some(t) = v4_token() {
+        if let Some(t) = v4x_token() {
             // Same interior-only bound as the AVX2 loop, 8 outputs per call.
             while j + 8 <= ind_x.len().saturating_sub(2) {
                 let ix = ind_x[j];
@@ -6155,7 +6155,7 @@ fn adm_decouple_s123_row_timing() {
     let (left, top, right, bottom) = border_region(w, h, 1);
     eprintln!("border l={left} t={top} r={right} b={bottom}");
     let t3 = v3_token().unwrap();
-    let t4 = X64V4Token::summon().unwrap();
+    let t4 = X64V4xToken::summon().unwrap();
     for _ in 0..3 {
         let t = std::time::Instant::now();
         for i in top..bottom {
@@ -6184,7 +6184,7 @@ fn adm_decouple_s123_row_timing() {
         let e3 = t.elapsed();
         let t = std::time::Instant::now();
         for i in top..bottom {
-            adm_decouple_s123_row_v4(
+            adm_decouple_s123_row_v4x(
                 t4,
                 &ref_b.h,
                 &ref_b.v,
@@ -6208,7 +6208,7 @@ fn adm_decouple_s123_row_timing() {
         }
         let e4 = t.elapsed();
         eprintln!(
-            "v3 {:?}  v4 {:?}  ratio {:.3}",
+            "v3 {:?}  v4x {:?}  ratio {:.3}",
             e3,
             e4,
             e4.as_secs_f64() / e3.as_secs_f64()

@@ -367,9 +367,9 @@ fn tier_parity() {
             assert_eq!(got, scalar, "v3 vs scalar");
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = archmage::X64V4Token::summon() {
-            let got = kernel::psnrhvs_band_v4(t, &r, &d, 48, 0, 5, 6, 8);
-            assert_eq!(got, scalar, "v4 vs scalar");
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            let got = kernel::psnrhvs_band_v4x(t, &r, &d, 48, 0, 5, 6, 8);
+            assert_eq!(got, scalar, "v4x vs scalar");
         }
     }
     #[cfg(target_arch = "aarch64")]

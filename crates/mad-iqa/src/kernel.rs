@@ -837,11 +837,11 @@ pub fn mad_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> (f64, f64) 
     score_body!(token, V, 8, a)
 }
 
-/// The `v4` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn mad_core_tier_v4(token: archmage::X64V4Token, a: Args<'_>) -> (f64, f64) {
-    type V = magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+pub fn mad_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> (f64, f64) {
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, a)
 }
 
@@ -875,7 +875,7 @@ pub(crate) fn mad_score(inputs: &crate::Inputs, w: usize, h: usize) -> crate::Ma
         w,
         h,
     };
-    let (hi, lo) = archmage::incant!(mad_core_tier(a), [v4, v3, neon, wasm128, scalar]);
+    let (hi, lo) = archmage::incant!(mad_core_tier(a), [v4x, v3, neon, wasm128, scalar]);
     // JEI 2010 combine: sig = 1/(1+b1·HI^b2), MAD = HI^sig·LO^(1−sig).
     let b1 = libm::exp(-2.55 / 3.35);
     let b2 = 1.0 / (libm::log(10.0) * 3.35);

@@ -13,7 +13,7 @@
 //! All entry points route through `archmage::incant!`. Kernels needing
 //! `pow`/`log2`/`exp2` use the `F32x8Convert` tier cascade
 //! `[v3, neon, wasm128, scalar]` (AVX-512 tokens lack that backend);
-//! pure-arithmetic kernels use the full `[v4x, v4, v3, neon, wasm128,
+//! pure-arithmetic kernels use the full `[v4x, v3, neon, wasm128,
 //! scalar]` cascade. Tail elements run the same scalar arithmetic the
 //! lane code implements.
 //!
@@ -272,13 +272,10 @@ fn lut_plane_inner(
 /// closely enough that this is a pure speed change.
 pub(crate) fn masked_sq_sum(v: &[f32], m: &[f32]) -> f64 {
     debug_assert_eq!(v.len(), m.len());
-    archmage::incant!(
-        masked_sq_sum_inner(v, m),
-        [v4x, v4, v3, neon, wasm128, scalar]
-    )
+    archmage::incant!(masked_sq_sum_inner(v, m), [v4x, v3, neon, wasm128, scalar])
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn masked_sq_sum_inner(token: Token, v: &[f32], m: &[f32]) -> f64 {
     const BLOCK: usize = 2048;
     let mut total = 0.0f64;

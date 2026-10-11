@@ -1,7 +1,7 @@
 use crate::pool;
 use crate::{Error, ModelVariant};
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
+use archmage::X64V4xToken;
 #[cfg(feature = "simd")]
 use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
@@ -516,11 +516,11 @@ fn neon_token() -> Option<NeonToken> {
 }
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-fn v4_token() -> Option<X64V4Token> {
+fn v4x_token() -> Option<X64V4xToken> {
     if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
     }
-    <X64V4Token as archmage::SimdToken>::summon()
+    <X64V4xToken as archmage::SimdToken>::summon()
 }
 
 /// Direct port of `convolution_f32_avx_s_1d_v_scanline`: 8-wide vertical
@@ -762,8 +762,8 @@ fn compute_covariance_v3(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn compute_covariance_v4(
-    _token: X64V4Token,
+fn compute_covariance_v4x(
+    _token: X64V4xToken,
     data: &[f32],
     mean_x: f64,
     mean_y: f64,
@@ -838,8 +838,8 @@ fn compute_covariance(
     let mean_x = means[srx * dim.block_size + scx] as f64;
     let mean_y = means[sry * dim.block_size + scy] as f64;
     #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-    if let Some(token) = v4_token() {
-        let result = compute_covariance_v4(
+    if let Some(token) = v4x_token() {
+        let result = compute_covariance_v4x(
             token,
             data,
             mean_x,

@@ -34,7 +34,7 @@
 //! (cast on gather); every filter output and map element is a
 //! fixed-order `f64` expression independent of SIMD lane count, and
 //! the information sums accumulate `f64` in fixed raster order.
-//! Every tier (scalar / v3 / v4 / neon / wasm128) and every
+//! Every tier (scalar / v3 / v4x / neon / wasm128) and every
 //! `parallel` thread count produces **bit-identical** output. `_dev`
 //! exposes the per-tier entries for tier-parity tests and
 //! disassembly.
@@ -67,7 +67,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::vifp_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::vifp_core_tier_v4;
+    pub use crate::kernel::vifp_core_tier_v4x;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::vifp_core_tier_wasm128;
     pub use crate::kernel::{Args, vifp_core_tier_scalar};

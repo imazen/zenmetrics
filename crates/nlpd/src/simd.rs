@@ -1,6 +1,6 @@
 //! SIMD reduction for the scale-wise mean squared distance.
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn squared_difference_inner(token: Token, a: &[f32], b: &[f32]) -> f64 {
     debug_assert_eq!(a.len(), b.len());
     let (ac, at) = f32x8::partition_slice(token, a);
@@ -21,11 +21,11 @@ fn squared_difference_inner(token: Token, a: &[f32], b: &[f32]) -> f64 {
 pub(crate) fn squared_difference(a: &[f32], b: &[f32]) -> f64 {
     archmage::incant!(
         squared_difference_inner(a, b),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     )
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn filter5_vertical_inner(
     token: Token,
     src: &[f32],
@@ -75,6 +75,6 @@ pub(crate) fn filter5_vertical(
     let dst = &mut dst[..out_height * width];
     archmage::incant!(
         filter5_vertical_inner(src, width, height, dst, out_height, stride, pad),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }

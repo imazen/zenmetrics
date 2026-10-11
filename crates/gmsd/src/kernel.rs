@@ -256,9 +256,9 @@ fn gray_plane(
     }
 }
 
-/// 16-wide `gray_plane` for the AVX-512 `v4` tier (crate feature `avx512`).
-/// Emits `gray_plane_v4`, which `incant!` picks up by name.
-#[magetypes(define(i32x16, f32x16), v4, -scalar)]
+/// 16-wide `gray_plane` for the AVX-512 `v4x` tier (crate feature `avx512`).
+/// Emits `gray_plane_v4x`, which `incant!` picks up by name.
+#[magetypes(define(i32x16, f32x16), v4x, -scalar)]
 fn gray_plane(
     token: Token,
     rgb: &[u8],
@@ -284,7 +284,7 @@ pub(crate) fn rgb8_to_gray_plane(
 ) {
     archmage::incant!(
         gray_plane(rgb, width, height, stride, out),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -379,7 +379,7 @@ macro_rules! gms_chunk {
 /// returns `(Σ(1−q), Σ(1−q)²)` over the row.
 ///
 /// `$LANES` is the main-loop width (8 for the established tiers, 16 for
-/// `v4`). The f64 pooling keeps a fixed lane grouping on plain scalar
+/// `v4x`). The f64 pooling keeps a fixed lane grouping on plain scalar
 /// arrays — independent of compute width and of any vector reduction
 /// order — so every tier's row sums are bit-identical (a backend
 /// `reduce_add` is not order-stable across tiers: v3 halves then
@@ -484,8 +484,8 @@ fn gms_row(
     gms_row_body!(token, f32x8, 8, ru, rm, rd, du, dm, dd, map)
 }
 
-/// 16-wide GMS row for the AVX-512 `v4` tier (crate feature `avx512`).
-#[magetypes(rite, define(f32x16, f32x8), v4, -scalar)]
+/// 16-wide GMS row for the AVX-512 `v4x` tier (crate feature `avx512`).
+#[magetypes(rite, define(f32x16, f32x8), v4x, -scalar)]
 fn gms_row16(
     token: Token,
     ru: &[f32],
@@ -665,10 +665,10 @@ pub fn gmsd_band_v3(
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-/// The AVX-512 `v4` tier of one band (16-wide; map rows `step` apart,
+/// The AVX-512 `v4x` tier of one band (16-wide; map rows `step` apart,
 /// per-row pooling sums).
-pub fn gmsd_band_v4(
-    token: archmage::X64V4Token,
+pub fn gmsd_band_v4x(
+    token: archmage::X64V4xToken,
     band: &Band<'_>,
     map: &mut [f32],
     step: usize,
@@ -680,10 +680,10 @@ pub fn gmsd_band_v4(
         map,
         step,
         sums,
-        magetypes::simd::generic::f32x16<archmage::X64V4Token>,
-        magetypes::simd::generic::i32x16<archmage::X64V4Token>,
+        magetypes::simd::generic::f32x16<archmage::X64V4xToken>,
+        magetypes::simd::generic::i32x16<archmage::X64V4xToken>,
         16,
-        gms_row16_v4
+        gms_row16_v4x
     )
 }
 
@@ -758,7 +758,7 @@ pub fn gmsd_band_scalar(
 pub(crate) fn gmsd_band(band: &Band<'_>, map: &mut [f32], step: usize, sums: &mut [(f64, f64)]) {
     archmage::incant!(
         gmsd_band(band, map, step, sums),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 

@@ -269,8 +269,8 @@ fn tier_parity() {
         assert_eq!(s_scalar, s_v3);
     }
     #[cfg(feature = "avx512")]
-    if let Some(token) = archmage::X64V4Token::summon() {
-        let s_v4 = crate::dev::vifp_core_tier_v4(
+    if let Some(token) = archmage::X64V4xToken::summon() {
+        let s_v4x = crate::dev::vifp_core_tier_v4x(
             token,
             crate::kernel::Args {
                 im1: &r,
@@ -279,6 +279,6 @@ fn tier_parity() {
                 h,
             },
         );
-        assert_eq!(s_scalar, s_v4);
+        assert_eq!(s_scalar, s_v4x);
     }
 }

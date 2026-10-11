@@ -49,7 +49,7 @@
 //! is a fixed-order `f32` expression independent of the SIMD lane
 //! count, and every scalar reduction (medians, noise sums, the final
 //! pooling) is `f64` in fixed raster order. Every tier (scalar / v3 /
-//! v4 / neon / wasm128) and every `parallel` thread count produces
+//! v4x / neon / wasm128) and every `parallel` thread count produces
 //! **bit-identical** output; the four PC orientations are combined in
 //! fixed orientation order. `_dev` exposes the per-tier entries for
 //! tier-parity tests and disassembly.
@@ -79,7 +79,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::fsim_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::fsim_core_tier_v4;
+    pub use crate::kernel::fsim_core_tier_v4x;
     pub use crate::kernel::{Planes, fsim_core_tier_scalar};
 }
 

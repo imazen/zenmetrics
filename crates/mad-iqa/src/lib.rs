@@ -32,7 +32,7 @@
 //! signal-level — an `f32` pipeline reproduces the reference's mask
 //! decisions (verified on the Octave goldens). Per-element
 //! expressions are fixed-order `f32` independent of SIMD lane count,
-//! so every tier (scalar / v3 / v4 / neon / wasm128) and every
+//! so every tier (scalar / v3 / v4x / neon / wasm128) and every
 //! `parallel` thread count produces **bit-identical** output. `_dev`
 //! exposes the per-tier entries for tier-parity tests.
 
@@ -67,7 +67,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::mad_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::mad_core_tier_v4;
+    pub use crate::kernel::mad_core_tier_v4x;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::mad_core_tier_wasm128;
     pub use crate::kernel::{Args, mad_core_tier_scalar};

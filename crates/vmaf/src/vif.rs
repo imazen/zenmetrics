@@ -1,5 +1,5 @@
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
+use archmage::X64V4xToken;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(feature = "simd")]
@@ -106,8 +106,8 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         if bit_depth == 8 && scale == 0 {
             // Scale-0 8-bit planes hold v ≤ 255 — the i16 madd-pair kernel is
             // exact; higher-scale planes reach ~65280 and stay on v3.
-            if let Some(token) = v4_token() {
-                processed = vif_subsample_vertical_v4(
+            if let Some(token) = v4x_token() {
+                processed = vif_subsample_vertical_v4x(
                     token,
                     &image.reference,
                     &image.distorted,
@@ -1059,8 +1059,8 @@ fn vif_subsample_vertical_simd(
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_subsample_vertical_v4(
-    _token: X64V4Token,
+fn vif_subsample_vertical_v4x(
+    _token: X64V4xToken,
     reference: &[u16],
     distorted: &[u16],
     row_offsets: &[usize],
@@ -1397,8 +1397,8 @@ fn vif_shuffle_save(_token: X64V3Token, addr: &mut [u32; 16], x: __m256i, y: __m
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat8_vertical_v4(
-    _token: X64V4Token,
+fn vif_stat8_vertical_v4x(
+    _token: X64V4xToken,
     reference: &[u16],
     distorted: &[u16],
     row_offsets: &[usize; 17],
@@ -3000,12 +3000,12 @@ fn vif_pixel_finalize(
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline(always)]
-fn v4_token() -> Option<X64V4Token> {
+fn v4x_token() -> Option<X64V4xToken> {
     #[cfg(test)]
     if V3_DISABLED_FOR_TEST.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
     }
-    X64V4Token::summon()
+    X64V4xToken::summon()
 }
 
 /// Lane gather into the u16 log table: identical to C's
@@ -3016,7 +3016,7 @@ fn v4_token() -> Option<X64V4Token> {
 /// `#[target_feature]` on stable, and per-iteration calls marshal zmm results
 /// through the stack).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-macro_rules! gather_log_u16_v4 {
+macro_rules! gather_log_u16_v4x {
     ($table:expr, $idx:expr) => {{
         let idx = $idx;
         let mut a = [0i64; 8];
@@ -3040,9 +3040,9 @@ macro_rules! gather_log_u16_v4 {
 /// finalize for `vif_statistic_8`. Matches `vif_finalize_sigma` bit-for-bit —
 /// same log2 table approximation (k = 48 - lzcnt, `v >> k` mantissa index,
 /// `2048*k` exponent), same truncating f64 divides, same masks. A macro so it
-/// expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4`).
+/// expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4x`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-macro_rules! vif_statistic_finalize_v4 {
+macro_rules! vif_statistic_finalize_v4x {
     ($xx:expr, $xy:expr, $yy:expr, $table:expr, $gain_limit:expr, $num_log:expr, $den_log:expr, $num_non_log:expr, $den_non_log:expr) => {{
         let xx = $xx;
         let xy = $xy;
@@ -3074,7 +3074,7 @@ macro_rules! vif_statistic_finalize_v4 {
             let stage1 = _mm512_add_epi64(msigma1, _mm512_set1_epi64(SIGMA_NSQ_I64));
             let mnorm = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(stage1));
             let mant = _mm512_srlv_epi64(stage1, mnorm);
-            let mut mden_val = gather_log_u16_v4!(table, mant);
+            let mut mden_val = gather_log_u16_v4x!(table, mant);
             mden_val = _mm512_add_epi64(mden_val, _mm512_slli_epi64(mnorm, 11));
             mden_val = _mm512_sub_epi64(mden_val, _mm512_set1_epi64(2048 * 17));
 
@@ -3098,7 +3098,7 @@ macro_rules! vif_statistic_finalize_v4 {
             let numer1 = _mm512_add_epi64(msv_sq, _mm512_set1_epi64(SIGMA_NSQ_I64));
             let numer1_lz = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1));
             let numer1_log = _mm512_add_epi64(
-                gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1, numer1_lz)),
+                gather_log_u16_v4x!(table, _mm512_srlv_epi64(numer1, numer1_lz)),
                 _mm512_slli_epi64(numer1_lz, 11),
             );
 
@@ -3110,7 +3110,7 @@ macro_rules! vif_statistic_finalize_v4 {
             let numer1_tmp_lz =
                 _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1_tmp));
             let numer1_tmp_log = _mm512_add_epi64(
-                gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
+                gather_log_u16_v4x!(table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
                 _mm512_slli_epi64(numer1_tmp_lz, 11),
             );
 
@@ -3133,13 +3133,13 @@ macro_rules! vif_statistic_finalize_v4 {
     }};
 }
 
-/// `vif_stat_horizontal_v4` filtered-square accumulator: `sum_t filt[t] *
+/// `vif_stat_horizontal_v4x` filtered-square accumulator: `sum_t filt[t] *
 /// tmp[..]` over the symmetric fwidth window, widened through cvtepu32_epi64
 /// and accumulated in two i64×8 halves, then `(acc + 0x8000) >> 16` merged to
 /// 16 u32 lanes via mask2. Mirrors C's `refsq/dissq/refdis` blocks. A macro so
-/// it expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4`).
+/// it expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4x`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-macro_rules! vif_stat_fsq_v4 {
+macro_rules! vif_stat_fsq_v4x {
     ($w:expr, $fqv:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
         let w: &[u32; 33] = $w;
         let fqv: &[__m512i; 17] = $fqv;
@@ -3172,8 +3172,8 @@ macro_rules! vif_stat_fsq_v4 {
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat_horizontal_v4(
-    _token: X64V4Token,
+fn vif_stat_horizontal_v4x(
+    _token: X64V4xToken,
     tmp_mu1: &[u32],
     tmp_mu2: &[u32],
     tmp_ref: &[u32],
@@ -3295,21 +3295,21 @@ fn vif_stat_horizontal_v4(
         // filtered ref²/dis²/ref·dis (u32 lanes widened to i64 accumulators,
         // srli 16, even-lane merge via mask2), minus the matching mu term.
         let xx = _mm512_sub_epi32(
-            vif_stat_fsq_v4!(w_ref, &fqv64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4x!(w_ref, &fqv64, fwidth, rounder16, mask2),
             mu1sq,
         );
         let yy = _mm512_max_epi32(
             _mm512_sub_epi32(
-                vif_stat_fsq_v4!(w_dis, &fqv64, fwidth, rounder16, mask2),
+                vif_stat_fsq_v4x!(w_dis, &fqv64, fwidth, rounder16, mask2),
                 mu2sq,
             ),
             zero,
         );
         let xy = _mm512_sub_epi32(
-            vif_stat_fsq_v4!(w_rd, &fqv64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4x!(w_rd, &fqv64, fwidth, rounder16, mask2),
             mu1mu2,
         );
-        vif_statistic_finalize_v4!(
+        vif_statistic_finalize_v4x!(
             xx,
             xy,
             yy,
@@ -3364,7 +3364,7 @@ fn statistics(
     } else {
         (16, 32768, 16, 32768)
     };
-    // +17 tail: the v4 horizontal reads a fixed [u32;33] window per 16-col
+    // +17 tail: the v4x horizontal reads a fixed [u32;33] window per 16-col
     // block so every tap index is compile-time provable (no per-load bounds
     // checks); indices past `padded` are read but never used.
     let padded = width + 2 * half as usize + 17;
@@ -3452,24 +3452,26 @@ fn statistics(
             }
         }
         #[cfg(all(feature = "avx512", feature = "simd", target_arch = "x86_64"))]
-        if bit_depth == 8 && scale == 0 && half % 2 == 0 {
-            if let Some(token) = v4_token() {
-                vif_stat8_vertical_v4(
-                    token,
-                    &image.reference,
-                    &image.distorted,
-                    &row_offsets,
-                    filter,
-                    half as usize,
-                    width,
-                    &mut vertical_ref_mean,
-                    &mut vertical_dis_mean,
-                    &mut vertical_ref_sq,
-                    &mut vertical_dis_sq,
-                    &mut vertical_ref_dis,
-                );
-                processed = width;
-            }
+        if bit_depth == 8
+            && scale == 0
+            && half % 2 == 0
+            && let Some(token) = v4x_token()
+        {
+            vif_stat8_vertical_v4x(
+                token,
+                &image.reference,
+                &image.distorted,
+                &row_offsets,
+                filter,
+                half as usize,
+                width,
+                &mut vertical_ref_mean,
+                &mut vertical_dis_mean,
+                &mut vertical_ref_sq,
+                &mut vertical_dis_sq,
+                &mut vertical_ref_dis,
+            );
+            processed = width;
         }
         #[cfg(feature = "simd")]
         if bit_depth == 8 && scale == 0 && processed < width {
@@ -3567,9 +3569,9 @@ fn statistics(
             #[cfg(all(feature = "avx512", target_arch = "x86_64"))]
             if bit_depth == 8
                 && scale == 0
-                && let Some(token) = v4_token()
+                && let Some(token) = v4x_token()
             {
-                hcol = vif_stat_horizontal_v4(
+                hcol = vif_stat_horizontal_v4x(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
@@ -3618,11 +3620,11 @@ fn statistics(
             #[cfg(all(feature = "avx512", target_arch = "x86_64"))]
             if hcol == 0
                 && !(bit_depth == 8 && scale == 0)
-                && let Some(token) = v4_token()
+                && let Some(token) = v4x_token()
             {
-                // Same horizontal math as the 8-bit path; the v4 kernel is
+                // Same horizontal math as the 8-bit path; the v4x kernel is
                 // width/bit-depth agnostic on the u32 tmp planes.
-                hcol = vif_stat_horizontal_v4(
+                hcol = vif_stat_horizontal_v4x(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,

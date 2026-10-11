@@ -123,7 +123,7 @@ fn v3_contract() {
 #[test]
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 fn v4_contract() {
-    if let Some(t) = archmage::X64V4Token::summon() {
+    if let Some(t) = archmage::X64V4xToken::summon() {
         check_tier!(t, width16);
     }
 }

@@ -60,7 +60,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::vsi_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::vsi_core_tier_v4;
+    pub use crate::kernel::vsi_core_tier_v4x;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::vsi_core_tier_wasm;
     pub use crate::kernel::{Planes, vsi_core_tier_scalar};

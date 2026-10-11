@@ -668,11 +668,11 @@ pub fn vsi_core_tier_v3(token: archmage::X64V3Token, p: Planes<'_>) -> f64 {
     pool_body!(token, V, 8, p)
 }
 
-/// The `v4` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn vsi_core_tier_v4(token: archmage::X64V4Token, p: Planes<'_>) -> f64 {
-    type V = magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+pub fn vsi_core_tier_v4x(token: archmage::X64V4xToken, p: Planes<'_>) -> f64 {
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     pool_body!(token, V, 16, p)
 }
 
@@ -694,7 +694,7 @@ pub fn vsi_core_tier_wasm(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
 
 /// Runtime-dispatched score: the best tier this CPU supports.
 fn vsi_core(p: Planes<'_>) -> f64 {
-    archmage::incant!(vsi_core_tier(p), [v4, v3, neon, wasm128, scalar])
+    archmage::incant!(vsi_core_tier(p), [v4x, v3, neon, wasm128, scalar])
 }
 
 /// Full VSI pipeline on prepared inputs — preprocess scalar-shared,

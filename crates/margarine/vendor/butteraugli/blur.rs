@@ -199,8 +199,8 @@ fn convolve_horizontal_interior_v3(
 /// AVX-512 non-transposing horizontal convolution interior.
 #[cfg(target_arch = "x86_64")]
 #[archmage::rite]
-fn convolve_horizontal_interior_v4(
-    token: archmage::X64V4Token,
+fn convolve_horizontal_interior_v4x(
+    token: archmage::X64V4xToken,
     input: &ImageF,
     scaled_kernel: &[f32],
     border1: usize,
@@ -208,7 +208,7 @@ fn convolve_horizontal_interior_v4(
     half: usize,
     output: &mut ImageF,
 ) {
-    use magetypes::simd::v4::f32x16;
+    use magetypes::simd::v4x::f32x16;
     let height = input.height();
     let kernel_len = scaled_kernel.len();
     let simd_chunks = (border2 - border1) / 16;
@@ -477,15 +477,15 @@ fn convolve_vertical_v3(
 /// AVX-512 vertical convolution.
 #[cfg(target_arch = "x86_64")]
 #[archmage::rite]
-fn convolve_vertical_v4(
-    token: archmage::X64V4Token,
+fn convolve_vertical_v4x(
+    token: archmage::X64V4xToken,
     input: &ImageF,
     kernel: &[f32],
     scaled_kernel: &[f32],
     border_ratio: f32,
     output: &mut ImageF,
 ) {
-    use magetypes::simd::v4::f32x16;
+    use magetypes::simd::v4x::f32x16;
     let width = input.width();
     let height = input.height();
     let half = kernel.len() / 2;
@@ -879,7 +879,7 @@ pub fn gaussian_blur(input: &ImageF, sigma: f32, pool: &BufferPool) -> ImageF {
     #[cfg(not(feature = "iir-blur"))]
     archmage::incant!(
         gaussian_blur_dispatch(input, sigma, pool),
-        [v4, v3, neon, wasm128]
+        [v4x, v3, neon, wasm128]
     )
 }
 
@@ -902,8 +902,8 @@ fn compute_scaled_kernel<'a>(kernel: &[f32], buf: &'a mut [f32; MAX_KERNEL_SIZE]
 
 #[cfg(target_arch = "x86_64")]
 #[archmage::arcane]
-fn gaussian_blur_dispatch_v4(
-    token: archmage::X64V4Token,
+fn gaussian_blur_dispatch_v4x(
+    token: archmage::X64V4xToken,
     input: &ImageF,
     sigma: f32,
     pool: &BufferPool,
@@ -922,12 +922,12 @@ fn gaussian_blur_dispatch_v4(
     let mut temp = ImageF::from_pool_dirty(width, height, pool);
     convolve_horizontal_borders(input, kernel, scaled, 0.0, &mut temp, false);
     if border2 > border1 {
-        convolve_horizontal_interior_v4(token, input, scaled, border1, border2, half, &mut temp);
+        convolve_horizontal_interior_v4x(token, input, scaled, border1, border2, half, &mut temp);
     }
 
     // V-pass: accumulate across rows
     let mut output = ImageF::from_pool_dirty(width, height, pool);
-    convolve_vertical_v4(token, &temp, kernel, scaled, 0.0, &mut output);
+    convolve_vertical_v4x(token, &temp, kernel, scaled, 0.0, &mut output);
     temp.recycle(pool);
     output
 }
@@ -1065,14 +1065,14 @@ pub fn blur_with_border(
     }
     archmage::incant!(
         blur_with_border_dispatch(input, sigma, border_ratio, pool),
-        [v4, v3, neon, wasm128]
+        [v4x, v3, neon, wasm128]
     )
 }
 
 #[cfg(target_arch = "x86_64")]
 #[archmage::arcane]
-fn blur_with_border_dispatch_v4(
-    token: archmage::X64V4Token,
+fn blur_with_border_dispatch_v4x(
+    token: archmage::X64V4xToken,
     input: &ImageF,
     sigma: f32,
     border_ratio: f32,
@@ -1091,11 +1091,11 @@ fn blur_with_border_dispatch_v4(
     let mut temp = ImageF::from_pool_dirty(width, height, pool);
     convolve_horizontal_borders(input, kernel, scaled, border_ratio, &mut temp, false);
     if border2 > border1 {
-        convolve_horizontal_interior_v4(token, input, scaled, border1, border2, half, &mut temp);
+        convolve_horizontal_interior_v4x(token, input, scaled, border1, border2, half, &mut temp);
     }
 
     let mut output = ImageF::from_pool_dirty(width, height, pool);
-    convolve_vertical_v4(token, &temp, kernel, scaled, border_ratio, &mut output);
+    convolve_vertical_v4x(token, &temp, kernel, scaled, border_ratio, &mut output);
     temp.recycle(pool);
     output
 }
@@ -1260,19 +1260,19 @@ fn mirror(mut x: i32, size: i32) -> usize {
 pub fn blur_mirrored_5x5(input: &ImageF, weights: &[f32; 3], pool: &BufferPool) -> ImageF {
     archmage::incant!(
         blur_mirrored_5x5(input, weights, pool),
-        [v4, v3, neon, wasm128]
+        [v4x, v3, neon, wasm128]
     )
 }
 
 #[cfg(target_arch = "x86_64")]
 #[archmage::arcane]
-fn blur_mirrored_5x5_v4(
-    token: archmage::X64V4Token,
+fn blur_mirrored_5x5_v4x(
+    token: archmage::X64V4xToken,
     input: &ImageF,
     weights: &[f32; 3],
     pool: &BufferPool,
 ) -> ImageF {
-    use magetypes::simd::v4::f32x16;
+    use magetypes::simd::v4x::f32x16;
 
     let width = input.width();
     let height = input.height();

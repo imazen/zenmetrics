@@ -83,13 +83,6 @@ impl Plane {
         &self.buf[i * self.stride..(i + 1) * self.stride]
     }
 
-    /// Mutable padded row `r` — same domain as [`Plane::prow`].
-    #[inline]
-    pub fn prow_mut(&mut self, r: isize) -> &mut [f32] {
-        let i = (r + PAD as isize) as usize;
-        &mut self.buf[i * self.stride..(i + 1) * self.stride]
-    }
-
     /// Inner `w`-wide view of image row `r`.
     #[inline]
     pub fn data(&self, r: usize) -> &[f32] {
@@ -747,16 +740,16 @@ pub fn haarpsi_core_tier_v3(
     score_body!(token, V, 8, pr, pd, iq)
 }
 
-/// The `v4` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn haarpsi_core_tier_v4(
-    token: archmage::X64V4Token,
+pub fn haarpsi_core_tier_v4x(
+    token: archmage::X64V4xToken,
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
 ) -> f64 {
-    type V = magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, pr, pd, iq)
 }
 
@@ -805,6 +798,6 @@ pub(crate) fn haarpsi_core(
 ) -> f64 {
     archmage::incant!(
         haarpsi_core_tier(pr, pd, iq),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     )
 }

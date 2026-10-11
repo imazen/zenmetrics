@@ -1302,7 +1302,7 @@ pub fn malta_diff_map(
 ) -> ImageF {
     archmage::incant!(
         malta_diff_map_dispatch(lum0, lum1, w_0gt1, w_0lt1, norm1, use_lf, pool),
-        [v4, v3, neon, wasm128]
+        [v4x, v3, neon, wasm128]
     )
 }
 
@@ -1510,13 +1510,13 @@ fn malta_diff_map_dispatch_v3(
 /// Processes pixels at center, center+1, ..., center+15 simultaneously.
 #[cfg(target_arch = "x86_64")]
 #[archmage::rite]
-fn malta_unit_interior_16x_v4(
-    token: archmage::X64V4Token,
+fn malta_unit_interior_16x_v4x(
+    token: archmage::X64V4xToken,
     data: &[f32],
     center: usize,
     stride: usize,
-) -> magetypes::simd::v4::f32x16 {
-    use magetypes::simd::v4::f32x16;
+) -> magetypes::simd::v4x::f32x16 {
+    use magetypes::simd::v4x::f32x16;
 
     let xs = stride as isize;
     let xs2 = xs * 2;
@@ -1736,13 +1736,13 @@ fn malta_unit_interior_16x_v4(
 /// SIMD LF Malta filter for 16 consecutive interior pixels (AVX-512).
 #[cfg(target_arch = "x86_64")]
 #[archmage::rite]
-fn malta_unit_lf_interior_16x_v4(
-    token: archmage::X64V4Token,
+fn malta_unit_lf_interior_16x_v4x(
+    token: archmage::X64V4xToken,
     data: &[f32],
     center: usize,
     stride: usize,
-) -> magetypes::simd::v4::f32x16 {
-    use magetypes::simd::v4::f32x16;
+) -> magetypes::simd::v4x::f32x16 {
+    use magetypes::simd::v4x::f32x16;
 
     let xs = stride as isize;
     let xs2 = xs * 2;
@@ -1851,8 +1851,8 @@ fn malta_unit_lf_interior_16x_v4(
 #[allow(clippy::too_many_arguments)]
 #[cfg(target_arch = "x86_64")]
 #[archmage::arcane]
-fn malta_diff_map_dispatch_v4(
-    token: archmage::X64V4Token,
+fn malta_diff_map_dispatch_v4x(
+    token: archmage::X64V4xToken,
     lum0: &ImageF,
     lum1: &ImageF,
     w_0gt1: f64,
@@ -1872,9 +1872,9 @@ fn malta_diff_map_dispatch_v4(
         while x + 16 <= count {
             let center = center_base + x;
             let results = if use_lf {
-                malta_unit_lf_interior_16x_v4(token, data, center, stride)
+                malta_unit_lf_interior_16x_v4x(token, data, center, stride)
             } else {
-                malta_unit_interior_16x_v4(token, data, center, stride)
+                malta_unit_interior_16x_v4x(token, data, center, stride)
             };
             results.store((&mut out[x..x + 16]).try_into().unwrap());
             x += 16;

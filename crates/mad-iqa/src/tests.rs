@@ -302,8 +302,8 @@ fn tier_parity() {
         let s3 = mad_core_tier_v3(t3, a);
         assert_eq!(s0, s3, "v3 diverged");
         #[cfg(feature = "avx512")]
-        if let Some(t4) = archmage::X64V4Token::summon() {
-            let s4 = mad_core_tier_v4(
+        if let Some(t4) = archmage::X64V4xToken::summon() {
+            let s4 = mad_core_tier_v4x(
                 t4,
                 Args {
                     im1: &r,
@@ -312,7 +312,7 @@ fn tier_parity() {
                     h: 96,
                 },
             );
-            assert_eq!(s0, s4, "v4 diverged");
+            assert_eq!(s0, s4, "v4x diverged");
         }
     }
     #[cfg(target_arch = "aarch64")]

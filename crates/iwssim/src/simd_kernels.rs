@@ -22,7 +22,7 @@
 //!   (`F32x8Convert` tiers only: v3, neon, wasm128, scalar).
 //!
 //! Most entry points route through `archmage::incant!` with the tier
-//! cascade `[v4x, v4, v3, neon, wasm128, scalar]`; the f64x4 and
+//! cascade `[v4x, v3, neon, wasm128, scalar]`; the f64x4 and
 //! transcendental kernels use `[v3, neon, wasm128, scalar]` because
 //! AVX-512 tokens lack `F64x4Backend`/`F32x8Convert`. AVX-512 (v4x) is
 //! opt-in via the `avx512` feature. Boundary handling stays scalar —
@@ -41,7 +41,7 @@ const SSIM_C2: f32 = crate::ssim::SSIM_C2;
 // Per-element kernels (no boundary handling).
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), dst.len());
     let (src_chunks, src_tail) = f32x8::partition_slice(token, src);
@@ -74,13 +74,10 @@ fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
 /// FMA-contraction difference to worry about). The other tiers keep their
 /// vector paths — x86's ratio is not measured on this host.
 pub fn square_into(src: &[f32], dst: &mut [f32]) {
-    archmage::incant!(
-        square_inplace_inner(src, dst),
-        [v4x, v4, v3, wasm128, scalar]
-    );
+    archmage::incant!(square_inplace_inner(src, dst), [v4x, v3, wasm128, scalar]);
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert_eq!(a.len(), dst.len());
@@ -105,11 +102,11 @@ fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
 pub fn mul_into(a: &[f32], b: &[f32], dst: &mut [f32]) {
     archmage::incant!(
         mul_inplace_inner(a, b, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn cs_combine_inner(
     token: Token,
     mu1: &[f32],
@@ -197,11 +194,11 @@ pub fn cs_combine_into(
             cs_out,
             with_luminance
         ),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
     debug_assert_eq!(cs.len(), iw.len());
     let mut acc_csiw = f32x8::zero(token);
@@ -241,7 +238,7 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
     if nb == 1 {
         return archmage::incant!(
             weighted_sum_pair_inner(cs, iw),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     }
     let sz = n.div_ceil(nb);
@@ -253,7 +250,7 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
         }
         archmage::incant!(
             weighted_sum_pair_inner(&cs[lo..hi], &iw[lo..hi]),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         )
     });
     parts
@@ -269,7 +266,7 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
 // `weights::quad_form_into`; only FMA contraction differs.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn quad_form_row_inner(
     token: Token,
     img: &[f32],
@@ -384,7 +381,7 @@ pub fn quad_form_rows(
                     n_f,
                     out_row
                 ),
-                [v4x, v4, v3, neon, wasm128, scalar]
+                [v4x, v3, neon, wasm128, scalar]
             );
         }
     });
@@ -398,7 +395,7 @@ pub fn quad_form_rows(
 // SSIM_WIN_1D. Process 8 output samples in parallel.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn ssim_gauss_h_inner(
     token: Token,
     src: &[f32],
@@ -452,7 +449,7 @@ fn ssim_gauss_h_inner(
 pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mut [f32]) {
     archmage::incant!(
         ssim_gauss_h_inner(src, h, w, dst_w, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -464,7 +461,7 @@ pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mu
 // in parallel.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn ssim_gauss_v_inner(
     token: Token,
     src: &[f32],
@@ -518,7 +515,7 @@ fn ssim_gauss_v_inner(
 pub fn ssim_gauss_v_pass(src: &[f32], h: usize, dst_h: usize, w: usize, dst: &mut [f32]) {
     archmage::incant!(
         ssim_gauss_v_inner(src, h, dst_h, w, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -715,7 +712,7 @@ fn box_gain_pixel(
     (g, vv)
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 #[allow(clippy::too_many_arguments)]
 fn box_gain_row_inner(
     token: Token,
@@ -831,7 +828,7 @@ pub fn box_gain_rows(
                     &mut gb[out..out + w],
                     &mut vb[out..out + w]
                 ),
-                [v4x, v4, v3, neon, wasm128, scalar]
+                [v4x, v3, neon, wasm128, scalar]
             );
         }
     });
@@ -866,7 +863,7 @@ fn corr5_reflect(src_row: &[f32], in_w: usize, xc: usize) -> f32 {
     acc
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 #[allow(clippy::too_many_arguments)]
 fn corr_dn_h_inner(
     token: Token,
@@ -918,12 +915,12 @@ pub fn corr_dn_h(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f3
         let mut corr_row = alloc::vec![0.0_f32; in_w];
         archmage::incant!(
             corr_dn_h_inner(src, in_w, out_w, y0, &mut corr_row, band),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     });
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn corr_dn_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, dst: &mut [f32]) {
     let k: [f32x8; 5] = core::array::from_fn(|i| f32x8::splat(token, BINOM5[i]));
     let in_h_i = in_h as i32;
@@ -962,12 +959,12 @@ pub fn corr_dn_v(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f3
     crate::par::map_rows(dst, w, |y0, band| {
         archmage::incant!(
             corr_dn_v_inner(src, in_h, w, y0, band),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     });
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, dst: &mut [f32]) {
     let k0 = f32x8::splat(token, BINOM5[0]);
     let k1 = f32x8::splat(token, BINOM5[1]);
@@ -1062,7 +1059,7 @@ pub fn up_conv_v(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f3
     crate::par::map_rows(dst, w, |y0, band| {
         archmage::incant!(
             up_conv_v_inner(src, in_h, w, y0, band),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     });
 }
@@ -1095,7 +1092,7 @@ fn up_conv_h_pixel(src_row: &[f32], in_w: usize, ox: usize) -> f32 {
     acc
 }
 
-#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
 fn up_conv_h_inner(
     token: Token,
     src: &[f32],
@@ -1160,7 +1157,7 @@ pub fn up_conv_h(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f3
     crate::par::map_rows(dst, out_w, |y0, band| {
         archmage::incant!(
             up_conv_h_inner(src, in_w, out_w, y0, band),
-            [v4x, v4, v3, neon, wasm128, scalar]
+            [v4x, v3, neon, wasm128, scalar]
         );
     });
 }
@@ -1253,7 +1250,10 @@ pub fn infow_map(
     let s4 = s2 * s2;
     let inv_s4 = 1.0 / s4;
     crate::par::map1_3(out, g, vv, ss, |d, a, b, c| {
-        archmage::incant!(infow_map_into(a, b, c, lambdas, s2, inv_s4, tol, d));
+        archmage::incant!(
+            infow_map_into(a, b, c, lambdas, s2, inv_s4, tol, d),
+            [v4x, v3, neon, wasm128, scalar]
+        );
     });
 }
 
@@ -1281,22 +1281,6 @@ mod infow_x64 {
     #[archmage::arcane]
     pub(crate) fn infow_map_into_v3(
         token: archmage::X64V3Token,
-        g: &[f32],
-        vv: &[f32],
-        ss: &[f32],
-        lambdas: &[f32],
-        s2: f32,
-        inv_s4: f32,
-        tol: f32,
-        out: &mut [f32],
-    ) {
-        infow_kernel(token, g, vv, ss, lambdas, s2, inv_s4, tol, out);
-    }
-
-    #[cfg(feature = "avx512")]
-    #[archmage::arcane]
-    pub(crate) fn infow_map_into_v4(
-        token: archmage::X64V4Token,
         g: &[f32],
         vv: &[f32],
         ss: &[f32],

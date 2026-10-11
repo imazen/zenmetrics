@@ -273,8 +273,8 @@ fn available_tiers_match_scalar() {
             check!("v3", prepare_band_v3, maps_band_v3, t);
         }
         #[cfg(feature = "avx512")]
-        if let Some(t) = X64V4Token::summon() {
-            check!("v4", prepare_band_v4, maps_band_v4, t);
+        if let Some(t) = X64V4xToken::summon() {
+            check!("v4x", prepare_band_v4x, maps_band_v4x, t);
         }
     }
     #[cfg(target_arch = "aarch64")]

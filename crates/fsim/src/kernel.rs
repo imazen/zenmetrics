@@ -653,11 +653,11 @@ pub fn fsim_core_tier_v3(token: archmage::X64V3Token, p: Planes<'_>) -> (f64, f6
     score_body!(token, V, 8, yr, yd, w, h, iq)
 }
 
-/// The `v4` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::arcane]
-pub fn fsim_core_tier_v4(token: archmage::X64V4Token, p: Planes<'_>) -> (f64, f64) {
-    type V = magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+pub fn fsim_core_tier_v4x(token: archmage::X64V4xToken, p: Planes<'_>) -> (f64, f64) {
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 16, yr, yd, w, h, iq)
 }
@@ -689,7 +689,7 @@ pub fn fsim_core_tier_scalar(token: archmage::ScalarToken, p: Planes<'_>) -> (f6
 
 /// Runtime-dispatched score: the best tier this CPU supports.
 fn fsim_core(p: Planes<'_>) -> (f64, f64) {
-    archmage::incant!(fsim_core_tier(p), [v4, v3, neon, wasm128, scalar])
+    archmage::incant!(fsim_core_tier(p), [v4x, v3, neon, wasm128, scalar])
 }
 
 // ------------------------------------------------------------------

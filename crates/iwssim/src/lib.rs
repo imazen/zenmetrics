@@ -40,7 +40,7 @@
 //!
 //! # SIMD coverage
 //!
-//! magetypes-dispatched (`#[magetypes(_v4x, v4, v3, neon, wasm128)]`):
+//! magetypes-dispatched (`#[magetypes(_v4x, v3, neon, wasm128)]`):
 //!
 //! - `binom5` 5-tap correlate/expand (pyramid `corr_dn`/`up_conv`).
 //! - `gaussian_11x11` separable blur (SSIM stats).

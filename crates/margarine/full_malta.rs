@@ -73,7 +73,7 @@ fn evaluate(_token: archmage::SimdToken, padded: &ImageF, lf: bool, step: usize,
 fn evaluate(padded: &ImageF, lf: bool, step: usize, out: &mut ImageF) {
     archmage::incant!(
         evaluate_simd(padded, lf, step, out),
-        [v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     )
 }
 
@@ -100,7 +100,7 @@ where
 }
 
 #[cfg(feature = "simd-malta")]
-#[archmage::magetypes(v4, v3, neon, wasm128, scalar)]
+#[archmage::magetypes(v4x, v3, neon, wasm128, scalar)]
 fn evaluate_simd(token: Token, padded: &ImageF, lf: bool, step: usize, out: &mut ImageF) {
     #[cfg(not(feature = "wide-malta"))]
     type Lanes = magetypes::simd::generic::f32x8<Token>;

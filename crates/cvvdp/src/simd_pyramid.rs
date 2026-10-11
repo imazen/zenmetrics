@@ -78,7 +78,7 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 // f32x{N} chunks across columns, broadcast-multiplying by the loop-
 // invariant scalar GAUSS5 taps.
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn reduce_v_inner(
     token: Token,
     src: &[f32],
@@ -125,7 +125,7 @@ fn reduce_v_inner(
                 };
                 // Interior rows have all five taps in bounds — one match
                 // per column-group instead of per-tap Option handling.
-                let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                let (v0, v1, v2, v3v, v4x) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
                     (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
                         (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
                     }
@@ -135,7 +135,7 @@ fn reduce_v_inner(
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
                 };
-                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let arr = acc.to_array();
                 vscratch[out_base + col..out_base + col + 16].copy_from_slice(&arr);
             }
@@ -201,7 +201,7 @@ fn reduce_v_inner(
                     let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
                     f32x8::from_array(token, arr)
                 };
-                let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                let (v0, v1, v2, v3v, v4x) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
                     (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
                         (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
                     }
@@ -211,7 +211,7 @@ fn reduce_v_inner(
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
                 };
-                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let arr = acc.to_array();
                 vscratch[out_base + col..out_base + col + 8].copy_from_slice(&arr);
             }
@@ -245,7 +245,7 @@ pub(crate) fn reduce_vertical_pass(
     debug_assert_eq!(vscratch.len(), sw * dh);
     archmage::incant!(
         reduce_v_inner(src, sw, sh, dh, vscratch),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -265,7 +265,7 @@ pub(crate) fn reduce_vertical_pass(
 // parallel. Each row reads vscratch[dy*sw + (cx-2..=cx+2)]. The 5 taps
 // stay loop-invariant scalars splatted across the N lanes.
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn reduce_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -330,8 +330,8 @@ fn reduce_h_inner(
                 let v1 = f32x16::from_array(token, arrs[1]);
                 let v2 = f32x16::from_array(token, arrs[2]);
                 let v3v = f32x16::from_array(token, arrs[3]);
-                let v4 = f32x16::from_array(token, arrs[4]);
-                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let v4x = f32x16::from_array(token, arrs[4]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let res = acc.to_array();
                 for r in 0..16 {
                     dst[(row_base + r) * dw + dx] = res[r];
@@ -416,8 +416,8 @@ fn reduce_h_inner(
                 let v1 = f32x8::from_array(token, arrs[1]);
                 let v2 = f32x8::from_array(token, arrs[2]);
                 let v3v = f32x8::from_array(token, arrs[3]);
-                let v4 = f32x8::from_array(token, arrs[4]);
-                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let v4x = f32x8::from_array(token, arrs[4]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let res = acc.to_array();
                 for r in 0..8 {
                     dst[(row_base + r) * dw + dx] = res[r];
@@ -451,7 +451,7 @@ pub(crate) fn reduce_horizontal_pass(
     debug_assert_eq!(dst.len(), dw * dh);
     archmage::incant!(
         reduce_h_inner(vscratch, sw, dw, dh, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -473,7 +473,7 @@ pub(crate) fn reduce_horizontal_pass(
 // then sweep y with f32x{N} mul-adds. The 2× scaling is folded into
 // the kernel taps (DOUBLED_GAUSS5).
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn expand_v_inner(
     token: Token,
     src: &[f32],
@@ -619,7 +619,7 @@ pub(crate) fn expand_vertical_pass(
     debug_assert_eq!(vscratch.len(), sw * out_h);
     archmage::incant!(
         expand_v_inner(src, sw, sh, out_h, vscratch),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -640,7 +640,7 @@ pub(crate) fn expand_vertical_pass(
 // reads a sliding-window of 5 taps from z_h. The 5 taps are scalar
 // splats. z_h is per-row scratch (we re-use a caller-owned Vec).
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn expand_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -713,8 +713,8 @@ fn expand_h_inner(
                 let v1 = f32x16::from_array(token, arrs[1]);
                 let v2 = f32x16::from_array(token, arrs[2]);
                 let v3v = f32x16::from_array(token, arrs[3]);
-                let v4 = f32x16::from_array(token, arrs[4]);
-                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+                let v4x = f32x16::from_array(token, arrs[4]);
+                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
                 let arr = acc.to_array();
                 dst[y_l * out_w + x_base..y_l * out_w + x_base + 16].copy_from_slice(&arr);
             }
@@ -794,8 +794,8 @@ fn expand_h_inner(
                 let v1 = f32x8::from_array(token, arrs[1]);
                 let v2 = f32x8::from_array(token, arrs[2]);
                 let v3v = f32x8::from_array(token, arrs[3]);
-                let v4 = f32x8::from_array(token, arrs[4]);
-                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+                let v4x = f32x8::from_array(token, arrs[4]);
+                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
                 let arr = acc.to_array();
                 dst[y_l * out_w + x_base..y_l * out_w + x_base + 8].copy_from_slice(&arr);
             }
@@ -824,7 +824,7 @@ pub(crate) fn expand_horizontal_pass(
     debug_assert_eq!(dst.len(), out_w * out_h);
     archmage::incant!(
         expand_h_inner(vscratch, sw, out_w, out_h, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
@@ -865,7 +865,7 @@ pub(crate) fn expand_horizontal_pass(
 //   - We do NOT pre-allocate a scratch z-buffer (unlike the pyramid
 //     expand) — the kernel reads source/scratch directly.
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
     let k0 = f32x16::splat(token, k[0]);
@@ -928,7 +928,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                 let v1 = load(1);
                 let v2 = load(2);
                 let v3 = load(3);
-                let v4 = load(4);
+                let v4x = load(4);
                 let v5 = load(5);
                 let v6 = load(6);
                 let v7 = load(7);
@@ -941,7 +941,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                     + v1 * k1
                     + v2 * k2
                     + v3 * k3
-                    + v4 * k4
+                    + v4x * k4
                     + v5 * k5
                     + v6 * k6
                     + v7 * k7
@@ -1017,7 +1017,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                 let v1 = load(1);
                 let v2 = load(2);
                 let v3 = load(3);
-                let v4 = load(4);
+                let v4x = load(4);
                 let v5 = load(5);
                 let v6 = load(6);
                 let v7 = load(7);
@@ -1030,7 +1030,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                     + v1 * k1
                     + v2 * k2
                     + v3 * k3
-                    + v4 * k4
+                    + v4x * k4
                     + v5 * k5
                     + v6 * k6
                     + v7 * k7
@@ -1065,11 +1065,11 @@ pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &
     debug_assert_eq!(h_pass.len(), w * h);
     archmage::incant!(
         pu_blur_h_inner(src, w, h, h_pass),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
 fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
     let k0 = f32x16::splat(token, k[0]);
@@ -1129,7 +1129,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                 let v1 = load(1);
                 let v2 = load(2);
                 let v3 = load(3);
-                let v4 = load(4);
+                let v4x = load(4);
                 let v5 = load(5);
                 let v6 = load(6);
                 let v7 = load(7);
@@ -1142,7 +1142,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     + v1 * k1
                     + v2 * k2
                     + v3 * k3
-                    + v4 * k4
+                    + v4x * k4
                     + v5 * k5
                     + v6 * k6
                     + v7 * k7
@@ -1237,7 +1237,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                 let v1 = load(1);
                 let v2 = load(2);
                 let v3 = load(3);
-                let v4 = load(4);
+                let v4x = load(4);
                 let v5 = load(5);
                 let v6 = load(6);
                 let v7 = load(7);
@@ -1250,7 +1250,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     + v1 * k1
                     + v2 * k2
                     + v3 * k3
-                    + v4 * k4
+                    + v4x * k4
                     + v5 * k5
                     + v6 * k6
                     + v7 * k7
@@ -1296,7 +1296,7 @@ pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mu
     debug_assert_eq!(dst.len(), w * h);
     archmage::incant!(
         pu_blur_v_inner(h_pass, w, h, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v3, neon, wasm128, scalar]
     );
 }
 

@@ -33,7 +33,7 @@
 //! map stage is a fixed-order `f32` expression independent of the SIMD
 //! lane count, and every scalar reduction (the two map means, the
 //! weighted-product combine) is `f64` in fixed raster order. Every
-//! tier (scalar / v3 / v4 / neon / wasm128) and every `parallel`
+//! tier (scalar / v3 / v4x / neon / wasm128) and every `parallel`
 //! thread count produces **bit-identical** output. `_dev` exposes the
 //! per-tier entries for tier-parity tests and disassembly.
 
@@ -69,7 +69,7 @@ pub mod dev {
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::msssim_core_tier_v3;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::msssim_core_tier_v4;
+    pub use crate::kernel::msssim_core_tier_v4x;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::msssim_core_tier_wasm;
     pub use crate::kernel::{Args, msssim_core_tier_scalar};
