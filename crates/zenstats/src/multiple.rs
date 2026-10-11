@@ -2,7 +2,9 @@
 
 /// Holm step-down adjusted p-values (Holm 1979, *Scand. J. Statist.* 6(2)).
 ///
-/// Controls the family-wise error rate for any dependence between the tests.
+/// Controls the family-wise error rate for any dependence between the tests,
+/// like the Bonferroni correction ITU-T P.1401 §7.6.5 names, and rejects at
+/// least everything Bonferroni rejects.
 /// Returns one adjusted value per input, in input order. NaN inputs stay NaN
 /// and are excluded from the family size.
 pub fn holm(p: &[f64]) -> Vec<f64> {

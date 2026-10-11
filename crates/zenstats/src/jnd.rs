@@ -42,11 +42,14 @@ pub enum Shape {
 }
 
 /// A mapping family from metric score to target units. Declare it before
-/// looking at the evaluation data (ITU-T P.1401 §7.3.3 requires it stated).
+/// looking at the evaluation data. ITU-T P.1401 §7.3.3 describes such monotonic
+/// mappings (first-order, third-order polynomial, logistic), which compensate
+/// offsets and gradient differences without changing the rank order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MapFamily {
-    /// `y = a + b·x` by least squares (P.1401 Appendix II first-order map).
+    /// `y = a + b·x` by least squares, the first-order mapping of P.1401
+    /// §7.3.3 (its Appendix II uses it to measure what a higher-order map adds).
     Linear,
     /// 4-parameter logistic, the same fit as [`crate::rescale_logistic`].
     Logistic4,
@@ -347,11 +350,14 @@ pub fn excess_error_sd(
             })
             .sum()
     };
-    // With a zero σ and a zero residual the likelihood is unbounded at v = 0;
-    // fall back to the boundary like any other non-positive slope there.
+    // At v → 0 the slope is +∞ when some σᵢ = 0 with rᵢ ≠ 0 (the likelihood is
+    // −∞ there, so the maximum is interior), and −∞ when some σᵢ = 0 with
+    // rᵢ = 0 (the likelihood is unbounded at the boundary, so v = 0).
     let g0 = g(f64::MIN_POSITIVE);
-    let ml = if !g0.is_finite() || g0 <= 0.0 {
-        if g0.is_finite() { 0.0 } else { moment }
+    let ml = if g0.is_nan() {
+        f64::NAN
+    } else if g0 <= 0.0 {
+        0.0
     } else {
         let max_r2 = r2.iter().cloned().fold(0.0, f64::max);
         let mut lo = 0.0f64;
@@ -699,6 +705,30 @@ mod tests {
         let tw = excess_error_sd(&p, &t, &wide).unwrap().moment;
         let tn = excess_error_sd(&p, &t, &narrow).unwrap().moment;
         assert!(tw < tn && tn <= 0.25 + 1e-12 && tw > 0.14, "{tw} {tn}");
+    }
+
+    /// A zero σ with a nonzero residual makes the likelihood −∞ at τ = 0, so
+    /// the maximum is interior; check it is a local maximum of the likelihood.
+    #[test]
+    fn excess_error_ml_with_a_zero_sigma_is_an_interior_maximum() {
+        let t = [0.0, 0.0, 0.0, 0.0];
+        let p = [0.3, 0.1, -0.1, 0.2];
+        let sigma = [0.0, 0.1, 0.1, 0.05];
+        let e = excess_error_sd(&p, &t, &sigma).unwrap();
+        assert!(e.ml.is_finite() && e.ml > 0.0, "{e:?}");
+        let ll = |tau: f64| -> f64 {
+            p.iter()
+                .zip(&sigma)
+                .map(|(r, s)| {
+                    let v = s * s + tau * tau;
+                    -0.5 * (v.ln() + r * r / v)
+                })
+                .sum()
+        };
+        assert!(
+            ll(e.ml) >= ll(e.ml * 1.01) && ll(e.ml) >= ll(e.ml * 0.99),
+            "{e:?}"
+        );
     }
 
     #[test]

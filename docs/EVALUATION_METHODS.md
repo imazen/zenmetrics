@@ -77,8 +77,8 @@ criterion more than the metric does.
    out-of-fold isotonic map side by side.
 7. **Transfer:** for a map fitted on one dataset and applied to another, report
    zero-shot error, and separately the error after a re-anchor of at most two
-   parameters (P.1401 §7.3.3 allows offsets that do not change the rank
-   order). Zero-shot measures absolute calibration; re-anchored measures shape.
+   parameters (P.1401 §7.3.3: a mapping compensates offsets and gradient
+   without changing the rank order). Zero-shot measures absolute calibration; re-anchored measures shape.
 
 ## Raw forced choices
 
@@ -114,7 +114,9 @@ metric out of comparisons within a level.
 ## Many metrics
 
 Use paired cluster-bootstrap differences with Holm adjustment
-(`zenstats::multiple::holm`, P.1401 §7.6.5). A Friedman test over sources with
+(`zenstats::multiple::holm`). P.1401 §7.6.5 requires correcting for multiple
+comparisons and names Bonferroni; Holm controls the same family-wise error
+rate and is never less powerful. A Friedman test over sources with
 a critical-difference diagram can summarise an overall order. Avoid
 mean-rank post-hoc tests, whose outcome depends on which other metrics are in
 the pool.

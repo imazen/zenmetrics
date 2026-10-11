@@ -281,13 +281,18 @@ where
                     p_zero: f64::NAN,
                 };
             }
-            let q = |p: f64| col[((p * n as f64).floor() as usize).min(n - 1)];
+            // same percentile convention as `bootstrap_ci_delta`:
+            // lo = sorted[⌊α·n⌋], hi = sorted[⌈(1−α)·n⌉ − 1]
+            let lo_i = ((alpha * n as f64).floor() as usize).min(n - 1);
+            let hi_i = (((1.0 - alpha) * n as f64).ceil() as usize)
+                .saturating_sub(1)
+                .min(n - 1);
             let le = col.iter().filter(|&&x| x <= 0.0).count() as f64 / n as f64;
             let ge = col.iter().filter(|&&x| x >= 0.0).count() as f64 / n as f64;
             Interval {
                 estimate: estimate[j],
-                lo: q(alpha),
-                hi: q(1.0 - alpha),
+                lo: col[lo_i],
+                hi: col[hi_i],
                 n_finite: n,
                 p_zero: (2.0 * le.min(ge)).min(1.0),
             }
