@@ -610,7 +610,7 @@ iwssim = { workspace = true, optional = true, features = ["std", "parallel"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 mdctpsnr = { workspace = true, optional = true, features = ["std", "parallel"] }
 vmaf = { workspace = true, optional = true, features = ["simd", "parallel"] }
-nlpd = { path = "../nlpd", optional = true }
+nlpd = { path = "../nlpd", optional = true, features = ["avx512", "parallel"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

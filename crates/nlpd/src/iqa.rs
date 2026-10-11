@@ -31,6 +31,8 @@
 //! ≈20.5× the column (~`6^(1/0.6)` pooling factor plus chroma energy).
 
 use super::{Error, Scratch, blur5, filter5_horizontal, normalize_band, simd, upsample_bilinear};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 /// Score two 8-bit sRGB images with the harness ingress: BT.709 luma
 /// `Y = 0.2126R + 0.7152G + 0.0722B` on `[0, 1]`, clamped and quantized
@@ -170,15 +172,26 @@ fn iqa_level(
     if (uw, uh) == (w, h) {
         recon.copy_from_slice(&smooth);
     } else {
-        for (y, row) in recon.chunks_mut(w).enumerate() {
+        super::for_each_row(&mut recon, w, |y, row| {
             let sy = (y * uh / h).min(uh - 1);
             for (x, px) in row.iter_mut().enumerate() {
                 let sx = (x * uw / w).min(uw - 1);
                 *px = smooth[sy * uw + sx];
             }
-        }
+        });
     }
     let n = w * h;
+    #[cfg(feature = "parallel")]
+    scratch.lap[..n]
+        .par_chunks_mut(1 << 14)
+        .zip(src[..n].par_chunks(1 << 14))
+        .zip(recon[..n].par_chunks(1 << 14))
+        .for_each(|((lc, sc), rc)| {
+            for ((l, &a), &s) in lc.iter_mut().zip(sc).zip(rc) {
+                *l = a - s;
+            }
+        });
+    #[cfg(not(feature = "parallel"))]
     for ((l, &a), &s) in scratch.lap[..n]
         .iter_mut()
         .zip(src.iter())

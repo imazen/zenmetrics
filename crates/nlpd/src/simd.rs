@@ -32,17 +32,16 @@ fn filter5_vertical_inner(
     width: usize,
     height: usize,
     dst: &mut [f32],
-    out_height: usize,
+    _out_height: usize,
     stride: usize,
     pad: usize,
 ) {
     let weights = [0.05, 0.25, 0.4, 0.25, 0.05].map(|v| f32x8::splat(token, v));
-    for oy in 0..out_height {
+    super::for_each_row(dst, width, |oy, dst_row| {
         let rows = core::array::from_fn::<_, 5, _>(|ky| {
             let sy = super::reflect((oy * stride + ky) as isize - pad as isize, height);
             &src[sy * width..(sy + 1) * width]
         });
-        let dst_row = &mut dst[oy * width..(oy + 1) * width];
         let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst_row);
         let row_parts = rows.map(|r| f32x8::partition_slice(token, r));
         for (i, chunk) in dst_chunks.iter_mut().enumerate() {
@@ -59,7 +58,7 @@ fn filter5_vertical_inner(
             }
             *d = sum;
         }
-    }
+    });
 }
 
 pub(crate) fn filter5_vertical(
@@ -71,6 +70,9 @@ pub(crate) fn filter5_vertical(
     stride: usize,
     pad: usize,
 ) {
+    // Callers pass level-0-sized scratch slabs for `dst` — iterate only
+    // this level's out_height×width subregion (row chunking keys off it).
+    let dst = &mut dst[..out_height * width];
     archmage::incant!(
         filter5_vertical_inner(src, width, height, dst, out_height, stride, pad),
         [v4x, v4, v3, neon, wasm128, scalar]

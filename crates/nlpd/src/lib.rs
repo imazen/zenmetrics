@@ -175,6 +175,59 @@ fn deinterleave_f32(src: &[f32], n: usize) -> Vec<Vec<f32>> {
     planes
 }
 
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
+/// Row-chunked iteration over `dst`'s `w`-element rows. Serial without the
+/// `parallel` feature; rayon `par_chunks_mut` with it. `f(y, dst_row)` must
+/// write only within `dst_row` (reads may alias arbitrarily) — the disjoint
+/// per-row writes keep results bit-identical either way. Chunk sizing
+/// targets ≥ ~64 KiB of output per task.
+fn for_each_row(dst: &mut [f32], w: usize, f: impl Fn(usize, &mut [f32]) + Sync + Send) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 && dst.len() >= (1 << 15) {
+        let rows_per = (32768usize / w.max(1)).clamp(4, 512);
+        dst.par_chunks_mut(w * rows_per)
+            .enumerate()
+            .for_each(|(ci, chunk)| {
+                for (r, out) in chunk.chunks_mut(w).enumerate() {
+                    f(ci * rows_per + r, out);
+                }
+            });
+        return;
+    }
+    for (y, out) in dst.chunks_mut(w).enumerate() {
+        f(y, out);
+    }
+}
+
+/// `for_each_row` carrying per-chunk scratch `T` built by `init` — for row
+/// bodies that need a reused workspace.
+fn for_each_row_init<T: Send>(
+    dst: &mut [f32],
+    w: usize,
+    init: impl Fn() -> T + Sync + Send,
+    f: impl Fn(usize, &mut [f32], &mut T) + Sync + Send,
+) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 && dst.len() >= (1 << 15) {
+        let rows_per = (32768usize / w.max(1)).clamp(4, 512);
+        dst.par_chunks_mut(w * rows_per)
+            .enumerate()
+            .for_each(|(ci, chunk)| {
+                let mut t = init();
+                for (r, out) in chunk.chunks_mut(w).enumerate() {
+                    f(ci * rows_per + r, out, &mut t);
+                }
+            });
+        return;
+    }
+    let mut t = init();
+    for (y, out) in dst.chunks_mut(w).enumerate() {
+        f(y, out, &mut t);
+    }
+}
+
 fn reflect(mut x: isize, len: usize) -> usize {
     let bound = len as isize;
     while x < 0 || x >= bound {
@@ -262,9 +315,8 @@ fn filter5_horizontal(
     }
     if stride != 1 {
         // Unseen stride: conservative direct-index path (interior only).
-        for y in 0..h {
+        for_each_row(dst, out_w, |y, out| {
             let row = &src[y * w..(y + 1) * w];
-            let out = &mut dst[y * out_w..(y + 1) * out_w];
             for (ox, o) in out.iter_mut().enumerate().take(lo) {
                 *o = tap5(row, w, ox, stride, pad);
             }
@@ -278,12 +330,11 @@ fn filter5_horizontal(
                 }
                 out[ox] = sum;
             }
-        }
+        });
         return;
     }
-    for y in 0..h {
+    for_each_row(dst, out_w, |y, out| {
         let row = &src[y * w..(y + 1) * w];
-        let out = &mut dst[y * out_w..(y + 1) * out_w];
         for (ox, o) in out.iter_mut().enumerate().take(lo) {
             *o = tap5(row, w, ox, stride, pad);
         }
@@ -305,7 +356,7 @@ fn filter5_horizontal(
                 }
             }
         }
-    }
+    });
 }
 
 /// Stride-2 path of [`filter5_horizontal`]: G[j] = Σ_k w_k·row[j+k] for
@@ -322,29 +373,33 @@ fn filter5_horizontal_decimate(
     lo: usize,
     hi: usize,
 ) {
+    let _ = h; // rows are driven off `dst`'s length now
     let g_len = w - 4;
-    let mut g = vec![0.0_f32; g_len];
-    for y in 0..h {
-        let row = &src[y * w..(y + 1) * w];
-        let out = &mut dst[y * out_w..(y + 1) * out_w];
-        for (ox, o) in out.iter_mut().enumerate().take(lo) {
-            *o = tap5(row, w, ox, 2, pad);
-        }
-        for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
-            *o = tap5(row, w, ox, 2, pad);
-        }
-        if lo < hi {
-            g.iter_mut().for_each(|v| *v = 0.0);
-            for (k, weight) in LOWPASS.iter().enumerate() {
-                for (j, &v) in g.iter_mut().zip(&row[k..k + g_len]) {
-                    *j += v * weight;
+    for_each_row_init(
+        dst,
+        out_w,
+        || vec![0.0_f32; g_len],
+        |y, out, g| {
+            let row = &src[y * w..(y + 1) * w];
+            for (ox, o) in out.iter_mut().enumerate().take(lo) {
+                *o = tap5(row, w, ox, 2, pad);
+            }
+            for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
+                *o = tap5(row, w, ox, 2, pad);
+            }
+            if lo < hi {
+                g.iter_mut().for_each(|v| *v = 0.0);
+                for (k, weight) in LOWPASS.iter().enumerate() {
+                    for (j, &v) in g.iter_mut().zip(&row[k..k + g_len]) {
+                        *j += v * weight;
+                    }
+                }
+                for ox in lo..hi {
+                    out[ox] = g[2 * ox - pad];
                 }
             }
-            for ox in lo..hi {
-                out[ox] = g[2 * ox - pad];
-            }
-        }
-    }
+        },
+    );
 }
 
 fn tap5(row: &[f32], w: usize, ox: usize, stride: usize, pad: usize) -> f32 {
@@ -371,7 +426,7 @@ fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst:
         let x1 = (x0 + 1).min(sw - 1);
         *t = (x0, x1, fx - x0 as f32);
     }
-    for y in 0..h {
+    for_each_row(dst, w, |y, out| {
         let fy = if h > 1 {
             y as f32 * (sh - 1) as f32 / (h - 1) as f32
         } else {
@@ -381,13 +436,12 @@ fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst:
         let y1 = (y0 + 1).min(sh - 1);
         let ty = fy - y0 as f32;
         let (r0, r1) = (&src[y0 * sw..(y0 + 1) * sw], &src[y1 * sw..(y1 + 1) * sw]);
-        let out = &mut dst[y * w..(y + 1) * w];
         for (x, &(x0, x1, tx)) in xtab.iter().enumerate() {
             let a = r0[x0] * (1.0 - tx) + r0[x1] * tx;
             let b = r1[x0] * (1.0 - tx) + r1[x1] * tx;
             out[x] = a * (1.0 - ty) + b * ty;
         }
-    }
+    });
 }
 
 fn blur5(src: &[f32], w: usize, h: usize, tmp_b: &mut [f32], out: &mut [f32]) {
@@ -402,18 +456,19 @@ fn blur5(src: &[f32], w: usize, h: usize, tmp_b: &mut [f32], out: &mut [f32]) {
 fn normalize_band(lap: &[f32], w: usize, h: usize, level: usize, normalized: &mut [f32]) {
     let [top, left, right, bottom] = DN[level];
     let sigma = SIGMAS[level];
-    for y in 0..h {
+    // `normalized` is the level-0-sized scratch slab — iterate only this
+    // level's w×h subregion.
+    for_each_row(&mut normalized[..w * h], w, |y, out_row| {
         if y == 0 || y + 1 == h {
             for x in 0..w {
-                normalized[y * w + x] = norm_px(lap, w, h, x, y, top, left, right, bottom, sigma);
+                out_row[x] = norm_px(lap, w, h, x, y, top, left, right, bottom, sigma);
             }
         } else {
-            normalized[y * w] = norm_px(lap, w, h, 0, y, top, left, right, bottom, sigma);
-            normalized[y * w + w - 1] =
-                norm_px(lap, w, h, w - 1, y, top, left, right, bottom, sigma);
+            out_row[0] = norm_px(lap, w, h, 0, y, top, left, right, bottom, sigma);
+            out_row[w - 1] = norm_px(lap, w, h, w - 1, y, top, left, right, bottom, sigma);
             // Interior row as five equal-length zipped slices — no per-element
             // bounds checks, auto-vectorizes (abs + fma + div).
-            let out = &mut normalized[y * w + 1..y * w + w - 1];
+            let out = &mut out_row[1..w - 1];
             let mid = &lap[y * w + 1..y * w + w - 1];
             let top_r = &lap[(y - 1) * w + 1..(y - 1) * w + w - 1];
             let left_r = &lap[y * w..y * w + w - 2];
@@ -428,7 +483,7 @@ fn normalize_band(lap: &[f32], w: usize, h: usize, level: usize, normalized: &mu
                 out[i] = mid[i] / denom;
             }
         }
-    }
+    });
 }
 
 fn norm_px(
@@ -470,6 +525,16 @@ fn level_transform(
     upsample_bilinear(&low, lw, lh, w, h, &mut scratch.up[..n]);
     blur5(&scratch.up[..n], w, h, &mut scratch.tmp_b, &mut scratch.lap);
     // lap = src - smoothed, folded elementwise over the smoothed slab.
+    #[cfg(feature = "parallel")]
+    scratch.lap[..n]
+        .par_chunks_mut(1 << 14)
+        .zip(src[..n].par_chunks(1 << 14))
+        .for_each(|(lc, sc)| {
+            for (s, &a) in lc.iter_mut().zip(sc) {
+                *s = a - *s;
+            }
+        });
+    #[cfg(not(feature = "parallel"))]
     for (s, &a) in scratch.lap[..n].iter_mut().zip(src.iter()) {
         *s = a - *s;
     }

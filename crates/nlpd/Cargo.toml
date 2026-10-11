@@ -13,10 +13,15 @@ workspace = true
 [features]
 default = []
 avx512 = ["archmage/avx512", "magetypes/avx512"]
+# Rayon row-striping over the disjoint output rows of the pyramid
+# filters/normalizer — writes stay elementwise-disjoint so results are
+# bit-identical to the serial path.
+parallel = ["dep:rayon"]
 
 [dependencies]
 archmage = { workspace = true }
 magetypes = { workspace = true }
+rayon = { version = "1.10", optional = true }
 
 [dev-dependencies]
 iai-callgrind = "0.16"
