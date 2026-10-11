@@ -319,8 +319,14 @@ magetypes = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
 #   ~/work/zen/zenjxl      (0.2.1 — git tip post 9ac0cd5a)
 #   ~/work/zen/jxl-encoder (post 6b8eefc1 + local improvements)
 #
-# zenjpeg already uses an explicit `path = ../../../zenjpeg/zenjpeg`
-# in zenmetrics-cli/Cargo.toml so it's not patched here.
+# zenjpeg: zenmetrics-cli takes it by path (`../../../zenjpeg/zenjpeg`), and
+# this patch sends every crates.io `zenjpeg` requirement to the same checkout.
+# Since ultrahdr d77976b, ultrahdr-rs asks for registry `zenjpeg = "0.9.0"`
+# (unpublished; crates.io has 0.8.4) and supplies it through ultrahdr's OWN
+# [patch.crates-io], which does not apply here, so a dev tree with that
+# ultrahdr failed to resolve (2026-10-11). Same checkout as the path dep, so
+# one zenjpeg in the graph. Drop when zenjpeg 0.9.0 publishes.
+zenjpeg      = { path = "../zenjpeg/zenjpeg" }
 # zenanalyze: same "a dependency's [patch] is ignored, only the root's counts"
 # rule as rav1d-safe below. zenjpeg's 2026-08-28 zenanalyze migration made it
 # take `zenanalyze = "0.2.0"` from the registry and supply the unpublished

@@ -99,8 +99,10 @@ and every CI job died at dependency resolution. The CI siblings are pinned in ON
     scripts/ci/lock.sh --regen     # re-resolve it there (isolated snapshot), write it back, re-check
 
 To build or test on a dev box whose sibling checkouts have drifted from the pins (a plain
-`cargo` there can fail to resolve, e.g. 2026-10-11: dev's `ultrahdr` wanted an unpublished
-`zenjpeg ^0.9.0`), run cargo in the pinned snapshot: `just snap-cargo @ test -p <crate>`.
+`cargo` there can fail to resolve; on 2026-10-11 dev's `ultrahdr` asked for an unpublished
+registry `zenjpeg ^0.9.0`, now redirected by the root `zenjpeg` patch), run cargo in the pinned
+snapshot: `just snap-cargo @ test -p <crate>`. A plain `cargo` in a dev tree rewrites
+`Cargo.lock` to match the local siblings: never commit that; `jj restore Cargo.lock`.
 
 `scripts/safe_push.sh` refuses (exit 8) any push that changes `Cargo.lock` or `ci/sibling-pins.tsv`
 unless `lock.sh --check` passes on the outgoing commit. If a pin must move, edit
