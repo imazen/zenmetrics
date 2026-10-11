@@ -13,6 +13,16 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenstats (PR, pending review): evaluation methods for every metric.
+  `resample` (source and source × codec cluster bootstrap), `pairs` (agreement
+  per pair class and expected observer agreement against a ceiling), `jnd`
+  (declared mapping families, leave-one-source-out maps, RMSE, τ̂, rmse*),
+  `forced_choice` (moved from zensim's `pairwise.rs`, plus held-out
+  log-likelihood) and `multiple` (Holm). Checked against scipy, scikit-learn
+  and statsmodels. Method guide: `docs/EVALUATION_METHODS.md`. Existing
+  functions are unchanged; `rescale_logistic` now calls the extracted
+  `fit_logistic4` with identical results.
+
 - Fit jobs (`765615c4`, `8353eaa2`): zensim E33 program support.
   `pack_fit_program --profile e33` pins the zensim scripts (`e33_program_pins.json`);
   `qualified_fit_contract` takes one package per program, selects variants by route and reads
