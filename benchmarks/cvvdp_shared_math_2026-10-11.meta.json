@@ -34,5 +34,6 @@
     "scalar_csf_control": "rc=0 13s | peak-RSS 0.35GiB | min-avail 25846MiB | peak-load 2.27",
     "corrected_after_repeat": "rc=0 12s | peak-RSS 0.35GiB | min-avail 25881MiB | peak-load 0.82"
   },
-  "score_all_variants": "9.861638069"
+  "score_all_variants": "9.861638069",
+  "implementation_commit": "01e28ca16f9038a376b6fe4dbe535fbd7502205d"
 }
