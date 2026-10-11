@@ -1098,8 +1098,7 @@ fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
         }
     }
     #[cfg(feature = "std")]
-    if let Ok(t) = std::env::var("DUMPA") {
-        let tgt: usize = t.parse().unwrap();
+    if let Some(tgt) = dump_targets().0 {
         let cur = CUR_CALL.with(|c| c.get());
         if cur == tgt {
             for (k, r) in v.iter().enumerate() {
@@ -1120,8 +1119,7 @@ fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
         }
     }
     #[cfg(feature = "std")]
-    if let Ok(t) = std::env::var("DUMPB") {
-        let tgt: usize = t.parse().unwrap();
+    if let Some(tgt) = dump_targets().1 {
         if CUR_CALL.with(|c| c.get()) == tgt {
             for (y, r) in out.iter().enumerate() {
                 for (x, &c) in r.iter().enumerate() {
@@ -1131,6 +1129,20 @@ fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
         }
     }
     out
+}
+
+/// `DUMPA`/`DUMPB` forensic targets, cached — the `aan_dct_2d` block loop
+/// polled them per 8×8 block, which was ~11% of program instructions at
+/// 512px. Same semantics as before: unset → `None`, malformed → panic.
+#[cfg(feature = "std")]
+fn dump_targets() -> (Option<usize>, Option<usize>) {
+    static T: std::sync::OnceLock<(Option<usize>, Option<usize>)> = std::sync::OnceLock::new();
+    *T.get_or_init(|| {
+        (
+            std::env::var("DUMPA").ok().map(|t| t.parse().unwrap()),
+            std::env::var("DUMPB").ok().map(|t| t.parse().unwrap()),
+        )
+    })
 }
 
 /// The unscaled AAN 1-D DCT-II butterfly sequence (dct/component.cpp),
