@@ -22,14 +22,19 @@ static BYTES: AtomicU64 = AtomicU64::new(0);
 
 struct Counting;
 
+// SAFETY: Atomic counters allocate no memory; allocation and deallocation
+// delegate unchanged pointers and layouts to System, preserving its contract.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCS.fetch_add(1, Ordering::Relaxed);
         BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+        // SAFETY: The caller supplies the valid layout required by GlobalAlloc.
         unsafe { System.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         FREES.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: The caller supplies a live pointer and its original layout;
+        // Counting returns the unmodified System allocation pointer.
         unsafe { System.dealloc(ptr, layout) }
     }
 }
