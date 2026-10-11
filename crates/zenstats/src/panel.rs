@@ -614,7 +614,7 @@ pub fn z_rmse_per_sample(predicted: &[f64], target: &[f64], sigma: &[f64]) -> f6
 // 4-parameter logistic rescale (Mohammadi 2025 convention)
 // ----------------------------------------------------------------------
 
-fn logistic_eval(b: &[f64; 4], x: f64) -> f64 {
+pub(crate) fn logistic_eval(b: &[f64; 4], x: f64) -> f64 {
     let b4 = if b[3].abs() < 1e-12 {
         1e-12_f64.copysign(b[3].max(0.0).signum().max(1.0))
     } else {
@@ -814,9 +814,19 @@ fn rescale_affine(predicted: &[f64], target: &[f64]) -> Vec<f64> {
 }
 
 pub fn rescale_logistic(predicted: &[f64], target: &[f64]) -> Vec<f64> {
+    match fit_logistic4(predicted, target) {
+        Some(b) => predicted.iter().map(|&x| logistic_eval(&b, x)).collect(),
+        None => rescale_affine(predicted, target),
+    }
+}
+
+/// The 13-start Levenberg-Marquardt 4-parameter logistic fit behind
+/// [`rescale_logistic`]. `None` is exactly the set of inputs on which
+/// `rescale_logistic` falls back to the affine rescale.
+pub(crate) fn fit_logistic4(predicted: &[f64], target: &[f64]) -> Option<[f64; 4]> {
     let n = predicted.len().min(target.len());
     if n < 4 {
-        return rescale_affine(predicted, target);
+        return None;
     }
     let mean_p: f64 = predicted.iter().take(n).sum::<f64>() / n as f64;
     let var_p: f64 = predicted
@@ -826,12 +836,12 @@ pub fn rescale_logistic(predicted: &[f64], target: &[f64]) -> Vec<f64> {
         .sum::<f64>()
         / n as f64;
     if !var_p.is_finite() || var_p < 1e-18 {
-        return rescale_affine(predicted, target);
+        return None;
     }
     if !predicted.iter().take(n).all(|x| x.is_finite())
         || !target.iter().take(n).all(|x| x.is_finite())
     {
-        return rescale_affine(predicted, target);
+        return None;
     }
     let t_max = target
         .iter()
@@ -962,16 +972,16 @@ pub fn rescale_logistic(predicted: &[f64], target: &[f64]) -> Vec<f64> {
     }
     let b: [f64; 4] = match best_b {
         Some(b) => b,
-        None => return rescale_affine(predicted, target),
+        None => return None,
     };
     let any_bad = predicted
         .iter()
         .take(n)
         .any(|&x| !logistic_eval(&b, x).is_finite());
     if any_bad {
-        return rescale_affine(predicted, target);
+        return None;
     }
-    predicted.iter().map(|&x| logistic_eval(&b, x)).collect()
+    Some(b)
 }
 
 // ----------------------------------------------------------------------
@@ -1253,12 +1263,12 @@ pub fn polarity_factor(scores_a: &[f64], scores_b: &[f64], humans: &[f64]) -> f6
 /// xoshiro256** RNG for reproducible bootstrap resampling. Same
 /// generator zenbench uses.
 #[derive(Clone, Copy)]
-struct Xoshiro256ss {
+pub(crate) struct Xoshiro256ss {
     s: [u64; 4],
 }
 
 impl Xoshiro256ss {
-    fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         // SplitMix64 expansion (one-shot, no external dep) so that
         // `seed=0` is a legitimate starting state.
         let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
@@ -1276,7 +1286,7 @@ impl Xoshiro256ss {
         Self { s }
     }
 
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         let r = self.s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
         let t = self.s[1].wrapping_shl(17);
         self.s[2] ^= self.s[0];
@@ -1288,7 +1298,7 @@ impl Xoshiro256ss {
         r
     }
 
-    fn next_usize_below(&mut self, bound: usize) -> usize {
+    pub(crate) fn next_usize_below(&mut self, bound: usize) -> usize {
         ((self.next_u64() as u128 * bound as u128) >> 64) as usize
     }
 }
