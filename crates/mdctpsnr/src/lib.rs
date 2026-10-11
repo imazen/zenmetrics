@@ -421,27 +421,84 @@ fn compute_mask_impl(
     }
 }
 
-/// `compute_mask_impl` compiled with hardware FMA/AVX2. Elementwise
-/// independence means the vectorized chains keep the serial per-element op
-/// order — bit-identical to the `fmaf` libcall path.
+/// `compute_mask_impl` compiled with hardware FMA/AVX2, with the per-lane
+/// `rcpss` reciprocal widened to `vrcpps`. The scalar `rcpss` inside the
+/// autovectorization path blocked every lane (LLVM can't vectorize around
+/// the partial-register intrinsic), so the whole loop ran one element at
+/// a time. `vrcpps` applies the same per-lane approximation, and the
+/// FMA/abs chains preserve the serial per-element op order — bit-identical
+/// to the safe impl (verified by the golden tests).
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "fma", enable = "avx2")]
 ///
 /// # Safety
 /// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
+/// [`have_fma`]. Lanes stay disjoint; the scalar tail uses the safe impl.
 unsafe fn compute_mask_fma(mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
-    compute_mask_impl(
-        &mask_obj.add_ring,
-        &mask_obj.in_ring[MASK_SIZE >> 1],
-        kernel[0],
-        kernel[1],
-        kernel[2],
-        mask_obj.vis,
-        mask_obj.w13,
-        &mut mask_obj.mask,
-        &mut mask_obj.coeff,
-    );
+    use core::arch::x86_64::*;
+    let add = &mask_obj.add_ring;
+    let mid_row = &mask_obj.in_ring[MASK_SIZE >> 1];
+    let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
+    let vis = mask_obj.vis;
+    let w13 = mask_obj.w13;
+    let mask = &mut mask_obj.mask;
+    let coeff = &mut mask_obj.coeff;
+    let base = BASE_VISIBILITY;
+    let inv_ms2 = 1.0 / (MASK_SIZE * MASK_SIZE) as f32;
+
+    let m0v = _mm256_set1_ps(m0);
+    let m1v = _mm256_set1_ps(m1);
+    let m2v = _mm256_set1_ps(m2);
+    let inv_ms2v = _mm256_set1_ps(inv_ms2);
+    let basev = _mm256_set1_ps(base);
+    let visv = _mm256_set1_ps(vis);
+    let w = w13 & !7;
+    for i in (0..w).step_by(8) {
+        // SAFETY: `i + 8 <= w <= w13`; `add`/`mask`/`coeff` are `w13`
+        // wide, `mid_row` is `w8 = w13 + MASK_SIZE - 1` wide, so the
+        // `i + 2 ..= i + 9` read ends at `w + 1 <= w13 + 1 < w8`.
+        // Loads/stores are unaligned by construction.
+        unsafe {
+            let s04 = _mm256_add_ps(
+                _mm256_loadu_ps(add[0].as_ptr().add(i)),
+                _mm256_loadu_ps(add[4].as_ptr().add(i)),
+            );
+            let sum = _mm256_mul_ps(m0v, s04);
+            let s13 = _mm256_add_ps(
+                _mm256_loadu_ps(add[1].as_ptr().add(i)),
+                _mm256_loadu_ps(add[3].as_ptr().add(i)),
+            );
+            let sum = _mm256_fmadd_ps(m1v, s13, sum);
+            let sum = _mm256_fmadd_ps(m2v, _mm256_loadu_ps(add[2].as_ptr().add(i)), sum);
+            let den = _mm256_fmadd_ps(sum, inv_ms2v, basev);
+            // mask = base·(2r − den·r²): the scalar path computes `den*r`
+            // and `(den*r)*r` as separate rounds — keep them unfused for
+            // parity.
+            let r = _mm256_rcp_ps(den);
+            let dr = _mm256_mul_ps(den, r);
+            let drr = _mm256_mul_ps(dr, r);
+            let t = _mm256_sub_ps(_mm256_add_ps(r, r), drr);
+            _mm256_storeu_ps(mask.as_mut_ptr().add(i), _mm256_mul_ps(basev, t));
+            _mm256_storeu_ps(
+                coeff.as_mut_ptr().add(i),
+                _mm256_mul_ps(
+                    _mm256_loadu_ps(mid_row.as_ptr().add(i + (MASK_SIZE >> 1))),
+                    visv,
+                ),
+            );
+        }
+    }
+    // Scalar tail — same op order as `compute_mask_impl` on the
+    // remainder (the impl takes whole slices; offsets stay inline here).
+    for i in w..w13 {
+        let sum = m0 * (add[0][i] + add[4][i]);
+        let sum = fm(m1, add[1][i] + add[3][i], sum);
+        let sum = fm(m2, add[2][i], sum);
+        let den = fm(sum, inv_ms2, base);
+        let r = rcp_approx(den);
+        mask[i] = base * ((r + r) - (den * r) * r);
+        coeff[i] = mid_row[i + (MASK_SIZE >> 1)] * vis;
+    }
 }
 
 /// Horizontal 5-tap symmetric conv of `mp` into `add`
@@ -1143,12 +1200,12 @@ fn dct_8x8_impl(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
         }
     }
     #[cfg(feature = "std")]
-    if let Some(tgt) = dump_targets().1 {
-        if CUR_CALL.with(|c| c.get()) == tgt {
-            for (y, r) in out.iter().enumerate() {
-                for (x, &c) in r.iter().enumerate() {
-                    eprintln!("PASS2 {y} {x} {:#010x}", c.to_bits());
-                }
+    if let Some(tgt) = dump_targets().1
+        && CUR_CALL.with(|c| c.get()) == tgt
+    {
+        for (y, r) in out.iter().enumerate() {
+            for (x, &c) in r.iter().enumerate() {
+                eprintln!("PASS2 {y} {x} {:#010x}", c.to_bits());
             }
         }
     }
