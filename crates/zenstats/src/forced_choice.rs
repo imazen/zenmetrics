@@ -62,9 +62,23 @@
 //!   shows the same image on both sides (every metric ties there).
 //! * **Keep "not sure" answers** as [`Choice::NotSure`]. They count half for
 //!   each side, the convention of the JPEG AIC reconstruction (Testolina et
-//!   al. 2024, arXiv:2410.09501) and of Men et al. 2021 (boosted triplet
-//!   comparisons, IEEE Access, doi:10.1109/ACCESS.2021.3118295). Dropping them scores a different response set
-//!   from the one the scale was built on.
+//!   al. 2024, arXiv:2410.09501), of Men et al. 2021 (boosted triplet
+//!   comparisons, IEEE Access, doi:10.1109/ACCESS.2021.3118295, R = 1/2) and
+//!   of Hanhart et al. 2016 for ties. Dropping them scores a different response
+//!   set from the one the scale was built on.
+//!
+//!   What the split changes: a not-sure response adds half its weight to the
+//!   metric's agreement whichever side the metric picks, and half to the
+//!   majority ceiling, so `acc_norm` and `acc_group_majority` are unchanged
+//!   (the normalisation cancels it; tested). `acc_response`,
+//!   `ceiling_response`, `ceiling_loo`, `observer_agreement`, `tie_rate`,
+//!   `n_responses` and every log-likelihood figure do change. Label figures of
+//!   those kinds computed with not-sure answers dropped as "not-sure dropped".
+//! * **Splitting does not replace screening.** On unscreened JPEG AIC-3
+//!   plain-triplet responses the human scale scores below chance in
+//!   log-likelihood with not-sure split. Apply the dataset's own screening;
+//!   for AIC-3 that keeps batches with at least 70 % correct on their 10 trap
+//!   questions.
 //! * **Check the unit:** [`fit_observer_slope`] on the human scale values
 //!   themselves should come out near the unit's own slope (0.6745 for a JND
 //!   defined at 75 %). Report it beside every log-likelihood; a slope far from
@@ -1033,5 +1047,31 @@ mod tests {
         // perfectly separated responses have no finite maximum
         let sep = [row(0, 0.0, 1.0, Choice::Left, 5.0)];
         assert_eq!(fit_observer_slope(&sep), None);
+    }
+
+    /// Splitting not-sure answers half/half leaves `acc_norm` and
+    /// `acc_group_majority` unchanged and moves the raw figures.
+    #[test]
+    fn not_sure_split_leaves_acc_norm_and_group_majority_unchanged() {
+        let base = [
+            row(0, 60.0, 90.0, Choice::Left, 6.0),
+            row(0, 60.0, 90.0, Choice::Right, 2.0),
+            row(1, 95.0, 91.0, Choice::Left, 3.0),
+            row(1, 95.0, 91.0, Choice::Right, 5.0),
+            row(2, 70.0, 70.0, Choice::Right, 4.0),
+            row(2, 70.0, 70.0, Choice::Left, 1.0),
+            row(3, 10.0, 40.0, Choice::Right, 3.0),
+            row(3, 10.0, 40.0, Choice::Left, 2.0),
+        ];
+        let mut with_ns = base.to_vec();
+        with_ns.push(row(0, 60.0, 90.0, Choice::NotSure, 3.0));
+        with_ns.push(row(1, 95.0, 91.0, Choice::NotSure, 1.0));
+        with_ns.push(row(2, 70.0, 70.0, Choice::NotSure, 2.0));
+        with_ns.push(row(3, 10.0, 40.0, Choice::NotSure, 5.0));
+        let (a, b) = (agreement(&base, 4), agreement(&with_ns, 4));
+        close(a.acc_norm, b.acc_norm);
+        close(a.acc_group_majority, b.acc_group_majority);
+        assert!((a.acc_response - b.acc_response).abs() > 1e-6);
+        assert!((a.ceiling_response - b.ceiling_response).abs() > 1e-6);
     }
 }

@@ -1302,7 +1302,10 @@ impl Xoshiro256ss {
 
 /// 95% bootstrap CI for (A - B) on every stat in the Mohammadi
 /// panel. Returns `(low, high)` per stat at the canonical panel
-/// order: SROCC, PLCC, KROCC, OR, PWRC, Z-RMSE.
+/// order: SROCC, PLCC, KROCC, OR, PWRC, Z-RMSE. Bounds are type 7
+/// percentiles (linear interpolation, numpy's default), the crate's one
+/// rule; before 2026-10-11 they were order statistics. Record the rule,
+/// `n_resamples` and `seed` with every result.
 ///
 /// `n_resamples` defaults to 1000 per § A.9 step (4). Each resample
 /// draws with replacement at the row level (NOT bootstrap of pairs
@@ -1376,11 +1379,12 @@ pub fn bootstrap_ci_delta(
             continue;
         }
         col.sort_by(f64::total_cmp);
-        let lo_idx = ((col.len() as f64) * 0.025).floor() as usize;
-        let hi_idx = (((col.len() as f64) * 0.975).ceil() as usize).saturating_sub(1);
-        let lo = col[lo_idx.min(col.len() - 1)];
-        let hi = col[hi_idx.min(col.len() - 1)];
-        ci[stat_idx] = (lo, hi);
+        // the crate's one percentile rule (type 7); until 2026-10-11 this used
+        // order statistics col[⌊0.025·n⌋] and col[⌈0.975·n⌉ − 1]
+        ci[stat_idx] = (
+            crate::special::quantile7(&col, 0.025),
+            crate::special::quantile7(&col, 0.975),
+        );
     }
     ci
 }
@@ -2022,6 +2026,50 @@ mod per_group_tests {
 
 #[cfg(test)]
 mod tests {
+    /// `bootstrap_ci_delta` bounds are the type 7 percentiles of its own
+    /// draws (reconstructed here with the same seeding, sequentially).
+    #[test]
+    fn bootstrap_ci_delta_uses_the_type7_rule() {
+        let n = 40;
+        let h: Vec<f64> = (0..n)
+            .map(|i| (i as f64 * 0.37).sin() + i as f64 * 0.05)
+            .collect();
+        let a: Vec<f64> = h
+            .iter()
+            .enumerate()
+            .map(|(i, v)| v + 0.3 * ((i * 7 % 11) as f64 - 5.0) / 5.0)
+            .collect();
+        let b: Vec<f64> = h
+            .iter()
+            .enumerate()
+            .map(|(i, v)| v + 0.5 * ((i * 3 % 13) as f64 - 6.0) / 6.0)
+            .collect();
+        let (resamples, seed) = (80usize, 9u64);
+        let got = bootstrap_ci_delta(&a, &b, &h, resamples, seed);
+        let mut srocc_deltas: Vec<f64> = (0..resamples)
+            .map(|k| {
+                let mut rng = Xoshiro256ss::new(
+                    seed.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                        .wrapping_add(k as u64),
+                );
+                let (mut sa, mut sb, mut hh) = (Vec::new(), Vec::new(), Vec::new());
+                for _ in 0..n {
+                    let i = rng.next_usize_below(n);
+                    sa.push(a[i]);
+                    sb.push(b[i]);
+                    hh.push(h[i]);
+                }
+                compute_panel(&sa, &hh).srocc - compute_panel(&sb, &hh).srocc
+            })
+            .filter(|v| v.is_finite())
+            .collect();
+        srocc_deltas.sort_by(f64::total_cmp);
+        let lo = crate::special::quantile7(&srocc_deltas, 0.025);
+        let hi = crate::special::quantile7(&srocc_deltas, 0.975);
+        assert_eq!(got[0].0.to_bits(), lo.to_bits());
+        assert_eq!(got[0].1.to_bits(), hi.to_bits());
+    }
+
     use super::*;
 
     // ----- OR (P.1401, Eq. 2-4) -----

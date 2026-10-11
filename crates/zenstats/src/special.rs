@@ -41,6 +41,20 @@ pub(crate) fn ln_norm_cdf(z: f64) -> f64 {
         + (1.0 - 1.0 / z2 + 3.0 / (z2 * z2)).ln()
 }
 
+/// The crate's one percentile rule: Hyndman & Fan type 7 (linear
+/// interpolation between order statistics at `h = (n − 1)·p`), numpy's
+/// default and `bake_verdict`'s. `sorted` must be sorted and non-empty.
+pub(crate) fn quantile7(sorted: &[f64], p: f64) -> f64 {
+    let n = sorted.len();
+    if n == 1 {
+        return sorted[0];
+    }
+    let h = (n - 1) as f64 * p;
+    let lo = (h.floor() as usize).min(n - 1);
+    let hi = (lo + 1).min(n - 1);
+    sorted[lo] + (h - lo as f64) * (sorted[hi] - sorted[lo])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,5 +85,17 @@ mod tests {
         // ln Φ(−40) from the exact erfc: −804.608442013754
         assert!((ln_norm_cdf(-40.0) + 804.608442013754).abs() < 1e-6);
         assert!(ln_norm_cdf(-1e6).is_finite());
+    }
+
+    /// numpy.percentile (default linear) on the same vector.
+    #[test]
+    fn quantile7_matches_numpy_percentile() {
+        let mut x = [
+            0.31, -1.2, 4.4, 0.05, 2.2, -0.7, 1.9, 3.3, 0.0, -2.5, 1.1, 0.6,
+        ];
+        x.sort_by(f64::total_cmp);
+        assert!((quantile7(&x, 0.025) - -2.1425).abs() < 1e-12);
+        assert!((quantile7(&x, 0.975) - 4.0975).abs() < 1e-12);
+        assert!((quantile7(&x, 0.5) - 0.455).abs() < 1e-12);
     }
 }

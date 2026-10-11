@@ -20,6 +20,14 @@ Workspace conventions per the global rules:
   `PairInput::family` (reproduces the rev4_e1b cross-codec pair classes) and
   `resample::spearman_interval` (replacement for `bake_verdict`'s pair
   bootstrap). Inventory and convention differences: `docs/EVALUATION_METHODS.md`.
+- zenstats (PR #67): **behaviour change** — `bootstrap_ci_delta` (and so
+  `decisive`) now uses the crate's one percentile rule, Hyndman–Fan type 7
+  (linear interpolation, numpy's default), instead of order statistics
+  `col[⌊0.025·n⌋]`, `col[⌈0.975·n⌉ − 1]`. Same draws, same seed; bounds move by
+  a fraction of one order-statistic gap. A recorded `decisive` result whose
+  panel-stat CI sat that close to 0 can change its agree count; such results
+  were already decided by seed noise. Results before this change are labelled
+  with the old rule.
   `resample` (source and source × codec cluster bootstrap), `pairs` (agreement
   per pair class and expected observer agreement against a ceiling), `jnd`
   (declared mapping families, leave-one-source-out maps, RMSE, τ̂, rmse*),

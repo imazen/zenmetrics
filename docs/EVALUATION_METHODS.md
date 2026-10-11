@@ -199,17 +199,25 @@ Conventions that differ, and which one zenstats uses:
   interval (see the PR #67 review). zenstats keeps copies distinct
   (`Draw::pair_weight`, `Draw::expand`). `spearman_interval` computes pooled
   Spearman on the expanded rows, matching the Python method.
-- **Percentiles.** `bootstrap_ci_delta` uses order statistics (⌊0.025·n⌋,
-  ⌈0.975·n⌉ − 1); the new code uses Hyndman–Fan type 7, as `bake_verdict`
-  and the numpy scripts do. `bootstrap_ci_delta` is unchanged so recorded
-  decisions keep their bounds.
+- **Percentiles.** Decided 2026-10-11: one rule across the crate, Hyndman–Fan
+  type 7 (numpy's default, `bake_verdict`'s), so cross-checks agree exactly.
+  `bootstrap_ci_delta` used order statistics (⌊0.025·n⌋, ⌈0.975·n⌉ − 1) before;
+  the switch moves a bound by far less than re-running with another seed.
+  Record the rule, B and seed with every result. Results computed before the
+  switch are labelled with the old rule.
 - **Bootstrap p-values.** zensim scripts report one-sided `#{δ > 0}/B`;
   `Interval::p_zero` is two-sided with +1/(B + 1).
-- **"Not sure" answers.** zensim's forced-choice callers dropped them
-  (recorded ceilings and accuracies are on that basis); `konfig_fscale.py`
-  counts them half each side, as `Choice::NotSure` does; the SDR25
-  reconstruction and the MLP training loss model them as a third
-  ordered-probit outcome. New reads should keep them as `NotSure` and say so.
+- **"Not sure" answers.** Decided 2026-10-11: count them half for each side
+  (`Choice::NotSure`), as the JPEG AIC scale reconstruction, Men et al. 2021
+  and zensim's `konfig_fscale.py` do. zensim's earlier forced-choice reads
+  dropped them. Their `acc_norm` and per-group majority agreement are
+  unchanged by the split and keep their recorded values; raw agreement, the
+  ceilings, tie rate, response counts and any log-likelihood are labelled
+  "not-sure dropped". The SDR25 reconstruction and the MLP training loss
+  model not-sure as a third ordered-probit outcome; that is a different
+  model, not this convention. New reads also apply the dataset's own worker
+  screening (AIC-3: batches with at least 70 % correct on their 10 trap
+  questions).
 - **Holm.** `holm` returns adjusted p-values and leaves NaN out of the family;
   pass 1.0 for an entry that must count but has no result.
 

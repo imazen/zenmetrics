@@ -425,17 +425,7 @@ fn multiplicities(rng: &mut Xoshiro256ss, k: usize) -> Vec<f64> {
     m
 }
 
-/// Hyndman & Fan type 7 quantile of sorted data.
-fn quantile7(sorted: &[f64], p: f64) -> f64 {
-    let n = sorted.len();
-    if n == 1 {
-        return sorted[0];
-    }
-    let h = (n - 1) as f64 * p;
-    let lo = h.floor() as usize;
-    let hi = (lo + 1).min(n - 1);
-    sorted[lo] + (h - lo as f64) * (sorted[hi] - sorted[lo])
-}
+use crate::special::quantile7;
 
 /// Percentile bootstrap of a vector-valued statistic under `design`.
 ///
