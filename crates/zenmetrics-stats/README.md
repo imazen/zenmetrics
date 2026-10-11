@@ -32,6 +32,10 @@ rule per § A.9 of `PSYCHOVISUAL_LEARNINGS_FOR_ZENSIM.md`).
 | `forced_choice::{agreement, log_likelihood, fit_observer_slope}` | raw 2AFC/triplet agreement and log-likelihood vs in-sample and cross-fitted ceilings; not-sure as half/half | moved from zensim; Testolina 2024 |
 | `multiple::{holm, holm_reject}` | Holm adjusted p-values and step-down rejections | Holm 1979 |
 
+`examples/jnd_calibrate.rs` is a command-line driver over `jnd` and `resample`: per declared map
+family it fits leave-one-source-out, reports out-of-fold RMSE, τ̂ and rmse*, and source-clustered
+intervals with the maps refitted inside every draw.
+
 How to use them together: [`docs/EVALUATION_METHODS.md`](../../docs/EVALUATION_METHODS.md).
 `tests/independent_reference.rs` checks them against scipy, scikit-learn and
 statsmodels (`scripts/independent_reference.py`).
