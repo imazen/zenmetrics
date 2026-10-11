@@ -110,15 +110,46 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
       registry 0.8.2 — porting the api's ssim2 call sites to the 0.9.0
       PixelSlice API (3 call sites + cached_ref path) is deferred until
       the 0.9.0 release or an explicit port decision.
+- [x] Row-map batch (2026-10-12, `c929d32c`..`a10f1afc`): the shared
+      `for_each_row`/`maybe_join`/banded-fold pattern applied to the
+      remaining serial kernels, all bit-identical or FFI-verified:
+  - vif `filt` H/V row loops → 89.8→57.8ms 8t (1.55x wall, 1.94x sweep).
+  - fsim `pc1`/`pc2` join + conv pairs + 3x3 row map → 1.80–2.35x sweep.
+  - msssim `filt` + decimate + product_planes → 2.08–2.22x sweep.
+  - msssim libvmaf paths (`float_ssim`/`float_ms_ssim`): conv_gauss_valid
+    row maps, decimate, fold_sums fixed-32-band → wall 4.73x at 8t,
+    sweep 3.16–3.42x. **Fold discipline:** deterministic banded order
+    in EVERY build keeps serial==parallel bit-identical.
+  - vsi imresize/decimate/conv/Lab → 2.01–1.99x sweep (2.40x wall).
+  - iwssim imenlarge upsample/copy/decimate via par::map_rows →
+    2.03x wall, 1.71–1.81x sweep.
+  - psnrhvs 3-channel join + deinterleave/luma row maps → 2.85–4.13x
+    sweep (3.57x wall).
+  - gmsd/ms-gmsd(c) prepare/half/variance → 2.43–4.00x sweep.
+  - haarpsi plane builders for_rows + pool_map 32-band fold → 3.60–4.09x
+    sweep, exact tier-parity kept.
+- [x] **Lesson — f32 raster folds are FFI-observable**: the psnrhvs-daala
+      `ret` fold is f32 in strict raster order; a striped fold shifted
+      the score 3.7e-4 dB and the vendored-libvmaf FFI parity test
+      caught it. Reverted (serial `block_row` retained). daala stays
+      1.01x — parity-locked.
+- [x] **CI lint hazard — magetypes 0.9.30 deprecations**: the 0.9.29→
+      0.9.30 bump (registry or git pin) emits thousands of `deprecated`
+      warnings (token-first forwarders pending the 0.10 tokenless API).
+      `-A deprecated` added to the CI clippy allow list with a comment;
+      the `_t` migration is deferred to the 0.10 release.
+- [ ] P2: ssim2 api port (registry 0.8.2 → local 0.9.0 PixelSlice) — the
+      last <2x metric with real cost (99 ms/MP at 8.4MP, 1.03x).
 - [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit) or scoped f32
       under JOD parity gate.
-- [ ] P2: msssim-libvmaf, vsi/fsim tails; vifvec's ~20% 1t regression
-      (striped-cu setup); mdctpsnr residual serial ring work.
+- [ ] P2: residual tails — ssim-libvmaf 1.25x (conv depth-bound), mdsi
+      1.70x, iwssim 1.71x, vif 1.94x, nlpd 1.85x, vsi 1.99x,
+      ms-gmsd(c) 2.87x; vifvec 1t striped-cu setup cost; mdctpsnr ring.
 - [x] Serialize: `cpu-metrics-1t8t` re-run pinned on i265 —
-      benchmarks/cpu_metrics_1t8t_2026-10-11-i265.md committed
-      (mad 10.42x, vifvec 5.05x, mdctpsnr 4.60x, ssim 3.85x, cvvdp
-      3.07x vs Oct-9 r7900x 8t numbers; post-sweep mdctpsnr commits
-      push it to ~10.6x).
+      benchmarks/cpu_metrics_1t8t_2026-10-12-i265b committed
+      (patched to post-batch binary): mad 4.66x, vifvec 4.46x,
+      ssim 4.54x, zensim 4.62x, psnrhvs 4.13x, haarpsi 4.09x,
+      cvvdp 2.51x, gmsd 3.16x at 8.4MP 8t vs Oct-9 r7900x.
 
 ## Environment hazards found (i265)
 
