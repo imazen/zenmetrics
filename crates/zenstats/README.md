@@ -20,11 +20,11 @@ rule per § A.9 of `PSYCHOVISUAL_LEARNINGS_FOR_ZENSIM.md`).
 | `compute_panel` / `compute_light_panel` | full 6-stat aggregator | this crate |
 | `mrr_h`, `phi`, `two_sided_p` | Meng-Rosenthal-Rubin paired z-test | Meng, Rosenthal & Rubin 1992 |
 | `bootstrap_ci_delta`, `decisive` | A-vs-B decision gate | § A.9 |
-| `resample::cluster_bootstrap` | percentile CIs resampling sources, or sources × codecs | Owen 2007 |
-| `pairs::{class_agreement, expected_agreement}` | agreement per pair class; expected observer agreement vs ceiling | Thurstone Case V |
+| `resample::{cluster_bootstrap, Draw}` | percentile CIs resampling sources, or sources × codecs; copy-aware pair weights and expansion | Owen 2007 |
+| `pairs::{class_agreement, expected_agreement, PairTable}` | agreement per pair class; expected observer agreement vs ceiling; O(cells²) bootstrap path | Thurstone Case V |
 | `jnd::{fit_map, out_of_fold}` | declared mapping families, leave-one-source-out | P.1401 §7.3.3 |
-| `jnd::{rmse, excess_error_sd, rmse_star}` | RMSE, τ̂ excess error, epsilon-insensitive RMSE | DerSimonian & Laird 1986; P.1401 §7.7 |
-| `forced_choice::{agreement, log_likelihood}` | raw 2AFC/triplet agreement and log-likelihood vs ceiling | moved from zensim |
+| `jnd::{rmse, excess_error_sd, rmse_star}` | RMSE, τ̂ excess error (moment, ML), epsilon-insensitive RMSE | Veroniki et al. 2016; P.1401 §7.7 |
+| `forced_choice::{agreement, log_likelihood, fit_observer_slope}` | raw 2AFC/triplet agreement and log-likelihood vs in-sample and cross-fitted ceilings; not-sure as half/half | moved from zensim; Testolina 2024 |
 | `multiple::holm` | Holm adjusted p-values | Holm 1979 |
 
 How to use them together: [`docs/EVALUATION_METHODS.md`](../../docs/EVALUATION_METHODS.md).

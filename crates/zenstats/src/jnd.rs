@@ -9,21 +9,33 @@
 //! rows are predicted by a map fitted on the other sources, so no map is ever
 //! scored on the rows it was fitted to (Varma & Simon 2006,
 //! doi:10.1186/1471-2105-7-91; Roberts et al. 2017, doi:10.1111/ecog.02881).
-//! Statistics should be computed on the pooled out-of-fold predictions, with
-//! a source-clustered interval from [`crate::resample`]; per-fold intervals
-//! under-cover (Bates, Hastie & Tibshirani 2024, doi:10.1080/01621459.2023.2197686).
+//! Statistics are computed on the pooled out-of-fold predictions. For their
+//! interval, refit the maps inside the bootstrap: expand each draw with
+//! [`crate::resample::Draw::expand`] and call [`out_of_fold`] on the
+//! resampled rows with the copy-aware source labels as folds. A bootstrap
+//! over *fixed* out-of-fold predictions carries neither the map-fitting
+//! variance nor the dependence between folds that share training data, and
+//! is too narrow. Bates, Hastie & Tibshirani (2024,
+//! doi:10.1080/01621459.2023.2197686) show that the standard interval built
+//! from pooled cross-validation errors under-covers for that reason and
+//! propose nested cross-validation.
 //!
 //! Error criteria:
 //!
 //! * [`rmse`]: root mean squared error in target units.
 //! * [`excess_error_sd`]: τ̂, the standard deviation of the prediction error
 //!   left after removing the target's own measurement noise, from the model
-//!   rᵢ ~ N(0, σᵢ² + τ²) (moment and maximum-likelihood forms; DerSimonian &
-//!   Laird 1986, doi:10.1016/0197-2456(86)90046-2). Unlike an error divided
-//!   by σᵢ, it does not grow as a study adds observers and σᵢ shrinks, and it
-//!   does not let the few stimuli with the smallest σ dominate.
+//!   rᵢ ~ N(0, σᵢ² + τ²) with a known zero mean. Two estimators: the
+//!   unweighted method of moments (Hedges–Olkin type), truncated at 0 and
+//!   therefore biased upward, and maximum likelihood. DerSimonian–Laird is the
+//!   inverse-variance-weighted moment estimator of the same model; see
+//!   Veroniki et al. 2016 (*Res. Synth. Methods* 7(1), doi:10.1002/jrsm.1164)
+//!   for the family. Unlike an error divided by σᵢ, τ̂ does not grow as a
+//!   study adds observers and σᵢ shrinks, and it does not let the few stimuli
+//!   with the smallest σ dominate.
 //! * [`rmse_star`]: ITU-T P.1401 §7.7 epsilon-insensitive RMSE, which only
-//!   counts error beyond each stimulus' 95 % confidence half-width.
+//!   counts error outside each stimulus' 95 % confidence interval (which may
+//!   be asymmetric, as reconstructed JND intervals are).
 //!
 //! The normalised error `(pred − target) / σ` (`crate::z_rmse_per_sample`)
 //! remains useful as a goodness-of-fit diagnostic; it is weighted by 1/σ²,
@@ -41,10 +53,12 @@ pub enum Shape {
     Distance,
 }
 
-/// A mapping family from metric score to target units. Declare it before
-/// looking at the evaluation data. ITU-T P.1401 §7.3.3 describes such monotonic
-/// mappings (first-order, third-order polynomial, logistic), which compensate
-/// offsets and gradient differences without changing the rank order.
+/// A mapping family from metric score to target units. ITU-T P.1401 §7.3.3
+/// requires the mapping applied before computing performance criteria to be
+/// stated, and describes monotonic first-order, third-order and logistic
+/// mappings that compensate offsets and gradients without changing the rank
+/// order. Declaring the family *before looking at the evaluation data* is this
+/// crate's rule on top of that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MapFamily {
@@ -53,10 +67,11 @@ pub enum MapFamily {
     Linear,
     /// 4-parameter logistic, the same fit as [`crate::rescale_logistic`].
     Logistic4,
-    /// Power law with a knee, the form the JPEG AIC common test conditions use
-    /// to put metrics on the JND scale: `y = a·max(0, b − x)^c` for
+    /// Power law with a knee, the family the JPEG AIC common test conditions
+    /// use to put metrics on the JND scale: `y = a·max(0, b − x)^c` for
     /// [`Shape::Quality`] and `y = a·max(0, x − b)^c` for [`Shape::Distance`],
-    /// with `a ≥ 0`, `c > 0`.
+    /// with `a ≥ 0`, `c > 0`. The CTC writes it `(a′·max(0, b − x))^c`, so
+    /// `a = a′^c`; convert before comparing parameters with published maps.
     KneePower(Shape),
     /// Monotone least squares (pool-adjacent-violators), decreasing for
     /// [`Shape::Quality`] and increasing for [`Shape::Distance`]; predictions
@@ -266,21 +281,37 @@ pub fn rmse(predicted: &[f64], target: &[f64]) -> Result<f64, MapError> {
 }
 
 /// ITU-T P.1401 §7.7 epsilon-insensitive RMSE:
-/// `sqrt( Σ max(0, |pᵢ − tᵢ| − ci95ᵢ)² / (N − d) )`, where `ci95ᵢ` is the
-/// 95 % confidence half-width of target i and `d` the mapping's parameter
-/// count (0 for a metric scored on its own output).
+/// `sqrt( Σ eᵢ² / (N − d) )` with `eᵢ = max(0, loᵢ − pᵢ, pᵢ − hiᵢ)`, the
+/// distance from the prediction to stimulus i's 95 % confidence interval
+/// `[loᵢ, hiᵢ]`. P.1401 uses a symmetric interval (MOS ± ci95); pass
+/// `t − ci95` and `t + ci95` for that. Reconstructed JND intervals are often
+/// asymmetric; pass their own bounds.
+///
+/// `d` is the number of mapping parameters fitted *in sample on this data*
+/// (P.1401's N − d). Use `d = 0` for out-of-fold predictions and for a metric
+/// scored on its own output. (P.1401 is not consistent about d itself: 4 or 2
+/// in §7.7, 3 or 2 in its rmse* significance test.)
 pub fn rmse_star(
     predicted: &[f64],
-    target: &[f64],
-    ci95_half: &[f64],
+    ci_lo: &[f64],
+    ci_hi: &[f64],
     d: usize,
 ) -> Result<f64, MapError> {
-    check_xy(predicted, target)?;
-    if ci95_half.len() != target.len() {
-        return Err(MapError::Length("ci95_half"));
+    if ci_lo.len() != predicted.len() {
+        return Err(MapError::Length("ci_lo"));
     }
-    if !ci95_half.iter().all(|c| c.is_finite() && *c >= 0.0) {
-        return Err(MapError::NonFinite("ci95_half"));
+    if ci_hi.len() != predicted.len() {
+        return Err(MapError::Length("ci_hi"));
+    }
+    if !predicted.iter().all(|v| v.is_finite()) {
+        return Err(MapError::NonFinite("predicted"));
+    }
+    if !ci_lo
+        .iter()
+        .zip(ci_hi)
+        .all(|(l, h)| l.is_finite() && h.is_finite() && l <= h)
+    {
+        return Err(MapError::NonFinite("ci_lo/ci_hi"));
     }
     let n = predicted.len();
     if n <= d {
@@ -291,7 +322,9 @@ pub fn rmse_star(
     }
     let s: f64 = (0..n)
         .map(|i| {
-            let e = ((predicted[i] - target[i]).abs() - ci95_half[i]).max(0.0);
+            let e = (ci_lo[i] - predicted[i])
+                .max(predicted[i] - ci_hi[i])
+                .max(0.0);
             e * e
         })
         .sum();
@@ -301,7 +334,8 @@ pub fn rmse_star(
 /// τ̂ in both estimators.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExcessError {
-    /// `sqrt(max(0, mean r² − mean σ²))`.
+    /// `sqrt(max(0, mean r² − mean σ²))`: unweighted method of moments with a
+    /// known zero mean, truncated at 0 (biased upward near 0).
     pub moment: f64,
     /// Maximum-likelihood τ under rᵢ ~ N(0, σᵢ² + τ²).
     pub ml: f64,
@@ -339,7 +373,7 @@ pub fn excess_error_sd(
     let mean_s2 = s2.iter().sum::<f64>() / n as f64;
     let moment = (mean_r2 - mean_s2).max(0.0).sqrt();
 
-    // d/dτ² of the log-likelihood, up to a factor −½:
+    // d/dτ² of the log-likelihood, up to a factor +½:
     // g(v) = Σ [ rᵢ²/(σᵢ²+v)² − 1/(σᵢ²+v) ]; the ML v solves g(v) = 0.
     let g = |v: f64| -> f64 {
         r2.iter()
@@ -731,14 +765,52 @@ mod tests {
         );
     }
 
+    /// The review's case: one reference stimulus (σ = 0, r = 0.4) and 49 rows
+    /// with σ = 0.1, r = ±0.3. Checked against a dense scan of the likelihood.
+    #[test]
+    fn excess_error_ml_matches_a_grid_scan_with_a_reference_stimulus() {
+        let mut r = vec![0.4];
+        let mut sigma = vec![0.0];
+        for i in 0..49 {
+            r.push(if i % 2 == 0 { 0.3 } else { -0.3 });
+            sigma.push(0.1);
+        }
+        let t = vec![0.0; r.len()];
+        let e = excess_error_sd(&r, &t, &sigma).unwrap();
+        let ll = |tau: f64| -> f64 {
+            r.iter()
+                .zip(&sigma)
+                .map(|(r, s)| {
+                    let v = s * s + tau * tau;
+                    -0.5 * (v.ln() + r * r / v)
+                })
+                .sum()
+        };
+        let best = (1..200_000)
+            .map(|k| k as f64 * 5e-6)
+            .max_by(|a, b| ll(*a).total_cmp(&ll(*b)))
+            .unwrap();
+        assert!((e.ml - best).abs() < 1e-5, "ml {} grid {best}", e.ml);
+        assert!((e.ml - e.moment).abs() > 1e-4, "{e:?}");
+    }
+
     #[test]
     fn rmse_star_counts_only_error_beyond_the_interval() {
         let p = [1.0, 2.0, 3.5];
         let t = [1.1, 2.0, 3.0];
         let ci = [0.2, 0.0, 0.3];
+        let lo: Vec<f64> = t.iter().zip(&ci).map(|(t, c)| t - c).collect();
+        let hi: Vec<f64> = t.iter().zip(&ci).map(|(t, c)| t + c).collect();
         // excess: 0, 0, 0.2 → sqrt(0.04 / (3 − 1))
-        let got = rmse_star(&p, &t, &ci, 1).unwrap();
+        let got = rmse_star(&p, &lo, &hi, 1).unwrap();
         assert!((got - (0.04f64 / 2.0).sqrt()).abs() < 1e-12);
+        // asymmetric interval: [2.9, 3.6] contains 3.5, so only the first two count
+        let got = rmse_star(&p, &[0.9, 2.0, 2.9], &[1.3, 2.0, 3.6], 0).unwrap();
+        assert!(got.abs() < 1e-12);
+        assert_eq!(
+            rmse_star(&p, &[1.0, 2.0, 4.0], &[1.0, 2.0, 3.0], 0),
+            Err(MapError::NonFinite("ci_lo/ci_hi"))
+        );
         assert!((rmse(&p, &t).unwrap() - ((0.01 + 0.0 + 0.25) / 3.0f64).sqrt()).abs() < 1e-12);
     }
 

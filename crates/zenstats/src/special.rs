@@ -26,6 +26,21 @@ pub(crate) fn norm_cdf(z: f64) -> f64 {
     0.5 * erfc(-z / core::f64::consts::SQRT_2)
 }
 
+/// ln Φ(z), accurate in the far lower tail (asymptotic series below −30,
+/// where Φ itself approaches the smallest normal `f64`).
+pub(crate) fn ln_norm_cdf(z: f64) -> f64 {
+    if z.is_nan() {
+        return f64::NAN;
+    }
+    if z > -30.0 {
+        return norm_cdf(z).ln();
+    }
+    // Φ(z) = φ(z)/(−z) · (1 − 1/z² + 3/z⁴ − …) for z → −∞
+    let z2 = z * z;
+    -0.5 * z2 - (-z).ln() - 0.5 * (2.0 * core::f64::consts::PI).ln()
+        + (1.0 - 1.0 / z2 + 3.0 / (z2 * z2)).ln()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +61,15 @@ mod tests {
             let got = norm_cdf(z);
             assert!(((got - want) / want).abs() < 2e-7, "z={z}: {got} vs {want}");
         }
+    }
+
+    #[test]
+    fn ln_norm_cdf_is_continuous_at_the_switch_and_finite_far_out() {
+        let below = ln_norm_cdf(-30.000001);
+        let above = ln_norm_cdf(-29.999999);
+        assert!((below - above).abs() < 1e-3, "{below} {above}");
+        // ln Φ(−40) from the exact erfc: −804.608442013754
+        assert!((ln_norm_cdf(-40.0) + 804.608442013754).abs() < 1e-6);
+        assert!(ln_norm_cdf(-1e6).is_finite());
     }
 }

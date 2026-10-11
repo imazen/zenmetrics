@@ -20,7 +20,24 @@ that are too narrow for any claim about new images or codecs.
 - Put the interval on every criterion and on every paired difference between
   two metrics. Compute both metrics inside one statistic closure so they see
   the same resample.
-- With five or so sources the interval is descriptive; say so.
+- **A source drawn twice is two sources.** The statistic receives a `Draw`:
+  - sums over rows use `Draw::row_weights`;
+  - statistics over pairs of rows pass the draw to `zenstats::pairs` (or use
+    a `PairTable`), which weights a pair with `Draw::pair_weight`. Within-source
+    pairs then count once per copy, not once per pair of copies;
+  - statistics that group rows (`per_group_srocc`) or refit something
+    (`jnd::out_of_fold`) run on `Draw::expand`, whose copy-aware labels make
+    the two copies different groups. Expanding without those labels merges
+    the copies into one group and under-covers.
+- `Design::TwoWay` is mildly conservative (Owen 2007): with few levels it
+  inflates the source and codec variance terms and triples the interaction
+  term, so a cross-codec comparison gets the widest intervals.
+- With few sources every simple interval under-covers. Measured on a
+  synthetic 12-source population (`crates/zenstats/tests/coverage.rs`): 95 %
+  percentile 0.884, Student `estimate ± t(G−1)·se·√(G/(G−1))` 0.911, exact t
+  over per-source values 0.910. Report the Student form beside the percentile
+  one with fewer than about 30 sources; with five or so the interval is
+  descriptive, and say so.
 - Print the row-bootstrap interval beside it only as a labelled comparison.
 
 ## Split pairwise agreement into three classes
@@ -62,8 +79,12 @@ criterion more than the metric does.
    predicted by a map that saw its source. A metric that outputs the target
    unit natively is also scored as delivered, so the mapping's share is
    visible.
-3. **Compute statistics on the pooled out-of-fold predictions**, with the
-   cluster interval. Per-fold intervals under-cover.
+3. **Compute statistics on the pooled out-of-fold predictions.** For the
+   interval, refit the maps inside the cluster bootstrap (`Draw::expand`, then
+   `out_of_fold` with the copy-aware source labels as folds). A bootstrap of
+   fixed out-of-fold predictions leaves out the map-fitting variance and is
+   too narrow; Bates, Hastie & Tibshirani (2024) show the analogous failure of
+   the standard cross-validation interval and propose nested cross-validation.
 4. **Headline: RMSE in target units and τ̂** (`jnd::excess_error_sd`), the
    error standard deviation left after removing the target's measurement
    noise. τ̂ does not grow as a study adds observers, and it does not let the
@@ -72,7 +93,9 @@ criterion more than the metric does.
    (`z_rmse_per_sample`) is weighted by 1/σ²; on data whose σ shrinks toward
    zero distortion it mostly scores the near-threshold stimuli and changes
    rank with the mapping family. Report it as a goodness-of-fit check, beside
-   the outlier ratio and P.1401 rmse* (`jnd::rmse_star`).
+   the outlier ratio and P.1401 rmse* (`jnd::rmse_star`, which takes each
+   stimulus' own interval bounds, so asymmetric JND intervals are handled;
+   use d = 0 for out-of-fold predictions).
 6. **Charge the map:** report the declared family, a first-order map and an
    out-of-fold isotonic map side by side.
 7. **Transfer:** for a map fitted on one dataset and applied to another, report
@@ -85,12 +108,24 @@ criterion more than the metric does.
 When a dataset releases its raw 2AFC or triplet responses, score them
 directly (`zenstats::forced_choice`):
 
-- `agreement`: response-weighted agreement and the majority-oracle ceiling.
-  Always report the ceiling; the same accuracy means opposite things against a
-  0.75 and a 0.95 ceiling.
+- **Prepare the responses like the reconstruction did.** Screen workers and
+  drop trap questions and questions that show the same image on both sides.
+  Keep "not sure" answers as `Choice::NotSure`; they count half for each side,
+  the JPEG AIC convention. On unscreened crowd responses the human scale
+  itself can score near chance.
+- **Check the unit.** `fit_observer_slope` on the human scale values should
+  come out near 0.6745 for a JND defined at 75 %. Report it beside every
+  log-likelihood.
+- `agreement`: response-weighted agreement with three ceilings, each named:
+  the in-sample majority oracle `ceiling_response` (an upper bound), its
+  leave-one-response-out counterpart `ceiling_loo`, and
+  `observer_agreement`, the expected agreement of two different observers
+  (p² + (1 − p)², the human ceiling LPIPS reports). Compare datasets with
+  different numbers of responses per question on the cross-fitted ones.
 - `log_likelihood`: once a metric's map is frozen, the held-out
   log-likelihood of the choices under P = Φ(ΔJND / s), normalised between
-  chance and the per-group ceiling. It is a proper scoring rule, keeps
+  chance and the per-group ceiling, in sample (`normalized`) and bias
+  corrected (`normalized_corrected`). It is a proper scoring rule, keeps
   magnitudes, and weights comparisons by real observer disagreement.
 
 Score unboosted comparisons on native pixels first, and declare which pixels
@@ -116,20 +151,23 @@ metric out of comparisons within a level.
 Use paired cluster-bootstrap differences with Holm adjustment
 (`zenstats::multiple::holm`). P.1401 §7.6.5 requires correcting for multiple
 comparisons and names Bonferroni; Holm controls the same family-wise error
-rate and is never less powerful. A Friedman test over sources with
-a critical-difference diagram can summarise an overall order. Avoid
-mean-rank post-hoc tests, whose outcome depends on which other metrics are in
-the pool.
+rate and is never less powerful. For an overall order, use pairwise tests
+over sources (Wilcoxon signed-rank or sign tests) with Holm, and draw any
+critical-difference style diagram from those. Do not use the Nemenyi
+mean-rank post-hoc test behind the usual Friedman critical-difference diagram:
+its outcome depends on which other metrics are in the pool (Benavoli et al.
+2016). With five sources an exact two-sided Wilcoxon test cannot go below
+p = 0.0625, so no pair can be declared different at 0.05 by it.
 
 ## Implementation status
 
 | method | `zenstats` | wired into a report |
 |---|---|---|
-| source / source × codec bootstrap | `resample` | not yet |
-| pair classes, expected observer agreement | `pairs` | not yet |
+| source / source × codec bootstrap with copy-aware draws | `resample` | not yet |
+| pair classes, expected observer agreement, `PairTable` | `pairs` | not yet |
 | declared maps, out-of-fold, RMSE, τ̂, rmse* | `jnd` | not yet |
 | raw forced-choice agreement | `forced_choice::agreement` | zensim `panel --pairwise` (its own copy until it moves to this one) |
-| forced-choice log-likelihood | `forced_choice::log_likelihood` | not yet |
+| forced-choice log-likelihood, observer slope, cross-fitted ceilings | `forced_choice` | not yet |
 | Holm | `multiple` | not yet |
 
 The evaluation CLI that applies all of this to every metric is the next step:
@@ -143,10 +181,13 @@ the generic evaluator, and it calls these statistics only where noted.
 - Testolina et al. 2024 (JND unit, 75 % correct), arXiv:2410.09501
 - Krasula et al., QoMEX 2016, doi:10.1109/QoMEX.2016.7498936; Hanhart et al.,
   QoMEX 2016, doi:10.1109/QoMEX.2016.7498960
-- DerSimonian & Laird 1986, doi:10.1016/0197-2456(86)90046-2
+- Veroniki et al. 2016 (between-study variance estimators),
+  doi:10.1002/jrsm.1164; DerSimonian & Laird 1986,
+  doi:10.1016/0197-2456(86)90046-2
+- Men et al. 2021 (boosted triplet comparisons), doi:10.1109/ACCESS.2021.3118295
 - Varma & Simon 2006, doi:10.1186/1471-2105-7-91; Roberts et al. 2017,
   doi:10.1111/ecog.02881; Bates, Hastie & Tibshirani 2024,
   doi:10.1080/01621459.2023.2197686
 - Holm 1979, *Scand. J. Statist.* 6(2); Demšar 2006, JMLR 7; Benavoli et al.
   2016, arXiv:1505.02288
-- Zhang et al. 2018 (2AFC with a human ceiling), arXiv:1801.03924
+- Zhang et al. 2018 (LPIPS; 2AFC scored against p² + (1 − p)²), arXiv:1801.03924

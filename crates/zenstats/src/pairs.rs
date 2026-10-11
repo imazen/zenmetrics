@@ -38,10 +38,16 @@
 //! (doi:10.1109/QoMEX.2016.7498936); Hanhart et al., QoMEX 2016
 //! (doi:10.1109/QoMEX.2016.7498960).
 //!
-//! Both walks visit every pair, O(n²). That is fine for a few thousand rows;
-//! inside a bootstrap over tens of thousands of rows it is not.
+//! Both functions visit every pair, O(n²). Inside a bootstrap, build a
+//! [`PairTable`] once instead: it sums pairs per pair of (source, codec) cells,
+//! so each draw costs O(K²) for K cells and gives the same result.
+//!
+//! Under a cluster bootstrap, pass the [`Draw`] (not row weights): a source
+//! drawn twice is two sources, so its within-source pairs count twice, not
+//! four times ([`Draw::pair_weight`]).
 
 use crate::panel::{Orientation, spearman};
+use crate::resample::{Design, Draw};
 use crate::special::norm_cdf;
 
 /// Which question a pair asks. See the module docs.
@@ -175,8 +181,10 @@ pub enum PairError {
     Length(&'static str),
     /// A score, target, weight or σ is not finite (or a weight/σ is negative).
     NonFinite(&'static str),
-    /// A noise scale is not positive.
+    /// A noise scale is not positive (or a table was built without noise).
     BadScale,
+    /// A bootstrap draw or design does not match the source/codec labels.
+    DesignMismatch,
 }
 
 impl core::fmt::Display for PairError {
@@ -185,13 +193,19 @@ impl core::fmt::Display for PairError {
             Self::Length(what) => write!(f, "`{what}` has a different length from `predicted`"),
             Self::NonFinite(what) => write!(f, "`{what}` holds a non-finite or negative value"),
             Self::BadScale => write!(f, "observer scale must be positive and finite"),
+            Self::DesignMismatch => {
+                write!(
+                    f,
+                    "the bootstrap design does not match the source/codec labels"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for PairError {}
 
-/// Rows for a pair walk: scores, targets, keys and optional row weights.
+/// Rows for a pair walk: scores, targets, keys and an optional bootstrap draw.
 #[derive(Clone, Copy, Debug)]
 pub struct PairInput<'a> {
     /// Metric scores.
@@ -203,9 +217,13 @@ pub struct PairInput<'a> {
     /// Codec label per row. For a codec nested in its source, any labelling
     /// works: only equality within a source matters here.
     pub codec: &'a [u32],
-    /// Optional non-negative row weights (for example from
-    /// [`crate::resample::cluster_bootstrap`]); a pair weighs `wᵢ·wⱼ`.
-    pub weights: Option<&'a [f64]>,
+    /// Optional bootstrap resample. Pairs are weighted by
+    /// [`Draw::pair_weight`], which keeps copies of a drawn source distinct.
+    /// The draw's first factor must partition rows exactly like `source`
+    /// (`Design::OneWay(source)` or `Design::TwoWay(source, …)`), and a second
+    /// factor must agree with `codec` inside every source; `Design::Rows`
+    /// draws are accepted as they are.
+    pub draw: Option<&'a Draw<'a>>,
     /// Whether the metric rises or falls with the target. `Auto` resolves the
     /// sign once from the pooled Spearman correlation, never per class.
     pub orientation: Orientation,
@@ -229,13 +247,11 @@ impl PairInput<'_> {
         if !self.target.iter().all(|x| x.is_finite()) {
             return Err(PairError::NonFinite("target"));
         }
-        if let Some(w) = self.weights {
-            if w.len() != n {
-                return Err(PairError::Length("weights"));
+        if let Some(d) = self.draw {
+            if d.n_rows() != n {
+                return Err(PairError::Length("draw"));
             }
-            if !w.iter().all(|x| x.is_finite() && *x >= 0.0) {
-                return Err(PairError::NonFinite("weights"));
-            }
+            check_design(self.source, self.codec, d)?;
         }
         Ok(match self.orientation {
             Orientation::HigherIsBetter => 1.0,
@@ -249,80 +265,42 @@ impl PairInput<'_> {
             }
         })
     }
-
-    fn weight(&self, i: usize) -> f64 {
-        self.weights.map_or(1.0, |w| w[i])
-    }
 }
 
-/// Sign agreement per pair class. Target differences with magnitude at most
-/// `target_tie` are excluded (and counted in `target_ties`).
-pub fn class_agreement(
-    input: &PairInput<'_>,
-    target_tie: f64,
-) -> Result<PerClass<ClassCounts>, PairError> {
-    let sign = input.validate()?;
-    let n = input.predicted.len();
-    let mut acc = [ClassCounts::default(); 3];
-    for i in 0..n {
-        let wi = input.weight(i);
-        if wi == 0.0 {
-            continue;
+/// The draw's factors must match the pair classes: factor 0 is the source
+/// partition, factor 1 (if any) agrees with the codec labels inside a source.
+fn check_design(source: &[u32], codec: &[u32], d: &Draw<'_>) -> Result<(), PairError> {
+    use std::collections::HashMap;
+    if d.is_row_design() {
+        return Ok(());
+    }
+    let mut s2a: HashMap<u32, usize> = HashMap::new();
+    let mut a2s: HashMap<usize, u32> = HashMap::new();
+    for (i, &s) in source.iter().enumerate() {
+        let a = d.level(0, i);
+        if *s2a.entry(s).or_insert(a) != a || *a2s.entry(a).or_insert(s) != s {
+            return Err(PairError::DesignMismatch);
         }
-        for j in (i + 1)..n {
-            let w = wi * input.weight(j);
-            if w == 0.0 {
-                continue;
-            }
-            let c = &mut acc[PairClass::of(
-                input.source[i],
-                input.source[j],
-                input.codec[i],
-                input.codec[j],
-            )
-            .slot()];
-            let dt = input.target[i] - input.target[j];
-            if dt.abs() <= target_tie {
-                c.target_ties += w;
-                continue;
-            }
-            c.pairs += w;
-            let dp = sign * (input.predicted[i] - input.predicted[j]);
-            if dp == 0.0 {
-                c.metric_ties += w;
-            } else if (dp > 0.0) == (dt > 0.0) {
-                c.concordant += w;
-            } else {
-                c.discordant += w;
+    }
+    if d.n_factors() > 1 {
+        let mut sc2b: HashMap<(u32, u32), usize> = HashMap::new();
+        let mut sb2c: HashMap<(u32, usize), u32> = HashMap::new();
+        for i in 0..source.len() {
+            let b = d.level(1, i);
+            if *sc2b.entry((source[i], codec[i])).or_insert(b) != b
+                || *sb2c.entry((source[i], b)).or_insert(codec[i]) != codec[i]
+            {
+                return Err(PairError::DesignMismatch);
             }
         }
     }
-    let mut pooled = ClassCounts::default();
-    for c in &acc {
-        pooled.pairs += c.pairs;
-        pooled.concordant += c.concordant;
-        pooled.discordant += c.discordant;
-        pooled.metric_ties += c.metric_ties;
-        pooled.target_ties += c.target_ties;
-    }
-    Ok(PerClass {
-        same_source_same_codec: acc[0],
-        same_source_cross_codec: acc[1],
-        cross_source: acc[2],
-        pooled,
-    })
+    Ok(())
 }
 
-/// Expected observer agreement per pair class. See the module docs.
-pub fn expected_agreement(
-    input: &PairInput<'_>,
-    noise: HumanNoise<'_>,
-) -> Result<PerClass<ExpectedAgreement>, PairError> {
-    let sign = input.validate()?;
-    let n = input.predicted.len();
+fn check_noise(noise: &HumanNoise<'_>, n: usize) -> Result<(), PairError> {
     match noise {
         HumanNoise::Observer { scale } => {
-            if !(scale.is_finite() && scale > 0.0) {
+            if !(scale.is_finite() && *scale > 0.0) {
                 return Err(PairError::BadScale);
             }
         }
@@ -335,88 +313,321 @@ pub fn expected_agreement(
             }
         }
     }
-    // per class: (weight, metric agreement sum, oracle sum)
-    let mut acc = [[0.0f64; 3]; 3];
-    for i in 0..n {
-        let wi = input.weight(i);
-        if wi == 0.0 {
-            continue;
-        }
-        for j in (i + 1)..n {
-            let w = wi * input.weight(j);
-            if w == 0.0 {
-                continue;
+    Ok(())
+}
+
+/// Unweighted contributions of pairs, per class.
+#[derive(Clone, Copy, Debug, Default)]
+struct Acc {
+    counts: [ClassCounts; 3],
+    /// per class: (pairs, metric agreement sum, oracle sum)
+    expected: [[f64; 3]; 3],
+}
+
+impl Acc {
+    fn add_scaled(&mut self, other: &Acc, w: f64) {
+        for k in 0..3 {
+            let (a, b) = (&mut self.counts[k], &other.counts[k]);
+            a.pairs += w * b.pairs;
+            a.concordant += w * b.concordant;
+            a.discordant += w * b.discordant;
+            a.metric_ties += w * b.metric_ties;
+            a.target_ties += w * b.target_ties;
+            for f in 0..3 {
+                self.expected[k][f] += w * other.expected[k][f];
             }
-            let dt = input.target[i] - input.target[j];
-            let z = match noise {
-                HumanNoise::Observer { scale } => dt.abs() / scale,
-                HumanNoise::Measurement { sigma } => {
-                    let s = (sigma[i] * sigma[i] + sigma[j] * sigma[j]).sqrt();
-                    if s > 0.0 {
-                        dt.abs() / s
-                    } else if dt == 0.0 {
-                        0.0
-                    } else {
-                        f64::INFINITY
-                    }
-                }
-            };
-            // probability an observer orders the pair like the target, and its complement
-            let p_right = norm_cdf(z);
-            let p_wrong = norm_cdf(-z);
-            let dp = sign * (input.predicted[i] - input.predicted[j]);
-            let metric = if dp == 0.0 || dt == 0.0 {
-                0.5
-            } else if (dp > 0.0) == (dt > 0.0) {
-                p_right
-            } else {
-                p_wrong
-            };
-            let a = &mut acc[PairClass::of(
-                input.source[i],
-                input.source[j],
-                input.codec[i],
-                input.codec[j],
-            )
-            .slot()];
-            a[0] += w;
-            a[1] += w * metric;
-            a[2] += w * p_right;
         }
     }
-    let finish = |a: [f64; 3]| -> ExpectedAgreement {
-        if a[0] <= 0.0 {
-            return ExpectedAgreement {
-                pairs: 0.0,
-                agreement: f64::NAN,
-                ceiling: f64::NAN,
-                normalized: f64::NAN,
-            };
+
+    fn counts(&self) -> PerClass<ClassCounts> {
+        let mut pooled = ClassCounts::default();
+        for c in &self.counts {
+            pooled.pairs += c.pairs;
+            pooled.concordant += c.concordant;
+            pooled.discordant += c.discordant;
+            pooled.metric_ties += c.metric_ties;
+            pooled.target_ties += c.target_ties;
         }
-        let agreement = a[1] / a[0];
-        let ceiling = a[2] / a[0];
-        ExpectedAgreement {
-            pairs: a[0],
-            agreement,
-            ceiling,
-            normalized: if ceiling > 0.5 {
-                (agreement - 0.5) / (ceiling - 0.5)
-            } else {
-                f64::NAN
-            },
+        PerClass {
+            same_source_same_codec: self.counts[0],
+            same_source_cross_codec: self.counts[1],
+            cross_source: self.counts[2],
+            pooled,
         }
-    };
-    let pooled = [
-        acc[0][0] + acc[1][0] + acc[2][0],
-        acc[0][1] + acc[1][1] + acc[2][1],
-        acc[0][2] + acc[1][2] + acc[2][2],
-    ];
-    Ok(PerClass {
-        same_source_same_codec: finish(acc[0]),
-        same_source_cross_codec: finish(acc[1]),
-        cross_source: finish(acc[2]),
-        pooled: finish(pooled),
-    })
+    }
+
+    fn expected(&self) -> PerClass<ExpectedAgreement> {
+        let finish = |a: [f64; 3]| -> ExpectedAgreement {
+            if a[0] <= 0.0 {
+                return ExpectedAgreement {
+                    pairs: 0.0,
+                    agreement: f64::NAN,
+                    ceiling: f64::NAN,
+                    normalized: f64::NAN,
+                };
+            }
+            let agreement = a[1] / a[0];
+            let ceiling = a[2] / a[0];
+            ExpectedAgreement {
+                pairs: a[0],
+                agreement,
+                ceiling,
+                normalized: if ceiling > 0.5 {
+                    (agreement - 0.5) / (ceiling - 0.5)
+                } else {
+                    f64::NAN
+                },
+            }
+        };
+        let e = &self.expected;
+        let pooled = [
+            e[0][0] + e[1][0] + e[2][0],
+            e[0][1] + e[1][1] + e[2][1],
+            e[0][2] + e[1][2] + e[2][2],
+        ];
+        PerClass {
+            same_source_same_codec: finish(e[0]),
+            same_source_cross_codec: finish(e[1]),
+            cross_source: finish(e[2]),
+            pooled: finish(pooled),
+        }
+    }
+}
+
+/// Add the pair (i, j) with weight `w` to `acc`. `noise` None skips the
+/// expected-agreement sums.
+#[allow(clippy::too_many_arguments)]
+fn add_pair(
+    acc: &mut Acc,
+    input: &PairInput<'_>,
+    sign: f64,
+    target_tie: f64,
+    noise: Option<&HumanNoise<'_>>,
+    i: usize,
+    j: usize,
+    w: f64,
+) {
+    let slot = PairClass::of(
+        input.source[i],
+        input.source[j],
+        input.codec[i],
+        input.codec[j],
+    )
+    .slot();
+    let dt = input.target[i] - input.target[j];
+    let dp = sign * (input.predicted[i] - input.predicted[j]);
+    let c = &mut acc.counts[slot];
+    if dt.abs() <= target_tie {
+        c.target_ties += w;
+    } else {
+        c.pairs += w;
+        if dp == 0.0 {
+            c.metric_ties += w;
+        } else if (dp > 0.0) == (dt > 0.0) {
+            c.concordant += w;
+        } else {
+            c.discordant += w;
+        }
+    }
+    if let Some(noise) = noise {
+        let z = match noise {
+            HumanNoise::Observer { scale } => dt.abs() / scale,
+            HumanNoise::Measurement { sigma } => {
+                let s = (sigma[i] * sigma[i] + sigma[j] * sigma[j]).sqrt();
+                if s > 0.0 {
+                    dt.abs() / s
+                } else if dt == 0.0 {
+                    0.0
+                } else {
+                    f64::INFINITY
+                }
+            }
+        };
+        // probability an observer orders the pair like the target, and its complement
+        let p_right = norm_cdf(z);
+        let p_wrong = norm_cdf(-z);
+        let metric = if dp == 0.0 || dt == 0.0 {
+            0.5
+        } else if (dp > 0.0) == (dt > 0.0) {
+            p_right
+        } else {
+            p_wrong
+        };
+        let a = &mut acc.expected[slot];
+        a[0] += w;
+        a[1] += w * metric;
+        a[2] += w * p_right;
+    }
+}
+
+fn walk(input: &PairInput<'_>, sign: f64, target_tie: f64, noise: Option<&HumanNoise<'_>>) -> Acc {
+    let n = input.predicted.len();
+    let mut acc = Acc::default();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let w = input.draw.map_or(1.0, |d| d.pair_weight(i, j));
+            if w != 0.0 {
+                add_pair(&mut acc, input, sign, target_tie, noise, i, j, w);
+            }
+        }
+    }
+    acc
+}
+
+/// Sign agreement per pair class. Target differences with magnitude at most
+/// `target_tie` are excluded (and counted in `target_ties`).
+pub fn class_agreement(
+    input: &PairInput<'_>,
+    target_tie: f64,
+) -> Result<PerClass<ClassCounts>, PairError> {
+    let sign = input.validate()?;
+    Ok(walk(input, sign, target_tie, None).counts())
+}
+
+/// Expected observer agreement per pair class. See the module docs.
+pub fn expected_agreement(
+    input: &PairInput<'_>,
+    noise: HumanNoise<'_>,
+) -> Result<PerClass<ExpectedAgreement>, PairError> {
+    let sign = input.validate()?;
+    check_noise(&noise, input.predicted.len())?;
+    Ok(walk(input, sign, 0.0, Some(&noise)).expected())
+}
+
+/// Pair statistics precomputed per pair of cells, for fast bootstrapping.
+///
+/// A cell is one (source, codec) combination. Every pair of rows is visited
+/// once at construction (O(n²)); each bootstrap draw then costs O(K²) for K
+/// cells, because a draw's pair weight depends only on the two rows' design
+/// levels, which are constant within a cell. Results equal
+/// [`class_agreement`] and [`expected_agreement`] with the same draw.
+#[derive(Clone, Debug)]
+pub struct PairTable {
+    n_rows: usize,
+    /// Design levels per cell, per factor.
+    cell_levels: Vec<Vec<usize>>,
+    /// Upper-triangular (p ≤ q) cell-pair accumulators, row-major.
+    acc: Vec<Acc>,
+    n_cells: usize,
+    has_noise: bool,
+}
+
+impl PairTable {
+    /// Precompute over `input` (its `draw` must be `None`) for draws from
+    /// `design`, which must be `Design::OneWay(source)` or
+    /// `Design::TwoWay(source, codec-or-nested-codec)`. `noise` enables
+    /// [`PairTable::expected_agreement`].
+    pub fn new(
+        input: &PairInput<'_>,
+        design: &Design<'_>,
+        target_tie: f64,
+        noise: Option<HumanNoise<'_>>,
+    ) -> Result<Self, PairError> {
+        if input.draw.is_some() {
+            return Err(PairError::DesignMismatch);
+        }
+        let sign = input.validate()?;
+        let n = input.predicted.len();
+        if let Some(nz) = &noise {
+            check_noise(nz, n)?;
+        }
+        if matches!(design, Design::Rows) {
+            return Err(PairError::DesignMismatch);
+        }
+        // a unit draw gives access to the design's dense levels
+        let dense =
+            crate::resample::DesignLevels::new(n, design).map_err(|_| PairError::DesignMismatch)?;
+        let draw = dense.unit_draw();
+        check_design(input.source, input.codec, &draw)?;
+        let nf = draw.n_factors();
+        // cells keyed by (source, codec)
+        let mut cell_of = std::collections::HashMap::new();
+        let mut cells = Vec::with_capacity(n);
+        let mut cell_levels: Vec<Vec<usize>> = Vec::new();
+        for i in 0..n {
+            let next = cell_levels.len();
+            let c = *cell_of
+                .entry((input.source[i], input.codec[i]))
+                .or_insert(next);
+            if c == next {
+                cell_levels.push((0..nf).map(|f| draw.level(f, i)).collect());
+            } else if (0..nf).any(|f| cell_levels[c][f] != draw.level(f, i)) {
+                return Err(PairError::DesignMismatch);
+            }
+            cells.push(c);
+        }
+        let k = cell_levels.len();
+        let mut acc = vec![Acc::default(); k * k];
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let (p, q) = (cells[i].min(cells[j]), cells[i].max(cells[j]));
+                add_pair(
+                    &mut acc[p * k + q],
+                    input,
+                    sign,
+                    target_tie,
+                    noise.as_ref(),
+                    i,
+                    j,
+                    1.0,
+                );
+            }
+        }
+        Ok(Self {
+            n_rows: n,
+            cell_levels,
+            acc,
+            n_cells: k,
+            has_noise: noise.is_some(),
+        })
+    }
+
+    fn total(&self, draw: &Draw<'_>) -> Result<Acc, PairError> {
+        if draw.n_rows() != self.n_rows
+            || draw.is_row_design()
+            || draw.n_factors() != self.cell_levels.first().map_or(0, Vec::len)
+        {
+            return Err(PairError::DesignMismatch);
+        }
+        let k = self.n_cells;
+        let mut out = Acc::default();
+        for p in 0..k {
+            for q in p..k {
+                let a = &self.acc[p * k + q];
+                let lv = |c: usize| -> [usize; 2] {
+                    let l = &self.cell_levels[c];
+                    [l[0], l.get(1).copied().unwrap_or(0)]
+                };
+                let w = crate::resample::hierarchical_pair_weight(
+                    false,
+                    draw.n_factors(),
+                    lv(p),
+                    lv(q),
+                    |f, l| draw.multiplicity(f, l),
+                );
+                if w != 0.0 {
+                    out.add_scaled(a, w);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// [`class_agreement`] under `draw`.
+    pub fn class_agreement(&self, draw: &Draw<'_>) -> Result<PerClass<ClassCounts>, PairError> {
+        Ok(self.total(draw)?.counts())
+    }
+
+    /// [`expected_agreement`] under `draw`; requires `noise` at construction.
+    pub fn expected_agreement(
+        &self,
+        draw: &Draw<'_>,
+    ) -> Result<PerClass<ExpectedAgreement>, PairError> {
+        if !self.has_noise {
+            return Err(PairError::BadScale);
+        }
+        Ok(self.total(draw)?.expected())
+    }
 }
 
 #[cfg(test)]
@@ -429,7 +640,7 @@ mod tests {
             target: t,
             source: s,
             codec: c,
-            weights: None,
+            draw: None,
             orientation: Orientation::HigherIsBetter,
         }
     }
@@ -481,33 +692,170 @@ mod tests {
         assert_eq!(r.cross_source.agreement(), 0.0);
     }
 
-    #[test]
-    fn weights_match_row_duplication() {
-        let p = [1.0, 2.0, 3.0, 0.5];
-        let t = [1.0, 3.0, 2.0, 0.0];
-        let s = [0u32, 0, 1, 1];
-        let c = [0u32, 1, 0, 0];
-        let w = [2.0, 1.0, 1.0, 3.0];
-        let mut inp = input(&p, &t, &s, &c);
-        inp.weights = Some(&w);
-        let weighted = class_agreement(&inp, 0.0).unwrap();
-        let (mut dp, mut dt, mut ds, mut dc) = (vec![], vec![], vec![], vec![]);
-        for i in 0..4 {
-            for _ in 0..(w[i] as usize) {
-                dp.push(p[i]);
-                dt.push(t[i]);
-                ds.push(s[i]);
-                dc.push(c[i]);
+    /// A small crossed dataset: 4 sources × 3 codecs × 3 rungs, with a
+    /// metric that is mostly right, sometimes reversed, sometimes tied.
+    fn crossed() -> (Vec<f64>, Vec<f64>, Vec<u32>, Vec<u32>) {
+        let (mut p, mut t, mut s, mut c) = (vec![], vec![], vec![], vec![]);
+        for src in 0..4u32 {
+            for codec in 0..3u32 {
+                for rung in 0..3u32 {
+                    let truth = 0.4 * rung as f64 + 0.15 * codec as f64 + 0.3 * src as f64;
+                    let noise = (((src * 7 + codec * 3 + rung * 5) % 5) as f64 - 2.0) * 0.12;
+                    p.push(((truth + noise) * 10.0).round() / 10.0);
+                    t.push(truth);
+                    s.push(src);
+                    c.push(codec);
+                }
             }
         }
-        let dup = class_agreement(&input(&dp, &dt, &ds, &dc), 0.0).unwrap();
-        // duplicated copies of one row form target-tied pairs; everything else matches
-        for class in PairClass::ALL {
-            let (a, b) = (weighted.get(class), dup.get(class));
-            assert_eq!(a.concordant, b.concordant, "{class:?}");
-            assert_eq!(a.discordant, b.discordant, "{class:?}");
-            assert_eq!(a.pairs, b.pairs, "{class:?}");
+        (p, t, s, c)
+    }
+
+    /// Independent reference: materialise the resample with explicit copy
+    /// identities and count pairs the plain way. Pairs between different
+    /// copies of one source, or (two-way) different copies of one codec inside
+    /// one source copy, are dropped; every other pair counts once.
+    fn materialised(inp: &PairInput<'_>, d: &Draw<'_>, two_way: bool) -> PerClass<ClassCounts> {
+        let n = inp.predicted.len();
+        // (row, source copy, codec copy)
+        let mut rows = Vec::new();
+        for i in 0..n {
+            let ms = d.multiplicity(0, d.level(0, i)) as usize;
+            let mc = if two_way {
+                d.multiplicity(1, d.level(1, i)) as usize
+            } else {
+                1
+            };
+            for k in 0..ms {
+                for l in 0..mc {
+                    rows.push((i, k, l));
+                }
+            }
         }
+        let mut acc = [ClassCounts::default(); 3];
+        for x in 0..rows.len() {
+            for y in (x + 1)..rows.len() {
+                let ((i, ki, li), (j, kj, lj)) = (rows[x], rows[y]);
+                let same_src = inp.source[i] == inp.source[j];
+                if same_src && ki != kj {
+                    continue;
+                }
+                if two_way && same_src && inp.codec[i] == inp.codec[j] && li != lj {
+                    continue;
+                }
+                let cls = PairClass::of(inp.source[i], inp.source[j], inp.codec[i], inp.codec[j]);
+                let c = &mut acc[cls.slot()];
+                let dt = inp.target[i] - inp.target[j];
+                if dt == 0.0 {
+                    c.target_ties += 1.0;
+                    continue;
+                }
+                c.pairs += 1.0;
+                let dp = inp.predicted[i] - inp.predicted[j];
+                if dp == 0.0 {
+                    c.metric_ties += 1.0;
+                } else if (dp > 0.0) == (dt > 0.0) {
+                    c.concordant += 1.0;
+                } else {
+                    c.discordant += 1.0;
+                }
+            }
+        }
+        PerClass {
+            same_source_same_codec: acc[0],
+            same_source_cross_codec: acc[1],
+            cross_source: acc[2],
+            pooled: ClassCounts::default(),
+        }
+    }
+
+    #[test]
+    fn draw_weights_match_a_materialised_resample_with_copy_identity() {
+        use crate::resample::{BootstrapConfig, cluster_bootstrap};
+        use std::sync::Mutex;
+        let (p, t, s, c) = crossed();
+        let failures = Mutex::new(Vec::new());
+        for two_way in [false, true] {
+            let design = if two_way {
+                Design::TwoWay(&s, &c)
+            } else {
+                Design::OneWay(&s)
+            };
+            let cfg = BootstrapConfig {
+                resamples: 60,
+                seed: 11,
+                level: 0.95,
+            };
+            let table = PairTable::new(
+                &input(&p, &t, &s, &c),
+                &design,
+                0.0,
+                Some(HumanNoise::JND_75),
+            )
+            .unwrap();
+            cluster_bootstrap(p.len(), &design, &cfg, |d| {
+                let mut inp = input(&p, &t, &s, &c);
+                inp.draw = Some(d);
+                let direct = class_agreement(&inp, 0.0).unwrap();
+                let want = materialised(&inp, d, two_way);
+                let fast = table.class_agreement(d).unwrap();
+                let direct_e = expected_agreement(&inp, HumanNoise::JND_75).unwrap();
+                let fast_e = table.expected_agreement(d).unwrap();
+                for class in PairClass::ALL {
+                    let (a, b, f) = (direct.get(class), want.get(class), fast.get(class));
+                    let same = |x: f64, y: f64| (x - y).abs() <= 1e-9 * (1.0 + x.abs());
+                    let ok = [
+                        (a.pairs, b.pairs),
+                        (a.concordant, b.concordant),
+                        (a.discordant, b.discordant),
+                        (a.metric_ties, b.metric_ties),
+                        (a.target_ties, b.target_ties),
+                        (a.pairs, f.pairs),
+                        (a.concordant, f.concordant),
+                        (a.discordant, f.discordant),
+                    ]
+                    .iter()
+                    .all(|&(x, y)| same(x, y));
+                    let (de, fe) = (direct_e.get(class), fast_e.get(class));
+                    let ok_e = (de.pairs - fe.pairs).abs() < 1e-9
+                        && (de.agreement.is_nan() && fe.agreement.is_nan()
+                            || (de.agreement - fe.agreement).abs() < 1e-12);
+                    if !ok || !ok_e {
+                        failures
+                            .lock()
+                            .unwrap()
+                            .push(format!("two_way={two_way} {class:?}: {a:?} {b:?} {f:?}"));
+                    }
+                }
+                Vec::new()
+            })
+            .unwrap();
+        }
+        let f = failures.into_inner().unwrap();
+        assert!(f.is_empty(), "{} mismatches, first: {}", f.len(), f[0]);
+    }
+
+    #[test]
+    fn a_draw_that_does_not_match_the_source_labels_is_refused() {
+        use crate::resample::{BootstrapConfig, cluster_bootstrap};
+        let (p, t, s, c) = crossed();
+        // cluster on codec while pairs are classed by source
+        let cfg = BootstrapConfig {
+            resamples: 1,
+            seed: 1,
+            level: 0.95,
+        };
+        cluster_bootstrap(p.len(), &Design::OneWay(&c), &cfg, |d| {
+            let mut inp = input(&p, &t, &s, &c);
+            inp.draw = Some(d);
+            assert_eq!(class_agreement(&inp, 0.0), Err(PairError::DesignMismatch));
+            Vec::new()
+        })
+        .unwrap();
+        assert!(matches!(
+            PairTable::new(&input(&p, &t, &s, &c), &Design::Rows, 0.0, None),
+            Err(PairError::DesignMismatch)
+        ));
     }
 
     #[test]

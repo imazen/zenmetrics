@@ -75,7 +75,7 @@ fn expected_observer_agreement_matches_brute_force_scipy() {
         target: &r::Y,
         source: &r::SOURCE,
         codec: &r::CODEC,
-        weights: None,
+        draw: None,
         orientation: Orientation::LowerIsBetter,
     };
     let got = expected_agreement(&input, HumanNoise::JND_75).unwrap();
