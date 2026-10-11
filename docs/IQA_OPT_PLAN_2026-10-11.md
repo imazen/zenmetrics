@@ -102,9 +102,14 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
       zenmetrics consumes it via a rev-pinned [patch.crates-io].
 - [x] ssim classical — 1.03x→4.43x @8.4MP 8t (row-parallel gaussian
       passes, `01c9e8b4`); the Oct-9 "superlinear" note is resolved.
-- [ ] P2: ssim2 — rayon edge enabled on the CLI's local fast-ssim2
-      (f839b2a5) but whole-image still ~1.0x: the pipeline's sequential
-      IIR column loops dominate; full fix is a fast-ssim2 PR.
+- [x] ssim2 — fast-ssim2 main 99b98cb9 parallelized the gaussian
+      vertical column blocks under rayon (private per-block scratch +
+      parallel row-scatter, bit-identical): whole-image 2.03x @8t
+      (1024² 65.5→32.2ms, 4K 833.9→410.1ms). Reaches zenmetrics via the
+      CLI's local-path 0.9.0 edge; the api + sweep driver still ride
+      registry 0.8.2 — porting the api's ssim2 call sites to the 0.9.0
+      PixelSlice API (3 call sites + cached_ref path) is deferred until
+      the 0.9.0 release or an explicit port decision.
 - [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit) or scoped f32
       under JOD parity gate.
 - [ ] P2: msssim-libvmaf, vsi/fsim tails; vifvec's ~20% 1t regression
