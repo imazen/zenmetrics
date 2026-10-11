@@ -172,68 +172,159 @@ fn gaussian_into(
     dst: &mut [f64],
     temp: &mut [f64],
 ) {
-    let mut row = vec![0.0_f64; w];
     let xlo = 5.min(w);
     let xhi = w.saturating_sub(5).max(xlo);
-    for y in 0..h {
-        let srow = &src[y * w..y * w + w];
-        let out = &mut temp[y * w..y * w + w];
-        match src2 {
-            None if !sq => row.copy_from_slice(srow),
-            None => {
-                for (r, &v) in row.iter_mut().zip(srow) {
-                    *r = v * v;
+    let mut ran_par = false;
+    #[cfg(not(target_family = "wasm"))]
+    if rayon::current_num_threads() > 1 && h >= 32 {
+        use rayon::prelude::*;
+        // Horizontal pass — rows write disjoint `temp` slices; each task
+        // keeps its own tap-row scratch.
+        temp.par_chunks_mut(w).enumerate().for_each_init(
+            || vec![0.0_f64; w],
+            |row, (y, out)| {
+                let srow = &src[y * w..y * w + w];
+                match src2 {
+                    None if !sq => row.copy_from_slice(srow),
+                    None => {
+                        for (r, &v) in row.iter_mut().zip(srow) {
+                            *r = v * v;
+                        }
+                    }
+                    Some(b2) => {
+                        let brow = &b2[y * w..y * w + w];
+                        for ((r, &v), &u) in row.iter_mut().zip(srow).zip(brow) {
+                            *r = v * u;
+                        }
+                    }
+                }
+                for (x, o) in out.iter_mut().enumerate().take(xlo) {
+                    *o = htap(&row, w, x, k);
+                }
+                for (x, o) in out.iter_mut().enumerate().take(w).skip(xhi) {
+                    *o = htap(&row, w, x, k);
+                }
+                let span = xhi - xlo;
+                if span > 0 {
+                    let s0 = &row[0..span];
+                    for (o, &v) in out[xlo..xhi].iter_mut().zip(s0) {
+                        *o = v * k[0];
+                    }
+                    for (i, &ki) in k.iter().enumerate().skip(1) {
+                        let s = &row[i..i + span];
+                        for (o, &v) in out[xlo..xhi].iter_mut().zip(s) {
+                            *o += v * ki;
+                        }
+                    }
+                }
+            },
+        );
+        ran_par = true;
+    }
+    if !ran_par {
+        let mut row = vec![0.0_f64; w];
+        for y in 0..h {
+            let srow = &src[y * w..y * w + w];
+            let out = &mut temp[y * w..y * w + w];
+            match src2 {
+                None if !sq => row.copy_from_slice(srow),
+                None => {
+                    for (r, &v) in row.iter_mut().zip(srow) {
+                        *r = v * v;
+                    }
+                }
+                Some(b2) => {
+                    let brow = &b2[y * w..y * w + w];
+                    for ((r, &v), &u) in row.iter_mut().zip(srow).zip(brow) {
+                        *r = v * u;
+                    }
                 }
             }
-            Some(b2) => {
-                let brow = &b2[y * w..y * w + w];
-                for ((r, &v), &u) in row.iter_mut().zip(srow).zip(brow) {
-                    *r = v * u;
+            for (x, o) in out.iter_mut().enumerate().take(xlo) {
+                *o = htap(&row, w, x, k);
+            }
+            for (x, o) in out.iter_mut().enumerate().take(w).skip(xhi) {
+                *o = htap(&row, w, x, k);
+            }
+            let span = xhi - xlo;
+            if span > 0 {
+                let s0 = &row[0..span];
+                for (o, &v) in out[xlo..xhi].iter_mut().zip(s0) {
+                    *o = v * k[0];
                 }
-            }
-        }
-        for (x, o) in out.iter_mut().enumerate().take(xlo) {
-            *o = htap(&row, w, x, k);
-        }
-        for (x, o) in out.iter_mut().enumerate().take(w).skip(xhi) {
-            *o = htap(&row, w, x, k);
-        }
-        let span = xhi - xlo;
-        if span > 0 {
-            let s0 = &row[0..span];
-            for (o, &v) in out[xlo..xhi].iter_mut().zip(s0) {
-                *o = v * k[0];
-            }
-            for (i, &ki) in k.iter().enumerate().skip(1) {
-                let s = &row[i..i + span];
-                for (o, &v) in out[xlo..xhi].iter_mut().zip(s) {
-                    *o += v * ki;
+                for (i, &ki) in k.iter().enumerate().skip(1) {
+                    let s = &row[i..i + span];
+                    for (o, &v) in out[xlo..xhi].iter_mut().zip(s) {
+                        *o += v * ki;
+                    }
                 }
             }
         }
     }
     let ylo = 5.min(h);
     let yhi = h.saturating_sub(5).max(ylo);
-    for y in 0..ylo {
-        for x in 0..w {
-            dst[y * w + x] = vtap(temp, w, h, x, y, k);
+    let mut ran_par2 = false;
+    #[cfg(not(target_family = "wasm"))]
+    if rayon::current_num_threads() > 1 && h >= 32 {
+        use rayon::prelude::*;
+        dst[..ylo * w]
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, o)| {
+                *o = vtap(temp, w, h, i % w, i / w, k);
+            });
+        dst[yhi * w..]
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, o)| {
+                let i = i + yhi * w;
+                *o = vtap(temp, w, h, i % w, i / w, k);
+            });
+        let vspan = (yhi - ylo) * w;
+        if vspan > 0 {
+            // Row-chunked interior: each chunk applies the same ordered
+            // 11-tap accumulate to its own span — per-element order kept.
+            dst[ylo * w..yhi * w]
+                .par_chunks_mut(w * 16)
+                .enumerate()
+                .for_each(|(ci, chunk)| {
+                    let base = (ylo - 5) * w + ci * w * 16;
+                    let s0 = &temp[base..base + chunk.len()];
+                    for (o, &v) in chunk.iter_mut().zip(s0) {
+                        *o = v * k[0];
+                    }
+                    for (i, &ki) in k.iter().enumerate().skip(1) {
+                        let s = &temp[base + i * w..base + i * w + chunk.len()];
+                        for (o, &v) in chunk.iter_mut().zip(s) {
+                            *o += v * ki;
+                        }
+                    }
+                });
         }
+        ran_par2 = true;
     }
-    for y in yhi..h {
-        for x in 0..w {
-            dst[y * w + x] = vtap(temp, w, h, x, y, k);
+    if !ran_par2 {
+        for y in 0..ylo {
+            for x in 0..w {
+                dst[y * w + x] = vtap(temp, w, h, x, y, k);
+            }
         }
-    }
-    let vspan = (yhi - ylo) * w;
-    if vspan > 0 {
-        let s0 = &temp[(ylo - 5) * w..(ylo - 5) * w + vspan];
-        for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s0) {
-            *o = v * k[0];
+        for y in yhi..h {
+            for x in 0..w {
+                dst[y * w + x] = vtap(temp, w, h, x, y, k);
+            }
         }
-        for (i, &ki) in k.iter().enumerate().skip(1) {
-            let s = &temp[(ylo - 5 + i) * w..(ylo - 5 + i) * w + vspan];
-            for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s) {
-                *o += v * ki;
+        let vspan = (yhi - ylo) * w;
+        if vspan > 0 {
+            let s0 = &temp[(ylo - 5) * w..(ylo - 5) * w + vspan];
+            for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s0) {
+                *o = v * k[0];
+            }
+            for (i, &ki) in k.iter().enumerate().skip(1) {
+                let s = &temp[(ylo - 5 + i) * w..(ylo - 5 + i) * w + vspan];
+                for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s) {
+                    *o += v * ki;
+                }
             }
         }
     }
