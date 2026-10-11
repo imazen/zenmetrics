@@ -330,3 +330,16 @@ cpu-metrics-1t8t out *sizes:
     nice -n 19 cargo build --release -p cpu-profile --bin new-metrics-wall
     scripts/cpu_metrics_1t8t.sh "{{out}}" {{sizes}}
     python3 scripts/cpu_metrics_1t8t_analyze.py "{{out}}"
+
+# sol-math lane validation uses the CI-pinned siblings, never the dev-tree lock.
+solmath-lock mode="--check":
+    TMPDIR="$HOME/tmp" LOCK_SNAP_DIR="$HOME/tmp/solmath-validation" scripts/ci/lock.sh {{mode}}
+
+solmath-test *features:
+    cd "$HOME/tmp/solmath-validation/work/zenmetrics" && TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="{{justfile_directory()}}/target/solmath" ~/work/zen/scripts/run-heavy --mem 12G -- cargo test --locked --manifest-path "$HOME/tmp/solmath-validation/work/zenmetrics/Cargo.toml" -p zenmetrics-math -p cvvdp {{features}}
+
+solmath-csf-bench *args:
+    cd "$HOME/tmp/solmath-validation/work/zenmetrics" && TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="{{justfile_directory()}}/target/solmath" RAYON_NUM_THREADS=8 ~/work/zen/scripts/run-heavy --mem 12G -- taskset -c 2-9 cargo bench --locked --manifest-path "$HOME/tmp/solmath-validation/work/zenmetrics/Cargo.toml" -p cvvdp --bench csf_wall {{args}}
+
+solmath-check *args:
+    cd "$HOME/tmp/solmath-validation/work/zenmetrics" && TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="{{justfile_directory()}}/target/solmath" ~/work/zen/scripts/run-heavy --mem 12G -- cargo {{args}}

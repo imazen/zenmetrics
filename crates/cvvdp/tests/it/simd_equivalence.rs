@@ -1264,7 +1264,7 @@ fn safe_pow_with_offset_envelope() {
 // Out-of-contract probe: DOCUMENT (not hard-assert) the behavior of the
 // `*_midp_unchecked` approximations on inputs the masking pipeline NEVER
 // produces — subnormals, exact zero into pow/log, etc. The kernels are
-// documented as "positive, in-range inputs only" (see simd_math.rs). The
+// documented as "positive, in-range inputs only" (see zenmetrics-math). The
 // brute-force harness surfaced that feeding `f32::MIN_POSITIVE` to
 // `pow_midp_unchecked` produces a large WRONG-SIGN value (the unchecked
 // log2 has no subnormal guard). This is NOT a bug to fix — it is the

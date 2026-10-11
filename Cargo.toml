@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/zenmetrics-math",
     "crates/butteraugli-gpu",
     "crates/zenhdr-corpus",
     "crates/cvvdp",

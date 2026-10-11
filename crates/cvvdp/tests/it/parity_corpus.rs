@@ -38,7 +38,7 @@ fn matches_host_scalar_on_corpus_q1_q90() {
         let cpu_jod = cv.score_with_warm_ref(&dist).unwrap();
         let ref_jod = predict_jod_still_3ch(&src, &dist, w as usize, h as usize, display, ppd);
         let diff = (cpu_jod - ref_jod).abs();
-        eprintln!("q={q}: cpu={cpu_jod:.6}  host_scalar={ref_jod:.6}  diff={diff:.6}");
+        eprintln!("q={q}: cpu={cpu_jod:.6}  host_scalar={ref_jod:.6}  diff={diff:e}");
         assert!(
             diff < 1e-4,
             "q={q}: cpu={cpu_jod}, host_scalar={ref_jod}, diff={diff}"

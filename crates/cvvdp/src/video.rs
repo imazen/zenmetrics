@@ -67,11 +67,11 @@ use crate::pyramid::{
     Band, PyramidScratch, WeberPyramid, WeberPyramidCache, build_gauss_pyramid_below,
     gauss_bands_with_capacity, gausspyr_expand, weber_bands_from_gauss_lexp,
 };
-use crate::simd_math::{
+use crate::{CvvdpParams, Error, Result};
+use zenmetrics_math::{
     lp2_finish, vabs_diff_mul_lp2_sum, vaxpy_into, vaxpy2_into, vfir_into, vfir2_into,
     vmul2_scale2_pair_into, vscale_into, vscale2_into,
 };
-use crate::{CvvdpParams, Error, Result};
 
 /// One side's DKL planes for one frame: `[A, RG, VY]`.
 type FramePlanes = [Vec<f32>; 3];

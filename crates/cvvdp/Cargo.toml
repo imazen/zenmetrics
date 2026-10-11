@@ -16,21 +16,13 @@ publish = false
 
 [features]
 default = ["std", "parallel"]
-# Pull AVX-512 SIMD tier into the archmage `incant!` dispatch path
-# used by the pyramid 5-tap kernels. OPT-IN: enabling this forces every
-# archmage-routed incant! site in cvvdp to provide v4 / v4x tier
-# variants (currently only `simd_pyramid` does — `simd_math`'s
-# `safe_pow_with_offset_into` / `vexp_into` / `vlog_into` / `vpow_into`
-# routes its own incant! with the default tier set, which does NOT
-# include v4 / v4x). Until those gain v4 variants, default-off avoids a
-# build failure. Without this flag, AVX-512 CPUs run the 8-wide AVX2
-# (`v4` polyfill) tier — still faster than scalar, just not the 16-wide
-# `v4x` win.
-avx512 = ["archmage/avx512", "magetypes/avx512"]
+# Opt-in native AVX-512 pyramid and shared math dispatch.
+# zenmetrics-math uses f32x16 at v4/v4x and f32x8 at the other tiers.
+avx512 = ["zenmetrics-math/avx512", "archmage/avx512", "magetypes/avx512"]
 # Use the standard library — most users want this. With `std` disabled
 # the crate falls back to `core + alloc` only, which is what no_std
 # wasm32 targets need.
-std = []
+std = ["zenmetrics-math/std"]
 # Allocator-only build. `alloc` is implied — kept as a feature to
 # make intent explicit. no_std + alloc is the minimum target.
 alloc = []
@@ -39,7 +31,7 @@ parallel = ["std", "dep:rayon"]
 # `zenpixels` integration smoke (scoring direct from `PixelLayout`).
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # TEST-ONLY: re-export the `pub(crate)` SIMD kernel entry points
-# (simd_pyramid + simd_math) through a `#[doc(hidden)]` module so the
+# (simd_pyramid + zenmetrics-math) through a `#[doc(hidden)]` module so the
 # brute-force SIMD-vs-scalar equivalence harness in
 # `tests/simd_equivalence.rs` can drive them directly. No production
 # code path enables this; it carries zero logic change and is hidden
@@ -52,11 +44,12 @@ __simd_equiv_test = []
 cvvdp-strip-parity-big = []
 
 [dependencies]
+zenmetrics-math = { path = "../zenmetrics-math", default-features = false }
 # Safe SIMD dispatch via capability tokens. Used by:
 #  - the pyramid 5-tap Gaussian SIMD port (Chunk 2 of the SIMD plan,
 #    `simd_pyramid.rs`),
 #  - vectorized transcendentals `vexp` / `vlog` / `vpow` via
-#    `simd_math.rs` (`pow_midp_unchecked` ≈ 128 ULP / 1e-5 rel-err)
+#    `zenmetrics-math` (`pow_midp_unchecked` ≈ 128 ULP / 1e-5 rel-err)
 #    used by the masking `safe_pow` calls.
 archmage = { workspace = true }
 magetypes = { workspace = true }
@@ -139,3 +132,7 @@ too_many_arguments = "allow"
 type_complexity = "allow"
 missing_safety_doc = "warn"
 undocumented_unsafe_blocks = "warn"
+
+[[bench]]
+name = "csf_wall"
+harness = false

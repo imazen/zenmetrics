@@ -61,6 +61,7 @@ fn matches_host_scalar_on_random_pairs() {
         (384, 256),
         (512, 512),
     ];
+    let mut max_diff = 0.0_f32;
     for (idx, &(w, h)) in cases.iter().enumerate() {
         let r = make_grid(w, h, 1000 + idx as u32);
         // Distort by adding noise.
@@ -75,11 +76,14 @@ fn matches_host_scalar_on_random_pairs() {
         let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
         let got = cv.score(&r, &d).unwrap();
         let diff = (want - got).abs();
+        max_diff = max_diff.max(diff);
+        eprintln!("{w}x{h}: cpu={got:.9} host_scalar={want:.9} delta={diff:e}");
         assert!(
             diff < 1e-4,
             "case {w}x{h}: cpu={got} host_scalar={want} diff={diff}"
         );
     }
+    eprintln!("synthetic max_jod_delta={max_diff:e}");
 }
 
 #[test]

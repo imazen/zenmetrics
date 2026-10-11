@@ -1139,6 +1139,7 @@ dependencies = [
  "imgref",
  "iwssim",
  "mad-iqa",
+ "mdctpsnr",
  "msssim",
  "nlpd",
  "psnrhvs",
@@ -1398,6 +1399,7 @@ dependencies = [
  "serde_json",
  "zenbench",
  "zenmetrics-corpus",
+ "zenmetrics-math",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -3319,6 +3321,7 @@ name = "mdctpsnr"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "rayon",
 ]
 
 [[package]]
@@ -3504,6 +3507,7 @@ dependencies = [
  "archmage",
  "iai-callgrind",
  "magetypes",
+ "rayon",
 ]
 
 [[package]]
@@ -7639,6 +7643,15 @@ dependencies = [
  "zenforks-cubecl",
  "zenpixels",
  "zenpixels-convert",
+]
+
+[[package]]
+name = "zenmetrics-math"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "rayon",
 ]
 
 [[package]]

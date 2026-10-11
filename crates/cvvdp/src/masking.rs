@@ -10,7 +10,7 @@
 //!   `Vec<f32>` buffers.
 //! - Emits `d_a / d_rg / d_vy` into caller-owned `&mut Vec<f32>`.
 //! - The per-pixel `safe_pow` calls are vectorized via
-//!   [`crate::simd_math::safe_pow_with_offset_into`] (archmage SIMD).
+//!   [`zenmetrics_math::safe_pow_with_offset_into`] (archmage SIMD).
 //!   Inputs are pre-offset by `SAFE_EPS > 0` so the unchecked
 //!   `pow_midp_unchecked` path is sound. The loop-invariant
 //!   `SAFE_EPS.powf(*)` constants are still hoisted once per band.
@@ -21,11 +21,11 @@ use crate::kernels::masking::{
     D_MAX, MASK_C, MASK_P, MASK_Q, MASK_Q_4, PU_PADSIZE, XCM_3X3, XCM_4X4,
 };
 
-use crate::simd_math::{
+use crate::simd_pyramid::gaussian_blur_sigma3_simd;
+use zenmetrics_math::{
     safe_pow_with_offset_into, vabs_diff_into, vabs_diff_pow_into, vmin_abs_into, vscale_into,
     vxcm_pool_clamp_4ch_sqsum_partial, xcm4_finish,
 };
-use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
 const SAFE_EPS: f32 = 1e-5;
 

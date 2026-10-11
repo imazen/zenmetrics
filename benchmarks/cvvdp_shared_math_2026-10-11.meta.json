@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-11",
+  "base_commit": "4ade83607f5a4aafcfdbbf3f3b58c182687d14f3",
+  "cpu": "Intel Core Ultra 7 265K",
+  "affinity": "2-9",
+  "rayon_threads": 8,
+  "size": [
+    1024,
+    1024
+  ],
+  "samples": 30,
+  "resolved_versions": {
+    "archmage": "0.9.29",
+    "magetypes": "0.9.29",
+    "zenbench": "0.1.9"
+  },
+  "command": "just solmath-lock && just solmath-csf-bench -- --format=csv",
+  "source_sha256": {
+    "crates/cvvdp/src/pipeline.rs": "808e5913f26330d275603de419f442fcf8172d2730d7c5e59088241b457342e6",
+    "crates/cvvdp/benches/csf_wall.rs": "c08c1d2608c187bfc6ad4e47348e1d1a51c8206c05a617a7f4d960e2280635b9",
+    "crates/zenmetrics-math/src/kernels.rs": "a77c62144d592e807b038e800e791d54c1f6b5400840e5a1997da9d23efb828f",
+    "crates/zenmetrics-math/src/policy.rs": "41b2889abcf6d850e0afaaab6b8d12211d18d94c8620f1dc82110c0bf9ef21a5"
+  },
+  "scalar_control_pipeline_sha256": "4fda1bed8654e0eb1360d4a56ec898a5d06275c5079e890d6d31d9294a112435",
+  "control": "Base pipeline with crate::simd_math imports redirected to zenmetrics_math; all other final sources, including the approved offset correction, held constant.",
+  "order": [
+    "original_before",
+    "initial_after",
+    "corrected_after_first",
+    "scalar_csf_control",
+    "corrected_after_repeat"
+  ],
+  "run_heavy": {
+    "scalar_csf_control": "rc=0 13s | peak-RSS 0.35GiB | min-avail 25846MiB | peak-load 2.27",
+    "corrected_after_repeat": "rc=0 12s | peak-RSS 0.35GiB | min-avail 25881MiB | peak-load 0.82"
+  },
+  "score_all_variants": "9.861638069"
+}

@@ -105,7 +105,6 @@ mod pipeline;
 mod pool;
 mod pyramid;
 mod scratch;
-mod simd_math;
 
 /// Dev-only per-kernel access for `benches/kernel_tiers.rs`.
 ///
@@ -118,13 +117,13 @@ mod simd_math;
 #[doc(hidden)]
 pub mod __bench_math {
     pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
-        crate::simd_math::vexp_into(xs, out)
+        zenmetrics_math::vexp_into(xs, out)
     }
     pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
-        crate::simd_math::vlog_into(xs, out)
+        zenmetrics_math::vlog_into(xs, out)
     }
     pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
-        crate::simd_math::vpow_into(xs, out, p)
+        zenmetrics_math::vpow_into(xs, out, p)
     }
 }
 mod simd_pyramid;
@@ -246,25 +245,25 @@ pub mod __simd_equiv_test_api {
         p: f32,
         offset_pow_p: f32,
     ) {
-        crate::simd_math::safe_pow_with_offset_into(xs, out, offset, p, offset_pow_p);
+        zenmetrics_math::safe_pow_with_offset_into(xs, out, offset, p, offset_pow_p);
     }
 
     /// `out[i] = exp(xs[i])` (magetypes `exp_midp_unchecked`).
     #[inline]
     pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
-        crate::simd_math::vexp_into(xs, out);
+        zenmetrics_math::vexp_into(xs, out);
     }
 
     /// `out[i] = ln(xs[i])` (magetypes `ln_midp_unchecked`, positive inputs).
     #[inline]
     pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
-        crate::simd_math::vlog_into(xs, out);
+        zenmetrics_math::vlog_into(xs, out);
     }
 
     /// `out[i] = xs[i]^p` (magetypes `pow_midp_unchecked`, positive inputs).
     #[inline]
     pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
-        crate::simd_math::vpow_into(xs, out, p);
+        zenmetrics_math::vpow_into(xs, out, p);
     }
 }
 

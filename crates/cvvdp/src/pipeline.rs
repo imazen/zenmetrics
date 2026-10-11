@@ -31,8 +31,8 @@ use crate::kernels::csf::{
     precompute_logs_row,
 };
 use crate::kernels::masking::{CH_GAIN, D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
-use crate::simd_math::safe_pow_with_offset_into;
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
+use zenmetrics_math::safe_pow_with_offset_into;
 
 use crate::masking::mult_mutual_band_into;
 
@@ -57,6 +57,7 @@ const CSF_L_BKG_MAX_IDX: f32 = 30.999_999;
 /// loop here has NO binary searches and the whole CSF evaluation
 /// reduces to 2 indexed reads + a linear combine + a single
 /// `f32::exp` per pixel per channel.
+#[cfg(test)]
 #[inline]
 fn apply_csf_row_per_pixel(log_l: f32, logs_row: &[f32; N_L_BKG]) -> f32 {
     let off_raw = (log_l - CSF_L_BKG_AXIS_MIN) * CSF_L_BKG_INV_STEP;
@@ -71,6 +72,83 @@ fn apply_csf_row_per_pixel(log_l: f32, logs_row: &[f32; N_L_BKG]) -> f32 {
     let log_s = log_s_raw + LOG_SENSITIVITY_CORRECTION;
     // exp(log_s * ln 10) == 10^log_s
     (log_s * core::f32::consts::LN_10).exp()
+}
+
+/// Tile-local sensitivity evaluation; no band-sized scratch or extra allocation.
+/// The multiply order is the scalar pipeline's `sample * (band_mul*s) * gain`.
+fn apply_csf_pairs(
+    log_l: &[f32],
+    rows: [&[f32; N_L_BKG]; 3],
+    reference: [&[f32]; 3],
+    distorted: [&[f32]; 3],
+    r_out: [&mut [f32]; 3],
+    t_out: [&mut [f32]; 3],
+    band_mul: f32,
+) {
+    const TILE: usize = 256;
+    let mut sensitivity = [0.0_f32; TILE];
+    for (((((row, r), t), ro), to), gain) in rows
+        .into_iter()
+        .zip(reference)
+        .zip(distorted)
+        .zip(r_out)
+        .zip(t_out)
+        .zip(CH_GAIN)
+    {
+        assert_eq!(ro.len(), log_l.len());
+        assert_eq!(to.len(), log_l.len());
+        for start in (0..log_l.len()).step_by(TILE) {
+            let end = (start + TILE).min(log_l.len());
+            zenmetrics_math::gather_lerp_exp_into(
+                &log_l[start..end],
+                row,
+                CSF_L_BKG_AXIS_MIN,
+                CSF_L_BKG_INV_STEP,
+                CSF_L_BKG_MAX_IDX,
+                LOG_SENSITIVITY_CORRECTION,
+                core::f32::consts::LN_10,
+                &mut sensitivity[..end - start],
+            );
+            for (j, &sens) in sensitivity[..end - start].iter().enumerate() {
+                let i = start + j;
+                let bm = band_mul * sens;
+                to[i] = t[i] * bm * gain;
+                ro[i] = r[i] * bm * gain;
+            }
+        }
+    }
+}
+
+/// Baseband differences consume sensitivities immediately in the stack tile.
+fn apply_csf_diffs(
+    log_l: &[f32],
+    rows: [&[f32; N_L_BKG]; 3],
+    reference: [&[f32]; 3],
+    distorted: [&[f32]; 3],
+    out: [&mut [f32]; 3],
+) {
+    const TILE: usize = 256;
+    let mut sensitivity = [0.0_f32; TILE];
+    for (((row, r), t), o) in rows.into_iter().zip(reference).zip(distorted).zip(out) {
+        assert_eq!(o.len(), log_l.len());
+        for start in (0..log_l.len()).step_by(TILE) {
+            let end = (start + TILE).min(log_l.len());
+            zenmetrics_math::gather_lerp_exp_into(
+                &log_l[start..end],
+                row,
+                CSF_L_BKG_AXIS_MIN,
+                CSF_L_BKG_INV_STEP,
+                CSF_L_BKG_MAX_IDX,
+                LOG_SENSITIVITY_CORRECTION,
+                core::f32::consts::LN_10,
+                &mut sensitivity[..end - start],
+            );
+            for (j, &sens) in sensitivity[..end - start].iter().enumerate() {
+                let i = start + j;
+                o[i] = (t[i] - r[i]).abs() * sens;
+            }
+        }
+    }
 }
 
 /// CPU scorer for cvvdp still-image JOD.
@@ -1457,9 +1535,6 @@ impl Cvvdp {
             let dis_rg_band = &dist_weber[1].bands[k].data;
             let dis_vy_band = &dist_weber[2].bands[k].data;
             let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
-            let ch_gain_a = CH_GAIN[0];
-            let ch_gain_rg = CH_GAIN[1];
-            let ch_gain_vy = CH_GAIN[2];
 
             let ws = &mut self.scratch.band_ws[0];
 
@@ -1483,34 +1558,23 @@ impl Cvvdp {
                 ws.d_rg.resize(n_px, 0.0);
                 ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
-                for i in 0..n_px {
-                    let log_l = log_l_bkg_band[i];
-                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                    let diff_a = dis_a_band[i] - ref_a_band[i];
-                    let diff_rg = dis_rg_band[i] - ref_rg_band[i];
-                    let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                    ws.d_a[i] = diff_a.abs() * s_a;
-                    ws.d_rg[i] = diff_rg.abs() * s_rg;
-                    ws.d_vy[i] = diff_vy.abs() * s_vy;
-                }
+                apply_csf_diffs(
+                    log_l_bkg_band,
+                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                    [ref_a_band, ref_rg_band, ref_vy_band],
+                    [dis_a_band, dis_rg_band, dis_vy_band],
+                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                );
             } else {
-                for i in 0..n_px {
-                    let log_l = log_l_bkg_band[i];
-                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                    let bm_sa = band_mul * s_a;
-                    let bm_srg = band_mul * s_rg;
-                    let bm_svy = band_mul * s_vy;
-                    ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                    ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                    ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                    ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                    ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                    ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
-                }
+                apply_csf_pairs(
+                    log_l_bkg_band,
+                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                    [ref_a_band, ref_rg_band, ref_vy_band],
+                    [dis_a_band, dis_rg_band, dis_vy_band],
+                    [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
+                    [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                    band_mul,
+                );
                 let t_p_taken: [Vec<f32>; 3] = [
                     core::mem::take(&mut ws.t_p_a),
                     core::mem::take(&mut ws.t_p_rg),
@@ -1721,9 +1785,6 @@ impl Cvvdp {
             let dis_a_band = &dist_weber[0].bands[k].data;
             let dis_rg_band = &dist_weber[1].bands[k].data;
             let dis_vy_band = &dist_weber[2].bands[k].data;
-            let ch_gain_a = CH_GAIN[0];
-            let ch_gain_rg = CH_GAIN[1];
-            let ch_gain_vy = CH_GAIN[2];
 
             // Shallow strip-major branch: dispatch through the helper.
             if k < k_split && !is_baseband {
@@ -1783,21 +1844,15 @@ impl Cvvdp {
             ws.r_p_vy.clear();
             ws.r_p_vy.resize(n_px, 0.0);
 
-            for i in 0..n_px {
-                let log_l = log_l_bkg_band[i];
-                let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                let bm_sa = band_mul * s_a;
-                let bm_srg = band_mul * s_rg;
-                let bm_svy = band_mul * s_vy;
-                ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
-            }
+            apply_csf_pairs(
+                log_l_bkg_band,
+                [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                [ref_a_band, ref_rg_band, ref_vy_band],
+                [dis_a_band, dis_rg_band, dis_vy_band],
+                [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
+                [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                band_mul,
+            );
 
             if is_baseband {
                 ws.d_a.clear();
@@ -1806,18 +1861,13 @@ impl Cvvdp {
                 ws.d_rg.resize(n_px, 0.0);
                 ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
-                for i in 0..n_px {
-                    let log_l = log_l_bkg_band[i];
-                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                    let diff_a = dis_a_band[i] - ref_a_band[i];
-                    let diff_rg = dis_rg_band[i] - ref_rg_band[i];
-                    let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                    ws.d_a[i] = diff_a.abs() * s_a;
-                    ws.d_rg[i] = diff_rg.abs() * s_rg;
-                    ws.d_vy[i] = diff_vy.abs() * s_vy;
-                }
+                apply_csf_diffs(
+                    log_l_bkg_band,
+                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                    [ref_a_band, ref_rg_band, ref_vy_band],
+                    [dis_a_band, dis_rg_band, dis_vy_band],
+                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                );
             } else {
                 // mult_mutual_band_into wants `&[Vec<f32>; 3]`. Move
                 // t_p / r_p slots out, call, move back.
@@ -1991,9 +2041,6 @@ impl Cvvdp {
             let dis_a_band = &dist_weber[0].bands[k].data;
             let dis_rg_band = &dist_weber[1].bands[k].data;
             let dis_vy_band = &dist_weber[2].bands[k].data;
-            let ch_gain_a = CH_GAIN[0];
-            let ch_gain_rg = CH_GAIN[1];
-            let ch_gain_vy = CH_GAIN[2];
 
             if is_baseband {
                 ws.d_a.clear();
@@ -2002,18 +2049,13 @@ impl Cvvdp {
                 ws.d_rg.resize(n_px, 0.0);
                 ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
-                for i in 0..n_px {
-                    let log_l = log_l_bkg_band[i];
-                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                    let diff_a = dis_a_band[i] - ref_a_band[i];
-                    let diff_rg = dis_rg_band[i] - ref_rg_band[i];
-                    let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                    ws.d_a[i] = diff_a.abs() * s_a;
-                    ws.d_rg[i] = diff_rg.abs() * s_rg;
-                    ws.d_vy[i] = diff_vy.abs() * s_vy;
-                }
+                apply_csf_diffs(
+                    log_l_bkg_band,
+                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                    [ref_a_band, ref_rg_band, ref_vy_band],
+                    [dis_a_band, dis_rg_band, dis_vy_band],
+                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                );
             } else {
                 ws.t_p_a.clear();
                 ws.t_p_a.resize(n_px, 0.0);
@@ -2027,21 +2069,15 @@ impl Cvvdp {
                 ws.r_p_rg.resize(n_px, 0.0);
                 ws.r_p_vy.clear();
                 ws.r_p_vy.resize(n_px, 0.0);
-                for i in 0..n_px {
-                    let log_l = log_l_bkg_band[i];
-                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                    let bm_sa = band_mul * s_a;
-                    let bm_srg = band_mul * s_rg;
-                    let bm_svy = band_mul * s_vy;
-                    ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                    ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                    ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                    ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                    ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                    ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
-                }
+                apply_csf_pairs(
+                    log_l_bkg_band,
+                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                    [ref_a_band, ref_rg_band, ref_vy_band],
+                    [dis_a_band, dis_rg_band, dis_vy_band],
+                    [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
+                    [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                    band_mul,
+                );
                 let t_p_taken: [Vec<f32>; 3] = [
                     core::mem::take(&mut ws.t_p_a),
                     core::mem::take(&mut ws.t_p_rg),
@@ -2708,9 +2744,6 @@ fn process_shallow_strip_band(
     let logs_row_rg = precompute_logs_row(rho, channels[1]);
     let logs_row_vy = precompute_logs_row(rho, channels[2]);
     let band_mul: f32 = if is_first { 1.0 } else { 2.0 };
-    let ch_gain_a = CH_GAIN[0];
-    let ch_gain_rg = CH_GAIN[1];
-    let ch_gain_vy = CH_GAIN[2];
 
     // Masking constants (hoisted from mult_mutual_band_into).
     const SAFE_EPS: f32 = 1e-5;
@@ -2761,28 +2794,31 @@ fn process_shallow_strip_band(
 
         // Step 2: CSF apply per-pixel over the strip window. Writes into
         // sws.t_p_*/r_p_* at indices [0, n_strip_window).
-        for sy in 0..strip_window_h {
-            let strip_row_off = sy * bw;
-            let full_row = top_global + sy;
-            let full_row_off = full_row * bw;
-            for x in 0..bw {
-                let i = strip_row_off + x;
-                let j = full_row_off + x;
-                let log_l = log_l_bkg_band[j];
-                let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                let bm_sa = band_mul * s_a;
-                let bm_srg = band_mul * s_rg;
-                let bm_svy = band_mul * s_vy;
-                sws.t_p_a[i] = dis_a_band[j] * bm_sa * ch_gain_a;
-                sws.t_p_rg[i] = dis_rg_band[j] * bm_srg * ch_gain_rg;
-                sws.t_p_vy[i] = dis_vy_band[j] * bm_svy * ch_gain_vy;
-                sws.r_p_a[i] = ref_a_band[j] * bm_sa * ch_gain_a;
-                sws.r_p_rg[i] = ref_rg_band[j] * bm_srg * ch_gain_rg;
-                sws.r_p_vy[i] = ref_vy_band[j] * bm_svy * ch_gain_vy;
-            }
-        }
+        apply_csf_pairs(
+            &log_l_bkg_band[top_global * bw..bot_global * bw],
+            [&logs_row_a, &logs_row_rg, &logs_row_vy],
+            [
+                &ref_a_band[top_global * bw..bot_global * bw],
+                &ref_rg_band[top_global * bw..bot_global * bw],
+                &ref_vy_band[top_global * bw..bot_global * bw],
+            ],
+            [
+                &dis_a_band[top_global * bw..bot_global * bw],
+                &dis_rg_band[top_global * bw..bot_global * bw],
+                &dis_vy_band[top_global * bw..bot_global * bw],
+            ],
+            [
+                &mut sws.r_p_a[..n_strip_window],
+                &mut sws.r_p_rg[..n_strip_window],
+                &mut sws.r_p_vy[..n_strip_window],
+            ],
+            [
+                &mut sws.t_p_a[..n_strip_window],
+                &mut sws.t_p_rg[..n_strip_window],
+                &mut sws.t_p_vy[..n_strip_window],
+            ],
+            band_mul,
+        );
 
         // Step 3: mult_mutual chain on strip buffers. The PU blur uses
         // gaussian_blur_sigma3_simd on the strip dim. For interior body
@@ -3642,9 +3678,6 @@ fn process_strip_step_at_s_k(
     let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
     let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
     let band_mul: f32 = if is_first { 1.0 } else { 2.0 };
-    let ch_gain_a = CH_GAIN[0];
-    let ch_gain_rg = CH_GAIN[1];
-    let ch_gain_vy = CH_GAIN[2];
 
     // Masking constants.
     const SAFE_EPS: f32 = 1e-5;
@@ -3670,25 +3703,31 @@ fn process_strip_step_at_s_k(
 
     // Step 2: CSF apply per-pixel over strip window. Writes T_p/R_p in
     // sws.t_p_*/r_p_* at indices [0, n_strip_window).
-    for sy in 0..strip_window_h {
-        let strip_row_off = sy * bw;
-        for x in 0..bw {
-            let i = strip_row_off + x;
-            let log_l = log_l_bkg_strip[i];
-            let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-            let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-            let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-            let bm_sa = band_mul * s_a;
-            let bm_srg = band_mul * s_rg;
-            let bm_svy = band_mul * s_vy;
-            sws.t_p_a[i] = dis_a_strip[i] * bm_sa * ch_gain_a;
-            sws.t_p_rg[i] = dis_rg_strip[i] * bm_srg * ch_gain_rg;
-            sws.t_p_vy[i] = dis_vy_strip[i] * bm_svy * ch_gain_vy;
-            sws.r_p_a[i] = ref_a_strip[i] * bm_sa * ch_gain_a;
-            sws.r_p_rg[i] = ref_rg_strip[i] * bm_srg * ch_gain_rg;
-            sws.r_p_vy[i] = ref_vy_strip[i] * bm_svy * ch_gain_vy;
-        }
-    }
+    apply_csf_pairs(
+        &log_l_bkg_strip[0..n_strip_window],
+        [&logs_row_a, &logs_row_rg, &logs_row_vy],
+        [
+            &ref_a_strip[0..n_strip_window],
+            &ref_rg_strip[0..n_strip_window],
+            &ref_vy_strip[0..n_strip_window],
+        ],
+        [
+            &dis_a_strip[0..n_strip_window],
+            &dis_rg_strip[0..n_strip_window],
+            &dis_vy_strip[0..n_strip_window],
+        ],
+        [
+            &mut sws.r_p_a[..n_strip_window],
+            &mut sws.r_p_rg[..n_strip_window],
+            &mut sws.r_p_vy[..n_strip_window],
+        ],
+        [
+            &mut sws.t_p_a[..n_strip_window],
+            &mut sws.t_p_rg[..n_strip_window],
+            &mut sws.t_p_vy[..n_strip_window],
+        ],
+        band_mul,
+    );
 
     // Step 3.1: M_mm_raw = min(|T|, |R|).
     for i in 0..n_strip_window {
@@ -4102,4 +4141,44 @@ fn dispatch_strip_major_shallow(
     }
 
     q_shallow
+}
+
+#[cfg(test)]
+mod csf_simd_tests {
+    use super::*;
+    #[test]
+    fn gathered_sensitivities_match_scalar_reference() {
+        let mut max_relative = 0.0_f32;
+        for rho in [0.01, 0.1, 1.0, 4.0, 16.0, 64.0] {
+            for ch in [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy] {
+                let row = precompute_logs_row(rho, ch);
+                for n in [1, 7, 8, 9, 15, 16, 17, 255, 256, 257, 1025] {
+                    let xs: Vec<f32> = (0..n)
+                        .map(|i| -3.0 + (i % 103) as f32 * 8.0 / 102.0)
+                        .collect();
+                    let mut out = vec![0.0; n];
+                    zenmetrics_math::gather_lerp_exp_into(
+                        &xs,
+                        &row,
+                        CSF_L_BKG_AXIS_MIN,
+                        CSF_L_BKG_INV_STEP,
+                        CSF_L_BKG_MAX_IDX,
+                        LOG_SENSITIVITY_CORRECTION,
+                        core::f32::consts::LN_10,
+                        &mut out,
+                    );
+                    for (&x, &got) in xs.iter().zip(&out) {
+                        let want = apply_csf_row_per_pixel(x, &row);
+                        let relative = (got - want).abs() / want.abs().max(1e-6);
+                        max_relative = max_relative.max(relative);
+                        assert!(
+                            relative <= 1e-4,
+                            "rho={rho} n={n} x={x} got={got} want={want} relative={relative}"
+                        );
+                    }
+                }
+            }
+        }
+        eprintln!("CSF max_relative={max_relative:e}");
+    }
 }

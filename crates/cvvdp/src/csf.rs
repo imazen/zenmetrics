@@ -60,7 +60,7 @@ use alloc::vec::Vec;
 
 use crate::kernels::csf::N_L_BKG;
 
-use crate::simd_math::vexp_into;
+use zenmetrics_math::vexp_into;
 
 /// `SENSITIVITY_CORRECTION_DB / 20.0` — premultiplied constant added
 /// to `log_s` before the `10^x` step (matches the GPU 3ch fused

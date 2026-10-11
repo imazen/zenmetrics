@@ -649,7 +649,7 @@ pub(crate) fn weber_bands_from_gauss(
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
-                    crate::simd_math::vweber_band_into,
+                    zenmetrics_math::vweber_band_into,
                 );
             } else {
                 crate::par::map1_3(
@@ -657,7 +657,7 @@ pub(crate) fn weber_bands_from_gauss(
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
-                    crate::simd_math::vweber_band_nolog_into,
+                    zenmetrics_math::vweber_band_nolog_into,
                 );
             }
             // Return scratch.
@@ -770,7 +770,7 @@ pub(crate) fn weber_bands_from_gauss_lexp(
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
-                    crate::simd_math::vweber_band_into,
+                    zenmetrics_math::vweber_band_into,
                 );
             } else {
                 crate::par::map1_3(
@@ -778,7 +778,7 @@ pub(crate) fn weber_bands_from_gauss_lexp(
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
-                    crate::simd_math::vweber_band_nolog_into,
+                    zenmetrics_math::vweber_band_nolog_into,
                 );
             }
             if let Some(e) = img_expanded {
