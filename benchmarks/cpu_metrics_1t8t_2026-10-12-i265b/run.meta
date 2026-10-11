@@ -1,0 +1,6 @@
+commit=a67ef832373023b9a3bf382ada1cc6faf061dbe7 dirty=4
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K nproc=20
+bin_sha256=1eea74dbb0e86bf60485c83c287e029e90a1fd6130d67103ad7202fedf80d519
+content=photo (zenmetrics-corpus source.png vs q20.jpg, mirror-tiled)
+sizes=1024 3355x2516 one_core=2 eight_cores=0-7
+command=./scripts/cpu_metrics_1t8t.sh benchmarks/cpu_metrics_1t8t_2026-10-12-i265b 1024 3355x2516

@@ -429,11 +429,13 @@ fn imenlarge2_small(
     let t2_h = t1_h + 2;
     let t2_w = t1_w + 2;
     let mut t2 = alloc::vec![0.0_f32; t2_h * t2_w];
-    for y in 0..t1_h {
-        let src_row = &t1[y * t1_w..(y + 1) * t1_w];
-        let dst_row = &mut t2[(y + 1) * t2_w + 1..(y + 1) * t2_w + 1 + t1_w];
-        dst_row.copy_from_slice(src_row);
-    }
+    crate::par::map_rows(&mut t2[t2_w..t2_w + t1_h * t2_w], t2_w, |y0, band| {
+        for (r, drow) in band.chunks_mut(t2_w).enumerate() {
+            let y = y0 + r;
+            let src_row = &t1[y * t1_w..(y + 1) * t1_w];
+            drow[1..1 + t1_w].copy_from_slice(src_row);
+        }
+    });
     for x in 0..t2_w {
         if x == 0 || x == t2_w - 1 {
             continue;
@@ -449,22 +451,28 @@ fn imenlarge2_small(
     let imu_h = t2_h.div_ceil(2);
     let imu_w = t2_w.div_ceil(2);
     let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
-    for y in 0..imu_h {
-        for x in 0..imu_w {
-            imu[y * imu_w + x] = t2[(2 * y) * t2_w + (2 * x)];
+    let t2_ref = &t2;
+    crate::par::map_rows(&mut imu, imu_w, |y0, band| {
+        for (r, orow) in band.chunks_mut(imu_w).enumerate() {
+            let y = y0 + r;
+            for (x, o) in orow.iter_mut().enumerate() {
+                *o = t2_ref[(2 * y) * t2_w + (2 * x)];
+            }
         }
-    }
+    });
     if dst_w == imu_w && dst_h == imu_h {
         imu
     } else {
         let mut out = alloc::vec![0.0_f32; dst_w * dst_h];
         let copy_h = dst_h.min(imu_h);
         let copy_w = dst_w.min(imu_w);
-        for y in 0..copy_h {
-            let src_row = &imu[y * imu_w..y * imu_w + copy_w];
-            let dst_row = &mut out[y * dst_w..y * dst_w + copy_w];
-            dst_row.copy_from_slice(src_row);
-        }
+        crate::par::map_rows(&mut out[..copy_h * dst_w], dst_w, |y0, band| {
+            for (r, drow) in band.chunks_mut(dst_w).enumerate() {
+                let y = y0 + r;
+                let src_row = &imu[y * imu_w..y * imu_w + copy_w];
+                drow[..copy_w].copy_from_slice(src_row);
+            }
+        });
         out
     }
 }
@@ -476,25 +484,30 @@ fn bilinear_upsample_general(src: &[f32], sw: usize, sh: usize, dw: usize, dh: u
     let mut out = alloc::vec![0.0_f32; dh * dw];
     let sx_scale = (sw - 1) as f32 / (dw - 1) as f32;
     let sy_scale = (sh - 1) as f32 / (dh - 1) as f32;
-    for dy in 0..dh {
-        let fy = dy as f32 * sy_scale;
-        let y0 = fy.floor() as usize;
-        let y1 = (y0 + 1).min(sh - 1);
-        let wy = fy - y0 as f32;
-        for dx in 0..dw {
-            let fx = dx as f32 * sx_scale;
-            let x0 = fx.floor() as usize;
-            let x1 = (x0 + 1).min(sw - 1);
-            let wx = fx - x0 as f32;
-            let v00 = src[y0 * sw + x0];
-            let v01 = src[y0 * sw + x1];
-            let v10 = src[y1 * sw + x0];
-            let v11 = src[y1 * sw + x1];
-            let v0 = v00 + wx * (v01 - v00);
-            let v1 = v10 + wx * (v11 - v10);
-            out[dy * dw + dx] = v0 + wy * (v1 - v0);
+    // Per-row independent — map_rows keeps the same elementwise math
+    // under either driver.
+    crate::par::map_rows(&mut out, dw, |y0, band| {
+        for (r, orow) in band.chunks_mut(dw).enumerate() {
+            let dy = y0 + r;
+            let fy = dy as f32 * sy_scale;
+            let sy0 = fy.floor() as usize;
+            let sy1 = (sy0 + 1).min(sh - 1);
+            let wy = fy - sy0 as f32;
+            for (dx, o) in orow.iter_mut().enumerate() {
+                let fx = dx as f32 * sx_scale;
+                let x0 = fx.floor() as usize;
+                let x1 = (x0 + 1).min(sw - 1);
+                let wx = fx - x0 as f32;
+                let v00 = src[sy0 * sw + x0];
+                let v01 = src[sy0 * sw + x1];
+                let v10 = src[sy1 * sw + x0];
+                let v11 = src[sy1 * sw + x1];
+                let v0 = v00 + wx * (v01 - v00);
+                let v1 = v10 + wx * (v11 - v10);
+                *o = v0 + wy * (v1 - v0);
+            }
         }
-    }
+    });
     out
 }
 
