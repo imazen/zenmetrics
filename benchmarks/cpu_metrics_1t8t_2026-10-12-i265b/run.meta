@@ -12,3 +12,10 @@ command=./scripts/cpu_metrics_1t8t.sh benchmarks/cpu_metrics_1t8t_2026-10-12-i26
 # TSVs: patch_mt8_1024.tsv, patch_mt8_3355.tsv. 1t 8.4MP heap times
 # for the same set re-run from logs/patch_heap_*.log.
 # vmaf: panics on odd dims (3355 odd) — input constraint, not a bug.
+# ssim2 rows now measure fast-ssim2 0.9.0 (local path via the api port,
+# c7955f70): the api's 0.8.2 req could not be satisfied by the workspace
+# patch, so pre-port rows ran REGISTRY 0.8.2 — a different pipeline.
+# 0.9.0-serial is ~2.9x heavier per-pixel than 0.8.2-serial (2458ms vs
+# 836ms 1t at 8.4MP) but threads 3.8x (2458->639); net vs the old 8t
+# row: 810->639ms. Score basis also differs (0.9.0 = 49.69 vs 0.8.2
+# 51.08 at 8.4MP). heap rep for the 1t column: logs/patch_heap_ssim2.log.
