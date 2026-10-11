@@ -1292,6 +1292,38 @@ mod infow_x64 {
     ) {
         infow_kernel(token, g, vv, ss, lambdas, s2, inv_s4, tol, out);
     }
+
+    #[cfg(feature = "avx512")]
+    #[archmage::arcane]
+    pub(crate) fn infow_map_into_v4(
+        token: archmage::X64V4Token,
+        g: &[f32],
+        vv: &[f32],
+        ss: &[f32],
+        lambdas: &[f32],
+        s2: f32,
+        inv_s4: f32,
+        tol: f32,
+        out: &mut [f32],
+    ) {
+        infow_kernel(token, g, vv, ss, lambdas, s2, inv_s4, tol, out);
+    }
+
+    #[cfg(feature = "avx512")]
+    #[archmage::arcane]
+    pub(crate) fn infow_map_into_v4x(
+        token: archmage::X64V4xToken,
+        g: &[f32],
+        vv: &[f32],
+        ss: &[f32],
+        lambdas: &[f32],
+        s2: f32,
+        inv_s4: f32,
+        tol: f32,
+        out: &mut [f32],
+    ) {
+        infow_kernel(token, g, vv, ss, lambdas, s2, inv_s4, tol, out);
+    }
 }
 
 #[cfg(target_arch = "aarch64")]

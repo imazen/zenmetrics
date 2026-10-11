@@ -296,6 +296,16 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f62
 # Equivalent git ref (use when the sibling checkout is gone):
 #   { git = "https://github.com/imazen/zensim", rev = "<commit>" }
 zensim = { path = "../zensim/zensim" }
+# Temporary until the next magetypes/archmage release (> 0.9.30)
+# publishes; then bump the minimums and drop these patches. The pinned
+# rev adds impls/x86_v4_narrow_delegated.rs — every W128/W256 backend +
+# F32x*Convert + *Bitcast delegated to V3 for the AVX-512 tokens —
+# which iwssim's +v4/+v4x kernel arms (F32x8Convert-bounded infow map,
+# f64x4 Gram rows) require. Pin all three crates to the same source
+# commit so their versions stay unified.
+archmage = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
+archmage-macros = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no
