@@ -92,7 +92,7 @@ fn decimate(x: &[f32], w: usize, h: usize) -> (usize, usize, Vec<f32>) {
 /// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
 /// otherwise the serial loop runs. Writes are disjoint per row either
 /// way, so results are bit-identical at any thread count.
-fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
+pub(crate) fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -108,7 +108,10 @@ fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + S
 
 /// `rayon::join` under `parallel`, sequential otherwise — each side
 /// writes its own `Vec`, so results are identical at any thread count.
-fn maybe_join<A, B>(fa: impl FnOnce() -> A + Send, fb: impl FnOnce() -> B + Send) -> (A, B)
+pub(crate) fn maybe_join<A, B>(
+    fa: impl FnOnce() -> A + Send,
+    fb: impl FnOnce() -> B + Send,
+) -> (A, B)
 where
     A: Send,
     B: Send,

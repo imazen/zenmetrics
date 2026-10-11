@@ -8,3 +8,110 @@ refused 3355x2516/vmaf: vmaf: VMAF requires matching, even dimensions >= 32
   zenbench  1791700583-2cbe4b
   git: 39ea6c644a2d035b3f33a67a7321dd2141b22b94
 ═══════════════════════════════════════════════════════════════
+
+  new_metrics_wall_3355x2516  6 rounds × 1 calls ⚠ only 6 rounds
+                             mean ±mad ms  95% CI vs base         
+  ├─ psnr__lat                12.5 ±0.0ms  [12.4–12.7]ms          
+  ├─ psnr-y__lat              15.7 ±0.4ms  [+22.3%–+29.6%]         [1]
+  ├─ ssim__lat               398.4 ±3.6ms  [+3084.9%–+3118.2%]    
+  ├─ ssim2__lat             809.9 ±10.3ms  [+6295.7%–+6466.3%]    
+  ├─ butteraugli__lat        640.0 ±2.0ms  [+4979.7%–+5047.8%]    
+  ├─ dssim__lat              393.3 ±5.8ms  [+2992.3%–+3046.7%]     [2]
+  ├─ zensim__lat              95.3 ±1.3ms  [+638.9%–+651.2%]       [3]
+  ├─ cvvdp__lat             541.7 ±30.1ms  [+4047.9%–+4464.7%]     [4]
+  ├─ iwssim__lat            424.5 ±29.2ms  [+3150.1%–+3447.2%]    
+  ├─ iwssim-piq__lat         396.3 ±5.7ms  [+3031.0%–+3110.0%]    
+  ├─ nlpd__lat               210.4 ±6.1ms  [+1530.4%–+1633.7%]    
+  ├─ nlpd-iqa__lat           115.2 ±3.9ms  [+797.3%–+842.0%]       [5]
+  ├─ ms-gmsdc__lat           192.2 ±4.4ms  [+1402.0%–+1473.2%]    
+  ├─ gmsd__lat                 2.0 ±0.2ms  [-86.0%–-82.3%]         [6]
+  ├─ mdsi__lat                 3.7 ±0.3ms  [-77.1%–-73.0%]         [7] [8]
+  ├─ ms-gmsd__lat            186.9 ±3.8ms  [+1362.5%–+1423.7%]    
+  ├─ psnrhvs__lat             64.6 ±2.0ms  [+392.9%–+442.9%]      
+  ├─ psnrhvs-daala__lat      306.5 ±3.5ms  [+2327.3%–+2372.8%]    
+  ├─ haarpsi__lat             87.8 ±5.6ms  [+579.2%–+624.8%]       [9]
+  ├─ fsim__lat              266.8 ±28.9ms  [+1915.1%–+2144.8%]     [10]
+  ├─ vsi__lat                247.6 ±6.2ms  [+1836.0%–+1929.3%]    
+  ├─ msssim__lat             142.5 ±3.3ms  [+1013.4%–+1069.3%]     [11]
+  ├─ msssim-libvmaf__lat     721.7 ±5.4ms  [+5627.9%–+5701.6%]     [12]
+  ├─ ssim-libvmaf__lat        83.2 ±2.8ms  [+565.1%–+588.0%]      
+  ├─ vif__lat                413.0 ±7.3ms  [+3159.0%–+3249.9%]    
+  ├─ vifvec__lat             746.6 ±6.3ms  [+5829.9%–+5905.1%]     [13]
+  ├─ mad__lat              5675.9 ±86.2ms  [+44390.5%–+46281.7%]  
+  ╰─ mdctpsnr__lat         5438.9 ±64.9ms  [+42998.0%–+43797.5%]  
+
+  gmsd__lat            █ 1.99ms
+  mdsi__lat            █ 3.67ms
+  psnr__lat            █ 12.51ms
+  psnr-y__lat          █ 15.74ms
+  psnrhvs__lat         █ 64.63ms
+  ssim-libvmaf__lat    █ 83.18ms
+  haarpsi__lat         █ 87.83ms
+  zensim__lat          █ 95.31ms
+  nlpd-iqa__lat        █ 115.18ms
+  msssim__lat          █ 142.48ms
+  ms-gmsd__lat         ██ 186.93ms
+  ms-gmsdc__lat        ██ 192.22ms
+  nlpd__lat            ██ 210.38ms
+  vsi__lat             ██ 247.64ms
+  fsim__lat            ██ 266.77ms
+  psnrhvs-daala__lat   ███ 306.54ms
+  dssim__lat           ███ 393.34ms
+  iwssim-piq__lat      ███ 396.32ms
+  ssim__lat            ███ 398.38ms
+  vif__lat             ███ 412.99ms
+  iwssim__lat          ████ 424.48ms
+  cvvdp__lat           █████ 541.70ms
+  butteraugli__lat     █████ 640.04ms
+  msssim-libvmaf__lat  ██████ 721.73ms
+  vifvec__lat          ██████ 746.57ms
+  ssim2__lat           ███████ 809.89ms
+  mdctpsnr__lat        ██████████████████████████████████████████████ 5.44s
+  mad__lat             ████████████████████████████████████████████████ 5.68s
+  [1] drift r=0.77 — later rounds slower
+  [2] drift r=-0.60 — later rounds faster
+  [3] drift r=0.70 — later rounds slower
+  [4] drift r=-0.60 — later rounds faster
+  [5] drift r=0.77 — later rounds slower
+  [6] drift r=0.54 — later rounds slower
+  [7] drift r=0.70 — later rounds slower
+  [8] CV=37%
+  [9] drift r=-0.60 — later rounds faster
+  [10] drift r=-0.60 — later rounds faster
+  [11] drift r=-0.66 — later rounds faster
+  [12] drift r=-0.83 — later rounds faster
+  [13] drift r=0.54 — later rounds slower
+
+  total: 340.7s  (186 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 3355x2516/psnr: 31.94591137932091
+sentinel 3355x2516/psnr-y: 34.659660059869
+sentinel 3355x2516/ssim: 0.9378330677831319
+sentinel 3355x2516/ssim2: 49.697679962976444
+sentinel 3355x2516/butteraugli: 11.94013500213623
+sentinel 3355x2516/dssim: 0.004027672013497519
+sentinel 3355x2516/zensim: 44.050046286044655
+sentinel 3355x2516/cvvdp: 9.458388328552246
+sentinel 3355x2516/iwssim: 0.9931595295948678
+sentinel 3355x2516/iwssim-piq: 0.9932754488668398
+sentinel 3355x2516/nlpd: 2.3730442996288796
+sentinel 3355x2516/nlpd-iqa: 0.09799005369563485
+sentinel 3355x2516/ms-gmsdc: 0.032332414812490023
+sentinel 3355x2516/gmsd: 0.028758917038967276
+sentinel 3355x2516/mdsi: 0.14145374639072852
+sentinel 3355x2516/ms-gmsd: 0.033549746494381916
+sentinel 3355x2516/psnrhvs: 28.056639812220126
+sentinel 3355x2516/psnrhvs-daala: 38.5280305345474
+sentinel 3355x2516/haarpsi: 0.9038334522161161
+sentinel 3355x2516/fsim: 0.9994539802118171
+sentinel 3355x2516/vsi: 0.9994204866373854
+sentinel 3355x2516/msssim: 0.9955028305568167
+sentinel 3355x2516/msssim-libvmaf: 0.9958854526892542
+sentinel 3355x2516/ssim-libvmaf: 0.9995668530464172
+sentinel 3355x2516/vif: 0.6628500480429461
+sentinel 3355x2516/vifvec: 0.6188657660242042
+sentinel 3355x2516/mad: 18.613801284574702
+sentinel 3355x2516/mdctpsnr: 32.76313018798828
+wrote wall rows for size 3355x2516 to benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/mt8_photo_3355x2516.tsv
+run-heavy: done rc=0 379s | peak-RSS 2.11GiB | min-avail 23764MiB | peak-load 3.41

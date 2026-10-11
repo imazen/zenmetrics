@@ -113,11 +113,11 @@ fn decimate(
     let sw = w / factor + (w & 1);
     let sh = h / factor + (h & 1);
     let mut out = vec![0.0f32; sw * sh];
-    for y in 0..sh {
-        for x in 0..sw {
-            out[y * sw + x] = filter_pixel(img, w, h, x * factor, y * factor, k, kw);
+    crate::kernel::for_each_row(&mut out, sw, |y, orow| {
+        for (x, o) in orow.iter_mut().enumerate() {
+            *o = filter_pixel(img, w, h, x * factor, y * factor, k, kw);
         }
-    }
+    });
     (out, sw, sh)
 }
 
@@ -128,27 +128,97 @@ fn conv_gauss_valid(img: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize)
     let dh = h - (GAUSS_LEN - 1);
     // horizontal pass: rows cached at the reduced column band
     let mut tmp = vec![0.0f32; h * dw];
-    for y in 0..h {
-        for x in 0..dw {
+    crate::kernel::for_each_row(&mut tmp, dw, |y, trow| {
+        for (x, o) in trow.iter_mut().enumerate() {
             let mut sum = 0.0f64;
             for u in 0..GAUSS_LEN {
                 sum += img[y * w + x + u] as f64 * GAUSS[u] as f64;
             }
-            tmp[y * dw + x] = sum as f32;
+            *o = sum as f32;
         }
-    }
+    });
     // vertical pass over the cached band → packed valid region
     let mut out = vec![0.0f32; dh * dw];
-    for y in 0..dh {
-        for x in 0..dw {
+    let tmp_ref = &tmp;
+    crate::kernel::for_each_row(&mut out, dw, |y, orow| {
+        for (x, o) in orow.iter_mut().enumerate() {
             let mut sum = 0.0f64;
             for v in 0..GAUSS_LEN {
-                sum += tmp[(y + v) * dw + x] as f64 * GAUSS[v] as f64;
+                sum += tmp_ref[(y + v) * dw + x] as f64 * GAUSS[v] as f64;
             }
-            out[y * dw + x] = sum as f32;
+            *o = sum as f32;
         }
-    }
+    });
     (out, dw, dh)
+}
+
+/// Elementwise `out[i] = f(src[i])` — par under `parallel` when the
+/// pool has >1 thread, serial otherwise (per-element math identical).
+fn map2(out: &mut [f32], src: &[f32], f: impl Fn(&f32) -> f32 + Sync) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_iter_mut()
+            .zip(src.par_iter())
+            .for_each(|(o, &v)| *o = f(&v));
+        return;
+    }
+    for (o, &v) in out.iter_mut().zip(src.iter()) {
+        *o = f(&v);
+    }
+}
+
+/// Fold `f(i)` over `0..n` into `(ssim, l, c, s)` sums. The fold uses
+/// a fixed 32-band striped order in every build — the parallel path
+/// distributes the same bands across threads, so serial and parallel
+/// results are bit-identical (both differ from the C raster fold only
+/// within f64 tolerance; the FFI parity tests gate that).
+fn fold_sums(n: usize, f: impl Fn(usize) -> (f64, f64, f64, f64) + Sync) -> (f64, f64, f64, f64) {
+    let body = |r: core::ops::Range<usize>| -> (f64, f64, f64, f64) {
+        r.fold((0.0, 0.0, 0.0, 0.0), |(a, b, c, s), i| {
+            let (pa, pb, pc, ps) = f(i);
+            (a + pa, b + pb, c + pc, s + ps)
+        })
+    };
+    const BANDS: usize = 32;
+    let bs = n.div_ceil(BANDS);
+    let merge = |parts: Vec<(f64, f64, f64, f64)>| {
+        parts
+            .into_iter()
+            .fold((0.0, 0.0, 0.0, 0.0), |(a, b, c, s), (pa, pb, pc, ps)| {
+                (a + pa, b + pb, c + pc, s + ps)
+            })
+    };
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let parts: Vec<(f64, f64, f64, f64)> = (0..BANDS)
+            .into_par_iter()
+            .map(|b| {
+                let lo = b * bs;
+                let hi = (lo + bs).min(n);
+                if lo >= hi {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    body(lo..hi)
+                }
+            })
+            .collect();
+        return merge(parts);
+    }
+    merge(
+        (0..BANDS)
+            .map(|b| {
+                let lo = b * bs;
+                let hi = (lo + bs).min(n);
+                if lo >= hi {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    body(lo..hi)
+                }
+            })
+            .collect(),
+    )
 }
 
 /// `_iqa_ssim` default branch — returns `(ssim, l, c, s)` means over the
@@ -164,21 +234,39 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
     let c2 = (k2 * 255.0f32) * (k2 * 255.0f32);
     let c3 = c2 / 2.0f32;
 
-    let (mu_r, vw, vh) = conv_gauss_valid(r, w, h);
-    let (mu_d, _, _) = conv_gauss_valid(d, w, h);
-    let r2: Vec<f32> = r.iter().map(|&v| v * v).collect();
-    let d2: Vec<f32> = d.iter().map(|&v| v * v).collect();
-    let rd: Vec<f32> = r.iter().zip(d).map(|(&a, &b)| a * b).collect();
-    let (sr_c, _, _) = conv_gauss_valid(&r2, w, h);
-    let (sd_c, _, _) = conv_gauss_valid(&d2, w, h);
+    let ((mu_r, vw, vh), (mu_d, _, _)) =
+        crate::kernel::maybe_join(|| conv_gauss_valid(r, w, h), || conv_gauss_valid(d, w, h));
+    let sq = |img: &[f32]| -> Vec<f32> {
+        let mut out = vec![0.0f32; img.len()];
+        map2(&mut out, img, |&v| v * v);
+        out
+    };
+    let mut rd = vec![0.0f32; r.len()];
+    let mut ri = 0usize;
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        rd.par_iter_mut()
+            .zip(r.par_iter())
+            .zip(d.par_iter())
+            .for_each(|((o, &a), &b)| *o = a * b);
+        ri = rd.len();
+    }
+    for k in ri..rd.len() {
+        rd[k] = r[k] * d[k];
+    }
+    let (r2, d2) = crate::kernel::maybe_join(|| sq(r), || sq(d));
+    let ((sr_c, _, _), (sd_c, _, _)) = crate::kernel::maybe_join(
+        || conv_gauss_valid(&r2, w, h),
+        || conv_gauss_valid(&d2, w, h),
+    );
     let (sb_c, _, _) = conv_gauss_valid(&rd, w, h);
 
-    let mut ssim_sum = 0.0f64;
-    let mut l_sum = 0.0f64;
-    let mut c_sum = 0.0f64;
-    let mut s_sum = 0.0f64;
     let n = vw * vh;
-    for i in 0..n {
+    // Striped partial sums: per-element l/c/s math is unchanged; the
+    // f64 fold order differs from the serial raster fold within float
+    // tolerance (bands merge in raster order).
+    let partial = |i: usize| -> (f64, f64, f64, f64) {
         // float-domain moments, mirroring the C expression arithmetic.
         let sr = (sr_c[i] - mu_r[i] * mu_r[i]).max(0.0);
         let sd = (sd_c[i] - mu_d[i] * mu_d[i]).max(0.0);
@@ -193,11 +281,9 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
         let csb = if sb < 0.0 && s_rc <= 0.0 { 0.0 } else { sb };
         // s computed fully in float then promoted (matches C `float` locals).
         let s = ((csb + c3) / (s_rc + c3)) as f64;
-        ssim_sum += l * c * s;
-        l_sum += l;
-        c_sum += c;
-        s_sum += s;
-    }
+        (l * c * s, l, c, s)
+    };
+    let (ssim_sum, l_sum, c_sum, s_sum) = fold_sums(n, partial);
     // C: `(float)(ssim_sum / (double)(w*h))` — a real f64 division, then
     // the mean is rounded to f32 (the `_iqa_ssim` return type and the
     // l/c/s mean outputs are all float). Widened to f64 for our API.

@@ -1,0 +1,2 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26201MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 mad
+heap 3355x2516/mad rep0: 26450.989 ms score=18.613801284574702

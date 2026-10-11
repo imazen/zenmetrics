@@ -168,23 +168,13 @@ fn calc_psnrhvs(
         }
     }
 
-    // Block rows are independent — striped partial `(ret, pixels)`
-    // sums under `parallel`, merged in band order. The per-block math
-    // is unchanged; the f32 fold order differs from the serial raster
-    // fold within float tolerance.
-    let nb_y = {
-        let mut n = 0usize;
-        let mut y = 0usize;
-        while y + 7 < h {
-            n += 1;
-            y += step;
-        }
-        n
-    };
-    let partials = crate::kernel::collect_bands(nb_y, |b| {
-        let y = b * step;
-        let mut ret = 0.0f32;
-        let mut pixels = 0u32;
+    // The `ret` fold is f32 in raster order — the vendored-libvmaf FFI
+    // parity tests observe the exact fold, so the block raster stays
+    // serial (band-reordered partials shifted the score 3.7e-4 dB).
+    let mut ret = 0.0f32;
+    let mut pixels = 0u32;
+    let mut y = 0usize;
+    while y + 7 < h {
         block_row(
             src,
             sstride,
@@ -198,13 +188,7 @@ fn calc_psnrhvs(
             &mut ret,
             &mut pixels,
         );
-        (ret, pixels)
-    });
-    let mut ret = 0.0f32;
-    let mut pixels = 0u32;
-    for (pr, pp) in partials {
-        ret += pr;
-        pixels += pp;
+        y += step;
     }
     // `ret /= pixels; ret /= samplemax²` — both divisions in f32, as C.
     let mut ret = ret / pixels as f32;
