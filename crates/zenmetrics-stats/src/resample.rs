@@ -109,6 +109,27 @@ pub struct Interval {
     pub p_zero: f64,
 }
 
+impl Interval {
+    /// The small-G Student interval `estimate ± t · se · √(G/(G−1))`, with `t`
+    /// the Student quantile at `(1 + level)/2` on `G − 1` degrees of freedom
+    /// and `G` the number of resampled clusters (sources). The module docs
+    /// give its measured coverage against the percentile interval. `None`
+    /// when `groups < 2`, `level` is outside (0, 1), or the estimate or
+    /// [`Interval::se`] is not finite.
+    pub fn student(&self, groups: usize, level: f64) -> Option<(f64, f64)> {
+        if groups < 2 || !(level > 0.0 && level < 1.0) {
+            return None;
+        }
+        if !(self.estimate.is_finite() && self.se.is_finite()) {
+            return None;
+        }
+        let g = groups as f64;
+        let t = crate::special::student_t_quantile(0.5 * (1.0 + level), g - 1.0);
+        let half = t * self.se * (g / (g - 1.0)).sqrt();
+        Some((self.estimate - half, self.estimate + half))
+    }
+}
+
 /// Why a bootstrap could not run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]

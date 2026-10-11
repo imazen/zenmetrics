@@ -5,9 +5,10 @@
 mod independent_reference_data;
 use independent_reference_data as r;
 
-use zenmetrics_stats::jnd::{MapFamily, Shape, excess_error_sd, fit_map, out_of_fold};
+use zenmetrics_stats::jnd::{Knee, MapFamily, Shape, excess_error_sd, fit_map, out_of_fold};
 use zenmetrics_stats::pairs::{HumanNoise, PairInput, expected_agreement};
 use zenmetrics_stats::panel::Orientation;
+use zenmetrics_stats::resample::Interval;
 
 #[test]
 fn knee_power_fit_is_at_least_as_good_as_scipy_curve_fit() {
@@ -29,6 +30,43 @@ fn knee_power_fit_is_at_least_as_good_as_scipy_curve_fit() {
             "params {p:?} vs scipy {:?}",
             r::KNEE_PARAMS
         );
+    }
+}
+
+fn knee_at_100() -> MapFamily {
+    MapFamily::KneePowerFixed(Shape::Quality, Knee::new(100.0).unwrap())
+}
+
+#[test]
+fn fixed_knee_fit_matches_scipy_curve_fit() {
+    let m = fit_map(knee_at_100(), &r::X, &r::Y).unwrap();
+    let p = m.params();
+    assert_eq!(p[1], r::KNEE_FIXED_PARAMS[1]);
+    for i in [0, 2] {
+        let (got, want) = (p[i], r::KNEE_FIXED_PARAMS[i]);
+        assert!(
+            ((got - want) / want).abs() < 1e-6,
+            "params {p:?} vs scipy {:?}",
+            r::KNEE_FIXED_PARAMS
+        );
+    }
+    let sse: f64 = r::X
+        .iter()
+        .zip(&r::Y)
+        .map(|(&x, &y)| (m.predict(x) - y).powi(2))
+        .sum();
+    assert!(
+        sse <= r::KNEE_FIXED_SSE * (1.0 + 1e-9),
+        "zenmetrics-stats {sse} vs scipy {}",
+        r::KNEE_FIXED_SSE
+    );
+}
+
+#[test]
+fn leave_one_source_out_fixed_knee_matches_scipy() {
+    let oof = out_of_fold(knee_at_100(), &r::X, &r::Y, &r::SOURCE).unwrap();
+    for (i, (&got, &want)) in oof.iter().zip(&r::OOF_KNEE_FIXED).enumerate() {
+        assert!((got - want).abs() < 1e-6, "row {i}: {got} vs scipy {want}");
     }
 }
 
@@ -103,4 +141,38 @@ fn expected_observer_agreement_matches_brute_force_scipy() {
             c.ceiling
         );
     }
+}
+
+#[test]
+fn student_interval_matches_scipy_t_ppf() {
+    let mut k = 0;
+    for &level in &r::STUDENT_LEVELS {
+        for &g in &r::STUDENT_GROUPS {
+            let iv = Interval {
+                estimate: 0.7,
+                lo: f64::NAN,
+                hi: f64::NAN,
+                se: 1.0,
+                n_finite: 1000,
+                p_zero: 1.0,
+            };
+            let (lo, hi) = iv.student(g as usize, level).unwrap();
+            let want = r::STUDENT_HALF[k];
+            assert!(
+                ((hi - 0.7) / want - 1.0).abs() < 1e-10 && ((0.7 - lo) / want - 1.0).abs() < 1e-10,
+                "G={g} level={level}: ({lo}, {hi}) vs half-width {want}"
+            );
+            k += 1;
+        }
+    }
+    let iv = Interval {
+        estimate: 0.7,
+        lo: 0.0,
+        hi: 1.0,
+        se: f64::NAN,
+        n_finite: 0,
+        p_zero: 1.0,
+    };
+    assert_eq!(iv.student(5, 0.95), None);
+    assert_eq!(Interval { se: 1.0, ..iv }.student(1, 0.95), None);
 }

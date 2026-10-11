@@ -27,14 +27,16 @@ rule per § A.9 of `PSYCHOVISUAL_LEARNINGS_FOR_ZENSIM.md`).
 | `pairs::{class_agreement, expected_agreement, PairTable}` | agreement per pair class (optional codec-family split); expected observer agreement vs ceiling; O(cells²) bootstrap path | Thurstone Case V |
 | `pairs::ds_auc` | same/different discrimination AUC (moved from zensim) | Mohammadi 2025 § VII |
 | `resample::spearman_interval` | source-clustered (or pair) bootstrap interval of SROCC | — |
-| `jnd::{fit_map, out_of_fold}` | declared mapping families, leave-one-source-out | P.1401 §7.3.3 |
+| `resample::Interval::student` | small-G Student interval from the bootstrap SE | `tests/coverage.rs` |
+| `jnd::{fit_map, out_of_fold}` | declared mapping families (incl. the knee power with a fixed knee, `KneePowerFixed`), leave-one-source-out | P.1401 §7.3.3 |
 | `jnd::{rmse, excess_error_sd, rmse_star}` | RMSE, τ̂ excess error (moment, ML), epsilon-insensitive RMSE | Veroniki et al. 2016; P.1401 §7.7 |
 | `forced_choice::{agreement, log_likelihood, fit_observer_slope}` | raw 2AFC/triplet agreement and log-likelihood vs in-sample and cross-fitted ceilings; not-sure as half/half | moved from zensim; Testolina 2024 |
 | `multiple::{holm, holm_reject}` | Holm adjusted p-values and step-down rejections | Holm 1979 |
 
 `examples/jnd_calibrate.rs` is a command-line driver over `jnd` and `resample`: per declared map
-family it fits leave-one-source-out, reports out-of-fold RMSE, τ̂ and rmse*, and source-clustered
-intervals with the maps refitted inside every draw.
+family (primary: knee power with the knee fixed at `--knee`, default 100) it fits leave-one-source-out,
+reports out-of-fold RMSE, τ̂ and rmse*, and source-clustered percentile and Student intervals with the
+maps refitted inside every draw.
 
 How to use them together: [`docs/EVALUATION_METHODS.md`](../../docs/EVALUATION_METHODS.md).
 `tests/independent_reference.rs` checks them against scipy, scikit-learn and

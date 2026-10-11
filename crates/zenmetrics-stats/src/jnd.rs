@@ -73,6 +73,14 @@ pub enum MapFamily {
     /// with `a ≥ 0`, `c > 0`. The CTC writes it `(a′·max(0, b − x))^c`, so
     /// `a = a′^c`; convert before comparing parameters with published maps.
     KneePower(Shape),
+    /// [`MapFamily::KneePower`] with the knee `b` fixed in advance instead of
+    /// fitted, leaving `a` and `c` free. Use it when the score has a known
+    /// zero of the target, such as a quality score whose value at pixel
+    /// identity is 0 JND by definition: fixing the knee there keeps every
+    /// score short of identity above 0 and identity itself at exactly 0,
+    /// where a fitted knee can map a band of near-identity scores to 0 or put
+    /// identity above 0.
+    KneePowerFixed(Shape, Knee),
     /// Monotone least squares (pool-adjacent-violators), decreasing for
     /// [`Shape::Quality`] and increasing for [`Shape::Distance`]; predictions
     /// between fitted points are linearly interpolated and clamped at the
@@ -80,6 +88,35 @@ pub enum MapFamily {
     /// use it out of fold.
     Isotonic(Shape),
 }
+
+/// A knee position fixed before fitting, for [`MapFamily::KneePowerFixed`].
+/// Compared by bit pattern, so a family holding one stays `Eq`.
+#[derive(Clone, Copy, Debug)]
+pub struct Knee(f64);
+
+impl Knee {
+    /// `None` unless `b` is finite. `-0.0` is stored as `0.0`.
+    pub const fn new(b: f64) -> Option<Self> {
+        if b.is_finite() {
+            Some(Self(if b == 0.0 { 0.0 } else { b }))
+        } else {
+            None
+        }
+    }
+
+    /// The knee position in score units.
+    pub const fn get(self) -> f64 {
+        self.0
+    }
+}
+
+impl PartialEq for Knee {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+
+impl Eq for Knee {}
 
 impl MapFamily {
     /// Free parameters, for P.1401's `N − d` denominator. Isotonic regression
@@ -90,6 +127,7 @@ impl MapFamily {
             MapFamily::Linear => Some(2),
             MapFamily::Logistic4 => Some(4),
             MapFamily::KneePower(_) => Some(3),
+            MapFamily::KneePowerFixed(..) => Some(2),
             MapFamily::Isotonic(_) => None,
         }
     }
@@ -145,7 +183,8 @@ impl FittedMap {
     }
 
     /// Fitted parameters: `[a, b]` (linear), the four logistic parameters,
-    /// `[a, b, c]` (knee power), empty for isotonic.
+    /// `[a, b, c]` (knee power; for the fixed-knee variant `b` is the declared
+    /// knee, not a fitted value), empty for isotonic.
     pub fn params(&self) -> &[f64] {
         &self.params
     }
@@ -169,7 +208,7 @@ impl FittedMap {
                 ];
                 logistic_eval(&b, x)
             }
-            MapFamily::KneePower(shape) => {
+            MapFamily::KneePower(shape) | MapFamily::KneePowerFixed(shape, _) => {
                 knee_eval(shape, self.params[0], self.params[1], self.params[2], x)
             }
             MapFamily::Isotonic(_) => interp(&self.knots, x),
@@ -212,6 +251,11 @@ pub fn fit_map(family: MapFamily, x: &[f64], y: &[f64]) -> Result<FittedMap, Map
             (b.to_vec(), Vec::new(), 0)
         }
         MapFamily::KneePower(shape) => (fit_knee(shape, x, y)?.to_vec(), Vec::new(), 0),
+        MapFamily::KneePowerFixed(shape, knee) => (
+            fit_knee_fixed(shape, knee.get(), x, y)?.to_vec(),
+            Vec::new(),
+            0,
+        ),
         MapFamily::Isotonic(shape) => {
             let (knots, blocks) = fit_isotonic(shape, x, y);
             (Vec::new(), knots, blocks)
@@ -488,6 +532,70 @@ fn fit_knee(shape: Shape, x: &[f64], y: &[f64]) -> Result<[f64; 3], MapError> {
     Ok([a, p[0], c])
 }
 
+/// Knee power with `b` fixed: `a` is profiled out, and `ln c` is found by a
+/// dense grid over `c ∈ [0.02, 50]` refined by golden-section search around
+/// the best grid point.
+fn fit_knee_fixed(shape: Shape, b: f64, x: &[f64], y: &[f64]) -> Result<[f64; 3], MapError> {
+    let below = x
+        .iter()
+        .filter(|&&xi| knee_eval(shape, 1.0, b, 1.0, xi) > 0.0)
+        .count();
+    if below < 2 {
+        return Err(MapError::FitFailed);
+    }
+    let cost = |lc: f64| -> f64 {
+        let (_, sse) = knee_profile(shape, b, lc.exp(), x, y);
+        if sse.is_finite() { sse } else { f64::INFINITY }
+    };
+    const N: usize = 400;
+    let (lo, hi) = (0.02f64.ln(), 50f64.ln());
+    let step = (hi - lo) / N as f64;
+    let mut best = (lo, cost(lo));
+    for i in 1..=N {
+        let lc = lo + step * i as f64;
+        let f = cost(lc);
+        if f < best.1 {
+            best = (lc, f);
+        }
+    }
+    if !best.1.is_finite() {
+        return Err(MapError::FitFailed);
+    }
+    let (mut l, mut r) = ((best.0 - step).max(lo), (best.0 + step).min(hi));
+    let g = (5f64.sqrt() - 1.0) / 2.0;
+    let (mut m1, mut m2) = (r - g * (r - l), l + g * (r - l));
+    let (mut f1, mut f2) = (cost(m1), cost(m2));
+    for _ in 0..200 {
+        if r - l < 1e-13 {
+            break;
+        }
+        if f1 <= f2 {
+            r = m2;
+            m2 = m1;
+            f2 = f1;
+            m1 = r - g * (r - l);
+            f1 = cost(m1);
+        } else {
+            l = m1;
+            m1 = m2;
+            f1 = f2;
+            m2 = l + g * (r - l);
+            f2 = cost(m2);
+        }
+    }
+    let lc = if f1.min(f2) <= best.1 {
+        if f1 <= f2 { m1 } else { m2 }
+    } else {
+        best.0
+    };
+    let c = lc.exp();
+    let (a, _) = knee_profile(shape, b, c, x, y);
+    if !(a.is_finite() && c.is_finite()) {
+        return Err(MapError::FitFailed);
+    }
+    Ok([a, b, c])
+}
+
 /// Nelder–Mead in two dimensions with the standard coefficients.
 fn nelder_mead_2d<F: Fn(&[f64; 2]) -> f64>(
     f: &F,
@@ -636,6 +744,68 @@ mod tests {
         for (&xi, &yi) in x.iter().zip(&y) {
             assert!((m.predict(xi) - yi).abs() < 1e-4);
         }
+    }
+
+    fn knee100() -> MapFamily {
+        MapFamily::KneePowerFixed(Shape::Quality, Knee::new(100.0).unwrap())
+    }
+
+    #[test]
+    fn fixed_knee_recovers_its_own_curve_and_keeps_the_knee() {
+        let x: Vec<f64> = (0..60).map(|i| 35.0 + i as f64).collect();
+        let y: Vec<f64> = x
+            .iter()
+            .map(|&v| knee_eval(Shape::Quality, 0.04, 100.0, 1.3, v))
+            .collect();
+        let m = fit_map(knee100(), &x, &y).unwrap();
+        let p = m.params();
+        assert_eq!(p[1], 100.0, "{p:?}");
+        assert!(
+            (p[0] - 0.04).abs() < 1e-9 && (p[2] - 1.3).abs() < 1e-9,
+            "{p:?}"
+        );
+        assert_eq!(m.n_params(), 2);
+    }
+
+    #[test]
+    fn fixed_knee_maps_identity_to_zero_and_nothing_short_of_it() {
+        // targets that a free knee would place well below 100
+        let x: Vec<f64> = (0..40).map(|i| 50.0 + i as f64).collect();
+        let y: Vec<f64> = x
+            .iter()
+            .map(|&v| knee_eval(Shape::Quality, 0.08, 85.0, 1.0, v))
+            .collect();
+        let m = fit_map(knee100(), &x, &y).unwrap();
+        assert_eq!(m.predict(100.0), 0.0);
+        assert_eq!(m.predict(120.0), 0.0);
+        assert!(m.predict(99.5) > 0.0 && m.predict(90.0) > m.predict(99.5));
+        let free = fit_map(MapFamily::KneePower(Shape::Quality), &x, &y).unwrap();
+        let sse = |f: &FittedMap| -> f64 {
+            x.iter()
+                .zip(&y)
+                .map(|(&a, &b)| (f.predict(a) - b).powi(2))
+                .sum()
+        };
+        assert!(
+            sse(&free) <= sse(&m) + 1e-12,
+            "a fixed knee cannot beat the free one"
+        );
+    }
+
+    #[test]
+    fn fixed_knee_needs_two_rows_short_of_the_knee() {
+        let x = [100.0, 101.0, 99.0, 102.0];
+        let y = [0.0, 0.0, 0.1, 0.0];
+        assert_eq!(fit_map(knee100(), &x, &y), Err(MapError::FitFailed));
+    }
+
+    #[test]
+    fn knee_equality_is_by_value_and_rejects_non_finite() {
+        assert_eq!(Knee::new(0.0), Knee::new(-0.0));
+        assert_ne!(Knee::new(100.0), Knee::new(99.0));
+        assert_eq!(Knee::new(f64::NAN), None);
+        assert_eq!(Knee::new(f64::INFINITY), None);
+        assert_eq!(knee100(), knee100());
     }
 
     #[test]
