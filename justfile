@@ -299,6 +299,15 @@ lock-check *args:
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
 
+# Run cargo in the CI-pinned sibling snapshot, for dev trees whose sibling
+# checkouts have drifted from ci/sibling-pins.tsv (a plain `cargo` there can
+# fail to resolve). Exports `rev` (default: the working copy), checks the lock,
+# then runs `cargo --locked <args>` in the snapshot with its own target dir.
+# Example: just snap-cargo @ test -p zenstats
+snap-cargo rev +args:
+    bash scripts/ci/lock.sh --check --rev {{rev}}
+    cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
+
 # Local V40 package verification; no enqueue or publication.
 v40-fit-tools:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools
