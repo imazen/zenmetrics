@@ -344,19 +344,40 @@ pub fn psnrhvs_rgb8(
         alloc::vec![0.0f32; width * height],
         alloc::vec![0.0f32; width * height],
     ];
-    for y in 0..height {
-        let rr = &reference[y * stride..y * stride + 3 * width];
-        let dd = &distorted[y * stride..y * stride + 3 * width];
-        for x in 0..width {
-            for c in 0..3 {
-                planes_r[c][y * width + x] = rr[3 * x + c] as f32;
-                planes_d[c][y * width + x] = dd[3 * x + c] as f32;
+    let [pr0, pr1, pr2] = &mut planes_r;
+    let [pd0, pd1, pd2] = &mut planes_d;
+    for_each_row2(
+        pr0,
+        pr1,
+        pr2,
+        pd0,
+        pd1,
+        pd2,
+        width,
+        height,
+        |y, (r0, r1, r2, d0, d1, d2)| {
+            let rr = &reference[y * stride..y * stride + 3 * width];
+            let dd = &distorted[y * stride..y * stride + 3 * width];
+            for x in 0..width {
+                r0[x] = rr[3 * x] as f32;
+                r1[x] = rr[3 * x + 1] as f32;
+                r2[x] = rr[3 * x + 2] as f32;
+                d0[x] = dd[3 * x] as f32;
+                d1[x] = dd[3 * x + 1] as f32;
+                d2[x] = dd[3 * x + 2] as f32;
             }
-        }
-    }
-    let red = psnrhvs_plane_f32(&planes_r[0], &planes_d[0], width, height, width)?;
-    let green = psnrhvs_plane_f32(&planes_r[1], &planes_d[1], width, height, width)?;
-    let blue = psnrhvs_plane_f32(&planes_r[2], &planes_d[2], width, height, width)?;
+        },
+    );
+    let ((red, green), blue) = crate::kernel::join2(
+        || {
+            crate::kernel::join2(
+                || psnrhvs_plane_f32(&planes_r[0], &planes_d[0], width, height, width),
+                || psnrhvs_plane_f32(&planes_r[1], &planes_d[1], width, height, width),
+            )
+        },
+        || psnrhvs_plane_f32(&planes_r[2], &planes_d[2], width, height, width),
+    );
+    let (red, green, blue) = (red?, green?, blue?);
     Ok(RgbScore {
         psnr_hvs: (red.psnr_hvs + green.psnr_hvs + blue.psnr_hvs) / 3.0,
         psnr_hvs_m: (red.psnr_hvs_m + green.psnr_hvs_m + blue.psnr_hvs_m) / 3.0,
@@ -389,15 +410,95 @@ pub fn psnrhvs_luma8(
     }
     let mut yr = alloc::vec![0.0f32; width * height];
     let mut yd = alloc::vec![0.0f32; width * height];
-    for y in 0..height {
+    for_each_row1(&mut yr, &mut yd, width, |y, (arow, brow)| {
         let rr = &reference[y * stride..y * stride + 3 * width];
         let dd = &distorted[y * stride..y * stride + 3 * width];
         for x in 0..width {
-            yr[y * width + x] = gray_px(rr[3 * x], rr[3 * x + 1], rr[3 * x + 2]);
-            yd[y * width + x] = gray_px(dd[3 * x], dd[3 * x + 1], dd[3 * x + 2]);
+            arow[x] = gray_px(rr[3 * x], rr[3 * x + 1], rr[3 * x + 2]);
+            brow[x] = gray_px(dd[3 * x], dd[3 * x + 1], dd[3 * x + 2]);
         }
-    }
+    });
     psnrhvs_plane_f32(&yr, &yd, width, height, width)
+}
+
+/// Row-map driver for a pair of same-shape planes — `f(y, (arow,
+/// brow))` per row. Disjoint writes, identical at any thread count.
+fn for_each_row1(
+    a: &mut [f32],
+    b: &mut [f32],
+    w: usize,
+    f: impl Fn(usize, (&mut [f32], &mut [f32])) + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        a.par_chunks_mut(w)
+            .zip(b.par_chunks_mut(w))
+            .enumerate()
+            .for_each(|(y, (arow, brow))| f(y, (arow, brow)));
+        return;
+    }
+    for (y, (arow, brow)) in a.chunks_mut(w).zip(b.chunks_mut(w)).enumerate() {
+        f(y, (arow, brow));
+    }
+}
+
+/// Row-map driver for the six deinterleave planes — `f(y, (r0,r1,r2,
+/// d0,d1,d2))` per row. Under `parallel` rows are chunked-mapped when
+/// the pool has >1 thread; writes are disjoint so results are
+/// bit-identical at any thread count.
+#[allow(clippy::too_many_arguments)]
+fn for_each_row2(
+    a: &mut [f32],
+    b: &mut [f32],
+    c: &mut [f32],
+    d: &mut [f32],
+    e: &mut [f32],
+    f: &mut [f32],
+    w: usize,
+    h: usize,
+    cb: impl Fn(
+        usize,
+        (
+            &mut [f32],
+            &mut [f32],
+            &mut [f32],
+            &mut [f32],
+            &mut [f32],
+            &mut [f32],
+        ),
+    ) + Sync,
+) {
+    let n = w * h;
+    debug_assert_eq!(a.len(), n);
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        a.par_chunks_mut(w)
+            .zip(b.par_chunks_mut(w))
+            .zip(c.par_chunks_mut(w))
+            .zip(d.par_chunks_mut(w))
+            .zip(e.par_chunks_mut(w))
+            .zip(f.par_chunks_mut(w))
+            .enumerate()
+            .for_each(|(y, (((((r0, r1), r2), d0), d1), d2))| {
+                cb(y, (r0, r1, r2, d0, d1, d2));
+            });
+        return;
+    }
+    for y in 0..h {
+        cb(
+            y,
+            (
+                &mut a[y * w..y * w + w],
+                &mut b[y * w..y * w + w],
+                &mut c[y * w..y * w + w],
+                &mut d[y * w..y * w + w],
+                &mut e[y * w..y * w + w],
+                &mut f[y * w..y * w + w],
+            ),
+        );
+    }
 }
 
 /// sRGB8 → BT.601 luma of one pixel, identical to `gmsd`'s `gray_px`:

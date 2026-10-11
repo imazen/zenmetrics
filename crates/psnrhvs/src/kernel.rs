@@ -135,6 +135,22 @@ pub(crate) fn n_bands(nb_y: usize) -> usize {
     }
 }
 
+/// `rayon::join` under `parallel`, sequential otherwise.
+pub(crate) fn join2<A, B>(fa: impl FnOnce() -> A + Send, fb: impl FnOnce() -> B + Send) -> (A, B)
+where
+    A: Send,
+    B: Send,
+{
+    #[cfg(feature = "parallel")]
+    {
+        rayon::join(fa, fb)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        (fa(), fb())
+    }
+}
+
 /// `f(b)` over `0..nb` collected in band order — parallel under
 /// `parallel`, sequential otherwise.
 pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + Sync) -> Vec<T> {
