@@ -426,6 +426,10 @@ fn compute_mask_impl(
 /// order — bit-identical to the `fmaf` libcall path.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "fma", enable = "avx2")]
+///
+/// # Safety
+/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
+/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
 unsafe fn compute_mask_fma(mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
     compute_mask_impl(
         &mask_obj.add_ring,
@@ -456,6 +460,10 @@ fn conv_add_impl(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "fma", enable = "avx2")]
+///
+/// # Safety
+/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
+/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
 unsafe fn conv_add_fma(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
     conv_add_impl(mp, m0, m1, m2, add);
 }
@@ -473,6 +481,10 @@ fn window_impl(block: &mut [[f32; 8]; 8], avg: f32) {
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "fma", enable = "avx2")]
+///
+/// # Safety
+/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
+/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
 unsafe fn window_fma(block: &mut [[f32; 8]; 8], avg: f32) {
     window_impl(block, avg);
 }
@@ -488,6 +500,10 @@ fn dc_fixup_impl(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "fma", enable = "avx2")]
+///
+/// # Safety
+/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
+/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
 unsafe fn dc_fixup_fma(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
     dc_fixup_impl(m00, m01, m10, m11);
 }
@@ -788,6 +804,8 @@ impl BandMask {
         let add = &mut self.add_ring[slot];
         #[cfg(target_arch = "x86_64")]
         if have_fma() {
+            // SAFETY: `have_fma()` gate above guarantees the target
+            // features; args mirror the safe call's contract.
             unsafe {
                 conv_add_fma(mp, m0, m1, m2, add);
             }
@@ -819,6 +837,8 @@ impl BandMask {
         // libcall, just ~10× cheaper. Without it the libcall path is kept.
         #[cfg(target_arch = "x86_64")]
         if have_fma() {
+            // SAFETY: `have_fma()` gate above guarantees the target
+            // features; args mirror the safe call's contract.
             unsafe {
                 compute_mask_fma(self, kernel);
             }
@@ -969,12 +989,13 @@ impl Component {
             #[cfg(feature = "std")]
             CUR_CALL.with(|c| c.set(pcall));
             #[cfg(feature = "std")]
-            if let Some((lo, hi)) = dumpp {
-                if pcall >= lo && pcall <= hi {
-                    for (y, r) in block.iter().enumerate() {
-                        for (x, &v) in r.iter().enumerate() {
-                            eprintln!("PIN {pcall} {y} {x} {:#010x}", v.to_bits());
-                        }
+            if let Some((lo, hi)) = dumpp
+                && pcall >= lo
+                && pcall <= hi
+            {
+                for (y, r) in block.iter().enumerate() {
+                    for (x, &v) in r.iter().enumerate() {
+                        eprintln!("PIN {pcall} {y} {x} {:#010x}", v.to_bits());
                     }
                 }
             }
@@ -1009,6 +1030,8 @@ impl Component {
             let avg = avg / 64.0;
             #[cfg(target_arch = "x86_64")]
             if have_fma() {
+                // SAFETY: `have_fma()` gate above guarantees the target
+                // features; args mirror the safe call's contract.
                 unsafe {
                     window_fma(&mut block, avg);
                 }
@@ -1235,6 +1258,8 @@ fn dc_mask_fixup(img: &mut MeteredImage) {
     // GCC `-ffast-math` reassociates to fma(m11, 0.25, (m01+m10)·0.5).
     #[cfg(target_arch = "x86_64")]
     if have_fma() {
+        // SAFETY: `have_fma()` gate above guarantees the target
+        // features; args mirror the safe call's contract.
         unsafe {
             dc_fixup_fma(m00, m01, m10, m11);
         }
