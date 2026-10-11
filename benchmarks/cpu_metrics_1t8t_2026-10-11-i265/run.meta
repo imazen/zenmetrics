@@ -18,3 +18,10 @@ host_detail: i265 = Core Ultra 7 265K Arrow Lake; cpus 0-7 = P-cores
   (5.5GHz, taskset 0-7 correct), cpus 8-19 = E-cores (4.6GHz). 1t legs
   pinned cpu 2 (P-core). Cross-host vs Oct-9 r7900x (Zen4): scalar f64
   workloads run ~10-25% slower on i265; Oct-9 doc notes ±2x leg noise.
+
+post_sweep_commits_remeasured:
+  mad batch8 Bluestein (28144f17): mt8 legs re-ran post-build —
+    8.4MP 8t 5792ms (was 8330 pre-batch8), 1MP 8t 413ms;
+    heap 1t re-ran 26857ms (was 46145).
+  vifvec (907b0f65) + ssim (01c9e8b4): heap 1t logs re-ran —
+    vifvec 3397ms, ssim 1825ms; mt8 rows patched from filtered legs.
