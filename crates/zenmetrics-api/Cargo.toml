@@ -180,7 +180,7 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # the workspace `[patch.crates-io]` sibling pin (root Cargo.toml); move
 # back to the registry once a fast-ssim2 release ships `hdr-pu`.
 fast-ssim2  = { version = "0.8.2", optional = true, features = ["imgref", "hdr-pu", "rayon"] }
-cvvdp       = { workspace = true, optional = true, features = ["std", "parallel"] }
+cvvdp       = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim      = { workspace = true, optional = true }

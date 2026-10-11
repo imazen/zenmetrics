@@ -594,11 +594,10 @@ zenmetrics-api = { workspace = true, optional = true, default-features = false }
 # `gpu-cvvdp` feature links cvvdp only THROUGH zenmetrics-api, which doesn't
 # resolve the CLI's own `use cvvdp::…` — the missing edge that made
 # hdr+png/jxl builds uncompilable (2026-07-12).
-# `avx512` intentionally off for cvvdp/iwssim/nlpd: their incant! cascades
-# emit v4 calls for kernels whose `_v4` fns were never written (f32x8
-# transcendentals + f64x4 have no V4 backend in magetypes) — enabling it
-# breaks the build until the zenmetrics-math native-width work lands.
-cvvdp = { workspace = true, optional = true, features = ["std", "parallel"] }
+# `avx512` still off for iwssim only: its f64x4 kernels need a V4
+# `F64x4Backend` (magetypes gap) plus `infow_map_into_v4`. cvvdp/nlpd got
+# their v4 coverage with zenmetrics-math's native-width kernels.
+cvvdp = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 gmsd = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 psnrhvs = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 haarpsi = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
