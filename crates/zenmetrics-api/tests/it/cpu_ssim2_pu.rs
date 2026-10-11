@@ -1,7 +1,7 @@
 //! CPU-ssim2 integrated-PU HDR routing (`hdr::HdrFeeding::IntegratedPuNits`):
 //! `HdrScorer` on `Backend::Cpu` routes ssim2 through
 //! `cpu_dispatch::compute_pu_nits_interleaved` →
-//! `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu` feature — PU21
+//! `fast_ssim2::compute_ssimulacra2_pu` (`hdr-pu` feature — PU21
 //! banding_glare in place of the cube-root opsin nonlinearity, absolute-nits
 //! f32 in, no u8 round-trip; consumed via the workspace `[patch.crates-io]`
 //! pin until a fast-ssim2 release ships the feature). Scoring itself is
@@ -33,24 +33,26 @@ fn hdr_pair(w: u32, h: u32) -> (Vec<f32>, Vec<f32>) {
     (r, d)
 }
 
-/// Repack interleaved nits as the `LinearRgbImage` the direct entry takes.
-fn nits_image(nits: &[f32], w: u32, h: u32) -> fast_ssim2::LinearRgbImage {
-    let data: Vec<[f32; 3]> = nits
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .map(|c| [c[0], c[1], c[2]])
-        .collect();
-    fast_ssim2::LinearRgbImage::new(data, w as usize, h as usize)
+/// Borrow interleaved nits as the `PixelSlice` the direct entry takes
+/// (`[f32; 3]` is `bytemuck::Pod` — a zero-copy reinterpret).
+fn nits_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelSlice<'a> {
+    fast_ssim2::PixelSlice::new(
+        bytemuck::cast_slice(nits),
+        w,
+        h,
+        w as usize * 12,
+        fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
+    )
+    .expect("PixelSlice RGBF32_LINEAR")
 }
 
 /// The umbrella's CPU-ssim2 HDR score equals calling
-/// `fast_ssim2::compute_ssimulacra2_pu_nits` directly on the same nits
+/// `fast_ssim2::compute_ssimulacra2_pu` directly on the same nits
 /// buffers — proving the routing reaches the integrated PU entry and adds
 /// nothing on top. Bit-equal: both sides run the identical deterministic
 /// pipeline in the same process.
 #[test]
-fn cpu_ssim2_pu_matches_direct_compute_ssimulacra2_pu_nits() {
+fn cpu_ssim2_pu_matches_direct_compute_ssimulacra2_pu() {
     let (w, h) = (128u32, 96u32);
     let (r, d) = hdr_pair(w, h);
 
@@ -59,14 +61,13 @@ fn cpu_ssim2_pu_matches_direct_compute_ssimulacra2_pu_nits() {
     let umbrella = s.compute_multi(&r, &d).expect("compute_multi");
     assert_eq!(umbrella.metric_name, "ssim2");
 
-    let direct =
-        fast_ssim2::compute_ssimulacra2_pu_nits(nits_image(&r, w, h), nits_image(&d, w, h))
-            .expect("direct compute_ssimulacra2_pu_nits");
+    let direct = fast_ssim2::compute_ssimulacra2_pu(&nits_slice(&r, w, h), &nits_slice(&d, w, h))
+        .expect("direct compute_ssimulacra2_pu");
 
     assert_eq!(
         umbrella.primary(),
         direct,
-        "umbrella IntegratedPuNits routing must be the direct compute_ssimulacra2_pu_nits score"
+        "umbrella IntegratedPuNits routing must be the direct compute_ssimulacra2_pu score"
     );
 }
 

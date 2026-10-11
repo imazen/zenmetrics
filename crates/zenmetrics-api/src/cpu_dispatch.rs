@@ -582,25 +582,16 @@ impl CpuMetricState {
                     });
                 }
                 // `[f32; 3]` is `bytemuck::Pod`, so the interleaved buffer
-                // reinterprets per-pixel without a copy; `LinearRgbImage`
-                // takes owned data, so one `to_vec` per side is the cost.
-                let to_img = |nits: &[f32]| {
-                    fast_ssim2::LinearRgbImage::try_new(
-                        bytemuck::cast_slice(nits).to_vec(),
-                        w,
-                        h,
-                    )
-                    .map_err(|e| Error::Metric {
-                        kind: "ssim2",
-                        message: format!("fast-ssim2 LinearRgbImage: {e}"),
-                    })
-                };
-                let v =
-                    fast_ssim2::compute_ssimulacra2_pu_nits(to_img(ref_nits)?, to_img(dis_nits)?)
-                        .map_err(|e| Error::Metric {
-                            kind: "ssim2",
-                            message: format!("fast-ssim2 compute_ssimulacra2_pu_nits: {e}"),
-                        })?;
+                // reinterprets per-pixel without a copy — PixelSlice
+                // borrows it directly (linear-light f32 nits).
+                let v = fast_ssim2::compute_ssimulacra2_pu(
+                    &ssim2_nits_slice(ref_nits, w, h)?,
+                    &ssim2_nits_slice(dis_nits, w, h)?,
+                )
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: format!("fast-ssim2 compute_ssimulacra2_pu: {e}"),
+                })?;
                 Ok((
                     Score {
                         value: v,
@@ -927,9 +918,9 @@ impl CpuMetricState {
                 height,
                 cached_ref,
             } => {
-                let img = ssim2_image_ref(r, *width as usize, *height as usize);
+                let img = ssim2_slice(r, *width as usize, *height as usize)?;
                 let pre =
-                    fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| Error::Metric {
+                    fast_ssim2::Ssimulacra2Reference::new(&img).map_err(|e| Error::Metric {
                         kind: "ssim2",
                         message: format!("fast-ssim2 Ssimulacra2Reference::new: {e}"),
                     })?;
@@ -1040,8 +1031,8 @@ impl CpuMetricState {
                     kind: "ssim2",
                     message: "ssim2: no cached reference; call set_reference first".into(),
                 })?;
-                let dist_img = ssim2_image_ref(d, *width as usize, *height as usize);
-                let v = pre.compare(dist_img).map_err(|e| Error::Metric {
+                let dist_img = ssim2_slice(d, *width as usize, *height as usize)?;
+                let v = pre.compare(&dist_img).map_err(|e| Error::Metric {
                     kind: "ssim2",
                     message: format!("fast-ssim2 compare: {e}"),
                 })?;
@@ -1269,20 +1260,44 @@ fn check_srgb_len(kind: &'static str, width: u32, height: u32, r: &[u8], d: &[u8
 // fast-ssim2 wiring — mirrors cpu_adapter::{ssim2_image_ref, compute_ssim2}.
 // ---------------------------------------------------------------------------
 
-/// Borrow an interleaved sRGB-u8 buffer as `ImgRef<'_, [u8; 3]>`.
-/// `[u8; 3]` is `bytemuck::Pod`, so this reinterprets in place — no copy.
+/// Borrow an interleaved linear-light f32 nits buffer as a `PixelSlice`
+/// — no copy (`[f32; 3]` is `bytemuck::Pod`).
 #[cfg(feature = "cpu-ssim2")]
-fn ssim2_image_ref<'a>(bytes: &'a [u8], w: usize, h: usize) -> imgref::ImgRef<'a, [u8; 3]> {
-    let pixels: &[[u8; 3]] = bytemuck::cast_slice(bytes);
-    imgref::ImgRef::new(pixels, w, h)
+fn ssim2_nits_slice<'a>(nits: &'a [f32], w: usize, h: usize) -> Result<fast_ssim2::PixelSlice<'a>> {
+    fast_ssim2::PixelSlice::new(
+        bytemuck::cast_slice(nits),
+        w as u32,
+        h as u32,
+        w * 12,
+        fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
+    )
+    .map_err(|e| Error::Metric {
+        kind: "ssim2",
+        message: format!("fast-ssim2 PixelSlice: {e:?}"),
+    })
+}
+
+#[cfg(feature = "cpu-ssim2")]
+fn ssim2_slice<'a>(bytes: &'a [u8], w: usize, h: usize) -> Result<fast_ssim2::PixelSlice<'a>> {
+    fast_ssim2::PixelSlice::new(
+        bytes,
+        w as u32,
+        h as u32,
+        w * 3,
+        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+    )
+    .map_err(|e| Error::Metric {
+        kind: "ssim2",
+        message: format!("fast-ssim2 PixelSlice: {e:?}"),
+    })
 }
 
 #[cfg(feature = "cpu-ssim2")]
 fn compute_ssim2(width: u32, height: u32, r: &[u8], d: &[u8]) -> Result<Score> {
     check_srgb_len("ssim2", width, height, r, d)?;
-    let ref_img = ssim2_image_ref(r, width as usize, height as usize);
-    let dist_img = ssim2_image_ref(d, width as usize, height as usize);
-    let v = fast_ssim2::compute_ssimulacra2(ref_img, dist_img).map_err(|e| Error::Metric {
+    let ref_img = ssim2_slice(r, width as usize, height as usize)?;
+    let dist_img = ssim2_slice(d, width as usize, height as usize)?;
+    let v = fast_ssim2::compute_ssimulacra2(&ref_img, &dist_img).map_err(|e| Error::Metric {
         kind: "ssim2",
         message: format!("fast-ssim2 compute_ssimulacra2: {e}"),
     })?;

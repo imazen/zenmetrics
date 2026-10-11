@@ -7540,7 +7540,7 @@ dependencies = [
  "dssim-core",
  "dssim-gpu",
  "enough",
- "fast-ssim2 0.8.2",
+ "fast-ssim2 0.9.0",
  "hdrvdp",
  "image",
  "imgref",
