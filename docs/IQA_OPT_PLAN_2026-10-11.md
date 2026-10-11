@@ -60,25 +60,41 @@ Measured baseline: `benchmarks/cpu_metrics_1t8t_2026-10-09.md` (29 metrics,
 
 Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brief.md`.
 
-## Priority queue
+## Priority queue — status after the 04:30–05:10 push series
 
 - [x] P0: enable `parallel`+`avx512` dep-edge features (cli+api) — avx512
-      OFF for cvvdp/iwssim/nlpd until v4 arms exist (compile-verified).
-- [ ] P0: mdctpsnr — rayon via errorline column-striping (per-element
-      product order preserved → bit-identical) + parallel push_row bands.
-- [ ] P0: nlpd — vectorize filter5_h/blur5/normalize, scratch reuse, add
-      `parallel`+`avx512`-safe kernels.
-- [ ] P1: cvvdp CSF vectorization (sol-math, gather+vexp).
-- [ ] P1: zenmetrics-math crate lands; par.rs consolidation.
+      ON for every crate that compiles it; iwssim is the last holdout
+      (needs `F64x4Backend` for V4 + `infow_map_into_v4`).
+- [x] P0: mdctpsnr — rayon errorline column-striping + push_row bands +
+      hoisted env probes + `#[target_feature]` FMA clones of the fmaf
+      libcall loops. 6.9s→1.63s @8t wall example; sweep 7740→2031 ms.
+      `4ade8360` + `f1870dca`.
+- [x] P0: nlpd — shared `for_each_row`/`for_each_row_init` striping all
+      row filters + avx512 edge. 47.8→29.4 ms/call @8t (1.63x), identical
+      scores, no 1t regression after the pool-size gate. `4a424978`.
+- [x] P1: cvvdp CSF vectorization + zenmetrics-math crate — sol-math
+      landed `01e28ca1` + `bd223f0c` (native-width kernels, policy seam,
+      consolidated par; CSF 45.2→36.9 ms @8t; JOD delta ≤9.5e-7). cvvdp
+      avx512 then enabled (`d97da263`).
+- [x] P1: mad — root cause found: non-pow2 dims drop to serial scalar
+      Bluestein chirp-z (~64 KiB alloc + 3 radix-2 FFTs of ~2n per row/
+      col × ~42 transforms). Parallelized rows (par_chunks_mut +
+      per-worker scratch), super-blocked columns mirroring the radix-2
+      structure, all ical passes j-strip parallel, elementwise stages
+      parallel, integral-input lum LUT. 3610→813 ms/call @8t at 1000×767
+      non-pow2 (4.44x), identical scores. `ab65ee00`.
+- [x] P2: vifvec — 1.00x→~3.4x @8t via corr_dn rows, maybe_join
+      pyramids, element-parallel mean, striped cu covariance, row-par
+      ss/LU blocks + vifsub_est. `907b0f65`.
+- [x] P2: ssim classical (CLI) — row-parallel gaussian passes. `01c9e8b4`.
 - [ ] P1: magetypes v4 fills (`I32x8Backend`+`F32x8Convert`+`F64x4Backend`)
-      — upstream PR, NOT critical path (native-width route avoids them).
-- [ ] P1: mad — root-cause 3.84× superlinear (FFT-vs-prime-factor dims?).
-- [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit-assisted fitting) or
-      scoped f32 conversion under JOD parity gate.
-- [ ] P2: vifvec steerable pyramid; ssim classical cache-bound (halo/strip);
-      ssim2 thread scaling; msssim-libvmaf.
-- [ ] Serialize: full `cpu-metrics-1t8t` re-run pinned, all sizes + heaptrack
-      RSS, after lanes merge (zenbench affinity or taskset).
+      — upstream PR; archmage repo has other live lanes — NOT done.
+- [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit) or scoped f32
+      under JOD parity gate.
+- [ ] P2: ssim2 thread scaling (1.02x→?), msssim-libvmaf, vsi/fsim tails.
+- [~] Serialize: `cpu-metrics-1t8t` re-run pinned on i265
+      (benchmarks/cpu_metrics_1t8t_2026-10-11-i265). 1024 legs done —
+      mt8 leg needs a clean re-run (overlapped a vifvec wall bench).
 
 ## Environment hazards found (i265)
 
