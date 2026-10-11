@@ -21,11 +21,13 @@ rule per § A.9 of `PSYCHOVISUAL_LEARNINGS_FOR_ZENSIM.md`).
 | `mrr_h`, `phi`, `two_sided_p` | Meng-Rosenthal-Rubin paired z-test | Meng, Rosenthal & Rubin 1992 |
 | `bootstrap_ci_delta`, `decisive` | A-vs-B decision gate | § A.9 |
 | `resample::{cluster_bootstrap, Draw}` | percentile CIs resampling sources, or sources × codecs; copy-aware pair weights and expansion | Owen 2007 |
-| `pairs::{class_agreement, expected_agreement, PairTable}` | agreement per pair class; expected observer agreement vs ceiling; O(cells²) bootstrap path | Thurstone Case V |
+| `pairs::{class_agreement, expected_agreement, PairTable}` | agreement per pair class (optional codec-family split); expected observer agreement vs ceiling; O(cells²) bootstrap path | Thurstone Case V |
+| `pairs::ds_auc` | same/different discrimination AUC (moved from zensim) | Mohammadi 2025 § VII |
+| `resample::spearman_interval` | source-clustered (or pair) bootstrap interval of SROCC | — |
 | `jnd::{fit_map, out_of_fold}` | declared mapping families, leave-one-source-out | P.1401 §7.3.3 |
 | `jnd::{rmse, excess_error_sd, rmse_star}` | RMSE, τ̂ excess error (moment, ML), epsilon-insensitive RMSE | Veroniki et al. 2016; P.1401 §7.7 |
 | `forced_choice::{agreement, log_likelihood, fit_observer_slope}` | raw 2AFC/triplet agreement and log-likelihood vs in-sample and cross-fitted ceilings; not-sure as half/half | moved from zensim; Testolina 2024 |
-| `multiple::holm` | Holm adjusted p-values | Holm 1979 |
+| `multiple::{holm, holm_reject}` | Holm adjusted p-values and step-down rejections | Holm 1979 |
 
 How to use them together: [`docs/EVALUATION_METHODS.md`](../../docs/EVALUATION_METHODS.md).
 `tests/independent_reference.rs` checks them against scipy, scikit-learn and

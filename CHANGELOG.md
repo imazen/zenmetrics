@@ -14,6 +14,12 @@ Workspace conventions per the global rules:
 ## [Unreleased]
 
 - zenstats (`553ac175`, `77999b50`, `42b57055`, `f6e75e9f`, PR #67): evaluation methods for every metric.
+  Also absorbs zensim's statistics (PR #67): `pairs::ds_auc` (moved from
+  `zensim-validate/src/difference_auc.rs`), `multiple::holm_reject` (same
+  decisions as zensim's registered `v2_confirm_read.py::holm` cases),
+  `PairInput::family` (reproduces the rev4_e1b cross-codec pair classes) and
+  `resample::spearman_interval` (replacement for `bake_verdict`'s pair
+  bootstrap). Inventory and convention differences: `docs/EVALUATION_METHODS.md`.
   `resample` (source and source × codec cluster bootstrap), `pairs` (agreement
   per pair class and expected observer agreement against a ceiling), `jnd`
   (declared mapping families, leave-one-source-out maps, RMSE, τ̂, rmse*),

@@ -75,6 +75,7 @@ fn expected_observer_agreement_matches_brute_force_scipy() {
         target: &r::Y,
         source: &r::SOURCE,
         codec: &r::CODEC,
+        family: None,
         draw: None,
         orientation: Orientation::LowerIsBetter,
     };

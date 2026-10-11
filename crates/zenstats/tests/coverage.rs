@@ -120,6 +120,7 @@ fn source_clustered_pair_interval_covers_and_a_naive_one_does_not() {
             target: &target,
             source: &source,
             codec: &codec,
+            family: None,
             draw: None,
             orientation: Orientation::HigherIsBetter,
         };

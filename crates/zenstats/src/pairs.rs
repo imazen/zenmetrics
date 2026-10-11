@@ -55,7 +55,13 @@ use crate::special::norm_cdf;
 pub enum PairClass {
     /// Same source image, same codec.
     SameSourceSameCodec,
-    /// Same source image, different codec.
+    /// Same source image, different codec of the same family (for example two
+    /// encoder configurations of one format). Only populated when
+    /// [`PairInput::family`] is given; otherwise these pairs are
+    /// [`PairClass::SameSourceCrossCodec`].
+    SameSourceSameFamily,
+    /// Same source image, different codec (different family when
+    /// [`PairInput::family`] is given).
     SameSourceCrossCodec,
     /// Different source images.
     CrossSource,
@@ -63,27 +69,31 @@ pub enum PairClass {
 
 impl PairClass {
     /// All classes, in report order.
-    pub const ALL: [PairClass; 3] = [
+    pub const ALL: [PairClass; 4] = [
         PairClass::SameSourceSameCodec,
+        PairClass::SameSourceSameFamily,
         PairClass::SameSourceCrossCodec,
         PairClass::CrossSource,
     ];
 
-    fn of(src_a: u32, src_b: u32, codec_a: u32, codec_b: u32) -> Self {
-        if src_a != src_b {
+    fn of(input: &PairInput<'_>, i: usize, j: usize) -> Self {
+        if input.source[i] != input.source[j] {
             PairClass::CrossSource
-        } else if codec_a != codec_b {
-            PairClass::SameSourceCrossCodec
-        } else {
+        } else if input.codec[i] == input.codec[j] {
             PairClass::SameSourceSameCodec
+        } else if input.family.is_some_and(|f| f[i] == f[j]) {
+            PairClass::SameSourceSameFamily
+        } else {
+            PairClass::SameSourceCrossCodec
         }
     }
 
     fn slot(self) -> usize {
         match self {
             PairClass::SameSourceSameCodec => 0,
-            PairClass::SameSourceCrossCodec => 1,
-            PairClass::CrossSource => 2,
+            PairClass::SameSourceSameFamily => 1,
+            PairClass::SameSourceCrossCodec => 2,
+            PairClass::CrossSource => 3,
         }
     }
 }
@@ -154,6 +164,8 @@ impl HumanNoise<'_> {
 pub struct PerClass<T> {
     /// [`PairClass::SameSourceSameCodec`].
     pub same_source_same_codec: T,
+    /// [`PairClass::SameSourceSameFamily`].
+    pub same_source_same_family: T,
     /// [`PairClass::SameSourceCrossCodec`].
     pub same_source_cross_codec: T,
     /// [`PairClass::CrossSource`].
@@ -167,6 +179,7 @@ impl<T: Copy> PerClass<T> {
     pub fn get(&self, class: PairClass) -> T {
         match class {
             PairClass::SameSourceSameCodec => self.same_source_same_codec,
+            PairClass::SameSourceSameFamily => self.same_source_same_family,
             PairClass::SameSourceCrossCodec => self.same_source_cross_codec,
             PairClass::CrossSource => self.cross_source,
         }
@@ -217,6 +230,10 @@ pub struct PairInput<'a> {
     /// Codec label per row. For a codec nested in its source, any labelling
     /// works: only equality within a source matters here.
     pub codec: &'a [u32],
+    /// Optional codec family per row (for example the format of an encoder
+    /// configuration in `codec`). Splits same-source cross-codec pairs into
+    /// same-family and cross-family classes.
+    pub family: Option<&'a [u32]>,
     /// Optional bootstrap resample. Pairs are weighted by
     /// [`Draw::pair_weight`], which keeps copies of a drawn source distinct.
     /// The draw's first factor must partition rows exactly like `source`
@@ -246,6 +263,9 @@ impl PairInput<'_> {
         }
         if !self.target.iter().all(|x| x.is_finite()) {
             return Err(PairError::NonFinite("target"));
+        }
+        if self.family.is_some_and(|f| f.len() != n) {
+            return Err(PairError::Length("family"));
         }
         if let Some(d) = self.draw {
             if d.n_rows() != n {
@@ -319,14 +339,14 @@ fn check_noise(noise: &HumanNoise<'_>, n: usize) -> Result<(), PairError> {
 /// Unweighted contributions of pairs, per class.
 #[derive(Clone, Copy, Debug, Default)]
 struct Acc {
-    counts: [ClassCounts; 3],
+    counts: [ClassCounts; 4],
     /// per class: (pairs, metric agreement sum, oracle sum)
-    expected: [[f64; 3]; 3],
+    expected: [[f64; 3]; 4],
 }
 
 impl Acc {
     fn add_scaled(&mut self, other: &Acc, w: f64) {
-        for k in 0..3 {
+        for k in 0..4 {
             let (a, b) = (&mut self.counts[k], &other.counts[k]);
             a.pairs += w * b.pairs;
             a.concordant += w * b.concordant;
@@ -350,8 +370,9 @@ impl Acc {
         }
         PerClass {
             same_source_same_codec: self.counts[0],
-            same_source_cross_codec: self.counts[1],
-            cross_source: self.counts[2],
+            same_source_same_family: self.counts[1],
+            same_source_cross_codec: self.counts[2],
+            cross_source: self.counts[3],
             pooled,
         }
     }
@@ -381,14 +402,15 @@ impl Acc {
         };
         let e = &self.expected;
         let pooled = [
-            e[0][0] + e[1][0] + e[2][0],
-            e[0][1] + e[1][1] + e[2][1],
-            e[0][2] + e[1][2] + e[2][2],
+            e[0][0] + e[1][0] + e[2][0] + e[3][0],
+            e[0][1] + e[1][1] + e[2][1] + e[3][1],
+            e[0][2] + e[1][2] + e[2][2] + e[3][2],
         ];
         PerClass {
             same_source_same_codec: finish(e[0]),
-            same_source_cross_codec: finish(e[1]),
-            cross_source: finish(e[2]),
+            same_source_same_family: finish(e[1]),
+            same_source_cross_codec: finish(e[2]),
+            cross_source: finish(e[3]),
             pooled: finish(pooled),
         }
     }
@@ -407,13 +429,7 @@ fn add_pair(
     j: usize,
     w: f64,
 ) {
-    let slot = PairClass::of(
-        input.source[i],
-        input.source[j],
-        input.codec[i],
-        input.codec[j],
-    )
-    .slot();
+    let slot = PairClass::of(input, i, j).slot();
     let dt = input.target[i] - input.target[j];
     let dp = sign * (input.predicted[i] - input.predicted[j]);
     let c = &mut acc.counts[slot];
@@ -544,6 +560,7 @@ impl PairTable {
         let mut cell_of = std::collections::HashMap::new();
         let mut cells = Vec::with_capacity(n);
         let mut cell_levels: Vec<Vec<usize>> = Vec::new();
+        let mut cell_family: Vec<Option<u32>> = Vec::new();
         for i in 0..n {
             let next = cell_levels.len();
             let c = *cell_of
@@ -551,7 +568,11 @@ impl PairTable {
                 .or_insert(next);
             if c == next {
                 cell_levels.push((0..nf).map(|f| draw.level(f, i)).collect());
-            } else if (0..nf).any(|f| cell_levels[c][f] != draw.level(f, i)) {
+                cell_family.push(input.family.map(|f| f[i]));
+            } else if (0..nf).any(|f| cell_levels[c][f] != draw.level(f, i))
+                || cell_family[c] != input.family.map(|f| f[i])
+            {
+                // design levels and family must be constant inside a (source, codec) cell
                 return Err(PairError::DesignMismatch);
             }
             cells.push(c);
@@ -630,6 +651,80 @@ impl PairTable {
     }
 }
 
+/// DS-AUC (Mohammadi 2025 § VII): area under the ROC curve for telling
+/// "different" stimulus pairs from "same" ones by the metric's score gap.
+///
+/// A pair (i, j) is "different" when `|human[i] − human[j]| > diff_threshold`
+/// (in human-score units) and "same" otherwise; the classifier score is
+/// `|predicted[i] − predicted[j]|`. Returns the Mann–Whitney AUC in [0, 1]
+/// (0.5 = chance) with average ranks for ties, or NaN with fewer than 4 rows
+/// or when one class is empty. Every pair class is pooled. When there are more
+/// than 200,000 pairs, every `stride`-th pair in row-major order is used, with
+/// `stride = ⌊pairs / 200,000⌋`, so the result is deterministic.
+///
+/// Moved from zensim's `zensim-validate/src/difference_auc.rs` with the same
+/// pair selection and arithmetic; Imazen relicensed it with the move.
+pub fn ds_auc(predicted: &[f64], human: &[f64], diff_threshold: f64) -> f64 {
+    let n = predicted.len();
+    if n < 4 || human.len() != n {
+        return f64::NAN;
+    }
+    let max_pairs = 200_000usize;
+    let total_pairs = n * (n - 1) / 2;
+    let stride = (total_pairs / max_pairs).max(1);
+    // Each `i` owns the pair-index run [base_i, base_i + n − 1 − i), so the
+    // selected pairs depend only on `i`; concatenating in ascending `i`
+    // reproduces the sequential sweep exactly.
+    let per_row = |i: usize| -> Vec<(f64, bool)> {
+        let base = i * (2 * n - i - 1) / 2;
+        let mut local = Vec::new();
+        for j in (i + 1)..n {
+            if (base + (j - i - 1)).is_multiple_of(stride) {
+                let metric_gap = (predicted[i] - predicted[j]).abs();
+                let human_gap = (human[i] - human[j]).abs();
+                if metric_gap.is_finite() && human_gap.is_finite() {
+                    local.push((metric_gap, human_gap > diff_threshold));
+                }
+            }
+        }
+        local
+    };
+    #[cfg(feature = "parallel")]
+    let runs: Vec<Vec<(f64, bool)>> = {
+        use rayon::prelude::*;
+        (0..n).into_par_iter().map(per_row).collect()
+    };
+    #[cfg(not(feature = "parallel"))]
+    let runs: Vec<Vec<(f64, bool)>> = (0..n).map(per_row).collect();
+    let mut samples: Vec<(f64, bool)> = runs.into_iter().flatten().collect();
+    if samples.len() < 2 {
+        return f64::NAN;
+    }
+    samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let n_diff = samples.iter().filter(|s| s.1).count();
+    let n_same = samples.len() - n_diff;
+    if n_diff == 0 || n_same == 0 {
+        return f64::NAN;
+    }
+    let mut rank_sum_diff = 0.0f64;
+    let mut k = 0usize;
+    while k < samples.len() {
+        let mut m = k;
+        while m + 1 < samples.len() && samples[m + 1].0 == samples[k].0 {
+            m += 1;
+        }
+        let avg_rank = ((k + 1) + (m + 1)) as f64 / 2.0;
+        for s in &samples[k..=m] {
+            if s.1 {
+                rank_sum_diff += avg_rank;
+            }
+        }
+        k = m + 1;
+    }
+    let u = rank_sum_diff - (n_diff * (n_diff + 1)) as f64 / 2.0;
+    u / (n_diff as f64 * n_same as f64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -640,6 +735,7 @@ mod tests {
             target: t,
             source: s,
             codec: c,
+            family: None,
             draw: None,
             orientation: Orientation::HigherIsBetter,
         }
@@ -732,7 +828,7 @@ mod tests {
                 }
             }
         }
-        let mut acc = [ClassCounts::default(); 3];
+        let mut acc = [ClassCounts::default(); 4];
         for x in 0..rows.len() {
             for y in (x + 1)..rows.len() {
                 let ((i, ki, li), (j, kj, lj)) = (rows[x], rows[y]);
@@ -743,7 +839,7 @@ mod tests {
                 if two_way && same_src && inp.codec[i] == inp.codec[j] && li != lj {
                     continue;
                 }
-                let cls = PairClass::of(inp.source[i], inp.source[j], inp.codec[i], inp.codec[j]);
+                let cls = PairClass::of(inp, i, j);
                 let c = &mut acc[cls.slot()];
                 let dt = inp.target[i] - inp.target[j];
                 if dt == 0.0 {
@@ -763,8 +859,9 @@ mod tests {
         }
         PerClass {
             same_source_same_codec: acc[0],
-            same_source_cross_codec: acc[1],
-            cross_source: acc[2],
+            same_source_same_family: acc[1],
+            same_source_cross_codec: acc[2],
+            cross_source: acc[3],
             pooled: ClassCounts::default(),
         }
     }
@@ -907,6 +1004,143 @@ mod tests {
         assert_eq!(
             expected_agreement(&input(&p, &t, &k, &k), HumanNoise::Observer { scale: 0.0 }),
             Err(PairError::BadScale)
+        );
+    }
+
+    /// Brute-force Mann–Whitney over every pair (no subsampling at this size).
+    #[test]
+    fn ds_auc_matches_a_brute_force_mann_whitney() {
+        let p: [f64; 8] = [0.0, 0.1, 0.5, 0.55, 1.0, 1.4, 2.0, 2.05];
+        let h: [f64; 8] = [0.0, 0.3, 0.2, 0.9, 1.1, 1.0, 2.2, 1.9];
+        let thr = 0.4;
+        let (mut diff, mut same) = (Vec::new(), Vec::new());
+        for i in 0..p.len() {
+            for j in (i + 1)..p.len() {
+                let g = (p[i] - p[j]).abs();
+                if (h[i] - h[j]).abs() > thr {
+                    diff.push(g)
+                } else {
+                    same.push(g)
+                }
+            }
+        }
+        let mut wins = 0.0;
+        for d in &diff {
+            for s in &same {
+                wins += if d > s {
+                    1.0
+                } else if d == s {
+                    0.5
+                } else {
+                    0.0
+                };
+            }
+        }
+        let want = wins / (diff.len() * same.len()) as f64;
+        assert!((ds_auc(&p, &h, thr) - want).abs() < 1e-12);
+        assert!(ds_auc(&p[..3], &h[..3], thr).is_nan());
+        assert!(ds_auc(&p, &h, 100.0).is_nan()); // no "different" pairs
+    }
+
+    #[test]
+    fn ds_auc_subsamples_deterministically() {
+        // 700 rows → 244,650 pairs → stride 1; 900 rows → 404,550 pairs → stride 2
+        let n = 900;
+        let p: Vec<f64> = (0..n).map(|i| ((i * 37) % 101) as f64).collect();
+        let h: Vec<f64> = (0..n)
+            .map(|i| ((i * 37) % 101) as f64 + ((i % 7) as f64) * 3.0)
+            .collect();
+        let a = ds_auc(&p, &h, 5.0);
+        let b = ds_auc(&p, &h, 5.0);
+        assert_eq!(a.to_bits(), b.to_bits());
+        assert!(a > 0.5 && a < 1.0, "{a}");
+    }
+
+    /// zensim's cross-codec analysis (rev4_e1b `crosscodec.py`) builds, inside
+    /// each reference, pseudo-choices for every pair (choice = the side with
+    /// the larger distortion target, exact target ties dropped) in three
+    /// classes (same configuration / same format / different format) and
+    /// scores them with the forced-choice owner. `class_agreement` with
+    /// `family` must give the same per-class agreement and counts.
+    #[test]
+    fn family_classes_reproduce_the_crosscodec_pseudo_choice_construction() {
+        use crate::forced_choice::{Choice, PairwiseRow, agreement};
+        // 2 references × configs {0,1 (format 0), 2 (format 1)} × 3 rungs;
+        // target is a distortion (higher = worse), metric is a quality score
+        let (mut q, mut t, mut s, mut c, mut f) = (vec![], vec![], vec![], vec![], vec![]);
+        for r in 0..2u32 {
+            for cfg in 0..3u32 {
+                for rung in 0..3u32 {
+                    let d = 0.5 * rung as f64 + 0.2 * cfg as f64 + 0.1 * r as f64;
+                    let noise = (((r * 5 + cfg * 3 + rung * 7) % 4) as f64 - 1.5) * 0.15;
+                    q.push(-(d + noise));
+                    t.push(if rung == 2 && cfg == 1 {
+                        1.2 + 0.1 * r as f64
+                    } else {
+                        d
+                    }); // planted target ties
+                    s.push(r);
+                    c.push(cfg);
+                    f.push(if cfg < 2 { 0 } else { 1 });
+                }
+            }
+        }
+        let mut inp = input(&q, &t, &s, &c);
+        inp.family = Some(&f);
+        inp.orientation = Orientation::LowerIsBetter; // quality vs distortion target
+        let got = class_agreement(&inp, 0.0).unwrap();
+        for (class, want_same_cfg, want_same_fmt) in [
+            (PairClass::SameSourceSameCodec, true, true),
+            (PairClass::SameSourceSameFamily, false, true),
+            (PairClass::SameSourceCrossCodec, false, false),
+        ] {
+            let mut rows = Vec::new();
+            let mut ties = 0.0;
+            for i in 0..q.len() {
+                for j in (i + 1)..q.len() {
+                    if s[i] != s[j]
+                        || (c[i] == c[j]) != want_same_cfg
+                        || (f[i] == f[j]) != want_same_fmt
+                    {
+                        continue;
+                    }
+                    if t[i] == t[j] {
+                        ties += 1.0;
+                        continue;
+                    }
+                    let choice = if t[i] > t[j] {
+                        Choice::Left
+                    } else {
+                        Choice::Right
+                    };
+                    rows.push(PairwiseRow {
+                        group: rows.len(),
+                        s_left: q[i],
+                        s_right: q[j],
+                        choice,
+                        weight: 1.0,
+                    });
+                }
+            }
+            let fc = agreement(&rows, rows.len());
+            let g = got.get(class);
+            assert_eq!(g.pairs, rows.len() as f64, "{class:?}");
+            assert_eq!(g.target_ties, ties, "{class:?}");
+            assert!(
+                (g.agreement() - fc.acc_response).abs() < 1e-12,
+                "{class:?}: {} vs {}",
+                g.agreement(),
+                fc.acc_response
+            );
+        }
+        assert!(got.same_source_same_family.pairs > 0.0);
+        // without family labels, the same-format pairs fold into cross-codec
+        inp.family = None;
+        let folded = class_agreement(&inp, 0.0).unwrap();
+        assert_eq!(folded.same_source_same_family.pairs, 0.0);
+        assert_eq!(
+            folded.same_source_cross_codec.pairs,
+            got.same_source_cross_codec.pairs + got.same_source_same_family.pairs
         );
     }
 }

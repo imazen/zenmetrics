@@ -174,6 +174,52 @@ The evaluation CLI that applies all of this to every metric is the next step:
 today zensim's `panel evaluate` (`zensim/docs/METRIC_EVALUATION_CLI.md`) is
 the generic evaluator, and it calls these statistics only where noted.
 
+## Consolidating zensim's statistics here
+
+zensim's rules make one owner per statistic, and zenstats is that owner for
+IQA statistics. This is where the zensim implementations stand (surveyed on
+zensim main `fc72d499`):
+
+| zensim implementation | zenstats | status |
+|---|---|---|
+| `zensim-validate/src/pairwise.rs` (forced-choice agreement, majority ceiling, group re-keying) | `forced_choice` | moved; zensim keeps its copy until it switches |
+| `zensim-validate/src/difference_auc.rs` (DS-AUC) | `pairs::ds_auc` | moved with the same pair selection and arithmetic |
+| `bake_verdict` `bootstrap_srocc_ci` (pair bootstrap of SROCC) | `resample::spearman_interval` | replacement; resample references, not pairs |
+| Python reference-clustered bootstraps feeding `panel --batch` (`band_reliability.py`, `e2b_stats.py`, `rev4_e1*/analyze.py`, `paired_perref_boot.py`, `rev4_featpot/*_ci.py`) | `resample::cluster_bootstrap` | same design; recorded evidence stays as computed |
+| `rev4_e1b/crosscodec.py` pair classes (same configuration / same format / different format, inside each reference) | `pairs` with `PairInput::family` | reproduced exactly (`family_classes_reproduce_the_crosscodec_pseudo_choice_construction`) |
+| `v2_confirm_read.py::holm` (rejections; incomplete entries count as p = 1) | `multiple::holm_reject` | same decisions on its registered test cases |
+| `zenstats::rescale_logistic` | `jnd::MapFamily::Logistic4` | same fit, reused |
+
+Conventions that differ, and which one zenstats uses:
+
+- **A cluster drawn twice.** The Python scripts concatenate a drawn
+  reference's rows, so within-reference pairs of a twice-drawn reference count
+  four times. For pooled SROCC over many references that is a small effect;
+  for pair statistics restricted to within-reference pairs it widens the
+  interval (see the PR #67 review). zenstats keeps copies distinct
+  (`Draw::pair_weight`, `Draw::expand`). `spearman_interval` computes pooled
+  Spearman on the expanded rows, matching the Python method.
+- **Percentiles.** `bootstrap_ci_delta` uses order statistics (⌊0.025·n⌋,
+  ⌈0.975·n⌉ − 1); the new code uses Hyndman–Fan type 7, as `bake_verdict`
+  and the numpy scripts do. `bootstrap_ci_delta` is unchanged so recorded
+  decisions keep their bounds.
+- **Bootstrap p-values.** zensim scripts report one-sided `#{δ > 0}/B`;
+  `Interval::p_zero` is two-sided with +1/(B + 1).
+- **"Not sure" answers.** zensim's forced-choice callers dropped them
+  (recorded ceilings and accuracies are on that basis); `konfig_fscale.py`
+  counts them half each side, as `Choice::NotSure` does; the SDR25
+  reconstruction and the MLP training loss model them as a third
+  ordered-probit outcome. New reads should keep them as `NotSure` and say so.
+- **Holm.** `holm` returns adjusted p-values and leaves NaN out of the family;
+  pass 1.0 for an entry that must count but has no result.
+
+Still in zensim, to switch once this crate's revision is pinned there:
+`panel --pairwise` and `panel evaluate` to `forced_choice`; `bake_verdict`
+DS-AUC and `srocc_ci` to `pairs::ds_auc` and `spearman_interval`;
+`panel evaluate` comparisons to a clustered design. The training-time
+ordered-probit loss (`mlp_train/strategy.rs`) and the serving calibration
+splines (`dial_spline.rs`) are not evaluation statistics and stay.
+
 ## References
 
 - Owen 2007, *The pigeonhole bootstrap*, doi:10.1214/07-AOAS122

@@ -128,6 +128,8 @@ pub enum BootstrapError {
     /// The statistic returned a different number of values on a resample
     /// than on the full data.
     StatisticLength { expected: usize, got: usize },
+    /// A data slice's length differs from the number of rows.
+    DataLength { len: usize, rows: usize },
 }
 
 impl core::fmt::Display for BootstrapError {
@@ -146,6 +148,9 @@ impl core::fmt::Display for BootstrapError {
             Self::BadConfig => write!(f, "resamples must be > 0 and level in (0, 1)"),
             Self::StatisticLength { expected, got } => {
                 write!(f, "statistic returned {got} values, expected {expected}")
+            }
+            Self::DataLength { len, rows } => {
+                write!(f, "data slice has {len} values for {rows} rows")
             }
         }
     }
@@ -523,6 +528,34 @@ where
         .collect())
 }
 
+/// Bootstrap interval of the pooled Spearman correlation (signed) between
+/// `scores` and `target`, resampling under `design` and computing Spearman on
+/// each draw's expanded rows. With `Design::OneWay(reference)` this is the
+/// reference-clustered SROCC interval; with `Design::Rows` it is the pair
+/// bootstrap. Take `.abs()` of the bounds for a distance-shaped metric only
+/// after checking the interval does not straddle 0.
+pub fn spearman_interval(
+    scores: &[f64],
+    target: &[f64],
+    design: &Design<'_>,
+    cfg: &BootstrapConfig,
+) -> Result<Interval, BootstrapError> {
+    let n = scores.len();
+    if target.len() != n {
+        return Err(BootstrapError::DataLength {
+            len: target.len(),
+            rows: n,
+        });
+    }
+    let out = cluster_bootstrap(n, design, cfg, |d| {
+        let e = d.expand();
+        let x: Vec<f64> = e.rows.iter().map(|&i| scores[i]).collect();
+        let y: Vec<f64> = e.rows.iter().map(|&i| target[i]).collect();
+        vec![crate::panel::spearman(&x, &y)]
+    })?;
+    Ok(out[0])
+}
+
 /// Weighted mean, a convenience statistic for [`Draw::row_weights`].
 pub fn weighted_mean(values: &[f64], weights: &[f64]) -> f64 {
     let (mut s, mut w) = (0.0, 0.0);
@@ -696,5 +729,34 @@ mod tests {
                 got: 2
             })
         );
+    }
+
+    #[test]
+    fn spearman_interval_is_wider_when_clustered_by_source() {
+        // per-source offset in the metric that the target does not share:
+        // rank agreement varies by source, so sources are the sampling unit
+        let (mut x, mut y, mut src) = (vec![], vec![], vec![]);
+        for s in 0..10u32 {
+            let off = if s % 2 == 0 { 0.8 } else { -0.8 } * (s as f64 / 10.0);
+            for k in 0..30 {
+                let t = k as f64 / 30.0 + 0.05 * s as f64;
+                y.push(t);
+                x.push(t + off + 0.01 * ((k * 7 + s as usize) % 5) as f64);
+                src.push(s);
+            }
+        }
+        let c = cfg(800);
+        let rows = spearman_interval(&x, &y, &Design::Rows, &c).unwrap();
+        let clus = spearman_interval(&x, &y, &Design::OneWay(&src), &c).unwrap();
+        assert!((rows.estimate - crate::panel::spearman(&x, &y)).abs() < 1e-15);
+        assert_eq!(rows.estimate, clus.estimate);
+        assert!(
+            clus.hi - clus.lo > 1.5 * (rows.hi - rows.lo),
+            "{rows:?} {clus:?}"
+        );
+        assert!(matches!(
+            spearman_interval(&x, &y[..5], &Design::Rows, &c),
+            Err(BootstrapError::DataLength { .. })
+        ));
     }
 }
