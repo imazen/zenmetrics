@@ -13,6 +13,30 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenstats (`553ac175`, `77999b50`, `42b57055`, `f6e75e9f`, PR #67): evaluation methods for every metric.
+  Also absorbs zensim's statistics (PR #67): `pairs::ds_auc` (moved from
+  `zensim-validate/src/difference_auc.rs`), `multiple::holm_reject` (same
+  decisions as zensim's registered `v2_confirm_read.py::holm` cases),
+  `PairInput::family` (reproduces the rev4_e1b cross-codec pair classes) and
+  `resample::spearman_interval` (replacement for `bake_verdict`'s pair
+  bootstrap). Inventory and convention differences: `docs/EVALUATION_METHODS.md`.
+- zenstats (PR #67): **behaviour change** — `bootstrap_ci_delta` (and so
+  `decisive`) now uses the crate's one percentile rule, Hyndman–Fan type 7
+  (linear interpolation, numpy's default), instead of order statistics
+  `col[⌊0.025·n⌋]`, `col[⌈0.975·n⌉ − 1]`. Same draws, same seed; bounds move by
+  a fraction of one order-statistic gap. A recorded `decisive` result whose
+  panel-stat CI sat that close to 0 can change its agree count; such results
+  were already decided by seed noise. Results before this change are labelled
+  with the old rule.
+  `resample` (source and source × codec cluster bootstrap), `pairs` (agreement
+  per pair class and expected observer agreement against a ceiling), `jnd`
+  (declared mapping families, leave-one-source-out maps, RMSE, τ̂, rmse*),
+  `forced_choice` (moved from zensim's `pairwise.rs`, plus held-out
+  log-likelihood) and `multiple` (Holm). Checked against scipy, scikit-learn
+  and statsmodels. Method guide: `docs/EVALUATION_METHODS.md`. Existing
+  functions are unchanged; `rescale_logistic` now calls the extracted
+  `fit_logistic4` with identical results.
+
 - Fit jobs (`765615c4`, `8353eaa2`): zensim E33 program support.
   `pack_fit_program --profile e33` pins the zensim scripts (`e33_program_pins.json`);
   `qualified_fit_contract` takes one package per program, selects variants by route and reads

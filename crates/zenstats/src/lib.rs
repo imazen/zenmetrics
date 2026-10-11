@@ -37,6 +37,16 @@
 //!   `bootstrap_ci_delta`, and `decisive` for ship-grade A-vs-B
 //!   comparison gates per *PSYCHOVISUAL_LEARNINGS_FOR_ZENSIM.md* § A.9.
 //!
+//! * **Evaluation methods for any metric** (added 2026-10-11) —
+//!   [`resample`] (source- and codec-clustered bootstrap intervals,
+//!   including Owen's two-way pigeonhole bootstrap), [`pairs`] (agreement
+//!   split into same-ladder, cross-codec and cross-source pairs, plus
+//!   expected observer agreement against a ceiling), [`jnd`] (declared
+//!   mapping families, out-of-fold maps grouped by source, RMSE, τ̂ excess
+//!   error and P.1401 rmse*), [`forced_choice`] (raw 2AFC/triplet agreement
+//!   and held-out log-likelihood against the observer ceiling) and
+//!   [`multiple`] (Holm adjustment). See `docs/EVALUATION_METHODS.md`.
+//!
 //! ## Polarity convention
 //!
 //! Bake / metric outputs may be either **distance-shaped** (low =
@@ -58,8 +68,14 @@
 //! See `imazen/zensim`'s CHANGELOG.md for the BREAKING semantics
 //! migration note.
 
+pub mod forced_choice;
+pub mod jnd;
+pub mod multiple;
+pub mod pairs;
 pub mod panel;
+pub mod resample;
 pub mod scatter;
+mod special;
 
 pub use panel::{
     Decision, DecisiveOutcome, LightPanel, PanelStats, ValAggregate, bootstrap_ci_delta,

@@ -1,0 +1,101 @@
+//! Special functions with relative (not absolute) accuracy in the tails.
+
+/// Complementary error function, Chebyshev fit with fractional error below
+/// 1.2e-7 everywhere (Press et al., *Numerical Recipes*, `erfcc`).
+pub(crate) fn erfc(x: f64) -> f64 {
+    let z = x.abs();
+    let t = 1.0 / (1.0 + 0.5 * z);
+    let poly = -z * z - 1.26551223
+        + t * (1.00002368
+            + t * (0.37409196
+                + t * (0.09678418
+                    + t * (-0.18628806
+                        + t * (0.27886807
+                            + t * (-1.13520398
+                                + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277))))))));
+    let ans = t * poly.exp();
+    if x >= 0.0 { ans } else { 2.0 - ans }
+}
+
+/// Standard normal CDF Pr(Z ≤ z) with small relative error in the lower tail.
+/// For the upper tail call it with `-z` rather than computing `1 - norm_cdf(z)`.
+pub(crate) fn norm_cdf(z: f64) -> f64 {
+    if z.is_nan() {
+        return f64::NAN;
+    }
+    0.5 * erfc(-z / core::f64::consts::SQRT_2)
+}
+
+/// ln Φ(z), accurate in the far lower tail (asymptotic series below −30,
+/// where Φ itself approaches the smallest normal `f64`).
+pub(crate) fn ln_norm_cdf(z: f64) -> f64 {
+    if z.is_nan() {
+        return f64::NAN;
+    }
+    if z > -30.0 {
+        return norm_cdf(z).ln();
+    }
+    // Φ(z) = φ(z)/(−z) · (1 − 1/z² + 3/z⁴ − …) for z → −∞
+    let z2 = z * z;
+    -0.5 * z2 - (-z).ln() - 0.5 * (2.0 * core::f64::consts::PI).ln()
+        + (1.0 - 1.0 / z2 + 3.0 / (z2 * z2)).ln()
+}
+
+/// The crate's one percentile rule: Hyndman & Fan type 7 (linear
+/// interpolation between order statistics at `h = (n − 1)·p`), numpy's
+/// default and `bake_verdict`'s. `sorted` must be sorted and non-empty.
+pub(crate) fn quantile7(sorted: &[f64], p: f64) -> f64 {
+    let n = sorted.len();
+    if n == 1 {
+        return sorted[0];
+    }
+    let h = (n - 1) as f64 * p;
+    let lo = (h.floor() as usize).min(n - 1);
+    let hi = (lo + 1).min(n - 1);
+    sorted[lo] + (h - lo as f64) * (sorted[hi] - sorted[lo])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matches_known_values_with_relative_accuracy() {
+        // Reference values: Φ(z) from the exact erfc (Abramowitz & Stegun tables / mpmath).
+        let cases = [
+            (0.0, 0.5),
+            (1.0, 0.8413447460685429),
+            (-1.0, 0.15865525393145707),
+            (0.6744897501960817, 0.75),
+            (-3.0, 0.0013498980316300946),
+            (-6.0, 9.865876450376946e-10),
+            (-8.0, 6.220960574271785e-16),
+        ];
+        for (z, want) in cases {
+            let got = norm_cdf(z);
+            assert!(((got - want) / want).abs() < 2e-7, "z={z}: {got} vs {want}");
+        }
+    }
+
+    #[test]
+    fn ln_norm_cdf_is_continuous_at_the_switch_and_finite_far_out() {
+        let below = ln_norm_cdf(-30.000001);
+        let above = ln_norm_cdf(-29.999999);
+        assert!((below - above).abs() < 1e-3, "{below} {above}");
+        // ln Φ(−40) from the exact erfc: −804.608442013754
+        assert!((ln_norm_cdf(-40.0) + 804.608442013754).abs() < 1e-6);
+        assert!(ln_norm_cdf(-1e6).is_finite());
+    }
+
+    /// numpy.percentile (default linear) on the same vector.
+    #[test]
+    fn quantile7_matches_numpy_percentile() {
+        let mut x = [
+            0.31, -1.2, 4.4, 0.05, 2.2, -0.7, 1.9, 3.3, 0.0, -2.5, 1.1, 0.6,
+        ];
+        x.sort_by(f64::total_cmp);
+        assert!((quantile7(&x, 0.025) - -2.1425).abs() < 1e-12);
+        assert!((quantile7(&x, 0.975) - 4.0975).abs() < 1e-12);
+        assert!((quantile7(&x, 0.5) - 0.455).abs() < 1e-12);
+    }
+}
