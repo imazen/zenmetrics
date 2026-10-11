@@ -82,18 +82,31 @@ pub struct Args<'a> {
 /// Computed in f64, stored f32.
 fn make_csf(m: usize, n: usize) -> Vec<f32> {
     let mut out = vec![0.0f32; m * n];
+    let csf_px = |r: usize, c: usize| {
+        let x = (r as f64 - m as f64 / 2.0 + 0.5) * 64.0 / n as f64;
+        let y = (c as f64 - n as f64 / 2.0 + 0.5) * 64.0 / n as f64;
+        let mut rf = libm::hypot(x, y);
+        let s = 0.15 * libm::cos(4.0 * libm::atan2(y, x)) + 0.85;
+        rf /= s;
+        if rf < 7.8909 {
+            0.9809
+        } else {
+            (2.6 * (0.0192 + 0.114 * rf) * libm::exp(-libm::pow(0.114 * rf, 1.1))) as f32
+        }
+    };
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        out.par_chunks_mut(n).enumerate().for_each(|(r, row)| {
+            for (c, v) in row.iter_mut().enumerate() {
+                *v = csf_px(r, c);
+            }
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
     for r in 0..m {
         for c in 0..n {
-            let x = (r as f64 - m as f64 / 2.0 + 0.5) * 64.0 / n as f64;
-            let y = (c as f64 - n as f64 / 2.0 + 0.5) * 64.0 / n as f64;
-            let mut rf = libm::hypot(x, y);
-            let s = 0.15 * libm::cos(4.0 * libm::atan2(y, x)) + 0.85;
-            rf /= s;
-            out[r * n + c] = if rf < 7.8909 {
-                0.9809
-            } else {
-                (2.6 * (0.0192 + 0.114 * rf) * libm::exp(-libm::pow(0.114 * rf, 1.1))) as f32
-            };
+            out[r * n + c] = csf_px(r, c);
         }
     }
     out
@@ -112,6 +125,19 @@ fn csf_apply(
 ) -> Vec<f32> {
     let mut buf: Vec<Complex> = src.iter().map(|&v| Complex::new(v, 0.0)).collect();
     fft::fft2_planned(&mut buf, n, m, wplan, hplan);
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        buf.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
+            let su = (u + m / 2) % m;
+            for (v, e) in row.iter_mut().enumerate() {
+                let sv = (v + n / 2) % n;
+                let w = csf[su * n + sv];
+                *e = Complex::new(e.re * w, e.im * w);
+            }
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
     for u in 0..m {
         let su = (u + m / 2) % m;
         for v in 0..n {
@@ -123,6 +149,15 @@ fn csf_apply(
     }
     fft::ifft2_planned(&mut buf, n, m, wplan, hplan);
     buf.iter().map(|c| c.re).collect()
+}
+
+/// j-block strip size for the `ical` passes under `parallel`: each strip
+/// is `g` block-row steps (4·g contiguous output rows), targeting ~4
+/// strips per worker for load balance.
+#[cfg(feature = "parallel")]
+fn jstrip_g(m: usize) -> usize {
+    let iters = m.saturating_sub(B - 1).div_ceil(4).max(1);
+    iters.div_ceil(rayon::current_num_threads() * 4).max(1)
 }
 
 /// `ical_std(dst−ref, ref)` → `(std_2, std_1, m1_1)` — verbatim port
@@ -140,7 +175,48 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
     if m < B || n < B {
         return (std2, std1, m1);
     }
-    // Pass 1: 16×16 blocks at stride 4.
+    // Pass 1: 16×16 blocks at stride 4. (i,j) blocks are independent —
+    // each writes only its own disjoint 4×4 tile, so j-strips are safe
+    // to run on threads (identical per-element values either way).
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let g = jstrip_g(m);
+        let (sh, je) = (4 * g * n, m + 1 - B);
+        std2.par_chunks_mut(sh)
+            .zip(m1.par_chunks_mut(sh))
+            .enumerate()
+            .for_each(|(ci, (s2s, m1s))| {
+                let rs = ci * 4 * g;
+                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
+                    for i in (0..=n - B).step_by(4) {
+                        let (mut sx, mut sy) = (0.0f64, 0.0f64);
+                        for r in j..j + B {
+                            for c in i..i + B {
+                                sx += diff[r * n + c] as f64;
+                                sy += reff[r * n + c] as f64;
+                            }
+                        }
+                        let (mean, mean2) = (sx / 256.0, sy / 256.0);
+                        let mut s2 = 0.0f64;
+                        for r in j..j + B {
+                            for c in i..i + B {
+                                let d = diff[r * n + c] as f64 - mean;
+                                s2 += d * d;
+                            }
+                        }
+                        let stdev = libm::sqrt(s2 / 255.0) as f32;
+                        for r in j..j + 4 {
+                            for c in i..i + 4 {
+                                s2s[(r - rs) * n + c] = stdev;
+                                m1s[(r - rs) * n + c] = mean2 as f32;
+                            }
+                        }
+                    }
+                }
+            });
+    }
+    #[cfg(not(feature = "parallel"))]
     for i in (0..=n - B).step_by(4) {
         for j in (0..=m - B).step_by(4) {
             let (mut sx, mut sy) = (0.0f64, 0.0f64);
@@ -168,6 +244,44 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
         }
     }
     // Pass 2: 8×8 blocks at the same stride-4 starts.
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let g = jstrip_g(m);
+        let (sh, je) = (4 * g * n, m + 1 - B);
+        tmp.par_chunks_mut(sh)
+            .zip(std1.par_chunks_mut(sh))
+            .enumerate()
+            .for_each(|(ci, (tps, s1s))| {
+                let rs = ci * 4 * g;
+                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
+                    for i in (0..=n - B).step_by(4) {
+                        let mut sy = 0.0f64;
+                        for r in j..j + 8 {
+                            for c in i..i + 8 {
+                                sy += reff[r * n + c] as f64;
+                            }
+                        }
+                        let mean = sy / 64.0;
+                        let mut s2 = 0.0f64;
+                        for r in j..j + 8 {
+                            for c in i..i + 8 {
+                                let d = reff[r * n + c] as f64 - mean;
+                                s2 += d * d;
+                            }
+                        }
+                        let stdev = libm::sqrt(s2 / 63.0) as f32;
+                        for r in j..j + 4 {
+                            for c in i..i + 4 {
+                                tps[(r - rs) * n + c] = stdev;
+                                s1s[(r - rs) * n + c] = stdev;
+                            }
+                        }
+                    }
+                }
+            });
+    }
+    #[cfg(not(feature = "parallel"))]
     for i in (0..=n - B).step_by(4) {
         for j in (0..=m - B).step_by(4) {
             let mut sy = 0.0f64;
@@ -193,7 +307,37 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
             }
         }
     }
-    // Pass 3: min-pool over {0,5} offsets, position bounds-checked.
+    // Pass 3: min-pool over {0,5} offsets, position bounds-checked. The
+    // `tmp` reads reach 7 rows past the strip boundary but are immutable
+    // by then (pass 2 joined first) — strips only write disjoint tiles.
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let g = jstrip_g(m);
+        let (sh, je) = (4 * g * n, m + 1 - B);
+        let tmp_ref: &[f32] = &tmp;
+        std1.par_chunks_mut(sh).enumerate().for_each(|(ci, s1s)| {
+            let rs = ci * 4 * g;
+            for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
+                for i in (0..=n - B).step_by(4) {
+                    let mut mn = tmp_ref[j * n + i];
+                    for ib in (i..=i + 7).step_by(5) {
+                        for jb in (j..=j + 7).step_by(5) {
+                            if ib < n - 15 && jb < m - 15 && mn > tmp_ref[jb * n + ib] {
+                                mn = tmp_ref[jb * n + ib];
+                            }
+                        }
+                    }
+                    for r in j..j + 4 {
+                        for c in i..i + 4 {
+                            s1s[(r - rs) * n + c] = mn;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
     for i in (0..=n - B).step_by(4) {
         for j in (0..=m - B).step_by(4) {
             let mut mn = tmp[j * n + i];
@@ -226,8 +370,8 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     if m < B || n < B {
         return (std_o, skw, krt);
     }
-    for i in (0..=n - B).step_by(4) {
-        for j in (0..=m - B).step_by(4) {
+    let block =
+        |j: usize, i: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32], roff: usize| {
             let mut sx = 0.0f64;
             for r in j..j + B {
                 for c in i..i + B {
@@ -247,7 +391,7 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
             }
             let stdev = libm::sqrt(s2 / 255.0) as f32;
             let stmp = libm::sqrt(s2 / 256.0);
-            let (sk, ku) = if stmp != 0.0 {
+            let (skv, kuv) = if stmp != 0.0 {
                 (
                     ((s3 / 256.0) / (stmp * stmp * stmp)) as f32,
                     ((s4 / 256.0) / (stmp * stmp * stmp * stmp)) as f32,
@@ -257,11 +401,36 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
             };
             for r in j..j + 4 {
                 for c in i..i + 4 {
-                    std_o[r * n + c] = stdev;
-                    skw[r * n + c] = sk;
-                    krt[r * n + c] = ku;
+                    let o = (r - roff) * n + c;
+                    so[o] = stdev;
+                    sk[o] = skv;
+                    kr[o] = kuv;
                 }
             }
+        };
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let g = jstrip_g(m);
+        let (sh, je) = (4 * g * n, m + 1 - B);
+        std_o
+            .par_chunks_mut(sh)
+            .zip(skw.par_chunks_mut(sh))
+            .zip(krt.par_chunks_mut(sh))
+            .enumerate()
+            .for_each(|(ci, ((so, sk), kr))| {
+                let rs = ci * 4 * g;
+                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
+                    for i in (0..=n - B).step_by(4) {
+                        block(j, i, so, sk, kr, rs);
+                    }
+                }
+            });
+    }
+    #[cfg(not(feature = "parallel"))]
+    for i in (0..=n - B).step_by(4) {
+        for j in (0..=m - B).step_by(4) {
+            block(j, i, &mut std_o, &mut skw, &mut krt, 0);
         }
     }
     (std_o, skw, krt)
@@ -345,6 +514,19 @@ fn gabor_apply(
     hplan: &fft::Plan,
 ) -> Vec<Complex> {
     let mut buf = imagefft.to_vec();
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        buf.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
+            let su = (u + m.div_ceil(2)) % m;
+            for (v, e) in row.iter_mut().enumerate() {
+                let sv = (v + n.div_ceil(2)) % n;
+                let w = lg[su * n + sv] * sp[su * n + sv];
+                *e = Complex::new(e.re * w, e.im * w);
+            }
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
     for u in 0..m {
         let su = (u + m.div_ceil(2)) % m;
         for v in 0..n {
@@ -361,7 +543,15 @@ fn gabor_apply(
 /// `|EO|` element magnitudes — scalar `hypotf`, matching Octave
 /// `abs()` to the ulp on every tier.
 fn eo_magnitude(eo: &[Complex]) -> Vec<f32> {
-    eo.iter().map(|c| libm::hypotf(c.re, c.im)).collect()
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        eo.par_iter().map(|c| libm::hypotf(c.re, c.im)).collect()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        eo.iter().map(|c| libm::hypotf(c.re, c.im)).collect()
+    }
 }
 
 /// The forward spectrum of a plane.
@@ -406,9 +596,43 @@ macro_rules! score_body {
         // (integer-input LUT in the reference is the same math).
         let mut lum_r = vec![0.0f32; m * n];
         let mut lum_d = vec![0.0f32; m * n];
+        // Integral inputs (every u8-derived plane — the `mad_rgb8` path and
+        // the C reference's own LUT) hit a 256-entry table built with the
+        // same `libm::pow` — identical bits, ~100x cheaper per element.
+        let lum_lut: [f32; 256] =
+            core::array::from_fn(|i| (K_LUM * libm::pow(i as f64, 2.2 / 3.0)) as f32);
+        let lum_px = |v: f32| -> f32 {
+            if v >= 0.0 && v < 256.0 && v == v.trunc() {
+                lum_lut[v as usize]
+            } else {
+                (K_LUM * libm::pow(v as f64, 2.2 / 3.0)) as f32
+            }
+        };
+        #[cfg(feature = "parallel")]
+        {
+            use rayon::prelude::*;
+            let n_px = m * n;
+            lum_r
+                .par_chunks_mut(1 << 14)
+                .zip($a.im1[..n_px].par_chunks(1 << 14))
+                .for_each(|(lc, ic)| {
+                    for (o, &v) in lc.iter_mut().zip(ic) {
+                        *o = lum_px(v);
+                    }
+                });
+            lum_d
+                .par_chunks_mut(1 << 14)
+                .zip($a.im2[..n_px].par_chunks(1 << 14))
+                .for_each(|(lc, ic)| {
+                    for (o, &v) in lc.iter_mut().zip(ic) {
+                        *o = lum_px(v);
+                    }
+                });
+        }
+        #[cfg(not(feature = "parallel"))]
         for i in 0..m * n {
-            lum_r[i] = (K_LUM * libm::pow($a.im1[i] as f64, 2.2 / 3.0)) as f32;
-            lum_d[i] = (K_LUM * libm::pow($a.im2[i] as f64, 2.2 / 3.0)) as f32;
+            lum_r[i] = lum_px($a.im1[i]);
+            lum_d[i] = lum_px($a.im2[i]);
         }
         let csf = make_csf(m, n);
         let (ref_l, dst_l) = maybe_join(

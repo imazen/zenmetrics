@@ -190,33 +190,47 @@ impl Plan {
         match &self.kind {
             PlanKind::Trivial => {}
             PlanKind::Radix2 { stages } => fft_radix2_planned(buf, stages),
-            PlanKind::Bluestein {
-                chirp,
-                bf,
-                m,
-                mplan,
-            } => {
-                let n = self.n;
+            PlanKind::Bluestein { m, .. } => {
                 let mut a = vec![Complex::default(); *m];
-                for k in 0..n {
-                    a[k] = buf[k].mul(chirp[k]);
-                }
-                fft_radix2_planned(&mut a, mplan);
-                for (x, y) in a.iter_mut().zip(bf) {
-                    *x = x.mul(*y);
-                }
-                for v in a.iter_mut() {
-                    *v = v.conj();
-                }
-                fft_radix2_planned(&mut a, mplan);
-                let s = 1.0 / *m as f32;
-                for v in a.iter_mut() {
-                    *v = v.conj().scale(s);
-                }
-                for (k, out) in buf.iter_mut().enumerate() {
-                    *out = a[k].mul(chirp[k]);
-                }
+                self.run_bluestein(buf, &mut a);
             }
+        }
+    }
+
+    /// The Bluestein pass with caller-supplied `m`-length scratch, so
+    /// parallel row/column sweeps reuse one buffer per worker instead of
+    /// allocating ~64 KiB per row. Results are identical to `run`.
+    fn run_bluestein(&self, buf: &mut [Complex], a: &mut [Complex]) {
+        debug_assert_eq!(buf.len(), self.n);
+        let PlanKind::Bluestein {
+            chirp,
+            bf,
+            m,
+            mplan,
+        } = &self.kind
+        else {
+            unreachable!("run_bluestein on non-Bluestein plan")
+        };
+        debug_assert!(a.len() >= *m);
+        let n = self.n;
+        a[..*m].fill(Complex::default());
+        for k in 0..n {
+            a[k] = buf[k].mul(chirp[k]);
+        }
+        fft_radix2_planned(&mut a[..*m], mplan);
+        for (x, y) in a[..*m].iter_mut().zip(bf) {
+            *x = x.mul(*y);
+        }
+        for v in a[..*m].iter_mut() {
+            *v = v.conj();
+        }
+        fft_radix2_planned(&mut a[..*m], mplan);
+        let s = 1.0 / *m as f32;
+        for v in a[..*m].iter_mut() {
+            *v = v.conj().scale(s);
+        }
+        for (k, out) in buf.iter_mut().enumerate() {
+            *out = a[k].mul(chirp[k]);
         }
     }
 }
@@ -457,8 +471,24 @@ fn fft2_rows_conj_mul(
                 *v = Complex::new(v.re * f, im * f);
             }
         }
-        for row in buf.chunks_exact_mut(width) {
-            wplan.run(row);
+        // Bluestein rows are independent transforms of disjoint rows —
+        // every real-world (non-power-of-two) image lands here, so this
+        // is where mad's thread scaling actually lives.
+        let mut done = false;
+        #[cfg(feature = "parallel")]
+        if let PlanKind::Bluestein { m, .. } = &wplan.kind {
+            use rayon::prelude::*;
+            let m = *m;
+            buf.par_chunks_mut(width).for_each_init(
+                || vec![Complex::default(); m],
+                |a, row| wplan.run_bluestein(row, a),
+            );
+            done = true;
+        }
+        if !done {
+            for row in buf.chunks_exact_mut(width) {
+                wplan.run(row);
+            }
         }
     }
 }
@@ -580,6 +610,62 @@ fn fft2_cols_conj_scale(
             x += nb;
         }
         return;
+    }
+
+    // Bluestein columns: strided writes can't be borrowed as disjoint
+    // slices, so under `parallel` this mirrors the radix-2 super-block
+    // structure — gather+transform per column-block into a contiguous SoA
+    // buffer (parallel over blocks), then scatter back over rows (parallel,
+    // fusing `conj·scale`).
+    #[cfg(feature = "parallel")]
+    if let PlanKind::Bluestein { m, .. } = &hplan.kind {
+        if width >= 4 * CB && height >= 4 * CB {
+            use rayon::prelude::*;
+            let m = *m;
+            const SB: usize = 64;
+            let s = scale.unwrap_or(1.0);
+            let negate = scale.is_some();
+            let mut x0 = 0usize;
+            while x0 < width {
+                let nb_cols = (SB * CB).min(width - x0);
+                let nblocks = nb_cols.div_ceil(CB);
+                let mut cols_all = vec![Complex::default(); nblocks * height * CB];
+                {
+                    let ro: &[Complex] = buf;
+                    cols_all
+                        .par_chunks_mut(height * CB)
+                        .enumerate()
+                        .for_each_init(
+                            || vec![Complex::default(); m],
+                            |a, (b, block)| {
+                                let bx = x0 + b * CB;
+                                let nb = CB.min(width - bx);
+                                for y in 0..height {
+                                    for j in 0..nb {
+                                        block[j * height + y] = ro[y * width + bx + j];
+                                    }
+                                }
+                                for c in block.chunks_exact_mut(height).take(nb) {
+                                    hplan.run_bluestein(c, a);
+                                }
+                            },
+                        );
+                }
+                buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                    for b in 0..nblocks {
+                        let bx = x0 + b * CB;
+                        let nb = CB.min(width - bx);
+                        for j in 0..nb {
+                            let v = cols_all[(b * CB + j) * height + y];
+                            row[bx + j] =
+                                Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+                        }
+                    }
+                });
+                x0 += nb_cols;
+            }
+            return;
+        }
     }
 
     let mut cols = vec![Complex::default(); height * CB];
