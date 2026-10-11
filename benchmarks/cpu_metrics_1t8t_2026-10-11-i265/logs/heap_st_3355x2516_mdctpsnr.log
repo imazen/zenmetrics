@@ -1,21 +1,20 @@
-run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26314MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 mdctpsnr
-heap 3355x2516/mdctpsnr rep0: 26406.574 ms score=32.76313018798828
-heap 3355x2516/mdctpsnr rep1: 26390.122 ms score=32.76313018798828
-	Command being timed: "taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 mdctpsnr"
-	User time (seconds): 52.63
-	System time (seconds): 0.17
+heap 3355x2516/mdctpsnr rep0: 18682.924 ms score=32.76313018798828
+heap 3355x2516/mdctpsnr rep1: 18685.851 ms score=32.76313018798828
+	Command being timed: "taskset -c 2 ./target/release/new-metrics-wall heap 3355x2516 mdctpsnr"
+	User time (seconds): 37.20
+	System time (seconds): 0.16
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:52.83
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:37.40
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 127516
+	Maximum resident set size (kbytes): 127560
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 48442
-	Voluntary context switches: 59919
-	Involuntary context switches: 60946
+	Minor (reclaiming a frame) page faults: 48437
+	Voluntary context switches: 59954
+	Involuntary context switches: 61265
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 8
@@ -24,4 +23,3 @@ heap 3355x2516/mdctpsnr rep1: 26390.122 ms score=32.76313018798828
 	Signals delivered: 0
 	Page size (bytes): 4096
 	Exit status: 0
-run-heavy: done rc=0 52s | peak-RSS 0.12GiB | min-avail 26313MiB | peak-load 1.39

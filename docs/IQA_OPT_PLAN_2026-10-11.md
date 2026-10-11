@@ -63,8 +63,14 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
 ## Priority queue — status after the 04:30–05:10 push series
 
 - [x] P0: enable `parallel`+`avx512` dep-edge features (cli+api) — avx512
-      ON for every crate that compiles it; iwssim is the last holdout
-      (needs `F64x4Backend` for V4 + `infow_map_into_v4`).
+      now ON for EVERY metric crate, iwssim included: archmage main
+      dea3a461 landed `x86_v4_narrow_delegated.rs` (all 18 W128/W256
+      f64/int backends + F32x*Convert + *Bitcast delegated to V3 for
+      V4/V4x/FP16 tokens — spec-driven from the trait defs via a
+      generalized xtask emitter); zenmetrics pins the three crates to
+      that rev in [patch.crates-io] until the next release ships.
+      iwssim's two missing arms (infow_map_into_v4/_v4x) added; verified
+      dispatch on Zen4 hardware (r7900x).
 - [x] P0: mdctpsnr — rayon errorline column-striping + push_row bands +
       hoisted env probes + `#[target_feature]` FMA clones of the fmaf
       libcall loops. 6.9s→1.63s @8t wall example; sweep 7740→2031 ms.
@@ -81,20 +87,33 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
       col × ~42 transforms). Parallelized rows (par_chunks_mut +
       per-worker scratch), super-blocked columns mirroring the radix-2
       structure, all ical passes j-strip parallel, elementwise stages
-      parallel, integral-input lum LUT. 3610→813 ms/call @8t at 1000×767
-      non-pow2 (4.44x), identical scores. `ab65ee00`.
+      parallel, integral-input lum LUT — then batch8'd the Bluestein
+      internals through fft_batch8 SoA (the m-length radix-2 stages
+      become f32x8 ops). 3610→412 ms/call @8t at 1000×767 (8.77x),
+      60,337→5,792 ms @8.4MP 8t (10.42x), identical scores.
+      `ab65ee00` + `28144f17`.
 - [x] P2: vifvec — 1.00x→~3.4x @8t via corr_dn rows, maybe_join
       pyramids, element-parallel mean, striped cu covariance, row-par
       ss/LU blocks + vifsub_est. `907b0f65`.
 - [x] P2: ssim classical (CLI) — row-parallel gaussian passes. `01c9e8b4`.
-- [ ] P1: magetypes v4 fills (`I32x8Backend`+`F32x8Convert`+`F64x4Backend`)
-      — upstream PR; archmage repo has other live lanes — NOT done.
+- [x] P1: magetypes v4 fills — DONE on archmage main (dea3a461) via the
+      generalized v4_delegation_gen emitter: all 18 W128/W256 f64/int
+      backends + F32x4/F32x8Convert + all 10 Bitcast traits × 3 tokens.
+      zenmetrics consumes it via a rev-pinned [patch.crates-io].
+- [x] ssim classical — 1.03x→4.43x @8.4MP 8t (row-parallel gaussian
+      passes, `01c9e8b4`); the Oct-9 "superlinear" note is resolved.
+- [ ] P2: ssim2 — rayon edge enabled on the CLI's local fast-ssim2
+      (f839b2a5) but whole-image still ~1.0x: the pipeline's sequential
+      IIR column loops dominate; full fix is a fast-ssim2 PR.
 - [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit) or scoped f32
       under JOD parity gate.
-- [ ] P2: ssim2 thread scaling (1.02x→?), msssim-libvmaf, vsi/fsim tails.
-- [~] Serialize: `cpu-metrics-1t8t` re-run pinned on i265
-      (benchmarks/cpu_metrics_1t8t_2026-10-11-i265). 1024 legs done —
-      mt8 leg needs a clean re-run (overlapped a vifvec wall bench).
+- [ ] P2: msssim-libvmaf, vsi/fsim tails; vifvec's ~20% 1t regression
+      (striped-cu setup); mdctpsnr residual serial ring work.
+- [x] Serialize: `cpu-metrics-1t8t` re-run pinned on i265 —
+      benchmarks/cpu_metrics_1t8t_2026-10-11-i265.md committed
+      (mad 10.42x, vifvec 5.05x, mdctpsnr 4.60x, ssim 3.85x, cvvdp
+      3.07x vs Oct-9 r7900x 8t numbers; post-sweep mdctpsnr commits
+      push it to ~10.6x).
 
 ## Environment hazards found (i265)
 

@@ -25,3 +25,12 @@ post_sweep_commits_remeasured:
     heap 1t re-ran 26857ms (was 46145).
   vifvec (907b0f65) + ssim (01c9e8b4): heap 1t logs re-ran —
     vifvec 3397ms, ssim 1825ms; mt8 rows patched from filtered legs.
+
+post_sweep_commits_remeasured_2:
+  mdctpsnr env-hoist (036145ab) + AAN FMA clone (cfc93a7b): mt8 legs
+    re-ran — 8.4MP 8t 5,546ms (was 13,845 pre-fixes), 1MP 8t 619ms;
+    heap 1t log re-ran — 18,686ms (was 26,390). vs Oct-9 r7900x:
+    11.47x at 8t, 3.52x at 1t.
+  iwssim avx512 enabled post-sweep (735ba37d via archmage dea3a461 V4
+    delegation fill) — no runtime change on i265 (Arrow Lake lacks
+    AVX-512); dispatch verified on r7900x Zen4.
