@@ -1,0 +1,25 @@
+heap 3355x2516/haarpsi rep0: 151.586 ms score=0.9038334522163479
+heap 3355x2516/haarpsi rep1: 167.601 ms score=0.9038334522163479
+	Command being timed: "taskset -c 2 target/release/new-metrics-wall heap 3355x2516 haarpsi"
+	User time (seconds): 0.26
+	System time (seconds): 0.09
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.35
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 190112
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 79731
+	Voluntary context switches: 159
+	Involuntary context switches: 196
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

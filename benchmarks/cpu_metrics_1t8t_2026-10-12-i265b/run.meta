@@ -4,3 +4,11 @@ bin_sha256=1eea74dbb0e86bf60485c83c287e029e90a1fd6130d67103ad7202fedf80d519
 content=photo (zenmetrics-corpus source.png vs q20.jpg, mirror-tiled)
 sizes=1024 3355x2516 one_core=2 eight_cores=0-7
 command=./scripts/cpu_metrics_1t8t.sh benchmarks/cpu_metrics_1t8t_2026-10-12-i265b 1024 3355x2516
+
+# Patch notes (2026-10-12):
+# mt8 rows for gmsd/ms-gmsd/ms-gmsdc/mdsi/psnrhvs/ssim-libvmaf/
+# msssim-libvmaf/haarpsi were re-measured against bin built at
+# a10f1afc (includes the day's row-map/join/fold work) — source
+# TSVs: patch_mt8_1024.tsv, patch_mt8_3355.tsv. 1t 8.4MP heap times
+# for the same set re-run from logs/patch_heap_*.log.
+# vmaf: panics on odd dims (3355 odd) — input constraint, not a bug.
