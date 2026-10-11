@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- zenstats (`553ac175`, `77999b50`, PR #67): evaluation methods for every metric.
+- zenstats (`553ac175`, `77999b50`, `42b57055`, `f6e75e9f`, PR #67): evaluation methods for every metric.
   `resample` (source and source × codec cluster bootstrap), `pairs` (agreement
   per pair class and expected observer agreement against a ceiling), `jnd`
   (declared mapping families, leave-one-source-out maps, RMSE, τ̂, rmse*),
