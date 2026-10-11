@@ -1,4 +1,7 @@
-# zenstats
+# zenmetrics-stats
+
+Statistics for evaluating image quality metrics against human data. Named
+`zenstats` until 2026-10-11.
 
 Paper-correct IQA statistical panel — Mohammadi 2025 / Wu 2017 / ITU-T
 P.1401 definitions, in one place, with the full 6-stat panel plus the

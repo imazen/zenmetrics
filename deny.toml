@@ -29,7 +29,7 @@ allow = [
 ]
 confidence-threshold = 0.93
 # Most members are publish=false — private crates get no license audit.
-# The publishable members (zenfleet-* , zenstats) are all MIT OR Apache-2.0.
+# The publishable members (zenfleet-* , zenmetrics-stats) are all MIT OR Apache-2.0.
 private.ignore = true
 # If a publishable crate gains a non-allowlisted license, add an explicit
 # exception rather than widening `allow`:

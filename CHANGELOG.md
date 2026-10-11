@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-stats: `zenstats` renamed to `zenmetrics-stats` (owner decision 2026-10-11; unpublished, so no crates.io name changes). Dependents that pin an older revision keep `zenstats` until they bump; on bumping, `zenstats = { package = "zenmetrics-stats", … }` keeps `use zenstats::` paths working. Lib name is `zenmetrics_stats`.
+
 - zenstats (`553ac175`, `77999b50`, `42b57055`, `f6e75e9f`, PR #67): evaluation methods for every metric.
   Also absorbs zensim's statistics (PR #67): `pairs::ds_auc` (moved from
   `zensim-validate/src/difference_auc.rs`), `multiple::holm_reject` (same

@@ -7681,6 +7681,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenmetrics-stats"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "zenpixels"
 version = "0.2.16"
 source = "git+https://github.com/imazen/zenpixels?rev=e56f626b14e6f0211e020159d30b3a48616e88e0#e56f626b14e6f0211e020159d30b3a48616e88e0"
@@ -7879,13 +7886,6 @@ dependencies = [
  "zenmetrics-gpu-core",
  "zenpixels",
  "zensim 0.3.0",
-]
-
-[[package]]
-name = "zenstats"
-version = "0.1.0"
-dependencies = [
- "rayon",
 ]
 
 [[package]]

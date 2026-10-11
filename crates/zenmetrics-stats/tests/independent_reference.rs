@@ -1,13 +1,13 @@
-//! zenstats' evaluation modules against values computed independently with
+//! zenmetrics-stats' evaluation modules against values computed independently with
 //! scipy, scikit-learn and statsmodels (`scripts/independent_reference.py`,
 //! synthetic data; regenerate with the command in that script).
 
 mod independent_reference_data;
 use independent_reference_data as r;
 
-use zenstats::jnd::{MapFamily, Shape, excess_error_sd, fit_map, out_of_fold};
-use zenstats::pairs::{HumanNoise, PairInput, expected_agreement};
-use zenstats::panel::Orientation;
+use zenmetrics_stats::jnd::{MapFamily, Shape, excess_error_sd, fit_map, out_of_fold};
+use zenmetrics_stats::pairs::{HumanNoise, PairInput, expected_agreement};
+use zenmetrics_stats::panel::Orientation;
 
 #[test]
 fn knee_power_fit_is_at_least_as_good_as_scipy_curve_fit() {
@@ -19,7 +19,7 @@ fn knee_power_fit_is_at_least_as_good_as_scipy_curve_fit() {
         .sum();
     assert!(
         sse <= r::KNEE_SSE * (1.0 + 1e-6),
-        "zenstats {sse} vs scipy {}",
+        "zenmetrics-stats {sse} vs scipy {}",
         r::KNEE_SSE
     );
     let p = m.params();
@@ -62,7 +62,7 @@ fn excess_error_matches_scipy_likelihood_maximum() {
 
 #[test]
 fn holm_matches_statsmodels() {
-    let got = zenstats::multiple::holm(&r::HOLM_P);
+    let got = zenmetrics_stats::multiple::holm(&r::HOLM_P);
     for (g, w) in got.iter().zip(r::HOLM_ADJ) {
         assert!((g - w).abs() < 1e-15, "{got:?} vs {:?}", r::HOLM_ADJ);
     }
@@ -90,7 +90,7 @@ fn expected_observer_agreement_matches_brute_force_scipy() {
             r::EXPECTED_AGREEMENT[2 * k],
             r::EXPECTED_AGREEMENT[2 * k + 1],
         );
-        // scipy's norm.cdf is exact to double precision; zenstats' erfc fit has
+        // scipy's norm.cdf is exact to double precision; zenmetrics-stats' erfc fit has
         // relative error below 1.2e-7
         assert!(
             (c.agreement - agree).abs() < 2e-7,

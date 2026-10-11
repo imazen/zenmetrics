@@ -1,7 +1,7 @@
 # Evaluating a metric against human data
 
 How to evaluate any metric in this repository against a human-labelled image
-quality dataset, using one implementation of every statistic (`zenstats`).
+quality dataset, using one implementation of every statistic (`zenmetrics-stats`, named `zenstats` until 2026-10-11).
 The same procedure applies to zensim, SSIMULACRA2, Butteraugli, CVVDP and the
 rest; nothing here is specific to one metric.
 
@@ -12,7 +12,7 @@ source shares its content, and every image from one codec shares its
 artefacts. A row bootstrap treats them as independent and gives intervals
 that are too narrow for any claim about new images or codecs.
 
-- Use `zenstats::resample::cluster_bootstrap` with `Design::OneWay(source)`,
+- Use `zenmetrics_stats::resample::cluster_bootstrap` with `Design::OneWay(source)`,
   or `Design::TwoWay(source, codec)` (Owen's pigeonhole bootstrap) when the
   codecs are crossed with the sources.
 - Give a codec applied to only some sources a label per (source, codec), so it
@@ -22,7 +22,7 @@ that are too narrow for any claim about new images or codecs.
   the same resample.
 - **A source drawn twice is two sources.** The statistic receives a `Draw`:
   - sums over rows use `Draw::row_weights`;
-  - statistics over pairs of rows pass the draw to `zenstats::pairs` (or use
+  - statistics over pairs of rows pass the draw to `zenmetrics_stats::pairs` (or use
     a `PairTable`), which weights a pair with `Draw::pair_weight`. Within-source
     pairs then count once per copy, not once per pair of copies;
   - statistics that group rows (`per_group_srocc`) or refit something
@@ -33,7 +33,7 @@ that are too narrow for any claim about new images or codecs.
   inflates the source and codec variance terms and triples the interaction
   term, so a cross-codec comparison gets the widest intervals.
 - With few sources every simple interval under-covers. Measured on a
-  synthetic 12-source population (`crates/zenstats/tests/coverage.rs`): 95 %
+  synthetic 12-source population (`crates/zenmetrics-stats/tests/coverage.rs`): 95 %
   percentile 0.884, Student `estimate ± t(G−1)·se·√(G/(G−1))` 0.911, exact t
   over per-source values 0.910. Report the Student form beside the percentile
   one with fewer than about 30 sources; with five or so the interval is
@@ -42,7 +42,7 @@ that are too narrow for any claim about new images or codecs.
 
 ## Split pairwise agreement into three classes
 
-`zenstats::pairs` splits every pair of stimuli by what it compares:
+`zenmetrics_stats::pairs` splits every pair of stimuli by what it compares:
 
 | class | compares | tests |
 |---|---|---|
@@ -72,7 +72,7 @@ Most metrics do not output the target's units, so absolute accuracy is the
 accuracy of the metric plus a mapping. The mapping family can change an error
 criterion more than the metric does.
 
-1. **Declare the family before looking at the data** (`zenstats::jnd::MapFamily`):
+1. **Declare the family before looking at the data** (`zenmetrics_stats::jnd::MapFamily`):
    `Linear`, `Logistic4`, `KneePower` (a·max(0, b − x)^c, the form used to put
    metrics on a JND scale) or `Isotonic` (the best monotone shape).
 2. **Fit leave-one-source-out** (`jnd::out_of_fold`), so no stimulus is
@@ -106,7 +106,7 @@ criterion more than the metric does.
 ## Raw forced choices
 
 When a dataset releases its raw 2AFC or triplet responses, score them
-directly (`zenstats::forced_choice`):
+directly (`zenmetrics_stats::forced_choice`):
 
 - **Prepare the responses like the reconstruction did.** Screen workers and
   drop trap questions and questions that show the same image on both sides.
@@ -149,7 +149,7 @@ metric out of comparisons within a level.
 ## Many metrics
 
 Use paired cluster-bootstrap differences with Holm adjustment
-(`zenstats::multiple::holm`). P.1401 §7.6.5 requires correcting for multiple
+(`zenmetrics_stats::multiple::holm`). P.1401 §7.6.5 requires correcting for multiple
 comparisons and names Bonferroni; Holm controls the same family-wise error
 rate and is never less powerful. For an overall order, use pairwise tests
 over sources (Wilcoxon signed-rank or sign tests) with Holm, and draw any
@@ -161,7 +161,7 @@ p = 0.0625, so no pair can be declared different at 0.05 by it.
 
 ## Implementation status
 
-| method | `zenstats` | wired into a report |
+| method | `zenmetrics-stats` | wired into a report |
 |---|---|---|
 | source / source × codec bootstrap with copy-aware draws | `resample` | not yet |
 | pair classes, expected observer agreement, `PairTable` | `pairs` | not yet |
@@ -176,11 +176,11 @@ the generic evaluator, and it calls these statistics only where noted.
 
 ## Consolidating zensim's statistics here
 
-zensim's rules make one owner per statistic, and zenstats is that owner for
+zensim's rules make one owner per statistic, and zenmetrics-stats is that owner for
 IQA statistics. This is where the zensim implementations stand (surveyed on
 zensim main `fc72d499`):
 
-| zensim implementation | zenstats | status |
+| zensim implementation | zenmetrics-stats | status |
 |---|---|---|
 | `zensim-validate/src/pairwise.rs` (forced-choice agreement, majority ceiling, group re-keying) | `forced_choice` | moved; zensim keeps its copy until it switches |
 | `zensim-validate/src/difference_auc.rs` (DS-AUC) | `pairs::ds_auc` | moved with the same pair selection and arithmetic |
@@ -188,15 +188,15 @@ zensim main `fc72d499`):
 | Python reference-clustered bootstraps feeding `panel --batch` (`band_reliability.py`, `e2b_stats.py`, `rev4_e1*/analyze.py`, `paired_perref_boot.py`, `rev4_featpot/*_ci.py`) | `resample::cluster_bootstrap` | same design; recorded evidence stays as computed |
 | `rev4_e1b/crosscodec.py` pair classes (same configuration / same format / different format, inside each reference) | `pairs` with `PairInput::family` | reproduced exactly (`family_classes_reproduce_the_crosscodec_pseudo_choice_construction`) |
 | `v2_confirm_read.py::holm` (rejections; incomplete entries count as p = 1) | `multiple::holm_reject` | same decisions on its registered test cases |
-| `zenstats::rescale_logistic` | `jnd::MapFamily::Logistic4` | same fit, reused |
+| `zenmetrics_stats::rescale_logistic` | `jnd::MapFamily::Logistic4` | same fit, reused |
 
-Conventions that differ, and which one zenstats uses:
+Conventions that differ, and which one zenmetrics-stats uses:
 
 - **A cluster drawn twice.** The Python scripts concatenate a drawn
   reference's rows, so within-reference pairs of a twice-drawn reference count
   four times. For pooled SROCC over many references that is a small effect;
   for pair statistics restricted to within-reference pairs it widens the
-  interval (see the PR #67 review). zenstats keeps copies distinct
+  interval (see the PR #67 review). zenmetrics-stats keeps copies distinct
   (`Draw::pair_weight`, `Draw::expand`). `spearman_interval` computes pooled
   Spearman on the expanded rows, matching the Python method.
 - **Percentiles.** Decided 2026-10-11: one rule across the crate, Hyndman–Fan

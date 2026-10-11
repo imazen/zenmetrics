@@ -1,5 +1,5 @@
 [package]
-name = "zenstats"
+name = "zenmetrics-stats"
 description = "Paper-correct IQA statistics for evaluating any image quality metric: the Mohammadi 2025 panel, MRR significance, source-clustered bootstrap intervals, pair-class agreement, JND-scale accuracy with declared out-of-fold maps, and raw forced-choice scoring."
 version = "0.1.0"
 edition.workspace = true

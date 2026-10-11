@@ -8,9 +8,9 @@
 //! close to 95 % of the time. A naive interval that treats pairs as
 //! independent is the negative control: it under-covers badly.
 
-use zenstats::pairs::{PairInput, PairTable};
-use zenstats::panel::Orientation;
-use zenstats::resample::{BootstrapConfig, Design, cluster_bootstrap};
+use zenmetrics_stats::pairs::{PairInput, PairTable};
+use zenmetrics_stats::panel::Orientation;
+use zenmetrics_stats::resample::{BootstrapConfig, Design, cluster_bootstrap};
 
 const SOURCES: u32 = 12;
 const CODECS: u32 = 3;

@@ -1,4 +1,4 @@
-//! # zenstats — paper-correct IQA statistical panel
+//! # zenmetrics-stats — paper-correct IQA statistics (named `zenstats` until 2026-10-11)
 //!
 //! Canonical home for the statistical panel used across imazen's zen
 //! image-quality stack. Implements the **exact** definitions from

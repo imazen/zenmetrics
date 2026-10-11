@@ -107,7 +107,7 @@ GPU-only" limitation.
 | [`zenmetrics-gpu-core`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-gpu-core) | Shared backend / score / sRGB / stream plumbing for the `*-gpu` crates (CubeCL) |
 | [`zenmetrics-orchestrator`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-orchestrator) | Capability-aware backend chooser + persistent benchmark cache + OOM fallback ladder + warm worker pool |
 | [`zenmetrics-cli`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-cli) | the `zenmetrics` CLI (`score` / `batch` / `compare` / `sweep` / `score-pairs` / `jobexec` / `assemble` / `fleet-plan`) |
-| [`zenstats`](https://github.com/imazen/zenmetrics/tree/master/crates/zenstats) | Paper-correct IQA statistical panel (SROCC / PLCC / KROCC / OR / PWRC + bootstrap-CI A-vs-B) |
+| [`zenmetrics-stats`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-stats) | Paper-correct IQA statistical panel (SROCC / PLCC / KROCC / OR / PWRC + bootstrap-CI A-vs-B) |
 | [`zenmetrics-corpus`](https://github.com/imazen/zenmetrics/tree/master/crates/zenmetrics-corpus) / [`zenhdr-corpus`](https://github.com/imazen/zenmetrics/tree/master/crates/zenhdr-corpus) | Shared SDR / HDR test-image corpora (test infra) |
 | [`cvvdp-conformance`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-conformance) | pycvvdp conformance fixtures + parity harness for the cvvdp crates |
 

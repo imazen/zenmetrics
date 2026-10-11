@@ -11,6 +11,21 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## Crate naming (owner decision 2026-10-11)
+
+- **Image quality metrics we publish first and canonically keep bare names**:
+  `zensim`, `butteraugli`, `fast-ssim2`, and the metric ports here (`cvvdp`,
+  `iwssim`, `vmaf`, `gmsd`, …). A GPU twin is `<metric>-gpu`.
+- **Shared infrastructure is `zenmetrics-*`** (`-api`, `-cli`, `-orchestrator`,
+  `-gpu-core`, `-math`, `-corpus`), and so is the evaluation crate:
+  `zenmetrics-stats` (renamed from `zenstats`).
+- **`dvifmish` may never be published**: it is an independent reimplementation
+  reconstructed from the published description, and publishing it needs the
+  original author's consent.
+- `crates/margarine` (package `margarine-lab`) becomes `margarine-lab` throughout
+  once it is cleaned up.
+- `zen-iqa` is a third-party project; do not use `zeniqa`-like names.
+
 ## VMAF CPU optimization discipline
 
 For future pure-Rust VMAF performance work, inspect generated code with
