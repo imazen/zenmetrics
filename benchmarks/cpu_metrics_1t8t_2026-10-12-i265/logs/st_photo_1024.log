@@ -1,0 +1,116 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26225MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall 1024 benchmarks/cpu_metrics_1t8t_2026-10-12-i265/st_photo_1024.tsv
+[zenbench] calibration: int=0.19ns/iter mem_bw=93.7GiB/s mem_lat=7.5ns
+[zenbench] timer resolution: 9ns, loop overhead: 0.09ns/iter, TSC: 3.878 ticks/ns (invariant)
+[zenbench] results → /home/lilith/tmp/zenbench/zenbench-1791699131-2c5dd2.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1791699131-2c5dd2
+  git: c929d32c96dad348d2fb706216b1cfb8613813c8
+═══════════════════════════════════════════════════════════════
+
+  new_metrics_wall_1024  4 rounds × 1 calls ⚠ only 4 rounds
+                            mean ±mad ms  95% CI vs base           
+  ├─ psnr__lat                1.5 ±0.0ms  [1.5–1.5]ms              
+  ├─ psnr-y__lat              1.9 ±0.0ms  [+23.7%–+24.4%]           [1]
+  ├─ ssim__lat              138.0 ±1.6ms  [+8769.8%–+8917.3%]       [2]
+  ├─ ssim2__lat              95.1 ±1.3ms  [+6058.7%–+6173.1%]      
+  ├─ butteraugli__lat       128.7 ±1.3ms  [+8261.1%–+8377.9%]      
+  ├─ dssim__lat             135.0 ±0.7ms  [+8516.7%–+8880.9%]      
+  ├─ zensim__lat             62.8 ±1.6ms  [+3841.1%–+4128.9%]      
+  ├─ cvvdp__lat             140.6 ±1.2ms  [+9058.2%–+9160.4%]      
+  ├─ iwssim__lat             77.7 ±1.2ms  [+4835.5%–+5062.6%]      
+  ├─ iwssim-piq__lat         80.0 ±1.5ms  [+4843.3%–+5487.2%]      
+  ├─ nlpd__lat               41.5 ±3.1ms  [+2414.0%–+2761.2%]      
+  ├─ nlpd-iqa__lat           22.1 ±1.6ms  [+1259.0%–+1403.2%]      
+  ├─ ms-gmsdc__lat           23.9 ±0.2ms  [+1399.0%–+1532.7%]       [3]
+  ├─ gmsd__lat                0.9 ±0.0ms  [-44.0%–-40.3%]          
+  ├─ mdsi__lat                2.1 ±0.3ms  [+18.5%–+53.8%]          
+  ├─ ms-gmsd__lat            22.9 ±0.9ms  [+1344.8%–+1426.3%]       [4]
+  ├─ psnrhvs__lat            10.8 ±1.9ms  [+507.0%–+689.0%]        
+  ├─ psnrhvs-daala__lat      38.0 ±0.2ms  [+2350.3%–+2372.6%]       [5]
+  ├─ haarpsi__lat            13.8 ±1.4ms  [+733.7%–+858.5%]         [6]
+  ├─ fsim__lat               64.8 ±0.5ms  [+4006.3%–+4253.8%]       [7]
+  ├─ vsi__lat                75.5 ±0.6ms  [+4818.9%–+4870.4%]      
+  ├─ msssim__lat             32.3 ±1.8ms  [+1868.9%–+2113.5%]      
+  ├─ msssim-libvmaf__lat     83.5 ±1.8ms  [+5196.9%–+5441.1%]       [8]
+  ├─ ssim-libvmaf__lat       10.3 ±0.5ms  [+574.1%–+622.1%]        
+  ├─ vif__lat                73.0 ±1.4ms  [+4345.0%–+5128.8%]       [9]
+  ├─ vifvec__lat            396.5 ±2.3ms  [+25479.1%–+25725.9%]    
+  ├─ mad__lat              1317.0 ±7.2ms  [+84448.3%–+86444.6%]    
+  ├─ mdctpsnr__lat         1889.7 ±2.1ms  [+122111.3%–+122823.4%]  
+  ╰─ vmaf__lat               29.0 ±0.6ms  [+1729.3%–+1855.8%]       [10]
+
+  gmsd__lat            █ 892.22µs
+  psnr__lat            █ 1.54ms
+  psnr-y__lat          █ 1.91ms
+  mdsi__lat            █ 2.09ms
+  ssim-libvmaf__lat    █ 10.28ms
+  psnrhvs__lat         █ 10.77ms
+  haarpsi__lat         █ 13.82ms
+  nlpd-iqa__lat        █ 22.08ms
+  ms-gmsd__lat         █ 22.92ms
+  ms-gmsdc__lat        █ 23.86ms
+  vmaf__lat            █ 29.03ms
+  msssim__lat          █ 32.30ms
+  psnrhvs-daala__lat   █ 37.98ms
+  nlpd__lat            █ 41.46ms
+  zensim__lat          ██ 62.80ms
+  fsim__lat            ██ 64.78ms
+  vif__lat             ██ 72.98ms
+  vsi__lat             ██ 75.47ms
+  iwssim__lat          ██ 77.68ms
+  iwssim-piq__lat      ██ 79.99ms
+  msssim-libvmaf__lat  ██ 83.53ms
+  ssim2__lat           ██ 95.08ms
+  butteraugli__lat     ███ 128.72ms
+  dssim__lat           ███ 135.03ms
+  ssim__lat            ███ 137.98ms
+  cvvdp__lat           ███ 140.56ms
+  vifvec__lat          ██████████ 396.55ms
+  mad__lat             █████████████████████████████████ 1.32s
+  mdctpsnr__lat        ███████████████████████████████████████████████ 1.89s
+  [1] drift r=0.80 — later rounds slower
+  [2] drift r=1.00 — later rounds slower
+  [3] drift r=-1.00 — later rounds faster
+  [4] drift r=0.60 — later rounds slower
+  [5] drift r=-0.80 — later rounds faster
+  [6] drift r=-0.80 — later rounds faster
+  [7] drift r=0.80 — later rounds slower
+  [8] drift r=1.00 — later rounds slower
+  [9] drift r=0.60 — later rounds slower
+  [10] drift r=0.80 — later rounds slower
+
+  total: 164.9s  (120 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 1024/psnr: 31.87536274198264
+sentinel 1024/psnr-y: 34.59622794311839
+sentinel 1024/ssim: 0.9383547151140973
+sentinel 1024/ssim2: 51.076591452899734
+sentinel 1024/butteraugli: 11.94013500213623
+sentinel 1024/dssim: 0.004013071224084008
+sentinel 1024/zensim: 44.4167459356094
+sentinel 1024/cvvdp: 9.464425086975098
+sentinel 1024/iwssim: 0.9931403081623312
+sentinel 1024/iwssim-piq: 0.9932556746310205
+sentinel 1024/nlpd: 2.394971943723971
+sentinel 1024/nlpd-iqa: 0.09798879079478053
+sentinel 1024/ms-gmsdc: 0.03229295298163877
+sentinel 1024/gmsd: 0.02870674988124706
+sentinel 1024/mdsi: 0.205979480164512
+sentinel 1024/ms-gmsd: 0.033512371948062045
+sentinel 1024/psnrhvs: 27.976531041918747
+sentinel 1024/psnrhvs-daala: 38.43614117655237
+sentinel 1024/haarpsi: 0.9055214205272816
+sentinel 1024/fsim: 0.9970832749303953
+sentinel 1024/vsi: 0.9984454192771071
+sentinel 1024/msssim: 0.995489349897922
+sentinel 1024/msssim-libvmaf: 0.9958671607061101
+sentinel 1024/ssim-libvmaf: 0.998246967792511
+sentinel 1024/vif: 0.6608518673508136
+sentinel 1024/vifvec: 0.6175632083942326
+sentinel 1024/mad: 17.57680019980074
+sentinel 1024/mdctpsnr: 32.809532165527344
+sentinel 1024/vmaf: 89.42498241800983
+wrote wall rows for size 1024 to benchmarks/cpu_metrics_1t8t_2026-10-12-i265/st_photo_1024.tsv
+run-heavy: done rc=0 175s | peak-RSS 0.28GiB | min-avail 26000MiB | peak-load 3.79

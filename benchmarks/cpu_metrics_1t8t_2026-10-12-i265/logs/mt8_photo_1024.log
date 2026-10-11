@@ -1,0 +1,9 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26296MiB :: env RAYON_NUM_THREADS=8 OMP_NUM_THREADS=8 taskset -c 0-7 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall 1024 benchmarks/cpu_metrics_1t8t_2026-10-12-i265/mt8_photo_1024.tsv
+[zenbench] calibration: int=0.19ns/iter mem_bw=93.6GiB/s mem_lat=7.9ns
+[zenbench] timer resolution: 9ns, loop overhead: 0.09ns/iter, TSC: 3.877 ticks/ns (invariant)
+[zenbench] results → /home/lilith/tmp/zenbench/zenbench-1791699303-2c633d.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1791699303-2c633d
+  git: c929d32c96dad348d2fb706216b1cfb8613813c8
+═══════════════════════════════════════════════════════════════

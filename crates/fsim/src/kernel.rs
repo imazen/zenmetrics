@@ -277,26 +277,57 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
 /// `conv2(Y, K, 'same')` for a 3×3 kernel — `out(i,j) =
 /// Σ_{a,b} K[a,b]·Y(i+1−a, j+1−b)`, zero outside (the kernel is
 /// applied flipped, as MATLAB's `conv2` does).
-fn conv2_same_3x3(y: &[f32], w: usize, h: usize, k: &[[f32; 3]; 3]) -> Vec<f32> {
-    let mut out = vec![0.0f32; w * h];
-    for i in 0..h {
-        for j in 0..w {
-            let mut acc = 0.0f32;
-            for a in 0..3isize {
-                let r = i as isize + 1 - a;
-                if r < 0 || r >= h as isize {
+/// `rayon::join` under `parallel`, sequential otherwise — each side
+/// produces its own `Vec`, so results are identical at any thread count.
+fn maybe_join<A, B>(fa: impl FnOnce() -> A + Send, fb: impl FnOnce() -> B + Send) -> (A, B)
+where
+    A: Send,
+    B: Send,
+{
+    #[cfg(feature = "parallel")]
+    {
+        rayon::join(fa, fb)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        (fa(), fb())
+    }
+}
+
+/// One output row of `conv2_same_3x3` — per-element tap order identical
+/// under either driver (reads at most the two neighbouring source rows).
+fn conv2_same_3x3_row(out: &mut [f32], y: &[f32], w: usize, h: usize, i: usize, k: &[[f32; 3]; 3]) {
+    for (j, o) in out.iter_mut().enumerate() {
+        let mut acc = 0.0f32;
+        for a in 0..3isize {
+            let r = i as isize + 1 - a;
+            if r < 0 || r >= h as isize {
+                continue;
+            }
+            for b in 0..3isize {
+                let c = j as isize + 1 - b;
+                if c < 0 || c >= w as isize {
                     continue;
                 }
-                for b in 0..3isize {
-                    let c = j as isize + 1 - b;
-                    if c < 0 || c >= w as isize {
-                        continue;
-                    }
-                    acc += k[a as usize][b as usize] * y[r as usize * w + c as usize];
-                }
+                acc += k[a as usize][b as usize] * y[r as usize * w + c as usize];
             }
-            out[i * w + j] = acc;
         }
+        *o = acc;
+    }
+}
+
+fn conv2_same_3x3(y: &[f32], w: usize, h: usize, k: &[[f32; 3]; 3]) -> Vec<f32> {
+    let mut out = vec![0.0f32; w * h];
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(i, row)| conv2_same_3x3_row(row, y, w, h, i, k));
+        return out;
+    }
+    for (i, row) in out.chunks_mut(w).enumerate() {
+        conv2_same_3x3_row(row, y, w, h, i, k);
     }
     out
 }
@@ -528,16 +559,27 @@ macro_rules! score_body {
             pcdiv_body!($token, $F32, $LANES, eall, aall, pc, n);
             pc
         };
-        let pc1 = pc($yr);
-        let pc2 = pc($yd);
+        // Phase-congruency maps of both planes — independent pipelines,
+        // joined under `parallel` (the serial path runs them in order).
+        let (pc1, pc2) = maybe_join(|| pc($yr), || pc($yd));
 
         // Gradient magnitudes of both planes (Scharr pair).
-        let ix1 = conv2_same_3x3($yr, w, h, &DX);
-        let iy1 = conv2_same_3x3($yr, w, h, &DY);
+        let ((ix1, iy1), (ix2, iy2)) = maybe_join(
+            || {
+                (
+                    conv2_same_3x3($yr, w, h, &DX),
+                    conv2_same_3x3($yr, w, h, &DY),
+                )
+            },
+            || {
+                (
+                    conv2_same_3x3($yd, w, h, &DX),
+                    conv2_same_3x3($yd, w, h, &DY),
+                )
+            },
+        );
         let mut g1 = vec![0.0f32; n];
         grad_body!($token, $F32, $LANES, ix1, iy1, g1, n);
-        let ix2 = conv2_same_3x3($yd, w, h, &DX);
-        let iy2 = conv2_same_3x3($yd, w, h, &DY);
         let mut g2 = vec![0.0f32; n];
         grad_body!($token, $F32, $LANES, ix2, iy2, g2, n);
 
