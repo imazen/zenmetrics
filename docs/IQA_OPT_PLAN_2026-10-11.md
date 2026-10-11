@@ -138,8 +138,17 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
       warnings (token-first forwarders pending the 0.10 tokenless API).
       `-A deprecated` added to the CI clippy allow list with a comment;
       the `_t` migration is deferred to the 0.10 release.
-- [ ] P2: ssim2 api port (registry 0.8.2 → local 0.9.0 PixelSlice) — the
-      last <2x metric with real cost (99 ms/MP at 8.4MP, 1.03x).
+- [x] ssim2 api port (c7955f70): the api's `version = "0.8.2"` req could
+      not be satisfied by the workspace patch, silently resolving
+      REGISTRY 0.8.2 — a second fast-ssim2 in the graph without the
+      rayon vertical-blur blocks. Bumped to 0.9.0 + ported to PixelSlice
+      (RGB8_SRGB / RGBF32_LINEAR for the PU path — nits now borrowed
+      zero-copy). ssim2 sweep 8t: 107.6→46.7ms 1MP, 810→639ms 8.4MP
+      (3.8x threading on 0.9.0). Caveat recorded in run.meta: 0.9.0
+      serial is ~2.9x heavier per-pixel than registry-0.8.2 serial
+      (pipeline differences, not a missing feature — SIMD is default),
+      so the net-vs-old-8t is ~1.27x; the serial gap is fast-ssim2-repo
+      follow-up.
 - [ ] P2: hdrvdp3 f64 — f64xN transcendentals (polyfit) or scoped f32
       under JOD parity gate.
 - [ ] P2: residual tails — ssim-libvmaf 1.25x (conv depth-bound), mdsi
