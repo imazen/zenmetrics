@@ -3,6 +3,8 @@
 //!
 //! Moved here from zensim's `zensim-validate/src/pairwise.rs` so every metric
 //! in zenmetrics is scored by the same code; the arithmetic is unchanged.
+//! Imazen, the copyright holder, relicensed it from AGPL-3.0-or-later OR
+//! commercial to this crate's MIT OR Apache-2.0 with the move (2026-10-11).
 //!
 //! # Why this statistic exists
 //!
@@ -304,7 +306,7 @@ pub struct LogLikelihood {
 /// cannot make the score −∞. Groups with no responses contribute nothing.
 pub fn log_likelihood(rows: &[PairwiseRow], n_groups_total: usize, scale: f64) -> LogLikelihood {
     const EPS: f64 = 1e-12;
-    let chance_ll = core::f64::consts::LN_2 * -1.0;
+    let chance_ll = -core::f64::consts::LN_2;
     let mut w_sum = 0.0f64;
     let mut ll_sum = 0.0f64;
     let mut gl = vec![0.0f64; n_groups_total];

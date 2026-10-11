@@ -970,10 +970,7 @@ pub(crate) fn fit_logistic4(predicted: &[f64], target: &[f64]) -> Option<[f64; 4
             best_b = Some(b_fit);
         }
     }
-    let b: [f64; 4] = match best_b {
-        Some(b) => b,
-        None => return None,
-    };
+    let b: [f64; 4] = best_b?;
     let any_bad = predicted
         .iter()
         .take(n)
