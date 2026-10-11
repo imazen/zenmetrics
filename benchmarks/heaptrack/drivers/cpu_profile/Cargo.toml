@@ -28,6 +28,7 @@ metrics-parallel = [
     "dep:mad-iqa", "mad-iqa/parallel", "dep:msssim", "msssim/parallel",
     "dep:psnrhvs", "psnrhvs/parallel", "dep:vif", "vif/parallel",
     "dep:vmaf", "vmaf/parallel", "dep:vsi", "vsi/parallel",
+    "dep:mdctpsnr", "mdctpsnr/parallel",
 ]
 
 [dependencies]
@@ -79,6 +80,7 @@ psnrhvs      = { workspace = true, optional = true }
 vif          = { workspace = true, optional = true }
 vmaf         = { workspace = true, optional = true }
 vsi          = { workspace = true, optional = true }
+mdctpsnr     = { workspace = true, optional = true }
 # cpu-metrics only: pulls nlpd + tempfile + the native-CPU backends — the same
 # dep set this crate already builds — plus the umbrella (`zenmetrics-api`)
 # native-CPU dispatch. No GPU/cubecl/codec deps enabled.

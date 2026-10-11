@@ -58,6 +58,9 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
 /// Errors from [`mdct_psnr_srgb8`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
@@ -385,6 +388,118 @@ mod libmvec {
     }
 }
 
+/// Elementwise body of `BandMask::compute_mask`. `#[inline(always)]` so the
+/// `target_feature` clone below compiles the identical code under
+/// `fma`/`avx2`, where `mul_add` lowers to `vfmadd` instead of a
+/// correctly-rounded `fmaf` libcall — same bits, ~10× cheaper per op.
+#[inline(always)]
+fn compute_mask_impl(
+    add: &[Vec<f32>; MASK_SIZE],
+    mid_row: &[f32],
+    m0: f32,
+    m1: f32,
+    m2: f32,
+    vis: f32,
+    w13: usize,
+    mask: &mut [f32],
+    coeff: &mut [f32],
+) {
+    let base = BASE_VISIBILITY;
+    let inv_ms2 = 1.0 / (MASK_SIZE * MASK_SIZE) as f32;
+    for i in 0..w13 {
+        // FMA chain order of `ComputeMaskLoop`: m0·s04, then
+        // fma(m1, s13), fma(m2, d2), then fused fma(sum, 1/25, base).
+        let sum = m0 * (add[0][i] + add[4][i]);
+        let sum = fm(m1, add[1][i] + add[3][i], sum);
+        let sum = fm(m2, add[2][i], sum);
+        let den = fm(sum, inv_ms2, base);
+        // `-freciprocal-math` lowers base/den to vrcpps + one NR step:
+        // mask = base·(2r − den·r²).
+        let r = rcp_approx(den);
+        mask[i] = base * ((r + r) - (den * r) * r);
+        coeff[i] = mid_row[i + (MASK_SIZE >> 1)] * vis;
+    }
+}
+
+/// `compute_mask_impl` compiled with hardware FMA/AVX2. Elementwise
+/// independence means the vectorized chains keep the serial per-element op
+/// order — bit-identical to the `fmaf` libcall path.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma", enable = "avx2")]
+unsafe fn compute_mask_fma(mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
+    compute_mask_impl(
+        &mask_obj.add_ring,
+        &mask_obj.in_ring[MASK_SIZE >> 1],
+        kernel[0],
+        kernel[1],
+        kernel[2],
+        mask_obj.vis,
+        mask_obj.w13,
+        &mut mask_obj.mask,
+        &mut mask_obj.coeff,
+    );
+}
+
+/// Horizontal 5-tap symmetric conv of `mp` into `add`
+/// (`ColumnSumConvolution` order).
+#[inline(always)]
+fn conv_add_impl(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
+    for (i, a) in add.iter_mut().enumerate() {
+        // GCC contracts to fma(m2, mp2, fma(m0, s04, m1·s13)).
+        *a = fm(
+            m2,
+            mp[i + 2],
+            fm(m0, mp[i] + mp[i + 4], m1 * (mp[i + 1] + mp[i + 3])),
+        );
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma", enable = "avx2")]
+unsafe fn conv_add_fma(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
+    conv_add_impl(mp, m0, m1, m2, add);
+}
+
+/// Window multiply of `run_dct`: `v = v·win + avg·(1−win)`, fused.
+#[inline(always)]
+fn window_impl(block: &mut [[f32; 8]; 8], avg: f32) {
+    for (y, r) in block.iter_mut().enumerate() {
+        let win = WINDOW[y];
+        for (x, v) in r.iter_mut().enumerate() {
+            *v = fm(*v, win[x], avg * (1.0 - win[x]));
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma", enable = "avx2")]
+unsafe fn window_fma(block: &mut [[f32; 8]; 8], avg: f32) {
+    window_impl(block, avg);
+}
+
+/// `dc_mask_fixup`'s `0.5·m01 + 0.5·m10 + 0.25·m11` merge (FMA order as the
+/// GCC reassociation).
+#[inline(always)]
+fn dc_fixup_impl(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
+    for i in 0..m00.len() {
+        m00[i] = fm(m11[i], 0.25, (m01[i] + m10[i]) * 0.5);
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma", enable = "avx2")]
+unsafe fn dc_fixup_fma(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
+    dc_fixup_impl(m00, m01, m10, m11);
+}
+
+/// FMA+AVX2 pair — every FMA-capable x86-64 has AVX2 (FMA3 arrived with
+/// Haswell), so the single probe gates both.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn have_fma() -> bool {
+    is_x86_feature_detected!("fma") && is_x86_feature_detected!("avx2")
+}
+
 /// Approximate reciprocal matching the x86 `vrcpps` the reference's
 /// `-freciprocal-math` build emits (SSE `rcpss` returns the identical table
 /// bits on the same CPU). Off x86 we fall back to true division — ≤1 ulp
@@ -671,15 +786,16 @@ impl BandMask {
         let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
         let mp = &self.mapped;
         let add = &mut self.add_ring[slot];
-        for (i, a) in add.iter_mut().enumerate() {
-            // GCC contracts `ColumnSumConvolution` to
-            // fma(m2, mp2, fma(m0, s04, m1·s13)).
-            *a = fm(
-                m2,
-                mp[i + 2],
-                fm(m0, mp[i] + mp[i + 4], m1 * (mp[i + 1] + mp[i + 3])),
-            );
+        #[cfg(target_arch = "x86_64")]
+        if have_fma() {
+            unsafe {
+                conv_add_fma(mp, m0, m1, m2, add);
+            }
+        } else {
+            conv_add_impl(mp, m0, m1, m2, add);
         }
+        #[cfg(not(target_arch = "x86_64"))]
+        conv_add_impl(mp, m0, m1, m2, add);
 
         if self.fill == MASK_SIZE - 1 {
             self.compute_mask(kernel);
@@ -698,22 +814,31 @@ impl BandMask {
     /// `mask = base/(base + Σ_{5×5} mapped · w / 25)`,
     /// `coeff[i] = in_ring[2][i+2] · vis`.
     fn compute_mask(&mut self, kernel: &[f32; MASK_SIZE]) {
-        let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
-        let base = BASE_VISIBILITY;
-        let inv_ms2 = 1.0 / (MASK_SIZE * MASK_SIZE) as f32;
-        for i in 0..self.w13 {
-            // FMA chain order of `ComputeMaskLoop`: m0·s04, then
-            // fma(m1, s13), fma(m2, d2), then fused fma(sum, 1/25, base).
-            let sum = m0 * (self.add_ring[0][i] + self.add_ring[4][i]);
-            let sum = fm(m1, self.add_ring[1][i] + self.add_ring[3][i], sum);
-            let sum = fm(m2, self.add_ring[2][i], sum);
-            let den = fm(sum, inv_ms2, base);
-            // `-freciprocal-math` lowers base/den to vrcpps + one NR step:
-            // mask = base·(2r − den·r²).
-            let r = rcp_approx(den);
-            self.mask[i] = base * ((r + r) - (den * r) * r);
-            self.coeff[i] = self.in_ring[MASK_SIZE >> 1][i + (MASK_SIZE >> 1)] * self.vis;
+        // On x86_64 with FMA the `mul_add` calls in `mask_impl` lower to
+        // `vfmadd` — bitwise identical to the correctly-rounded `fmaf`
+        // libcall, just ~10× cheaper. Without it the libcall path is kept.
+        #[cfg(target_arch = "x86_64")]
+        if have_fma() {
+            unsafe {
+                compute_mask_fma(self, kernel);
+            }
+            return;
         }
+        self.compute_mask_scalar(kernel);
+    }
+
+    fn compute_mask_scalar(&mut self, kernel: &[f32; MASK_SIZE]) {
+        compute_mask_impl(
+            &self.add_ring,
+            &self.in_ring[MASK_SIZE >> 1],
+            kernel[0],
+            kernel[1],
+            kernel[2],
+            self.vis,
+            self.w13,
+            &mut self.mask,
+            &mut self.coeff,
+        );
     }
 
     /// `Masking::ComputeLowpass` — the four 5×5 separable subbands of the
@@ -815,6 +940,21 @@ impl Component {
     /// for `i in 0 .. w-8` — the last legal position `w−8` is skipped, as
     /// in the reference loop bound `i < w - 8`.
     fn run_dct(&mut self) {
+        // Hoist the forensic env lookups out of the per-position loop —
+        // getenv is a strcmp scan of environ and was ~13% of program
+        // instructions at 512px.
+        #[cfg(feature = "std")]
+        let dumpp: Option<(usize, usize)> = std::env::var_os("DUMPP").map(|v| {
+            let lo: usize = v.to_str().unwrap().parse().unwrap();
+            let hi = std::env::var("DUMPP2")
+                .map(|s| s.parse().unwrap())
+                .unwrap_or(lo);
+            (lo, hi)
+        });
+        #[cfg(feature = "std")]
+        let dumpi = std::env::var_os("DUMPI").is_some();
+        #[cfg(feature = "std")]
+        let dumpw: Option<usize> = std::env::var("DUMPW").ok().and_then(|s| s.parse().ok());
         for i in 0..self.w8 {
             #[cfg(feature = "std")]
             let pcall = {
@@ -829,11 +969,7 @@ impl Component {
             #[cfg(feature = "std")]
             CUR_CALL.with(|c| c.set(pcall));
             #[cfg(feature = "std")]
-            if let Some(v) = std::env::var_os("DUMPP") {
-                let lo: usize = v.to_str().unwrap().parse().unwrap();
-                let hi: usize = std::env::var("DUMPP2")
-                    .map(|s| s.parse().unwrap())
-                    .unwrap_or(lo);
+            if let Some((lo, hi)) = dumpp {
                 if pcall >= lo && pcall <= hi {
                     for (y, r) in block.iter().enumerate() {
                         for (x, &v) in r.iter().enumerate() {
@@ -843,7 +979,7 @@ impl Component {
                 }
             }
             #[cfg(feature = "std")]
-            if std::env::var_os("DUMPI").is_some() && i == 0 && self.first_call {
+            if dumpi && i == 0 && self.first_call {
                 self.first_call = false;
                 for (y, r) in self.ring.iter().enumerate() {
                     for (k, v) in r.iter().enumerate() {
@@ -871,16 +1007,18 @@ impl Component {
             }
             let avg = ((s[0] + s[4]) + (s[2] + s[6])) + ((s[1] + s[5]) + (s[3] + s[7]));
             let avg = avg / 64.0;
-            for (y, r) in block.iter_mut().enumerate() {
-                for (x, v) in r.iter_mut().enumerate() {
-                    let win = WINDOW[y];
-                    *v = fm(*v, win[x], avg * (1.0 - win[x]));
+            #[cfg(target_arch = "x86_64")]
+            if have_fma() {
+                unsafe {
+                    window_fma(&mut block, avg);
                 }
+            } else {
+                window_impl(&mut block, avg);
             }
+            #[cfg(not(target_arch = "x86_64"))]
+            window_impl(&mut block, avg);
             #[cfg(feature = "std")]
-            if let Ok(t) = std::env::var("DUMPW")
-                && pcall == t.parse::<usize>().unwrap_or(usize::MAX)
-            {
+            if dumpw == Some(pcall) {
                 eprintln!("AVGHERE {:#010x}", avg.to_bits());
                 for (y, r) in block.iter().enumerate() {
                     for (x, v) in r.iter().enumerate() {
@@ -1094,9 +1232,82 @@ fn dc_mask_fixup(img: &mut MeteredImage) {
     let m01 = &y01[0].mask;
     let m10 = &y10[0].mask;
     let m11 = &y11[0].mask;
-    for i in 0..m00.len() {
-        // GCC `-ffast-math` reassociates to fma(m11, 0.25, (m01+m10)·0.5).
-        m00[i] = fm(m11[i], 0.25, (m01[i] + m10[i]) * 0.5);
+    // GCC `-ffast-math` reassociates to fma(m11, 0.25, (m01+m10)·0.5).
+    #[cfg(target_arch = "x86_64")]
+    if have_fma() {
+        unsafe {
+            dc_fixup_fma(m00, m01, m10, m11);
+        }
+    } else {
+        dc_fixup_impl(m00, m01, m10, m11);
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    dc_fixup_impl(m00, m01, m10, m11);
+}
+
+/// True when any of the bit-forensic `DUMPT`/`DUMPP`/`DUMPI`/`DUMPW` env
+/// vars is set. The `parallel` path runs the serial code order then so
+/// call numbering and errorline traces stay deterministic.
+#[cfg(feature = "parallel")]
+fn dump_env_set() -> bool {
+    std::env::var_os("DUMPT").is_some()
+        || std::env::var_os("DUMPP").is_some()
+        || std::env::var_os("DUMPI").is_some()
+        || std::env::var_os("DUMPW").is_some()
+}
+
+/// The `(c, yy, x)` band-measure sweep restricted to `errorline[lo..hi]`.
+/// Element `i`'s `*=` sequence follows the serial band order, so striping
+/// `errorline` into contiguous per-thread ranges is bit-exact against the
+/// serial loop (each element is folded by exactly one thread, in order).
+#[cfg(feature = "parallel")]
+fn measure_bands_span(
+    comps_r: &[Component; 3],
+    comps_d: &[Component; 3],
+    lo: usize,
+    hi: usize,
+    errorline: &mut [f32],
+) {
+    for c in 0..3 {
+        for yy in 0..8 {
+            for x in 0..8 {
+                let br = &comps_r[c].bands[x][yy];
+                let bd = &comps_d[c].bands[x][yy];
+                if c == 0 && x == 0 && yy == 0 {
+                    // EXTENDED_FILTER: the Y-DC band is measured on its
+                    // four 5×5 low/high subbands (same factors as the
+                    // serial loop).
+                    let l0 = LUMA_TBL[0] as f32;
+                    let subs: [(usize, usize, f32); 4] = [
+                        (0, 0, l0 / 90.0),
+                        (1, 0, l0 / 15.0),
+                        (0, 1, l0 / 15.0),
+                        (1, 1, l0 / 20.0),
+                    ];
+                    let fr = br.filtered.as_ref().unwrap();
+                    let fd = bd.filtered.as_ref().unwrap();
+                    for &(a, b, vb) in &subs {
+                        measure_in_band(
+                            &fr[a][b][lo..hi],
+                            &fd[a][b][lo..hi],
+                            &br.mask[lo..hi],
+                            &bd.mask[lo..hi],
+                            vb,
+                            errorline,
+                        );
+                    }
+                } else {
+                    measure_in_band(
+                        &br.coeff[lo..hi],
+                        &bd.coeff[lo..hi],
+                        &br.mask[lo..hi],
+                        &bd.mask[lo..hi],
+                        1.0,
+                        errorline,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -1183,23 +1394,72 @@ pub fn mdct_psnr_srgb8(
             &mut rows_d,
         );
 
-        let mut ready = false;
-        for c in 0..3 {
-            ready = img_r.comps[c].push_line(&rows_r[c]);
-            img_d.comps[c].push_line(&rows_d[c]);
-        }
+        #[cfg(feature = "parallel")]
+        let ready = {
+            // Components are independent ring buffers; the bit pattern of
+            // each comp's output is unchanged by running them on threads.
+            // `ready` keeps the serial semantics — the last comp's flag.
+            let vr: Vec<bool> = img_r
+                .comps
+                .par_iter_mut()
+                .zip(rows_r.par_iter())
+                .map(|(c, r)| c.push_line(r))
+                .collect();
+            let _vd: Vec<bool> = img_d
+                .comps
+                .par_iter_mut()
+                .zip(rows_d.par_iter())
+                .map(|(c, r)| c.push_line(r))
+                .collect();
+            vr[2]
+        };
+        #[cfg(not(feature = "parallel"))]
+        let ready = {
+            let mut ready = false;
+            for c in 0..3 {
+                ready = img_r.comps[c].push_line(&rows_r[c]);
+                img_d.comps[c].push_line(&rows_d[c]);
+            }
+            ready
+        };
         if ready {
             // SplitWork: run the sliding DCT (Component::Run) and push the
             // 64 band rows into their masking pipelines (Pooling::Run).
-            for c in 0..3 {
-                img_r.comps[c].run_dct();
-                img_d.comps[c].run_dct();
+            #[cfg(feature = "parallel")]
+            {
+                // Each (image, comp) runs its own sliding-window DCT —
+                // disjoint state, identical results. The DUMPP/DUMPI/DUMPW
+                // forensic env vars fall back to the serial order so PCALL
+                // numbering stays deterministic for bit-level diffing.
+                if dump_env_set() {
+                    for c in 0..3 {
+                        img_r.comps[c].run_dct();
+                        img_d.comps[c].run_dct();
+                    }
+                } else {
+                    img_r.comps.par_iter_mut().for_each(|c| c.run_dct());
+                    img_d.comps.par_iter_mut().for_each(|c| c.run_dct());
+                }
+                // All 384 band masking pipelines are independent objects.
+                let kernel = &kernel;
+                let mut all: Vec<&mut BandMask> = Vec::with_capacity(384);
+                for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
+                    all.extend(comp.bands.as_flattened_mut().iter_mut());
+                }
+                all.into_par_iter().for_each(|b| b.push_row(kernel));
             }
-            for c in 0..3 {
-                for x in 0..8 {
-                    for yy in 0..8 {
-                        img_r.comps[c].bands[x][yy].push_row(&kernel);
-                        img_d.comps[c].bands[x][yy].push_row(&kernel);
+            #[cfg(not(feature = "parallel"))]
+            {
+                for c in 0..3 {
+                    img_r.comps[c].run_dct();
+                    img_d.comps[c].run_dct();
+                }
+                for c in 0..3 {
+                    for x in 0..8 {
+                        for yy in 0..8 {
+                            img_r.comps[c].bands[x][yy].push_row(&kernel);
+                            img_d.comps[c].bands[x][yy].push_row(&kernel);
+                        }
                     }
                 }
             }
@@ -1219,54 +1479,81 @@ pub fn mdct_psnr_srgb8(
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0);
-            for c in 0..3 {
-                for yy in 0..8 {
-                    for x in 0..8 {
-                        let br = &img_r.comps[c].bands[x][yy];
-                        let bd = &img_d.comps[c].bands[x][yy];
-                        if c == 0 && x == 0 && yy == 0 {
-                            // EXTENDED_FILTER: the Y-DC band is measured on
-                            // its four 5×5 low/high subbands instead of the
-                            // raw coefficient, with these visbase factors.
-                            let l0 = LUMA_TBL[0] as f32;
-                            let subs: [(usize, usize, f32); 4] = [
-                                (0, 0, l0 / 90.0),
-                                (1, 0, l0 / 15.0),
-                                (0, 1, l0 / 15.0),
-                                (1, 1, l0 / 20.0),
-                            ];
-                            let fr = br.filtered.as_ref().unwrap();
-                            let fd = bd.filtered.as_ref().unwrap();
-                            for &(a, b, vb) in &subs {
+            #[cfg(feature = "parallel")]
+            let serial_measure = dump_env_set();
+            #[cfg(not(feature = "parallel"))]
+            let serial_measure = true;
+            if serial_measure {
+                for c in 0..3 {
+                    for yy in 0..8 {
+                        for x in 0..8 {
+                            let br = &img_r.comps[c].bands[x][yy];
+                            let bd = &img_d.comps[c].bands[x][yy];
+                            if c == 0 && x == 0 && yy == 0 {
+                                // EXTENDED_FILTER: the Y-DC band is measured on
+                                // its four 5×5 low/high subbands instead of the
+                                // raw coefficient, with these visbase factors.
+                                let l0 = LUMA_TBL[0] as f32;
+                                let subs: [(usize, usize, f32); 4] = [
+                                    (0, 0, l0 / 90.0),
+                                    (1, 0, l0 / 15.0),
+                                    (0, 1, l0 / 15.0),
+                                    (1, 1, l0 / 20.0),
+                                ];
+                                let fr = br.filtered.as_ref().unwrap();
+                                let fd = bd.filtered.as_ref().unwrap();
+                                for &(a, b, vb) in &subs {
+                                    measure_in_band(
+                                        &fr[a][b],
+                                        &fd[a][b],
+                                        &br.mask,
+                                        &bd.mask,
+                                        vb,
+                                        &mut errorline,
+                                    );
+                                }
+                                #[cfg(feature = "std")]
+                                if dline == Some(y - 12) {
+                                    eprintln!("EL DC-EXT -> {:08x}", errorline[tgt_i].to_bits());
+                                }
+                            } else {
                                 measure_in_band(
-                                    &fr[a][b],
-                                    &fd[a][b],
+                                    &br.coeff,
+                                    &bd.coeff,
                                     &br.mask,
                                     &bd.mask,
-                                    vb,
+                                    1.0,
                                     &mut errorline,
                                 );
                             }
                             #[cfg(feature = "std")]
                             if dline == Some(y - 12) {
-                                eprintln!("EL DC-EXT -> {:08x}", errorline[tgt_i].to_bits());
+                                eprintln!(
+                                    "EL c{c} x{x} y{yy} -> {:08x}",
+                                    errorline[tgt_i].to_bits()
+                                );
                             }
-                        } else {
-                            measure_in_band(
-                                &br.coeff,
-                                &bd.coeff,
-                                &br.mask,
-                                &bd.mask,
-                                1.0,
-                                &mut errorline,
-                            );
-                        }
-                        #[cfg(feature = "std")]
-                        if dline == Some(y - 12) {
-                            eprintln!("EL c{c} x{x} y{yy} -> {:08x}", errorline[tgt_i].to_bits());
                         }
                     }
                 }
+            }
+            #[cfg(feature = "parallel")]
+            if !serial_measure {
+                // errorline[i] *= ef(-p) is a per-element multiplicative
+                // fold, so striping the row into contiguous ranges keeps
+                // every element's `*=` sequence in the serial (c,yy,x)
+                // band order — bit-identical to the serial loop.
+                let w = errorline.len();
+                let stripes = (rayon::current_num_threads() * 2).min(w.max(1));
+                let stripe_len = w.div_ceil(stripes);
+                let (cr, cd) = (&img_r.comps, &img_d.comps);
+                errorline
+                    .par_chunks_mut(stripe_len)
+                    .enumerate()
+                    .for_each(|(si, el)| {
+                        let lo = si * stripe_len;
+                        measure_bands_span(cr, cd, lo, lo + el.len(), el);
+                    });
             }
             // The reference's `error += 1.0f - errorline[i]` loop is
             // vectorized by GCC `-fassociative-math` into an 8-lane f32

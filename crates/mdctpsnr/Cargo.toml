@@ -15,9 +15,13 @@ publish = false
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
 std = []
+# Rayon row-band parallelism over the independent masking pipelines and
+# column-striped errorline measurement. Implies std (rayon requires it).
+parallel = ["std", "dep:rayon"]
 
 [dependencies]
 libm = "0.2.16"
+rayon = { version = "1.10", optional = true }
 
 # Lint EXCEPTION crate: carries existing unsafe debt, so it cannot
 # inherit [workspace.lints] — unsafe_code is `forbid` there and

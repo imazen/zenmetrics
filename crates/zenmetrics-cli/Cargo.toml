@@ -608,7 +608,7 @@ msssim = { workspace = true, optional = true, features = ["std", "avx512", "para
 vif = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 iwssim = { workspace = true, optional = true, features = ["std", "parallel"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
-mdctpsnr = { workspace = true, optional = true, features = ["std"] }
+mdctpsnr = { workspace = true, optional = true, features = ["std", "parallel"] }
 vmaf = { workspace = true, optional = true, features = ["simd", "parallel"] }
 nlpd = { path = "../nlpd", optional = true }
 cubecl = { workspace = true, optional = true }
