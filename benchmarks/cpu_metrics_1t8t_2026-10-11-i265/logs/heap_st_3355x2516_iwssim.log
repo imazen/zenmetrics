@@ -1,0 +1,27 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26292MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 iwssim
+heap 3355x2516/iwssim rep0: 768.591 ms score=0.9931595295948678
+heap 3355x2516/iwssim rep1: 729.140 ms score=0.9931595295948678
+	Command being timed: "taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 iwssim"
+	User time (seconds): 1.02
+	System time (seconds): 0.51
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.53
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 697564
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 493971
+	Voluntary context switches: 169
+	Involuntary context switches: 490
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 1s | peak-RSS 0.67GiB | min-avail 26292MiB | peak-load 2.67

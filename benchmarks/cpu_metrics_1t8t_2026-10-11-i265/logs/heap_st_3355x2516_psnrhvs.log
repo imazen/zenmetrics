@@ -1,0 +1,27 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=26288MiB :: env RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 /usr/bin/time -v taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 psnrhvs
+heap 3355x2516/psnrhvs rep0: 99.305 ms score=28.056639812220126
+heap 3355x2516/psnrhvs rep1: 99.795 ms score=28.056639812220126
+	Command being timed: "taskset -c 2 /home/lilith/work/zen/zenmetrics/target/release/new-metrics-wall heap 3355x2516 psnrhvs"
+	User time (seconds): 0.14
+	System time (seconds): 0.09
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.24
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 253980
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 111862
+	Voluntary context switches: 8
+	Involuntary context switches: 56
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 0s | peak-RSS 0.24GiB | min-avail 26288MiB | peak-load 2.54

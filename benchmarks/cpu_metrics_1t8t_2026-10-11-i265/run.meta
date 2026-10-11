@@ -4,3 +4,17 @@ bin_sha256=86abeef4c1e6c0c0bc1907cbafc80600bdb544670ccd0d2aa781aface89434b0
 content=photo (zenmetrics-corpus source.png vs q20.jpg, mirror-tiled)
 sizes=1024 3355x2516 one_core=2 eight_cores=0-7
 command=scripts/cpu_metrics_1t8t.sh benchmarks/cpu_metrics_1t8t_2026-10-11-i265 1024 3355x2516
+
+post_run_notes:
+  mt8_photo_1024 leg first run overlapped a vifvec wall-benchmark on cores
+  0-7 (agent error) — leg re-ran clean at ~05:0x UTC (see logs/mt8_photo_1024-rerun.log).
+  ssim and vifvec rows in mt8_photo_*.tsv patched from fresh per-metric legs
+  (driver binary rebuilt post-sweep for vifvec+ssim commits 907b0f65/01c9e8b4):
+    1024      ssim 50.0628ms vifvec 98.5429ms  (8t, taskset 0-7, RAYON=8)
+    3355x2516 ssim 411.678996ms vifvec 756.486028ms
+  1t vifvec 416.28ms / ssim 152.45ms from the same per-metric legs.
+  vmaf panics on odd width 3355 (expected — needs even dims).
+host_detail: i265 = Core Ultra 7 265K Arrow Lake; cpus 0-7 = P-cores
+  (5.5GHz, taskset 0-7 correct), cpus 8-19 = E-cores (4.6GHz). 1t legs
+  pinned cpu 2 (P-core). Cross-host vs Oct-9 r7900x (Zen4): scalar f64
+  workloads run ~10-25% slower on i265; Oct-9 doc notes ±2x leg noise.
