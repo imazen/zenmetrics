@@ -20,8 +20,9 @@ See global ~/.claude/CLAUDE.md for general instructions.
   `-gpu-core`, `-math`, `-corpus`), and so is the evaluation crate:
   `zenmetrics-stats` (renamed from `zenstats`).
 - **`dvifmish` may never be published**: it is an independent reimplementation
-  reconstructed from the published description, and publishing it needs the
-  original author's consent.
+  reconstructed from a public talk (the author has not released code), and
+  publishing it needs the original author's consent. Its manifest says
+  `publish = false` (dvifmish `0fa38910`).
 - `crates/margarine` (package `margarine-lab`) becomes `margarine-lab` throughout
   once it is cleaned up.
 - `zen-iqa` is a third-party project; do not use `zeniqa`-like names.
