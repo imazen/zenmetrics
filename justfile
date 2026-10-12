@@ -321,6 +321,17 @@ lpf-rank-check:
 ranked-zenbench binary threads prefix metrics size="1024":
     bash scripts/bench/ranked-metric-zenbench.sh "{{binary}}" "{{threads}}" "{{prefix}}" "{{metrics}}" "{{size}}"
 
+# Prepare a fresh-process exploratory A/B with A/A and an exact score-bit checker.
+ranked-pair-plan baseline candidate baseline_rev candidate_rev output threads="1" cpus="2":
+    python3 -B scripts/bench/ranked-metric-pair.py plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{output}}" --threads "{{threads}}" --cpus "{{cpus}}"
+
+ranked-pair runner plan output cpus="2":
+    TMPDIR="$HOME/tmp" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- "{{runner}}" exec --cpu-policy auto --cpu-set "{{cpus}}" "{{runner}}" -- pair "{{plan}}" --output "{{output}}" --wait 30
+
+# Explicit system scope when the user manager lacks delegated cpuset control.
+ranked-pair-scope runner plan output cpus="2":
+    sudo -n systemd-run --scope --quiet --property=AllowedCPUs={{cpus}} --property=MemoryMax=16G --property=MemorySwapMax=0 runuser -u "$(id -un)" -- env TMPDIR="$HOME/tmp" ZENBENCH_CPU_SET="{{cpus}}" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- "{{runner}}" pair "{{plan}}" --output "{{output}}" --wait 30
+
 # Local V40 package verification; no enqueue or publication.
 v40-fit-tools:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools

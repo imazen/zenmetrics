@@ -15,6 +15,8 @@ heavy="$HOME/work/claudehints/scripts/run-heavy"
   printf 'modes: %s\nmin_rounds: %s\ngroup_wall_s: %s\ncell_max_s: %s\n' \
     "$NMW_MODES" "$NMW_MIN_ROUNDS" "$NMW_GROUP_WALL_S" "$NMW_CELL_MAX_S"
   if [ "$threads" = 1 ]; then
+    export ZENBENCH_PIN=2
+    printf 'coordinator_pin: 2 (scoped affinity; process boundary is reported separately)\n'
     "$heavy" --mem 16G -- perf stat -e instructions,cycles -- taskset -c 2 \
       "$binary" "$size" "$prefix.tsv" "$metrics"
   else
