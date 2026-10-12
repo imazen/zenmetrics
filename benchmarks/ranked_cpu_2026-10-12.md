@@ -383,6 +383,56 @@ small inputs to its native dimensions.
 the original text and hashes; [metadata](iwssim_rolling_2026-10-12.meta)
 records binary/source hashes, commands, profile and test provenance.
 
+### IW-SSIM distorted residual in strip pass one
+
+The next strip profile records 8,379 cycles samples, zero lost; pyramid
+construction has 3.29% self samples and its vertical/horizontal expansion
+kernels have 1.90%/1.03%. Pass one uses reference Laplacian bands for the
+global covariance, but uses only the distorted residual lowpass for the
+top-scale contrast score. The candidate builds that residual with the
+same Gaussian steps and omits the four unused distorted Laplacian bands.
+Pass two still rebuilds both pyramids. The existing materialized oracle
+now also compares every residual coefficient by exact bits.
+
+Both binaries use `parallel,avx512`, runtime dispatch, the 3355×2516 gray
+fixture and strip body 512. The r7900x observations ran under substantial
+ambient load (recorded peak load 24.30–25.58). The same binaries were then
+measured on i134, pinned to its P-core 2, with ten calls and low ambient
+load. Counters on that host are the `cpu_core` PMU; the unused Atom PMU
+reports no counts.
+
+| Measurement | Baseline | Residual only |
+|---|---:|---:|
+| r7900x, 1T ms/call, five calls | 1435.98 | 1458.12 |
+| r7900x, 16T ms/call, five calls | 1452.99 | 1447.68 |
+| r7900x, 1T instructions | 58,915,393,564 | 57,388,294,693 |
+| r7900x, 1T cycles | 37,666,724,792 | 38,236,292,283 |
+| r7900x, 1T maximum RSS, KiB (`time -v`) | 364,496 | 365,004 |
+| r7900x, 16T maximum RSS, KiB (`time -v`) | 363,620 | 364,080 |
+| i134, 1T ms/call, ten calls | 882.45 | 855.13 |
+| i134, 1T instructions | 114,603,515,550 | 112,119,649,253 |
+| i134, 1T cycles | 40,107,275,238 | 38,544,796,027 |
+| i134, 1T maximum RSS, KiB (`time -v`) | 368,424 | 365,092 |
+| Run-heavy peak RSS, GiB, all six runs | 0.35 | 0.35 |
+
+The instruction reduction appears on both hosts. Timing remains
+exploratory and below the suite's 15% caution; r7900x shows no wall or
+memory improvement. The small i134 RSS change is an observation for that
+run, not a general memory claim. Baseline and candidate retain identical
+score bits on each host: `3fefff0b341ed75d` on r7900x and
+`3fefff0b351388ed` on i134. Cross-host score identity is not claimed.
+
+Both feature configurations pass all 42 tests, including the Python
+goldens and strip suite. Release-mode residual/coefficient parity,
+all-target all-feature clippy with `-D warnings`, rustfmt and shell syntax
+checks pass. The wall helper accepts an explicit heavy-wrapper path and
+an optional privileged perf invocation for the remote host; its default
+behavior is unchanged.
+
+[Complete wall/resource logs](iwssim_residual_wall_2026-10-12.json) retain
+all six outputs and hashes; [metadata](iwssim_residual_2026-10-12.meta)
+records provenance, commands, limitations and verification resources.
+
 ## PSNR-HVS
 
 Baseline source: `62b5a420`. Its native profile places 38.91% of sampled

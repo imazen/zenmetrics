@@ -15,8 +15,9 @@
 //! the eigendecomposition depends on the full image's `Y^T·Y` sum.
 //!
 //! - **Pass 1** (per strip):
-//!   1. Build the per-strip Laplacian pyramid (`build_laplacian_pyramid`)
-//!      from the strip's gray pixels (body + halo).
+//!   1. Build the reference's per-strip Laplacian pyramid and the distorted
+//!      residual lowpass from the strip's gray pixels (body + halo). Finer
+//!      distorted bands are unused in this pass and are not expanded.
 //!   2. For each scale s ∈ 0..NUM_SCALES-1 with IW enabled:
 //!      - Accumulate the neighborhood Gram `Y^T·Y` directly from the
 //!        strip's body rows via `weights::gram_accumulate` (the Y
@@ -126,7 +127,9 @@ use alloc::vec::Vec;
 use crate::eig::{EigResult, decompose_and_invert};
 use crate::params::IwssimParams;
 use crate::pipeline::WarmState;
-use crate::pyramid::{PyrLevel, build_laplacian_pyramid, imenlarge2, pyramid_dims};
+use crate::pyramid::{
+    PyrLevel, build_coarsest_residual, build_laplacian_pyramid, imenlarge2, pyramid_dims,
+};
 use crate::ssim::{CsStats, compute_cs};
 use crate::{Error, IwssimScore, NUM_SCALES, Result};
 
@@ -589,11 +592,11 @@ pub(crate) fn score_strip_internal(
         let ref_strip = slice_rows(ref_work, work_w, sg.strip_start, sg.strip_end);
         let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
 
-        // Per-strip Laplacian pyramid.
+        // Covariance needs reference bands; distorted input contributes only
+        // its residual lowpass to this pass's top-scale contrast score.
         let ref_levels = build_laplacian_pyramid(ref_strip, work_w, strip_h, NUM_SCALES);
-        let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
+        let dis_residual = build_coarsest_residual(dis_strip, work_w, strip_h, NUM_SCALES);
         let lp_ref_v = split_levels(&ref_levels);
-        let lp_dis_v = split_levels(&dis_levels);
 
         // For each IW scale, accumulate Y^T·Y.
         if params.iw_flag {
@@ -709,7 +712,7 @@ pub(crate) fn score_strip_internal(
                 // Compute cs over the entire strip at scale s
                 let cs_full = compute_cs(
                     lp_ref_v[s],
-                    lp_dis_v[s],
+                    &dis_residual,
                     strip_h_at_s,
                     w_s,
                     true, // with_luminance for the top scale

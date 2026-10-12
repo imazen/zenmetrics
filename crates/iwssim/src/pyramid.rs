@@ -239,13 +239,7 @@ pub(crate) fn build_laplacian_pyramid(
     for s in 0..(n_levels - 1) {
         let (w_cur, h_cur) = dims[s];
         let (w_nxt, h_nxt) = dims[s + 1];
-        // Horizontal pass: (h_cur, w_cur) → (h_cur, w_nxt).
-        let mut scratch = alloc::vec![0.0_f32; h_cur * w_nxt];
-        crate::simd_kernels::corr_dn_h(&g, h_cur, w_cur, w_nxt, &mut scratch);
-        // Vertical pass: (h_cur, w_nxt) → (h_nxt, w_nxt).
-        let mut g_nxt = alloc::vec![0.0_f32; h_nxt * w_nxt];
-        crate::simd_kernels::corr_dn_v(&scratch, h_cur, w_nxt, h_nxt, &mut g_nxt);
-        drop(scratch);
+        let g_nxt = gaussian_step(&g, w_cur, h_cur, w_nxt, h_nxt);
 
         // LP[s] = G[s] − expand(G[s+1]).
         let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
@@ -271,6 +265,32 @@ pub(crate) fn build_laplacian_pyramid(
         lp: g.into_owned(),
     });
     levels
+}
+
+fn gaussian_step(src: &[f32], w: usize, h: usize, next_w: usize, next_h: usize) -> Vec<f32> {
+    let mut scratch = alloc::vec![0.0_f32; h * next_w];
+    crate::simd_kernels::corr_dn_h(src, h, w, next_w, &mut scratch);
+    let mut next = alloc::vec![0.0_f32; next_h * next_w];
+    crate::simd_kernels::corr_dn_v(&scratch, h, next_w, next_h, &mut next);
+    next
+}
+
+/// Build the residual lowpass without expanding unused finer Laplacian bands.
+pub(crate) fn build_coarsest_residual(
+    img: &[f32],
+    w: usize,
+    h: usize,
+    n_levels: usize,
+) -> Vec<f32> {
+    assert_eq!(img.len(), w * h);
+    assert!(n_levels > 0);
+    let dims = pyramid_dims(w, h, n_levels);
+    let mut g = Cow::Borrowed(img);
+    for pair in dims.windows(2) {
+        let ((w, h), (next_w, next_h)) = (pair[0], pair[1]);
+        g = Cow::Owned(gaussian_step(&g, w, h, next_w, next_h));
+    }
+    g.into_owned()
 }
 
 /// `imenlarge2` matches the Python reference exactly:
@@ -612,6 +632,12 @@ mod tests {
                 for depth in 1..=max_depth {
                     let expected = materialized_laplacian_pyramid(&image, w, h, depth);
                     let actual = build_laplacian_pyramid(&image, w, h, depth);
+                    let residual = build_coarsest_residual(&image, w, h, depth);
+                    let old_residual = &expected.last().unwrap().lp;
+                    assert_eq!(residual.len(), old_residual.len());
+                    for (a, b) in residual.iter().zip(old_residual) {
+                        assert_eq!(a.to_bits(), b.to_bits(), "residual {w}x{h}, depth {depth}");
+                    }
                     assert_eq!(actual.len(), expected.len());
                     for (s, (a, b)) in actual.iter().zip(&expected).enumerate() {
                         assert_eq!((a.w, a.h), (b.w, b.h));

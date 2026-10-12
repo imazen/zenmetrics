@@ -1,0 +1,27 @@
+Date: 2026-10-12. Hosts: r7900x and i134. Baseline production source: 41c8c9e8f94536d4df4d54ebddeb84adbb370460; no later production metric changes through 312c09efdda1f306fd3f7f730cd82d408ae34d8b.
+Candidate pyramid.rs SHA-256: c2ecd5eac9ba35315296815d5de370f011451f1f09ca672704d527f82b86bede.
+Candidate strip.rs SHA-256: 0fe33d293335849a0c24ed96bc029ae0abcd536eb3d811f85154f9b1527bbc16.
+Baseline binary: ~/tmp/zm-ranked-binaries/iwssim-rolling-candidate; SHA-256 58184de58bb1b0e63d9a01f06d27182706cee158e0b2ef19cab04fe193d18a7e.
+Candidate binary: ~/tmp/zm-ranked-binaries/iwssim-residual-final-candidate; SHA-256 6db61fcbc5e5ced4c67ff58d942c1436771f0a834065e8c2f1bf98f96db766dc.
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just snap-cargo @ build --release -p iwssim --features parallel,avx512 --example wall.
+Runtime SIMD dispatch; no target-cpu=native. Ordinary gray wall example, patterned 3355x2516, strip body 512. Five calls on r7900x, ten on i134. One thread pinned to CPU 2; sixteen-thread pool unpinned.
+Local command: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-wall <binary> <1-or-16> <new-log> 3355 2516 5.
+Remote command: RANKED_RUN_HEAVY=$HOME/tmp/zm-iqa-dct-run-heavy RANKED_PERF_SUDO=1 IWSSIM_WALL_STRIP_HEIGHT=512 bash ranked-metric-wall.sh <binary> 1 <new-log> 3355 2516 10.
+i134 inputs are in ~/tmp/zm-iwssim-residual-20261012/. Launch through sudo systemd-run with MemoryMax=16G, MemorySwapMax=0, AllowedCPUs=2, normal User and explicit WorkingDirectory/TMPDIR. The inner run-heavy reports no user scope; these particular outer unit properties were queried after collection, so live enforcement was not independently recorded. taskset directly constrains the measured binary to CPU 2. No global perf policy was changed.
+i134 counters use cpu_core/instructions/ and cpu_core/cycles/. Atom counters were not counted because the task ran on a P-core.
+All six full stdout/stderr logs and their SHA-256 hashes are retained in iwssim_residual_wall_2026-10-12.json. Original copies on r7900x: ~/tmp/zm-iwssim-residual-walls/.
+Score bits: r7900x baseline/candidate 3fefff0b341ed75d; i134 baseline/candidate 3fefff0b351388ed. Per-host exact A/B only. Exploratory observations; no Confirm verdict, confirmation interval, general wall improvement or general memory reduction.
+Fresh baseline strip profile: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-profile <baseline-binary> ~/tmp/zm-iwssim-rolling-profile 3355 2516 10.
+Profile data: ~/tmp/zm-iwssim-rolling-profile.data, 67463640 bytes, associated .log/.report. 8379 cycles samples, zero lost; self shares pyramid 3.29%, up_conv_v 1.90%, up_conv_h 1.03%. Resolve with ls -l ~/tmp/zm-iwssim-rolling-profile*.
+Profile resource: run-heavy: done rc=0 10s | peak-RSS 0.35GiB | min-avail 24973MiB | peak-load 0.36
+All-feature tests: 25 unit + 3 Python goldens + 14 strip tests, zero failed or ignored. run-heavy: done rc=0 18s | peak-RSS 0.40GiB | min-avail 20996MiB | peak-load 12.40
+No-default tests: same 42 tests passed. run-heavy: done rc=0 18s | peak-RSS 0.39GiB | min-avail 21081MiB | peak-load 18.08
+Release exact materialized-oracle/residual test: passed. run-heavy: done rc=0 6s | peak-RSS 0.37GiB | min-avail 21254MiB | peak-load 22.52
+All-target all-feature no-deps clippy -D warnings: passed. run-heavy: done rc=0 3s | peak-RSS 0.17GiB | min-avail 21864MiB | peak-load 22.52
+Final wall build: run-heavy: done rc=0 8s | peak-RSS 0.28GiB | min-avail 21732MiB | peak-load 22.52
+Local baseline 1T: run-heavy: done rc=0 8s | peak-RSS 0.35GiB | min-avail 20828MiB | peak-load 25.58
+Local candidate 1T: run-heavy: done rc=0 8s | peak-RSS 0.35GiB | min-avail 21020MiB | peak-load 24.30
+Local baseline 16T: run-heavy: done rc=0 7s | peak-RSS 0.35GiB | min-avail 21270MiB | peak-load 25.40
+Local candidate 16T: run-heavy: done rc=0 7s | peak-RSS 0.35GiB | min-avail 21037MiB | peak-load 24.80
+i134 baseline: run-heavy: done rc=0 9s | peak-RSS 0.35GiB | min-avail 27858MiB | peak-load 0.39
+i134 candidate: run-heavy: done rc=0 9s | peak-RSS 0.35GiB | min-avail 27722MiB | peak-load 0.74
