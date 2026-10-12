@@ -325,3 +325,9 @@ The 2026-10-12 [CUDA deployment receipt](../benchmarks/iqa_cuda_deployment_2026-
 records 24/24 complete worker observations on r5600g. i134 passed all direct
 controls but only 12/24 worker observations after a driver replacement; its
 intermittent CUDA initialization failures leave that deployment unqualified.
+
+The [post-reboot i134 panel](../benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.meta)
+subsequently passes all 24 direct controls and all 24 native worker
+observations. Earlier failed attempts remain retained. These panels contain
+six CUDA variants, each cold and with a retained instance, with separate
+ordinary-latency and instrumented-memory processes.

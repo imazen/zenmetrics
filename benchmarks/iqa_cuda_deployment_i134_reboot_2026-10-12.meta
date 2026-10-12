@@ -1,0 +1,13 @@
+Follow-up to iqa_cuda_deployment_2026-10-12.meta; earlier partial attempts remain historical evidence.
+User approved reboot after checking active work. No builds, containers, metric jobs or GPU contexts were running; all recognized agents were idle/done. A changed boot ID and fresh uptime confirmed reboot.
+Hardware after reboot: NVIDIA GeForce GTX 1080 Ti, proprietary driver 580.178.04, CUDA runtime SDK manifest 39e2acdd0eb8b0dbd3372808aaeb8499e455b9691d94f975e2b05a1fe178da1f.
+Driver and runner SHA-256 values unchanged from the preceding CUDA receipt; native GPU driver source ec453ab069121c3c5b04ccdefcc8cf7e8ae5b005.
+All 24 direct controls passed: six variants x cold/warm_instance x packed/padded, ordinary/instrumented exact scalar bits. controls.json SHA-256: 05d6b28d65f74a9b4284bfd1a88602a9015f64b4f93e1a94830bed9d7023fc95.
+Direct resource: run-heavy: done rc=0 41s | peak-RSS 0.23GiB | min-avail 26821MiB | peak-load 1.67
+Native worker: 24/24 packet.status=complete; twelve ordinary-latency products and twelve separate instrumented-memory products. Actual inspected CUDA adapter matches the declared card. No accuracy or speed acceptance is certified.
+Native command: just iqa-gpu-deployment-bench <GPU-binaries> <runner> <controls-reboot> <fleet-observations-reboot> i134 performance_l320480K <scoped-SDK>.
+Worker resource: run-heavy: done rc=0 75s | peak-RSS 0.25GiB | min-avail 27926MiB | peak-load 1.39
+Live outer system scope verified: AllowedCPUs=2, MemoryMax=17179869184, MemorySwapMax=0. Inner run-heavy has no user scope; the outer system scope supplies the hard CPU/memory boundaries. Supervisor peak RSS is separate from each child observation's heap/OS-resident quantities; device memory is unmeasured.
+This first post-reboot panel used the targeted NVIDIA child-module unload rule. Override SHA-256: a5bd3bdde6b1b375cde61a5f45fa26bbbaf82ba465ea49bde1d3f2ea28fd7587. A subsequent vendor-rule panel records cleanup separately.
+Raw resolving path on i134: ~/tmp/zm-iqa-cuda-20261012/{controls-reboot,fleet-observations-reboot}/. Resolve current hardware with nvidia-smi --query-gpu=name,driver_version --format=csv,noheader.
+Observation JSONL SHA-256: ce7c9d233c443ab389d4c4ebaee85af573dd6a9bdaf5f146fb3c664b0bb3bb2c

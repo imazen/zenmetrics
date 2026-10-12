@@ -1,0 +1,3 @@
+run-heavy: mem-cap=NONE (no systemd user scope — niced+monitored only) jobs=1/1 avail=28178MiB :: python3 -B benchmark_iqa_deployment.py binaries /home/lilith/tmp/zm-iqa-dct-20261012/binaries/zenbench - - fleet-observations-reboot i134 performance_l320480K --gpu-only --gpu-controls controls-reboot --gpu-sdk sdk
+{"captured": 24, "complete": 24, "native_routes": 0, "gpu_variants": 6, "machine": "i134", "domain": "performance_l320480K", "qualification": "deployment and descriptive observations; no accuracy/speed acceptance"}
+run-heavy: done rc=0 75s | peak-RSS 0.25GiB | min-avail 27926MiB | peak-load 1.39
