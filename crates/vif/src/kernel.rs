@@ -58,31 +58,6 @@ fn decimate(x: &[f64], w: usize, h: usize) -> (usize, usize, Vec<f64>) {
     (w2, h2, out)
 }
 
-/// Shared per-scale elementwise products feeding the five `'valid'`
-/// filters: `im1²`, `im2²`, `im1·im2`.
-fn product_planes(im1: &[f64], im2: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-    let mut p1 = vec![0.0; im1.len()];
-    let mut p2 = vec![0.0; im1.len()];
-    let mut pp = vec![0.0; im1.len()];
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
-        use rayon::prelude::*;
-        p1.par_iter_mut()
-            .zip(&mut p2)
-            .zip(&mut pp)
-            .zip(im1)
-            .zip(im2)
-            .for_each(|((((o1, o2), oc), &a), &b)| {
-                (*o1, *o2, *oc) = (a * a, b * b, a * b);
-            });
-        return (p1, p2, pp);
-    }
-    for ((((o1, o2), oc), &a), &b) in p1.iter_mut().zip(&mut p2).zip(&mut pp).zip(im1).zip(im2) {
-        (*o1, *o2, *oc) = (a * a, b * b, a * b);
-    }
-    (p1, p2, pp)
-}
-
 /// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
 /// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
 /// otherwise the serial loop runs. Writes are disjoint per row either
@@ -276,85 +251,165 @@ macro_rules! score_body {
                 // it has no size guard).
                 continue;
             }
-            let (p1, p2, pp) = product_planes(&im1, &im2);
             let out_w = w - nk + 1;
             let out_h = h - nk + 1;
-            let (((mu1, s1p), (mu2, s2p)), s12p) = maybe_join(
-                || {
-                    maybe_join(
-                        || (filt(&im1, w, h), filt(&p1, w, h)),
-                        || (filt(&im2, w, h), filt(&p2, w, h)),
-                    )
-                },
-                || filt(&pp, w, h),
-            );
-
-            // GSM map: the reference's exact masking order —
-            //   sigma<0 → 0;  g = s12/(s1+eps);  sv = s2 − g·s12;
-            //   s1<eps → g=0, sv=s2, s1=0;  s2<eps → g=0, sv=0;
-            //   g<0   → sv=s2, g=0;         sv≤eps → sv=eps.
             let n = out_w * out_h;
-            let mut i = 0usize;
-            while i + $LANES <= n {
-                let m1 = <$V>::from_array_t($token, core::array::from_fn(|k| mu1[i + k]));
-                let m2 = <$V>::from_array_t($token, core::array::from_fn(|k| mu2[i + k]));
-                let v1 = <$V>::from_array_t($token, core::array::from_fn(|k| s1p[i + k]));
-                let v2 = <$V>::from_array_t($token, core::array::from_fn(|k| s2p[i + k]));
-                let vc = <$V>::from_array_t($token, core::array::from_fn(|k| s12p[i + k]));
-                let mut s1sq = (v1 - m1 * m1).max(zero);
-                let s2sq = (v2 - m2 * m2).max(zero);
-                let s12 = vc - m1 * m2;
-                let mut g = s12 / (s1sq + epsv);
-                let mut sv = s2sq - g * s12;
-                let mx = s1sq.simd_lt(epsv);
-                g = <$V>::blend(mx, zero, g);
-                sv = <$V>::blend(mx, s2sq, sv);
-                s1sq = <$V>::blend(mx, zero, s1sq);
-                let my = s2sq.simd_lt(epsv);
-                g = <$V>::blend(my, zero, g);
-                sv = <$V>::blend(my, zero, sv);
-                let mg = g.simd_lt(zero);
-                sv = <$V>::blend(mg, s2sq, sv);
-                g = <$V>::blend(mg, zero, g);
-                sv = <$V>::blend(sv.simd_le(epsv), epsv, sv);
-                let tn = one + (g * g * s1sq) / (sv + snv);
-                let td = one + s1sq / snv;
-                let (ta, da) = (tn.to_array(), td.to_array());
-                for k in 0..$LANES {
-                    num += libm::log10(ta[k]);
-                    den += libm::log10(da[k]);
+            let mut terms_n = vec![0.0; n];
+            let mut terms_d = vec![0.0; n];
+            // Fuse the five horizontal statistics, then consume their
+            // row rings directly in the vertical/GSM pass. Only the two
+            // information terms survive for fixed raster-order pooling.
+            let stripe = |first_y: usize, dst_n: &mut [f64], dst_d: &mut [f64]| {
+                let mut ring: [Vec<f64>; 5] = core::array::from_fn(|_| vec![0.0; nk * out_w]);
+                let horizontal = |y: usize, slot: usize, ring: &mut [Vec<f64>; 5]| {
+                    let r = &im1[y * w..(y + 1) * w];
+                    let d = &im2[y * w..(y + 1) * w];
+                    let mut x = 0;
+                    while x + $LANES <= out_w {
+                        let mut sums = [zero; 5];
+                        for u in 0..nk {
+                            let rv =
+                                <$V>::from_array_t($token, core::array::from_fn(|k| r[x + u + k]));
+                            let dv =
+                                <$V>::from_array_t($token, core::array::from_fn(|k| d[x + u + k]));
+                            let tap = <$V>::splat_t($token, taps[u]);
+                            let products = [rv, dv, rv * rv, dv * dv, rv * dv];
+                            for k in 0..5 {
+                                sums[k] = sums[k] + tap * products[k];
+                            }
+                        }
+                        for k in 0..5 {
+                            ring[k][slot * out_w + x..slot * out_w + x + $LANES]
+                                .copy_from_slice(&sums[k].to_array());
+                        }
+                        x += $LANES;
+                    }
+                    while x < out_w {
+                        let mut sums = [0.0; 5];
+                        for u in 0..nk {
+                            let (rv, dv) = (r[x + u], d[x + u]);
+                            let products = [rv, dv, rv * rv, dv * dv, rv * dv];
+                            for k in 0..5 {
+                                sums[k] += taps[u] * products[k];
+                            }
+                        }
+                        for k in 0..5 {
+                            ring[k][slot * out_w + x] = sums[k];
+                        }
+                        x += 1;
+                    }
+                };
+                for u in 0..nk - 1 {
+                    horizontal(first_y + u, u, &mut ring);
                 }
-                i += $LANES;
+                for (dy, (nr, dr)) in dst_n
+                    .chunks_mut(out_w)
+                    .zip(dst_d.chunks_mut(out_w))
+                    .enumerate()
+                {
+                    horizontal(first_y + dy + nk - 1, (dy + nk - 1) % nk, &mut ring);
+                    let rows: [[&[f64]; 17]; 5] = core::array::from_fn(|k| {
+                        core::array::from_fn(|u| {
+                            if u < nk {
+                                let slot = (dy + u) % nk;
+                                &ring[k][slot * out_w..(slot + 1) * out_w]
+                            } else {
+                                &[]
+                            }
+                        })
+                    });
+                    let mut x = 0;
+                    while x + $LANES <= out_w {
+                        let mut sums = [zero; 5];
+                        for u in 0..nk {
+                            let tap = <$V>::splat_t($token, taps[u]);
+                            for k in 0..5 {
+                                let v = <$V>::from_array_t(
+                                    $token,
+                                    core::array::from_fn(|lane| rows[k][u][x + lane]),
+                                );
+                                sums[k] = sums[k] + tap * v;
+                            }
+                        }
+                        let [m1, m2, v1, v2, vc] = sums;
+                        let mut s1sq = (v1 - m1 * m1).max(zero);
+                        let s2sq = (v2 - m2 * m2).max(zero);
+                        let s12 = vc - m1 * m2;
+                        let mut g = s12 / (s1sq + epsv);
+                        let mut sv = s2sq - g * s12;
+                        let mx = s1sq.simd_lt(epsv);
+                        g = <$V>::blend(mx, zero, g);
+                        sv = <$V>::blend(mx, s2sq, sv);
+                        s1sq = <$V>::blend(mx, zero, s1sq);
+                        let my = s2sq.simd_lt(epsv);
+                        g = <$V>::blend(my, zero, g);
+                        sv = <$V>::blend(my, zero, sv);
+                        let mg = g.simd_lt(zero);
+                        sv = <$V>::blend(mg, s2sq, sv);
+                        g = <$V>::blend(mg, zero, g);
+                        sv = <$V>::blend(sv.simd_le(epsv), epsv, sv);
+                        let tn = one + (g * g * s1sq) / (sv + snv);
+                        let td = one + s1sq / snv;
+                        nr[x..x + $LANES].copy_from_slice(&tn.to_array());
+                        dr[x..x + $LANES].copy_from_slice(&td.to_array());
+                        x += $LANES;
+                    }
+                    while x < out_w {
+                        let mut values = [0.0; 5];
+                        for u in 0..nk {
+                            for k in 0..5 {
+                                values[k] += taps[u] * rows[k][u][x];
+                            }
+                        }
+                        let m1 = values[0];
+                        let m2 = values[1];
+                        let mut s1sq = (values[2] - m1 * m1).max(0.0);
+                        let s2sq = (values[3] - m2 * m2).max(0.0);
+                        let s12 = values[4] - m1 * m2;
+                        let mut g = s12 / (s1sq + EPS);
+                        let mut sv = s2sq - g * s12;
+                        if s1sq < EPS {
+                            g = 0.0;
+                            sv = s2sq;
+                        }
+                        if s1sq < EPS {
+                            s1sq = 0.0;
+                        }
+                        if s2sq < EPS {
+                            g = 0.0;
+                            sv = 0.0;
+                        }
+                        if g < 0.0 {
+                            sv = s2sq;
+                            g = 0.0;
+                        }
+                        if sv <= EPS {
+                            sv = EPS;
+                        }
+                        nr[x] = 1.0 + (g * g * s1sq) / (sv + SIGMA_NSQ);
+                        dr[x] = 1.0 + s1sq / SIGMA_NSQ;
+                        x += 1;
+                    }
+                }
+            };
+            let mut ran_par = false;
+            #[cfg(feature = "parallel")]
+            if rayon::current_num_threads() > 1 {
+                use rayon::prelude::*;
+                terms_n
+                    .par_chunks_mut(out_w * 64)
+                    .zip(terms_d.par_chunks_mut(out_w * 64))
+                    .enumerate()
+                    .for_each(|(s, (nr, dr))| stripe(s * 64, nr, dr));
+                ran_par = true;
             }
-            while i < n {
-                let m1 = mu1[i];
-                let m2 = mu2[i];
-                let mut s1sq = (s1p[i] - m1 * m1).max(0.0);
-                let s2sq = (s2p[i] - m2 * m2).max(0.0);
-                let s12 = s12p[i] - m1 * m2;
-                let mut g = s12 / (s1sq + EPS);
-                let mut sv = s2sq - g * s12;
-                if s1sq < EPS {
-                    g = 0.0;
-                    sv = s2sq;
-                }
-                if s1sq < EPS {
-                    s1sq = 0.0;
-                }
-                if s2sq < EPS {
-                    g = 0.0;
-                    sv = 0.0;
-                }
-                if g < 0.0 {
-                    sv = s2sq;
-                    g = 0.0;
-                }
-                if sv <= EPS {
-                    sv = EPS;
-                }
-                num += libm::log10(1.0 + (g * g * s1sq) / (sv + SIGMA_NSQ));
-                den += libm::log10(1.0 + s1sq / SIGMA_NSQ);
-                i += 1;
+            let _ = ran_par;
+            if !ran_par {
+                stripe(0, &mut terms_n, &mut terms_d);
+            }
+            for (&tn, &td) in terms_n.iter().zip(&terms_d) {
+                num += libm::log10(tn);
+                den += libm::log10(td);
             }
         }
 
