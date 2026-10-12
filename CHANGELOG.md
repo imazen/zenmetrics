@@ -13,6 +13,9 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Changed
+- CI removes macOS Intel runners from workspace, native benchmark and margarine matrices at owner direction; macOS ARM64 remains covered.
+
 - Benchmark studies (`9787ca07`): source-backed inventory, explicit study expansion, content identity, release-artifact and reviewed correctness qualification gates, and visible unsupported cells.
 - Study drivers (`b1078783`, `a6db5270`, `992f6e1a`): all 38 SDR CPU routes, two explicit native HDR routes, and separate ordinary/instrumented release artifacts with stride and scalar-output controls.
 - Study evidence (`6b30b296`, `f78b0a49`, `50090290`): native bundle materialization, hash-verified attempt ingestion, portable SVG/HTML cost curves, descriptive fits, and compatible exploratory A/B plans with qualified per-arm correctness checks.
