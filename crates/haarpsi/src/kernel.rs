@@ -497,6 +497,167 @@ macro_rules! avg2_body {
 // Whole-score body — instantiated once per tier.
 // ------------------------------------------------------------------
 
+// The reduction constants and polynomial follow libm 0.2.16's expf,
+// src/math/expf.rs (FreeBSD e_expf.c), specialized to finite [-8, 0].
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this software is freely
+// granted, provided that this notice is preserved.
+// Keep every f32 rounding step: ordinary multiply/add, never FMA.
+#[inline]
+fn logistic_block<T: magetypes::simd::backends::F32x8Backend>(
+    token: T,
+    input: [f32; 8],
+) -> [f32; 8] {
+    type V<T> = magetypes::simd::generic::f32x8<T>;
+    let x = V::from_array_t(token, input) * V::splat_t(token, -ALPHA);
+    let xa = x.to_array();
+    if !xa
+        .iter()
+        .fold(true, |valid, &v| valid & (-8.0..=0.0).contains(&v))
+    {
+        return input.map(|v| 1.0 / (1.0 + libm::expf(-ALPHA * v)));
+    }
+    // Negative arguments truncate toward zero by rounding up. Select the
+    // same three reduction branches as expf, including their exact cutoffs.
+    let rounded = (x * V::splat_t(token, 1.4426950216) - V::splat_t(token, 0.5)).ceil();
+    let abs = x.abs();
+    let kf = V::blend(
+        abs.simd_gt(V::splat_t(token, f32::from_bits(0x3f851592))),
+        rounded,
+        V::blend(
+            abs.simd_gt(V::splat_t(token, f32::from_bits(0x3eb17218))),
+            V::splat_t(token, -1.0),
+            V::zero_t(token),
+        ),
+    );
+    let hi = x - kf * V::splat_t(token, 6.9314575195e-01);
+    let lo = kf * V::splat_t(token, 1.4286067653e-06);
+    let reduced = hi - lo;
+    let xx = reduced * reduced;
+    let c = reduced
+        - xx * (V::splat_t(token, 1.6666625440e-1) + xx * V::splat_t(token, -2.7667332906e-3));
+    let one = V::splat_t(token, 1.0);
+    let y = one + (reduced * c / (V::splat_t(token, 2.0) - c) - lo + hi);
+    let scale = V::from_array_t(
+        token,
+        kf.to_array()
+            .map(|v| f32::from_bits(((127 + v as i32) as u32) << 23)),
+    );
+    let exp = V::blend(
+        abs.simd_le(V::splat_t(token, f32::from_bits(0x39000000))),
+        one + x,
+        y * scale,
+    );
+    (one / (one + exp)).to_array()
+}
+
+#[archmage::attune(
+    _v4x_t(cfg(avx512)),
+    _v3_t,
+    _neon_t,
+    _wasm128_t,
+    _scalar_t,
+    define(f32x8)
+)]
+fn pool_band_inner(
+    token: Token,
+    ls: &Plane,
+    w: &Plane,
+    r0: usize,
+    r1: usize,
+) -> ([f64; 8], [f64; 8], Vec<(f32, f32)>) {
+    let mut acc_t = [0.0f64; 8];
+    let mut acc_w = [0.0f64; 8];
+    let mut tail = Vec::with_capacity(r1.saturating_sub(r0) * (ls.w % 8));
+    for r in r0..r1 {
+        let lr = ls.data(r);
+        let wr = w.data(r);
+        for g in 0..ls.w / 8 {
+            let base = 8 * g;
+            let l = logistic_block(token, lr[base..base + 8].try_into().unwrap());
+            let weighted = (f32x8::load_t(token, wr[base..base + 8].try_into().unwrap())
+                * f32x8::from_array_t(token, l))
+            .to_array();
+            for j in 0..8 {
+                acc_t[j] += weighted[j] as f64;
+                acc_w[j] += wr[base + j] as f64;
+            }
+        }
+        for i in 8 * (ls.w / 8)..ls.w {
+            tail.push((wr[i], lr[i]));
+        }
+    }
+    (acc_t, acc_w, tail)
+}
+
+#[cfg(test)]
+mod pooling_tests {
+    use super::*;
+
+    #[archmage::attune(
+        _v4x_t(cfg(avx512)),
+        _v3_t,
+        _neon_t,
+        _wasm128_t,
+        _scalar_t,
+        define(f32x8)
+    )]
+    fn check_logistic_inner(token: Token, values: &[f32]) {
+        for chunk in values.as_chunks::<8>().0 {
+            let actual = logistic_block(token, *chunk);
+            for j in 0..8 {
+                let expected = 1.0f32 / (1.0 + libm::expf(-ALPHA * chunk[j]));
+                if expected.is_nan() {
+                    assert!(actual[j].is_nan());
+                } else {
+                    assert_eq!(
+                        actual[j].to_bits(),
+                        expected.to_bits(),
+                        "input {}",
+                        chunk[j]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn vector_logistic_matches_libm_bits() {
+        let mut values: Vec<f32> = (0..65536)
+            .map(|i| i as f32 * (8.0 / (65535.0 * ALPHA)))
+            .collect();
+        // Neighbors of each argument-reduction boundary, including tiny
+        // arguments, plus the bounded kernel's scalar fallback domain.
+        for bits in [0x39000000, 0x3eb17218, 0x3f851592, 0x41000000] {
+            let input = f32::from_bits(bits) / ALPHA;
+            for delta in -16..=16i32 {
+                let near = f32::from_bits(input.to_bits().wrapping_add_signed(delta));
+                values.push(near);
+            }
+        }
+        values.extend_from_slice(&[
+            0.0,
+            -0.0,
+            f32::MIN_POSITIVE,
+            f32::from_bits(1),
+            -1.0,
+            10.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+        ]);
+        while !values.len().is_multiple_of(8) {
+            values.push(1.0);
+        }
+        check_logistic_inner_scalar_t(archmage::ScalarToken, &values);
+        archmage::attuned!(
+            check_logistic_inner(&values),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    }
+}
+
 /// Fixed-order logistic + weighted-sum fold of one (ls, w) map pair.
 /// gmsd's 8-lane accumulator grouping: `acc[j]` sums positions
 /// `≡ j (mod 8)` within each 8-block; tails append after the fold —
@@ -508,29 +669,12 @@ fn pool_map(ls: &Plane, w: &Plane) -> (f64, f64) {
     // thread counts fold identically (exact tier-parity preserved;
     // the grouping differs from the raster fold only in f64 ULPs).
     const BANDS: usize = 32;
-    let nblk = ls.w / 8;
     let bs = ls.h.div_ceil(BANDS);
     let band = |r0: usize, r1: usize| -> ([f64; 8], [f64; 8], Vec<(f32, f32)>) {
-        let mut acc_t = [0.0f64; 8];
-        let mut acc_w = [0.0f64; 8];
-        let mut tail = Vec::with_capacity(r1.saturating_sub(r0) * (ls.w % 8));
-        for r in r0..r1 {
-            let lr = ls.data(r);
-            let wr = w.data(r);
-            for g in 0..nblk {
-                let base = 8 * g;
-                for (j, (at, aw)) in acc_t.iter_mut().zip(acc_w.iter_mut()).enumerate() {
-                    let i = base + j;
-                    let l = 1.0f32 / (1.0 + libm::expf(-ALPHA * lr[i]));
-                    *at += (wr[i] * l) as f64;
-                    *aw += wr[i] as f64;
-                }
-            }
-            for i in 8 * nblk..ls.w {
-                tail.push((wr[i], lr[i]));
-            }
-        }
-        (acc_t, acc_w, tail)
+        archmage::attuned!(
+            pool_band_inner(ls, w, r0, r1),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        )
     };
     #[cfg(feature = "parallel")]
     let parts: Vec<([f64; 8], [f64; 8], Vec<(f32, f32)>)> = {

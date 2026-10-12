@@ -309,6 +309,10 @@ snap-cargo rev +args:
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 
+# Matched CPU-metric wall/counter runs; pass a preserved baseline or candidate example.
+ranked-wall binary threads output w="3355" h="2516" reps="5":
+    bash scripts/bench/ranked-metric-wall.sh "{{binary}}" "{{threads}}" "{{output}}" "{{w}}" "{{h}}" "{{reps}}"
+
 # Local V40 package verification; no enqueue or publication.
 v40-fit-tools:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools
@@ -437,7 +441,15 @@ iqa-bundle-check binaries runner case output:
 benchmark-native-check runner worker reader output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}} scripts/jobsys/benchmark_exec.py {{worker}} {{reader}}
 
-# Checkpoint builders run in the CI-pinned snapshot; outputs must be new directories.
+# Install locked dashboard dependencies without dependency lifecycle scripts.
+dashboard-web-check npm_bin="npm":
+    cd crates/zenfleet-dash/web && "{{npm_bin}}" ci --ignore-scripts --no-audit --no-fund --allow-remote=all
+    cd crates/zenfleet-dash/web && "{{npm_bin}}" run build
+
+vmaf-portable-check:
+    cargo check --locked -p vmaf --lib --features simd,avx512 --target aarch64-unknown-linux-gnu
+    cargo check --locked -p vmaf --lib --features simd,avx512 --target x86_64-unknown-linux-gnu
+
 checkpoint-native profile target source runner output:
     python3 scripts/checkpoint/package.py --profile {{profile}} --target {{target}} --source {{source}} --runner-source {{runner}} --out {{output}}
 

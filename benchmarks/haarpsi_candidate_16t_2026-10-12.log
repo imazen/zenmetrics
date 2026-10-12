@@ -1,0 +1,7 @@
+binary_sha256: 5dfe85fc8123f1b0b1543bb61843c72a0996b7ba18bec64301bf1abc8762852c  /home/lilith/tmp/zm-ranked-binaries/haarpsi-candidate
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/haarpsi-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24678MiB :: /home/lilith/tmp/zm-ranked-binaries/haarpsi-candidate 3355 2516 5
+3355x2516 5 reps: 34.4 ms/call (score 0.75297188785649927, bits 3fe818588024d55a)
+run-heavy: done rc=0 0s | peak-RSS 0.18GiB | min-avail 24678MiB | peak-load 3.27

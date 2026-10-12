@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Dependency updates (`74e9a0f9`, `df8973e4`): refreshed dashboard dependencies with a locked production build; updated both standalone Rustls locks to 0.23.45.
+
 - CI (`81dcb599`) removes macOS Intel runners from workspace, native benchmark and margarine matrices at owner direction; macOS ARM64 remains covered.
 - Checkpoint packaging (`e89db556`, review required): native CLI, pinned runner, fleet worker/controller and separate IQA timing/memory drivers; target-specific archives with provenance and checksums. Browser worker module exposes cached-reference zensim scores and raw maps; publication and hardware qualification remain gated.
 

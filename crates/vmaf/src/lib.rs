@@ -25,10 +25,12 @@ use std::fmt;
 
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 use archmage::X64V4xToken;
+#[cfg(feature = "simd")]
+use archmage::attune;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, attune};
+use archmage::{SimdToken, X64V3Token};
 #[cfg(feature = "simd")]
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[inline(always)]

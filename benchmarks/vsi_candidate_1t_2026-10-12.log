@@ -1,0 +1,19 @@
+binary_sha256: 217d18eb4cc0d4047fa00ac95b507ae7e8669988e2de515db59a7d5cbcfc6ad6  /home/lilith/tmp/zm-ranked-binaries/vsi-candidate
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/vsi-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24817MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/vsi-candidate 3355 2516 5
+3355x2516 5 reps: 410.0 ms/call (score 0.997725)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/vsi-candidate 3355 2516 5':
+
+       28109445107      instructions                                                          
+       11102197534      cycles                                                                
+
+       2.082940285 seconds time elapsed
+
+       1.366407000 seconds user
+       0.716213000 seconds sys
+
+
+run-heavy: done rc=0 2s | peak-RSS 0.50GiB | min-avail 24346MiB | peak-load 0.73

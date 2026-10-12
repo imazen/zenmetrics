@@ -381,10 +381,15 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
         return (w, h, x.to_vec());
     }
     let s = f / 2;
-    let mut tmp = vec![0.0f32; w * h];
-    for_each_row(&mut tmp, w, |i, trow| {
+    let w2 = w.div_ceil(f);
+    let h2 = h.div_ceil(f);
+    // The vertical pass only consumes columns 0, F, 2F, ... . Keep their
+    // horizontal sums in a compact plane, preserving each sum's order.
+    let mut tmp = vec![0.0f32; w2 * h];
+    for_each_row(&mut tmp, w2, |i, trow| {
         let row = &x[i * w..(i + 1) * w];
-        for (j, t) in trow.iter_mut().enumerate() {
+        for (oj, t) in trow.iter_mut().enumerate() {
+            let j = oj * f;
             let lo = (j + s).saturating_sub(f - 1);
             let hi = (j + s).min(w - 1);
             let mut acc = 0.0f32;
@@ -394,8 +399,6 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
             *t = acc;
         }
     });
-    let w2 = w.div_ceil(f);
-    let h2 = h.div_ceil(f);
     let mut out = vec![0.0f32; w2 * h2];
     let inv = 1.0 / (f * f) as f32;
     let tmp_ref = &tmp;
@@ -404,15 +407,57 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
         let lo = (i + s).saturating_sub(f - 1);
         let hi = (i + s).min(h - 1);
         for (oj, o) in orow.iter_mut().enumerate() {
-            let j = oj * f;
             let mut acc = 0.0f32;
             for r in lo..=hi {
-                acc += tmp_ref[r * w + j];
+                acc += tmp_ref[r * w2 + oj];
             }
             *o = acc * inv;
         }
     });
     (w2, h2, out)
+}
+
+#[cfg(test)]
+mod decimation_tests {
+    use super::*;
+
+    #[test]
+    fn retained_columns_match_full_box_filter_bits() {
+        for (w, h) in [(1, 1), (1, 17), (19, 1), (7, 11), (32, 29), (65, 63)] {
+            let x: Vec<f32> = (0..w * h)
+                .map(|i| ((i * 37 % 251) as f32 - 125.0) / ((i % 7 + 1) as f32))
+                .collect();
+            for f in 1..=12 {
+                let (dw, dh, actual) = downsample_decimate(&x, w, h, f);
+                assert_eq!((dw, dh), (w.div_ceil(f), h.div_ceil(f)));
+                for oy in 0..dh {
+                    for ox in 0..dw {
+                        let mut expected = 0.0f32;
+                        for dy in 0..f {
+                            let y = (oy * f + f / 2) as isize - (f - 1) as isize + dy as isize;
+                            if !(0..h as isize).contains(&y) {
+                                continue;
+                            }
+                            let mut row = 0.0f32;
+                            for dx in 0..f {
+                                let xx = (ox * f + f / 2) as isize - (f - 1) as isize + dx as isize;
+                                if (0..w as isize).contains(&xx) {
+                                    row += x[y as usize * w + xx as usize];
+                                }
+                            }
+                            expected += row;
+                        }
+                        expected *= 1.0 / (f * f) as f32;
+                        assert_eq!(
+                            actual[oy * dw + ox].to_bits(),
+                            expected.to_bits(),
+                            "{w}x{h}, F={f}, ({ox},{oy})"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// `conv2(Y, K, 'same')` for a 3×3 kernel — flipped kernel,

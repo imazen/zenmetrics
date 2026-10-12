@@ -1,0 +1,7 @@
+binary_sha256: cdd4819bd28048acc60eef221490bb31c70a992e7bc43ffdc051bf95cbac4b64  /home/lilith/tmp/zm-ranked-binaries/fsim-candidate
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/fsim-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24625MiB :: /home/lilith/tmp/zm-ranked-binaries/fsim-candidate 3355 2516 5
+3355x2516 5 reps: 262.1 ms/call (fsim 0.994798 fsimc 0.991394)
+run-heavy: done rc=0 1s | peak-RSS 0.11GiB | min-avail 24625MiB | peak-load 2.25
