@@ -40,37 +40,6 @@ fn gaussian_taps() -> [f32; GAUSS_K] {
 /// `imfilter(im, ones(2)/4, 'symmetric', 'same')` then `im(1:2:end,
 /// 1:2:end)` — forward 2×2 box with whole-point symmetric border
 /// (`x(n+1) → x(n)`), verified against Octave.
-fn product_planes(im1: &[f32], im2: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    let mut p1 = vec![0.0f32; im1.len()];
-    let mut p2 = vec![0.0f32; im1.len()];
-    let mut pp = vec![0.0f32; im1.len()];
-    let body = |(i, (o1, o2, op)): (usize, (&mut f32, &mut f32, &mut f32))| {
-        let (a, b) = (im1[i], im2[i]);
-        *o1 = a * a;
-        *o2 = b * b;
-        *op = a * b;
-    };
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
-        use rayon::prelude::*;
-        p1.par_iter_mut()
-            .zip(p2.par_iter_mut())
-            .zip(pp.par_iter_mut())
-            .enumerate()
-            .for_each(|(i, ((a, b), c))| body((i, (a, b, c))));
-        return (p1, p2, pp);
-    }
-    for (i, ((o1, o2), op)) in p1
-        .iter_mut()
-        .zip(p2.iter_mut())
-        .zip(pp.iter_mut())
-        .enumerate()
-    {
-        body((i, (o1, o2, op)));
-    }
-    (p1, p2, pp)
-}
-
 fn decimate(x: &[f32], w: usize, h: usize) -> (usize, usize, Vec<f32>) {
     let (w2, h2) = (w.div_ceil(2), h.div_ceil(2));
     let mut out = vec![0.0f32; w2 * h2];
@@ -86,8 +55,6 @@ fn decimate(x: &[f32], w: usize, h: usize) -> (usize, usize, Vec<f32>) {
     (w2, h2, out)
 }
 
-/// Shared per-level elementwise products feeding the five `'valid'`
-/// filters: `im1²`, `im2²`, `im1·im2`.
 /// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
 /// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
 /// otherwise the serial loop runs. Writes are disjoint per row either
@@ -152,120 +119,143 @@ macro_rules! score_body {
     ($token:ident, $F32:ident, $LANES:literal, $a:ident) => {{
         let (mut w, mut h, level) = ($a.w, $a.h, $a.level);
         let taps = gaussian_taps();
-        let (mut im1, mut im2) = ($a.im1.to_vec(), $a.im2.to_vec());
+        let (mut im1, mut im2) = (
+            alloc::borrow::Cow::Borrowed($a.im1),
+            alloc::borrow::Cow::Borrowed($a.im2),
+        );
         let mut mcs = [0.0f64; 5];
         let mut mssim_last = 0.0f64;
         let (c1v, c2v) = (<$F32>::splat_t($token, C1), <$F32>::splat_t($token, C2));
         let twov = <$F32>::splat_t($token, 2.0);
 
         for l in 0..level {
-            let (p1, p2, pp) = product_planes(&im1, &im2);
-            // Five separable 'valid' filters. H pass: lanes over
-            // output columns, fixed tap order. V pass: lanes over
-            // output columns of each output row, fixed tap order.
             let out_w = w - GAUSS_K + 1;
             let out_h = h - GAUSS_K + 1;
-            let filt = |src: &[f32]| -> Vec<f32> {
-                // horizontal into a `h × out_w` scratch — per-row
-                // independent (identical tap order under either driver).
-                let mut tmp = vec![0.0f32; h * out_w];
-                for_each_row(&mut tmp, out_w, |y, drow| {
-                    let srow = &src[y * w..y * w + w];
-                    let mut x = 0usize;
-                    while x + $LANES <= out_w {
-                        let mut v = <$F32>::splat_t($token, 0.0);
-                        for u in 0..GAUSS_K {
-                            let xv = <$F32>::from_array_t(
-                                $token,
-                                core::array::from_fn(|k| srow[x + u + k]),
-                            );
-                            v += <$F32>::splat_t($token, taps[u]) * xv;
-                        }
-                        drow[x..x + $LANES].copy_from_slice(&v.to_array());
-                        x += $LANES;
-                    }
-                    while x < out_w {
-                        let mut acc = 0.0f32;
-                        for u in 0..GAUSS_K {
-                            acc += taps[u] * srow[x + u];
-                        }
-                        drow[x] = acc;
-                        x += 1;
-                    }
-                });
-                // vertical into `out_h × out_w` — each output row reads
-                // `GAUSS_K` tmp rows, writes only its own.
-                let mut out = vec![0.0f32; out_h * out_w];
-                let tmp_ref = &tmp;
-                for_each_row(&mut out, out_w, |y, drow| {
-                    let mut x = 0usize;
-                    while x + $LANES <= out_w {
-                        let mut v = <$F32>::splat_t($token, 0.0);
-                        for u in 0..GAUSS_K {
-                            let xv = <$F32>::from_array_t(
-                                $token,
-                                core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
-                            );
-                            v += <$F32>::splat_t($token, taps[u]) * xv;
-                        }
-                        drow[x..x + $LANES].copy_from_slice(&v.to_array());
-                        x += $LANES;
-                    }
-                    while x < out_w {
-                        let mut acc = 0.0f32;
-                        for u in 0..GAUSS_K {
-                            acc += taps[u] * tmp_ref[(y + u) * out_w + x];
-                        }
-                        drow[x] = acc;
-                        x += 1;
-                    }
-                });
-                out
-            };
-            let ((mu1, s1p), (mu2, s2p)) =
-                maybe_join(|| (filt(&im1), filt(&p1)), || (filt(&im2), filt(&p2)));
-            let s12p = filt(&pp);
-
-            // Map stage: ssim = (n1·n2)/(d1·d2), cs = n2/d2, means in
-            // raster order over the `out_h × out_w` map.
             let n = out_w * out_h;
-            let (mut sum_s, mut sum_c) = (0.0f64, 0.0f64);
-            let mut i = 0usize;
-            while i + $LANES <= n {
-                let m1 = <$F32>::from_array_t($token, core::array::from_fn(|k| mu1[i + k]));
-                let m2 = <$F32>::from_array_t($token, core::array::from_fn(|k| mu2[i + k]));
-                let v1 = <$F32>::from_array_t($token, core::array::from_fn(|k| s1p[i + k]));
-                let v2 = <$F32>::from_array_t($token, core::array::from_fn(|k| s2p[i + k]));
-                let vc = <$F32>::from_array_t($token, core::array::from_fn(|k| s12p[i + k]));
-                let s1sq = v1 - m1 * m1;
-                let s2sq = v2 - m2 * m2;
-                let s12 = vc - m1 * m2;
-                let n1 = twov * m1 * m2 + c1v;
-                let n2 = twov * s12 + c2v;
-                let d1 = m1 * m1 + m2 * m2 + c1v;
-                let d2 = s1sq + s2sq + c2v;
-                let sm = (n1 * n2) / (d1 * d2);
-                let cm = n2 / d2;
-                let (sa, ca) = (sm.to_array(), cm.to_array());
-                for k in 0..$LANES {
-                    sum_s += sa[k] as f64;
-                    sum_c += ca[k] as f64;
+            let mut smap = vec![0.0f32; n];
+            let mut cmap = vec![0.0f32; n];
+            // Keep only eleven horizontal rows per moment. Products are
+            // formed in the horizontal stencil, with the same f32 rounding
+            // and tap order as the materialized product planes. Each band
+            // owns its ring and output rows, including under Rayon.
+            let band = |first_y: usize, sout: &mut [f32], cout: &mut [f32]| {
+                let mut ring: [Vec<f32>; 5] = core::array::from_fn(|_| vec![0.0; GAUSS_K * out_w]);
+                let rows = sout.len() / out_w;
+                for ry in 0..rows + GAUSS_K - 1 {
+                    let slot = ry % GAUSS_K;
+                    let base = (first_y + ry) * w;
+                    let rrow = &im1[base..base + w];
+                    let drow = &im2[base..base + w];
+                    let mut x = 0;
+                    while x + $LANES <= out_w {
+                        let mut acc = [<$F32>::splat_t($token, 0.0); 5];
+                        for u in 0..GAUSS_K {
+                            let r = <$F32>::from_array_t(
+                                $token,
+                                core::array::from_fn(|k| rrow[x + u + k]),
+                            );
+                            let d = <$F32>::from_array_t(
+                                $token,
+                                core::array::from_fn(|k| drow[x + u + k]),
+                            );
+                            let tap = <$F32>::splat_t($token, taps[u]);
+                            acc[0] += tap * r;
+                            acc[1] += tap * d;
+                            acc[2] += tap * (r * r);
+                            acc[3] += tap * (d * d);
+                            acc[4] += tap * (r * d);
+                        }
+                        for j in 0..5 {
+                            ring[j][slot * out_w + x..slot * out_w + x + $LANES]
+                                .copy_from_slice(&acc[j].to_array());
+                        }
+                        x += $LANES;
+                    }
+                    while x < out_w {
+                        let mut acc = [0.0f32; 5];
+                        for u in 0..GAUSS_K {
+                            let (r, d) = (rrow[x + u], drow[x + u]);
+                            let v = [r, d, r * r, d * d, r * d];
+                            for j in 0..5 {
+                                acc[j] += taps[u] * v[j];
+                            }
+                        }
+                        for j in 0..5 {
+                            ring[j][slot * out_w + x] = acc[j];
+                        }
+                        x += 1;
+                    }
+                    if ry < GAUSS_K - 1 {
+                        continue;
+                    }
+                    let y = ry - (GAUSS_K - 1);
+                    let mut x = 0;
+                    while x + $LANES <= out_w {
+                        let mut acc = [<$F32>::splat_t($token, 0.0); 5];
+                        for u in 0..GAUSS_K {
+                            let off = ((y + u) % GAUSS_K) * out_w + x;
+                            let tap = <$F32>::splat_t($token, taps[u]);
+                            for j in 0..5 {
+                                let v = <$F32>::from_array_t(
+                                    $token,
+                                    core::array::from_fn(|k| ring[j][off + k]),
+                                );
+                                acc[j] += tap * v;
+                            }
+                        }
+                        let [m1, m2, v1, v2, vc] = acc;
+                        let s1sq = v1 - m1 * m1;
+                        let s2sq = v2 - m2 * m2;
+                        let s12 = vc - m1 * m2;
+                        let n1 = twov * m1 * m2 + c1v;
+                        let n2 = twov * s12 + c2v;
+                        let d1 = m1 * m1 + m2 * m2 + c1v;
+                        let d2 = s1sq + s2sq + c2v;
+                        let off = y * out_w + x;
+                        sout[off..off + $LANES]
+                            .copy_from_slice(&((n1 * n2) / (d1 * d2)).to_array());
+                        cout[off..off + $LANES].copy_from_slice(&(n2 / d2).to_array());
+                        x += $LANES;
+                    }
+                    while x < out_w {
+                        let mut acc = [0.0f32; 5];
+                        for u in 0..GAUSS_K {
+                            let off = ((y + u) % GAUSS_K) * out_w + x;
+                            for j in 0..5 {
+                                acc[j] += taps[u] * ring[j][off];
+                            }
+                        }
+                        let [m1, m2, v1, v2, vc] = acc;
+                        let s1sq = v1 - m1 * m1;
+                        let s2sq = v2 - m2 * m2;
+                        let s12 = vc - m1 * m2;
+                        let n1 = 2.0 * m1 * m2 + C1;
+                        let n2 = 2.0 * s12 + C2;
+                        let d1 = m1 * m1 + m2 * m2 + C1;
+                        let d2 = s1sq + s2sq + C2;
+                        sout[y * out_w + x] = (n1 * n2) / (d1 * d2);
+                        cout[y * out_w + x] = n2 / d2;
+                        x += 1;
+                    }
                 }
-                i += $LANES;
+            };
+            #[cfg(feature = "parallel")]
+            {
+                use rayon::prelude::*;
+                // Each worker computes its own halo; the final fold remains raster-ordered.
+                let band_rows = out_h.div_ceil(rayon::current_num_threads());
+                smap.par_chunks_mut(band_rows * out_w)
+                    .zip(cmap.par_chunks_mut(band_rows * out_w))
+                    .enumerate()
+                    .for_each(|(b, (s, c))| band(b * band_rows, s, c));
             }
-            while i < n {
-                let m1 = mu1[i];
-                let m2 = mu2[i];
-                let s1sq = s1p[i] - m1 * m1;
-                let s2sq = s2p[i] - m2 * m2;
-                let s12 = s12p[i] - m1 * m2;
-                let n1 = 2.0 * m1 * m2 + C1;
-                let n2 = 2.0 * s12 + C2;
-                let d1 = m1 * m1 + m2 * m2 + C1;
-                let d2 = s1sq + s2sq + C2;
-                sum_s += ((n1 * n2) / (d1 * d2)) as f64;
-                sum_c += (n2 / d2) as f64;
-                i += 1;
+            #[cfg(not(feature = "parallel"))]
+            band(0, &mut smap, &mut cmap);
+            // Preserve the original raster-order f64 fold exactly.
+            let (mut sum_s, mut sum_c) = (0.0f64, 0.0f64);
+            for (&s, &c) in smap.iter().zip(&cmap) {
+                sum_s += s as f64;
+                sum_c += c as f64;
             }
             let npix = n as f64;
             mcs[l] = sum_c / npix;
@@ -274,8 +264,8 @@ macro_rules! score_body {
             if l + 1 < level {
                 let ((w2, h2, d1), (_, _, d2)) =
                     maybe_join(|| decimate(&im1, w, h), || decimate(&im2, w, h));
-                im1 = d1;
-                im2 = d2;
+                im1 = alloc::borrow::Cow::Owned(d1);
+                im2 = alloc::borrow::Cow::Owned(d2);
                 w = w2;
                 h = h2;
             }

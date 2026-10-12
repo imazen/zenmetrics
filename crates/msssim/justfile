@@ -1,0 +1,17 @@
+# Run from the workspace root: just -f crates/msssim/justfile <recipe>.
+set working-directory := '../..'
+
+build:
+    TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo build --release -p msssim --examples --features parallel
+
+test features='parallel,_dev,avx512':
+    TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo test -p msssim --features {{features}}
+
+wall binary='target/release/examples/wall' threads='1' w='4096' h='2048' reps='4':
+    TMPDIR=$HOME/tmp RAYON_NUM_THREADS={{threads}} ~/work/claudehints/scripts/run-heavy --mem 16G --jobs {{threads}} -- perf stat -e cycles {{binary}} {{w}} {{h}} {{reps}}
+
+profile binary='target/release/examples/wall' output='/home/lilith/tmp/msssim.perf':
+    TMPDIR=$HOME/tmp RAYON_NUM_THREADS=1 ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 1 -- perf record -e cycles:u -o {{output}} {{binary}} 4096 2048 8
+
+clippy:
+    TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo clippy -p msssim --all-targets --features parallel,_dev,avx512

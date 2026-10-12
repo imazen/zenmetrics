@@ -229,3 +229,29 @@ fn tier_parity() {
         assert_eq!(s_scalar, s_v3);
     }
 }
+
+/// Band halos and SIMD tails preserve the same raster fold at every
+/// thread count, including bands shorter than the eleven-row window.
+#[cfg(feature = "parallel")]
+#[test]
+fn ring_band_thread_parity() {
+    for (w, h) in [(11, 11), (17, 23), (176, 177), (257, 193), (513, 257)] {
+        let r = gen1(w, h);
+        let d = gen2(w, h);
+        let score = |threads| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(|| msssim_plane_f32(&r, &d, w, h, w).unwrap())
+        };
+        let serial = score(1);
+        for threads in [2, 3, 16] {
+            assert_eq!(
+                serial.to_bits(),
+                score(threads).to_bits(),
+                "{w}x{h}, {threads} threads"
+            );
+        }
+    }
+}
