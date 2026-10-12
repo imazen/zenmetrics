@@ -249,30 +249,26 @@ impl Plan {
             }
         }
         fft_batch8(re8, im8, m, mplan);
-        for j in 0..8 {
-            for k in 0..m {
+        // k-outer: the SoA layout is contiguous per k, so these fuses
+        // stay per-element identical (bf-multiply then conjugate).
+        for k in 0..m {
+            let b = bf[k];
+            for j in 0..8 {
                 let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
-                let b = bf[k];
                 re8[k * 8 + j] = re * b.re - im * b.im;
-                im8[k * 8 + j] = re * b.im + im * b.re;
+                im8[k * 8 + j] = -(re * b.im + im * b.re);
             }
-        }
-        for v in im8[..m * 8].iter_mut() {
-            *v = -*v;
         }
         fft_batch8(re8, im8, m, mplan);
         let s = 1.0 / m as f32;
-        for k in 0..m {
-            for j in 0..8 {
-                re8[k * 8 + j] *= s;
-                im8[k * 8 + j] = -im8[k * 8 + j] * s;
-            }
-        }
         for (j, buf) in bufs.iter_mut().enumerate() {
             for k in 0..n {
                 let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
                 let c = chirp[k];
-                buf[k] = Complex::new(re * c.re - im * c.im, re * c.im + im * c.re);
+                // scale (re·s, −im·s) fused into the chirp multiply —
+                // same op order per element, one less full pass.
+                let (rs, ims) = (re * s, -(im * s));
+                buf[k] = Complex::new(rs * c.re - ims * c.im, rs * c.im + ims * c.re);
             }
         }
     }
