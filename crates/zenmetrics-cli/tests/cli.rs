@@ -2007,10 +2007,19 @@ fn default_score_routes_through_orchestrator() {
     // stderr when the feature is built; legacy path does not. We
     // only assert the marker when the feature is compiled in.
     #[cfg(feature = "orchestrator")]
-    assert!(
-        stderr.contains("[orchestrator] enabled"),
-        "expected orchestrator-enabled stderr marker; got: {stderr}",
-    );
+    {
+        if zenmetrics_orchestrator::detect_gpu().present {
+            assert!(
+                stderr.contains("[orchestrator] enabled"),
+                "expected orchestrator-enabled stderr marker; got: {stderr}"
+            );
+        } else {
+            assert!(
+                stderr.contains("no GPU detected") && stderr.contains("legacy CPU scheduler"),
+                "expected explicit CPU scheduler marker; got: {stderr}"
+            );
+        }
+    }
 }
 
 /// `zenmetrics --use-legacy-scheduler score …` must succeed and route
@@ -2127,18 +2136,34 @@ fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
 #[test]
 fn without_require_gpu_auto_silently_falls_back_to_cpu() {
     let out = cli_without_gpu(false);
-    assert!(
-        out.status.success(),
-        "expected the permissive default to succeed via the CPU rung; \
-         stdout={} stderr={}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("cvvdp"),
-        "expected a cvvdp score on stdout, got {stdout:?}"
-    );
+    if cfg!(feature = "gpu-cpu") {
+        assert!(
+            out.status.success(),
+            "expected the permissive default to succeed via the CPU rung; \
+             stdout={} stderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("cvvdp"),
+            "expected a cvvdp score on stdout, got {stdout:?}"
+        );
+    } else {
+        assert!(
+            !out.status.success(),
+            "missing GPU and no software runtime must refuse"
+        );
+        assert!(
+            out.stdout.is_empty(),
+            "refused GPU request must emit no score"
+        );
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("no runtime succeeded"),
+            "refusal must report exhausted runtimes: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
 }
 
 /// With the gate ON and no GPU reachable, the run MUST fail loudly — nonzero

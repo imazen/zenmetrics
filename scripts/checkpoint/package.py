@@ -90,9 +90,14 @@ def main():
                  'compiler': compiler, 'features': selected, 'rustflags': [], 'profile': 'release',
                  'instrumented': variant == 'memory'}
         (driver_dir / (variant + '-build.json')).write_text(json.dumps(build, indent=2) + '\n')
+    control_reports = {}
     for checker in ['check_iqa_study.py', 'check_iqa_hdr.py']:
-        subprocess.run(['python3', str(root / 'scripts/jobsys' / checker), str(driver_dir.resolve()),
-                        str((args.out / checker.removesuffix('.py')).resolve())], check=True)
+        command = ['python3', str(root / 'scripts/jobsys' / checker), str(driver_dir.resolve()),
+                   str((args.out / checker.removesuffix('.py')).resolve())]
+        output = subprocess.check_output(command, text=True)
+        print(output, end='')
+        control_reports[checker] = json.loads(output)
+        commands.append(command)
     adapter_dir = args.out / 'adapter'
     adapter_dir.mkdir()
     shutil.copy2(root / 'scripts/jobsys/benchmark_exec.py', adapter_dir / 'benchmark_exec.py')
@@ -109,6 +114,7 @@ def main():
         'target': args.target, 'rustc': compiler, 'features': config['profiles'][args.profile],
         'default_features': True, 'rustflags': [], 'commands': [['cross', *c[1:]] if args.cross and c[0] == 'cargo' else c for c in commands],
         'qualification': {'native_cli_tests': 'passed', 'doc_tests': 'passed',
+                          'iqa_functional_controls': control_reports,
                           'hardware_gpu': 'not qualified', 'benchmark_admission': 'not run'},
         'benchmark_runner_commit': runner_revision,
         'test_fixture': {'zensim_selector_bake': bake.name, 'sha256': digest(bake)},
