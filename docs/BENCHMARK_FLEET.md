@@ -124,6 +124,18 @@ memory records and internal latency samples are retained in
 [r5600g JSONL](../benchmarks/iqa_deployment_r5600g_2026-10-12.jsonl), and
 [build, command and resource provenance](../benchmarks/iqa_deployment_2026-10-12.meta).
 
+The refreshed driver built from `9b8de0dd` completed the same 80 observations
+on each host after the IW-SSIM, PSNR-HVS, HDR-VDP-3 and FSIM optimizations.
+All 40 routes again passed exact layout and instrumentation controls.
+The separate refresh records preserve the original deployment evidence:
+[i134 JSONL](../benchmarks/iqa_deployment_refresh_i134_2026-10-12.jsonl),
+[r5600g JSONL](../benchmarks/iqa_deployment_refresh_r5600g_2026-10-12.jsonl),
+and [refresh provenance](../benchmarks/iqa_deployment_refresh_2026-10-12.meta).
+These are descriptive cold observations, with the same deployment-only
+qualification. The synthetic adapter controls explicitly select unrestricted
+placement and clear an inherited checked-policy CPU request; the process's
+outer CPU and memory boundary still applies.
+
 ```sh
 just benchmark-contract-check
 just benchmark-executor-check /path/to/zenbench NEW_CONTROL_DIRECTORY

@@ -1,0 +1,25 @@
+Driver source: 9b8de0dd0238758b2a5b00453c6813162d97cffd; CI-pinned sibling snapshot.
+Runner source: zenbench ac675d3a (resolved 0.1.10); version-only 0.1.11 candidate is separate.
+CPU deployment: 38 SDR routes at 256x256 + hdrvdp/hdrvdp3 at 128x96 absolute nits; 2 cold calls, packed, 1 thread.
+Qualification: every scalar product exact across packed/padded and ordinary/instrumented controls on each host. No accuracy or speed acceptance is claimed.
+Command: just iqa-deployment-bench <binaries> <runner> <sdr-controls> <hdr-controls> <new-output> <machine> <exact-domain>
+Execution: hard outer system scope AllowedCPUs=2, MemoryMax=16G, MemorySwapMax=0; run-heavy inside.
+Domains: i134 performance_l320480K; r5600g capacity1024_l316384K.
+Raw evidence resolving path on each host: ~/tmp/zm-iqa-refresh-20261012/benchmark-observations/
+Controls resolving path: ~/tmp/zm-iqa-refresh-20261012/{sdr-controls,hdr-controls,adapter-controls}/ (i134 adapter-controls-checked).
+Both hosts: 80/80 observations complete, 40 latency products usable, 40 separate memory products, all hash-verified receipts recovered.
+i134: run-heavy: done rc=0 89s | peak-RSS 0.02GiB | min-avail 27218MiB | peak-load 1.97
+r5600g: run-heavy: done rc=0 99s | peak-RSS 0.02GiB | min-avail 41698MiB | peak-load 0.56
+The resource receipts describe the supervisor; per-child resident high water and heap phase watermarks are retained in the JSONL records.
+The initial i134 adapter invocation refused an inherited CPU_SET=2 combined with the fixtures explicit unrestricted policy; the corrected fixture environment passed. No assertions changed.
+A second wrapper attempt lost its working directory; setting WorkingDirectory in the hard outer scope resolved it. r5600g initially unpacked controls at the archive root; the corrected controls subdirectory resolved that invocation. Failed logs were retained.
+latency SHA-256: aaf0dc17b3171120b998fe1e73cdcbdb207dd1411ce14520f5cae3b1f8752469
+memory SHA-256: 3bad3a57710ba704769c9684ed5f934a7bc89b3288691a650b0313a534d0a2ba
+zenbench SHA-256: 7e21043cd3429fbe97494a53936a82a2759a4fad40060289bf1ee415ddbb79c5
+zenfleet-worker SHA-256: 6cc8f7c6647b8d69037054a6197272fdd280370405c57fdc0ac8138868e4bf5e
+zenfleet-ctl SHA-256: e7a5eb491a3039f784fc8e5ec8d2f9526f6d856e0b22a8c0685dd9efd11235c2
+benchmark_ledger_control SHA-256: ff04baa98129562ae83e17f7cbd4b9ccb5184f6c8557702cea250b8cadfff0ff
+i134 summary SHA-256: 0d0910581ab4ed3f8c0442528b27cc2ccae62e2e3f5c44ebb8bd099c6aeb1582
+r5600g summary SHA-256: 91455b5b106c33dbd1f10e27b3f1ac5598bf291b8c4e94fbfbfdd7b587540e95
+Inherited-CPU adapter regression: ZENBENCH_CPU_SET=2 just benchmark-executor-check <runner> <new-output>; positive and wrong-output/timeout/cancellation/wrong-machine controls passed without assertion changes.
+Adapter regression run-heavy: done rc=0 6s | peak-RSS 0.02GiB | min-avail 24166MiB | peak-load 0.06

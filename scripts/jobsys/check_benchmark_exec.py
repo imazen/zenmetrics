@@ -21,6 +21,9 @@ os.environ.update(ZENBENCH_BIN=str(runner), ZENBENCH_WORK_DIR=str(root),
                   ZENBENCH_DOMAIN='unrestricted', ZENBENCH_CPU_POLICY='unrestricted',
                   ZENBENCH_COORDINATION_DIR=str(root/'coordination'))
 os.environ.pop('ZENBENCH_BLOB_URI', None)
+# These synthetic adapter fixtures select unrestricted placement explicitly;
+# an inherited checked-policy CPU request must not contradict that selection.
+os.environ.pop('ZENBENCH_CPU_SET', None)
 (root/'coordination').mkdir()
 caps, _ = module.capabilities(str(runner))
 driver = root/'driver.py'
