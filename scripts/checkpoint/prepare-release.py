@@ -81,6 +81,6 @@ def main():
         archives.append(str(path.resolve()))
     (args.out / 'release-assets.json').write_text(json.dumps({'schema':1,'source':args.source,
         'run':run['html_url'],'archives':archives},indent=2)+'\n')
-    print(f'Verified {len(archives)} checkpoint archives. README approval and publication remain separate.')
+    print(f'Verified {len(archives)} checkpoint archives. Ready for GitHub checkpoint publication.')
 
 if __name__ == '__main__': main()

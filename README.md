@@ -9,7 +9,7 @@ reference implementation; the table below says which, and by how much, and
 a metric with its own conventions (the scores published with the JPEG AIC2026
 dataset, libvmaf), that variant is available too, so published numbers can be reproduced. Six metrics
 also run on the GPU (CUDA, Vulkan, Metal, DX12) through CubeCL.
-`#![forbid(unsafe_code)]` throughout.
+`unsafe_code = "forbid"` is the workspace default; some crates override it.
 
 ## Quick start
 
@@ -192,8 +192,10 @@ caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t
 
 ## Limitations
 
-- Build from source only, with the sibling repos checked out (see Quick
-  start). There are no crates.io releases yet.
+- Source builds require the pinned sibling repos (see Quick start).
+  [Checkpoint packages](docs/CHECKPOINT_BINARIES.md) include target-specific
+  executables; GPU drivers and platform runtime dependencies remain required.
+  There are no crates.io releases yet.
 - Most metrics run on one thread in the default build. The CLI builds eleven
   in-tree metric crates without their `parallel` (rayon) feature, and
   `fast-ssim2` without `rayon`. Turning them on leaves scores bit-identical

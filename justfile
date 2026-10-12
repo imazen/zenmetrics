@@ -511,8 +511,8 @@ checkpoint-gpu-contract-check expectation features:
 checkpoint-gpu-refusal-check features:
     cargo test --locked -p zenmetrics-cli --features {{features}} --test cli require_gpu
 
-checkpoint-release-publish run source tag readme_hash output:
-    python3 scripts/checkpoint/publish-release.py --run {{run}} --source {{source}} --tag {{tag}} --readme-approved --readme-sha256 {{readme_hash}} --out {{output}}
+checkpoint-release-publish run source tag output:
+    python3 scripts/checkpoint/publish-release.py --run {{run}} --source {{source}} --tag {{tag}} --out {{output}}
 
 checkpoint-release-controls:
     python3 scripts/checkpoint/test_release.py

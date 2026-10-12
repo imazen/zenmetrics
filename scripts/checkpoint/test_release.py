@@ -1,6 +1,5 @@
 """Publication controls use fake commands; no GitHub or Git mutation occurs."""
 import contextlib
-import hashlib
 import importlib.util
 import io
 import json
@@ -21,20 +20,15 @@ class PublicationControls(unittest.TestCase):
         self.scratch = tempfile.TemporaryDirectory(dir=Path.home() / 'tmp')
         self.addCleanup(self.scratch.cleanup)
         self.out = Path(self.scratch.name) / 'assets'
-        self.readme = b'Reviewed source README\n'
         self.source = 'a' * 40
         self.tag = 'v0.1.0-checkpoint.control'
         self.argv = ['publish-release.py', '--run', '123', '--source', self.source,
-                     '--tag', self.tag, '--out', str(self.out), '--readme-approved',
-                     '--readme-sha256', hashlib.sha256(self.readme).hexdigest()]
+                     '--tag', self.tag, '--out', str(self.out)]
         self.commands = []
         self.existing_tag = False
         self.refuse_preparation = False
 
     def output(self, command, **kwargs):
-        if command[0] == 'git':
-            self.assertEqual(command, ['git', 'show', f'{self.source}:README.md'])
-            return self.readme
         self.assertEqual(command[:2], ['gh', 'api'])
         if 'releases/generate-notes' in ' '.join(command):
             return json.dumps({'body': 'Changes by @contributor and @lilith'})
@@ -58,15 +52,18 @@ class PublicationControls(unittest.TestCase):
              contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             publisher.main()
 
-    def test_missing_approval_refuses_before_commands(self):
+    def test_invalid_source_refuses_before_commands(self):
+        argv = self.argv.copy()
+        argv[argv.index('--source') + 1] = 'mutable-branch'
         with self.assertRaises(SystemExit):
-            self.invoke([arg for arg in self.argv if arg != '--readme-approved'])
+            self.invoke(argv)
         self.assertEqual(self.commands, [])
 
-    def test_wrong_readme_refuses_before_preparation(self):
-        self.readme = b'Unreviewed replacement\n'
+    def test_invalid_tag_refuses_before_commands(self):
+        argv = self.argv.copy()
+        argv[argv.index('--tag') + 1] = 'latest'
         with self.assertRaises(SystemExit):
-            self.invoke()
+            self.invoke(argv)
         self.assertEqual(self.commands, [])
 
     def test_failed_verification_never_tags(self):

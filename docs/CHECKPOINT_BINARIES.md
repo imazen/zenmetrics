@@ -142,12 +142,13 @@ benchmark observations or alter resource admission.
 
 ## Attach files to GitHub Releases
 
-After the exact source README has been reviewed and approved, run the manual
+Run the manual
 **Publish checkpoint release** workflow from `master`. Supply the successful
 Checkpoint binaries run ID, its full source SHA, a new
-`vX.Y.Z-checkpoint.ID` tag, and the reviewed README’s SHA-256.
+`vX.Y.Z-checkpoint.ID` tag. README sign-off is required for crates.io
+publication, not for these GitHub checkpoint attachments.
 
-The publisher checks the README hash and repeats all green-CI and archive
+The publisher repeats all green-CI and archive
 verification gates before tagging. It attaches all eight archives, their eight
 SHA-256 files, and `release-assets.json` to a GitHub prerelease. The published
 asset index identifies archives by their release filenames. Existing tags

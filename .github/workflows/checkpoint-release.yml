@@ -14,15 +14,6 @@ on:
         description: New vX.Y.Z-checkpoint.ID tag
         required: true
         type: string
-      readme_approved:
-        description: Source README reviewed and explicitly approved for release
-        required: true
-        default: false
-        type: boolean
-      readme_sha256:
-        description: SHA-256 of that reviewed README
-        required: true
-        type: string
 permissions:
   contents: read
 concurrency:
@@ -41,8 +32,6 @@ jobs:
       CHECKPOINT_RUN: ${{ inputs.run }}
       CHECKPOINT_SOURCE: ${{ inputs.source }}
       CHECKPOINT_TAG: ${{ inputs.tag }}
-      README_APPROVED: ${{ inputs.readme_approved }}
-      README_SHA256: ${{ inputs.readme_sha256 }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,10 +42,8 @@ jobs:
       - name: Verify completed platform evidence and attach immutable release files
         shell: bash
         run: |
-          test "$README_APPROVED" = true
           mkdir -p "$HOME/tmp"
           export TMPDIR="$HOME/tmp"
           python3 scripts/checkpoint/publish-release.py --run "$CHECKPOINT_RUN" \
             --source "$CHECKPOINT_SOURCE" --tag "$CHECKPOINT_TAG" \
-            --readme-approved --readme-sha256 "$README_SHA256" \
             --out "$HOME/tmp/checkpoint-release-assets"

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Attach verified checkpoint archives to a GitHub prerelease after README approval."""
+"""Attach verified checkpoint archives to a GitHub prerelease."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -17,22 +16,13 @@ def main():
     parser.add_argument('--source', required=True)
     parser.add_argument('--tag', required=True)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--readme-approved', action='store_true')
-    parser.add_argument('--readme-sha256', required=True, help='SHA-256 of the reviewed source README')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
-    if not args.readme_approved:
-        parser.error('Explicit approval of the source README is required')
     if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-checkpoint\.[A-Za-z0-9][A-Za-z0-9.-]*', args.tag):
         parser.error('Use a versioned checkpoint tag: vX.Y.Z-checkpoint.ID')
     if not re.fullmatch(r'[0-9a-f]{40}', args.source):
         parser.error('Full immutable source SHA required')
-    if not re.fullmatch(r'[0-9a-f]{64}', args.readme_sha256):
-        parser.error('Full README SHA-256 required')
     root = Path(__file__).resolve().parents[2]
-    readme = subprocess.check_output(['git', 'show', f'{args.source}:README.md'], cwd=root)
-    if hashlib.sha256(readme).hexdigest() != args.readme_sha256:
-        parser.error('Reviewed README hash does not match the release source')
     # Preparation rechecks all platform jobs, required workflows and artifact hashes.
     subprocess.run([sys.executable, str(Path(__file__).with_name('prepare-release.py')),
                     '--run', str(args.run), '--source', args.source, '--out', str(args.out)], check=True)
@@ -41,7 +31,6 @@ def main():
     local_archives = index['archives']
     index['archives'] = [Path(archive).name for archive in local_archives]
     index['tag'] = args.tag
-    index['readme_sha256'] = args.readme_sha256
     index_path.write_text(json.dumps(index, indent=2) + '\n')
     assets = []
     for archive in local_archives:
