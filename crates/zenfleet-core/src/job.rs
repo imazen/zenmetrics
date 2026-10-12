@@ -207,6 +207,20 @@ pub enum JobKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         revision: Option<String>,
     },
+    /// One planned benchmark observation. Machine, CPU domain and replicate
+    /// are identity, so fleet deduplication never collapses independent runs.
+    /// The output is an irreplaceable observation receipt, including failures.
+    Benchmark {
+        bundle_sha: String,
+        runner_sha: String,
+        experiment: String,
+        machine: String,
+        domain: String,
+        replicate: u32,
+        backend: String,
+        timeout_seconds: u64,
+        admission_seconds: u64,
+    },
     /// A hermetic fit cell. The three hashes bind the baked fit program,
     /// content-addressed data bundle and canonical JSON argv bytes. The argv
     /// is carried on the wire so the executor need not infer work from a path.
@@ -366,6 +380,19 @@ impl JobKind {
                 }
             }
             JobKind::FitCell { .. } => add("fit-cell-v1"),
+            JobKind::Benchmark {
+                runner_sha,
+                machine,
+                domain,
+                backend,
+                ..
+            } => {
+                add("benchmark-v1");
+                add(&format!("benchmark-runner:{runner_sha}"));
+                add(&format!("benchmark-machine:{machine}"));
+                add(&format!("benchmark-domain:{domain}"));
+                add(&format!("benchmark-backend:{backend}"));
+            }
             JobKind::Resample { .. } | JobKind::Bake { .. } => {}
         }
         req
@@ -401,6 +428,11 @@ impl JobKind {
                 class: ResourceClass::CpuHeavy,
                 group_by: GroupBy::SourceSha,
                 output_regenerability: Regenerability::CheapRegenerable,
+            },
+            JobKind::Benchmark { .. } => JobProfile {
+                class: ResourceClass::CpuHeavy,
+                group_by: GroupBy::None,
+                output_regenerability: Regenerability::NotRegenerable,
             },
             JobKind::FitCell { .. } => JobProfile {
                 class: ResourceClass::CpuHeavy,
@@ -1356,6 +1388,56 @@ mod tests {
         assert_eq!(
             JobId::of(&kind, &inputs).as_str(),
             "64b6925760fc41fd15aca593ada2c85ba8420490ced978e98e5967e4d9d448a5",
+        );
+    }
+}
+
+#[cfg(test)]
+mod benchmark_identity_tests {
+    use super::*;
+    use crate::{JobId, sha256};
+    #[test]
+    fn planned_machine_domain_and_replicate_are_not_deduplicated() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../scripts/jobsys/benchmark_identity_v1.json"
+        ))
+        .unwrap();
+        let kind: JobKind = serde_json::from_value(golden["kind"].clone()).unwrap();
+        let inputs: Vec<crate::Sha256Hex> =
+            serde_json::from_value(golden["inputs"].clone()).unwrap();
+        assert_eq!(
+            JobId::of(&kind, &inputs).as_str(),
+            golden["job_id"].as_str().unwrap()
+        );
+
+        let make = |machine: &str, domain: &str, replicate| JobKind::Benchmark {
+            bundle_sha: sha256(b"bundle").to_string(),
+            runner_sha: sha256(b"runner").to_string(),
+            experiment: "study".into(),
+            machine: machine.into(),
+            domain: domain.into(),
+            replicate,
+            backend: "heaptrack".into(),
+            timeout_seconds: 300,
+            admission_seconds: 60,
+        };
+        let a = make("cpu-a", "p", 0);
+        let id = JobId::of(&a, &[]);
+        for b in [
+            make("cpu-b", "p", 0),
+            make("cpu-a", "e", 0),
+            make("cpu-a", "p", 1),
+        ] {
+            assert_ne!(id, JobId::of(&b, &[]));
+        }
+        assert_eq!(id, JobId::of(&make("cpu-a", "p", 0), &[]));
+        assert_eq!(
+            a.profile().output_regenerability,
+            Regenerability::NotRegenerable
+        );
+        assert!(
+            a.required_capabilities()
+                .contains(&"benchmark-machine:cpu-a".into())
         );
     }
 }

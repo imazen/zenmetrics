@@ -23,6 +23,7 @@
 //! empty gap — the no-duplicate-work guarantee, end to end.
 
 use std::path::PathBuf;
+mod benchmark_declare;
 
 use clap::{Parser, Subcommand};
 
@@ -53,6 +54,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Declare planned benchmark observations, retaining machine/domain/replicate identity.
+    DeclareBenchmarks {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Declare content-addressed fit cells from a program/data/argv spec.
     DeclareFits {
         #[arg(long)]
@@ -539,6 +547,12 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match Cli::parse().cmd {
+        Cmd::DeclareBenchmarks { spec, out } => {
+            let bytes = std::fs::read(spec)?;
+            let jobs = benchmark_declare::declare(&bytes)?;
+            std::fs::write(out, serde_json::to_vec_pretty(&jobs)?)?;
+            eprintln!("declared {} benchmark observations", jobs.len());
+        }
         Cmd::DeclareFits { spec, out } => {
             let s: FitDeclareSpec = serde_json::from_slice(&std::fs::read(&spec)?)?;
             let jobs = declare_fits(&s)?;
