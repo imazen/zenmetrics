@@ -185,3 +185,20 @@ eleven-row moment rings feed the vertical filter and statistic combine.
 Rayon bands own their halos, and the final fold stays in raster order.
 There are no materialized full-image product planes to remove from that
 path. These two scout findings are source checks, not new speedup claims.
+
+## Subsequent target measurements
+
+The next passes use the existing `cpu-profile/new-metrics-wall` production
+CLI driver with its pinned zenbench git revision `ac675d3` (resolved
+version 0.1.10). `just ranked-zenbench` retains the binary hash, bounded
+run settings, full console report, resource receipt and per-metric TSV.
+Latency cells score one pair; `par1/par4/par8` cells instead measure
+concurrent independent pairs on dedicated pools. They answer distinct
+questions and are labelled explicitly. Inputs here use the driver's
+procedural RGB pair, which differs from the earlier crate wall examples.
+
+The initial NLPD observations use 30 interleaved rounds at 3355×2516,
+one Rayon thread, with source `bdc458e0`:
+[zenbench report](nlpd_baseline_zenbench_1t_2026-10-12.log),
+[TSV](nlpd_baseline_zenbench_1t_2026-10-12.tsv).
+They establish the next candidate's baseline, not an optimization result.
