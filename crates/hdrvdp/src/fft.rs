@@ -207,33 +207,110 @@ impl Plan {
         match &self.kind {
             PlanKind::Trivial => {}
             PlanKind::Radix2 { stages } => fft_radix2_planned(buf, stages),
-            PlanKind::Bluestein {
-                chirp,
-                bf,
-                m,
-                mplan,
-            } => {
-                let n = self.n;
+            PlanKind::Bluestein { m, .. } => {
                 let mut a = vec![Complex::default(); *m];
-                for k in 0..n {
-                    a[k] = buf[k].mul(chirp[k]);
-                }
-                fft_radix2_planned(&mut a, mplan);
-                for (x, y) in a.iter_mut().zip(bf) {
-                    *x = x.mul(*y);
-                }
-                for v in a.iter_mut() {
-                    *v = v.conj();
-                }
-                fft_radix2_planned(&mut a, mplan);
-                let s = 1.0 / *m as f32;
-                for v in a.iter_mut() {
-                    *v = v.conj().scale(s);
-                }
-                for (k, out) in buf.iter_mut().enumerate() {
-                    *out = a[k].mul(chirp[k]);
-                }
+                self.run_bluestein(buf, &mut a);
             }
+        }
+    }
+
+    /// Eight Bluestein transforms at once in the `fft_batch8` SoA layout
+    /// (lane = transform). The three `m`-length radix-2 stages vectorize
+    /// through [`fft_batch8`]; the chirp/`bf` multiplies and the conj·scale
+    /// are per-lane scalar ops on the way in/out — bit-identical to
+    /// [`Self::run_bluestein`] on each row. `bufs` are the eight `n`-length
+    /// rows/columns; `re8`/`im8` are caller scratch of `m·8`.
+    fn run_bluestein8(&self, bufs: &mut [&mut [Complex]], re8: &mut [f32], im8: &mut [f32]) {
+        let PlanKind::Bluestein {
+            chirp,
+            bf,
+            m,
+            mplan,
+        } = &self.kind
+        else {
+            unreachable!("run_bluestein8 on non-Bluestein plan")
+        };
+        let (n, m) = (self.n, *m);
+        debug_assert_eq!(bufs.len(), 8);
+        debug_assert!(re8.len() >= m * 8 && im8.len() >= m * 8);
+        // Gather: a[k] = buf[k]·chirp[k], zeroed past n.
+        for (j, buf) in bufs.iter().enumerate() {
+            debug_assert_eq!(buf.len(), n);
+            for k in 0..m {
+                let (re, im) = if k < n {
+                    let v = buf[k];
+                    let c = chirp[k];
+                    (v.re * c.re - v.im * c.im, v.re * c.im + v.im * c.re)
+                } else {
+                    (0.0, 0.0)
+                };
+                re8[k * 8 + j] = re;
+                im8[k * 8 + j] = im;
+            }
+        }
+        fft_batch8(re8, im8, m, mplan);
+        for j in 0..8 {
+            for k in 0..m {
+                let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
+                let b = bf[k];
+                re8[k * 8 + j] = re * b.re - im * b.im;
+                im8[k * 8 + j] = re * b.im + im * b.re;
+            }
+        }
+        for v in im8[..m * 8].iter_mut() {
+            *v = -*v;
+        }
+        fft_batch8(re8, im8, m, mplan);
+        let s = 1.0 / m as f32;
+        for k in 0..m {
+            for j in 0..8 {
+                re8[k * 8 + j] *= s;
+                im8[k * 8 + j] = -im8[k * 8 + j] * s;
+            }
+        }
+        for (j, buf) in bufs.iter_mut().enumerate() {
+            for k in 0..n {
+                let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
+                let c = chirp[k];
+                buf[k] = Complex::new(re * c.re - im * c.im, re * c.im + im * c.re);
+            }
+        }
+    }
+
+    /// The Bluestein pass with caller-supplied `m`-length scratch, so
+    /// parallel row/column sweeps reuse one buffer per worker instead of
+    /// allocating ~64 KiB per row. Results are identical to `run`.
+    fn run_bluestein(&self, buf: &mut [Complex], a: &mut [Complex]) {
+        debug_assert_eq!(buf.len(), self.n);
+        let PlanKind::Bluestein {
+            chirp,
+            bf,
+            m,
+            mplan,
+        } = &self.kind
+        else {
+            unreachable!("run_bluestein on non-Bluestein plan")
+        };
+        debug_assert!(a.len() >= *m);
+        let n = self.n;
+        a[..*m].fill(Complex::default());
+        for k in 0..n {
+            a[k] = buf[k].mul(chirp[k]);
+        }
+        fft_radix2_planned(&mut a[..*m], mplan);
+        for (x, y) in a[..*m].iter_mut().zip(bf) {
+            *x = x.mul(*y);
+        }
+        for v in a[..*m].iter_mut() {
+            *v = v.conj();
+        }
+        fft_radix2_planned(&mut a[..*m], mplan);
+        let s = 1.0 / *m as f32;
+        for v in a[..*m].iter_mut() {
+            *v = v.conj().scale(s);
+        }
+        for (k, out) in buf.iter_mut().enumerate() {
+            *out = a[k].mul(chirp[k]);
         }
     }
 }
@@ -466,8 +543,41 @@ fn fft2_rows_conj_mul(
                 *v = Complex::new(v.re * f, im * f);
             }
         }
-        for row in buf.chunks_exact_mut(width) {
-            wplan.run(row);
+        // Bluestein rows are independent transforms of disjoint rows —
+        // every real-world (non-power-of-two) image lands here, so this
+        // is where thread scaling actually lives. Groups of eight take
+        // the SoA batch path (each m-length radix-2 stage vectorizes).
+        let mut done = false;
+        #[cfg(feature = "parallel")]
+        if let PlanKind::Bluestein { m, .. } = &wplan.kind {
+            use rayon::prelude::*;
+            let m = *m;
+            buf.par_chunks_mut(width * 8).for_each_init(
+                || {
+                    (
+                        vec![0.0f32; m * 8],
+                        vec![0.0f32; m * 8],
+                        vec![Complex::default(); m],
+                    )
+                },
+                |(re8, im8, a), chunk| {
+                    let nb = chunk.len() / width;
+                    let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
+                    if nb == 8 {
+                        wplan.run_bluestein8(&mut bufs, re8, im8);
+                    } else {
+                        for row in bufs {
+                            wplan.run_bluestein(row, a);
+                        }
+                    }
+                },
+            );
+            done = true;
+        }
+        if !done {
+            for row in buf.chunks_exact_mut(width) {
+                wplan.run(row);
+            }
         }
     }
 }
@@ -587,6 +697,75 @@ fn fft2_cols_conj_scale(
                 }
             }
             x += nb;
+        }
+        return;
+    }
+
+    // Bluestein columns: strided writes can't be borrowed as disjoint
+    // slices, so under `parallel` this mirrors the radix-2 super-block
+    // structure — gather+transform per column-block into a contiguous SoA
+    // buffer (parallel over blocks), then scatter back over rows (parallel,
+    // fusing `conj·scale`).
+    #[cfg(feature = "parallel")]
+    if let PlanKind::Bluestein { m, .. } = &hplan.kind
+        && width >= 4 * CB
+        && height >= 4 * CB
+    {
+        use rayon::prelude::*;
+        let m = *m;
+        const SB: usize = 64;
+        let s = scale.unwrap_or(1.0);
+        let negate = scale.is_some();
+        let mut x0 = 0usize;
+        while x0 < width {
+            let nb_cols = (SB * CB).min(width - x0);
+            let nblocks = nb_cols.div_ceil(CB);
+            let mut cols_all = vec![Complex::default(); nblocks * height * CB];
+            {
+                let ro: &[Complex] = buf;
+                cols_all
+                    .par_chunks_mut(height * CB)
+                    .enumerate()
+                    .for_each_init(
+                        || {
+                            (
+                                vec![0.0f32; m * CB],
+                                vec![0.0f32; m * CB],
+                                vec![Complex::default(); m],
+                            )
+                        },
+                        |(re8, im8, a), (b, block)| {
+                            let bx = x0 + b * CB;
+                            let nb = CB.min(width - bx);
+                            for y in 0..height {
+                                for j in 0..nb {
+                                    block[j * height + y] = ro[y * width + bx + j];
+                                }
+                            }
+                            let mut bufs: Vec<&mut [Complex]> =
+                                block.chunks_mut(height).take(nb).collect();
+                            if nb == CB {
+                                hplan.run_bluestein8(&mut bufs, re8, im8);
+                            } else {
+                                for c in bufs {
+                                    hplan.run_bluestein(c, a);
+                                }
+                            }
+                        },
+                    );
+            }
+            buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                for b in 0..nblocks {
+                    let bx = x0 + b * CB;
+                    let nb = CB.min(width - bx);
+                    for j in 0..nb {
+                        let v = cols_all[(b * CB + j) * height + y];
+                        row[bx + j] =
+                            Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+                    }
+                }
+            });
+            x0 += nb_cols;
         }
         return;
     }
