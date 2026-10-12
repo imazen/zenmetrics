@@ -1680,8 +1680,7 @@ dependencies = [
 [[package]]
 name = "dssim-core"
 version = "3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2186fbf554f956fbd6206e3b2554978062558ace6572c317b34d0c03a2dbdff"
+source = "git+https://github.com/lilith/dssim?rev=331b56cf8998d89c3c89444880f8a0f51f046fb8#331b56cf8998d89c3c89444880f8a0f51f046fb8"
 dependencies = [
  "imgref",
  "itertools 0.15.0",
