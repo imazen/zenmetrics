@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Benchmark studies (`9787ca07`): source-backed inventory, explicit study expansion, content identity, release-artifact and reviewed correctness qualification gates, and visible unsupported cells.
+
 - Benchmark fleet (`b98de605`, `31ecd846`, `773f5193`): content-addressed staging/recovery, fresh worker execution, bounded cancellation, retained failed observations and baked worker image.
 - IQA measurement (`a18f44b2`, `f140186d`, `57f4ee24`): separate latency and heap-phase builds, cold/cached-reference cases, stride and instrumentation parity controls, independent heaptrack control, and bundle-bound inputs.
 - Benchmark evidence retention (`554dd327`): GC follows bundle and receipt references for every retained attempt, failing before deletion when metadata cannot be verified.
