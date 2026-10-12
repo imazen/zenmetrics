@@ -32,9 +32,11 @@ fn main() {
     }
     let dt = t0.elapsed();
     println!(
-        "{w}x{h} {reps} reps: {:.1} ms/call (psnr_hvs {:.4} psnr_hvs_m {:.4})",
+        "{w}x{h} {reps} reps: {:.2} ms/call (psnr_hvs {:.17} psnr_hvs_m {:.17}, bits {:016x}/{:016x})",
         dt.as_secs_f64() * 1e3 / reps as f64,
         s.0,
-        s.1
+        s.1,
+        s.0.to_bits(),
+        s.1.to_bits()
     );
 }

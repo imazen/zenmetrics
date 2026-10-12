@@ -1,0 +1,19 @@
+binary_sha256: 8ef847818f2b080f604ffafd23285fca56b9dce94b290e4684802e8ddef4b59c  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23444MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline 3355 2516 5
+3355x2516 5 reps: 146.03 ms/call (psnr_hvs 17.05396496828231889 psnr_hvs_m 20.08511255732970824, bits 40310dd0a5ede6f9/403415c9efc235c4)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline 3355 2516 5':
+
+        6400082339      instructions                                                          
+        4209813128      cycles                                                                
+
+       0.759956905 seconds time elapsed
+
+       0.449408000 seconds user
+       0.310282000 seconds sys
+
+
+run-heavy: done rc=0 1s | peak-RSS 0.24GiB | min-avail 23444MiB | peak-load 1.10

@@ -4,8 +4,8 @@
 //! this exists so a profiler has a single long-running, deterministic target:
 //!
 //! ```text
-//! cargo run --release -p hdrvdp --example perf_probe -- <side> [reps]
-//! sample <pid> 10 -f /tmp/prof.txt        # macOS
+//! cargo run --release -p hdrvdp --example perf_probe -- <side> [reps] [v2|v3]
+//! sample <pid> 10 -f ~/tmp/prof.txt        # macOS
 //! ```
 //!
 //! Prints per-call wall time and a bit-digest of the outputs so two builds
@@ -53,6 +53,11 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let side: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(512);
     let reps: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(1);
+    let version = args.next().unwrap_or_else(|| "v2".into());
+    assert!(
+        ["v2", "v3"].contains(&version.as_str()),
+        "expected v2 or v3"
+    );
 
     let par = Params::new(30.0);
     let reference = hdr_field(side, side, 0xfeed);
@@ -68,6 +73,34 @@ fn main() {
 
     for rep in 0..reps {
         let t0 = std::time::Instant::now();
+        if version == "v3" {
+            use hdrvdp::v3;
+            let encoding = v3::InputEncoding::Luminance;
+            let params = v3::Params::new(
+                v3::Task::Quality,
+                v3::ViewingConditions::new(30.0, v3::Surround::None, 24),
+                encoding,
+                v3::Emission::default_for(encoding),
+                v3::Options::reference(v3::Task::Quality),
+            )
+            .expect("perf_probe: invalid viewing conditions");
+            let r = v3::hdrvdp3(&test, &reference, side, side, &params)
+                .expect("perf_probe: v3 metric failed");
+            let dt = t0.elapsed();
+            let digest = fnv1a(
+                r.p_map
+                    .iter()
+                    .copied()
+                    .chain(r.s_map.iter().copied())
+                    .chain([r.q, r.q_jod, r.gamut_clamped_fraction]),
+            );
+            println!(
+                "rep {rep}: v3 {side}x{side} in {:.3} s  res_q={:.17}  digest={digest:#018x}",
+                dt.as_secs_f64(),
+                r.q_jod
+            );
+            continue;
+        }
         let r = hdrvdp(
             &test,
             &reference,

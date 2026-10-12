@@ -1,0 +1,9 @@
+Production source: 504be5b3; wall formatter and profile recipe in accompanying commit
+Binary SHA-256: 8ef847818f2b080f604ffafd23285fca56b9dce94b290e4684802e8ddef4b59c
+Command: just ranked-profile <binary> <output-prefix> 3355 2516 30
+Host: r7900x; RAYON_NUM_THREADS=1; CPU 2; runtime AVX-512 tier; no target-cpu=native
+Raw samples: r7900x:/home/lilith/tmp/zm-psnrhvs-baseline-profile.data
+Annotation: r7900x:/home/lilith/tmp/zm-psnrhvs-baseline-profile.annotate
+perf: 4418 samples, 0 lost; 34.370 MB retained
+run-heavy: done rc=0 6s | peak-RSS 0.24GiB | min-avail 23432MiB | peak-load 1.17
+The v4x band accounts for 38.91% of sampled cycles. Four vgatherqps instructions have local-period shares 18.26%, 9.77%, 6.48%, 6.84%.

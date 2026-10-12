@@ -1,0 +1,77 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cpu/cycles/P'
+# Event count (approx.): 24319000253
+#
+# Overhead  Command          Shared Object      Symbol                                          
+# ........  ...............  .................  ................................................
+#
+    38.91%  psnrhvs-baselin  psnrhvs-baseline   [.] psnrhvs::kernel::__arcane_psnrhvs_band_v4x_t
+    12.21%  psnrhvs-baselin  psnrhvs-baseline   [.] psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          
+            |--10.03%--psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          |          
+            |           --9.51%--0x1826813
+            |          
+             --1.19%--exc_page_fault
+                       asm_exc_page_fault
+
+     5.56%  psnrhvs-baselin  [kernel.kallsyms]  [k] kernel_init_pages
+            |          
+             --1.85%--kernel_init_pages
+                       |          
+                        --1.83%--post_alloc_hook
+                                  get_page_from_freelist
+                                  __alloc_frozen_pages_noprof
+                                  alloc_pages_mpol
+                                  vma_alloc_folio_noprof
+                                  alloc_anon_folio
+                                  do_anonymous_page
+                                  handle_pte_fault
+                                  __handle_mm_fault
+                                  handle_mm_fault
+                                  do_user_addr_fault
+                                  exc_page_fault
+                                  asm_exc_page_fault
+                                  psnrhvs::psnrhvs_rgb8::{closure#0}
+                                  0x1826813
+
+     3.50%  psnrhvs-baselin  [kernel.kallsyms]  [k] __irqentry_text_end
+            |          
+             --3.43%--psnrhvs::psnrhvs_rgb8::{closure#0}
+                       0x1826813
+
+     3.42%  psnrhvs-baselin  [kernel.kallsyms]  [k] mod_memcg_lruvec_state
+            |          
+             --1.86%--lru_gen_del_folio.constprop.0
+                       __page_cache_release.part.0
+                       folios_put_refs
+                       free_pages_and_swap_cache
+                       __tlb_batch_free_encoded_pages
+                       tlb_finish_mmu
+                       unmap_region
+                       vms_complete_munmap_vmas
+                       do_vmi_align_munmap
+                       do_vmi_munmap
+                       __vm_munmap
+                       __x64_sys_munmap
+                       x64_sys_call
+                       do_syscall_64
+                       entry_SYSCALL_64_after_hwframe
+                       __munmap
+                       _int_free_chunk
+                       |          
+                        --1.84%--psnrhvs::psnrhvs_rgb8
+
+     2.76%  psnrhvs-baselin  libc.so.6          [.] __memset_avx512_unaligned_erms
+     1.77%  psnrhvs-baselin  [kernel.kallsyms]  [k] do_anonymous_page
+     1.74%  psnrhvs-baselin  [kernel.kallsyms]  [k] get_mem_cgroup_from_mm
+     1.18%  psnrhvs-baselin  [kernel.kallsyms]  [k] __handle_mm_fault
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
