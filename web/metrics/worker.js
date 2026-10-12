@@ -28,8 +28,9 @@ self.onmessage = async ({data}) => {
     if (metric !== 'zensim') throw new Error('Browser module supports zensim; full registry is in native checkpoint');
     if (!previousReference || previousReference.width !== width || previousReference.height !== height ||
         previousReference.bytes.length !== reference.length || !reference.every((v,i) => v === previousReference.bytes[i])) {
+      const prepared = new Reference(reference, width, height, width * 4);
       if (cached) cached.free();
-      cached = new Reference(reference, width, height, width * 4);
+      cached = prepared;
       previousReference = {width, height, bytes: reference.slice()};
     }
     const compared = cached.compare(distorted, width * 4);

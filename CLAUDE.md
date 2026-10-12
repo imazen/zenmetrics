@@ -1385,3 +1385,12 @@ control and its fingerprint fix (`4d999037`): the intervening control-only
 revision merges distinct chroma cells. The existing dedup assertion reproduced
 that collision; all 98 CLI library tests pass after the paired fix, with no
 assertion changes (two existing ignored tests remain).
+
+### Known Bugs: browser cached reference after rejected input (2026-10-12)
+
+The checkpoint worker freed its cached reference before validating a replacement.
+An alpha rejection then left the previous identity attached to the freed object;
+restoring the original input could reuse it. Prepare the new reference before
+freeing or replacing the current one. Chromium recovery controls fail with the
+old worker and pass with the corrected worker, retaining exact native scalar
+and raw-map checks.

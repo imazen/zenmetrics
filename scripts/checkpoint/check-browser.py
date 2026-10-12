@@ -66,13 +66,17 @@ try:
           const values=Array.from(result.map);
           promise=wait();worker.postMessage({id:2,metric:'zensim',reference,distorted,width,height});
           const repeat=await promise;
-          if (JSON.stringify(values)!==JSON.stringify(Array.from(repeat.map))) throw new Error('Repeated maps differ');
-          reference[3]=0;
+          if (JSON.stringify(values)!==JSON.stringify(Array.from(repeat.map)) || result.score.score!==repeat.score.score) throw new Error('Repeated comparisons differ');
+          const alpha = reference[3]; reference[3]=0;
           promise=wait();worker.postMessage({id:3,metric:'zensim',reference,distorted,width,height});
           const refused=await promise;
           if(refused.type!=='error'||!refused.message.includes('opaque')) throw new Error('Alpha silently accepted');
+          reference[3]=alpha;
+          promise=wait();worker.postMessage({id:4,metric:'zensim',reference,distorted,width,height});
+          const recovered=await promise;
+          if(recovered.type!=='result'||recovered.score.score!==result.score.score||JSON.stringify(values)!==JSON.stringify(Array.from(recovered.map))) throw new Error('Rejected input damaged cached reference');
           worker.terminate();
-          return {ready, score:result.score, map:values, repeated:true, alpha_refused:true};
+          return {ready, score:result.score, map:values, repeated:true, alpha_refused:true, rejected_input_recovery:true};
         }''')
         assert len(result['map']) == 64 * 64
         assert all(isinstance(value, (int, float)) for value in result['map'])
