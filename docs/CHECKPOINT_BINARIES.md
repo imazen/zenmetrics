@@ -168,7 +168,7 @@ workspace. It keeps its own dependency lock and does not join the metric graph.
 ## Browser website
 
 The interactive viewer runs on https://zenmetrics-site.pages.dev/; its custom
-domain is https://zenmetrics.imazen.org/ (activate with a proxied CNAME to
+domain is https://metrics.imazen.org/ (activate with a proxied CNAME to
 zenmetrics-site.pages.dev). `.github/workflows/site.yml` downloads the pinned browser release,
 verifies its archive checksum and every manifest file against its source commit,
 and deploys without recompiling WASM. Change the checkpoint tag and source together

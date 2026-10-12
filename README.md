@@ -11,7 +11,7 @@ dataset, libvmaf), that variant is available too, so published numbers can be re
 also run on the GPU (CUDA, Vulkan, Metal, DX12) through CubeCL.
 `unsafe_code = "forbid"` is the workspace default; some crates override it.
 
-[Interactive browser viewer](https://zenmetrics.imazen.org/) ·
+[Interactive browser viewer](https://metrics.imazen.org/) ·
 [Checkpoint downloads](https://github.com/imazen/zenmetrics/releases)
 
 ## Quick start
