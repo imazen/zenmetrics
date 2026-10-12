@@ -1,19 +1,130 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Zenmetrics spatial viewer</title>
-<style>
-body{background:#10151f;color:#e8edf5;font:16px system-ui;margin:2rem auto;max-width:1100px;padding:0 1rem}h1{font-size:2rem}label{display:inline-block;margin:0 1rem 1rem 0}canvas{width:100%;height:auto;background:#232c3c}section{display:grid;grid-template-columns:1fr 1fr;gap:1rem}button,input,select{font:inherit}output{display:block;white-space:pre-wrap;margin:1rem 0}.error{color:#ffa1a1}
-</style>
-<h1>Spatial error, visible</h1>
-<p>Opaque sRGB8 image pairs. Zensim error maps use the fixed display scale below. Scores identify the selected CPU metric; the map always identifies zensim.</p>
-<label>Reference <input id="reference" type="file" accept="image/*"></label>
-<label>Distorted <input id="distorted" type="file" accept="image/*"></label>
-<input id="metric" type="hidden" value="zensim">
-<label>Map maximum <input id="scale" type="number" value="1" min="0.000001" step="0.1"></label>
-<label>Overlay opacity <input id="opacity" type="range" min="0" max="1" step="0.01" value="0.7"></label>
-<button id="compare" disabled>Compare</button>
-<output id="status">Starting threaded SIMD/relaxed-SIMD WASM…</output>
-<section><div>Reference<canvas id="source"></canvas></div><div>Zensim error overlay: black = 0, yellow = maximum<canvas id="map"></canvas></div></section>
-<p>Uploads use the browser's sRGB canvas conversion. This viewer is an interactive tool; browser timing is not an accepted fleet benchmark observation.</p>
-<script type="module" src="app.js"></script>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zenmetrics image comparison</title><style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #deddd6;
+  --accent: #b5452b; --accent-ink: #ffffff; --chip: #efeee8; --bar: #c2603f; --bar2: #6a5acd;
+  --good: #2f7d4f; --warn: #a15c07; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161614; --panel: #1f1f1c; --ink: #ecebe6; --muted: #a09f97; --line: #34342f;
+    --accent: #e0714f; --accent-ink: #161614; --chip: #2a2a26; --bar: #e0714f; --bar2: #9d90f0;
+    --good: #6cc38f; --warn: #e6a34a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161614; --panel: #1f1f1c; --ink: #ecebe6; --muted: #a09f97; --line: #34342f;
+  --accent: #e0714f; --accent-ink: #161614; --chip: #2a2a26; --bar: #e0714f; --bar2: #9d90f0;
+  --good: #6cc38f; --warn: #e6a34a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1360px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: 14px; }
+header h1 { font-size: 20px; margin: 0; letter-spacing: 0.01em; }
+header p { margin: 0; color: var(--muted); flex: 1 1 420px; }
+header a { color: var(--accent); }
+.grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.grid > div { min-width: 0; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.panel + .panel { margin-top: 16px; }
+label.file { display: block; border: 1px dashed var(--line); border-radius: 8px; padding: 10px; cursor: pointer; margin-bottom: 8px; }
+label.file:hover { border-color: var(--accent); }
+label.file input { display: none; }
+label.file b { display: block; }
+label.file span { color: var(--muted); font-size: 12px; word-break: break-all; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.row > * { flex: 0 0 auto; }
+select, input[type=number], input[type=text], textarea, button {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px;
+}
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+select { max-width: 100%; }
+#preset { width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 5px 12px; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.score { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.score div { background: var(--chip); border-radius: 8px; padding: 8px 10px; }
+.score small { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.score b { font: 600 20px/1.2 var(--mono); }
+.status { color: var(--muted); font-size: 12px; min-height: 18px; }
+.status.err { color: var(--accent); }
+.bars { margin-top: 10px; }
+.bars .plane { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.bar { display: grid; grid-template-columns: 26px 1fr 78px; gap: 6px; align-items: center; font: 12px var(--mono); }
+.bar i { display: block; height: 10px; background: var(--bar); border-radius: 3px; min-width: 1px; }
+.viewer { position: relative; }
+.viewer canvas { width: 100%; height: auto; max-height: 78vh; object-fit: contain; display: block; border-radius: 6px; background: var(--chip); image-rendering: auto; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend .ramp { flex: 0 1 180px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, #000004, #51127c, #b73779, #fc8961, #fcfdbf); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { background: var(--chip); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; user-select: none; }
+.chips input { margin: 0 4px 0 0; vertical-align: -1px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+td input[type=number] { width: 100px; font-family: var(--mono); font-size: 12px; padding: 3px 5px; }
+td input[type=range] { width: 110px; vertical-align: middle; }
+td select { font-size: 12px; padding: 3px 4px; }
+.globals { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; margin-bottom: 10px; }
+.globals label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+textarea { width: 100%; min-height: 220px; font: 12px/1.4 var(--mono); }
+.note { color: var(--muted); font-size: 12px; }
+details summary { cursor: pointer; color: var(--muted); }
+.prov { font-size: 12px; color: var(--muted); margin-top: 6px; max-height: 7.5em; overflow: auto; }
+
+#viewport{overflow:auto;max-height:78vh;touch-action:none;cursor:grab;background:var(--chip)}
+#viewport:active{cursor:grabbing}#view{max-height:none;max-width:none;width:auto;height:auto;border-radius:0}
+.file.drag{border-color:var(--accent);background:var(--chip)}button:disabled{opacity:.45;cursor:default}
+#status{white-space:pre-wrap}.error{color:var(--accent)}#score{font:600 23px var(--mono)}
+#metric{width:100%}.viewer-tools{justify-content:space-between}#pixel{font:12px var(--mono)}
+</style></head>
+<body><div class="wrap">
+<header><h1>Zenmetrics</h1><p>Compare image quality and explore spatial error. Images stay on your device.</p>
+<a href="https://github.com/imazen/zenmetrics">Source</a><a href="https://github.com/imazen/zenmetrics/releases">Downloads</a>
+<button id="theme" aria-label="Switch color theme">◐</button></header>
+<div class="grid"><div>
+<section class="panel"><h2>Images</h2>
+<label class="file" id="drop-reference"><input id="reference" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Reference</b><span id="name-reference">Choose or drop a file</span></label>
+<label class="file" id="drop-distorted"><input id="distorted" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Distorted</b><span id="name-distorted">Choose a file, or generate a JPEG below</span></label>
+<div class="row"><button id="demo">Demo scene</button><button id="swap">Swap images</button></div>
+<div class="row"><label for="quality">JPEG quality</label><input id="quality" type="range" min="5" max="100" value="40"><span id="quality-value">40</span></div>
+<button id="generate">Generate with zenjpeg</button> <button id="download-jpeg" disabled>Save JPEG</button>
+<p class="note">JPEG, PNG, WebP and JPEG XL use Zen decoders. SDR RGB8 ingress matches the CLI: transparency is preserved and scoring refuses non-opaque pixels. ICC metadata is not applied. Use already composited sRGB images for color-managed comparison.</p>
+</section>
+<section class="panel"><h2>Metric</h2><select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select>
+<div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
+<div class="row"><button id="compare" class="primary" disabled>Compare</button><label><input id="live" type="checkbox" checked> Live</label></div>
+<div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Worker time</small><b id="elapsed">–</b></div></div>
+<output id="status" class="status">Starting threaded SIMD WASM…</output>
+<p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. The zensim profile is pinned to B.</p></details>
+</section>
+</div><div>
+<section class="panel"><h2>Image comparison</h2>
+<div class="row"><div class="seg" id="views" role="group" aria-label="View mode">
+<button data-mode="reference">Reference</button><button data-mode="distorted">Distorted</button><button data-mode="split">Split</button><button data-mode="blink">Blink</button><button data-mode="overlay" class="on">Overlay</button><button data-mode="map">Map</button></div></div>
+<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim codec-target error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
+<label>Palette <select id="palette"><option value="viridis">Viridis</option><option value="turbo">Turbo</option></select></label>
+<label>Background <select id="background"><option value="reference">Reference</option><option value="distorted">Distorted</option></select></label>
+<label><input id="grey" type="checkbox"> Grey</label></div>
+<div class="row"><label>Overlay <input id="opacity" type="range" min="0" max="1" step=".01" value=".7"></label>
+<label>Scale <select id="norm"><option value="fixed">Fixed</option><option value="p995">99.5th percentile</option><option value="max">Maximum</option><option value="sqrt">Square root</option></select></label>
+<input id="scale" type="number" value="1" min=".000001" step=".1" aria-label="Fixed map maximum"></div>
+<div class="row"><label>Split <input id="split" type="range" min="0" max="1" step=".01" value=".5"></label>
+<button id="fit">Fit</button><button id="actual">1:1</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" aria-label="Zoom in">+</button><span id="zoom">100%</span>
+<button id="download">Download raw map</button></div>
+<div class="viewer" id="viewport"><canvas id="view" width="768" height="512"></canvas></div>
+<div class="legend"><span>Low</span><span class="ramp"></span><span>High error</span><span id="map-info"></span></div>
+<div class="row viewer-tools"><span id="dimensions" class="note">Load a pair or try the demo scene</span><span id="pixel">Move over the image to inspect a pixel</span></div>
+<p class="note">Map scaling changes only the visualization. Scores and downloaded raw values retain their metric definitions. DSSIM and GMSD retain their native similarity grids; visualization uses 1−similarity. SSIMULACRA2 currently exports a scalar only. Browser timings are interactive feedback, not accepted fleet benchmark observations.</p>
+</section>
+</div></div></div><script type="module" src="app.js"></script></body></html>
