@@ -537,7 +537,8 @@ fn fft2_rows_conj_mul(
         // Bluestein rows are independent transforms of disjoint rows —
         // every real-world (non-power-of-two) image lands here, so this
         // is where mad's thread scaling actually lives. Groups of eight
-        // take the SoA batch path (each m-length radix-2 stage vectorizes).
+        // take the SoA batch path (each m-length radix-2 stage vectorizes)
+        // on both the serial and the parallel path.
         let mut done = false;
         #[cfg(feature = "parallel")]
         if let PlanKind::Bluestein { m, .. } = &wplan.kind {
@@ -566,8 +567,30 @@ fn fft2_rows_conj_mul(
             done = true;
         }
         if !done {
-            for row in buf.chunks_exact_mut(width) {
-                wplan.run(row);
+            if let PlanKind::Bluestein { m, .. } = &wplan.kind {
+                // Serial path runs the same eight-lane batches, reusing one
+                // scratch set across the sweep instead of allocating per row.
+                let m = *m;
+                let (mut re8, mut im8, mut a) = (
+                    vec![0.0f32; m * 8],
+                    vec![0.0f32; m * 8],
+                    vec![Complex::default(); m],
+                );
+                for chunk in buf.chunks_mut(width * 8) {
+                    let nb = chunk.len() / width;
+                    let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
+                    if nb == 8 {
+                        wplan.run_bluestein8(&mut bufs, &mut re8, &mut im8);
+                    } else {
+                        for row in bufs {
+                            wplan.run_bluestein(row, &mut a);
+                        }
+                    }
+                }
+            } else {
+                for row in buf.chunks_exact_mut(width) {
+                    wplan.run(row);
+                }
             }
         }
     }
@@ -762,6 +785,19 @@ fn fft2_cols_conj_scale(
     }
 
     let mut cols = vec![Complex::default(); height * CB];
+    // The CB-column blocks are exactly the batch-8 width, so the serial
+    // Bluestein path transforms each block through `run_bluestein8` (one
+    // scratch set reused across the sweep) instead of `run` per column.
+    let mut blue = if let PlanKind::Bluestein { m, .. } = &hplan.kind {
+        let m = *m;
+        Some((
+            vec![0.0f32; m * CB],
+            vec![0.0f32; m * CB],
+            vec![Complex::default(); m],
+        ))
+    } else {
+        None
+    };
     let mut x = 0usize;
     while x < width {
         let nb = CB.min(width - x);
@@ -771,8 +807,22 @@ fn fft2_cols_conj_scale(
                 cols[j * height + y] = v;
             }
         }
-        for c in cols.chunks_exact_mut(height).take(nb) {
-            hplan.run(c);
+        match &mut blue {
+            Some((re8, im8, a)) => {
+                let mut bufs: Vec<&mut [Complex]> = cols.chunks_mut(height).take(nb).collect();
+                if nb == CB {
+                    hplan.run_bluestein8(&mut bufs, re8, im8);
+                } else {
+                    for c in bufs {
+                        hplan.run_bluestein(c, a);
+                    }
+                }
+            }
+            None => {
+                for c in cols.chunks_exact_mut(height).take(nb) {
+                    hplan.run(c);
+                }
+            }
         }
         for y in 0..height {
             let dst = &mut buf[y * width + x..y * width + x + nb];
@@ -819,6 +869,7 @@ pub(crate) fn ifft2_planned(
         Some(1.0 / (width * height) as f32),
     );
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
