@@ -230,7 +230,7 @@ fn ef(x: f32) -> f32 {
     target_env = "gnu"
 ))]
 mod libmvec {
-    use super::sq;
+    use archmage::{SimdToken, X64V3Token, arcane, rite};
     use core::arch::x86_64::__m256;
 
     #[link(name = "mvec")]
@@ -276,41 +276,96 @@ mod libmvec {
         visbase: f32,
         errorline: &mut [f32],
     ) {
-        if !std::arch::is_x86_feature_detected!("avx2") {
+        if let Some(token) = X64V3Token::summon() {
+            measure_in_band_v3(
+                token, refline, dstline, refmask, dstmask, visbase, errorline,
+            );
+        } else {
             super::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
-            return;
         }
-        let n = errorline.len();
-        let chunks = n.div_ceil(8);
-        // SAFETY: AVX2 was detected above, so `expf8`'s target-feature
-        // requirement holds for every call in this loop.
-        unsafe {
-            for ch in 0..chunks {
-                let i = ch * 8;
-                let mut neg = [0.0f32; 8];
-                let mut keep = [false; 8];
-                for j in 0..8 {
-                    let k = i + j;
-                    if k < n {
-                        // Compiled order: err = (|r−d|·visbase)·max(rm,dm)
-                        // (visbase multiplies FIRST), p = (err·√err)·err².
-                        let err =
-                            (refline[k] - dstline[k]).abs() * visbase * refmask[k].max(dstmask[k]);
-                        if err > 0.0 {
-                            let p = (err * sq(err)) * (err * err);
-                            neg[j] = -p;
-                            keep[j] = true;
-                        }
-                    }
-                }
-                let e = expf8(&neg);
-                for j in 0..8 {
-                    let k = i + j;
-                    if k < n && keep[j] {
-                        errorline[k] *= e[j];
-                    }
-                }
-            }
+    }
+
+    /// One 8-lane chunk of [`measure_in_band`]: the same lane-local ops the
+    /// scalar loop runs, so each output lane is bit-identical. `vsqrtps` and
+    /// `vblendvps` are exact per lane; `expf8` keeps the vector `expf` the
+    /// reference executes.
+    #[rite(v3, import_intrinsics)]
+    fn measure_in_band_chunk8(
+        r: &[f32; 8],
+        d: &[f32; 8],
+        rm: &[f32; 8],
+        dm: &[f32; 8],
+        el: &mut [f32; 8],
+        visv: __m256,
+        absmask: __m256,
+    ) {
+        // Compiled order: err = (|r−d|·visbase)·max(rm,dm)
+        // (visbase multiplies FIRST), p = (err·√err)·err².
+        let err = _mm256_mul_ps(
+            _mm256_mul_ps(
+                _mm256_and_ps(
+                    _mm256_sub_ps(_mm256_loadu_ps(r), _mm256_loadu_ps(d)),
+                    absmask,
+                ),
+                visv,
+            ),
+            _mm256_max_ps(_mm256_loadu_ps(rm), _mm256_loadu_ps(dm)),
+        );
+        let keep = _mm256_cmp_ps::<_CMP_GT_OQ>(err, _mm256_setzero_ps());
+        let p = _mm256_mul_ps(
+            _mm256_mul_ps(err, _mm256_sqrt_ps(err)),
+            _mm256_mul_ps(err, err),
+        );
+        let mut neg = [0.0f32; 8];
+        _mm256_storeu_ps(&mut neg, _mm256_xor_ps(p, _mm256_set1_ps(-0.0)));
+        // SAFETY: the `#[rite(v3)]` region guarantees AVX2 — `expf8`'s contract.
+        let e = _mm256_loadu_ps(&unsafe { expf8(&neg) });
+        let cur = _mm256_loadu_ps(el);
+        _mm256_storeu_ps(el, _mm256_blendv_ps(cur, _mm256_mul_ps(cur, e), keep));
+    }
+
+    /// The AVX2 body of [`measure_in_band`]: whole-vector loop over
+    /// 8-lane chunks plus a zero-padded tail chunk (err = 0 on padding
+    /// lanes → keep-mask off → blended out).
+    #[arcane(import_intrinsics)]
+    fn measure_in_band_v3(
+        _token: X64V3Token,
+        refline: &[f32],
+        dstline: &[f32],
+        refmask: &[f32],
+        dstmask: &[f32],
+        visbase: f32,
+        errorline: &mut [f32],
+    ) {
+        debug_assert_eq!(refline.len(), errorline.len());
+        debug_assert_eq!(dstline.len(), errorline.len());
+        debug_assert_eq!(refmask.len(), errorline.len());
+        debug_assert_eq!(dstmask.len(), errorline.len());
+        let visv = _mm256_set1_ps(visbase);
+        let absmask = _mm256_castsi256_ps(_mm256_set1_epi32(0x7fff_ffff));
+        let (rc, rt) = refline.as_chunks::<8>();
+        let (dc, _) = dstline.as_chunks::<8>();
+        let (rmc, _) = refmask.as_chunks::<8>();
+        let (dmc, _) = dstmask.as_chunks::<8>();
+        let (ec, et) = errorline.as_chunks_mut::<8>();
+        for i in 0..ec.len() {
+            measure_in_band_chunk8(&rc[i], &dc[i], &rmc[i], &dmc[i], &mut ec[i], visv, absmask);
+        }
+        // Partial tail: zero-pad to 8 lanes and run the same vector chunk —
+        // the previous chunked loop did exactly this.
+        if !et.is_empty() {
+            let t = et.len();
+            let off = rc.len() * 8;
+            let (mut r, mut d, mut rm, mut dm) =
+                ([0.0f32; 8], [0.0f32; 8], [0.0f32; 8], [0.0f32; 8]);
+            let mut el = [0.0f32; 8];
+            r[..t].copy_from_slice(&rt[..t]);
+            d[..t].copy_from_slice(&dstline[off..off + t]);
+            rm[..t].copy_from_slice(&refmask[off..off + t]);
+            dm[..t].copy_from_slice(&dstmask[off..off + t]);
+            el[..t].copy_from_slice(et);
+            measure_in_band_chunk8(&r, &d, &rm, &dm, &mut el, visv, absmask);
+            et.copy_from_slice(&el[..t]);
         }
     }
 
