@@ -513,3 +513,44 @@ min-avail 23143MiB | peak-load 2.34`. Clippy/build receipt:
 peak-load 2.48`. Candidate measurement receipt:
 `run-heavy: done rc=0 16s | peak-RSS 0.14GiB | min-avail 24020MiB |
 peak-load 1.33`.
+
+## Daala conversion: resumed layout, threaded-pool and paired checks
+
+The retained ordinary binaries for `9b8de0dd` and `a070af2d` were
+rechecked after resuming. With a 16-thread Rayon pool, the same
+3355×2516 synthetic production fixture measured 393.0329 → 349.7952
+ms/call over thirty rounds. Both sentinel scores remained
+34.765447061926444. Daala's ordered block fold remains serial; these
+pool settings do not establish parallel scaling. Peak RSS was
+0.13 → 0.14 GiB, with no memory improvement claimed.
+
+A separate patterned RGB8 fixture at the same dimensions passed
+packed/padded and ordinary/instrumented exact-product controls for
+all four Daala scalar columns. The instrumented oracle was the
+retained `9b8de0dd` memory binary; it independently agreed with the
+new ordinary conversion. Four fresh-process paired blocks on CPU 2,
+under an outer 16 GiB system scope with swap disabled, measured
+−10.698018% latency change and +0.726022% A/A change. Every invocation
+checked both operations' complete scalar products. The result is
+exploratory and below the suite's 15% wall-time caution; it is not a
+confirmation acceptance. The pair uses different pixel content from
+the synthetic production fixture.
+
+The new `ranked-fleet-pair-plan` recipe binds the input files, case,
+binaries and exact ordinary-driver checker through the existing
+zenbench bundle and pair protocols. `iqa-study-check` accepts optional
+`--size WIDTH HEIGHT --metric NAME` controls while retaining its
+default 38-route panel. Wrong control workloads, unknown metrics and
+zero dimensions were refused before creating output. The real pair
+completed with exact products and no validity issues.
+[Full logs, TSVs, products and paired export](psnrhvs_daala_qualification_2026-10-12.json).
+
+Control receipts: `run-heavy: done rc=0 21s | peak-RSS 1.20GiB |
+min-avail 23286MiB | peak-load 1.18` and
+`run-heavy: done rc=0 21s | peak-RSS 1.20GiB | min-avail 23131MiB |
+peak-load 0.97`. Threaded-pool receipts: `run-heavy: done rc=0 15s |
+peak-RSS 0.13GiB | min-avail 22619MiB | peak-load 1.11` and
+`run-heavy: done rc=0 13s | peak-RSS 0.14GiB | min-avail 24172MiB |
+peak-load 1.25`. The pair supervisor reported `run-heavy: done rc=0
+14s | peak-RSS 0.10GiB | min-avail 24313MiB | peak-load 0.79`; that
+supervisor RSS is not a metric-child peak measurement.

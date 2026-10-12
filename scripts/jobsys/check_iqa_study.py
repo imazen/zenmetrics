@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
 """Functional SDR driver controls. These do not certify accuracy or admission."""
+import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 from build_benchmark_study import inventory
 
-binaries, root = (Path(value).resolve() for value in sys.argv[1:])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('binaries', type=Path)
+parser.add_argument('output', type=Path)
+parser.add_argument('--size', type=int, nargs=2, default=[256, 256], metavar=('WIDTH', 'HEIGHT'))
+parser.add_argument('--metric', action='append', help='restrict controls to named cold RGB8 routes')
+args = parser.parse_args()
+binaries, root = args.binaries.resolve(), args.output.resolve()
+w, h = args.size
+if w < 1 or h < 1:
+    parser.error('dimensions must be positive')
+rows = [row for row in inventory()['metrics'] if row['cold_rgb8']]
+if args.metric:
+    unknown = set(args.metric) - {row['metric'] for row in rows}
+    if unknown:
+        parser.error(f'unknown cold RGB8 metrics: {sorted(unknown)}')
+    rows = [row for row in rows if row['metric'] in args.metric]
 root.mkdir(parents=True, exist_ok=False)
-w, h = 256, 256
 reference = bytes((x * 17 + y * 13 + c * 41) % 256
                   for y in range(h) for x in range(w) for c in range(3))
 distorted = bytes(max(0, value - 7) for value in reference)
@@ -31,9 +45,7 @@ def execute(case, label, variant):
     return result
 
 controls = []
-for row in inventory()['metrics']:
-    if not row['cold_rgb8']:
-        continue
+for row in rows:
     previous = None
     for layout, padding in [('packed', 0), ('padded', 7)]:
         metric = row['metric']
@@ -78,6 +90,6 @@ for count in [0, 2]:
     assert value['workload']['warmup_operations'] == count
     assert len(value['driver']['correctness']['score_bits']) == 2
 (root / 'controls.json').write_text(json.dumps(controls, indent=2) + '\n')
-print(json.dumps(dict(sdr_metrics=sum(row['cold_rgb8'] for row in inventory()['metrics']),
+print(json.dumps(dict(sdr_metrics=len(rows), width=w, height=h,
                       instrumentation_and_stride_parity='exact scalar products',
                       qualification='functional control only; no accuracy or resource admission claim')))

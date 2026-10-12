@@ -342,6 +342,10 @@ ranked-pair-plan baseline candidate baseline_rev candidate_rev output threads="1
 ranked-hdr-pair-plan baseline candidate baseline_rev candidate_rev output version="v3" side="250" threads="1" cpus="2":
     python3 -B scripts/bench/ranked-metric-pair.py plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{output}}" --threads "{{threads}}" --cpus "{{cpus}}" --hdr-version "{{version}}" --side "{{side}}"
 
+# Pair full production fleet scoring with every scalar product checked exactly.
+ranked-fleet-pair-plan baseline candidate baseline_rev candidate_rev case control runner output:
+    python3 -B scripts/bench/ranked-metric-pair.py fleet-plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{case}}" "{{control}}" "{{runner}}" "{{output}}"
+
 ranked-pair runner plan output cpus="2":
     TMPDIR="$HOME/tmp" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- "{{runner}}" exec --cpu-policy auto --cpu-set "{{cpus}}" "{{runner}}" -- pair "{{plan}}" --output "{{output}}" --wait 30
 
@@ -458,8 +462,8 @@ iqa-pair-lines-check binaries case output:
 iqa-hdr-check binaries output:
     python3 -B scripts/jobsys/check_iqa_hdr.py {{binaries}} {{output}}
 
-iqa-study-check binaries output:
-    python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}}
+iqa-study-check binaries output *args:
+    python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}} {{args}}
 
 # Use prequalified small cases to exercise all native routes through zenfleet.
 iqa-deployment-bench binaries runner sdr hdr output machine domain:
