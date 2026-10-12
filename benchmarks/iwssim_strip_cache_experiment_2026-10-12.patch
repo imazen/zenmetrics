@@ -1,0 +1,37 @@
+diff --git a/crates/iwssim/src/strip.rs b/crates/iwssim/src/strip.rs
+index 2724542dd8..1b98ce0e6c 100644
+--- a/crates/iwssim/src/strip.rs
++++ b/crates/iwssim/src/strip.rs
+@@ -583,6 +583,7 @@
+         })
+         .collect();
+     let mut top_accum = TopAccum::default();
++    let mut ref_cache = Vec::with_capacity(strips.len());
+
+     // ====== Pass 1: per-strip Y^T·Y accumulation + top-scale cs sum ======
+     for sg in &strips {
+@@ -736,6 +737,9 @@
+                 }
+             }
+         }
++        if params.iw_flag {
++            ref_cache.push(ref_levels);
++        }
+     }
+
+     // ====== Eigendecomp per scale ======
+@@ -763,13 +767,11 @@
+
+     // ====== Pass 2: per-strip cs + infow accumulation ======
+     if params.iw_flag {
+-        for sg in &strips {
++        for (sg, ref_levels) in strips.iter().zip(ref_cache) {
+             let strip_h = sg.strip_h();
+             let body_in_strip = sg.body_in_strip();
+-            let ref_strip = slice_rows(ref_work, work_w, sg.strip_start, sg.strip_end);
+             let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
+
+-            let ref_levels = build_laplacian_pyramid(ref_strip, work_w, strip_h, NUM_SCALES);
+             let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
+             let lp_ref_v = split_levels(&ref_levels);
+             let lp_dis_v = split_levels(&dis_levels);

@@ -1,0 +1,18 @@
+Date: 2026-10-12. Host: i134. Production baseline: 4ca87a344ad15d4b342cbaf73ccd6bc244b75142.
+Experiment is not shipped. Apply iwssim_strip_cache_experiment_2026-10-12.patch to baseline strip.rs to retain reference pyramids across the covariance barrier. Each is released after its pass-two strip. No distorted pyramid cache, arithmetic or global fold changes.
+Experimental strip.rs SHA-256: 605a1f4a4d3a39b4f35732e2f2789611e9ae190794eab0b932c34cdd1a89c06b.
+Patch SHA-256: 6436d8db3e305a795647837093f06d674ac13efdf64d1897236de1e59f87db87.
+Baseline binary SHA-256: 6db61fcbc5e5ced4c67ff58d942c1436771f0a834065e8c2f1bf98f96db766dc.
+Experimental binary SHA-256: deff815850cf3f1b8a9202c162c5019ee8b9811d70a4fbd434f5c50316c57ed1.
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just snap-cargo @ build --release -p iwssim --features parallel,avx512 --example wall. Runtime dispatch, no target-cpu=native.
+Experimental binary retained on r7900x at ~/tmp/zm-ranked-binaries/iwssim-strip-cache-experiment; i134 at ~/tmp/zm-iwssim-residual-20261012/iwssim-strip-cache-experiment.
+Measurement command on i134: RANKED_RUN_HEAVY=$HOME/tmp/zm-iqa-dct-run-heavy RANKED_PERF_SUDO=1 IWSSIM_WALL_STRIP_HEIGHT=512 bash ranked-metric-wall.sh <binary> 1 <new-output> 3355 <2516-or-5032> 5.
+Outer systemd service runs as normal User, with TMPDIR=$HOME/tmp and AllowedCPUs=2, MemoryMax=17179869184, MemorySwapMax=0. These properties and EffectiveCPUs=2 were queried while ActiveState=active. Inner run-heavy has no user scope and reports that fallback explicitly; the outer unit supplies hard limits. CPU counters are cpu_core PMU, unused Atom counters are not counted.
+Raw remote campaign: ~/tmp/zm-iwssim-residual-20261012/cache-campaign.sh and cache-*.log. Local complete outputs: ~/tmp/zm-iwssim-residual-walls/cache-*.log; all retained with hashes in iwssim_strip_cache_wall_2026-10-12.json.
+All-feature experiment tests: 25 unit + 3 Python goldens + 14 strip tests, zero failed or ignored. run-heavy: done rc=0 16s | peak-RSS 0.42GiB | min-avail 20386MiB | peak-load 22.86
+Build resource: run-heavy: done rc=0 8s | peak-RSS 0.28GiB | min-avail 20964MiB | peak-load 23.58
+3355x2516 baseline: run-heavy: done rc=0 4s | peak-RSS 0.35GiB | min-avail 27869MiB | peak-load 0.15
+3355x2516 experiment: run-heavy: done rc=0 4s | peak-RSS 0.41GiB | min-avail 27813MiB | peak-load 0.15
+3355x5032 baseline: run-heavy: done rc=0 9s | peak-RSS 0.54GiB | min-avail 27684MiB | peak-load 0.44
+3355x5032 experiment: run-heavy: done rc=0 7s | peak-RSS 0.69GiB | min-avail 27576MiB | peak-load 0.60
+Score bits are exact per size across builds: 3fefff0b351388ed and 3fefff09b633abe4. Exploratory wall and measured peak RSS only; no confirmation verdict or unmeasured scaling claim.

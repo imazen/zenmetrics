@@ -433,6 +433,40 @@ behavior is unchanged.
 all six outputs and hashes; [metadata](iwssim_residual_2026-10-12.meta)
 records provenance, commands, limitations and verification resources.
 
+### IW-SSIM reference strip cache: measured memory tradeoff
+
+An experimental patch retains each reference Laplacian pyramid from pass
+one until its turn in pass two, then releases it. Distorted pyramids are
+still rebuilt. The patch passes the 42-test all-feature suite with
+unchanged assertions. These i134 measurements use the same ordinary
+binaries, P-core 2, five calls and body 512; global covariance and the
+score fold keep their original order.
+
+| Measurement | Rebuild | Retain reference pyramids |
+|---|---:|---:|
+| 3355×2516 ms/call | 843.54 | 739.89 |
+| 3355×2516 instructions | 56,942,047,047 | 52,335,710,064 |
+| 3355×2516 maximum RSS, KiB (`time -v`) | 365,128 | 426,804 |
+| 3355×2516 run-heavy peak RSS, GiB | 0.35 | 0.41 |
+| 3355×5032 ms/call | 1750.74 | 1453.19 |
+| 3355×5032 instructions | 117,804,443,447 | 105,626,424,676 |
+| 3355×5032 maximum RSS, KiB (`time -v`) | 562,900 | 725,944 |
+| 3355×5032 run-heavy peak RSS, GiB | 0.54 | 0.69 |
+
+Both builds retain score bits `3fefff0b351388ed` at the first size and
+`3fefff09b633abe4` at the second. Timings are exploratory, without paired
+confirmation intervals. The measured memory cost grows across these two
+sizes. Retaining every strip also changes the storage bound from the
+current strip to the entire image's overlapping strip pyramids. The
+unconditional cache therefore remains an experiment. A future cache
+needs an explicit memory budget or external storage before it can serve
+the bounded strip route; production still rebuilds the reference bands.
+
+The [experimental patch](iwssim_strip_cache_experiment_2026-10-12.patch),
+[complete outputs](iwssim_strip_cache_wall_2026-10-12.json) and
+[metadata](iwssim_strip_cache_2026-10-12.meta) preserve the reproducible
+tradeoff instead of inferring it from buffer sizes.
+
 ## PSNR-HVS
 
 Baseline source: `62b5a420`. Its native profile places 38.91% of sampled
