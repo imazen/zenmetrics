@@ -125,29 +125,22 @@ fn csf_apply(
 ) -> Vec<f32> {
     let mut buf: Vec<Complex> = src.iter().map(|&v| Complex::new(v, 0.0)).collect();
     fft::fft2_planned(&mut buf, n, m, wplan, hplan);
-    // The shifted-position remap materialises as a weight plane; the
-    // multiply then rides the inverse transform's transpose-in
-    // (`conj(v·w)` — identical arithmetic to multiply-then-conjugate),
-    // so no separate pass over `buf` is needed.
-    let mut wmap = vec![0.0f32; m * n];
-    #[cfg(feature = "parallel")]
-    {
-        use rayon::prelude::*;
-        wmap.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
-            let su = (u + m / 2) % m;
-            for (v, w) in row.iter_mut().enumerate() {
-                *w = csf[su * n + (v + n / 2) % n];
-            }
-        });
-    }
-    #[cfg(not(feature = "parallel"))]
-    for u in 0..m {
-        let su = (u + m / 2) % m;
-        for v in 0..n {
-            wmap[u * n + v] = csf[su * n + (v + n / 2) % n];
-        }
-    }
-    fft::ifft2_planned_mul(&mut buf, n, m, wplan, hplan, &wmap);
+    // The shifted-position remap is a lazy view the row gather evaluates
+    // on the fly — `conj(v·w)` — identical arithmetic to
+    // multiply-then-conjugate, with no weight plane materialized.
+    fft::ifft2_planned_mul(
+        &mut buf,
+        n,
+        m,
+        wplan,
+        hplan,
+        fft::RowMul::Shift {
+            a: csf,
+            uo: m / 2,
+            vo: n / 2,
+            m,
+        },
+    );
     buf.iter().map(|c| c.re).collect()
 }
 
@@ -526,28 +519,22 @@ fn gabor_apply(
 ) -> Vec<Complex> {
     let mut buf = imagefft.to_vec();
     // Same fusion as `csf_apply`: the `fftshift`ed `lg·sp` product is a
-    // real weight plane that rides the inverse transform's transpose-in.
-    let mut wmap = vec![0.0f32; m * n];
-    #[cfg(feature = "parallel")]
-    {
-        use rayon::prelude::*;
-        wmap.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
-            let su = (u + m.div_ceil(2)) % m;
-            for (v, w) in row.iter_mut().enumerate() {
-                let sv = (v + n.div_ceil(2)) % n;
-                *w = lg[su * n + sv] * sp[su * n + sv];
-            }
-        });
-    }
-    #[cfg(not(feature = "parallel"))]
-    for u in 0..m {
-        let su = (u + m.div_ceil(2)) % m;
-        for v in 0..n {
-            let sv = (v + n.div_ceil(2)) % n;
-            wmap[u * n + v] = lg[su * n + sv] * sp[su * n + sv];
-        }
-    }
-    fft::ifft2_planned_mul(&mut buf, n, m, wplan, hplan, &wmap);
+    // lazy weight view the inverse transform's row gather evaluates on
+    // the fly — no weight plane is materialized.
+    fft::ifft2_planned_mul(
+        &mut buf,
+        n,
+        m,
+        wplan,
+        hplan,
+        fft::RowMul::Shift2 {
+            a: lg,
+            b: sp,
+            uo: m.div_ceil(2),
+            vo: n.div_ceil(2),
+            m,
+        },
+    );
     buf
 }
 

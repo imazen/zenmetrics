@@ -136,6 +136,65 @@ enum PlanKind {
     },
 }
 
+/// Real multiplier a row-transform gather applies on the way in — the
+/// `v ↦ (re·f, ±im·f)` factor the old separate conj/filter pass wrote
+/// into `buf` before transforming. The shifted-position views
+/// `a[su·n+sv]` and `a[su·n+sv]·b[su·n+sv]` with `su = (u+uo) mod m`,
+/// `sv = (v+vo) mod n` let the fftshift/ifftshift weight remaps ride the
+/// gather directly, so no weight plane is ever materialized. `u`/`v` are
+/// absolute row/column indices of the plane being transformed.
+#[derive(Clone, Copy)]
+pub(crate) enum RowMul<'a> {
+    /// `f = 1` — no multiply.
+    Id,
+    /// `f = a[su·n + sv]` — one circularly shifted plane (the csf remap).
+    Shift {
+        /// The unshifted source plane.
+        a: &'a [f32],
+        /// Row shift `uo` and column shift `vo`; each wraps at most once.
+        uo: usize,
+        vo: usize,
+        /// Plane height — the `su` modulus (`n` is ambient).
+        m: usize,
+    },
+    /// `f = a[su·n+sv]·b[su·n+sv]` — the gabor `lg·sp` product, lazily.
+    Shift2 {
+        /// First shifted plane.
+        a: &'a [f32],
+        /// Second shifted plane.
+        b: &'a [f32],
+        /// Row shift.
+        uo: usize,
+        /// Column shift.
+        vo: usize,
+        /// Plane height — the `su` modulus.
+        m: usize,
+    },
+}
+
+impl RowMul<'_> {
+    /// The multiplier at plane position `(u, v)`; `n` is the plane width.
+    /// `u < m`, `v < n`, `uo < m`, `vo < n` → each shifted index wraps at
+    /// most once, so one conditional subtract replaces a modulo.
+    #[inline(always)]
+    fn at(self, u: usize, v: usize, n: usize) -> f32 {
+        match self {
+            RowMul::Id => 1.0,
+            RowMul::Shift { a, uo, vo, m } | RowMul::Shift2 { a, uo, vo, m, .. } => {
+                let su = u + uo;
+                let su = if su >= m { su - m } else { su };
+                let sv = v + vo;
+                let sv = if sv >= n { sv - n } else { sv };
+                let av = a[su * n + sv];
+                match self {
+                    RowMul::Shift2 { b, .. } => av * b[su * n + sv],
+                    _ => av,
+                }
+            }
+        }
+    }
+}
+
 /// Per-stage twiddles for a power-of-two length.
 fn radix2_stages(n: usize) -> Vec<Vec<Complex>> {
     debug_assert!(n.is_power_of_two() && n >= 2);
@@ -192,7 +251,7 @@ impl Plan {
             PlanKind::Radix2 { stages } => fft_radix2_planned(buf, stages),
             PlanKind::Bluestein { m, .. } => {
                 let mut a = vec![Complex::default(); *m];
-                self.run_bluestein(buf, &mut a);
+                self.run_bluestein(buf, &mut a, RowMul::Id, false, 0, 0);
             }
         }
     }
@@ -203,6 +262,10 @@ impl Plan {
     /// are per-lane scalar ops on the way in/out — bit-identical to
     /// [`Self::run_bluestein`] on each row. `bufs` are the eight `n`-length
     /// rows/columns; `re8`/`im8` are caller scratch of `m·8`.
+    ///
+    /// `conj`/`mul` fuse the `(re·f, −im·f)` input factor into the gather —
+    /// `bufs[j]` is treated as row `r0 + j` of a `width`-strided plane for
+    /// the [`RowMul`] index math (ignored for [`RowMul::Id`]).
     fn run_bluestein8(
         &self,
         bufs: &mut [&mut [Complex]],
@@ -210,6 +273,10 @@ impl Plan {
         im8: &mut [f32],
         re8b: &mut [f32],
         im8b: &mut [f32],
+        mul: RowMul,
+        conj: bool,
+        r0: usize,
+        width: usize,
     ) {
         let PlanKind::Bluestein {
             chirp,
@@ -225,18 +292,21 @@ impl Plan {
         debug_assert!(
             re8.len() >= m * 8 && im8.len() >= m * 8 && re8b.len() >= m * 8 && im8b.len() >= m * 8
         );
-        // Gather: a[k] = buf[k]·chirp[k], zeroed past n — 8×8 k-blocks keep
-        // the transposed load in registers (scalar tail for m % 8 ≠ 0).
+        // Gather: a[k] = (conj·f)(buf[k])·chirp[k], zeroed past n — 8×8
+        // k-blocks keep the transposed load in registers (scalar tail for
+        // m % 8 ≠ 0).
         let mb = m & !7;
         for k0 in (0..mb).step_by(8) {
-            blue8_gather(bufs, n, k0, chirp, re8, im8);
+            blue8_gather(bufs, n, k0, chirp, re8, im8, mul, conj, r0, width);
         }
         for k in mb..m {
             for (j, buf) in bufs.iter().enumerate() {
                 let (re, im) = if k < n {
                     let v = buf[k];
                     let c = chirp[k];
-                    (v.re * c.re - v.im * c.im, v.re * c.im + v.im * c.re)
+                    let f = mul.at(r0 + j, k, width);
+                    let (zr, zi) = (v.re * f, (if conj { -v.im } else { v.im }) * f);
+                    (zr * c.re - zi * c.im, zr * c.im + zi * c.re)
                 } else {
                     (0.0, 0.0)
                 };
@@ -262,7 +332,19 @@ impl Plan {
     /// The Bluestein pass with caller-supplied `m`-length scratch, so
     /// parallel row/column sweeps reuse one buffer per worker instead of
     /// allocating ~64 KiB per row. Results are identical to `run`.
-    fn run_bluestein(&self, buf: &mut [Complex], a: &mut [Complex]) {
+    ///
+    /// `conj`/`mul` apply the `(re·f, −im·f)` input factor on the way in
+    /// — `buf` is treated as row `u` of a `width`-strided plane for the
+    /// [`RowMul`] index math (ignored for [`RowMul::Id`]).
+    fn run_bluestein(
+        &self,
+        buf: &mut [Complex],
+        a: &mut [Complex],
+        mul: RowMul,
+        conj: bool,
+        u: usize,
+        width: usize,
+    ) {
         debug_assert_eq!(buf.len(), self.n);
         let PlanKind::Bluestein {
             chirp,
@@ -277,7 +359,10 @@ impl Plan {
         let n = self.n;
         a[..*m].fill(Complex::default());
         for k in 0..n {
-            a[k] = buf[k].mul(chirp[k]);
+            let v = buf[k];
+            let f = mul.at(u, k, width);
+            let im = if conj { -v.im } else { v.im };
+            a[k] = Complex::new(v.re * f, im * f).mul(chirp[k]);
         }
         fft_radix2_planned(&mut a[..*m], mplan);
         for (x, y) in a[..*m].iter_mut().zip(bf) {
@@ -506,9 +591,11 @@ fn fft_batch8(
 }
 
 /// One 8×8 k-block of the [`Plan::run_bluestein8`] gather: lane `j` reads
-/// `bufs[j][k′]` (zeroed past `n`) and stores `·chirp[k′]` contiguously at
-/// `re8[k′·8+j]` for k′ = k0..k0+8. The fixed arrays keep the 8×8 transpose
-/// register-resident so each tier body lowers to unpack/permute shuffles.
+/// `bufs[j][k′]` (zeroed past `n`), applies the `conj·f` input factor
+/// (`bufs[j]` is plane row `r0+j` for the [`RowMul`] index math), and
+/// stores `·chirp[k′]` contiguously at `re8[k′·8+j]` for k′ = k0..k0+8.
+/// The fixed arrays keep the 8×8 transpose register-resident so each tier
+/// body lowers to unpack/permute shuffles.
 #[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn blue8_gather(
     bufs: &[&mut [Complex]],
@@ -517,27 +604,40 @@ fn blue8_gather(
     chirp: &[Complex],
     re8: &mut [f32],
     im8: &mut [f32],
+    mul: RowMul,
+    conj: bool,
+    r0: usize,
+    width: usize,
 ) {
     let cols = n.saturating_sub(k0).min(8);
+    // The per-element multiplier for this tile, match-once per spec kind.
+    let mut fm = [[1.0f32; 8]; 8];
+    if !matches!(mul, RowMul::Id) {
+        for (j, row) in fm.iter_mut().enumerate() {
+            for (w, c) in row.iter_mut().zip(0..cols) {
+                *w = mul.at(r0 + j, k0 + c, width);
+            }
+        }
+    }
     let mut br = [[0.0f32; 8]; 8];
     let mut bi = [[0.0f32; 8]; 8];
     if cols == 8 {
         // Fully fixed bounds: LLVM lowers this to ymm loads + deinterleave.
-        for (j, b) in br.iter_mut().zip(bi.iter_mut()).enumerate() {
+        for (j, (b, frow)) in br.iter_mut().zip(bi.iter_mut()).zip(fm.iter()).enumerate() {
             let row = &*bufs[j];
             for c in 0..8 {
                 let z = row[k0 + c];
-                b.0[c] = z.re;
-                b.1[c] = z.im;
+                b.0[c] = z.re * frow[c];
+                b.1[c] = (if conj { -z.im } else { z.im }) * frow[c];
             }
         }
     } else {
-        for (j, b) in br.iter_mut().zip(bi.iter_mut()).enumerate() {
+        for (j, (b, frow)) in br.iter_mut().zip(bi.iter_mut()).zip(fm.iter()).enumerate() {
             let row = &*bufs[j];
             for c in 0..cols {
                 let z = row[k0 + c];
-                b.0[c] = z.re;
-                b.1[c] = z.im;
+                b.0[c] = z.re * frow[c];
+                b.1[c] = (if conj { -z.im } else { z.im }) * frow[c];
             }
         }
     }
@@ -797,20 +897,21 @@ pub(crate) fn fft2_planned(
 /// the block fits L2, so the extra pass is in-cache). Non-power-of-two
 /// plans keep the scalar per-row path (Bluestein sizes are rare and small).
 fn fft2_rows_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan) {
-    fft2_rows_conj_mul(buf, width, height, wplan, None, false);
+    fft2_rows_conj_mul(buf, width, height, wplan, RowMul::Id, false);
 }
 
 /// [`fft2_rows_planned`] with an optional `conj` and a real filter multiply
 /// fused into the transpose **in**: with `conj` set it loads
-/// `(re·f, −im·f)` (with `f = 1` when `filter` is `None`), i.e.
+/// `(re·f, −im·f)` (with `f = 1` for [`RowMul::Id`]), i.e.
 /// `conj(buf·f)` — exactly what an `ifft2` whose input was just
 /// pointwise-filtered needs, without a separate pass over the buffer.
+/// Bluestein plans fuse the same factor into the chirp gather.
 fn fft2_rows_conj_mul(
     buf: &mut [Complex],
     width: usize,
     height: usize,
     wplan: &Plan,
-    filter: Option<&[f32]>,
+    mul: RowMul,
     conj: bool,
 ) {
     if let PlanKind::Radix2 { stages } = &wplan.kind {
@@ -833,11 +934,16 @@ fn fft2_rows_conj_mul(
                     },
                     |(re8, im8, re8b, im8b), (ci, chunk)| {
                         let nb = chunk.len() / width;
+                        let r0 = ci * RB;
                         for x in 0..width {
+                            let mut fj = [1.0f32; RB];
+                            for (w, j) in fj.iter_mut().zip(0..nb) {
+                                *w = mul.at(r0 + j, x, width);
+                            }
                             for j in 0..nb {
                                 let i = j * width + x;
                                 let v = chunk[i];
-                                let f = filter.map_or(1.0, |f| f[(ci * RB + j) * width + x]);
+                                let f = fj[j];
                                 let im = if conj { -v.im } else { v.im };
                                 re8[x * RB + j] = v.re * f;
                                 im8[x * RB + j] = im * f;
@@ -867,10 +973,14 @@ fn fft2_rows_conj_mul(
         while y < height {
             let nb = RB.min(height - y);
             for x in 0..width {
+                let mut fj = [1.0f32; RB];
+                for (w, j) in fj.iter_mut().zip(0..nb) {
+                    *w = mul.at(y + j, x, width);
+                }
                 for j in 0..nb {
                     let i = (y + j) * width + x;
                     let v = buf[i];
-                    let f = filter.map_or(1.0, |f| f[i]);
+                    let f = fj[j];
                     let im = if conj { -v.im } else { v.im };
                     re8[x * RB + j] = v.re * f;
                     im8[x * RB + j] = im * f;
@@ -889,9 +999,10 @@ fn fft2_rows_conj_mul(
             y += nb;
         }
     } else {
-        if conj || filter.is_some() {
+        let bluestein = matches!(wplan.kind, PlanKind::Bluestein { .. });
+        if !bluestein && (conj || !matches!(mul, RowMul::Id)) {
             for (i, v) in buf.iter_mut().enumerate() {
-                let f = filter.map_or(1.0, |f| f[i]);
+                let f = mul.at(i / width, i % width, width);
                 let im = if conj { -v.im } else { v.im };
                 *v = Complex::new(v.re * f, im * f);
             }
@@ -906,7 +1017,7 @@ fn fft2_rows_conj_mul(
         if let PlanKind::Bluestein { m, .. } = &wplan.kind {
             use rayon::prelude::*;
             let m = *m;
-            buf.par_chunks_mut(width * 8).for_each_init(
+            buf.par_chunks_mut(width * 8).enumerate().for_each_init(
                 || {
                     (
                         vec![0.0f32; m * 8],
@@ -916,14 +1027,15 @@ fn fft2_rows_conj_mul(
                         vec![Complex::default(); m],
                     )
                 },
-                |(re8, im8, re8b, im8b, a), chunk| {
+                |(re8, im8, re8b, im8b, a), (ci, chunk)| {
                     let nb = chunk.len() / width;
+                    let r0 = ci * 8;
                     let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
                     if nb == 8 {
-                        wplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
+                        wplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b, mul, conj, r0, width);
                     } else {
-                        for row in bufs {
-                            wplan.run_bluestein(row, a);
+                        for (j, row) in bufs.into_iter().enumerate() {
+                            wplan.run_bluestein(row, a, mul, conj, r0 + j, width);
                         }
                     }
                 },
@@ -942,16 +1054,21 @@ fn fft2_rows_conj_mul(
                     vec![0.0f32; m * 8],
                     vec![Complex::default(); m],
                 );
+                let mut r0 = 0usize;
                 for chunk in buf.chunks_mut(width * 8) {
                     let nb = chunk.len() / width;
                     let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
                     if nb == 8 {
-                        wplan.run_bluestein8(&mut bufs, &mut re8, &mut im8, &mut re8b, &mut im8b);
+                        wplan.run_bluestein8(
+                            &mut bufs, &mut re8, &mut im8, &mut re8b, &mut im8b, mul, conj, r0,
+                            width,
+                        );
                     } else {
-                        for row in bufs {
-                            wplan.run_bluestein(row, &mut a);
+                        for (j, row) in bufs.into_iter().enumerate() {
+                            wplan.run_bluestein(row, &mut a, mul, conj, r0 + j, width);
                         }
                     }
+                    r0 += nb;
                 }
             } else {
                 for row in buf.chunks_exact_mut(width) {
@@ -1151,10 +1268,20 @@ fn fft2_cols_conj_scale(
                             let mut bufs: Vec<&mut [Complex]> =
                                 block.chunks_mut(height).take(nb).collect();
                             if nb == CB {
-                                hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
+                                hplan.run_bluestein8(
+                                    &mut bufs,
+                                    re8,
+                                    im8,
+                                    re8b,
+                                    im8b,
+                                    RowMul::Id,
+                                    false,
+                                    0,
+                                    0,
+                                );
                             } else {
                                 for c in bufs {
-                                    hplan.run_bluestein(c, a);
+                                    hplan.run_bluestein(c, a, RowMul::Id, false, 0, 0);
                                 }
                             }
                         },
@@ -1221,10 +1348,10 @@ fn fft2_cols_conj_scale(
             Some((re8, im8, re8b, im8b, a)) => {
                 let mut bufs: Vec<&mut [Complex]> = cols.chunks_mut(height).take(nb).collect();
                 if nb == CB {
-                    hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
+                    hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b, RowMul::Id, false, 0, 0);
                 } else {
                     for c in bufs {
-                        hplan.run_bluestein(c, a);
+                        hplan.run_bluestein(c, a, RowMul::Id, false, 0, 0);
                     }
                 }
             }
@@ -1274,7 +1401,7 @@ pub(crate) fn ifft2_planned(
     hplan: &Plan,
 ) {
     debug_assert_eq!(buf.len(), width * height);
-    fft2_rows_conj_mul(buf, width, height, wplan, None, true);
+    fft2_rows_conj_mul(buf, width, height, wplan, RowMul::Id, true);
     fft2_cols_conj_scale(
         buf,
         width,
@@ -1285,21 +1412,21 @@ pub(crate) fn ifft2_planned(
 }
 
 /// [`ifft2_planned`] with a real (r-space) filter multiply fused into the
-/// row transpose-in: element `i` is transformed as `conj(buf[i]·filter[i])`,
-/// which is `conj(buf[i])·filter[i]` for real `filter` — identical arithmetic
+/// row transpose-in: element `i` is transformed as `conj(buf[i]·mul[i])`,
+/// which is `conj(buf[i])·mul[i]` for real `mul` — identical arithmetic
 /// to multiplying then running [`ifft2_planned`], minus the multiply's own
-/// pass over the buffer.
+/// pass over the buffer. The [`RowMul`] shifted views also remove the
+/// weight-plane materialization entirely.
 pub(crate) fn ifft2_planned_mul(
     buf: &mut [Complex],
     width: usize,
     height: usize,
     wplan: &Plan,
     hplan: &Plan,
-    filter: &[f32],
+    mul: RowMul,
 ) {
     debug_assert_eq!(buf.len(), width * height);
-    debug_assert_eq!(filter.len(), width * height);
-    fft2_rows_conj_mul(buf, width, height, wplan, Some(filter), true);
+    fft2_rows_conj_mul(buf, width, height, wplan, mul, true);
     fft2_cols_conj_scale(
         buf,
         width,
