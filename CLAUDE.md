@@ -542,6 +542,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-12 — the internal IW-SSIM pyramid's old reflect1 kernels cannot repeatedly downsample a one/two-sample axis.** The retained materialized oracle panics on a 1×1 depth-two build; public scoring pads small inputs to its native dimensions. Exact rolling-pyramid tests exercise tiny axes at residual-only depth and deeper supported shapes explicitly. This is an existing internal kernel restriction, not score drift from the rolling schedule.
+
 - **2026-10-12 — native adapter CI could hit resource admission before testing its requested child outcome.** The macOS runner in [run 38317895817](https://github.com/imazen/zenmetrics/actions/runs/38317895817) refused the timeout fixture as `busy`: CPU load 1.0, six heavy processes, a two-second admission budget. Controls now allow 30 seconds for resource admission, with a matching bounded parent wait; the two-second child timeout and every expected outcome remain unchanged. Linux controls pass complete, OS-peak, wrong-output, timeout, cancellation, routing refusal and the native worker/ledger path. The admission gate remains enabled.
 
 - **2026-10-12 — IW-SSIM SIMD tests lacked `alloc::vec`/`Vec` imports with default features disabled. FIXED.** The test module now imports both explicitly. The existing 41 tests pass with and without default features; assertions are unchanged. Reproduce with `just snap-cargo @ test -p iwssim --no-default-features`.

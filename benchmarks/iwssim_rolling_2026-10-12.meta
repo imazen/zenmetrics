@@ -1,0 +1,20 @@
+Date: 2026-10-12. Host: r7900x. Baseline production source: 3250fcb948704c25d36d361b9eb8928efd4e2a2f; no later production metric changes through 1a80ca30ff46f37fbe7023431269296dabe185bb.
+Candidate pyramid.rs SHA-256: 4ed698ef6619baa88b038c1f64b311b9d1bdf65f7e99972438c51d4cb8adbd46.
+Baseline binary: ~/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate; SHA-256 9f8e872b732a662a210d0993fa18aa4d185d3d07478792b9e29b0496adf29809.
+Candidate binary: ~/tmp/zm-ranked-binaries/iwssim-rolling-candidate; SHA-256 58184de58bb1b0e63d9a01f06d27182706cee158e0b2ef19cab04fe193d18a7e.
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just snap-cargo @ build --release -p iwssim --features parallel,avx512 --example wall.
+Runtime SIMD dispatch, no target-cpu=native. Ordinary wall example, patterned gray 3355x2516, five operations; full and strip body 512. One thread pinned to CPU 2, sixteen-thread pool unpinned.
+Full command: env -u IWSSIM_WALL_STRIP_HEIGHT just ranked-wall <binary> <1-or-16> <new-log>.
+Strip command: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-wall <binary> <1-or-16> <new-log>.
+All eight full stdout/stderr logs and their hashes are retained in iwssim_rolling_wall_2026-10-12.json. Originals on r7900x: ~/tmp/zm-iwssim-rolling-walls/.
+All full score bits: 3fefff0b71a660d0. All strip score bits: 3fefff0b341ed75d. Exploratory wall/resource observations only; no confirmation interval or speed acceptance.
+Profile: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-profile <baseline-binary> ~/tmp/zm-iwssim-strip-borrow-profile-v2 3355 2516 10.
+The profile recipe now preserves the explicit strip geometry across sudo. An initial non-preserving invocation selected full mode and was excluded from the strip profile evidence; its raw files remain retained separately.
+Raw strip profile: ~/tmp/zm-iwssim-strip-borrow-profile-v2.data, 76094816 bytes; associated .log and .report. 9411 cycles samples, zero lost. Resolve with ls -l ~/tmp/zm-iwssim-strip-borrow-profile-v2*.
+Profile resource: run-heavy: done rc=0 10s | peak-RSS 0.36GiB | min-avail 24421MiB | peak-load 2.49
+All-feature tests: 25 unit + 3 Python goldens + 14 strip tests, no failures or ignored tests. run-heavy: done rc=0 11s | peak-RSS 0.39GiB | min-avail 23861MiB | peak-load 2.91
+No-default tests: same 42 tests passed. run-heavy: done rc=0 12s | peak-RSS 0.38GiB | min-avail 24467MiB | peak-load 3.12
+Build resource: run-heavy: done rc=0 4s | peak-RSS 0.28GiB | min-avail 24755MiB | peak-load 3.12
+Additional verification: release-mode exact materialized-oracle test; all-feature all-target no-deps clippy with -D warnings; rustfmt.
+Release parity resource: run-heavy: done rc=0 9s | peak-RSS 0.46GiB | min-avail 24577MiB | peak-load 3.19
+Clippy resource: run-heavy: done rc=0 1s | peak-RSS 0.17GiB | min-avail 24608MiB | peak-load 3.19

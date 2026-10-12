@@ -19,7 +19,7 @@
 //! All routines here are scalar f32. SIMD variants live in
 //! `pyramid_simd.rs` (currently unused — wired in Phase 8g step 4).
 
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, vec::Vec};
 
 #[cfg(test)]
 use crate::filters::{BINOM5, BINOM5_LEN, BINOM5_RADIUS};
@@ -231,51 +231,45 @@ pub(crate) fn build_laplacian_pyramid(
     assert_eq!(img.len(), w0 * h0);
     let dims = pyramid_dims(w0, h0, n_levels);
 
-    // 1. Gaussian chain. g[0] = img; g[s+1] = corrDn_v(corrDn_h(g[s])).
-    let mut g_levels: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
-    g_levels.push(img.to_vec());
+    // Each Laplacian band needs only adjacent Gaussian levels. Borrow G[0],
+    // build G[s+1], then emit LP[s] before releasing G[s]. The per-pixel
+    // filter and subtraction order is unchanged by interleaving the levels.
+    let mut g = Cow::Borrowed(img);
+    let mut levels = Vec::with_capacity(n_levels);
     for s in 0..(n_levels - 1) {
         let (w_cur, h_cur) = dims[s];
         let (w_nxt, h_nxt) = dims[s + 1];
         // Horizontal pass: (h_cur, w_cur) → (h_cur, w_nxt).
         let mut scratch = alloc::vec![0.0_f32; h_cur * w_nxt];
-        crate::simd_kernels::corr_dn_h(&g_levels[s], h_cur, w_cur, w_nxt, &mut scratch);
+        crate::simd_kernels::corr_dn_h(&g, h_cur, w_cur, w_nxt, &mut scratch);
         // Vertical pass: (h_cur, w_nxt) → (h_nxt, w_nxt).
         let mut g_nxt = alloc::vec![0.0_f32; h_nxt * w_nxt];
         crate::simd_kernels::corr_dn_v(&scratch, h_cur, w_nxt, h_nxt, &mut g_nxt);
-        g_levels.push(g_nxt);
-    }
+        drop(scratch);
 
-    // 2. Laplacian bands: LP[s] = G[s] − expand(G[s+1]); LP[top] = G[top].
-    let mut levels: Vec<PyrLevel> = Vec::with_capacity(n_levels);
-    for s in 0..n_levels {
-        let (w_cur, h_cur) = dims[s];
-        let g = &g_levels[s];
-        let lp = if s == n_levels - 1 {
-            // Residual lowpass.
-            g.clone()
-        } else {
-            let (w_nxt, h_nxt) = dims[s + 1];
-            // Expand g[s+1] → (h_cur, w_cur).
-            //   Horizontal: (h_nxt, w_nxt) → (h_nxt, w_cur).
-            let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
-            crate::simd_kernels::up_conv_h(&g_levels[s + 1], h_nxt, w_nxt, w_cur, &mut h_scratch);
-            //   Vertical: (h_nxt, w_cur) → (h_cur, w_cur).
-            let mut expanded = alloc::vec![0.0_f32; h_cur * w_cur];
-            crate::simd_kernels::up_conv_v(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
-            // LP[s] = G[s] − expand(G[s+1]).
-            let mut lp = alloc::vec![0.0_f32; h_cur * w_cur];
-            for i in 0..(h_cur * w_cur) {
-                lp[i] = g[i] - expanded[i];
-            }
-            lp
-        };
+        // LP[s] = G[s] − expand(G[s+1]).
+        let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
+        crate::simd_kernels::up_conv_h(&g_nxt, h_nxt, w_nxt, w_cur, &mut h_scratch);
+        let mut expanded = alloc::vec![0.0_f32; h_cur * w_cur];
+        crate::simd_kernels::up_conv_v(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
+        drop(h_scratch);
+        let mut lp = alloc::vec![0.0_f32; h_cur * w_cur];
+        for i in 0..(h_cur * w_cur) {
+            lp[i] = g[i] - expanded[i];
+        }
         levels.push(PyrLevel {
             w: w_cur,
             h: h_cur,
             lp,
         });
+        g = Cow::Owned(g_nxt);
     }
+    let (w, h) = dims[n_levels - 1];
+    levels.push(PyrLevel {
+        w,
+        h,
+        lp: g.into_owned(),
+    });
     levels
 }
 
@@ -514,6 +508,126 @@ fn bilinear_upsample_general(src: &[f32], sw: usize, sh: usize, dw: usize, dh: u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Retain the previous all-Gaussian-levels implementation as an exact oracle.
+    fn materialized_laplacian_pyramid(
+        img: &[f32],
+        w0: usize,
+        h0: usize,
+        n_levels: usize,
+    ) -> Vec<PyrLevel> {
+        assert_eq!(img.len(), w0 * h0);
+        let dims = pyramid_dims(w0, h0, n_levels);
+
+        // 1. Gaussian chain. g[0] = img; g[s+1] = corrDn_v(corrDn_h(g[s])).
+        let mut g_levels: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
+        g_levels.push(img.to_vec());
+        for s in 0..(n_levels - 1) {
+            let (w_cur, h_cur) = dims[s];
+            let (w_nxt, h_nxt) = dims[s + 1];
+            // Horizontal pass: (h_cur, w_cur) → (h_cur, w_nxt).
+            let mut scratch = alloc::vec![0.0_f32; h_cur * w_nxt];
+            crate::simd_kernels::corr_dn_h(&g_levels[s], h_cur, w_cur, w_nxt, &mut scratch);
+            // Vertical pass: (h_cur, w_nxt) → (h_nxt, w_nxt).
+            let mut g_nxt = alloc::vec![0.0_f32; h_nxt * w_nxt];
+            crate::simd_kernels::corr_dn_v(&scratch, h_cur, w_nxt, h_nxt, &mut g_nxt);
+            g_levels.push(g_nxt);
+        }
+
+        // 2. Laplacian bands: LP[s] = G[s] − expand(G[s+1]); LP[top] = G[top].
+        let mut levels: Vec<PyrLevel> = Vec::with_capacity(n_levels);
+        for s in 0..n_levels {
+            let (w_cur, h_cur) = dims[s];
+            let g = &g_levels[s];
+            let lp = if s == n_levels - 1 {
+                // Residual lowpass.
+                g.clone()
+            } else {
+                let (w_nxt, h_nxt) = dims[s + 1];
+                // Expand g[s+1] → (h_cur, w_cur).
+                //   Horizontal: (h_nxt, w_nxt) → (h_nxt, w_cur).
+                let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
+                crate::simd_kernels::up_conv_h(
+                    &g_levels[s + 1],
+                    h_nxt,
+                    w_nxt,
+                    w_cur,
+                    &mut h_scratch,
+                );
+                //   Vertical: (h_nxt, w_cur) → (h_cur, w_cur).
+                let mut expanded = alloc::vec![0.0_f32; h_cur * w_cur];
+                crate::simd_kernels::up_conv_v(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
+                // LP[s] = G[s] − expand(G[s+1]).
+                let mut lp = alloc::vec![0.0_f32; h_cur * w_cur];
+                for i in 0..(h_cur * w_cur) {
+                    lp[i] = g[i] - expanded[i];
+                }
+                lp
+            };
+            levels.push(PyrLevel {
+                w: w_cur,
+                h: h_cur,
+                lp,
+            });
+        }
+        levels
+    }
+
+    #[test]
+    fn rolling_pyramid_matches_materialized_bits() {
+        // The old reflect1 kernels require at least three samples before each
+        // downsampling pass. One/two-sample axes are valid residuals only.
+        for (w, h, max_depth) in [
+            (1, 1, 1),
+            (1, 17, 1),
+            (17, 1, 1),
+            (2, 3, 1),
+            (7, 11, 3),
+            (31, 32, 5),
+            (33, 35, 5),
+            (128, 96, 5),
+            (129, 97, 5),
+            (265, 193, 5),
+        ] {
+            for pattern in 0..3 {
+                let image: Vec<f32> = (0..w * h)
+                    .map(|i| match pattern {
+                        0 => ((i * 73 % 509) as f32 - 254.0) * 0.125,
+                        1 => {
+                            if i % 2 == 0 {
+                                0.0
+                            } else {
+                                -0.0
+                            }
+                        }
+                        _ => {
+                            if i % 7 == 0 {
+                                1.0e-20
+                            } else {
+                                1.0e12
+                            }
+                        }
+                    })
+                    .collect();
+                for depth in 1..=max_depth {
+                    let expected = materialized_laplacian_pyramid(&image, w, h, depth);
+                    let actual = build_laplacian_pyramid(&image, w, h, depth);
+                    assert_eq!(actual.len(), expected.len());
+                    for (s, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                        assert_eq!((a.w, a.h), (b.w, b.h));
+                        assert_eq!(a.lp.len(), b.lp.len());
+                        for (i, (a, b)) in a.lp.iter().zip(&b.lp).enumerate() {
+                            assert_eq!(
+                                a.to_bits(),
+                                b.to_bits(),
+                                "{w}x{h}, pattern {pattern}, depth {depth}, scale {s}, sample {i}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn pyramid_dims_5_level() {

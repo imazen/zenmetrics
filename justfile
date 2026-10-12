@@ -315,7 +315,7 @@ ranked-wall binary threads output w="3355" h="2516" reps="5":
 
 # Preserve native perf samples under an explicit disk-backed output prefix.
 ranked-profile binary output w="3355" h="2516" reps="30":
-    TMPDIR="$HOME/tmp" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- sudo -n perf record -F 997 --call-graph dwarf,8192 -o "{{output}}.data" -- taskset -c 2 env RAYON_NUM_THREADS=1 "{{binary}}" "{{w}}" "{{h}}" "{{reps}}"
+    TMPDIR="$HOME/tmp" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- sudo -n --preserve-env=IWSSIM_WALL_STRIP_HEIGHT perf record -F 997 --call-graph dwarf,8192 -o "{{output}}.data" -- taskset -c 2 env RAYON_NUM_THREADS=1 "{{binary}}" "{{w}}" "{{h}}" "{{reps}}"
     sudo -n perf report -i "{{output}}.data" --stdio --no-children --percent-limit 1 > "{{output}}.report"
 
 # Absolute-luminance end-to-end HDR probe, with explicit generation and thread count.

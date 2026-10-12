@@ -337,6 +337,52 @@ Receipts: [baseline 1T](iwssim_strip_baseline_1t_2026-10-12.log),
 [borrowed 16T](iwssim_strip_borrow_16t_2026-10-12.log), and
 [provenance and commands](iwssim_strip_borrow_2026-10-12.meta).
 
+### IW-SSIM adjacent Gaussian levels
+
+Reprofiling the borrowed-strip binary records 9,411 cycles samples with
+zero lost: pyramid construction has 7.18% self samples, `memmove` 3.54%
+and `memset` 3.86%. The builder retained the entire Gaussian chain before
+emitting any Laplacian bands. The candidate borrows the input Gaussian,
+builds its next level, emits the current Laplacian band, then releases the
+previous Gaussian. The final owned Gaussian becomes the residual band.
+Filter taps, subtraction and each coefficient's operation order are
+unchanged. This applies to both full and strip scoring and does not cache
+pyramids between strip passes.
+
+Same r7900x, 3355×2516 fixture and five calls as above; baseline is the
+borrowed-strip binary, with `parallel,avx512` in both builds.
+
+| Measurement | Baseline | Adjacent levels |
+|---|---:|---:|
+| Full, 1T ms/call | 544.25 | 521.82 |
+| Full, 16T ms/call | 332.92 | 311.94 |
+| Strip body 512, 1T ms/call | 945.72 | 855.34 |
+| Strip body 512, 16T ms/call | 690.15 | 617.89 |
+| Full, 1T instructions | 37,865,870,390 | 36,672,131,338 |
+| Strip, 1T instructions | 63,502,540,883 | 58,446,188,269 |
+| Full, 1T maximum RSS, KiB (`time -v`) | 719,088 | 711,404 |
+| Full, 16T maximum RSS, KiB (`time -v`) | 717,376 | 709,160 |
+| Strip, 1T maximum RSS, KiB (`time -v`) | 373,136 | 364,640 |
+| Strip, 16T maximum RSS, KiB (`time -v`) | 371,728 | 363,392 |
+
+Full scores retain bits `3fefff0b71a660d0`; strip scores retain
+`3fefff0b341ed75d`. Wall changes are below the suite's 15% caution and
+remain exploratory. The maximum-RSS change is modest; no larger memory
+reduction is inferred from shorter buffer lifetimes.
+
+The previous materialized builder remains a test oracle. Every band is
+compared by exact coefficient bits across odd/even shapes, signed zeros,
+contrasting finite magnitudes and supported depths one through five.
+Both feature configurations pass 25 unit tests, three Python goldens and
+14 strip tests with unchanged existing assertions. The initial tiny-axis
+test exposed the old oracle's unsupported repeated-reflection case;
+residual-only depths exercise those axes explicitly. Public scoring pads
+small inputs to its native dimensions.
+
+[Complete wall/resource logs](iwssim_rolling_wall_2026-10-12.json) preserve
+the original text and hashes; [metadata](iwssim_rolling_2026-10-12.meta)
+records binary/source hashes, commands, profile and test provenance.
+
 ## PSNR-HVS
 
 Baseline source: `62b5a420`. Its native profile places 38.91% of sampled
