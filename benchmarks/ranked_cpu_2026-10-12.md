@@ -298,6 +298,45 @@ Receipts: [baseline 1T](iwssim_baseline_1t_2026-10-12.log),
 Reproduce with the VSI build/wall recipes using `-p iwssim`, and the
 `ranked-pair-plan` / `ranked-pair-scope` recipes recorded in the metadata.
 
+### IW-SSIM strip copies
+
+The 3355×2516 strip profile records 5.77% self samples in `memmove` and
+5.85% in pyramid construction (5,712 cycles samples, zero lost). The strip
+inputs were copied into staging vectors, and `split_levels` cloned every
+Laplacian plane after the pyramid already owned it. The candidate borrows
+both instead. It also borrows the distorted input in the warm-reference
+route. Covariance pass order, halo geometry and score arithmetic are
+unchanged; pass two still rebuilds the current strip's pyramid.
+
+Both builds use `parallel,avx512`, runtime dispatch and the same patterned
+3355×2516 gray fixture, strip body 512 and five operations. One thread is
+pinned to CPU 2; the sixteen-thread pool is unpinned. These wall
+observations are exploratory, without a confirmation interval.
+
+| Measurement | Baseline | Borrowed |
+|---|---:|---:|
+| One-thread ms/call | 1163.04 | 930.89 |
+| One-thread instructions, five calls | 67,862,258,871 | 63,488,951,932 |
+| One-thread cycles, five calls | 32,350,101,902 | 25,917,681,491 |
+| Sixteen-thread ms/call | 851.29 | 681.16 |
+| One-thread maximum RSS, KiB (`time -v`) | 424,900 | 372,952 |
+| Sixteen-thread maximum RSS, KiB (`time -v`) | 423,280 | 371,676 |
+| One-thread run-heavy peak RSS, GiB | 0.41 | 0.36 |
+| Sixteen-thread run-heavy peak RSS, GiB | 0.40 | 0.35 |
+
+All four measurements produce score bits `3fefff0b341ed75d`. The
+all-feature suite passes all 24 unit tests, three Python goldens and 14
+strip tests with unchanged assertions. The no-default-features test build
+exposed missing `alloc` imports in the existing SIMD tests; adding those
+imports makes that suite run too. The optimization retains storage for
+one strip's pyramids; it adds no image-wide pyramid cache.
+
+Receipts: [baseline 1T](iwssim_strip_baseline_1t_2026-10-12.log),
+[borrowed 1T](iwssim_strip_borrow_1t_2026-10-12.log),
+[baseline 16T](iwssim_strip_baseline_16t_2026-10-12.log),
+[borrowed 16T](iwssim_strip_borrow_16t_2026-10-12.log), and
+[provenance and commands](iwssim_strip_borrow_2026-10-12.meta).
+
 ## PSNR-HVS
 
 Baseline source: `62b5a420`. Its native profile places 38.91% of sampled

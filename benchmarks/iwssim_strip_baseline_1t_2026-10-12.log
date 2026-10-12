@@ -1,0 +1,43 @@
+binary_sha256: 904c1eaa0bc971ef5cd39465d0821881177f8f5a22daa9c1b491767b0f6580a8  /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-baseline
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=25219MiB :: perf stat -e instructions,cycles -- taskset -c 2 /usr/bin/time -v /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-baseline 3355 2516 5
+3355x2516 5 reps: 1163.04 ms/call (score 0.99988327197818772, bits 3fefff0b341ed75d)
+strip_body_height: Some(512)
+	Command being timed: "/home/lilith/tmp/zm-ranked-binaries/iwssim-strip-baseline 3355 2516 5"
+	User time (seconds): 3.22
+	System time (seconds): 2.69
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.91
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 424900
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 2171883
+	Voluntary context switches: 2701
+	Involuntary context switches: 4532
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'taskset -c 2 /usr/bin/time -v /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-baseline 3355 2516 5':
+
+       67862258871      instructions                                                          
+       32350101902      cycles                                                                
+
+       5.917604083 seconds time elapsed
+
+       3.221176000 seconds user
+       2.694947000 seconds sys
+
+
+run-heavy: done rc=0 6s | peak-RSS 0.41GiB | min-avail 24836MiB | peak-load 1.70

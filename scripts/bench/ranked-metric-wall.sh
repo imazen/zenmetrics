@@ -10,8 +10,8 @@ heavy="$HOME/work/claudehints/scripts/run-heavy"
   printf 'rayon_threads: %s\nargv:' "$threads"
   printf ' %q' "$binary" "$@"; printf '\n'
   if [ "$threads" = 1 ]; then
-    "$heavy" --mem 16G -- perf stat -e instructions,cycles -- taskset -c 2 "$binary" "$@"
+    "$heavy" --mem 16G -- perf stat -e instructions,cycles -- taskset -c 2 /usr/bin/time -v "$binary" "$@"
   else
-    "$heavy" --mem 16G -- "$binary" "$@"
+    "$heavy" --mem 16G -- /usr/bin/time -v "$binary" "$@"
   fi
 } 2>&1 | tee "$output"

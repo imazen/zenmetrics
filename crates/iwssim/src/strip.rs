@@ -252,14 +252,10 @@ fn body_at_scale(body_start_s0: usize, body_end_s0: usize, s: usize) -> (usize, 
     (body_start_s, body_end_s)
 }
 
-/// Extract `[start..end)` rows of a 2D buffer `(h, w)` into a fresh
-/// `Vec<f32>`. Used to slice the strip's gray-pixel input from the
-/// full-image padded buffer.
-fn slice_rows(src: &[f32], w: usize, start: usize, end: usize) -> Vec<f32> {
-    let n = (end - start) * w;
-    let mut out = alloc::vec![0.0_f32; n];
-    out.copy_from_slice(&src[start * w..end * w]);
-    out
+/// Borrow `[start..end)` rows from the full-image padded gray plane.
+/// The pyramid owns its output; a separate input staging copy is unnecessary.
+fn slice_rows(src: &[f32], w: usize, start: usize, end: usize) -> &[f32] {
+    &src[start * w..end * w]
 }
 
 /// Compute the cropped `(g, vv, ss)` arrays for the strip's body rows
@@ -594,8 +590,8 @@ pub(crate) fn score_strip_internal(
         let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
 
         // Per-strip Laplacian pyramid.
-        let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
-        let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
+        let ref_levels = build_laplacian_pyramid(ref_strip, work_w, strip_h, NUM_SCALES);
+        let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
         let lp_ref_v = split_levels(&ref_levels);
         let lp_dis_v = split_levels(&dis_levels);
 
@@ -667,7 +663,7 @@ pub(crate) fn score_strip_internal(
                     let (w_nxt, _) = dims[s + 1];
                     let (_, h_nxt_strip) = dims_s_strip[s + 1];
                     Some(imenlarge2(
-                        &lp_ref_v[s + 1],
+                        lp_ref_v[s + 1],
                         w_nxt,
                         h_nxt_strip,
                         w_s,
@@ -687,7 +683,7 @@ pub(crate) fn score_strip_internal(
                 let lx = (block_w - 1) / 2;
                 let (body_s0, body_s1) = body_in_strip_s;
                 let nexp_strip = crate::weights::gram_accumulate(
-                    &lp_ref_v[s],
+                    lp_ref_v[s],
                     parent_band.as_deref(),
                     w_s,
                     body_s0,
@@ -712,8 +708,8 @@ pub(crate) fn score_strip_internal(
             if strip_h_at_s > 10 {
                 // Compute cs over the entire strip at scale s
                 let cs_full = compute_cs(
-                    &lp_ref_v[s],
-                    &lp_dis_v[s],
+                    lp_ref_v[s],
+                    lp_dis_v[s],
                     strip_h_at_s,
                     w_s,
                     true, // with_luminance for the top scale
@@ -770,8 +766,8 @@ pub(crate) fn score_strip_internal(
             let ref_strip = slice_rows(ref_work, work_w, sg.strip_start, sg.strip_end);
             let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
 
-            let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
-            let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
+            let ref_levels = build_laplacian_pyramid(ref_strip, work_w, strip_h, NUM_SCALES);
+            let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
             let lp_ref_v = split_levels(&ref_levels);
             let lp_dis_v = split_levels(&dis_levels);
 
@@ -809,7 +805,7 @@ pub(crate) fn score_strip_internal(
                 if strip_h_at_s <= 10 {
                     continue;
                 }
-                let cs_full = compute_cs(&lp_ref_v[s], &lp_dis_v[s], strip_h_at_s, w_s, false);
+                let cs_full = compute_cs(lp_ref_v[s], lp_dis_v[s], strip_h_at_s, w_s, false);
 
                 let bound1 = params.bound1() as usize;
                 // body_in_strip_s is in strip-local Y-row coords, post
@@ -916,7 +912,7 @@ pub(crate) fn score_strip_internal(
                     let (w_nxt, _) = dims[s + 1];
                     let (_, h_nxt_strip) = dims_s_strip[s + 1];
                     Some(imenlarge2(
-                        &lp_ref_v[s + 1],
+                        lp_ref_v[s + 1],
                         w_nxt,
                         h_nxt_strip,
                         w_s,
@@ -944,8 +940,8 @@ pub(crate) fn score_strip_internal(
                 // it's (cs_h_image, cs_w_image) for that body region.
 
                 fold_iw_for_strip_scale(
-                    &lp_ref_v[s],
-                    &lp_dis_v[s],
+                    lp_ref_v[s],
+                    lp_dis_v[s],
                     parent_band.as_deref(),
                     strip_h_at_s,
                     w_s,
@@ -968,8 +964,8 @@ pub(crate) fn score_strip_internal(
             let body_in_strip = sg.body_in_strip();
             let ref_strip = slice_rows(ref_work, work_w, sg.strip_start, sg.strip_end);
             let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
-            let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
-            let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
+            let ref_levels = build_laplacian_pyramid(ref_strip, work_w, strip_h, NUM_SCALES);
+            let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
             let lp_ref_v = split_levels(&ref_levels);
             let lp_dis_v = split_levels(&dis_levels);
             for s in 0..NUM_SCALES - 1 {
@@ -979,7 +975,7 @@ pub(crate) fn score_strip_internal(
                 if strip_h_at_s <= 10 {
                     continue;
                 }
-                let cs_full = compute_cs(&lp_ref_v[s], &lp_dis_v[s], strip_h_at_s, w_s, false);
+                let cs_full = compute_cs(lp_ref_v[s], lp_dis_v[s], strip_h_at_s, w_s, false);
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
                 let (cs_body_start, cs_body_end) =
                     body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);
@@ -1035,9 +1031,9 @@ pub(crate) fn score_strip_internal(
     })
 }
 
-/// Split borrow of `levels` into `(lp_vec, g_vec)`.
-fn split_levels(levels: &[PyrLevel]) -> Vec<Vec<f32>> {
-    levels.iter().map(|level| level.lp.clone()).collect()
+/// Borrow Laplacian planes while the current strip's pyramid owns them.
+fn split_levels(levels: &[PyrLevel]) -> Vec<&[f32]> {
+    levels.iter().map(|level| level.lp.as_slice()).collect()
 }
 
 /// Score in strip mode against a warm reference. The warm state
@@ -1159,13 +1155,8 @@ pub(crate) fn score_with_warm_ref_strip_internal(
         let body_in_strip = sg.body_in_strip();
 
         // Slice the dist strip and build its pyramid.
-        let dis_strip = {
-            let n = strip_h * work_w;
-            let mut buf = alloc::vec![0.0_f32; n];
-            buf.copy_from_slice(&dis_work[sg.strip_start * work_w..sg.strip_end * work_w]);
-            buf
-        };
-        let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
+        let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
+        let dis_levels = build_laplacian_pyramid(dis_strip, work_w, strip_h, NUM_SCALES);
         let lp_dis_v = split_levels(&dis_levels);
 
         for s in 0..NUM_SCALES - 1 {
@@ -1218,7 +1209,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 buf
             };
 
-            let cs_full = compute_cs(&ref_lp_strip_at_s, &lp_dis_v[s], strip_h_at_s, w_s, false);
+            let cs_full = compute_cs(&ref_lp_strip_at_s, lp_dis_v[s], strip_h_at_s, w_s, false);
 
             // Body cs rows in strip-cs coords.
             let cs_body_start_i = (body_in_strip_s.0 + bound1) as isize - 5;
@@ -1285,7 +1276,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
 
             fold_iw_for_strip_scale(
                 &ref_lp_strip_at_s,
-                &lp_dis_v[s],
+                lp_dis_v[s],
                 parent_band.as_deref(),
                 strip_h_at_s,
                 w_s,
@@ -1318,7 +1309,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                     }
                     buf
                 };
-                let cs_full = compute_cs(&ref_lp_strip_at_s, &lp_dis_v[s], strip_h_at_s, w_s, true);
+                let cs_full = compute_cs(&ref_lp_strip_at_s, lp_dis_v[s], strip_h_at_s, w_s, true);
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
                 let (cs_body_start, cs_body_end) =
                     body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);

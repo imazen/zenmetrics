@@ -1,0 +1,27 @@
+Date: 2026-10-12. Host: r7900x. Workload: patterned gray 3355x2516, strip body 512, five calls, default information weights.
+Baseline production source: 04f534f912f8 (strip-capable wall example added; strip algorithm unchanged).
+Candidate changes: borrow gray input row slices and Laplacian planes in crates/iwssim/src/strip.rs; preserve arithmetic, halos, pass order and one-strip pyramid lifetime.
+Candidate strip.rs SHA-256: 8d6693552d4c93b15cbb155dd96415d9383dc51977bf4f67f11a3323eecc9a3c
+Candidate simd_kernels.rs SHA-256: d95d11e1778ee692d0fea8bca067704c945c2e36036eaefcb668474f7eb2c738 (test-only alloc imports).
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just snap-cargo @ build --release -p iwssim --features parallel,avx512 --example wall
+Runtime SIMD dispatch; no target-cpu=native. Baseline and candidate were retained outside Cargo target before subsequent builds.
+Baseline binary: ~/tmp/zm-ranked-binaries/iwssim-strip-baseline
+Baseline SHA-256: 904c1eaa0bc971ef5cd39465d0821881177f8f5a22daa9c1b491767b0f6580a8
+Candidate binary: ~/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate
+Candidate SHA-256: 9f8e872b732a662a210d0993fa18aa4d185d3d07478792b9e29b0496adf29809
+Measure: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-wall <binary> <1-or-16> <receipt>
+One-thread branch: run-heavy --mem 16G -- perf stat -e instructions,cycles -- taskset -c 2 /usr/bin/time -v <binary>
+Sixteen-thread branch: run-heavy --mem 16G -- /usr/bin/time -v <binary>, RAYON_NUM_THREADS=16; unpinned.
+All four score bits: 3fefff0b341ed75d. No confirm interval or promotion verdict; wall observations are exploratory.
+Baseline 1T: run-heavy: done rc=0 6s | peak-RSS 0.41GiB | min-avail 24836MiB | peak-load 1.70
+Candidate 1T: run-heavy: done rc=0 5s | peak-RSS 0.36GiB | min-avail 24894MiB | peak-load 1.26
+Baseline 16T: run-heavy: done rc=0 5s | peak-RSS 0.40GiB | min-avail 24501MiB | peak-load 0.97
+Candidate 16T: run-heavy: done rc=0 3s | peak-RSS 0.35GiB | min-avail 24661MiB | peak-load 0.50
+Profile: IWSSIM_WALL_STRIP_HEIGHT=512 just ranked-profile <baseline-binary> ~/tmp/zm-iwssim-strip-profile
+Raw profile retained on r7900x at ~/tmp/zm-iwssim-strip-profile.data (46,065,384 bytes); associated .log and -report.txt. Resolving command: ls -l ~/tmp/zm-iwssim-strip-profile*.
+Profile: 5,712 cycles samples, zero lost. Kernel symbols unavailable; reported self shares refer to resolved userspace symbols.
+Profile resource: run-heavy: done rc=0 12s | peak-RSS 0.41GiB | min-avail 23947MiB | peak-load 2.05
+Verification: just snap-cargo @ test -p iwssim --all-features; just snap-cargo @ test -p iwssim --no-default-features; all-target all-feature clippy with --no-deps -- -D warnings. Existing assertions unchanged.
+Both test suites: 24 unit + 3 Python goldens + 14 strip tests passed, zero ignored. All-feature test resource: run-heavy: done rc=0 11s | peak-RSS 0.43GiB | min-avail 24527MiB | peak-load 1.12
+No-default test resource: run-heavy: done rc=0 13s | peak-RSS 0.38GiB | min-avail 24581MiB | peak-load 0.70
+Clippy resource: run-heavy: done rc=0 2s | peak-RSS 0.17GiB | min-avail 25196MiB | peak-load 0.87

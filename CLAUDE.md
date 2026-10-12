@@ -542,6 +542,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-12 — IW-SSIM SIMD tests lacked `alloc::vec`/`Vec` imports with default features disabled. FIXED.** The test module now imports both explicitly. The existing 41 tests pass with and without default features; assertions are unchanged. Reproduce with `just snap-cargo @ test -p iwssim --no-default-features`.
+
 - **2026-10-12 — Windows checkpoint manifests used host path separators.**
   The archive converted backslashes to forward slashes while the manifest retained
   backslashes, so strict release verification refused the otherwise green Windows

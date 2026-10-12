@@ -1,0 +1,43 @@
+binary_sha256: 9f8e872b732a662a210d0993fa18aa4d185d3d07478792b9e29b0496adf29809  /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=25210MiB :: perf stat -e instructions,cycles -- taskset -c 2 /usr/bin/time -v /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate 3355 2516 5
+3355x2516 5 reps: 930.89 ms/call (score 0.99988327197818772, bits 3fefff0b341ed75d)
+strip_body_height: Some(512)
+	Command being timed: "/home/lilith/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate 3355 2516 5"
+	User time (seconds): 2.94
+	System time (seconds): 1.81
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.75
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 372952
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1471317
+	Voluntary context switches: 2747
+	Involuntary context switches: 4019
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'taskset -c 2 /usr/bin/time -v /home/lilith/tmp/zm-ranked-binaries/iwssim-strip-borrow-candidate 3355 2516 5':
+
+       63488951932      instructions                                                          
+       25917681491      cycles                                                                
+
+       4.754797136 seconds time elapsed
+
+       2.941495000 seconds user
+       1.812379000 seconds sys
+
+
+run-heavy: done rc=0 5s | peak-RSS 0.36GiB | min-avail 24894MiB | peak-load 1.26
