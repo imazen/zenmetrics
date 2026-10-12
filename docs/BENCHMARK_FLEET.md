@@ -331,3 +331,8 @@ subsequently passes all 24 direct controls and all 24 native worker
 observations. Earlier failed attempts remain retained. These panels contain
 six CUDA variants, each cold and with a retained instance, with separate
 ordinary-latency and instrumented-memory processes.
+
+The synthetic native adapter controls allow 30 seconds for resource
+admission on shared CI runners. Their child timeout remains two seconds;
+complete, wrong-output, timeout and cancellation outcomes are still checked
+exactly. These fixtures validate the protocol and do not measure metric speed.

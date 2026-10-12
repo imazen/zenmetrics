@@ -37,6 +37,9 @@ Path(os.environ['ZENBENCH_RESULT_FILE']).write_text(json.dumps({
     'schema':1,'operations':1,'correctness':'ok','memory':[]}))
 ''')
 records = []
+# Shared CI runners can stay busy briefly after compilation. Admission has its
+# own budget; keep the two-second child timeout and every outcome assertion.
+admission_seconds = 30
 program = 'python.exe' if os.name == 'nt' else 'python'
 target_os = 'darwin' if caps['runner']['os'] == 'macos' else caps['runner']['os']
 for index, (backend, expected, sleep, status) in enumerate([
@@ -62,7 +65,7 @@ for index, (backend, expected, sleep, status) in enumerate([
     hashes = module.stage(bundle)
     kind = dict(kind='benchmark', **hashes, experiment='adapter-control', machine='control-cpu',
                 domain='unrestricted', replicate=index, backend=backend,
-                timeout_seconds=2, admission_seconds=2)
+                timeout_seconds=2, admission_seconds=admission_seconds)
     job = {'kind':kind,'inputs':sorted(hashes.values())}
     if index == 0:
         first_job = json.loads(json.dumps(job))
@@ -85,7 +88,8 @@ for index, (backend, expected, sleep, status) in enumerate([
                 subprocess.run([sys.executable,str(adapter),'cancel',attempt],check=True)
             else:
                 process.send_signal(signal.SIGTERM)
-        assert process.wait(timeout=30) == 0, (case/'adapter.stderr').read_text()
+        wait_seconds = kind['admission_seconds'] + kind['timeout_seconds'] + 30
+        assert process.wait(timeout=wait_seconds) == 0, (case/'adapter.stderr').read_text()
     receipt = json.loads(receipt_file.read_bytes())
     assert receipt['status'] == status, receipt
     assert receipt['job_id'] == module.canonical_job_id(kind,job['inputs'])
