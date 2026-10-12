@@ -875,9 +875,11 @@ impl BandMask {
     /// `Masking::PushLine` on the staged `next_row`.
     fn push_row(&mut self, kernel: &[f32; MASK_SIZE]) {
         // Swap the staged row into the ring at `fill` (saturating at 4),
-        // matching the C++ `m_pInput[m_ulY]->Swap(line)`.
+        // matching the C++ `m_pInput[m_ulY]->Swap(line)` — a buffer swap,
+        // not a copy: `next_row` is fully rewritten by `run_dct` before the
+        // next push, so taking the slot's old buffer is safe.
         let slot = self.fill.min(MASK_SIZE - 1);
-        self.in_ring[slot].copy_from_slice(&self.next_row);
+        core::mem::swap(&mut self.in_ring[slot], &mut self.next_row);
 
         // mapped[i] = (|in[i]| · vis)^expon, full band width. For e≠1 the
         // reference's powf loop vectorizes through libmvec — use it when
