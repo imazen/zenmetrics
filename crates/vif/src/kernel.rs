@@ -213,7 +213,10 @@ macro_rules! score_body {
                         }
                     }
                 };
+                #[cfg(feature = "parallel")]
                 let mut ran_par = false;
+                #[cfg(not(feature = "parallel"))]
+                let ran_par = false;
                 #[cfg(feature = "parallel")]
                 if rayon::current_num_threads() > 1 {
                     use rayon::prelude::*;
@@ -392,7 +395,10 @@ macro_rules! score_body {
                     }
                 }
             };
+            #[cfg(feature = "parallel")]
             let mut ran_par = false;
+            #[cfg(not(feature = "parallel"))]
+            let ran_par = false;
             #[cfg(feature = "parallel")]
             if rayon::current_num_threads() > 1 {
                 use rayon::prelude::*;

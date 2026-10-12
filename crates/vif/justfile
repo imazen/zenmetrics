@@ -13,3 +13,24 @@ wall binary threads="1" w="3355" h="2516" reps="3":
 
 profile binary output w="3355" h="2516" reps="3":
     RAYON_NUM_THREADS=1 {{heavy}} -- perf record -e cycles -o {{output}} {{binary}} {{w}} {{h}} {{reps}}
+
+# Back-to-back baseline/current walls, including the 16-thread configuration.
+matrix before after output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{output}}"
+    for threads in 1 16; do
+        for metric in wall_vifp wall; do
+            for variant in before after; do
+                bin_dir="{{before}}"
+                if [ "$variant" = after ]; then bin_dir="{{after}}"; fi
+                RAYON_NUM_THREADS=$threads {{heavy}} -- perf stat -e cycles -o "{{output}}/$metric-$threads-$variant.cycles" "$bin_dir/$metric" 3355 2516 3
+            done
+        done
+    done
+
+memory binary threads="1" w="3355" h="2516" reps="3":
+    RAYON_NUM_THREADS={{threads}} {{heavy}} -- /usr/bin/time -v {{binary}} {{w}} {{h}} {{reps}}
+
+lint features="std":
+    {{heavy}} -- cargo clippy --manifest-path {{manifest}} -p vif --all-targets --features {{features}} -- -D warnings

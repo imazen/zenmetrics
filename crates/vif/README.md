@@ -76,3 +76,5 @@ counts.
 
 SIMD tiers (scalar / AVX2 / AVX-512 / NEON / wasm128), dispatched on
 first call.
+
+Optimization measurements and profiles: [2026-10-12 report](benchmarks/vif_2026-10-12.md).

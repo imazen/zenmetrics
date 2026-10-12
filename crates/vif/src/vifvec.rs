@@ -544,7 +544,10 @@ fn corr_dn(
             [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     };
+    #[cfg(feature = "parallel")]
     let mut ran_par = false;
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -995,7 +998,10 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     let mut mean = alloc::vec![0.0f64; n2];
     // Each of the 81 accumulators sums its own lane in the same (ty,tx)
     // order — parallel over elements is bit-identical.
+    #[cfg(feature = "parallel")]
     let mut ran_par = false;
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -1028,7 +1034,10 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     // Striped partial covariance: each stripe owns a ty range and a
     // private 81×81 buffer; the ordered merge keeps the sum order fixed
     // for any thread count (within ~1e-14 of serial — tolerance-passed).
+    #[cfg(feature = "parallel")]
     let mut ran_par = false;
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -1117,7 +1126,10 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
         }
         s / (n2 as f64)
     };
+    #[cfg(feature = "parallel")]
     let mut ran_par = false;
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -1356,7 +1368,10 @@ fn vifsub_est(
             [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     };
+    #[cfg(feature = "parallel")]
     let mut ran_par = false;
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;

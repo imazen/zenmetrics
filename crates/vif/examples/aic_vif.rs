@@ -12,7 +12,7 @@ fn luma(
 ) -> Vec<f32> {
     let mut out = Vec::with_capacity(w * h);
     for row in rgb.chunks_exact(stride_px * 3).take(h) {
-        for px in row[..w * 3].chunks_exact(3) {
+        for px in row[..w * 3].as_chunks::<3>().0 {
             out.push(f(px[0] as f32, px[1] as f32, px[2] as f32));
         }
     }
