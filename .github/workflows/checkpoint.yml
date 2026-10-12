@@ -1,0 +1,159 @@
+name: Checkpoint binaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['scripts/checkpoint/**', 'ci/checkpoint-profiles.json', 'crates/zenmetrics-browser/**', 'web/metrics/**', '.github/workflows/checkpoint.yml']
+  pull_request:
+    paths: ['scripts/checkpoint/**', 'ci/checkpoint-profiles.json', 'crates/zenmetrics-browser/**', 'web/metrics/**', '.github/workflows/checkpoint.yml']
+permissions:
+  contents: read
+concurrency:
+  group: checkpoint-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Verify publication refusal and ordering controls
+        run: |
+          mkdir -p "$HOME/tmp"
+          python3 scripts/checkpoint/test_release.py
+          python3 -m py_compile scripts/checkpoint/*.py
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, profile: full-wgpu, gpu: absent}
+          - {os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, profile: full-cuda, gpu: absent}
+          - {os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, profile: full-wgpu, gpu: absent}
+          - {os: windows-latest, target: x86_64-pc-windows-msvc, profile: full-wgpu, gpu: absent}
+          - {os: windows-11-arm, target: aarch64-pc-windows-msvc, profile: full-wgpu, gpu: absent}
+          - {os: macos-latest, target: aarch64-apple-darwin, profile: full-wgpu, gpu: present}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: 4
+      RAYON_NUM_THREADS: 4
+      CUDARC_CUDA_VERSION: '12000'
+      ZENMETRICS_TEST_GPU: ${{ matrix.gpu }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - run: bash scripts/ci/clone-siblings.sh
+      - uses: actions/checkout@v7
+        with:
+          repository: imazen/zenbench
+          ref: 4f152ef95b700366642f7011972c302300ee6932
+          path: runner-source
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checkpoint-${{ matrix.target }}-${{ matrix.profile }}
+      - name: Test and package native CLI and benchmark executors
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          python3 scripts/checkpoint/package.py --source "$GITHUB_SHA" \
+            --profile '${{ matrix.profile }}' --target '${{ matrix.target }}' \
+            --runner-source "$GITHUB_WORKSPACE/runner-source" \
+            --out "$GITHUB_WORKSPACE/checkpoint"
+      - run: python3 scripts/checkpoint/archive.py checkpoint checkpoint-${{ matrix.target }}-${{ matrix.profile }}.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: checkpoint-${{ matrix.target }}-${{ matrix.profile }}
+          path: checkpoint-*.tar.gz*
+          if-no-files-found: error
+  i686:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_BUILD_JOBS: 1
+      RAYON_NUM_THREADS: 4
+      ZENMETRICS_TEST_GPU: absent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: i686-unknown-linux-gnu
+      - run: bash scripts/ci/clone-siblings.sh
+      - uses: actions/checkout@v7
+        with:
+          repository: imazen/zenbench
+          ref: 4f152ef95b700366642f7011972c302300ee6932
+          path: runner-source
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checkpoint-i686
+      - run: cargo install cross --version 0.2.5 --locked
+      - name: Install host runtime for packaged i686 controls
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y libc6:i386 libgcc-s1:i386 libstdc++6:i386
+      - name: Test and package i686 using cross
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          python3 scripts/checkpoint/package.py --source "$GITHUB_SHA" --cross \
+            --profile full-cpu --target i686-unknown-linux-gnu \
+            --runner-source "$GITHUB_WORKSPACE/runner-source" --out "$GITHUB_WORKSPACE/checkpoint"
+      - run: python3 scripts/checkpoint/archive.py checkpoint checkpoint-i686-unknown-linux-gnu-full-cpu.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: checkpoint-i686-unknown-linux-gnu-full-cpu
+          path: checkpoint-*.tar.gz*
+          if-no-files-found: error
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: 4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-06
+          components: rust-src
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: bash scripts/ci/clone-siblings.sh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checkpoint-browser
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - name: Build explicit threaded SIMD browser package
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          CHECKPOINT_OUT="$GITHUB_WORKSPACE/browser-checkpoint" bash scripts/checkpoint/build-browser.sh
+      - name: Compare real browser workers with the native library oracle
+        run: |
+          python3 -m pip install playwright==1.63.0
+          python3 -m playwright install --with-deps chromium
+          cargo run --locked --release -p zenmetrics-browser --example browser_oracle > "$HOME/tmp/browser-oracle.json"
+          python3 scripts/checkpoint/check-browser.py browser-checkpoint \
+            "$HOME/tmp/browser-controls.json" --oracle "$HOME/tmp/browser-oracle.json"
+          python3 scripts/checkpoint/manifest-browser.py browser-checkpoint "$GITHUB_SHA" "$HOME/tmp/browser-controls.json"
+      - run: python3 scripts/checkpoint/archive.py browser-checkpoint checkpoint-browser-simd128-relaxed-rayon.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: checkpoint-browser-simd128-relaxed-rayon
+          path: checkpoint-*.tar.gz*
+          if-no-files-found: error

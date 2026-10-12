@@ -654,11 +654,41 @@ fn butteraugli_cpu_and_gpu_agree() {
         &dir.join("ref_64.png"),
         &dir.join("dist_noisy_64.png"),
     );
-    let gpu = run_scores(
-        "butteraugli-gpu",
-        &dir.join("ref_64.png"),
-        &dir.join("dist_noisy_64.png"),
-    );
+    let expectation = std::env::var("ZENMETRICS_TEST_GPU").unwrap_or_else(|_| "present".into());
+    match expectation.as_str() {
+        "absent" => {
+            let output = run_scores_output(
+                "butteraugli-gpu",
+                &dir.join("ref_64.png"),
+                &dir.join("dist_noisy_64.png"),
+            );
+            assert!(!output.status.success(), "GPU-absent host returned success");
+            assert!(
+                output.stdout.is_empty(),
+                "GPU refusal emitted a score/output"
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("No possible adapter available")
+                    || stderr.contains("Unable to dynamically load the \"cuda\" shared library")
+                    || stderr.contains("GPU backend unavailable"),
+                "Expected backend-unavailable refusal, stderr={stderr}"
+            );
+        }
+        "present" => assert_butteraugli_parity(
+            &cpu,
+            &run_scores(
+                "butteraugli-gpu",
+                &dir.join("ref_64.png"),
+                &dir.join("dist_noisy_64.png"),
+            ),
+        ),
+        _ => panic!("ZENMETRICS_TEST_GPU must be present or absent"),
+    }
+}
+
+#[cfg(all(feature = "cpu-metrics", feature = "gpu-butteraugli"))]
+fn assert_butteraugli_parity(cpu: &[(String, f64)], gpu: &[(String, f64)]) {
     let cpu_max = cpu
         .iter()
         .find(|(k, _)| k == "butteraugli_max")
@@ -716,20 +746,7 @@ fn run_scores(
     reference: &std::path::Path,
     distorted: &std::path::Path,
 ) -> Vec<(String, f64)> {
-    let out = cli()
-        .args([
-            "score",
-            "--metric",
-            metric,
-            "--reference",
-            reference.to_str().unwrap(),
-            "--distorted",
-            distorted.to_str().unwrap(),
-            "--output",
-            "json",
-        ])
-        .output()
-        .expect("run cli");
+    let out = run_scores_output(metric, reference, distorted);
     assert!(
         out.status.success(),
         "stderr={}",
@@ -744,6 +761,28 @@ fn run_scores(
         .iter()
         .map(|(k, v)| (k.clone(), v.as_f64().expect("score f64")))
         .collect()
+}
+
+#[cfg(feature = "cpu-metrics")]
+fn run_scores_output(
+    metric: &str,
+    reference: &std::path::Path,
+    distorted: &std::path::Path,
+) -> std::process::Output {
+    cli()
+        .args([
+            "score",
+            "--metric",
+            metric,
+            "--reference",
+            reference.to_str().unwrap(),
+            "--distorted",
+            distorted.to_str().unwrap(),
+            "--output",
+            "json",
+        ])
+        .output()
+        .expect("run cli")
 }
 
 // ── sweep subcommand ────────────────────────────────────────────────────
@@ -2007,10 +2046,19 @@ fn default_score_routes_through_orchestrator() {
     // stderr when the feature is built; legacy path does not. We
     // only assert the marker when the feature is compiled in.
     #[cfg(feature = "orchestrator")]
-    assert!(
-        stderr.contains("[orchestrator] enabled"),
-        "expected orchestrator-enabled stderr marker; got: {stderr}",
-    );
+    {
+        if zenmetrics_orchestrator::detect_gpu().present {
+            assert!(
+                stderr.contains("[orchestrator] enabled"),
+                "expected orchestrator-enabled stderr marker; got: {stderr}"
+            );
+        } else {
+            assert!(
+                stderr.contains("no GPU detected") && stderr.contains("legacy CPU scheduler"),
+                "expected explicit CPU scheduler marker; got: {stderr}"
+            );
+        }
+    }
 }
 
 /// `zenmetrics --use-legacy-scheduler score …` must succeed and route
@@ -2092,6 +2140,7 @@ fn use_orchestrator_emits_deprecation_warning() {
 /// `CUDA_VISIBLE_DEVICES=""` hides CUDA; the bogus Vulkan ICD paths keep a
 /// wgpu-enabled build (including a software rasteriser like lavapipe, which
 /// would otherwise "succeed" on the CPU and defeat the point) from coming up.
+/// An unavailable WGPU device index also excludes Metal and DX12 adapters.
 #[cfg(feature = "gpu-cvvdp")]
 fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
     let fx = fixtures_dir();
@@ -2100,12 +2149,15 @@ fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
         "score",
         "--metric",
         "cvvdp-gpu",
+        "--display-model",
+        "standard_fhd",
         "--reference",
         fx.join("ref_64.png").to_str().unwrap(),
         "--distorted",
         fx.join("dist_noisy_64.png").to_str().unwrap(),
     ])
     .env("CUDA_VISIBLE_DEVICES", "")
+    .env("CUBECL_WGPU_DEFAULT_DEVICE", "DiscreteGpu(65535)")
     .env("VK_ICD_FILENAMES", "/nonexistent/zenmetrics-test.json")
     .env("VK_DRIVER_FILES", "/nonexistent/zenmetrics-test.json");
     if require_gpu {
@@ -2125,18 +2177,34 @@ fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
 #[test]
 fn without_require_gpu_auto_silently_falls_back_to_cpu() {
     let out = cli_without_gpu(false);
-    assert!(
-        out.status.success(),
-        "expected the permissive default to succeed via the CPU rung; \
-         stdout={} stderr={}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("cvvdp"),
-        "expected a cvvdp score on stdout, got {stdout:?}"
-    );
+    if cfg!(feature = "gpu-cpu") {
+        assert!(
+            out.status.success(),
+            "expected the permissive default to succeed via the CPU rung; \
+             stdout={} stderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("cvvdp"),
+            "expected a cvvdp score on stdout, got {stdout:?}"
+        );
+    } else {
+        assert!(
+            !out.status.success(),
+            "missing GPU and no software runtime must refuse"
+        );
+        assert!(
+            out.stdout.is_empty(),
+            "refused GPU request must emit no score"
+        );
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("no runtime succeeded"),
+            "refusal must report exhausted runtimes: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
 }
 
 /// With the gate ON and no GPU reachable, the run MUST fail loudly — nonzero

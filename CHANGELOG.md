@@ -14,7 +14,11 @@ Workspace conventions per the global rules:
 ## [Unreleased]
 
 ### Changed
-- CI removes macOS Intel runners from workspace, native benchmark and margarine matrices at owner direction; macOS ARM64 remains covered.
+
+- Dependency updates (`74e9a0f9`, `df8973e4`): refreshed dashboard dependencies with a locked production build; updated both standalone Rustls locks to 0.23.45.
+
+- CI (`81dcb599`) removes macOS Intel runners from workspace, native benchmark and margarine matrices at owner direction; macOS ARM64 remains covered.
+- Checkpoint packaging (`e89db556`, review required): native CLI, pinned runner, fleet worker/controller and separate IQA timing/memory drivers; target-specific archives with provenance and checksums. Browser worker module exposes cached-reference zensim scores and raw maps; publication and hardware qualification remain gated.
 
 - Benchmark studies (`9787ca07`): source-backed inventory, explicit study expansion, content identity, release-artifact and reviewed correctness qualification gates, and visible unsupported cells.
 - Study drivers (`b1078783`, `a6db5270`, `992f6e1a`): all 38 SDR CPU routes, two explicit native HDR routes, and separate ordinary/instrumented release artifacts with stride and scalar-output controls.

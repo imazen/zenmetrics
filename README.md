@@ -49,6 +49,9 @@ zenmetrics batch --metric cvvdp --display-model standard_fhd \
 `zenmetrics list-metrics` prints what your build enabled and which metrics
 need a GPU; `zenmetrics list-formats` prints the decoders.
 
+[Checkpoint binaries](docs/CHECKPOINT_BINARIES.md) package the CLI, IQA comparison
+drivers and fleet executors with pinned build identities.
+
 ## Metrics
 
 Listed by name. "Validated against" is the implementation each port is

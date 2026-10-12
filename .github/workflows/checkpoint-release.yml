@@ -1,0 +1,62 @@
+name: Publish checkpoint release
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Successful Checkpoint binaries run ID on master
+        required: true
+        type: string
+      source:
+        description: Full source commit SHA from that run
+        required: true
+        type: string
+      tag:
+        description: New vX.Y.Z-checkpoint.ID tag
+        required: true
+        type: string
+      readme_approved:
+        description: Source README reviewed and explicitly approved for release
+        required: true
+        default: false
+        type: boolean
+      readme_sha256:
+        description: SHA-256 of that reviewed README
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: checkpoint-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHECKPOINT_RUN: ${{ inputs.run }}
+      CHECKPOINT_SOURCE: ${{ inputs.source }}
+      CHECKPOINT_TAG: ${{ inputs.tag }}
+      README_APPROVED: ${{ inputs.readme_approved }}
+      README_SHA256: ${{ inputs.readme_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Verify completed platform evidence and attach immutable release files
+        shell: bash
+        run: |
+          test "$README_APPROVED" = true
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp"
+          python3 scripts/checkpoint/publish-release.py --run "$CHECKPOINT_RUN" \
+            --source "$CHECKPOINT_SOURCE" --tag "$CHECKPOINT_TAG" \
+            --readme-approved --readme-sha256 "$README_SHA256" \
+            --out "$HOME/tmp/checkpoint-release-assets"

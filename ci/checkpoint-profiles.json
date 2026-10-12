@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "rust": "1.99.0",
+  "profiles": {
+    "full-wgpu": [
+      "gpu",
+      "gpu-wgpu",
+      "sweep",
+      "bmp",
+      "gif",
+      "tiff",
+      "hdr-gainmap",
+      "avif-svt",
+      "hdr-svt",
+      "jpegai",
+      "orchestrator",
+      "orchestrator-cpu-all",
+      "feature-jobs"
+    ],
+    "full-cuda": [
+      "gpu",
+      "gpu-cuda",
+      "sweep",
+      "bmp",
+      "gif",
+      "tiff",
+      "hdr-gainmap",
+      "avif-svt",
+      "hdr-svt",
+      "jpegai",
+      "orchestrator-cuda",
+      "orchestrator-cpu-all",
+      "feature-jobs"
+    ],
+    "full-cpu": [
+      "sweep",
+      "bmp",
+      "gif",
+      "tiff",
+      "hdr-gainmap",
+      "avif-svt",
+      "hdr-svt",
+      "jpegai",
+      "orchestrator",
+      "orchestrator-cpu-all",
+      "feature-jobs"
+    ]
+  },
+  "excluded_features": {
+    "avif-aom": "Uses a C oracle in the shipping dependency graph; reserved for differential tests.",
+    "gpu-cpu": "Software execution is not a hardware GPU benchmark backend.",
+    "gpu-hip": "Separate backend qualification required.",
+    "gpu-wgpu-spirv": "Separate Vulkan compiler qualification required.",
+    "feature-rev": "Requires a separately reviewed feature-formula revision."
+  },
+  "benchmark_runner": {
+    "repository": "imazen/zenbench",
+    "commit": "4f152ef95b700366642f7011972c302300ee6932"
+  },
+  "release_artifacts": [
+    "checkpoint-x86_64-unknown-linux-gnu-full-wgpu",
+    "checkpoint-x86_64-unknown-linux-gnu-full-cuda",
+    "checkpoint-aarch64-unknown-linux-gnu-full-wgpu",
+    "checkpoint-x86_64-pc-windows-msvc-full-wgpu",
+    "checkpoint-aarch64-pc-windows-msvc-full-wgpu",
+    "checkpoint-aarch64-apple-darwin-full-wgpu",
+    "checkpoint-i686-unknown-linux-gnu-full-cpu",
+    "checkpoint-browser-simd128-relaxed-rayon"
+  ]
+}

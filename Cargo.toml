@@ -35,6 +35,7 @@ members = [
     "crates/zenfleet-sweep",
     "crates/zenfleet-sim",
     "crates/zenmetrics-cli",
+    "crates/zenmetrics-browser",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",
@@ -51,6 +52,8 @@ members = [
 # training-framework counterpart (burn 0.21 autodiff + custom
 # RankNet loss); also standalone, also kept out of the parent graph.
 exclude = [
+    # Separately pinned CLI runner checkout used only by checkpoint CI.
+    "runner-source",
     # Frozen Margarine research dependency graph and CPU-only command.
     "crates/margarine",
     # Lean, statically linked AV1 comparison executor; no GPU/corpus siblings.

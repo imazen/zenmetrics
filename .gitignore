@@ -64,3 +64,6 @@ target-bookworm/
 /target-*/
 
 .quality-kit/
+
+# Separately pinned checkpoint benchmark runner checkout.
+/runner-source/

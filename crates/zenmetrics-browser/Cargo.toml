@@ -1,0 +1,24 @@
+[package]
+name = "zenmetrics-browser"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+description = "Worker-based browser IQA and spatial error-map viewer"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zensim = { workspace = true }
+wasm-bindgen = "=0.2.129"
+rayon = "1.12.0"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-rayon = { version = "1.3.0", features = ["no-bundler"] }
+
+[lints]
+workspace = true

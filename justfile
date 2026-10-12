@@ -489,3 +489,33 @@ dashboard-web-check npm_bin="npm":
 vmaf-portable-check:
     cargo check --locked -p vmaf --lib --features simd,avx512 --target aarch64-unknown-linux-gnu
     cargo check --locked -p vmaf --lib --features simd,avx512 --target x86_64-unknown-linux-gnu
+
+checkpoint-i686-vmaf-check:
+    ZEN_CHECKPOINT_WORKSPACES="$(cd ../.. && pwd)" CROSS_CONFIG="$(pwd)/ci/checkpoint-cross.toml" cross check --locked -p vmaf --lib --features simd,avx512 --target i686-unknown-linux-gnu
+
+checkpoint-native profile target source runner output:
+    python3 scripts/checkpoint/package.py --profile {{profile}} --target {{target}} --source {{source}} --runner-source {{runner}} --out {{output}}
+
+checkpoint-browser-build output:
+    CHECKPOINT_OUT={{output}} bash scripts/checkpoint/build-browser.sh
+
+checkpoint-browser-check package report oracle:
+    python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}
+
+checkpoint-release-prepare run source output:
+    python3 scripts/checkpoint/prepare-release.py --run {{run}} --source {{source}} --out {{output}}
+
+checkpoint-gpu-contract-check expectation features:
+    ZENMETRICS_TEST_GPU={{expectation}} cargo test --locked -p zenmetrics-cli --features {{features}} --test cli butteraugli_cpu_and_gpu_agree -- --exact
+
+checkpoint-gpu-refusal-check features:
+    cargo test --locked -p zenmetrics-cli --features {{features}} --test cli require_gpu
+
+checkpoint-release-publish run source tag readme_hash output:
+    python3 scripts/checkpoint/publish-release.py --run {{run}} --source {{source}} --tag {{tag}} --readme-approved --readme-sha256 {{readme_hash}} --out {{output}}
+
+checkpoint-release-controls:
+    python3 scripts/checkpoint/test_release.py
+
+checkpoint-i686-cli-tests:
+    ZEN_CHECKPOINT_WORKSPACES="$(cd ../.. && pwd)" CROSS_CONFIG="$(pwd)/ci/checkpoint-cross.toml" ZENMETRICS_TEST_GPU=absent cross test --locked -p zenmetrics-cli --all-targets --features sweep,bmp,gif,tiff,hdr-gainmap,avif-svt,hdr-svt,jpegai,orchestrator,orchestrator-cpu-all,feature-jobs --target i686-unknown-linux-gnu

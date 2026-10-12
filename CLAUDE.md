@@ -542,6 +542,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- The CLI no-GPU fixture hid CUDA and Vulkan but left Metal reachable. macOS ARM64 therefore correctly returned a GPU score while the fixture expected refusal. Selecting an unavailable WGPU device index also excludes Metal and DX12 without changing either refusal assertion or the separate GPU-present numeric parity test.
+
 - GPU memory-mode defaults must fit the target address width. The 8 GiB fallback budget overflowed `usize` when the i686 CLI test graph compiled GPU dependencies. Saturating multiplication retains exactly 8 GiB on 64-bit targets and limits 32-bit budgeting to representable bytes. The complete i686 CLI all-targets run passes; score arithmetic and GPU benchmark acceptance are unchanged.
 - The distortion-worker protocol fixture decodes its UTF-8 JSON frame before parsing, preserving its byte payload and assertions on Python versions that require a string for `json.loads`. Both existing RGB8/RGB16 round-trip fixtures pass inside the Python-enabled i686 builder. No test was skipped or relaxed.
 
@@ -1399,3 +1401,12 @@ on every architecture. ARM checkpoint builds failed before metric execution.
 Import `attune` under `simd` independently of the x86 token/trait imports.
 Pinned-source `cargo check` with `simd,avx512` passes on both aarch64 Linux and
 x86_64 Linux; this establishes compilation, not ARM numerical execution.
+
+### Known Bugs: browser cached reference after rejected input (2026-10-12)
+
+The checkpoint worker freed its cached reference before validating a replacement.
+An alpha rejection then left the previous identity attached to the freed object;
+restoring the original input could reuse it. Prepare the new reference before
+freeing or replacing the current one. Chromium recovery controls fail with the
+old worker and pass with the corrected worker, retaining exact native scalar
+and raw-map checks.
