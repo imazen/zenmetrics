@@ -42,6 +42,7 @@ jobs:
           mkdir -p "$HOME/tmp"
           TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
           TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_study.py
+          TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_analysis.py
       - name: Build native worker and runner
         run: |
           cargo build --locked -p zenfleet-worker --bin zenfleet-worker --example benchmark_ledger_control

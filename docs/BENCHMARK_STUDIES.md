@@ -193,3 +193,63 @@ Rust controls compare the routed outputs exactly with each metric's direct
 absolute-nits entry point and refuse nonfinite/negative channels and missing
 geometry. These controls verify routing and input preservation; the metric
 crates' author/reference gates remain the accuracy oracles.
+
+## Evidence ingestion, charts and descriptive fits
+
+```sh
+just benchmark-study-analyze GENERATED_DIRECTORY PACKAGED_DIRECTORY NEW_OUTPUT ATTEMPT_DIRECTORY...
+```
+
+Supply recovered attempt directories from the benchmark adapter. The analyzer
+checks the study/cell identities, packaged manifest hashes, declared plan,
+runner, machine, domain, replicate, correctness and every retained artifact
+hash. It refuses changed evidence. `analysis.json` retains observations,
+packet hashes, admission observations, placement, unavailable counters and the
+complete declared-cell audit. It accepts no loose table of unproven timings.
+
+A cell with one complete attempt yields observations. Failed/busy attempts
+remain visible. No complete attempt means failed or missing; multiple complete
+attempts mean `ambiguous_retry`, with every attempt retained and no selected
+performance point. There is no fastest-attempt rule. Resolve ambiguous retries
+through a separately reviewed evidence selection before comparing them.
+
+`index.html` is a portable filterable report with standalone slide-sized SVGs,
+exact panel metadata and links to the full analysis. Linear axes are default;
+`--log` selects explicitly labeled log10 axes and refuses zero observations
+rather than hiding them. Every marker represents one invocation/declared
+replicate. Hover text retains dimensions, raw value, replicate and attempt.
+No mean bar is presented as a confirmation interval.
+
+For `wall` passes the report retains both supervisor invocation wall and the
+ordinary driver's arithmetic mean internal metric-call latency. Internal
+operations are samples inside one invocation, never independent process
+blocks. Throughput uses declared operations divided by invocation wall and is
+labeled operations/s. Memory curves retain raw bytes and their exact quantity,
+scope, backend/version and coverage; they do not equate requested heap with
+resident RAM or divide a peak by operation count.
+
+Panels separate metric, testbed, machine/domain/placement, target, build,
+threads, reuse, input format, row-padding bytes, products, warmup/operation
+budget, viewing model, origin/content/aspect ratio and measurement mode.
+Pair records may declare `series:"NAME"` to identify intentionally comparable
+size derivatives made with the same content/distortion recipe. Without that
+field each pair is its own series, preventing accidental fits across unrelated
+pairs. The operator must qualify the derivative recipe; a shared label alone
+cannot prove equivalent content.
+
+For a panel with at least three distinct pixel counts, the tool fits
+`intercept + slope * pixels` to arithmetic means of declared invocation
+replicates at each size. It retains intercept, slope, every residual and RMSE.
+This is descriptive OLS over the supplied panel, not an uncertainty model,
+cache-regime detector or acceptance decision. Inspect residuals and declare
+separate panels for different regimes; a negative intercept is evidence about
+fit adequacy, not a negative startup cost. Origin/content/aspect and hardware
+remain separate factors. No confidence intervals, p-values, cross-machine
+pairing or causal hardware/OS claims are generated.
+
+`just benchmark-analysis-check` checks missing/busy cells, retry ambiguity,
+hash corruption, panel separation and valid SVG/HTML. `just benchmark-fit-oracle`
+requires NumPy and independently checks centered least-squares coefficients
+and residuals on three synthetic irregular size panels. Those controls qualify
+the numerical implementation only. Real size-grid replay and repeated-measure
+uncertainty validation remain prerequisites for inferential fit output.

@@ -361,6 +361,15 @@ benchmark-contract-check:
 benchmark-study-check:
     TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_study.py
 
+benchmark-analysis-check:
+    TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_analysis.py
+
+benchmark-fit-oracle:
+    python3 -B scripts/jobsys/check_benchmark_fit_oracle.py
+
+benchmark-study-analyze +args:
+    python3 -B scripts/jobsys/analyze_benchmark_study.py {{args}}
+
 benchmark-study +args:
     python3 -B scripts/jobsys/build_benchmark_study.py {{args}}
 

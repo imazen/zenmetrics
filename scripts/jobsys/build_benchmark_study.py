@@ -35,7 +35,7 @@ def file_sha(path):
     return h.hexdigest()
 
 
-def load(path):
+def decode(data):
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -43,11 +43,16 @@ def load(path):
                 raise ValueError(f'duplicate JSON key: {key}')
             result[key] = value
         return result
-    if path.stat().st_size > 8 * 1024 * 1024:
+    if len(data) > 8 * 1024 * 1024:
         raise ValueError('metadata exceeds 8 MiB')
-    return json.loads(path.read_bytes(), object_pairs_hook=unique,
+    return json.loads(data, object_pairs_hook=unique,
                       parse_constant=lambda x: (_ for _ in ()).throw(ValueError(f'nonfinite JSON: {x}')))
 
+
+def load(path):
+    if path.stat().st_size > 8 * 1024 * 1024:
+        raise ValueError('metadata exceeds 8 MiB')
+    return decode(path.read_bytes())
 
 def keys(value, required, optional=()):
     if not isinstance(value, dict) or set(value) - set(required) - set(optional) or set(required) - set(value):
@@ -125,8 +130,9 @@ def expand(spec_path):
         raise ValueError('unknown CLI metric')
     pairs = []
     for pair in spec['pairs']:
-        keys(pair, ['id', 'origin', 'content', 'width', 'height', 'stride_bytes', 'pixel_format', 'reference', 'distorted'], ['viewing'])
+        keys(pair, ['id', 'origin', 'content', 'width', 'height', 'stride_bytes', 'pixel_format', 'reference', 'distorted'], ['viewing', 'series'])
         token(pair['id']); token(pair['origin']); token(pair['content'])
+        if 'series' in pair: token(pair['series'])
         positive(pair['width'], 'width'); positive(pair['height'], 'height')
         positive(pair['stride_bytes'], 'stride_bytes')
         if 'viewing' in pair:
