@@ -378,3 +378,6 @@ benchmark-image-check image scratch:
 
 iqa-heap-oracle binary case output:
     python3 -B scripts/jobsys/check_iqa_heap_oracle.py {{binary}} {{case}} {{output}}
+
+iqa-bundle-check binaries runner case output:
+    python3 -B scripts/jobsys/check_iqa_bundle.py {{binaries}} {{runner}} {{case}} {{output}}

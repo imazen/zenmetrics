@@ -216,3 +216,9 @@ ledger's lifetime maximum. The fixture needs debug symbols containing
 `HeapProfiler`. This is a whole-process control, not an external validation of
 individual phase peaks. Use the normal driver with the `heaptrack` backend to
 observe intercepted native allocations as a separately labeled quantity.
+
+Fleet IQA cases require relative input paths contained by the case directory.
+When `ZENBENCH_RESULT_FILE` is set, the case and both inputs must also appear
+in the current bundle manifest. Standalone cases omit that variable.
+`just iqa-bundle-check BINARIES RUNNER CASE NEW_DIRECTORY` checks both real
+IQA builds through the runner and refuses escaped or unlisted inputs.
