@@ -1,4 +1,7 @@
 # Preserve whole sibling workspace roots, not only selected member directories.
 [build.env]
-volumes = ["ZEN_CHECKPOINT_WORKSPACES"]
-passthrough = ["ZENMETRICS_TEST_ZENSIM_BAKE", "ZENMETRICS_TEST_GPU", "CARGO_BUILD_JOBS", "RAYON_NUM_THREADS"]
+volumes = ["ZEN_CHECKPOINT_WORKSPACES", "TMPDIR"]
+passthrough = ["TMPDIR", "ZENMETRICS_TEST_ZENSIM_BAKE", "ZENMETRICS_TEST_GPU", "CARGO_BUILD_JOBS", "RAYON_NUM_THREADS"]
+
+[target.i686-unknown-linux-gnu]
+dockerfile = "ci/checkpoint-i686.Dockerfile"

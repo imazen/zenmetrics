@@ -280,7 +280,7 @@ while True:
         break
     header = rd(struct.unpack('<I', lh)[0])
     ref = rd(struct.unpack('<I', rd(4))[0])
-    n = len(json.loads(header)['cells'])
+    n = len(json.loads(header.decode('utf-8'))['cells'])
     resp = json.dumps({'variants': [{'ok': True} for _ in range(n)]}).encode()
     sys.stdout.buffer.write(struct.pack('<I', len(resp)) + resp)
     raw = ref * n

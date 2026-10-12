@@ -149,3 +149,12 @@ SHA-256 files, and `release-assets.json` to a GitHub prerelease. Existing tags
 and assets are never overwritten. It does not publish a crate or a container.
 Use `publish-release.py --dry-run` with the same inputs to download and verify
 the assets and print the publication command without creating a tag or release.
+
+The i686 test builder includes Python for the existing distortion-worker
+protocol fixtures and mounts the caller’s durable `TMPDIR`. Its base image is
+pinned by digest. Linking is serialized on this target to bound build memory;
+all existing functional and numeric assertions still execute. The build image
+is a CI tool, while distributed checkpoint files remain GitHub Release assets.
+
+The separately pinned `runner-source` checkout is excluded from this Cargo
+workspace. It keeps its own dependency lock and does not join the metric graph.

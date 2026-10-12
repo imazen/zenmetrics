@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      CARGO_BUILD_JOBS: 4
+      CARGO_BUILD_JOBS: 1
       RAYON_NUM_THREADS: 4
       ZENMETRICS_TEST_GPU: absent
     steps:

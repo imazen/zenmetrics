@@ -50,6 +50,9 @@ def main():
         # Path dependencies may be members inheriting from a sibling workspace root.
         build_env['ZEN_CHECKPOINT_WORKSPACES'] = str(root.parent.parent)
         build_env['CROSS_CONFIG'] = str(root / 'ci/checkpoint-cross.toml')
+    runner_metadata = ['cargo', 'metadata', '--locked', '--no-deps', '--format-version', '1',
+                       '--manifest-path', str(args.runner_source / 'Cargo.toml')]
+    subprocess.run(runner_metadata, cwd=root, env=build_env, stdout=subprocess.DEVNULL, check=True)
     features = ','.join(config['profiles'][args.profile])
     common = ['--locked', '-p', 'zenmetrics-cli', '--target', args.target, '--features', features]
     commands = [
@@ -62,6 +65,7 @@ def main():
         subprocess.run(command, cwd=cwd, env=build_env, check=True)
     for command in commands:
         execute(command)
+    commands.insert(0, runner_metadata)
     runner_command = ['cargo', 'build', '--locked', '--release', '--target', args.target,
                       '--manifest-path', str(args.runner_source / 'Cargo.toml'), '--bin', 'zenbench']
     execute(runner_command)
