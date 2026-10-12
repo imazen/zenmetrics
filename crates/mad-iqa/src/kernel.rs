@@ -180,6 +180,11 @@ fn tile_dims(m: usize, n: usize) -> (usize, usize) {
 /// `mt × nt` tile-resolution maps (`tile[jt * nt + it]` = pixel block
 /// starting at `(4jt, 4it)`). Positions outside the tile grid would
 /// have read 0 from the full-res maps, and callers honour that.
+///
+/// The per-tile sums use the same fixed 8-lane `f64` partials as
+/// [`ical_stat`] — a deterministic grouping every tier lowers
+/// identically, lowered to `vaddpd` chains on v3+.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let (mt, nt) = tile_dims(m, n);
     let (mut std2, mut std1, mut m1) = (
@@ -194,6 +199,33 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
     // Pass 1: 16×16 blocks at stride 4. (it,jt) blocks are independent —
     // each writes only its own tile, so jt-strips are safe to run on
     // threads (identical per-element values either way).
+    let block16 = |j: usize, i: usize| -> (f32, f32) {
+        let (mut sx, mut sy) = ([0.0f64; 8], [0.0f64; 8]);
+        for r in j..j + B {
+            let (rd, rr) = (
+                &diff[r * n + i..r * n + i + B],
+                &reff[r * n + i..r * n + i + B],
+            );
+            for k in 0..8 {
+                sx[k] += rd[k] as f64 + rd[k + 8] as f64;
+                sy[k] += rr[k] as f64 + rr[k + 8] as f64;
+            }
+        }
+        let (mean, mean2) = (
+            (sx[0] + sx[1] + sx[2] + sx[3] + sx[4] + sx[5] + sx[6] + sx[7]) / 256.0,
+            (sy[0] + sy[1] + sy[2] + sy[3] + sy[4] + sy[5] + sy[6] + sy[7]) / 256.0,
+        );
+        let mut s2 = [0.0f64; 8];
+        for r in j..j + B {
+            let rd = &diff[r * n + i..r * n + i + B];
+            for k in 0..8 {
+                let (d0, d1) = (rd[k] as f64 - mean, rd[k + 8] as f64 - mean);
+                s2[k] += d0 * d0 + d1 * d1;
+            }
+        }
+        let s2 = s2[0] + s2[1] + s2[2] + s2[3] + s2[4] + s2[5] + s2[6] + s2[7];
+        (libm::sqrt(s2 / 255.0) as f32, mean2 as f32)
+    };
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
@@ -204,57 +236,45 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
             .for_each(|(ci, (s2s, m1s))| {
                 let ts = ci * g;
                 for jt in ts..(ts + g).min(mt) {
-                    let j = 4 * jt;
                     for it in 0..nt {
-                        let i = 4 * it;
-                        let (mut sx, mut sy) = (0.0f64, 0.0f64);
-                        for r in j..j + B {
-                            for c in i..i + B {
-                                sx += diff[r * n + c] as f64;
-                                sy += reff[r * n + c] as f64;
-                            }
-                        }
-                        let (mean, mean2) = (sx / 256.0, sy / 256.0);
-                        let mut s2 = 0.0f64;
-                        for r in j..j + B {
-                            for c in i..i + B {
-                                let d = diff[r * n + c] as f64 - mean;
-                                s2 += d * d;
-                            }
-                        }
+                        let (v2, v1) = block16(4 * jt, 4 * it);
                         let o = (jt - ts) * nt + it;
-                        s2s[o] = libm::sqrt(s2 / 255.0) as f32;
-                        m1s[o] = mean2 as f32;
+                        s2s[o] = v2;
+                        m1s[o] = v1;
                     }
                 }
             });
     }
     #[cfg(not(feature = "parallel"))]
     for it in 0..nt {
-        let i = 4 * it;
         for jt in 0..mt {
-            let j = 4 * jt;
-            let (mut sx, mut sy) = (0.0f64, 0.0f64);
-            for r in j..j + B {
-                for c in i..i + B {
-                    sx += diff[r * n + c] as f64;
-                    sy += reff[r * n + c] as f64;
-                }
-            }
-            let (mean, mean2) = (sx / 256.0, sy / 256.0);
-            let mut s2 = 0.0f64;
-            for r in j..j + B {
-                for c in i..i + B {
-                    let d = diff[r * n + c] as f64 - mean;
-                    s2 += d * d;
-                }
-            }
+            let (v2, v1) = block16(4 * jt, 4 * it);
             let o = jt * nt + it;
-            std2[o] = libm::sqrt(s2 / 255.0) as f32;
-            m1[o] = mean2 as f32;
+            std2[o] = v2;
+            m1[o] = v1;
         }
     }
     // Pass 2: 8×8 blocks at the same stride-4 starts.
+    let block8 = |j: usize, i: usize| -> f32 {
+        let mut sy = [0.0f64; 8];
+        for r in j..j + 8 {
+            let row = &reff[r * n + i..r * n + i + 8];
+            for k in 0..8 {
+                sy[k] += row[k] as f64;
+            }
+        }
+        let mean = (sy[0] + sy[1] + sy[2] + sy[3] + sy[4] + sy[5] + sy[6] + sy[7]) / 64.0;
+        let mut s2 = [0.0f64; 8];
+        for r in j..j + 8 {
+            let row = &reff[r * n + i..r * n + i + 8];
+            for k in 0..8 {
+                let d = row[k] as f64 - mean;
+                s2[k] += d * d;
+            }
+        }
+        let s2 = s2[0] + s2[1] + s2[2] + s2[3] + s2[4] + s2[5] + s2[6] + s2[7];
+        libm::sqrt(s2 / 63.0) as f32
+    };
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
@@ -265,25 +285,9 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
             .for_each(|(ci, (tps, s1s))| {
                 let ts = ci * g;
                 for jt in ts..(ts + g).min(mt) {
-                    let j = 4 * jt;
                     for it in 0..nt {
-                        let i = 4 * it;
-                        let mut sy = 0.0f64;
-                        for r in j..j + 8 {
-                            for c in i..i + 8 {
-                                sy += reff[r * n + c] as f64;
-                            }
-                        }
-                        let mean = sy / 64.0;
-                        let mut s2 = 0.0f64;
-                        for r in j..j + 8 {
-                            for c in i..i + 8 {
-                                let d = reff[r * n + c] as f64 - mean;
-                                s2 += d * d;
-                            }
-                        }
+                        let stdev = block8(4 * jt, 4 * it);
                         let o = (jt - ts) * nt + it;
-                        let stdev = libm::sqrt(s2 / 63.0) as f32;
                         tps[o] = stdev;
                         s1s[o] = stdev;
                     }
@@ -292,24 +296,8 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
     }
     #[cfg(not(feature = "parallel"))]
     for it in 0..nt {
-        let i = 4 * it;
         for jt in 0..mt {
-            let j = 4 * jt;
-            let mut sy = 0.0f64;
-            for r in j..j + 8 {
-                for c in i..i + 8 {
-                    sy += reff[r * n + c] as f64;
-                }
-            }
-            let mean = sy / 64.0;
-            let mut s2 = 0.0f64;
-            for r in j..j + 8 {
-                for c in i..i + 8 {
-                    let d = reff[r * n + c] as f64 - mean;
-                    s2 += d * d;
-                }
-            }
-            let stdev = libm::sqrt(s2 / 63.0) as f32;
+            let stdev = block8(4 * jt, 4 * it);
             tmp[jt * nt + it] = stdev;
             std1[jt * nt + it] = stdev;
         }
@@ -372,6 +360,13 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
 /// `ical_stat(x)` → `(std, skew, kurt)` — verbatim port of the C
 /// mex: stride-4 16×16 windows, blocky 4×4 tiles; skew/kurtosis
 /// normalised by population moments (`stmp`); flat → 0.
+///
+/// The per-tile sums accumulate on fixed 8-lane `f64` partials (lane k
+/// takes column-offsets k and k+8, each pair pre-summed before the
+/// accumulate) instead of one serial chain — a deterministic grouping
+/// every dispatch tier lowers identically, and the pattern lowers to
+/// `vaddpd` chains on v3+ instead of a latency-bound scalar loop.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let (mt, nt) = tile_dims(m, n);
     let (mut std_o, mut skw, mut krt) = (
@@ -383,23 +378,28 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
         return (std_o, skw, krt);
     }
     let block = |j: usize, i: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32], o: usize| {
-        let mut sx = 0.0f64;
+        let mut sx = [0.0f64; 8];
         for r in j..j + B {
-            for c in i..i + B {
-                sx += x[r * n + c] as f64;
+            let row = &x[r * n + i..r * n + i + B];
+            for k in 0..8 {
+                sx[k] += row[k] as f64 + row[k + 8] as f64;
             }
         }
-        let mean = sx / 256.0;
-        let (mut s2, mut s3, mut s4) = (0.0f64, 0.0f64, 0.0f64);
+        let mean = (sx[0] + sx[1] + sx[2] + sx[3] + sx[4] + sx[5] + sx[6] + sx[7]) / 256.0;
+        let (mut s2, mut s3, mut s4) = ([0.0f64; 8], [0.0f64; 8], [0.0f64; 8]);
         for r in j..j + B {
-            for c in i..i + B {
-                let d = x[r * n + c] as f64 - mean;
-                let d2 = d * d;
-                s2 += d2;
-                s3 += d2 * d;
-                s4 += d2 * d2;
+            let row = &x[r * n + i..r * n + i + B];
+            for k in 0..8 {
+                let (d0, d1) = (row[k] as f64 - mean, row[k + 8] as f64 - mean);
+                let (p0, p1) = (d0 * d0, d1 * d1);
+                s2[k] += p0 + p1;
+                s3[k] += p0 * d0 + p1 * d1;
+                s4[k] += p0 * p0 + p1 * p1;
             }
         }
+        let s2 = s2[0] + s2[1] + s2[2] + s2[3] + s2[4] + s2[5] + s2[6] + s2[7];
+        let s3 = s3[0] + s3[1] + s3[2] + s3[3] + s3[4] + s3[5] + s3[6] + s3[7];
+        let s4 = s4[0] + s4[1] + s4[2] + s4[3] + s4[4] + s4[5] + s4[6] + s4[7];
         so[o] = libm::sqrt(s2 / 255.0) as f32;
         let stmp = libm::sqrt(s2 / 256.0);
         if stmp != 0.0 {
@@ -560,21 +560,36 @@ fn spectrum(src: &[f32], m: usize, n: usize, wplan: &fft::Plan, hplan: &fft::Pla
 }
 
 /// `norm(mp(17:end-17, 17:end-17)(:), 2) / sqrt(numel)` — the
-/// reference's edge kill (0-based rows/cols `16 ..= dim−18`).
+/// reference's edge kill (0-based rows/cols `16 ..= dim−18`). The sum
+/// runs on fixed 8-lane `f64` partials (in-row groups, tail lanes
+/// folded last) — a deterministic grouping every tier lowers
+/// identically.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn interior_norm(mp: &[f32], m: usize, n: usize) -> f64 {
     if m < 34 || n < 34 {
         return f64::NAN;
     }
-    let mut acc = 0.0f64;
+    let mut acc = [0.0f64; 8];
     let mut count = 0usize;
     for r in 16..m - 17 {
-        for c in 16..n - 17 {
-            let v = mp[r * n + c] as f64;
-            acc += v * v;
-            count += 1;
+        let row = &mp[r * n + 16..r * n + n - 17];
+        let mut c = 0usize;
+        while c + 8 <= row.len() {
+            for k in 0..8 {
+                let v = row[c + k] as f64;
+                acc[k] += v * v;
+            }
+            c += 8;
         }
+        while c < row.len() {
+            let v = row[c] as f64;
+            acc[0] += v * v;
+            c += 1;
+        }
+        count += row.len();
     }
-    libm::sqrt(acc) / libm::sqrt(count as f64)
+    libm::sqrt(acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7])
+        / libm::sqrt(count as f64)
 }
 
 // ============================ tiered core ================================

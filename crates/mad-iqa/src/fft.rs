@@ -323,7 +323,68 @@ fn fft_batch8_inner(
         }
     }
 
-    for tw in stages {
+    // Consecutive stage pairs run fused (radix-4-equivalent): the two
+    // butterflies land on the same registers, so each element loads and
+    // stores once per pair instead of once per stage — identical
+    // arithmetic, half the passes over the planes. An odd stage count
+    // leaves the final stage to the single-stage loop below.
+    let mut s = 0usize;
+    while s + 1 < stages.len() {
+        let (tw0, tw1) = (&stages[s], &stages[s + 1]);
+        let half = tw0.len();
+        let (h8, h16, h24) = (half * 8, half * 16, half * 24);
+        for start in (0..n).step_by(half * 4) {
+            for k in 0..half {
+                let (w0re, w0im) = (
+                    f32x8::splat_t(token, tw0[k].re),
+                    f32x8::splat_t(token, tw0[k].im),
+                );
+                let (w1re_a, w1im_a) = (
+                    f32x8::splat_t(token, tw1[k].re),
+                    f32x8::splat_t(token, tw1[k].im),
+                );
+                let (w1re_b, w1im_b) = (
+                    f32x8::splat_t(token, tw1[k + half].re),
+                    f32x8::splat_t(token, tw1[k + half].im),
+                );
+                let i0 = (start + k) * 8;
+                let (i1, i2, i3) = (i0 + h8, i0 + h16, i0 + h24);
+                // Stage s: butterflies (i0,i1) and (i2,i3), same twiddle.
+                let vre = f32x8::load_t(token, (&re8[i1..i1 + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&im8[i1..i1 + 8]).try_into().unwrap());
+                let tre = vre * w0re - vim * w0im;
+                let tim = vre * w0im + vim * w0re;
+                let ure = f32x8::load_t(token, (&re8[i0..i0 + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&im8[i0..i0 + 8]).try_into().unwrap());
+                let (y0re, y1re) = (ure + tre, ure - tre);
+                let (y0im, y1im) = (uim + tim, uim - tim);
+                let vre = f32x8::load_t(token, (&re8[i3..i3 + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&im8[i3..i3 + 8]).try_into().unwrap());
+                let tre = vre * w0re - vim * w0im;
+                let tim = vre * w0im + vim * w0re;
+                let ure = f32x8::load_t(token, (&re8[i2..i2 + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&im8[i2..i2 + 8]).try_into().unwrap());
+                let (y2re, y3re) = (ure + tre, ure - tre);
+                let (y2im, y3im) = (uim + tim, uim - tim);
+                // Stage s+1: butterflies (i0,i2) with tw1[k], (i1,i3) with
+                // tw1[k+half].
+                let tre = y2re * w1re_a - y2im * w1im_a;
+                let tim = y2re * w1im_a + y2im * w1re_a;
+                (y0re + tre).store((&mut re8[i0..i0 + 8]).try_into().unwrap());
+                (y0im + tim).store((&mut im8[i0..i0 + 8]).try_into().unwrap());
+                (y0re - tre).store((&mut re8[i2..i2 + 8]).try_into().unwrap());
+                (y0im - tim).store((&mut im8[i2..i2 + 8]).try_into().unwrap());
+                let tre = y3re * w1re_b - y3im * w1im_b;
+                let tim = y3re * w1im_b + y3im * w1re_b;
+                (y1re + tre).store((&mut re8[i1..i1 + 8]).try_into().unwrap());
+                (y1im + tim).store((&mut im8[i1..i1 + 8]).try_into().unwrap());
+                (y1re - tre).store((&mut re8[i3..i3 + 8]).try_into().unwrap());
+                (y1im - tim).store((&mut im8[i3..i3 + 8]).try_into().unwrap());
+            }
+        }
+        s += 2;
+    }
+    for tw in &stages[s..] {
         let half = tw.len();
         let len = half * 2;
         for start in (0..n).step_by(len) {
