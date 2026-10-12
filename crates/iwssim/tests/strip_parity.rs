@@ -25,7 +25,7 @@ fn synth_rgb_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
         s_dis ^= s_dis << 17;
         // Distortion: blend with ref to keep score in a useful range
         let mixed = (ref_buf[i] as u16) * 230 + ((s_dis as u8) as u16) * 25;
-        dis_buf[i] = ((mixed / 256) as u8).min(255);
+        dis_buf[i] = (mixed / 256) as u8;
     }
     (ref_buf, dis_buf)
 }
@@ -70,19 +70,19 @@ fn parity_at(w: u32, h: u32, strip_h: u32, seed: u64, tol_abs: f64) {
 #[test]
 fn strip_parity_256x256_body512() {
     // strip_h > image_h ⇒ one strip = full image. Should be exact.
-    parity_at(256, 256, STRIP_BODY_DEFAULT, 0xc0_ffee_12_34, 1e-5);
+    parity_at(256, 256, STRIP_BODY_DEFAULT, 0x00c0_ffee_1234, 1e-5);
 }
 
 #[test]
 fn strip_parity_512x512_body256() {
     // 2 strips with adequate halo.
-    parity_at(512, 512, 256, 0xc0_ffee_12_34, 1e-4);
+    parity_at(512, 512, 256, 0x00c0_ffee_1234, 1e-4);
 }
 
 #[test]
 fn strip_parity_512x512_body512() {
     // strip_h == image_h ⇒ one strip = full image. Should be exact.
-    parity_at(512, 512, 512, 0xc0_ffee_12_34, 1e-5);
+    parity_at(512, 512, 512, 0x00c0_ffee_1234, 1e-5);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn strip_parity_512x256_body128() {
 
 #[test]
 fn strip_body_too_small_uses_default() {
-    let (ref_buf, dis_buf) = synth_rgb_pair(256, 256, 0xc0_ffee_12_34);
+    let (ref_buf, dis_buf) = synth_rgb_pair(256, 256, 0x00c0_ffee_1234);
     let mut scorer = Iwssim::new(256, 256).expect("Iwssim");
     let result = scorer.score_strip(&ref_buf, &dis_buf, STRIP_BODY_MIN - 1);
     assert!(
@@ -171,12 +171,12 @@ fn warm_ref_parity_at(w: u32, h: u32, strip_h: u32, seed: u64, tol_abs: f64) {
 
 #[test]
 fn warm_ref_strip_parity_512x512_body512() {
-    warm_ref_parity_at(512, 512, 512, 0xc0_ffee_12_34, 1e-5);
+    warm_ref_parity_at(512, 512, 512, 0x00c0_ffee_1234, 1e-5);
 }
 
 #[test]
 fn warm_ref_strip_parity_512x512_body256() {
-    warm_ref_parity_at(512, 512, 256, 0xc0_ffee_12_34, 1e-4);
+    warm_ref_parity_at(512, 512, 256, 0x00c0_ffee_1234, 1e-4);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn warm_ref_strip_parity_1024x1024_body256() {
 
 #[test]
 fn warm_ref_strip_no_warm_returns_error() {
-    let (_, dis_buf) = synth_rgb_pair(256, 256, 0xc0_ffee_12_34);
+    let (_, dis_buf) = synth_rgb_pair(256, 256, 0x00c0_ffee_1234);
     let mut scorer = Iwssim::new(256, 256).expect("Iwssim");
     let result = scorer.score_with_warm_ref_strip(&dis_buf, 256);
     assert!(
@@ -203,7 +203,7 @@ fn warm_ref_strip_no_warm_returns_error() {
 #[test]
 fn strip_with_iw_flag_off() {
     // Sanity test the non-IW path through the strip walker too.
-    let (ref_buf, dis_buf) = synth_rgb_pair(512, 512, 0xc0_ffee_12_34);
+    let (ref_buf, dis_buf) = synth_rgb_pair(512, 512, 0x00c0_ffee_1234);
     let params = IwssimParams {
         iw_flag: false,
         ..IwssimParams::default()

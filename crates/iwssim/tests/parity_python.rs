@@ -88,7 +88,7 @@ fn apply_distortion(ref_rgb: &[u8], w: u32, h: u32, distort: &str) -> Vec<u8> {
         "swap" => {
             // ref[..., [1, 0, 2]]
             let mut out = ref_rgb.to_vec();
-            for chunk in out.chunks_exact_mut(3) {
+            for chunk in out.as_chunks_mut::<3>().0 {
                 chunk.swap(0, 1);
             }
             out

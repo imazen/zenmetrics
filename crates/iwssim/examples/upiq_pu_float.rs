@@ -46,7 +46,9 @@ fn load_pu_gray(path: &str, pu_max: f32) -> Result<(Vec<f32>, u32, u32), String>
     let raw = img.into_raw();
     let scale = 255.0 / pu_max;
     let gray = raw
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| pu21(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) * scale)
         .collect();
     Ok((gray, w, h))
