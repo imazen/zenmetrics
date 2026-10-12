@@ -1,0 +1,33 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cpu/cycles/P'
+# Event count (approx.): 91563049776
+#
+# Overhead  Command          Shared Object      Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+# ........  ...............  .................  .........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    23.23%  latency          latency            [.] psnrhvs::daala::calc_psnrhvs
+            |          
+             --4.05%--psnrhvs::daala::calc_psnrhvs
+                       |          
+                        --1.50%--psnrhvs::daala::psnr_hvs_daala_yuv444
+
+    22.19%  latency          latency            [.] psnrhvs::daala::od_bin_fdct8
+            |          
+             --4.04%--psnrhvs::daala::od_bin_fdct8
+
+    18.01%  latency          latency            [.] zenmetrics_cli::metrics::studio601_yuv444
+            |          
+             --3.72%--zenmetrics_cli::metrics::studio601_yuv444
+
+     7.55%  latency          latency            [.] roundf
+     5.58%  latency          latency            [.] psnrhvs::daala::od_bin_fdct8x8
+     1.81%  resource-sample  [kernel.kallsyms]  [k] entry_SYSRETQ_unsafe_stack
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -330,6 +330,11 @@ lpf-rank-check:
 ranked-zenbench binary threads prefix metrics size="1024":
     bash scripts/bench/ranked-metric-zenbench.sh "{{binary}}" "{{threads}}" "{{prefix}}" "{{metrics}}" "{{size}}"
 
+# Sample the same bounded production latency fixture; profiling is a separate run.
+ranked-zenbench-profile binary prefix metrics size="1024":
+    TMPDIR="$HOME/tmp" RAYON_NUM_THREADS=1 NMW_CONTENT=synth NMW_MODES=lat NMW_MIN_ROUNDS=30 NMW_GROUP_WALL_S=120 NMW_CELL_MAX_S=30 ZENBENCH_PIN=2 ZENBENCH_DATA_DIR="$HOME/tmp/zm-ranked-profile-evidence" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- sudo -n --preserve-env=TMPDIR,RAYON_NUM_THREADS,NMW_CONTENT,NMW_MODES,NMW_MIN_ROUNDS,NMW_GROUP_WALL_S,NMW_CELL_MAX_S,ZENBENCH_PIN,ZENBENCH_DATA_DIR perf record -F 997 --call-graph dwarf,8192 -o "{{prefix}}.data" -- taskset -c 2 "{{binary}}" "{{size}}" "{{prefix}}.tsv" "{{metrics}}" > "{{prefix}}.log" 2>&1
+    sudo -n perf report -i "{{prefix}}.data" --stdio --no-children --percent-limit 1 > "{{prefix}}.report"
+
 # Prepare a fresh-process exploratory A/B with A/A and an exact score-bit checker.
 ranked-pair-plan baseline candidate baseline_rev candidate_rev output threads="1" cpus="2":
     python3 -B scripts/bench/ranked-metric-pair.py plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{output}}" --threads "{{threads}}" --cpus "{{cpus}}"

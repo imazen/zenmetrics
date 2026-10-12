@@ -1,0 +1,12 @@
+Production source: 9b8de0dd0238758b2a5b00453c6813162d97cffd
+Runtime checkout: d98a301ff17c0ae23ef37caf14012556e2cc7616; runtime Git HEAD does not identify the build source.
+Driver SHA-256: aaf0dc17b3171120b998fe1e73cdcbdb207dd1411ce14520f5cae3b1f8752469
+Host: r7900x (Zen 4), not Zen 5.
+Native pinned-sibling release build; no target-cpu=native.
+Commands: just ranked-zenbench <driver> 1 <baseline-prefix> psnrhvs-daala 3355x2516; just ranked-zenbench-profile <driver> <profile-prefix> psnrhvs-daala 3355x2516.
+Profile: 997 Hz cycles, dwarf stack 8192; 16628 samples, zero lost.
+Raw resolving path: ~/tmp/psnrhvs-daala-profile-20261012.{data,log,report,tsv}.
+Saved profiling evidence: ~/tmp/zm-ranked-profile-evidence/.
+Baseline resource: run-heavy: done rc=0 17s | peak-RSS 0.14GiB | min-avail 24058MiB | peak-load 0.50
+Profile resource: run-heavy: done rc=0 19s | peak-RSS 0.17GiB | min-avail 24031MiB | peak-load 0.54
+Qualification: exploratory baseline and instrumented sampling; no optimization or promotion verdict.

@@ -449,3 +449,33 @@ Receipts: [baseline 1T](fsim_fusion_baseline_1t_2026-10-12.log),
 [paired provenance and resource receipt](fsim_fusion_pair_2026-10-12.meta).
 Use the preceding FSIM build command and the `ranked-wall` /
 `ranked-pair-plan` / `ranked-pair-scope` recipes.
+
+
+## Daala PSNR-HVS baseline and profile
+
+The production CLI driver built from `9b8de0dd` measured 466.4643 ms per
+call over 30 exploratory rounds at 3355×2516, one Rayon thread, CPU 2.
+The sentinel score was 34.765447061926444. This uses the driver's
+procedural pair and the Daala studio-601 YUV444 route, separately from
+the Ponomarenko path above. It establishes a baseline, not a speedup.
+[Report](psnrhvs_daala_baseline_zenbench_1t_2026-10-12.log) and
+[TSV](psnrhvs_daala_baseline_zenbench_1t_2026-10-12.tsv).
+
+A separate sampled run recorded 16,628 samples with zero lost. The
+self-cycle shares were 23.23% in `calc_psnrhvs`, 22.19% in
+`od_bin_fdct8`, 5.58% in `od_bin_fdct8x8`, 18.01% in
+`studio601_yuv444` and 7.55% in `roundf`.
+[Profile](psnrhvs_daala_profile_2026-10-12.txt).
+The production conversion preserves ordered f32 arithmetic and
+rounds each Y/Cb/Cr component separately. A conversion optimization
+must compare all 256³ RGB triples against that rounding contract.
+The Daala block raster and coefficient fold must retain their ordered
+f32 accumulation; the integer DCT must keep its column-first rounding.
+
+Baseline resource receipt: `run-heavy: done rc=0 17s | peak-RSS 0.14GiB |
+min-avail 24058MiB | peak-load 0.50`. Profile receipt:
+`run-heavy: done rc=0 19s | peak-RSS 0.17GiB | min-avail 24031MiB |
+peak-load 0.54`. Sampled timings are kept separate from the baseline.
+Reproduce with `just ranked-zenbench BINARY 1 PREFIX psnrhvs-daala
+3355x2516` and `just ranked-zenbench-profile BINARY PREFIX
+psnrhvs-daala 3355x2516`.
