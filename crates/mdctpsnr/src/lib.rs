@@ -230,7 +230,7 @@ fn ef(x: f32) -> f32 {
     target_env = "gnu"
 ))]
 mod libmvec {
-    use archmage::{SimdToken, X64V3Token, arcane, rite};
+    use archmage::{SimdToken, X64V3Token, attune};
     use core::arch::x86_64::__m256;
 
     #[link(name = "mvec")]
@@ -289,7 +289,7 @@ mod libmvec {
     /// scalar loop runs, so each output lane is bit-identical. `vsqrtps` and
     /// `vblendvps` are exact per lane; `expf8` keeps the vector `expf` the
     /// reference executes.
-    #[rite(v3, import_intrinsics)]
+    #[attune(v3, import_intrinsics)]
     fn measure_in_band_chunk8(
         r: &[f32; 8],
         d: &[f32; 8],
@@ -318,7 +318,7 @@ mod libmvec {
         );
         let mut neg = [0.0f32; 8];
         _mm256_storeu_ps(&mut neg, _mm256_xor_ps(p, _mm256_set1_ps(-0.0)));
-        // SAFETY: the `#[rite(v3)]` region guarantees AVX2 — `expf8`'s contract.
+        // SAFETY: the `#[attune(v3)]` region guarantees AVX2 — `expf8`'s contract.
         let e = _mm256_loadu_ps(&unsafe { expf8(&neg) });
         let cur = _mm256_loadu_ps(el);
         _mm256_storeu_ps(el, _mm256_blendv_ps(cur, _mm256_mul_ps(cur, e), keep));
@@ -327,7 +327,7 @@ mod libmvec {
     /// The AVX2 body of [`measure_in_band`]: whole-vector loop over
     /// 8-lane chunks plus a zero-padded tail chunk (err = 0 on padding
     /// lanes → keep-mask off → blended out).
-    #[arcane(import_intrinsics)]
+    #[attune(wrap, import_intrinsics)]
     fn measure_in_band_v3(
         _token: X64V3Token,
         refline: &[f32],

@@ -10,9 +10,9 @@
 //! - `masked_sq_sum`       — `Σ (v·m)²` in chunked f32x8 lanes, widened to f64
 //!   per block — the per-plane `msre` reduction.
 //!
-//! All entry points route through `archmage::incant!`. Kernels needing
+//! All entry points route through `archmage::attuned!`. Kernels needing
 //! `pow`/`log2`/`exp2` use the `F32x8Convert` tier cascade
-//! `[v3, neon, wasm128, scalar]` (AVX-512 tokens lack that backend);
+//! `[_v3, _neon, _wasm128, _scalar]` (AVX-512 tokens lack that backend);
 //! pure-arithmetic kernels use the full `[v4x, v3, neon, wasm128,
 //! scalar]` cascade. Tail elements run the same scalar arithmetic the
 //! lane code implements.
@@ -62,15 +62,15 @@ pub(crate) fn transducer_plane(
     if let Some(c) = csf {
         debug_assert_eq!(t.len(), c.len());
     }
-    archmage::incant!(
+    archmage::attuned!(
         transducer_inner(
             t, r, csf, sm, xo_tot, xn, band_norm, p, q, k_self, k_xo, k_xn, do_masking, out
         ),
-        [v3, neon, wasm128, scalar]
+        [_v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 #[allow(clippy::too_many_arguments)]
 fn transducer_inner(
     token: Token,
@@ -90,25 +90,25 @@ fn transducer_inner(
     out: &mut [f32],
 ) {
     let n = t.len();
-    let bn = f32x8::splat(token, band_norm);
-    let inv_bn = f32x8::splat(token, 1.0 / band_norm);
-    let zero = f32x8::zero(token);
-    let one = f32x8::splat(token, 1.0);
+    let bn = f32x8::splat_t(token, band_norm);
+    let inv_bn = f32x8::splat_t(token, 1.0 / band_norm);
+    let zero = f32x8::zero_t(token);
+    let one = f32x8::splat_t(token, 1.0);
     let pm1 = p - 1.0;
     let p2 = 2.0 * p;
-    let ks = f32x8::splat(token, k_self);
-    let kxo = f32x8::splat(token, k_xo);
-    let kxn = f32x8::splat(token, k_xn);
+    let ks = f32x8::splat_t(token, k_self);
+    let kxo = f32x8::splat_t(token, k_xo);
+    let kxn = f32x8::splat_t(token, k_xn);
 
     let mut i = 0usize;
     while i + 8 <= n {
-        let load = |s: &[f32]| f32x8::load(token, (&s[i..i + 8]).try_into().unwrap());
+        let load = |s: &[f32]| f32x8::load_t(token, (&s[i..i + 8]).try_into().unwrap());
         let tv = load(t);
         let rv = load(r);
         let bd = (tv - rv) * inv_bn;
         let ex = bd * bd.abs().pow_midp(pm1) * bn;
         let nv = match csf {
-            Some(c) => one / f32x8::load(token, (&c[i..i + 8]).try_into().unwrap()),
+            Some(c) => one / f32x8::load_t(token, (&c[i..i + 8]).try_into().unwrap()),
             None => one,
         };
         let d = if do_masking {
@@ -151,21 +151,21 @@ fn transducer_inner(
 /// transducer output and the visibility pyramid's `D` bands.
 pub(crate) fn sign_pow_reshape(v: &[f32], band_norm: f32, pf: f32, out: &mut [f32]) {
     debug_assert_eq!(v.len(), out.len());
-    archmage::incant!(
+    archmage::attuned!(
         sign_pow_reshape_inner(v, band_norm, pf, out),
-        [v3, neon, wasm128, scalar]
+        [_v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn sign_pow_reshape_inner(token: Token, v: &[f32], band_norm: f32, pf: f32, out: &mut [f32]) {
     let n = v.len();
-    let bn = f32x8::splat(token, band_norm);
-    let inv_bn = f32x8::splat(token, 1.0 / band_norm);
+    let bn = f32x8::splat_t(token, band_norm);
+    let inv_bn = f32x8::splat_t(token, 1.0 / band_norm);
     let pfm1 = pf - 1.0;
     let mut i = 0usize;
     while i + 8 <= n {
-        let x = f32x8::load(token, (&v[i..i + 8]).try_into().unwrap()) * inv_bn;
+        let x = f32x8::load_t(token, (&v[i..i + 8]).try_into().unwrap()) * inv_bn;
         let y = x * x.abs().pow_midp(pfm1) * bn;
         y.store((&mut out[i..i + 8]).try_into().unwrap());
         i += 8;
@@ -199,13 +199,13 @@ pub(crate) fn lut_plane(
 ) {
     debug_assert_eq!(x.len(), out.len());
     debug_assert!(lut.len() >= 2);
-    archmage::incant!(
+    archmage::attuned!(
         lut_plane_inner(x, lut, x0, inv_dx, lo, hi, log10_input, out),
-        [v3, neon, wasm128, scalar]
+        [_v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 #[allow(clippy::too_many_arguments)]
 fn lut_plane_inner(
     token: Token,
@@ -219,16 +219,16 @@ fn lut_plane_inner(
     out: &mut [f32],
 ) {
     let last = lut.len() - 1;
-    let lo_v = f32x8::splat(token, lo);
-    let hi_v = f32x8::splat(token, hi);
-    let x0v = f32x8::splat(token, x0);
-    let idxv = f32x8::splat(token, inv_dx);
-    let lastv = f32x8::splat(token, last as f32);
-    let lastm1 = f32x8::splat(token, (last - 1) as f32);
-    let zero = f32x8::zero(token);
+    let lo_v = f32x8::splat_t(token, lo);
+    let hi_v = f32x8::splat_t(token, hi);
+    let x0v = f32x8::splat_t(token, x0);
+    let idxv = f32x8::splat_t(token, inv_dx);
+    let lastv = f32x8::splat_t(token, last as f32);
+    let lastm1 = f32x8::splat_t(token, (last - 1) as f32);
+    let zero = f32x8::zero_t(token);
     let mut i = 0usize;
     while i + 8 <= x.len() {
-        let mut v = f32x8::load(token, (&x[i..i + 8]).try_into().unwrap());
+        let mut v = f32x8::load_t(token, (&x[i..i + 8]).try_into().unwrap());
         // clamp32 semantics: NaN lands on `lo` before the log10.
         v = f32x8::blend(v.simd_ne(v), lo_v, v).clamp(lo_v, hi_v);
         let v = if log10_input { v.log10_midp() } else { v };
@@ -243,8 +243,8 @@ fn lut_plane_inner(
             a[l] = lut[j];
             b[l] = lut[j + 1];
         }
-        let av = f32x8::from_array(token, a);
-        let bv = f32x8::from_array(token, b);
+        let av = f32x8::from_array_t(token, a);
+        let bv = f32x8::from_array_t(token, b);
         (bv - av)
             .mul_add(t, av)
             .store((&mut out[i..i + 8]).try_into().unwrap());
@@ -272,20 +272,23 @@ fn lut_plane_inner(
 /// closely enough that this is a pure speed change.
 pub(crate) fn masked_sq_sum(v: &[f32], m: &[f32]) -> f64 {
     debug_assert_eq!(v.len(), m.len());
-    archmage::incant!(masked_sq_sum_inner(v, m), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        masked_sq_sum_inner(v, m),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn masked_sq_sum_inner(token: Token, v: &[f32], m: &[f32]) -> f64 {
     const BLOCK: usize = 2048;
     let mut total = 0.0f64;
     let mut i = 0usize;
     while i < v.len() {
         let end = (i + BLOCK).min(v.len());
-        let mut acc = f32x8::zero(token);
+        let mut acc = f32x8::zero_t(token);
         while i + 8 <= end {
-            let a = f32x8::load(token, (&v[i..i + 8]).try_into().unwrap());
-            let b = f32x8::load(token, (&m[i..i + 8]).try_into().unwrap());
+            let a = f32x8::load_t(token, (&v[i..i + 8]).try_into().unwrap());
+            let b = f32x8::load_t(token, (&m[i..i + 8]).try_into().unwrap());
             let vm = a * b;
             acc += vm * vm;
             i += 8;

@@ -312,7 +312,7 @@ impl Plan {
 /// block, transposed in and out). Bit-reversal swaps whole 8-lane rows.
 ///
 /// Twiddles are splat per butterfly — cheap, and identical across lanes.
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn fft_batch8_inner(
     token: Token,
     re8: &mut [f32],
@@ -329,12 +329,12 @@ fn fft_batch8_inner(
         let j = (i as u32).reverse_bits() >> (32 - bits);
         let j = j as usize;
         if j > i {
-            let a = f32x8::load(token, (&re8[i * 8..i * 8 + 8]).try_into().unwrap());
-            let b = f32x8::load(token, (&re8[j * 8..j * 8 + 8]).try_into().unwrap());
+            let a = f32x8::load_t(token, (&re8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f32x8::load_t(token, (&re8[j * 8..j * 8 + 8]).try_into().unwrap());
             b.store((&mut re8[i * 8..i * 8 + 8]).try_into().unwrap());
             a.store((&mut re8[j * 8..j * 8 + 8]).try_into().unwrap());
-            let a = f32x8::load(token, (&im8[i * 8..i * 8 + 8]).try_into().unwrap());
-            let b = f32x8::load(token, (&im8[j * 8..j * 8 + 8]).try_into().unwrap());
+            let a = f32x8::load_t(token, (&im8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f32x8::load_t(token, (&im8[j * 8..j * 8 + 8]).try_into().unwrap());
             b.store((&mut im8[i * 8..i * 8 + 8]).try_into().unwrap());
             a.store((&mut im8[j * 8..j * 8 + 8]).try_into().unwrap());
         }
@@ -347,12 +347,12 @@ fn fft_batch8_inner(
             for (k, &w) in tw.iter().enumerate() {
                 let a = (start + k) * 8;
                 let b = (start + k + half) * 8;
-                let wre = f32x8::splat(token, w.re);
-                let wim = f32x8::splat(token, w.im);
-                let ure = f32x8::load(token, (&re8[a..a + 8]).try_into().unwrap());
-                let uim = f32x8::load(token, (&im8[a..a + 8]).try_into().unwrap());
-                let vre = f32x8::load(token, (&re8[b..b + 8]).try_into().unwrap());
-                let vim = f32x8::load(token, (&im8[b..b + 8]).try_into().unwrap());
+                let wre = f32x8::splat_t(token, w.re);
+                let wim = f32x8::splat_t(token, w.im);
+                let ure = f32x8::load_t(token, (&re8[a..a + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
+                let vre = f32x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&im8[b..b + 8]).try_into().unwrap());
                 let tre = vre * wre - vim * wim;
                 let tim = vre * wim + vim * wre;
                 (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
@@ -366,9 +366,9 @@ fn fft_batch8_inner(
 
 /// [`fft_batch8_inner`] with runtime tier dispatch.
 fn fft_batch8(re8: &mut [f32], im8: &mut [f32], n: usize, stages: &[Vec<Complex>]) {
-    archmage::incant!(
+    archmage::attuned!(
         fft_batch8_inner(re8, im8, n, stages),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 

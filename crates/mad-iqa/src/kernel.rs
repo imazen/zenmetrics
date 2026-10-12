@@ -642,8 +642,8 @@ macro_rules! score_body {
         {
             let mut i = 0usize;
             while i + $LANES <= m * n {
-                let dv = <$V>::from_array($token, core::array::from_fn(|k| dst_l[i + k]))
-                    - <$V>::from_array($token, core::array::from_fn(|k| ref_l[i + k]));
+                let dv = <$V>::from_array_t($token, core::array::from_fn(|k| dst_l[i + k]))
+                    - <$V>::from_array_t($token, core::array::from_fn(|k| ref_l[i + k]));
                 diff[i..i + $LANES].copy_from_slice(&dv.to_array());
                 i += $LANES;
             }
@@ -662,8 +662,8 @@ macro_rules! score_body {
             {
                 let mut i = 0usize;
                 while i + $LANES <= m * n {
-                    let dv = <$V>::from_array($token, core::array::from_fn(|k| $a.im1[i + k]))
-                        - <$V>::from_array($token, core::array::from_fn(|k| $a.im2[i + k]));
+                    let dv = <$V>::from_array_t($token, core::array::from_fn(|k| $a.im1[i + k]))
+                        - <$V>::from_array_t($token, core::array::from_fn(|k| $a.im2[i + k]));
                     let sq = dv * dv;
                     e2[i..i + $LANES].copy_from_slice(&sq.to_array());
                     i += $LANES;
@@ -691,13 +691,15 @@ macro_rules! score_body {
                 let drow = &mut tmp[y * n..y * n + n];
                 let mut x = 0usize;
                 while x + $LANES <= n {
-                    let mut acc = <$V>::splat($token, 0.0);
+                    let mut acc = <$V>::splat_t($token, 0.0);
                     for u in 0..B {
-                        let xv =
-                            <$V>::from_array($token, core::array::from_fn(|k| srow[x + 1 + u + k]));
+                        let xv = <$V>::from_array_t(
+                            $token,
+                            core::array::from_fn(|k| srow[x + 1 + u + k]),
+                        );
                         acc = acc + xv;
                     }
-                    let outv = acc * <$V>::splat($token, 1.0 / 16.0);
+                    let outv = acc * <$V>::splat_t($token, 1.0 / 16.0);
                     drow[x..x + $LANES].copy_from_slice(&outv.to_array());
                     x += $LANES;
                 }
@@ -716,15 +718,15 @@ macro_rules! score_body {
                 let drow = &mut out[y * n..y * n + n];
                 let mut x = 0usize;
                 while x + $LANES <= n {
-                    let mut acc = <$V>::splat($token, 0.0);
+                    let mut acc = <$V>::splat_t($token, 0.0);
                     for u in 0..B {
-                        let xv = <$V>::from_array(
+                        let xv = <$V>::from_array_t(
                             $token,
                             core::array::from_fn(|k| tmp[(y + 1 + u) * n + x + k]),
                         );
                         acc = acc + xv;
                     }
-                    let outv = acc * <$V>::splat($token, 1.0 / 16.0);
+                    let outv = acc * <$V>::splat_t($token, 1.0 / 16.0);
                     drow[x..x + $LANES].copy_from_slice(&outv.to_array());
                     x += $LANES;
                 }
@@ -786,7 +788,7 @@ macro_rules! score_body {
         // runs once per tile — the same f32 adds in the same order —
         // and the result expands to pixels in a single pass.
         let mut mp_lo_t = vec![0.0f32; mt * nt];
-        let two = <$V>::splat($token, 2.0);
+        let two = <$V>::splat_t($token, 2.0);
         for s in 0..5 {
             for o in 0..4 {
                 let (eo_r, eo_d) = maybe_join(
@@ -796,19 +798,19 @@ macro_rules! score_body {
                 let (mag_r, mag_d) = (eo_magnitude(&eo_r), eo_magnitude(&eo_d));
                 let ((sr, kwr, krr), (sd, kwd, krd)) =
                     maybe_join(|| ical_stat(&mag_r, m, n), || ical_stat(&mag_d, m, n));
-                let swv = <$V>::splat($token, LO_WEIGHTS[s]);
+                let swv = <$V>::splat_t($token, LO_WEIGHTS[s]);
                 let mut i = 0usize;
                 while i + $LANES <= mt * nt {
-                    let ds = (<$V>::from_array($token, core::array::from_fn(|k| sr[i + k]))
-                        - <$V>::from_array($token, core::array::from_fn(|k| sd[i + k])))
+                    let ds = (<$V>::from_array_t($token, core::array::from_fn(|k| sr[i + k]))
+                        - <$V>::from_array_t($token, core::array::from_fn(|k| sd[i + k])))
                     .abs();
-                    let dk = (<$V>::from_array($token, core::array::from_fn(|k| kwr[i + k]))
-                        - <$V>::from_array($token, core::array::from_fn(|k| kwd[i + k])))
+                    let dk = (<$V>::from_array_t($token, core::array::from_fn(|k| kwr[i + k]))
+                        - <$V>::from_array_t($token, core::array::from_fn(|k| kwd[i + k])))
                     .abs();
-                    let dt = (<$V>::from_array($token, core::array::from_fn(|k| krr[i + k]))
-                        - <$V>::from_array($token, core::array::from_fn(|k| krd[i + k])))
+                    let dt = (<$V>::from_array_t($token, core::array::from_fn(|k| krr[i + k]))
+                        - <$V>::from_array_t($token, core::array::from_fn(|k| krd[i + k])))
                     .abs();
-                    let acc = <$V>::from_array($token, core::array::from_fn(|k| mp_lo_t[i + k]))
+                    let acc = <$V>::from_array_t($token, core::array::from_fn(|k| mp_lo_t[i + k]))
                         + swv * (ds + two * dk + dt);
                     mp_lo_t[i..i + $LANES].copy_from_slice(&acc.to_array());
                     i += $LANES;
@@ -841,38 +843,39 @@ macro_rules! score_body {
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn mad_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn mad_core_tier_v3_t(token: archmage::X64V3Token, a: Args<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     score_body!(token, V, 8, a)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn mad_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn mad_core_tier_v4x_t(token: archmage::X64V4xToken, a: Args<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, a)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn mad_core_tier_neon(token: archmage::NeonToken, a: Args<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn mad_core_tier_neon_t(token: archmage::NeonToken, a: Args<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     score_body!(token, V, 8, a)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
-pub fn mad_core_tier_wasm128(token: archmage::Wasm128Token, a: Args<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn mad_core_tier_wasm128_t(token: archmage::Wasm128Token, a: Args<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     score_body!(token, V, 8, a)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn mad_core_tier_scalar(token: archmage::ScalarToken, a: Args<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn mad_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     score_body!(token, V, 8, a)
 }
@@ -885,7 +888,10 @@ pub(crate) fn mad_score(inputs: &crate::Inputs, w: usize, h: usize) -> crate::Ma
         w,
         h,
     };
-    let (hi, lo) = archmage::incant!(mad_core_tier(a), [v4x, v3, neon, wasm128, scalar]);
+    let (hi, lo) = archmage::attuned!(
+        mad_core_tier(a),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
     // JEI 2010 combine: sig = 1/(1+b1·HI^b2), MAD = HI^sig·LO^(1−sig).
     let b1 = libm::exp(-2.55 / 3.35);
     let b2 = 1.0 / (libm::log(10.0) * 3.35);
