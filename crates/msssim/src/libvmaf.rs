@@ -117,6 +117,13 @@ fn decimate_inner(
     let mut out = vec![0.0f32; sw * sh];
     let half = kw / 2;
     let right = kw - half - 1;
+    // Broadcast taps for the 9x9 interior path once per call; each lane
+    // group then reuses them instead of re-splatting all 81 every time.
+    let tapv: [f64x4; 81] = if kw == 9 && factor == 2 {
+        core::array::from_fn(|i| f64x4::splat_t(token, k[i] as f64))
+    } else {
+        [f64x4::splat_t(token, 0.0); 81]
+    };
     crate::kernel::for_each_row(&mut out, sw, |y, orow| {
         let cy = y * factor;
         let mut x = 0;
@@ -129,28 +136,31 @@ fn decimate_inner(
             x += 1;
         }
         if kw == 9 && factor == 2 {
-            let taps: &[f32; 81] = k.try_into().unwrap();
+            // The 9x9 kernel is the hot path (g_lpf MS-SSIM decimation).
+            // Four independent accumulators break the 81-long dependent
+            // vaddpd chain that otherwise bounds each 4-lane group to
+            // ~4 cycles per tap, and the taps are broadcast once per call
+            // instead of once per group. Tap-to-accumulator assignment is
+            // fixed (u mod 4), so the result is identical across every
+            // tier and thread count; vs filter_pixel's strict scan order
+            // it is a reassociation (~1e-16 relative, far inside the
+            // 2e-6 FFI parity gate).
             let rows: [&[f32]; 9] =
                 core::array::from_fn(|v| &img[row_offsets[v]..row_offsets[v] + w]);
-            while x + 4 <= sw && (x + 3) * 2 + 4 < w {
-                let mut sum = f64x4::splat_t(token, 0.0);
+            while x + 4 <= sw && (x + 3) * 2 + right < w {
+                let off = x * 2 - 4;
+                let mut acc = [f64x4::splat_t(token, 0.0); 4];
                 for v in 0..9 {
-                    let off = x * 2 - 4;
                     let pixels: &[f32; 15] = rows[v][off..off + 15].try_into().unwrap();
                     for u in 0..9 {
-                        let values = f64x4::from_array_t(
+                        let lanes = f64x4::from_array_t(
                             token,
-                            [
-                                pixels[u] as f64,
-                                pixels[u + 2] as f64,
-                                pixels[u + 4] as f64,
-                                pixels[u + 6] as f64,
-                            ],
+                            core::array::from_fn(|j| pixels[u + 2 * j] as f64),
                         );
-                        sum += values * f64x4::splat_t(token, taps[v * 9 + u] as f64);
+                        acc[u & 3] += lanes * tapv[v * 9 + u];
                     }
                 }
-                let values = sum.to_array();
+                let values = ((acc[0] + acc[1]) + (acc[2] + acc[3])).to_array();
                 for j in 0..4 {
                     orow[x + j] = values[j] as f32;
                 }
@@ -209,6 +219,9 @@ fn conv_gauss_valid_inner(
 ) -> (Vec<f32>, usize, usize) {
     let dw = w - (GAUSS_LEN - 1);
     let dh = h - (GAUSS_LEN - 1);
+    // Broadcast taps once per call — every lane group reuses them.
+    let gv: [f64x4; GAUSS_LEN] =
+        core::array::from_fn(|u| f64x4::splat_t(token, GAUSS[u] as f64));
     let mut tmp = vec![0.0f32; h * dw];
     crate::kernel::for_each_row(&mut tmp, dw, |y, trow| {
         let row = &img[y * w..(y + 1) * w];
@@ -217,7 +230,7 @@ fn conv_gauss_valid_inner(
             let mut sum = f64x4::splat_t(token, 0.0);
             for u in 0..GAUSS_LEN {
                 let v = f64x4::from_array_t(token, core::array::from_fn(|j| row[x + u + j] as f64));
-                sum += v * f64x4::splat_t(token, GAUSS[u] as f64);
+                sum += v * gv[u];
             }
             let values = sum.to_array();
             for j in 0..4 {
@@ -243,7 +256,7 @@ fn conv_gauss_valid_inner(
             let mut sum = f64x4::splat_t(token, 0.0);
             for u in 0..GAUSS_LEN {
                 let v = f64x4::from_array_t(token, core::array::from_fn(|j| rows[u][x + j] as f64));
-                sum += v * f64x4::splat_t(token, GAUSS[u] as f64);
+                sum += v * gv[u];
             }
             let values = sum.to_array();
             for j in 0..4 {
@@ -286,18 +299,18 @@ fn map2(out: &mut [f32], src: &[f32], f: impl Fn(&f32) -> f32 + Sync) {
     }
 }
 
-/// Fold `f(i)` over `0..n` into `(ssim, l, c, s)` sums. The fold uses
+/// Fold a per-range body over `0..n` into `(ssim, l, c, s)` sums using
 /// a fixed 32-band striped order in every build — the parallel path
 /// distributes the same bands across threads, so serial and parallel
-/// results are bit-identical (both differ from the C raster fold only
-/// within f64 tolerance; the FFI parity tests gate that).
-fn fold_sums(n: usize, f: impl Fn(usize) -> (f64, f64, f64, f64) + Sync) -> (f64, f64, f64, f64) {
-    let body = |r: core::ops::Range<usize>| -> (f64, f64, f64, f64) {
-        r.fold((0.0, 0.0, 0.0, 0.0), |(a, b, c, s), i| {
-            let (pa, pb, pc, ps) = f(i);
-            (a + pa, b + pb, c + pc, s + ps)
-        })
-    };
+/// results are bit-identical. A range-body that evaluates several
+/// elements per step (vector lanes) still folds deterministically —
+/// its result differs from an element-serial fold only by
+/// reassociation, and both differ from the C raster fold only within
+/// f64 tolerance (the FFI parity tests gate that).
+fn fold_ranges(
+    n: usize,
+    body: impl Fn(core::ops::Range<usize>) -> (f64, f64, f64, f64) + Sync,
+) -> (f64, f64, f64, f64) {
     const BANDS: usize = 32;
     let bs = n.div_ceil(BANDS);
     let merge = |parts: Vec<(f64, f64, f64, f64)>| {
@@ -336,6 +349,102 @@ fn fold_sums(n: usize, f: impl Fn(usize) -> (f64, f64, f64, f64) + Sync) -> (f64
                 }
             })
             .collect(),
+    )
+}
+
+/// Per-element l·c·s evaluation for `_iqa_ssim`, four lanes at a time.
+/// Each lane computes the scalar expression bit-for-bit (f32 products
+/// and divides stay f32, the f64 numerator/divide/sqrt stay f64, the
+/// `s_rc` narrowing round-trips through `as f32`), so element values are
+/// identical to the scalar path; only the band fold order reassociates.
+#[archmage::attune(_*_t, define(f32x4, f64x4))]
+fn iqa_fold_inner(
+    token: Token,
+    mu_r: &[f32],
+    mu_d: &[f32],
+    sr_c: &[f32],
+    sd_c: &[f32],
+    sb_c: &[f32],
+    c1: f32,
+    c2: f32,
+    c3: f32,
+    range: core::ops::Range<usize>,
+) -> (f64, f64, f64, f64) {
+    let widen = |v: f32x4| -> f64x4 {
+        f64x4::from_array_t(token, v.to_array().map(|x| x as f64))
+    };
+    let mut acc = [f64x4::splat_t(token, 0.0); 4];
+    let mut i = range.start;
+    while i + 4 <= range.end {
+        let load = |src: &[f32]| f32x4::from_array_t(token, src[i..i + 4].try_into().unwrap());
+        let mur = load(mu_r);
+        let mud = load(mu_d);
+        let mur2 = mur * mur;
+        let mud2 = mud * mud;
+        let zero = f32x4::splat_t(token, 0.0);
+        let sr = (load(sr_c) - mur2).max(zero);
+        let sd = (load(sd_c) - mud2).max(zero);
+        let sb = load(sb_c) - mur * mud;
+        // `sqrt(sr*sd)`: f32 product promoted to f64, correctly-rounded
+        // f64 sqrt (matches libm), narrowed back to f32.
+        let s_rc64 = widen(sr * sd).sqrt();
+        let s_rc = f32x4::from_array_t(token, s_rc64.to_array().map(|x| x as f32));
+        // l: f64 numerator, f32 denominator promoted.
+        let mur64 = widen(mur);
+        let mud64 = widen(mud);
+        let l = (f64x4::splat_t(token, 2.0) * mur64 * mud64
+            + f64x4::splat_t(token, c1 as f64))
+            / widen(mur2 + mud2 + f32x4::splat_t(token, c1));
+        // c: f64 numerator, f32 denominator promoted.
+        let c = (f64x4::splat_t(token, 2.0) * s_rc64 + f64x4::splat_t(token, c2 as f64))
+            / widen(sr + sd + f32x4::splat_t(token, c2));
+        // csb = (sb < 0 && s_rc <= 0) ? 0 : sb — then s stays in f32.
+        let csb = f32x4::blend(sb.simd_lt(zero) & s_rc.simd_le(zero), zero, sb);
+        let s = widen((csb + f32x4::splat_t(token, c3)) / (s_rc + f32x4::splat_t(token, c3)));
+        acc[0] += l * c * s;
+        acc[1] += l;
+        acc[2] += c;
+        acc[3] += s;
+        i += 4;
+    }
+    let lanes = |v: f64x4| {
+        let a = v.to_array();
+        a[0] + a[1] + a[2] + a[3]
+    };
+    let mut sums = (lanes(acc[0]), lanes(acc[1]), lanes(acc[2]), lanes(acc[3]));
+    // Scalar tail — the original element expressions.
+    for i in i..range.end {
+        let sr = (sr_c[i] - mu_r[i] * mu_r[i]).max(0.0);
+        let sd = (sd_c[i] - mu_d[i] * mu_d[i]).max(0.0);
+        let sb = sb_c[i] - mu_r[i] * mu_d[i];
+        let s_rc = libm::sqrt((sr * sd) as f64) as f32;
+        let l = (2.0f64 * mu_r[i] as f64 * mu_d[i] as f64 + c1 as f64)
+            / (mu_r[i] * mu_r[i] + mu_d[i] * mu_d[i] + c1) as f64;
+        let c = (2.0f64 * s_rc as f64 + c2 as f64) / (sr + sd + c2) as f64;
+        let csb = if sb < 0.0 && s_rc <= 0.0 { 0.0 } else { sb };
+        let s = ((csb + c3) / (s_rc + c3)) as f64;
+        sums.0 += l * c * s;
+        sums.1 += l;
+        sums.2 += c;
+        sums.3 += s;
+    }
+    sums
+}
+
+fn iqa_fold(
+    mu_r: &[f32],
+    mu_d: &[f32],
+    sr_c: &[f32],
+    sd_c: &[f32],
+    sb_c: &[f32],
+    c1: f32,
+    c2: f32,
+    c3: f32,
+    range: core::ops::Range<usize>,
+) -> (f64, f64, f64, f64) {
+    archmage::attuned!(
+        iqa_fold_inner(mu_r, mu_d, sr_c, sd_c, sb_c, c1, c2, c3, range),
+        [_v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -386,25 +495,11 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
     let n = vw * vh;
     // Striped partial sums: per-element l/c/s math is unchanged; the
     // f64 fold order differs from the serial raster fold within float
-    // tolerance (bands merge in raster order).
-    let partial = |i: usize| -> (f64, f64, f64, f64) {
-        // float-domain moments, mirroring the C expression arithmetic.
-        let sr = (sr_c[i] - mu_r[i] * mu_r[i]).max(0.0);
-        let sd = (sd_c[i] - mu_d[i] * mu_d[i]).max(0.0);
-        let sb = sb_c[i] - mu_r[i] * mu_d[i];
-        // C: `float s_rc = sqrt(sr*sd)` — the float product promotes to
-        // double, `sqrt(double)`, result assigned back to float.
-        let s_rc = libm::sqrt((sr * sd) as f64) as f32;
-        // l: double numerator / float denominator (C promotes via `2.0`).
-        let l = (2.0f64 * mu_r[i] as f64 * mu_d[i] as f64 + c1 as f64)
-            / (mu_r[i] * mu_r[i] + mu_d[i] * mu_d[i] + c1) as f64;
-        let c = (2.0f64 * s_rc as f64 + c2 as f64) / (sr + sd + c2) as f64;
-        let csb = if sb < 0.0 && s_rc <= 0.0 { 0.0 } else { sb };
-        // s computed fully in float then promoted (matches C `float` locals).
-        let s = ((csb + c3) / (s_rc + c3)) as f64;
-        (l * c * s, l, c, s)
-    };
-    let (ssim_sum, l_sum, c_sum, s_sum) = fold_sums(n, partial);
+    // tolerance (bands merge in raster order, vector lanes interleave
+    // within a band).
+    let (ssim_sum, l_sum, c_sum, s_sum) = fold_ranges(n, |r| {
+        iqa_fold(&mu_r, &mu_d, &sr_c, &sd_c, &sb_c, c1, c2, c3, r)
+    });
     // C: `(float)(ssim_sum / (double)(w*h))` — a real f64 division, then
     // the mean is rounded to f32 (the `_iqa_ssim` return type and the
     // l/c/s mean outputs are all float). Widened to f64 for our API.
@@ -432,9 +527,11 @@ fn hbd_scaler(bpc: u32) -> f32 {
 fn plane_to_f32(y: &[u16], w: usize, h: usize, stride: usize, scaler: f32) -> Vec<f32> {
     let mut out = Vec::with_capacity(w * h);
     for row in 0..h {
-        for x in 0..w {
-            out.push(y[row * stride + x] as f32 / scaler);
-        }
+        out.extend(
+            y[row * stride..row * stride + w]
+                .iter()
+                .map(|&v| v as f32 / scaler),
+        );
     }
     out
 }
@@ -634,11 +731,22 @@ mod tests {
                     for x in 0..sw {
                         let expected =
                             filter_pixel(&img, w, h, x * factor, y * factor, &kernel, kw);
-                        assert_eq!(
-                            actual[y * sw + x].to_bits(),
-                            expected.to_bits(),
-                            "{w}x{h}, factor {factor}, {x},{y}"
-                        );
+                        // The 9x9 interior path splits the tap sequence
+                        // across four accumulators, so its f64 sum order
+                        // differs from filter_pixel's strict scan order:
+                        // results agree to ~1e-14, which can flip the last
+                        // f32 ulp. Bound the drift; other kernels stay
+                        // bit-exact.
+                        if kw == 9 {
+                            let diff = (actual[y * sw + x] - expected).abs();
+                            assert!(diff <= 1e-4, "{w}x{h}, factor {factor}, {x},{y}: {diff}");
+                        } else {
+                            assert_eq!(
+                                actual[y * sw + x].to_bits(),
+                                expected.to_bits(),
+                                "{w}x{h}, factor {factor}, {x},{y}"
+                            );
+                        }
                     }
                 }
             }
