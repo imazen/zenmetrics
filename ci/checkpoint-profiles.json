@@ -64,7 +64,6 @@
     "checkpoint-x86_64-pc-windows-msvc-full-wgpu",
     "checkpoint-aarch64-pc-windows-msvc-full-wgpu",
     "checkpoint-aarch64-apple-darwin-full-wgpu",
-    "checkpoint-x86_64-apple-darwin-full-wgpu",
     "checkpoint-i686-unknown-linux-gnu-full-cpu",
     "checkpoint-browser-simd128-relaxed-rayon"
   ]

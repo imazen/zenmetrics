@@ -48,8 +48,7 @@ jobs:
       - run: python3 scripts/ci/check_hygiene.py --self-test
       - run: python3 scripts/ci/check_hygiene.py
 
-  # Workspace-wide compile check across the platforms CLAUDE.md mandates:
-  # linux-x86_64, windows-11-arm, macos-15-intel, macos-26-intel.
+  # Workspace-wide compile check across Linux, Windows and macOS ARM64.
   # We compile with the WGPU backend (no system CUDA needed) so this works
   # on every runner without per-OS toolchain setup.
   compile:
@@ -62,8 +61,6 @@ jobs:
           - ubuntu-latest        # linux-x86_64
           - windows-latest       # windows-x86_64
           - windows-11-arm       # windows-arm64 (per CLAUDE.md)
-          - macos-15-intel       # macos-x86_64
-          - macos-26-intel       # macos-x86_64 (newer image)
           - macos-latest         # macos-aarch64
     steps:
       - uses: actions/checkout@v7
@@ -103,7 +100,7 @@ jobs:
         # above compiles it everywhere. (vastai runs feature-light to skip the GPU/
         # codec tree; --no-default-features --features worker keeps its claim/parse/
         # dispatch tests without cubecl.) TODO: extend the RUN to windows-11-arm +
-        # macos-15-intel per CLAUDE.md once verified green there.
+        # macos-latest once verified green there.
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir -p "$HOME/tmp"
@@ -174,8 +171,8 @@ jobs:
   # step) on which cubecl-wgpu stalls allocating our multi-scale pyramids —
   # both Intel legs ran 6h05m and hit the default 360-min job ceiling on every
   # push (premium macOS minutes), so they were dropped from this matrix on
-  # 2026-06-03 (#20). Intel-Mac coverage is retained by the Compile job, which
-  # builds `--all-targets` on macos-15-intel + macos-26-intel.
+  # 2026-06-03 (#20). macOS Intel runners were removed from CI by owner
+  # direction on 2026-10-12; macOS coverage uses Apple Silicon.
   metal-tests:
     name: Metal tests (${{ matrix.os }})
     # DISABLED 2026-06-13 — the macos-latest (8 GB unified) GPU wedges on

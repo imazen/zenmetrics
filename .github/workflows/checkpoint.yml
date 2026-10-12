@@ -23,7 +23,6 @@ jobs:
           - {os: windows-latest, target: x86_64-pc-windows-msvc, profile: full-wgpu}
           - {os: windows-11-arm, target: aarch64-pc-windows-msvc, profile: full-wgpu}
           - {os: macos-latest, target: aarch64-apple-darwin, profile: full-wgpu}
-          - {os: macos-15-intel, target: x86_64-apple-darwin, profile: full-wgpu}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     defaults:

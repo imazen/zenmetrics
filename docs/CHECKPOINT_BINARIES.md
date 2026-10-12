@@ -20,7 +20,7 @@ remain runtime requirements. Compilation is not hardware qualification.
 ## Build and release
 
 The `Checkpoint binaries` workflow tests and builds Linux x64/ARM64, Windows
-x64/ARM64, macOS Intel/ARM64 and i686 Linux through cross. It runs CLI all-targets
+x64/ARM64, macOS ARM64 and i686 Linux through cross. It runs CLI all-targets
 and doc tests, then the IQA study functional controls. Browser CI runs Chromium
 workers and compares a textured raw-map fixture exactly with the native library.
 Each package records the immutable source, compiler, features and dependency
@@ -120,4 +120,6 @@ unrestricted CPU placement and a two-second admission deadline; unrestricted
 placement still preserves admission. The refusal does not establish a protocol
 failure. Retain the receipt, packet and event stream when diagnosing this class;
 never turn a refused observation into an accepted benchmark. The checkpoint
-release remains gated while the required native-protocol run is not green.
+release requires a green native-protocol run under the current matrix.
+macOS Intel was removed from all matrices at owner direction; macOS ARM64
+remains a required checkpoint target.
