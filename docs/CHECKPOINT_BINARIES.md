@@ -145,7 +145,8 @@ Checkpoint binaries run ID, its full source SHA, a new
 
 The publisher checks the README hash and repeats all green-CI and archive
 verification gates before tagging. It attaches all eight archives, their eight
-SHA-256 files, and `release-assets.json` to a GitHub prerelease. Existing tags
+SHA-256 files, and `release-assets.json` to a GitHub prerelease. The published
+asset index identifies archives by their release filenames. Existing tags
 and assets are never overwritten. It does not publish a crate or a container.
 Use `publish-release.py --dry-run` with the same inputs to download and verify
 the assets and print the publication command without creating a tag or release.

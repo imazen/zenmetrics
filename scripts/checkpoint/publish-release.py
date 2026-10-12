@@ -38,11 +38,13 @@ def main():
                     '--run', str(args.run), '--source', args.source, '--out', str(args.out)], check=True)
     index_path = args.out / 'release-assets.json'
     index = json.loads(index_path.read_text())
+    local_archives = index['archives']
+    index['archives'] = [Path(archive).name for archive in local_archives]
     index['tag'] = args.tag
     index['readme_sha256'] = args.readme_sha256
     index_path.write_text(json.dumps(index, indent=2) + '\n')
     assets = []
-    for archive in index['archives']:
+    for archive in local_archives:
         assets.extend([archive, archive + '.sha256'])
     assets.append(str(index_path.resolve()))
     notes = json.loads(subprocess.check_output(

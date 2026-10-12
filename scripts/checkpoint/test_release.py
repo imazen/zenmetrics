@@ -85,6 +85,11 @@ class PublicationControls(unittest.TestCase):
         self.invoke(self.argv + ['--dry-run'])
         self.assertEqual(len(self.commands), 1)
 
+    def test_public_index_contains_portable_release_filenames(self):
+        self.invoke(self.argv + ['--dry-run'])
+        index = json.loads((self.out / 'release-assets.json').read_text())
+        self.assertEqual(index['archives'], ['checkpoint-control.tar.gz'])
+
     def test_tag_then_push_then_attach_archives_and_checksums(self):
         self.invoke()
         self.assertEqual(self.commands[1], ['git', 'tag', self.tag, self.source])
