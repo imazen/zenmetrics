@@ -15,6 +15,10 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- IW-SSIM (`3250fcb9`): borrow strip input rows and Laplacian planes instead of copying them; exact score bits on the measured body-512 fixture, lower measured maximum RSS, unchanged golden/parity assertions and working no-default-features tests.
+- CUDA deployment (`00880930`, `3083c487`): bind a scoped, verified NVRTC SDK into native worker bundles; all six CUDA variants pass direct controls and worker observations on i134 and r5600g after driver recovery. Observations remain descriptive.
+- Native adapter controls (`770454db`): allow 30 seconds for resource admission on shared CI runners while retaining the two-second child timeout and exact outcome assertions.
+
 - Dependency updates (`74e9a0f9`, `df8973e4`): refreshed dashboard dependencies with a locked production build; updated both standalone Rustls locks to 0.23.45.
 
 - CI (`81dcb599`) removes macOS Intel runners from workspace, native benchmark and margarine matrices at owner direction; macOS ARM64 remains covered.

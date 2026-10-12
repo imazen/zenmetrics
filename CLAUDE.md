@@ -1437,3 +1437,7 @@ After an approved reboot, all 24 direct controls and all 24 native worker
 observations pass. The [post-reboot receipt](benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.meta)
 records the actual adapter, runtime hashes and resource boundaries. Earlier
 initialization failures remain preserved as historical attempts.
+
+Removing the temporary udev override and restoring unchanged vendor-rule
+behavior also passes a fresh 24/24 worker panel. Its [receipt](benchmarks/iqa_cuda_deployment_i134_vendor_2026-10-12.meta)
+records the cleanup and interval with no kernel unload/Xid errors.

@@ -1,0 +1,12 @@
+Second post-reboot panel; complements the targeted-rule panel without replacing its historical evidence.
+The agent-created /etc/udev/rules.d/71-nvidia.rules matched the recorded SHA-256 a5bd3bdde6b1b375cde61a5f45fa26bbbaf82ba465ea49bde1d3f2ea28fd7587 before it was moved to ~/tmp/zm-iqa-cuda-20261012/71-nvidia.rules.post-reboot-override. Udev rules were reloaded.
+The override is absent; the unchanged vendor /lib/udev/rules.d/71-nvidia.rules SHA-256 is 0a6e1b3ba1c875d14402a1e136d16bf4db60da779096129976257a9bd5b0398e.
+Current inspected hardware remains NVIDIA GeForce GTX 1080 Ti, proprietary driver 580.178.04. Kernel journal in this boot records one NVIDIA load and no unload/Xid errors through the completed panel; this is an observed interval, not a long-term stability claim.
+Reuse the reboot-qualified 24 direct controls and exact SDK/binary hashes from iqa_cuda_deployment_i134_reboot_2026-10-12.meta.
+Command: just iqa-gpu-deployment-bench <GPU-binaries> <runner> <controls-reboot> <fleet-observations-vendor> i134 performance_l320480K <scoped-SDK>.
+All 24 native packets complete: six CUDA variants x cold/warm_instance x ordinary latency/separate instrumented memory. Twelve products are usable ordinary timings; no failed packet contributes a measurement. Accuracy and comparative speed are not certified.
+Live hard outer system scope verified: AllowedCPUs=2, MemoryMax=17179869184, MemorySwapMax=0. Inner run-heavy reports no user scope; the outer system scope provides the hard boundaries.
+Resource: run-heavy: done rc=0 76s | peak-RSS 0.25GiB | min-avail 28038MiB | peak-load 0.81
+Supervisor peak RSS is separate from per-child heap/OS-resident quantities retained in the JSONL; device memory is unmeasured.
+Raw resolving path on i134: ~/tmp/zm-iqa-cuda-20261012/fleet-observations-vendor/. Resolve current driver/adapter with nvidia-smi --query-gpu=name,driver_version --format=csv,noheader.
+Observation JSONL SHA-256: 0d6b38f626f7450d5a7d55a0af3aeeb90872fa355ea12cbae2a6ece990977443

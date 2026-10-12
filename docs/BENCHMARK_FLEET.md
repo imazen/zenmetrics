@@ -332,6 +332,10 @@ observations. Earlier failed attempts remain retained. These panels contain
 six CUDA variants, each cold and with a retained instance, with separate
 ordinary-latency and instrumented-memory processes.
 
+A [second i134 panel using the unchanged vendor driver rules](../benchmarks/iqa_cuda_deployment_i134_vendor_2026-10-12.meta)
+also completes all 24 worker observations. The temporary agent-created
+udev override is removed and retained with the diagnostic evidence.
+
 The synthetic native adapter controls allow 30 seconds for resource
 admission on shared CI runners. Their child timeout remains two seconds;
 complete, wrong-output, timeout and cancellation outcomes are still checked
