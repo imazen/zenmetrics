@@ -41,7 +41,7 @@ zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
-zenbench = { git = "https://github.com/imazen/zenbench", rev = "77707b68eae6e5245d7f87a78e04a9453bcde4e5", default-features = false, features = ["precise-timing", "alloc-profiling"] }
+zenbench = { git = "https://github.com/imazen/zenbench", rev = "ac675d3", default-features = false, features = ["precise-timing", "alloc-profiling"] }
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }

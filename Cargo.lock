@@ -1184,7 +1184,7 @@ dependencies = [
  "vif",
  "vmaf",
  "vsi",
- "zenbench 0.1.10 (git+https://github.com/imazen/zenbench?rev=77707b68eae6e5245d7f87a78e04a9453bcde4e5)",
+ "zenbench 0.1.10 (git+https://github.com/imazen/zenbench?rev=ac675d3)",
  "zenforks-cubecl",
  "zenmetrics-api",
  "zenmetrics-cli",
@@ -7041,7 +7041,7 @@ dependencies = [
 [[package]]
 name = "zenbench"
 version = "0.1.10"
-source = "git+https://github.com/imazen/zenbench?rev=77707b68eae6e5245d7f87a78e04a9453bcde4e5#77707b68eae6e5245d7f87a78e04a9453bcde4e5"
+source = "git+https://github.com/imazen/zenbench?rev=ac675d3#ac675d3a3f5334f4be6749a61b37995c9f3d34fb"
 dependencies = [
  "affinity",
  "flate2",

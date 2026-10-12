@@ -63,6 +63,8 @@ use rayon::prelude::*;
 
 #[cfg(target_arch = "x86_64")]
 use archmage::{SimdToken, X64V3Token, attune};
+#[cfg(target_arch = "x86_64")]
+use magetypes::simd::generic::f32x8;
 
 /// Errors from [`mdct_psnr_srgb8`].
 #[derive(Debug, Clone, PartialEq)]
@@ -309,6 +311,23 @@ mod vecops {
         visbase: f32,
         errorline: &mut [f32],
     ) {
+        measure_in_band_inner_v3(
+            token, refline, dstline, refmask, dstmask, visbase, errorline,
+        );
+    }
+
+    /// The `#[attune(v3)]` inner — callable from inside other v3 regions
+    /// (e.g. `measure_bands_span_v3_t`) with no per-band dispatch boundary.
+    #[attune(v3, import_intrinsics)]
+    pub(crate) fn measure_in_band_inner_v3(
+        token: X64V3Token,
+        refline: &[f32],
+        dstline: &[f32],
+        refmask: &[f32],
+        dstmask: &[f32],
+        visbase: f32,
+        errorline: &mut [f32],
+    ) {
         debug_assert_eq!(refline.len(), errorline.len());
         debug_assert_eq!(dstline.len(), errorline.len());
         debug_assert_eq!(refmask.len(), errorline.len());
@@ -360,6 +379,19 @@ mod vecops {
     /// 8-lane chunks; the remainder keeps scalar `powf`.
     #[attune]
     fn powf_mapped_v3_t(token: X64V3Token, out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
+        powf_mapped_v3(token, out, inp, vis, e);
+    }
+
+    /// The `#[attune(v3)]` inner — callable from inside other v3 regions
+    /// (e.g. `push_row_v3_t`) with no extra dispatch boundary.
+    #[attune(v3)]
+    pub(crate) fn powf_mapped_v3(
+        token: X64V3Token,
+        out: &mut [f32],
+        inp: &[f32],
+        vis: f32,
+        e: f32,
+    ) {
         type V = f32x8<X64V3Token>;
         let visv = V::splat_t(token, vis);
         let (ic, it) = V::partition_slice_t(token, inp);
@@ -415,8 +447,16 @@ fn compute_mask_impl(
 /// to the safe impl (verified by the golden tests). Token proof wrapper:
 /// callers summon `X64V3Token`, which guarantees `fma`/`avx2`.
 #[cfg(target_arch = "x86_64")]
-#[attune(import_intrinsics)]
-fn compute_mask_fma_v3_t(_token: X64V3Token, mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
+#[attune]
+fn compute_mask_fma_v3_t(token: X64V3Token, mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
+    compute_mask_v3(token, mask_obj, kernel);
+}
+
+/// The `#[attune(v3)]` inner — callable from inside other v3 regions
+/// (e.g. `push_row_v3_t`) with no extra dispatch boundary.
+#[cfg(target_arch = "x86_64")]
+#[attune(v3, import_intrinsics)]
+fn compute_mask_v3(_token: X64V3Token, mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
     let add = &mask_obj.add_ring;
     let mid_row = &mask_obj.in_ring[MASK_SIZE >> 1];
     let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
@@ -483,6 +523,60 @@ fn compute_mask_fma_v3_t(_token: X64V3Token, mask_obj: &mut BandMask, kernel: &[
         let r = rcp_approx(den);
         mask[i] = base * ((r + r) - (den * r) * r);
         coeff[i] = mid_row[i + (MASK_SIZE >> 1)] * vis;
+    }
+}
+
+/// `compute_lowpass_scalar` with the 8 output lanes in an `f32x8` — the
+/// same per-element FMA chain (identical bits per lane), and it removes
+/// the baseline codegen's `fmaf` libcalls that made this the long-pole
+/// task in the `push_row` par sweep.
+#[cfg(target_arch = "x86_64")]
+#[attune]
+fn compute_lowpass_v3_t(token: X64V3Token, mask_obj: &mut BandMask) {
+    compute_lowpass_v3(token, mask_obj);
+}
+
+/// The `#[attune(v3)]` inner — callable from inside other v3 regions.
+#[cfg(target_arch = "x86_64")]
+#[attune(v3)]
+fn compute_lowpass_v3(token: X64V3Token, mask_obj: &mut BandMask) {
+    type V = f32x8<X64V3Token>;
+    let cf4 = *mask_obj.lp.as_ref().unwrap();
+    let Some(filt) = &mut mask_obj.filtered else {
+        return;
+    };
+    for x in 0..2 {
+        for y in 0..2 {
+            let cf = &cf4[y][x];
+            let out = &mut filt[x][y];
+            let n8 = out.len() & !7;
+            for k0 in (0..n8).step_by(8) {
+                let mut acc = V::zero_t(token);
+                #[allow(clippy::needless_range_loop)]
+                for i in 0..MASK_SIZE {
+                    let ring = &mask_obj.in_ring[i];
+                    let r = |j: usize| V::load_t(token, ring[k0 + j..][..8].first_chunk().unwrap());
+                    let t = r(4).mul_add(V::splat_t(token, cf[i][4]), {
+                        r(0).mul_add(V::splat_t(token, cf[i][0]), r(1) * cf[i][1])
+                    }) + r(2).mul_add(V::splat_t(token, cf[i][2]), r(3) * cf[i][3]);
+                    acc += t;
+                }
+                acc.store(out[k0..][..8].first_chunk_mut().unwrap());
+            }
+            // Scalar tail — same op order as `compute_lowpass_scalar`.
+            for (k, o) in out[n8..].iter_mut().enumerate() {
+                let k = k + n8;
+                let mut acc = 0.0f32;
+                #[allow(clippy::needless_range_loop)]
+                for i in 0..MASK_SIZE {
+                    let r = &mask_obj.in_ring[i][k..k + MASK_SIZE];
+                    let t = fm(r[4], cf[i][4], fm(r[0], cf[i][0], r[1] * cf[i][1]))
+                        + fm(r[2], cf[i][2], r[3] * cf[i][3]);
+                    acc += t;
+                }
+                *o = acc;
+            }
+        }
     }
 }
 
@@ -780,6 +874,17 @@ impl BandMask {
 
     /// `Masking::PushLine` on the staged `next_row`.
     fn push_row(&mut self, kernel: &[f32; MASK_SIZE]) {
+        #[cfg(all(feature = "std", target_arch = "x86_64"))]
+        if let Some(token) = X64V3Token::summon() {
+            // One dispatch boundary for the whole map→conv→mask sequence —
+            // the helpers inline into `push_row_v3_t`'s v3 region.
+            push_row_v3_t(token, self, kernel);
+            return;
+        }
+        self.push_row_scalar(kernel);
+    }
+
+    fn push_row_scalar(&mut self, kernel: &[f32; MASK_SIZE]) {
         // Swap the staged row into the ring at `fill` (saturating at 4),
         // matching the C++ `m_pInput[m_ulY]->Swap(line)` — a buffer swap,
         // not a copy: `next_row` is fully rewritten by `run_dct` before the
@@ -868,6 +973,15 @@ impl BandMask {
     /// DC coefficient plane (`filtered[x][y]` follows the C++ `m_pFiltered`
     /// indexing: `[x][y]` ↔ `[coeff pair]` per `GetLowpass(x,y)`).
     fn compute_lowpass(&mut self) {
+        #[cfg(target_arch = "x86_64")]
+        if let Some(token) = X64V3Token::summon() {
+            compute_lowpass_v3_t(token, self);
+            return;
+        }
+        self.compute_lowpass_scalar();
+    }
+
+    fn compute_lowpass_scalar(&mut self) {
         let cf4 = *self.lp.as_ref().unwrap();
         if let Some(filt) = &mut self.filtered {
             for x in 0..2 {
@@ -892,6 +1006,44 @@ impl BandMask {
                 }
             }
         }
+    }
+}
+
+/// `push_row_scalar`'s whole sequence inside a single v3 region: the
+/// `mapped` pow, `conv_add`, `compute_mask` and `compute_lowpass` helpers
+/// are all `#[attune(v3)]`/`#[inline(always)]`, so the compiler sees one
+/// uninterrupted vector body per band push — one dispatch boundary per
+/// `push_row` instead of three, with kernel splats hoisted and `mapped`
+/// kept hot between passes. Bit-identical to the scalar path.
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[attune]
+fn push_row_v3_t(token: X64V3Token, b: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
+    let slot = b.fill.min(MASK_SIZE - 1);
+    core::mem::swap(&mut b.in_ring[slot], &mut b.next_row);
+
+    let vis = b.vis;
+    let e = b.expon;
+    if e == 1.0 {
+        for (m, &v) in b.mapped.iter_mut().zip(b.in_ring[slot].iter()) {
+            *m = v.abs() * vis;
+        }
+    } else {
+        vecops::powf_mapped_v3(token, &mut b.mapped, &b.in_ring[slot], vis, e);
+    }
+    let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
+    // `conv_add_impl` is `#[inline(always)]` — it compiles with hardware
+    // FMA inside this v3 region (`conv_add_fma_v3_t`'s body).
+    conv_add_impl(&b.mapped, m0, m1, m2, &mut b.add_ring[slot]);
+
+    if b.fill == MASK_SIZE - 1 {
+        compute_mask_v3(token, b, kernel);
+        if b.lp.is_some() {
+            compute_lowpass_v3(token, b);
+        }
+        b.in_ring.rotate_left(1);
+        b.add_ring.rotate_left(1);
+    } else {
+        b.fill += 1;
     }
 }
 
@@ -978,7 +1130,32 @@ impl Component {
         let dumpi = std::env::var_os("DUMPI").is_some();
         #[cfg(feature = "std")]
         let dumpw: Option<usize> = std::env::var("DUMPW").ok().and_then(|s| s.parse().ok());
-        for i in 0..self.w8 {
+        // 8-positions-in-lanes DCT for the bulk; the forensic dump paths
+        // and the `w8 % 8` tail keep the per-position loop (PCALL numbering
+        // and dump order are preserved there).
+        #[cfg(target_arch = "x86_64")]
+        let start = {
+            let no_dumps = {
+                #[cfg(feature = "std")]
+                {
+                    dumpp.is_none() && !dumpi && dumpw.is_none() && dump_targets() == (None, None)
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    true
+                }
+            };
+            let n8 = self.w8 & !7;
+            if no_dumps && let Some(token) = X64V3Token::summon() {
+                run_dct_soa_v3_t(token, self);
+                n8
+            } else {
+                0
+            }
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let start = 0;
+        for i in start..self.w8 {
             #[cfg(feature = "std")]
             let pcall = {
                 static PCALL: std::sync::atomic::AtomicUsize =
@@ -1213,6 +1390,128 @@ fn aan_1d(b: &[f32; 8]) -> [f32; 8] {
     out
 }
 
+/// `aan_1d` with 8 consecutive window positions in the `f32x8` lanes —
+/// identical arithmetic per lane, so each position's coefficients are
+/// bit-identical to the scalar butterfly.
+#[cfg(target_arch = "x86_64")]
+#[attune(v3)]
+fn aan_1d_x8(token: X64V3Token, b: &[f32x8<X64V3Token>; 8]) -> [f32x8<X64V3Token>; 8] {
+    type V = f32x8<X64V3Token>;
+    let s22 = V::splat_t(token, SQRT2_2);
+    let c2v = V::splat_t(token, C2);
+    let c3v = V::splat_t(token, C3);
+    let tmp0 = b[0] + b[7];
+    let tmp7 = b[0] - b[7];
+    let tmp1 = b[1] + b[6];
+    let tmp6 = b[1] - b[6];
+    let tmp2 = b[2] + b[5];
+    let tmp5 = b[2] - b[5];
+    let tmp3 = b[3] + b[4];
+
+    let tmp10 = tmp0 + tmp3;
+    let tmp13 = tmp0 - tmp3;
+    let tmp11 = tmp1 + tmp2;
+
+    let mut out = [V::zero_t(token); 8];
+    out[0] = tmp10 + tmp11;
+    out[4] = tmp10 - tmp11;
+
+    let z1n = tmp1 + (tmp13 - tmp2);
+    out[2] = z1n.mul_add(s22, tmp13);
+    out[6] = (-z1n).mul_add(s22, tmp13);
+
+    let o10 = b[3] + (tmp5 - b[4]);
+    let o11 = tmp6 + tmp5;
+    let o12 = tmp6 + tmp7;
+
+    let z5 = (o10 - o12) * C1;
+    let z2 = o10.mul_add(c2v, z5);
+    let z4 = o12.mul_add(c3v, z5);
+
+    let z11 = o11.mul_add(s22, tmp7);
+    let z13 = (-o11).mul_add(s22, tmp7);
+
+    out[5] = z13 + z2;
+    out[3] = z13 - z2;
+    out[1] = z11 + z4;
+    out[7] = z11 - z4;
+    out
+}
+
+/// One `#[attune]` boundary for the whole position loop — the per-8 body
+/// is the `#[attune(v3)]` helper below so everything inlines into a
+/// single v3 region.
+#[cfg(target_arch = "x86_64")]
+#[attune]
+fn run_dct_soa_v3_t(token: X64V3Token, comp: &mut Component) {
+    let n8 = comp.w8 & !7;
+    for i0 in (0..n8).step_by(8) {
+        run_dct_soa8(token, comp, i0);
+    }
+}
+
+/// Eight-position sliding DCT: `run_dct` for `i in i0..i0+8` with the
+/// window positions in the vector lanes — `b[y][x]` lane `j` is the
+/// scalar path's `block[y][x]` at position `i0+j`. Both AAN passes stay
+/// elementwise (no register-file transposes) and each band's staged row
+/// gets one contiguous 8-wide store instead of eight scattered element
+/// writes. Per-lane arithmetic order is identical to the scalar loop, so
+/// results are bitwise equal.
+#[cfg(target_arch = "x86_64")]
+#[attune(v3)]
+fn run_dct_soa8(token: X64V3Token, comp: &mut Component, i0: usize) {
+    type V = f32x8<X64V3Token>;
+    // `i0 + x + 8 <= i0 + 15 <= w8 + 7 < w` whenever `i0 + 8 <= w8`.
+    let mut b: [[V; 8]; 8] = core::array::from_fn(|y| {
+        core::array::from_fn(|x| {
+            V::load_t(token, comp.ring[y][i0 + x..][..8].first_chunk().unwrap())
+        })
+    });
+    // Per-position block mean — the same column-sum regrouping as the
+    // scalar loop, evaluated on vectors so each lane sums its own block.
+    let s: [V; 8] = core::array::from_fn(|x| {
+        ((b[0][x] + b[7][x]) + (b[5][x] + b[6][x])) + ((b[1][x] + b[2][x]) + (b[3][x] + b[4][x]))
+    });
+    let avg = ((s[0] + s[4]) + (s[2] + s[6])) + ((s[1] + s[5]) + (s[3] + s[7]));
+    // `/64.0` is exact (power of two) — the broadcast multiply is bitwise.
+    let avg = avg * (1.0f32 / 64.0);
+    // Window multiply, `v = v·win + avg·(1−win)` — same fm() order.
+    for y in 0..8 {
+        for x in 0..8 {
+            let w = WINDOW[y][x];
+            b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
+        }
+    }
+    // Pass 1 (vertical): `aan_1d` per column — `v[k][x]` lane `j` is
+    // vertical frequency `k` of column `x` at position `i0+j`.
+    let mut v = [[V::zero_t(token); 8]; 8];
+    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
+        [
+            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
+        ]
+    })
+    .into_iter()
+    .enumerate()
+    {
+        let cv = aan_1d_x8(token, &col);
+        for (k, &c) in cv.iter().enumerate() {
+            v[k][x] = c;
+        }
+    }
+    // Pass 2 (horizontal): `aan_1d` per vertical-frequency row —
+    // `hv[u]` is horizontal frequency `u`, stored contiguously.
+    for (vix, row) in v.iter().enumerate() {
+        let hv = aan_1d_x8(token, row);
+        for (u, &c) in hv.iter().enumerate() {
+            c.store(
+                comp.bands[u][vix].next_row[i0..][..8]
+                    .first_chunk_mut()
+                    .unwrap(),
+            );
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Pooling driver (measure/pooling.cpp `Pooling::Measure`).
 // ---------------------------------------------------------------------------
@@ -1344,6 +1643,61 @@ fn measure_bands_span(
                     }
                 } else {
                     measure_in_band(
+                        &br.coeff[lo..hi],
+                        &bd.coeff[lo..hi],
+                        &br.mask[lo..hi],
+                        &bd.mask[lo..hi],
+                        1.0,
+                        errorline,
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// `measure_bands_span` inside a single v3 region — the per-band
+/// `measure_in_band` calls inline (`measure_in_band_inner_v3`) instead of
+/// each paying a dispatch boundary. Same element/fold order → bit-exact.
+#[cfg(all(feature = "std", feature = "parallel", target_arch = "x86_64"))]
+#[attune]
+fn measure_bands_span_v3_t(
+    token: X64V3Token,
+    comps_r: &[Component; 3],
+    comps_d: &[Component; 3],
+    lo: usize,
+    hi: usize,
+    errorline: &mut [f32],
+) {
+    for c in 0..3 {
+        for yy in 0..8 {
+            for x in 0..8 {
+                let br = &comps_r[c].bands[x][yy];
+                let bd = &comps_d[c].bands[x][yy];
+                if c == 0 && x == 0 && yy == 0 {
+                    let l0 = LUMA_TBL[0] as f32;
+                    let subs: [(usize, usize, f32); 4] = [
+                        (0, 0, l0 / 90.0),
+                        (1, 0, l0 / 15.0),
+                        (0, 1, l0 / 15.0),
+                        (1, 1, l0 / 20.0),
+                    ];
+                    let fr = br.filtered.as_ref().unwrap();
+                    let fd = bd.filtered.as_ref().unwrap();
+                    for &(a, b, vb) in &subs {
+                        vecops::measure_in_band_inner_v3(
+                            token,
+                            &fr[a][b][lo..hi],
+                            &fd[a][b][lo..hi],
+                            &br.mask[lo..hi],
+                            &bd.mask[lo..hi],
+                            vb,
+                            errorline,
+                        );
+                    }
+                } else {
+                    vecops::measure_in_band_inner_v3(
+                        token,
                         &br.coeff[lo..hi],
                         &bd.coeff[lo..hi],
                         &br.mask[lo..hi],
@@ -1598,6 +1952,11 @@ pub fn mdct_psnr_srgb8(
                     .enumerate()
                     .for_each(|(si, el)| {
                         let lo = si * stripe_len;
+                        #[cfg(target_arch = "x86_64")]
+                        if let Some(token) = X64V3Token::summon() {
+                            measure_bands_span_v3_t(token, cr, cd, lo, lo + el.len(), el);
+                            return;
+                        }
                         measure_bands_span(cr, cd, lo, lo + el.len(), el);
                     });
             }
