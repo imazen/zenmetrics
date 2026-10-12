@@ -98,3 +98,26 @@ JPEG and AVIF need separate verification of spatial input and encoded output.
 No steering or realtime claim is made by this checkpoint. Qualification should
 bind each frame's source, controls, codec revision, decoded pixels, score/map and
 measured end-to-end latency before enabling an animated steering mode.
+
+## Local qualification record (2026-10-12)
+
+The Linux x64 WGPU package at source
+`1e1d1b40637be0e0ac9037d48fcefbac18afa3ce` passed CLI all-targets and doc tests,
+38 SDR and two native HDR functional variants, and both shipped-runner IQA
+bundle controls. The package build used `run-heavy --mem 12G --jobs 4`; its
+reported peak RSS was 4.90 GiB. Archive manifests and mismatched-source refusal
+also passed. These are local packaging controls, not fleet performance results.
+
+The threaded browser control used Chromium 153.0.8010.12 and two actual Rayon
+workers. Its textured fixture matched the native raw map and scalar exactly;
+repeatability, alpha refusal and missing isolation refusal passed. Its qualified
+source was `648d5e7a14a7b2371765f8b585a0374e1608196e`. Final release artifacts
+must be rebuilt by CI at the reviewed release source.
+
+[Native protocol CI run 38257659558](https://github.com/imazen/zenmetrics/actions/runs/38257659558)
+refused a macOS Intel fixture as `busy` before execution. The fixture declared
+unrestricted CPU placement and a two-second admission deadline; unrestricted
+placement still preserves admission. The refusal does not establish a protocol
+failure. Retain the receipt, packet and event stream when diagnosing this class;
+never turn a refused observation into an accepted benchmark. The checkpoint
+release remains gated while the required native-protocol run is not green.

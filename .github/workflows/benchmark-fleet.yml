@@ -67,4 +67,7 @@ jobs:
         if: always()
         with:
           name: benchmark-fleet-${{ matrix.os }}
-          path: ~/tmp/benchmark-fleet-control/**/*.stderr
+          path: |
+            ~/tmp/benchmark-fleet-control/**/*.stderr
+            ~/tmp/benchmark-fleet-control/**/*.json
+            ~/tmp/benchmark-fleet-control/**/*.jsonl

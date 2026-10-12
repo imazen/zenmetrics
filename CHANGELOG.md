@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- Checkpoint packaging (PR pending): native CLI, pinned runner, fleet worker/controller and separate IQA timing/memory drivers; target-specific archives with provenance and checksums. Browser worker module exposes cached-reference zensim scores and raw maps; publication and hardware qualification remain gated.
+- Checkpoint packaging (`e89db556`, review required): native CLI, pinned runner, fleet worker/controller and separate IQA timing/memory drivers; target-specific archives with provenance and checksums. Browser worker module exposes cached-reference zensim scores and raw maps; publication and hardware qualification remain gated.
 
 - Benchmark studies (`9787ca07`): source-backed inventory, explicit study expansion, content identity, release-artifact and reviewed correctness qualification gates, and visible unsupported cells.
 - Study drivers (`b1078783`, `a6db5270`, `992f6e1a`): all 38 SDR CPU routes, two explicit native HDR routes, and separate ordinary/instrumented release artifacts with stride and scalar-output controls.
