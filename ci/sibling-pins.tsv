@@ -57,7 +57,7 @@ jxl-encoder	https://github.com/imazen/jxl-encoder.git	../jxl-encoder	df297ea1a08
 # active in the build, so CI must clone them all to satisfy
 # workspace metadata resolution. Pinned to stable revs to
 # make CI reproducible.
-zenpng	https://github.com/imazen/zenpng.git	../zenpng	f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720	-
+zenpng	https://github.com/imazen/zenpng.git	../zenpng	c461fde90bffeb4c750abc892296e8a4f333a6e5	-
 # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
 # no longer matches the lock's zenwebp entry.
 zenwebp	https://github.com/imazen/zenwebp.git	../zenwebp	8aa8a7858b97da88f0ba7d9027f8b6108d999196	-
@@ -172,7 +172,7 @@ zenav1-svt	https://github.com/imazen/zenav1-svt.git	../zenav1-svt	6532bfe951dbef
 # added in 9093cc23 without this clone, which is what turned every
 # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
 # OFF in every CI build below, but the path must exist.
-zenflate	https://github.com/imazen/zenflate.git	../zenflate	486e04ce7a75edbf5cbbaf50f6600f306243ec43	-
+zenflate	https://github.com/imazen/zenflate.git	../zenflate	71ee10b6ce5317de74b2e9b03c78b39fcaf805df	-
 # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
 # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
 # pure-Rust libaom-port differential bench/oracle/DSP crates added in

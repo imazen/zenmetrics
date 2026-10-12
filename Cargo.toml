@@ -349,6 +349,8 @@ zenjpeg      = { path = "../zenjpeg/zenjpeg" }
 # Drop when zenanalyze 0.2.0 publishes.
 zenanalyze   = { path = "../zenanalyze" }
 zenpng       = { path = "../zenpng" }
+# Share the CI-pinned main implementation with PNG and HDR compression.
+zenflate     = { path = "../zenflate" }
 zenwebp      = { path = "../zenwebp" }
 # zenavif: the former ../zenavif--main worktree (zenavif main) was
 # removed by worktree cleanup; ../zenavif is now the source of truth —

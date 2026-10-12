@@ -10,15 +10,67 @@ description = "Worker-based browser IQA and spatial error-map viewer"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-zensim = { workspace = true }
+zenmetrics-api = { workspace = true, default-features = false, features = ["cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-cvvdp", "cpu-iwssim"] }
+butteraugli = { workspace = true }
+dssim-core = { workspace = true }
+rgb = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+bytemuck = { workspace = true }
+cvvdp = { workspace = true, features = ["std", "parallel"] }
+iwssim = { workspace = true, features = ["std", "parallel"] }
+gmsd = { workspace = true, features = ["std", "parallel"] }
+psnrhvs = { workspace = true, features = ["std", "parallel"] }
+haarpsi = { workspace = true, features = ["std", "parallel"] }
+fsim = { workspace = true, features = ["std", "parallel"] }
+vsi = { workspace = true, features = ["std", "parallel"] }
+msssim = { workspace = true, features = ["std", "parallel"] }
+vif = { workspace = true, features = ["std", "parallel"] }
+mad-iqa = { workspace = true, features = ["std", "parallel"] }
+mdctpsnr = { workspace = true, features = ["std", "parallel"] }
+vmaf = { workspace = true, features = ["simd", "parallel"] }
+nlpd = { path = "../nlpd", features = ["parallel"] }
+zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
+zenpng = { path = "../../../zenpng" }
+zenwebp = { path = "../../../zenwebp", default-features = false }
+zenjxl = { path = "../../../zenjxl", default-features = false, features = ["decode"] }
+zenpixels = { version = ">=0.2.16, <0.4.0" }
+zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimental"] }
+enough = "0.4.4"
+zensim = { workspace = true, features = ["training", "feature-regime-v2", "custom-profiles"] }
 wasm-bindgen = "=0.2.129"
 rayon = "1.12.0"
 
-[dev-dependencies]
-serde_json = { workspace = true }
+[features]
+# Reuse the CLI's CPU dispatch and decoder sources without its networking,
+# fleet process management or native-only command dependencies.
+default = ["cpu-metrics", "cpu-cvvdp", "cpu-iwssim", "cpu-gmsd", "cpu-psnrhvs", "cpu-haarpsi", "cpu-fsim", "cpu-vsi", "cpu-msssim", "cpu-vif", "cpu-vifvec", "cpu-iwssim-piq", "cpu-mad", "cpu-mdctpsnr", "cpu-vmaf", "png", "jpeg", "webp", "jxl"]
+cpu-metrics = []
+cpu-cvvdp = []
+cpu-iwssim = []
+cpu-gmsd = []
+cpu-psnrhvs = []
+cpu-haarpsi = []
+cpu-fsim = []
+cpu-vsi = []
+cpu-msssim = []
+cpu-vif = []
+cpu-vifvec = []
+cpu-iwssim-piq = []
+cpu-mad = []
+cpu-mdctpsnr = []
+cpu-vmaf = []
+png = []
+jpeg = []
+webp = []
+jxl = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-rayon = { version = "1.3.0", features = ["no-bundler"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+imgref = { workspace = true }
+jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }

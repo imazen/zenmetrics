@@ -7127,7 +7127,7 @@ dependencies = [
 
 [[package]]
 name = "zenflate"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "archmage 0.9.30",
  "enough",
@@ -7703,11 +7703,39 @@ dependencies = [
 name = "zenmetrics-browser"
 version = "0.1.0"
 dependencies = [
+ "butteraugli",
+ "bytemuck",
+ "clap",
+ "cvvdp",
+ "dssim-core",
+ "enough",
+ "fsim",
+ "gmsd",
+ "haarpsi",
+ "imgref",
+ "iwssim",
+ "jxl-encoder",
+ "mad-iqa",
+ "mdctpsnr",
+ "msssim",
+ "nlpd",
+ "psnrhvs",
  "rayon",
+ "rgb",
  "serde_json",
+ "vif",
+ "vmaf",
+ "vsi",
  "wasm-bindgen",
  "wasm-bindgen-rayon",
+ "zenjpeg",
+ "zenjxl",
+ "zenmetrics-api",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenpng 0.2.0",
  "zensim 0.3.0",
+ "zenwebp",
 ]
 
 [[package]]
@@ -7765,7 +7793,7 @@ dependencies = [
  "zenavif-serialize 0.2.0",
  "zenbitmaps",
  "zencodec",
- "zenflate 0.4.0",
+ "zenflate 0.4.1",
  "zenfleet-core",
  "zenforks-cubecl",
  "zengif",
@@ -7884,11 +7912,12 @@ dependencies = [
  "magetypes 0.9.30",
  "memchr",
  "rgb",
+ "rustix",
  "safe_unaligned_simd",
  "thiserror 2.0.21",
  "whereat",
  "zencodec",
- "zenflate 0.3.6",
+ "zenflate 0.4.1",
  "zenpixels",
  "zenpixels-convert",
  "zenquant",
