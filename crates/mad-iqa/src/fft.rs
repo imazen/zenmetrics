@@ -870,6 +870,31 @@ pub(crate) fn ifft2_planned(
     );
 }
 
+/// [`ifft2_planned`] with a real (r-space) filter multiply fused into the
+/// row transpose-in: element `i` is transformed as `conj(buf[i]·filter[i])`,
+/// which is `conj(buf[i])·filter[i]` for real `filter` — identical arithmetic
+/// to multiplying then running [`ifft2_planned`], minus the multiply's own
+/// pass over the buffer.
+pub(crate) fn ifft2_planned_mul(
+    buf: &mut [Complex],
+    width: usize,
+    height: usize,
+    wplan: &Plan,
+    hplan: &Plan,
+    filter: &[f32],
+) {
+    debug_assert_eq!(buf.len(), width * height);
+    debug_assert_eq!(filter.len(), width * height);
+    fft2_rows_conj_mul(buf, width, height, wplan, Some(filter), true);
+    fft2_cols_conj_scale(
+        buf,
+        width,
+        height,
+        hplan,
+        Some(1.0 / (width * height) as f32),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -125,15 +125,18 @@ fn csf_apply(
 ) -> Vec<f32> {
     let mut buf: Vec<Complex> = src.iter().map(|&v| Complex::new(v, 0.0)).collect();
     fft::fft2_planned(&mut buf, n, m, wplan, hplan);
+    // The shifted-position remap materialises as a weight plane; the
+    // multiply then rides the inverse transform's transpose-in
+    // (`conj(v·w)` — identical arithmetic to multiply-then-conjugate),
+    // so no separate pass over `buf` is needed.
+    let mut wmap = vec![0.0f32; m * n];
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        buf.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
+        wmap.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
             let su = (u + m / 2) % m;
-            for (v, e) in row.iter_mut().enumerate() {
-                let sv = (v + n / 2) % n;
-                let w = csf[su * n + sv];
-                *e = Complex::new(e.re * w, e.im * w);
+            for (v, w) in row.iter_mut().enumerate() {
+                *w = csf[su * n + (v + n / 2) % n];
             }
         });
     }
@@ -141,13 +144,10 @@ fn csf_apply(
     for u in 0..m {
         let su = (u + m / 2) % m;
         for v in 0..n {
-            let sv = (v + n / 2) % n;
-            let w = csf[su * n + sv];
-            let e = &mut buf[u * n + v];
-            *e = Complex::new(e.re * w, e.im * w);
+            wmap[u * n + v] = csf[su * n + (v + n / 2) % n];
         }
     }
-    fft::ifft2_planned(&mut buf, n, m, wplan, hplan);
+    fft::ifft2_planned_mul(&mut buf, n, m, wplan, hplan, &wmap);
     buf.iter().map(|c| c.re).collect()
 }
 
@@ -514,15 +514,17 @@ fn gabor_apply(
     hplan: &fft::Plan,
 ) -> Vec<Complex> {
     let mut buf = imagefft.to_vec();
+    // Same fusion as `csf_apply`: the `fftshift`ed `lg·sp` product is a
+    // real weight plane that rides the inverse transform's transpose-in.
+    let mut wmap = vec![0.0f32; m * n];
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        buf.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
+        wmap.par_chunks_mut(n).enumerate().for_each(|(u, row)| {
             let su = (u + m.div_ceil(2)) % m;
-            for (v, e) in row.iter_mut().enumerate() {
+            for (v, w) in row.iter_mut().enumerate() {
                 let sv = (v + n.div_ceil(2)) % n;
-                let w = lg[su * n + sv] * sp[su * n + sv];
-                *e = Complex::new(e.re * w, e.im * w);
+                *w = lg[su * n + sv] * sp[su * n + sv];
             }
         });
     }
@@ -531,12 +533,10 @@ fn gabor_apply(
         let su = (u + m.div_ceil(2)) % m;
         for v in 0..n {
             let sv = (v + n.div_ceil(2)) % n;
-            let w = lg[su * n + sv] * sp[su * n + sv];
-            let e = &mut buf[u * n + v];
-            *e = Complex::new(e.re * w, e.im * w);
+            wmap[u * n + v] = lg[su * n + sv] * sp[su * n + sv];
         }
     }
-    fft::ifft2_planned(&mut buf, n, m, wplan, hplan);
+    fft::ifft2_planned_mul(&mut buf, n, m, wplan, hplan, &wmap);
     buf
 }
 
