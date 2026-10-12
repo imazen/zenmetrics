@@ -19,6 +19,9 @@
 **/.venv/
 **/__pycache__/
 *.pyc
+*.so
+.wrangler/
+crates/zenmetrics-py/Cargo.lock
 scripts/cvvdp_goldens/out/
 
 # Repo-root staging for Dockerfile.sweep.vNN precompiled-binary builds.

@@ -39,7 +39,7 @@ cc = "1.4.4"
 # build cleanly against the latest archmage / magetypes. JPEG is omitted
 # from the default set because zenjpeg 0.8.3 does not yet build against
 # magetypes 0.9.x — see the `jpeg` feature note below.
-default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr"]
+default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr", "alpha"]
 # Learned metrics from zenmetrics-nn (lpips-alex/-vgg/-squeeze, dists) on the
 # pure-Rust rten engine; models load from ZENMETRICS_NN_MODEL_DIR. `nn-ort`
 # adds the ONNX Runtime CUDA engine (ZENMETRICS_NN_ENGINE=ort-cuda).
@@ -50,6 +50,9 @@ nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
 # scored through `zenmetrics-abstractions::PairedNoReference`, so batch /
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
 nr = ["dep:piqe", "dep:niqe", "dep:brisque", "dep:zenmetrics-abstractions"]
+
+# Alpha channel handling and compositing via the fundamental zenmetrics-api layer
+alpha = ["dep:zenmetrics-api"]
 
 # Decoder feature flags
 # zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette

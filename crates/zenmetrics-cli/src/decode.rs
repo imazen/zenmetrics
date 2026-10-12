@@ -23,12 +23,19 @@ pub struct Rgb8Image {
     pub height: u32,
 }
 
-/// Decode `path` into 8-bit sRGB RGB. Format is sniffed from the file's
-/// magic bytes first, with extension as a fall-back tiebreaker.
-pub fn decode_image_to_rgb8(path: &Path) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+/// Decode `path` into 8-bit sRGB RGB using the specified alpha handling policy.
+pub fn decode_image_with_alpha_policy(
+    path: &Path,
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     let data = fs::read(path)?;
     let format = sniff_format(&data, path);
-    decode_bytes_to_rgb8(&data, format)
+    decode_bytes_to_rgb8_with_policy(&data, format, policy)
+}
+
+/// Decode `path` into 8-bit sRGB RGB. Requires all pixels to be fully opaque if alpha is present.
+pub fn decode_image_to_rgb8(path: &Path) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_image_with_alpha_policy(path, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
 
 /// Decode RGB8 straight from in-memory bytes — no temp file. `name_hint` (the object
@@ -128,22 +135,30 @@ fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
     }
 }
 
+fn decode_bytes_to_rgb8_with_policy(
+    data: &[u8],
+    format: Option<ImageFormat>,
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    let format = format.ok_or("could not detect image format from magic bytes or extension")?;
+    match format {
+        ImageFormat::Png => decode_png_with_policy(data, policy),
+        ImageFormat::Jpeg => decode_jpeg_with_policy(data, policy),
+        ImageFormat::Webp => decode_webp_with_policy(data, policy),
+        ImageFormat::Avif => decode_avif_with_policy(data, policy),
+        ImageFormat::Jxl => decode_jxl_with_policy(data, policy),
+        ImageFormat::Gif => decode_gif_with_policy(data, policy),
+        ImageFormat::Tiff => decode_tiff_with_policy(data, policy),
+        ImageFormat::Bmp => decode_bmp_with_policy(data, policy),
+        ImageFormat::JpegAi => decode_jpegai(data),
+    }
+}
+
 fn decode_bytes_to_rgb8(
     data: &[u8],
     format: Option<ImageFormat>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    let format = format.ok_or("could not detect image format from magic bytes or extension")?;
-    match format {
-        ImageFormat::Png => decode_png(data),
-        ImageFormat::Jpeg => decode_jpeg(data),
-        ImageFormat::Webp => decode_webp(data),
-        ImageFormat::Avif => decode_avif(data),
-        ImageFormat::Jxl => decode_jxl(data),
-        ImageFormat::Gif => decode_gif(data),
-        ImageFormat::Tiff => decode_tiff(data),
-        ImageFormat::Bmp => decode_bmp(data),
-        ImageFormat::JpegAi => decode_jpegai(data),
-    }
+    decode_bytes_to_rgb8_with_policy(data, format, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
 
 /// Directory holding the upstream JPEG AI checkpoints (`VM_common/`,
@@ -196,21 +211,13 @@ fn decode_jpegai(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> 
 }
 
 #[cfg(feature = "png")]
-fn decode_png(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+fn decode_png_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     use zenpng::{PngDecodeConfig, decode};
-    // zenpng decode returns a PixelBuffer in whatever native format the PNG
-    // happens to be in (RGB8, RGBA8, gray, 16-bit, ...). We funnel through
-    // the unified pixel-buffer-to-RGB8 helper so the metric sees the same
-    // layout regardless of source.
     let cancel = enough_unstoppable();
     let output = decode(data, &PngDecodeConfig::default(), &*cancel)?;
-    // HDR tripwire: a PNG whose cICP says PQ (16) or HLG (18) carries
-    // absolute-luminance HDR code values. The RGB8 funnel below would
-    // silently quantise 16-bit PQ to "8-bit sRGB" — scores computed on
-    // that are garbage with no error anywhere (the imazen/zenmetrics#25
-    // failure class). Error loudly instead; HDR-aware callers route
-    // through `hdr::decode_to_nits` (`--hdr` on score / score-pairs /
-    // sweep).
     if let Some(cicp) = &output.info.cicp
         && matches!(cicp.transfer_characteristics, 16 | 18)
     {
@@ -227,7 +234,20 @@ fn decode_png(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
         )
         .into());
     }
-    pixel_buffer_to_rgb8(&output.pixels)
+    pixel_buffer_to_rgb8_with_policy(&output.pixels, policy)
+}
+
+#[cfg(feature = "png")]
+fn decode_png(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_png_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(not(feature = "png"))]
+fn decode_png_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("PNG decoding is disabled (compile with `--features png`)".into())
 }
 
 #[cfg(not(feature = "png"))]
@@ -236,13 +256,26 @@ fn decode_png(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 }
 
 #[cfg(feature = "jpeg")]
-fn decode_jpeg(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+fn decode_jpeg_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     use zenjpeg::JpegDecoderConfig;
-    // zenjpeg's decode() returns a DecodeOutput; the underlying PixelBuffer
-    // is in one of zenjpeg's native output formats (RGB8 or RGBA8 are the
-    // common cases for typical JPEGs).
     let output = JpegDecoderConfig::new().decode(data)?;
-    pixel_slice_to_rgb8(&output.pixels())
+    pixel_slice_to_rgb8_with_policy(&output.pixels(), policy)
+}
+
+#[cfg(feature = "jpeg")]
+fn decode_jpeg(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_jpeg_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(not(feature = "jpeg"))]
+fn decode_jpeg_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("JPEG decoding is disabled (compile with `--features jpeg`)".into())
 }
 
 #[cfg(not(feature = "jpeg"))]
@@ -251,16 +284,30 @@ fn decode_jpeg(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 }
 
 #[cfg(feature = "webp")]
-fn decode_webp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    // zenwebp exposes a tight one-shot RGB8 decode that handles both lossy
-    // and lossless WebP and returns flat (Vec<u8>, w, h). No PixelBuffer
-    // conversion needed.
-    let (pixels, width, height) = zenwebp::decoder::decode_rgb(data)?;
+fn decode_webp_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    let (rgba, width, height) = zenwebp::decoder::decode_rgba(data)?;
+    let pixels = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, policy)?;
     Ok(Rgb8Image {
         pixels,
         width,
         height,
     })
+}
+
+#[cfg(feature = "webp")]
+fn decode_webp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_webp_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(not(feature = "webp"))]
+fn decode_webp_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("WebP decoding is disabled (compile with `--features webp`)".into())
 }
 
 #[cfg(not(feature = "webp"))]
@@ -289,6 +336,14 @@ fn hdr_transfer_name(transfer_characteristics: u8) -> Option<&'static str> {
 
 #[cfg(feature = "avif")]
 fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_avif_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "avif")]
+fn decode_avif_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // Decode-route opt-in. The default arm is the raw `ManagedAvifDecoder`
     // funnel — the pre-lane behaviour every zenmetrics command has always
     // used, and the more exact of the two routes (REVIEW_AVIF_DECODE measured
@@ -303,8 +358,8 @@ fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // is auditable per row. Any other non-empty value is a misconfiguration
     // and fails loudly rather than silently picking a route.
     match std::env::var("ZEN_JOBEXEC_AVIF_DECODE").as_deref() {
-        Err(_) | Ok("") => decode_avif_default(data),
-        Ok("zencodec") => decode_avif_zencodec(data),
+        Err(_) | Ok("") => decode_avif_default_with_policy(data, policy),
+        Ok("zencodec") => decode_avif_zencodec_with_policy(data, policy),
         Ok(other) => Err(format!(
             "ZEN_JOBEXEC_AVIF_DECODE={other:?} is not a known AVIF decode route \
              (known: \"zencodec\"; unset or empty selects the default \
@@ -316,6 +371,14 @@ fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "avif")]
 fn decode_avif_default(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_avif_default_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "avif")]
+fn decode_avif_default_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // Single-threaded decode (threads(1)): rav1d-safe's default multi-threaded
     // frame decode (n_threads=0=auto) races on the frame buffer under the sweep's
     // rayon parallelism — DisjointMut overlap panic / deadlock (imazen/rav1d-safe#15).
@@ -372,11 +435,19 @@ fn decode_avif_default(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Err
     // conversion and change scores for a metadata-only AVIF edit.
     let desc = avif_sdr_descriptor(pixels.descriptor(), &info);
     let pixels = pixels.with_descriptor(desc);
-    pixel_buffer_to_rgb8(&pixels)
+    pixel_buffer_to_rgb8_with_policy(&pixels, policy)
 }
 
 #[cfg(feature = "avif")]
 fn decode_avif_zencodec(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_avif_zencodec_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "avif")]
+fn decode_avif_zencodec_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     use std::borrow::Cow;
     use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
 
@@ -435,7 +506,7 @@ fn decode_avif_zencodec(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Er
         )
         .into());
     }
-    pixel_buffer_to_rgb8(&out.into_buffer())
+    pixel_buffer_to_rgb8_with_policy(&out.into_buffer(), policy)
 }
 
 #[cfg(feature = "avif")]
@@ -451,17 +522,41 @@ fn avif_sdr_descriptor(
 }
 
 #[cfg(not(feature = "avif"))]
+fn decode_avif_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("AVIF decoding is disabled (compile with `--features avif`)".into())
+}
+
+#[cfg(not(feature = "avif"))]
 fn decode_avif(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("AVIF decoding is disabled (compile with `--features avif`)".into())
 }
 
 #[cfg(feature = "jxl")]
 fn decode_jxl(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_jxl_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "jxl")]
+fn decode_jxl_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     use zenjxl::decode;
     // Pass an empty preferred-format list so zenjxl returns its native
     // pixel format; we normalise downstream.
     let output = decode(data, None, &[]).map_err(|e| format!("zenjxl: {e}"))?;
-    pixel_buffer_to_rgb8(&output.pixels)
+    pixel_buffer_to_rgb8_with_policy(&output.pixels, policy)
+}
+
+#[cfg(not(feature = "jxl"))]
+fn decode_jxl_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("JPEG XL decoding is disabled (compile with `--features jxl`)".into())
 }
 
 #[cfg(not(feature = "jxl"))]
@@ -471,9 +566,17 @@ fn decode_jxl(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "gif")]
 fn decode_gif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_gif_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "gif")]
+fn decode_gif_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // GIF stills carry one frame; the sweep encodes single-frame stills, so
     // we score the first composed frame. `decode_gif` returns RGBA (disposal
-    // + transparency already applied); drop alpha for the SDR RGB8 metric.
+    // + transparency already applied).
     let (_meta, frames, _stats) =
         zengif::decode_gif(data, zengif::Limits::none(), &enough::Unstoppable)
             .map_err(|e| format!("zengif: {e}"))?;
@@ -481,17 +584,29 @@ fn decode_gif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
         .into_iter()
         .next()
         .ok_or("zengif: decoded GIF has no frames")?;
-    let mut pixels = Vec::with_capacity(frame.pixels.len() * 3);
+    let w = u32::from(frame.width);
+    let h = u32::from(frame.height);
+    let mut rgba = Vec::with_capacity(frame.pixels.len() * 4);
     for px in &frame.pixels {
-        pixels.push(px.r);
-        pixels.push(px.g);
-        pixels.push(px.b);
+        rgba.push(px.r);
+        rgba.push(px.g);
+        rgba.push(px.b);
+        rgba.push(px.a);
     }
+    let pixels = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, w, h, policy)?;
     Ok(Rgb8Image {
         pixels,
-        width: u32::from(frame.width),
-        height: u32::from(frame.height),
+        width: w,
+        height: h,
     })
+}
+
+#[cfg(not(feature = "gif"))]
+fn decode_gif_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("GIF decoding is disabled (compile with `--features gif`)".into())
 }
 
 #[cfg(not(feature = "gif"))]
@@ -501,6 +616,14 @@ fn decode_gif(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "tiff")]
 fn decode_tiff(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_tiff_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "tiff")]
+fn decode_tiff_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // zentiff::decode returns a PixelBuffer in the TIFF's native layout
     // (Gray/RGB/RGBA × u8/u16/f32); funnel through the unified RGB8
     // normaliser like the other PixelBuffer-returning decoders.
@@ -510,7 +633,15 @@ fn decode_tiff(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
         &enough::Unstoppable,
     )
     .map_err(|e| format!("zentiff: {e}"))?;
-    pixel_buffer_to_rgb8(&output.pixels)
+    pixel_buffer_to_rgb8_with_policy(&output.pixels, policy)
+}
+
+#[cfg(not(feature = "tiff"))]
+fn decode_tiff_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("TIFF decoding is disabled (compile with `--features tiff`)".into())
 }
 
 #[cfg(not(feature = "tiff"))]
@@ -520,6 +651,14 @@ fn decode_tiff(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "bmp")]
 fn decode_bmp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    decode_bmp_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "bmp")]
+fn decode_bmp_with_policy(
+    data: &[u8],
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // `zenbitmaps::decode_bmp` returns a `DecodeOutput` in whatever native
     // `PixelLayout` the file's bit depth/bitfields decode to (1/2/4/8/16/24/32-bit,
     // RLE and BITFIELDS all normalise to one of the palette-free layouts below —
@@ -527,7 +666,7 @@ fn decode_bmp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // the same way the other arms funnel their native `PixelBuffer`.
     let output = zenbitmaps::decode_bmp(data, enough::Unstoppable)
         .map_err(|e| format!("zenbitmaps: {e}"))?;
-    bmp_layout_to_rgb8(output.pixels(), output.width, output.height, output.layout)
+    bmp_layout_to_rgb8_with_policy(output.pixels(), output.width, output.height, output.layout, policy)
 }
 
 #[cfg(feature = "bmp")]
@@ -537,100 +676,142 @@ fn bmp_layout_to_rgb8(
     height: u32,
     layout: zenbitmaps::PixelLayout,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    bmp_layout_to_rgb8_with_policy(pixels, width, height, layout, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(feature = "bmp")]
+fn bmp_layout_to_rgb8_with_policy(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    layout: zenbitmaps::PixelLayout,
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     use zenbitmaps::PixelLayout;
     let n = (width as usize) * (height as usize);
-    let mut out = vec![0u8; n * 3];
-    macro_rules! fill {
-        ($chunk_len:expr, $body:expr) => {{
-            let body: fn(&[u8], &mut [u8]) = $body;
-            for (src, dst) in pixels.chunks_exact($chunk_len).zip(out.chunks_exact_mut(3)) {
-                body(src, dst);
-            }
-        }};
-    }
     match layout {
-        PixelLayout::Rgb8 => out.copy_from_slice(&pixels[..n * 3]),
-        PixelLayout::Gray8 => {
-            fill!(1, |s, d: &mut [u8]| {
-                d[0] = s[0];
-                d[1] = s[0];
-                d[2] = s[0];
-            });
-        }
-        PixelLayout::Bgr8 => {
-            fill!(3, |s, d: &mut [u8]| {
-                d[0] = s[2];
-                d[1] = s[1];
-                d[2] = s[0];
-            });
-        }
         PixelLayout::Rgba8 => {
-            fill!(4, |s, d: &mut [u8]| {
-                d[0] = s[0];
-                d[1] = s[1];
-                d[2] = s[2];
-            });
+            let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&pixels[..n * 4], width, height, policy)?;
+            Ok(Rgb8Image {
+                pixels: rgb,
+                width,
+                height,
+            })
         }
-        PixelLayout::Bgra8 | PixelLayout::Bgrx8 => {
-            fill!(4, |s, d: &mut [u8]| {
-                d[0] = s[2];
-                d[1] = s[1];
-                d[2] = s[0];
-            });
+        PixelLayout::Bgra8 => {
+            let mut rgba = vec![0u8; n * 4];
+            for (src, dst) in pixels.chunks_exact(4).zip(rgba.chunks_exact_mut(4)) {
+                dst[0] = src[2];
+                dst[1] = src[1];
+                dst[2] = src[0];
+                dst[3] = src[3];
+            }
+            let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, policy)?;
+            Ok(Rgb8Image {
+                pixels: rgb,
+                width,
+                height,
+            })
         }
-        // Not a reachable BMP output today (the format's max depth is 32bpp
-        // integer per zenbitmaps' README — no 16-bit-per-channel BMP variant),
-        // but `PixelLayout` is `#[non_exhaustive]` and shared across every
-        // format the crate decodes, so this stays a real arm rather than an
-        // `unreachable!()`: narrow native-endian 16-bit to the top byte.
-        PixelLayout::Gray16 => {
-            fill!(2, |s, d: &mut [u8]| {
-                let v8 = (u16::from_ne_bytes([s[0], s[1]]) >> 8) as u8;
-                d[0] = v8;
-                d[1] = v8;
-                d[2] = v8;
-            });
-        }
-        PixelLayout::Rgba16 => {
-            fill!(8, |s, d: &mut [u8]| {
-                d[0] = (u16::from_ne_bytes([s[0], s[1]]) >> 8) as u8;
-                d[1] = (u16::from_ne_bytes([s[2], s[3]]) >> 8) as u8;
-                d[2] = (u16::from_ne_bytes([s[4], s[5]]) >> 8) as u8;
-            });
-        }
-        PixelLayout::GrayF32 => {
-            fill!(4, |s, d: &mut [u8]| {
-                let v = f32::from_ne_bytes([s[0], s[1], s[2], s[3]]).clamp(0.0, 1.0);
-                let v8 = (v * 255.0 + 0.5) as u8;
-                d[0] = v8;
-                d[1] = v8;
-                d[2] = v8;
-            });
-        }
-        PixelLayout::RgbF32 => {
-            fill!(12, |s, d: &mut [u8]| {
-                for c in 0..3 {
-                    let v =
-                        f32::from_ne_bytes([s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3]])
-                            .clamp(0.0, 1.0);
-                    d[c] = (v * 255.0 + 0.5) as u8;
+        _ => {
+            let mut out = vec![0u8; n * 3];
+            macro_rules! fill {
+                ($chunk_len:expr, $body:expr) => {{
+                    let body: fn(&[u8], &mut [u8]) = $body;
+                    for (src, dst) in pixels.chunks_exact($chunk_len).zip(out.chunks_exact_mut(3)) {
+                        body(src, dst);
+                    }
+                }};
+            }
+            match layout {
+                PixelLayout::Rgb8 => out.copy_from_slice(&pixels[..n * 3]),
+                PixelLayout::Gray8 => {
+                    fill!(1, |s, d: &mut [u8]| {
+                        d[0] = s[0];
+                        d[1] = s[0];
+                        d[2] = s[0];
+                    });
                 }
-            });
-        }
-        other => {
-            return Err(format!(
-                "zenbitmaps: BMP decoded to pixel layout {other:?}, which this module's \
-                 RGB8 funnel has no arm for (zenbitmaps' PixelLayout is #[non_exhaustive] \
-                 -- add the arm here, never silently reinterpret the bytes)"
-            )
-            .into());
+                PixelLayout::Bgr8 => {
+                    fill!(3, |s, d: &mut [u8]| {
+                        d[0] = s[2];
+                        d[1] = s[1];
+                        d[2] = s[0];
+                    });
+                }
+                PixelLayout::Bgrx8 => {
+                    fill!(4, |s, d: &mut [u8]| {
+                        d[0] = s[2];
+                        d[1] = s[1];
+                        d[2] = s[0];
+                    });
+                }
+                PixelLayout::Gray16 => {
+                    fill!(2, |s, d: &mut [u8]| {
+                        let v8 = (u16::from_ne_bytes([s[0], s[1]]) >> 8) as u8;
+                        d[0] = v8;
+                        d[1] = v8;
+                        d[2] = v8;
+                    });
+                }
+                PixelLayout::Rgba16 => {
+                    let mut rgba = vec![0u8; n * 4];
+                    for (s, d) in pixels.chunks_exact(8).zip(rgba.chunks_exact_mut(4)) {
+                        d[0] = (u16::from_ne_bytes([s[0], s[1]]) >> 8) as u8;
+                        d[1] = (u16::from_ne_bytes([s[2], s[3]]) >> 8) as u8;
+                        d[2] = (u16::from_ne_bytes([s[4], s[5]]) >> 8) as u8;
+                        d[3] = (u16::from_ne_bytes([s[6], s[7]]) >> 8) as u8;
+                    }
+                    let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, policy)?;
+                    return Ok(Rgb8Image {
+                        pixels: rgb,
+                        width,
+                        height,
+                    });
+                }
+                PixelLayout::GrayF32 => {
+                    fill!(4, |s, d: &mut [u8]| {
+                        let v = f32::from_ne_bytes([s[0], s[1], s[2], s[3]]).clamp(0.0, 1.0);
+                        let v8 = (v * 255.0 + 0.5) as u8;
+                        d[0] = v8;
+                        d[1] = v8;
+                        d[2] = v8;
+                    });
+                }
+                PixelLayout::RgbF32 => {
+                    fill!(12, |s, d: &mut [u8]| {
+                        for c in 0..3 {
+                            let v =
+                                f32::from_ne_bytes([s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3]])
+                                    .clamp(0.0, 1.0);
+                            d[c] = (v * 255.0 + 0.5) as u8;
+                        }
+                    });
+                }
+                other => {
+                    return Err(format!(
+                        "zenbitmaps: BMP decoded to pixel layout {other:?}, which this module's \
+                  RGB8 funnel has no arm for (zenbitmaps' PixelLayout is #[non_exhaustive] \
+                  -- add the arm here, never silently reinterpret the bytes)"
+                    )
+                    .into());
+                }
+            }
+            Ok(Rgb8Image {
+                pixels: out,
+                width,
+                height,
+            })
         }
     }
-    Ok(Rgb8Image {
-        pixels: out,
-        width,
-        height,
-    })
+}
+
+#[cfg(not(feature = "bmp"))]
+fn decode_bmp_with_policy(
+    _data: &[u8],
+    _policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("BMP decoding is disabled (compile with `--features bmp`)".into())
 }
 
 #[cfg(not(feature = "bmp"))]
@@ -661,10 +842,102 @@ fn decode_bmp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     feature = "jxl",
     feature = "tiff"
 ))]
+fn pixel_buffer_to_rgb8_with_policy(
+    buf: &zenpixels::PixelBuffer,
+    policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    pixel_slice_to_rgb8_with_policy(&buf.as_slice(), policy)
+}
+
+#[cfg(any(
+    feature = "png",
+    feature = "jpeg",
+    feature = "avif",
+    feature = "jxl",
+    feature = "tiff"
+))]
 fn pixel_buffer_to_rgb8(
     buf: &zenpixels::PixelBuffer,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    pixel_slice_to_rgb8(&buf.as_slice())
+    pixel_buffer_to_rgb8_with_policy(buf, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+}
+
+#[cfg(any(
+    feature = "png",
+    feature = "jpeg",
+    feature = "avif",
+    feature = "jxl",
+    feature = "tiff"
+))]
+pub fn pixel_slice_to_rgb8_with_policy(
+    pixels: &zenpixels::PixelSlice<'_>,
+    alpha_policy: zenmetrics_api::alpha::AlphaPolicy,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    use zenpixels::PixelDescriptor;
+    use zenpixels_convert::policy::ConvertOptions;
+
+    let width = pixels.width();
+    let height = pixels.rows();
+    let src_stride = pixels.stride();
+    let src_desc = pixels.descriptor();
+    let src_bytes = pixels.as_strided_bytes();
+
+    if src_desc.has_alpha() {
+        let dst_desc = PixelDescriptor::RGBA8_SRGB;
+        let options = ConvertOptions::permissive();
+        let cow = zenpixels_convert::adapt::adapt_for_encode_explicit_cow(
+            src_bytes,
+            src_desc,
+            width,
+            height,
+            src_stride,
+            &[dst_desc],
+            &options,
+        )
+        .map_err(|e| format!("decode: cannot convert {src_desc:?} → RGBA8_SRGB: {e}"))?;
+
+        let slice = cow.as_slice();
+        let mut rgba = vec![0u8; (width as usize * 4) * height as usize];
+        for y in 0..height {
+            let src_row = slice.row(y);
+            let dst_row = &mut rgba[y as usize * width as usize * 4..(y as usize + 1) * width as usize * 4];
+            dst_row.copy_from_slice(src_row);
+        }
+
+        let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, alpha_policy)?;
+        Ok(Rgb8Image {
+            pixels: rgb,
+            width,
+            height,
+        })
+    } else {
+        let dst_desc = PixelDescriptor::RGB8_SRGB;
+        let options = ConvertOptions::permissive();
+        let cow = zenpixels_convert::adapt::adapt_for_encode_explicit_cow(
+            src_bytes,
+            src_desc,
+            width,
+            height,
+            src_stride,
+            &[dst_desc],
+            &options,
+        )
+        .map_err(|e| format!("decode: cannot convert {src_desc:?} → RGB8_SRGB: {e}"))?;
+
+        let slice = cow.as_slice();
+        let mut dst = vec![0u8; (width as usize * 3) * height as usize];
+        for y in 0..height {
+            let src_row = slice.row(y);
+            let dst_row = &mut dst[y as usize * width as usize * 3..(y as usize + 1) * width as usize * 3];
+            dst_row.copy_from_slice(src_row);
+        }
+
+        Ok(Rgb8Image {
+            pixels: dst,
+            width,
+            height,
+        })
+    }
 }
 
 #[cfg(any(
@@ -677,29 +950,7 @@ fn pixel_buffer_to_rgb8(
 fn pixel_slice_to_rgb8(
     pixels: &zenpixels::PixelSlice<'_>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    use zenpixels::PixelDescriptor;
-    use zenpixels_convert::converter::RowConverter;
-
-    let width = pixels.width();
-    let height = pixels.rows();
-    let src_stride = pixels.stride();
-    let src_desc = pixels.descriptor();
-    let src_bytes = pixels.as_strided_bytes();
-
-    let dst_desc = PixelDescriptor::RGB8_SRGB;
-    let dst_stride = width as usize * 3;
-    let mut dst = vec![0u8; dst_stride * height as usize];
-
-    let mut conv = RowConverter::new(src_desc, dst_desc)
-        .map_err(|e| format!("decode: cannot plan {src_desc:?} → RGB8_SRGB: {e}"))?;
-    conv.convert_rows(src_bytes, src_stride, &mut dst, dst_stride, width, height)
-        .map_err(|e| format!("decode: row conversion failed: {e}"))?;
-
-    Ok(Rgb8Image {
-        pixels: dst,
-        width,
-        height,
-    })
+    pixel_slice_to_rgb8_with_policy(pixels, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
 
 // zenpng wants `&dyn enough::Stop`. The crate exports `Unstoppable` but we
@@ -883,10 +1134,15 @@ mod high_depth_funnel_tests {
             PixelDescriptor::GRAYA16_SRGB,
         ] {
             let channels = desc.layout().channels();
+            let has_alpha = desc.has_alpha();
             let mut bytes = Vec::new();
             for code in codes {
-                for _ in 0..channels {
+                let color_channels = if has_alpha { channels - 1 } else { channels };
+                for _ in 0..color_channels {
                     bytes.extend_from_slice(&code.to_ne_bytes());
+                }
+                if has_alpha {
+                    bytes.extend_from_slice(&65535u16.to_ne_bytes());
                 }
             }
             let pixels = PixelBuffer::from_vec(bytes, codes.len() as u32, 1, desc).unwrap();
