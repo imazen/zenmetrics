@@ -542,6 +542,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
+- Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
+
 - **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
   directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
   marked `target*` directories even when accidentally tracked, plus repository

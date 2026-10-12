@@ -360,3 +360,14 @@ benchmark-contract-check:
 
 benchmark-executor-check runner output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}}
+
+# Separate artifacts: the memory binary must never supply latency claims.
+iqa-fleet-build output:
+    mkdir {{output}}
+    just snap-cargo @ build -p cpu-profile --bin new-metrics-wall
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/debug/new-metrics-wall" {{output}}/latency
+    just snap-cargo @ build -p cpu-profile --bin new-metrics-wall --features heap-phases
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/debug/new-metrics-wall" {{output}}/memory
+
+iqa-fleet-check binaries output:
+    python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}

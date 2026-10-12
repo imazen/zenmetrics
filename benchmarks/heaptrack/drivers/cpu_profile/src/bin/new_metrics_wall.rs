@@ -68,6 +68,12 @@ use zenmetrics_cli::decode::Rgb8Image;
 use zenmetrics_cli::metrics::display::{CvvdpDisplay, parse_display};
 use zenmetrics_cli::metrics::{GpuRuntime, MetricKind, run_metric_display};
 
+#[path = "../fleet_case.rs"]
+mod fleet_case;
+#[cfg(feature = "heap-phases")]
+#[global_allocator]
+static HEAP: zenbench_memory::HeapProfiler = zenbench_memory::HeapProfiler::system();
+
 // ---------------------------------------------------------------------------
 // Synthetic inputs — identical pattern to cpu_wall.rs / the heaptrack driver
 // so wall and memory measurements use the same input shape.
@@ -267,6 +273,17 @@ fn env_override<T: std::str::FromStr>(name: &str, default: T) -> T {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    if args.get(1).is_some_and(|s| s == "fleet") {
+        fleet_case::run(&args).unwrap_or_else(|e| {
+            eprintln!("fleet IQA case failed: {e}");
+            std::process::exit(2);
+        });
+        return;
+    }
+    assert!(
+        !cfg!(feature = "heap-phases"),
+        "heap-phases is a memory-only build: use new-metrics-wall fleet CASE.json"
+    );
     if args.len() >= 2 && args[1] == "heap" {
         heap_mode(&args);
         return;
