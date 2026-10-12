@@ -551,3 +551,11 @@ site-check site:
 # Check the deployed viewer while retaining the local unisolated refusal control.
 site-check-live site url:
     python3 scripts/checkpoint/check-pages.py '{{site}}' --url '{{url}}'
+
+# Qualify the all-metric browser viewer against independent native spatial outputs.
+viewer-check site oracle report:
+    python3 scripts/checkpoint/check-pages.py '{{site}}' --oracle '{{oracle}}' --report '{{report}}'
+
+# Assemble the matching current-source viewer (not an old checkpoint frontend).
+viewer-site build source out:
+    python3 scripts/checkpoint/prepare-pages.py --build '{{build}}' --source '{{source}}' --out '{{out}}'

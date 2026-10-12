@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Browser viewer (`4f80a33b`, `319c2f33`, `cc6f9b95`, `172fb123`): native SDR metric selection, Zen JPEG/PNG/WebP/JXL decoding, JPEG candidates, native spatial maps, and current-source Pages deployments. Pin zenflate main and compatible zenpng together; refuse unsupported maps and non-opaque scoring. Validation and remaining issue 70 gates: [browser validation](docs/BROWSER_VIEWER_2026-10-13.md).
+
 - IW-SSIM (`41c8c9e8`): emit Laplacian bands from adjacent Gaussian levels, with exact coefficient parity against the previous builder and lower measured maximum RSS in full/strip fixtures. Full CPU deployment was rechecked with separate ordinary/instrumented artifacts.
 
 - IW-SSIM (`3250fcb9`): borrow strip input rows and Laplacian planes instead of copying them; exact score bits on the measured body-512 fixture, lower measured maximum RSS, unchanged golden/parity assertions and working no-default-features tests.

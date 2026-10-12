@@ -4,6 +4,8 @@ import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import math
+import json
+import gzip
 from pathlib import Path
 import threading
 from playwright.sync_api import sync_playwright
@@ -11,6 +13,8 @@ from playwright.sync_api import sync_playwright
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('site', type=Path)
 parser.add_argument('--url', help='Check an already deployed HTTPS site instead')
+parser.add_argument('--oracle', type=Path, help='Independent native map outputs')
+parser.add_argument('--report', type=Path, help='Measured browser results')
 args = parser.parse_args()
 
 
@@ -67,10 +71,80 @@ try:
           const second=await response;
           if(second.type!=='result'||JSON.stringify(first.score)!==JSON.stringify(second.score)||
              JSON.stringify(Array.from(first.map))!==JSON.stringify(Array.from(second.map))) throw new Error('Repeat differs');
-          worker.terminate(); return {score:first.score,map:Array.from(first.map)};
+          const spatial={};
+          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd']) {
+            response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric,reference,distorted,width,height,display:'standard_4k'});
+            const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
+            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,values:Array.from(got.map)};
+          }
+          response=wait();worker.postMessage({type:'generate',reference,width,height,quality:40});
+          const jpeg=await response;if(jpeg.type!=='decoded'||!jpeg.encoded||jpeg.encoded[0]!==255||jpeg.encoded[1]!==216)throw new Error('JPEG generation failed');
+          // The independent browser decoder validates the Zen encoder's bytes.
+          const chrome=await createImageBitmap(new Blob([jpeg.encoded],{type:'image/jpeg'}));
+          if(chrome.width!==width||chrome.height!==height)throw new Error('Independent JPEG dimensions differ');chrome.close();
+          response=wait();worker.postMessage({type:'decode',bytes:new Uint8Array([255,216,1]),filename:'broken.jpg'});
+          if((await response).type!=='error')throw new Error('Broken JPEG accepted');
+          response=wait();worker.postMessage({type:'decode',bytes:jpeg.encoded,filename:'uploaded.jpg'});
+          const uploaded=await response;
+          if(uploaded.type!=='decoded'||JSON.stringify(Array.from(uploaded.rgba))!==JSON.stringify(Array.from(jpeg.rgba)))throw new Error('Upload decoding or recovery differs');
+          const pngCanvas=new OffscreenCanvas(8,8),pngContext=pngCanvas.getContext('2d');
+          pngContext.fillStyle='rgba(100,80,60,0.5)';pngContext.fillRect(0,0,8,8);
+          const png=new Uint8Array(await (await pngCanvas.convertToBlob({type:'image/png'})).arrayBuffer());
+          response=wait();worker.postMessage({type:'decode',bytes:png,filename:'transparent.png'});
+          const transparent=await response;
+          if(transparent.type!=='decoded'||transparent.rgba[3]!==128)throw new Error('PNG alpha lost');
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',reference:transparent.rgba,distorted:transparent.rgba,width:8,height:8});
+          const alpha=await response;if(alpha.type!=='error'||!alpha.message.includes('opaque'))throw new Error('PNG alpha silently accepted');
+          const input={width:256,height:256},r=new Uint8Array(256*256*4),d=new Uint8Array(r.length);
+          for(let i=0;i<r.length;i++){r[i]=i%4===3?255:(i*13+Math.floor(i/1024)*17)%256;d[i]=i%4===3?255:Math.max(0,r[i]-7);}
+          const metrics={};
+          for(const metric of ready.metrics) {
+            response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:r,distorted:d,...input,display:'standard_4k'});
+            const got=await response;if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
+          }
+          const hd={width:1920,height:1080},hr=new Uint8Array(hd.width*hd.height*4),hdist=new Uint8Array(hr.length);
+          for(let i=0;i<hr.length;i++){hr[i]=i%4===3?255:(i*17+Math.floor(i/(hd.width*4))*13)%256;hdist[i]=i%4===3?255:Math.max(0,hr[i]-7);}
+          response=wait();worker.postMessage({type:'compare',metric:'ssim2',mapMetric:'psnr',reference:hr,distorted:hdist,...hd});
+          const timed=await response;if(timed.type!=='result')throw new Error(JSON.stringify(timed));
+          worker.terminate();return {score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
+        # Both file controls exercise the UI's independent upload revisions.
+        jpeg=bytes(result.pop('jpeg_bytes'))
+        observed=[]
+        context.on('request',lambda request:observed.append(request.url))
+        context.set_offline(True)
+        page.locator('#reference').set_input_files({'name':'reference.jpg','mimeType':'image/jpeg','buffer':jpeg})
+        page.locator('#distorted').set_input_files({'name':'distorted.jpg','mimeType':'image/jpeg','buffer':jpeg})
+        page.wait_for_function("document.getElementById('status').textContent.includes('native-cpu-wasm')",timeout=30000)
+        assert '64×64' in page.locator('#dimensions').inner_text()
+        assert page.locator('#score').inner_text()!='–'
+        page.locator('#metric').select_option('ssim2')
+        page.wait_for_function("document.getElementById('score-label').textContent==='ssim2'",timeout=30000)
+        page.locator('#map-metric').select_option('gmsd')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd')",timeout=30000)
+        assert not observed,observed
+        result['offline_upload_ui_and_scoring']=True
+        context.set_offline(False)
+        if args.oracle:
+            oracle=json.loads(args.oracle.read_text())
+            assert result['score']['score']==oracle['score']
+            assert result['map']==oracle['map']
+            result['native_map_max_abs_delta']={}
+            for name,expected in oracle['spatial_maps'].items():
+                got=result['spatial'][name]
+                assert (got['width'],got['height'],got['similarity'])==(expected['width'],expected['height'],expected['similarity'])
+                assert len(got['values'])==len(expected['values'])
+                assert all(math.isfinite(v) for v in got['values'])
+                delta=max(abs(a-b) for a,b in zip(got['values'],expected['values']))
+                result['native_map_max_abs_delta'][name]=delta
+                if name=='psnr': assert delta==0
+        if args.report:
+            wasm=(args.site/'pkg/zenmetrics_browser_bg.wasm').read_bytes()
+            result['wasm_bytes']=len(wasm);result['wasm_gzip_bytes']=len(gzip.compress(wasm,mtime=0))
+            result['browser']=browser.version
+            args.report.write_text(json.dumps(result,indent=2)+'\n')
         class Unisolated(Handler):
             isolated = False
         control = ThreadingHTTPServer(('127.0.0.1', 3320), partial(Unisolated, directory=str(args.site.resolve())))

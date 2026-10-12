@@ -83,17 +83,29 @@ unchanged acceptance criteria. Both retain refusal outcomes.
 
 ## Threaded browser package
 
-The browser checkpoint currently provides **zensim codec-target scoring and raw
-maps** with a cached reference, a coordinator worker and Rayon workers. It needs
-a secure context, COOP `same-origin`, COEP `require-corp`, SharedArrayBuffer,
-SIMD128 and relaxed SIMD. Unsupported configurations produce an error. Inputs
-are opaque sRGB8; callers choose any alpha composite explicitly. The viewer uses
-a fixed user-selected map scale, retains raw values and bounds in-flight work.
+The release checkpoint provides zensim codec-target scoring and raw maps.
+The current website additionally selects the native SDR CPU metric catalog and
+decodes JPEG, PNG, WebP and JPEG XL with Zen codecs. It generates JPEG candidates
+with zenjpeg and supports split, blink, pan, zoom, Turbo/Viridis overlays, hover
+inspection, and raw-map download. PNG/WebP/JXL alpha is preserved; scoring rejects
+non-opaque pixels. ICC metadata is not applied: use composited sRGB sources.
 
-Browser controls establish one textured 64×64 fixture's exact score/map parity,
-repeatability, two-worker initialization and ingress/isolation refusal. They do
-not establish latency, all-image parity or fleet benchmark acceptance. The full
-native IQA catalog is broader than this first browser module.
+The module requires a secure context, COOP `same-origin`, COEP `require-corp`,
+SharedArrayBuffer, SIMD128 and relaxed SIMD. Unsupported configurations fail.
+No alternate metric backend is substituted. CVVDP names its display explicitly.
+The zensim cached-reference route names its `codec_target` profile. Native
+DSSIM scale-0 SSIM and GMSD maps retain their sampling grids and similarity
+values; only visualization applies `1 - similarity`. Butteraugli and CVVDP
+return native error maps. PSNR returns per-pixel normalized RGB squared error.
+SSIMULACRA2 has no spatial-map export in the current pinned port.
+
+Browser controls compare native map outputs on a textured 64×64 fixture,
+require exact zensim score/map repeatability and PSNR/GMSD map parity, exercise
+all selectable metrics on 256×256 inputs, decode an independently verified Zen
+JPEG, reject malformed JPEGs, recover on the next upload, preserve PNG alpha,
+and refuse non-opaque scoring and unisolated worker startup. Measurements and
+limits are in [the viewer validation record](BROWSER_VIEWER_2026-10-13.md).
+They do not establish all-image parity or fleet benchmark acceptance.
 
 Animated spatial steering needs a codec route that consumes spatial control,
 not merely a global quality slider. The inspected JXL route offers an internal
@@ -169,10 +181,12 @@ workspace. It keeps its own dependency lock and does not join the metric graph.
 
 The interactive viewer runs on https://zenmetrics-site.pages.dev/; its custom
 domain is https://metrics.imazen.org/ (activate with a proxied CNAME to
-zenmetrics-site.pages.dev). `.github/workflows/site.yml` downloads the pinned browser release,
-verifies its archive checksum and every manifest file against its source commit,
-and deploys without recompiling WASM. Change the checkpoint tag and source together
-when promoting a new verified release. `site-source.json` records that provenance.
+zenmetrics-site.pages.dev). `.github/workflows/site.yml` builds the matching
+frontend and shared-memory WASM from the same commit and CI-pinned siblings,
+including zenflate main. Cargo and wasm-bindgen tool caches avoid repeated
+installation and dependency compilation. `site-source.json` records the source
+commit and artifact hashes. Immutable release archives remain supported by
+`prepare-pages.py --archive`; development website builds use `--build`.
 
 `web/site/_headers` supplies COOP `same-origin`, COEP `require-corp`, and public
 asset CORS. These headers enable SharedArrayBuffer and Rayon workers directly.
@@ -184,6 +198,6 @@ GitHub deployment requires the encrypted `CLOUDFLARE_API_TOKEN` secret with
 Cloudflare Pages Edit permission for the configured account. R2 remains separate
 artifact storage. No rotating Wrangler login credential belongs in CI.
 
-Without that secret, the workflow verifies the release and browser behavior but
+Without that secret, the workflow builds and verifies the viewer but
 reports that deployment is not configured. Production deployment and its live
 browser check run only when the credential is supplied.

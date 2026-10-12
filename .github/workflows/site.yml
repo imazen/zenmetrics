@@ -6,6 +6,15 @@ on:
     paths:
       - '.github/workflows/site.yml'
       - 'web/site/**'
+      - 'web/metrics/**'
+      - 'crates/zenmetrics-browser/**'
+      - 'crates/zenmetrics-api/**'
+      - 'crates/zenmetrics-cli/src/metrics/**'
+      - 'crates/zenmetrics-cli/src/decode.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'ci/sibling-pins.tsv'
+      - 'scripts/checkpoint/build-browser.sh'
       - 'scripts/checkpoint/*pages.py'
 permissions:
   contents: read
@@ -15,27 +24,43 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CHECKPOINT_TAG: v0.6.0-checkpoint.20261012
-      CHECKPOINT_SOURCE: 53f5c92f7f5f206ab66a04e331935db0da18c89b
-      ARCHIVE: checkpoint-browser-simd128-relaxed-rayon.tar.gz
+      CARGO_BUILD_JOBS: 4
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - name: Download immutable browser checkpoint
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$CHECKPOINT_TAG" --pattern "$ARCHIVE*" --dir checkpoint-download
-      - name: Verify and assemble
-        run: python scripts/checkpoint/prepare-pages.py --archive "checkpoint-download/$ARCHIVE" --source "$CHECKPOINT_SOURCE" --tag "$CHECKPOINT_TAG" --out site
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-06
+          components: rust-src
+          targets: wasm32-unknown-unknown
+      - run: bash scripts/ci/clone-siblings.sh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checkpoint-browser
+      - uses: actions/cache@v6
+        id: bindgen
+        with:
+          path: ~/.cargo/bin/wasm-bindgen*
+          key: wasm-bindgen-cli-linux-0.2.129
+      - if: steps.bindgen.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - name: Build and assemble current viewer
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          CHECKPOINT_OUT="$GITHUB_WORKSPACE/browser-build" bash scripts/checkpoint/build-browser.sh
+          python scripts/checkpoint/prepare-pages.py --build browser-build --source "$GITHUB_SHA" --out site
       - name: Verify isolated browser workers
         run: |
           python -m pip install playwright==1.63.0
           python -m playwright install --with-deps chromium
-          python scripts/checkpoint/check-pages.py site
+          cargo run --locked --release -p zenmetrics-browser --example browser_oracle > "$HOME/tmp/browser-oracle.json"
+          python scripts/checkpoint/check-pages.py site --oracle "$HOME/tmp/browser-oracle.json" --report "$HOME/tmp/browser-results.json"
       - name: Report missing deployment credential
         if: env.CLOUDFLARE_API_TOKEN == ''
         run: echo "::warning::Deployment is not configured. Set CLOUDFLARE_API_TOKEN with Cloudflare Pages Edit permission."
