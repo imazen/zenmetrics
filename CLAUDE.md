@@ -542,6 +542,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- GPU memory-mode defaults must fit the target address width. The 8 GiB fallback budget overflowed `usize` when the i686 CLI test graph compiled GPU dependencies. Saturating multiplication retains the exact 8 GiB default on 64-bit targets and limits 32-bit budgeting to representable bytes. This does not change metric arithmetic or benchmark GPU acceptance.
+
 - VMAF ADM/CAMBI/SPEED portable dispatch generation must import `attune` on every SIMD-enabled target, including i686. Architecture-specific tokens remain gated. The i686 cross compile and aarch64 compile pass with the portable macro imports; numerical execution on i686 was not measured.
 
 - The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
