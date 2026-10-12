@@ -1,0 +1,21 @@
+Driver source: ec453ab069121c3c5b04ccdefcc8cf7e8ae5b005; CI-pinned sibling snapshot, including vectorized exact Daala integer DCT.
+Runner source: zenbench ac675d3a (resolved 0.1.10); the version-only 0.1.11 release candidate is separate.
+CPU deployment: 38 SDR routes at 256x256 + hdrvdp/hdrvdp3 at 128x96 absolute nits; two cold calls, packed, one thread.
+Qualification: every scalar product exact across packed/padded and ordinary/instrumented controls on each host. Deployment and descriptive observations only; no accuracy or speed acceptance.
+Command: just iqa-deployment-bench <binaries> <runner> <sdr-controls> <hdr-controls> <new-output> <machine> <exact-domain>
+Execution: hard outer system scope AllowedCPUs=2, MemoryMax=16G, MemorySwapMax=0; run-heavy inside.
+Domains: i134 performance_l320480K; r5600g capacity1024_l316384K.
+Raw evidence resolving path on each host: ~/tmp/zm-iqa-dct-20261012/benchmark-observations/
+Control resolving paths: ~/tmp/zm-iqa-dct-20261012/{sdr-controls,hdr-controls}/
+Both hosts: 80/80 observations complete, 40 latency products usable, 40 separate memory products; all receipts recovered by hash through the native zenfleet adapter.
+i134: run-heavy: done rc=0 91s | peak-RSS 0.02GiB | min-avail 26747MiB | peak-load 2.65
+r5600g: run-heavy: done rc=0 93s | peak-RSS 0.02GiB | min-avail 41662MiB | peak-load 0.55
+These resource receipts describe the supervisor; the JSONL records retain per-child resident high water or separate heap phase watermarks.
+latency SHA-256: 01fae63455bc65c0c1d64251414b8132eb2cd69183f78b5b4e7b4d9299095faa
+memory SHA-256: 33ede37f4859ab79351e80c1949e3a739b9e6152a78aa081dce07cf0c3b028ff
+zenbench SHA-256: 7e21043cd3429fbe97494a53936a82a2759a4fad40060289bf1ee415ddbb79c5
+zenfleet-worker SHA-256: 6cc8f7c6647b8d69037054a6197272fdd280370405c57fdc0ac8138868e4bf5e
+zenfleet-ctl SHA-256: e7a5eb491a3039f784fc8e5ec8d2f9526f6d856e0b22a8c0685dd9efd11235c2
+benchmark_ledger_control SHA-256: ff04baa98129562ae83e17f7cbd4b9ccb5184f6c8557702cea250b8cadfff0ff
+i134 summary SHA-256: 83702ff5a83b12a7e5931ee6ff7711a35dda089efe60e92f1961229f1b7c489e
+r5600g summary SHA-256: 99fa4792578ea18c2abe44488a757d1cecccc9ba8b311adfccbf72cc85bd9992

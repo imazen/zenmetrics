@@ -606,3 +606,21 @@ The pair supervisor reported `run-heavy: done rc=0 13s | peak-RSS
 metric-child peak measurement. Full libvmaf validation reported
 `run-heavy: done rc=0 24s | peak-RSS 0.52GiB | min-avail 23768MiB |
 peak-load 0.75`.
+
+## Native deployment after the Daala DCT change
+
+Drivers rebuilt from `ec453ab0` completed 80/80 declared observations on each
+of i134 and r5600g: 38 SDR routes and two native absolute-nits HDR routes,
+with ordinary and separately instrumented executions. Every route first
+passed exact packed/padded and ordinary/instrumented scalar-product controls.
+The existing zenfleet adapter staged, declared, executed and recovered all
+receipts by hash. These small cases qualify deployment and retain descriptive
+measurements; they do not establish metric accuracy or a fleet speedup.
+
+The committed [i134 records](iqa_deployment_dct_i134_2026-10-12.jsonl) and
+[r5600g records](iqa_deployment_dct_r5600g_2026-10-12.jsonl) retain latency
+samples, OS child resident high water or separate heap phase watermarks.
+[Source, binary hashes, commands and resource receipts](iqa_deployment_dct_2026-10-12.meta)
+bind this campaign to the current DCT implementation. Both outer scopes
+enforced CPU 2, 16 GiB RAM and no swap. The supervisors reported peak RSS
+0.02 GiB; that is separate from the metric-child measurements in each record.
