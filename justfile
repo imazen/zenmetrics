@@ -358,6 +358,12 @@ benchmark-contract-check:
     TMPDIR="${TMPDIR:-$HOME/tmp}" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
     just snap-cargo @ test -p zenfleet-core -p zenfleet-worker -p zenfleet-ctl --lib --bins
 
+benchmark-study-check:
+    TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_study.py
+
+benchmark-study +args:
+    python3 -B scripts/jobsys/build_benchmark_study.py {{args}}
+
 benchmark-executor-check runner output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}}
 
