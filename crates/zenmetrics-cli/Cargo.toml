@@ -86,7 +86,7 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # `fleet-plan --codec` path constructs at a representative default to size the
 # encode side.
 gif = ["dep:zengif"]
-tiff = ["dep:zentiff"]
+tiff = ["dep:zentiff", "zentiff/zencodec"]
 # BMP: the REV2 RECALCULATION LAN wave's blocker (docs/PLAN_REV2_RECALC_2026-09-06.md
 # §7.2) — the stored LIVE 372-eval table was built from `.bmp` (LIVE's
 # `databaserelease2` originals), and this CLI had no BMP arm, so a `live`

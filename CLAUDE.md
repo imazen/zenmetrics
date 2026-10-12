@@ -1374,3 +1374,14 @@ alone does not detect worker exit. The adapter now holds a synchronization-only
 parent process handle and polls it without spawning monitoring processes. Native
 contract tests exit a real parent and require its surviving child's watcher to
 observe termination. The handle also prevents PID reuse from changing identity.
+
+### Known Bugs: checkpoint feature combinations (2026-10-12)
+
+The full CLI feature probe exposed HDR-SVT imports through expert-only module
+paths, the TIFF fleet planner without `zentiff/zencodec`, and an AVIF dependency
+pin predating `SvtParams::chroma_q`. Use SVT's public `pipeline` facade and
+compile the TIFF codec wrapper. The AVIF pin must include both the chroma
+control and its fingerprint fix (`4d999037`): the intervening control-only
+revision merges distinct chroma cells. The existing dedup assertion reproduced
+that collision; all 98 CLI library tests pass after the paired fix, with no
+assertion changes (two existing ignored tests remain).

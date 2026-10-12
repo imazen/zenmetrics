@@ -79,7 +79,7 @@ zenwebp	https://github.com/imazen/zenwebp.git	../zenwebp	8aa8a7858b97da88f0ba7d9
 # and later move it to 2255a342). It also carries
 # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
 # `sweep` feature has called since 6b3c41fe.
-zenavif	https://github.com/imazen/zenavif.git	../zenavif	e73e3d70f264246b51497fe1c291181d721c8d5e	-
+zenavif	https://github.com/imazen/zenavif.git	../zenavif	4d9990374e5eb4abe59bf330827150ff32375597	-
 # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
 # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
 # fix) — without this clone, cargo can't resolve the whole

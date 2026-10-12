@@ -1425,7 +1425,7 @@ pub(crate) fn avif_config_from_knobs(
                 // or 420 here -- both resolve to the pin below, which keeps
                 // this backend's fingerprints byte-stable.
                 cfg = cfg
-                    .backend(zenavif::Av1Backend::SvtRs)
+                    .backend(zenavif::Av1Backend::Zenav1Svt)
                     .chroma_subsampling(zenavif::EncodeChromaSubsampling::Yuv420);
             }
             #[cfg(not(feature = "avif-svt"))]

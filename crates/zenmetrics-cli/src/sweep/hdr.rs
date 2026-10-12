@@ -551,8 +551,7 @@ fn to_yuv420_bd10(rgb16: &[u16], w: usize, h: usize) -> (Vec<u16>, Vec<u16>, Vec
 #[cfg(feature = "hdr-svt")]
 fn encode_svt_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result<EncodedCell, Err> {
     use std::time::Instant;
-    use svtav1::encoder::pipeline::EncodePipeline;
-    use svtav1::encoder::rate_control::{RcConfig, RcMode};
+    use svtav1::pipeline::{ColorDescription, EncodePipeline, RcConfig, RcMode};
 
     if let Some(unknown) = knobs.keys().find(|k| !SVT_HDR_KNOBS.contains(&k.as_str())) {
         return Err(format!(
@@ -589,7 +588,7 @@ fn encode_svt_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result
         .with_chroma_420(true);
     // OBU-level CICP: primaries pass through from the source; matrix 9 is
     // what to_yuv420_bd10 applied; limited range matches its quantization.
-    pipeline.color_description = svtav1::entropy::obu::ColorDescription {
+    pipeline.color_description = ColorDescription {
         color_primaries: source.cicp.color_primaries,
         transfer_characteristics: 16,
         matrix_coefficients: 9,
