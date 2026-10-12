@@ -1358,3 +1358,11 @@ when the box is busy.
 ## Known Bugs — SHIPPATH11 (2026-10-07)
 
 The strict training-only harvester previously trusted reported epoch/pair budgets and nonempty admission fields. The qualified program contract now binds exact expected budget, receipt/freeze/decision and seven-table admission to the manifest program/data hashes; the canonical checkpoint decoder must agree. Local smoke argv identities are verification-only and cannot install. The separately deployed E28 harvest driver still delegates to its existing verifier without these checks; it was inspected but left unchanged pending coordinator sign-off.
+
+### Known Bugs: benchmark evidence retention (2026-10-12)
+
+Benchmark receipts contain nested content-store artifacts, while the original
+GC only marked each Done row's output receipt. The benchmark GC expansion now
+marks bundle files, runner and all receipt artifacts before latest-wins folding.
+Changed or unknown-schema metadata refuses GC. Preserve the original attempt
+ledgers as inputs to reachability; discarded history cannot be reconstructed.

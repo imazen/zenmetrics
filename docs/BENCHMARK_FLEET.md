@@ -245,3 +245,11 @@ host. Publish a target-compatible image through the existing image builder,
 then run a small declared campaign and collect its receipts before scaling.
 A CI result or local image control does not verify production credentials,
 object-store permissions, target host configuration or image deployment.
+
+`zenfleet-gc` expands benchmark bundle and receipt references automatically
+before its latest-wins ledger fold. It retains the runner, bundled inputs,
+receipt and nested artifacts for every benchmark row it reads, including older
+attempts of the same job. Supply all retained attempt ledgers; a lossy summary
+cannot recover discarded history. Missing, changed or unknown-schema metadata
+stops GC before deletion. Additional references in an archive remain valid
+explicit GC roots.
