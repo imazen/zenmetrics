@@ -237,12 +237,16 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
         return (w, h, x.to_vec());
     }
     let s = f / 2;
-    // Horizontal box sums into `tmp` (un-normalised).
-    let mut tmp = vec![0.0f32; w * h];
+    let w2 = w.div_ceil(f);
+    let h2 = h.div_ceil(f);
+    // Keep only the horizontal sums consumed by vertical decimation.
+    // Each retained window still accumulates left to right, un-normalised.
+    let mut tmp = vec![0.0f32; w2 * h];
     for i in 0..h {
         let row = &x[i * w..(i + 1) * w];
-        let trow = &mut tmp[i * w..(i + 1) * w];
-        for (j, t) in trow.iter_mut().enumerate() {
+        let trow = &mut tmp[i * w2..(i + 1) * w2];
+        for (oj, t) in trow.iter_mut().enumerate() {
+            let j = oj * f;
             let mut acc = 0.0f32;
             // out[i,j] = Σ_b x[i, j+s−b] over b ∈ [0, f)
             let lo = (j + s).saturating_sub(f - 1);
@@ -254,8 +258,6 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
         }
     }
     // Vertical box sums at the decimated positions only, normalised.
-    let w2 = w.div_ceil(f);
-    let h2 = h.div_ceil(f);
     let mut out = vec![0.0f32; w2 * h2];
     let inv = 1.0 / (f * f) as f32;
     for oi in 0..h2 {
@@ -263,15 +265,57 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
         let lo = (i + s).saturating_sub(f - 1);
         let hi = (i + s).min(h - 1);
         for oj in 0..w2 {
-            let j = oj * f;
             let mut acc = 0.0f32;
             for r in lo..=hi {
-                acc += tmp[r * w + j];
+                acc += tmp[r * w2 + oj];
             }
             out[oi * w2 + oj] = acc * inv;
         }
     }
     (w2, h2, out)
+}
+
+#[cfg(test)]
+mod decimation_tests {
+    use super::*;
+
+    #[test]
+    fn retained_columns_match_full_box_filter_bits() {
+        for (w, h) in [(1, 1), (1, 17), (19, 1), (7, 11), (32, 29), (65, 63)] {
+            let x: Vec<f32> = (0..w * h)
+                .map(|i| ((i * 37 % 251) as f32 - 125.0) / ((i % 7 + 1) as f32))
+                .collect();
+            for f in 1..=12 {
+                let (dw, dh, actual) = decimate_plane(&x, w, h, f);
+                assert_eq!((dw, dh), (w.div_ceil(f), h.div_ceil(f)));
+                for oy in 0..dh {
+                    for ox in 0..dw {
+                        let mut expected = 0.0f32;
+                        for dy in 0..f {
+                            let y = (oy * f + f / 2) as isize - (f - 1) as isize + dy as isize;
+                            if !(0..h as isize).contains(&y) {
+                                continue;
+                            }
+                            let mut row = 0.0f32;
+                            for dx in 0..f {
+                                let xx = (ox * f + f / 2) as isize - (f - 1) as isize + dx as isize;
+                                if (0..w as isize).contains(&xx) {
+                                    row += x[y as usize * w + xx as usize];
+                                }
+                            }
+                            expected += row;
+                        }
+                        expected *= 1.0 / (f * f) as f32;
+                        assert_eq!(
+                            actual[oy * dw + ox].to_bits(),
+                            expected.to_bits(),
+                            "{w}x{h}, F={f}, ({ox},{oy})"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// `conv2(Y, K, 'same')` for a 3×3 kernel — `out(i,j) =
@@ -642,7 +686,7 @@ pub struct Planes<'a> {
 
 /// Decimated I/Q plane quad for the FSIMc chroma term:
 /// `(I_ref, I_dis, Q_ref, Q_dis)`.
-pub type IqPlanes<'a> = (&'a [f32], &'a [f32], &'a [f32], &'a [f32]);
+pub(crate) type IqPlanes<'a> = (&'a [f32], &'a [f32], &'a [f32], &'a [f32]);
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]

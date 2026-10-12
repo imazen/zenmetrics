@@ -45,3 +45,33 @@ Receipts:
 Reproduce with `just snap-cargo @ build --release -p vsi
 --features parallel,avx512 --example wall`, preserve the resulting binary,
 then `just ranked-wall <binary> <1-or-16> <receipt-path>`.
+
+## FSIM
+
+Baseline source: `81dcb599`. Candidate: the accompanying retained-column
+decimation change. The RGB/YIQ conversion is unchanged in this comparison.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 876.1 | 725.0 |
+| One-thread instructions, five calls | 107,894,319,179 | 90,361,554,508 |
+| One-thread cycles, five calls | 24,234,072,459 | 19,841,131,868 |
+| Sixteen-thread ms/call | 449.0 | 262.1 |
+| One-thread run-heavy peak RSS, GiB | 0.12 | 0.09 |
+| Sixteen-thread run-heavy peak RSS, GiB | 0.12 | 0.11 |
+
+The decimation test covers the same ordered full-filter oracle as VSI.
+Default and all-feature tests pass, including the existing grayscale,
+RGB/YIQ, luma, stride and tier goldens with unchanged assertions.
+All-feature clippy with `-D warnings` and scoped rustfmt pass; an
+unreachable internal type alias was restricted to crate visibility.
+
+Receipts:
+[baseline 1T](fsim_baseline_1t_2026-10-12.log),
+[baseline 16T](fsim_baseline_16t_2026-10-12.log),
+[candidate 1T](fsim_candidate_1t_2026-10-12.log),
+[candidate 16T](fsim_candidate_16t_2026-10-12.log).
+
+Use the VSI reproduction commands with `-p fsim`. The workspace's
+advisory `just quality` cannot start on this checkout because the quality
+kit is absent; scoped fmt, tests and clippy were run explicitly.

@@ -1,0 +1,19 @@
+binary_sha256: cf8ad3dc0925f07eda606bb1c8150347b31997528b5c256046a51668a6b021a2  /home/lilith/tmp/zm-ranked-binaries/fsim-baseline
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/fsim-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24837MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/fsim-baseline 3355 2516 5
+3355x2516 5 reps: 876.1 ms/call (fsim 0.994798 fsimc 0.991394)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/fsim-baseline 3355 2516 5':
+
+      107894319179      instructions                                                          
+       24234072459      cycles                                                                
+
+       4.412223604 seconds time elapsed
+
+       3.764902000 seconds user
+       0.646811000 seconds sys
+
+
+run-heavy: done rc=0 4s | peak-RSS 0.12GiB | min-avail 24729MiB | peak-load 0.53
