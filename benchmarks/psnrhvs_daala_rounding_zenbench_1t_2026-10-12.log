@@ -1,0 +1,47 @@
+binary_sha256: bcb3ba9578faee89c89411fff205c09676b79caa5545654ffbb15d0807d55adb  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate
+host: r7900x
+rayon_threads: 1
+size: 3355x2516
+metrics: psnrhvs-daala
+modes: lat
+min_rounds: 30
+group_wall_s: 120
+cell_max_s: 30
+coordinator_pin: 2 (scoped affinity; process boundary is reported separately)
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24183MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 benchmarks/psnrhvs_daala_rounding_zenbench_1t_2026-10-12.tsv psnrhvs-daala
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class="capacity1024_l332768K" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=120.2GiB/s mem_lat=9.2ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18ddd4fe48225540-9e39b-f62b7bd121d8f736.json.gz
+
+═══════════════════════════════════════════════════════════════
+  zenbench  18ddd4fe48225540-9e39b-f62b7bd121d8f736
+  git: 6fd7ceedfa0efe2b667bdc5c49c883439541ded7
+═══════════════════════════════════════════════════════════════
+[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class="capacity1024_l332768K" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=[2] cpu_thread_effective=[2] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false
+
+  new_metrics_wall_3355x2516  30 rounds × 1 calls
+                           mean ±mad ms  95% CI vs base   
+  ╰─ psnrhvs-daala__lat   430.9 ±22.4ms  [423.2–439.4]ms  
+[zenbench] evidence → .zenbench/data/runs/18ddd501bd38670b-9e39b-7281f21a50acc2e5.json
+
+  total: 14.6s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 3355x2516/psnrhvs-daala: 34.765447061926444
+wrote wall rows for size 3355x2516 to benchmarks/psnrhvs_daala_rounding_zenbench_1t_2026-10-12.tsv
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 benchmarks/psnrhvs_daala_rounding_zenbench_1t_2026-10-12.tsv psnrhvs-daala':
+
+      235979530699      instructions                                                          
+       84561071820      cycles                                                                
+
+      15.863235052 seconds time elapsed
+
+      12.336764000 seconds user
+       3.032591000 seconds sys
+
+
+run-heavy: done rc=0 16s | peak-RSS 0.14GiB | min-avail 24020MiB | peak-load 1.33

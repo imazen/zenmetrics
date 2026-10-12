@@ -1,0 +1,13 @@
+Candidate source: accompanying studio601_yuv444 conversion and exhaustive test against parent 6fd7ceedfa0efe2b667bdc5c49c883439541ded7.
+Compiled source file SHA-256: d6dc479e02e3697e45f74d704088cc04687d90d023b4d8e5ddf15dc501d2d929
+Candidate driver SHA-256: bcb3ba9578faee89c89411fff205c09676b79caa5545654ffbb15d0807d55adb
+Baseline driver SHA-256: aaf0dc17b3171120b998fe1e73cdcbdb207dd1411ce14520f5cae3b1f8752469
+Release production driver, CI-pinned siblings, zenbench ac675d3a resolved 0.1.10; no target-cpu=native.
+Test: just snap-cargo @ test -p zenmetrics-cli --no-default-features --features cpu-metrics,png --lib
+Clippy: just snap-cargo @ clippy --no-deps -p zenmetrics-cli --no-default-features --features cpu-metrics,png --lib -- -D warnings
+Build: just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall
+Measurement: just ranked-zenbench <candidate> 1 <prefix> psnrhvs-daala 3355x2516
+Logs resolving path: ~/tmp/zm-daala-rounding-{exhaustive,native-tests,clippy-build,scoped-clippy-build,owned-clippy-build,production-clippy-build}.log
+Disassembly resolving paths: ~/tmp/zm-daala-{baseline,candidate}-conversion.asm; both conversion bodies use scalar floating-point operations.
+No 16-thread or paired confirmation result was recorded before the user-requested 25% weekly quota pause.
+Publication candidate zenbench 0.1.11 remains at 1639ae5fa2941a53021b8e08f59d5ec011de1c7f with all 12 platform CI jobs and package dry run passing; README approval pending.

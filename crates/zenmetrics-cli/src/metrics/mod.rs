@@ -727,27 +727,17 @@ fn studio601_y_plane(img: &Rgb8Image) -> Vec<u8> {
 /// full-res chroma — see `docs/METRIC_PROVENANCE.md`).
 #[cfg(feature = "cpu-psnrhvs")]
 fn studio601_yuv444(img: &Rgb8Image) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    // Studio components stay positive (16..240). Adding half and truncating
+    // preserves round-away-from-zero, checked against every RGB8 triple.
     let n = (img.width * img.height) as usize;
     let mut y = Vec::with_capacity(n);
     let mut cb = Vec::with_capacity(n);
     let mut cr = Vec::with_capacity(n);
     for px in img.pixels.as_chunks::<3>().0 {
         let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
-        y.push(
-            (16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0)
-                .round()
-                .clamp(0.0, 255.0) as u8,
-        );
-        cb.push(
-            (128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0)
-                .round()
-                .clamp(0.0, 255.0) as u8,
-        );
-        cr.push(
-            (128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0)
-                .round()
-                .clamp(0.0, 255.0) as u8,
-        );
+        y.push((16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0 + 0.5) as u8);
+        cb.push((128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0 + 0.5) as u8);
+        cr.push((128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0 + 0.5) as u8);
     }
     (y, cb, cr)
 }
@@ -2618,6 +2608,40 @@ mod tests {
         // And the live function returns whichever matches the cached flag.
         let live = auto_order();
         assert_eq!(live, if require_gpu() { GPU_ONLY } else { WITH_CPU });
+    }
+
+    #[cfg(feature = "cpu-psnrhvs")]
+    #[test]
+    fn studio601_yuv444_matches_round_for_every_rgb_triple() {
+        for r in 0..=255u8 {
+            let mut pixels = Vec::with_capacity(256 * 256 * 3);
+            for g in 0..=255u8 {
+                for b in 0..=255u8 {
+                    pixels.extend_from_slice(&[r, g, b]);
+                }
+            }
+            let img = Rgb8Image {
+                pixels,
+                width: 256,
+                height: 256,
+            };
+            let (y, cb, cr) = studio601_yuv444(&img);
+            for (i, px) in img.pixels.as_chunks::<3>().0.iter().enumerate() {
+                let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
+                let expected = [
+                    (16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8,
+                    (128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8,
+                    (128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8,
+                ];
+                assert_eq!([y[i], cb[i], cr[i]], expected, "RGB {px:?}");
+            }
+        }
     }
 
     /// `studio601_gray` — the libvmaf/JPEG AIC studio-swing BT.601 luma.

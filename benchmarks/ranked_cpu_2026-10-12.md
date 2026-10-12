@@ -479,3 +479,37 @@ peak-load 0.54`. Sampled timings are kept separate from the baseline.
 Reproduce with `just ranked-zenbench BINARY 1 PREFIX psnrhvs-daala
 3355x2516` and `just ranked-zenbench-profile BINARY PREFIX
 psnrhvs-daala 3355x2516`.
+
+
+## Exact studio-601 conversion without scalar rounding calls
+
+Sixteen-thread and fresh-process paired qualification were not measured
+for this change before the requested quota pause. The thirty-round
+one-thread production observation was 466.4643 → 430.9209 ms/call,
+below the suite's 15% noise caution. The complete driver's retired
+instructions were 276,814,796,449 → 235,979,530,699 and cycles
+90,361,162,538 → 84,561,071,820; these totals include calibration,
+resource sampling and input setup. This is exploratory evidence.
+Both sentinel scores were 34.765447061926444. Peak RSS was 0.14 GiB
+in both runs; no peak-memory improvement is claimed.
+[Candidate report](psnrhvs_daala_rounding_zenbench_1t_2026-10-12.log)
+and [TSV](psnrhvs_daala_rounding_zenbench_1t_2026-10-12.tsv).
+
+The Y/Cb/Cr expressions retain ordered f32 arithmetic. Their positive
+studio range permits half-addition and truncation with the same u8
+result as the previous rounding and clamp. An exhaustive independent
+comparison passed for all 16,777,216 RGB8 triples and all three planes.
+The full native CPU CLI library suite passed 36 tests, with two existing
+ignored tests unchanged. Production-library clippy with `--no-deps`
+and `-D warnings` passed, as did rustfmt. Generated code remains scalar;
+no SIMD claim is made. The broader dependency/test clippy configurations
+still report existing documentation, test-layout and fixed-chunk lints.
+The initial narrow test feature set lacked the CVVDP display surface;
+full native CPU features compiled and passed without assertion changes.
+
+Test receipt: `run-heavy: done rc=0 12s | peak-RSS 1.06GiB |
+min-avail 23143MiB | peak-load 2.34`. Clippy/build receipt:
+`run-heavy: done rc=0 19s | peak-RSS 0.96GiB | min-avail 22641MiB |
+peak-load 2.48`. Candidate measurement receipt:
+`run-heavy: done rc=0 16s | peak-RSS 0.14GiB | min-avail 24020MiB |
+peak-load 1.33`.
