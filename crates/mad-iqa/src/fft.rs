@@ -123,17 +123,136 @@ pub(crate) struct Plan {
 enum PlanKind {
     /// `n <= 1`: nothing to do.
     Trivial,
-    /// Power-of-two Cooley–Tukey; `stages[s]` holds the `2^s` twiddles of the
-    /// stage with butterfly span `2^(s+1)`.
-    Radix2 { stages: Vec<Vec<Complex>> },
+    /// Power-of-two Cooley–Tukey.
+    Radix2 { mplan: MPlan },
     /// Bluestein chirp-z: `chirp[k] = e^{-iπk²/n}` and `bf` = the length-`m`
-    /// FFT of the chirp filter, with the radix-2 plan for `m`.
+    /// FFT of the chirp filter, with the mixed-radix plan for `m`.
     Bluestein {
         chirp: Vec<Complex>,
         bf: Vec<Complex>,
         m: usize,
-        mplan: Vec<Vec<Complex>>,
+        mplan: MPlan,
     },
+}
+
+/// A Cooley–Tukey plan over {2,3}-radix stages — the generalization of
+/// the old power-of-two stage table. Stage `s` applies `radices[s]`
+/// on span `Π_{t<s} radices[t]`; `tw[s]` packs its twiddles —
+/// radix-2: `w[t] = W_{2s}^{t}` (len `s`); radix-3: `w[t] = W_{3s}^{t}`
+/// then `w[s+t] = W_{3s}^{2t}` (len `2s`). `perm` is the input-order
+/// gather — slot `p` holds `src[perm[p]]`, the mixed-radix digit
+/// reversal that replaces bit-reversal.
+struct MPlan {
+    /// Stage radices in application order — power-of-two plans are all
+    /// 2; Bluestein `m` orders the 2s first so the gather pass keeps its
+    /// fused-quad shape.
+    radices: Vec<u8>,
+    /// Per-stage twiddles, packed as described above.
+    tw: Vec<Vec<Complex>>,
+    /// `slot p ← src[perm[p]]` — the digit-reversal row gather.
+    perm: Vec<u32>,
+    /// Transform length.
+    n: usize,
+}
+
+impl MPlan {
+    /// Pure radix-2 plan for power-of-two `n` — the twiddle table is
+    /// [`radix2_stages`] verbatim, the permutation bit-reversal.
+    fn pow2(n: usize) -> Self {
+        debug_assert!(n.is_power_of_two() && n >= 2);
+        let bits = n.trailing_zeros();
+        let radices = vec![2u8; bits as usize];
+        let tw = radix2_stages(n);
+        let perm = (0..n as u32)
+            .map(|i| i.reverse_bits() >> (32 - bits))
+            .collect();
+        Self {
+            radices,
+            tw,
+            perm,
+            n,
+        }
+    }
+
+    /// Mixed-radix plan for `n = 2^a·3^b` (radix-2 stages first). The
+    /// caller guarantees the factorization — `m` always comes from
+    /// [`smooth23`].
+    fn smooth(n: usize) -> Self {
+        let (mut a, mut b, mut rem) = (0usize, 0usize, n);
+        while rem % 2 == 0 {
+            a += 1;
+            rem /= 2;
+        }
+        while rem % 3 == 0 {
+            b += 1;
+            rem /= 3;
+        }
+        debug_assert_eq!(rem, 1, "MPlan::smooth needs a 2^a·3^b length");
+        debug_assert!(a + b >= 1);
+        let radices: Vec<u8> = [2].repeat(a).into_iter().chain([3].repeat(b)).collect();
+        // Stage s: span = product of earlier radices; block = span·r.
+        // r=2: tw[t] = W_{2·span}^t. r=3: tw[t] = W_{3·span}^t,
+        // tw[span+t] = W_{3·span}^{2t}.
+        let mut tw = Vec::with_capacity(a + b);
+        let mut span = 1usize;
+        for &r in &radices {
+            let block = span * r as usize;
+            let ang = -2.0 * PI / block as f64;
+            if r == 2 {
+                tw.push((0..span).map(|t| Complex::expi(ang * t as f64)).collect());
+            } else {
+                tw.push(
+                    (0..span)
+                        .map(|t| Complex::expi(ang * t as f64))
+                        .chain((0..span).map(|t| Complex::expi(ang * 2.0 * t as f64)))
+                        .collect(),
+                );
+            }
+            span = block;
+        }
+        debug_assert_eq!(span, n);
+        // perm[i] = Σ_s d_s·(n/M_s) where i = Σ d_s·M_{s−1} — the
+        // digit-reversal of `i` in the stage-order positional system
+        // (bit-reversal when all radices are 2).
+        let mut m_acc = 1usize;
+        let mut perm = vec![0u32; n];
+        let mut weights = Vec::with_capacity(radices.len());
+        for &r in &radices {
+            weights.push(m_acc);
+            m_acc *= r as usize;
+        }
+        for (i, p) in perm.iter_mut().enumerate() {
+            let mut rev = 0usize;
+            for (w, &r) in weights.iter().zip(&radices) {
+                rev += (i / w % r as usize) * (n / (w * r as usize));
+            }
+            *p = rev as u32;
+        }
+        Self {
+            radices,
+            tw,
+            perm,
+            n,
+        }
+    }
+}
+
+/// Smallest `2^a·3^b` ≥ `need` — the Bluestein convolution length,
+/// which hugs `2n−1` where `next_power_of_two` overshoots by up to 2×
+/// (n=2516 → 5184 vs 8192; n=3355 → 6912).
+fn smooth23(need: usize) -> usize {
+    debug_assert!(need >= 2);
+    let mut best = need.next_power_of_two();
+    let mut p2 = 2usize;
+    while p2 < best {
+        let mut v = p2;
+        while v < need {
+            v *= 3;
+        }
+        best = best.min(v);
+        p2 *= 2;
+    }
+    best
 }
 
 /// Real multiplier a row-transform gather applies on the way in — the
@@ -215,17 +334,20 @@ impl Plan {
             PlanKind::Trivial
         } else if n.is_power_of_two() {
             PlanKind::Radix2 {
-                stages: radix2_stages(n),
+                mplan: MPlan::pow2(n),
             }
         } else {
-            let m = (2 * n - 1).next_power_of_two();
+            // The {2,3}-smooth convolution length hugs 2n−1 — for
+            // n=2516 that's 5184 (−51% stage passes vs the 8192 power
+            // of two), for n=3355 it's 6912 (−29%).
+            let m = smooth23(2 * n - 1);
             let chirp: Vec<Complex> = (0..n)
                 .map(|k| {
                     let kk = (k as u128 * k as u128 % (2 * n as u128)) as f64;
                     Complex::expi(-PI * kk / n as f64)
                 })
                 .collect();
-            let mplan = radix2_stages(m);
+            let mplan = MPlan::smooth(m);
             let mut bf = vec![Complex::default(); m];
             for k in 0..n {
                 bf[k] = chirp[k].conj();
@@ -233,7 +355,7 @@ impl Plan {
                     bf[m - k] = chirp[k].conj();
                 }
             }
-            fft_radix2_planned(&mut bf, &mplan);
+            fft_mixed_planned(&mut bf, &mplan);
             PlanKind::Bluestein {
                 chirp,
                 bf,
@@ -248,7 +370,7 @@ impl Plan {
         debug_assert_eq!(buf.len(), self.n);
         match &self.kind {
             PlanKind::Trivial => {}
-            PlanKind::Radix2 { stages } => fft_radix2_planned(buf, stages),
+            PlanKind::Radix2 { mplan } => fft_mixed_planned(buf, mplan),
             PlanKind::Bluestein { m, .. } => {
                 let mut a = vec![Complex::default(); *m];
                 self.run_bluestein(buf, &mut a, RowMul::Id, false, 0, 0);
@@ -399,9 +521,9 @@ impl Plan {
             &mut re8b[..m * 8],
             &mut im8b[..m * 8],
         );
-        fft_batch8(re8, im8, re8b, im8b, m, mplan);
+        fft_batch8(re8, im8, re8b, im8b, mplan);
         blue8_bf(re8b, im8b, bf);
-        fft_batch8(re8b, im8b, re8, im8, m, mplan);
+        fft_batch8(re8b, im8b, re8, im8, mplan);
     }
 
     /// The Bluestein pass with caller-supplied `m`-length scratch, so
@@ -479,14 +601,14 @@ impl Plan {
             unreachable!("bluestein_core on non-Bluestein plan")
         };
         let m = *m;
-        fft_radix2_planned(&mut a[..m], mplan);
+        fft_mixed_planned(&mut a[..m], mplan);
         for (x, y) in a[..m].iter_mut().zip(bf) {
             *x = x.mul(*y);
         }
         for v in a[..m].iter_mut() {
             *v = v.conj();
         }
-        fft_radix2_planned(&mut a[..m], mplan);
+        fft_mixed_planned(&mut a[..m], mplan);
         let s = 1.0 / m as f32;
         for v in a[..m].iter_mut() {
             *v = v.conj().scale(s);
@@ -521,30 +643,36 @@ fn fft_batch8_inner(
     src_im: &[f32],
     dst_re: &mut [f32],
     dst_im: &mut [f32],
-    n: usize,
-    stages: &[Vec<Complex>],
+    mplan: &MPlan,
 ) {
+    let n = mplan.n;
     debug_assert_eq!(src_re.len(), n * 8);
     debug_assert_eq!(src_im.len(), n * 8);
     debug_assert_eq!(dst_re.len(), n * 8);
     debug_assert_eq!(dst_im.len(), n * 8);
 
-    let bits = n.trailing_zeros();
+    let perm = &mplan.perm;
+    let radices = &mplan.radices;
+    let stages = &mplan.tw;
     let mut s = 0usize;
 
-    if stages.len() >= 2 {
-        // The bit-reversal rides the first fused pair: logical slot `p`
-        // holds `src[rev(p)]`, so loads are permuted row gathers while
+    if radices.len() >= 2 && radices[0] == 2 && radices[1] == 2 {
+        // The digit-reversal rides the first fused pair: logical slot `p`
+        // holds `src[perm[p]]`, so loads are permuted row gathers while
         // stores stay contiguous — the src→dst split makes the gather
         // alias-safe where an in-place version would read rows it had
         // already overwritten. Stage-0/1 twiddles are exactly (1,0) and
         // {(1,0), w1[1]≈−i}, so the pass is adds, subs, and one twiddle
         // multiply per 4 elements.
         let tw1 = &stages[1];
-        // Row gather for one 4-element block: `src[rev(start+q)]`.
+        // Row gather for one 4-element block: `src[perm[start+q]]`.
         let load4 = |start: usize| {
-            let rev = |q: usize| (((start + q) as u32).reverse_bits() >> (32 - bits)) as usize * 8;
-            let (p0, p1, p2, p3) = (rev(0), rev(1), rev(2), rev(3));
+            let (p0, p1, p2, p3) = (
+                perm[start] as usize * 8,
+                perm[start + 1] as usize * 8,
+                perm[start + 2] as usize * 8,
+                perm[start + 3] as usize * 8,
+            );
             (
                 f32x8::load_t(token, (&src_re[p0..p0 + 8]).try_into().unwrap()),
                 f32x8::load_t(token, (&src_im[p0..p0 + 8]).try_into().unwrap()),
@@ -592,10 +720,11 @@ fn fft_batch8_inner(
         }
         s = 2;
     } else {
-        // n <= 2: bit-reversed gather into dst; the single-stage loop
-        // below applies the one twiddle.
+        // Anything but a [2,2] start (pure-3 plans, single radix-2):
+        // digit-reversed gather into dst; the stage loop below applies
+        // every stage's twiddles.
         for i in 0..n {
-            let j = ((i as u32).reverse_bits() >> (32 - bits)) as usize;
+            let j = perm[i] as usize;
             let a = f32x8::load_t(token, (&src_re[j * 8..j * 8 + 8]).try_into().unwrap());
             a.store((&mut dst_re[i * 8..i * 8 + 8]).try_into().unwrap());
             let a = f32x8::load_t(token, (&src_im[j * 8..j * 8 + 8]).try_into().unwrap());
@@ -603,86 +732,131 @@ fn fft_batch8_inner(
         }
     }
 
-    // Consecutive stage pairs run fused (radix-4-equivalent): the two
-    // butterflies land on the same registers, so each element loads and
-    // stores once per pair instead of once per stage — identical
-    // arithmetic, half the passes over the planes. An odd stage count
-    // leaves the final stage to the single-stage loop below.
-    while s + 1 < stages.len() {
-        let (tw0, tw1) = (&stages[s], &stages[s + 1]);
-        let half = tw0.len();
-        let (h8, h16, h24) = (half * 8, half * 16, half * 24);
-        for start in (0..n).step_by(half * 4) {
-            for k in 0..half {
-                let (w0re, w0im) = (
-                    f32x8::splat_t(token, tw0[k].re),
-                    f32x8::splat_t(token, tw0[k].im),
-                );
-                let (w1re_a, w1im_a) = (
-                    f32x8::splat_t(token, tw1[k].re),
-                    f32x8::splat_t(token, tw1[k].im),
-                );
-                let (w1re_b, w1im_b) = (
-                    f32x8::splat_t(token, tw1[k + half].re),
-                    f32x8::splat_t(token, tw1[k + half].im),
-                );
-                let i0 = (start + k) * 8;
-                let (i1, i2, i3) = (i0 + h8, i0 + h16, i0 + h24);
-                // Stage s: butterflies (i0,i1) and (i2,i3), same twiddle.
-                let vre = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&dst_im[i1..i1 + 8]).try_into().unwrap());
-                let tre = vre * w0re - vim * w0im;
-                let tim = vre * w0im + vim * w0re;
-                let ure = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
-                let (y0re, y1re) = (ure + tre, ure - tre);
-                let (y0im, y1im) = (uim + tim, uim - tim);
-                let vre = f32x8::load_t(token, (&dst_re[i3..i3 + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&dst_im[i3..i3 + 8]).try_into().unwrap());
-                let tre = vre * w0re - vim * w0im;
-                let tim = vre * w0im + vim * w0re;
-                let ure = f32x8::load_t(token, (&dst_re[i2..i2 + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&dst_im[i2..i2 + 8]).try_into().unwrap());
-                let (y2re, y3re) = (ure + tre, ure - tre);
-                let (y2im, y3im) = (uim + tim, uim - tim);
-                // Stage s+1: butterflies (i0,i2) with tw1[k], (i1,i3) with
-                // tw1[k+half].
-                let tre = y2re * w1re_a - y2im * w1im_a;
-                let tim = y2re * w1im_a + y2im * w1re_a;
-                (y0re + tre).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
-                (y0im + tim).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
-                (y0re - tre).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
-                (y0im - tim).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
-                let tre = y3re * w1re_b - y3im * w1im_b;
-                let tim = y3re * w1im_b + y3im * w1re_b;
-                (y1re + tre).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
-                (y1im + tim).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
-                (y1re - tre).store((&mut dst_re[i3..i3 + 8]).try_into().unwrap());
-                (y1im - tim).store((&mut dst_im[i3..i3 + 8]).try_into().unwrap());
+    // Consecutive radix-2 stage pairs run fused (radix-4-equivalent): the
+    // two butterflies land on the same registers, so each element loads
+    // and stores once per pair instead of once per stage — identical
+    // arithmetic, half the passes over the planes. Radix-3 stages and
+    // unpaired radix-2s take the single-stage paths.
+    while s < radices.len() {
+        if radices[s] == 2 {
+            if s + 1 < radices.len() && radices[s + 1] == 2 {
+                let (tw0, tw1) = (&stages[s], &stages[s + 1]);
+                let half = tw0.len();
+                let (h8, h16, h24) = (half * 8, half * 16, half * 24);
+                for start in (0..n).step_by(half * 4) {
+                    for k in 0..half {
+                        let (w0re, w0im) = (
+                            f32x8::splat_t(token, tw0[k].re),
+                            f32x8::splat_t(token, tw0[k].im),
+                        );
+                        let (w1re_a, w1im_a) = (
+                            f32x8::splat_t(token, tw1[k].re),
+                            f32x8::splat_t(token, tw1[k].im),
+                        );
+                        let (w1re_b, w1im_b) = (
+                            f32x8::splat_t(token, tw1[k + half].re),
+                            f32x8::splat_t(token, tw1[k + half].im),
+                        );
+                        let i0 = (start + k) * 8;
+                        let (i1, i2, i3) = (i0 + h8, i0 + h16, i0 + h24);
+                        // Stage s: butterflies (i0,i1) and (i2,i3), same twiddle.
+                        let vre = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
+                        let vim = f32x8::load_t(token, (&dst_im[i1..i1 + 8]).try_into().unwrap());
+                        let tre = vre * w0re - vim * w0im;
+                        let tim = vre * w0im + vim * w0re;
+                        let ure = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
+                        let uim = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
+                        let (y0re, y1re) = (ure + tre, ure - tre);
+                        let (y0im, y1im) = (uim + tim, uim - tim);
+                        let vre = f32x8::load_t(token, (&dst_re[i3..i3 + 8]).try_into().unwrap());
+                        let vim = f32x8::load_t(token, (&dst_im[i3..i3 + 8]).try_into().unwrap());
+                        let tre = vre * w0re - vim * w0im;
+                        let tim = vre * w0im + vim * w0re;
+                        let ure = f32x8::load_t(token, (&dst_re[i2..i2 + 8]).try_into().unwrap());
+                        let uim = f32x8::load_t(token, (&dst_im[i2..i2 + 8]).try_into().unwrap());
+                        let (y2re, y3re) = (ure + tre, ure - tre);
+                        let (y2im, y3im) = (uim + tim, uim - tim);
+                        // Stage s+1: butterflies (i0,i2) with tw1[k], (i1,i3) with
+                        // tw1[k+half].
+                        let tre = y2re * w1re_a - y2im * w1im_a;
+                        let tim = y2re * w1im_a + y2im * w1re_a;
+                        (y0re + tre).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
+                        (y0im + tim).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
+                        (y0re - tre).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
+                        (y0im - tim).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
+                        let tre = y3re * w1re_b - y3im * w1im_b;
+                        let tim = y3re * w1im_b + y3im * w1re_b;
+                        (y1re + tre).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
+                        (y1im + tim).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
+                        (y1re - tre).store((&mut dst_re[i3..i3 + 8]).try_into().unwrap());
+                        (y1im - tim).store((&mut dst_im[i3..i3 + 8]).try_into().unwrap());
+                    }
+                }
+                s += 2;
+            } else {
+                let tw = &stages[s];
+                let half = tw.len();
+                let len = half * 2;
+                for start in (0..n).step_by(len) {
+                    for (k, &w) in tw.iter().enumerate() {
+                        let a = (start + k) * 8;
+                        let b = (start + k + half) * 8;
+                        let wre = f32x8::splat_t(token, w.re);
+                        let wim = f32x8::splat_t(token, w.im);
+                        let ure = f32x8::load_t(token, (&dst_re[a..a + 8]).try_into().unwrap());
+                        let uim = f32x8::load_t(token, (&dst_im[a..a + 8]).try_into().unwrap());
+                        let vre = f32x8::load_t(token, (&dst_re[b..b + 8]).try_into().unwrap());
+                        let vim = f32x8::load_t(token, (&dst_im[b..b + 8]).try_into().unwrap());
+                        let tre = vre * wre - vim * wim;
+                        let tim = vre * wim + vim * wre;
+                        (ure + tre).store((&mut dst_re[a..a + 8]).try_into().unwrap());
+                        (uim + tim).store((&mut dst_im[a..a + 8]).try_into().unwrap());
+                        (ure - tre).store((&mut dst_re[b..b + 8]).try_into().unwrap());
+                        (uim - tim).store((&mut dst_im[b..b + 8]).try_into().unwrap());
+                    }
+                }
+                s += 1;
             }
-        }
-        s += 2;
-    }
-    for tw in &stages[s..] {
-        let half = tw.len();
-        let len = half * 2;
-        for start in (0..n).step_by(len) {
-            for (k, &w) in tw.iter().enumerate() {
-                let a = (start + k) * 8;
-                let b = (start + k + half) * 8;
-                let wre = f32x8::splat_t(token, w.re);
-                let wim = f32x8::splat_t(token, w.im);
-                let ure = f32x8::load_t(token, (&dst_re[a..a + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&dst_im[a..a + 8]).try_into().unwrap());
-                let vre = f32x8::load_t(token, (&dst_re[b..b + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&dst_im[b..b + 8]).try_into().unwrap());
-                let tre = vre * wre - vim * wim;
-                let tim = vre * wim + vim * wre;
-                (ure + tre).store((&mut dst_re[a..a + 8]).try_into().unwrap());
-                (uim + tim).store((&mut dst_im[a..a + 8]).try_into().unwrap());
-                (ure - tre).store((&mut dst_re[b..b + 8]).try_into().unwrap());
-                (uim - tim).store((&mut dst_im[b..b + 8]).try_into().unwrap());
+        } else {
+            // Radix-3 stage, span `sp`, block `3·sp`: X_q =
+            // x_q·W_{3sp}^{q·t} then a 3-point DFT over q — with
+            // ω₃ = −½−i√3/2 and ω₃² = conj(ω₃), the DFT-3 needs only
+            // real scales of S = X₁+X₂ and D = X₁−X₂.
+            let tw = &stages[s];
+            let sp = tw.len() / 2;
+            let (a, b) = (-0.5f32, -0.866_025_4f32);
+            let (a8, b8) = (f32x8::splat_t(token, a), f32x8::splat_t(token, b));
+            for start in (0..n).step_by(sp * 3) {
+                for t in 0..sp {
+                    let w1 = tw[t];
+                    let w2 = tw[sp + t];
+                    let (w1re, w1im) = (f32x8::splat_t(token, w1.re), f32x8::splat_t(token, w1.im));
+                    let (w2re, w2im) = (f32x8::splat_t(token, w2.re), f32x8::splat_t(token, w2.im));
+                    let i0 = (start + t) * 8;
+                    let i1 = i0 + sp * 8;
+                    let i2 = i0 + 2 * sp * 8;
+                    let x0re = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
+                    let x0im = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
+                    let x1re = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
+                    let x1im = f32x8::load_t(token, (&dst_im[i1..i1 + 8]).try_into().unwrap());
+                    let x2re = f32x8::load_t(token, (&dst_re[i2..i2 + 8]).try_into().unwrap());
+                    let x2im = f32x8::load_t(token, (&dst_im[i2..i2 + 8]).try_into().unwrap());
+                    let (x1re, x1im) = (x1re * w1re - x1im * w1im, x1re * w1im + x1im * w1re);
+                    let (x2re, x2im) = (x2re * w2re - x2im * w2im, x2re * w2im + x2im * w2re);
+                    let (sre, sim) = (x1re + x2re, x1im + x2im);
+                    let (dre, dim) = (x1re - x2re, x1im - x2im);
+                    // out0 = x0+S; out1 = x0 + a·S + i·b·D; out2 = x0 + a·S − i·b·D.
+                    let (tre, tim) = (sre * a8, sim * a8);
+                    let (ure, uim) = (dre * b8, dim * b8);
+                    (x0re + sre).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
+                    (x0im + sim).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
+                    (x0re + tre - uim).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
+                    (x0im + tim + ure).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
+                    (x0re + tre + uim).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
+                    (x0im + tim - ure).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
+                }
             }
+            s += 1;
         }
     }
 }
@@ -693,11 +867,10 @@ fn fft_batch8(
     src_im: &[f32],
     dst_re: &mut [f32],
     dst_im: &mut [f32],
-    n: usize,
-    stages: &[Vec<Complex>],
+    mplan: &MPlan,
 ) {
     archmage::attuned!(
-        fft_batch8_inner(src_re, src_im, dst_re, dst_im, n, stages),
+        fft_batch8_inner(src_re, src_im, dst_re, dst_im, mplan),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -1094,30 +1267,59 @@ fn cols_scatter_tile_mag(
     }
 }
 
-/// Iterative radix-2 with precomputed per-stage twiddles.
-fn fft_radix2_planned(buf: &mut [Complex], stages: &[Vec<Complex>]) {
+/// Iterative mixed-radix DFT with the precomputed stage table and
+/// digit-reversal permutation — identical to the old radix-2 form on
+/// power-of-two plans, radix-3 stages slot in where `m` needs them.
+fn fft_mixed_planned(buf: &mut [Complex], mplan: &MPlan) {
     let n = buf.len();
-    debug_assert!(n.is_power_of_two());
+    debug_assert_eq!(n, mplan.n);
 
-    // Bit-reversal permutation.
-    let bits = n.trailing_zeros();
-    for i in 0..n {
-        let j = (i as u32).reverse_bits() >> (32 - bits);
-        let j = j as usize;
-        if j > i {
-            buf.swap(i, j);
-        }
+    // Digit-reversal permutation. Mixed-radix digit reversal is not an
+    // involution, so the in-place swap trick of pure bit-reversal
+    // doesn't apply — this gathers out-of-place through a scratch row.
+    // The scalar path is the cold one (edge-column tails, tiny sizes,
+    // `bf` setup); the batch kernel gathers straight out of `src`.
+    let mut tmp = vec![Complex::default(); n];
+    for (i, &p) in mplan.perm.iter().enumerate() {
+        tmp[i] = buf[p as usize];
     }
+    buf.copy_from_slice(&tmp);
 
-    for tw in stages {
-        let half = tw.len();
-        let len = half * 2;
-        for start in (0..n).step_by(len) {
-            for (k, &w) in tw.iter().enumerate() {
-                let u = buf[start + k];
-                let v = buf[start + k + half].mul(w);
-                buf[start + k] = u.add(v);
-                buf[start + k + half] = u.sub(v);
+    for (tw, &r) in mplan.tw.iter().zip(&mplan.radices) {
+        if r == 2 {
+            let half = tw.len();
+            let len = half * 2;
+            for start in (0..n).step_by(len) {
+                for (k, &w) in tw.iter().enumerate() {
+                    let u = buf[start + k];
+                    let v = buf[start + k + half].mul(w);
+                    buf[start + k] = u.add(v);
+                    buf[start + k + half] = u.sub(v);
+                }
+            }
+        } else {
+            // Radix-3: span `sp`, block `3·sp`; X_q = x_q·W_{3sp}^{q·t},
+            // then a 3-point DFT over q. With ω₃ = −½−i√3/2 the DFT-3
+            // is real scales of S = X₁+X₂ and D = X₁−X₂.
+            let sp = tw.len() / 2;
+            let (a, b) = (-0.5f32, -0.866_025_4f32);
+            for start in (0..n).step_by(sp * 3) {
+                for t in 0..sp {
+                    let (i0, i1, i2) = (start + t, start + t + sp, start + t + 2 * sp);
+                    let x0 = buf[i0];
+                    let x1 = buf[i1].mul(tw[t]);
+                    let x2 = buf[i2].mul(tw[sp + t]);
+                    let s = x1.add(x2);
+                    let d = x1.sub(x2);
+                    buf[i0] = x0.add(s);
+                    // out1 = x0 + a·S + i·b·D; out2 = x0 + a·S − i·b·D.
+                    let tre = s.re * a;
+                    let tim = s.im * a;
+                    let ure = d.re * b;
+                    let uim = d.im * b;
+                    buf[i1] = Complex::new(x0.re + tre - uim, x0.im + tim + ure);
+                    buf[i2] = Complex::new(x0.re + tre + uim, x0.im + tim - ure);
+                }
             }
         }
     }
@@ -1184,7 +1386,7 @@ fn fft2_rows_conj_mul(
     mul: RowMul,
     conj: bool,
 ) {
-    if let PlanKind::Radix2 { stages } = &wplan.kind {
+    if let PlanKind::Radix2 { mplan } = &wplan.kind {
         const RB: usize = 8;
         // Row blocks are disjoint slices of `buf`, so under `parallel` each
         // block's transpose+transform+writeback is an independent task.
@@ -1223,7 +1425,7 @@ fn fft2_rows_conj_mul(
                                 im8[x * RB + j] = 0.0;
                             }
                         }
-                        fft_batch8(re8, im8, re8b, im8b, width, stages);
+                        fft_batch8(re8, im8, re8b, im8b, mplan);
                         for x in 0..width {
                             for j in 0..nb {
                                 chunk[j * width + x] =
@@ -1260,7 +1462,7 @@ fn fft2_rows_conj_mul(
                     im8[x * RB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, width, stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
             for x in 0..width {
                 for j in 0..nb {
                     buf[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
@@ -1364,7 +1566,7 @@ fn fft2_rows_conj_mul_io(
 ) {
     debug_assert_eq!(src.len(), width * height);
     debug_assert_eq!(dst.len(), width * height);
-    if let PlanKind::Radix2 { stages } = &wplan.kind {
+    if let PlanKind::Radix2 { mplan } = &wplan.kind {
         const RB: usize = 8;
         #[cfg(feature = "parallel")]
         if height >= 4 * RB {
@@ -1401,7 +1603,7 @@ fn fft2_rows_conj_mul_io(
                                 im8[x * RB + j] = 0.0;
                             }
                         }
-                        fft_batch8(re8, im8, re8b, im8b, width, stages);
+                        fft_batch8(re8, im8, re8b, im8b, mplan);
                         for x in 0..width {
                             for j in 0..nb {
                                 dchunk[j * width + x] =
@@ -1437,7 +1639,7 @@ fn fft2_rows_conj_mul_io(
                     im8[x * RB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, width, stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
             for x in 0..width {
                 for j in 0..nb {
                     dst[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
@@ -1554,7 +1756,7 @@ fn fft2_cols_conj_scale(
     mut mag: Option<&mut [f32]>,
 ) {
     const CB: usize = 8;
-    if let PlanKind::Radix2 { stages } = &hplan.kind {
+    if let PlanKind::Radix2 { mplan } = &hplan.kind {
         // Column stripes are disjoint writes but strided — not sliceable —
         // so the parallel path goes through a block-major SoA buffer in
         // bounded super-blocks (64 blocks = 512 columns ≈ 16 MB at 2048²):
@@ -1601,9 +1803,7 @@ fn fft2_cols_conj_scale(
                     .zip(im_all.par_chunks_mut(height * CB))
                     .zip(re_allb.par_chunks_mut(height * CB))
                     .zip(im_allb.par_chunks_mut(height * CB))
-                    .for_each(|(((rc, ic), rcb), icb)| {
-                        fft_batch8(rc, ic, rcb, icb, height, stages)
-                    });
+                    .for_each(|(((rc, ic), rcb), icb)| fft_batch8(rc, ic, rcb, icb, mplan));
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
                 if let Some(mag) = mag.as_deref_mut() {
@@ -1657,7 +1857,7 @@ fn fft2_cols_conj_scale(
                     im8[y * CB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, height, stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
             if let Some(mag) = mag.as_deref_mut() {
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
@@ -2079,13 +2279,41 @@ mod tests {
         }
     }
 
-    /// `fft_batch8` vs the scalar [`fft_radix2_planned`] — eight distinct
+    /// The scalar mixed-radix path against the naive DFT — the
+    /// Bluestein `m` values hit every radix combination ([2,3], [2,2,3],
+    /// pure 3, multiple 3s).
+    #[test]
+    fn fft_mixed_matches_the_naive_dft() {
+        for n in [6usize, 12, 9, 18] {
+            let mplan = MPlan::smooth(n);
+            let x = seeded(n);
+            let want = naive_dft(&x);
+            let mut got = x.clone();
+            fft_mixed_planned(&mut got, &mplan);
+            for (k, (a, b)) in got.iter().zip(&want).enumerate() {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4,
+                    "n={n} k={k}: {a:?} != {b:?} radices={:?} perm={:?}",
+                    mplan.radices,
+                    mplan.perm
+                );
+            }
+        }
+    }
+
+    /// `fft_batch8` vs the scalar [`fft_mixed_planned`] — eight distinct
     /// lane inputs, so a broken row gather can't hide behind identical
-    /// data (the failure mode that once masked a bad permutation).
+    /// data (the failure mode that once masked a bad permutation). The
+    /// mixed sizes (6, 12, 18, 48, 216…) exercise the radix-3 stages and
+    /// the digit-reversal permutation.
     #[test]
     fn batch8_matches_scalar_per_lane() {
-        for n in [4usize, 8, 16, 32, 64] {
-            let stages = radix2_stages(n);
+        for n in [4usize, 8, 16, 32, 64, 6, 12, 18, 48, 216, 6 * 8, 3 * 81] {
+            let mplan = if n.is_power_of_two() {
+                MPlan::pow2(n)
+            } else {
+                MPlan::smooth(n)
+            };
             let xs: Vec<Vec<Complex>> = (0..8)
                 .map(|j| {
                     seeded(n)
@@ -2098,7 +2326,7 @@ mod tests {
                 .iter()
                 .map(|x| {
                     let mut w = x.clone();
-                    fft_radix2_planned(&mut w, &stages);
+                    fft_mixed_planned(&mut w, &mplan);
                     w
                 })
                 .collect();
@@ -2112,7 +2340,7 @@ mod tests {
                     im8[k * 8 + j] = xs[j][k].im;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, n, &stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, &mplan);
             for k in 0..n {
                 for j in 0..8 {
                     let d = (re8b[k * 8 + j] - wants[j][k].re).abs()
