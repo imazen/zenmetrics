@@ -34,3 +34,23 @@ Validation: Python IW/MS goldens, strip and warm-reference parity,
 materialized covariance equality, plus exact comparison to the previous
 generic Gram kernel with nonzero initial accumulators and split row calls.
 No threshold or public API changes. Clippy introduces no warnings.
+
+A follow-up experiment specialized quadratic-form loops to literal 9/10
+bounds. It passed parity but was rejected: in an eight-call 1t A/B the packed
+Gram baseline measured 664.8 ms/call and 28,069,531,466 cycles; the specialization
+measured 923.4 ms/call and 34,279,682,415 cycles. At 16t (four calls),
+552.4→543.0 ms/call and 20,995,591,653→20,321,476,217 cycles did not offset the
+single-thread regression. The existing quadratic-form kernel is retained.
+run-heavy peak-RSS: 0.67 GiB for both eight-call 1t runs, 0.66 GiB for both
+16t runs. These were separate, more heavily loaded runs than the main table.
+
+Disassembly of the retained Gram AVX2 function contains vmulpd/vaddpd and
+no fused multiply-add: the two-rounding accumulation remains explicit.
+The repository advisory quality kit was unavailable (`just quality --quick`
+reported `kit not found`); scoped fmt and clippy were run directly instead.
+
+CI lint on e2dc4f74 failed at fmt-check on an inherited formatting hunk in
+`crates/mad-iqa/src/fft.rs:834`, outside this lane's permitted crates.
+Scoped `cargo fmt --check -p msssim -p iwssim` passes. Run 38254913417,
+job 114830527851 contains the formatting diff. Local default and parallel
+IW-SSIM suites pass; remote full-matrix green is not established.

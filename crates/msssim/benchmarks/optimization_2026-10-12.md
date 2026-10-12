@@ -67,3 +67,11 @@ scalar oracle across odd/even sizes, factors 2/3/4, and 2/3/4/9-tap kernels.
 Default and parallel tests, including real libvmaf frame/scale/LCS parity,
 pass without any threshold change. Clippy adds no warnings; existing FFI
 safety-comment warnings remain. API and no_std behavior are retained.
+
+Final user-cycle profiles after fixed-array decimation: Wang fused band 59.30%,
+RGB entry/conversion 23.06%, score/pool entry 5.93%, box decimation 5.71%,
+fixture/main 1.28%. libvmaf-compatible decimation 27.43%, score fold 19.50%,
+vertical Gaussian 17.85%, horizontal Gaussian 16.18%, plane conversion 7.48%.
+These profiles used eight calls at 4096×2048; measured profile walls were
+157.1 ms/call (Wang), 43.3/367.8 ms/call (float_ssim/float_ms_ssim).
+They are separate observations from the perf-stat A/B table.
