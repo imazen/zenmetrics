@@ -1,0 +1,20 @@
+Driver build source: accompanying NLPD change; pinned sibling snapshot, before master 5dea4dde.
+Runner source: zenbench ac675d3a (resolved 0.1.10); version-only 0.1.11 preparation is separate.
+CPU deployment cases: 38 SDR at 256x256 + hdrvdp/hdrvdp3 at 128x96 absolute nits; 2 calls, cold, packed, 1 thread.
+Qualification: separate packed/padded and ordinary/instrumented controls compare all scalar products exactly. Accuracy was not requalified by these deployment controls.
+Command: just iqa-deployment-bench <binaries> <runner> <sdr-controls> <hdr-controls> <new-output> <machine> <exact-domain>
+Execution: hard outer system scope AllowedCPUs=2, MemoryMax=16G, MemorySwapMax=0; run-heavy inside.
+Domains: i134 performance_l320480K; r5600g capacity1024_l316384K.
+Raw evidence resolving path on each host: ~/tmp/zm-iqa-20261012/benchmark-observations-class/
+Controls resolving path on each host: ~/tmp/zm-iqa-20261012/{sdr-controls,hdr-controls,adapter-controls}/
+i134: run-heavy: done rc=0 84s | peak-RSS 0.02GiB | min-avail 27145MiB | peak-load 2.17
+r5600g: run-heavy: done rc=0 87s | peak-RSS 0.02GiB | min-avail 41696MiB | peak-load 0.64
+These run-heavy lines describe the supervisor invocation; the JSONL records retain per-child resident high water and dedicated heap phase watermarks.
+latency SHA-256: cec378d29177b56f601604ed98fb16695ec708df04c88961f660d1c92b4ef060
+memory SHA-256: b839da957219976ccaf01d4c5fb9b8ee273ef3b5b881a29557afa14ea5686092
+zenbench SHA-256: 7e21043cd3429fbe97494a53936a82a2759a4fad40060289bf1ee415ddbb79c5
+zenfleet-worker SHA-256: 6cc8f7c6647b8d69037054a6197272fdd280370405c57fdc0ac8138868e4bf5e
+zenfleet-ctl SHA-256: e7a5eb491a3039f784fc8e5ec8d2f9526f6d856e0b22a8c0685dd9efd11235c2
+benchmark_ledger_control SHA-256: ff04baa98129562ae83e17f7cbd4b9ccb5184f6c8557702cea250b8cadfff0ff
+i134 summary SHA-256: 1528ff48fef043b81434d490536f9224449157de4a35332128c1400697fac4e4
+r5600g summary SHA-256: ced4849431a960f1f21d898503bbea4cbaed3052542f9fa3cf544860eb0bfd01

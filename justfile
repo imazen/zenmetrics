@@ -444,6 +444,10 @@ iqa-hdr-check binaries output:
 iqa-study-check binaries output:
     python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}}
 
+# Use prequalified small cases to exercise all native routes through zenfleet.
+iqa-deployment-bench binaries runner sdr hdr output machine domain:
+    python3 -B scripts/jobsys/benchmark_iqa_deployment.py {{binaries}} {{runner}} {{sdr}} {{hdr}} {{output}} {{machine}} {{domain}}
+
 iqa-fleet-check binaries output:
     python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}
 

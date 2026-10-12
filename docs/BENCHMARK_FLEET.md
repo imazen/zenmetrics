@@ -99,6 +99,31 @@ Fleet comparisons are descriptive; use `zenbench pair` for latency inference.
 
 ## Validation
 
+The all-native deployment control uses existing SDR/HDR layout and
+instrumentation controls, then stages bundles, declares benchmark jobs,
+runs the worker and recovers hash-verified receipts:
+
+```sh
+just iqa-deployment-bench BINARIES RUNNER SDR_CONTROLS HDR_CONTROLS NEW_OUTPUT MACHINE EXACT_DOMAIN
+```
+
+Run inside a verified process CPU boundary. The domain must be the exact
+class reported by the runner, including the cache suffix; a generic
+`performance` label can fail the adapter's capability probe. The script
+retains the first refusal and requires 80 complete observations for its
+40 native routes. It provides no scheduler or automatic retry.
+
+On 2026-10-12, both i134 and r5600g completed all 80 observations, with
+one CPU per process and a 16 GiB hard outer memory scope. The cases cover
+38 SDR routes at 256×256 and two native absolute-nits HDR routes at 128×96,
+with two cold operations per invocation. This verifies deployment and
+output contracts; it does not establish accuracy or a speedup. Separate
+latency and memory binaries preserve the timing boundary. Selected full
+memory records and internal latency samples are retained in
+[i134 JSONL](../benchmarks/iqa_deployment_i134_2026-10-12.jsonl),
+[r5600g JSONL](../benchmarks/iqa_deployment_r5600g_2026-10-12.jsonl), and
+[build, command and resource provenance](../benchmarks/iqa_deployment_2026-10-12.meta).
+
 ```sh
 just benchmark-contract-check
 just benchmark-executor-check /path/to/zenbench NEW_CONTROL_DIRECTORY
