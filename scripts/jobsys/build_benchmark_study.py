@@ -10,7 +10,7 @@ import itertools
 import json
 from pathlib import Path
 import re
-import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 DRIVER = ROOT / 'benchmarks/heaptrack/drivers/cpu_profile/src'
@@ -250,19 +250,84 @@ def write_study(spec, output):
         cell = output / row['cell_sha']
         cell.mkdir()
         (cell / 'case.json').write_bytes(canonical(row['case']) + b'\n')
-        files = {'case.json': {'source': str(cell / 'case.json'), 'executable': False},
-                 'driver': {'source': row['sources']['artifact']['binary']['path'], 'executable': True},
-                 'build.json': {'source': row['sources']['artifact']['build']['path'], 'executable': False}}
-        for side in ['reference', 'distorted']:
-            files[f'{side}.rgb'] = {'source': row['sources']['inputs'][side]['path'], 'executable': False}
-        plan = {'schema': 1, 'program': 'driver', 'args': ['fleet', 'case.json'],
-                'env': {'RAYON_NUM_THREADS': str(row['case']['threads'])}, 'backend': row['measurement'],
-                'operations': summary['operations_per_launch'], 'timeout_seconds': summary['timeout_seconds'],
-                'expected_correctness': row['expected_correctness'],
-                'workload': {'study_sha': summary['study_sha'], 'cell_sha': row['cell_sha'],
-                             'case': row['case'], 'timing_boundary': 'decoded_input_score'}}
-        (cell / 'bundle-spec.json').write_bytes(canonical({'schema': 1, 'target': row['target'], 'files': files, 'plan': plan}) + b'\n')
+        (cell / 'bundle-spec.json').write_bytes(canonical(bundle_spec(row, summary, cell)) + b'\n')
     return summary
+
+
+def bundle_spec(row, summary, cell):
+    files = {'case.json': {'source': str(cell / 'case.json'), 'executable': False},
+             'driver': {'source': row['sources']['artifact']['binary']['path'], 'executable': True},
+             'build.json': {'source': row['sources']['artifact']['build']['path'], 'executable': False}}
+    for side in ['reference', 'distorted']:
+        files[f'{side}.rgb'] = {'source': row['sources']['inputs'][side]['path'], 'executable': False}
+    plan = {'schema': 1, 'program': 'driver', 'args': ['fleet', 'case.json'],
+            'env': {'RAYON_NUM_THREADS': str(row['case']['threads'])}, 'backend': row['measurement'],
+            'operations': summary['operations_per_launch'], 'timeout_seconds': summary['timeout_seconds'],
+            'expected_correctness': row['expected_correctness'],
+            'workload': {'study_sha': summary['study_sha'], 'cell_sha': row['cell_sha'],
+                         'case': row['case'], 'timing_boundary': 'decoded_input_score'}}
+    return {"schema": 1, "target": row["target"], "files": files, "plan": plan}
+
+
+def package_study(spec, study_dir, runner, runner_sha, output):
+    """Materialize verified bundles, without execution, enrollment or upload."""
+    inv, summary, rows = expand(spec)
+    study_dir, runner, output = (Path(p).resolve() for p in [study_dir, runner, output])
+    if file_sha(runner) != runner_sha:
+        raise ValueError('runner hash mismatch')
+    if load(study_dir / 'inventory.json') != inv or load(study_dir / 'study.json') != summary:
+        raise ValueError('study inventory or declaration changed since expansion')
+    expected_rows = b''.join(canonical(row) + b'\n' for row in rows)
+    if (study_dir / 'cells.jsonl').read_bytes() != expected_rows:
+        raise ValueError('study cells changed since expansion')
+    ready = [row for row in rows if row['status'] == 'ready']
+    for row in ready:
+        cell = study_dir / row['cell_sha']
+        if load(cell / 'case.json') != row['case'] or load(cell / 'bundle-spec.json') != bundle_spec(row, summary, cell):
+            raise ValueError('case or bundle plan changed since expansion')
+    output.mkdir(parents=True, exist_ok=False)
+    observations, identities = [], []
+    for row in ready:
+        cell = study_dir / row['cell_sha']
+        bundle = output / row['cell_sha']
+        command = [str(runner), 'bundle', str(cell / 'bundle-spec.json'), str(bundle)]
+        result = subprocess.run(command, capture_output=True, timeout=300)
+        (output / (row['cell_sha'] + '.stdout')).write_bytes(result.stdout)
+        (output / (row['cell_sha'] + '.stderr')).write_bytes(result.stderr)
+        if result.returncode:
+            raise ValueError(f"native runner refused bundle {row['cell_sha']}; see retained stderr")
+        manifest = load(bundle / 'bundle.json')
+        keys(manifest, ['schema', 'target', 'plan', 'files'])
+        wanted = bundle_spec(row, summary, cell)
+        if manifest['schema'] != 1 or manifest['target'] != wanted['target'] or manifest['plan'] != wanted['plan']:
+            raise ValueError('materialized bundle contract differs from declared study')
+        sources = row['sources']
+        bound = {'driver': sources['artifact']['binary'], 'build.json': sources['artifact']['build'],
+                 **{f'{side}.rgb': sources['inputs'][side] for side in ['reference', 'distorted']},
+                 'case.json': {'sha256': hashlib.sha256(canonical(row['case']) + b'\n').hexdigest(),
+                               'bytes': len(canonical(row['case']) + b'\n')}}
+        if set(manifest['files']) != set(bound):
+            raise ValueError('materialized file inventory differs from declared study')
+        for name, artifact in manifest['files'].items():
+            keys(artifact, ['sha256', 'bytes', 'executable'])
+            if (artifact['sha256'] != bound[name]['sha256'] or artifact['bytes'] != bound[name]['bytes']
+                    or artifact['executable'] != (name == 'driver') or file_sha(bundle / name) != artifact['sha256']):
+                raise ValueError('bundle source changed during materialization')
+        bundle_sha = file_sha(bundle / 'bundle.json')
+        job = {'kind': 'benchmark', 'bundle_sha': bundle_sha, 'runner_sha': runner_sha,
+               'experiment': row['cell_sha'], 'machine': row['machine'], 'domain': row['domain'],
+               'replicate': row['replicate'], 'backend': row['measurement'],
+               'timeout_seconds': summary['timeout_seconds'], 'admission_seconds': summary['admission_seconds']}
+        observations.append({'job': job, 'threads': row['case']['threads'], 'peak_mem_bytes': summary['peak_mem_bytes']})
+        identities.append({'cell_sha': row['cell_sha'], 'bundle_sha': bundle_sha, 'bundle': str(bundle)})
+    # Recheck all declared bytes after copying. Mutation leaves evidence but no declaration.
+    if file_sha(runner) != runner_sha or expand(spec) != (inv, summary, rows):
+        raise ValueError('study sources or runner changed during materialization')
+    (output / 'observations.json').write_bytes(canonical({'schema': 1, 'observations': observations}) + b'\n')
+    (output / 'identities.json').write_bytes(canonical({'schema': 1, 'study_sha': summary['study_sha'],
+        'runner_sha': runner_sha, 'cells': identities}) + b'\n')
+    return {'schema': 1, 'study_sha': summary['study_sha'], 'bundles': len(ready),
+            'observations': str(output / 'observations.json'), 'executed': False, 'staged': False}
 
 
 def main():
@@ -271,11 +336,19 @@ def main():
     subs.add_parser('inventory')
     dry = subs.add_parser('plan'); dry.add_argument('spec', type=Path)
     emit = subs.add_parser('write'); emit.add_argument('spec', type=Path); emit.add_argument('output', type=Path)
+    pack = subs.add_parser("package")
+    for name in ["spec", "study_dir", "runner"]:
+        pack.add_argument(name, type=Path)
+    pack.add_argument("runner_sha")
+    pack.add_argument("output", type=Path)
     args = parser.parse_args()
     try:
-        result = inventory() if args.command == 'inventory' else (expand(args.spec)[1] if args.command == 'plan' else write_study(args.spec, args.output))
+        if args.command == 'package':
+            result = package_study(args.spec, args.study_dir, args.runner, args.runner_sha, args.output)
+        else:
+            result = inventory() if args.command == 'inventory' else (expand(args.spec)[1] if args.command == 'plan' else write_study(args.spec, args.output))
         print(json.dumps(result, indent=2, allow_nan=False))
-    except (ValueError, OSError, KeyError, TypeError) as error:
+    except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
         parser.exit(2, f'benchmark study refused: {error}\n')
 
 

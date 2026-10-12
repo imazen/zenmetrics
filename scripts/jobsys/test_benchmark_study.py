@@ -116,6 +116,22 @@ class StudyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'native execution'):
             study.expand(self.write())
 
+    def test_packaging_refuses_changed_cases_and_runner_before_writing(self):
+        self.qualify()
+        spec = self.write()
+        output = self.root / 'output'
+        study.write_study(spec, output)
+        packaged = self.root / 'packaged'
+        runner = self.root / 'binary'
+        with self.assertRaisesRegex(ValueError, 'runner hash'):
+            study.package_study(spec, output, runner, 'a' * 64, packaged)
+        case = next(output.glob('*/case.json'))
+        value = json.loads(case.read_bytes()); value['threads'] = 17
+        case.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, 'case or bundle plan'):
+            study.package_study(spec, output, runner, study.file_sha(runner), packaged)
+        self.assertFalse(packaged.exists())
+
     def test_nonlinux_heaptrack_is_visible(self):
         self.spec['metrics'] = ['ssim2']; self.spec['passes'] = ['heaptrack']
         self.spec['testbeds'][0]['target'] = 'aarch64-apple-darwin'

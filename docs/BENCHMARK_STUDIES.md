@@ -127,3 +127,34 @@ scalar-column collection. Supervisor `wall` covers the whole invocation,
 including preparation, warmup, measurement and serialization. Heap phase
 records include the harness allocations made inside each phase. Keep these
 boundaries labeled when comparing results.
+
+## Materialize and stage a qualified study
+
+```sh
+just benchmark-study package SPEC.json GENERATED_DIRECTORY NATIVE_RUNNER RUNNER_SHA NEW_BUNDLE_DIRECTORY
+```
+
+Packaging re-expands the original spec, compares the inventory, summary and all
+cells, verifies the generated case and plan, then uses the hash-bound native
+runner's `bundle` command. It verifies each copied file against the declared
+input/build/binary hashes and checks sources again before writing a declaration.
+A refusal retains materialization logs and partial bundles, but writes no final
+`observations.json`. A new output directory is mandatory. This command performs
+no workload execution, upload or worker enrollment.
+
+The output contains `identities.json`, a bundle directory per ready cell and
+`observations.json` in the existing controller schema. Each job experiment is
+the cell hash, preserving the selected study/pass/testbed/replicate identity.
+Use the exact hash-bound runner as `ZENBENCH_BIN` when staging each listed bundle
+with `scripts/jobsys/benchmark_exec.py stage BUNDLE`; require the returned bundle
+and runner hashes to match `identities.json`. Then pass `observations.json` to
+`zenfleet-ctl declare-benchmarks --spec ... --out ...`. Deployment and execution
+continue through the existing fleet flow. Packaging supplies no retry policy
+and does not certify production admission or installation.
+
+`just benchmark-study-package-check RUNNER NEW_DIRECTORY` exercises actual
+native bundle materialization with fixture bytes that are never executed. On
+2026-10-12 the Linux x86-64 runner materialized 12 qualified fixture cells and
+preserved all declaration hashes. The unit controls also refuse a changed
+runner or case before creating output. This evidence concerns protocol
+materialization, not metric accuracy, resource admission or performance.

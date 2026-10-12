@@ -364,6 +364,9 @@ benchmark-study-check:
 benchmark-study +args:
     python3 -B scripts/jobsys/build_benchmark_study.py {{args}}
 
+benchmark-study-package-check runner output:
+    python3 -B scripts/jobsys/check_benchmark_study_package.py {{runner}} {{output}}
+
 benchmark-executor-check runner output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}}
 
