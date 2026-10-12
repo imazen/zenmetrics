@@ -386,6 +386,9 @@ iqa-study-build output:
     just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features heap-phases
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
 
+iqa-hdr-check binaries output:
+    python3 -B scripts/jobsys/check_iqa_hdr.py {{binaries}} {{output}}
+
 iqa-study-check binaries output:
     python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}}
 

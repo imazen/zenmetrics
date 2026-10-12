@@ -158,3 +158,38 @@ native bundle materialization with fixture bytes that are never executed. On
 preserved all declaration hashes. The unit controls also refuse a changed
 runner or case before creating output. This evidence concerns protocol
 materialization, not metric accuracy, resource admission or performance.
+
+## Native HDR-VDP cases
+
+Schema-3 fleet cases support `hdrvdp` and `hdrvdp3` on the native CPU, cold
+reuse only. Inputs use `pixel_format:"rgb_f32le_bt709_linear_nits"`: interleaved
+little-endian f32 RGB channels in absolute cd/m², with BT.709 primaries. Every
+channel must be finite and nonnegative. Row padding is supported and excluded
+when unpacking during input preparation. No transfer-function conversion,
+normalization, tone mapping or reinterpretation as sRGB8 occurs.
+
+Schema 3 requires `products:"primary"|"all"`, `warmup_operations:0..1024` and
+an explicit `viewing` object. For HDR-VDP-2 use
+`{"model":"hdrvdp2-defaults-bt709","pixels_per_degree":45}`. This selects the
+source-pinned HDR-VDP-2 default calibration with the stated geometry. For
+HDR-VDP-3 use
+`{"model":"hdrvdp3-quality-bt709-age24-nosurround-reference","pixels_per_degree":45}`.
+This selects quality task, BT.709 input/default emission, observer age 24, no
+surround and reference options. Both require positive finite geometry of at
+least four pixels per degree. These are different metric models and output
+scales. The metric constructor and reference work occur inside each cold
+score; input unpacking and pool initialization occur before scoring.
+
+A study pair may include the same `viewing` object. The generator emits
+schema-3 primary-score cases for the matching HDR metric/preset. Missing
+geometry, a mismatched preset, sRGB8 inputs or warm reuse remain explicit
+unsupported cells. Exact input and parameter identities enter qualification.
+The inventory now exposes all 40 CPU routes across their two input contracts;
+GPU routes still require separate implementation and on-target qualification.
+
+`just iqa-hdr-check BINARIES NEW_DIRECTORY` checks both HDR routes, two
+operations, padded and packed rows, and ordinary/instrumented builds. Private
+Rust controls compare the routed outputs exactly with each metric's direct
+absolute-nits entry point and refuse nonfinite/negative channels and missing
+geometry. These controls verify routing and input preservation; the metric
+crates' author/reference gates remain the accuracy oracles.

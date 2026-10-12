@@ -33,7 +33,7 @@ metrics-parallel = [
 ]
 
 [dependencies]
-zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels"] }
+zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }

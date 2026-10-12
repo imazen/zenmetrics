@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use zenmetrics_api::{Backend, MetricKind, Warm};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+#[path = "fleet_hdr.rs"]
+mod hdr;
+
 type Error = Box<dyn std::error::Error>;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,7 +155,11 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
         return Err("usage: new-metrics-wall fleet CASE.json".into());
     }
     let case_path = Path::new(&args[2]).canonicalize()?;
-    let case: Case = serde_json::from_slice(&std::fs::read(&case_path)?)?;
+    let bytes = std::fs::read(&case_path)?;
+    if serde_json::from_slice::<Value>(&bytes)?["schema"] == 3 {
+        return hdr::run(&case_path, &bytes);
+    }
+    let case: Case = serde_json::from_slice(&bytes)?;
     if ![1, 2].contains(&case.schema)
         || case.width == 0
         || case.height == 0

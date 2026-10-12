@@ -41,10 +41,17 @@ jobs:
         run: |
           mkdir -p "$HOME/tmp"
           TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
+          TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_study.py
       - name: Build native worker and runner
         run: |
           cargo build --locked -p zenfleet-worker --bin zenfleet-worker --example benchmark_ledger_control
           cargo build --locked --manifest-path ../benchmark-runner/Cargo.toml --bin zenbench
+      - name: Exercise study bundle materialization without executing fixture bytes
+        run: |
+          suffix=''
+          if [[ "$RUNNER_OS" == Windows ]]; then suffix='.exe'; fi
+          TMPDIR="$HOME/tmp" python -B scripts/jobsys/check_benchmark_study_package.py \
+            "../benchmark-runner/target/debug/zenbench$suffix" "$HOME/tmp/benchmark-study-package-control"
       - name: Exercise native observation and ledger protocol
         run: |
           suffix=''

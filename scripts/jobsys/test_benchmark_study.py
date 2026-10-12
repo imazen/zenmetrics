@@ -132,6 +132,22 @@ class StudyTests(unittest.TestCase):
             study.package_study(spec, output, runner, study.file_sha(runner), packaged)
         self.assertFalse(packaged.exists())
 
+    def test_hdr_requires_nits_and_explicit_matching_viewing(self):
+        self.spec['metrics'] = ['hdrvdp']
+        self.assertTrue(all(row['status'] == 'unsupported' for row in study.expand(self.write())[2]))
+        pair = self.spec['pairs'][0]
+        pair.update(stride_bytes=24, pixel_format='rgb_f32le_bt709_linear_nits',
+                    viewing={'model': 'hdrvdp2-defaults-bt709', 'pixels_per_degree': 45.0})
+        for name in ['r', 'd']:
+            (self.root / name).write_bytes(bytes(48))
+        pair.update(reference=self.bound('r'), distorted=self.bound('d'))
+        rows = study.expand(self.write())[2]
+        cold = [row for row in rows if row['case']['reuse'] == 'cold']
+        self.assertTrue(all(row['status'] == 'unqualified' and row['case']['schema'] == 3 for row in cold))
+        self.assertTrue(all(row['status'] == 'unsupported' for row in rows if row not in cold))
+        pair['viewing']['pixels_per_degree'] = True
+        with self.assertRaises(ValueError): study.expand(self.write())
+
     def test_nonlinux_heaptrack_is_visible(self):
         self.spec['metrics'] = ['ssim2']; self.spec['passes'] = ['heaptrack']
         self.spec['testbeds'][0]['target'] = 'aarch64-apple-darwin'

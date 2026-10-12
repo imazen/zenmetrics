@@ -85,14 +85,12 @@ def inventory():
         reasons = []
         if name.endswith('-gpu'):
             reasons.append('GPU workload driver not qualified')
-        if name in HDR:
-            reasons.append('absolute-nits workload required')
-        if name not in cold and not reasons:
+        if name not in cold and name not in HDR and not reasons:
             reasons.append('SDR fleet driver does not expose this variant')
         rows.append({'metric': name, 'cold_rgb8': name in cold,
-                     'warm_rgb8': name in WARM, 'unsupported_reasons': reasons})
+                     'warm_rgb8': name in WARM, 'cold_absolute_nits': name in HDR, 'unsupported_reasons': reasons})
     return {'schema': 1, 'kind': 'zenmetrics_benchmark_inventory', 'metrics': rows,
-            'sources': {str(p.relative_to(ROOT)): file_sha(p) for p in [registry, harness, DRIVER / 'fleet_case.rs']}}
+            'sources': {str(p.relative_to(ROOT)): file_sha(p) for p in [registry, harness, DRIVER / 'fleet_case.rs', DRIVER / 'fleet_hdr.rs']}}
 
 
 def bound_file(base, value):
@@ -127,10 +125,15 @@ def expand(spec_path):
         raise ValueError('unknown CLI metric')
     pairs = []
     for pair in spec['pairs']:
-        keys(pair, ['id', 'origin', 'content', 'width', 'height', 'stride_bytes', 'pixel_format', 'reference', 'distorted'])
+        keys(pair, ['id', 'origin', 'content', 'width', 'height', 'stride_bytes', 'pixel_format', 'reference', 'distorted'], ['viewing'])
         token(pair['id']); token(pair['origin']); token(pair['content'])
         positive(pair['width'], 'width'); positive(pair['height'], 'height')
         positive(pair['stride_bytes'], 'stride_bytes')
+        if 'viewing' in pair:
+            keys(pair['viewing'], ['model', 'pixels_per_degree'])
+            ppd = pair['viewing']['pixels_per_degree']
+            if type(ppd) not in (int, float) or not 4 <= ppd <= 10000:
+                raise ValueError('viewing requires finite pixels_per_degree 4..10000')
         item = dict(pair)
         for side in ['reference', 'distorted']:
             item[side] = bound_file(base, pair[side])
@@ -181,12 +184,20 @@ def expand(spec_path):
         case = {'schema': 1, 'metric': metric, 'width': pair['width'], 'height': pair['height'],
                 'stride_bytes': pair['stride_bytes'], 'reference': 'reference.rgb',
                 'distorted': 'distorted.rgb', 'pixel_format': pair['pixel_format'], 'reuse': reuse, 'threads': threads}
+        if metric in HDR:
+            case.update(schema=3, products='primary', warmup_operations=0, viewing=pair.get('viewing'))
         contract = {'study_sha': study_sha, 'metric': metric, 'pair': without_paths(pair),
                     'testbed': without_paths(bed), 'reuse': reuse, 'threads': threads,
                     'measurement': measurement, 'replicate': replicate, 'operations': spec['operations']}
         cell_sha = digest(contract)
         reasons = list(metrics[metric]['unsupported_reasons'])
-        if pair['pixel_format'] != 'rgb8_srgb' or pair['stride_bytes'] < pair['width'] * 3:
+        if metric in HDR:
+            if pair['pixel_format'] != 'rgb_f32le_bt709_linear_nits' or pair['stride_bytes'] < pair['width'] * 12:
+                reasons.append('native HDR requires absolute-nits BT709 RGB f32le with valid row stride')
+            model = 'hdrvdp2-defaults-bt709' if metric == 'hdrvdp' else 'hdrvdp3-quality-bt709-age24-nosurround-reference'
+            if pair.get('viewing', {}).get('model') != model:
+                reasons.append('native HDR requires the matching explicit viewing preset')
+        elif pair['pixel_format'] != 'rgb8_srgb' or pair['stride_bytes'] < pair['width'] * 3:
             reasons.append('driver requires RGB8 sRGB with valid row stride')
         if reuse == 'warm_reference' and not metrics[metric]['warm_rgb8']:
             reasons.append('cached-reference route unavailable in driver')
