@@ -2140,6 +2140,7 @@ fn use_orchestrator_emits_deprecation_warning() {
 /// `CUDA_VISIBLE_DEVICES=""` hides CUDA; the bogus Vulkan ICD paths keep a
 /// wgpu-enabled build (including a software rasteriser like lavapipe, which
 /// would otherwise "succeed" on the CPU and defeat the point) from coming up.
+/// An unavailable WGPU device index also excludes Metal and DX12 adapters.
 #[cfg(feature = "gpu-cvvdp")]
 fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
     let fx = fixtures_dir();
@@ -2156,6 +2157,7 @@ fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
         fx.join("dist_noisy_64.png").to_str().unwrap(),
     ])
     .env("CUDA_VISIBLE_DEVICES", "")
+    .env("CUBECL_WGPU_DEFAULT_DEVICE", "DiscreteGpu(65535)")
     .env("VK_ICD_FILENAMES", "/nonexistent/zenmetrics-test.json")
     .env("VK_DRIVER_FILES", "/nonexistent/zenmetrics-test.json");
     if require_gpu {
