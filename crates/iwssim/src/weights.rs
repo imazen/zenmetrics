@@ -146,6 +146,15 @@ fn gram_accumulate_rows(
     let big_n = nb + parent.is_some() as usize;
     debug_assert_eq!(gram.len(), big_n * big_n);
     debug_assert!(big_n <= 16);
+    if nb == 9 {
+        archmage::attuned!(
+            crate::simd_kernels::gram3_rows_inner(
+                img, parent, stride, row0, col0, nrows, ncols, taps, gram
+            ),
+            [_v3, _neon, _wasm128, _scalar]
+        );
+        return;
+    }
     archmage::attuned!(
         crate::simd_kernels::gram_rows_inner(
             img, parent, stride, row0, col0, nrows, ncols, taps, gram
@@ -403,6 +412,42 @@ mod tests {
             }
         }
         (y, big_n)
+    }
+
+    #[test]
+    fn packed_gram_matches_generic_and_incremental() {
+        let (w, h) = (37, 29);
+        let img: Vec<f32> = (0..w * h)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 13.0)
+            .collect();
+        let p: Vec<f32> = (0..w * h).map(|i| (i * 53 % 89) as f32 / 31.0).collect();
+        let taps = tap_offsets(3, 3);
+        for parent in [None, Some(p.as_slice())] {
+            let n = 9 + parent.is_some() as usize;
+            let initial: Vec<f64> = (0..n * n).map(|i| i as f64 * 0.125).collect();
+            let mut expected = initial.clone();
+            archmage::attuned!(
+                crate::simd_kernels::gram_rows_inner(
+                    &img,
+                    parent,
+                    w,
+                    1,
+                    1,
+                    h - 2,
+                    w - 2,
+                    &taps,
+                    &mut expected
+                ),
+                [_v3, _neon, _wasm128, _scalar]
+            );
+            let mut actual = initial.clone();
+            gram_accumulate_rows(&img, parent, w, 1, 1, h - 2, w - 2, &taps, &mut actual);
+            assert_eq!(actual, expected);
+            let mut split = initial;
+            gram_accumulate_rows(&img, parent, w, 1, 1, 7, w - 2, &taps, &mut split);
+            gram_accumulate_rows(&img, parent, w, 8, 1, h - 9, w - 2, &taps, &mut split);
+            assert_eq!(split, expected);
+        }
     }
 
     /// `gram_accumulate` + `gram_mirror` + `/nexp` must equal

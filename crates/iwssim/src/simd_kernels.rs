@@ -1366,6 +1366,253 @@ mod infow_wasm {
 // contraction).
 // ---------------------------------------------------------------------
 
+// Fixed triangular packing for the default 3×3 neighborhood. SIMD lanes
+// remain independent Gram coefficients, preserving ordered f64 accumulation.
+#[archmage::attune(_*_t, define(f64x4))]
+pub(crate) fn gram3_rows_inner(
+    token: Token,
+    img: &[f32],
+    parent: Option<&[f32]>,
+    stride: usize,
+    row0: usize,
+    col0: usize,
+    nrows: usize,
+    ncols: usize,
+    taps: &[(i32, i32)],
+    gram: &mut [f64],
+) {
+    let offsets: [usize; 9] = core::array::from_fn(|k| {
+        let (dy, dx) = taps[k];
+        ((row0 as i32 + dy) as usize) * stride + (col0 as i32 + dx) as usize
+    });
+    if let Some(p) = parent {
+        let mut a0 = f64x4::from_array_t(token, [gram[0], gram[1], gram[2], gram[3]]);
+        let mut a1 = f64x4::from_array_t(token, [gram[4], gram[5], gram[6], gram[7]]);
+        let mut a2 = f64x4::from_array_t(token, [gram[8], gram[9], gram[11], gram[12]]);
+        let mut a3 = f64x4::from_array_t(token, [gram[13], gram[14], gram[15], gram[16]]);
+        let mut a4 = f64x4::from_array_t(token, [gram[17], gram[18], gram[19], gram[22]]);
+        let mut a5 = f64x4::from_array_t(token, [gram[23], gram[24], gram[25], gram[26]]);
+        let mut a6 = f64x4::from_array_t(token, [gram[27], gram[28], gram[29], gram[33]]);
+        let mut a7 = f64x4::from_array_t(token, [gram[34], gram[35], gram[36], gram[37]]);
+        let mut a8 = f64x4::from_array_t(token, [gram[38], gram[39], gram[44], gram[45]]);
+        let mut a9 = f64x4::from_array_t(token, [gram[46], gram[47], gram[48], gram[49]]);
+        let mut a10 = f64x4::from_array_t(token, [gram[55], gram[56], gram[57], gram[58]]);
+        let mut a11 = f64x4::from_array_t(token, [gram[59], gram[66], gram[67], gram[68]]);
+        let mut a12 = f64x4::from_array_t(token, [gram[69], gram[77], gram[78], gram[79]]);
+        let mut a13 = f64x4::from_array_t(token, [gram[88], gram[89], gram[99], 0.0]);
+        for r in 0..nrows {
+            let row_off = r * stride;
+            for c in 0..ncols {
+                let mut y = [0.0f64; 10];
+                for k in 0..9 {
+                    y[k] = img[offsets[k] + row_off + c] as f64;
+                }
+                y[9] = p[(row0 + r) * stride + col0 + c] as f64;
+                a0 += f64x4::from_array_t(token, [y[0], y[0], y[0], y[0]])
+                    * f64x4::from_array_t(token, [y[0], y[1], y[2], y[3]]);
+                a1 += f64x4::from_array_t(token, [y[0], y[0], y[0], y[0]])
+                    * f64x4::from_array_t(token, [y[4], y[5], y[6], y[7]]);
+                a2 += f64x4::from_array_t(token, [y[0], y[0], y[1], y[1]])
+                    * f64x4::from_array_t(token, [y[8], y[9], y[1], y[2]]);
+                a3 += f64x4::from_array_t(token, [y[1], y[1], y[1], y[1]])
+                    * f64x4::from_array_t(token, [y[3], y[4], y[5], y[6]]);
+                a4 += f64x4::from_array_t(token, [y[1], y[1], y[1], y[2]])
+                    * f64x4::from_array_t(token, [y[7], y[8], y[9], y[2]]);
+                a5 += f64x4::from_array_t(token, [y[2], y[2], y[2], y[2]])
+                    * f64x4::from_array_t(token, [y[3], y[4], y[5], y[6]]);
+                a6 += f64x4::from_array_t(token, [y[2], y[2], y[2], y[3]])
+                    * f64x4::from_array_t(token, [y[7], y[8], y[9], y[3]]);
+                a7 += f64x4::from_array_t(token, [y[3], y[3], y[3], y[3]])
+                    * f64x4::from_array_t(token, [y[4], y[5], y[6], y[7]]);
+                a8 += f64x4::from_array_t(token, [y[3], y[3], y[4], y[4]])
+                    * f64x4::from_array_t(token, [y[8], y[9], y[4], y[5]]);
+                a9 += f64x4::from_array_t(token, [y[4], y[4], y[4], y[4]])
+                    * f64x4::from_array_t(token, [y[6], y[7], y[8], y[9]]);
+                a10 += f64x4::from_array_t(token, [y[5], y[5], y[5], y[5]])
+                    * f64x4::from_array_t(token, [y[5], y[6], y[7], y[8]]);
+                a11 += f64x4::from_array_t(token, [y[5], y[6], y[6], y[6]])
+                    * f64x4::from_array_t(token, [y[9], y[6], y[7], y[8]]);
+                a12 += f64x4::from_array_t(token, [y[6], y[7], y[7], y[7]])
+                    * f64x4::from_array_t(token, [y[9], y[7], y[8], y[9]]);
+                a13 += f64x4::from_array_t(token, [y[8], y[8], y[9], 0.0])
+                    * f64x4::from_array_t(token, [y[8], y[9], y[9], 0.0]);
+            }
+        }
+        let v = a0.to_array();
+        gram[0] = v[0];
+        gram[1] = v[1];
+        gram[2] = v[2];
+        gram[3] = v[3];
+        let v = a1.to_array();
+        gram[4] = v[0];
+        gram[5] = v[1];
+        gram[6] = v[2];
+        gram[7] = v[3];
+        let v = a2.to_array();
+        gram[8] = v[0];
+        gram[9] = v[1];
+        gram[11] = v[2];
+        gram[12] = v[3];
+        let v = a3.to_array();
+        gram[13] = v[0];
+        gram[14] = v[1];
+        gram[15] = v[2];
+        gram[16] = v[3];
+        let v = a4.to_array();
+        gram[17] = v[0];
+        gram[18] = v[1];
+        gram[19] = v[2];
+        gram[22] = v[3];
+        let v = a5.to_array();
+        gram[23] = v[0];
+        gram[24] = v[1];
+        gram[25] = v[2];
+        gram[26] = v[3];
+        let v = a6.to_array();
+        gram[27] = v[0];
+        gram[28] = v[1];
+        gram[29] = v[2];
+        gram[33] = v[3];
+        let v = a7.to_array();
+        gram[34] = v[0];
+        gram[35] = v[1];
+        gram[36] = v[2];
+        gram[37] = v[3];
+        let v = a8.to_array();
+        gram[38] = v[0];
+        gram[39] = v[1];
+        gram[44] = v[2];
+        gram[45] = v[3];
+        let v = a9.to_array();
+        gram[46] = v[0];
+        gram[47] = v[1];
+        gram[48] = v[2];
+        gram[49] = v[3];
+        let v = a10.to_array();
+        gram[55] = v[0];
+        gram[56] = v[1];
+        gram[57] = v[2];
+        gram[58] = v[3];
+        let v = a11.to_array();
+        gram[59] = v[0];
+        gram[66] = v[1];
+        gram[67] = v[2];
+        gram[68] = v[3];
+        let v = a12.to_array();
+        gram[69] = v[0];
+        gram[77] = v[1];
+        gram[78] = v[2];
+        gram[79] = v[3];
+        let v = a13.to_array();
+        gram[88] = v[0];
+        gram[89] = v[1];
+        gram[99] = v[2];
+    } else {
+        let mut a0 = f64x4::from_array_t(token, [gram[0], gram[1], gram[2], gram[3]]);
+        let mut a1 = f64x4::from_array_t(token, [gram[4], gram[5], gram[6], gram[7]]);
+        let mut a2 = f64x4::from_array_t(token, [gram[8], gram[10], gram[11], gram[12]]);
+        let mut a3 = f64x4::from_array_t(token, [gram[13], gram[14], gram[15], gram[16]]);
+        let mut a4 = f64x4::from_array_t(token, [gram[17], gram[20], gram[21], gram[22]]);
+        let mut a5 = f64x4::from_array_t(token, [gram[23], gram[24], gram[25], gram[26]]);
+        let mut a6 = f64x4::from_array_t(token, [gram[30], gram[31], gram[32], gram[33]]);
+        let mut a7 = f64x4::from_array_t(token, [gram[34], gram[35], gram[40], gram[41]]);
+        let mut a8 = f64x4::from_array_t(token, [gram[42], gram[43], gram[44], gram[50]]);
+        let mut a9 = f64x4::from_array_t(token, [gram[51], gram[52], gram[53], gram[60]]);
+        let mut a10 = f64x4::from_array_t(token, [gram[61], gram[62], gram[70], gram[71]]);
+        let mut a11 = f64x4::from_array_t(token, [gram[80], 0.0, 0.0, 0.0]);
+        for r in 0..nrows {
+            let row_off = r * stride;
+            for c in 0..ncols {
+                let mut y = [0.0f64; 10];
+                for k in 0..9 {
+                    y[k] = img[offsets[k] + row_off + c] as f64;
+                }
+                a0 += f64x4::from_array_t(token, [y[0], y[0], y[0], y[0]])
+                    * f64x4::from_array_t(token, [y[0], y[1], y[2], y[3]]);
+                a1 += f64x4::from_array_t(token, [y[0], y[0], y[0], y[0]])
+                    * f64x4::from_array_t(token, [y[4], y[5], y[6], y[7]]);
+                a2 += f64x4::from_array_t(token, [y[0], y[1], y[1], y[1]])
+                    * f64x4::from_array_t(token, [y[8], y[1], y[2], y[3]]);
+                a3 += f64x4::from_array_t(token, [y[1], y[1], y[1], y[1]])
+                    * f64x4::from_array_t(token, [y[4], y[5], y[6], y[7]]);
+                a4 += f64x4::from_array_t(token, [y[1], y[2], y[2], y[2]])
+                    * f64x4::from_array_t(token, [y[8], y[2], y[3], y[4]]);
+                a5 += f64x4::from_array_t(token, [y[2], y[2], y[2], y[2]])
+                    * f64x4::from_array_t(token, [y[5], y[6], y[7], y[8]]);
+                a6 += f64x4::from_array_t(token, [y[3], y[3], y[3], y[3]])
+                    * f64x4::from_array_t(token, [y[3], y[4], y[5], y[6]]);
+                a7 += f64x4::from_array_t(token, [y[3], y[3], y[4], y[4]])
+                    * f64x4::from_array_t(token, [y[7], y[8], y[4], y[5]]);
+                a8 += f64x4::from_array_t(token, [y[4], y[4], y[4], y[5]])
+                    * f64x4::from_array_t(token, [y[6], y[7], y[8], y[5]]);
+                a9 += f64x4::from_array_t(token, [y[5], y[5], y[5], y[6]])
+                    * f64x4::from_array_t(token, [y[6], y[7], y[8], y[6]]);
+                a10 += f64x4::from_array_t(token, [y[6], y[6], y[7], y[7]])
+                    * f64x4::from_array_t(token, [y[7], y[8], y[7], y[8]]);
+                a11 += f64x4::from_array_t(token, [y[8], 0.0, 0.0, 0.0])
+                    * f64x4::from_array_t(token, [y[8], 0.0, 0.0, 0.0]);
+            }
+        }
+        let v = a0.to_array();
+        gram[0] = v[0];
+        gram[1] = v[1];
+        gram[2] = v[2];
+        gram[3] = v[3];
+        let v = a1.to_array();
+        gram[4] = v[0];
+        gram[5] = v[1];
+        gram[6] = v[2];
+        gram[7] = v[3];
+        let v = a2.to_array();
+        gram[8] = v[0];
+        gram[10] = v[1];
+        gram[11] = v[2];
+        gram[12] = v[3];
+        let v = a3.to_array();
+        gram[13] = v[0];
+        gram[14] = v[1];
+        gram[15] = v[2];
+        gram[16] = v[3];
+        let v = a4.to_array();
+        gram[17] = v[0];
+        gram[20] = v[1];
+        gram[21] = v[2];
+        gram[22] = v[3];
+        let v = a5.to_array();
+        gram[23] = v[0];
+        gram[24] = v[1];
+        gram[25] = v[2];
+        gram[26] = v[3];
+        let v = a6.to_array();
+        gram[30] = v[0];
+        gram[31] = v[1];
+        gram[32] = v[2];
+        gram[33] = v[3];
+        let v = a7.to_array();
+        gram[34] = v[0];
+        gram[35] = v[1];
+        gram[40] = v[2];
+        gram[41] = v[3];
+        let v = a8.to_array();
+        gram[42] = v[0];
+        gram[43] = v[1];
+        gram[44] = v[2];
+        gram[50] = v[3];
+        let v = a9.to_array();
+        gram[51] = v[0];
+        gram[52] = v[1];
+        gram[53] = v[2];
+        gram[60] = v[3];
+        let v = a10.to_array();
+        gram[61] = v[0];
+        gram[62] = v[1];
+        gram[70] = v[2];
+        gram[71] = v[3];
+        let v = a11.to_array();
+        gram[80] = v[0];
+    }
+}
+
 #[archmage::attune(_*_t, define(f64x4))]
 pub(crate) fn gram_rows_inner(
     token: Token,
