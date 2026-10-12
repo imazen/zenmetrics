@@ -361,6 +361,12 @@ benchmark-contract-check:
 benchmark-study-check:
     TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_study.py
 
+benchmark-pair-check:
+    TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_pair.py
+
+benchmark-pair +args:
+    python3 -B scripts/jobsys/build_benchmark_pair.py {{args}}
+
 benchmark-analysis-check:
     TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_analysis.py
 
@@ -394,6 +400,9 @@ iqa-study-build output:
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/latency
     just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features heap-phases
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
+
+iqa-pair-lines-check binaries case output:
+    python3 -B scripts/jobsys/check_iqa_pair_lines.py {{binaries}} {{case}} {{output}}
 
 iqa-hdr-check binaries output:
     python3 -B scripts/jobsys/check_iqa_hdr.py {{binaries}} {{output}}

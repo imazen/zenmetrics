@@ -184,6 +184,7 @@ pub(super) fn run(case_path: &Path, bytes: &[u8]) -> Result<(), Error> {
         "rayon_threads":rayon::current_num_threads(),"simd":"runtime dispatch; effective tier not observed",
         "timing_boundary":"native absolute-nits metric construction and scoring; input unpacking excluded"}})
     );
+    super::emit_pair_timings(&durations);
     Ok(())
 }
 

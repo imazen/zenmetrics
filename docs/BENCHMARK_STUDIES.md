@@ -253,3 +253,41 @@ requires NumPy and independently checks centered least-squares coefficients
 and residuals on three synthetic irregular size panels. Those controls qualify
 the numerical implementation only. Real size-grid replay and repeated-measure
 uncertainty validation remain prerequisites for inferential fit output.
+
+## Compatible implementation A/B plans
+
+```sh
+just benchmark-pair LEFT_STUDY LEFT_PACKAGED LEFT_CELL RIGHT_STUDY RIGHT_PACKAGED RIGHT_CELL NEW_DIRECTORY --blocks 4 --deadline 300
+```
+
+The builder accepts qualified ordinary release `wall` cells with identical
+metric, case/viewing/reuse/thread settings, operation budget, input bytes,
+expected correctness, testbed/machine/domain/target and selected runner. It
+refuses cross-metric, hardware/OS or unlike workload pairing. Implementations
+and build identities may differ. It copies the verified bundles and emits a
+native `zenbench pair` plan with A/A enabled, a fixed block budget and exactly
+`3 * blocks` fresh child invocations. Generating a plan executes nothing.
+
+The ordinary driver supplies `METRIC_NS=` lines only when the plan explicitly
+sets `ZENMETRICS_PAIR_TIMING=1`. Each line is one retained internal duration;
+the runner averages the vector once per invocation. The checker validates
+**each** arm against the prequalified correctness and operation count, including
+A/A, and refuses instrumented memory output. Matching two incorrect outputs
+is insufficient. Timing lines do not enter the correctness artifact.
+
+Use the hash-bound runner to dry-run the plan and inspect resolved identities
+and placement before execution. The currently tested runner is the older
+exploratory external-pair protocol. The generated plan therefore labels itself
+exploratory and cannot issue a Confirm acceptance verdict. Use the current
+qualified zenbench confirmation protocol and its fixed margins/error bounds
+for a performance decision; these descriptive fleet records and exploration
+plans cannot substitute for that gate. There is no pooling across resumes.
+
+On the local asymmetric host, native dry-run refused the unrestricted process
+boundary under the default placement policy. An explicitly unrestricted
+**dry-run** validated syntax and resolved the 12-invocation plan; it ran no
+workloads and certified no measurement conditions. `just benchmark-pair-check`
+checks compatibility, launch counts and refusal of two equally wrong outputs.
+`just iqa-pair-lines-check BINARIES CASE NEW_DIRECTORY` checks actual ordinary
+and memory driver extraction, exact output parity and instrumented-output
+refusal as a functional control, without a statistical comparison.

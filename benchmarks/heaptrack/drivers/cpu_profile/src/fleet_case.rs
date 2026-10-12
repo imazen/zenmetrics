@@ -150,6 +150,14 @@ fn require_bundle_inputs(paths: &[&Path]) -> Result<(), Error> {
     Ok(())
 }
 
+fn emit_pair_timings(durations: &[u128]) {
+    if std::env::var("ZENMETRICS_PAIR_TIMING").as_deref() == Ok("1") {
+        for nanoseconds in durations {
+            println!("METRIC_NS={nanoseconds}");
+        }
+    }
+}
+
 pub(super) fn run(args: &[String]) -> Result<(), Error> {
     if args.len() != 3 {
         return Err("usage: new-metrics-wall fleet CASE.json".into());
@@ -297,5 +305,6 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
         "simd":"metric runtime dispatch; effective tier not observed",
         "display":"standard_fhd for cvvdp","output":"scalar score products; no retained diffmap"}})
     );
+    emit_pair_timings(&durations);
     Ok(())
 }
