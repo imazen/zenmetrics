@@ -85,13 +85,24 @@ fn make_csf(m: usize, n: usize) -> Vec<f32> {
     let csf_px = |r: usize, c: usize| {
         let x = (r as f64 - m as f64 / 2.0 + 0.5) * 64.0 / n as f64;
         let y = (c as f64 - n as f64 / 2.0 + 0.5) * 64.0 / n as f64;
-        let mut rf = libm::hypot(x, y);
-        let s = 0.15 * libm::cos(4.0 * libm::atan2(y, x)) + 0.85;
+        // cos(4·atan2(y,x)) collapses to the Chebyshev T4 of x/r —
+        // 8c⁴−8c²+1 — so no atan2/cos/hypot calls survive: at the origin
+        // (x=y=0) the rf<7.8909 early-out makes the 0/0 moot, and the
+        // axis cases give T4(0)=T4(±1)=1 = cos(4·atan2) exactly.
+        let r2 = x * x + y * y;
+        let mut rf = libm::sqrt(r2);
+        let s = if r2 == 0.0 {
+            1.0
+        } else {
+            let c2 = x * x / r2;
+            0.15 * (8.0 * c2 * c2 - 8.0 * c2 + 1.0) + 0.85
+        };
         rf /= s;
         if rf < 7.8909 {
             0.9809
         } else {
-            (2.6 * (0.0192 + 0.114 * rf) * libm::exp(-libm::pow(0.114 * rf, 1.1))) as f32
+            let t = 0.114 * rf;
+            (2.6 * (0.0192 + t) * libm::exp(-libm::exp(1.1 * libm::log(t)))) as f32
         }
     };
     #[cfg(feature = "parallel")]

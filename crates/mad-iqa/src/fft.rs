@@ -327,6 +327,62 @@ impl Plan {
         }
     }
 
+    /// [`Self::run_bluestein8`] for a column block read straight out of
+    /// the row-major plane: `bufs[j]` would be column `x+j`, so the
+    /// gather transposes 8×8 tiles from `buf` directly — the col-major
+    /// scratch's input round-trip is skipped entirely. Transformed
+    /// columns still scatter into `dcols` (col-major scratch, eight
+    /// `height`-length columns) for the row-major write-back sweep.
+    fn run_bluestein8_cols(
+        &self,
+        buf: &[Complex],
+        width: usize,
+        x: usize,
+        dcols: &mut [Complex],
+        re8: &mut [f32],
+        im8: &mut [f32],
+        re8b: &mut [f32],
+        im8b: &mut [f32],
+    ) {
+        let PlanKind::Bluestein { chirp, m, .. } = &self.kind else {
+            unreachable!("run_bluestein8_cols on non-Bluestein plan")
+        };
+        let (n, m) = (self.n, *m);
+        debug_assert!(dcols.len() >= 8 * n);
+        // Gather: a[k] = buf[k·width + x+j]·chirp[k], zeroed past n.
+        // Software-pipelined: the next 8×8 tile's strided row loads
+        // issue while this tile's chirp multiplies run — the 26 KB
+        // strides are latency-bound, not bandwidth-bound.
+        let mb = m & !7;
+        let mut xtile = gather_cols_tile(buf, width, n, x, 0);
+        for k0 in (0..mb).step_by(8) {
+            let cur = xtile;
+            if k0 + 8 < mb {
+                xtile = gather_cols_tile(buf, width, n, x, k0 + 8);
+            }
+            blue8_gather_cols_apply(cur, n, k0, chirp, re8, im8);
+        }
+        for k in mb..m {
+            for j in 0..8 {
+                let (re, im) = if k < n {
+                    let v = buf[k * width + x + j];
+                    let c = chirp[k];
+                    (v.re * c.re - v.im * c.im, v.re * c.im + v.im * c.re)
+                } else {
+                    (0.0, 0.0)
+                };
+                re8[k * 8 + j] = re;
+                im8[k * 8 + j] = im;
+            }
+        }
+        self.blue8_inner(re8, im8, re8b, im8b);
+        let s = 1.0 / m as f32;
+        let mut dbufs: Vec<&mut [Complex]> = dcols.chunks_mut(n).take(8).collect();
+        for k0 in (0..n).step_by(8) {
+            blue8_scatter(&mut dbufs, n, k0, chirp, s, re8, im8);
+        }
+    }
+
     /// The SoA middle of the batch Bluestein pass: `fft → ·bf → fft` on
     /// the `m·8` planes, ping-ponging the two scratch pairs.
     fn blue8_inner(&self, re8: &mut [f32], im8: &mut [f32], re8b: &mut [f32], im8b: &mut [f32]) {
@@ -717,6 +773,78 @@ fn blue8_gather(
     }
 }
 
+/// The 8×8 tile read of [`Plan::run_bluestein8_cols`]'s
+/// direct-from-plane gather: `(br[j][c], bi[j][c])` = the real/imag
+/// parts of `buf[(k0+c)·width + x+j]` — eight contiguous 8-wide row
+/// loads (fixed bounds lower to ymm loads + deinterleave), transposed
+/// in-register. Split from the chirp apply so the caller can pipeline
+/// the strided loads a tile ahead.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn gather_cols_tile(
+    buf: &[Complex],
+    width: usize,
+    n: usize,
+    x: usize,
+    k0: usize,
+) -> ([[f32; 8]; 8], [[f32; 8]; 8]) {
+    let rows = n.saturating_sub(k0).min(8);
+    let mut br = [[0.0f32; 8]; 8];
+    let mut bi = [[0.0f32; 8]; 8];
+    if rows == 8 {
+        for c in 0..8 {
+            let src: &[Complex; 8] = buf[(k0 + c) * width + x..(k0 + c) * width + x + 8]
+                .try_into()
+                .unwrap();
+            for j in 0..8 {
+                br[j][c] = src[j].re;
+                bi[j][c] = src[j].im;
+            }
+        }
+    } else {
+        for c in 0..rows {
+            let src = &buf[(k0 + c) * width + x..(k0 + c) * width + x + 8];
+            for j in 0..8 {
+                br[j][c] = src[j].re;
+                bi[j][c] = src[j].im;
+            }
+        }
+    }
+    (br, bi)
+}
+
+/// The chirp-apply half of [`Plan::run_bluestein8_cols`]'s gather:
+/// `re8[k′·8+j] = tile[j][k′]·chirp[k′]` for k′ = k0..k0+8, zero-filled
+/// past `n` — the same stores as the row-side [`blue8_gather`].
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn blue8_gather_cols_apply(
+    tile: ([[f32; 8]; 8], [[f32; 8]; 8]),
+    n: usize,
+    k0: usize,
+    chirp: &[Complex],
+    re8: &mut [f32],
+    im8: &mut [f32],
+) {
+    let (br, bi) = tile;
+    let rows = n.saturating_sub(k0).min(8);
+    for k in 0..8 {
+        let d = (k0 + k) * 8;
+        if k >= rows {
+            re8[d..d + 8].fill(0.0);
+            im8[d..d + 8].fill(0.0);
+            continue;
+        }
+        let c = chirp[k0 + k];
+        let (mut r, mut i) = ([0.0f32; 8], [0.0f32; 8]);
+        for j in 0..8 {
+            let (zr, zi) = (br[j][k], bi[j][k]);
+            r[j] = zr * c.re - zi * c.im;
+            i[j] = zr * c.im + zi * c.re;
+        }
+        re8[d..d + 8].copy_from_slice(&r);
+        im8[d..d + 8].copy_from_slice(&i);
+    }
+}
+
 /// The full [`Plan::run_bluestein8`]/[`Plan::run_bluestein8_io`] gather:
 /// `re8[k·8+j] = (conj·f)(sbufs[j][k])·chirp[k]` for `k < n`, zero past it
 /// — 8×8 [`blue8_gather`] tiles plus the scalar `m % 8` tail.
@@ -889,9 +1017,7 @@ fn cols_scatter_tile(
             let src_c: &[Complex; 8] = src[l * height + y0..l * height + y0 + 8]
                 .try_into()
                 .unwrap();
-            for k in 0..8 {
-                col[k] = src_c[k];
-            }
+            *col = *src_c;
         }
         for k in 0..8 {
             let mut out = [Complex::default(); 8];
@@ -945,9 +1071,7 @@ fn cols_scatter_tile_mag(
             let src_c: &[Complex; 8] = src[l * height + y0..l * height + y0 + 8]
                 .try_into()
                 .unwrap();
-            for k in 0..8 {
-                col[k] = src_c[k];
-            }
+            *col = *src_c;
         }
         for k in 0..8 {
             let mut out = [0.0f32; 8];
@@ -1609,34 +1733,24 @@ fn fft2_cols_conj_scale(
                         |(re8, im8, re8b, im8b, a), (b, block)| {
                             let bx = x0 + b * CB;
                             let nb = CB.min(width - bx);
-                            for y0 in (0..height).step_by(8) {
-                                cols_gather_tile(
-                                    ro,
-                                    width,
-                                    bx,
-                                    y0,
-                                    (height - y0).min(8),
-                                    nb,
-                                    block,
-                                    height,
-                                );
-                            }
-                            let mut bufs: Vec<&mut [Complex]> =
-                                block.chunks_mut(height).take(nb).collect();
                             if nb == CB {
-                                hplan.run_bluestein8(
-                                    &mut bufs,
-                                    re8,
-                                    im8,
-                                    re8b,
-                                    im8b,
-                                    RowMul::Id,
-                                    false,
-                                    0,
-                                    0,
+                                hplan.run_bluestein8_cols(
+                                    ro, width, bx, block, re8, im8, re8b, im8b,
                                 );
                             } else {
-                                for c in bufs {
+                                for y0 in (0..height).step_by(8) {
+                                    cols_gather_tile(
+                                        ro,
+                                        width,
+                                        bx,
+                                        y0,
+                                        (height - y0).min(8),
+                                        nb,
+                                        block,
+                                        height,
+                                    );
+                                }
+                                for c in block.chunks_mut(height).take(nb) {
                                     hplan.run_bluestein(c, a, RowMul::Id, false, 0, 0);
                                 }
                             }
@@ -1712,30 +1826,43 @@ fn fft2_cols_conj_scale(
     let mut x = 0usize;
     while x < width {
         let nb = CB.min(width - x);
-        for y0 in (0..height).step_by(8) {
-            cols_gather_tile(
-                buf,
-                width,
-                x,
-                y0,
-                (height - y0).min(8),
-                nb,
-                &mut cols,
-                height,
-            );
-        }
         match &mut blue {
-            Some((re8, im8, re8b, im8b, a)) => {
-                let mut bufs: Vec<&mut [Complex]> = cols.chunks_mut(height).take(nb).collect();
-                if nb == CB {
-                    hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b, RowMul::Id, false, 0, 0);
-                } else {
-                    for c in bufs {
-                        hplan.run_bluestein(c, a, RowMul::Id, false, 0, 0);
-                    }
+            Some((re8, im8, re8b, im8b, _)) if nb == CB => {
+                // Full block: gather straight out of the plane — the
+                // transformed columns land back in `cols` for the
+                // scatter sweep below.
+                hplan.run_bluestein8_cols(buf, width, x, &mut cols, re8, im8, re8b, im8b);
+            }
+            Some((_, _, _, _, a)) => {
+                for y0 in (0..height).step_by(8) {
+                    cols_gather_tile(
+                        buf,
+                        width,
+                        x,
+                        y0,
+                        (height - y0).min(8),
+                        nb,
+                        &mut cols,
+                        height,
+                    );
+                }
+                for c in cols.chunks_mut(height).take(nb) {
+                    hplan.run_bluestein(c, a, RowMul::Id, false, 0, 0);
                 }
             }
             None => {
+                for y0 in (0..height).step_by(8) {
+                    cols_gather_tile(
+                        buf,
+                        width,
+                        x,
+                        y0,
+                        (height - y0).min(8),
+                        nb,
+                        &mut cols,
+                        height,
+                    );
+                }
                 for c in cols.chunks_exact_mut(height).take(nb) {
                     hplan.run(c);
                 }
