@@ -149,6 +149,13 @@ CLI: `--metric hdrvdp3 --hdr --hdrvdp3-ppd <f64>` (required) with
 `--hdrvdp3-age <u8>` (24) and `--hdrvdp3-surround none|mean|<cd/m²>` (none).
 Defaults match the jpeg-ai-qaf harness configuration.
 
+The v3 Fourier path reuses one f64 plan per axis and shares those plans
+between convolution's forward and inverse transforms. Bluestein chirps,
+filter transforms and scratch are reused without changing operation order.
+Exact comparisons cover repeated plans, arbitrary lengths and 2-D row/column
+ordering; the reference goldens retain their existing tolerances.
+[Measurements and commands](../../benchmarks/ranked_cpu_2026-10-12.md#hdr-vdp-3).
+
 Caveats carried over from the reference (full record in
 [`DIVERGENCES.md`](../../DIVERGENCES.md)): the `'srgb-display'` encoding
 string is case-sensitive inconsistently upstream; `ignore_freqs_lower_than`

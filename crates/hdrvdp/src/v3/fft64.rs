@@ -67,6 +67,7 @@ impl C64 {
 }
 
 /// Forward DFT of `buf`, in place. Any length.
+#[cfg(test)]
 pub(super) fn fft(buf: &mut [C64]) {
     let n = buf.len();
     if n <= 1 {
@@ -81,6 +82,7 @@ pub(super) fn fft(buf: &mut [C64]) {
 }
 
 /// Inverse DFT of `buf`, in place, normalised by `1/n`.
+#[cfg(test)]
 pub(super) fn ifft(buf: &mut [C64]) {
     let n = buf.len();
     if n <= 1 {
@@ -135,6 +137,7 @@ fn fft_radix2(buf: &mut [C64], stages: &[Vec<C64>]) {
 }
 
 /// Bluestein chirp-z transform for arbitrary `n`.
+#[cfg(test)]
 fn bluestein(buf: &mut [C64]) {
     let n = buf.len();
     let m = (2 * n - 1).next_power_of_two();
@@ -176,41 +179,172 @@ fn bluestein(buf: &mut [C64]) {
     }
 }
 
-/// Forward 2-D DFT of a row-major `height × width` buffer, in place.
-pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize) {
-    assert_eq!(buf.len(), width * height, "fft2: buffer size mismatch");
-    for row in buf.chunks_exact_mut(width) {
-        fft(row);
-    }
-    let mut col = vec![C64::default(); height];
-    for x in 0..width {
-        for (y, c) in col.iter_mut().enumerate() {
-            *c = buf[y * width + x];
+enum Plan {
+    Trivial,
+    Radix2(Vec<Vec<C64>>),
+    Bluestein {
+        chirp: Vec<C64>,
+        bf: Vec<C64>,
+        stages: Vec<Vec<C64>>,
+        scratch: Vec<C64>,
+    },
+}
+
+impl Plan {
+    fn new(n: usize) -> Self {
+        if n <= 1 {
+            return Self::Trivial;
         }
-        fft(&mut col);
-        for (y, c) in col.iter().enumerate() {
-            buf[y * width + x] = *c;
+        if n.is_power_of_two() {
+            return Self::Radix2(radix2_stages(n));
+        }
+        let m = (2 * n - 1).next_power_of_two();
+        let chirp: Vec<C64> = (0..n)
+            .map(|k| {
+                let kk = (k as u128 * k as u128 % (2 * n as u128)) as f64;
+                C64::expi(-PI * kk / n as f64)
+            })
+            .collect();
+        let stages = radix2_stages(m);
+        let mut bf = vec![C64::default(); m];
+        for (k, &c) in chirp.iter().enumerate() {
+            bf[k] = c.conj();
+            if k > 0 {
+                bf[m - k] = c.conj();
+            }
+        }
+        fft_radix2(&mut bf, &stages);
+        Self::Bluestein {
+            chirp,
+            bf,
+            stages,
+            scratch: vec![C64::default(); m],
+        }
+    }
+
+    fn forward(&mut self, buf: &mut [C64]) {
+        match self {
+            Self::Trivial => {}
+            Self::Radix2(stages) => fft_radix2(buf, stages),
+            Self::Bluestein {
+                chirp,
+                bf,
+                stages,
+                scratch,
+            } => {
+                scratch.fill(C64::default());
+                for (k, b) in buf.iter().enumerate() {
+                    scratch[k] = b.mul(chirp[k]);
+                }
+                fft_radix2(scratch, stages);
+                for (x, &y) in scratch.iter_mut().zip(bf.iter()) {
+                    *x = x.mul(y);
+                }
+                for v in scratch.iter_mut() {
+                    *v = v.conj();
+                }
+                fft_radix2(scratch, stages);
+                let s = 1.0 / scratch.len() as f64;
+                for v in scratch.iter_mut() {
+                    *v = v.conj();
+                    v.re *= s;
+                    v.im *= s;
+                }
+                for (k, out) in buf.iter_mut().enumerate() {
+                    *out = scratch[k].mul(chirp[k]);
+                }
+            }
+        }
+    }
+
+    fn inverse(&mut self, buf: &mut [C64]) {
+        let n = buf.len();
+        if n <= 1 {
+            return;
+        }
+        for v in buf.iter_mut() {
+            *v = v.conj();
+        }
+        self.forward(buf);
+        let s = 1.0 / n as f64;
+        for v in buf.iter_mut() {
+            *v = v.conj();
+            v.re *= s;
+            v.im *= s;
         }
     }
 }
 
+struct Plan2 {
+    width: usize,
+    height: usize,
+    rows: Plan,
+    columns: Plan,
+    column: Vec<C64>,
+}
+
+impl Plan2 {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            rows: Plan::new(width),
+            columns: Plan::new(height),
+            column: vec![C64::default(); height],
+        }
+    }
+
+    fn columns(&mut self, buf: &mut [C64], inverse: bool) {
+        for x in 0..self.width {
+            for (y, c) in self.column.iter_mut().enumerate() {
+                *c = buf[y * self.width + x];
+            }
+            if inverse {
+                self.columns.inverse(&mut self.column);
+            } else {
+                self.columns.forward(&mut self.column);
+            }
+            for (y, c) in self.column.iter().enumerate() {
+                buf[y * self.width + x] = *c;
+            }
+        }
+    }
+
+    fn forward(&mut self, buf: &mut [C64]) {
+        assert_eq!(
+            buf.len(),
+            self.width * self.height,
+            "fft2: buffer size mismatch"
+        );
+        for row in buf.chunks_exact_mut(self.width) {
+            self.rows.forward(row);
+        }
+        self.columns(buf, false);
+    }
+
+    fn inverse(&mut self, buf: &mut [C64]) {
+        assert_eq!(
+            buf.len(),
+            self.width * self.height,
+            "ifft2: buffer size mismatch"
+        );
+        self.columns(buf, true);
+        for row in buf.chunks_exact_mut(self.width) {
+            self.rows.inverse(row);
+        }
+    }
+}
+
+/// Forward 2-D DFT of a row-major `height × width` buffer, in place.
+pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize) {
+    Plan2::new(width, height).forward(buf);
+}
+
 /// Inverse 2-D DFT of a row-major `height × width` buffer, in place,
 /// normalised by `1/(width·height)`.
-pub(super) fn ifft2(buf: &mut [C64], width: usize, height: usize) {
-    assert_eq!(buf.len(), width * height, "ifft2: buffer size mismatch");
-    let mut col = vec![C64::default(); height];
-    for x in 0..width {
-        for (y, c) in col.iter_mut().enumerate() {
-            *c = buf[y * width + x];
-        }
-        ifft(&mut col);
-        for (y, c) in col.iter().enumerate() {
-            buf[y * width + x] = *c;
-        }
-    }
-    for row in buf.chunks_exact_mut(width) {
-        ifft(row);
-    }
+#[cfg(test)]
+fn ifft2(buf: &mut [C64], width: usize, height: usize) {
+    Plan2::new(width, height).inverse(buf);
 }
 
 /// `np.fft.fft2` of a real row-major `width × height` buffer.
@@ -302,11 +436,12 @@ pub(super) fn conv_fft_pad(
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
     let padded = pad_image(x, width, height, pad_w, pad_h, pad);
     let mut buf: Vec<C64> = padded.iter().map(|&v| C64::new(v, 0.0)).collect();
-    fft2(&mut buf, pad_w, pad_h);
+    let mut plan = Plan2::new(pad_w, pad_h);
+    plan.forward(&mut buf);
     for (b, &f) in buf.iter_mut().zip(filter) {
         *b = C64::new(b.re * f, b.im * f);
     }
-    ifft2(&mut buf, pad_w, pad_h);
+    plan.inverse(&mut buf);
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {
         for x0 in 0..width {
@@ -319,6 +454,89 @@ pub(super) fn conv_fft_pad(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn same_bits(actual: &[C64], expected: &[C64]) {
+        assert_eq!(actual.len(), expected.len());
+        for (i, (a, b)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(a.re.to_bits(), b.re.to_bits(), "real bin {i}");
+            assert_eq!(a.im.to_bits(), b.im.to_bits(), "imaginary bin {i}");
+        }
+    }
+
+    #[test]
+    fn reused_1d_plans_match_unplanned_bits() {
+        for n in [0, 1, 2, 3, 4, 8, 17, 96, 100, 97, 180, 1021, 1024] {
+            let mut plan = Plan::new(n);
+            for seed in 0..4 {
+                let input: Vec<C64> = (0..n)
+                    .map(|k| {
+                        if seed == 3 {
+                            C64::default()
+                        } else {
+                            C64::new(
+                                (k as f64 * 0.37 + seed as f64).sin(),
+                                (k as f64 * 1.1 - seed as f64).cos(),
+                            )
+                        }
+                    })
+                    .collect();
+                let mut expected = input.clone();
+                fft(&mut expected);
+                let mut got = input;
+                plan.forward(&mut got);
+                same_bits(&got, &expected);
+                ifft(&mut expected);
+                plan.inverse(&mut got);
+                same_bits(&got, &expected);
+            }
+        }
+    }
+
+    #[test]
+    fn reused_2d_plans_match_ordered_row_column_bits() {
+        for (w, h) in [(1, 1), (7, 13), (64, 32), (97, 100), (128, 96)] {
+            let mut plan = Plan2::new(w, h);
+            for seed in 0..3 {
+                let input: Vec<C64> = (0..w * h)
+                    .map(|i| C64::new((i as f64 * 0.37 + seed as f64).sin(), 0.0))
+                    .collect();
+                let mut expected = input.clone();
+                for row in expected.chunks_exact_mut(w) {
+                    fft(row);
+                }
+                let mut col = vec![C64::default(); h];
+                for x in 0..w {
+                    for y in 0..h {
+                        col[y] = expected[y * w + x];
+                    }
+                    fft(&mut col);
+                    for y in 0..h {
+                        expected[y * w + x] = col[y];
+                    }
+                }
+                let mut got = input;
+                plan.forward(&mut got);
+                same_bits(&got, &expected);
+                let mut wrapper_inverse = got.clone();
+                ifft2(&mut wrapper_inverse, w, h);
+                for x in 0..w {
+                    for y in 0..h {
+                        col[y] = expected[y * w + x];
+                    }
+                    ifft(&mut col);
+                    for y in 0..h {
+                        expected[y * w + x] = col[y];
+                    }
+                }
+                for row in expected.chunks_exact_mut(w) {
+                    ifft(row);
+                }
+                plan.inverse(&mut got);
+                same_bits(&got, &expected);
+                same_bits(&wrapper_inverse, &expected);
+            }
+        }
+    }
 
     #[test]
     fn fft_ifft_roundtrip() {

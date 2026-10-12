@@ -319,8 +319,8 @@ ranked-profile binary output w="3355" h="2516" reps="30":
     sudo -n perf report -i "{{output}}.data" --stdio --no-children --percent-limit 1 > "{{output}}.report"
 
 # Absolute-luminance end-to-end HDR probe, with explicit generation and thread count.
-ranked-hdr-probe binary version side reps threads output:
-    TMPDIR="$HOME/tmp" RAYON_NUM_THREADS="{{threads}}" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- perf stat -e instructions,cycles -- taskset -c 2 "{{binary}}" "{{side}}" "{{reps}}" "{{version}}" 2>&1 | tee "{{output}}"
+ranked-hdr-probe binary version side reps threads output cpus="2":
+    TMPDIR="$HOME/tmp" RAYON_NUM_THREADS="{{threads}}" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- perf stat -e instructions,cycles -- taskset -c "{{cpus}}" "{{binary}}" "{{side}}" "{{reps}}" "{{version}}" 2>&1 | tee "{{output}}"
 
 # Exact coefficient audit for the proposed libvmaf separable low-pass.
 lpf-rank-check:
@@ -333,6 +333,9 @@ ranked-zenbench binary threads prefix metrics size="1024":
 # Prepare a fresh-process exploratory A/B with A/A and an exact score-bit checker.
 ranked-pair-plan baseline candidate baseline_rev candidate_rev output threads="1" cpus="2":
     python3 -B scripts/bench/ranked-metric-pair.py plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{output}}" --threads "{{threads}}" --cpus "{{cpus}}"
+
+ranked-hdr-pair-plan baseline candidate baseline_rev candidate_rev output version="v3" side="250" threads="1" cpus="2":
+    python3 -B scripts/bench/ranked-metric-pair.py plan "{{baseline}}" "{{candidate}}" "{{baseline_rev}}" "{{candidate_rev}}" "{{output}}" --threads "{{threads}}" --cpus "{{cpus}}" --hdr-version "{{version}}" --side "{{side}}"
 
 ranked-pair runner plan output cpus="2":
     TMPDIR="$HOME/tmp" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- "{{runner}}" exec --cpu-policy auto --cpu-set "{{cpus}}" "{{runner}}" -- pair "{{plan}}" --output "{{output}}" --wait 30

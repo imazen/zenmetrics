@@ -658,7 +658,10 @@ fn fft2_rows_conj_mul(
         // is where thread scaling actually lives. Groups of eight take
         // the SoA batch path (each m-length radix-2 stage vectorizes)
         // on both the serial and the parallel path.
+        #[cfg(feature = "parallel")]
         let mut done = false;
+        #[cfg(not(feature = "parallel"))]
+        let done = false;
         #[cfg(feature = "parallel")]
         if let PlanKind::Bluestein { m, .. } = &wplan.kind {
             use rayon::prelude::*;

@@ -1,0 +1,12 @@
+Runner source: zenbench ac675d3a (0.1.10)
+Baseline source: 62b5a420; candidate: accompanying HDR-VDP-3 FFT-plan change
+Command: just ranked-pair-scope <runner> <plan> <new-output> 2
+Plan recipe: just ranked-hdr-pair-plan <baseline> <candidate> 62b5a420 hdrvdp3-fft-plans <new-plan> v3 250
+Host: r7900x; Rayon threads: 1; outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0
+Input: perf_probe absolute-luminance field; Quality, 30 pixels/degree, age 24, no surround, luminance-default emission, reference options; no excluded warmup
+Three complete metric calls per invocation; each Q/Q_JOD/P_map/S_map/gamut digest checked against baseline
+Raw evidence: r7900x:/home/lilith/tmp/zm-hdrvdp3-pair-20261012/packet.json.gz
+Packet SHA-256: 8081d66bb10c56b5c572fd6bcdf2a0d1e106733fab765fea388ca89c6f60f0a8
+Console receipt: r7900x:/home/lilith/tmp/zm-hdrvdp3-pair-console.log
+run-heavy: done rc=0 26s | peak-RSS 0.02GiB | min-avail 24183MiB | peak-load 0.53
+The inner run-heavy reported no user scope; the outer system scope supplied the hard limits.

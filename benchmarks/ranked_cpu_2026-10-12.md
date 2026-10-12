@@ -342,3 +342,66 @@ Receipts: [baseline 1T](psnrhvs_baseline_1t_2026-10-12.log),
 the reports records raw sample paths, binary hashes and resource receipts.
 Use `ranked-wall` with `-p psnrhvs`, `ranked-profile`, and the paired
 recipes.
+
+## HDR-VDP-3
+
+Baseline source: `62b5a420`, using the extended existing `perf_probe`
+example. Both generations consume the same absolute-luminance field;
+v3 explicitly uses Quality, 30 pixels/degree, age 24, no surround,
+luminance-default emission and reference options. The v3 candidate
+reuses one f64 plan per axis, including twiddles, Bluestein chirps and
+filter transforms. One scratch buffer serves successive transforms.
+Convolution shares its plans between forward and inverse transforms.
+Butterfly arithmetic and axis order remain unchanged.
+
+| One-thread observation, three calls | Baseline | Candidate |
+|---|---:|---:|
+| 250² seconds per call | 0.648 / 0.643 / 0.643 | 0.423 / 0.420 / 0.418 |
+| 250² retired instructions | 46,881,022,790 | 30,653,210,397 |
+| 250² cycles | 10,695,895,767 | 7,002,355,294 |
+| 256² seconds per call | 0.380 / 0.355 / 0.335 | 0.338 / 0.315 / 0.297 |
+| 256² retired instructions | 19,112,998,532 | 17,000,579,747 |
+| 512² seconds per call | 1.401 / 1.385 / 1.387 | 1.300 / 1.232 / 1.231 |
+| 512² retired instructions | 77,369,534,518 | 68,983,043,340 |
+| 250² / 256² run-heavy peak RSS, GiB | 0.02 | 0.02 |
+| 512² run-heavy peak RSS, GiB | 0.09 | 0.09 |
+
+The non-power-of-two case benefits from cached Bluestein setup. Its
+four-block paired latency change is exploratory -34.17826938080178%,
+with A/A change +0.21689984320927078%. Every invocation's three output
+digests match. There is no confirmation interval or promotion verdict.
+The raw point observations at 256² and 512² remain within the earlier
+15% noise caution. Memory peaks did not fall.
+
+With sixteen Rayon threads and affinity to CPUs 0–23, the 250² baseline
+is 0.650/0.644/0.642 seconds; candidate 0.425/0.419/0.419 seconds.
+This particular v3 workload does not improve with that thread setting.
+Both thread settings return digest `d4052bae6722d1b6`; the 256² and
+512² digests are `5b3aad535338dd14` and `bf6301622110de34`. The untouched
+v2 control returns `8598d191fde2f435` with 0.040/0.034/0.034 seconds
+in both builds at 256². Digests include complete maps and scalar outputs.
+
+Default/all-feature unit tests pass. The full all-feature suite retains
+its official/reference goldens and map assertions, including the 21-case
+v3 corpus, unchanged. New tests compare every real/imaginary output bit
+against the previous per-transform implementation for repeated zero and
+nonzero inputs, radix-2 and arbitrary lengths, and mixed 2-D shapes.
+All-target all-feature clippy passes with `-D warnings`. The no-default
+wasm32 library check and clippy pass; the v2 feature-conditional local
+variable no longer triggers an unused-mut warning there.
+
+Receipts: [250² baseline](hdrvdp3_baseline_250_2026-10-12.log),
+[250² candidate](hdrvdp3_candidate_250_2026-10-12.log),
+[256² baseline](hdrvdp3_baseline_256_2026-10-12.log),
+[256² candidate](hdrvdp3_candidate_256_2026-10-12.log),
+[512² baseline](hdrvdp3_baseline_512_2026-10-12.log),
+[512² candidate](hdrvdp3_candidate_512_2026-10-12.log),
+[16T baseline](hdrvdp3_baseline_250_16t_2026-10-12.log),
+[16T candidate](hdrvdp3_candidate_250_16t_2026-10-12.log),
+[v2 baseline](hdrvdp2_baseline_256_2026-10-12.log),
+[v2 candidate](hdrvdp2_candidate_256_2026-10-12.log),
+[paired export](hdrvdp3_pair_2026-10-12.csv),
+[paired provenance and resource receipt](hdrvdp3_pair_2026-10-12.meta).
+Build `-p hdrvdp --features parallel,avx512 --example perf_probe` in
+the pinned snapshot, then use `ranked-hdr-probe` or
+`ranked-hdr-pair-plan` / `ranked-pair-scope`.

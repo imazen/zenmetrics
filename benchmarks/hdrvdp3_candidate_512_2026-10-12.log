@@ -1,0 +1,17 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24081MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/hdrvdp-candidate 512 3 v3
+rep 0: v3 512x512 in 1.300 s  res_q=9.65763233204363836  digest=0xbf6301622110de34
+rep 1: v3 512x512 in 1.232 s  res_q=9.65763233204363836  digest=0xbf6301622110de34
+rep 2: v3 512x512 in 1.231 s  res_q=9.65763233204363836  digest=0xbf6301622110de34
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/hdrvdp-candidate 512 3 v3':
+
+       68983043340      instructions                                                          
+       20743662789      cycles                                                                
+
+       3.792887189 seconds time elapsed
+
+       3.631404000 seconds user
+       0.161017000 seconds sys
+
+
+run-heavy: done rc=0 4s | peak-RSS 0.09GiB | min-avail 24079MiB | peak-load 2.49
