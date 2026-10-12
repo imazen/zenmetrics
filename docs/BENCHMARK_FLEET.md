@@ -201,3 +201,18 @@ baked adapter and runner, then the baked worker's actual Parquet ledger and blob
 recovery, including `ZEN_PERSISTENT_EXEC=1` with `ZEN_WARM_KINDS=all`.
 A local Linux x86-64 image passed this control on 2026-10-12. This does not certify
 an ARM image or the separate Windows/macOS worker deployment.
+
+For a Windows worker, install Python and put `benchmark-exec.cmd` beside
+`benchmark_exec.py`; point `ZEN_EXEC` at the absolute `.cmd` path. The shim
+preserves the worker's JSON stdin contract. Use
+`benchmark_exec.py cancel ATTEMPT` (with the same work directory) for portable
+file-based cancellation; Windows process termination does not provide Unix
+signal-handler grace. This packaging path still requires a native worker smoke
+run on the target before enrollment.
+
+`just iqa-heap-oracle MEMORY_BINARY CASE.json NEW_DIRECTORY` runs a real IQA case
+under heaptrack and checks its global Rust-allocation contribution against the
+ledger's lifetime maximum. The fixture needs debug symbols containing
+`HeapProfiler`. This is a whole-process control, not an external validation of
+individual phase peaks. Use the normal driver with the `heaptrack` backend to
+observe intercepted native allocations as a separately labeled quantity.

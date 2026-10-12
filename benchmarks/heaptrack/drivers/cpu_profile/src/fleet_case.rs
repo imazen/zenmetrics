@@ -23,13 +23,13 @@ struct Case {
 
 struct Phase {
     #[cfg(feature = "heap-phases")]
-    phase: zenbench_memory::HeapPhase,
+    phase: zenbench::HeapPhase,
 }
 impl Phase {
     fn begin() -> Result<Self, Error> {
         Ok(Self {
             #[cfg(feature = "heap-phases")]
-            phase: zenbench_memory::HeapPhase::begin()?,
+            phase: zenbench::HeapPhase::begin()?,
         })
     }
     fn finish(self, scope: &str, records: &mut Vec<Value>) -> Result<(), Error> {
@@ -181,9 +181,13 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     if let Some(path) = std::env::var_os("ZENBENCH_RESULT_FILE") {
         std::fs::write(path, serde_json::to_vec(&result)?)?;
     }
+    #[cfg(feature = "heap-phases")]
+    let lifetime = serde_json::to_value(zenbench::HeapSnapshot::get()?)?;
+    #[cfg(not(feature = "heap-phases"))]
+    let lifetime = Value::Null;
     println!(
         "{}",
-        json!({"driver":result,"operation_ns":durations,
+        json!({"driver":result,"operation_ns":durations,"lifetime":lifetime,
         "timing_usable":!cfg!(feature="heap-phases"),"workload":{"metric":case.metric,
         "width":case.width,"height":case.height,"source_stride_bytes":case.stride_bytes,
         "dispatch_layout":"packed RGB8 after preparation","pixel_format":case.pixel_format,

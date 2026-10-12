@@ -266,12 +266,15 @@ def main():
         print('\n'.join(sorted(tokens)))
     elif len(sys.argv) == 1:
         sys.stdout.buffer.write(execute(json.load(sys.stdin)))
+    elif len(sys.argv) == 3 and sys.argv[1] == 'cancel':
+        attempt = token(sys.argv[2])
+        (Path(os.environ['ZENBENCH_WORK_DIR']) / f'cancel-{attempt}').touch(exist_ok=True)
     elif len(sys.argv) == 3 and sys.argv[1] == 'stage':
         print(json.dumps(stage(Path(sys.argv[2]).resolve()), separators=(',', ':')))
     elif len(sys.argv) == 4 and sys.argv[1] == 'collect':
         print(json.dumps(collect(sys.argv[2], Path(sys.argv[3])), separators=(',', ':')))
     else:
-        raise ValueError('usage: benchmark_exec.py [capabilities | stage BUNDLE | collect RECEIPT_OR_SHA NEW_DIRECTORY]; no arguments executes a stdin job')
+        raise ValueError('usage: benchmark_exec.py [capabilities | stage BUNDLE | collect RECEIPT_OR_SHA NEW_DIRECTORY | cancel ATTEMPT]; no arguments executes a stdin job')
 
 if __name__ == '__main__':
     try:

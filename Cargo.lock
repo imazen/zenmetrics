@@ -1162,7 +1162,6 @@ dependencies = [
  "vmaf",
  "vsi",
  "zenbench 0.1.10",
- "zenbench 0.1.9",
  "zenmetrics-api",
  "zenmetrics-cli",
  "zenmetrics-corpus",
