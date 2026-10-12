@@ -2396,7 +2396,9 @@ fn dispatch_exec(
     program: &str,
     job: &DesiredJob,
 ) -> Result<Vec<u8>, HandlerError> {
-    if persistent && !matches!(job.kind, JobKind::Benchmark { .. }) {
+    if matches!(job.kind, JobKind::Benchmark { .. }) {
+        exec_command_deadline(program, job, cell_deadline_secs(job))
+    } else if persistent {
         exec_command_persistent(program, job)
     } else {
         exec_command(program, job)
@@ -3271,6 +3273,19 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             skipped: 0,
             already_poison: 0,
         });
+    }
+
+    // Benchmark admission can outlive a claim TTL. Require the path that
+    // renews a live observation's lease instead of permitting a duplicate run.
+    if desired
+        .iter()
+        .any(|j| matches!(j.kind, JobKind::Benchmark { .. }))
+        && (resolve_epoch_cfg(&ctl, cfg.epoch_shard).is_some()
+            || (cfg.claims.is_some() && cfg.chunk_wall_sec <= 0.0))
+    {
+        return Err(WorkerRunError::Config(
+            "benchmark jobs require lease claiming with a positive chunk duration for heartbeat renewal".into(),
+        ));
     }
 
     let policy = RetryPolicy {

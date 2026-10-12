@@ -23,6 +23,15 @@ pub fn kind_label(k: &JobKind) -> String {
         JobKind::Diffmap { metric, .. } => format!("diffmap:{metric}"),
         JobKind::Resample { kernel, .. } => format!("resample:{kernel}"),
         JobKind::Bake { view } => format!("bake:{view}"),
+        JobKind::Benchmark {
+            experiment,
+            machine,
+            domain,
+            replicate,
+            ..
+        } => {
+            format!("benchmark:{experiment}/{machine}/{domain}/{replicate}")
+        }
         JobKind::FitCell { argv, .. } => {
             format!(
                 "fit_cell:{}",

@@ -216,6 +216,7 @@ def execute(job):
         receipt = {"kind":"zenfleet_benchmark_observation","schema":1,"job_id":canonical_job_id(kind,job["inputs"]),
                    "attempt":attempt,"status":packet['status'],"packet":artifacts['packet.json'],
                    "artifacts":artifacts,"interrupted":interrupted,"runner_exit":process.returncode,
+                   "retention":{"regenerability":"not_regenerable","references":[v['sha256'] for v in artifacts.values()]},
                    "commands":{"decode":"fetch packet blob, then read its JSON; raw evidence is hash-addressed",
                                "validity":"require packet.status == complete before comparison"}}
         encoded = json.dumps(receipt,separators=(',',':')).encode()
