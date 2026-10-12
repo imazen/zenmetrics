@@ -119,7 +119,7 @@ pub mod context;
 pub use enough;
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
-#[cfg(feature = "cvvdp")]
+#[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
 pub use metric::CvvdpConfig;
 #[doc(hidden)]
 pub use metric::MetricInner;

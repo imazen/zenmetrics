@@ -105,7 +105,7 @@ cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
 # the GPU crates' feature unification — but it makes the standalone
 # `--no-default-features --features cpu-metrics` build (CI cpu job, phase 5)
 # self-sufficient instead of accidentally relying on a GPU crate being on.
-cpu-cvvdp = ["dep:cvvdp", "cvvdp/std"]
+cpu-cvvdp = ["dep:cvvdp", "cvvdp?/std"]
 cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 # `zensim/custom-profiles` unlocks `ZensimProfile::Custom` + `ProfileParams::
@@ -113,7 +113,7 @@ cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 # wrap a ZNPR bake loaded at runtime. Enabling an existing non-default feature
 # of a dependency is not a public-API addition here.
 cpu-zensim = ["dep:zensim", "dep:bytemuck", "zensim?/custom-profiles", "zensim-deprecated-profiles", "zensim-candidate-profiles"]
-cpu-iwssim = ["dep:iwssim", "iwssim/std", "iwssim/avx512", "iwssim/parallel"]
+cpu-iwssim = ["dep:iwssim", "iwssim?/std", "iwssim?/avx512", "iwssim?/parallel"]
 # hdrvdp is std-only (no no_std split) and CPU-only by design — no GPU twin.
 cpu-hdrvdp = ["dep:hdrvdp"]
 # Umbrella: every optimized native-CPU metric (parallels `all-metrics`).

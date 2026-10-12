@@ -7,8 +7,14 @@
 //! `cvvdp@<display>`) into a typed [`CvvdpDisplay`], and passes that type
 //! inward. The display's [`CvvdpDisplay::slug`] names the output column.
 
-#[cfg(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
+#[cfg(all(not(feature = "cpu-cvvdp"), feature = "gpu-cvvdp"))]
+use zenmetrics_api::cvvdp::params::DisplayGeometry;
+#[cfg(all(not(feature = "cpu-cvvdp"), feature = "gpu-cvvdp"))]
 pub use zenmetrics_api::cvvdp::params::{CustomDisplay, CvvdpDisplay, DisplayPreset};
+#[cfg(feature = "cpu-cvvdp")]
+use zenmetrics_api::cvvdp_cpu::params::DisplayGeometry;
+#[cfg(feature = "cpu-cvvdp")]
+pub use zenmetrics_api::cvvdp_cpu::params::{CustomDisplay, CvvdpDisplay, DisplayPreset};
 
 /// Study displays the CLI defines on top of the official presets. Not in
 /// upstream's `display_models.json`, so they are [`CustomDisplay`]s.
@@ -24,7 +30,6 @@ pub const STUDY_DISPLAYS: &[&str] = &["squintly_n1", "squintly_m2"];
 /// (500 cd/m², 250 lux ambient).
 #[cfg(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
 fn study_display(name: &str) -> Option<CvvdpDisplay> {
-    use zenmetrics_api::cvvdp::params::DisplayGeometry;
     let distance_m = match name {
         "squintly_n1" => 0.30,
         "squintly_m2" => 0.15,

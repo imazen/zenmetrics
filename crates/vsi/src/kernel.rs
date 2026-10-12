@@ -731,10 +731,16 @@ pub fn vsi_core_tier_neon_t(token: archmage::NeonToken, p: Planes<'_>) -> f64 {
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::attune]
+#[archmage::attune(wasm128)]
 pub fn vsi_core_tier_wasm(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     pool_body!(token, V, 8, p)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+fn vsi_core_tier_wasm128_t(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
+    vsi_core_tier_wasm(token, p)
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.

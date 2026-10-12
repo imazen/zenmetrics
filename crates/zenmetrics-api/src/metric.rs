@@ -7,6 +7,9 @@ use crate::memory_mode::MemoryMode;
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
 
+#[cfg(all(feature = "cpu-cvvdp", not(feature = "cvvdp")))]
+use cvvdp as cvvdp_gpu;
+
 // ---------------------------------------------------------------
 // Backend
 // ---------------------------------------------------------------
@@ -339,7 +342,7 @@ pub enum MetricParams {
     /// cvvdp with an explicitly selected display — see [`CvvdpConfig`].
     /// There is no default: build it with [`MetricParams::cvvdp`] or
     /// [`MetricParams::cvvdp_with`].
-    #[cfg(feature = "cvvdp")]
+    #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
     Cvvdp(CvvdpConfig),
     /// [`butteraugli_gpu::ButteraugliParams`] passthrough.
     #[cfg(feature = "butter")]
@@ -377,6 +380,9 @@ pub enum MetricParams {
     /// [`iwssim_gpu::IwssimParams`] passthrough.
     #[cfg(feature = "iwssim")]
     Iwssim(iwssim_gpu::IwssimParams),
+    /// CPU-only IWSSIM uses the native default parameters.
+    #[cfg(all(feature = "cpu-iwssim", not(feature = "iwssim")))]
+    Iwssim(()),
     /// [`zensim_gpu::ZensimParams`] passthrough.
     #[cfg(feature = "zensim")]
     Zensim(zensim_gpu::ZensimParams),
@@ -409,14 +415,14 @@ pub enum MetricParams {
 /// umbrella deliberately has no default display —
 /// [`MetricParams::try_default_for`] returns [`Error::DisplayRequired`] for
 /// cvvdp. Build it with [`MetricParams::cvvdp`].
-#[cfg(feature = "cvvdp")]
+#[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
 #[derive(Debug, Clone)]
 pub struct CvvdpConfig {
     display: cvvdp_gpu::params::CvvdpDisplay,
     params: cvvdp_gpu::CvvdpParams,
 }
 
-#[cfg(feature = "cvvdp")]
+#[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
 impl CvvdpConfig {
     /// Bind cvvdp to `display` (its photometry becomes `params.display`,
     /// its geometry sets pixels per degree).
@@ -506,7 +512,7 @@ impl MetricParams {
     /// let m = Metric::new(MetricKind::Cvvdp, Backend::Cuda, w, h,
     ///                     MetricParams::cvvdp(DisplayPreset::StandardFhd))?;
     /// ```
-    #[cfg(feature = "cvvdp")]
+    #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
     pub fn cvvdp(display: impl Into<cvvdp_gpu::params::CvvdpDisplay>) -> Self {
         Self::Cvvdp(CvvdpConfig::new(display))
     }
@@ -517,7 +523,7 @@ impl MetricParams {
     #[allow(unused_variables)]
     pub fn try_default_for(kind: MetricKind) -> Result<Self> {
         match kind {
-            #[cfg(feature = "cvvdp")]
+            #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
             // No default viewing condition: the caller must pick a display.
             MetricKind::Cvvdp => Err(Error::DisplayRequired { kind: "cvvdp" }),
             #[cfg(feature = "butter")]
@@ -534,6 +540,8 @@ impl MetricParams {
             MetricKind::Dssim => Ok(Self::Dssim(())),
             #[cfg(feature = "iwssim")]
             MetricKind::Iwssim => Ok(Self::Iwssim(iwssim_gpu::IwssimParams::DEFAULT)),
+            #[cfg(all(feature = "cpu-iwssim", not(feature = "iwssim")))]
+            MetricKind::Iwssim => Ok(Self::Iwssim(())),
             #[cfg(feature = "zensim")]
             MetricKind::Zensim => Ok(Self::Zensim(zensim_gpu::ZensimParams::default_weights())),
             #[cfg(all(feature = "cpu-zensim", not(feature = "zensim")))]
@@ -1631,6 +1639,8 @@ impl MetricInner {
         dis_g: &[f32],
         dis_b: &[f32],
     ) -> Result<Score> {
+        // CPU-only builds reject planar ingress; these planes are used by GPU arms.
+        let _ = (ref_r, ref_g, ref_b, dis_r, dis_g, dis_b);
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1731,6 +1741,8 @@ impl MetricInner {
         dis_g: &[f32],
         dis_b: &[f32],
     ) -> Result<Scores> {
+        // CPU-only builds reject planar ingress; these planes are used by GPU arms.
+        let _ = (ref_r, ref_g, ref_b, dis_r, dis_g, dis_b);
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1850,6 +1862,7 @@ impl MetricInner {
             feature = "cpu-iwssim",
             feature = "cpu-hdrvdp"
         ))]
+        #[allow(irrefutable_let_patterns)] // CPU-only builds contain this one variant.
         if let MetricInner::Cpu(s, _) = self {
             return s
                 .compute_from_linear_interleaved(ref_rgb, dis_rgb)
@@ -1880,6 +1893,7 @@ impl MetricInner {
             feature = "cpu-iwssim",
             feature = "cpu-hdrvdp"
         ))]
+        #[allow(irrefutable_let_patterns)] // CPU-only builds contain this one variant.
         if let MetricInner::Cpu(s, _) = self {
             let (score, pnorm3) = s.compute_from_linear_interleaved(ref_rgb, dis_rgb)?;
             return Ok(match pnorm3 {

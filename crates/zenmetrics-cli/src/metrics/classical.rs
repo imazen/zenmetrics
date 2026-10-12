@@ -174,7 +174,10 @@ fn gaussian_into(
 ) {
     let xlo = 5.min(w);
     let xhi = w.saturating_sub(5).max(xlo);
+    #[cfg(not(target_family = "wasm"))]
     let mut ran_par = false;
+    #[cfg(target_family = "wasm")]
+    let ran_par = false;
     #[cfg(not(target_family = "wasm"))]
     if rayon::current_num_threads() > 1 && h >= 32 {
         use rayon::prelude::*;
@@ -245,7 +248,10 @@ fn gaussian_into(
     }
     let ylo = 5.min(h);
     let yhi = h.saturating_sub(5).max(ylo);
+    #[cfg(not(target_family = "wasm"))]
     let mut ran_par2 = false;
+    #[cfg(target_family = "wasm")]
+    let ran_par2 = false;
     #[cfg(not(target_family = "wasm"))]
     if rayon::current_num_threads() > 1 && h >= 32 {
         use rayon::prelude::*;
