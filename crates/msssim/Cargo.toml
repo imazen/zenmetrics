@@ -39,6 +39,11 @@ rayon = { version = "1.10", optional = true }
 vmaf-head-sys = "=0.2.0"
 psnrhvs = { workspace = true }
 
+# Compile the CLI's actual classical kernel without its decoder graph.
+[[example]]
+name = "classical_wall"
+required-features = ["parallel"]
+
 # Lint EXCEPTION crate: carries existing unsafe debt, so it cannot
 # inherit [workspace.lints] — unsafe_code is `forbid` there and
 # member overrides are not possible under workspace=true. Mirror of

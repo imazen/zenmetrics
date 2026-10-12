@@ -126,3 +126,39 @@ The first prototype kept scalar argument-reduction selection; it retired
 score bits. The landed version also vectorizes that selection.
 [prototype 1T](haarpsi_candidate_1t_2026-10-12.log),
 [prototype 16T](haarpsi_candidate_16t_2026-10-12.log).
+
+## RGB SSIM
+
+Baseline production source: `16ef88a9`, with the accompanying
+`msssim/examples/classical_wall.rs` harness. It compiles the CLI scoring
+source directly; native CLI tests exercise the production input conversion.
+The candidate retains f64, reflected borders, all coefficients, tap order
+and the final score fold. Interior convolutions accumulate sixteen outputs
+locally before storing, instead of reading and writing the full output row
+for every tap. Disassembly contains packed f64 multiply/add operations.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 1621.1 | 1000.9 |
+| One-thread instructions, five calls | 65,983,425,931 | 60,424,291,115 |
+| One-thread cycles, five calls | 44,582,556,016 | 27,525,912,117 |
+| Sixteen-thread ms/call | 463.1 | 453.8 |
+| Run-heavy peak RSS, GiB, both thread counts | 0.55 | 0.55 |
+
+The sixteen-thread wall observations are within the noise caution. Both
+thread counts return exactly `3febf5b219da7a49`. An independent reflected
+scalar filter compares both intermediate and output bits, including square
+and product ingress, narrow shapes, odd dimensions and block tails.
+All four classical tests pass through the native CLI. Its full CPU-metrics
+library configuration passes 33 tests, with two pre-existing ignored tests.
+The lean example passes clippy with `-D warnings` and scoped rustfmt.
+Full CLI clippy remains blocked by existing unused/unreachable code and
+doc-format warnings in GPU dependencies. No expectations were changed.
+
+Receipts:
+[baseline 1T](ssim_baseline_1t_2026-10-12.log),
+[baseline 16T](ssim_baseline_16t_2026-10-12.log),
+[candidate 1T](ssim_candidate_1t_2026-10-12.log),
+[candidate 16T](ssim_candidate_16t_2026-10-12.log).
+Build with `just snap-cargo @ build --release -p msssim
+--features parallel,avx512 --example classical_wall`, then use `ranked-wall`.

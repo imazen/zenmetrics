@@ -206,16 +206,7 @@ fn gaussian_into(
                 }
                 let span = xhi - xlo;
                 if span > 0 {
-                    let s0 = &row[0..span];
-                    for (o, &v) in out[xlo..xhi].iter_mut().zip(s0) {
-                        *o = v * k[0];
-                    }
-                    for (i, &ki) in k.iter().enumerate().skip(1) {
-                        let s = &row[i..i + span];
-                        for (o, &v) in out[xlo..xhi].iter_mut().zip(s) {
-                            *o += v * ki;
-                        }
-                    }
+                    gaussian_interior(row, 1, k, &mut out[xlo..xhi]);
                 }
             },
         );
@@ -248,16 +239,7 @@ fn gaussian_into(
             }
             let span = xhi - xlo;
             if span > 0 {
-                let s0 = &row[0..span];
-                for (o, &v) in out[xlo..xhi].iter_mut().zip(s0) {
-                    *o = v * k[0];
-                }
-                for (i, &ki) in k.iter().enumerate().skip(1) {
-                    let s = &row[i..i + span];
-                    for (o, &v) in out[xlo..xhi].iter_mut().zip(s) {
-                        *o += v * ki;
-                    }
-                }
+                gaussian_interior(&row, 1, k, &mut out[xlo..xhi]);
             }
         }
     }
@@ -289,16 +271,7 @@ fn gaussian_into(
                 .enumerate()
                 .for_each(|(ci, chunk)| {
                     let base = (ylo - 5) * w + ci * w * 16;
-                    let s0 = &temp[base..base + chunk.len()];
-                    for (o, &v) in chunk.iter_mut().zip(s0) {
-                        *o = v * k[0];
-                    }
-                    for (i, &ki) in k.iter().enumerate().skip(1) {
-                        let s = &temp[base + i * w..base + i * w + chunk.len()];
-                        for (o, &v) in chunk.iter_mut().zip(s) {
-                            *o += v * ki;
-                        }
-                    }
+                    gaussian_interior(&temp[base..], w, k, chunk);
                 });
         }
         ran_par2 = true;
@@ -316,17 +289,36 @@ fn gaussian_into(
         }
         let vspan = (yhi - ylo) * w;
         if vspan > 0 {
-            let s0 = &temp[(ylo - 5) * w..(ylo - 5) * w + vspan];
-            for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s0) {
-                *o = v * k[0];
-            }
-            for (i, &ki) in k.iter().enumerate().skip(1) {
-                let s = &temp[(ylo - 5 + i) * w..(ylo - 5 + i) * w + vspan];
-                for (o, &v) in dst[ylo * w..yhi * w].iter_mut().zip(s) {
-                    *o += v * ki;
-                }
+            gaussian_interior(&temp[(ylo - 5) * w..], w, k, &mut dst[ylo * w..yhi * w]);
+        }
+    }
+}
+
+/// Accumulate each interior block locally before writing it once. `stride`
+/// is one for horizontal taps and the row width for vertical taps. The
+/// eleven products and additions retain the previous f64 order.
+fn gaussian_interior(src: &[f64], stride: usize, k: &[f64; 11], dst: &mut [f64]) {
+    let (blocks, tail) = dst.as_chunks_mut::<16>();
+    for (block, out) in blocks.iter_mut().enumerate() {
+        let base = block * 16;
+        let first: &[f64; 16] = src[base..base + 16].try_into().unwrap();
+        let mut acc: [f64; 16] = core::array::from_fn(|j| first[j] * k[0]);
+        for (tap, &weight) in k.iter().enumerate().skip(1) {
+            let off = base + tap * stride;
+            let values: &[f64; 16] = src[off..off + 16].try_into().unwrap();
+            for j in 0..16 {
+                acc[j] += values[j] * weight;
             }
         }
+        *out = acc;
+    }
+    let base = blocks.len() * 16;
+    for (j, out) in tail.iter_mut().enumerate() {
+        let mut acc = src[base + j] * k[0];
+        for (tap, &weight) in k.iter().enumerate().skip(1) {
+            acc += src[base + j + tap * stride] * weight;
+        }
+        *out = acc;
     }
 }
 
@@ -376,6 +368,64 @@ fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_gaussian_matches_reflected_scalar_bits() {
+        for (w, h) in [
+            (1, 37),
+            (37, 1),
+            (4, 6),
+            (11, 11),
+            (19, 17),
+            (33, 35),
+            (64, 63),
+        ] {
+            let a: Vec<f64> = (0..w * h).map(|i| (i * 37 % 251) as f64 / 251.0).collect();
+            let b: Vec<f64> = (0..w * h).map(|i| (i * 91 % 241) as f64 / 241.0).collect();
+            let k = kernel11();
+            for (src2, sq) in [(None, false), (None, true), (Some(b.as_slice()), false)] {
+                let transformed: Vec<f64> = a
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &v)| {
+                        if let Some(other) = src2 {
+                            v * other[i]
+                        } else if sq {
+                            v * v
+                        } else {
+                            v
+                        }
+                    })
+                    .collect();
+                let mut expected_h = vec![0.0; w * h];
+                for y in 0..h {
+                    for x in 0..w {
+                        expected_h[y * w + x] = htap(&transformed[y * w..(y + 1) * w], w, x, &k);
+                    }
+                }
+                let mut actual_h = vec![0.0; w * h];
+                let mut actual = vec![0.0; w * h];
+                gaussian_into(&a, src2, sq, w, h, &k, &mut actual, &mut actual_h);
+                for y in 0..h {
+                    for x in 0..w {
+                        let i = y * w + x;
+                        assert_eq!(
+                            actual_h[i].to_bits(),
+                            expected_h[i].to_bits(),
+                            "horizontal {w}x{h}, ({x},{y}), square={sq}"
+                        );
+                        let expected = vtap(&expected_h, w, h, x, y, &k);
+                        assert_eq!(
+                            actual[i].to_bits(),
+                            expected.to_bits(),
+                            "vertical {w}x{h}, ({x},{y}), square={sq}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn identical_and_impulse() {
         let pixels = vec![128; 192 * 192 * 3];
