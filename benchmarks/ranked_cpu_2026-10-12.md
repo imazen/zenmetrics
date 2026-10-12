@@ -405,3 +405,47 @@ Receipts: [250² baseline](hdrvdp3_baseline_250_2026-10-12.log),
 Build `-p hdrvdp --features parallel,avx512 --example perf_probe` in
 the pinned snapshot, then use `ranked-hdr-probe` or
 `ranked-hdr-pair-plan` / `ranked-pair-scope`.
+
+## FSIM fused ingress
+
+Baseline source: `68651fc6`, retaining the earlier decimated-column win.
+The candidate converts RGB values to Y/I/Q inside each consumed
+horizontal box window, avoiding full-resolution color planes. Conversion
+values, horizontal/vertical sum order and final normalization are
+unchanged. Independent compact rows run through Rayon when large enough;
+the luma-only path shares the same implementation with one channel.
+Factor-one inputs retain direct plane conversion and avoid its previous
+extra copy.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 669.44 | 594.10 |
+| One-thread instructions, five calls | 90,358,060,491 | 83,985,712,591 |
+| One-thread cycles, five calls | 18,551,116,239 | 16,167,906,900 |
+| Sixteen-thread ms/call | 262.75 | 136.64 |
+| One-thread run-heavy peak RSS, GiB | 0.09 | 0.07 |
+| Sixteen-thread run-heavy peak RSS, GiB | 0.11 | 0.13 |
+
+The single-thread RSS falls; the sixteen-thread observation uses more
+RSS. The timing change there is exploratory, without an interval. The
+four-block single-thread paired comparison reports -13.544669810273469%
+latency change and A/A +0.13874499293387374%, within the earlier suite's
+15% noise caution. No confirmation or promotion verdict is claimed.
+Every arm returns both exact score bits
+`3fefd56321153b56/3fefb97ee068a939`.
+
+The independent materialized conversion/filter test compares every
+Y/I/Q and luma output bit at factors 1–12, odd/narrow shapes, partial
+windows, padded rows and truncated final padding. Its large case also
+exercises the parallel compact-row path. Default/all-feature goldens,
+stride and tier tests pass unchanged; all-target all-feature clippy with
+`-D warnings`, scoped fmt and the no-default wasm32 library check pass.
+
+Receipts: [baseline 1T](fsim_fusion_baseline_1t_2026-10-12.log),
+[candidate 1T](fsim_fusion_candidate_1t_2026-10-12.log),
+[baseline 16T](fsim_fusion_baseline_16t_2026-10-12.log),
+[candidate 16T](fsim_fusion_candidate_16t_2026-10-12.log),
+[paired export](fsim_fusion_pair_2026-10-12.csv),
+[paired provenance and resource receipt](fsim_fusion_pair_2026-10-12.meta).
+Use the preceding FSIM build command and the `ranked-wall` /
+`ranked-pair-plan` / `ranked-pair-scope` recipes.

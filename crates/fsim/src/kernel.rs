@@ -275,9 +275,130 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
     (w2, h2, out)
 }
 
+fn for_each_compact_row<T: Send>(
+    out: &mut [T],
+    width: usize,
+    op: impl Fn(usize, &mut [T]) + Send + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    if out.len() >= 1 << 16 && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(width)
+            .enumerate()
+            .for_each(|(y, row)| op(y, row));
+        return;
+    }
+    for (y, row) in out.chunks_mut(width).enumerate() {
+        op(y, row);
+    }
+}
+
+// Convert each RGB pixel inside its retained horizontal window. This keeps
+// the same rounded color values and sum order without full-size YIQ planes.
+fn decimate_rgb8<const N: usize>(
+    data: &[u8],
+    w: usize,
+    h: usize,
+    stride: usize,
+    f: usize,
+    coefficients: [[f32; 3]; N],
+) -> (usize, usize, [Vec<f32>; N]) {
+    if f == 1 {
+        return (
+            w,
+            h,
+            core::array::from_fn(|c| plane_from_rgb8(data, w, h, stride, coefficients[c])),
+        );
+    }
+    let s = f / 2;
+    let w2 = w.div_ceil(f);
+    let h2 = h.div_ceil(f);
+    let mut horizontal = vec![[0.0f32; N]; w2 * h];
+    for_each_compact_row(&mut horizontal, w2, |y, row| {
+        let pixels = &data[y * stride..y * stride + w * 3];
+        for (oj, sums) in row.iter_mut().enumerate() {
+            let j = oj * f;
+            let lo = (j + s).saturating_sub(f - 1);
+            let hi = (j + s).min(w - 1);
+            for px in pixels[lo * 3..(hi + 1) * 3].as_chunks::<3>().0 {
+                let [r, g, b] = px.map(f32::from);
+                for c in 0..N {
+                    let coef = coefficients[c];
+                    let value = coef[0] * r + coef[1] * g + coef[2] * b;
+                    sums[c] += value;
+                }
+            }
+        }
+    });
+    let inv = 1.0 / (f * f) as f32;
+    let mut compact = vec![[0.0f32; N]; w2 * h2];
+    for_each_compact_row(&mut compact, w2, |oi, row| {
+        let i = oi * f;
+        let lo = (i + s).saturating_sub(f - 1);
+        let hi = (i + s).min(h - 1);
+        for (oj, values) in row.iter_mut().enumerate() {
+            for r in lo..=hi {
+                for c in 0..N {
+                    values[c] += horizontal[r * w2 + oj][c];
+                }
+            }
+            for value in values {
+                *value *= inv;
+            }
+        }
+    });
+    let planes = core::array::from_fn(|c| compact.iter().map(|pixel| pixel[c]).collect());
+    (w2, h2, planes)
+}
+
 #[cfg(test)]
 mod decimation_tests {
     use super::*;
+
+    #[test]
+    fn fused_rgb_windows_match_materialized_yiq_bits() {
+        for (w, h) in [
+            (1, 1),
+            (1, 17),
+            (19, 1),
+            (7, 11),
+            (32, 29),
+            (65, 63),
+            (1009, 171),
+        ] {
+            let stride = w * 3 + 13;
+            let mut rgb = vec![0xa5; stride * (h - 1) + w * 3];
+            for y in 0..h {
+                for x in 0..w * 3 {
+                    rgb[y * stride + x] = ((x * 37 + y * 19) ^ (x * y % 251)) as u8;
+                }
+            }
+            for f in 1..=12 {
+                let (fw, fh, got) = decimate_rgb8(&rgb, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
+                let (lw, lh, [luma]) = decimate_rgb8(&rgb, w, h, stride, f, [Y_COEF]);
+                assert_eq!((lw, lh), (fw, fh));
+                for (c, coef) in [Y_COEF, I_COEF, Q_COEF].into_iter().enumerate() {
+                    let source = plane_from_rgb8(&rgb, w, h, stride, coef);
+                    let (ew, eh, expected) = decimate_plane(&source, w, h, f);
+                    assert_eq!((fw, fh), (ew, eh));
+                    for (i, (&actual, &old)) in got[c].iter().zip(&expected).enumerate() {
+                        assert_eq!(
+                            actual.to_bits(),
+                            old.to_bits(),
+                            "{w}x{h} f={f} channel={c} pixel={i}"
+                        );
+                        if c == 0 {
+                            assert_eq!(
+                                luma[i].to_bits(),
+                                old.to_bits(),
+                                "luma {w}x{h} f={f} pixel={i}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn retained_columns_match_full_box_filter_bits() {
@@ -768,12 +889,8 @@ pub(crate) fn fsim_rgb8_planes(
     stride: usize,
 ) -> (f64, f64) {
     let f = downsample_factor(w, h);
-    let (w2, h2, yr) = decimate_plane(&plane_from_rgb8(r, w, h, stride, Y_COEF), w, h, f);
-    let (_, _, yd) = decimate_plane(&plane_from_rgb8(d, w, h, stride, Y_COEF), w, h, f);
-    let (_, _, ir) = decimate_plane(&plane_from_rgb8(r, w, h, stride, I_COEF), w, h, f);
-    let (_, _, id) = decimate_plane(&plane_from_rgb8(d, w, h, stride, I_COEF), w, h, f);
-    let (_, _, qr) = decimate_plane(&plane_from_rgb8(r, w, h, stride, Q_COEF), w, h, f);
-    let (_, _, qd) = decimate_plane(&plane_from_rgb8(d, w, h, stride, Q_COEF), w, h, f);
+    let (w2, h2, [yr, ir, qr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
+    let (_, _, [yd, id, qd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     fsim_core(Planes {
         yr: &yr,
         yd: &yd,
@@ -786,8 +903,8 @@ pub(crate) fn fsim_rgb8_planes(
 /// FSIM of the unrounded BT.601 luma of two packed sRGB8 images.
 pub(crate) fn fsim_luma8_planes(r: &[u8], d: &[u8], w: usize, h: usize, stride: usize) -> f64 {
     let f = downsample_factor(w, h);
-    let (w2, h2, yr) = decimate_plane(&plane_from_rgb8(r, w, h, stride, Y_COEF), w, h, f);
-    let (_, _, yd) = decimate_plane(&plane_from_rgb8(d, w, h, stride, Y_COEF), w, h, f);
+    let (w2, h2, [yr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF]);
+    let (_, _, [yd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF]);
     fsim_core(Planes {
         yr: &yr,
         yd: &yd,

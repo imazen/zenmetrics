@@ -1,0 +1,3 @@
+case,arm,complete_blocks,planned_blocks,latency_change_pct,log_ratio_sd,inference,control_present,correctness_checked,lower_pct,upper_pct,verdict,ratio_median,ratio_min,ratio_mad
+"3355x2516","after",4,4,-13.544669810273469,0.004571506292997032,"exploratory",true,true,null,null,"exploratory",0.865295179325708,0.8595576736912651,0.00241152491244917
+"3355x2516","__aa",4,4,0.13874499293387374,0.007049594869511084,"exploratory",true,true,null,null,"exploratory",1.002188600827566,0.9920619554695063,0.00361286963105778

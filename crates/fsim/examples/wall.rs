@@ -34,9 +34,11 @@ fn main() {
     }
     let dt = t0.elapsed();
     println!(
-        "{w}x{h} {reps} reps: {:.1} ms/call (fsim {:.6} fsimc {:.6})",
+        "{w}x{h} {reps} reps: {:.2} ms/call (fsim {:.17} fsimc {:.17}, bits {:016x}/{:016x})",
         dt.as_secs_f64() * 1e3 / reps as f64,
         s.fsim,
-        s.fsimc
+        s.fsimc,
+        s.fsim.to_bits(),
+        s.fsimc.to_bits()
     );
 }

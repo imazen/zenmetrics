@@ -1,0 +1,10 @@
+Runner source: zenbench ac675d3a (0.1.10)
+Baseline source: 68651fc6 with accompanying exact score wall output; candidate: accompanying fused RGB/YIQ box ingress
+Command: just ranked-pair-scope <runner> <plan> <new-output> 2
+Plan recipe: just ranked-pair-plan <baseline> <candidate> 68651fc6 fsim-fused-yiq <new-plan>
+Host: r7900x; Rayon threads: 1; outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0
+Raw evidence: r7900x:/home/lilith/tmp/zm-fsim-fusion-pair-20261012/packet.json.gz
+Packet SHA-256: 8e4df6609cca2cd7339d3e4ed1a9ec592b252c5db1785a8760696689a388be2c
+Console receipt: r7900x:/home/lilith/tmp/zm-fsim-fusion-pair-console.log
+run-heavy: done rc=0 44s | peak-RSS 0.09GiB | min-avail 23212MiB | peak-load 2.16
+The inner run-heavy reported no user scope; the outer system scope supplied the hard limits. Both FSIM and FSIMc scalar bits are checked.
