@@ -464,3 +464,6 @@ checkpoint-browser-check package report oracle:
 
 checkpoint-release-prepare run source output:
     python3 scripts/checkpoint/prepare-release.py --run {{run}} --source {{source}} --out {{output}}
+
+checkpoint-gpu-contract-check expectation features:
+    ZENMETRICS_TEST_GPU={{expectation}} cargo test --locked -p zenmetrics-cli --features {{features}} --test cli butteraugli_cpu_and_gpu_agree -- --exact

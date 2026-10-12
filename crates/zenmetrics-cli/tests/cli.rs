@@ -654,11 +654,41 @@ fn butteraugli_cpu_and_gpu_agree() {
         &dir.join("ref_64.png"),
         &dir.join("dist_noisy_64.png"),
     );
-    let gpu = run_scores(
-        "butteraugli-gpu",
-        &dir.join("ref_64.png"),
-        &dir.join("dist_noisy_64.png"),
-    );
+    let expectation = std::env::var("ZENMETRICS_TEST_GPU").unwrap_or_else(|_| "present".into());
+    match expectation.as_str() {
+        "absent" => {
+            let output = run_scores_output(
+                "butteraugli-gpu",
+                &dir.join("ref_64.png"),
+                &dir.join("dist_noisy_64.png"),
+            );
+            assert!(!output.status.success(), "GPU-absent host returned success");
+            assert!(
+                output.stdout.is_empty(),
+                "GPU refusal emitted a score/output"
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("No possible adapter available")
+                    || stderr.contains("Unable to dynamically load the \"cuda\" shared library")
+                    || stderr.contains("GPU backend unavailable"),
+                "Expected backend-unavailable refusal, stderr={stderr}"
+            );
+        }
+        "present" => assert_butteraugli_parity(
+            &cpu,
+            &run_scores(
+                "butteraugli-gpu",
+                &dir.join("ref_64.png"),
+                &dir.join("dist_noisy_64.png"),
+            ),
+        ),
+        _ => panic!("ZENMETRICS_TEST_GPU must be present or absent"),
+    }
+}
+
+#[cfg(all(feature = "cpu-metrics", feature = "gpu-butteraugli"))]
+fn assert_butteraugli_parity(cpu: &[(String, f64)], gpu: &[(String, f64)]) {
     let cpu_max = cpu
         .iter()
         .find(|(k, _)| k == "butteraugli_max")
@@ -716,20 +746,7 @@ fn run_scores(
     reference: &std::path::Path,
     distorted: &std::path::Path,
 ) -> Vec<(String, f64)> {
-    let out = cli()
-        .args([
-            "score",
-            "--metric",
-            metric,
-            "--reference",
-            reference.to_str().unwrap(),
-            "--distorted",
-            distorted.to_str().unwrap(),
-            "--output",
-            "json",
-        ])
-        .output()
-        .expect("run cli");
+    let out = run_scores_output(metric, reference, distorted);
     assert!(
         out.status.success(),
         "stderr={}",
@@ -744,6 +761,28 @@ fn run_scores(
         .iter()
         .map(|(k, v)| (k.clone(), v.as_f64().expect("score f64")))
         .collect()
+}
+
+#[cfg(feature = "cpu-metrics")]
+fn run_scores_output(
+    metric: &str,
+    reference: &std::path::Path,
+    distorted: &std::path::Path,
+) -> std::process::Output {
+    cli()
+        .args([
+            "score",
+            "--metric",
+            metric,
+            "--reference",
+            reference.to_str().unwrap(),
+            "--distorted",
+            distorted.to_str().unwrap(),
+            "--output",
+            "json",
+        ])
+        .output()
+        .expect("run cli")
 }
 
 // ── sweep subcommand ────────────────────────────────────────────────────

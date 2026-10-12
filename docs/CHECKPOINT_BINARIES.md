@@ -129,3 +129,9 @@ sibling workspaces. Mounting only dependency member directories loses inherited
 workspace metadata. `just checkpoint-i686-vmaf-check` exercises that mount and
 VMAF’s portable SIMD generation on the 32-bit target. This is a compile check;
 it does not establish numerical parity on i686.
+
+Native packaging requires the caller to declare `ZENMETRICS_TEST_GPU=present`
+or `absent`. GPU-present hosts retain both butteraugli parity assertions at
+5e-2. GPU-absent hosts require failure, no stdout score and a backend-unavailable
+diagnostic. This functional test contract does not qualify hardware GPU
+benchmark observations or alter resource admission.

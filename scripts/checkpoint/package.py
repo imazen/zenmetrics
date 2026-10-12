@@ -42,6 +42,9 @@ def main():
     bake = root.parent / 'zensim/zensim/weights/d_sdr_add156_id100_negrich_dial_byid_2026-09-06.bin'
     if not bake.is_file():
         parser.error('Pinned zensim selector fixture is missing')
+    gpu_expectation = os.environ.get('ZENMETRICS_TEST_GPU')
+    if gpu_expectation not in ('present', 'absent'):
+        parser.error('Caller must declare ZENMETRICS_TEST_GPU=present|absent')
     build_env = dict(os.environ, ZENMETRICS_TEST_ZENSIM_BAKE=str(bake))
     if args.cross:
         # Path dependencies may be members inheriting from a sibling workspace root.
@@ -117,7 +120,7 @@ def main():
         'schema': 1, 'source_commit': args.source, 'profile': args.profile,
         'target': args.target, 'rustc': compiler, 'features': config['profiles'][args.profile],
         'default_features': True, 'rustflags': [], 'commands': [['cross', *c[1:]] if args.cross and c[0] == 'cargo' else c for c in commands],
-        'qualification': {'native_cli_tests': 'passed', 'doc_tests': 'passed',
+        'qualification': {'native_cli_tests': 'passed', 'test_gpu_expectation': gpu_expectation, 'doc_tests': 'passed',
                           'iqa_functional_controls': control_reports,
                           'hardware_gpu': 'not qualified', 'benchmark_admission': 'not run'},
         'benchmark_runner_commit': runner_revision,
