@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real runner/store/adapter controls. Supply a built zenbench and new output dir."""
 import importlib.util
+from importlib.machinery import SourceFileLoader
 import json
 import os
 from pathlib import Path
@@ -9,8 +10,8 @@ import subprocess
 import sys
 import time
 
-adapter = Path(__file__).with_name('benchmark_exec.py').resolve()
-spec = importlib.util.spec_from_file_location('benchmark_exec', adapter)
+adapter = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else Path(__file__).with_name('benchmark_exec.py').resolve()
+spec = importlib.util.spec_from_loader('benchmark_exec', SourceFileLoader('benchmark_exec', str(adapter)))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 runner, root = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
@@ -58,6 +59,8 @@ for index, (backend, expected, sleep, status) in enumerate([
                 domain='unrestricted', replicate=index, backend=backend,
                 timeout_seconds=2, admission_seconds=2)
     job = {'kind':kind,'inputs':sorted(hashes.values())}
+    if index == 0:
+        first_job = json.loads(json.dumps(job))
     receipt_file = case/'receipt.json'
     with receipt_file.open('wb') as out, (case/'adapter.stderr').open('wb') as err:
         process = subprocess.Popen([sys.executable,str(adapter)],stdin=subprocess.PIPE,stdout=out,stderr=err)
@@ -95,4 +98,29 @@ except ValueError as error:
 else:
     raise AssertionError('wrong machine accepted')
 (root/'controls.json').write_text(json.dumps(records,indent=2)+'\n')
+if len(sys.argv) > 4:
+    import pyarrow.parquet as pq
+    first_job['kind']['replicate'] = 100
+    first_job['kind']['admission_seconds'] = 30
+    first_job['cell'] = {'image_path':'control','codec':'benchmark','q':0,'knob_tuple_json':'{}'}
+    first_job['hint'] = {'peak_mem_bytes':256*1024*1024,'threads':1,'vram_bytes':None}
+    _, capabilities = module.capabilities(str(runner))
+    first_job['requires'] = sorted(capabilities)
+    manifest = root/'manifest.json'; manifest.write_text(json.dumps([first_job]))
+    ledger = root/'ledger'; ledger.mkdir()
+    command = [sys.argv[4],'--manifest',str(manifest),'--ledger-out',str(ledger/'result.parquet'),
+               '--blobs',str(root/'blobs'),'--exec',str(adapter)]
+    env = dict(os.environ,ZEN_PERSISTENT_EXEC='1',ZEN_WARM_KINDS='all',ZEN_CHUNK_WALL_SEC='300')
+    result = subprocess.run(command,env=env,capture_output=True,timeout=60)
+    (root/'worker.stdout').write_bytes(result.stdout); (root/'worker.stderr').write_bytes(result.stderr)
+    assert result.returncode == 0, result.stderr.decode()
+    rows = [r for p in ledger.glob('*.parquet') for r in pq.read_table(p).to_pylist()]
+    completed = [r for r in rows if r['status']=='done']
+    assert len(completed)==1, rows
+    receipt = json.loads(module.Store(root).get(completed[0]['output_sha']).read_bytes())
+    assert receipt['status']=='complete', receipt
+    assert receipt['job_id']==module.canonical_job_id(first_job['kind'],first_job['inputs'])
+    module.collect(completed[0]['output_sha'],root/'worker-recovered')
+    print(json.dumps({'worker_ledger':'done','observation_status':receipt['status'],
+                      'persistent_all':'fresh benchmark succeeded'}))
 print(json.dumps({'controls':records,'wrong_machine':'refused'}))

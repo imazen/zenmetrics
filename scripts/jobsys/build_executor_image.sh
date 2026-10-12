@@ -45,6 +45,30 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # escape hatch; the default is unchanged, so nothing about an existing invocation moves.
 DOCKER="${DOCKER:-docker}"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
+if [ "${BENCHMARK_IMAGE:-0}" = "1" ]; then
+  read -r -a BENCH_DOCKER_CMD <<< "$DOCKER"
+  "${BENCH_DOCKER_CMD[@]}" buildx version >/dev/null
+  export DOCKER_BUILDKIT=1
+  : "${ZENBENCH_BIN:?set ZENBENCH_BIN to the prebuilt native runner}"
+  : "${ZEN_WORKER_BIN:?set ZEN_WORKER_BIN to the prebuilt worker}"
+  : "${BENCHMARK_BASE:?set BENCHMARK_BASE to the matching baked base image digest}"
+  [[ "$IMAGE" == ghcr.io/imazen/zenfleet-worker:bench-* ]] || { echo "use a zenfleet-worker:bench-* tag" >&2; exit 1; }
+  [ -x "$ZENBENCH_BIN" ] && [ -x "$ZEN_WORKER_BIN" ] || { echo "prebuilt binaries missing" >&2; exit 1; }
+  mkdir -p "${TMPDIR:-$HOME/tmp}"
+  CTX="$(mktemp -d "${TMPDIR:-$HOME/tmp}/benchctx.XXXXXX")"
+  # Retain the small context for provenance; it contains executable hashes.
+  cp "$ZENBENCH_BIN" "$CTX/zenbench"
+  cp "$ZEN_WORKER_BIN" "$CTX/zenfleet-worker"
+  cp "$ROOT/scripts/jobsys/benchmark_exec.py" "$CTX/benchmark_exec.py"
+  cp "$ROOT/crates/zenfleet-worker/"{fleet-entrypoint.sh,tmpdir_discipline.sh} "$CTX/"
+  cp "$ROOT/crates/zenfleet-worker/Dockerfile.benchmark" "$CTX/Dockerfile"
+  (cd "$CTX" && sha256sum zenbench zenfleet-worker benchmark_exec.py > provenance.sha256)
+  "${BENCH_DOCKER_CMD[@]}" build --build-arg "BASE=$BENCHMARK_BASE" -t "$IMAGE" "$CTX"
+  "${BENCH_DOCKER_CMD[@]}" run --rm --entrypoint /usr/local/bin/zenbench "$IMAGE" capabilities
+  echo "benchmark image context and binary hashes: $CTX"
+  if [ "${PUSH:-0}" = "1" ]; then "${BENCH_DOCKER_CMD[@]}" push "$IMAGE"; fi
+  exit 0
+fi
 if [ "${FIT_CELL_IMAGE:-0}" = "1" ]; then
   read -r -a FIT_DOCKER_CMD <<< "$DOCKER"
   : "${ZEN_FIT_PROGRAM_TAR:?set ZEN_FIT_PROGRAM_TAR to the baked program.tar.gz}"

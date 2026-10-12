@@ -371,3 +371,7 @@ iqa-fleet-build output:
 
 iqa-fleet-check binaries output:
     python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}
+
+benchmark-image-check image scratch:
+    mkdir -p {{scratch}}
+    docker run --rm --memory=6g --memory-swap=6g --cpus=2 --mount type=bind,source={{scratch}},target=/scratch --mount type=bind,source={{justfile_directory()}}/scripts/jobsys,target=/controls,readonly --entrypoint python3 {{image}} /controls/check_benchmark_exec.py /usr/local/bin/zenbench /scratch/proof /usr/local/bin/benchmark-exec /usr/local/bin/zenfleet-worker

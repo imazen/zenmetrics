@@ -109,3 +109,95 @@ The second runs actual bundle staging, child execution, correctness mismatch,
 timeout, cancellation, wrong-machine refusal and hash-verified recovery. It uses
 small synthetic controls and makes no IQA performance claim. Heap accuracy is
 separately checked by zenbench's `just heap-oracle NEW_DIRECTORY` against heaptrack.
+
+## Baked Linux worker image
+
+Use the existing image builder's benchmark variant; no boot-time installs:
+
+```sh
+BENCHMARK_IMAGE=1 BENCHMARK_BASE=BASE_IMAGE_DIGEST \
+ZENBENCH_BIN=/path/to/prebuilt/zenbench \
+ZEN_WORKER_BIN=/path/to/prebuilt/zenfleet-worker \
+bash scripts/jobsys/build_executor_image.sh ghcr.io/imazen/zenfleet-worker:bench-REVISION
+```
+
+The base must match the target architecture and runtime libraries of both
+prebuilt binaries. Build-time executable checks reject an incompatible libc.
+Build the benchmarked driver for that same runtime. Dynamically linked workload
+allocations can be intercepted by heaptrack; a static allocator is outside that
+interception coverage. The image includes Python, blob tools, heaptrack, its
+analyzer and OS time. Set `PUSH=1` only when shipping the verified image. The
+builder retains its context and SHA-256 provenance. Mount scratch and the local
+coordination directory, set CPU and memory limits, and use the existing fleet
+launcher to deploy the image by digest. Run the tiny observation control inside
+the actual image before enrolling it for a study.
+
+Benchmark jobs use lease claiming with positive chunk duration (the worker
+currently defaults to 300 seconds). Epoch-sharded claiming and serial R2 claims
+are refused for this job kind because they do not provide its required renewal
+contract. Local execution also has a bounded worker watchdog. Receipts label
+all nested evidence as `not_regenerable` and list its hash references; include
+those references when constructing campaign archive/GC roots.
+
+## IQA driver phases
+
+`new-metrics-wall fleet CASE.json` runs one SDR CPU metric through the existing
+CLI dispatch, without timing calibration or batching. Build a normal binary for
+latency/heaptrack/OS counters, and a separate `--features heap-phases` binary for
+Rust heap phases. The instrumented build refuses the old timing entry points;
+its output says `timing_usable:false`.
+
+```json
+{"schema":1,"metric":"ssim2","width":65,"height":67,"stride_bytes":202,
+ "reference":"reference.rgb","distorted":"distorted.rgb",
+ "pixel_format":"rgb8_srgb","reuse":"warm_reference","threads":2}
+```
+
+Raw files contain exactly `stride_bytes * height` bytes. Paths resolve beside
+the case file. Padded rows are supported; packing for the CLI's packed RGB8
+dispatch belongs to `input_and_pool_preparation`, as does pool initialization.
+This driver measures decoded sRGB8 inputs; decoding, other transfer functions,
+HDR and GPU execution require another driver and must not reuse this case label.
+Include both inputs and the case in the bundle so hashes bind their contents.
+Set `RAYON_NUM_THREADS` to the declared value and supply `ZENBENCH_OPERATIONS`
+(1..1024). The driver refuses mismatches. Metric runtime SIMD dispatch remains
+active; its effective tier is not independently observed.
+
+`cold` supports the driver's existing `METRICS` list, including reference work
+inside every score call. `warm_reference` currently supports **4 metrics**:
+SSIMULACRA2, butteraugli, DSSIM and zensim. It calls the umbrella's actual cached
+reference API, retains that state, performs one declared warmup score, then
+measures the requested calls. Other warm cases are refused. CVVDP cold uses the
+existing `standard_fhd` display. The output is the primary score, without a
+retained diffmap. Case-specific correctness is an exact array of primary-score
+float bits; supply the expected array from the matching validated latency driver
+in the bundle's `expected_correctness` contract.
+
+Rust memory records expose entry/peak/exit requested live bytes and allocation
+traffic for preparation, reference preparation, score warmup, scoring and
+reference release, where applicable. Peaks are absolute live-byte watermarks,
+never divided by operations. Earlier inputs, retained references and harness
+records remain part of the process ledger; differences are not ownership-based
+scratch attribution. Native allocations, children, direct mappings and GPU
+memory remain outside this allocator's coverage. Use whole-process OS/heaptrack
+observations as separate views.
+
+```sh
+just iqa-fleet-build NEW_BINARIES_DIRECTORY
+just iqa-fleet-check NEW_BINARIES_DIRECTORY NEW_CONTROLS_DIRECTORY
+```
+
+The build recipe retains distinct debug artifacts for protocol controls; build
+release equivalents with debug symbols for a real study. Local controls on
+2026-10-12 exercised all four warm-capable metrics, cold and warm reuse, one and
+two Rayon threads, and packed/padded 65×67 inputs. Instrumented and ordinary
+primary scores matched exactly, as did the packed/padded inputs. These controls
+validate phase plumbing and output preservation; they are not representative
+performance measurements or an allocator-overhead estimate.
+
+The image builder requires Docker Buildx/BuildKit for executable-preserving COPY.
+`just benchmark-image-check IMAGE ABSOLUTE_NEW_SCRATCH_DIRECTORY` exercises the
+baked adapter and runner, then the baked worker's actual Parquet ledger and blob
+recovery, including `ZEN_PERSISTENT_EXEC=1` with `ZEN_WARM_KINDS=all`.
+A local Linux x86-64 image passed this control on 2026-10-12. This does not certify
+an ARM image or the separate Windows/macOS worker deployment.
