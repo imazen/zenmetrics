@@ -1,0 +1,7 @@
+binary_sha256: 620da95154446818ae9d63a1e85a5706aa4f3b9b395ad637ed708cca6e655f6e  /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=22672MiB :: /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate 3355 2516 5
+3355x2516 5 reps: 223.24 ms/call (score 6.97757159858747400, bits 401be9088775ba00)
+run-heavy: done rc=0 1s | peak-RSS 0.51GiB | min-avail 22670MiB | peak-load 6.79

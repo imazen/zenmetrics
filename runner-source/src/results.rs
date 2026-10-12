@@ -1,0 +1,1813 @@
+use crate::bench::Throughput;
+use crate::format::csv_escape;
+use crate::stats::{PairedAnalysis, Summary};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::time::Duration;
+
+/// Unique identifier for a benchmark run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunId(pub String);
+
+impl RunId {
+    pub fn generate() -> Self {
+        use std::hash::{BuildHasher, Hasher};
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let pid = std::process::id();
+        let random = std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish();
+        RunId(format!("{:x}-{pid:x}-{random:016x}", now.as_nanos()))
+    }
+}
+
+impl std::fmt::Display for RunId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Result of a single benchmark within a group.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct BenchmarkResult {
+    pub name: String,
+    pub summary: Summary,
+    /// CPU time summary (user time). Present when `cpu-time` feature is enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_summary: Option<Summary>,
+    /// Key-value tags for multi-dimensional reporting.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<(String, String)>,
+    /// Visual subgroup label (display-only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subgroup: Option<String>,
+    /// Cold-start time in nanoseconds (first single-iteration call during warmup).
+    /// This is the coldest measurement we can capture without process isolation.
+    #[serde(default)]
+    pub cold_start_ns: f64,
+    /// Bootstrap 95% confidence interval for this benchmark's mean time.
+    ///
+    /// Computed when there are enough samples (≥ 2 rounds). Tells you how
+    /// confident you can be in the absolute mean — "this function takes
+    /// 245 ± 3ns" rather than just "245ns."
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mean_ci: Option<crate::stats::MeanCi>,
+    /// OLS slope estimate (ns/iter) from linear sampling mode.
+    /// More accurate than mean for sub-100ns benchmarks — separates per-iteration
+    /// cost from constant overhead (timer, black_box, dispatch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slope_ns: Option<f64>,
+    /// Timer ticks per sample: `(mean_ns * iterations_per_sample) / timer_resolution_ns`.
+    /// Values below ~50 mean the measurement is quantization-limited — differences
+    /// smaller than `timer_res / iterations` are undetectable.
+    #[serde(default)]
+    pub timer_ticks_per_sample: f64,
+    /// Allocation statistics (when `alloc-profiling` feature is active and
+    /// `AllocProfiler` is installed as the global allocator).
+    #[cfg(feature = "alloc-profiling")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alloc_stats: Option<crate::alloc::AllocStats>,
+}
+
+impl Default for BenchmarkResult {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            summary: Summary::new(),
+            cpu_summary: None,
+            tags: Vec::new(),
+            subgroup: None,
+            cold_start_ns: 0.0,
+            mean_ci: None,
+            slope_ns: None,
+            timer_ticks_per_sample: 0.0,
+            #[cfg(feature = "alloc-profiling")]
+            alloc_stats: None,
+        }
+    }
+}
+
+impl BenchmarkResult {
+    /// Get a tag value by key.
+    pub fn tag(&self, key: &str) -> Option<&str> {
+        self.tags
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// One completed measurement round, excluding warmup and resource-gate waits.
+///
+/// The timing vectors are indexed by `ComparisonResult::benchmarks`, not by
+/// execution position. The vector index in `ComparisonResult::samples` is the
+/// chronological round number. Timings cover the entire iteration batch; they
+/// are individual-call latency observations only when `iterations == 1`.
+/// Retention does not certify that the machine was quiet during the round.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct RoundSample {
+    /// Pre-round resource check: true = clean, false = flagged, None = disabled
+    /// or absent in historical evidence. This does not monitor the timed body.
+    #[serde(default)]
+    pub gate_clean: Option<bool>,
+    /// Age of the background observation used for the pre-round check.
+    /// None means no fresh background observation; not continuous quietness proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_observation_age_ns: Option<u64>,
+    /// Diagnostic values and admission reason for the cached pre-round observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_observation: Option<String>,
+    /// Actual iteration count shared by all benchmarks in this round.
+    pub iterations: usize,
+    /// Benchmark indices in their randomized execution order.
+    pub execution_order: Vec<usize>,
+    /// Measured batch durations before loop-overhead subtraction, in ns.
+    pub elapsed_ns: Vec<u64>,
+    /// Batch durations used by summaries: overhead-subtracted, clamped to 1ns.
+    pub compensated_ns: Vec<u64>,
+}
+
+/// Result of a comparison group (multiple interleaved benchmarks).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ComparisonResult {
+    /// Resolved sampling settings; absent on historical/immediate-mode results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<crate::GroupConfig>,
+    /// Process CPU-placement evidence. None means historical/unknown.
+    #[serde(default)]
+    pub cpu_placement: Option<crate::platform::CpuPlacement>,
+    pub group_name: String,
+    pub benchmarks: Vec<BenchmarkResult>,
+    /// Paired analyses: (baseline_name, candidate_name, analysis).
+    pub analyses: Vec<(String, String, PairedAnalysis)>,
+    pub completed_rounds: usize,
+    /// Completed paired rounds in chronological order, with actual batch sizes.
+    /// Empty for historical results, immediate-mode compatibility results, or
+    /// multi-run aggregates, which do not describe one paired execution.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub samples: Vec<RoundSample>,
+    /// Throughput declaration for this group (if set).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub throughput: Option<Throughput>,
+    /// Whether cache firewall was enabled for this group.
+    #[serde(default)]
+    pub cache_firewall: bool,
+    /// Cache firewall size in bytes (when enabled).
+    #[serde(default)]
+    pub cache_firewall_bytes: usize,
+    /// Whether only baseline comparisons are shown in reports.
+    #[serde(default)]
+    pub baseline_only: bool,
+    /// Custom unit name for Elements throughput (e.g., "checks" -> "Gchecks/s").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub throughput_unit: Option<String>,
+    /// Whether benchmarks are sorted by speed in report output.
+    #[serde(default)]
+    pub sort_by_speed: bool,
+    /// Whether sub-ns warnings are suppressed.
+    #[serde(default)]
+    pub expect_sub_ns: bool,
+    /// Whether cold-start mode was used.
+    #[serde(default)]
+    pub cold_start: bool,
+    /// Base iterations per sample (before jitter). 0 if unknown.
+    #[serde(default)]
+    pub iterations_per_sample: usize,
+}
+
+/// Complete results of a benchmark suite run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct SuiteResult {
+    /// Resolved measurement intent and executed binary identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<crate::ExecutionRecord>,
+    /// Inference across independent process populations, separate from round analyses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub process_comparisons: Vec<crate::ProcessComparison>,
+    /// Process CPU-placement evidence. None never certifies uniform placement.
+    #[serde(default)]
+    pub cpu_placement: Option<crate::platform::CpuPlacement>,
+    pub run_id: RunId,
+    pub timestamp: String,
+    pub git_hash: Option<String>,
+    pub ci_environment: Option<String>,
+    pub comparisons: Vec<ComparisonResult>,
+    /// Original runs underlying a descriptive multi-run aggregate. Process/pass
+    /// boundaries and raw rounds remain available; aggregate rows are not paired rounds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replicates: Vec<SuiteResult>,
+    /// Deprecated — always empty. `suite.bench()` now creates single-benchmark
+    /// groups in `comparisons`. Kept for API and serde compatibility.
+    #[deprecated(
+        since = "0.1.5",
+        note = "standalones are now single-benchmark groups in `comparisons`"
+    )]
+    #[serde(default)]
+    pub standalones: Vec<BenchmarkResult>,
+    #[serde(with = "duration_serde")]
+    pub total_time: Duration,
+    pub gate_waits: usize,
+    #[serde(with = "duration_serde")]
+    pub gate_wait_time: Duration,
+    pub unreliable: bool,
+    /// A checkpoint from an interrupted/running attempt, never completed evidence.
+    #[serde(default)]
+    pub incomplete: bool,
+    /// Timer resolution in nanoseconds (measured at startup).
+    #[serde(default)]
+    pub timer_resolution_ns: u64,
+    /// Per-iteration loop overhead in nanoseconds (subtracted from measurements).
+    ///
+    /// Measures the cost of the benchmark harness itself: loop control flow,
+    /// `black_box` barrier, branch prediction overhead. Subtracted from all
+    /// sample times so reported values reflect only the user's code.
+    #[serde(default)]
+    pub loop_overhead_ns: f64,
+    /// Hardware fingerprint for testbed identification.
+    /// Used by baseline comparison to detect hardware changes between runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub testbed: Option<crate::platform::Testbed>,
+    /// Hardware calibration results from built-in workloads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calibration: Option<crate::calibration::Calibration>,
+}
+
+impl Default for SuiteResult {
+    #[allow(deprecated)] // standalones field kept for serde compat
+    fn default() -> Self {
+        Self {
+            execution: None,
+            process_comparisons: Vec::new(),
+            run_id: RunId(String::new()),
+            timestamp: String::new(),
+            git_hash: None,
+            ci_environment: None,
+            comparisons: Vec::new(),
+            replicates: Vec::new(),
+            standalones: Vec::new(),
+            total_time: Duration::ZERO,
+            gate_waits: 0,
+            gate_wait_time: Duration::ZERO,
+            unreliable: false,
+            incomplete: false,
+            timer_resolution_ns: 0,
+            loop_overhead_ns: 0.0,
+            testbed: None,
+            calibration: None,
+            cpu_placement: None,
+        }
+    }
+}
+
+impl SuiteResult {
+    /// Reasons this packet cannot support confirmation or baseline promotion.
+    pub fn confirmation_issues(&self) -> Vec<String> {
+        let mut issues = crate::inference::issues(self);
+        if issues.is_empty() {
+            let expected = self
+                .replicates
+                .first()
+                .map(|r| {
+                    r.comparisons
+                        .iter()
+                        .map(|g| g.analyses.len())
+                        .sum::<usize>()
+                })
+                .unwrap_or(0);
+            if crate::inference::confirm(self).len() != expected {
+                issues.push("one or more process intervals are numerically unresolved".into());
+            }
+        }
+        issues
+    }
+
+    /// Process-level inference rendered from the same decisions used by CI/JSON.
+    pub fn process_report(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+        for comparison in &self.process_comparisons {
+            let _ = writeln!(
+                out,
+                "process_comparison group={:?} baseline={:?} candidate={:?} estimate={:+.4}% interval=[{:+.4}%,{:+.4}%] verdict={} processes={}/{} method={}",
+                comparison.group,
+                comparison.baseline,
+                comparison.candidate,
+                comparison.estimate_pct,
+                comparison.lower_pct,
+                comparison.upper_pct,
+                comparison.verdict,
+                comparison.baseline_processes,
+                comparison.candidate_processes,
+                comparison.method
+            );
+        }
+        out
+    }
+    /// Refuse aggregation/baseline comparisons across differing CPU boundaries.
+    /// Two historical results are comparable with unknown placement; they do
+    /// not acquire certification by being compared.
+    pub fn check_cpu_compatibility(&self, other: &Self) -> Result<(), String> {
+        let compatible =
+            |a: &Option<crate::platform::CpuPlacement>,
+             b: &Option<crate::platform::CpuPlacement>| match (a, b) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a.compatible(b),
+                _ => false,
+            };
+        if !compatible(&self.cpu_placement, &other.cpu_placement) {
+            return Err(
+                "CPU placement differs or is missing from one run; comparison/aggregation refused"
+                    .into(),
+            );
+        }
+        for group in &self.comparisons {
+            if let Some(previous) = other
+                .comparisons
+                .iter()
+                .find(|c| c.group_name == group.group_name)
+            {
+                if !compatible(&group.cpu_placement, &previous.cpu_placement) {
+                    return Err(format!(
+                        "CPU placement differs in group {:?}; comparison/aggregation refused",
+                        group.group_name
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn cpu_evidence(&self, comp: Option<&ComparisonResult>) -> String {
+        let placement = comp.map_or(self.cpu_placement.as_ref(), |c| c.cpu_placement.as_ref())
+            .map(|placement| placement.llm())
+            .unwrap_or_else(|| "cpu_placement=LEGACY_UNKNOWN cpu_class_uniform=unknown cpu_enforcement=unknown pool_thread_count=unknown".into());
+        let mode = self
+            .execution
+            .as_ref()
+            .map(|e| e.plan.mode.to_string())
+            .unwrap_or_else(|| "legacy".into());
+        let status = if self
+            .execution
+            .as_ref()
+            .is_some_and(|e| e.plan.mode == crate::BenchmarkMode::Iterate)
+        {
+            "exploratory"
+        } else if !self.process_comparisons.is_empty() {
+            "process_analysis"
+        } else {
+            "unconfirmed"
+        };
+        format!("mode={mode} inference={status} {placement}")
+    }
+    /// Atomically save compact JSON, compressed when the filename ends in `.gz`.
+    pub fn save(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
+        crate::storage::save(self, path.as_ref())
+    }
+
+    /// Load JSON, gzip JSON, or an immutable evidence reference.
+    pub fn load(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        crate::storage::load(path.as_ref())
+    }
+
+    /// Recompute the recorded process analysis without running benchmarks.
+    /// The separate versioned artifact references a retained immutable raw packet.
+    pub fn save_analysis(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
+        crate::storage::persist(self)?;
+        let report = serde_json::json!({
+            "zenbench_analysis": 1,
+            "policy": "zenbench-process-v1",
+            "evidence_sha256": crate::storage::evidence_digest(self)?,
+            "validity_issues": self.confirmation_issues(),
+            "comparisons": crate::inference::confirm(self),
+        });
+        crate::storage::atomic_write(
+            path.as_ref(),
+            &serde_json::to_vec(&report).map_err(std::io::Error::other)?,
+        )
+    }
+
+    /// Stable CSV summary for an explicitly selected version-control snapshot.
+    /// Raw rounds and replicate packets are retained in evidence storage instead.
+    /// Values are descriptive; this export does not establish confirmation.
+    pub fn to_snapshot(&self) -> String {
+        let mut rows = self
+            .comparisons
+            .iter()
+            .flat_map(|group| group.benchmarks.iter().map(move |bench| (group, bench)))
+            .collect::<Vec<_>>();
+        rows.sort_by(|(ga, ba), (gb, bb)| {
+            (&ga.group_name, &ba.name).cmp(&(&gb.group_name, &bb.name))
+        });
+        let mut out = String::from(
+            "group,benchmark,mean_ns,mad_ns,n,scope,unreliable,mode,baseline,change_pct,lo_pct,hi_pct,verdict\n",
+        );
+        for (group, bench) in rows {
+            use std::fmt::Write;
+            let decision = self
+                .process_comparisons
+                .iter()
+                .find(|c| c.group == group.group_name && c.candidate == bench.name);
+            let scope = if self.replicates.is_empty() {
+                "within_process"
+            } else {
+                "aggregate"
+            };
+            let _ = writeln!(
+                out,
+                "{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                csv_escape(&group.group_name),
+                csv_escape(&bench.name),
+                bench.summary.mean,
+                bench.summary.mad,
+                bench.summary.n,
+                scope,
+                self.unreliable,
+                self.execution
+                    .as_ref()
+                    .map(|e| e.plan.mode.to_string())
+                    .unwrap_or_else(|| "legacy".into()),
+                decision
+                    .map(|c| csv_escape(&c.baseline))
+                    .unwrap_or_default(),
+                decision
+                    .map(|c| c.estimate_pct.to_string())
+                    .unwrap_or_default(),
+                decision
+                    .map(|c| c.lower_pct.to_string())
+                    .unwrap_or_default(),
+                decision
+                    .map(|c| c.upper_pct.to_string())
+                    .unwrap_or_default(),
+                decision
+                    .map(|c| c.verdict.to_string())
+                    .unwrap_or_else(|| "unconfirmed".into())
+            );
+        }
+        out
+    }
+
+    /// Export a selected snapshot with an evidence hash, retaining its raw packet
+    /// in the ignored data directory first. Incomplete attempts are refused.
+    pub fn save_snapshot(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
+        if self.incomplete {
+            return Err(std::io::Error::other("cannot export an incomplete attempt"));
+        }
+        crate::storage::persist(self)?;
+        let hash = crate::storage::evidence_digest(self)?;
+        let object = crate::storage::data_dir()
+            .join("objects")
+            .join(format!("{hash}.json.gz"));
+        let usage = crate::storage::usage(&object);
+        let context = serde_json::json!({
+            "testbed": self.testbed,
+            "cpu_class": self.cpu_placement.as_ref().and_then(|p| p.core_class.as_deref()),
+            "cpu_set": self.cpu_placement.as_ref().map(|p| &p.effective_cpus),
+            "execution": self.execution.as_ref().map(|e| serde_json::json!({
+                "mode": e.plan.mode, "workload_id": e.plan.workload_id,
+                "scope": e.plan.scope, "binary_sha256": e.binary_sha256,
+                "confidence": e.plan.confidence, "margin_pct": e.plan.margin_pct,
+            })),
+        });
+        let text = format!(
+            "# zenbench-snapshot-v1 evidence_sha256={hash}\n# usage={usage}\n# context={context}\n{}",
+            self.to_snapshot()
+        );
+        crate::storage::atomic_write(path.as_ref(), text.as_bytes())
+    }
+
+    /// Print a human-readable report to stderr (with ANSI colors).
+    pub fn print_report(&self) {
+        crate::report::print_report(self);
+    }
+
+    /// Generate a self-contained HTML report with inline SVG bar charts.
+    ///
+    /// Each group is a collapsible `<details>` section with a table and
+    /// bar chart. No external dependencies or JavaScript required.
+    pub fn to_html(&self) -> String {
+        crate::html::to_html(self)
+    }
+
+    /// Save each comparison group's SVG bar chart as a standalone `.svg` file.
+    ///
+    /// Files are named `{group_name}.svg` (with `/` replaced by `_`).
+    /// Matrix-structured groups (benchmark names with `variant/param` format)
+    /// automatically render as grouped bar charts with per-section scaling.
+    pub fn save_charts(&self, dir: impl AsRef<Path>) -> std::io::Result<()> {
+        let dir = dir.as_ref();
+        std::fs::create_dir_all(dir)?;
+        for comp in &self.comparisons {
+            let svg = crate::html::render_chart_standalone(comp);
+            if svg.is_empty() {
+                continue;
+            }
+            let filename = comp.group_name.replace(['/', ' '], "_");
+            std::fs::write(dir.join(format!("{filename}.svg")), &svg)?;
+        }
+        Ok(())
+    }
+
+    /// Save publication-quality SVG charts via charts-rs.
+    ///
+    /// Requires the `charts` feature. Produces polished bar charts with
+    /// proper fonts, gridlines, legends, and value labels. Supports
+    /// `"light"`, `"dark"`, `"grafana"`, `"vintage"`, and other charts-rs themes.
+    ///
+    /// For matrix-structured groups (benchmarks named `variant/param`),
+    /// produces grouped bar charts with one series per variant.
+    #[cfg(feature = "charts")]
+    pub fn save_publication_charts(
+        &self,
+        dir: impl AsRef<Path>,
+        config: &crate::charts::ChartConfig,
+    ) -> std::io::Result<()> {
+        crate::charts::save_charts(self, dir.as_ref(), config)
+    }
+
+    /// Generate key-value format optimized for LLM consumption and grep.
+    ///
+    /// One line per benchmark. Every field explicitly named. No positional
+    /// parsing, no ANSI, no box drawing. Greppable:
+    /// ```text
+    /// cargo bench -- --format=llm | grep 'benchmark="my_func"'
+    /// ```
+    pub fn to_llm(&self) -> String {
+        let mut out = String::new();
+
+        for comp in &self.comparisons {
+            let baseline_name = comp
+                .analyses
+                .first()
+                .map(|(base, _, _)| base.as_str())
+                .unwrap_or_else(|| {
+                    comp.benchmarks
+                        .first()
+                        .map(|b| b.name.as_str())
+                        .unwrap_or("")
+                });
+
+            let analyses: std::collections::HashMap<&str, &PairedAnalysis> = comp
+                .analyses
+                .iter()
+                .filter(|(base, _, _)| base == baseline_name)
+                .map(|(_, cand, a)| (cand.as_str(), a))
+                .collect();
+
+            for bench in &comp.benchmarks {
+                let s = &bench.summary;
+
+                // Section 1: Identity
+                // Omit group= when it's a single-bench group with matching name
+                let is_single = comp.benchmarks.len() == 1 && bench.name == comp.group_name;
+                let mut identity = Vec::new();
+                if !is_single {
+                    identity.push(format!("group={}", llm_quote(&comp.group_name)));
+                }
+                if let Some(sg) = &bench.subgroup {
+                    identity.push(format!("subgroup={}", llm_quote(sg)));
+                }
+                identity.push(format!("benchmark={}", llm_quote(&bench.name)));
+                identity.push(self.cpu_evidence(Some(comp)));
+
+                // Section 2: Comparison (the number you care about most)
+                let mut comparison = Vec::new();
+                if bench.name == baseline_name {
+                    comparison.push("vs_base=baseline".to_string());
+                } else if let Some(analysis) = analyses.get(bench.name.as_str()) {
+                    let base_mean = analysis.baseline.mean;
+                    comparison.push(format!("vs_base_pct={:+.2}", analysis.pct_change));
+                    if base_mean.abs() > f64::EPSILON {
+                        comparison.push(format!(
+                            "ci=[{:+.2}% {:+.2}%]",
+                            analysis.ci_lower / base_mean * 100.0,
+                            analysis.ci_upper / base_mean * 100.0,
+                        ));
+                    }
+                    comparison.push(format!("significant={}", analysis.significant));
+                    if analysis.resolution_limited {
+                        comparison.push("resolution_limited=true".to_string());
+                    }
+                    comparison.push(format!("effect={:.2}", analysis.cohens_d));
+                    comparison.push(format!("p={:.4}", analysis.wilcoxon_p));
+                }
+
+                // Section 3: Measurement
+                let measurement = [
+                    format!("min={}", crate::format::format_ns(s.min)),
+                    format!("mean={}", crate::format::format_ns(s.mean)),
+                    format!("median={}", crate::format::format_ns(s.median)),
+                    format!("mad={}", crate::format::format_ns(s.mad)),
+                ];
+
+                // Section 4: Throughput (if set)
+                let mut throughput = Vec::new();
+                if let Some(tp) = &comp.throughput {
+                    let (val, unit) = tp.compute(s.mean, comp.throughput_unit.as_deref());
+                    throughput.push(format!("throughput={val:.2} {unit}"));
+                }
+
+                // Section 5: Metadata
+                let mut meta = vec![
+                    format!("n={}", s.n),
+                    format!("cv={:.1}%", s.cv() * 100.0),
+                    format!("rounds={}", comp.completed_rounds),
+                    if self.replicates.is_empty() {
+                        format!("calls={}", comp.iterations_per_sample)
+                    } else {
+                        "calls=per_process".into()
+                    },
+                ];
+                if let Some(ci) = &bench.mean_ci {
+                    meta.push(format!(
+                        "mean_ci=[{} {}]",
+                        crate::format::format_ns(ci.lower),
+                        crate::format::format_ns(ci.upper),
+                    ));
+                }
+                if bench.cold_start_ns > 0.0 {
+                    meta.push(format!(
+                        "cold={}",
+                        crate::format::format_ns(bench.cold_start_ns),
+                    ));
+                }
+                if !self.replicates.is_empty() {
+                    meta.push("timer_ticks=per_process".into());
+                } else if bench.timer_ticks_per_sample < 50.0 {
+                    meta.push(format!(
+                        "timer_ticks={:.0} (resolution-limited)",
+                        bench.timer_ticks_per_sample,
+                    ));
+                }
+                for (k, v) in &bench.tags {
+                    let key = if k.starts_with("cpu_") || k == "pool_thread_count" {
+                        format!("tag_{k}")
+                    } else {
+                        k.clone()
+                    };
+                    meta.push(format!("{}={}", llm_quote(&key), llm_quote(v)));
+                }
+
+                // Allocation stats (when profiler is active)
+                #[cfg(feature = "alloc-profiling")]
+                if let Some(alloc) = &bench.alloc_stats {
+                    meta.push(format!("allocs/iter={:.1}", alloc.allocs_per_iter));
+                    meta.push(format!("bytes/iter={:.0}", alloc.bytes_per_iter));
+                    if alloc.reallocs_per_iter > 0.0 {
+                        meta.push(format!("reallocs/iter={:.1}", alloc.reallocs_per_iter));
+                    }
+                }
+
+                // Join sections with " | " for visual grouping
+                let mut sections: Vec<String> = Vec::new();
+                sections.push(identity.join(" "));
+                if !comparison.is_empty() {
+                    sections.push(comparison.join(" "));
+                }
+                sections.push(measurement.join(" "));
+                if !throughput.is_empty() {
+                    sections.push(throughput.join(" "));
+                }
+                sections.push(meta.join(" "));
+
+                out.push_str(&sections.join("  |  "));
+                out.push('\n');
+            }
+        }
+
+        out.push_str(&self.process_report());
+        out
+    }
+
+    /// Generate a markdown report with tables.
+    pub fn to_markdown(&self) -> String {
+        let mut out = String::new();
+
+        // Header
+        out.push_str("# Benchmark Results\n\n");
+        out.push_str(&format!("CPU placement: `{}`\n\n", self.cpu_evidence(None)));
+        if let Some(hash) = &self.git_hash {
+            out.push_str(&format!("**git:** `{hash}`  \n"));
+        }
+        out.push_str(&format!(
+            "**total:** {:.1}s  **waits:** {} ({:.1}s)\n\n",
+            self.total_time.as_secs_f64(),
+            self.gate_waits,
+            self.gate_wait_time.as_secs_f64()
+        ));
+
+        // Comparison groups
+        for comp in &self.comparisons {
+            out.push_str(&format!(
+                "CPU placement: `{}`\n\n",
+                self.cpu_evidence(Some(comp))
+            ));
+            // Single-bench group with matching name: compact one-liner
+            let is_single =
+                comp.benchmarks.len() == 1 && comp.benchmarks[0].name == comp.group_name;
+            if is_single {
+                let bench = &comp.benchmarks[0];
+                let calls_str = if comp.iterations_per_sample == 1 {
+                    "1 call".to_string()
+                } else {
+                    format!("{} calls", comp.iterations_per_sample)
+                };
+                let tp_str = comp
+                    .throughput
+                    .as_ref()
+                    .map(|t| {
+                        format!(
+                            " · {}",
+                            t.format(bench.summary.mean, comp.throughput_unit.as_deref())
+                        )
+                    })
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "**{}** — {} (min: {}){} · {} rounds \u{d7} {}\n\n",
+                    bench.name,
+                    format_ns(bench.summary.mean),
+                    format_ns(bench.summary.min),
+                    tp_str,
+                    comp.completed_rounds,
+                    calls_str,
+                ));
+                continue;
+            }
+
+            out.push_str(&format!("## {}\n\n", comp.group_name));
+
+            // Methodology line
+            let calls_str = if comp.iterations_per_sample == 1 {
+                "1 call (cold start)".to_string()
+            } else {
+                format!("{} calls", comp.iterations_per_sample)
+            };
+            out.push_str(&format!(
+                "*{} rounds \u{d7} {}*\n\n",
+                comp.completed_rounds, calls_str
+            ));
+
+            let has_throughput = comp.throughput.is_some();
+
+            // Find baseline name
+            let baseline_name = comp
+                .analyses
+                .first()
+                .map(|(base, _, _)| base.as_str())
+                .unwrap_or_else(|| {
+                    comp.benchmarks
+                        .first()
+                        .map(|b| b.name.as_str())
+                        .unwrap_or("")
+                });
+
+            // Build analysis lookup: candidate name -> analysis (only baseline pairs)
+            let analyses: std::collections::HashMap<&str, &PairedAnalysis> = comp
+                .analyses
+                .iter()
+                .filter(|(base, _, _)| base == baseline_name)
+                .map(|(_, cand, a)| (cand.as_str(), a))
+                .collect();
+
+            let has_comparisons = comp.benchmarks.len() >= 2;
+
+            // Table header
+            if has_throughput && has_comparisons {
+                out.push_str("| Benchmark | Min | Mean | vs Base | Throughput |\n");
+                out.push_str("|-----------|-----|------|---------|------------|\n");
+            } else if has_throughput {
+                out.push_str("| Benchmark | Min | Mean | Throughput |\n");
+                out.push_str("|-----------|-----|------|------------|\n");
+            } else if has_comparisons {
+                out.push_str("| Benchmark | Min | Mean | vs Base |\n");
+                out.push_str("|-----------|-----|------|----------|\n");
+            } else {
+                out.push_str("| Benchmark | Min | Mean |\n");
+                out.push_str("|-----------|-----|------|\n");
+            }
+
+            let has_subgroups = comp.benchmarks.iter().any(|b| b.subgroup.is_some());
+            let mut current_subgroup: Option<&str> = None;
+
+            for bench in &comp.benchmarks {
+                // Subgroup header row
+                if has_subgroups {
+                    let row_sg = bench.subgroup.as_deref();
+                    if row_sg != current_subgroup {
+                        current_subgroup = row_sg;
+                        if let Some(label) = row_sg {
+                            let n_cols = if has_throughput && has_comparisons {
+                                5
+                            } else if has_throughput || has_comparisons {
+                                4
+                            } else {
+                                3
+                            };
+                            let empty_cols = " |".repeat(n_cols - 1);
+                            out.push_str(&format!("| **{label}** |{empty_cols}\n"));
+                        }
+                    }
+                }
+
+                let min_str = format_ns(bench.summary.min);
+                let mean_str = format_ns(bench.summary.mean);
+
+                // vs Base column
+                let res_flag = analyses
+                    .get(bench.name.as_str())
+                    .is_some_and(|a| a.resolution_limited);
+                let vs_base = if has_comparisons {
+                    if bench.name == baseline_name {
+                        mean_str.clone()
+                    } else if let Some(analysis) = analyses.get(bench.name.as_str()) {
+                        let base_mean = analysis.baseline.mean;
+                        let ci_str = if base_mean.abs() > f64::EPSILON {
+                            let lo_pct = analysis.ci_lower / base_mean * 100.0;
+                            let mid_pct = analysis.ci_median / base_mean * 100.0;
+                            let hi_pct = analysis.ci_upper / base_mean * 100.0;
+                            format!("[{:+.1}%  {:+.1}%  {:+.1}%]", lo_pct, mid_pct, hi_pct)
+                        } else {
+                            format!("{:+.1}%", analysis.pct_change)
+                        };
+                        if res_flag {
+                            format!("{ci_str} \u{26a0}")
+                        } else {
+                            ci_str
+                        }
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+
+                let tp_str = if has_throughput {
+                    comp.throughput
+                        .as_ref()
+                        .map(|t| t.format(bench.summary.mean, comp.throughput_unit.as_deref()))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
+                if has_throughput && has_comparisons {
+                    out.push_str(&format!(
+                        "| {} | {} | {} | {} | {} |\n",
+                        bench.name, min_str, mean_str, vs_base, tp_str,
+                    ));
+                } else if has_throughput {
+                    out.push_str(&format!(
+                        "| {} | {} | {} | {} |\n",
+                        bench.name, min_str, mean_str, tp_str,
+                    ));
+                } else if has_comparisons {
+                    out.push_str(&format!(
+                        "| {} | {} | {} | {} |\n",
+                        bench.name, min_str, mean_str, vs_base,
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "| {} | {} | {} |\n",
+                        bench.name, min_str, mean_str,
+                    ));
+                }
+            }
+
+            // Resolution warning
+            let any_res_limited = comp.analyses.iter().any(|(_, _, a)| a.resolution_limited);
+            if any_res_limited {
+                out.push_str(
+                    "\n> \u{26a0} Some comparisons are below timer resolution \
+                     and cannot be distinguished by this hardware.\n",
+                );
+            }
+
+            // Bar chart
+            if !comp.benchmarks.is_empty() {
+                out.push('\n');
+                out.push_str(&crate::report::format_bar_chart(
+                    &comp.benchmarks,
+                    comp.throughput.as_ref(),
+                    comp.throughput_unit.as_deref(),
+                ));
+            }
+
+            out.push('\n');
+        }
+
+        if !self.process_comparisons.is_empty() {
+            out.push_str("\n```text\n");
+            out.push_str(&self.process_report());
+            out.push_str("```\n");
+        }
+        out
+    }
+
+    /// Generate CSV output with one row per benchmark.
+    pub fn to_csv(&self) -> String {
+        let mut out = String::new();
+
+        // Header
+        let mut header = "group,benchmark,subgroup,mean_ns,std_dev_ns,median_ns,mad_ns,min_ns,max_ns,n,cv,\
+             cold_start_ns,cpu_mean_ns,cpu_efficiency,throughput_value,throughput_unit,\
+             vs_base_pct,vs_base_ci_lo_pct,vs_base_ci_hi_pct,significant,resolution_limited,cohens_d,wilcoxon_p,drift_r,timer_ticks_per_sample"
+            .to_string();
+        #[cfg(feature = "alloc-profiling")]
+        header.push_str(",allocs_per_iter,deallocs_per_iter,reallocs_per_iter,bytes_per_iter");
+        header.push_str(",cpu_placement_evidence,process_comparisons");
+        header.push('\n');
+        out.push_str(&header);
+
+        // Comparison groups
+        for comp in &self.comparisons {
+            // Find baseline name
+            let baseline_name = comp
+                .analyses
+                .first()
+                .map(|(base, _, _)| base.as_str())
+                .unwrap_or_else(|| {
+                    comp.benchmarks
+                        .first()
+                        .map(|b| b.name.as_str())
+                        .unwrap_or("")
+                });
+
+            // Build analysis lookup: candidate name -> analysis (only baseline pairs)
+            let analyses: std::collections::HashMap<&str, &PairedAnalysis> = comp
+                .analyses
+                .iter()
+                .filter(|(base, _, _)| base == baseline_name)
+                .map(|(_, cand, a)| (cand.as_str(), a))
+                .collect();
+
+            for bench in &comp.benchmarks {
+                let (tp_val, tp_unit) = comp
+                    .throughput
+                    .as_ref()
+                    .map(|t| {
+                        let (v, u) = t.compute(bench.summary.mean, comp.throughput_unit.as_deref());
+                        (format!("{v:.4}"), u)
+                    })
+                    .unwrap_or_else(|| (String::new(), String::new()));
+
+                let (cpu_mean, cpu_eff) = bench
+                    .cpu_summary
+                    .as_ref()
+                    .map(|c| {
+                        let eff = if bench.summary.mean > 0.0 {
+                            c.mean / bench.summary.mean
+                        } else {
+                            0.0
+                        };
+                        (format!("{:.2}", c.mean), format!("{eff:.4}"))
+                    })
+                    .unwrap_or_else(|| (String::new(), String::new()));
+
+                let cold = if bench.cold_start_ns > 0.0 {
+                    format!("{:.2}", bench.cold_start_ns)
+                } else {
+                    String::new()
+                };
+
+                let subgroup = bench
+                    .subgroup
+                    .as_deref()
+                    .map(csv_escape)
+                    .unwrap_or_default();
+
+                // vs-base columns
+                let (
+                    vs_pct,
+                    vs_ci_lo,
+                    vs_ci_hi,
+                    significant,
+                    res_limited,
+                    cohens_d,
+                    wilcoxon_p,
+                    drift_r,
+                ) = if bench.name == baseline_name {
+                    // baseline row: no comparison values
+                    (
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                    )
+                } else if let Some(analysis) = analyses.get(bench.name.as_str()) {
+                    let base_mean = analysis.baseline.mean;
+                    let (ci_lo, ci_hi) = if base_mean.abs() > f64::EPSILON {
+                        (
+                            format!("{:.4}", analysis.ci_lower / base_mean * 100.0),
+                            format!("{:.4}", analysis.ci_upper / base_mean * 100.0),
+                        )
+                    } else {
+                        (String::new(), String::new())
+                    };
+                    (
+                        format!("{:.4}", analysis.pct_change),
+                        ci_lo,
+                        ci_hi,
+                        format!("{}", analysis.significant),
+                        format!("{}", analysis.resolution_limited),
+                        format!("{:.4}", analysis.cohens_d),
+                        format!("{:.6}", analysis.wilcoxon_p),
+                        format!("{:.4}", analysis.drift_correlation),
+                    )
+                } else {
+                    (
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                    )
+                };
+
+                out.push_str(&format!(
+                    "{},{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{},{:.4},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.0}",
+                    csv_escape(&comp.group_name),
+                    csv_escape(&bench.name),
+                    subgroup,
+                    bench.summary.mean,
+                    bench.summary.std_dev(),
+                    bench.summary.median,
+                    bench.summary.mad,
+                    bench.summary.min,
+                    bench.summary.max,
+                    bench.summary.n,
+                    bench.summary.cv(),
+                    cold,
+                    cpu_mean,
+                    cpu_eff,
+                    tp_val,
+                    tp_unit,
+                    vs_pct,
+                    vs_ci_lo,
+                    vs_ci_hi,
+                    significant,
+                    res_limited,
+                    cohens_d,
+                    wilcoxon_p,
+                    drift_r,
+                    bench.timer_ticks_per_sample,
+                ));
+                #[cfg(feature = "alloc-profiling")]
+                if let Some(alloc) = &bench.alloc_stats {
+                    out.push_str(&format!(
+                        ",{:.1},{:.1},{:.1},{:.0}",
+                        alloc.allocs_per_iter,
+                        alloc.deallocs_per_iter,
+                        alloc.reallocs_per_iter,
+                        alloc.bytes_per_iter,
+                    ));
+                } else {
+                    #[cfg(feature = "alloc-profiling")]
+                    out.push_str(",,,,");
+                }
+                out.push(',');
+                out.push_str(&csv_escape(&self.cpu_evidence(Some(comp))));
+                out.push(',');
+                let decisions = self
+                    .process_comparisons
+                    .iter()
+                    .filter(|c| c.group == comp.group_name && c.candidate == bench.name)
+                    .collect::<Vec<_>>();
+                out.push_str(&csv_escape(
+                    &serde_json::to_string(&decisions).expect("process comparisons serialize"),
+                ));
+                out.push('\n');
+            }
+        }
+
+        out
+    }
+
+    /// Group benchmarks across all comparison results by a tag key.
+    ///
+    /// Returns a map from tag value to list of (group_name, benchmark_result) pairs.
+    pub fn group_by_tag(
+        &self,
+        tag_key: &str,
+    ) -> std::collections::BTreeMap<String, Vec<(&str, &BenchmarkResult)>> {
+        let mut groups = std::collections::BTreeMap::new();
+        for comp in &self.comparisons {
+            for bench in &comp.benchmarks {
+                if let Some(val) = bench.tag(tag_key) {
+                    groups
+                        .entry(val.to_string())
+                        .or_insert_with(Vec::new)
+                        .push((comp.group_name.as_str(), bench));
+                }
+            }
+        }
+        groups
+    }
+}
+
+// Re-export format_ns so that `results::format_ns` still resolves.
+pub use crate::format::format_ns;
+
+/// Quote a value for LLM key-value format. Wraps in double quotes if it
+/// contains spaces, quotes, or equals signs.
+fn llm_quote(s: &str) -> String {
+    if s.chars().any(char::is_whitespace) || s.contains(['"', '=', '\\', '|']) {
+        serde_json::to_string(s).expect("serializing LLM string")
+    } else {
+        s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::csv_escape;
+    use crate::stats::Summary;
+    use std::time::Duration;
+
+    fn make_summary(mean_ns: f64) -> Summary {
+        // Minimal summary for testing
+        Summary::from_slice(&[mean_ns])
+    }
+
+    #[test]
+    fn throughput_bytes_mibs() {
+        let tp = Throughput::Bytes(1_048_576); // 1 MiB
+        // 1 MiB in 1ms = 1000 MiB/s -> should show GiB/s
+        let (val, unit) = tp.compute(1_000_000.0, None); // 1ms in ns
+        assert_eq!(unit, "MiB/s");
+        assert!((val - 1000.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn throughput_bytes_gibs() {
+        let tp = Throughput::Bytes(1_073_741_824); // 1 GiB
+        // 1 GiB in 1ms = 1000 GiB/s
+        let (val, unit) = tp.compute(1_000_000.0, None); // 1ms in ns
+        assert_eq!(unit, "GiB/s");
+        assert!((val - 1000.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn throughput_elements() {
+        let tp = Throughput::Elements(1000);
+        // 1000 elements in 1ms = 1M ops/s
+        let (val, unit) = tp.compute(1_000_000.0, None);
+        assert_eq!(unit, "Mops/s");
+        assert!((val - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn throughput_format() {
+        let tp = Throughput::Bytes(153 * 1024 * 1024); // 153 MiB
+        // 153 MiB in 531ms = 288 MiB/s
+        let s = tp.format(531_000_000.0, None);
+        assert!(s.contains("MiB/s"), "Expected MiB/s, got: {s}");
+        assert!(s.contains("288"), "Expected ~288, got: {s}");
+    }
+
+    #[test]
+    fn benchmark_result_tags() {
+        let br = BenchmarkResult {
+            name: "test".to_string(),
+            summary: make_summary(100.0),
+            tags: vec![
+                ("library".to_string(), "zenflate".to_string()),
+                ("level".to_string(), "L6".to_string()),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(br.tag("library"), Some("zenflate"));
+        assert_eq!(br.tag("level"), Some("L6"));
+        assert_eq!(br.tag("missing"), None);
+    }
+
+    fn make_suite_result() -> SuiteResult {
+        SuiteResult {
+            run_id: RunId("test-123".to_string()),
+            git_hash: Some("abc123".to_string()),
+            comparisons: vec![ComparisonResult {
+                group_name: "compress".to_string(),
+                benchmarks: vec![
+                    BenchmarkResult {
+                        name: "zenflate".to_string(),
+                        summary: make_summary(5_000_000.0),
+                        tags: vec![("library".to_string(), "zenflate".to_string())],
+                        ..Default::default()
+                    },
+                    BenchmarkResult {
+                        name: "libdeflate".to_string(),
+                        summary: make_summary(10_000_000.0),
+                        tags: vec![("library".to_string(), "libdeflate".to_string())],
+                        ..Default::default()
+                    },
+                ],
+                completed_rounds: 100,
+                throughput: Some(Throughput::Bytes(1_048_576)),
+                iterations_per_sample: 1000,
+                ..Default::default()
+            }],
+            total_time: Duration::from_secs(5),
+            timer_resolution_ns: 25,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn markdown_output_contains_table() {
+        let result = make_suite_result();
+        let md = result.to_markdown();
+        assert!(md.contains("| Benchmark |"), "Missing table header");
+        assert!(md.contains("zenflate"), "Missing benchmark name");
+        assert!(md.contains("MiB/s"), "Missing throughput");
+    }
+
+    #[test]
+    fn markdown_output_contains_bar_chart() {
+        let result = make_suite_result();
+        let md = result.to_markdown();
+        assert!(md.contains("```"), "Missing code block");
+        assert!(md.contains('\u{2588}'), "Missing bar characters");
+    }
+
+    #[test]
+    fn csv_output_has_header_and_rows() {
+        let result = make_suite_result();
+        let csv = result.to_csv();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert!(lines[0].starts_with("group,benchmark,"));
+        assert_eq!(lines.len(), 3); // header + 2 benchmarks
+        assert!(lines[1].contains("zenflate"));
+        assert!(lines[2].contains("libdeflate"));
+        assert!(lines[1].contains("MiB/s"));
+    }
+
+    #[test]
+    fn group_by_tag() {
+        let result = make_suite_result();
+        let grouped = result.group_by_tag("library");
+        assert_eq!(grouped.len(), 2);
+        assert!(grouped.contains_key("zenflate"));
+        assert!(grouped.contains_key("libdeflate"));
+    }
+
+    #[test]
+    fn format_ns_ranges() {
+        assert_eq!(format_ns(500.0), "500.0ns");
+        assert_eq!(format_ns(1_500.0), "1.50\u{b5}s");
+        assert_eq!(format_ns(1_500_000.0), "1.50ms");
+        assert_eq!(format_ns(1_500_000_000.0), "1.50s");
+        assert_eq!(format_ns(-1_500_000.0), "-1.50ms");
+    }
+
+    #[test]
+    fn csv_escape_special_chars() {
+        assert_eq!(csv_escape("simple"), "simple");
+        assert_eq!(csv_escape("has,comma"), "\"has,comma\"");
+        assert_eq!(csv_escape("has\"quote"), "\"has\"\"quote\"");
+    }
+
+    /// A suite with a real PairedAnalysis so vs_base fields are populated.
+    fn make_suite_result_with_analyses() -> SuiteResult {
+        use crate::stats::PairedAnalysis;
+
+        // Build a PairedAnalysis from real samples so ci_median is populated.
+        let base_samples: Vec<f64> = (0..100).map(|_| 5_000_000.0_f64).collect();
+        let cand_samples: Vec<f64> = (0..100).map(|_| 10_000_000.0_f64).collect();
+        let iters: Vec<usize> = vec![1usize; 100];
+        let analysis = PairedAnalysis::compute(&base_samples, &cand_samples, &iters)
+            .expect("analysis should succeed for equal-length inputs");
+
+        SuiteResult {
+            run_id: RunId("test-456".to_string()),
+            comparisons: vec![ComparisonResult {
+                group_name: "compress".to_string(),
+                benchmarks: vec![
+                    BenchmarkResult {
+                        name: "zenflate".to_string(),
+                        summary: make_summary(5_000_000.0),
+                        cold_start_ns: 12_500.0,
+                        ..Default::default()
+                    },
+                    BenchmarkResult {
+                        name: "libdeflate".to_string(),
+                        summary: make_summary(10_000_000.0),
+                        ..Default::default()
+                    },
+                ],
+                analyses: vec![("zenflate".to_string(), "libdeflate".to_string(), analysis)],
+                completed_rounds: 50,
+                iterations_per_sample: 10,
+                ..Default::default()
+            }],
+            total_time: Duration::from_secs(3),
+            gate_waits: 2,
+            gate_wait_time: Duration::from_millis(250),
+            timer_resolution_ns: 25,
+            ..Default::default()
+        }
+    }
+
+    // --- to_llm() ---
+
+    #[test]
+    fn llm_aggregate_does_not_present_unavailable_metadata_as_zero() {
+        let mut child = make_suite_result_with_analyses();
+        for bench in &mut child.comparisons[0].benchmarks {
+            bench.timer_ticks_per_sample = 120.0;
+        }
+        let aggregate =
+            crate::aggregate_results(vec![child.clone(), child], crate::Aggregation::Mean);
+        let text = aggregate.to_llm();
+        assert!(text.contains("calls=per_process"));
+        assert!(text.contains("timer_ticks=per_process"));
+        assert!(!text.contains("calls=0"));
+        assert!(!text.contains("timer_ticks=0"));
+        assert!(!text.contains("resolution-limited"));
+    }
+
+    #[test]
+    fn llm_output_baseline_has_vs_base_eq_baseline() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        // The baseline row must say vs_base=baseline
+        let baseline_line = llm
+            .lines()
+            .find(|l| l.contains("benchmark=zenflate"))
+            .expect("should have a zenflate line");
+        assert!(
+            baseline_line.contains("vs_base=baseline"),
+            "baseline row should contain vs_base=baseline, got: {baseline_line}"
+        );
+    }
+
+    #[test]
+    fn llm_output_candidate_has_vs_base_pct() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        let cand_line = llm
+            .lines()
+            .find(|l| l.contains("benchmark=libdeflate"))
+            .expect("should have a libdeflate line");
+        assert!(
+            cand_line.contains("vs_base_pct="),
+            "candidate row should contain vs_base_pct=, got: {cand_line}"
+        );
+    }
+
+    #[test]
+    fn llm_output_has_group_field() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        assert!(
+            llm.contains("group=compress"),
+            "llm output should contain group=compress, got:\n{llm}"
+        );
+    }
+
+    #[test]
+    fn llm_output_has_benchmark_field() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        assert!(
+            llm.contains("benchmark=zenflate"),
+            "llm output should contain benchmark=zenflate, got:\n{llm}"
+        );
+    }
+
+    #[test]
+    fn llm_output_has_section_separators() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        for line in llm.lines() {
+            assert!(
+                line.contains("  |  "),
+                "every line should have '  |  ' section separators, got: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn llm_output_cold_start_field_present_when_nonzero() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        // zenflate has cold_start_ns=12500, should show up as cold=...
+        let baseline_line = llm
+            .lines()
+            .find(|l| l.contains("benchmark=zenflate"))
+            .expect("should have a zenflate line");
+        assert!(
+            baseline_line.contains("cold="),
+            "row with nonzero cold_start_ns should have cold= field, got: {baseline_line}"
+        );
+    }
+
+    #[test]
+    fn llm_output_throughput_absent_when_not_set() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        // make_suite_result_with_analyses has no throughput
+        assert!(
+            !llm.contains("throughput="),
+            "no throughput should produce no throughput= field, got:\n{llm}"
+        );
+    }
+
+    // --- to_markdown() ---
+
+    #[test]
+    fn markdown_output_has_min_and_mean_headers() {
+        let result = make_suite_result();
+        let md = result.to_markdown();
+        assert!(
+            md.contains("| Min |"),
+            "markdown should have '| Min |' column header, got:\n{md}"
+        );
+        assert!(
+            md.contains("| Mean |"),
+            "markdown should have '| Mean |' column header, got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn markdown_output_has_vs_base_column_when_comparisons_exist() {
+        let result = make_suite_result_with_analyses();
+        let md = result.to_markdown();
+        assert!(
+            md.contains("| vs Base |"),
+            "markdown should have '| vs Base |' column when analyses present, got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn markdown_output_methodology_line_has_rounds_cross() {
+        let result = make_suite_result_with_analyses();
+        let md = result.to_markdown();
+        // Methodology line uses × (U+00D7) between rounds count and calls
+        assert!(
+            md.contains('\u{d7}'),
+            "methodology line should contain × (rounds × calls), got:\n{md}"
+        );
+        assert!(
+            md.contains("rounds"),
+            "methodology line should mention 'rounds', got:\n{md}"
+        );
+    }
+
+    // --- to_csv() ---
+
+    #[test]
+    fn csv_header_contains_cold_start_ns_column() {
+        let result = make_suite_result();
+        let csv = result.to_csv();
+        let header = csv.lines().next().expect("csv should have a header line");
+        assert!(
+            header.contains("cold_start_ns"),
+            "csv header should contain 'cold_start_ns', got: {header}"
+        );
+    }
+
+    #[test]
+    fn csv_header_contains_vs_base_pct_column() {
+        let result = make_suite_result();
+        let csv = result.to_csv();
+        let header = csv.lines().next().expect("csv should have a header line");
+        assert!(
+            header.contains("vs_base_pct"),
+            "csv header should contain 'vs_base_pct', got: {header}"
+        );
+    }
+
+    #[test]
+    fn csv_header_contains_significant_column() {
+        let result = make_suite_result();
+        let csv = result.to_csv();
+        let header = csv.lines().next().expect("csv should have a header line");
+        assert!(
+            header.contains("significant"),
+            "csv header should contain 'significant', got: {header}"
+        );
+    }
+
+    #[test]
+    fn csv_candidate_row_has_vs_base_pct_value() {
+        let result = make_suite_result_with_analyses();
+        let csv = result.to_csv();
+        let lines: Vec<&str> = csv.lines().collect();
+        let cand_row = lines
+            .iter()
+            .find(|l| l.contains("libdeflate"))
+            .expect("should have libdeflate row");
+        // The vs_base_pct column should be a non-empty float for the candidate
+        // Count commas to find the column position (vs_base_pct is column index 16, 0-based)
+        let cols: Vec<&str> = cand_row.split(',').collect();
+        // Header: group,benchmark,subgroup,mean_ns,std_dev_ns,median_ns,mad_ns,min_ns,max_ns,
+        //         n,cv,cold_start_ns,cpu_mean_ns,cpu_efficiency,throughput_value,throughput_unit,
+        //         vs_base_pct,...
+        let vs_base_pct_col = 16;
+        assert!(
+            cols.len() > vs_base_pct_col,
+            "candidate row should have enough columns, got {} cols in: {cand_row}",
+            cols.len()
+        );
+        assert!(
+            !cols[vs_base_pct_col].is_empty(),
+            "vs_base_pct should be non-empty for candidate, got: {cand_row}"
+        );
+    }
+
+    #[test]
+    fn csv_baseline_row_has_empty_vs_base_pct() {
+        let result = make_suite_result_with_analyses();
+        let csv = result.to_csv();
+        let lines: Vec<&str> = csv.lines().collect();
+        let base_row = lines
+            .iter()
+            .find(|l| l.contains("zenflate"))
+            .expect("should have zenflate row");
+        let cols: Vec<&str> = base_row.split(',').collect();
+        let vs_base_pct_col = 16;
+        assert!(
+            cols.len() > vs_base_pct_col,
+            "baseline row should have enough columns, got {} cols in: {base_row}",
+            cols.len()
+        );
+        assert!(
+            cols[vs_base_pct_col].is_empty(),
+            "vs_base_pct should be empty for baseline row, got: {base_row}"
+        );
+    }
+
+    // ── Single-bench output format tests ──────────────────────────
+
+    #[test]
+    fn llm_multi_bench_group_has_group_field() {
+        let result = make_suite_result_with_analyses();
+        let llm = result.to_llm();
+        assert!(
+            llm.contains("group=compress"),
+            "multi-bench group should have group= field, got:\n{llm}"
+        );
+    }
+
+    #[test]
+    fn llm_single_bench_omits_group_field() {
+        let result = SuiteResult {
+            comparisons: vec![ComparisonResult {
+                group_name: "overhead".to_string(),
+                benchmarks: vec![BenchmarkResult {
+                    name: "overhead".to_string(),
+                    summary: make_summary(0.5),
+                    ..Default::default()
+                }],
+                completed_rounds: 30,
+                iterations_per_sample: 1_000_000,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let llm = result.to_llm();
+        assert!(
+            !llm.contains("group="),
+            "single-bench LLM should omit group=, got:\n{llm}"
+        );
+        assert!(llm.contains("benchmark=overhead"));
+    }
+
+    #[test]
+    fn markdown_single_bench_is_one_liner() {
+        let result = SuiteResult {
+            comparisons: vec![ComparisonResult {
+                group_name: "overhead".to_string(),
+                benchmarks: vec![BenchmarkResult {
+                    name: "overhead".to_string(),
+                    summary: make_summary(0.5),
+                    ..Default::default()
+                }],
+                completed_rounds: 30,
+                iterations_per_sample: 1_000_000,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let md = result.to_markdown();
+        assert!(
+            md.contains("**overhead**"),
+            "single-bench markdown should use bold name, got:\n{md}"
+        );
+        assert!(
+            !md.contains("## overhead"),
+            "single-bench markdown should not use section header, got:\n{md}"
+        );
+        assert!(
+            !md.contains("| Benchmark"),
+            "single-bench markdown should not use table, got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn markdown_multi_bench_uses_table() {
+        let result = make_suite_result_with_analyses();
+        let md = result.to_markdown();
+        assert!(
+            md.contains("## compress"),
+            "multi-bench should have section header"
+        );
+        assert!(md.contains("| Benchmark"), "multi-bench should have table");
+    }
+
+    #[test]
+    fn csv_single_bench_has_group_column() {
+        let result = SuiteResult {
+            comparisons: vec![ComparisonResult {
+                group_name: "overhead".to_string(),
+                benchmarks: vec![BenchmarkResult {
+                    name: "overhead".to_string(),
+                    summary: make_summary(0.5),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let csv = result.to_csv();
+        let data_line = csv.lines().nth(1).expect("should have data row");
+        assert!(
+            data_line.starts_with("overhead,overhead,"),
+            "CSV should have group=overhead, bench=overhead, got: {data_line}"
+        );
+    }
+
+    #[test]
+    fn html_single_bench_produces_output() {
+        let result = SuiteResult {
+            comparisons: vec![ComparisonResult {
+                group_name: "overhead".to_string(),
+                benchmarks: vec![BenchmarkResult {
+                    name: "overhead".to_string(),
+                    summary: make_summary(0.5),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let html = result.to_html();
+        assert!(
+            html.contains("overhead"),
+            "HTML should contain benchmark name"
+        );
+        assert!(html.contains("<html"), "should be valid HTML");
+        assert!(html.contains("</html>"), "should have closing tag");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn json_standalones_field_serializes_empty() {
+        let result = SuiteResult {
+            comparisons: vec![ComparisonResult {
+                group_name: "x".to_string(),
+                benchmarks: vec![BenchmarkResult {
+                    name: "x".to_string(),
+                    summary: make_summary(1.0),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(
+            json.contains(r#""standalones":[]"#),
+            "standalones should serialize as empty array, got:\n{json}"
+        );
+    }
+    #[test]
+    fn placement_metadata_prevents_mixing_and_preserves_legacy_unknown() {
+        use crate::platform::{
+            CoreClass, CpuPlacement, CpuPolicy, CpuTopology, PlacementStatus, TopologyKind,
+        };
+        let topology = CpuTopology {
+            kind: TopologyKind::Asymmetric,
+            classes: vec![
+                CoreClass {
+                    name: "P".into(),
+                    cpus: vec![0],
+                    logical_cpu_count: 1,
+                    performance_rank: Some(2),
+                },
+                CoreClass {
+                    name: "E".into(),
+                    cpus: vec![1],
+                    logical_cpu_count: 1,
+                    performance_rank: Some(1),
+                },
+            ],
+            source: "fixture".into(),
+            diagnostic: None,
+        };
+        let p = CpuPlacement {
+            policy: CpuPolicy::Auto,
+            topology,
+            status: PlacementStatus::EnforcedUniform,
+            core_class: Some("P".into()),
+            effective_cpus: vec![0],
+            requested_cpus: None,
+            enforcement: "cpuset".into(),
+            thread_affinity_requested: None,
+            thread_affinity_effective: None,
+        };
+        let mut e = p.clone();
+        e.core_class = Some("E".into());
+        e.effective_cpus = vec![1];
+        let mut bench = BenchmarkResult {
+            name: "work".into(),
+            ..Default::default()
+        };
+        bench.tags.push(("cpu_class_uniform".into(), "true".into()));
+        bench.tags.push((
+            "note\ncpu_class_uniform".into(),
+            "value\ncpu_class_uniform=true".into(),
+        ));
+        let comparison = ComparisonResult {
+            group_name: "proof".into(),
+            benchmarks: vec![bench],
+            cpu_placement: Some(p.clone()),
+            ..Default::default()
+        };
+        let run = SuiteResult {
+            cpu_placement: Some(p),
+            comparisons: vec![comparison],
+            ..Default::default()
+        };
+        let mut other = run.clone();
+        other.cpu_placement = Some(e);
+        assert!(run.check_cpu_compatibility(&other).is_err());
+        assert!(
+            std::panic::catch_unwind(|| crate::aggregate_results(
+                vec![run.clone(), other.clone()],
+                crate::Aggregation::Mean
+            ))
+            .is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| crate::baseline::compare_against_baseline(
+                &run, &other, 5.0
+            ))
+            .is_err()
+        );
+        other = run.clone();
+        other.comparisons[0]
+            .cpu_placement
+            .as_mut()
+            .unwrap()
+            .thread_affinity_effective = Some(vec![0]);
+        assert!(run.check_cpu_compatibility(&other).is_err());
+        other = run.clone();
+        other.comparisons[0].cpu_placement = None;
+        assert!(other.to_llm().contains("cpu_placement=LEGACY_UNKNOWN"));
+        assert!(!other.to_llm().contains("cpu_placement=enforced_uniform"));
+        assert!(run.to_llm().contains("tag_cpu_class_uniform="));
+        assert_eq!(run.to_llm().lines().count(), 1);
+        assert!(run.to_llm().contains("\\n"));
+        let mut encoded = serde_json::to_value(SuiteResult::default()).unwrap();
+        encoded.as_object_mut().unwrap().remove("cpu_placement");
+        let legacy: SuiteResult = serde_json::from_value(encoded).unwrap();
+        assert!(legacy.cpu_placement.is_none());
+        assert!(legacy.check_cpu_compatibility(&run).is_err());
+    }
+}
+
+/// Serde support for Duration via millis.
+mod duration_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    #[derive(Serialize, Deserialize)]
+    struct DurationMs {
+        millis: u64,
+    }
+
+    pub fn serialize<S: Serializer>(dur: &Duration, s: S) -> Result<S::Ok, S::Error> {
+        DurationMs {
+            millis: dur.as_millis() as u64,
+        }
+        .serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
+        let ms = DurationMs::deserialize(d)?;
+        Ok(Duration::from_millis(ms.millis))
+    }
+}

@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  ZENBENCH_NO_SAVE: "1"
+  # Functional/statistical fixtures exercise measurements intentionally without
+  # enforcing a core class. CPU-policy subprocess tests remove this opt-out and
+  # verify fail-closed defaults independently.
+  ZENBENCH_CPU_POLICY: unrestricted
+
+# Superseded runs only waste runner queue — particularly the macOS
+# jobs, which wait on GitHub's scarcest pool. Only the newest
+# commit's run matters per ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --check
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Clippy (no default features)
+        run: cargo clippy --no-default-features -- -D warnings
+      - name: Doc warnings
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  test:
+    name: Test (${{ matrix.name }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux x64
+          - os: ubuntu-24.04-arm
+            name: Linux ARM64
+          - os: windows-latest
+            name: Windows x64
+          - os: windows-11-arm
+            name: Windows ARM64
+          - os: macos-latest
+            name: macOS ARM64
+          - os: macos-26-intel
+            name: macOS Intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Native Windows core/cache topology oracle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./examples/windows_topology_probe.ps1
+      - name: Native Windows process-mask worker oracle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./examples/windows_process_mask_probe.ps1
+      - name: Native process-wide heap controls
+        run: cargo run --features heap-profiling --example heap_phases -- --exercise-oom
+      - name: Unit tests (all features)
+        run: cargo test --all-features
+      - name: Unit tests (no default features)
+        run: cargo test --no-default-features
+      - name: Integration tests (real benchmarks)
+        run: cargo test --test integration -- --nocapture
+
+  cross:
+    name: Cross (${{ matrix.target }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - i686-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/install-action@cross
+      - uses: Swatinem/rust-cache@v2
+      - name: Test (all features)
+        run: cross test --target ${{ matrix.target }} --all-features
+      - name: Test (no default features)
+        run: cross test --target ${{ matrix.target }} --no-default-features
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-llvm-cov --locked
+      - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+      - uses: codecov/codecov-action@v7
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Check MSRV compiles (default features)
+        run: cargo check
+      - name: Check MSRV compiles (no default features)
+        run: cargo check --no-default-features
+      # Every feature except charts (1.88) and wasm (1.96) claims 1.85
+      # in the README features table; all targets covers tests and benches.
+      - name: Check MSRV compiles (all 1.85 features, all targets)
+        run: cargo check --all-targets --features async,cpu-time,criterion-compat
+      - name: Check Windows MSRV compiles (all 1.85 features, all targets)
+        run: cargo check --locked --target x86_64-pc-windows-gnu --all-targets --features async,cpu-time,criterion-compat
+      - name: Test on MSRV
+        run: cargo test --lib

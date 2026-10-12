@@ -182,7 +182,7 @@ fn iqa_level(
     }
     let n = w * h;
     #[cfg(feature = "parallel")]
-    scratch.lap[..n]
+    scratch.up[..n]
         .par_chunks_mut(1 << 14)
         .zip(src[..n].par_chunks(1 << 14))
         .zip(recon[..n].par_chunks(1 << 14))
@@ -192,14 +192,10 @@ fn iqa_level(
             }
         });
     #[cfg(not(feature = "parallel"))]
-    for ((l, &a), &s) in scratch.lap[..n]
-        .iter_mut()
-        .zip(src.iter())
-        .zip(recon.iter())
-    {
+    for ((l, &a), &s) in scratch.up[..n].iter_mut().zip(src.iter()).zip(recon.iter()) {
         *l = a - s;
     }
-    normalize_band(&scratch.lap[..n], w, h, level, &mut scratch.normalized);
+    normalize_band(&scratch.up[..n], w, h, level, &mut scratch.normalized);
     (low, ow, oh)
 }
 
@@ -215,7 +211,7 @@ mod tests {
             .map(|i| ((i * 37 + i / 97) % 256) as u8)
             .collect::<Vec<_>>();
         let mut changed = reference.clone();
-        for p in changed.chunks_exact_mut(3).step_by(19) {
+        for p in changed.as_chunks_mut::<3>().0.iter_mut().step_by(19) {
             p[0] = p[0].saturating_add(20);
         }
         assert_eq!(score_rgb_u8(&reference, &reference, w, h).unwrap(), 0.0);

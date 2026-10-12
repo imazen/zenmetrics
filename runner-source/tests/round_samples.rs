@@ -1,0 +1,201 @@
+use std::time::Duration;
+use zenbench::{Aggregation, GateConfig, SuiteResult, aggregate_results, black_box, run_gated};
+
+#[test]
+fn engine_retains_paired_batches_and_round_trips_evidence() {
+    let result = run_gated(GateConfig::disabled(), |suite| {
+        suite.compare("retained", |group| {
+            let config = group.config();
+            config
+                .max_rounds(10)
+                .min_rounds(10)
+                .auto_rounds(false)
+                .warmup_time(Duration::ZERO)
+                .linear_sampling(true);
+            config.min_iterations = 10;
+            config.max_iterations = 10;
+            group.bench("a", |b| {
+                b.iter(|| black_box(17u64).wrapping_mul(black_box(13)))
+            });
+            group.bench("b", |b| {
+                b.iter(|| black_box(31u64).wrapping_mul(black_box(19)))
+            });
+        });
+    });
+    let cmp = &result.comparisons[0];
+    assert_eq!(cmp.completed_rounds, 10);
+    assert_eq!(cmp.samples.len(), cmp.completed_rounds);
+    assert_ne!(cmp.samples[0].iterations, cmp.samples[9].iterations);
+    // A random ten-round schedule can legitimately repeat one order.
+    // Deterministic sequence coverage lives beside random_permutation.
+    for sample in &cmp.samples {
+        assert!(sample.iterations > 0);
+        let mut order = sample.execution_order.clone();
+        order.sort_unstable();
+        assert_eq!(order, vec![0, 1]);
+        assert_eq!(sample.elapsed_ns.len(), 2);
+        assert_eq!(sample.compensated_ns.len(), 2);
+        for (&raw, &compensated) in sample.elapsed_ns.iter().zip(&sample.compensated_ns) {
+            let overhead = (result.loop_overhead_ns * sample.iterations as f64) as u64;
+            assert_eq!(compensated, raw.saturating_sub(overhead).max(1));
+        }
+    }
+    for (index, bench) in cmp.benchmarks.iter().enumerate() {
+        let mean = cmp
+            .samples
+            .iter()
+            .map(|s| s.compensated_ns[index] as f64 / s.iterations as f64)
+            .sum::<f64>()
+            / cmp.samples.len() as f64;
+        assert_eq!(bench.summary.n, cmp.samples.len());
+        assert!((mean - bench.summary.mean).abs() <= 1e-10 * mean.max(1.0));
+    }
+    let bytes = serde_json::to_vec(&result).unwrap();
+    let restored: SuiteResult = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(restored.comparisons[0].samples, cmp.samples);
+
+    let mut legacy = serde_json::to_value(&result).unwrap();
+    legacy["comparisons"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("samples");
+    let restored: SuiteResult = serde_json::from_value(legacy).unwrap();
+    assert!(restored.comparisons[0].samples.is_empty());
+
+    let single = aggregate_results(vec![result.clone()], Aggregation::Mean);
+    assert_eq!(single.comparisons[0].samples, cmp.samples);
+    for policy in [Aggregation::Best, Aggregation::Mean, Aggregation::Median] {
+        let mut flagged = result.clone();
+        flagged.unreliable = true;
+        let aggregate = aggregate_results(vec![result.clone(), flagged], policy);
+        assert!(aggregate.comparisons[0].samples.is_empty());
+        assert!(
+            aggregate.unreliable,
+            "aggregation must not hide a flagged run"
+        );
+    }
+}
+
+#[test]
+fn single_iteration_rounds_are_not_warmup_or_batch_averages() {
+    let result = run_gated(GateConfig::disabled(), |suite| {
+        suite.compare("individual", |group| {
+            let config = group.config();
+            config
+                .max_rounds(3)
+                .min_rounds(3)
+                .auto_rounds(false)
+                .warmup_time(Duration::ZERO);
+            config.min_iterations = 1;
+            config.max_iterations = 1;
+            group.bench("a", |b| b.iter(|| black_box(47u64)));
+        });
+    });
+    assert_eq!(result.comparisons[0].samples.len(), 3);
+    for sample in &result.comparisons[0].samples {
+        assert_eq!(sample.iterations, 1);
+        assert_eq!(sample.gate_clean, None);
+        assert_eq!(sample.execution_order, vec![0]);
+        assert_eq!(sample.elapsed_ns.len(), 1);
+    }
+}
+
+#[test]
+fn strict_gate_failure_reaches_saved_suite() {
+    let mut gate = GateConfig::strict();
+    gate.min_available_ram_bytes = u64::MAX;
+    gate.max_wait_count = 0;
+    let result = run_gated(gate, |suite| {
+        suite.compare("forced_gate_failure", |group| {
+            let config = group.config();
+            config
+                .max_rounds(3)
+                .min_rounds(3)
+                .auto_rounds(false)
+                .warmup_time(Duration::ZERO);
+            config.min_iterations = 1;
+            config.max_iterations = 1;
+            group.bench("a", |b| b.iter(|| black_box(47u64)));
+        });
+    });
+    assert_eq!(result.gate_waits, 3);
+    assert!(
+        result.unreliable,
+        "strict gate failure must reach the saved suite"
+    );
+    assert!(
+        result.comparisons[0]
+            .samples
+            .iter()
+            .all(|s| s.gate_clean == Some(false))
+    );
+}
+
+#[test]
+fn enabled_clean_gate_is_distinct_from_absent_historical_check() {
+    let mut gate = GateConfig::strict();
+    gate.min_available_ram_bytes = 0;
+    gate.max_cpu_load = 1.0;
+    gate.max_cpu_temp_c = None;
+    gate.max_heavy_processes = usize::MAX;
+    let result = run_gated(gate, |suite| {
+        suite.compare("clean", |group| {
+            let config = group.config();
+            config
+                .max_rounds(2)
+                .min_rounds(2)
+                .auto_rounds(false)
+                .warmup_time(Duration::ZERO);
+            config.min_iterations = 1;
+            config.max_iterations = 1;
+            group.bench("a", |b| b.iter(|| black_box(47u64)));
+        });
+    });
+    assert_eq!(result.gate_waits, 0);
+    assert!(!result.unreliable);
+    assert!(
+        result.comparisons[0]
+            .samples
+            .iter()
+            .all(|s| s.gate_clean == Some(true))
+    );
+    let mut old = serde_json::to_value(&result).unwrap();
+    for sample in old["comparisons"][0]["samples"].as_array_mut().unwrap() {
+        sample.as_object_mut().unwrap().remove("gate_clean");
+    }
+    let restored: SuiteResult = serde_json::from_value(old).unwrap();
+    assert!(
+        restored.comparisons[0]
+            .samples
+            .iter()
+            .all(|s| s.gate_clean.is_none())
+    );
+}
+
+#[test]
+fn parallel_groups_keep_fresh_resource_observations() {
+    let mut gate = GateConfig::strict();
+    gate.min_available_ram_bytes = 0;
+    gate.max_cpu_load = 1.0;
+    gate.max_cpu_temp_c = None;
+    gate.max_heavy_processes = usize::MAX;
+    let result = run_gated(gate, |suite| {
+        suite.compare("parallel_observation", |group| {
+            group
+                .config()
+                .max_rounds(3)
+                .min_rounds(3)
+                .auto_rounds(false)
+                .warmup_time(Duration::ZERO);
+            group.config().min_iterations = 1;
+            group.config().max_iterations = 1;
+            group.bench_parallel("two_workers", 2, |b, id| b.iter(|| black_box(id)));
+        });
+    });
+    assert_eq!(result.comparisons[0].samples.len(), 3);
+    assert!(result.gate_wait_time >= Duration::from_millis(200));
+    for sample in &result.comparisons[0].samples {
+        assert_eq!(sample.gate_clean, Some(true));
+        assert!(sample.gate_observation_age_ns.is_some());
+    }
+}

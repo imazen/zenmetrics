@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zenbench results</title>
+<style>
+  :root { --bg: #1a1b26; --fg: #c0caf5; --accent: #7aa2f7; --dim: #737aa2; --green: #9ece6a; --red: #f7768e; --yellow: #e0af68; --surface: #24283b; --border: #2f3549; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 0; font-size: 15px; line-height: 1.5; }
+  .container { max-width: 1060px; margin: 0 auto; padding: 2rem; }
+  h1 { color: #fff; margin-bottom: 0.5rem; font-size: 1.8rem; } h1 small { color: var(--dim); font-weight: normal; font-size: 0.4em; }
+  h2 { color: var(--accent); font-size: 1.2rem; margin: 0; display: inline; }
+  h4 { color: var(--accent); font-size: 0.95rem; margin: 0.6rem 0 0.3rem; }
+  .meta { color: var(--dim); font-size: 0.9rem; margin-left: 1rem; }
+  .header-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; color: var(--dim); font-size: 0.9rem; margin-bottom: 1.2rem; padding: 0.6rem 0.8rem; background: var(--surface); border-radius: 6px; }
+  summary { cursor: pointer; padding: 0.5rem 0; }
+  summary:hover { opacity: 0.8; }
+  details { margin: 0.8rem 0; border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem 1.2rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+  th, td { padding: 0.5rem 0.8rem; text-align: right; font-size: 1.05rem; border: none; }
+  th { color: var(--dim); font-weight: 600; font-size: 0.85rem; border-bottom: 2px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  td { font-variant-numeric: tabular-nums; }
+  .header-row th { padding-bottom: 0.4rem; }
+  tr:hover > td { background: rgba(255,255,255,0.03); }
+  .fastest > td { color: var(--green); }
+  .subgroup td { color: var(--dim); font-style: italic; font-size: 0.9rem; padding-top: 0.8rem; border-bottom: 1px solid var(--border); text-align: left; }
+  .bench-toggle { cursor: pointer; white-space: nowrap; }
+  .bench-toggle::before { content: '▸ '; color: var(--dim); }
+  .detail-toggle:checked + .bench-toggle::before { content: '▾ '; }
+  .bench-toggle:hover { opacity: 0.8; }
+  .detail-row { display: none; }
+  .detail-row td { padding: 0.2rem 0.8rem 0.6rem; border: none; }
+  tr:has(.detail-toggle:checked) + .detail-row { display: table-row; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.6rem; padding: 0.6rem 0; }
+  .detail-section { background: var(--surface); border-radius: 6px; padding: 0.6rem 0.9rem; }
+  .detail-table { margin: 0; }
+  .detail-table td { font-size: 0.9rem; padding: 0.2rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .detail-table td:first-child { color: var(--dim); width: 45%; }
+  .explain { font-size: 0.8rem; color: var(--dim); font-style: italic; margin-top: 0.15rem; }
+  .methodology { font-size: 0.85rem; color: var(--dim); margin: 0.3rem 0 0.6rem; line-height: 1.6; }
+  .methodology strong { color: var(--fg); font-weight: 500; }
+  .pill { display: inline-block; font-size: 0.75rem; padding: 0.1em 0.5em; border-radius: 10px; font-weight: 600; }
+  .pill-green { background: rgba(158,206,106,0.15); color: var(--green); }
+  .pill-red { background: rgba(247,118,142,0.15); color: var(--red); }
+  .pill-yellow { background: rgba(224,175,104,0.15); color: var(--yellow); }
+  .pill-dim { background: rgba(115,122,162,0.15); color: var(--dim); }
+  svg { margin: 0.8rem 0; display: block; max-width: 100%; }
+  code { background: var(--surface); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
+</style>
+</head>
+<body><div class="container">
+<h1>zenbench <small>1774487377-5ec33</small></h1>
+<div class="header-meta"><span>git: <code>c8cb79faad7dbb87456f233405c3c1942a8bba08</code></span><span>total: 39.8s</span><span>177 noisy rounds</span><span>timer: 10ns</span><span>overhead: 0.37ns/iter</span><span>AMD Ryzen 9 7950X 16-Core Processor (x86_64/linux)</span><span>cal: int=0.22ns mem_bw=117.2GiB/s lat=9.9ns</span></div>
+<details open><summary><h2>sort_1000</h2><span class="meta">30 rounds · 3436 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 4 benchmarks run in shuffled order. Each benchmark runs <strong>3436 calls</strong> (iterations) per round to produce one sample. After <strong>30 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th><th>throughput</th></tr>
+<tr class="subgroup"><td colspan="6">reversed</td></tr>
+<tr><td><input type="checkbox" id="b-sort_1000-std_sort" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_1000-std_sort">std_sort</label></td><td>421.5ns</td><td>443.3ns</td><td>±15.7ns</td><td>[435.1ns–452.6ns]</td><td>2.26 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>421.5ns</td></tr><tr><td>mean</td><td>443.3ns</td></tr><tr><td>median</td><td>434.8ns</td></tr><tr><td>max</td><td>534.8ns</td></tr><tr><td>MAD</td><td>15.7ns</td></tr><tr><td>std dev</td><td>24.9ns</td></tr><tr><td>CV</td><td>5.6% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>982.0ns</td></tr><tr><td>mean CI</td><td>[435.1ns – 452.6ns]</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sort_1000-sort_unstable" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_1000-sort_unstable">sort_unstable</label></td><td>241.3ns</td><td>258.3ns</td><td>±6.6ns</td><td><span style="color:#9ece6a">[-44.4%–-40.8%]</span></td><td>3.87 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>241.3ns</td></tr><tr><td>mean</td><td>258.3ns</td></tr><tr><td>median</td><td>248.3ns</td></tr><tr><td>max</td><td>356.2ns</td></tr><tr><td>MAD</td><td>6.6ns</td></tr><tr><td>std dev</td><td>26.4ns</td></tr><tr><td>CV</td><td>10.2% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>310.0ns</td></tr><tr><td>mean CI</td><td>[250.0ns – 268.5ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>-42.61%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=-11.22 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[-195.1ns – -179.3ns]</td></tr><tr><td>drift</td><td>r=0.10 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>3</td></tr></table></div>
+</div>
+</td></tr>
+<tr class="subgroup"><td colspan="6">already sorted</td></tr>
+<tr><td><input type="checkbox" id="b-sort_1000-std_sort_sorted" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_1000-std_sort_sorted">std_sort_sorted</label></td><td>200.1ns</td><td>211.1ns</td><td>±5.2ns</td><td><span style="color:#9ece6a">[-53.5%–-50.9%]</span></td><td>4.74 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>200.1ns</td></tr><tr><td>mean</td><td>211.1ns</td></tr><tr><td>median</td><td>204.6ns</td></tr><tr><td>max</td><td>254.5ns</td></tr><tr><td>MAD</td><td>5.2ns</td></tr><tr><td>std dev</td><td>13.9ns</td></tr><tr><td>CV</td><td>6.6% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>301.0ns</td></tr><tr><td>mean CI</td><td>[206.6ns – 216.3ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>-52.13%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=-15.83 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[-234.8ns – -223.4ns]</td></tr><tr><td>drift</td><td>r=0.24 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>3</td></tr></table></div>
+</div>
+</td></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-sort_1000-unstable_sorted" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_1000-unstable_sorted">unstable_sorted</label></td><td>194.6ns</td><td>205.6ns</td><td>±4.8ns</td><td><span style="color:#9ece6a">[-54.5%–-51.8%]</span></td><td>4.86 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>194.6ns</td></tr><tr><td>mean</td><td>205.6ns</td></tr><tr><td>median</td><td>199.8ns</td></tr><tr><td>max</td><td>269.2ns</td></tr><tr><td>MAD</td><td>4.8ns</td></tr><tr><td>std dev</td><td>15.3ns</td></tr><tr><td>CV</td><td>7.4% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>371.0ns</td></tr><tr><td>mean CI</td><td>[200.8ns – 211.5ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>-53.10%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=-14.30 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[-239.0ns – -227.1ns]</td></tr><tr><td>drift</td><td>r=0.15 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>2</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 122" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">unstable_sorted</text>
+<rect class="bar-fastest" x="200" y="5" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="17" dominant-baseline="middle">4.86 Gitems/s</text>
+  <text x="5" y="45" dominant-baseline="middle">std_sort_sorted</text>
+<rect class="bar" x="200" y="33" width="389" height="24" rx="3"/>
+<text class="value" x="597" y="45" dominant-baseline="middle">4.74 Gitems/s</text>
+  <text x="5" y="73" dominant-baseline="middle">sort_unstable</text>
+<rect class="bar" x="200" y="61" width="318" height="24" rx="3"/>
+<text class="value" x="526" y="73" dominant-baseline="middle">3.87 Gitems/s</text>
+  <text x="5" y="101" dominant-baseline="middle">std_sort</text>
+<rect class="bar" x="200" y="89" width="185" height="24" rx="3"/>
+<text class="value" x="393" y="101" dominant-baseline="middle">2.26 Gitems/s</text>
+</svg>
+</details>
+<details open><summary><h2>sub_ns_ops</h2><span class="meta">200 rounds · 1000000 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 3 benchmarks run in shuffled order. Each benchmark runs <strong>1000000 calls</strong> (iterations) per round to produce one sample. After <strong>200 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-sub_ns_ops-black_box_unit" class="detail-toggle" hidden><label class="bench-toggle" for="b-sub_ns_ops-black_box_unit">black_box_unit</label></td><td>0.000ns</td><td>0.001ns</td><td>±0.000ns</td><td>[0.000ns–0.003ns]</td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>0.000ns</td></tr><tr><td>mean</td><td>0.001ns</td></tr><tr><td>median</td><td>0.000ns</td></tr><tr><td>max</td><td>0.1ns</td></tr><tr><td>MAD</td><td>0.000ns</td></tr><tr><td>std dev</td><td>0.0ns</td></tr><tr><td>CV</td><td>831.9% <span class="pill pill-red">very noisy — try a quieter system</span></td></tr><tr><td>cold start</td><td>100.0ns</td></tr><tr><td>mean CI</td><td>[0.000ns – 0.003ns]</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sub_ns_ops-black_box_add" class="detail-toggle" hidden><label class="bench-toggle" for="b-sub_ns_ops-black_box_add">black_box_add</label></td><td>0.000ns</td><td>0.0ns</td><td>±0.006ns</td><td><span style="color:#f7768e">[+1407.5%–+2707.6%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>0.000ns</td></tr><tr><td>mean</td><td>0.0ns</td></tr><tr><td>median</td><td>0.004ns</td></tr><tr><td>max</td><td>0.3ns</td></tr><tr><td>MAD</td><td>0.006ns</td></tr><tr><td>std dev</td><td>0.1ns</td></tr><tr><td>CV</td><td>223.6% <span class="pill pill-red">very noisy — try a quieter system</span></td></tr><tr><td>cold start</td><td>10.0ns</td></tr><tr><td>mean CI</td><td>[0.0ns – 0.0ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+2023.33%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=0.59 <span class="pill pill-dim">medium</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[0.0ns – 0.0ns]</td></tr><tr><td>drift</td><td>r=0.36 <span class="pill-yellow pill">later rounds slower — possible thermal throttling</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>0</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sub_ns_ops-black_box_bool" class="detail-toggle" hidden><label class="bench-toggle" for="b-sub_ns_ops-black_box_bool">black_box_bool</label></td><td>0.000ns</td><td>0.0ns</td><td>±0.006ns</td><td><span style="color:#f7768e">[+1241.8%–+2499.4%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>0.000ns</td></tr><tr><td>mean</td><td>0.0ns</td></tr><tr><td>median</td><td>0.004ns</td></tr><tr><td>max</td><td>0.3ns</td></tr><tr><td>MAD</td><td>0.006ns</td></tr><tr><td>std dev</td><td>0.1ns</td></tr><tr><td>CV</td><td>229.6% <span class="pill pill-red">very noisy — try a quieter system</span></td></tr><tr><td>cold start</td><td>10.0ns</td></tr><tr><td>mean CI</td><td>[0.0ns – 0.0ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+1839.68%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=0.57 <span class="pill pill-dim">medium</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[0.0ns – 0.0ns]</td></tr><tr><td>drift</td><td>r=0.27 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>0</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 94" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">black_box_unit</text>
+<rect class="bar-fastest" x="200" y="5" width="18" height="24" rx="3"/>
+<text class="value" x="226" y="17" dominant-baseline="middle">0.001ns</text>
+  <text x="5" y="45" dominant-baseline="middle">black_box_bool</text>
+<rect class="bar" x="200" y="33" width="365" height="24" rx="3"/>
+<text class="value" x="573" y="45" dominant-baseline="middle">0.0ns</text>
+  <text x="5" y="73" dominant-baseline="middle">black_box_add</text>
+<rect class="bar" x="200" y="61" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="73" dominant-baseline="middle">0.0ns</text>
+</svg>
+</details>
+<details open><summary><h2>contention</h2><span class="meta">30 rounds · 9523 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 3 benchmarks run in shuffled order. Each benchmark runs <strong>9523 calls</strong> (iterations) per round to produce one sample. After <strong>30 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-contention-mutex_map_1t" class="detail-toggle" hidden><label class="bench-toggle" for="b-contention-mutex_map_1t">mutex_map_1t</label></td><td>8.0ns</td><td>8.6ns</td><td>±0.3ns</td><td>[8.4ns–8.8ns]</td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>8.0ns</td></tr><tr><td>mean</td><td>8.6ns</td></tr><tr><td>median</td><td>8.5ns</td></tr><tr><td>max</td><td>10.9ns</td></tr><tr><td>MAD</td><td>0.3ns</td></tr><tr><td>std dev</td><td>0.5ns</td></tr><tr><td>CV</td><td>5.9% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>12.45µs</td></tr><tr><td>mean CI</td><td>[8.4ns – 8.8ns]</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>1</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-contention-mutex_map_2t" class="detail-toggle" hidden><label class="bench-toggle" for="b-contention-mutex_map_2t">mutex_map_2t</label></td><td>51.1ns</td><td>96.5ns</td><td>±11.4ns</td><td><span style="color:#f7768e">[+989.5%–+1088.4%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>51.1ns</td></tr><tr><td>mean</td><td>96.5ns</td></tr><tr><td>median</td><td>99.5ns</td></tr><tr><td>max</td><td>114.6ns</td></tr><tr><td>MAD</td><td>11.4ns</td></tr><tr><td>std dev</td><td>14.6ns</td></tr><tr><td>CV</td><td>15.1% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>58.74µs</td></tr><tr><td>mean CI</td><td>[91.0ns – 101.3ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+1040.94%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=10.48 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[85.0ns – 93.5ns]</td></tr><tr><td>drift</td><td>r=0.30 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>1</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>2</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-contention-mutex_map_4t" class="detail-toggle" hidden><label class="bench-toggle" for="b-contention-mutex_map_4t">mutex_map_4t</label></td><td>148.7ns</td><td>186.6ns</td><td>±16.7ns</td><td><span style="color:#f7768e">[+1967.4%–+2117.9%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>148.7ns</td></tr><tr><td>mean</td><td>186.6ns</td></tr><tr><td>median</td><td>183.1ns</td></tr><tr><td>max</td><td>257.4ns</td></tr><tr><td>MAD</td><td>16.7ns</td></tr><tr><td>std dev</td><td>22.0ns</td></tr><tr><td>CV</td><td>11.8% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>147.16µs</td></tr><tr><td>mean CI</td><td>[179.0ns – 194.8ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+2042.91%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=13.93 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[169.1ns – 182.0ns]</td></tr><tr><td>drift</td><td>r=-0.05 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>1</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>4</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 94" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">mutex_map_1t</text>
+<rect class="bar-fastest" x="200" y="5" width="18" height="24" rx="3"/>
+<text class="value" x="226" y="17" dominant-baseline="middle">8.6ns</text>
+  <text x="5" y="45" dominant-baseline="middle">mutex_map_2t</text>
+<rect class="bar" x="200" y="33" width="206" height="24" rx="3"/>
+<text class="value" x="414" y="45" dominant-baseline="middle">96.5ns</text>
+  <text x="5" y="73" dominant-baseline="middle">mutex_map_4t</text>
+<rect class="bar" x="200" y="61" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="73" dominant-baseline="middle">186.6ns</text>
+</svg>
+</details>
+<details open><summary><h2>process_elements</h2><span class="meta">30 rounds · 122 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 3 benchmarks run in shuffled order. Each benchmark runs <strong>122 calls</strong> (iterations) per round to produce one sample. After <strong>30 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th><th>throughput</th></tr>
+<tr class="subgroup"><td colspan="6">single-threaded</td></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-process_elements-sum_sequential" class="detail-toggle" hidden><label class="bench-toggle" for="b-process_elements-sum_sequential">sum_sequential</label></td><td>947.0ns</td><td>985.9ns</td><td>±11.0ns</td><td>[962.6ns–1.02µs]</td><td>10.14 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>947.0ns</td></tr><tr><td>mean</td><td>985.9ns</td></tr><tr><td>median</td><td>958.0ns</td></tr><tr><td>max</td><td>1.29µs</td></tr><tr><td>MAD</td><td>11.0ns</td></tr><tr><td>std dev</td><td>77.4ns</td></tr><tr><td>CV</td><td>7.8% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>581.0ns</td></tr><tr><td>mean CI</td><td>[962.6ns – 1.02µs]</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-process_elements-map_sqrt" class="detail-toggle" hidden><label class="bench-toggle" for="b-process_elements-map_sqrt">map_sqrt</label></td><td>7.91µs</td><td>8.19µs</td><td>±135.1ns</td><td><span style="color:#f7768e">[+709.1%–+717.8%]</span></td><td>1.22 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>7.91µs</td></tr><tr><td>mean</td><td>8.19µs</td></tr><tr><td>median</td><td>8.05µs</td></tr><tr><td>max</td><td>10.16µs</td></tr><tr><td>MAD</td><td>135.1ns</td></tr><tr><td>std dev</td><td>441.3ns</td></tr><tr><td>CV</td><td>5.4% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>9.14µs</td></tr><tr><td>mean CI</td><td>[8.06µs – 8.36µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+713.46%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=80.29 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[7.02µs – 7.10µs]</td></tr><tr><td>drift</td><td>r=0.30 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>4</td></tr></table></div>
+</div>
+</td></tr>
+<tr class="subgroup"><td colspan="6">contended (4 threads)</td></tr>
+<tr><td><input type="checkbox" id="b-process_elements-shared_vec_push" class="detail-toggle" hidden><label class="bench-toggle" for="b-process_elements-shared_vec_push">shared_vec_push</label></td><td>281.76µs</td><td>340.15µs</td><td>±39.99µs</td><td><span style="color:#f7768e">[+33099.6%–+35740.9%]</span></td><td>29.40 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>281.76µs</td></tr><tr><td>mean</td><td>340.15µs</td></tr><tr><td>median</td><td>334.76µs</td></tr><tr><td>max</td><td>424.82µs</td></tr><tr><td>MAD</td><td>39.99µs</td></tr><tr><td>std dev</td><td>36.90µs</td></tr><tr><td>CV</td><td>10.8% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>312.58µs</td></tr><tr><td>mean CI</td><td>[327.34µs – 353.38µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+34400.03%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=13.00 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[326.34µs – 352.38µs]</td></tr><tr><td>drift</td><td>r=0.19 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>0</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>4</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 94" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">sum_sequential</text>
+<rect class="bar-fastest" x="200" y="5" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="17" dominant-baseline="middle">10.1 Gitems/s</text>
+  <text x="5" y="45" dominant-baseline="middle">map_sqrt</text>
+<rect class="bar" x="200" y="33" width="48" height="24" rx="3"/>
+<text class="value" x="256" y="45" dominant-baseline="middle">1.22 Gitems/s</text>
+  <text x="5" y="73" dominant-baseline="middle">shared_vec_push</text>
+<rect class="bar" x="200" y="61" width="2" height="24" rx="3"/>
+<text class="value" x="210" y="73" dominant-baseline="middle">29.4 Mitems/s</text>
+</svg>
+</details>
+<details open><summary><h2>scaling</h2><span class="meta">200 rounds · 69 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 17 benchmarks run in shuffled order. Each benchmark runs <strong>69 calls</strong> (iterations) per round to produce one sample. After <strong>200 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th><th>throughput</th></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-scaling-sqrt_1t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_1t">sqrt_1t</label></td><td>2.97µs</td><td>4.30µs</td><td>±114.9ns</td><td>[4.25µs–4.35µs]</td><td>2.33 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>2.97µs</td></tr><tr><td>mean</td><td>4.30µs</td></tr><tr><td>median</td><td>4.20µs</td></tr><tr><td>max</td><td>6.94µs</td></tr><tr><td>MAD</td><td>114.9ns</td></tr><tr><td>std dev</td><td>383.4ns</td></tr><tr><td>CV</td><td>8.9% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>12.53µs</td></tr><tr><td>mean CI</td><td>[4.25µs – 4.35µs]</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>1</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_2t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_2t">sqrt_2t</label></td><td>4.17µs</td><td>4.81µs</td><td>±337.4ns</td><td><span style="color:#f7768e">[+9.4%–+11.8%]</span></td><td>2.08 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>4.17µs</td></tr><tr><td>mean</td><td>4.81µs</td></tr><tr><td>median</td><td>4.70µs</td></tr><tr><td>max</td><td>8.42µs</td></tr><tr><td>MAD</td><td>337.4ns</td></tr><tr><td>std dev</td><td>554.5ns</td></tr><tr><td>CV</td><td>11.5% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>204.33µs</td></tr><tr><td>mean CI</td><td>[4.74µs – 4.89µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+10.62%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=1.79 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[402.3ns – 502.5ns]</td></tr><tr><td>drift</td><td>r=0.05 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>16</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>2</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_3t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_3t">sqrt_3t</label></td><td>4.67µs</td><td>5.72µs</td><td>±338.9ns</td><td><span style="color:#f7768e">[+30.4%–+33.0%]</span></td><td>1.75 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>4.67µs</td></tr><tr><td>mean</td><td>5.72µs</td></tr><tr><td>median</td><td>5.58µs</td></tr><tr><td>max</td><td>9.01µs</td></tr><tr><td>MAD</td><td>338.9ns</td></tr><tr><td>std dev</td><td>626.8ns</td></tr><tr><td>CV</td><td>11.0% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>110.51µs</td></tr><tr><td>mean CI</td><td>[5.64µs – 5.81µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+31.69%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=4.70 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[1.29µs – 1.40µs]</td></tr><tr><td>drift</td><td>r=0.06 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>16</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>3</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_4t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_4t">sqrt_4t</label></td><td>4.93µs</td><td>6.20µs</td><td>±424.6ns</td><td><span style="color:#f7768e">[+39.6%–+42.7%]</span></td><td>1.61 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>4.93µs</td></tr><tr><td>mean</td><td>6.20µs</td></tr><tr><td>median</td><td>6.02µs</td></tr><tr><td>max</td><td>15.56µs</td></tr><tr><td>MAD</td><td>424.6ns</td></tr><tr><td>std dev</td><td>967.8ns</td></tr><tr><td>CV</td><td>15.6% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>139.40µs</td></tr><tr><td>mean CI</td><td>[6.08µs – 6.34µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+41.17%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.35 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[1.69µs – 1.82µs]</td></tr><tr><td>drift</td><td>r=-0.00 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>19</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>4</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_5t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_5t">sqrt_5t</label></td><td>5.27µs</td><td>6.87µs</td><td>±525.7ns</td><td><span style="color:#f7768e">[+54.6%–+58.2%]</span></td><td>1.46 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>5.27µs</td></tr><tr><td>mean</td><td>6.87µs</td></tr><tr><td>median</td><td>6.64µs</td></tr><tr><td>max</td><td>10.79µs</td></tr><tr><td>MAD</td><td>525.7ns</td></tr><tr><td>std dev</td><td>908.0ns</td></tr><tr><td>CV</td><td>13.2% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>189.74µs</td></tr><tr><td>mean CI</td><td>[6.75µs – 7.00µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+56.39%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.92 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[2.33µs – 2.48µs]</td></tr><tr><td>drift</td><td>r=0.09 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>20</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>5</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_6t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_6t">sqrt_6t</label></td><td>5.14µs</td><td>7.49µs</td><td>±615.5ns</td><td><span style="color:#f7768e">[+69.3%–+73.9%]</span></td><td>1.33 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>5.14µs</td></tr><tr><td>mean</td><td>7.49µs</td></tr><tr><td>median</td><td>7.30µs</td></tr><tr><td>max</td><td>11.71µs</td></tr><tr><td>MAD</td><td>615.5ns</td></tr><tr><td>std dev</td><td>1.08µs</td></tr><tr><td>CV</td><td>14.4% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>226.56µs</td></tr><tr><td>mean CI</td><td>[7.35µs – 7.64µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+71.59%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=6.06 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[2.96µs – 3.15µs]</td></tr><tr><td>drift</td><td>r=0.17 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>26</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>6</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_7t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_7t">sqrt_7t</label></td><td>5.52µs</td><td>8.27µs</td><td>±889.6ns</td><td><span style="color:#f7768e">[+85.5%–+91.9%]</span></td><td>1.21 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>5.52µs</td></tr><tr><td>mean</td><td>8.27µs</td></tr><tr><td>median</td><td>8.04µs</td></tr><tr><td>max</td><td>12.42µs</td></tr><tr><td>MAD</td><td>889.6ns</td></tr><tr><td>std dev</td><td>1.28µs</td></tr><tr><td>CV</td><td>15.5% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>248.01µs</td></tr><tr><td>mean CI</td><td>[8.10µs – 8.45µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+88.72%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.32 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[3.66µs – 3.94µs]</td></tr><tr><td>drift</td><td>r=0.07 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>17</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>7</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_8t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_8t">sqrt_8t</label></td><td>4.57µs</td><td>9.13µs</td><td>±1.12µs</td><td><span style="color:#f7768e">[+107.6%–+115.7%]</span></td><td>1.10 Gitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>4.57µs</td></tr><tr><td>mean</td><td>9.13µs</td></tr><tr><td>median</td><td>8.93µs</td></tr><tr><td>max</td><td>14.08µs</td></tr><tr><td>MAD</td><td>1.12µs</td></tr><tr><td>std dev</td><td>1.44µs</td></tr><tr><td>CV</td><td>15.8% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>292.49µs</td></tr><tr><td>mean CI</td><td>[8.93µs – 9.33µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+111.65%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.44 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[4.62µs – 4.97µs]</td></tr><tr><td>drift</td><td>r=0.02 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>9</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>8</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_9t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_9t">sqrt_9t</label></td><td>5.82µs</td><td>10.08µs</td><td>±1.47µs</td><td><span style="color:#f7768e">[+125.4%–+136.0%]</span></td><td>992.33 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>5.82µs</td></tr><tr><td>mean</td><td>10.08µs</td></tr><tr><td>median</td><td>9.91µs</td></tr><tr><td>max</td><td>16.45µs</td></tr><tr><td>MAD</td><td>1.47µs</td></tr><tr><td>std dev</td><td>1.83µs</td></tr><tr><td>CV</td><td>18.2% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>311.60µs</td></tr><tr><td>mean CI</td><td>[9.83µs – 10.33µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+130.68%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=4.81 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[5.39µs – 5.85µs]</td></tr><tr><td>drift</td><td>r=0.02 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>6</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>9</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_10t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_10t">sqrt_10t</label></td><td>6.03µs</td><td>11.05µs</td><td>±1.80µs</td><td><span style="color:#f7768e">[+148.5%–+160.8%]</span></td><td>905.35 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>6.03µs</td></tr><tr><td>mean</td><td>11.05µs</td></tr><tr><td>median</td><td>10.86µs</td></tr><tr><td>max</td><td>18.28µs</td></tr><tr><td>MAD</td><td>1.80µs</td></tr><tr><td>std dev</td><td>2.02µs</td></tr><tr><td>CV</td><td>18.3% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>372.77µs</td></tr><tr><td>mean CI</td><td>[10.77µs – 11.33µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+154.66%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=4.91 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[6.39µs – 6.92µs]</td></tr><tr><td>drift</td><td>r=0.01 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>3</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>10</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_11t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_11t">sqrt_11t</label></td><td>6.47µs</td><td>11.98µs</td><td>±2.29µs</td><td><span style="color:#f7768e">[+171.8%–+184.2%]</span></td><td>834.74 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>6.47µs</td></tr><tr><td>mean</td><td>11.98µs</td></tr><tr><td>median</td><td>11.81µs</td></tr><tr><td>max</td><td>18.77µs</td></tr><tr><td>MAD</td><td>2.29µs</td></tr><tr><td>std dev</td><td>1.95µs</td></tr><tr><td>CV</td><td>16.3% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>371.32µs</td></tr><tr><td>mean CI</td><td>[11.71µs – 12.25µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+178.03%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.58 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[7.38µs – 7.91µs]</td></tr><tr><td>drift</td><td>r=0.05 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>1</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>11</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_12t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_12t">sqrt_12t</label></td><td>6.60µs</td><td>12.64µs</td><td>±2.15µs</td><td><span style="color:#f7768e">[+186.3%–+199.5%]</span></td><td>791.26 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>6.60µs</td></tr><tr><td>mean</td><td>12.64µs</td></tr><tr><td>median</td><td>12.23µs</td></tr><tr><td>max</td><td>21.14µs</td></tr><tr><td>MAD</td><td>2.15µs</td></tr><tr><td>std dev</td><td>2.20µs</td></tr><tr><td>CV</td><td>17.4% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>395.67µs</td></tr><tr><td>mean CI</td><td>[12.33µs – 12.94µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+192.98%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=5.99 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[8.00µs – 8.57µs]</td></tr><tr><td>drift</td><td>r=-0.04 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>5</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>12</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_13t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_13t">sqrt_13t</label></td><td>6.82µs</td><td>13.19µs</td><td>±2.11µs</td><td><span style="color:#f7768e">[+199.9%–+212.4%]</span></td><td>758.01 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>6.82µs</td></tr><tr><td>mean</td><td>13.19µs</td></tr><tr><td>median</td><td>12.94µs</td></tr><tr><td>max</td><td>20.54µs</td></tr><tr><td>MAD</td><td>2.11µs</td></tr><tr><td>std dev</td><td>2.05µs</td></tr><tr><td>CV</td><td>15.6% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>466.13µs</td></tr><tr><td>mean CI</td><td>[12.91µs – 13.48µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+206.16%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=6.48 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[8.59µs – 9.13µs]</td></tr><tr><td>drift</td><td>r=-0.08 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>3</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>13</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_14t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_14t">sqrt_14t</label></td><td>7.21µs</td><td>13.61µs</td><td>±2.06µs</td><td><span style="color:#f7768e">[+210.4%–+223.2%]</span></td><td>734.72 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>7.21µs</td></tr><tr><td>mean</td><td>13.61µs</td></tr><tr><td>median</td><td>13.55µs</td></tr><tr><td>max</td><td>19.75µs</td></tr><tr><td>MAD</td><td>2.06µs</td></tr><tr><td>std dev</td><td>2.02µs</td></tr><tr><td>CV</td><td>14.8% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>517.29µs</td></tr><tr><td>mean CI</td><td>[13.33µs – 13.89µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+216.86%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=6.70 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[9.04µs – 9.59µs]</td></tr><tr><td>drift</td><td>r=0.01 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>2</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>14</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_15t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_15t">sqrt_15t</label></td><td>8.16µs</td><td>14.65µs</td><td>±1.93µs</td><td><span style="color:#f7768e">[+234.3%–+246.2%]</span></td><td>682.73 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>8.16µs</td></tr><tr><td>mean</td><td>14.65µs</td></tr><tr><td>median</td><td>14.54µs</td></tr><tr><td>max</td><td>22.65µs</td></tr><tr><td>MAD</td><td>1.93µs</td></tr><tr><td>std dev</td><td>2.03µs</td></tr><tr><td>CV</td><td>13.9% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>578.32µs</td></tr><tr><td>mean CI</td><td>[14.37µs – 14.93µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+240.15%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=8.16 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[10.03µs – 10.54µs]</td></tr><tr><td>drift</td><td>r=-0.01 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>6</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>15</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_16t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_16t">sqrt_16t</label></td><td>8.83µs</td><td>14.85µs</td><td>±1.96µs</td><td><span style="color:#f7768e">[+240.0%–+253.5%]</span></td><td>673.53 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>8.83µs</td></tr><tr><td>mean</td><td>14.85µs</td></tr><tr><td>median</td><td>14.72µs</td></tr><tr><td>max</td><td>20.49µs</td></tr><tr><td>MAD</td><td>1.96µs</td></tr><tr><td>std dev</td><td>2.20µs</td></tr><tr><td>CV</td><td>14.8% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>667.51µs</td></tr><tr><td>mean CI</td><td>[14.55µs – 15.16µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+246.61%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=7.35 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[10.33µs – 10.91µs]</td></tr><tr><td>drift</td><td>r=-0.04 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>6</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>16</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-scaling-sqrt_32t" class="detail-toggle" hidden><label class="bench-toggle" for="b-scaling-sqrt_32t">sqrt_32t</label></td><td>14.63µs</td><td>24.81µs</td><td>±2.67µs</td><td><span style="color:#f7768e">[+469.3%–+487.8%]</span></td><td>403.06 Mitems/s</td></tr>
+<tr class="detail-row"><td colspan="6">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>200</td></tr><tr><td>min</td><td>14.63µs</td></tr><tr><td>mean</td><td>24.81µs</td></tr><tr><td>median</td><td>24.70µs</td></tr><tr><td>max</td><td>32.36µs</td></tr><tr><td>MAD</td><td>2.67µs</td></tr><tr><td>std dev</td><td>2.98µs</td></tr><tr><td>CV</td><td>12.0% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>1.07ms</td></tr><tr><td>mean CI</td><td>[24.39µs – 25.22µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+478.71%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=10.29 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[20.17µs – 20.96µs]</td></tr><tr><td>drift</td><td>r=-0.06 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>200</td></tr><tr><td>outliers removed</td><td>3</td></tr></table></div>
+<div class="detail-section"><h4>Tags</h4><table class="detail-table"><tr><td>threads</td><td>32</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 486" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">sqrt_1t</text>
+<rect class="bar-fastest" x="200" y="5" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="17" dominant-baseline="middle">2.33 Gitems/s</text>
+  <text x="5" y="45" dominant-baseline="middle">sqrt_2t</text>
+<rect class="bar" x="200" y="33" width="357" height="24" rx="3"/>
+<text class="value" x="565" y="45" dominant-baseline="middle">2.08 Gitems/s</text>
+  <text x="5" y="73" dominant-baseline="middle">sqrt_3t</text>
+<rect class="bar" x="200" y="61" width="300" height="24" rx="3"/>
+<text class="value" x="508" y="73" dominant-baseline="middle">1.75 Gitems/s</text>
+  <text x="5" y="101" dominant-baseline="middle">sqrt_4t</text>
+<rect class="bar" x="200" y="89" width="277" height="24" rx="3"/>
+<text class="value" x="485" y="101" dominant-baseline="middle">1.61 Gitems/s</text>
+  <text x="5" y="129" dominant-baseline="middle">sqrt_5t</text>
+<rect class="bar" x="200" y="117" width="250" height="24" rx="3"/>
+<text class="value" x="458" y="129" dominant-baseline="middle">1.46 Gitems/s</text>
+  <text x="5" y="157" dominant-baseline="middle">sqrt_6t</text>
+<rect class="bar" x="200" y="145" width="229" height="24" rx="3"/>
+<text class="value" x="437" y="157" dominant-baseline="middle">1.33 Gitems/s</text>
+  <text x="5" y="185" dominant-baseline="middle">sqrt_7t</text>
+<rect class="bar" x="200" y="173" width="207" height="24" rx="3"/>
+<text class="value" x="415" y="185" dominant-baseline="middle">1.21 Gitems/s</text>
+  <text x="5" y="213" dominant-baseline="middle">sqrt_8t</text>
+<rect class="bar" x="200" y="201" width="188" height="24" rx="3"/>
+<text class="value" x="396" y="213" dominant-baseline="middle">1.10 Gitems/s</text>
+  <text x="5" y="241" dominant-baseline="middle">sqrt_9t</text>
+<rect class="bar" x="200" y="229" width="170" height="24" rx="3"/>
+<text class="value" x="378" y="241" dominant-baseline="middle">992 Mitems/s</text>
+  <text x="5" y="269" dominant-baseline="middle">sqrt_10t</text>
+<rect class="bar" x="200" y="257" width="155" height="24" rx="3"/>
+<text class="value" x="363" y="269" dominant-baseline="middle">905 Mitems/s</text>
+  <text x="5" y="297" dominant-baseline="middle">sqrt_11t</text>
+<rect class="bar" x="200" y="285" width="143" height="24" rx="3"/>
+<text class="value" x="351" y="297" dominant-baseline="middle">835 Mitems/s</text>
+  <text x="5" y="325" dominant-baseline="middle">sqrt_12t</text>
+<rect class="bar" x="200" y="313" width="135" height="24" rx="3"/>
+<text class="value" x="343" y="325" dominant-baseline="middle">791 Mitems/s</text>
+  <text x="5" y="353" dominant-baseline="middle">sqrt_13t</text>
+<rect class="bar" x="200" y="341" width="130" height="24" rx="3"/>
+<text class="value" x="338" y="353" dominant-baseline="middle">758 Mitems/s</text>
+  <text x="5" y="381" dominant-baseline="middle">sqrt_14t</text>
+<rect class="bar" x="200" y="369" width="126" height="24" rx="3"/>
+<text class="value" x="334" y="381" dominant-baseline="middle">735 Mitems/s</text>
+  <text x="5" y="409" dominant-baseline="middle">sqrt_15t</text>
+<rect class="bar" x="200" y="397" width="117" height="24" rx="3"/>
+<text class="value" x="325" y="409" dominant-baseline="middle">683 Mitems/s</text>
+  <text x="5" y="437" dominant-baseline="middle">sqrt_16t</text>
+<rect class="bar" x="200" y="425" width="115" height="24" rx="3"/>
+<text class="value" x="323" y="437" dominant-baseline="middle">674 Mitems/s</text>
+  <text x="5" y="465" dominant-baseline="middle">sqrt_32t</text>
+<rect class="bar" x="200" y="453" width="69" height="24" rx="3"/>
+<text class="value" x="277" y="465" dominant-baseline="middle">403 Mitems/s</text>
+</svg>
+</details>
+<details open><summary><h2>sort_sizes</h2><span class="meta">30 rounds · 4016 calls/sample</span></summary>
+<p class="methodology">Each <strong>round</strong>, all 4 benchmarks run in shuffled order. Each benchmark runs <strong>4016 calls</strong> (iterations) per round to produce one sample. After <strong>30 rounds</strong>, paired statistics compare the round-by-round differences.</p>
+<table><tr class="header-row"><th>benchmark</th><th>min</th><th>mean</th><th>±mad</th><th>95% CI</th></tr>
+<tr class="fastest"><td><input type="checkbox" id="b-sort_sizes-unstable_10" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_sizes-unstable_10">unstable_10</label></td><td>21.6ns</td><td>22.8ns</td><td>±0.3ns</td><td>[22.0ns–23.8ns]</td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>21.6ns</td></tr><tr><td>mean</td><td>22.8ns</td></tr><tr><td>median</td><td>21.9ns</td></tr><tr><td>max</td><td>35.0ns</td></tr><tr><td>MAD</td><td>0.3ns</td></tr><tr><td>std dev</td><td>2.6ns</td></tr><tr><td>CV</td><td>11.6% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>90.0ns</td></tr><tr><td>mean CI</td><td>[22.0ns – 23.8ns]</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sort_sizes-unstable_100" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_sizes-unstable_100">unstable_100</label></td><td>31.0ns</td><td>32.5ns</td><td>±0.4ns</td><td><span style="color:#f7768e">[+41.7%–+43.9%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>31.0ns</td></tr><tr><td>mean</td><td>32.5ns</td></tr><tr><td>median</td><td>31.5ns</td></tr><tr><td>max</td><td>55.3ns</td></tr><tr><td>MAD</td><td>0.4ns</td></tr><tr><td>std dev</td><td>4.4ns</td></tr><tr><td>CV</td><td>13.4% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>91.0ns</td></tr><tr><td>mean CI</td><td>[31.5ns – 34.2ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+42.80%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=18.25 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[9.2ns – 9.7ns]</td></tr><tr><td>drift</td><td>r=0.10 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>6</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sort_sizes-unstable_1000" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_sizes-unstable_1000">unstable_1000</label></td><td>243.7ns</td><td>259.7ns</td><td>±5.4ns</td><td><span style="color:#f7768e">[+1010.0%–+1031.3%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>243.7ns</td></tr><tr><td>mean</td><td>259.7ns</td></tr><tr><td>median</td><td>249.5ns</td></tr><tr><td>max</td><td>466.6ns</td></tr><tr><td>MAD</td><td>5.4ns</td></tr><tr><td>std dev</td><td>40.1ns</td></tr><tr><td>CV</td><td>15.5% <span class="pill pill-yellow">noisy</span></td></tr><tr><td>cold start</td><td>261.0ns</td></tr><tr><td>mean CI</td><td>[250.2ns – 276.0ns]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+1019.81%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=51.59 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[225.6ns – 230.4ns]</td></tr><tr><td>drift</td><td>r=-0.12 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>4</td></tr></table></div>
+</div>
+</td></tr>
+<tr><td><input type="checkbox" id="b-sort_sizes-unstable_10000" class="detail-toggle" hidden><label class="bench-toggle" for="b-sort_sizes-unstable_10000">unstable_10000</label></td><td>2.36µs</td><td>2.50µs</td><td>±85.4ns</td><td><span style="color:#f7768e">[+10723.0%–+10922.8%]</span></td></tr>
+<tr class="detail-row"><td colspan="5">
+<div class="detail-grid">
+<div class="detail-section"><h4>Summary</h4><table class="detail-table"><tr><td>n</td><td>30</td></tr><tr><td>min</td><td>2.36µs</td></tr><tr><td>mean</td><td>2.50µs</td></tr><tr><td>median</td><td>2.44µs</td></tr><tr><td>max</td><td>4.21µs</td></tr><tr><td>MAD</td><td>85.4ns</td></tr><tr><td>std dev</td><td>330.0ns</td></tr><tr><td>CV</td><td>13.2% <span class="pill pill-dim">good</span></td></tr><tr><td>cold start</td><td>4.66µs</td></tr><tr><td>mean CI</td><td>[2.42µs – 2.63µs]</td></tr></table></div>
+<div class="detail-section"><h4>vs Baseline</h4><table class="detail-table"><tr><td>change</td><td>+10822.87%</td></tr><tr><td>significant</td><td><span class="pill pill-green">yes — real difference</span></td></tr><tr><td>effect size</td><td>d=54.36 <span class="pill pill-dim">large</span></td></tr><tr><td>Wilcoxon p</td><td>0.0000</td></tr><tr><td>CI</td><td>[2.39µs – 2.44µs]</td></tr><tr><td>drift</td><td>r=-0.16 <span class="pill-green pill">stable — no systematic trend</span></td></tr><tr><td>samples</td><td>30</td></tr><tr><td>outliers removed</td><td>1</td></tr></table></div>
+</div>
+</td></tr>
+</table>
+<svg width="100%" viewBox="0 0 760 122" xmlns="http://www.w3.org/2000/svg">
+<style>
+text { font-family: -apple-system, sans-serif; font-size: 13px; fill: #c0caf5; }
+.bar { fill: #7aa2f7; }
+.bar-fastest { fill: #9ece6a; }
+.value { font-size: 12px; fill: #565f89; }
+</style>
+<rect width="100%" height="100%" fill="#1a1b26" rx="6"/>
+  <text x="5" y="17" dominant-baseline="middle">unstable_10</text>
+<rect class="bar-fastest" x="200" y="5" width="3" height="24" rx="3"/>
+<text class="value" x="211" y="17" dominant-baseline="middle">22.8ns</text>
+  <text x="5" y="45" dominant-baseline="middle">unstable_100</text>
+<rect class="bar" x="200" y="33" width="5" height="24" rx="3"/>
+<text class="value" x="213" y="45" dominant-baseline="middle">32.5ns</text>
+  <text x="5" y="73" dominant-baseline="middle">unstable_1000</text>
+<rect class="bar" x="200" y="61" width="41" height="24" rx="3"/>
+<text class="value" x="249" y="73" dominant-baseline="middle">259.7ns</text>
+  <text x="5" y="101" dominant-baseline="middle">unstable_10000</text>
+<rect class="bar" x="200" y="89" width="400" height="24" rx="3"/>
+<text class="value" x="608" y="101" dominant-baseline="middle">2.50µs</text>
+</svg>
+</details>
+<footer style="margin-top:2rem;padding:1rem 0;border-top:1px solid var(--border);color:var(--dim);font-size:0.85rem;text-align:center">Generated by <a href="https://github.com/imazen/zenbench" style="color:var(--accent)">zenbench</a> · <a href="https://imazen.github.io/zenbench" style="color:var(--accent)">Documentation</a></footer>
+</div></body></html>

@@ -1,0 +1,10 @@
+Runner source: zenbench ac675d3a (0.1.10)
+Baseline source: bdc458e0; candidate: accompanying NLPD row-streaming change
+Command: just ranked-pair-scope <runner> <plan> <new-output> 2
+Plan recipe: just ranked-pair-plan <baseline> <candidate> bdc458e0 nlpd-row-partition <new-plan>
+Host: r7900x; Rayon threads: 1; hard outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0
+Raw evidence: r7900x:/home/lilith/tmp/zm-nlpd-pair-scope-20261012/packet.json.gz
+Packet SHA-256: c14885441927b88468175905badc2ea0a9876cbe1e2a6fd7ff528a25d5d4591c
+Console receipt: r7900x:/home/lilith/tmp/zm-nlpd-pair-scope-console.log
+run-heavy: done rc=0 34s | peak-RSS 0.57GiB | min-avail 23643MiB | peak-load 2.63
+The inner run-heavy reported no user scope; the outer system scope supplied the hard limits.

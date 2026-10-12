@@ -1,0 +1,28 @@
+binary_sha256: 7809f504ea6446de6fdd70dc9cc0576657f2f69136638a0ab907e9048c61a97c  /home/lilith/tmp/zm-ranked-binaries/nlpd-candidate-zenbench
+host: r7900x
+rayon_threads: 1
+size: 3355x2516
+metrics: nlpd,nlpd-iqa
+modes: lat
+min_rounds: 30
+group_wall_s: 120
+cell_max_s: 30
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=23999MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-candidate-zenbench 3355x2516 benchmarks/nlpd_candidate_zenbench_1t_2026-10-12.tsv nlpd,nlpd-iqa
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class="capacity1024_l332768K" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] admission queued behind #35 external pair experiment (pid 291725); directory=/home/lilith/.cache/zenbench/admission-v1
+taskset: Interrupt
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-candidate-zenbench 3355x2516 benchmarks/nlpd_candidate_zenbench_1t_2026-10-12.tsv nlpd,nlpd-iqa':
+
+       10288334612      instructions                                                          
+        6080140219      cycles                                                                
+
+     268.301852206 seconds time elapsed
+
+       0.602954000 seconds user
+       0.564544000 seconds sys
+
+
+run-heavy: done rc=130 269s | peak-RSS 0.51GiB | min-avail 23504MiB | peak-load 6.63
