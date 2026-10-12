@@ -503,26 +503,32 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
     (logs, spreads)
 }
 
-/// `ifft2(imagefft .* fftshift(logGabor·spread))` — returns the
-/// complex EO plane. `fftshift` maps centered index `i` to unshifted
+/// `|ifft2(imagefft .* fftshift(logGabor·spread))|` — the EO magnitude
+/// plane written straight into caller scratch: `dst` is reusable complex
+/// working storage, `mag` receives the magnitudes directly from the
+/// transform's scatter, so no intermediate EO plane is ever materialized.
+/// `fftshift` maps centered index `i` to unshifted
 /// `(i + ceil(d/2)) % d` — for odd dims this is *not* the same offset
 /// as `hi_index`'s `ifftshift(fftshift(X)·csf)` (floor), so the two
 /// remaps differ by one element on odd axes.
-fn gabor_apply(
+fn gabor_apply_mag(
     imagefft: &[Complex],
+    dst: &mut [Complex],
+    mag: &mut [f32],
     lg: &[f32],
     sp: &[f32],
     m: usize,
     n: usize,
     wplan: &fft::Plan,
     hplan: &fft::Plan,
-) -> Vec<Complex> {
-    let mut buf = imagefft.to_vec();
+) {
     // Same fusion as `csf_apply`: the `fftshift`ed `lg·sp` product is a
     // lazy weight view the inverse transform's row gather evaluates on
-    // the fly — no weight plane is materialized.
-    fft::ifft2_planned_mul(
-        &mut buf,
+    // the fly — no weight plane, no input copy, no magnitude pass.
+    fft::ifft2_planned_mul_mag_into(
+        imagefft,
+        dst,
+        mag,
         n,
         m,
         wplan,
@@ -535,45 +541,6 @@ fn gabor_apply(
             m,
         },
     );
-    buf
-}
-
-/// `|EO|` element magnitudes — `sqrt(re²+im²)` in fixed 8-lane groups
-/// (~1–2 ulp vs the reference's `hypotf`, far inside the golden
-/// tolerance; FFT output ranges nowhere near f32 overflow, so
-/// `hypotf`'s rescaling buys nothing). Deterministic per tier.
-#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
-fn eo_magnitude(eo: &[Complex]) -> Vec<f32> {
-    let mut out = vec![0.0f32; eo.len()];
-    #[cfg(feature = "parallel")]
-    {
-        use rayon::prelude::*;
-        out.par_chunks_mut(1 << 14)
-            .zip(eo.par_chunks(1 << 14))
-            .for_each(|(oc, ic)| mag_chunk(ic, oc));
-    }
-    #[cfg(not(feature = "parallel"))]
-    mag_chunk(eo, &mut out);
-    out
-}
-
-/// One tile of [`eo_magnitude`]: 8 lanes per group, tail scalar.
-fn mag_chunk(eo: &[Complex], out: &mut [f32]) {
-    let mut i = 0usize;
-    while i + 8 <= eo.len() {
-        let mut m = [0.0f32; 8];
-        for k in 0..8 {
-            let c = eo[i + k];
-            m[k] = libm::sqrtf(c.re * c.re + c.im * c.im);
-        }
-        out[i..i + 8].copy_from_slice(&m);
-        i += 8;
-    }
-    while i < eo.len() {
-        let c = eo[i];
-        out[i] = libm::sqrtf(c.re * c.re + c.im * c.im);
-        i += 1;
-    }
 }
 
 /// The forward spectrum of a plane.
@@ -828,13 +795,42 @@ macro_rules! score_body {
         // and the result expands to pixels in a single pass.
         let mut mp_lo_t = vec![0.0f32; mt * nt];
         let two = <$V>::splat_t($token, 2.0);
+        // Reused across all 40 gabor applications: the complex working
+        // planes and the magnitude outputs — no per-call allocation.
+        let mut scr_r = vec![Complex::default(); m * n];
+        let mut scr_d = vec![Complex::default(); m * n];
+        let mut mag_r = vec![0.0f32; m * n];
+        let mut mag_d = vec![0.0f32; m * n];
         for s in 0..5 {
             for o in 0..4 {
-                let (eo_r, eo_d) = maybe_join(
-                    || gabor_apply(&xfft_r, &logs[s], &spreads[o], m, n, &wplan, &hplan),
-                    || gabor_apply(&xfft_d, &logs[s], &spreads[o], m, n, &wplan, &hplan),
+                maybe_join(
+                    || {
+                        gabor_apply_mag(
+                            &xfft_r,
+                            &mut scr_r,
+                            &mut mag_r,
+                            &logs[s],
+                            &spreads[o],
+                            m,
+                            n,
+                            &wplan,
+                            &hplan,
+                        )
+                    },
+                    || {
+                        gabor_apply_mag(
+                            &xfft_d,
+                            &mut scr_d,
+                            &mut mag_d,
+                            &logs[s],
+                            &spreads[o],
+                            m,
+                            n,
+                            &wplan,
+                            &hplan,
+                        )
+                    },
                 );
-                let (mag_r, mag_d) = (eo_magnitude(&eo_r), eo_magnitude(&eo_d));
                 let ((sr, kwr, krr), (sd, kwd, krd)) =
                     maybe_join(|| ical_stat(&mag_r, m, n), || ical_stat(&mag_d, m, n));
                 let swv = <$V>::splat_t($token, LO_WEIGHTS[s]);

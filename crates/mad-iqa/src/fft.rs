@@ -278,42 +278,65 @@ impl Plan {
         r0: usize,
         width: usize,
     ) {
-        let PlanKind::Bluestein {
-            chirp,
-            bf,
-            m,
-            mplan,
-        } = &self.kind
-        else {
+        let PlanKind::Bluestein { chirp, m, .. } = &self.kind else {
             unreachable!("run_bluestein8 on non-Bluestein plan")
         };
         let (n, m) = (self.n, *m);
         debug_assert_eq!(bufs.len(), 8);
+        {
+            // The gather finishes before any scatter store, so the shared
+            // reborrow of `bufs` here never aliases the mutable use below.
+            let sbufs: [&[Complex]; 8] = core::array::from_fn(|i| &bufs[i][..]);
+            blue8_gather_all(&sbufs, n, m, chirp, re8, im8, mul, conj, r0, width);
+        }
+        self.blue8_inner(re8, im8, re8b, im8b);
+        let s = 1.0 / m as f32;
+        for k0 in (0..n).step_by(8) {
+            blue8_scatter(bufs, n, k0, chirp, s, re8, im8);
+        }
+    }
+
+    /// [`Self::run_bluestein8`] reading `sbufs` and scattering to `dbufs`
+    /// — the out-of-place row-pass variant, where the input plane is a
+    /// shared spectrum no transform may mutate.
+    #[allow(clippy::too_many_arguments)]
+    fn run_bluestein8_io(
+        &self,
+        sbufs: &[&[Complex]],
+        dbufs: &mut [&mut [Complex]],
+        re8: &mut [f32],
+        im8: &mut [f32],
+        re8b: &mut [f32],
+        im8b: &mut [f32],
+        mul: RowMul,
+        conj: bool,
+        r0: usize,
+        width: usize,
+    ) {
+        let PlanKind::Bluestein { chirp, m, .. } = &self.kind else {
+            unreachable!("run_bluestein8_io on non-Bluestein plan")
+        };
+        let (n, m) = (self.n, *m);
+        debug_assert_eq!(sbufs.len(), 8);
+        debug_assert_eq!(dbufs.len(), 8);
+        blue8_gather_all(sbufs, n, m, chirp, re8, im8, mul, conj, r0, width);
+        self.blue8_inner(re8, im8, re8b, im8b);
+        let s = 1.0 / m as f32;
+        for k0 in (0..n).step_by(8) {
+            blue8_scatter(dbufs, n, k0, chirp, s, re8, im8);
+        }
+    }
+
+    /// The SoA middle of the batch Bluestein pass: `fft → ·bf → fft` on
+    /// the `m·8` planes, ping-ponging the two scratch pairs.
+    fn blue8_inner(&self, re8: &mut [f32], im8: &mut [f32], re8b: &mut [f32], im8b: &mut [f32]) {
+        let PlanKind::Bluestein { bf, m, mplan, .. } = &self.kind else {
+            unreachable!("blue8_inner on non-Bluestein plan")
+        };
+        let m = *m;
         debug_assert!(
             re8.len() >= m * 8 && im8.len() >= m * 8 && re8b.len() >= m * 8 && im8b.len() >= m * 8
         );
-        // Gather: a[k] = (conj·f)(buf[k])·chirp[k], zeroed past n — 8×8
-        // k-blocks keep the transposed load in registers (scalar tail for
-        // m % 8 ≠ 0).
-        let mb = m & !7;
-        for k0 in (0..mb).step_by(8) {
-            blue8_gather(bufs, n, k0, chirp, re8, im8, mul, conj, r0, width);
-        }
-        for k in mb..m {
-            for (j, buf) in bufs.iter().enumerate() {
-                let (re, im) = if k < n {
-                    let v = buf[k];
-                    let c = chirp[k];
-                    let f = mul.at(r0 + j, k, width);
-                    let (zr, zi) = (v.re * f, (if conj { -v.im } else { v.im }) * f);
-                    (zr * c.re - zi * c.im, zr * c.im + zi * c.re)
-                } else {
-                    (0.0, 0.0)
-                };
-                re8[k * 8 + j] = re;
-                im8[k * 8 + j] = im;
-            }
-        }
         let (re8, im8, re8b, im8b) = (
             &mut re8[..m * 8],
             &mut im8[..m * 8],
@@ -323,10 +346,6 @@ impl Plan {
         fft_batch8(re8, im8, re8b, im8b, m, mplan);
         blue8_bf(re8b, im8b, bf);
         fft_batch8(re8b, im8b, re8, im8, m, mplan);
-        let s = 1.0 / m as f32;
-        for k0 in (0..n).step_by(8) {
-            blue8_scatter(bufs, n, k0, chirp, s, re8, im8);
-        }
     }
 
     /// The Bluestein pass with caller-supplied `m`-length scratch, so
@@ -346,13 +365,7 @@ impl Plan {
         width: usize,
     ) {
         debug_assert_eq!(buf.len(), self.n);
-        let PlanKind::Bluestein {
-            chirp,
-            bf,
-            m,
-            mplan,
-        } = &self.kind
-        else {
+        let PlanKind::Bluestein { chirp, m, .. } = &self.kind else {
             unreachable!("run_bluestein on non-Bluestein plan")
         };
         debug_assert!(a.len() >= *m);
@@ -364,20 +377,63 @@ impl Plan {
             let im = if conj { -v.im } else { v.im };
             a[k] = Complex::new(v.re * f, im * f).mul(chirp[k]);
         }
-        fft_radix2_planned(&mut a[..*m], mplan);
-        for (x, y) in a[..*m].iter_mut().zip(bf) {
-            *x = x.mul(*y);
-        }
-        for v in a[..*m].iter_mut() {
-            *v = v.conj();
-        }
-        fft_radix2_planned(&mut a[..*m], mplan);
-        let s = 1.0 / *m as f32;
-        for v in a[..*m].iter_mut() {
-            *v = v.conj().scale(s);
-        }
+        self.bluestein_core(a);
         for (k, out) in buf.iter_mut().enumerate() {
             *out = a[k].mul(chirp[k]);
+        }
+    }
+
+    /// [`Self::run_bluestein`] reading `src` and writing `dst` — the
+    /// out-of-place row-pass variant.
+    fn run_bluestein_io(
+        &self,
+        src: &[Complex],
+        dst: &mut [Complex],
+        a: &mut [Complex],
+        mul: RowMul,
+        conj: bool,
+        u: usize,
+        width: usize,
+    ) {
+        debug_assert_eq!(src.len(), self.n);
+        debug_assert_eq!(dst.len(), self.n);
+        let PlanKind::Bluestein { chirp, m, .. } = &self.kind else {
+            unreachable!("run_bluestein_io on non-Bluestein plan")
+        };
+        debug_assert!(a.len() >= *m);
+        let n = self.n;
+        a[..*m].fill(Complex::default());
+        for k in 0..n {
+            let v = src[k];
+            let f = mul.at(u, k, width);
+            let im = if conj { -v.im } else { v.im };
+            a[k] = Complex::new(v.re * f, im * f).mul(chirp[k]);
+        }
+        self.bluestein_core(a);
+        for (k, out) in dst.iter_mut().enumerate() {
+            *out = a[k].mul(chirp[k]);
+        }
+    }
+
+    /// The scalar middle shared by [`Self::run_bluestein`] and
+    /// [`Self::run_bluestein_io`]: `fft → ·bf → conj → fft → conj·(1/m)`
+    /// on the `m`-length scratch.
+    fn bluestein_core(&self, a: &mut [Complex]) {
+        let PlanKind::Bluestein { bf, m, mplan, .. } = &self.kind else {
+            unreachable!("bluestein_core on non-Bluestein plan")
+        };
+        let m = *m;
+        fft_radix2_planned(&mut a[..m], mplan);
+        for (x, y) in a[..m].iter_mut().zip(bf) {
+            *x = x.mul(*y);
+        }
+        for v in a[..m].iter_mut() {
+            *v = v.conj();
+        }
+        fft_radix2_planned(&mut a[..m], mplan);
+        let s = 1.0 / m as f32;
+        for v in a[..m].iter_mut() {
+            *v = v.conj().scale(s);
         }
     }
 }
@@ -598,7 +654,7 @@ fn fft_batch8(
 /// body lowers to unpack/permute shuffles.
 #[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn blue8_gather(
-    bufs: &[&mut [Complex]],
+    sbufs: &[&[Complex]],
     n: usize,
     k0: usize,
     chirp: &[Complex],
@@ -624,7 +680,7 @@ fn blue8_gather(
     if cols == 8 {
         // Fully fixed bounds: LLVM lowers this to ymm loads + deinterleave.
         for (j, (b, frow)) in br.iter_mut().zip(bi.iter_mut()).zip(fm.iter()).enumerate() {
-            let row = &*bufs[j];
+            let row = sbufs[j];
             for c in 0..8 {
                 let z = row[k0 + c];
                 b.0[c] = z.re * frow[c];
@@ -633,7 +689,7 @@ fn blue8_gather(
         }
     } else {
         for (j, (b, frow)) in br.iter_mut().zip(bi.iter_mut()).zip(fm.iter()).enumerate() {
-            let row = &*bufs[j];
+            let row = sbufs[j];
             for c in 0..cols {
                 let z = row[k0 + c];
                 b.0[c] = z.re * frow[c];
@@ -658,6 +714,43 @@ fn blue8_gather(
         }
         re8[d..d + 8].copy_from_slice(&r);
         im8[d..d + 8].copy_from_slice(&i);
+    }
+}
+
+/// The full [`Plan::run_bluestein8`]/[`Plan::run_bluestein8_io`] gather:
+/// `re8[k·8+j] = (conj·f)(sbufs[j][k])·chirp[k]` for `k < n`, zero past it
+/// — 8×8 [`blue8_gather`] tiles plus the scalar `m % 8` tail.
+#[allow(clippy::too_many_arguments)]
+fn blue8_gather_all(
+    sbufs: &[&[Complex]],
+    n: usize,
+    m: usize,
+    chirp: &[Complex],
+    re8: &mut [f32],
+    im8: &mut [f32],
+    mul: RowMul,
+    conj: bool,
+    r0: usize,
+    width: usize,
+) {
+    let mb = m & !7;
+    for k0 in (0..mb).step_by(8) {
+        blue8_gather(sbufs, n, k0, chirp, re8, im8, mul, conj, r0, width);
+    }
+    for k in mb..m {
+        for (j, buf) in sbufs.iter().enumerate() {
+            let (re, im) = if k < n {
+                let v = buf[k];
+                let c = chirp[k];
+                let f = mul.at(r0 + j, k, width);
+                let (zr, zi) = (v.re * f, (if conj { -v.im } else { v.im }) * f);
+                (zr * c.re - zi * c.im, zr * c.im + zi * c.re)
+            } else {
+                (0.0, 0.0)
+            };
+            re8[k * 8 + j] = re;
+            im8[k * 8 + j] = im;
+        }
     }
 }
 
@@ -819,6 +912,59 @@ fn cols_scatter_tile(
                 let v = t[l][k];
                 dst[k * width + x + l] =
                     Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+            }
+        }
+    }
+}
+
+/// [`cols_scatter_tile`] writing `|z|` instead of `z` — the final
+/// conj·scale value's magnitude, identical to running the element
+/// `sqrt(re²+im²)` pass over the complex result.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+#[allow(clippy::too_many_arguments)]
+fn cols_scatter_tile_mag(
+    src: &[Complex],
+    height: usize,
+    y0: usize,
+    nr: usize,
+    nb: usize,
+    s: f32,
+    negate: bool,
+    dst: &mut [f32],
+    width: usize,
+    x: usize,
+) {
+    #[inline(always)]
+    fn norm(v: Complex, s: f32, negate: bool) -> f32 {
+        let (re, im) = (v.re * s, if negate { -v.im * s } else { v.im * s });
+        libm::sqrtf(re * re + im * im)
+    }
+    let mut t = [[Complex::default(); 8]; 8];
+    if nr == 8 && nb == 8 {
+        for (l, col) in t.iter_mut().enumerate() {
+            let src_c: &[Complex; 8] = src[l * height + y0..l * height + y0 + 8]
+                .try_into()
+                .unwrap();
+            for k in 0..8 {
+                col[k] = src_c[k];
+            }
+        }
+        for k in 0..8 {
+            let mut out = [0.0f32; 8];
+            for l in 0..8 {
+                out[l] = norm(t[l][k], s, negate);
+            }
+            dst[k * width + x..k * width + x + 8].copy_from_slice(&out);
+        }
+    } else {
+        for l in 0..nb {
+            for k in 0..nr {
+                t[l][k] = src[l * height + y0 + k];
+            }
+        }
+        for k in 0..nr {
+            for l in 0..nb {
+                dst[k * width + x + l] = norm(t[l][k], s, negate);
             }
         }
     }
@@ -1079,6 +1225,184 @@ fn fft2_rows_conj_mul(
     }
 }
 
+/// The out-of-place twin of [`fft2_rows_conj_mul`]: `src` rows are
+/// gathered (with `conj·mul` fused) and transformed rows land in `dst` —
+/// the caller's spectrum can stay shared read-only input.
+#[allow(clippy::too_many_arguments)]
+fn fft2_rows_conj_mul_io(
+    src: &[Complex],
+    dst: &mut [Complex],
+    width: usize,
+    height: usize,
+    wplan: &Plan,
+    mul: RowMul,
+    conj: bool,
+) {
+    debug_assert_eq!(src.len(), width * height);
+    debug_assert_eq!(dst.len(), width * height);
+    if let PlanKind::Radix2 { stages } = &wplan.kind {
+        const RB: usize = 8;
+        #[cfg(feature = "parallel")]
+        if height >= 4 * RB {
+            use rayon::prelude::*;
+            dst.par_chunks_mut(width * RB)
+                .zip(src.par_chunks(width * RB))
+                .enumerate()
+                .map_init(
+                    || {
+                        (
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                        )
+                    },
+                    |(re8, im8, re8b, im8b), (ci, (dchunk, schunk))| {
+                        let nb = dchunk.len() / width;
+                        let r0 = ci * RB;
+                        for x in 0..width {
+                            let mut fj = [1.0f32; RB];
+                            for (w, j) in fj.iter_mut().zip(0..nb) {
+                                *w = mul.at(r0 + j, x, width);
+                            }
+                            for j in 0..nb {
+                                let v = schunk[j * width + x];
+                                let f = fj[j];
+                                let im = if conj { -v.im } else { v.im };
+                                re8[x * RB + j] = v.re * f;
+                                im8[x * RB + j] = im * f;
+                            }
+                            for j in nb..RB {
+                                re8[x * RB + j] = 0.0;
+                                im8[x * RB + j] = 0.0;
+                            }
+                        }
+                        fft_batch8(re8, im8, re8b, im8b, width, stages);
+                        for x in 0..width {
+                            for j in 0..nb {
+                                dchunk[j * width + x] =
+                                    Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
+                            }
+                        }
+                    },
+                )
+                .for_each(|()| ());
+            return;
+        }
+        let mut re8 = vec![0.0f32; width * RB];
+        let mut im8 = vec![0.0f32; width * RB];
+        let mut re8b = vec![0.0f32; width * RB];
+        let mut im8b = vec![0.0f32; width * RB];
+        let mut y = 0usize;
+        while y < height {
+            let nb = RB.min(height - y);
+            for x in 0..width {
+                let mut fj = [1.0f32; RB];
+                for (w, j) in fj.iter_mut().zip(0..nb) {
+                    *w = mul.at(y + j, x, width);
+                }
+                for j in 0..nb {
+                    let v = src[(y + j) * width + x];
+                    let f = fj[j];
+                    let im = if conj { -v.im } else { v.im };
+                    re8[x * RB + j] = v.re * f;
+                    im8[x * RB + j] = im * f;
+                }
+                for j in nb..RB {
+                    re8[x * RB + j] = 0.0;
+                    im8[x * RB + j] = 0.0;
+                }
+            }
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, width, stages);
+            for x in 0..width {
+                for j in 0..nb {
+                    dst[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
+                }
+            }
+            y += nb;
+        }
+    } else if let PlanKind::Bluestein { m, .. } = &wplan.kind {
+        let m = *m;
+        // Parallel: disjoint src/dst chunk pairs are independent tasks.
+        #[cfg(feature = "parallel")]
+        {
+            use rayon::prelude::*;
+            dst.par_chunks_mut(width * 8)
+                .zip(src.par_chunks(width * 8))
+                .enumerate()
+                .for_each_init(
+                    || {
+                        (
+                            vec![0.0f32; m * 8],
+                            vec![0.0f32; m * 8],
+                            vec![0.0f32; m * 8],
+                            vec![0.0f32; m * 8],
+                            vec![Complex::default(); m],
+                        )
+                    },
+                    |(re8, im8, re8b, im8b, a), (ci, (dchunk, schunk))| {
+                        let nb = dchunk.len() / width;
+                        let r0 = ci * 8;
+                        if nb == 8 {
+                            let sbufs: Vec<&[Complex]> = schunk.chunks(width).collect();
+                            let mut dbufs: Vec<&mut [Complex]> = dchunk.chunks_mut(width).collect();
+                            wplan.run_bluestein8_io(
+                                &sbufs, &mut dbufs, re8, im8, re8b, im8b, mul, conj, r0, width,
+                            );
+                        } else {
+                            for (j, (srow, drow)) in schunk
+                                .chunks(width)
+                                .zip(dchunk.chunks_mut(width))
+                                .enumerate()
+                            {
+                                wplan.run_bluestein_io(srow, drow, a, mul, conj, r0 + j, width);
+                            }
+                        }
+                    },
+                );
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let (mut re8, mut im8, mut re8b, mut im8b, mut a) = (
+                vec![0.0f32; m * 8],
+                vec![0.0f32; m * 8],
+                vec![0.0f32; m * 8],
+                vec![0.0f32; m * 8],
+                vec![Complex::default(); m],
+            );
+            let mut r0 = 0usize;
+            for (dchunk, schunk) in dst.chunks_mut(width * 8).zip(src.chunks(width * 8)) {
+                let nb = dchunk.len() / width;
+                if nb == 8 {
+                    let sbufs: Vec<&[Complex]> = schunk.chunks(width).collect();
+                    let mut dbufs: Vec<&mut [Complex]> = dchunk.chunks_mut(width).collect();
+                    wplan.run_bluestein8_io(
+                        &sbufs, &mut dbufs, &mut re8, &mut im8, &mut re8b, &mut im8b, mul, conj,
+                        r0, width,
+                    );
+                } else {
+                    for (j, (srow, drow)) in schunk
+                        .chunks(width)
+                        .zip(dchunk.chunks_mut(width))
+                        .enumerate()
+                    {
+                        wplan.run_bluestein_io(srow, drow, &mut a, mul, conj, r0 + j, width);
+                    }
+                }
+                r0 += nb;
+            }
+        }
+    } else {
+        // Trivial length: the transform is the identity — just the
+        // fused conj·f copy.
+        for (i, (s, d)) in src.iter().zip(dst.iter_mut()).enumerate() {
+            let f = mul.at(i / width, i % width, width);
+            let im = if conj { -s.im } else { s.im };
+            *d = Complex::new(s.re * f, im * f);
+        }
+    }
+}
+
 /// The column half of [`fft2_planned`], split out so [`conv_fft_real`] can run
 /// a smarter row pass first.
 ///
@@ -1088,18 +1412,22 @@ fn fft2_rows_conj_mul(
 /// plans keep the blocked scalar path (8 adjacent columns per block = one
 /// cache line per touched row, as before).
 fn fft2_cols_planned(buf: &mut [Complex], width: usize, height: usize, hplan: &Plan) {
-    fft2_cols_conj_scale(buf, width, height, hplan, None);
+    fft2_cols_conj_scale(buf, width, height, hplan, None, None);
 }
 
 /// [`fft2_cols_planned`] with `conj·scale` fused into the transpose **out**:
 /// with `scale` set it stores `(re·s, −im·s)`, which is `ifft2`'s trailing
 /// `conj·(1/n)` — fused so it doesn't take its own pass over the buffer.
+/// With `mag` set the scatter writes `|re·s, ±im·s|` into the `f32` plane
+/// instead of the complex value into `buf` — `buf` is then pure working
+/// storage and the separate magnitude pass never happens.
 fn fft2_cols_conj_scale(
     buf: &mut [Complex],
     width: usize,
     height: usize,
     hplan: &Plan,
     scale: Option<f32>,
+    mut mag: Option<&mut [f32]>,
 ) {
     const CB: usize = 8;
     if let PlanKind::Radix2 { stages } = &hplan.kind {
@@ -1154,19 +1482,35 @@ fn fft2_cols_conj_scale(
                     });
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
-                buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
-                    for b in 0..nblocks {
-                        let base = (b * height + y) * CB;
-                        for l in 0..CB {
-                            let x = x0 + b * CB + l;
-                            if x < width {
-                                let (re, im) = (re_allb[base + l], im_allb[base + l]);
-                                row[x] =
-                                    Complex::new(re * s, if negate { -im * s } else { im * s });
+                if let Some(mag) = mag.as_deref_mut() {
+                    mag.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                        for b in 0..nblocks {
+                            let base = (b * height + y) * CB;
+                            for l in 0..CB {
+                                let x = x0 + b * CB + l;
+                                if x < width {
+                                    let (re, im) = (re_allb[base + l], im_allb[base + l]);
+                                    let (zr, zi) = (re * s, if negate { -im * s } else { im * s });
+                                    row[x] = libm::sqrtf(zr * zr + zi * zi);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                } else {
+                    buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                        for b in 0..nblocks {
+                            let base = (b * height + y) * CB;
+                            for l in 0..CB {
+                                let x = x0 + b * CB + l;
+                                if x < width {
+                                    let (re, im) = (re_allb[base + l], im_allb[base + l]);
+                                    row[x] =
+                                        Complex::new(re * s, if negate { -im * s } else { im * s });
+                                }
+                            }
+                        }
+                    });
+                }
                 x0 += nb_cols;
             }
             return;
@@ -1190,20 +1534,32 @@ fn fft2_cols_conj_scale(
                 }
             }
             fft_batch8(&re8, &im8, &mut re8b, &mut im8b, height, stages);
-            match scale {
-                Some(s) => {
-                    for y in 0..height {
-                        for j in 0..nb {
-                            buf[y * width + x + j] =
-                                Complex::new(re8b[y * CB + j] * s, -im8b[y * CB + j] * s);
-                        }
+            if let Some(mag) = mag.as_deref_mut() {
+                let s = scale.unwrap_or(1.0);
+                let negate = scale.is_some();
+                for y in 0..height {
+                    for j in 0..nb {
+                        let (re, im) = (re8b[y * CB + j], im8b[y * CB + j]);
+                        let (zr, zi) = (re * s, if negate { -im * s } else { im * s });
+                        mag[y * width + x + j] = libm::sqrtf(zr * zr + zi * zi);
                     }
                 }
-                None => {
-                    for y in 0..height {
-                        for j in 0..nb {
-                            buf[y * width + x + j] =
-                                Complex::new(re8b[y * CB + j], im8b[y * CB + j]);
+            } else {
+                match scale {
+                    Some(s) => {
+                        for y in 0..height {
+                            for j in 0..nb {
+                                buf[y * width + x + j] =
+                                    Complex::new(re8b[y * CB + j] * s, -im8b[y * CB + j] * s);
+                            }
+                        }
+                    }
+                    None => {
+                        for y in 0..height {
+                            for j in 0..nb {
+                                buf[y * width + x + j] =
+                                    Complex::new(re8b[y * CB + j], im8b[y * CB + j]);
+                            }
                         }
                     }
                 }
@@ -1287,27 +1643,51 @@ fn fft2_cols_conj_scale(
                         },
                     );
             }
-            buf.par_chunks_mut(width * 8)
-                .enumerate()
-                .for_each(|(g, rows)| {
-                    let y0 = g * 8;
-                    for b in 0..nblocks {
-                        let bx = x0 + b * CB;
-                        let nb = CB.min(width - bx);
-                        cols_scatter_tile(
-                            &cols_all[b * CB * height..],
-                            height,
-                            y0,
-                            rows.len() / width,
-                            nb,
-                            s,
-                            negate,
-                            rows,
-                            width,
-                            bx,
-                        );
-                    }
-                });
+            if let Some(mag) = mag.as_deref_mut() {
+                mag.par_chunks_mut(width * 8)
+                    .enumerate()
+                    .for_each(|(g, rows)| {
+                        let y0 = g * 8;
+                        for b in 0..nblocks {
+                            let bx = x0 + b * CB;
+                            let nb = CB.min(width - bx);
+                            cols_scatter_tile_mag(
+                                &cols_all[b * CB * height..],
+                                height,
+                                y0,
+                                rows.len() / width,
+                                nb,
+                                s,
+                                negate,
+                                rows,
+                                width,
+                                bx,
+                            );
+                        }
+                    });
+            } else {
+                buf.par_chunks_mut(width * 8)
+                    .enumerate()
+                    .for_each(|(g, rows)| {
+                        let y0 = g * 8;
+                        for b in 0..nblocks {
+                            let bx = x0 + b * CB;
+                            let nb = CB.min(width - bx);
+                            cols_scatter_tile(
+                                &cols_all[b * CB * height..],
+                                height,
+                                y0,
+                                rows.len() / width,
+                                nb,
+                                s,
+                                negate,
+                                rows,
+                                width,
+                                bx,
+                            );
+                        }
+                    });
+            }
             x0 += nb_cols;
         }
         return;
@@ -1363,20 +1743,38 @@ fn fft2_cols_conj_scale(
         }
         let s = scale.unwrap_or(1.0);
         let negate = scale.is_some();
-        for y0 in (0..height).step_by(8) {
-            let nr = (height - y0).min(8);
-            cols_scatter_tile(
-                &cols,
-                height,
-                y0,
-                nr,
-                nb,
-                s,
-                negate,
-                &mut buf[y0 * width..],
-                width,
-                x,
-            );
+        if let Some(mag) = mag.as_deref_mut() {
+            for y0 in (0..height).step_by(8) {
+                let nr = (height - y0).min(8);
+                cols_scatter_tile_mag(
+                    &cols,
+                    height,
+                    y0,
+                    nr,
+                    nb,
+                    s,
+                    negate,
+                    &mut mag[y0 * width..],
+                    width,
+                    x,
+                );
+            }
+        } else {
+            for y0 in (0..height).step_by(8) {
+                let nr = (height - y0).min(8);
+                cols_scatter_tile(
+                    &cols,
+                    height,
+                    y0,
+                    nr,
+                    nb,
+                    s,
+                    negate,
+                    &mut buf[y0 * width..],
+                    width,
+                    x,
+                );
+            }
         }
         x += nb;
     }
@@ -1408,6 +1806,7 @@ pub(crate) fn ifft2_planned(
         height,
         hplan,
         Some(1.0 / (width * height) as f32),
+        None,
     );
 }
 
@@ -1433,6 +1832,36 @@ pub(crate) fn ifft2_planned_mul(
         height,
         hplan,
         Some(1.0 / (width * height) as f32),
+        None,
+    );
+}
+
+/// [`ifft2_planned_mul`] out-of-place and magnitude-producing: `src` stays
+/// untouched shared input, `dst` is caller-owned complex scratch, and the
+/// column scatter writes `|z|` into `mag` — so a filtered inverse transform
+/// plus the `sqrt(re²+im²)` plane cost one copy's worth of traffic total.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn ifft2_planned_mul_mag_into(
+    src: &[Complex],
+    dst: &mut [Complex],
+    mag: &mut [f32],
+    width: usize,
+    height: usize,
+    wplan: &Plan,
+    hplan: &Plan,
+    mul: RowMul,
+) {
+    debug_assert_eq!(src.len(), width * height);
+    debug_assert_eq!(dst.len(), width * height);
+    debug_assert_eq!(mag.len(), width * height);
+    fft2_rows_conj_mul_io(src, dst, width, height, wplan, mul, true);
+    fft2_cols_conj_scale(
+        dst,
+        width,
+        height,
+        hplan,
+        Some(1.0 / (width * height) as f32),
+        Some(mag),
     );
 }
 
