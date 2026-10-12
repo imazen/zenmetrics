@@ -35,6 +35,7 @@ members = [
     "crates/zenfleet-sweep",
     "crates/zenfleet-sim",
     "crates/zenmetrics-cli",
+    "crates/zenmetrics-browser",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",

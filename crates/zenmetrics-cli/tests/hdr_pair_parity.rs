@@ -334,7 +334,7 @@ fn hdr_transfer_is_inert_on_the_faithful_route() {
 mod gpu_parity {
     use super::*;
     use zenmetrics_cli::hdr::{score_via_hdr_scorer, to_cvvdp_linear_planes};
-    use zenmetrics_cli::metrics::{cvvdp_gpu, run_zensim_gpu_with_features};
+    use zenmetrics_cli::metrics::cvvdp_gpu;
 
     /// |a-b| within `tol·max(1,|b|)`. GPU pooling (atomic-f32) is not
     /// bit-order-deterministic across invocations, so the faithful cvvdp path
@@ -355,13 +355,14 @@ mod gpu_parity {
 
         // cvvdp-gpu: faithful linear planes @ DisplayTarget::hdr(1000).
         let want_cvvdp = {
+            let peak = zenmetrics_cli::hdr::measured_display_peak_nits(&r);
             let mut s = cvvdp_gpu::CvvdpBatchScorer::new_with_target(
                 GpuRuntime::Auto,
-                cvvdp_gpu::DisplayTarget::hdr(zenmetrics_cli::hdr::HDR_DISPLAY_PEAK_NITS),
+                cvvdp_gpu::DisplayTarget::hdr(peak),
             )
             .expect("cvvdp gpu scorer");
-            let (rr, rg, rb) = to_cvvdp_linear_planes(&r);
-            let (dr, dg, db) = to_cvvdp_linear_planes(&d);
+            let (rr, rg, rb) = to_cvvdp_linear_planes(&r, peak);
+            let (dr, dg, db) = to_cvvdp_linear_planes(&d, peak);
             s.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, W, H)
                 .expect("cvvdp faithful")
         };
@@ -423,13 +424,27 @@ mod gpu_parity {
         }
 
         // zensim-gpu: u8 shell + 372 with-iw features.
-        let (want_zs, want_zf) = run_zensim_gpu_with_features(
-            &to_sdr_rgb8(&r, TRANSFER),
-            &to_sdr_rgb8(&d, TRANSFER),
-            GpuRuntime::Auto,
-            ZensimFeatureRegime::WithIw,
+        let reference = to_sdr_rgb8(&r, TRANSFER);
+        let distorted = to_sdr_rgb8(&d, TRANSFER);
+        let backend = if cfg!(feature = "gpu-cuda") {
+            zenmetrics_api::Backend::Cuda
+        } else {
+            zenmetrics_api::Backend::Wgpu
+        };
+        let params = zenmetrics_api::zensim::ZensimParams::default_weights()
+            .with_regime(ZensimFeatureRegime::WithIw.into());
+        let mut metric = zenmetrics_api::Metric::new(
+            zenmetrics_api::MetricKind::Zensim,
+            backend,
+            W,
+            H,
+            zenmetrics_api::MetricParams::Zensim(params),
         )
-        .expect("zensim gpu features");
+        .expect("zensim GPU metric");
+        let (score, want_zf) = metric
+            .compute_features_srgb_u8(&reference.pixels, &distorted.pixels)
+            .expect("zensim gpu features");
+        let want_zs = score.value;
         let (got_zs, got_zf) = score_hdr_zensim_with_features_per_score_pairs(
             MetricKind::ZensimGpu,
             &rf,

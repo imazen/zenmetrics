@@ -436,3 +436,13 @@ iqa-bundle-check binaries runner case output:
 
 benchmark-native-check runner worker reader output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}} scripts/jobsys/benchmark_exec.py {{worker}} {{reader}}
+
+# Checkpoint builders run in the CI-pinned snapshot; outputs must be new directories.
+checkpoint-native profile target source runner output:
+    python3 scripts/checkpoint/package.py --profile {{profile}} --target {{target}} --source {{source}} --runner-source {{runner}} --out {{output}}
+
+checkpoint-browser-build output:
+    CHECKPOINT_OUT={{output}} bash scripts/checkpoint/build-browser.sh
+
+checkpoint-browser-check package report oracle:
+    python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}

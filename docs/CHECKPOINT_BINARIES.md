@@ -1,0 +1,88 @@
+# Native and browser checkpoints
+
+A checkpoint is an immutable source commit plus target-specific executables,
+locked dependencies, build commands and SHA-256 manifests. Native packages ship:
+
+- `zenmetrics`, with the CPU IQA registry and the selected GPU backend compiled in;
+- `zenbench`, pinned independently in `ci/checkpoint-profiles.json`;
+- `zenfleet-worker` and `zenfleet-ctl` for the existing fleet job protocol;
+- `drivers/latency` and `drivers/memory`, plus their separate build identities;
+- the observation adapter, Windows shim, compiled metric catalog, lockfiles and sibling pins.
+
+The memory driver contains allocation instrumentation. Use the ordinary driver
+for timing. The full profiles enable codecs, native HDR routes, orchestration and
+feature jobs. CUDA and WGPU are separate binaries. The CPU-only i686 package has
+no GPU route. `--all-features` combines software, experimental and oracle features;
+the reviewed shipping profiles enumerate the intended capability set instead.
+GPU libraries/drivers, external model assets and platform runtime dependencies
+remain runtime requirements. Compilation is not hardware qualification.
+
+## Build and release
+
+The `Checkpoint binaries` workflow tests and builds Linux x64/ARM64, Windows
+x64/ARM64, macOS Intel/ARM64 and i686 Linux through cross. It runs CLI all-targets
+and doc tests, then the IQA study functional controls. Browser CI runs Chromium
+workers and compares a textured raw-map fixture exactly with the native library.
+Each package records the immutable source, compiler, features and dependency
+hashes. The workflow publishes CI artifacts; it does not publish a release.
+
+For a local native build, use the CI-pinned snapshot and the pinned runner:
+
+```sh
+python3 scripts/checkpoint/package.py --profile full-wgpu \
+  --target x86_64-unknown-linux-gnu --source FULL_SOURCE_SHA \
+  --runner-source /path/to/pinned/zenbench --out /path/to/new/checkpoint
+```
+
+Run heavy builds with the workspace resource wrapper. Output directories must be
+new. No `target-cpu=native` flags are accepted. The package has runtime dispatch.
+After every platform is green on the release commit, review the README and the
+checkpoint manifests before approving a checkpoint release. Tag only that tested
+commit. Release assets must preserve executable permissions and carry SHA-256
+checksums; use the archived CI artifacts rather than rebuilding after approval.
+
+## Deploy IQA comparisons
+
+Install the target-matching checkpoint through the existing fleet deployment.
+Set `ZENBENCH_BIN` to its pinned runner and `ZEN_EXEC` to the packaged adapter
+(on Windows, its `.cmd` shim). Supply Python, scoped object-store credentials,
+`s5cmd` for remote transfer, durable scratch and a shared host coordination mount.
+Run native architecture and adapter controls before enrolling a worker.
+
+Use [BENCHMARK_STUDIES.md](BENCHMARK_STUDIES.md) to expand the algorithm, input,
+size, stride, reference-cache and thread matrix into immutable cases. Point the
+study's latency/memory artifacts at the packaged binaries and build JSON files.
+Generate correctness contracts before staging the bundles. Then follow
+[BENCHMARK_FLEET.md](BENCHMARK_FLEET.md): stage by content hash, declare every
+machine/domain/replicate, execute through the existing worker, collect every
+attempt and analyze accepted observations. A captured busy/refused observation
+is retained evidence, not an invitation to select a faster retry.
+
+GPU cases require the requested hardware adapter and backend. Software adapters,
+CPU execution and adapter mismatch are refused before metric work. Shipping all
+implementations never permits a benchmark to switch implementations silently.
+Functional protocol CI uses declared placement suitable for its fixtures; real
+resource-admission validation runs separately on an identified target with
+unchanged acceptance criteria. Both retain refusal outcomes.
+
+## Threaded browser package
+
+The browser checkpoint currently provides **zensim codec-target scoring and raw
+maps** with a cached reference, a coordinator worker and Rayon workers. It needs
+a secure context, COOP `same-origin`, COEP `require-corp`, SharedArrayBuffer,
+SIMD128 and relaxed SIMD. Unsupported configurations produce an error. Inputs
+are opaque sRGB8; callers choose any alpha composite explicitly. The viewer uses
+a fixed user-selected map scale, retains raw values and bounds in-flight work.
+
+Browser controls establish one textured 64×64 fixture's exact score/map parity,
+repeatability, two-worker initialization and ingress/isolation refusal. They do
+not establish latency, all-image parity or fleet benchmark acceptance. The full
+native IQA catalog is broader than this first browser module.
+
+Animated spatial steering needs a codec route that consumes spatial control,
+not merely a global quality slider. The inspected JXL route offers an internal
+zensim feedback loop; the reviewed wrapper did not expose an external map input.
+JPEG and AVIF need separate verification of spatial input and encoded output.
+No steering or realtime claim is made by this checkpoint. Qualification should
+bind each frame's source, controls, codec revision, decoded pixels, score/map and
+measured end-to-end latency before enabling an animated steering mode.

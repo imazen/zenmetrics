@@ -2100,6 +2100,8 @@ fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
         "score",
         "--metric",
         "cvvdp-gpu",
+        "--display-model",
+        "standard_fhd",
         "--reference",
         fx.join("ref_64.png").to_str().unwrap(),
         "--distorted",
