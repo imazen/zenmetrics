@@ -222,3 +222,26 @@ When `ZENBENCH_RESULT_FILE` is set, the case and both inputs must also appear
 in the current bundle manifest. Standalone cases omit that variable.
 `just iqa-bundle-check BINARIES RUNNER CASE NEW_DIRECTORY` checks both real
 IQA builds through the runner and refuses escaped or unlisted inputs.
+
+## Validation and rollout
+
+The control recipes are correctness checks, not a performance study. The real
+IQA parity matrix covers four metrics, cold and cached-reference execution,
+one and two Rayon threads, and packed and padded 65×67 RGB8 input. Each of the
+32 cases requires exact score bits between latency and memory builds; each
+padded case must equal its packed counterpart. This does not establish parity
+for untested metrics, formats, sizes or target-specific SIMD paths.
+
+The native CI workflow runs the adapter and a real worker with the persistent
+executor option enabled, reads its Parquet ledger, recovers every artifact by
+hash, and checks success, wrong output, timeout, cancellation and wrong-machine
+routing. Linux image controls additionally exercise the baked executables.
+These checks use explicitly unrestricted CPU placement and cannot produce
+confirmatory benchmark claims.
+
+Before enrolling a production worker, verify its native architecture, selected
+CPU/cache domain, installed runner hash and workload outputs on that actual
+host. Publish a target-compatible image through the existing image builder,
+then run a small declared campaign and collect its receipts before scaling.
+A CI result or local image control does not verify production credentials,
+object-store permissions, target host configuration or image deployment.
