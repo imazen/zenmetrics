@@ -1,0 +1,19 @@
+binary_sha256: ed3cdacd9167344aac461961e1e1f11db5bdd69385803f9f35be853aed42ad40  /home/lilith/tmp/zm-ranked-binaries/haarpsi-vector-candidate
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/haarpsi-vector-candidate 1024 1024 10
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24818MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/haarpsi-vector-candidate 1024 1024 10
+1024x1024 10 reps: 18.4 ms/call (score 0.75789441752277065, bits 3fe840abcb2299c2)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/haarpsi-vector-candidate 1024 1024 10':
+
+        3456720450      instructions                                                          
+         932366878      cycles                                                                
+
+       0.189530779 seconds time elapsed
+
+       0.151234000 seconds user
+       0.038312000 seconds sys
+
+
+run-heavy: done rc=0 0s | peak-RSS 0.03GiB | min-avail 24818MiB | peak-load 2.14

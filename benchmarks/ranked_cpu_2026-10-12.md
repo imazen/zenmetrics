@@ -108,3 +108,21 @@ Receipts:
 [candidate 1T](haarpsi_vector_candidate_1t_2026-10-12.log),
 [candidate 16T](haarpsi_vector_candidate_16t_2026-10-12.log).
 Use the VSI reproduction commands with `-p haarpsi`.
+
+Additional HaarPSI checks retain exact score bits at 64² (100 calls,
+`3fea26b2015e7bf8`) and 1024² (ten calls, `3fe840abcb2299c2`).
+At 64², instructions changed from 393,150,402 to 375,765,570;
+both wall observations rounded to 0.6 ms/call. At 1024² they changed
+from 3,908,961,616 to 3,456,720,450; wall changed from 21.1 to 18.4
+ms/call. Peak RSS stayed at 0.02 GiB and 0.03 GiB respectively.
+These wall deltas also remain below the noise caution.
+[64² baseline](haarpsi_baseline_small_2026-10-12.log),
+[64² candidate](haarpsi_candidate_small_2026-10-12.log),
+[1024² baseline](haarpsi_baseline_1024_2026-10-12.log),
+[1024² candidate](haarpsi_candidate_1024_2026-10-12.log).
+
+The first prototype kept scalar argument-reduction selection; it retired
+14,657,449,477 instructions for the large-image leg and returned the same
+score bits. The landed version also vectorizes that selection.
+[prototype 1T](haarpsi_candidate_1t_2026-10-12.log),
+[prototype 16T](haarpsi_candidate_16t_2026-10-12.log).
