@@ -33,7 +33,7 @@ class AnalysisTests(unittest.TestCase):
         root=self.root/name;root.mkdir()
         row=self.row
         driver=dict(schema=1,operations=2,correctness=row['expected_correctness'],memory=[])
-        stdout=dict(driver=driver,timing_usable=True,operation_ns=[123,456])
+        stdout=dict(driver=driver,timing_usable=True,operation_ns=[123,456],workload=dict(row["case"]))
         (root/'driver.json').write_bytes(study.canonical(driver))
         (root/'stdout.txt').write_bytes(study.canonical(stdout)+b'\n')
         identities=study.load(self.packaged/'identities.json')
@@ -47,6 +47,21 @@ class AnalysisTests(unittest.TestCase):
                     inference='synthetic control only')
         (root/'packet.json').write_bytes(study.canonical(packet))
         return root
+
+    def test_gpu_analysis_refuses_software_wrong_backend_and_wrong_name(self):
+        case=dict(backend='wgpu',memory_mode='full',parameter_preset='api-defaults-standard-fhd',expected_adapter='fixture GPU')
+        workload=dict(case,device=dict(name='fixture GPU',type='IntegratedGpu'))
+        analysis.verify_gpu_workload(case,workload)
+        for kind in ('Cpu','Other','VirtualGpu','CudaGpu'):
+            workload['device']['type']=kind
+            with self.assertRaisesRegex(ValueError,'GPU runtime identity'):
+                analysis.verify_gpu_workload(case,workload)
+        workload['device']=dict(name='different GPU',type='DiscreteGpu')
+        with self.assertRaisesRegex(ValueError,'GPU runtime identity'):
+            analysis.verify_gpu_workload(case,workload)
+        workload['device']['name']='fixture GPU';workload['backend']='cpu'
+        with self.assertRaisesRegex(ValueError,'GPU runtime workload'):
+            analysis.verify_gpu_workload(case,workload)
 
     def test_missing_failed_and_retry_ambiguity_remain_visible(self):
         empty=analysis.ingest(self.generated,self.packaged,[])

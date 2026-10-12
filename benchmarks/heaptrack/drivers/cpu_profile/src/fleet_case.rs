@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use zenmetrics_api::{Backend, MetricKind, Warm};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+#[cfg(any(feature = "study-gpu-wgpu", feature = "study-gpu-cuda"))]
+#[path = "fleet_gpu.rs"]
+mod gpu;
 #[path = "fleet_hdr.rs"]
 mod hdr;
 
@@ -64,24 +67,26 @@ impl Phase {
 // The existing CLI metric dispatch takes packed RGB8. Preserve every source
 // row, including padded inputs; packing is charged to input preparation.
 fn input(path: &Path, case: &Case) -> Result<Vec<u8>, Error> {
-    let row = (case.width as usize).checked_mul(3).ok_or("row overflow")?;
-    let length = case
-        .stride_bytes
-        .checked_mul(case.height as usize)
+    read_rgb8(path, case.width, case.height, case.stride_bytes)
+}
+fn read_rgb8(path: &Path, width: u32, height: u32, stride_bytes: usize) -> Result<Vec<u8>, Error> {
+    let row = (width as usize).checked_mul(3).ok_or("row overflow")?;
+    let length = stride_bytes
+        .checked_mul(height as usize)
         .ok_or("input overflow")?;
-    if case.stride_bytes < row || std::fs::metadata(path)?.len() != length as u64 {
+    if stride_bytes < row || std::fs::metadata(path)?.len() != length as u64 {
         return Err("raw input length/stride differs from declared layout".into());
     }
     let bytes = std::fs::read(path)?;
-    if row == case.stride_bytes {
+    if row == stride_bytes {
         return Ok(bytes);
     }
     let mut packed = Vec::new();
     packed.try_reserve_exact(
-        row.checked_mul(case.height as usize)
+        row.checked_mul(height as usize)
             .ok_or("packed size overflow")?,
     )?;
-    for source in bytes.chunks_exact(case.stride_bytes) {
+    for source in bytes.chunks_exact(stride_bytes) {
         packed.extend_from_slice(&source[..row]);
     }
     Ok(packed)
@@ -166,6 +171,12 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     let bytes = std::fs::read(&case_path)?;
     if serde_json::from_slice::<Value>(&bytes)?["schema"] == 3 {
         return hdr::run(&case_path, &bytes);
+    }
+    if serde_json::from_slice::<Value>(&bytes)?["schema"] == 4 {
+        #[cfg(any(feature = "study-gpu-wgpu", feature = "study-gpu-cuda"))]
+        return gpu::run(&case_path, &bytes);
+        #[cfg(not(any(feature = "study-gpu-wgpu", feature = "study-gpu-cuda")))]
+        return Err("schema 4 requires an explicit study-gpu-wgpu or study-gpu-cuda build".into());
     }
     let case: Case = serde_json::from_slice(&bytes)?;
     if ![1, 2].contains(&case.schema)

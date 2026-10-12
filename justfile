@@ -395,11 +395,22 @@ iqa-fleet-build output:
 
 # Release artifacts for study qualification; keep timing and heap instrumentation separate.
 iqa-study-build output:
-    mkdir -p {{output}}
+    mkdir {{output}}
     just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/latency
     just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features heap-phases
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
+
+iqa-gpu-study-build backend output:
+    python3 -c 'import sys; assert sys.argv[1] in ("wgpu", "cuda")' "{{backend}}"
+    mkdir {{output}}
+    just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features study-gpu-{{backend}}
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/latency
+    just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features study-gpu-{{backend}},heap-phases
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
+
+iqa-gpu-check binaries backend output adapter:
+    python3 -B scripts/jobsys/check_iqa_gpu.py {{binaries}} {{backend}} {{output}} "{{adapter}}"
 
 iqa-pair-lines-check binaries case output:
     python3 -B scripts/jobsys/check_iqa_pair_lines.py {{binaries}} {{case}} {{output}}

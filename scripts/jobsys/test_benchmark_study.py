@@ -148,6 +148,27 @@ class StudyTests(unittest.TestCase):
         pair['viewing']['pixels_per_degree'] = True
         with self.assertRaises(ValueError): study.expand(self.write())
 
+    def test_gpu_requires_explicit_backend_build_and_verified_device(self):
+        self.spec['metrics'] = ['ssim2-gpu']
+        self.spec['reuse'] = ['cold', 'warm_instance']
+        self.assertTrue(all(row['status'] == 'unsupported' for row in study.expand(self.write())[2]))
+        bed=self.spec['testbeds'][0]
+        bed.update(gpu_backend='wgpu',gpu_device='fixture-device',gpu_adapter='fixture GPU')
+        self.assertTrue(all(row['status'] == 'unqualified' for row in study.expand(self.write())[2]))
+        self.qualify()
+        self.assertTrue(all(row['status'] == 'unsupported' for row in study.expand(self.write())[2] if row['measurement']=='wall'))
+        build=json.loads((self.root/'build.json').read_bytes());build['features']=['study-gpu-wgpu']
+        (self.root/'build.json').write_text(json.dumps(build))
+        bed['artifacts']['latency']['build']=self.bound('build.json')
+        with self.assertRaisesRegex(ValueError,'GPU qualification'):
+            study.expand(self.write())
+        q=json.loads((self.root/'qualification.json').read_bytes())
+        q.update(testbed='cpu',gpu_backend='wgpu',gpu_device='fixture-device',gpu_device_verified=True)
+        (self.root/'qualification.json').write_text(json.dumps(q));bed['qualification']=self.bound('qualification.json')
+        rows=study.expand(self.write())[2]
+        self.assertTrue(all(row['case']['schema']==4 for row in rows))
+        self.assertTrue(all(row['status']=='unqualified' for row in rows))
+
     def test_nonlinux_heaptrack_is_visible(self):
         self.spec['metrics'] = ['ssim2']; self.spec['passes'] = ['heaptrack']
         self.spec['testbeds'][0]['target'] = 'aarch64-apple-darwin'

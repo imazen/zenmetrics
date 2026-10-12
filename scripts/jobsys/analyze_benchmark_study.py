@@ -51,6 +51,16 @@ def read_cells(study):
     return summary, cells
 
 
+def verify_gpu_workload(case, workload):
+    for key in ('backend', 'memory_mode', 'parameter_preset'):
+        if workload[key] != case[key]:
+            raise ValueError('GPU runtime workload differs from qualified case')
+    device=workload['device']
+    allowed=('CudaGpu',) if case['backend']=='cuda' else ('IntegratedGpu','DiscreteGpu')
+    if device['name']!=case['expected_adapter'] or device['type'] not in allowed:
+        raise ValueError('GPU runtime identity differs from qualified hardware')
+
+
 def ingest(study, packaged, attempts):
     summary, cells = read_cells(study)
     identities = load(packaged/'identities.json')
@@ -124,19 +134,24 @@ def ingest(study, packaged, attempts):
                         backend=memory.get('backend'),backend_version=memory.get('backend_version')))
                 else:
                     record.setdefault('unavailable',[]).append(memory)
-            if row['measurement']=='wall' and 'stdout.txt' in packet['artifacts']:
+            if 'stdout.txt' in packet['artifacts']:
                 stdout = (directory/'stdout.txt').read_text()
                 lines=[decode(line) for line in stdout.splitlines() if line.startswith('{')]
                 if len(lines)!=1: raise ValueError('expected one bound IQA driver stdout record')
                 value=lines[0]
-                if value['driver'] != driver or value['timing_usable'] is not True:
+                if value['driver'] != driver or (row['measurement']=='wall' and value['timing_usable'] is not True):
                     raise ValueError('latency stdout and bound driver result differ')
-                durations=value['operation_ns']
-                if len(durations)!=summary['operations_per_launch']:
-                    raise ValueError('operation timing budget mismatch')
-                mean=statistics.fmean(number(n,'operation ns') for n in durations)/1e9
-                record['points'].append(dict(quantity='metric_call_mean',scope='decoded_input_score',unit='seconds',value=mean,
-                                             operations=len(durations),replication='one invocation; operations are not independent blocks'))
+                record['workload']=value['workload']
+                if row['case']['schema']==4:
+                    verify_gpu_workload(row['case'],value['workload'])
+                    record.setdefault('unavailable',[]).append(dict(quantity='device_memory',reason=value['workload']['device_memory']))
+                if row['measurement']=='wall':
+                    durations=value['operation_ns']
+                    if len(durations)!=summary['operations_per_launch']:
+                        raise ValueError('operation timing budget mismatch')
+                    mean=statistics.fmean(number(n,'operation ns') for n in durations)/1e9
+                    record['points'].append(dict(quantity='metric_call_mean',scope='decoded_input_score',unit='seconds',value=mean,
+                                                 operations=len(durations),replication='one invocation; operations are not independent blocks'))
         evidence[sha].append(record)
     audit, observations = [], []
     for sha, cell in cells.items():
@@ -152,7 +167,9 @@ def ingest(study, packaged, attempts):
                        target=cell['target'],reuse=case['reuse'],threads=case['threads'],format=case['pixel_format'],
                        viewing=case.get('viewing'),origin=pair['origin'],content=pair['content'],
                        series=pair.get('series',pair['id']),case_schema=case['schema'],
-                       products=case.get('products','primary'),
+                       products=case.get('products','primary'),backend=case.get('backend','native_cpu'),
+                       memory_mode=case.get('memory_mode'),parameter_preset=case.get('parameter_preset'),
+                       gpu_device=cell['contract']['testbed'].get('gpu_device'),
                        warmup_operations=case.get('warmup_operations',1 if case['reuse']=='warm_reference' else 0),
                        operations=summary['operations_per_launch'],
                        row_padding_bytes=case['stride_bytes']-case['width']*(12 if case['pixel_format']=='rgb_f32le_bt709_linear_nits' else 3),

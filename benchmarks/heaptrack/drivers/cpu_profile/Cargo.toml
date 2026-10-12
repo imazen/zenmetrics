@@ -23,6 +23,8 @@ path = "src/bin/cpu_wall.rs"
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
 heap-phases = ["zenbench/heap-profiling"]
+study-gpu-wgpu = ["zenmetrics-api/all-metrics", "zenmetrics-api/wgpu", "dep:cubecl", "cubecl/wgpu"]
+study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc"]
 metrics-parallel = [
     "cvvdp/parallel", "iwssim/parallel", "fast-ssim2/rayon",
     "dep:fsim", "fsim/parallel", "dep:haarpsi", "haarpsi/parallel",
@@ -33,6 +35,8 @@ metrics-parallel = [
 ]
 
 [dependencies]
+cubecl = { workspace = true, optional = true }
+cudarc = { version = "0.19.10", default-features = false, features = ["std", "driver", "fallback-dynamic-loading", "cuda-version-from-build-system", "fallback-latest"], optional = true }
 zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

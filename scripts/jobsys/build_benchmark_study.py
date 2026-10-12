@@ -85,17 +85,19 @@ def inventory():
     cold = set(re.findall(r'\("([^"]+)", MetricKind::', harness.read_text().split('const METRICS:', 1)[1].split('];', 1)[0]))
     if not names or len(set(names)) != len(names) or not cold <= set(names):
         raise ValueError('registry/driver inventory cannot be resolved')
+    gpu = set(re.findall(r'"([^"]+-gpu)"\s*=>\s*MetricKind::', (DRIVER / "fleet_gpu.rs").read_text()))
+    if not gpu or not gpu <= set(names):
+        raise ValueError("GPU driver inventory cannot be resolved")
     rows = []
     for name in names:
         reasons = []
-        if name.endswith('-gpu'):
-            reasons.append('GPU workload driver not qualified')
-        if name not in cold and name not in HDR and not reasons:
+        if name not in cold and name not in HDR and name not in gpu:
             reasons.append('SDR fleet driver does not expose this variant')
         rows.append({'metric': name, 'cold_rgb8': name in cold,
-                     'warm_rgb8': name in WARM, 'cold_absolute_nits': name in HDR, 'unsupported_reasons': reasons})
+                     'warm_rgb8': name in WARM, 'cold_absolute_nits': name in HDR,
+                     'cold_gpu_rgb8': name in gpu, 'warm_instance_gpu_rgb8': name in gpu, 'unsupported_reasons': reasons})
     return {'schema': 1, 'kind': 'zenmetrics_benchmark_inventory', 'metrics': rows,
-            'sources': {str(p.relative_to(ROOT)): file_sha(p) for p in [registry, harness, DRIVER / 'fleet_case.rs', DRIVER / 'fleet_hdr.rs']}}
+            'sources': {str(p.relative_to(ROOT)): file_sha(p) for p in [registry, harness, DRIVER / 'fleet_case.rs', DRIVER / 'fleet_hdr.rs', DRIVER / 'fleet_gpu.rs']}}
 
 
 def bound_file(base, value):
@@ -122,7 +124,7 @@ def expand(spec_path):
     positive(spec['peak_mem_bytes'], 'peak_mem_bytes')
     for threads in spec['threads']:
         positive(threads, 'threads', 1024)
-    if not set(spec['passes']) <= PASSES or not set(spec['reuse']) <= {'cold', 'warm_reference'}:
+    if not set(spec['passes']) <= PASSES or not set(spec['reuse']) <= {'cold', 'warm_reference', 'warm_instance'}:
         raise ValueError('unknown pass or reuse boundary')
     inv = inventory()
     metrics = {r['metric']: r for r in inv['metrics']}
@@ -150,9 +152,14 @@ def expand(spec_path):
         raise ValueError('duplicate pair ID')
     testbeds = []
     for bed in spec['testbeds']:
-        keys(bed, ['id', 'machine', 'domain', 'target'], ['artifacts', 'qualification'])
+        keys(bed, ['id', 'machine', 'domain', 'target'], ['artifacts', 'qualification', 'gpu_backend', 'gpu_device', 'gpu_adapter'])
         for label in ['id', 'machine', 'domain', 'target']:
             token(bed[label])
+        if 'gpu_backend' in bed and bed['gpu_backend'] not in {'cuda', 'wgpu'}:
+            raise ValueError('unknown explicit GPU backend')
+        if 'gpu_device' in bed: token(bed['gpu_device'])
+        if 'gpu_adapter' in bed and (not isinstance(bed['gpu_adapter'], str) or not 1 <= len(bed['gpu_adapter']) <= 256):
+            raise ValueError('GPU adapter must be an exact nonempty runtime name')
         item = dict(bed, artifacts={})
         for variant, artifact in bed.get('artifacts', {}).items():
             if variant not in {'latency', 'memory'}:
@@ -162,6 +169,8 @@ def expand(spec_path):
             build = load(Path(item['artifacts'][variant]['build']['path']))
             keys(build, ['schema', 'target', 'binary_sha256', 'source_revision', 'dependency_lock_sha256',
                          'compiler', 'features', 'rustflags', 'profile', 'instrumented'])
+            if not isinstance(build['features'], list) or not all(isinstance(f, str) for f in build['features']):
+                raise ValueError('build features must be an explicit string array')
             if (build['schema'] != 1 or build['target'] != bed['target'] or build['profile'] != 'release'
                     or build['instrumented'] != (variant == 'memory')
                     or build['binary_sha256'] != item['artifacts'][variant]['binary']['sha256']):
@@ -192,6 +201,9 @@ def expand(spec_path):
                 'distorted': 'distorted.rgb', 'pixel_format': pair['pixel_format'], 'reuse': reuse, 'threads': threads}
         if metric in HDR:
             case.update(schema=3, products='primary', warmup_operations=0, viewing=pair.get('viewing'))
+        if metric.endswith('-gpu'):
+            case.update(schema=4, products='primary', warmup_operations=0, backend=bed.get('gpu_backend'), expected_adapter=bed.get('gpu_adapter'),
+                        memory_mode='full', parameter_preset='api-defaults-standard-fhd')
         contract = {'study_sha': study_sha, 'metric': metric, 'pair': without_paths(pair),
                     'testbed': without_paths(bed), 'reuse': reuse, 'threads': threads,
                     'measurement': measurement, 'replicate': replicate, 'operations': spec['operations']}
@@ -205,6 +217,10 @@ def expand(spec_path):
                 reasons.append('native HDR requires the matching explicit viewing preset')
         elif pair['pixel_format'] != 'rgb8_srgb' or pair['stride_bytes'] < pair['width'] * 3:
             reasons.append('driver requires RGB8 sRGB with valid row stride')
+        if metric.endswith('-gpu') and ('gpu_backend' not in bed or 'gpu_device' not in bed or 'gpu_adapter' not in bed):
+            reasons.append('GPU cell requires explicit backend and declared device testbed')
+        if reuse == 'warm_instance' and not metric.endswith('-gpu'):
+            reasons.append('retained-instance route is exposed only for GPU cases')
         if reuse == 'warm_reference' and not metrics[metric]['warm_rgb8']:
             reasons.append('cached-reference route unavailable in driver')
         if metric.startswith('iwssim') and min(pair['width'], pair['height']) < 176:
@@ -216,11 +232,20 @@ def expand(spec_path):
         variant = 'memory' if measurement == 'driver' else 'latency'
         artifact = bed['artifacts'].get(variant)
         status, expected = ('unsupported' if reasons else 'unqualified'), None
+        if metric.endswith('-gpu') and artifact:
+            build = load(Path(artifact['build']['path']))
+            if 'study-gpu-' + str(bed.get('gpu_backend')) not in build['features']:
+                reasons.append('artifact build does not enable the selected study GPU backend')
+                status = 'unsupported'
         if not reasons and artifact and 'qualification' in bed:
             q = load(Path(bed['qualification']['path']))
-            keys(q, ['schema', 'target', 'native_arch_verified', 'inventory_sha', 'cases'])
+            keys(q, ['schema', 'target', 'native_arch_verified', 'inventory_sha', 'cases'],
+                 ['testbed', 'gpu_backend', 'gpu_device', 'gpu_device_verified'])
             if q['schema'] != 1 or q['target'] != bed['target'] or q['native_arch_verified'] is not True or q['inventory_sha'] != digest(inv):
                 raise ValueError('qualification target/native execution/inventory mismatch')
+            if metric.endswith('-gpu') and (q.get('testbed') != bed['id'] or q.get('gpu_backend') != bed['gpu_backend']
+                    or q.get('gpu_device') != bed['gpu_device'] or q.get('gpu_device_verified') is not True):
+                raise ValueError('GPU qualification needs verified device/backend and matching testbed')
             # Qualification binds build bytes, exact input bytes and all timing settings.
             proof_id = digest({'case': case, 'inputs': [pair[s]['sha256'] for s in ['reference', 'distorted']],
                                'binary_sha256': artifact['binary']['sha256'], 'operations': spec['operations']})

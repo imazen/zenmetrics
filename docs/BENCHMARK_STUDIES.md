@@ -93,10 +93,10 @@ the remaining platform/analysis qualification gates.
 
 ## SDR driver coverage and scalar products
 
-The release fleet driver exposes **38 of 46 CLI variants**: all SDR CPU
-variants. The remaining eight are the six GPU variants and the two native HDR
-variants; they require separately qualified workload contracts. Warm-reference
-coverage remains four variants. These counts describe driver routes, not
+The base release fleet driver exposes **40 of 46 CLI variants**: 38 SDR CPU
+variants and two native HDR variants. The optional GPU builds expose the six
+remaining routes under the separate contract below. Warm-reference coverage
+remains four CPU variants. These counts describe driver routes, not
 cross-platform build or accuracy certification.
 
 `just iqa-study-build DIRECTORY` retains separate release `latency` and `memory`
@@ -185,7 +185,7 @@ schema-3 primary-score cases for the matching HDR metric/preset. Missing
 geometry, a mismatched preset, sRGB8 inputs or warm reuse remain explicit
 unsupported cells. Exact input and parameter identities enter qualification.
 The inventory now exposes all 40 CPU routes across their two input contracts;
-GPU routes still require separate implementation and on-target qualification.
+The six GPU routes use schema 4 and require separate on-target qualification.
 
 `just iqa-hdr-check BINARIES NEW_DIRECTORY` checks both HDR routes, two
 operations, padded and packed rows, and ordinary/instrumented builds. Private
@@ -291,3 +291,56 @@ checks compatibility, launch counts and refusal of two equally wrong outputs.
 `just iqa-pair-lines-check BINARIES CASE NEW_DIRECTORY` checks actual ordinary
 and memory driver extraction, exact output parity and instrumented-output
 refusal as a functional control, without a statistical comparison.
+
+
+## Explicit GPU workloads
+
+GPU accuracy and cross-platform performance remain unqualified.
+On 2026-10-12 the local Linux process lacked access to its render node and
+WGPU selected llvmpipe (CPU). All 48 ordinary/instrumented software-adapter
+controls failed before scoring, with no successful GPU cases. The hardware
+controls remain blocked; these refusals are evidence of the guard only. A compiled
+route or a determinism control cannot supply its own accuracy oracle. CUDA
+runtime controls also require a verified CUDA device; a successful compile
+provides no execution evidence.
+
+Build separate ordinary and instrumented executables with
+`just iqa-gpu-study-build wgpu NEW_DIRECTORY` (or `cuda`). Testbeds declare
+`gpu_backend` (`wgpu` or `cuda`), a stable `gpu_device` token, and `gpu_adapter`
+containing the exact runtime adapter name. The matching qualification record
+also binds `testbed`, `gpu_backend`, `gpu_device`, and
+`gpu_device_verified:true`; exact case proofs bind the adapter name and binary.
+Missing hardware/build/oracle evidence keeps cells unsupported or unqualified.
+
+Schema 4 accepts the six GPU CLI names, `rgb8_srgb`, `cold` or `warm_instance`,
+explicit backend, `memory_mode:"full"`, and
+`parameter_preset:"api-defaults-standard-fhd"`. CPU, Auto, CubeCL CPU, automatic
+memory modes and cached-reference reuse are refused. CVVDP uses the driver's
+standard FHD display configuration; other parameters use explicit metric API
+defaults. Warm instance retains the scorer and buffers, not cached reference
+features. Padding is packed during input preparation.
+
+Before scoring, WGPU initializes and registers the inspected setup under the
+same default-device key used by the metrics. Only discrete or integrated GPU
+adapter types qualify; CPU, virtual and unknown types fail. The selected name
+must exactly match `expected_adapter`. CUDA queries the same driver ordinal
+zero used by the metric constructors, respecting driver visibility remapping,
+and also requires an exact name match. An unavailable or mismatched device
+fails the invocation; no alternate backend is tried. The existing API's
+sentinel kernel/readback liveness check remains active.
+
+Runtime device identity is retained in stdout and the analysis audit.
+Device context qualification/preparation is a separate phase before scoring.
+Whole-child wall time includes it; internal cold score timing includes metric
+construction but starts after that context preparation. Process-wide context
+and JIT caches can survive scorer destruction. Neither host heap probes nor
+process resident peaks measure device allocations; device-memory coverage is
+explicitly unavailable.
+
+`just iqa-gpu-check BINARIES BACKEND NEW_DIRECTORY "EXACT ADAPTER NAME"`
+checks six metrics × two lifetimes × two row layouts × two executables, with
+two score operations per process. It retains every failure and refuses stderr
+indicating a device-thread panic. Repeated results, all scalar products,
+ordinary/instrumented output and packed/padded output must match exactly.
+These functional controls neither relax resource admission nor certify accuracy
+or benchmark acceptance. Use the strict native runner for performance evidence.
