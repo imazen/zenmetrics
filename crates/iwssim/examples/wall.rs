@@ -10,6 +10,12 @@ fn main() {
     let w: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(1024);
     let h: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(1024);
     let reps: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(2);
+    let strip_height = std::env::var("IWSSIM_WALL_STRIP_HEIGHT")
+        .ok()
+        .map(|value| value.parse::<u32>().expect("positive strip height"));
+    if let Some(height) = strip_height {
+        assert!(height >= iwssim::STRIP_BODY_MIN);
+    }
     let n = w as usize * h as usize;
 
     let reference: Vec<f32> = (0..n)
@@ -26,7 +32,13 @@ fn main() {
     let mut score = 0.0f64;
     let t0 = Instant::now();
     for _ in 0..reps {
-        score = m.score_gray(&reference, &distorted).unwrap().score as f64;
+        score = if let Some(height) = strip_height {
+            m.score_strip_gray(&reference, &distorted, height)
+        } else {
+            m.score_gray(&reference, &distorted)
+        }
+        .unwrap()
+        .score as f64;
     }
     let dt = t0.elapsed();
     println!(
@@ -34,4 +46,5 @@ fn main() {
         dt.as_secs_f64() * 1e3 / reps as f64,
         score.to_bits()
     );
+    println!("strip_body_height: {strip_height:?}");
 }
