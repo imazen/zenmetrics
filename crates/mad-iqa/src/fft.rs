@@ -203,7 +203,14 @@ impl Plan {
     /// are per-lane scalar ops on the way in/out — bit-identical to
     /// [`Self::run_bluestein`] on each row. `bufs` are the eight `n`-length
     /// rows/columns; `re8`/`im8` are caller scratch of `m·8`.
-    fn run_bluestein8(&self, bufs: &mut [&mut [Complex]], re8: &mut [f32], im8: &mut [f32]) {
+    fn run_bluestein8(
+        &self,
+        bufs: &mut [&mut [Complex]],
+        re8: &mut [f32],
+        im8: &mut [f32],
+        re8b: &mut [f32],
+        im8b: &mut [f32],
+    ) {
         let PlanKind::Bluestein {
             chirp,
             bf,
@@ -215,7 +222,9 @@ impl Plan {
         };
         let (n, m) = (self.n, *m);
         debug_assert_eq!(bufs.len(), 8);
-        debug_assert!(re8.len() >= m * 8 && im8.len() >= m * 8);
+        debug_assert!(
+            re8.len() >= m * 8 && im8.len() >= m * 8 && re8b.len() >= m * 8 && im8b.len() >= m * 8
+        );
         // Gather: a[k] = buf[k]·chirp[k], zeroed past n — 8×8 k-blocks keep
         // the transposed load in registers (scalar tail for m % 8 ≠ 0).
         let mb = m & !7;
@@ -235,9 +244,15 @@ impl Plan {
                 im8[k * 8 + j] = im;
             }
         }
-        fft_batch8(re8, im8, m, mplan);
-        blue8_bf(re8, im8, bf);
-        fft_batch8(re8, im8, m, mplan);
+        let (re8, im8, re8b, im8b) = (
+            &mut re8[..m * 8],
+            &mut im8[..m * 8],
+            &mut re8b[..m * 8],
+            &mut im8b[..m * 8],
+        );
+        fft_batch8(re8, im8, re8b, im8b, m, mplan);
+        blue8_bf(re8b, im8b, bf);
+        fft_batch8(re8b, im8b, re8, im8, m, mplan);
         let s = 1.0 / m as f32;
         for k0 in (0..n).step_by(8) {
             blue8_scatter(bufs, n, k0, chirp, s, re8, im8);
@@ -292,34 +307,102 @@ impl Plan {
 /// including the small ones that would be strided in a per-row SIMD scheme.
 /// `fft2` uses this for the column pass (8 columns per block, a layout the
 /// old blocked transpose already produced) and for the row pass (8 rows per
-/// block, transposed in and out). Bit-reversal swaps whole 8-lane rows.
+/// block, transposed in and out).
+///
+/// The transform runs out-of-place: the first fused stage pair reads
+/// `src[rev(p)]` — the bit-reversal as a row gather, no swap sweep at all —
+/// and writes `dst` contiguously, then the remaining stages run in-place on
+/// `dst`. The gather would corrupt an in-place array (later blocks still
+/// need rows the earlier stores already overwrote), so `src`/`dst` must not
+/// alias; `run_bluestein8` ping-pongs the pair across its two transforms.
 ///
 /// Twiddles are splat per butterfly — cheap, and identical across lanes.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn fft_batch8_inner(
     token: Token,
-    re8: &mut [f32],
-    im8: &mut [f32],
+    src_re: &[f32],
+    src_im: &[f32],
+    dst_re: &mut [f32],
+    dst_im: &mut [f32],
     n: usize,
     stages: &[Vec<Complex>],
 ) {
-    debug_assert_eq!(re8.len(), n * 8);
-    debug_assert_eq!(im8.len(), n * 8);
+    debug_assert_eq!(src_re.len(), n * 8);
+    debug_assert_eq!(src_im.len(), n * 8);
+    debug_assert_eq!(dst_re.len(), n * 8);
+    debug_assert_eq!(dst_im.len(), n * 8);
 
-    // Bit-reversal permutation on 8-lane blocks.
     let bits = n.trailing_zeros();
-    for i in 0..n {
-        let j = (i as u32).reverse_bits() >> (32 - bits);
-        let j = j as usize;
-        if j > i {
-            let a = f32x8::load_t(token, (&re8[i * 8..i * 8 + 8]).try_into().unwrap());
-            let b = f32x8::load_t(token, (&re8[j * 8..j * 8 + 8]).try_into().unwrap());
-            b.store((&mut re8[i * 8..i * 8 + 8]).try_into().unwrap());
-            a.store((&mut re8[j * 8..j * 8 + 8]).try_into().unwrap());
-            let a = f32x8::load_t(token, (&im8[i * 8..i * 8 + 8]).try_into().unwrap());
-            let b = f32x8::load_t(token, (&im8[j * 8..j * 8 + 8]).try_into().unwrap());
-            b.store((&mut im8[i * 8..i * 8 + 8]).try_into().unwrap());
-            a.store((&mut im8[j * 8..j * 8 + 8]).try_into().unwrap());
+    let mut s = 0usize;
+
+    if stages.len() >= 2 {
+        // The bit-reversal rides the first fused pair: logical slot `p`
+        // holds `src[rev(p)]`, so loads are permuted row gathers while
+        // stores stay contiguous — the src→dst split makes the gather
+        // alias-safe where an in-place version would read rows it had
+        // already overwritten. Stage-0/1 twiddles are exactly (1,0) and
+        // {(1,0), w1[1]≈−i}, so the pass is adds, subs, and one twiddle
+        // multiply per 4 elements.
+        let tw1 = &stages[1];
+        // Row gather for one 4-element block: `src[rev(start+q)]`.
+        let load4 = |start: usize| {
+            let rev = |q: usize| (((start + q) as u32).reverse_bits() >> (32 - bits)) as usize * 8;
+            let (p0, p1, p2, p3) = (rev(0), rev(1), rev(2), rev(3));
+            (
+                f32x8::load_t(token, (&src_re[p0..p0 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_im[p0..p0 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_re[p1..p1 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_im[p1..p1 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_re[p2..p2 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_im[p2..p2 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_re[p3..p3 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_im[p3..p3 + 8]).try_into().unwrap()),
+            )
+        };
+        // Software-pipelined: the scattered row loads for `start+4` issue a
+        // full iteration before their values are needed, hiding the gather
+        // latency behind this block's butterflies and stores.
+        let mut x = load4(0);
+        for start in (0..n).step_by(4) {
+            let (x0re, x0im, x1re, x1im, x2re, x2im, x3re, x3im) = x;
+            if start + 4 < n {
+                x = load4(start + 4);
+            }
+            // Stage 0 (twiddle 1): y = x±x on both pairs.
+            let (y0re, y1re) = (x0re + x1re, x0re - x1re);
+            let (y0im, y1im) = (x0im + x1im, x0im - x1im);
+            let (y2re, y3re) = (x2re + x3re, x2re - x3re);
+            let (y2im, y3im) = (x2im + x3im, x2im - x3im);
+            // Stage 1: tw1[0] is exactly (1,0) — y2 through unchanged;
+            // tw1[1] is the stored ≈−i twiddle (a real cmul, kept for
+            // bit-parity with the unfused path).
+            let i0 = start * 8;
+            let (i1, i2, i3) = (i0 + 8, i0 + 16, i0 + 24);
+            (y0re + y2re).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
+            (y0im + y2im).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
+            (y0re - y2re).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
+            (y0im - y2im).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
+            let (w1re_b, w1im_b) = (
+                f32x8::splat_t(token, tw1[1].re),
+                f32x8::splat_t(token, tw1[1].im),
+            );
+            let tre = y3re * w1re_b - y3im * w1im_b;
+            let tim = y3re * w1im_b + y3im * w1re_b;
+            (y1re + tre).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
+            (y1im + tim).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
+            (y1re - tre).store((&mut dst_re[i3..i3 + 8]).try_into().unwrap());
+            (y1im - tim).store((&mut dst_im[i3..i3 + 8]).try_into().unwrap());
+        }
+        s = 2;
+    } else {
+        // n <= 2: bit-reversed gather into dst; the single-stage loop
+        // below applies the one twiddle.
+        for i in 0..n {
+            let j = ((i as u32).reverse_bits() >> (32 - bits)) as usize;
+            let a = f32x8::load_t(token, (&src_re[j * 8..j * 8 + 8]).try_into().unwrap());
+            a.store((&mut dst_re[i * 8..i * 8 + 8]).try_into().unwrap());
+            let a = f32x8::load_t(token, (&src_im[j * 8..j * 8 + 8]).try_into().unwrap());
+            a.store((&mut dst_im[i * 8..i * 8 + 8]).try_into().unwrap());
         }
     }
 
@@ -328,7 +411,6 @@ fn fft_batch8_inner(
     // stores once per pair instead of once per stage — identical
     // arithmetic, half the passes over the planes. An odd stage count
     // leaves the final stage to the single-stage loop below.
-    let mut s = 0usize;
     while s + 1 < stages.len() {
         let (tw0, tw1) = (&stages[s], &stages[s + 1]);
         let half = tw0.len();
@@ -350,36 +432,36 @@ fn fft_batch8_inner(
                 let i0 = (start + k) * 8;
                 let (i1, i2, i3) = (i0 + h8, i0 + h16, i0 + h24);
                 // Stage s: butterflies (i0,i1) and (i2,i3), same twiddle.
-                let vre = f32x8::load_t(token, (&re8[i1..i1 + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&im8[i1..i1 + 8]).try_into().unwrap());
+                let vre = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&dst_im[i1..i1 + 8]).try_into().unwrap());
                 let tre = vre * w0re - vim * w0im;
                 let tim = vre * w0im + vim * w0re;
-                let ure = f32x8::load_t(token, (&re8[i0..i0 + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&im8[i0..i0 + 8]).try_into().unwrap());
+                let ure = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
                 let (y0re, y1re) = (ure + tre, ure - tre);
                 let (y0im, y1im) = (uim + tim, uim - tim);
-                let vre = f32x8::load_t(token, (&re8[i3..i3 + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&im8[i3..i3 + 8]).try_into().unwrap());
+                let vre = f32x8::load_t(token, (&dst_re[i3..i3 + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&dst_im[i3..i3 + 8]).try_into().unwrap());
                 let tre = vre * w0re - vim * w0im;
                 let tim = vre * w0im + vim * w0re;
-                let ure = f32x8::load_t(token, (&re8[i2..i2 + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&im8[i2..i2 + 8]).try_into().unwrap());
+                let ure = f32x8::load_t(token, (&dst_re[i2..i2 + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&dst_im[i2..i2 + 8]).try_into().unwrap());
                 let (y2re, y3re) = (ure + tre, ure - tre);
                 let (y2im, y3im) = (uim + tim, uim - tim);
                 // Stage s+1: butterflies (i0,i2) with tw1[k], (i1,i3) with
                 // tw1[k+half].
                 let tre = y2re * w1re_a - y2im * w1im_a;
                 let tim = y2re * w1im_a + y2im * w1re_a;
-                (y0re + tre).store((&mut re8[i0..i0 + 8]).try_into().unwrap());
-                (y0im + tim).store((&mut im8[i0..i0 + 8]).try_into().unwrap());
-                (y0re - tre).store((&mut re8[i2..i2 + 8]).try_into().unwrap());
-                (y0im - tim).store((&mut im8[i2..i2 + 8]).try_into().unwrap());
+                (y0re + tre).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
+                (y0im + tim).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
+                (y0re - tre).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
+                (y0im - tim).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
                 let tre = y3re * w1re_b - y3im * w1im_b;
                 let tim = y3re * w1im_b + y3im * w1re_b;
-                (y1re + tre).store((&mut re8[i1..i1 + 8]).try_into().unwrap());
-                (y1im + tim).store((&mut im8[i1..i1 + 8]).try_into().unwrap());
-                (y1re - tre).store((&mut re8[i3..i3 + 8]).try_into().unwrap());
-                (y1im - tim).store((&mut im8[i3..i3 + 8]).try_into().unwrap());
+                (y1re + tre).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
+                (y1im + tim).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
+                (y1re - tre).store((&mut dst_re[i3..i3 + 8]).try_into().unwrap());
+                (y1im - tim).store((&mut dst_im[i3..i3 + 8]).try_into().unwrap());
             }
         }
         s += 2;
@@ -393,25 +475,32 @@ fn fft_batch8_inner(
                 let b = (start + k + half) * 8;
                 let wre = f32x8::splat_t(token, w.re);
                 let wim = f32x8::splat_t(token, w.im);
-                let ure = f32x8::load_t(token, (&re8[a..a + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
-                let vre = f32x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&im8[b..b + 8]).try_into().unwrap());
+                let ure = f32x8::load_t(token, (&dst_re[a..a + 8]).try_into().unwrap());
+                let uim = f32x8::load_t(token, (&dst_im[a..a + 8]).try_into().unwrap());
+                let vre = f32x8::load_t(token, (&dst_re[b..b + 8]).try_into().unwrap());
+                let vim = f32x8::load_t(token, (&dst_im[b..b + 8]).try_into().unwrap());
                 let tre = vre * wre - vim * wim;
                 let tim = vre * wim + vim * wre;
-                (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
-                (uim + tim).store((&mut im8[a..a + 8]).try_into().unwrap());
-                (ure - tre).store((&mut re8[b..b + 8]).try_into().unwrap());
-                (uim - tim).store((&mut im8[b..b + 8]).try_into().unwrap());
+                (ure + tre).store((&mut dst_re[a..a + 8]).try_into().unwrap());
+                (uim + tim).store((&mut dst_im[a..a + 8]).try_into().unwrap());
+                (ure - tre).store((&mut dst_re[b..b + 8]).try_into().unwrap());
+                (uim - tim).store((&mut dst_im[b..b + 8]).try_into().unwrap());
             }
         }
     }
 }
 
 /// [`fft_batch8_inner`] with runtime tier dispatch.
-fn fft_batch8(re8: &mut [f32], im8: &mut [f32], n: usize, stages: &[Vec<Complex>]) {
+fn fft_batch8(
+    src_re: &[f32],
+    src_im: &[f32],
+    dst_re: &mut [f32],
+    dst_im: &mut [f32],
+    n: usize,
+    stages: &[Vec<Complex>],
+) {
     archmage::attuned!(
-        fft_batch8_inner(re8, im8, n, stages),
+        fft_batch8_inner(src_re, src_im, dst_re, dst_im, n, stages),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -734,8 +823,15 @@ fn fft2_rows_conj_mul(
             buf.par_chunks_mut(width * RB)
                 .enumerate()
                 .map_init(
-                    || (vec![0.0f32; width * RB], vec![0.0f32; width * RB]),
-                    |(re8, im8), (ci, chunk)| {
+                    || {
+                        (
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                        )
+                    },
+                    |(re8, im8, re8b, im8b), (ci, chunk)| {
                         let nb = chunk.len() / width;
                         for x in 0..width {
                             for j in 0..nb {
@@ -751,11 +847,11 @@ fn fft2_rows_conj_mul(
                                 im8[x * RB + j] = 0.0;
                             }
                         }
-                        fft_batch8(re8, im8, width, stages);
+                        fft_batch8(re8, im8, re8b, im8b, width, stages);
                         for x in 0..width {
                             for j in 0..nb {
                                 chunk[j * width + x] =
-                                    Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                                    Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
                             }
                         }
                     },
@@ -765,6 +861,8 @@ fn fft2_rows_conj_mul(
         }
         let mut re8 = vec![0.0f32; width * RB];
         let mut im8 = vec![0.0f32; width * RB];
+        let mut re8b = vec![0.0f32; width * RB];
+        let mut im8b = vec![0.0f32; width * RB];
         let mut y = 0usize;
         while y < height {
             let nb = RB.min(height - y);
@@ -782,10 +880,10 @@ fn fft2_rows_conj_mul(
                     im8[x * RB + j] = 0.0;
                 }
             }
-            fft_batch8(&mut re8, &mut im8, width, stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, width, stages);
             for x in 0..width {
                 for j in 0..nb {
-                    buf[(y + j) * width + x] = Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                    buf[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
                 }
             }
             y += nb;
@@ -813,14 +911,16 @@ fn fft2_rows_conj_mul(
                     (
                         vec![0.0f32; m * 8],
                         vec![0.0f32; m * 8],
+                        vec![0.0f32; m * 8],
+                        vec![0.0f32; m * 8],
                         vec![Complex::default(); m],
                     )
                 },
-                |(re8, im8, a), chunk| {
+                |(re8, im8, re8b, im8b, a), chunk| {
                     let nb = chunk.len() / width;
                     let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
                     if nb == 8 {
-                        wplan.run_bluestein8(&mut bufs, re8, im8);
+                        wplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
                     } else {
                         for row in bufs {
                             wplan.run_bluestein(row, a);
@@ -835,7 +935,9 @@ fn fft2_rows_conj_mul(
                 // Serial path runs the same eight-lane batches, reusing one
                 // scratch set across the sweep instead of allocating per row.
                 let m = *m;
-                let (mut re8, mut im8, mut a) = (
+                let (mut re8, mut im8, mut re8b, mut im8b, mut a) = (
+                    vec![0.0f32; m * 8],
+                    vec![0.0f32; m * 8],
                     vec![0.0f32; m * 8],
                     vec![0.0f32; m * 8],
                     vec![Complex::default(); m],
@@ -844,7 +946,7 @@ fn fft2_rows_conj_mul(
                     let nb = chunk.len() / width;
                     let mut bufs: Vec<&mut [Complex]> = chunk.chunks_mut(width).collect();
                     if nb == 8 {
-                        wplan.run_bluestein8(&mut bufs, &mut re8, &mut im8);
+                        wplan.run_bluestein8(&mut bufs, &mut re8, &mut im8, &mut re8b, &mut im8b);
                     } else {
                         for row in bufs {
                             wplan.run_bluestein(row, &mut a);
@@ -893,12 +995,20 @@ fn fft2_cols_conj_scale(
         if width >= 4 * CB && height >= 4 * CB {
             use rayon::prelude::*;
             const SB: usize = 64; // blocks per super-block
+            // The super-block buffers are sized for a full sweep once and
+            // reused — each iteration rewrites every cell it reads.
+            let mut re_all = vec![0.0f32; SB * height * CB];
+            let mut im_all = vec![0.0f32; SB * height * CB];
+            let mut re_allb = vec![0.0f32; SB * height * CB];
+            let mut im_allb = vec![0.0f32; SB * height * CB];
             let mut x0 = 0usize;
             while x0 < width {
                 let nb_cols = (SB * CB).min(width - x0);
                 let nblocks = nb_cols.div_ceil(CB);
-                let mut re_all = vec![0.0f32; nblocks * height * CB];
-                let mut im_all = vec![0.0f32; nblocks * height * CB];
+                let re_all = &mut re_all[..nblocks * height * CB];
+                let im_all = &mut im_all[..nblocks * height * CB];
+                let re_allb = &mut re_allb[..nblocks * height * CB];
+                let im_allb = &mut im_allb[..nblocks * height * CB];
                 {
                     let ro: &[Complex] = buf;
                     re_all
@@ -920,7 +1030,11 @@ fn fft2_cols_conj_scale(
                 re_all
                     .par_chunks_mut(height * CB)
                     .zip(im_all.par_chunks_mut(height * CB))
-                    .for_each(|(rc, ic)| fft_batch8(rc, ic, height, stages));
+                    .zip(re_allb.par_chunks_mut(height * CB))
+                    .zip(im_allb.par_chunks_mut(height * CB))
+                    .for_each(|(((rc, ic), rcb), icb)| {
+                        fft_batch8(rc, ic, rcb, icb, height, stages)
+                    });
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
                 buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
@@ -929,7 +1043,7 @@ fn fft2_cols_conj_scale(
                         for l in 0..CB {
                             let x = x0 + b * CB + l;
                             if x < width {
-                                let (re, im) = (re_all[base + l], im_all[base + l]);
+                                let (re, im) = (re_allb[base + l], im_allb[base + l]);
                                 row[x] =
                                     Complex::new(re * s, if negate { -im * s } else { im * s });
                             }
@@ -942,6 +1056,8 @@ fn fft2_cols_conj_scale(
         }
         let mut re8 = vec![0.0f32; height * CB];
         let mut im8 = vec![0.0f32; height * CB];
+        let mut re8b = vec![0.0f32; height * CB];
+        let mut im8b = vec![0.0f32; height * CB];
         let mut x = 0usize;
         while x < width {
             let nb = CB.min(width - x);
@@ -956,20 +1072,21 @@ fn fft2_cols_conj_scale(
                     im8[y * CB + j] = 0.0;
                 }
             }
-            fft_batch8(&mut re8, &mut im8, height, stages);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, height, stages);
             match scale {
                 Some(s) => {
                     for y in 0..height {
                         for j in 0..nb {
                             buf[y * width + x + j] =
-                                Complex::new(re8[y * CB + j] * s, -im8[y * CB + j] * s);
+                                Complex::new(re8b[y * CB + j] * s, -im8b[y * CB + j] * s);
                         }
                     }
                 }
                 None => {
                     for y in 0..height {
                         for j in 0..nb {
-                            buf[y * width + x + j] = Complex::new(re8[y * CB + j], im8[y * CB + j]);
+                            buf[y * width + x + j] =
+                                Complex::new(re8b[y * CB + j], im8b[y * CB + j]);
                         }
                     }
                 }
@@ -994,11 +1111,13 @@ fn fft2_cols_conj_scale(
         const SB: usize = 64;
         let s = scale.unwrap_or(1.0);
         let negate = scale.is_some();
+        // Reused across super-blocks — every cell is regathered each pass.
+        let mut cols_all = vec![Complex::default(); SB * height * CB];
         let mut x0 = 0usize;
         while x0 < width {
             let nb_cols = (SB * CB).min(width - x0);
             let nblocks = nb_cols.div_ceil(CB);
-            let mut cols_all = vec![Complex::default(); nblocks * height * CB];
+            let cols_all = &mut cols_all[..nblocks * height * CB];
             {
                 let ro: &[Complex] = buf;
                 cols_all
@@ -1009,10 +1128,12 @@ fn fft2_cols_conj_scale(
                             (
                                 vec![0.0f32; m * CB],
                                 vec![0.0f32; m * CB],
+                                vec![0.0f32; m * CB],
+                                vec![0.0f32; m * CB],
                                 vec![Complex::default(); m],
                             )
                         },
-                        |(re8, im8, a), (b, block)| {
+                        |(re8, im8, re8b, im8b, a), (b, block)| {
                             let bx = x0 + b * CB;
                             let nb = CB.min(width - bx);
                             for y0 in (0..height).step_by(8) {
@@ -1030,7 +1151,7 @@ fn fft2_cols_conj_scale(
                             let mut bufs: Vec<&mut [Complex]> =
                                 block.chunks_mut(height).take(nb).collect();
                             if nb == CB {
-                                hplan.run_bluestein8(&mut bufs, re8, im8);
+                                hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
                             } else {
                                 for c in bufs {
                                     hplan.run_bluestein(c, a);
@@ -1074,6 +1195,8 @@ fn fft2_cols_conj_scale(
         Some((
             vec![0.0f32; m * CB],
             vec![0.0f32; m * CB],
+            vec![0.0f32; m * CB],
+            vec![0.0f32; m * CB],
             vec![Complex::default(); m],
         ))
     } else {
@@ -1095,10 +1218,10 @@ fn fft2_cols_conj_scale(
             );
         }
         match &mut blue {
-            Some((re8, im8, a)) => {
+            Some((re8, im8, re8b, im8b, a)) => {
                 let mut bufs: Vec<&mut [Complex]> = cols.chunks_mut(height).take(nb).collect();
                 if nb == CB {
-                    hplan.run_bluestein8(&mut bufs, re8, im8);
+                    hplan.run_bluestein8(&mut bufs, re8, im8, re8b, im8b);
                 } else {
                     for c in bufs {
                         hplan.run_bluestein(c, a);
@@ -1273,6 +1396,57 @@ mod tests {
         }
     }
 
+    /// `fft_batch8` vs the scalar [`fft_radix2_planned`] — eight distinct
+    /// lane inputs, so a broken row gather can't hide behind identical
+    /// data (the failure mode that once masked a bad permutation).
+    #[test]
+    fn batch8_matches_scalar_per_lane() {
+        for n in [4usize, 8, 16, 32, 64] {
+            let stages = radix2_stages(n);
+            let xs: Vec<Vec<Complex>> = (0..8)
+                .map(|j| {
+                    seeded(n)
+                        .iter()
+                        .map(|v| Complex::new(v.re + j as f32, v.im - j as f32))
+                        .collect()
+                })
+                .collect();
+            let wants: Vec<Vec<Complex>> = xs
+                .iter()
+                .map(|x| {
+                    let mut w = x.clone();
+                    fft_radix2_planned(&mut w, &stages);
+                    w
+                })
+                .collect();
+            let mut re8 = vec![0f32; n * 8];
+            let mut im8 = vec![0f32; n * 8];
+            let mut re8b = vec![0f32; n * 8];
+            let mut im8b = vec![0f32; n * 8];
+            for k in 0..n {
+                for j in 0..8 {
+                    re8[k * 8 + j] = xs[j][k].re;
+                    im8[k * 8 + j] = xs[j][k].im;
+                }
+            }
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, n, &stages);
+            for k in 0..n {
+                for j in 0..8 {
+                    let d = (re8b[k * 8 + j] - wants[j][k].re).abs()
+                        + (im8b[k * 8 + j] - wants[j][k].im).abs();
+                    assert!(
+                        d < 1e-4,
+                        "n={n} k={k} j={j}: got ({},{}) want ({},{})",
+                        re8b[k * 8 + j],
+                        im8b[k * 8 + j],
+                        wants[j][k].re,
+                        wants[j][k].im
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn fft2_ifft2_round_trips() {
         for (w, h) in [(4usize, 4usize), (8, 5), (13, 7), (32, 16)] {
@@ -1280,8 +1454,11 @@ mod tests {
             let mut y = x.clone();
             fft2(&mut y, w, h);
             ifft2(&mut y, w, h);
-            for (a, b) in y.iter().zip(&x) {
-                assert!((a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4);
+            for (i, (a, b)) in y.iter().zip(&x).enumerate() {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4,
+                    "{w}x{h} i={i}: {a:?} vs {b:?}"
+                );
             }
         }
     }
