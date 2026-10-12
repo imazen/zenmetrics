@@ -1,0 +1,22 @@
+date=2026-10-12 host=r7900x cpu="AMD Ryzen 9 7900X" nproc=24
+toolchain=rustc 1.99.0 profile=release target-cpu=default
+method=crates/mad-iqa/examples/wall.rs (direct mad_rgb8 call, synthetic
+  deterministic input pair; 1 rep per row). `serial` = default feature set,
+  `parallel-feature` = mad-iqa built with --features parallel.
+stack:
+  baseline = origin/master tip (upstream batch8 wired under `parallel` only)
+  +"perf(mad-iqa, hdrvdp): run the Bluestein batches on the serial path too"
+  +"perf(mad-iqa): fuse the csf/gabor filter multiply into the inverse fft"
+parity:
+  score_hi/score_lo identical across all three stack levels (batch and
+  fusion are bit-exact). mad-iqa tests incl. plane_goldens pass serial
+  and --features parallel on the tip. The cpu-profile harness could not
+  be rebuilt (zenmetrics-api fails against the mid-migration fast-ssim2
+  sibling checkout, unrelated), so the photo 18.613801284574702 sentinel
+  was not re-run on this stack.
+notes:
+  3355x2516 serial baseline row measured on the stack parent (upstream tip,
+  mad-iqa untouched). i265 post-sweep doc records mad 1t 26.9s — that leg ran
+  the metrics-parallel binary pinned to one core, i.e. the same batch8 code
+  these rows enable for the default build.
+  run-heavy/niced environment; absolute ms are ±5% run to run.

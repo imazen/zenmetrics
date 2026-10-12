@@ -169,3 +169,31 @@ cost of the ones that follow (allocator or cache state; not root-caused).
 At 8.4 MP the interleaved and isolated figures agree within ~5%, which is
 why the threading table above uses 8.4 MP. For 1 MP work, time each metric
 in its own process or its own zenbench group.
+
+## Post-optimization addendum (2026-10-12, same host)
+
+The Oct-11 i265 sweep (`cpu_metrics_1t8t_2026-10-11-i265.md`) covers the
+parallel-build numbers for the mad/mdctpsnr work that landed upstream.
+This note covers the remaining default-build gap on this host: upstream
+wired the Bluestein batch8 path under `parallel` only, so the *serial*
+build still ran scalar per-row transforms (their 26.9 s "1t" i265 leg
+used the metrics-parallel binary pinned to one core — batch8 running on
+a single thread).
+
+Direct A/B on `crates/mad-iqa/examples/wall.rs`, synthetic 3355×2516,
+release, 1 rep (raw rows + conditions:
+`cpu_metrics_1t8t_2026-10-09/serial_batch_2026-10-12/`):
+
+| mad-iqa build | wall ms | score (hi/lo) |
+|---|--:|---|
+| default, upstream tip | 60,862.6 | 466.6273 / 5.4949 |
+| + serial Bluestein batch8 (rows+cols) | 27,737.8 | identical |
+| + filter multiply fused into ifft2 | 28,060.6 | identical |
+
+The default build now gets the same ~27 s the parallel binary delivers
+on one core (2.2× vs the old serial path); the parallel feature still
+takes the full-threaded path further (1.4 s at 2000×1400 vs 8.0 s
+serial on this stack). Scores bit-identical at every step; crate tests
+including `plane_goldens` pass with and without `parallel`. The same
+batch8 core was ported to `crates/hdrvdp/src/fft.rs` (the two files are
+kept in step).

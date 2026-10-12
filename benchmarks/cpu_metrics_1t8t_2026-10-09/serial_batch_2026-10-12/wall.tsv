@@ -1,0 +1,6 @@
+build	rev_desc	size	wall_ms	score_hi	score_lo
+serial	default-build-no-parallel	3355x2516	60862.6	466.6273	5.4949
+serial	+serial-bluestein-batch8	3355x2516	27737.8	466.6273	5.4949
+serial	+serial-batch8+ifft-filter-fusion	3355x2516	28060.6	466.6273	5.4949
+serial	+serial-batch8+ifft-filter-fusion	2000x1400	7975.8	480.3883	5.5449
+parallel-feature	+serial-batch8+ifft-filter-fusion	2000x1400	1406.2	480.3883	5.5449
