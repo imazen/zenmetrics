@@ -61,6 +61,9 @@ use alloc::vec::Vec;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(target_arch = "x86_64")]
+use archmage::{SimdToken, X64V3Token, attune};
+
 /// Errors from [`mdct_psnr_srgb8`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
@@ -218,53 +221,18 @@ fn ef(x: f32) -> f32 {
         libm::expf(x)
     }
 }
-/// glibc libmvec `_ZGVdN8vv_powf` — the 8-lane `powf` the reference's
-/// `-ffast-math` build vectorizes the `mapped` loop into. Scalar `powf`
-/// disagrees with it on ~5% of inputs by 1 ulp; on x86_64+glibc we call the
-/// real vector routine through `asm!` (stable ymm_reg operands). Elsewhere
-/// we fall back to scalar `powf` — documented in DIVERGENCES.md.
-#[cfg(all(
-    feature = "std",
-    target_arch = "x86_64",
-    target_os = "linux",
-    target_env = "gnu"
-))]
-mod libmvec {
+/// Vector helpers for the measured hot loops, built on magetypes'
+/// mid-precision kernels (`pow_midp`, `exp_midp_unchecked`) through the
+/// safe `f32x8` API — no extern calls, no `asm!`, no `transmute`. These
+/// kernels differ from glibc's `_ZGVdN8*` vector routines (and from scalar
+/// `powf`/`expf`) by up to ~30 ulp per lane — within the golden tolerance —
+/// and the `#[attune]` bodies dispatch on `X64V3Token` rather than probing
+/// `is_x86_feature_detected!` directly.
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+mod vecops {
     use archmage::{SimdToken, X64V3Token, attune};
     use core::arch::x86_64::__m256;
-
-    #[link(name = "mvec")]
-    unsafe extern "C" {
-        fn _ZGVdN8vv_powf();
-        fn _ZGVdN8v_expf();
-    }
-
-    /// `expf` on 8 lanes, bit-identical to the reference's vectorized call
-    /// (glibc's real SVML-style kernel — differs from scalar `expf` by
-    /// 1 ulp on a substantial fraction of inputs; verified via direct call).
-    ///
-    /// # Safety
-    /// Requires AVX2 at runtime.
-    #[target_feature(enable = "avx2")]
-    unsafe fn expf8(x: &[f32; 8]) -> [f32; 8] {
-        let r: __m256;
-        // SAFETY: `x` points to 8 readable `f32` (one ymmword for the vmovups);
-        // `_ZGVdN8v_expf` is glibc's vector-ABI `expf` (ymm0 in, ymm0 out) and
-        // `clobber_abi("C")` declares the call's register clobbers. AVX2 is
-        // required by this fn's `#[target_feature]` contract.
-        unsafe {
-            core::arch::asm!(
-                "vmovups ymm0, ymmword ptr [{x}]",
-                "call {f}",
-                x = in(reg) x.as_ptr(),
-                f = sym _ZGVdN8v_expf,
-                out("ymm0") r,
-                clobber_abi("C"),
-            );
-        }
-        // SAFETY: `__m256` and `[f32; 8]` have identical layout.
-        unsafe { core::mem::transmute::<__m256, [f32; 8]>(r) }
-    }
+    use magetypes::simd::generic::f32x8;
 
     /// `Pooling::MeasureInBand` with the AVX2 vector `expf`: 8-lane chunks,
     /// `err³·√err` per lane, lanes with `err ≤ 0` keep their errorline value.
@@ -286,11 +254,12 @@ mod libmvec {
     }
 
     /// One 8-lane chunk of [`measure_in_band`]: the same lane-local ops the
-    /// scalar loop runs, so each output lane is bit-identical. `vsqrtps` and
-    /// `vblendvps` are exact per lane; `expf8` keeps the vector `expf` the
-    /// reference executes.
+    /// scalar loop runs, so each output lane matches. `vsqrtps` and
+    /// `vblendvps` are exact per lane; `exp_midp_unchecked` supplies the
+    /// vector `expf` (mid-precision exp2 kernel, ≤~2 ulp near zero).
     #[attune(v3, import_intrinsics)]
     fn measure_in_band_chunk8(
+        token: X64V3Token,
         r: &[f32; 8],
         d: &[f32; 8],
         rm: &[f32; 8],
@@ -318,8 +287,11 @@ mod libmvec {
         );
         let mut neg = [0.0f32; 8];
         _mm256_storeu_ps(&mut neg, _mm256_xor_ps(p, _mm256_set1_ps(-0.0)));
-        // SAFETY: the `#[attune(v3)]` region guarantees AVX2 — `expf8`'s contract.
-        let e = _mm256_loadu_ps(&unsafe { expf8(&neg) });
+        let e = _mm256_loadu_ps(
+            &f32x8::<X64V3Token>::from_array_t(token, neg)
+                .exp_midp_unchecked()
+                .to_array(),
+        );
         let cur = _mm256_loadu_ps(el);
         _mm256_storeu_ps(el, _mm256_blendv_ps(cur, _mm256_mul_ps(cur, e), keep));
     }
@@ -329,7 +301,7 @@ mod libmvec {
     /// lanes → keep-mask off → blended out).
     #[attune(wrap, import_intrinsics)]
     fn measure_in_band_v3(
-        _token: X64V3Token,
+        token: X64V3Token,
         refline: &[f32],
         dstline: &[f32],
         refmask: &[f32],
@@ -349,7 +321,9 @@ mod libmvec {
         let (dmc, _) = dstmask.as_chunks::<8>();
         let (ec, et) = errorline.as_chunks_mut::<8>();
         for i in 0..ec.len() {
-            measure_in_band_chunk8(&rc[i], &dc[i], &rmc[i], &dmc[i], &mut ec[i], visv, absmask);
+            measure_in_band_chunk8(
+                token, &rc[i], &dc[i], &rmc[i], &dmc[i], &mut ec[i], visv, absmask,
+            );
         }
         // Partial tail: zero-pad to 8 lanes and run the same vector chunk —
         // the previous chunked loop did exactly this.
@@ -364,81 +338,37 @@ mod libmvec {
             rm[..t].copy_from_slice(&refmask[off..off + t]);
             dm[..t].copy_from_slice(&dstmask[off..off + t]);
             el[..t].copy_from_slice(et);
-            measure_in_band_chunk8(&r, &d, &rm, &dm, &mut el, visv, absmask);
+            measure_in_band_chunk8(token, &r, &d, &rm, &dm, &mut el, visv, absmask);
             et.copy_from_slice(&el[..t]);
         }
     }
 
-    /// `powf` on 8 lanes, bit-identical to the reference's vectorized call.
-    ///
-    /// # Safety
-    /// Requires AVX2 at runtime.
-    #[target_feature(enable = "avx2")]
-    unsafe fn powf8(x: &[f32; 8], y: &[f32; 8]) -> [f32; 8] {
-        let r: __m256;
-        // SAFETY: `x` and `y` each point to 8 readable `f32` (one ymmword per
-        // vmovups); `_ZGVdN8vv_powf` is glibc's vector-ABI `powf` (ymm0, ymm1
-        // in, ymm0 out) and `clobber_abi("C")` declares the call's register
-        // clobbers. AVX2 is required by this fn's `#[target_feature]` contract.
-        unsafe {
-            core::arch::asm!(
-                "vmovups ymm0, ymmword ptr [{x}]",
-                "vmovups ymm1, ymmword ptr [{y}]",
-                "call {f}",
-                x = in(reg) x.as_ptr(),
-                y = in(reg) y.as_ptr(),
-                f = sym _ZGVdN8vv_powf,
-                out("ymm0") r,
-                clobber_abi("C"),
-            );
-        }
-        // SAFETY: `__m256` and `[f32; 8]` have identical layout.
-        unsafe { core::mem::transmute::<__m256, [f32; 8]>(r) }
-    }
-
     /// `mapped[i] = |in[i]|·vis` raised to `e`, matching the reference's
-    /// loop structure: full 8-lane vector chunks, a 4-lane epilogue chunk
-    /// (`_ZGVbN4vv_powf`, bit-identical per lane), scalar `powf` tail <4.
+    /// loop structure: 8-lane vector chunks, then a scalar `powf` tail.
     pub(crate) fn powf_mapped(out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
-        let n = out.len();
-        if !std::arch::is_x86_feature_detected!("avx2") {
+        if let Some(token) = X64V3Token::summon() {
+            powf_mapped_v3_t(token, out, inp, vis, e);
+        } else {
             for (o, &v) in out.iter_mut().zip(inp) {
                 *o = super::pf(v.abs() * vis, e);
             }
-            return;
         }
-        let ye = [e; 8];
-        let full = n / 8;
-        let rem = n % 8;
-        // SAFETY: avx2 detected above.
-        unsafe {
-            for k in 0..full {
-                let i = k * 8;
-                let mut x = [0.0f32; 8];
-                for j in 0..8 {
-                    x[j] = inp[i + j].abs() * vis;
-                }
-                let r = powf8(&x, &ye);
-                out[i..i + 8].copy_from_slice(&r);
-            }
-            if rem >= 4 {
-                let i = n - rem;
-                let mut x = [0.0f32; 8];
-                for j in 0..rem.min(8) {
-                    x[j] = inp[i + j].abs() * vis;
-                }
-                let r = powf8(&x, &ye);
-                let take = rem.min(4).min(8);
-                out[i..i + take.min(rem)].copy_from_slice(&r[..take.min(rem)]);
-                // scalar tail for the final rem-4 lanes
-                for j in 4..rem {
-                    out[i + j] = super::pf(inp[i + j].abs() * vis, e);
-                }
-            } else {
-                for j in 0..rem {
-                    out[n - rem + j] = super::pf(inp[n - rem + j].abs() * vis, e);
-                }
-            }
+    }
+
+    /// The AVX2 body of [`powf_mapped`]: mid-precision vector `pow`
+    /// (`pow_midp` — edge-checked, so `0^e` stays exact 0) over contiguous
+    /// 8-lane chunks; the remainder keeps scalar `powf`.
+    #[attune]
+    fn powf_mapped_v3_t(token: X64V3Token, out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
+        type V = f32x8<X64V3Token>;
+        let visv = V::splat_t(token, vis);
+        let (ic, it) = V::partition_slice_t(token, inp);
+        let (oc, ot) = V::partition_slice_mut_t(token, out);
+        for (i, o) in ic.iter().zip(oc.iter_mut()) {
+            (V::load_t(token, i).abs() * visv).pow_midp(e).store(o);
+        }
+        for (o, &v) in ot.iter_mut().zip(it) {
+            *o = super::pf(v.abs() * vis, e);
         }
     }
 }
@@ -482,15 +412,11 @@ fn compute_mask_impl(
 /// the partial-register intrinsic), so the whole loop ran one element at
 /// a time. `vrcpps` applies the same per-lane approximation, and the
 /// FMA/abs chains preserve the serial per-element op order — bit-identical
-/// to the safe impl (verified by the golden tests).
+/// to the safe impl (verified by the golden tests). Token proof wrapper:
+/// callers summon `X64V3Token`, which guarantees `fma`/`avx2`.
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma", enable = "avx2")]
-///
-/// # Safety
-/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`]. Lanes stay disjoint; the scalar tail uses the safe impl.
-unsafe fn compute_mask_fma(mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
-    use core::arch::x86_64::*;
+#[attune(import_intrinsics)]
+fn compute_mask_fma_v3_t(_token: X64V3Token, mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
     let add = &mask_obj.add_ring;
     let mid_row = &mask_obj.in_ring[MASK_SIZE >> 1];
     let (m0, m1, m2) = (kernel[0], kernel[1], kernel[2]);
@@ -509,39 +435,43 @@ unsafe fn compute_mask_fma(mask_obj: &mut BandMask, kernel: &[f32; MASK_SIZE]) {
     let visv = _mm256_set1_ps(vis);
     let w = w13 & !7;
     for i in (0..w).step_by(8) {
-        // SAFETY: `i + 8 <= w <= w13`; `add`/`mask`/`coeff` are `w13`
-        // wide, `mid_row` is `w8 = w13 + MASK_SIZE - 1` wide, so the
+        // `i + 8 <= w <= w13`; `add`/`mask`/`coeff` are `w13` wide and
+        // `mid_row` is `w8 = w13 + MASK_SIZE - 1` wide, so the
         // `i + 2 ..= i + 9` read ends at `w + 1 <= w13 + 1 < w8`.
-        // Loads/stores are unaligned by construction.
-        unsafe {
-            let s04 = _mm256_add_ps(
-                _mm256_loadu_ps(add[0].as_ptr().add(i)),
-                _mm256_loadu_ps(add[4].as_ptr().add(i)),
-            );
-            let sum = _mm256_mul_ps(m0v, s04);
-            let s13 = _mm256_add_ps(
-                _mm256_loadu_ps(add[1].as_ptr().add(i)),
-                _mm256_loadu_ps(add[3].as_ptr().add(i)),
-            );
-            let sum = _mm256_fmadd_ps(m1v, s13, sum);
-            let sum = _mm256_fmadd_ps(m2v, _mm256_loadu_ps(add[2].as_ptr().add(i)), sum);
-            let den = _mm256_fmadd_ps(sum, inv_ms2v, basev);
-            // mask = base·(2r − den·r²): the scalar path computes `den*r`
-            // and `(den*r)*r` as separate rounds — keep them unfused for
-            // parity.
-            let r = _mm256_rcp_ps(den);
-            let dr = _mm256_mul_ps(den, r);
-            let drr = _mm256_mul_ps(dr, r);
-            let t = _mm256_sub_ps(_mm256_add_ps(r, r), drr);
-            _mm256_storeu_ps(mask.as_mut_ptr().add(i), _mm256_mul_ps(basev, t));
-            _mm256_storeu_ps(
-                coeff.as_mut_ptr().add(i),
-                _mm256_mul_ps(
-                    _mm256_loadu_ps(mid_row.as_ptr().add(i + (MASK_SIZE >> 1))),
-                    visv,
-                ),
-            );
-        }
+        let s04 = _mm256_add_ps(
+            _mm256_loadu_ps(add[0][i..].first_chunk().unwrap()),
+            _mm256_loadu_ps(add[4][i..].first_chunk().unwrap()),
+        );
+        let sum = _mm256_mul_ps(m0v, s04);
+        let s13 = _mm256_add_ps(
+            _mm256_loadu_ps(add[1][i..].first_chunk().unwrap()),
+            _mm256_loadu_ps(add[3][i..].first_chunk().unwrap()),
+        );
+        let sum = _mm256_fmadd_ps(m1v, s13, sum);
+        let sum = _mm256_fmadd_ps(
+            m2v,
+            _mm256_loadu_ps(add[2][i..].first_chunk().unwrap()),
+            sum,
+        );
+        let den = _mm256_fmadd_ps(sum, inv_ms2v, basev);
+        // mask = base·(2r − den·r²): the scalar path computes `den*r`
+        // and `(den*r)*r` as separate rounds — keep them unfused for
+        // parity.
+        let r = _mm256_rcp_ps(den);
+        let dr = _mm256_mul_ps(den, r);
+        let drr = _mm256_mul_ps(dr, r);
+        let t = _mm256_sub_ps(_mm256_add_ps(r, r), drr);
+        _mm256_storeu_ps(
+            mask[i..].first_chunk_mut().unwrap(),
+            _mm256_mul_ps(basev, t),
+        );
+        _mm256_storeu_ps(
+            coeff[i..].first_chunk_mut().unwrap(),
+            _mm256_mul_ps(
+                _mm256_loadu_ps(mid_row[i + (MASK_SIZE >> 1)..].first_chunk().unwrap()),
+                visv,
+            ),
+        );
     }
     // Scalar tail — same op order as `compute_mask_impl` on the
     // remainder (the impl takes whole slices; offsets stay inline here).
@@ -570,13 +500,12 @@ fn conv_add_impl(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
     }
 }
 
+/// `conv_add_impl` under an `X64V3Token` proof wrapper — the token
+/// guarantees `fma`/`avx2`, so `mul_add` lowers to `vfmadd`. Same op order
+/// as the safe impl; lanes stay disjoint.
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma", enable = "avx2")]
-///
-/// # Safety
-/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
-unsafe fn conv_add_fma(mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
+#[attune]
+fn conv_add_fma_v3_t(_token: X64V3Token, mp: &[f32], m0: f32, m1: f32, m2: f32, add: &mut [f32]) {
     conv_add_impl(mp, m0, m1, m2, add);
 }
 
@@ -591,13 +520,11 @@ fn window_impl(block: &mut [[f32; 8]; 8], avg: f32) {
     }
 }
 
+/// `window_impl` under an `X64V3Token` proof wrapper — the token
+/// guarantees `fma`/`avx2`. Same op order as the safe impl.
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma", enable = "avx2")]
-///
-/// # Safety
-/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
-unsafe fn window_fma(block: &mut [[f32; 8]; 8], avg: f32) {
+#[attune]
+fn window_fma_v3_t(_token: X64V3Token, block: &mut [[f32; 8]; 8], avg: f32) {
     window_impl(block, avg);
 }
 
@@ -610,43 +537,22 @@ fn dc_fixup_impl(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
     }
 }
 
+/// `dc_fixup_impl` under an `X64V3Token` proof wrapper — the token
+/// guarantees `fma`/`avx2`. Same op order as the safe impl.
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma", enable = "avx2")]
-///
-/// # Safety
-/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`]. Same op order as the safe impl; lanes stay disjoint.
-unsafe fn dc_fixup_fma(m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
+#[attune]
+fn dc_fixup_fma_v3_t(_token: X64V3Token, m00: &mut [f32], m01: &[f32], m10: &[f32], m11: &[f32]) {
     dc_fixup_impl(m00, m01, m10, m11);
 }
 
-/// FMA+AVX2 pair — every FMA-capable x86-64 has AVX2 (FMA3 arrived with
-/// Haswell), so the single probe gates both.
-#[cfg(target_arch = "x86_64")]
-#[inline(always)]
-fn have_fma() -> bool {
-    is_x86_feature_detected!("fma") && is_x86_feature_detected!("avx2")
-}
-
 /// Approximate reciprocal matching the x86 `vrcpps` the reference's
-/// `-freciprocal-math` build emits (SSE `rcpss` returns the identical table
-/// bits on the same CPU). Off x86 we fall back to true division — ≤1 ulp
-/// difference post-NR, documented in DIVERGENCES.md.
+/// `-freciprocal-math` build emits. We now use true division as the
+/// Newton–Raphson seed on every platform — post-NR it stays within ≤1 ulp
+/// of the `rcpss`-seeded iterate, as documented in DIVERGENCES.md (the
+/// SSE intrinsic carried an otherwise-unneeded `unsafe`/feature edge).
 #[inline(always)]
 fn rcp_approx(x: f32) -> f32 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        // SAFETY: `_mm_rcp_ss` is SSE, baseline on x86_64.
-        unsafe {
-            core::arch::x86_64::_mm_cvtss_f32(core::arch::x86_64::_mm_rcp_ss(
-                core::arch::x86_64::_mm_set_ss(x),
-            ))
-        }
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        1.0 / x
-    }
+    1.0 / x
 }
 #[inline(always)]
 fn sf(x: f32) -> f32 {
@@ -882,8 +788,9 @@ impl BandMask {
         core::mem::swap(&mut self.in_ring[slot], &mut self.next_row);
 
         // mapped[i] = (|in[i]| · vis)^expon, full band width. For e≠1 the
-        // reference's powf loop vectorizes through libmvec — use it when
-        // available so the ~5% 1-ulp lanes match bit-exactly.
+        // reference's powf loop vectorizes — `powf_mapped` runs it 8 lanes
+        // at a time under v3 (within ~1 ulp of the libmvec result it
+        // replaces, well inside tolerance).
         let vis = self.vis;
         let e = self.expon;
         if e == 1.0 {
@@ -891,21 +798,11 @@ impl BandMask {
                 *m = v.abs() * vis;
             }
         } else {
-            #[cfg(all(
-                feature = "std",
-                target_arch = "x86_64",
-                target_os = "linux",
-                target_env = "gnu"
-            ))]
+            #[cfg(all(feature = "std", target_arch = "x86_64"))]
             {
-                libmvec::powf_mapped(&mut self.mapped, &self.in_ring[slot], vis, e);
+                vecops::powf_mapped(&mut self.mapped, &self.in_ring[slot], vis, e);
             }
-            #[cfg(not(all(
-                feature = "std",
-                target_arch = "x86_64",
-                target_os = "linux",
-                target_env = "gnu"
-            )))]
+            #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
             {
                 for (m, &v) in self.mapped.iter_mut().zip(self.in_ring[slot].iter()) {
                     *m = pf(v.abs() * vis, e);
@@ -917,12 +814,8 @@ impl BandMask {
         let mp = &self.mapped;
         let add = &mut self.add_ring[slot];
         #[cfg(target_arch = "x86_64")]
-        if have_fma() {
-            // SAFETY: `have_fma()` gate above guarantees the target
-            // features; args mirror the safe call's contract.
-            unsafe {
-                conv_add_fma(mp, m0, m1, m2, add);
-            }
+        if let Some(token) = X64V3Token::summon() {
+            conv_add_fma_v3_t(token, mp, m0, m1, m2, add);
         } else {
             conv_add_impl(mp, m0, m1, m2, add);
         }
@@ -950,12 +843,8 @@ impl BandMask {
         // `vfmadd` — bitwise identical to the correctly-rounded `fmaf`
         // libcall, just ~10× cheaper. Without it the libcall path is kept.
         #[cfg(target_arch = "x86_64")]
-        if have_fma() {
-            // SAFETY: `have_fma()` gate above guarantees the target
-            // features; args mirror the safe call's contract.
-            unsafe {
-                compute_mask_fma(self, kernel);
-            }
+        if let Some(token) = X64V3Token::summon() {
+            compute_mask_fma_v3_t(token, self, kernel);
             return;
         }
         self.compute_mask_scalar(kernel);
@@ -1143,12 +1032,8 @@ impl Component {
             let avg = ((s[0] + s[4]) + (s[2] + s[6])) + ((s[1] + s[5]) + (s[3] + s[7]));
             let avg = avg / 64.0;
             #[cfg(target_arch = "x86_64")]
-            if have_fma() {
-                // SAFETY: `have_fma()` gate above guarantees the target
-                // features; args mirror the safe call's contract.
-                unsafe {
-                    window_fma(&mut block, avg);
-                }
+            if let Some(token) = X64V3Token::summon() {
+                window_fma_v3_t(token, &mut block, avg);
             } else {
                 window_impl(&mut block, avg);
             }
@@ -1193,10 +1078,9 @@ thread_local! {
 /// — see `tables_are_symmetric`.)
 fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
     #[cfg(target_arch = "x86_64")]
-    if have_fma() {
-        // SAFETY: `have_fma()` gate above guarantees the target features;
-        // same op order as the safe impl — `mul_add` lowers to `vfmadd`.
-        return unsafe { dct_8x8_fma(block) };
+    if let Some(token) = X64V3Token::summon() {
+        // Same op order as the safe impl — `mul_add` lowers to `vfmadd`.
+        return dct_8x8_fma_v3_t(token, block);
     }
     dct_8x8_impl(block)
 }
@@ -1205,12 +1089,8 @@ fn dct_8x8(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
 /// lower to `vfmadd` instead of `fmaf` libcalls — bitwise identical
 /// (single-rounded either way), ~10x cheaper per op.
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "fma", enable = "avx2")]
-///
-/// # Safety
-/// Requires x86-64 with `fma` and `avx2` support — callers must gate on
-/// [`have_fma`].
-unsafe fn dct_8x8_fma(block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
+#[attune]
+fn dct_8x8_fma_v3_t(_token: X64V3Token, block: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
     dct_8x8_impl(block)
 }
 
@@ -1357,9 +1237,9 @@ impl MeteredImage {
 /// `err = (|ref−dst|·visbase)·max(mask_ref, mask_dst)` and
 /// `p = (err·√err)·err²`, then `errorline *= exp(−p)` for `err > 0` —
 /// reproduced here verbatim (multiply order verified from the
-/// `N_AVX2` clone's disassembly). On x86_64+glibc the vectorized `expf`
-/// (`_ZGVdN8v_expf`, which differs from scalar `expf` by ~1 ulp on many
-/// inputs) is dispatched through `libmvec`.
+/// `N_AVX2` clone's disassembly). On x86_64+std the 8-lane `expf` runs
+/// through `vecops` (`exp_midp_unchecked` — within ~2 ulp of glibc's
+/// `_ZGVdN8v_expf`, and of scalar `expf`, on the inputs this loop sees).
 #[allow(clippy::too_many_arguments)]
 fn measure_in_band(
     refline: &[f32],
@@ -1369,14 +1249,9 @@ fn measure_in_band(
     visbase: f32,
     errorline: &mut [f32],
 ) {
-    #[cfg(all(
-        feature = "std",
-        target_arch = "x86_64",
-        target_os = "linux",
-        target_env = "gnu"
-    ))]
+    #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
-        libmvec::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
+        vecops::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
         return;
     }
     #[allow(unreachable_code)]
@@ -1407,12 +1282,8 @@ fn dc_mask_fixup(img: &mut MeteredImage) {
     let m11 = &y11[0].mask;
     // GCC `-ffast-math` reassociates to fma(m11, 0.25, (m01+m10)·0.5).
     #[cfg(target_arch = "x86_64")]
-    if have_fma() {
-        // SAFETY: `have_fma()` gate above guarantees the target
-        // features; args mirror the safe call's contract.
-        unsafe {
-            dc_fixup_fma(m00, m01, m10, m11);
-        }
+    if let Some(token) = X64V3Token::summon() {
+        dc_fixup_fma_v3_t(token, m00, m01, m10, m11);
     } else {
         dc_fixup_impl(m00, m01, m10, m11);
     }
