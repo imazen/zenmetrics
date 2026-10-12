@@ -1,0 +1,51 @@
+binary_sha256: 19701f478171bf0d7cb74cdbe8c9c616cbebd436c7f22a4ab635ffebf6d7eff7  /home/lilith/tmp/zm-ranked-binaries/fusion-baseline-zenbench
+host: r7900x
+rayon_threads: 1
+size: 3355x2516
+metrics: nlpd,nlpd-iqa
+modes: lat
+min_rounds: 30
+group_wall_s: 120
+cell_max_s: 30
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24994MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/fusion-baseline-zenbench 3355x2516 benchmarks/nlpd_baseline_zenbench_1t_2026-10-12.tsv nlpd,nlpd-iqa
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class="capacity1024_l332768K" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=94.4GiB/s mem_lat=9.4ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18ddcf2369f003db-4117e-8a97666528afc342.json.gz
+
+═══════════════════════════════════════════════════════════════
+  zenbench  18ddcf2369f003db-4117e-8a97666528afc342
+  git: bdc458e0525b1c43913532fd3c90d43fced53e27
+═══════════════════════════════════════════════════════════════
+[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class="capacity1024_l332768K" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[2] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false
+
+  new_metrics_wall_3355x2516  30 rounds × 1 calls
+                      mean ±mad ms  95% CI vs base   
+  ├─ nlpd__lat       763.2 ±34.0ms  [753.7–773.4]ms  
+  ╰─ nlpd-iqa__lat   431.1 ±28.7ms  [-45.7%–-41.3%]  
+
+  nlpd-iqa__lat  ███████████████████████████████ 431.12ms
+  nlpd__lat      ██████████████████████████████████████████████████████ 763.17ms
+[zenbench] evidence → .zenbench/data/runs/18ddcf2c8c6b76d3-4117e-58bdccd215013dce.json
+
+  total: 39.0s  (2 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 3355x2516/nlpd: 0.11370763578305383
+sentinel 3355x2516/nlpd-iqa: 0.009011586042769465
+wrote wall rows for size 3355x2516 to benchmarks/nlpd_baseline_zenbench_1t_2026-10-12.tsv
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/fusion-baseline-zenbench 3355x2516 benchmarks/nlpd_baseline_zenbench_1t_2026-10-12.tsv nlpd,nlpd-iqa':
+
+      347458126894      instructions                                                          
+      221905006064      cycles                                                                
+
+      41.409693700 seconds time elapsed
+
+      21.986191000 seconds user
+      18.950872000 seconds sys
+
+
+run-heavy: done rc=0 41s | peak-RSS 0.61GiB | min-avail 24340MiB | peak-load 5.07

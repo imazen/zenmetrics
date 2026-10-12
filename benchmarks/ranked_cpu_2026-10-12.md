@@ -126,3 +126,79 @@ The first prototype kept scalar argument-reduction selection; it retired
 score bits. The landed version also vectorizes that selection.
 [prototype 1T](haarpsi_candidate_1t_2026-10-12.log),
 [prototype 16T](haarpsi_candidate_16t_2026-10-12.log).
+
+## RGB SSIM
+
+Baseline production source: `16ef88a9`, with the accompanying
+`msssim/examples/classical_wall.rs` harness. It compiles the CLI scoring
+source directly; native CLI tests exercise the production input conversion.
+The candidate retains f64, reflected borders, all coefficients, tap order
+and the final score fold. Interior convolutions accumulate sixteen outputs
+locally before storing, instead of reading and writing the full output row
+for every tap. Disassembly contains packed f64 multiply/add operations.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 1621.1 | 1000.9 |
+| One-thread instructions, five calls | 65,983,425,931 | 60,424,291,115 |
+| One-thread cycles, five calls | 44,582,556,016 | 27,525,912,117 |
+| Sixteen-thread ms/call | 463.1 | 453.8 |
+| Run-heavy peak RSS, GiB, both thread counts | 0.55 | 0.55 |
+
+The sixteen-thread wall observations are within the noise caution. Both
+thread counts return exactly `3febf5b219da7a49`. An independent reflected
+scalar filter compares both intermediate and output bits, including square
+and product ingress, narrow shapes, odd dimensions and block tails.
+All four classical tests pass through the native CLI. Its full CPU-metrics
+library configuration passes 33 tests, with two pre-existing ignored tests.
+The lean example passes clippy with `-D warnings` and scoped rustfmt.
+Full CLI clippy remains blocked by existing unused/unreachable code and
+doc-format warnings in GPU dependencies. No expectations were changed.
+
+Receipts:
+[baseline 1T](ssim_baseline_1t_2026-10-12.log),
+[baseline 16T](ssim_baseline_16t_2026-10-12.log),
+[candidate 1T](ssim_candidate_1t_2026-10-12.log),
+[candidate 16T](ssim_candidate_16t_2026-10-12.log).
+Build with `just snap-cargo @ build --release -p msssim
+--features parallel,avx512 --example classical_wall`, then use `ranked-wall`.
+
+## MS-SSIM scout audit
+
+The proposed exact separable replacement for libvmaf's 9×9 decimator
+cannot preserve its stored coefficients. Their leading 2×2 minor is
+exactly `-32317628725/73786976294838206464`, so the f32 table is not rank
+one. A 255-valued impulse distinguishes the original coefficient from
+the proposed center-row factorization after f32 rounding: 0.18207000195980072
+versus 0.18215307593345642. This audits coefficient/output equality; it
+does not measure an approximate implementation's final score error.
+
+Run `just lpf-rank-check`; the [receipt](msssim_lpf_rank_2026-10-12.log)
+records the source hash and an exactly separable negative control.
+The existing `dispatched_filters_match_ordered_scalar` test requires
+exact decimated output bits. All-feature tests pass, including six real
+libvmaf feature/frame comparisons, with unchanged expectations.
+
+The next native MS-SSIM scout suggestion is already implemented in the
+current `kernel.rs`: products form inside the horizontal filter and five
+eleven-row moment rings feed the vertical filter and statistic combine.
+Rayon bands own their halos, and the final fold stays in raster order.
+There are no materialized full-image product planes to remove from that
+path. These two scout findings are source checks, not new speedup claims.
+
+## Subsequent target measurements
+
+The next passes use the existing `cpu-profile/new-metrics-wall` production
+CLI driver with its pinned zenbench git revision `ac675d3` (resolved
+version 0.1.10). `just ranked-zenbench` retains the binary hash, bounded
+run settings, full console report, resource receipt and per-metric TSV.
+Latency cells score one pair; `par1/par4/par8` cells instead measure
+concurrent independent pairs on dedicated pools. They answer distinct
+questions and are labelled explicitly. Inputs here use the driver's
+procedural RGB pair, which differs from the earlier crate wall examples.
+
+The initial NLPD observations use 30 interleaved rounds at 3355×2516,
+one Rayon thread, with source `bdc458e0`:
+[zenbench report](nlpd_baseline_zenbench_1t_2026-10-12.log),
+[TSV](nlpd_baseline_zenbench_1t_2026-10-12.tsv).
+They establish the next candidate's baseline, not an optimization result.

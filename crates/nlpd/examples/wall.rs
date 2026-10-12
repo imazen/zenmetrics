@@ -33,7 +33,8 @@ fn main() {
     }
     let dt = t0.elapsed();
     println!(
-        "{w}x{h} {reps} reps: {:.2} ms/call (score {score:.6})",
-        dt.as_secs_f64() * 1e3 / reps as f64
+        "{w}x{h} {reps} reps: {:.2} ms/call (score {score:.17}, bits {:016x})",
+        dt.as_secs_f64() * 1e3 / reps as f64,
+        score.to_bits()
     );
 }

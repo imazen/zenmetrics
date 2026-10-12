@@ -313,6 +313,14 @@ snap-cargo rev +args:
 ranked-wall binary threads output w="3355" h="2516" reps="5":
     bash scripts/bench/ranked-metric-wall.sh "{{binary}}" "{{threads}}" "{{output}}" "{{w}}" "{{h}}" "{{reps}}"
 
+# Exact coefficient audit for the proposed libvmaf separable low-pass.
+lpf-rank-check:
+    python3 scripts/bench/check-lpf-rank.py
+
+# Existing new-metrics-wall driver, bounded zenbench rounds and retained TSV.
+ranked-zenbench binary threads prefix metrics size="1024":
+    bash scripts/bench/ranked-metric-zenbench.sh "{{binary}}" "{{threads}}" "{{prefix}}" "{{metrics}}" "{{size}}"
+
 # Local V40 package verification; no enqueue or publication.
 v40-fit-tools:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools

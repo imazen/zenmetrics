@@ -36,6 +36,8 @@ class PublicationControls(unittest.TestCase):
             self.assertEqual(command, ['git', 'show', f'{self.source}:README.md'])
             return self.readme
         self.assertEqual(command[:2], ['gh', 'api'])
+        if 'releases/generate-notes' in ' '.join(command):
+            return json.dumps({'body': 'Changes by @contributor and @lilith'})
         return json.dumps([{'ref': f'refs/tags/{self.tag}'}] if self.existing_tag else [])
 
     def command(self, command, **kwargs):
@@ -95,6 +97,8 @@ class PublicationControls(unittest.TestCase):
         self.assertIn(str(self.out / 'release-assets.json'), release)
         self.assertIn('--prerelease', release)
         self.assertNotIn('--clobber', release)
+        self.assertEqual((self.out / 'release-notes.md').read_text(),
+                         'Changes by contributor and @lilith\n')
 
 
 if __name__ == '__main__':

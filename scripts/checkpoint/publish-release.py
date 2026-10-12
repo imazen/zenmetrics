@@ -45,9 +45,17 @@ def main():
     for archive in index['archives']:
         assets.extend([archive, archive + '.sha256'])
     assets.append(str(index_path.resolve()))
+    notes = json.loads(subprocess.check_output(
+        ['gh', 'api', '--method', 'POST', f'repos/{REPO}/releases/generate-notes',
+         '-f', f'tag_name={args.tag}', '-f', f'target_commitish={args.source}'], text=True))['body']
+    # Preserve contributor names without sending account notifications.
+    notes = re.sub(r'(?<![\w])@([A-Za-z0-9_-]+)',
+                   lambda match: match.group(0) if match.group(1) == 'lilith' else match.group(1), notes)
+    notes_path = args.out / 'release-notes.md'
+    notes_path.write_text(notes + '\n')
     command = ['gh', 'release', 'create', args.tag, *assets, '--repo', REPO,
                '--prerelease', '--target', args.source,
-               '--title', f'CLI and browser checkpoint {args.tag}', '--generate-notes']
+               '--title', f'CLI and browser checkpoint {args.tag}', '--notes-file', str(notes_path.resolve())]
     if args.dry_run:
         print(json.dumps({'tag': args.tag, 'source': args.source, 'command': command}, indent=2))
         return

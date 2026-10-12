@@ -1,0 +1,8 @@
+python3 scripts/bench/check-lpf-rank.py
+source: crates/msssim/src/libvmaf.rs
+source_sha256: a385454a91f3250154709b759bfe279a6f124301f7d4b4d018bb8580b70937ac
+leading_2x2_minor_exact: -32317628725/73786976294838206464
+leading_2x2_minor_f64: -4.3798554091531178e-10
+impulse255_original_f32: 0.18207000195980072 bits=8f703a3e
+impulse255_center_factor_f32: 0.18215307593345642 bits=56863a3e
+verdict: stored LPF9 is not rank one; center-row factorization changes output bits

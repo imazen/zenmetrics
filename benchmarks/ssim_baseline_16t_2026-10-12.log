@@ -1,0 +1,7 @@
+binary_sha256: f8e7d9e0aa9f8ecde1704900d6b250e701e323cf3ff52c9d36ed40faf9895a17  /home/lilith/tmp/zm-ranked-binaries/ssim-baseline
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/ssim-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24739MiB :: /home/lilith/tmp/zm-ranked-binaries/ssim-baseline 3355 2516 5
+3355x2516 5 reps RGB SSIM: 463.1 ms/call (score 0.87374215173242320, bits 3febf5b219da7a49)
+run-heavy: done rc=0 2s | peak-RSS 0.55GiB | min-avail 24239MiB | peak-load 0.49
