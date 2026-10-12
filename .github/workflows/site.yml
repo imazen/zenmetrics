@@ -1,0 +1,52 @@
+name: Browser website
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/site.yml'
+      - 'web/site/**'
+      - 'scripts/checkpoint/*pages.py'
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-pages-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CHECKPOINT_TAG: v0.6.0-checkpoint.20261012
+      CHECKPOINT_SOURCE: 53f5c92f7f5f206ab66a04e331935db0da18c89b
+      ARCHIVE: checkpoint-browser-simd128-relaxed-rayon.tar.gz
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Download immutable browser checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$CHECKPOINT_TAG" --pattern "$ARCHIVE*" --dir checkpoint-download
+      - name: Verify and assemble
+        run: python scripts/checkpoint/prepare-pages.py --archive "checkpoint-download/$ARCHIVE" --source "$CHECKPOINT_SOURCE" --tag "$CHECKPOINT_TAG" --out site
+      - name: Verify isolated browser workers
+        run: |
+          python -m pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+          python scripts/checkpoint/check-pages.py site
+      - name: Report missing deployment credential
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::warning::Deployment is not configured. Set CLOUDFLARE_API_TOKEN with Cloudflare Pages Edit permission."
+      - name: Deploy to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 338ad3b06716695d6e2c81c864e387d8
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Set the Cloudflare Pages Edit token in CLOUDFLARE_API_TOKEN'; exit 1; }
+          npx --yes wrangler@4.149.0 pages deploy site --project-name zenmetrics-site --branch master --commit-hash "$GITHUB_SHA"
+      - name: Verify deployed browser workers
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: python scripts/checkpoint/check-pages.py site --url https://zenmetrics-site.pages.dev/

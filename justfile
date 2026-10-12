@@ -536,3 +536,15 @@ checkpoint-release-controls:
 
 checkpoint-i686-cli-tests:
     ZEN_CHECKPOINT_WORKSPACES="$(cd ../.. && pwd)" CROSS_CONFIG="$(pwd)/ci/checkpoint-cross.toml" ZENMETRICS_TEST_GPU=absent cross test --locked -p zenmetrics-cli --all-targets --features sweep,bmp,gif,tiff,hdr-gainmap,avif-svt,hdr-svt,jpegai,orchestrator,orchestrator-cpu-all,feature-jobs --target i686-unknown-linux-gnu
+
+# Assemble a verified browser release for Cloudflare Pages (output must be new).
+site-prepare archive source tag out:
+    python3 scripts/checkpoint/prepare-pages.py --archive '{{archive}}' --source '{{source}}' --tag '{{tag}}' --out '{{out}}'
+
+# Check isolated Rayon execution locally; requires Playwright and Chromium.
+site-check site:
+    python3 scripts/checkpoint/check-pages.py '{{site}}'
+
+# Check the deployed viewer while retaining the local unisolated refusal control.
+site-check-live site url:
+    python3 scripts/checkpoint/check-pages.py '{{site}}' --url '{{url}}'

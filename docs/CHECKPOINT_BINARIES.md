@@ -164,3 +164,26 @@ is a CI tool, while distributed checkpoint files remain GitHub Release assets.
 
 The separately pinned `runner-source` checkout is excluded from this Cargo
 workspace. It keeps its own dependency lock and does not join the metric graph.
+
+## Browser website
+
+The interactive viewer runs on https://zenmetrics-site.pages.dev/; its custom
+domain is https://zenmetrics.imazen.org/ (activate with a proxied CNAME to
+zenmetrics-site.pages.dev). `.github/workflows/site.yml` downloads the pinned browser release,
+verifies its archive checksum and every manifest file against its source commit,
+and deploys without recompiling WASM. Change the checkpoint tag and source together
+when promoting a new verified release. `site-source.json` records that provenance.
+
+`web/site/_headers` supplies COOP `same-origin`, COEP `require-corp`, and public
+asset CORS. These headers enable SharedArrayBuffer and Rayon workers directly.
+The browser check requires a real two-thread comparison, finite raw map values,
+repeatable results, and refusal on an unisolated control server. It runs before
+and after deployment; benchmark acceptance remains unchanged.
+
+GitHub deployment requires the encrypted `CLOUDFLARE_API_TOKEN` secret with
+Cloudflare Pages Edit permission for the configured account. R2 remains separate
+artifact storage. No rotating Wrangler login credential belongs in CI.
+
+Without that secret, the workflow verifies the release and browser behavior but
+reports that deployment is not configured. Production deployment and its live
+browser check run only when the credential is supplied.

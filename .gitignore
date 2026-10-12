@@ -67,3 +67,6 @@ target-bookworm/
 
 # Separately pinned checkpoint benchmark runner checkout.
 /runner-source/
+
+# Local deployment state
+.wrangler/
