@@ -834,7 +834,8 @@ fn fft_batch8_inner(
                         f32x8::splat_t(token, tw3[3 * sp + t].im),
                     );
                     let i0 = (start + t) * 8;
-                    let (i1, i2, i3, i4, i5) = (i0 + sp8, i0 + sp16, i0 + sp24, i0 + sp32, i0 + sp40);
+                    let (i1, i2, i3, i4, i5) =
+                        (i0 + sp8, i0 + sp16, i0 + sp24, i0 + sp32, i0 + sp40);
                     let x0re = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
                     let x0im = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
                     let x1re = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
