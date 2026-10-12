@@ -1,0 +1,744 @@
+use crate::platform::{SystemMonitor, SystemState};
+use std::time::{Duration, Instant};
+
+/// Configuration for resource gating.
+///
+/// Before each measurement round, the harness checks system state
+/// and waits if conditions aren't suitable for accurate benchmarking.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct GateConfig {
+    /// Maximum CPU load fraction [0.0, 1.0] before we wait.
+    /// Default: 0.15 (15%).
+    pub max_cpu_load: f64,
+    /// Minimum available RAM in bytes before we wait.
+    /// Default: 512 MB.
+    pub min_available_ram_bytes: u64,
+    /// Maximum CPU temperature in Celsius before we wait.
+    /// Default: 85°C. Set to None to disable.
+    pub max_cpu_temp_c: Option<f64>,
+    /// Maximum number of heavy processes (>10% CPU) before we wait.
+    /// Default: 0.
+    pub max_heavy_processes: usize,
+    /// How long to wait for conditions to become favorable.
+    /// Default: 60 seconds.
+    pub max_wait: Duration,
+    /// Polling interval when waiting.
+    /// Default: 500ms.
+    pub poll_interval: Duration,
+    /// If true, refuse to report results if too many waits occurred.
+    /// Default: false.
+    pub strict: bool,
+    /// Maximum number of waits before results are flagged as unreliable.
+    /// Default: 10.
+    pub max_wait_count: usize,
+    /// Whether gating is enabled at all.
+    /// Default: true.
+    pub enabled: bool,
+}
+
+impl Default for GateConfig {
+    fn default() -> Self {
+        Self {
+            max_cpu_load: 0.20,
+            min_available_ram_bytes: 512 * 1024 * 1024,
+            max_cpu_temp_c: Some(85.0),
+            max_heavy_processes: 1, // Allow 1 background process (IDE, browser)
+            max_wait: Duration::from_secs(30),
+            poll_interval: Duration::from_millis(500),
+            strict: false,
+            max_wait_count: 10,
+            enabled: true,
+        }
+    }
+}
+
+impl GateConfig {
+    /// Permissive config for CI environments where we can't control the system.
+    pub fn ci() -> Self {
+        Self {
+            max_cpu_load: 0.50,
+            min_available_ram_bytes: 256 * 1024 * 1024,
+            max_cpu_temp_c: None, // Often not available in CI
+            max_heavy_processes: 5,
+            max_wait: Duration::from_secs(30),
+            strict: false,
+            max_wait_count: 20,
+            ..Default::default()
+        }
+    }
+
+    /// Strict config for local development with quiet system.
+    pub fn strict() -> Self {
+        Self {
+            max_cpu_load: 0.05,
+            max_heavy_processes: 0,
+            strict: true,
+            max_wait_count: 5,
+            ..Default::default()
+        }
+    }
+
+    /// Disabled — no waiting, no checks.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Default::default()
+        }
+    }
+
+    pub fn max_cpu_load(mut self, load: f64) -> Self {
+        self.max_cpu_load = load;
+        self
+    }
+
+    pub fn min_available_ram_mb(mut self, mb: u64) -> Self {
+        self.min_available_ram_bytes = mb * 1024 * 1024;
+        self
+    }
+
+    pub fn max_cpu_temp_c(mut self, temp: Option<f64>) -> Self {
+        self.max_cpu_temp_c = temp;
+        self
+    }
+
+    pub fn max_heavy_processes(mut self, count: usize) -> Self {
+        self.max_heavy_processes = count;
+        self
+    }
+
+    pub fn max_wait(mut self, dur: Duration) -> Self {
+        self.max_wait = dur;
+        self
+    }
+}
+
+/// Reason for a gate wait.
+#[derive(Debug, Clone)]
+pub enum GateReason {
+    CpuLoad(f64),
+    LowRam(u64),
+    CpuTemp(f64),
+    HeavyProcesses(usize),
+}
+
+impl std::fmt::Display for GateReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GateReason::CpuLoad(load) => write!(f, "CPU load {:.0}%", load * 100.0),
+            GateReason::LowRam(bytes) => write!(f, "available RAM {}MB", bytes / 1024 / 1024),
+            GateReason::CpuTemp(temp) => write!(f, "CPU temp {:.0}°C", temp),
+            GateReason::HeavyProcesses(n) => write!(f, "{} heavy process(es)", n),
+        }
+    }
+}
+
+/// The resource gate: checks system state and waits for favorable conditions.
+pub struct ResourceGate {
+    config: GateConfig,
+    monitor: SystemMonitor,
+    total_waits: usize,
+    total_wait_time: Duration,
+    background: Option<crate::monitor::Monitor>,
+    observation_age_ns: Option<u64>,
+    last_observation: Option<String>,
+    missing_observations: bool,
+}
+
+impl ResourceGate {
+    pub fn new(config: GateConfig) -> Self {
+        Self {
+            monitor: SystemMonitor::new(),
+            config,
+            total_waits: 0,
+            total_wait_time: Duration::ZERO,
+            background: None,
+            observation_age_ns: None,
+            last_observation: None,
+            missing_observations: false,
+        }
+    }
+
+    pub(crate) fn start_monitoring(&mut self) {
+        if self.config.enabled && self.background.is_none() {
+            let start = Instant::now();
+            self.background = Some(crate::monitor::Monitor::start());
+            self.total_wait_time += start.elapsed();
+        }
+    }
+
+    pub(crate) fn observation_age_ns(&self) -> Option<u64> {
+        self.observation_age_ns
+    }
+
+    pub(crate) fn last_observation(&self) -> Option<String> {
+        self.last_observation.clone()
+    }
+
+    /// Set thread allowance for the current benchmark group.
+    ///
+    /// When benchmarks spawn N threads, those threads may appear as
+    /// "heavy processes" in the post-round gate check (CPU load lingers).
+    /// This allowance raises the heavy_process threshold to compensate.
+    /// Check if conditions are favorable. Returns None if OK, or the blocking reason.
+    #[allow(dead_code)] // Used by bin targets
+    pub fn check(&self) -> Option<GateReason> {
+        if !self.config.enabled {
+            return None;
+        }
+
+        let state = self.monitor.snapshot();
+        self.check_state(&state)
+    }
+
+    fn check_state(&self, state: &SystemState) -> Option<GateReason> {
+        if state.cpu_load > self.config.max_cpu_load {
+            return Some(GateReason::CpuLoad(state.cpu_load));
+        }
+        if state.available_ram_bytes < self.config.min_available_ram_bytes {
+            return Some(GateReason::LowRam(state.available_ram_bytes));
+        }
+        if let (Some(max_temp), Some(current_temp)) = (self.config.max_cpu_temp_c, state.cpu_temp_c)
+        {
+            if current_temp > max_temp {
+                return Some(GateReason::CpuTemp(current_temp));
+            }
+        }
+        let effective_max_heavy = self.config.max_heavy_processes;
+        if state.heavy_process_count > effective_max_heavy {
+            return Some(GateReason::HeavyProcesses(state.heavy_process_count));
+        }
+        None
+    }
+
+    /// Wait until conditions are favorable, or timeout.
+    ///
+    /// `deadline` optionally caps the maximum wait to the remaining time
+    /// in the caller's budget. This prevents a gate wait from consuming
+    /// more time than the measurement group has left.
+    ///
+    /// Returns true if conditions became favorable, false if timed out.
+    #[allow(dead_code)] // Public API for external gate users
+    pub fn wait_for_clear(&mut self) -> bool {
+        self.wait_for_clear_with_deadline(None)
+    }
+
+    /// Like [`ResourceGate::wait_for_clear`], but with an explicit deadline.
+    ///
+    /// The gate will wait at most `min(max_wait, deadline)`.
+    #[allow(dead_code)] // Public API for external gate users
+    pub fn wait_for_clear_with_deadline(&mut self, deadline: Option<Duration>) -> bool {
+        if !self.config.enabled {
+            return true;
+        }
+
+        let effective_max = match deadline {
+            Some(dl) => self.config.max_wait.min(dl),
+            None => self.config.max_wait,
+        };
+
+        let start = Instant::now();
+        let mut last_status = Instant::now() - Duration::from_secs(10); // force first update
+        loop {
+            let state = self.monitor.snapshot();
+            match self.check_state(&state) {
+                None => {
+                    crate::report::clear_status();
+                    return true;
+                }
+                Some(reason) => {
+                    if start.elapsed() >= effective_max {
+                        crate::report::clear_status();
+                        return false;
+                    }
+                    // Throttle status updates to every 5 seconds
+                    if last_status.elapsed() >= Duration::from_secs(5) {
+                        let elapsed = start.elapsed().as_secs_f64();
+                        let max = effective_max.as_secs_f64();
+                        crate::report::status(&format!(
+                            "[zenbench] waiting ({elapsed:.0}s/{max:.0}s): {reason}"
+                        ));
+                        last_status = Instant::now();
+                    }
+                    self.total_waits += 1;
+                    std::thread::sleep(self.config.poll_interval);
+                    self.total_wait_time += self.config.poll_interval;
+                }
+            }
+        }
+    }
+
+    /// Block until no other benchmark harness is running.
+    ///
+    /// Detects zenbench, criterion, divan, and cargo-bench processes by name.
+    /// This prevents concurrent benchmarks from corrupting each other's data.
+    /// General system noise is NOT gated here — only benchmark-vs-benchmark.
+    pub fn wait_for_no_benchmarks(&mut self) {
+        if !self.config.enabled {
+            return;
+        }
+
+        let our_pid = sysinfo::get_current_pid().ok();
+
+        // Collect PIDs to exclude: ourselves, plus any ancestor PIDs set by
+        // the launcher (e.g., `zenbench self-compare` sets ZENBENCH_LAUNCHER_PIDS
+        // so the child benchmark doesn't wait on its own parent CLI process).
+        let mut excluded_pids: Vec<sysinfo::Pid> = Vec::new();
+        if let Some(our) = our_pid {
+            excluded_pids.push(our);
+        }
+        if let Ok(pids_str) = std::env::var("ZENBENCH_LAUNCHER_PIDS") {
+            excluded_pids.extend(parse_launcher_pids(&pids_str));
+        }
+
+        let start = Instant::now();
+        let max_wait = Duration::from_secs(30);
+        let mut warned = false;
+
+        loop {
+            // Use a fresh System scan for process detection (the monitor
+            // may not refresh process command lines in its snapshot).
+            let mut sys = sysinfo::System::new();
+            sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+
+            // Exclude our entire ancestor chain (cargo, the shell, CI
+            // runners, wrappers like run-heavy). `cargo bench --bench
+            // decode_zenbench` carries the harness's own name in its
+            // command line, so without this the gate detected its own
+            // parent cargo process as a "concurrent benchmark" and
+            // stalled `max_wait` on every round — leaving ~4 surviving
+            // rounds per group, on every machine, deterministically.
+            // Ancestors are blocked waiting on us; they cannot be
+            // concurrently *running* benchmarks. Siblings (a genuinely
+            // concurrent bench under the same shell) are not ancestors
+            // and are still detected.
+            let mut scan_excluded = excluded_pids.clone();
+            #[cfg(not(target_arch = "wasm32"))]
+            for pid in crate::coordination::queued_pids(&sys) {
+                scan_excluded.push(pid);
+                if let Some(tasks) = sys.process(pid).and_then(|p| p.tasks()) {
+                    scan_excluded.extend(tasks.iter().copied());
+                }
+            }
+            collect_ancestors(&sys, our_pid, &mut scan_excluded);
+            // Linux refresh_processes also exposes task IDs. In particular,
+            // our own "zenbench-exclusive-heartbeat" thread matches the rival
+            // name filter, but is not the process leader excluded above.
+            // Exclude only our tasks; other processes and their tasks remain
+            // eligible, including real sibling benchmark workers.
+            if let Some(our) = our_pid.and_then(|pid| sys.process(pid)) {
+                if let Some(tasks) = our.tasks() {
+                    scan_excluded.extend(tasks.iter().copied());
+                }
+            }
+
+            let bench_count = sys
+                .processes()
+                .values()
+                .filter(|p| {
+                    // Skip ourselves, launcher pids, and ancestors
+                    if scan_excluded.contains(&p.pid()) {
+                        return false;
+                    }
+                    process_is_benchmark(p)
+                })
+                .count();
+
+            if bench_count == 0 {
+                if warned {
+                    crate::report::clear_status();
+                }
+                return;
+            }
+
+            if start.elapsed() >= max_wait {
+                crate::report::clear_status();
+                self.missing_observations = true; // admission failed; result cannot certify quietness
+                return;
+            }
+
+            if !warned {
+                crate::report::status(&format!(
+                    "[zenbench] waiting for {bench_count} other benchmark process(es) to finish..."
+                ));
+                warned = true;
+            }
+
+            std::thread::sleep(Duration::from_secs(1));
+            self.total_waits += 1;
+            self.total_wait_time += Duration::from_secs(1);
+        }
+    }
+
+    /// Non-blocking system check. Records whether the system is noisy
+    /// but never blocks. The statistical machinery handles noisy samples.
+    pub fn check_and_record(&mut self) {
+        self.check_and_record_status();
+    }
+
+    /// Share the existing check with the engine's retained round evidence.
+    pub(crate) fn check_and_record_status(&mut self) -> Option<bool> {
+        self.last_observation = None;
+        if !self.config.enabled {
+            return None;
+        }
+        let state = if let Some(background) = &self.background {
+            let Some((age, state)) = background.latest() else {
+                self.observation_age_ns = None;
+                self.missing_observations = true;
+                return None;
+            };
+            self.observation_age_ns = Some(age.as_nanos().min(u64::MAX as u128) as u64);
+            state
+        } else {
+            let start = Instant::now();
+            let state = self.monitor.snapshot();
+            self.total_wait_time += start.elapsed();
+            state
+        };
+        let reason = self.check_state(&state);
+        let clean = reason.is_none();
+        self.last_observation = Some(format!("reason={reason:?} state={state:?}"));
+        if std::env::var_os("ZENBENCH_GATE_TRACE").is_some() {
+            eprintln!("[zenbench gate] clean={clean} reason={reason:?} state={state:?}");
+        }
+        if !clean {
+            self.total_waits += 1;
+        }
+        Some(clean)
+    }
+
+    /// Brief non-blocking gate check. Waits up to `max_wait` for conditions to
+    /// improve, then proceeds regardless. Shows a single status line during the
+    /// wait, clears it when done.
+    ///
+    /// This replaces the old blocking gate that could consume 89% of total
+    /// benchmark time on busy systems. The statistical machinery (IQR outlier
+    /// removal, bootstrap CI, MAD) handles noisy samples — the gate just gives
+    /// the system a brief chance to settle.
+    #[allow(dead_code)]
+    pub fn brief_wait(&mut self, max_wait: Duration) {
+        if !self.config.enabled {
+            return;
+        }
+
+        let start = Instant::now();
+        loop {
+            let state = self.monitor.snapshot();
+            if self.check_state(&state).is_none() {
+                crate::report::clear_status();
+                return; // system is quiet, proceed
+            }
+            if start.elapsed() >= max_wait {
+                crate::report::clear_status();
+                self.total_waits += 1;
+                self.total_wait_time += start.elapsed();
+                return; // time's up, measure anyway
+            }
+            if self.total_waits == 0 {
+                // Show status only on first wait of this group
+                if let Some(reason) = self.check_state(&state) {
+                    crate::report::status(&format!(
+                        "[zenbench] system busy ({reason}), waiting up to {:.0}s...",
+                        max_wait.as_secs_f64(),
+                    ));
+                }
+            }
+            std::thread::sleep(self.config.poll_interval);
+        }
+    }
+
+    /// Whether the benchmark results should be considered unreliable due to
+    /// excessive waiting (indicates a noisy system).
+    #[allow(dead_code)] // May be used by bin targets
+    pub fn is_unreliable(&self) -> bool {
+        self.missing_observations
+            || (self.config.strict && self.total_waits > self.config.max_wait_count)
+    }
+
+    /// Total number of times we had to wait.
+    pub fn total_waits(&self) -> usize {
+        self.total_waits
+    }
+
+    /// Total time spent waiting.
+    pub fn total_wait_time(&self) -> Duration {
+        self.total_wait_time
+    }
+}
+
+/// Parse the `ZENBENCH_LAUNCHER_PIDS` env var value into a list of PIDs.
+/// Comma-separated, ignores invalid entries. Used by `wait_for_no_benchmarks`
+/// (integrated via PR #8 / fix/self-compare-gate).
+pub(crate) fn parse_launcher_pids(val: &str) -> Vec<sysinfo::Pid> {
+    val.split(',')
+        .filter_map(|s| s.trim().parse::<usize>().ok().map(sysinfo::Pid::from))
+        .collect()
+}
+
+/// Benchmark-harness process-name patterns (case-insensitive substrings).
+/// Matched against the process NAME and the argv[0] basename only — never
+/// the full argument list (see `process_is_benchmark`).
+const BENCH_NAME_PATTERNS: &[&str] = &["criterion", "divan", "zenbench", "cargo-bench", "bench-"];
+
+/// Basename of a path-like string (after the last `/` or `\`), lowercased.
+fn basename_lower(s: &str) -> String {
+    s.rsplit(['/', '\\']).next().unwrap_or(s).to_lowercase()
+}
+
+/// Whether `p` looks like a concurrently-running benchmark harness.
+///
+/// Matches the harness patterns against the process NAME and the argv[0]
+/// basename ONLY — deliberately NOT the whole joined command line. Scanning
+/// the full cmdline produced false positives on unrelated processes that
+/// merely *name* a benchmark directory in their arguments — most painfully a
+/// periodic backup `rsync --exclude=criterion/ --exclude=cargo-timing-*.html
+/// …`, which the gate mistook for a rival benchmark and waited the full 30s
+/// timeout on, every round. A real concurrent bench binary carries the
+/// pattern in its own name / invoked path (e.g. `…/deps/foo_zenbench-<hash>`),
+/// not only in an arbitrary argument. Complements `collect_ancestors` (which
+/// excludes the harness's own launcher chain): that handles the self-parent,
+/// this handles unrelated siblings.
+fn process_is_benchmark(p: &sysinfo::Process) -> bool {
+    let name = p.name().to_string_lossy().to_lowercase();
+    if BENCH_NAME_PATTERNS.iter().any(|&pat| name.contains(pat)) {
+        return true;
+    }
+    // argv[0] as invoked (covers a bench binary launched by absolute path,
+    // whose reported `name` may be truncated by the OS).
+    if let Some(argv0) = p.cmd().first() {
+        let base = basename_lower(&argv0.to_string_lossy());
+        if BENCH_NAME_PATTERNS.iter().any(|&pat| base.contains(pat)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Walk the parent-PID chain from `start` upward, appending every ancestor
+/// to `out`. Ancestors of the running harness are blocked waiting on it
+/// (`cargo bench` waits on its child), so they can never be a *concurrently
+/// running* benchmark — but `cargo bench --bench foo_zenbench` carries the
+/// harness name in its command line and would otherwise match the
+/// benchmark-name scan. Bounded by the live process set, so it always
+/// terminates even if the OS reports a cyclic/again-reused PPID.
+fn collect_ancestors(
+    sys: &sysinfo::System,
+    start: Option<sysinfo::Pid>,
+    out: &mut Vec<sysinfo::Pid>,
+) {
+    collect_ancestors_with(start, out, |pid| sys.process(pid)?.parent());
+}
+
+fn collect_ancestors_with(
+    start: Option<sysinfo::Pid>,
+    out: &mut Vec<sysinfo::Pid>,
+    parent_of: impl Fn(sysinfo::Pid) -> Option<sysinfo::Pid>,
+) {
+    let mut cur = start;
+    // Hard cap independent of the process count: PID chains are shallow,
+    // and this guards against a reused-PID cycle the visited-set might miss.
+    for _ in 0..1024 {
+        let Some(pid) = cur else { return };
+        let Some(parent) = parent_of(pid) else {
+            return;
+        };
+        if Some(parent) == start || out.contains(&parent) {
+            // PID reuse can close a cycle through the starting process,
+            // which is not necessarily already present in the output.
+            return;
+        }
+        out.push(parent);
+        cur = Some(parent);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_launcher_pids_single() {
+        let pids = parse_launcher_pids("12345");
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], sysinfo::Pid::from(12345));
+    }
+
+    #[test]
+    fn parse_launcher_pids_multiple() {
+        let pids = parse_launcher_pids("100,200,300");
+        assert_eq!(pids.len(), 3);
+        assert_eq!(pids[0], sysinfo::Pid::from(100));
+        assert_eq!(pids[1], sysinfo::Pid::from(200));
+        assert_eq!(pids[2], sysinfo::Pid::from(300));
+    }
+
+    #[test]
+    fn parse_launcher_pids_with_whitespace() {
+        let pids = parse_launcher_pids(" 100 , 200 , 300 ");
+        assert_eq!(pids.len(), 3);
+    }
+
+    #[test]
+    fn parse_launcher_pids_empty() {
+        let pids = parse_launcher_pids("");
+        assert!(pids.is_empty());
+    }
+
+    #[test]
+    fn parse_launcher_pids_ignores_invalid() {
+        let pids = parse_launcher_pids("123,not_a_pid,456");
+        assert_eq!(pids.len(), 2);
+        assert_eq!(pids[0], sysinfo::Pid::from(123));
+        assert_eq!(pids[1], sysinfo::Pid::from(456));
+    }
+
+    #[test]
+    fn parse_launcher_pids_chained() {
+        // Simulates nested self-compare: parent appends its PID
+        let pids = parse_launcher_pids("1000,2000");
+        assert_eq!(pids.len(), 2);
+    }
+
+    #[test]
+    fn gate_disabled_skips_benchmark_check() {
+        let mut gate = ResourceGate::new(GateConfig::disabled());
+        // Should return immediately without scanning
+        gate.wait_for_no_benchmarks();
+        assert_eq!(gate.total_waits(), 0);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn own_benchmark_named_thread_does_not_block_gate() {
+        // Linux sysinfo exposes task IDs alongside process IDs. Our exclusive
+        // lock's heartbeat must not be treated as a competing benchmark.
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::Builder::new()
+            .name("zenbench-exclusive-heartbeat".into())
+            .spawn(move || {
+                ready_tx.send(()).unwrap();
+                stop_rx.recv().unwrap();
+            })
+            .unwrap();
+        ready_rx.recv().unwrap();
+        let mut gate = ResourceGate::new(GateConfig::default());
+        gate.wait_for_no_benchmarks();
+        stop_tx.send(()).unwrap();
+        worker.join().unwrap();
+        assert_eq!(gate.total_waits(), 0, "our own thread caused a rival wait");
+    }
+
+    #[test]
+    fn gate_config_defaults_are_sane() {
+        let config = GateConfig::default();
+        assert!(config.enabled);
+        assert!(config.max_cpu_load > 0.0 && config.max_cpu_load < 1.0);
+        assert!(config.min_available_ram_bytes > 0);
+        assert!(config.max_wait > Duration::ZERO);
+        assert!(config.poll_interval > Duration::ZERO);
+    }
+
+    #[test]
+    fn gate_config_ci_is_more_permissive() {
+        let default = GateConfig::default();
+        let ci = GateConfig::ci();
+        assert!(ci.max_cpu_load >= default.max_cpu_load);
+        assert!(ci.max_heavy_processes >= default.max_heavy_processes);
+    }
+
+    #[test]
+    fn collect_ancestors_includes_our_parent() {
+        // The test binary always has a parent (cargo / the shell). The
+        // ancestor walk from our own PID must surface it, must not include
+        // our own PID, and must terminate.
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let our_pid = sysinfo::get_current_pid().ok();
+
+        let mut ancestors = Vec::new();
+        collect_ancestors(&sys, our_pid, &mut ancestors);
+
+        // Nested `if let` rather than a let-chain: let-chains only stabilized
+        // in Rust 1.88, and this crate's MSRV is 1.85.
+        if let Some(pid) = our_pid {
+            if let Some(parent) = sys.process(pid).and_then(|p| p.parent()) {
+                assert!(
+                    ancestors.contains(&parent),
+                    "ancestor walk should include our immediate parent {parent:?}"
+                );
+            }
+        }
+        assert!(
+            our_pid.is_none_or(|pid| !ancestors.contains(&pid)),
+            "ancestor walk must not include our own PID"
+        );
+    }
+
+    #[test]
+    fn collect_ancestors_none_start_is_empty() {
+        let sys = sysinfo::System::new();
+        let mut ancestors = Vec::new();
+        collect_ancestors(&sys, None, &mut ancestors);
+        assert!(ancestors.is_empty());
+    }
+
+    #[test]
+    fn collect_ancestors_excludes_start_in_cycles() {
+        let start = sysinfo::Pid::from(100);
+        let parent = sysinfo::Pid::from(200);
+        let mut ancestors = Vec::new();
+        collect_ancestors_with(Some(start), &mut ancestors, |pid| {
+            Some(if pid == start { parent } else { start })
+        });
+        assert_eq!(ancestors, vec![parent]);
+
+        ancestors.clear();
+        collect_ancestors_with(Some(start), &mut ancestors, Some);
+        assert!(ancestors.is_empty());
+    }
+
+    #[test]
+    fn collect_ancestors_retains_chain_and_stops_at_shared_ancestor() {
+        let start = sysinfo::Pid::from(300);
+        let parent = sysinfo::Pid::from(200);
+        let grandparent = sysinfo::Pid::from(100);
+        let parent_of = |pid| match pid {
+            p if p == start => Some(parent),
+            p if p == parent => Some(grandparent),
+            _ => None,
+        };
+        let mut ancestors = Vec::new();
+        collect_ancestors_with(Some(start), &mut ancestors, parent_of);
+        assert_eq!(ancestors, vec![parent, grandparent]);
+
+        collect_ancestors_with(Some(start), &mut ancestors, parent_of);
+        assert_eq!(ancestors, vec![parent, grandparent]);
+    }
+
+    #[test]
+    fn basename_lower_strips_path_and_lowercases() {
+        assert_eq!(
+            basename_lower("/home/x/target/release/deps/Decode_Zenbench-abc"),
+            "decode_zenbench-abc"
+        );
+        assert_eq!(basename_lower("cargo-bench"), "cargo-bench");
+        assert_eq!(basename_lower(r"C:\bin\Foo.exe"), "foo.exe");
+        assert_eq!(basename_lower(""), "");
+    }
+
+    #[test]
+    fn bench_name_patterns_match_harness_argv0_not_backup_args() {
+        // A real bench binary's invoked path carries the pattern.
+        let argv0 = basename_lower("/w/target/release/deps/decode_zenbench-9f3");
+        assert!(BENCH_NAME_PATTERNS.iter().any(|&p| argv0.contains(p)));
+
+        // The false positive that motivated the argv0-only match: a backup
+        // rsync whose argv[0] basename is `rsync`. Only its later
+        // `--exclude=criterion/` args mention a bench dir — and those are no
+        // longer scanned, so it is correctly NOT flagged.
+        let rsync_argv0 = basename_lower("/usr/bin/rsync");
+        assert!(!BENCH_NAME_PATTERNS.iter().any(|&p| rsync_argv0.contains(p)));
+    }
+}

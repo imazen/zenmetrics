@@ -66,7 +66,8 @@ pub fn vram_cap_bytes() -> usize {
     if let Some(probed) = live_vram_probe_bytes() {
         return probed;
     }
-    8 * 1024 * 1024 * 1024
+    // A 32-bit process cannot represent the full default address budget.
+    8_usize.saturating_mul(1024 * 1024 * 1024)
 }
 
 /// Reclaim pooled-but-unreferenced device memory back to the driver

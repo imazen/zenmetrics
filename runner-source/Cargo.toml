@@ -1,0 +1,130 @@
+[package]
+name = "zenbench"
+version = "0.1.10"
+edition = "2024"
+rust-version = "1.85"
+description = "Interleaved microbenchmarking with paired statistics, CI regression testing, and hardware-adaptive measurement"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/imazen/zenbench"
+keywords = ["benchmark", "performance", "profiling", "testing"]
+categories = ["development-tools", "development-tools::profiling"]
+readme = "README.crates.md"
+exclude = [
+  "CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md",
+  ".claude/", ".superwork/", ".zenbench/", ".gitignore",
+  "copter-report/", ".github/", "Cross.toml", "justfile",
+  "Cargo.toml.original.txt", "fuzz/",
+  "benches/", "tests/",
+  "docs/", "site/",
+  "CHART-GALLERY.md",
+]
+
+[features]
+default = ["cli", "daemon", "precise-timing", "alloc-profiling"]
+cli = ["dep:clap", "dep:process-wrap", "dep:regex"]
+daemon = []
+cpu-time = ["dep:cpu-time"]
+# Hardware TSC timer (rdtsc/rdtscp on x86_64, cntvct_el0 on aarch64)
+# and asm fences for stronger dead-code-elimination prevention.
+precise-timing = []
+# AllocProfiler for tracking heap allocations per benchmark.
+# Install as #[global_allocator] in your bench binary to activate.
+alloc-profiling = []
+# Dedicated memory runs: process-wide serialization, never latency profiling.
+heap-profiling = ["alloc-profiling"]
+# Drop-in criterion compatibility layer. Opt-in for migration.
+criterion-compat = []
+# Async benchmarking via Bencher::iter_async(runtime, || async { ... }).
+async = ["dep:tokio"]
+# Publication-quality SVG charts via charts-rs (horizontal bar, grouped).
+charts = ["dep:charts-rs"]
+# WASM benchmarking via wasmtime with simd128 support.
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
+
+[[bin]]
+name = "zenbench"
+path = "src/bin/zenbench.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "zenbench-mcp"
+path = "src/bin/zenbench-mcp.rs"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+sha2 = "0.11.0"
+# 0.19 requires Rust 1.89; retain the supported 1.85 MSRV.
+statrs = { version = "0.18.0", default-features = false }
+sysinfo = "0.36.1"
+# process-wrap 9+ requires Rust 1.87; 8.2.2 supports the 1.85 MSRV.
+regex = { version = "1.13.1", optional = true }
+process-wrap = { version = "8.2.2", default-features = false, features = ["std", "process-group", "job-object", "tracing"], optional = true }
+clap = { version = "4.6.7", features = ["derive"], optional = true }
+cpu-time = { version = "1.0.0", optional = true }
+terminal_size = "0.4.4"
+tokio = { version = "1.53.2", features = ["rt"], optional = true }
+charts-rs = { version = "2.0.0", default-features = false, optional = true }
+wasmtime = { version = "49.0.2", optional = true }
+wasmtime-wasi = { version = "49.0.2", optional = true }
+
+# fs4 doesn't compile for wasm32; zenbench doesn't run on wasm but must
+# compile as a dev-dep when downstream crates target wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs4 = { version = "1.1.0", features = ["sync"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+affinity = "0.1.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+win32job = "2.0.3"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+libc = "0.2.186"
+
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+raw-cpuid = "11.6.0"
+
+[[bench]]
+name = "sorting"
+harness = false
+
+[[bench]]
+name = "divan_compare"
+harness = false
+
+[[bench]]
+name = "divan_compare_ref"
+harness = false
+
+[[bench]]
+name = "criterion_compare_ref"
+harness = false
+
+[[bench]]
+name = "alloc_profiling"
+harness = false
+
+[[bench]]
+name = "standalone_only"
+harness = false
+
+[[example]]
+name = "wasm_simd_bench"
+required-features = ["wasm"]
+
+[dev-dependencies]
+rayon = "1.12.0"
+divan = "0.1.21"
+criterion = { version = ">=0.7.0, <0.9.0", features = ["html_reports"] }
+tokio = { version = "1.53.2", features = ["rt", "macros"] }
+
+# Tests retain executable hashes too. Keep SHA-256 fast for large debug
+# executables under emulation without optimizing benchmark/test code itself.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[[example]]
+name = "heap_phases"
+required-features = ["heap-profiling"]
