@@ -135,3 +135,17 @@ or `absent`. GPU-present hosts retain both butteraugli parity assertions at
 5e-2. GPU-absent hosts require failure, no stdout score and a backend-unavailable
 diagnostic. This functional test contract does not qualify hardware GPU
 benchmark observations or alter resource admission.
+
+## Attach files to GitHub Releases
+
+After the exact source README has been reviewed and approved, run the manual
+**Publish checkpoint release** workflow from `master`. Supply the successful
+Checkpoint binaries run ID, its full source SHA, a new
+`vX.Y.Z-checkpoint.ID` tag, and the reviewed README’s SHA-256.
+
+The publisher checks the README hash and repeats all green-CI and archive
+verification gates before tagging. It attaches all eight archives, their eight
+SHA-256 files, and `release-assets.json` to a GitHub prerelease. Existing tags
+and assets are never overwritten. It does not publish a crate or a container.
+Use `publish-release.py --dry-run` with the same inputs to download and verify
+the assets and print the publication command without creating a tag or release.
