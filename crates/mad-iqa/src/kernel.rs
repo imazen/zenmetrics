@@ -365,11 +365,18 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
 /// mex: stride-4 16×16 windows, blocky 4×4 tiles; skew/kurtosis
 /// normalised by population moments (`stmp`); flat → 0.
 ///
-/// The per-tile sums accumulate on fixed 8-lane `f64` partials (lane k
-/// takes column-offsets k and k+8, each pair pre-summed before the
-/// accumulate) instead of one serial chain — a deterministic grouping
-/// every dispatch tier lowers identically, and the pattern lowers to
-/// `vaddpd` chains on v3+ instead of a latency-bound scalar loop.
+/// The stride-4 windows revisit each element ~16× under the direct
+/// kernel. Instead, each row's 16-column segment contributes its raw
+/// moments `(Σx, Σx², Σx³, Σx⁴)` once — accumulated in fixed 8-lane
+/// `f64` partials, a deterministic grouping every dispatch tier lowers
+/// identically — into the ≤4 vertically-overlapping tile-rows that
+/// contain it (a 4-slot ring keyed `jt & 3`). Centered moments are
+/// recovered algebraically at tile completion:
+/// `s2 = T2 − 256μ²`, `s3 = T3 − 3μT2 + 512μ³`,
+/// `s4 = T4 − 4μT3 + 6μ²T2 − 768μ⁴`. Raw-moment cancellation in f64
+/// stays ~1e-10 relative for the bounded magnitudes here — orders
+/// inside the score golden — and the `max(0.)` clamps keep the
+/// nonnegativity the squared sums guarantee mathematically.
 #[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let (mt, nt) = tile_dims(m, n);
@@ -381,34 +388,87 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     if mt == 0 {
         return (std_o, skw, krt);
     }
-    let block = |j: usize, i: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32], o: usize| {
-        let mut sx = [0.0f64; 8];
-        for r in j..j + B {
-            let row = &x[r * n + i..r * n + i + B];
-            for k in 0..8 {
-                sx[k] += row[k] as f64 + row[k + 8] as f64;
+    let strip = |ts: usize, te: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32]| {
+        // Ring of 4 tile-row accumulators; tile jt occupies slot jt & 3
+        // between its first row (4jt) and finalising row (4jt+15).
+        // Layout is (slot, moment)-planar so every row sweep below is a
+        // contiguous vector loop.
+        let nb = nt + 3; // 4-element blocks a 16-col segment spans
+        let mut acc = vec![0.0f64; 4 * 4 * nt];
+        let (mut b1, mut b2, mut b3, mut b4) = (
+            vec![0.0f64; nb],
+            vec![0.0f64; nb],
+            vec![0.0f64; nb],
+            vec![0.0f64; nb],
+        );
+        let (mut s1, mut s2, mut s3, mut s4) = (
+            vec![0.0f64; nt],
+            vec![0.0f64; nt],
+            vec![0.0f64; nt],
+            vec![0.0f64; nt],
+        );
+        for r in 4 * ts..4 * te + B - 4 {
+            let row = &x[r * n..r * n + n];
+            // Tiles holding row r: 4jt ≤ r ≤ 4jt+15 →
+            // jt ∈ [(r−(B−4))/4, r/4], clamped to the strip.
+            let j_lo = usize::max(r.saturating_sub(B - 4) / 4, ts);
+            let j_hi = usize::min(r / 4, te - 1);
+            // Tile jt finalises on row 4jt+15 → jt = (r−15)/4.
+            let fj = if (r + 1) % 4 == 0 && r >= B - 1 {
+                let j = (r - (B - 1)) / 4;
+                (j >= ts && j < te).then_some(j)
+            } else {
+                None
+            };
+            // 4-column block moments for the row; a 16-col segment is
+            // then four consecutive block sums.
+            for q in 0..nb {
+                let w = &row[4 * q..4 * q + 4];
+                let (v0, v1, v2, v3) = (w[0] as f64, w[1] as f64, w[2] as f64, w[3] as f64);
+                let (p0, p1, p2, p3) = (v0 * v0, v1 * v1, v2 * v2, v3 * v3);
+                b1[q] = v0 + v1 + v2 + v3;
+                b2[q] = p0 + p1 + p2 + p3;
+                b3[q] = p0 * v0 + p1 * v1 + p2 * v2 + p3 * v3;
+                b4[q] = p0 * p0 + p1 * p1 + p2 * p2 + p3 * p3;
             }
-        }
-        let mean = (sx[0] + sx[1] + sx[2] + sx[3] + sx[4] + sx[5] + sx[6] + sx[7]) / 256.0;
-        let (mut s2, mut s3, mut s4) = ([0.0f64; 8], [0.0f64; 8], [0.0f64; 8]);
-        for r in j..j + B {
-            let row = &x[r * n + i..r * n + i + B];
-            for k in 0..8 {
-                let (d0, d1) = (row[k] as f64 - mean, row[k + 8] as f64 - mean);
-                let (p0, p1) = (d0 * d0, d1 * d1);
-                s2[k] += p0 + p1;
-                s3[k] += p0 * d0 + p1 * d1;
-                s4[k] += p0 * p0 + p1 * p1;
+            for it in 0..nt {
+                s1[it] = b1[it] + b1[it + 1] + b1[it + 2] + b1[it + 3];
+                s2[it] = b2[it] + b2[it + 1] + b2[it + 2] + b2[it + 3];
+                s3[it] = b3[it] + b3[it + 1] + b3[it + 2] + b3[it + 3];
+                s4[it] = b4[it] + b4[it + 1] + b4[it + 2] + b4[it + 3];
             }
-        }
-        let s2 = s2[0] + s2[1] + s2[2] + s2[3] + s2[4] + s2[5] + s2[6] + s2[7];
-        let s3 = s3[0] + s3[1] + s3[2] + s3[3] + s3[4] + s3[5] + s3[6] + s3[7];
-        let s4 = s4[0] + s4[1] + s4[2] + s4[3] + s4[4] + s4[5] + s4[6] + s4[7];
-        so[o] = libm::sqrt(s2 / 255.0) as f32;
-        let stmp = libm::sqrt(s2 / 256.0);
-        if stmp != 0.0 {
-            sk[o] = ((s3 / 256.0) / (stmp * stmp * stmp)) as f32;
-            kr[o] = ((s4 / 256.0) / (stmp * stmp * stmp * stmp)) as f32;
+            for jt in j_lo..=j_hi {
+                let base = (jt & 3) * 4 * nt;
+                for i in 0..nt {
+                    acc[base + i] += s1[i];
+                    acc[base + nt + i] += s2[i];
+                    acc[base + 2 * nt + i] += s3[i];
+                    acc[base + 3 * nt + i] += s4[i];
+                }
+            }
+            if let Some(fj) = fj {
+                let base = (fj & 3) * 4 * nt;
+                let o = (fj - ts) * nt;
+                for it in 0..nt {
+                    let (t1, t2, t3, t4) = (
+                        core::mem::take(&mut acc[base + it]),
+                        core::mem::take(&mut acc[base + nt + it]),
+                        core::mem::take(&mut acc[base + 2 * nt + it]),
+                        core::mem::take(&mut acc[base + 3 * nt + it]),
+                    );
+                    let mean = t1 / 256.0;
+                    let m2 = mean * mean;
+                    let m2v = (t2 - 256.0 * m2).max(0.0);
+                    let m3v = t3 - 3.0 * mean * t2 + 512.0 * m2 * mean;
+                    let m4v = (t4 - 4.0 * mean * t3 + 6.0 * m2 * t2 - 768.0 * m2 * m2).max(0.0);
+                    so[o + it] = libm::sqrt(m2v / 255.0) as f32;
+                    let stmp = libm::sqrt(m2v / 256.0);
+                    if stmp != 0.0 {
+                        sk[o + it] = ((m3v / 256.0) / (stmp * stmp * stmp)) as f32;
+                        kr[o + it] = ((m4v / 256.0) / (stmp * stmp * stmp * stmp)) as f32;
+                    }
+                }
+            }
         }
     };
     #[cfg(feature = "parallel")]
@@ -422,19 +482,11 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
             .enumerate()
             .for_each(|(ci, ((so, sk), kr))| {
                 let ts = ci * g;
-                for jt in ts..(ts + g).min(mt) {
-                    for it in 0..nt {
-                        block(4 * jt, 4 * it, so, sk, kr, (jt - ts) * nt + it);
-                    }
-                }
+                strip(ts, (ts + g).min(mt), so, sk, kr);
             });
     }
     #[cfg(not(feature = "parallel"))]
-    for it in 0..nt {
-        for jt in 0..mt {
-            block(4 * jt, 4 * it, &mut std_o, &mut skw, &mut krt, jt * nt + it);
-        }
-    }
+    strip(0, mt, &mut std_o, &mut skw, &mut krt);
     (std_o, skw, krt)
 }
 
