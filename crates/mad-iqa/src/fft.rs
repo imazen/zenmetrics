@@ -195,9 +195,7 @@ impl MPlan {
         // that's [2,2] + (2,3)⁴: five passes instead of seven.
         let mut radices = Vec::with_capacity(a + b);
         let (mut aa, mut bb) = (a, b);
-        for _ in 0..aa.min(2) {
-            radices.push(2);
-        }
+        radices.extend(std::iter::repeat_n(2, aa.min(2)));
         aa = aa.saturating_sub(2);
         while bb > 0 && aa > 0 {
             radices.push(2);
@@ -1620,7 +1618,10 @@ fn fft2_rows_conj_mul(
         // is where mad's thread scaling actually lives. Groups of eight
         // take the SoA batch path (each m-length radix-2 stage vectorizes)
         // on both the serial and the parallel path.
+        #[cfg(feature = "parallel")]
         let mut done = false;
+        #[cfg(not(feature = "parallel"))]
+        let done = false;
         #[cfg(feature = "parallel")]
         if let PlanKind::Bluestein { m, .. } = &wplan.kind {
             use rayon::prelude::*;
