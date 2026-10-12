@@ -189,7 +189,24 @@ impl MPlan {
         }
         debug_assert_eq!(rem, 1, "MPlan::smooth needs a 2^a·3^b length");
         debug_assert!(a + b >= 1);
-        let radices: Vec<u8> = [2].repeat(a).into_iter().chain([3].repeat(b)).collect();
+        // Stage order: two 2s up front (the pass-0 fused quad needs a
+        // [2,2] start), then [2,3] pairs — each fuses into one radix-6
+        // register pass — then any leftover 3s and 2s. For 5184 = 2⁶·3⁴
+        // that's [2,2] + (2,3)⁴: five passes instead of seven.
+        let mut radices = Vec::with_capacity(a + b);
+        let (mut aa, mut bb) = (a, b);
+        for _ in 0..aa.min(2) {
+            radices.push(2);
+        }
+        aa = aa.saturating_sub(2);
+        while bb > 0 && aa > 0 {
+            radices.push(2);
+            radices.push(3);
+            aa -= 1;
+            bb -= 1;
+        }
+        radices.extend([3].repeat(bb));
+        radices.extend([2].repeat(aa));
         // Stage s: span = product of earlier radices; block = span·r.
         // r=2: tw[t] = W_{2·span}^t. r=3: tw[t] = W_{3·span}^t,
         // tw[span+t] = W_{3·span}^{2t}.
@@ -777,10 +794,100 @@ fn fft_batch8_inner(
     // Consecutive radix-2 stage pairs run fused (radix-4-equivalent): the
     // two butterflies land on the same registers, so each element loads
     // and stores once per pair instead of once per stage — identical
-    // arithmetic, half the passes over the planes. Radix-3 stages and
-    // unpaired radix-2s take the single-stage paths.
+    // arithmetic, half the passes over the planes. [2,3] pairs fuse the
+    // same way into one radix-6 pass; lone radix-3s and unpaired
+    // radix-2s take the single-stage paths.
     while s < radices.len() {
-        if radices[s] == 2 {
+        if radices[s] == 2 && s + 1 < radices.len() && radices[s + 1] == 3 {
+            // Fused radix-6: stage s (radix-2, span sp) then stage s+1
+            // (radix-3, span 2sp) on registers. The r2 stage runs three
+            // butterflies (x_q, x_{q+sp}) sharing tw2[t]; the r3 stage
+            // runs two DFT-3s, at t3 = t and t3 = t+sp — each with its
+            // own tw3 twiddle pair.
+            let tw2 = &stages[s];
+            let tw3 = &stages[s + 1];
+            let sp = tw2.len();
+            let (a, b) = (-0.5f32, -0.866_025_4f32);
+            let (a8, b8) = (f32x8::splat_t(token, a), f32x8::splat_t(token, b));
+            let (sp8, sp16, sp24, sp32, sp40) = (sp * 8, sp * 16, sp * 24, sp * 32, sp * 40);
+            for start in (0..n).step_by(sp * 6) {
+                for t in 0..sp {
+                    let (wre, wim) = (
+                        f32x8::splat_t(token, tw2[t].re),
+                        f32x8::splat_t(token, tw2[t].im),
+                    );
+                    let (w1re, w1im) = (
+                        f32x8::splat_t(token, tw3[t].re),
+                        f32x8::splat_t(token, tw3[t].im),
+                    );
+                    let (w2re, w2im) = (
+                        f32x8::splat_t(token, tw3[2 * sp + t].re),
+                        f32x8::splat_t(token, tw3[2 * sp + t].im),
+                    );
+                    // The second DFT-3 is at t3 = t+sp — its own twiddles.
+                    let (w3re, w3im) = (
+                        f32x8::splat_t(token, tw3[t + sp].re),
+                        f32x8::splat_t(token, tw3[t + sp].im),
+                    );
+                    let (w4re, w4im) = (
+                        f32x8::splat_t(token, tw3[3 * sp + t].re),
+                        f32x8::splat_t(token, tw3[3 * sp + t].im),
+                    );
+                    let i0 = (start + t) * 8;
+                    let (i1, i2, i3, i4, i5) = (i0 + sp8, i0 + sp16, i0 + sp24, i0 + sp32, i0 + sp40);
+                    let x0re = f32x8::load_t(token, (&dst_re[i0..i0 + 8]).try_into().unwrap());
+                    let x0im = f32x8::load_t(token, (&dst_im[i0..i0 + 8]).try_into().unwrap());
+                    let x1re = f32x8::load_t(token, (&dst_re[i1..i1 + 8]).try_into().unwrap());
+                    let x1im = f32x8::load_t(token, (&dst_im[i1..i1 + 8]).try_into().unwrap());
+                    let x2re = f32x8::load_t(token, (&dst_re[i2..i2 + 8]).try_into().unwrap());
+                    let x2im = f32x8::load_t(token, (&dst_im[i2..i2 + 8]).try_into().unwrap());
+                    let x3re = f32x8::load_t(token, (&dst_re[i3..i3 + 8]).try_into().unwrap());
+                    let x3im = f32x8::load_t(token, (&dst_im[i3..i3 + 8]).try_into().unwrap());
+                    let x4re = f32x8::load_t(token, (&dst_re[i4..i4 + 8]).try_into().unwrap());
+                    let x4im = f32x8::load_t(token, (&dst_im[i4..i4 + 8]).try_into().unwrap());
+                    let x5re = f32x8::load_t(token, (&dst_re[i5..i5 + 8]).try_into().unwrap());
+                    let x5im = f32x8::load_t(token, (&dst_im[i5..i5 + 8]).try_into().unwrap());
+                    // Stage s (radix-2): y_lo = u + v·w, y_hi = u − v·w
+                    // on (x0,x1), (x2,x3), (x4,x5).
+                    let (t0re, t0im) = (x1re * wre - x1im * wim, x1re * wim + x1im * wre);
+                    let (y0re, y0im) = (x0re + t0re, x0im + t0im);
+                    let (y1re, y1im) = (x0re - t0re, x0im - t0im);
+                    let (t1re, t1im) = (x3re * wre - x3im * wim, x3re * wim + x3im * wre);
+                    let (y2re, y2im) = (x2re + t1re, x2im + t1im);
+                    let (y3re, y3im) = (x2re - t1re, x2im - t1im);
+                    let (t2re, t2im) = (x5re * wre - x5im * wim, x5re * wim + x5im * wre);
+                    let (y4re, y4im) = (x4re + t2re, x4im + t2im);
+                    let (y5re, y5im) = (x4re - t2re, x4im - t2im);
+                    // Stage s+1 (radix-3): DFT-3 on (y0,y2,y4) at t3 = t,
+                    // then on (y1,y3,y5) at t3 = t+sp.
+                    let (z1re, z1im) = (y2re * w1re - y2im * w1im, y2re * w1im + y2im * w1re);
+                    let (z2re, z2im) = (y4re * w2re - y4im * w2im, y4re * w2im + y4im * w2re);
+                    let (sre, sim) = (z1re + z2re, z1im + z2im);
+                    let (dre, dim) = (z1re - z2re, z1im - z2im);
+                    let (tre, tim) = (sre * a8, sim * a8);
+                    let (ure, uim) = (dre * b8, dim * b8);
+                    (y0re + sre).store((&mut dst_re[i0..i0 + 8]).try_into().unwrap());
+                    (y0im + sim).store((&mut dst_im[i0..i0 + 8]).try_into().unwrap());
+                    (y0re + tre - uim).store((&mut dst_re[i2..i2 + 8]).try_into().unwrap());
+                    (y0im + tim + ure).store((&mut dst_im[i2..i2 + 8]).try_into().unwrap());
+                    (y0re + tre + uim).store((&mut dst_re[i4..i4 + 8]).try_into().unwrap());
+                    (y0im + tim - ure).store((&mut dst_im[i4..i4 + 8]).try_into().unwrap());
+                    let (z1re, z1im) = (y3re * w3re - y3im * w3im, y3re * w3im + y3im * w3re);
+                    let (z2re, z2im) = (y5re * w4re - y5im * w4im, y5re * w4im + y5im * w4re);
+                    let (sre, sim) = (z1re + z2re, z1im + z2im);
+                    let (dre, dim) = (z1re - z2re, z1im - z2im);
+                    let (tre, tim) = (sre * a8, sim * a8);
+                    let (ure, uim) = (dre * b8, dim * b8);
+                    (y1re + sre).store((&mut dst_re[i1..i1 + 8]).try_into().unwrap());
+                    (y1im + sim).store((&mut dst_im[i1..i1 + 8]).try_into().unwrap());
+                    (y1re + tre - uim).store((&mut dst_re[i3..i3 + 8]).try_into().unwrap());
+                    (y1im + tim + ure).store((&mut dst_im[i3..i3 + 8]).try_into().unwrap());
+                    (y1re + tre + uim).store((&mut dst_re[i5..i5 + 8]).try_into().unwrap());
+                    (y1im + tim - ure).store((&mut dst_im[i5..i5 + 8]).try_into().unwrap());
+                }
+            }
+            s += 2;
+        } else if radices[s] == 2 {
             if s + 1 < radices.len() && radices[s + 1] == 2 {
                 let (tw0, tw1) = (&stages[s], &stages[s + 1]);
                 let half = tw0.len();
