@@ -1,0 +1,4 @@
+# Preserve whole sibling workspace roots, not only selected member directories.
+[build.env]
+volumes = ["ZEN_CHECKPOINT_WORKSPACES"]
+passthrough = ["ZENMETRICS_TEST_ZENSIM_BAKE", "CARGO_BUILD_JOBS", "RAYON_NUM_THREADS"]

@@ -123,3 +123,9 @@ never turn a refused observation into an accepted benchmark. The checkpoint
 release requires a green native-protocol run under the current matrix.
 macOS Intel was removed from all matrices at owner direction; macOS ARM64
 remains a required checkpoint target.
+
+For i686, `cross` mounts the common ancestor containing the complete pinned
+sibling workspaces. Mounting only dependency member directories loses inherited
+workspace metadata. `just checkpoint-i686-vmaf-check` exercises that mount and
+VMAF’s portable SIMD generation on the 32-bit target. This is a compile check;
+it does not establish numerical parity on i686.

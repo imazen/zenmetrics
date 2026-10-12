@@ -43,6 +43,10 @@ def main():
     if not bake.is_file():
         parser.error('Pinned zensim selector fixture is missing')
     build_env = dict(os.environ, ZENMETRICS_TEST_ZENSIM_BAKE=str(bake))
+    if args.cross:
+        # Path dependencies may be members inheriting from a sibling workspace root.
+        build_env['ZEN_CHECKPOINT_WORKSPACES'] = str(root.parent.parent)
+        build_env['CROSS_CONFIG'] = str(root / 'ci/checkpoint-cross.toml')
     features = ','.join(config['profiles'][args.profile])
     common = ['--locked', '-p', 'zenmetrics-cli', '--target', args.target, '--features', features]
     commands = [

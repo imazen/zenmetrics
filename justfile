@@ -450,6 +450,9 @@ vmaf-portable-check:
     cargo check --locked -p vmaf --lib --features simd,avx512 --target aarch64-unknown-linux-gnu
     cargo check --locked -p vmaf --lib --features simd,avx512 --target x86_64-unknown-linux-gnu
 
+checkpoint-i686-vmaf-check:
+    ZEN_CHECKPOINT_WORKSPACES="$(cd ../.. && pwd)" CROSS_CONFIG="$(pwd)/ci/checkpoint-cross.toml" cross check --locked -p vmaf --lib --features simd,avx512 --target i686-unknown-linux-gnu
+
 checkpoint-native profile target source runner output:
     python3 scripts/checkpoint/package.py --profile {{profile}} --target {{target}} --source {{source}} --runner-source {{runner}} --out {{output}}
 
