@@ -226,6 +226,8 @@ caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t
   which AIC-4 columns we reproduce, which we can't, and JND normalization.
 - [docs/RUNNING_JOBS.md](docs/RUNNING_JOBS.md): the zenfleet job system for
   distributed sweeps and backfills.
+- [docs/MULTIDIMENSIONAL_BENCHMARKING.md](docs/MULTIDIMENSIONAL_BENCHMARKING.md):
+  proposed metric cost studies across image size, hardware and OS.
 - [crates/margarine/README.md](crates/margarine/README.md): Margarine, an
   unpublished research metric (not in `--metric` yet).
 - [docs/CUBECL_PORTING_GUIDE.md](docs/CUBECL_PORTING_GUIDE.md),
