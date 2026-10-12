@@ -75,8 +75,8 @@ fn input(path: &Path, case: &Case) -> Result<Vec<f32>, Error> {
             .ok_or("packed size overflow")?,
     )?;
     for source in bytes.chunks_exact(case.stride_bytes) {
-        for channel in source[..row].chunks_exact(4) {
-            let value = f32::from_le_bytes(channel.try_into()?);
+        for channel in source[..row].as_chunks::<4>().0 {
+            let value = f32::from_le_bytes(*channel);
             if !value.is_finite() || value < 0.0 {
                 return Err("HDR channels require finite nonnegative absolute cd/m2".into());
             }
