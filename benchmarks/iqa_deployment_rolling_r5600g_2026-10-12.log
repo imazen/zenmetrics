@@ -1,0 +1,5 @@
+run-heavy: mem-cap=NONE (no systemd user scope — niced+monitored only) jobs=1/1 avail=41641MiB :: python3 -B check_iqa_deployment.py binaries /home/lilith/tmp/zm-iqa-dct-20261012/binaries/zenbench /home/lilith/tmp/zm-iqa-dct-20261012/zenmetrics-controls campaign r5600g capacity1024_l316384K
+{"sdr_metrics": 38, "width": 256, "height": 256, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional control only; no accuracy or resource admission claim"}
+{"native_hdr_metrics": 2, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional routing only; no performance/admission certification"}
+{"captured": 80, "complete": 80, "native_routes": 40, "gpu_variants": 0, "machine": "r5600g", "domain": "capacity1024_l316384K", "qualification": "deployment and descriptive observations; no accuracy/speed acceptance"}
+run-heavy: done rc=0 93s | peak-RSS 0.02GiB | min-avail 41560MiB | peak-load 0.46

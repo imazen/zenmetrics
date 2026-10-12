@@ -1,0 +1,8 @@
+run-heavy: mem-cap=NONE (no systemd user scope — niced+monitored only) jobs=1/1 avail=28269MiB :: bash -c set -e
+python3 -B "$HOME/tmp/zm-iqa-dct-20261012/zenmetrics-controls/scripts/jobsys/check_iqa_study.py" binaries sdr-controls
+python3 -B "$HOME/tmp/zm-iqa-dct-20261012/zenmetrics-controls/scripts/jobsys/check_iqa_hdr.py" binaries hdr-controls
+python3 -B benchmark_iqa_deployment.py binaries "$HOME/tmp/zm-iqa-dct-20261012/binaries/zenbench" sdr-controls hdr-controls benchmark-observations i134 performance_l320480K
+{"sdr_metrics": 38, "width": 256, "height": 256, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional control only; no accuracy or resource admission claim"}
+{"native_hdr_metrics": 2, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional routing only; no performance/admission certification"}
+{"captured": 80, "complete": 80, "native_routes": 40, "gpu_variants": 0, "machine": "i134", "domain": "performance_l320480K", "qualification": "deployment and descriptive observations; no accuracy/speed acceptance"}
+run-heavy: done rc=0 91s | peak-RSS 0.02GiB | min-avail 28104MiB | peak-load 0.61

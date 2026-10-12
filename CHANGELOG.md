@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- IW-SSIM (`41c8c9e8`): emit Laplacian bands from adjacent Gaussian levels, with exact coefficient parity against the previous builder and lower measured maximum RSS in full/strip fixtures. Full CPU deployment was rechecked with separate ordinary/instrumented artifacts.
+
 - IW-SSIM (`3250fcb9`): borrow strip input rows and Laplacian planes instead of copying them; exact score bits on the measured body-512 fixture, lower measured maximum RSS, unchanged golden/parity assertions and working no-default-features tests.
 - CUDA deployment (`00880930`, `3083c487`): bind a scoped, verified NVRTC SDK into native worker bundles; all six CUDA variants pass direct controls and worker observations on i134 and r5600g after driver recovery. Observations remain descriptive.
 - Native adapter controls (`770454db`): allow 30 seconds for resource admission on shared CI runners while retaining the two-second child timeout and exact outcome assertions.

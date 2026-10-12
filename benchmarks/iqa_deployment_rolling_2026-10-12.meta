@@ -1,0 +1,18 @@
+Driver source: 41c8c9e8f94536d4df4d54ebddeb84adbb370460 (adjacent Gaussian levels in IW-SSIM). CI-pinned snapshot, ordinary and heap-phases release builds, runtime dispatch, no target-cpu=native.
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just iqa-study-build ~/tmp/zm-iqa-rolling-20261012-binaries.
+Build resource: run-heavy: done rc=0 30s | peak-RSS 0.72GiB | min-avail 24041MiB | peak-load 2.68
+Ordinary latency SHA-256: 63d14fbc131ef146b5fee5d7d087ca8cf5617a3298ce8bb616c5e2d4094f932d
+Instrumented memory SHA-256: d33353bb644bac12a10797e1b60591afa3b7dd0b1e2134c01d0225a1d07dc9b9
+Runner/worker/controller/ledger-reader hashes unchanged from iqa_deployment_dct_2026-10-12.meta; deployed zenbench is ac675d3a, 0.1.10, not the pending 0.1.11 release.
+Native functional controls: all 38 SDR routes at patterned RGB8 256x256 plus hdrvdp/hdrvdp3 at 128x96 absolute BT.709 nits; two cold calls. Exact products across packed/padded rows and ordinary/instrumented builds. Native observations stage the qualified packed cases through the existing worker/ledger adapter.
+Per host: 80 complete packet observations, 40 ordinary-latency products and 40 separate instrumented-memory products; all 40 routes. Results are descriptive deployment controls, not independent metric accuracy or comparative speed acceptance.
+Resource boundary: hard outer system scope AllowedCPUs=2, MemoryMax=17179869184, MemorySwapMax=0, verified while active. Inner run-heavy reports no user scope; the outer scope supplies the hard limits. Supervisor peak RSS is separate from retained per-child OS-resident and heap phase quantities.
+i134 domain: performance_l320480K.
+i134 direct controls and worker resource: run-heavy: done rc=0 91s | peak-RSS 0.02GiB | min-avail 28104MiB | peak-load 0.61
+i134 observation JSONL SHA-256: 5d53c877d1eac1156385d7fcbf32a9d294161284e0a0343e88828c2c36239401
+i134 raw resolving path: ~/tmp/zm-iqa-rolling-20261012/{sdr-controls,hdr-controls,benchmark-observations}/.
+Campaign recipe: just iqa-deployment-campaign <binaries> <runner> <checker-source-tree> <new-output> <machine> <domain>. Argument-based orchestration avoids nested shell quoting; checker-source-tree explicitly supplies the existing fixture inventory and checker scripts.
+r5600g domain: capacity1024_l316384K.
+r5600g observation JSONL SHA-256: 03f1cb54f6c662a2d5288a0f132c0d1137e363245bffabd3785ad671f920af08
+r5600g direct controls and worker resource: run-heavy: done rc=0 93s | peak-RSS 0.02GiB | min-avail 41560MiB | peak-load 0.46
+r5600g raw resolving path: ~/tmp/zm-iqa-rolling-20261012/campaign/{sdr-controls,hdr-controls,benchmark-observations}/.

@@ -340,3 +340,10 @@ The synthetic native adapter controls allow 30 seconds for resource
 admission on shared CI runners. Their child timeout remains two seconds;
 complete, wrong-output, timeout and cancellation outcomes are still checked
 exactly. These fixtures validate the protocol and do not measure metric speed.
+
+`just iqa-deployment-campaign BINARIES RUNNER CHECKER_TREE NEW_OUTPUT
+MACHINE DOMAIN` runs SDR/HDR layout and instrumentation controls before
+staging the native panel. It uses argument vectors for each command and
+retains the explicit checker source tree. The [rolling-pyramid deployment
+refresh](../benchmarks/iqa_deployment_rolling_2026-10-12.meta) uses this path
+with the current ordinary and separate instrumented drivers.
