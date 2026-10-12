@@ -9,6 +9,20 @@ and collect `perf stat -e instructions,cycles`; sixteen-thread runs use the
 host's available CPUs. These wall observations are exploratory, without
 statistical intervals; the earlier suite treats changes below 15% as noise.
 
+The five leading scout targets are addressed below: retained-column VSI and
+FSIM decimation, exact HaarPSI pooling and f64 RGB SSIM changes are retained;
+the proposed exact MS-SSIM separable decimator has a coefficient-level
+counterexample. Subsequent sections retain the NLPD, IW-SSIM, PSNR-HVS,
+Daala and HDR-VDP-3 changes. Native MS-SSIM product fusion already exists;
+the strip-cache experiment records its measured memory tradeoff without
+enabling image-wide retention in production.
+
+The final [larger host panels](iqa_deployment_expanded_2026-10-12.meta)
+cover 46/46 registry variants on both i134 and r5600g, including six CUDA
+variants after i134's approved reboot. They retain individual call times and
+separate memory observations; they qualify the exercised deployment routes,
+not comparative speed acceptance or independent metric accuracy.
+
 ## VSI
 
 Baseline source: `81dcb599`; baseline receipts and recipe: `c1fe73b0`.

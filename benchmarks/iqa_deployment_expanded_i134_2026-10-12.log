@@ -1,0 +1,13 @@
+Running as unit: zm-iqa-expanded-v2-20261012.service
+run-heavy: mem-cap=NONE (no systemd user scope — niced+monitored only) jobs=1/1 avail=28225MiB :: bash /home/lilith/tmp/zm-iqa-expanded-20261012/campaign.sh
+{"sdr_metrics": 38, "width": 1024, "height": 1024, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional control only; no accuracy or resource admission claim"}
+{"native_hdr_metrics": 2, "width": 1024, "height": 768, "instrumentation_and_stride_parity": "exact scalar products", "qualification": "functional routing only; no performance/admission certification"}
+{"captured": 80, "complete": 80, "native_routes": 40, "gpu_variants": 0, "machine": "i134", "domain": "performance_l320480K", "qualification": "deployment and descriptive observations; no accuracy/speed acceptance"}
+{"backend": "cuda", "expected_adapter": "NVIDIA GeForce GTX 1080 Ti", "width": 1024, "height": 1024, "control_cases": 24, "failures": []}
+{"captured": 24, "complete": 24, "native_routes": 0, "gpu_variants": 6, "machine": "i134", "domain": "performance_l320480K", "qualification": "deployment and descriptive observations; no accuracy/speed acceptance"}
+run-heavy: done rc=0 379s | peak-RSS 0.58GiB | min-avail 27632MiB | peak-load 1.43
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 6min 19.813s
+             CPU time consumed: 5min 23.705s
+                   Memory peak: 16G (swap: 0B)

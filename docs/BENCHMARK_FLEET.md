@@ -360,3 +360,20 @@ registry and driver source inventory together. Extract the archive under the
 explicit `CHECKER_TREE` path before launching a remote campaign. The inventory
 needs `crates/zenmetrics-cli/src/metrics/mod.rs` as well as the driver source;
 transferring only scripts and the driver leaves the campaign incomplete.
+
+The [larger 2026-10-12 panels](../benchmarks/iqa_deployment_expanded_2026-10-12.meta)
+cover **46/46 registry variants** on both i134 and r5600g: 38 SDR CPU routes,
+two native HDR routes and six CUDA variants. SDR/GPU inputs are 1024×1024;
+native HDR inputs are 1024×768 absolute BT.709 nits. All direct packed/padded
+and ordinary/instrumented scalar-product controls pass. Each host then
+completes 80/80 CPU and 24/24 CUDA worker observations, with the GPU variants
+tested cold and with a retained instance.
+
+The [call-time table](../benchmarks/iqa_deployment_expanded_2026-10-12.tsv)
+retains both measured calls for every ordinary-latency route. Separate memory
+and full correctness receipts remain in the [i134 JSONL](../benchmarks/iqa_deployment_expanded_i134_2026-10-12.jsonl)
+and [r5600g JSONL](../benchmarks/iqa_deployment_expanded_r5600g_2026-10-12.jsonl).
+These are descriptive observations, without a statistical speed verdict or
+independent metric-accuracy qualification. The hard system scopes reached
+16 GiB charged memory, including staged-file cache; their accounting differs
+from the per-case resident and Rust heap quantities.

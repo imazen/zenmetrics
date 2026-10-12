@@ -1,0 +1,28 @@
+Date: 2026-10-12. Expanded deployment and descriptive benchmark observations, not canonical accuracy or comparative speed acceptance.
+CPU production driver source: 52b367c0d32635783f70c14f68b4464fcfd85145; metric implementation matches 4ca87a344ad15d4b342cbaf73ccd6bc244b75142. CI-pinned release builds, runtime dispatch, no target-cpu=native.
+Control scripts and portable source-tree recipe: 9e5986720b9855c3b220be2232eac894bacda2c4. The original direct product, repeatability, stride and instrumentation assertions remain unchanged.
+Build: TMPDIR=$HOME/tmp run-heavy --mem 16G --jobs 8 -- just iqa-study-build ~/tmp/zm-iqa-expanded-20261012-binaries.
+Build resource: run-heavy: done rc=0 60s | peak-RSS 0.72GiB | min-avail 20076MiB | peak-load 34.76
+Ordinary CPU driver SHA-256: 80e6d6c770d3f7baee33c96317c85d90dad46ea1efaf20dfe0538e65a6337993.
+Instrumented CPU driver SHA-256: 5ffda2f1fc01c5d5ff5513715918e56a8302f8137cb2b3f0250db699c825c19f.
+CUDA drivers and scoped SDK are the unchanged hash-bound artifacts in iqa_cuda_deployment_2026-10-12.meta, GPU source ec453ab069. Runner/worker/controller/ledger-reader are unchanged from iqa_deployment_dct_2026-10-12.meta; deployed zenbench remains ac675d3a, version 0.1.10, not the pending 0.1.11 release.
+Direct controls: all 38 SDR routes at 1024x1024 patterned sRGB8; hdrvdp/hdrvdp3 at 1024x768 absolute BT.709 nits; all six CUDA variants at 1024x1024, cold and warm_instance. Two score operations, packed and padded inputs, separate ordinary and instrumented processes. Expected products are exact per host, route and workload; these controls do not compare CPU to GPU or one host to another.
+Inventory command: python3 -B scripts/jobsys/build_benchmark_study.py inventory. The source inventory contains 46 variants; every one has a native driver route. GPU cold/warm-instance modes add six repeated routes, yielding 52 ordinary latency and 52 separate memory observations per host. Native worker collection requires every packet status complete, not merely ledger Done.
+CPU campaign: just iqa-deployment-campaign <binaries> <runner> <checker-tree> <new-root>/cpu <machine> <domain> --sdr-size 1024 1024 --hdr-size 1024 768.
+GPU controls: CUDA_PATH=<sdk> LD_LIBRARY_PATH=<sdk>/lib64 just iqa-gpu-check <GPU-binaries> cuda <new-root>/gpu-controls <adapter-resolved-with-nvidia-smi> --size 1024 1024.
+GPU worker: just iqa-gpu-deployment-bench <GPU-binaries> <runner> <new-root>/gpu-controls <new-root>/gpu <machine> <domain> <sdk>.
+Portable checkers: just iqa-control-tree <new-archive>; extract under checker-tree. An initial i134 transfer omitted the registry and failed before any controls ran. Its log and empty campaign root remain at ~/tmp/zm-iqa-expanded-20261012/campaign-first-failure.log and cpu-first-failure; the completed source-tree recipe was used for both successful launches.
+Resource boundary: outer systemd system service, normal User, AllowedCPUs=2, MemoryMax=17179869184, MemorySwapMax=0, properties verified while active. Worker reports one CPU core, so jobs run serially. Inner run-heavy reports no user scope and is niced/monitored; the outer unit supplies the hard limits. Its peak RSS receipt differs from per-case resident/heap memory, and from the unit's total charged memory including filesystem cache.
+i134 complete raw paths: ~/tmp/zm-iqa-expanded-20261012/cpu/{sdr-controls,hdr-controls,benchmark-observations}, gpu-controls, gpu, campaign.log. Domain performance_l320480K. SDK and GPU binaries remain under ~/tmp/zm-iqa-cuda-20261012/.
+i134: 80/80 CPU and 24/24 CUDA worker observations complete after all direct controls passed. run-heavy: done rc=0 379s | peak-RSS 0.58GiB | min-avail 27632MiB | peak-load 1.43
+The i134 system service reports total Memory peak 16G, swap 0B; a late active-unit observation records max=1203 and oom=oom_kill=oom_group_kill=0. Charged unit memory pressure can influence these descriptive timings; no speed acceptance is inferred.
+i134 CPU raw summary SHA-256: 00b1ce84c3d88c7bdecdc1d9e12d8e19307445031c743ac4a3b70e160e183c63.
+i134 GPU raw summary SHA-256: 5d485736fcb7f05c9de7a8dce8404899d039f57d7a278d28707d2fd0233b36dc.
+i134 concatenated JSONL SHA-256: 4661cc74171d042cca4936fea00dd04cac05c183e80f8f6b18aea90f2f6d78d2.
+r5600g raw paths: ~/tmp/zm-iqa-expanded-20261012/cpu/{sdr-controls,hdr-controls,benchmark-observations}, gpu-controls, gpu, campaign.log. Domain capacity1024_l316384K. SDK and GPU binaries remain under ~/tmp/zm-iqa-cuda-20261012/.
+r5600g: 80/80 CPU and 24/24 CUDA observations complete after all direct controls passed. run-heavy: done rc=0 457s | peak-RSS 0.93GiB | min-avail 40984MiB | peak-load 1.11
+r5600g system service reports total Memory peak 16G, swap 0B. A live worker snapshot measured 6310109184 bytes of file cache, 61976576 bytes anonymous memory and 23252992 bytes kernel memory. These are unit accounting at that observation, not per-case memory peaks. Preserve that distinction and the descriptive timing qualification.
+r5600g zm-iqa-expanded-r5600g-cpu.jsonl SHA-256: 7e2581bac0f58394add0cc8a974b3d980b272ddb51d2789c61d8b508d1ae8f52.
+r5600g zm-iqa-expanded-r5600g-gpu.jsonl SHA-256: e74339c7b381a4b76fb53ba7981bbbb96f668afd8147ad659d1e7e8cee5c37e5.
+r5600g concatenated JSONL SHA-256: 43e14c209d391fa63268b1af9b866ca96e76ece801dda23ee50bb04d7a4ed558.
+TSV: all 52 ordinary-latency metric/reuse routes, sorted lexically; each raw operation_ns converted exactly to decimal milliseconds (integer quotient/remainder by 1000000). No average, ratio, interpolation or acceptance verdict. SHA-256 faf29295599618aa9bd1679807af9bc57ba663e495c031eb5b922b4b40299b83.
