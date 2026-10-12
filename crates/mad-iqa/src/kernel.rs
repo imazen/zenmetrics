@@ -160,36 +160,53 @@ fn jstrip_g(m: usize) -> usize {
     iters.div_ceil(rayon::current_num_threads() * 4).max(1)
 }
 
+/// Tile-grid dims: the stride-4 block starts of B-sized windows, as
+/// `(tile_rows, tile_cols)`. `(0, 0)` when no block fits.
+fn tile_dims(m: usize, n: usize) -> (usize, usize) {
+    if m >= B && n >= B {
+        ((m - B) / 4 + 1, (n - B) / 4 + 1)
+    } else {
+        (0, 0)
+    }
+}
+
 /// `ical_std(dst−ref, ref)` → `(std_2, std_1, m1_1)` — verbatim port
 /// of the C mex: stride-4 16×16 windows, blocky 4×4 tiles; `std_1` is
 /// the 8×8 sample-std of ref min-pooled over `{0,5}` offsets.
-/// Numerators accumulate f64 (the C code is `double`); maps store
-/// f32.
+/// Numerators accumulate f64 (the C code is `double`).
+///
+/// The C mex stores each statistic into a whole 4×4 tile of a full-res
+/// map; every consumer only needs the per-tile value, so these are
+/// `mt × nt` tile-resolution maps (`tile[jt * nt + it]` = pixel block
+/// starting at `(4jt, 4it)`). Positions outside the tile grid would
+/// have read 0 from the full-res maps, and callers honour that.
 fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    let (mt, nt) = tile_dims(m, n);
     let (mut std2, mut std1, mut m1) = (
-        vec![0.0f32; m * n],
-        vec![0.0f32; m * n],
-        vec![0.0f32; m * n],
+        vec![0.0f32; mt * nt],
+        vec![0.0f32; mt * nt],
+        vec![0.0f32; mt * nt],
     );
-    let mut tmp = vec![0.0f32; m * n];
-    if m < B || n < B {
+    let mut tmp = vec![0.0f32; mt * nt];
+    if mt == 0 {
         return (std2, std1, m1);
     }
-    // Pass 1: 16×16 blocks at stride 4. (i,j) blocks are independent —
-    // each writes only its own disjoint 4×4 tile, so j-strips are safe
-    // to run on threads (identical per-element values either way).
+    // Pass 1: 16×16 blocks at stride 4. (it,jt) blocks are independent —
+    // each writes only its own tile, so jt-strips are safe to run on
+    // threads (identical per-element values either way).
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
         let g = jstrip_g(m);
-        let (sh, je) = (4 * g * n, m + 1 - B);
-        std2.par_chunks_mut(sh)
-            .zip(m1.par_chunks_mut(sh))
+        std2.par_chunks_mut(g * nt)
+            .zip(m1.par_chunks_mut(g * nt))
             .enumerate()
             .for_each(|(ci, (s2s, m1s))| {
-                let rs = ci * 4 * g;
-                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
-                    for i in (0..=n - B).step_by(4) {
+                let ts = ci * g;
+                for jt in ts..(ts + g).min(mt) {
+                    let j = 4 * jt;
+                    for it in 0..nt {
+                        let i = 4 * it;
                         let (mut sx, mut sy) = (0.0f64, 0.0f64);
                         for r in j..j + B {
                             for c in i..i + B {
@@ -205,20 +222,18 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                                 s2 += d * d;
                             }
                         }
-                        let stdev = libm::sqrt(s2 / 255.0) as f32;
-                        for r in j..j + 4 {
-                            for c in i..i + 4 {
-                                s2s[(r - rs) * n + c] = stdev;
-                                m1s[(r - rs) * n + c] = mean2 as f32;
-                            }
-                        }
+                        let o = (jt - ts) * nt + it;
+                        s2s[o] = libm::sqrt(s2 / 255.0) as f32;
+                        m1s[o] = mean2 as f32;
                     }
                 }
             });
     }
     #[cfg(not(feature = "parallel"))]
-    for i in (0..=n - B).step_by(4) {
-        for j in (0..=m - B).step_by(4) {
+    for it in 0..nt {
+        let i = 4 * it;
+        for jt in 0..mt {
+            let j = 4 * jt;
             let (mut sx, mut sy) = (0.0f64, 0.0f64);
             for r in j..j + B {
                 for c in i..i + B {
@@ -234,13 +249,9 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                     s2 += d * d;
                 }
             }
-            let stdev = libm::sqrt(s2 / 255.0) as f32;
-            for r in j..j + 4 {
-                for c in i..i + 4 {
-                    std2[r * n + c] = stdev;
-                    m1[r * n + c] = mean2 as f32;
-                }
-            }
+            let o = jt * nt + it;
+            std2[o] = libm::sqrt(s2 / 255.0) as f32;
+            m1[o] = mean2 as f32;
         }
     }
     // Pass 2: 8×8 blocks at the same stride-4 starts.
@@ -248,14 +259,15 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
     {
         use rayon::prelude::*;
         let g = jstrip_g(m);
-        let (sh, je) = (4 * g * n, m + 1 - B);
-        tmp.par_chunks_mut(sh)
-            .zip(std1.par_chunks_mut(sh))
+        tmp.par_chunks_mut(g * nt)
+            .zip(std1.par_chunks_mut(g * nt))
             .enumerate()
             .for_each(|(ci, (tps, s1s))| {
-                let rs = ci * 4 * g;
-                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
-                    for i in (0..=n - B).step_by(4) {
+                let ts = ci * g;
+                for jt in ts..(ts + g).min(mt) {
+                    let j = 4 * jt;
+                    for it in 0..nt {
+                        let i = 4 * it;
                         let mut sy = 0.0f64;
                         for r in j..j + 8 {
                             for c in i..i + 8 {
@@ -270,20 +282,19 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                                 s2 += d * d;
                             }
                         }
+                        let o = (jt - ts) * nt + it;
                         let stdev = libm::sqrt(s2 / 63.0) as f32;
-                        for r in j..j + 4 {
-                            for c in i..i + 4 {
-                                tps[(r - rs) * n + c] = stdev;
-                                s1s[(r - rs) * n + c] = stdev;
-                            }
-                        }
+                        tps[o] = stdev;
+                        s1s[o] = stdev;
                     }
                 }
             });
     }
     #[cfg(not(feature = "parallel"))]
-    for i in (0..=n - B).step_by(4) {
-        for j in (0..=m - B).step_by(4) {
+    for it in 0..nt {
+        let i = 4 * it;
+        for jt in 0..mt {
+            let j = 4 * jt;
             let mut sy = 0.0f64;
             for r in j..j + 8 {
                 for c in i..i + 8 {
@@ -299,60 +310,60 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                 }
             }
             let stdev = libm::sqrt(s2 / 63.0) as f32;
-            for r in j..j + 4 {
-                for c in i..i + 4 {
-                    tmp[r * n + c] = stdev;
-                    std1[r * n + c] = stdev;
-                }
-            }
+            tmp[jt * nt + it] = stdev;
+            std1[jt * nt + it] = stdev;
         }
     }
-    // Pass 3: min-pool over {0,5} offsets, position bounds-checked. The
-    // `tmp` reads reach 7 rows past the strip boundary but are immutable
-    // by then (pass 2 joined first) — strips only write disjoint tiles.
+    // Pass 3: min-pool over {0,5} pixel offsets = {0,+1} tile offsets
+    // (block starts are ≡0 mod 4, so pixel j+5 lands in tile jt+1).
+    // The bounds checks stay pixel-level, exactly as the reference
+    // evaluates them. Tile reads reach one tile row past a strip's
+    // edge but are immutable by then (pass 2 joined first).
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
         let g = jstrip_g(m);
-        let (sh, je) = (4 * g * n, m + 1 - B);
         let tmp_ref: &[f32] = &tmp;
-        std1.par_chunks_mut(sh).enumerate().for_each(|(ci, s1s)| {
-            let rs = ci * 4 * g;
-            for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
-                for i in (0..=n - B).step_by(4) {
-                    let mut mn = tmp_ref[j * n + i];
-                    for ib in (i..=i + 7).step_by(5) {
-                        for jb in (j..=j + 7).step_by(5) {
-                            if ib < n - 15 && jb < m - 15 && mn > tmp_ref[jb * n + ib] {
-                                mn = tmp_ref[jb * n + ib];
-                            }
+        std1.par_chunks_mut(g * nt)
+            .enumerate()
+            .for_each(|(ci, s1s)| {
+                let ts = ci * g;
+                for jt in ts..(ts + g).min(mt) {
+                    let j = 4 * jt;
+                    for it in 0..nt {
+                        let i = 4 * it;
+                        let mut mn = tmp_ref[jt * nt + it];
+                        if i + 5 < n - 15 && j < m - 15 && mn > tmp_ref[jt * nt + it + 1] {
+                            mn = tmp_ref[jt * nt + it + 1];
                         }
-                    }
-                    for r in j..j + 4 {
-                        for c in i..i + 4 {
-                            s1s[(r - rs) * n + c] = mn;
+                        if i < n - 15 && j + 5 < m - 15 && mn > tmp_ref[(jt + 1) * nt + it] {
+                            mn = tmp_ref[(jt + 1) * nt + it];
                         }
+                        if i + 5 < n - 15 && j + 5 < m - 15 && mn > tmp_ref[(jt + 1) * nt + it + 1]
+                        {
+                            mn = tmp_ref[(jt + 1) * nt + it + 1];
+                        }
+                        s1s[(jt - ts) * nt + it] = mn;
                     }
                 }
-            }
-        });
+            });
     }
     #[cfg(not(feature = "parallel"))]
-    for i in (0..=n - B).step_by(4) {
-        for j in (0..=m - B).step_by(4) {
-            let mut mn = tmp[j * n + i];
-            for ib in (i..=i + 7).step_by(5) {
-                for jb in (j..=j + 7).step_by(5) {
-                    if ib < n - 15 && jb < m - 15 && mn > tmp[jb * n + ib] {
-                        mn = tmp[jb * n + ib];
-                    }
-                }
+    for it in 0..nt {
+        let i = 4 * it;
+        for jt in 0..mt {
+            let j = 4 * jt;
+            let mut mn = tmp[jt * nt + it];
+            if i + 5 < n - 15 && j < m - 15 && mn > tmp[jt * nt + it + 1] {
+                mn = tmp[jt * nt + it + 1];
             }
-            for r in j..j + 4 {
-                for c in i..i + 4 {
-                    std1[r * n + c] = mn;
-                }
+            if i < n - 15 && j + 5 < m - 15 && mn > tmp[(jt + 1) * nt + it] {
+                mn = tmp[(jt + 1) * nt + it];
             }
+            if i + 5 < n - 15 && j + 5 < m - 15 && mn > tmp[(jt + 1) * nt + it + 1] {
+                mn = tmp[(jt + 1) * nt + it + 1];
+            }
+            std1[jt * nt + it] = mn;
         }
     }
     (std2, std1, m1)
@@ -362,75 +373,62 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
 /// mex: stride-4 16×16 windows, blocky 4×4 tiles; skew/kurtosis
 /// normalised by population moments (`stmp`); flat → 0.
 fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    let (mt, nt) = tile_dims(m, n);
     let (mut std_o, mut skw, mut krt) = (
-        vec![0.0f32; m * n],
-        vec![0.0f32; m * n],
-        vec![0.0f32; m * n],
+        vec![0.0f32; mt * nt],
+        vec![0.0f32; mt * nt],
+        vec![0.0f32; mt * nt],
     );
-    if m < B || n < B {
+    if mt == 0 {
         return (std_o, skw, krt);
     }
-    let block =
-        |j: usize, i: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32], roff: usize| {
-            let mut sx = 0.0f64;
-            for r in j..j + B {
-                for c in i..i + B {
-                    sx += x[r * n + c] as f64;
-                }
+    let block = |j: usize, i: usize, so: &mut [f32], sk: &mut [f32], kr: &mut [f32], o: usize| {
+        let mut sx = 0.0f64;
+        for r in j..j + B {
+            for c in i..i + B {
+                sx += x[r * n + c] as f64;
             }
-            let mean = sx / 256.0;
-            let (mut s2, mut s3, mut s4) = (0.0f64, 0.0f64, 0.0f64);
-            for r in j..j + B {
-                for c in i..i + B {
-                    let d = x[r * n + c] as f64 - mean;
-                    let d2 = d * d;
-                    s2 += d2;
-                    s3 += d2 * d;
-                    s4 += d2 * d2;
-                }
+        }
+        let mean = sx / 256.0;
+        let (mut s2, mut s3, mut s4) = (0.0f64, 0.0f64, 0.0f64);
+        for r in j..j + B {
+            for c in i..i + B {
+                let d = x[r * n + c] as f64 - mean;
+                let d2 = d * d;
+                s2 += d2;
+                s3 += d2 * d;
+                s4 += d2 * d2;
             }
-            let stdev = libm::sqrt(s2 / 255.0) as f32;
-            let stmp = libm::sqrt(s2 / 256.0);
-            let (skv, kuv) = if stmp != 0.0 {
-                (
-                    ((s3 / 256.0) / (stmp * stmp * stmp)) as f32,
-                    ((s4 / 256.0) / (stmp * stmp * stmp * stmp)) as f32,
-                )
-            } else {
-                (0.0, 0.0)
-            };
-            for r in j..j + 4 {
-                for c in i..i + 4 {
-                    let o = (r - roff) * n + c;
-                    so[o] = stdev;
-                    sk[o] = skv;
-                    kr[o] = kuv;
-                }
-            }
-        };
+        }
+        so[o] = libm::sqrt(s2 / 255.0) as f32;
+        let stmp = libm::sqrt(s2 / 256.0);
+        if stmp != 0.0 {
+            sk[o] = ((s3 / 256.0) / (stmp * stmp * stmp)) as f32;
+            kr[o] = ((s4 / 256.0) / (stmp * stmp * stmp * stmp)) as f32;
+        }
+    };
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
         let g = jstrip_g(m);
-        let (sh, je) = (4 * g * n, m + 1 - B);
         std_o
-            .par_chunks_mut(sh)
-            .zip(skw.par_chunks_mut(sh))
-            .zip(krt.par_chunks_mut(sh))
+            .par_chunks_mut(g * nt)
+            .zip(skw.par_chunks_mut(g * nt))
+            .zip(krt.par_chunks_mut(g * nt))
             .enumerate()
             .for_each(|(ci, ((so, sk), kr))| {
-                let rs = ci * 4 * g;
-                for j in (rs..(rs + 4 * g).min(je)).step_by(4) {
-                    for i in (0..=n - B).step_by(4) {
-                        block(j, i, so, sk, kr, rs);
+                let ts = ci * g;
+                for jt in ts..(ts + g).min(mt) {
+                    for it in 0..nt {
+                        block(4 * jt, 4 * it, so, sk, kr, (jt - ts) * nt + it);
                     }
                 }
             });
     }
     #[cfg(not(feature = "parallel"))]
-    for i in (0..=n - B).step_by(4) {
-        for j in (0..=m - B).step_by(4) {
-            block(j, i, &mut std_o, &mut skw, &mut krt, 0);
+    for it in 0..nt {
+        for jt in 0..mt {
+            block(4 * jt, 4 * it, &mut std_o, &mut skw, &mut krt, jt * nt + it);
         }
     }
     (std_o, skw, krt)
@@ -744,32 +742,34 @@ macro_rules! score_body {
 
         // msk (scalar — per-element logs and thresholds) × lmse over
         // covered tiles; outside coverage m1 = std_1 = 0, which the
-        // reference's own NaN/−inf path maps to msk = 0.
+        // reference's own NaN/−inf path maps to msk = 0. All three stat
+        // maps are tile-uniform, so the mask math runs once per tile —
+        // identical f64 inputs, identical result.
         let mut mp_hi = vec![0.0f32; m * n];
-        if m >= B && n >= B {
-            for by in (0..=m - B).step_by(4) {
-                for bx in (0..=n - B).step_by(4) {
-                    for r in by..by + 4 {
-                        for c in bx..bx + 4 {
-                            let idx = r * n + c;
-                            let s1 = std1[idx] as f64;
-                            let mu = m1[idx] as f64;
-                            let s2 = std2[idx] as f64;
-                            let ci_ref = libm::log(s1 / mu);
-                            let ci_dst = if m1[idx] < G_LUM as f32 {
-                                f64::NEG_INFINITY
-                            } else {
-                                libm::log(s2 / mu)
-                            };
-                            let msk = if ci_ref > CI_THR && ci_dst > (ci_ref - CI_THR + CD_THR) {
-                                ci_dst - (ci_ref - CI_THR + CD_THR)
-                            } else if ci_ref <= CI_THR && ci_dst > CD_THR {
-                                ci_dst - CD_THR
-                            } else {
-                                0.0
-                            };
-                            mp_hi[idx] = msk as f32 * lm[idx];
-                        }
+        let (mt, nt) = tile_dims(m, n);
+        for jt in 0..mt {
+            for it in 0..nt {
+                let t = jt * nt + it;
+                let mu = m1[t] as f64;
+                let s1 = std1[t] as f64;
+                let s2 = std2[t] as f64;
+                let ci_ref = libm::log(s1 / mu);
+                let ci_dst = if m1[t] < G_LUM as f32 {
+                    f64::NEG_INFINITY
+                } else {
+                    libm::log(s2 / mu)
+                };
+                let msk = if ci_ref > CI_THR && ci_dst > (ci_ref - CI_THR + CD_THR) {
+                    ci_dst - (ci_ref - CI_THR + CD_THR)
+                } else if ci_ref <= CI_THR && ci_dst > CD_THR {
+                    ci_dst - CD_THR
+                } else {
+                    0.0
+                } as f32;
+                for r in 4 * jt..4 * jt + 4 {
+                    for c in 4 * it..4 * it + 4 {
+                        let idx = r * n + c;
+                        mp_hi[idx] = msk * lm[idx];
                     }
                 }
             }
@@ -781,7 +781,11 @@ macro_rules! score_body {
             || spectrum(&$a.im1, m, n, &wplan, &hplan),
             || spectrum(&$a.im2, m, n, &wplan, &hplan),
         );
-        let mut mp_lo = vec![0.0f32; m * n];
+        // mp += s·(|Δstd| + 2|Δskw| + |Δkrt|) over the whole map, but the
+        // stat maps are tile-uniform so the 20-iteration accumulation
+        // runs once per tile — the same f32 adds in the same order —
+        // and the result expands to pixels in a single pass.
+        let mut mp_lo_t = vec![0.0f32; mt * nt];
         let two = <$V>::splat($token, 2.0);
         for s in 0..5 {
             for o in 0..4 {
@@ -792,12 +796,9 @@ macro_rules! score_body {
                 let (mag_r, mag_d) = (eo_magnitude(&eo_r), eo_magnitude(&eo_d));
                 let ((sr, kwr, krr), (sd, kwd, krd)) =
                     maybe_join(|| ical_stat(&mag_r, m, n), || ical_stat(&mag_d, m, n));
-                // mp += s·(|Δstd| + 2|Δskw| + |Δkrt|) over the whole
-                // map — outside coverage every map is 0 so the add is
-                // a no-op there.
                 let swv = <$V>::splat($token, LO_WEIGHTS[s]);
                 let mut i = 0usize;
-                while i + $LANES <= m * n {
+                while i + $LANES <= mt * nt {
                     let ds = (<$V>::from_array($token, core::array::from_fn(|k| sr[i + k]))
                         - <$V>::from_array($token, core::array::from_fn(|k| sd[i + k])))
                     .abs();
@@ -807,17 +808,26 @@ macro_rules! score_body {
                     let dt = (<$V>::from_array($token, core::array::from_fn(|k| krr[i + k]))
                         - <$V>::from_array($token, core::array::from_fn(|k| krd[i + k])))
                     .abs();
-                    let acc = <$V>::from_array($token, core::array::from_fn(|k| mp_lo[i + k]))
+                    let acc = <$V>::from_array($token, core::array::from_fn(|k| mp_lo_t[i + k]))
                         + swv * (ds + two * dk + dt);
-                    mp_lo[i..i + $LANES].copy_from_slice(&acc.to_array());
+                    mp_lo_t[i..i + $LANES].copy_from_slice(&acc.to_array());
                     i += $LANES;
                 }
-                while i < m * n {
+                while i < mt * nt {
                     let ds = (sr[i] - sd[i]).abs();
                     let dk = (kwr[i] - kwd[i]).abs();
                     let dt = (krr[i] - krd[i]).abs();
-                    mp_lo[i] += LO_WEIGHTS[s] * (ds + 2.0 * dk + dt);
+                    mp_lo_t[i] += LO_WEIGHTS[s] * (ds + 2.0 * dk + dt);
                     i += 1;
+                }
+            }
+        }
+        let mut mp_lo = vec![0.0f32; m * n];
+        for jt in 0..mt {
+            for it in 0..nt {
+                let v = mp_lo_t[jt * nt + it];
+                for r in 4 * jt..4 * jt + 4 {
+                    mp_lo[r * n + 4 * it..r * n + 4 * it + 4].fill(v);
                 }
             }
         }
