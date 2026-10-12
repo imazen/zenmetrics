@@ -1,0 +1,7 @@
+binary_sha256: be69bf2b7f37ec1634bfcb35c323d581352da7f9458f80e409c5cccce9087a8e  /home/lilith/tmp/zm-ranked-binaries/vsi-baseline
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/vsi-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24827MiB :: /home/lilith/tmp/zm-ranked-binaries/vsi-baseline 3355 2516 5
+3355x2516 5 reps: 314.5 ms/call (score 0.997725)
+run-heavy: done rc=0 2s | peak-RSS 0.57GiB | min-avail 24826MiB | peak-load 0.60
