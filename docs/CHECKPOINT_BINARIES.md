@@ -26,6 +26,10 @@ workers and compares a textured raw-map fixture exactly with the native library.
 Each package records the immutable source, compiler, features and dependency
 hashes. The workflow publishes CI artifacts; it does not publish a release.
 
+Manifest file paths use forward slashes on every host, matching tar archive
+members. Archive controls exercise Windows path conversion, nested-file
+verification and refusal of changed payloads before packaging.
+
 For a local native build, use the CI-pinned snapshot and the pinned runner:
 
 ```sh

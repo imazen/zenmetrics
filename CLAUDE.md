@@ -542,6 +542,13 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-12 — Windows checkpoint manifests used host path separators.**
+  The archive converted backslashes to forward slashes while the manifest retained
+  backslashes, so strict release verification refused the otherwise green Windows
+  ARM64 package. Native/browser manifest writers and archive naming now use POSIX
+  relative paths. Archive controls check Windows conversion, nested-file roundtrip
+  and hash-tamper refusal; existing verification gates remain unchanged.
+
 - The CLI no-GPU fixture hid CUDA and Vulkan but left Metal reachable. macOS ARM64 therefore correctly returned a GPU score while the fixture expected refusal. Selecting an unavailable WGPU device index also excludes Metal and DX12 without changing either refusal assertion or the separate GPU-present numeric parity test.
 
 - GPU memory-mode defaults must fit the target address width. The 8 GiB fallback budget overflowed `usize` when the i686 CLI test graph compiled GPU dependencies. Saturating multiplication retains exactly 8 GiB on 64-bit targets and limits 32-bit budgeting to representable bytes. The complete i686 CLI all-targets run passes; score arithmetic and GPU benchmark acceptance are unchanged.

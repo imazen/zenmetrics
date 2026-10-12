@@ -516,6 +516,7 @@ checkpoint-release-publish run source tag readme_hash output:
 
 checkpoint-release-controls:
     python3 scripts/checkpoint/test_release.py
+    python3 scripts/checkpoint/test_archive.py
 
 checkpoint-i686-cli-tests:
     ZEN_CHECKPOINT_WORKSPACES="$(cd ../.. && pwd)" CROSS_CONFIG="$(pwd)/ci/checkpoint-cross.toml" ZENMETRICS_TEST_GPU=absent cross test --locked -p zenmetrics-cli --all-targets --features sweep,bmp,gif,tiff,hdr-gainmap,avif-svt,hdr-svt,jpegai,orchestrator,orchestrator-cpu-all,feature-jobs --target i686-unknown-linux-gnu

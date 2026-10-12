@@ -9,7 +9,7 @@ import tarfile
 
 package, output = map(Path, sys.argv[1:])
 manifest = json.loads((package / 'checkpoint.json').read_text())
-actual = {str(p.relative_to(package)) for p in package.rglob('*') if p.is_file()}
+actual = {p.relative_to(package).as_posix() for p in package.rglob('*') if p.is_file()}
 if actual != set(manifest['files']) | {'checkpoint.json'}:
     raise ValueError('Unlisted or missing checkpoint files')
 for relative, expected in manifest['files'].items():
@@ -26,7 +26,7 @@ with output.open('xb') as raw:
         with tarfile.open(fileobj=zipped, mode='w') as archive:
             for path in sorted(package.rglob('*')):
                 if path.is_symlink(): raise ValueError('Symlink refused')
-                info = archive.gettarinfo(str(path), arcname='checkpoint/' + str(path.relative_to(package)))
+                info = archive.gettarinfo(str(path), arcname='checkpoint/' + path.relative_to(package).as_posix())
                 info.uid = info.gid = 0
                 info.uname = info.gname = ''
                 info.mtime = 0

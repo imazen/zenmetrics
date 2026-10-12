@@ -14,6 +14,11 @@ def digest(path):
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
+def artifact_hashes(package):
+    return {p.relative_to(package).as_posix(): digest(p)
+            for p in sorted(package.rglob('*')) if p.is_file()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', required=True)
@@ -129,7 +134,7 @@ def main():
                           'hardware_gpu': 'not qualified', 'benchmark_admission': 'not run'},
         'benchmark_runner_commit': runner_revision,
         'test_fixture': {'zensim_selector_bake': bake.name, 'sha256': digest(bake)},
-        'files': {str(p.relative_to(args.out)): digest(p) for p in sorted(args.out.rglob('*')) if p.is_file()},
+        'files': artifact_hashes(args.out),
     }
     (args.out / 'checkpoint.json').write_text(json.dumps(metadata, indent=2) + '\n')
     print(args.out)
