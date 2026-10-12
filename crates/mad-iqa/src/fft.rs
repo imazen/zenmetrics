@@ -521,9 +521,10 @@ impl Plan {
             &mut re8b[..m * 8],
             &mut im8b[..m * 8],
         );
-        fft_batch8(re8, im8, re8b, im8b, mplan);
-        blue8_bf(re8b, im8b, bf);
-        fft_batch8(re8b, im8b, re8, im8, mplan);
+        fft_batch8(re8, im8, re8b, im8b, mplan, None);
+        // The ·bf pass folds into the second transform's permuted
+        // gather — one fewer full-plane round trip.
+        fft_batch8(re8b, im8b, re8, im8, mplan, Some((&bf[..], true)));
     }
 
     /// The Bluestein pass with caller-supplied `m`-length scratch, so
@@ -644,6 +645,7 @@ fn fft_batch8_inner(
     dst_re: &mut [f32],
     dst_im: &mut [f32],
     mplan: &MPlan,
+    pre: Option<(&[Complex], bool)>,
 ) {
     let n = mplan.n;
     debug_assert_eq!(src_re.len(), n * 8);
@@ -665,7 +667,10 @@ fn fft_batch8_inner(
         // {(1,0), w1[1]≈−i}, so the pass is adds, subs, and one twiddle
         // multiply per 4 elements.
         let tw1 = &stages[1];
-        // Row gather for one 4-element block: `src[perm[start+q]]`.
+        // Row gather for one 4-element block: `src[perm[start+q]]`, with
+        // an optional `pre[perm[…]]` complex multiplier fused into the
+        // load (Bluestein's `·bf` pass rides here instead of a separate
+        // plane round trip).
         let load4 = |start: usize| {
             let (p0, p1, p2, p3) = (
                 perm[start] as usize * 8,
@@ -673,7 +678,7 @@ fn fft_batch8_inner(
                 perm[start + 2] as usize * 8,
                 perm[start + 3] as usize * 8,
             );
-            (
+            let mut x = (
                 f32x8::load_t(token, (&src_re[p0..p0 + 8]).try_into().unwrap()),
                 f32x8::load_t(token, (&src_im[p0..p0 + 8]).try_into().unwrap()),
                 f32x8::load_t(token, (&src_re[p1..p1 + 8]).try_into().unwrap()),
@@ -682,7 +687,31 @@ fn fft_batch8_inner(
                 f32x8::load_t(token, (&src_im[p2..p2 + 8]).try_into().unwrap()),
                 f32x8::load_t(token, (&src_re[p3..p3 + 8]).try_into().unwrap()),
                 f32x8::load_t(token, (&src_im[p3..p3 + 8]).try_into().unwrap()),
-            )
+            );
+            if let Some((pre, conj)) = pre {
+                let sgn = f32x8::splat_t(token, if conj { -1.0 } else { 1.0 });
+                let (bre, bim) = (
+                    f32x8::splat_t(token, pre[p0 / 8].re),
+                    f32x8::splat_t(token, pre[p0 / 8].im),
+                );
+                (x.0, x.1) = (x.0 * bre - x.1 * bim, (x.0 * bim + x.1 * bre) * sgn);
+                let (bre, bim) = (
+                    f32x8::splat_t(token, pre[p1 / 8].re),
+                    f32x8::splat_t(token, pre[p1 / 8].im),
+                );
+                (x.2, x.3) = (x.2 * bre - x.3 * bim, (x.2 * bim + x.3 * bre) * sgn);
+                let (bre, bim) = (
+                    f32x8::splat_t(token, pre[p2 / 8].re),
+                    f32x8::splat_t(token, pre[p2 / 8].im),
+                );
+                (x.4, x.5) = (x.4 * bre - x.5 * bim, (x.4 * bim + x.5 * bre) * sgn);
+                let (bre, bim) = (
+                    f32x8::splat_t(token, pre[p3 / 8].re),
+                    f32x8::splat_t(token, pre[p3 / 8].im),
+                );
+                (x.6, x.7) = (x.6 * bre - x.7 * bim, (x.6 * bim + x.7 * bre) * sgn);
+            }
+            x
         };
         // Software-pipelined: the scattered row loads for `start+4` issue a
         // full iteration before their values are needed, hiding the gather
@@ -725,10 +754,23 @@ fn fft_batch8_inner(
         // every stage's twiddles.
         for i in 0..n {
             let j = perm[i] as usize;
-            let a = f32x8::load_t(token, (&src_re[j * 8..j * 8 + 8]).try_into().unwrap());
-            a.store((&mut dst_re[i * 8..i * 8 + 8]).try_into().unwrap());
-            let a = f32x8::load_t(token, (&src_im[j * 8..j * 8 + 8]).try_into().unwrap());
-            a.store((&mut dst_im[i * 8..i * 8 + 8]).try_into().unwrap());
+            let (mut re, mut im) = (
+                f32x8::load_t(token, (&src_re[j * 8..j * 8 + 8]).try_into().unwrap()),
+                f32x8::load_t(token, (&src_im[j * 8..j * 8 + 8]).try_into().unwrap()),
+            );
+            if let Some((pre, conj)) = pre {
+                let (bre, bim) = (
+                    f32x8::splat_t(token, pre[j].re),
+                    f32x8::splat_t(token, pre[j].im),
+                );
+                (re, im) = if conj {
+                    (re * bre - im * bim, -(re * bim + im * bre))
+                } else {
+                    (re * bre - im * bim, re * bim + im * bre)
+                };
+            }
+            re.store((&mut dst_re[i * 8..i * 8 + 8]).try_into().unwrap());
+            im.store((&mut dst_im[i * 8..i * 8 + 8]).try_into().unwrap());
         }
     }
 
@@ -861,16 +903,20 @@ fn fft_batch8_inner(
     }
 }
 
-/// [`fft_batch8_inner`] with runtime tier dispatch.
+/// [`fft_batch8_inner`] with runtime tier dispatch. `pre` fuses a
+/// per-element complex multiply into the permuted first-pass gather
+/// (`dst[i] = src[perm[i]]·pre[perm[i]]`), identical to multiplying the
+/// source first — used for Bluestein's `·bf` half-transform.
 fn fft_batch8(
     src_re: &[f32],
     src_im: &[f32],
     dst_re: &mut [f32],
     dst_im: &mut [f32],
     mplan: &MPlan,
+    pre: Option<(&[Complex], bool)>,
 ) {
     archmage::attuned!(
-        fft_batch8_inner(src_re, src_im, dst_re, dst_im, mplan),
+        fft_batch8_inner(src_re, src_im, dst_re, dst_im, mplan, pre),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -1052,24 +1098,6 @@ fn blue8_gather_all(
             re8[k * 8 + j] = re;
             im8[k * 8 + j] = im;
         }
-    }
-}
-
-/// The bf-multiply + conjugate pass of [`Plan::run_bluestein8`] — per k the
-/// eight SoA lanes are one vector, so the whole pass is contiguous.
-#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
-fn blue8_bf(re8: &mut [f32], im8: &mut [f32], bf: &[Complex]) {
-    for (k, &b) in bf.iter().enumerate() {
-        let d = k * 8;
-        let mut r: [f32; 8] = re8[d..d + 8].try_into().unwrap();
-        let mut i: [f32; 8] = im8[d..d + 8].try_into().unwrap();
-        for j in 0..8 {
-            let (zr, zi) = (r[j], i[j]);
-            r[j] = zr * b.re - zi * b.im;
-            i[j] = -(zr * b.im + zi * b.re);
-        }
-        re8[d..d + 8].copy_from_slice(&r);
-        im8[d..d + 8].copy_from_slice(&i);
     }
 }
 
@@ -1425,7 +1453,7 @@ fn fft2_rows_conj_mul(
                                 im8[x * RB + j] = 0.0;
                             }
                         }
-                        fft_batch8(re8, im8, re8b, im8b, mplan);
+                        fft_batch8(re8, im8, re8b, im8b, mplan, None);
                         for x in 0..width {
                             for j in 0..nb {
                                 chunk[j * width + x] =
@@ -1462,7 +1490,7 @@ fn fft2_rows_conj_mul(
                     im8[x * RB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan, None);
             for x in 0..width {
                 for j in 0..nb {
                     buf[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
@@ -1603,7 +1631,7 @@ fn fft2_rows_conj_mul_io(
                                 im8[x * RB + j] = 0.0;
                             }
                         }
-                        fft_batch8(re8, im8, re8b, im8b, mplan);
+                        fft_batch8(re8, im8, re8b, im8b, mplan, None);
                         for x in 0..width {
                             for j in 0..nb {
                                 dchunk[j * width + x] =
@@ -1639,7 +1667,7 @@ fn fft2_rows_conj_mul_io(
                     im8[x * RB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan, None);
             for x in 0..width {
                 for j in 0..nb {
                     dst[(y + j) * width + x] = Complex::new(re8b[x * RB + j], im8b[x * RB + j]);
@@ -1803,7 +1831,7 @@ fn fft2_cols_conj_scale(
                     .zip(im_all.par_chunks_mut(height * CB))
                     .zip(re_allb.par_chunks_mut(height * CB))
                     .zip(im_allb.par_chunks_mut(height * CB))
-                    .for_each(|(((rc, ic), rcb), icb)| fft_batch8(rc, ic, rcb, icb, mplan));
+                    .for_each(|(((rc, ic), rcb), icb)| fft_batch8(rc, ic, rcb, icb, mplan, None));
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
                 if let Some(mag) = mag.as_deref_mut() {
@@ -1857,7 +1885,7 @@ fn fft2_cols_conj_scale(
                     im8[y * CB + j] = 0.0;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, mplan, None);
             if let Some(mag) = mag.as_deref_mut() {
                 let s = scale.unwrap_or(1.0);
                 let negate = scale.is_some();
@@ -2340,7 +2368,7 @@ mod tests {
                     im8[k * 8 + j] = xs[j][k].im;
                 }
             }
-            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, &mplan);
+            fft_batch8(&re8, &im8, &mut re8b, &mut im8b, &mplan, None);
             for k in 0..n {
                 for j in 0..8 {
                     let d = (re8b[k * 8 + j] - wants[j][k].re).abs()

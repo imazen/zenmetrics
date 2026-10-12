@@ -675,6 +675,22 @@ macro_rules! score_body {
                 (K_LUM * libm::pow(v as f64, 2.2 / 3.0)) as f32
             }
         };
+        // Vector path: `pow_midp` (~30 ulp worst on this range — the
+        // exponent·log2 argument stays under 6) vs the scalar `libm::pow`
+        // per pixel; differences ride far inside the score golden.
+        let lum_chunk = |lc: &mut [f32], ic: &[f32]| {
+            let klum = <$V>::splat_t($token, K_LUM as f32);
+            let mut i = 0usize;
+            while i + $LANES <= ic.len() {
+                let v = <$V>::from_array_t($token, core::array::from_fn(|k| ic[i + k]));
+                lc[i..i + $LANES].copy_from_slice(&(v.pow_midp(2.2 / 3.0) * klum).to_array());
+                i += $LANES;
+            }
+            while i < ic.len() {
+                lc[i] = lum_px(ic[i]);
+                i += 1;
+            }
+        };
         #[cfg(feature = "parallel")]
         {
             use rayon::prelude::*;
@@ -682,24 +698,17 @@ macro_rules! score_body {
             lum_r
                 .par_chunks_mut(1 << 14)
                 .zip($a.im1[..n_px].par_chunks(1 << 14))
-                .for_each(|(lc, ic)| {
-                    for (o, &v) in lc.iter_mut().zip(ic) {
-                        *o = lum_px(v);
-                    }
-                });
+                .for_each(|(lc, ic)| lum_chunk(lc, ic));
             lum_d
                 .par_chunks_mut(1 << 14)
                 .zip($a.im2[..n_px].par_chunks(1 << 14))
-                .for_each(|(lc, ic)| {
-                    for (o, &v) in lc.iter_mut().zip(ic) {
-                        *o = lum_px(v);
-                    }
-                });
+                .for_each(|(lc, ic)| lum_chunk(lc, ic));
         }
         #[cfg(not(feature = "parallel"))]
-        for i in 0..m * n {
-            lum_r[i] = lum_px($a.im1[i]);
-            lum_d[i] = lum_px($a.im2[i]);
+        {
+            let n_px = m * n;
+            lum_chunk(&mut lum_r, &$a.im1[..n_px]);
+            lum_chunk(&mut lum_d, &$a.im2[..n_px]);
         }
         let csf = make_csf(m, n);
         let (ref_l, dst_l) = maybe_join(
