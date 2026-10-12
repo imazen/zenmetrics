@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """GPU functional controls; preserve every failure and certify no performance."""
+import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 
-binaries=Path(sys.argv[1]).resolve();backend=sys.argv[2];root=Path(sys.argv[3]).resolve();adapter=sys.argv[4]
-assert backend in ('cuda','wgpu')
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('binaries',type=Path)
+parser.add_argument('backend',choices=('cuda','wgpu'))
+parser.add_argument('output',type=Path)
+parser.add_argument('adapter')
+parser.add_argument('--size',type=int,nargs=2,default=[256,256],metavar=('WIDTH','HEIGHT'))
+args=parser.parse_args()
+binaries=args.binaries.resolve();backend=args.backend;root=args.output.resolve();adapter=args.adapter
+w,h=args.size
+if w<1 or h<1:
+    parser.error('dimensions must be positive')
 root.mkdir(parents=True,exist_ok=False)
 xdg=root/'xdg';xdg.mkdir(mode=0o700)
-w,h=256,256
 reference=bytes((x*17+y*13+c*41)%256 for y in range(h) for x in range(w) for c in range(3))
 distorted=bytes(max(0,value-7) for value in reference)
 for name,data in [('reference',reference),('distorted',distorted)]:
@@ -51,5 +60,5 @@ for metric in ['butteraugli-gpu','cvvdp-gpu','dssim-gpu','iwssim-gpu','ssim2-gpu
                 controls.append(dict(case=label,products=outputs[0]))
 (root/'controls.json').write_text(json.dumps(dict(backend=backend,expected_adapter=adapter,controls=controls,failures=failures,
     qualification='functional determinism only; actual adapter identity and metric accuracy require independent gates'),indent=2)+'\n')
-print(json.dumps(dict(backend=backend,expected_adapter=adapter,control_cases=len(controls),failures=failures)),flush=True)
+print(json.dumps(dict(backend=backend,expected_adapter=adapter,width=w,height=h,control_cases=len(controls),failures=failures)),flush=True)
 sys.exit(1 if failures else 0)

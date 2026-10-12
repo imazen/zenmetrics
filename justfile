@@ -457,14 +457,14 @@ iqa-gpu-study-build backend output:
 cuda-runtime-sdk output:
     python3 -B scripts/cuda/export-runtime-sdk.py "{{output}}"
 
-iqa-gpu-check binaries backend output adapter:
-    python3 -B scripts/jobsys/check_iqa_gpu.py {{binaries}} {{backend}} {{output}} "{{adapter}}"
+iqa-gpu-check binaries backend output adapter *args:
+    python3 -B scripts/jobsys/check_iqa_gpu.py {{binaries}} {{backend}} {{output}} "{{adapter}}" {{args}}
 
 iqa-pair-lines-check binaries case output:
     python3 -B scripts/jobsys/check_iqa_pair_lines.py {{binaries}} {{case}} {{output}}
 
-iqa-hdr-check binaries output:
-    python3 -B scripts/jobsys/check_iqa_hdr.py {{binaries}} {{output}}
+iqa-hdr-check binaries output *args:
+    python3 -B scripts/jobsys/check_iqa_hdr.py {{binaries}} {{output}} {{args}}
 
 iqa-study-check binaries output *args:
     python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}} {{args}}
@@ -474,8 +474,11 @@ iqa-deployment-bench binaries runner sdr hdr output machine domain:
     python3 -B scripts/jobsys/benchmark_iqa_deployment.py {{binaries}} {{runner}} {{sdr}} {{hdr}} {{output}} {{machine}} {{domain}}
 
 # Argument-based orchestration also works through nested SSH without shell quoting.
-iqa-deployment-campaign binaries runner checker_tree output machine domain:
-    python3 -B scripts/jobsys/check_iqa_deployment.py "{{binaries}}" "{{runner}}" "{{checker_tree}}" "{{output}}" "{{machine}}" "{{domain}}"
+iqa-control-tree output:
+    tar -czf "{{output}}" scripts/jobsys/check_iqa_study.py scripts/jobsys/check_iqa_hdr.py scripts/jobsys/check_iqa_gpu.py scripts/jobsys/check_iqa_deployment.py scripts/jobsys/build_benchmark_study.py scripts/jobsys/benchmark_iqa_deployment.py scripts/jobsys/benchmark_exec.py benchmarks/heaptrack/drivers/cpu_profile/src crates/zenmetrics-cli/src/metrics/mod.rs
+
+iqa-deployment-campaign binaries runner checker_tree output machine domain *args:
+    python3 -B scripts/jobsys/check_iqa_deployment.py "{{binaries}}" "{{runner}}" "{{checker_tree}}" "{{output}}" "{{machine}}" "{{domain}}" {{args}}
 
 # Stage the hash-bound scoped CUDA runtime with every qualified GPU case.
 iqa-gpu-deployment-bench binaries runner controls output machine domain sdk *args:

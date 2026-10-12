@@ -347,3 +347,16 @@ staging the native panel. It uses argument vectors for each command and
 retains the explicit checker source tree. The [rolling-pyramid deployment
 refresh](../benchmarks/iqa_deployment_rolling_2026-10-12.meta) uses this path
 with the current ordinary and separate instrumented drivers.
+
+The campaign accepts `--sdr-size WIDTH HEIGHT` and `--hdr-size WIDTH HEIGHT`.
+Individual `just iqa-hdr-check` and `just iqa-gpu-check` calls accept
+`--size WIDTH HEIGHT`. Defaults retain the original small deployment cases;
+explicit dimensions flow into each case and its retained workload record.
+All existing repeated-product, stride and instrumentation comparisons still
+apply at the requested size. Invalid dimensions fail before generating inputs.
+
+`just iqa-control-tree NEW_ARCHIVE` packages the checker scripts, metric
+registry and driver source inventory together. Extract the archive under the
+explicit `CHECKER_TREE` path before launching a remote campaign. The inventory
+needs `crates/zenmetrics-cli/src/metrics/mod.rs` as well as the driver source;
+transferring only scripts and the driver leaves the campaign incomplete.

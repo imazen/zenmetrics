@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Native absolute-nits workload controls; not performance measurements."""
+import argparse
 import json
 import os
 from pathlib import Path
 import struct
 import subprocess
-import sys
 
-binaries, root = (Path(value).resolve() for value in sys.argv[1:])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('binaries', type=Path)
+parser.add_argument('output', type=Path)
+parser.add_argument('--size', type=int, nargs=2, default=[128, 96], metavar=('WIDTH', 'HEIGHT'))
+args = parser.parse_args()
+binaries, root = args.binaries.resolve(), args.output.resolve()
+w, h = args.size
+if w < 1 or h < 1:
+    parser.error('dimensions must be positive')
 root.mkdir(parents=True, exist_ok=False)
-w, h = 128, 96
 for name, factor in [('reference', 1.0), ('distorted', 0.9)]:
     rows = [b''.join(struct.pack('<f', factor*(50+(x*17+y*13+c*41)%701))
                     for x in range(w) for c in range(3)) for y in range(h)]
@@ -51,5 +58,5 @@ for metric, model in [('hdrvdp', 'hdrvdp2-defaults-bt709'),
                               capture_output=True,timeout=120)
         assert result.returncode!=0, change
 (root/'controls.json').write_text(json.dumps(controls,indent=2)+'\n')
-print(json.dumps(dict(native_hdr_metrics=2,instrumentation_and_stride_parity='exact scalar products',
+print(json.dumps(dict(native_hdr_metrics=2,width=w,height=h,instrumentation_and_stride_parity='exact scalar products',
                      qualification='functional routing only; no performance/admission certification')))
