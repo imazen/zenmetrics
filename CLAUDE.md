@@ -542,6 +542,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
+- Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
+
 - **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
   directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
   marked `target*` directories even when accidentally tracked, plus repository
@@ -1355,3 +1358,19 @@ when the box is busy.
 ## Known Bugs — SHIPPATH11 (2026-10-07)
 
 The strict training-only harvester previously trusted reported epoch/pair budgets and nonempty admission fields. The qualified program contract now binds exact expected budget, receipt/freeze/decision and seven-table admission to the manifest program/data hashes; the canonical checkpoint decoder must agree. Local smoke argv identities are verification-only and cannot install. The separately deployed E28 harvest driver still delegates to its existing verifier without these checks; it was inspected but left unchanged pending coordinator sign-off.
+
+### Known Bugs: benchmark evidence retention (2026-10-12)
+
+Benchmark receipts contain nested content-store artifacts, while the original
+GC only marked each Done row's output receipt. The benchmark GC expansion now
+marks bundle files, runner and all receipt artifacts before latest-wins folding.
+Changed or unknown-schema metadata refuses GC. Preserve the original attempt
+ledgers as inputs to reachability; discarded history cannot be reconstructed.
+
+### Known Bugs: Windows benchmark parent lifetime (2026-10-12)
+
+Windows preserves a dead parent's PID in child metadata, so comparing getppid
+alone does not detect worker exit. The adapter now holds a synchronization-only
+parent process handle and polls it without spawning monitoring processes. Native
+contract tests exit a real parent and require its surviving child's watcher to
+observe termination. The handle also prevents PID reuse from changing identity.

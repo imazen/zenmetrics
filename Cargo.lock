@@ -18,6 +18,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "affinity"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "763e484feceb7dd021b21c5c6f81aee06b1594a743455ec7efbf72e6355e447b"
+dependencies = [
+ "cfg-if",
+ "errno",
+ "libc",
+ "num_cpus",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -507,7 +519,7 @@ dependencies = [
  "num-traits",
  "pastey",
  "rayon",
- "thiserror",
+ "thiserror 2.0.20",
  "v_frame 0.3.9",
  "y4m",
 ]
@@ -776,7 +788,7 @@ dependencies = [
  "image",
  "imgref",
  "rgb",
- "zenbench",
+ "zenbench 0.1.9",
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
@@ -1143,13 +1155,17 @@ dependencies = [
  "psnrhvs",
  "rayon",
  "rgb",
+ "serde",
+ "serde_json",
  "tempfile",
  "vif",
  "vmaf",
  "vsi",
- "zenbench",
+ "zenbench 0.1.10",
+ "zenmetrics-api",
  "zenmetrics-cli",
  "zenmetrics-corpus",
+ "zenpixels",
  "zensim 0.3.0",
 ]
 
@@ -1395,7 +1411,7 @@ dependencies = [
  "magetypes",
  "rayon",
  "serde_json",
- "zenbench",
+ "zenbench 0.1.9",
  "zenmetrics-corpus",
  "zenmetrics-math",
  "zenpixels",
@@ -1430,7 +1446,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "ureq",
- "zenbench",
+ "zenbench 0.1.9",
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
@@ -1856,7 +1872,7 @@ dependencies = [
  "imgref",
  "magetypes",
  "num-traits",
- "thiserror",
+ "thiserror 2.0.20",
  "yuvxyb 0.4.2",
  "yuvxyb-math",
 ]
@@ -1872,7 +1888,7 @@ dependencies = [
  "magetypes",
  "num-traits",
  "rayon",
- "thiserror",
+ "thiserror 2.0.20",
  "yuvxyb 0.5.0",
  "yuvxyb-math",
 ]
@@ -1882,14 +1898,14 @@ name = "fast-ssim2"
 version = "0.9.0"
 dependencies = [
  "archmage",
+ "bytemuck",
  "enough",
- "imgref",
+ "linear-srgb",
  "magetypes",
  "num-traits",
  "rayon",
- "thiserror",
- "yuvxyb 0.5.0",
- "yuvxyb-math",
+ "thiserror 2.0.20",
+ "zenpixels",
 ]
 
 [[package]]
@@ -2252,7 +2268,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "zenbench",
+ "zenbench 0.1.9",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -2267,7 +2283,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "log",
  "presser",
- "thiserror",
+ "thiserror 2.0.20",
  "windows 0.62.2",
 ]
 
@@ -2384,7 +2400,7 @@ dependencies = [
  "magetypes",
  "rayon",
  "rgb",
- "zenbench",
+ "zenbench 0.1.9",
  "zenmetrics-corpus",
  "zenpng 0.2.0 (git+https://github.com/imazen/zenpng?branch=main)",
 ]
@@ -2869,7 +2885,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "zenbench",
+ "zenbench 0.1.9",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -2900,7 +2916,7 @@ dependencies = [
  "jni-sys 0.4.1",
  "log",
  "simd_cesu8",
- "thiserror",
+ "thiserror 2.0.20",
  "walkdir",
  "windows-link 0.2.1",
 ]
@@ -2983,7 +2999,7 @@ dependencies = [
  "once_cell",
  "rayon",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zenjxl-decoder 0.3.10",
  "zensim 0.3.0",
@@ -3435,7 +3451,7 @@ dependencies = [
  "once_cell",
  "rustc-hash 1.1.0",
  "spirv",
- "thiserror",
+ "thiserror 2.0.20",
  "unicode-ident",
 ]
 
@@ -3768,7 +3784,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "thiserror",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "url",
@@ -4108,7 +4124,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "rustls",
  "socket2",
- "thiserror",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "web-time",
@@ -4131,7 +4147,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "slab",
- "thiserror",
+ "thiserror 2.0.20",
  "tinyvec",
  "tracing",
  "web-time",
@@ -4298,7 +4314,7 @@ dependencies = [
  "rand 0.9.5",
  "rand_chacha",
  "simd_helpers",
- "thiserror",
+ "thiserror 2.0.20",
  "v_frame 0.3.9",
  "wasm-bindgen",
 ]
@@ -4394,7 +4410,7 @@ checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
 dependencies = [
  "getrandom 0.2.17",
  "libredox",
- "thiserror",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -5043,7 +5059,7 @@ checksum = "700cb4e17f98c3f36756815b18dbec2b2e3c4f5028e9cdee3e23dd8c285e736c"
 dependencies = [
  "num-traits",
  "rayon",
- "thiserror",
+ "thiserror 2.0.20",
  "yuvxyb 0.4.2",
  "yuvxyb-math",
 ]
@@ -5065,6 +5081,16 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "statrs"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3fe7c28c6512e766b0874335db33c94ad7b8f9054228ae1c2abd47ce7d335e"
+dependencies = [
+ "approx",
+ "num-traits",
+]
 
 [[package]]
 name = "strsim"
@@ -5239,11 +5265,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.20",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -5577,7 +5623,7 @@ dependencies = [
  "bindgen",
  "cc",
  "paste",
- "thiserror",
+ "thiserror 2.0.20",
  "tracel-llvm-bundler",
 ]
 
@@ -5680,7 +5726,7 @@ dependencies = [
  "enough",
  "half",
  "linear-srgb",
- "thiserror",
+ "thiserror 2.0.20",
  "wide",
  "zencodec",
  "zenpixels",
@@ -5696,7 +5742,7 @@ dependencies = [
  "half",
  "linear-srgb",
  "magetypes",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenpixels",
@@ -5713,7 +5759,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "linear-srgb",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenpixels",
@@ -5728,7 +5774,7 @@ dependencies = [
  "imgref",
  "moxcms 0.9.0",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
  "ultrahdr-core 0.6.0",
  "whereat",
  "zencodec",
@@ -5869,7 +5915,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "706b485cfdd36c867e946509da6f8b9fa38f40a1aecb92d702e04d135c4335bb"
 dependencies = [
  "num-traits",
- "thiserror",
+ "thiserror 2.0.20",
  "wasm-bindgen",
 ]
 
@@ -6151,7 +6197,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.20",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-windows-linux-android",
@@ -6230,7 +6276,7 @@ dependencies = [
  "raw-window-metal",
  "renderdoc-sys",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.20",
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
@@ -6279,6 +6325,16 @@ checksum = "8cf05ca94c9fba0c51316899caa1d1e74a064fc310a5efa7375e614343d415be"
 dependencies = [
  "bytemuck",
  "safe_arch",
+]
+
+[[package]]
+name = "win32job"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6a6724ccfbf34154a8691bd868b0fcd2be2ca3f7b47b32614654f1a01b191c"
+dependencies = [
+ "thiserror 1.0.69",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -6892,7 +6948,7 @@ dependencies = [
  "rav1d-safe",
  "rgb",
  "safe_unaligned_simd",
- "thiserror",
+ "thiserror 2.0.20",
  "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
@@ -6952,11 +7008,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenbench"
+version = "0.1.10"
+source = "git+https://github.com/imazen/zenbench?rev=77707b68eae6e5245d7f87a78e04a9453bcde4e5#77707b68eae6e5245d7f87a78e04a9453bcde4e5"
+dependencies = [
+ "affinity",
+ "flate2",
+ "fs4",
+ "libc",
+ "raw-cpuid",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "statrs",
+ "sysinfo 0.36.1",
+ "terminal_size",
+ "win32job",
+]
+
+[[package]]
 name = "zenbitmaps"
 version = "0.2.0"
 dependencies = [
  "enough",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
 ]
 
@@ -6998,7 +7073,7 @@ dependencies = [
  "reqwest 0.13.5",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.20",
  "tokio",
 ]
 
@@ -7011,7 +7086,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "thiserror",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -7036,7 +7111,7 @@ dependencies = [
  "reqwest 0.13.5",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.20",
  "tokio",
  "tower-http 0.7.1",
  "zenfleet-core",
@@ -7062,7 +7137,7 @@ dependencies = [
  "parquet",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.20",
  "zenfleet-core",
 ]
 
@@ -7135,7 +7210,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
- "thiserror",
+ "thiserror 2.0.20",
  "tokio",
  "toml",
  "zenfleet-core",
@@ -7295,7 +7370,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spin",
- "thiserror",
+ "thiserror 2.0.20",
  "toml",
  "wasm-bindgen-futures",
  "web-time",
@@ -7369,7 +7444,7 @@ dependencies = [
  "gif",
  "linear-srgb",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenpixels",
@@ -7403,7 +7478,7 @@ dependencies = [
  "memchr",
  "rgb",
  "safe_unaligned_simd",
- "thiserror",
+ "thiserror 2.0.20",
  "tinyvec",
  "ultrahdr-core 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "whereat",
@@ -7436,7 +7511,7 @@ dependencies = [
  "jxl-encoder",
  "linear-srgb",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenjxl-decoder 0.4.0",
@@ -7460,7 +7535,7 @@ dependencies = [
  "num-traits",
  "paste",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.20",
  "zenjxl-decoder-macros 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenjxl-decoder-simd 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -7480,7 +7555,7 @@ dependencies = [
  "num-traits",
  "paste",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zenjxl-decoder-macros 0.3.9 (git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5)",
  "zenjxl-decoder-simd 0.3.9 (git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5)",
@@ -7548,7 +7623,7 @@ dependencies = [
  "iwssim-gpu",
  "rgb",
  "ssim2-gpu",
- "thiserror",
+ "thiserror 2.0.20",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
  "zenpixels",
@@ -7673,7 +7748,7 @@ dependencies = [
  "sha2 0.11.0",
  "sysinfo 0.39.6",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.20",
  "toml",
  "xxhash-rust",
  "zenmetrics-api",
@@ -7732,7 +7807,7 @@ dependencies = [
  "memchr",
  "rgb",
  "safe_unaligned_simd",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenflate 0.3.6",
@@ -7756,7 +7831,7 @@ dependencies = [
  "memchr",
  "rgb",
  "safe_unaligned_simd",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenflate 0.3.6",
@@ -7788,7 +7863,7 @@ dependencies = [
  "magetypes",
  "num-traits",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -7818,7 +7893,7 @@ dependencies = [
  "rand 0.9.5",
  "rand_chacha",
  "simd_helpers",
- "thiserror",
+ "thiserror 2.0.20",
  "v_frame 0.3.9",
  "wasm-bindgen",
  "whereat",
@@ -7852,7 +7927,7 @@ dependencies = [
  "magetypes",
  "rayon",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -7868,7 +7943,7 @@ dependencies = [
  "magetypes",
  "rayon",
  "rgb",
- "thiserror",
+ "thiserror 2.0.20",
  "zenpredict",
 ]
 
@@ -7880,7 +7955,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "image",
- "zenbench",
+ "zenbench 0.1.9",
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
@@ -7894,7 +7969,7 @@ version = "0.1.2"
 dependencies = [
  "bytemuck",
  "enough",
- "thiserror",
+ "thiserror 2.0.20",
  "tiff",
  "whereat",
  "zenpixels",
@@ -7927,7 +8002,7 @@ dependencies = [
  "magetypes",
  "rgb",
  "self_cell",
- "thiserror",
+ "thiserror 2.0.20",
  "whereat",
  "zencodec",
  "zenpixels",

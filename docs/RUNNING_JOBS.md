@@ -774,3 +774,7 @@ Map provenance: Explore agent trace 2026-06-27 (file:line above). `BoxBudget`
 admission logic (`can_admit`/`max_concurrent`/`recommend_concurrency`) already
 exists + is tested but is only called by `provision.rs` (fleet sizing), never the
 worker — chunk 2 wires it into execution.
+
+## Benchmark observations
+
+For native timing and memory experiments, use the [benchmark fleet workflow](BENCHMARK_FLEET.md). It uses the existing job system with explicit machine/domain/replicate identities and retains unsuccessful observations.

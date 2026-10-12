@@ -11,6 +11,9 @@
 //!     --blobs-r2 s3://b/blobs --tombstones-r2 s3://b/jobsys/tombstones \
 //!     --r2-endpoint https://<acct>.r2.cloudflarestorage.com --cheap-cap-bytes 1000000 [--execute]
 
+#[path = "support/benchmark_gc.rs"]
+mod benchmark_gc;
+
 use std::collections::HashSet;
 
 use clap::Parser;
@@ -65,16 +68,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Referenced = output blobs of Done rows (latest-wins view).
     let mut view = LedgerView::new();
+    let mut evidence = benchmark_gc::Evidence::default();
     for l in &c.ledger {
         for r in zenfleet_ledger::read_ledger_uri(l, ep)? {
+            evidence.observe(&r)?;
             view.apply(r);
         }
     }
-    let referenced: HashSet<Sha256Hex> = view
+    let mut referenced: HashSet<Sha256Hex> = view
         .rows()
         .filter(|r| r.status == JobStatus::Done)
         .filter_map(|r| r.output_sha.clone())
         .collect();
+    referenced.extend(evidence.expand(|sha| {
+        Ok(zenfleet_ledger::read_bytes_uri(
+            &format!("{}/{}", c.blobs_r2.trim_end_matches('/'), sha),
+            ep,
+        )?)
+    })?);
     let roots: HashSet<Sha256Hex> = c
         .pin
         .iter()

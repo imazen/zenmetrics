@@ -516,7 +516,7 @@ where
 fn needs_chunk_heartbeat(desired: &[DesiredJob]) -> bool {
     desired
         .iter()
-        .any(|j| matches!(j.kind, JobKind::FitCell { .. }))
+        .any(|j| matches!(j.kind, JobKind::FitCell { .. } | JobKind::Benchmark { .. }))
 }
 
 /// Time-based lease renewal for long single-cell chunks. The progress renewal in
@@ -1790,6 +1790,19 @@ where
 /// cost model, floored high enough that spawn/fetch jitter never clips a real cell. The
 /// watchdog stops INFINITE holds; it does not police slow-but-working cells.
 fn cell_deadline_secs(job: &DesiredJob) -> u64 {
+    if let JobKind::Benchmark {
+        timeout_seconds,
+        admission_seconds,
+        ..
+    } = job.kind
+    {
+        // Includes recorder + analyzer, admission, hashing and cleanup. The
+        // adapter's own deadline fires first and retains the observation.
+        return timeout_seconds
+            .saturating_mul(2)
+            .saturating_add(admission_seconds)
+            .saturating_add(120);
+    }
     // Rev4 fit cells are finite, deterministic trainings whose wall time varies ~8x across
     // worker CPUs (measured: P0 H128 on a Zen+ worker ~3.6 h; D2 H128 cells cost ~1.6x that).
     // The 4 h clamp below would kill them; the watchdog here only has to stop infinite holds.
@@ -2383,7 +2396,9 @@ fn dispatch_exec(
     program: &str,
     job: &DesiredJob,
 ) -> Result<Vec<u8>, HandlerError> {
-    if persistent {
+    if matches!(job.kind, JobKind::Benchmark { .. }) {
+        exec_command_deadline(program, job, cell_deadline_secs(job))
+    } else if persistent {
         exec_command_persistent(program, job)
     } else {
         exec_command(program, job)
@@ -2398,6 +2413,7 @@ fn kind_name(kind: &JobKind) -> &'static str {
         JobKind::ScoreFile { .. } => "score_file",
         JobKind::Feature { .. } => "feature",
         JobKind::FitCell { .. } => "fit_cell",
+        JobKind::Benchmark { .. } => "benchmark",
         JobKind::Diffmap { .. } => "diffmap",
         JobKind::Resample { .. } => "resample",
         JobKind::Bake { .. } => "bake",
@@ -2427,6 +2443,9 @@ fn warm_kinds_from_env() -> Vec<String> {
 }
 
 fn kind_is_warm_eligible(kind: &JobKind, warm_kinds: &[String]) -> bool {
+    if matches!(kind, JobKind::Benchmark { .. }) {
+        return false;
+    }
     let name = kind_name(kind);
     warm_kinds.iter().any(|k| k == "all" || k == name)
 }
@@ -3256,6 +3275,19 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         });
     }
 
+    // Benchmark admission can outlive a claim TTL. Require the path that
+    // renews a live observation's lease instead of permitting a duplicate run.
+    if desired
+        .iter()
+        .any(|j| matches!(j.kind, JobKind::Benchmark { .. }))
+        && (resolve_epoch_cfg(&ctl, cfg.epoch_shard).is_some()
+            || (cfg.claims.is_some() && cfg.chunk_wall_sec <= 0.0))
+    {
+        return Err(WorkerRunError::Config(
+            "benchmark jobs require lease claiming with a positive chunk duration for heartbeat renewal".into(),
+        ));
+    }
+
     let policy = RetryPolicy {
         max_attempts: cfg.max_attempts,
         // Claim-TTL staleness at reconcile time (the 2026-08-26 stuck-29 fix): an in-flight
@@ -4081,6 +4113,37 @@ mod tests {
         const {
             assert!(DEFAULT_CHUNK_WALL_SEC > 0.0);
         }
+    }
+
+    #[test]
+    fn benchmark_lease_deadline_and_fresh_process_contract() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../scripts/jobsys/benchmark_identity_v1.json"
+        ))
+        .unwrap();
+        let kind: JobKind = serde_json::from_value(golden["kind"].clone()).unwrap();
+        assert!(!kind_is_warm_eligible(
+            &kind,
+            &["all".into(), "benchmark".into()]
+        ));
+        assert_eq!(kind_name(&kind), "benchmark");
+        let job = DesiredJob::new(
+            kind,
+            vec![],
+            zenfleet_core::CellId {
+                image_path: "control".into(),
+                codec: "benchmark".into(),
+                q: 0,
+                knob_tuple_json: "{}".into(),
+            },
+        );
+        assert_eq!(
+            cell_deadline_secs(&job),
+            2 * golden["kind"]["timeout_seconds"].as_u64().unwrap()
+                + golden["kind"]["admission_seconds"].as_u64().unwrap()
+                + 120
+        );
+        assert!(needs_chunk_heartbeat(&[job]));
     }
 
     #[test]

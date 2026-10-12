@@ -1,0 +1,19 @@
+{
+  "kind": {
+    "kind": "benchmark",
+    "bundle_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runner_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "experiment": "test",
+    "machine": "cpu-a",
+    "domain": "performance",
+    "replicate": 0,
+    "backend": "wall",
+    "timeout_seconds": 10,
+    "admission_seconds": 0
+  },
+  "inputs": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "job_id": "bb016eac52910392040d3a5e6836be196f155b423d00c703bd0f35b0e80a0e92"
+}

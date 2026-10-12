@@ -143,7 +143,7 @@ butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	791d08d7
 # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
 # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
 # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
-fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	d989014aa8c63a2e4a2af601bb8f11d81edb28d3	-
+fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	96ad1ab0515217bf6712f9bcf1960b034ac11c2b	-
 dssim	https://github.com/lilith/dssim.git	../../dssim	eec33f556d7ee991c4b906198c3a1b74f6f6063d	-
 # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
 # and `../../../heic`). OFF in every CI build below, but cargo

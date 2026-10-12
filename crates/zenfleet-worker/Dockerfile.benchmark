@@ -1,0 +1,21 @@
+# Build context: prebuilt native runner/worker plus the existing entrypoint.
+ARG BASE=ghcr.io/imazen/zenfleet-worker:base-x86
+FROM ${BASE}
+USER root
+RUN mkdir -p /scratch/tmp && TMPDIR=/scratch/tmp apt-get update -qq \
+    && TMPDIR=/scratch/tmp apt-get install -y --no-install-recommends heaptrack time procps util-linux \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chmod=0755 zenbench /usr/local/bin/zenbench
+COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
+COPY --chmod=0755 benchmark_exec.py /usr/local/bin/benchmark-exec
+COPY --chmod=0755 fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
+COPY --chmod=0755 tmpdir_discipline.sh /usr/local/bin/tmpdir_discipline.sh
+ENV ZEN_EXEC=/usr/local/bin/benchmark-exec \
+    ZENBENCH_BIN=/usr/local/bin/zenbench \
+    ZENBENCH_WORK_DIR=/scratch/benchmark \
+    ZEN_BLOBS_DIR=/scratch/blobs \
+    TMPDIR=/scratch/tmp
+RUN python3 --version && zenbench --version && zenfleet-worker --help >/dev/null \
+    && command -v heaptrack && command -v heaptrack_print && command -v s5cmd \
+    && command -v aws && test -x /usr/bin/time
+ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]

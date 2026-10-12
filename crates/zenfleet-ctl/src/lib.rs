@@ -462,6 +462,7 @@ fn metric_label(kind: &JobKind) -> String {
             None => format!("feature:{regime}"),
         },
         JobKind::FitCell { .. } => "fit_cell".into(),
+        JobKind::Benchmark { backend, .. } => format!("benchmark:{backend}"),
         JobKind::Encode { .. } => "encode".into(),
         JobKind::Resample { .. } => "resample".into(),
         JobKind::Bake { .. } => "bake".into(),

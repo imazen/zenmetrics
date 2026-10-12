@@ -353,3 +353,34 @@ solmath-csf-bench *args:
 
 solmath-check *args:
     cd "$HOME/tmp/solmath-validation/work/zenmetrics" && TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="{{justfile_directory()}}/target/solmath" ~/work/zen/scripts/run-heavy --mem 12G -- cargo {{args}}
+
+benchmark-contract-check:
+    TMPDIR="${TMPDIR:-$HOME/tmp}" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
+    just snap-cargo @ test -p zenfleet-core -p zenfleet-worker -p zenfleet-ctl --lib --bins
+
+benchmark-executor-check runner output:
+    python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}}
+
+# Separate artifacts: the memory binary must never supply latency claims.
+iqa-fleet-build output:
+    mkdir {{output}}
+    just snap-cargo @ build -p cpu-profile --bin new-metrics-wall
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/debug/new-metrics-wall" {{output}}/latency
+    just snap-cargo @ build -p cpu-profile --bin new-metrics-wall --features heap-phases
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/debug/new-metrics-wall" {{output}}/memory
+
+iqa-fleet-check binaries output:
+    python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}
+
+benchmark-image-check image scratch:
+    mkdir -p {{scratch}}
+    docker run --rm --memory=6g --memory-swap=6g --cpus=2 --mount type=bind,source={{scratch}},target=/scratch --mount type=bind,source={{justfile_directory()}}/scripts/jobsys,target=/controls,readonly --entrypoint python3 {{image}} /controls/check_benchmark_exec.py /usr/local/bin/zenbench /scratch/proof /usr/local/bin/benchmark-exec /usr/local/bin/zenfleet-worker
+
+iqa-heap-oracle binary case output:
+    python3 -B scripts/jobsys/check_iqa_heap_oracle.py {{binary}} {{case}} {{output}}
+
+iqa-bundle-check binaries runner case output:
+    python3 -B scripts/jobsys/check_iqa_bundle.py {{binaries}} {{runner}} {{case}} {{output}}
+
+benchmark-native-check runner worker reader output:
+    python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}} scripts/jobsys/benchmark_exec.py {{worker}} {{reader}}
