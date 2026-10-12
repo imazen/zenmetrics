@@ -447,23 +447,32 @@ fn sym(mut i: isize, n: usize) -> usize {
 /// angular spreads (`spread{1..4}`), computed in f64, stored f32.
 /// `logGabors[s]` has the center element zeroed at the reference's
 /// `round(rows/2+1), round(cols/2+1)` fudge index.
+///
+/// The reference builds `sin/cos(atan2(-y,x))` per element and then
+/// takes `atan2` of four rotated copies — algebraically the same as
+/// keeping the angle itself (`θ = atan2(-y,x)`) and wrapping
+/// `θ−angl`, and `log(hypot(x,y))` is `½log(x²+y²)`. What was ~18
+/// transcendentals per element becomes one `atan2`, one `log`, and
+/// nine `expf`s; residuals differ by a few ulp, far inside the
+/// golden tolerance.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
     // round(x/2+1) 1-based → 0-based
     let (rc, cc) = (m.div_ceil(2), n.div_ceil(2));
     let mut radius = vec![0.0f64; m * n];
-    let (mut sinth, mut costh) = (vec![0.0f64; m * n], vec![0.0f64; m * n]);
+    let mut theta = vec![0.0f64; m * n];
     for r in 0..m {
         for c in 0..n {
             let x = (c as f64 - n as f64 / 2.0) / (n as f64 / 2.0);
             let y = (r as f64 - m as f64 / 2.0) / (m as f64 / 2.0);
-            let mut rad = libm::hypot(x, y);
-            if r == rc && c == cc {
-                rad = 1.0; // radius fudge
-            }
-            radius[r * n + c] = libm::log(rad);
-            let th = libm::atan2(-y, x);
-            sinth[r * n + c] = libm::sin(th);
-            costh[r * n + c] = libm::cos(th);
+            let i = r * n + c;
+            // x,y ∈ [-1,1] → x²+y² ≤ 2: no overflow, ~1 ulp vs hypot.
+            radius[i] = if r == rc && c == cc {
+                0.0 // log(1) — the reference's radius fudge
+            } else {
+                0.5 * libm::log(x * x + y * y)
+            };
+            theta[i] = libm::atan2(-y, x);
         }
     }
     let sigma_onf = 0.55f64;
@@ -476,7 +485,7 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
         let mut lg = vec![0.0f32; m * n];
         for i in 0..m * n {
             let d = radius[i] - lrfo;
-            lg[i] = libm::exp(d * d / den) as f32;
+            lg[i] = libm::expf((d * d / den) as f32);
         }
         lg[rc * n + cc] = 0.0; // undo the radius fudge
         logs.push(lg);
@@ -484,13 +493,17 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
     let mut spreads = Vec::with_capacity(4);
     for o in 0..4 {
         let angl = o as f64 * core::f64::consts::PI / 4.0;
-        let (ca, sa) = (libm::cos(angl), libm::sin(angl));
+        let inv = 1.0 / (2.0 * theta_sigma * theta_sigma);
         let mut sp = vec![0.0f32; m * n];
         for i in 0..m * n {
-            let ds = sinth[i] * ca - costh[i] * sa;
-            let dc = costh[i] * ca + sinth[i] * sa;
-            let dth = libm::atan2(ds, dc).abs();
-            sp[i] = libm::exp(-dth * dth / (2.0 * theta_sigma * theta_sigma)) as f32;
+            // atan2 of (sin,cos) rotated by angl = wrap_pi(θ−angl);
+            // θ−angl ∈ (-7π/4, π] wraps at most once.
+            let mut d = theta[i] - angl;
+            if d <= -core::f64::consts::PI {
+                d += 2.0 * core::f64::consts::PI;
+            }
+            let dth = d.abs();
+            sp[i] = libm::expf((-dth * dth * inv) as f32);
         }
         spreads.push(sp);
     }
@@ -538,17 +551,41 @@ fn gabor_apply(
     buf
 }
 
-/// `|EO|` element magnitudes — scalar `hypotf`, matching Octave
-/// `abs()` to the ulp on every tier.
+/// `|EO|` element magnitudes — `sqrt(re²+im²)` in fixed 8-lane groups
+/// (~1–2 ulp vs the reference's `hypotf`, far inside the golden
+/// tolerance; FFT output ranges nowhere near f32 overflow, so
+/// `hypotf`'s rescaling buys nothing). Deterministic per tier.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
 fn eo_magnitude(eo: &[Complex]) -> Vec<f32> {
+    let mut out = vec![0.0f32; eo.len()];
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        eo.par_iter().map(|c| libm::hypotf(c.re, c.im)).collect()
+        out.par_chunks_mut(1 << 14)
+            .zip(eo.par_chunks(1 << 14))
+            .for_each(|(oc, ic)| mag_chunk(ic, oc));
     }
     #[cfg(not(feature = "parallel"))]
-    {
-        eo.iter().map(|c| libm::hypotf(c.re, c.im)).collect()
+    mag_chunk(eo, &mut out);
+    out
+}
+
+/// One tile of [`eo_magnitude`]: 8 lanes per group, tail scalar.
+fn mag_chunk(eo: &[Complex], out: &mut [f32]) {
+    let mut i = 0usize;
+    while i + 8 <= eo.len() {
+        let mut m = [0.0f32; 8];
+        for k in 0..8 {
+            let c = eo[i + k];
+            m[k] = libm::sqrtf(c.re * c.re + c.im * c.im);
+        }
+        out[i..i + 8].copy_from_slice(&m);
+        i += 8;
+    }
+    while i < eo.len() {
+        let c = eo[i];
+        out[i] = libm::sqrtf(c.re * c.re + c.im * c.im);
+        i += 1;
     }
 }
 

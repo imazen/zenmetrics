@@ -542,6 +542,99 @@ fn blue8_scatter(
     }
 }
 
+/// Gather one `nr`×`nb` tile (≤ 8×8) of the column transpose-in:
+/// `ro[y0+k][x..x+nb]` rows load contiguously, the fixed 8×8 array
+/// keeps the transpose register-resident (unpack/permute shuffles),
+/// and each column `l` stores contiguously at `dst[l·height + y0]`.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn cols_gather_tile(
+    ro: &[Complex],
+    width: usize,
+    x: usize,
+    y0: usize,
+    nr: usize,
+    nb: usize,
+    dst: &mut [Complex],
+    height: usize,
+) {
+    let mut t = [[Complex::default(); 8]; 8];
+    if nr == 8 && nb == 8 {
+        for k in 0..8 {
+            let src: &[Complex; 8] = ro[(y0 + k) * width + x..(y0 + k) * width + x + 8]
+                .try_into()
+                .unwrap();
+            for l in 0..8 {
+                t[l][k] = src[l];
+            }
+        }
+        for (l, col) in t.iter().enumerate() {
+            dst[l * height + y0..l * height + y0 + 8].copy_from_slice(col);
+        }
+    } else {
+        for k in 0..nr {
+            let src = &ro[(y0 + k) * width + x..(y0 + k) * width + x + nb];
+            for (l, &v) in src.iter().enumerate() {
+                t[l][k] = v;
+            }
+        }
+        for l in 0..nb {
+            dst[l * height + y0..l * height + y0 + nr].copy_from_slice(&t[l][..nr]);
+        }
+    }
+}
+
+/// The transpose-out twin of [`cols_gather_tile`]: column `l` loads
+/// contiguously from `src[l·height + y0]`, gets `conj·scale` fused in
+/// (`re·s, −im·s` when `negate`), and each row `k` stores
+/// contiguously at `dst[k·width + x]`.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+#[allow(clippy::too_many_arguments)]
+fn cols_scatter_tile(
+    src: &[Complex],
+    height: usize,
+    y0: usize,
+    nr: usize,
+    nb: usize,
+    s: f32,
+    negate: bool,
+    dst: &mut [Complex],
+    width: usize,
+    x: usize,
+) {
+    let mut t = [[Complex::default(); 8]; 8];
+    if nr == 8 && nb == 8 {
+        for (l, col) in t.iter_mut().enumerate() {
+            let src_c: &[Complex; 8] = src[l * height + y0..l * height + y0 + 8]
+                .try_into()
+                .unwrap();
+            for k in 0..8 {
+                col[k] = src_c[k];
+            }
+        }
+        for k in 0..8 {
+            let mut out = [Complex::default(); 8];
+            for l in 0..8 {
+                let v = t[l][k];
+                out[l] = Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+            }
+            dst[k * width + x..k * width + x + 8].copy_from_slice(&out);
+        }
+    } else {
+        for l in 0..nb {
+            for k in 0..nr {
+                t[l][k] = src[l * height + y0 + k];
+            }
+        }
+        for k in 0..nr {
+            for l in 0..nb {
+                let v = t[l][k];
+                dst[k * width + x + l] =
+                    Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+            }
+        }
+    }
+}
+
 /// Iterative radix-2 with precomputed per-stage twiddles.
 fn fft_radix2_planned(buf: &mut [Complex], stages: &[Vec<Complex>]) {
     let n = buf.len();
@@ -922,10 +1015,17 @@ fn fft2_cols_conj_scale(
                         |(re8, im8, a), (b, block)| {
                             let bx = x0 + b * CB;
                             let nb = CB.min(width - bx);
-                            for y in 0..height {
-                                for j in 0..nb {
-                                    block[j * height + y] = ro[y * width + bx + j];
-                                }
+                            for y0 in (0..height).step_by(8) {
+                                cols_gather_tile(
+                                    ro,
+                                    width,
+                                    bx,
+                                    y0,
+                                    (height - y0).min(8),
+                                    nb,
+                                    block,
+                                    height,
+                                );
                             }
                             let mut bufs: Vec<&mut [Complex]> =
                                 block.chunks_mut(height).take(nb).collect();
@@ -939,17 +1039,27 @@ fn fft2_cols_conj_scale(
                         },
                     );
             }
-            buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
-                for b in 0..nblocks {
-                    let bx = x0 + b * CB;
-                    let nb = CB.min(width - bx);
-                    for j in 0..nb {
-                        let v = cols_all[(b * CB + j) * height + y];
-                        row[bx + j] =
-                            Complex::new(v.re * s, if negate { -v.im * s } else { v.im * s });
+            buf.par_chunks_mut(width * 8)
+                .enumerate()
+                .for_each(|(g, rows)| {
+                    let y0 = g * 8;
+                    for b in 0..nblocks {
+                        let bx = x0 + b * CB;
+                        let nb = CB.min(width - bx);
+                        cols_scatter_tile(
+                            &cols_all[b * CB * height..],
+                            height,
+                            y0,
+                            rows.len() / width,
+                            nb,
+                            s,
+                            negate,
+                            rows,
+                            width,
+                            bx,
+                        );
                     }
-                }
-            });
+                });
             x0 += nb_cols;
         }
         return;
@@ -972,11 +1082,17 @@ fn fft2_cols_conj_scale(
     let mut x = 0usize;
     while x < width {
         let nb = CB.min(width - x);
-        for y in 0..height {
-            let src = &buf[y * width + x..y * width + x + nb];
-            for (j, &v) in src.iter().enumerate() {
-                cols[j * height + y] = v;
-            }
+        for y0 in (0..height).step_by(8) {
+            cols_gather_tile(
+                buf,
+                width,
+                x,
+                y0,
+                (height - y0).min(8),
+                nb,
+                &mut cols,
+                height,
+            );
         }
         match &mut blue {
             Some((re8, im8, a)) => {
@@ -995,20 +1111,24 @@ fn fft2_cols_conj_scale(
                 }
             }
         }
-        for y in 0..height {
-            let dst = &mut buf[y * width + x..y * width + x + nb];
-            for (j, d) in dst.iter_mut().enumerate() {
-                *d = cols[j * height + y];
-            }
+        let s = scale.unwrap_or(1.0);
+        let negate = scale.is_some();
+        for y0 in (0..height).step_by(8) {
+            let nr = (height - y0).min(8);
+            cols_scatter_tile(
+                &cols,
+                height,
+                y0,
+                nr,
+                nb,
+                s,
+                negate,
+                &mut buf[y0 * width..],
+                width,
+                x,
+            );
         }
         x += nb;
-    }
-    // The trailing `conj·scale` applies to the TRANSFORMED data — on the
-    // scalar fallback it stays a separate final pass.
-    if let Some(s) = scale {
-        for v in buf.iter_mut() {
-            *v = Complex::new(v.re, -v.im).scale(s);
-        }
     }
 }
 
