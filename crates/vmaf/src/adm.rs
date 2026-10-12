@@ -1,15 +1,16 @@
 use crate::{Error, ModelVariant, VmafV0Variant, pool};
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 use archmage::X64V4xToken;
+#[cfg(feature = "simd")]
+use archmage::attune;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-use archmage::{NeonToken, SimdToken, attune};
+use archmage::{NeonToken, SimdToken};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, attune};
-#[cfg(feature = "simd")]
+use archmage::{SimdToken, X64V3Token};
 #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {

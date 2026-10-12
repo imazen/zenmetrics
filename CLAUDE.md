@@ -542,6 +542,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- VMAF ADM/CAMBI/SPEED portable dispatch generation must import `attune` on every SIMD-enabled target, including i686. Architecture-specific tokens remain gated. The i686 cross compile and aarch64 compile pass with the portable macro imports; numerical execution on i686 was not measured.
+
 - The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
 - Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
 

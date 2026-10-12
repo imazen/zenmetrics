@@ -1,12 +1,14 @@
 use crate::{Error, pool};
+#[cfg(feature = "simd")]
+use archmage::attune;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-use archmage::{NeonToken, SimdToken, attune};
+use archmage::{NeonToken, SimdToken};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, attune};
+use archmage::{SimdToken, X64V3Token};
 
 #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
@@ -5028,7 +5030,6 @@ fn compute_dp_row_v3_t(
 
 /// mask[j] = dp_bottom[j+2p+1] + dp_top[j] - dp_bottom[j] - dp_top[j+2p+1]
 /// > mask_index — the window sum read straight out of the two dp rows.
-///
 /// Matches `compute_mask_row_avx2`.
 fn compute_mask_row(
     mask_row: &mut [u16],
