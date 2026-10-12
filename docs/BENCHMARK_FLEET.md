@@ -310,3 +310,18 @@ Pascal GPUs require the proprietary kernel module; NVIDIA's
 [kernel-module documentation](https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/kernel_open.html)
 limits the open module to Turing and newer. Use CUDA 12 for Pascal: CUDA 13
 [removed offline compilation for architectures before Turing](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/).
+
+`just iqa-gpu-deployment-bench GPU_BINARIES RUNNER CONTROLS NEW_OUTPUT
+MACHINE DOMAIN SDK` stages the qualified CUDA cases through the existing
+worker adapter. It requires all 24 layout/instrumentation controls and bundles
+the scoped SDK's verified files and loader aliases with each case. The child
+selects this runtime with relative `CUDA_PATH` and `LD_LIBRARY_PATH` values.
+Each of six variants runs cold and with a retained instance, in separate
+ordinary-latency and instrumented-memory processes. The summary retains actual
+adapter identity, metric version, scalar bits and memory coverage. A Done
+ledger row containing a failed packet does not qualify as a measurement.
+
+The 2026-10-12 [CUDA deployment receipt](../benchmarks/iqa_cuda_deployment_2026-10-12.meta)
+records 24/24 complete worker observations on r5600g. i134 passed all direct
+controls but only 12/24 worker observations after a driver replacement; its
+intermittent CUDA initialization failures leave that deployment unqualified.

@@ -1,0 +1,28 @@
+Metric driver source: ec453ab069121c3c5b04ccdefcc8cf7e8ae5b005; CI-pinned sibling snapshot, study-gpu-cuda; CUDARC_CUDA_VERSION=12000; no target-cpu=native.
+Driver latency SHA-256: eccb3a8ae82f23b93f054733b92640fbe30c68e2615b55b2e991fbc04df80ce8
+Driver memory SHA-256: 89a390670f05984823cf4c5f0f7d25e3dedb7781fb65dd6c0c6ee22a273ad970
+Runner SHA-256: 7e21043cd3429fbe97494a53936a82a2759a4fad40060289bf1ee415ddbb79c5 (zenbench ac675d3a, 0.1.10).
+CUDA runtime: NVRTC/builtins 12.4.127, 204 package-owned headers, two real libraries, five loader aliases.
+Scoped SDK manifest SHA-256: 39e2acdd0eb8b0dbd3372808aaeb8499e455b9691d94f975e2b05a1fe178da1f.
+Each native bundle binds all SDK files and loader names by hash, using relative CUDA_PATH=sdk and LD_LIBRARY_PATH=sdk/lib64. The host supplies its own driver.
+Control command: just iqa-gpu-check <binaries> cuda <new-controls> <exact-adapter-name>.
+Deployment command: just iqa-gpu-deployment-bench <binaries> <runner> <controls> <new-output> <machine> <exact-domain> <scoped-sdk>.
+Six variants: butteraugli-gpu, cvvdp-gpu, dssim-gpu, iwssim-gpu, ssim2-gpu, zensim-gpu.
+Each: cold and warm_instance, 256x256 patterned RGB8, two calls; exact scalar products across packed/padded and ordinary/instrumented controls.
+Both direct-control suites: 24/24 cases passed. This certifies functional determinism/layout/instrumentation on this fixture, not canonical metric accuracy.
+Native worker cases: packed, both reuse modes, separate latency/os_peak and instrumented/driver passes; each receipt recovered by hash. Warm_instance retains metric buffers, not a cached reference. Cold can retain process-wide context/JIT caches between its two operations.
+Resource boundary: outer hard system scope AllowedCPUs=2, MemoryMax=16G, MemorySwapMax=0; run-heavy inside. Resource receipt RSS describes the supervisor; committed records retain metric-child resident high water or Rust heap phase quantities. Device memory is not observed by this driver.
+r5600g: GTX 1660 Ti, driver 580.178.04; domain capacity1024_l316384K.
+r5600g native worker: 24/24 packet.status=complete, 12 usable latency products and 12 separate memory products.
+r5600g control: run-heavy: done rc=0 59s | peak-RSS 0.26GiB | min-avail 41490MiB | peak-load 0.79
+r5600g worker: run-heavy: done rc=0 93s | peak-RSS 0.26GiB | min-avail 41438MiB | peak-load 0.67
+r5600g raw resolving path: ~/tmp/zm-iqa-cuda-20261012/{controls,fleet-observations-v2}/.
+i134: GTX 1080 Ti, proprietary driver 580.178.04; domain performance_l320480K.
+i134 direct controls: run-heavy: done rc=0 48s | peak-RSS 0.24GiB | min-avail 26453MiB | peak-load 3.48
+i134 worker retry: 12/24 packet.status=complete; the other 12 fail CUDA initialization with CUDA_ERROR_UNKNOWN. No failed packet is a usable observation even if its ledger row is Done.
+i134 worker retry: run-heavy: done rc=1 76s | peak-RSS 0.24GiB | min-avail 26496MiB | peak-load 3.49
+i134 raw resolving path: ~/tmp/zm-iqa-cuda-20261012/{controls-recovered,fleet-observations,fleet-observations-v2}/.
+i134 initially had an open 595.99.02 kernel module incompatible with Pascal. The proprietary 580.178.04 driver now recognizes the card. After hot replacement, udev repeatedly unloads/reloads NVIDIA modules; replacing the child unload actions with target-only rmmod reduces that loop, but the native campaign still observes intermittent initialization failures. The vendor rule is preserved at ~/tmp/zm-iqa-cuda-20261012/71-nvidia.rules.original; its SHA-256 is 0a6e1b3ba1c875d14402a1e136d16bf4db60da779096129976257a9bd5b0398e. A targeted override is installed at /etc/udev/rules.d/71-nvidia.rules. A reboot is awaiting operator approval; i134 CUDA worker deployment remains unqualified.
+All failed attempts and raw logs remain retained. No assertion or tolerance changed. Performance observations are descriptive, with no speed acceptance.
+iqa_cuda_deployment_r5600g_2026-10-12.jsonl SHA-256: f6e73c5c309ecccfcd100f60c1252da64b9aba435e179099cc4a29278990ffcd
+iqa_cuda_deployment_i134_partial_2026-10-12.jsonl SHA-256: e41256fe45f7a5a737090f2419ab024efae702cb85d1a3596a77ee1eb677c5bf

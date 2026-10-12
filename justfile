@@ -473,6 +473,10 @@ iqa-study-check binaries output *args:
 iqa-deployment-bench binaries runner sdr hdr output machine domain:
     python3 -B scripts/jobsys/benchmark_iqa_deployment.py {{binaries}} {{runner}} {{sdr}} {{hdr}} {{output}} {{machine}} {{domain}}
 
+# Stage the hash-bound scoped CUDA runtime with every qualified GPU case.
+iqa-gpu-deployment-bench binaries runner controls output machine domain sdk *args:
+    python3 -B scripts/jobsys/benchmark_iqa_deployment.py {{binaries}} {{runner}} - - {{output}} {{machine}} {{domain}} --gpu-only --gpu-controls {{controls}} --gpu-sdk {{sdk}} {{args}}
+
 iqa-fleet-check binaries output:
     python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}
 

@@ -1417,3 +1417,14 @@ restoring the original input could reuse it. Prepare the new reference before
 freeing or replacing the current one. Chromium recovery controls fail with the
 old worker and pass with the corrected worker, retaining exact native scalar
 and raw-map checks.
+
+### Known Bugs: CUDA initialization after driver replacement (2026-10-12)
+
+i134's GTX 1080 Ti requires the proprietary NVIDIA kernel module. After
+replacing its incompatible open module with 580.178.04, direct controls passed
+all six CUDA metric variants, but native worker attempts still intermittently
+fail `CudaContext::new(0)` with `CUDA_ERROR_UNKNOWN`. Udev repeatedly
+unloaded/reloaded modules; targeted child-module unload actions reduced that
+loop without qualifying the worker deployment. All failed packets and logs
+are retained in the [CUDA deployment receipt](benchmarks/iqa_cuda_deployment_2026-10-12.meta).
+A Done ledger row with `packet.status=child_failed` is not a usable measurement.
