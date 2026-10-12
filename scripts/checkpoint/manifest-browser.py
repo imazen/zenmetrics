@@ -19,6 +19,7 @@ def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 metadata = {'schema': 1, 'source_commit': source,
+    'target': 'wasm32-unknown-unknown', 'profile': 'browser-simd128-relaxed-rayon',
     'rustc': subprocess.check_output(['rustc', '+nightly-2026-10-06', '-Vv'], text=True),
     'wasm_bindgen': '0.2.129', 'required': ['secure-context', 'COOP: same-origin',
         'COEP: require-corp', 'SharedArrayBuffer', 'simd128', 'relaxed-simd'],

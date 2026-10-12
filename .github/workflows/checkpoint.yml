@@ -1,6 +1,9 @@
 name: Checkpoint binaries
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['scripts/checkpoint/**', 'ci/checkpoint-profiles.json', 'crates/zenmetrics-browser/**', 'web/metrics/**', '.github/workflows/checkpoint.yml']
   pull_request:
     paths: ['scripts/checkpoint/**', 'ci/checkpoint-profiles.json', 'crates/zenmetrics-browser/**', 'web/metrics/**', '.github/workflows/checkpoint.yml']
 permissions:

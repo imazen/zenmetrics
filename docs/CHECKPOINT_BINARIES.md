@@ -34,6 +34,18 @@ python3 scripts/checkpoint/package.py --profile full-wgpu \
   --runner-source /path/to/pinned/zenbench --out /path/to/new/checkpoint
 ```
 
+After CI succeeds, download and verify the exact release assets:
+
+```sh
+python3 scripts/checkpoint/prepare-release.py --run CHECKPOINT_RUN_ID \
+  --source FULL_SOURCE_SHA --out /path/to/new/release-assets
+```
+
+The preparer refuses PR-only commits, missing or expired targets, failed or
+skipped checkpoint jobs, a source absent from the default branch, and non-green
+CI/native-protocol runs on that source. It verifies the archive and every
+manifest-bound file without rebuilding, tagging or publishing.
+
 Run heavy builds with the workspace resource wrapper. Output directories must be
 new. No `target-cpu=native` flags are accepted. The package has runtime dispatch.
 After every platform is green on the release commit, review the README and the

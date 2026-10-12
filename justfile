@@ -446,3 +446,6 @@ checkpoint-browser-build output:
 
 checkpoint-browser-check package report oracle:
     python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}
+
+checkpoint-release-prepare run source output:
+    python3 scripts/checkpoint/prepare-release.py --run {{run}} --source {{source}} --out {{output}}

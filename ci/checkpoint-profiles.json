@@ -56,5 +56,16 @@
   "benchmark_runner": {
     "repository": "imazen/zenbench",
     "commit": "4f152ef95b700366642f7011972c302300ee6932"
-  }
+  },
+  "release_artifacts": [
+    "checkpoint-x86_64-unknown-linux-gnu-full-wgpu",
+    "checkpoint-x86_64-unknown-linux-gnu-full-cuda",
+    "checkpoint-aarch64-unknown-linux-gnu-full-wgpu",
+    "checkpoint-x86_64-pc-windows-msvc-full-wgpu",
+    "checkpoint-aarch64-pc-windows-msvc-full-wgpu",
+    "checkpoint-aarch64-apple-darwin-full-wgpu",
+    "checkpoint-x86_64-apple-darwin-full-wgpu",
+    "checkpoint-i686-unknown-linux-gnu-full-cpu",
+    "checkpoint-browser-simd128-relaxed-rayon"
+  ]
 }
