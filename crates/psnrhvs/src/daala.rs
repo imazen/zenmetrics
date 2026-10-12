@@ -21,6 +21,11 @@
 //! f32 `ret` accumulator over all coefficients — libvmaf accumulates in
 //! float, and matching that accumulation order is what keeps parity),
 //! f64 only for the final `-10·log10`.
+//!
+//! The integer DCT processes eight independent columns in SIMD lanes,
+//! with bit-shuffle transposes between its column-first passes. Runtime
+//! dispatch occurs once per block row. All floating-point statistics and
+//! the global coefficient fold retain their original scalar order.
 
 /// Per-plane CSF tables (`csf_y`, `csf_cb420`, `csf_cr420`) — normalized
 /// inverse-quantization matrices "at the point of transparency".
@@ -64,12 +69,14 @@ const CSF_CR420: [[f32; 8]; 8] = [
 /// Daala integer transforms: `((uint32)(a) >> (32-b)) + a) >> b`, with
 /// the add carried out in the u32 domain exactly as C does.
 #[inline(always)]
+#[cfg(test)]
 fn od_rshift(a: i32, b: u32) -> i32 {
     (((a as u32) >> (32 - b)).wrapping_add(a as u32) as i32) >> b
 }
 
 /// `od_bin_fdct8` — Daala's 8-point integer forward DCT (bit-exact
 /// port). `x` is read with `xstride` between taps.
+#[cfg(test)]
 fn od_bin_fdct8(y: &mut [i32; 8], x: &[i32], xstride: usize) {
     let mut t0 = x[0];
     let mut t4 = x[xstride];
@@ -127,6 +134,7 @@ fn od_bin_fdct8(y: &mut [i32; 8], x: &[i32], xstride: usize) {
 /// intermediate, in place (C: `od_bin_fdct8(z + 8*i, x + i, xstride)`
 /// then `od_bin_fdct8(y + ystride*i, z + i, 8)`). The order matters:
 /// the bin-DCT's integer rounding makes row-first ≠ column-first.
+#[cfg(test)]
 fn od_bin_fdct8x8(y: &mut [i32; 64]) {
     let mut z = [0i32; 64];
     let mut col_in = [0i32; 8];
@@ -142,6 +150,80 @@ fn od_bin_fdct8x8(y: &mut [i32; 64]) {
         let mut col_out = [0i32; 8];
         od_bin_fdct8(&mut col_out, &z[i..], 8);
         y[i * 8..i * 8 + 8].copy_from_slice(&col_out);
+    }
+}
+
+/// Eight independent integer transforms, one in each lane. The shifts
+/// retain Daala's signed rounding, including the unbiased half shifts.
+#[inline(always)]
+fn fdct8_vectors<T: magetypes::simd::backends::I32x8Backend>(
+    x: [magetypes::simd::generic::i32x8<T>; 8],
+) -> [magetypes::simd::generic::i32x8<T>; 8] {
+    fn half<T: magetypes::simd::backends::I32x8Backend>(
+        a: magetypes::simd::generic::i32x8<T>,
+    ) -> magetypes::simd::generic::i32x8<T> {
+        (a.shr_logical_const::<31>() + a).shr_arithmetic_const::<1>()
+    }
+    let [
+        mut t0,
+        mut t4,
+        mut t2,
+        mut t6,
+        mut t7,
+        mut t3,
+        mut t5,
+        mut t1,
+    ] = x;
+    t1 = t0 - t1;
+    let t1h = half(t1);
+    t0 -= t1h;
+    t4 += t5;
+    let t4h = half(t4);
+    t5 -= t4h;
+    t3 = t2 - t3;
+    t2 -= half(t3);
+    t6 += t7;
+    let t6h = half(t6);
+    t7 = t6h - t7;
+    t0 += t6h;
+    t6 = t0 - t6;
+    t2 = t4h - t2;
+    t4 = t2 - t4;
+    t0 -= (t4 * 13573 + 16384).shr_arithmetic_const::<15>();
+    t4 += (t0 * 11585 + 8192).shr_arithmetic_const::<14>();
+    t0 -= (t4 * 13573 + 16384).shr_arithmetic_const::<15>();
+    t6 -= (t2 * 21895 + 16384).shr_arithmetic_const::<15>();
+    t2 += (t6 * 15137 + 8192).shr_arithmetic_const::<14>();
+    t6 -= (t2 * 21895 + 16384).shr_arithmetic_const::<15>();
+    t3 += (t5 * 19195 + 16384).shr_arithmetic_const::<15>();
+    t5 += (t3 * 11585 + 8192).shr_arithmetic_const::<14>();
+    t3 -= (t5 * 7489 + 4096).shr_arithmetic_const::<13>();
+    t7 = half(t5) - t7;
+    t5 -= t7;
+    t3 = t1h - t3;
+    t1 -= t3;
+    t7 += (t1 * 3227 + 16384).shr_arithmetic_const::<15>();
+    t1 -= (t7 * 6393 + 16384).shr_arithmetic_const::<15>();
+    t7 += (t1 * 3227 + 16384).shr_arithmetic_const::<15>();
+    t5 += (t3 * 2485 + 4096).shr_arithmetic_const::<13>();
+    t3 -= (t5 * 18205 + 16384).shr_arithmetic_const::<15>();
+    t5 += (t3 * 2485 + 4096).shr_arithmetic_const::<13>();
+    [t0, t1, t2, t3, t4, t5, t6, t7]
+}
+
+#[inline(always)]
+fn fdct8x8_vectors<T: magetypes::simd::backends::F32x8Convert>(token: T, block: &mut [i32; 64]) {
+    use magetypes::simd::generic::{f32x8, i32x8};
+    let rows = block.as_chunks::<8>().0;
+    let columns = fdct8_vectors(core::array::from_fn(|i| i32x8::load_t(token, &rows[i])));
+    // These are bit shuffles only: the float vectors never do arithmetic.
+    let mut transposed = columns.map(i32x8::bitcast_to_f32);
+    f32x8::transpose_8x8(&mut transposed);
+    let columns = fdct8_vectors(transposed.map(f32x8::bitcast_to_i32));
+    let mut transposed = columns.map(i32x8::bitcast_to_f32);
+    f32x8::transpose_8x8(&mut transposed);
+    for (out, row) in block.as_chunks_mut::<8>().0.iter_mut().zip(transposed) {
+        row.bitcast_to_i32().store(out);
     }
 }
 
@@ -175,18 +257,21 @@ fn calc_psnrhvs(
     let mut pixels = 0u32;
     let mut y = 0usize;
     while y + 7 < h {
-        block_row(
-            src,
-            sstride,
-            dst,
-            dstride,
-            w,
-            y,
-            step,
-            &mask,
-            csf,
-            &mut ret,
-            &mut pixels,
+        archmage::attuned!(
+            block_row(
+                src,
+                sstride,
+                dst,
+                dstride,
+                w,
+                y,
+                step,
+                &mask,
+                csf,
+                &mut ret,
+                &mut pixels,
+            ),
+            [_v3_t, _neon_t, _wasm128_t, _scalar_t]
         );
         y += step;
     }
@@ -199,7 +284,9 @@ fn calc_psnrhvs(
 /// One `step`-strided block row of `calc_psnrhvs` — the unchanged
 /// per-block math, accumulating `(ret, pixels)` for its band.
 #[allow(clippy::too_many_arguments)]
+#[archmage::attune(_*_t, define(i32x8, f32x8))]
 fn block_row(
+    token: Token,
     src: &[u8],
     sstride: usize,
     dst: &[u8],
@@ -269,8 +356,8 @@ fn block_row(
         if d_gvar > 0.0 {
             d_gvar = (d_vars[0] + d_vars[1] + d_vars[2] + d_vars[3]) / d_gvar;
         }
-        od_bin_fdct8x8(&mut dct_s);
-        od_bin_fdct8x8(&mut dct_d);
+        fdct8x8_vectors(token, &mut dct_s);
+        fdct8x8_vectors(token, &mut dct_d);
         let mut s_mask = 0.0f32;
         let mut d_mask = 0.0f32;
         for i in 0..8 {
@@ -408,5 +495,46 @@ pub fn psnr_hvs_daala_yuv420(
         psnr_hvs_y: score_db(mse_y),
         psnr_hvs_cb: score_db(mse_cb),
         psnr_hvs_cr: score_db(mse_cr),
+    }
+}
+
+#[cfg(test)]
+mod transform_tests {
+    use super::*;
+    use archmage::SimdToken;
+
+    fn check<T: magetypes::simd::backends::F32x8Convert>(token: T, input: [i32; 64]) {
+        let mut expected = input;
+        od_bin_fdct8x8(&mut expected);
+        let mut actual = input;
+        fdct8x8_vectors(token, &mut actual);
+        assert_eq!(actual, expected, "input {input:?}");
+    }
+
+    #[test]
+    fn vector_transform_matches_original_integer_coefficients() {
+        let mut state = 0x9182_783bu32;
+        for seed in 0..4096 {
+            let input = core::array::from_fn(|i| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                match seed {
+                    0 => 0,
+                    1 => 255,
+                    2..=65 => i32::from(i == seed - 2) * 255,
+                    66 => i32::from(i % 2 == 0) * 255,
+                    67 => (i as i32 * 17) % 256,
+                    _ => (state >> 24) as i32,
+                }
+            });
+            check(archmage::ScalarToken::summon().unwrap(), input);
+            #[cfg(target_arch = "x86_64")]
+            if let Some(token) = archmage::X64V3Token::summon() {
+                check(token, input);
+            }
+            #[cfg(target_arch = "aarch64")]
+            check(archmage::NeonToken::summon().unwrap(), input);
+            #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+            check(archmage::Wasm128Token::summon().unwrap(), input);
+        }
     }
 }

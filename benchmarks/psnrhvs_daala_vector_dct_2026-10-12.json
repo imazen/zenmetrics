@@ -1,0 +1,224 @@
+{
+  "schema": 1,
+  "host": "r7900x",
+  "baseline_source": "a070af2de69899d10ff3a37b7f972cfe7281431c",
+  "candidate_parent": "c1079f26adf544b58f5567daa9135d5e8563f7e8",
+  "compiled_daala_source_sha256": "9b419613deaa4cd1d264216b3a340a09200a29eb9ffb383c92f09ce81fc42f3e",
+  "final_daala_source_sha256": "20d5286ae7b34ec2fba806d0b95a2d596138f5407288dc368c0d5a64ae2c8eb9",
+  "source_difference_after_build": "test module moved after production items; production bodies unchanged",
+  "baseline_binary_sha256": "bcb3ba9578faee89c89411fff205c09676b79caa5545654ffbb15d0807d55adb",
+  "candidate_binary_sha256": "8aed10bc780b8f0b78c5f8205ceb75d196229b8723708c488ad0c2fa1724f61a",
+  "compiled_conversion_sha256": "d6dc479e02e3697e45f74d704088cc04687d90d023b4d8e5ddf15dc501d2d929",
+  "runner_sha256": "7e21043cd3429fbe97494a53936a82a2759a4fad40060289bf1ee415ddbb79c5",
+  "fixtures": {
+    "wall": "new-metrics-wall synthetic RGB8 3355x2516, thirty rounds, ordinary release",
+    "pair": "check_iqa_study patterned RGB8 3355x2516, zero warmup, two cold operations, exact four columns; distinct pixels from wall"
+  },
+  "inference": "exploratory, no confirmation acceptance",
+  "not_measured": [
+    "scalar performance",
+    "aarch64 performance",
+    "Zen 5 performance"
+  ],
+  "disassembly": {
+    "vpmulld": 78,
+    "vpsrad": 80,
+    "vpsrld": 20,
+    "fma_instructions": 0,
+    "path": "~/tmp/zm-daala-vector-dct-v3.asm",
+    "sha256": "6eb741bdaa01acea64cd04c152b975c4050f6900c80085eacb8ab3b0be599e13"
+  },
+  "profile_before_dct": {
+    "samples": 15093,
+    "lost_samples": 0,
+    "self_percent": {
+      "calc_psnrhvs": 26.0,
+      "od_bin_fdct8": 24.22,
+      "od_bin_fdct8x8": 6.25,
+      "studio601_yuv444": 18.91
+    },
+    "raw_data": "~/tmp/psnrhvs-daala-post-conversion-profile-20261012.data",
+    "raw_sha256": "59d1ea0e0eb4a2f7e492526384613c68c5781d7782c8fa53bb8721bb46c3a05c"
+  },
+  "logs": {
+    "before_1t": "binary_sha256: bcb3ba9578faee89c89411fff205c09676b79caa5545654ffbb15d0807d55adb  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate\nhost: r7900x\nrayon_threads: 1\nsize: 3355x2516\nmetrics: psnrhvs-daala\nmodes: lat\nmin_rounds: 30\ngroup_wall_s: 120\ncell_max_s: 30\ncoordinator_pin: 2 (scoped affinity; process boundary is reported separately)\nrun-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24409MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-vector-dct-baseline-1t-20261012.tsv psnrhvs-daala\n[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help\n[zenbench] mode=iterate inference=exploratory workload=None\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n[zenbench] calibration: int=0.18ns/iter mem_bw=108.9GiB/s mem_lat=9.2ns\n[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)\n[zenbench] results \u2192 .zenbench/data/attempts/18dde6f991f016db-1370e2-2f0391d10c594684.json.gz\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  zenbench  18dde6f991f016db-1370e2-2f0391d10c594684\n  git: c1079f26adf544b58f5567daa9135d5e8563f7e8\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=[2] cpu_thread_effective=[2] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n\n  new_metrics_wall_3355x2516  30 rounds \u00d7 1 calls\n                           mean \u00b1mad ms  95% CI vs base   \n  \u2570\u2500 psnrhvs-daala__lat   429.2 \u00b126.0ms  [420.9\u2013437.9]ms  \n[zenbench] evidence \u2192 .zenbench/data/runs/18dde6fcfdb55097-1370e2-0bbe89285b855c46.json\n\n  total: 14.5s\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json\nsentinel 3355x2516/psnrhvs-daala: 34.765447061926444\nwrote wall rows for size 3355x2516 to /home/lilith/tmp/psnrhvs-daala-vector-dct-baseline-1t-20261012.tsv\n\n Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-vector-dct-baseline-1t-20261012.tsv psnrhvs-daala':\n\n      235620157956      instructions                                                          \n       84100506147      cycles                                                                \n\n      15.651082365 seconds time elapsed\n\n      12.291954000 seconds user\n       2.955528000 seconds sys\n\n\nrun-heavy: done rc=0 16s | peak-RSS 0.14GiB | min-avail 24246MiB | peak-load 0.80\n",
+    "after_1t": "binary_sha256: 8aed10bc780b8f0b78c5f8205ceb75d196229b8723708c488ad0c2fa1724f61a  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-vector-dct-candidate\nhost: r7900x\nrayon_threads: 1\nsize: 3355x2516\nmetrics: psnrhvs-daala\nmodes: lat\nmin_rounds: 30\ngroup_wall_s: 120\ncell_max_s: 30\ncoordinator_pin: 2 (scoped affinity; process boundary is reported separately)\nrun-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=23882MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-vector-dct-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-vector-dct-1t-20261012.tsv psnrhvs-daala\n[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help\n[zenbench] mode=iterate inference=exploratory workload=None\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n[zenbench] calibration: int=0.35ns/iter mem_bw=89.4GiB/s mem_lat=10.2ns\n[zenbench] timer resolution: 10ns, loop overhead: 0.32ns/iter, TSC: 4.691 ticks/ns (invariant)\n[zenbench] results \u2192 .zenbench/data/attempts/18dde6d4cbf3c13b-133483-86e547fd5bb17202.json.gz\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  zenbench  18dde6d4cbf3c13b-133483-86e547fd5bb17202\n  git: c1079f26adf544b58f5567daa9135d5e8563f7e8\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=[2] cpu_thread_effective=[2] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n\n  new_metrics_wall_3355x2516  30 rounds \u00d7 1 calls\n                          mean \u00b1mad ms  95% CI vs base   \n  \u2570\u2500 psnrhvs-daala__lat   292.8 \u00b11.2ms  [291.1\u2013294.2]ms  \n[zenbench] evidence \u2192 .zenbench/data/runs/18dde6d7522308d4-133483-7ff0e290c9b490e5.json\n\n  total: 10.5s\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json\nsentinel 3355x2516/psnrhvs-daala: 34.765447061926444\nwrote wall rows for size 3355x2516 to /home/lilith/tmp/psnrhvs-daala-vector-dct-1t-20261012.tsv\n\n Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-vector-dct-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-vector-dct-1t-20261012.tsv psnrhvs-daala':\n\n      134387110205      instructions                                                          \n       60773398633      cycles                                                                \n\n      11.754170819 seconds time elapsed\n\n       8.533348000 seconds user\n       2.488404000 seconds sys\n\n\nrun-heavy: done rc=0 12s | peak-RSS 0.14GiB | min-avail 23690MiB | peak-load 2.47\n",
+    "before_16t": "binary_sha256: bcb3ba9578faee89c89411fff205c09676b79caa5545654ffbb15d0807d55adb  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate\nhost: r7900x\nrayon_threads: 16\nsize: 3355x2516\nmetrics: psnrhvs-daala\nmodes: lat\nmin_rounds: 30\ngroup_wall_s: 120\ncell_max_s: 30\nrun-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24190MiB :: /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-after-16t-resume.tsv psnrhvs-daala\n[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help\n[zenbench] mode=iterate inference=exploratory workload=None\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n[zenbench] calibration: int=0.18ns/iter mem_bw=115.8GiB/s mem_lat=9.2ns\n[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)\n[zenbench] results \u2192 .zenbench/data/attempts/18dde64caa2acb6f-12b005-2cd17d23126b5c6d.json.gz\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  zenbench  18dde64caa2acb6f-12b005-2cd17d23126b5c6d\n  git: 53f5c92f7f5f206ab66a04e331935db0da18c89b\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n\n  new_metrics_wall_3355x2516  30 rounds \u00d7 1 calls\n                          mean \u00b1mad ms  95% CI vs base   \n  \u2570\u2500 psnrhvs-daala__lat   349.8 \u00b11.1ms  [349.3\u2013350.3]ms  \n[zenbench] evidence \u2192 .zenbench/data/runs/18dde64f76989cc0-12b005-5c560d921c839c2c.json\n\n  total: 11.8s\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json\nsentinel 3355x2516/psnrhvs-daala: 34.765447061926444\nwrote wall rows for size 3355x2516 to /home/lilith/tmp/psnrhvs-daala-after-16t-resume.tsv\nrun-heavy: done rc=0 13s | peak-RSS 0.14GiB | min-avail 24172MiB | peak-load 1.25\n",
+    "after_16t": "binary_sha256: 8aed10bc780b8f0b78c5f8205ceb75d196229b8723708c488ad0c2fa1724f61a  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-vector-dct-candidate\nhost: r7900x\nrayon_threads: 16\nsize: 3355x2516\nmetrics: psnrhvs-daala\nmodes: lat\nmin_rounds: 30\ngroup_wall_s: 120\ncell_max_s: 30\nrun-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24411MiB :: /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-vector-dct-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-vector-dct-16t-20261012.tsv psnrhvs-daala\n[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help\n[zenbench] mode=iterate inference=exploratory workload=None\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n[zenbench] calibration: int=0.20ns/iter mem_bw=109.3GiB/s mem_lat=10.3ns\n[zenbench] timer resolution: 10ns, loop overhead: 0.20ns/iter, TSC: 4.691 ticks/ns (invariant)\n[zenbench] results \u2192 .zenbench/data/attempts/18dde7044416c2c9-1372e8-4c743d2added5647.json.gz\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  zenbench  18dde7044416c2c9-1372e8-4c743d2added5647\n  git: c1079f26adf544b58f5567daa9135d5e8563f7e8\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n\n  new_metrics_wall_3355x2516  30 rounds \u00d7 1 calls\n                          mean \u00b1mad ms  95% CI vs base   \n  \u2570\u2500 psnrhvs-daala__lat   239.8 \u00b11.8ms  [239.0\u2013240.6]ms  \n[zenbench] evidence \u2192 .zenbench/data/runs/18dde7064df4b20b-1372e8-f7acfc6c8a9f669f.json\n\n  total: 8.5s  (1 noisy rounds)\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json\nsentinel 3355x2516/psnrhvs-daala: 34.765447061926444\nwrote wall rows for size 3355x2516 to /home/lilith/tmp/psnrhvs-daala-vector-dct-16t-20261012.tsv\nrun-heavy: done rc=0 10s | peak-RSS 0.14GiB | min-avail 24252MiB | peak-load 0.64\n",
+    "native_tests": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24406MiB :: just snap-cargo @ test -p psnrhvs --features parallel,avx512\nif [ \"@\" = \"@\" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi\nlock.sh: exported tracked tree fca93a17a3ec (Cargo output excluded)\nlock.sh --check: PASS \u2014 Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).\ncd \"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics\" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR=\"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target\" cargo --locked test -p psnrhvs --features parallel,avx512\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenrav1e)` was not used in the crate graph\n  |\n  = help: perhaps you meant one of the following:\n          \thttps://github.com/imazen/zenrav1e\n   Compiling psnrhvs v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/psnrhvs)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s\n     Running unittests src/lib.rs (/home/lilith/tmp/zenmetrics-lock-snap/target/debug/deps/psnrhvs-aaf087f77fc9b99d)\n\nrunning 8 tests\ntest tests::errors ... ok\ntest tests::rgb8_luma8_goldens ... ok\ntest tests::tier_parity ... ok\ntest kernel::transposed_loads_match_indexed_gather_bits ... ok\ntest tests::identical_is_100000 ... ok\ntest tests::hvs_m_bounds_hvs ... ok\ntest tests::golden_scores ... ok\ntest daala::transform_tests::vector_transform_matches_original_integer_coefficients ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n   Doc-tests psnrhvs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nrun-heavy: done rc=0 2s | peak-RSS 0.22GiB | min-avail 24056MiB | peak-load 0.86\n",
+    "no_default_tests": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24408MiB :: just snap-cargo @ test -p psnrhvs --no-default-features\nif [ \"@\" = \"@\" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi\nlock.sh: exported tracked tree fca93a17a3ec (Cargo output excluded)\nlock.sh --check: PASS \u2014 Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).\ncd \"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics\" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR=\"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target\" cargo --locked test -p psnrhvs --no-default-features\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenrav1e)` was not used in the crate graph\n  |\n  = help: perhaps you meant one of the following:\n          \thttps://github.com/imazen/zenrav1e\n   Compiling psnrhvs v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/psnrhvs)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s\n     Running unittests src/lib.rs (/home/lilith/tmp/zenmetrics-lock-snap/target/debug/deps/psnrhvs-f526156b781b9c10)\n\nrunning 8 tests\ntest tests::errors ... ok\ntest tests::tier_parity ... ok\ntest tests::rgb8_luma8_goldens ... ok\ntest kernel::transposed_loads_match_indexed_gather_bits ... ok\ntest tests::identical_is_100000 ... ok\ntest tests::hvs_m_bounds_hvs ... ok\ntest tests::golden_scores ... ok\ntest daala::transform_tests::vector_transform_matches_original_integer_coefficients ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n   Doc-tests psnrhvs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nrun-heavy: done rc=0 2s | peak-RSS 0.21GiB | min-avail 24404MiB | peak-load 0.93\n",
+    "wasm_tests": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24402MiB :: just snap-cargo @ test -p psnrhvs --no-default-features --target wasm32-wasip1 -- --test-threads=1\nif [ \"@\" = \"@\" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi\nlock.sh: exported tracked tree fca93a17a3ec (Cargo output excluded)\nlock.sh --check: PASS \u2014 Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).\ncd \"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics\" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR=\"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target\" cargo --locked test -p psnrhvs --no-default-features --target wasm32-wasip1 -- --test-threads=1\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenrav1e)` was not used in the crate graph\n  |\n  = help: perhaps you meant one of the following:\n          \thttps://github.com/imazen/zenrav1e\n   Compiling serde_core v1.0.229\n   Compiling safe_unaligned_simd v0.2.5\n   Compiling zmij v1.0.23\n   Compiling libm v0.2.16\n   Compiling serde_json v1.0.154\n   Compiling serde v1.0.229\n   Compiling serde_derive v1.0.229\n   Compiling itoa v1.0.18\n   Compiling memchr v2.8.3\n   Compiling archmage v0.9.31-beta (https://github.com/imazen/archmage?rev=72910a29#72910a29)\n   Compiling magetypes v0.9.31-beta (https://github.com/imazen/archmage?rev=72910a29#72910a29)\n   Compiling psnrhvs v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/psnrhvs)\nwarning: unused variable: `scalar`\n   --> crates/psnrhvs/src/tests.rs:361:9\n    |\n361 |     let scalar = kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8);\n    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`\n    |\n    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `psnrhvs` (lib test) generated 1 warning (run `cargo fix --lib -p psnrhvs --tests` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.05s\n     Running unittests src/lib.rs (/home/lilith/tmp/zenmetrics-lock-snap/target/wasm32-wasip1/debug/deps/psnrhvs-3f4810701f044ae7.wasm)\n\nrunning 8 tests\ntest daala::transform_tests::vector_transform_matches_original_integer_coefficients ... ok\ntest kernel::transposed_loads_match_indexed_gather_bits ... ok\ntest tests::errors ... ok\ntest tests::golden_scores ... ok\ntest tests::hvs_m_bounds_hvs ... ok\ntest tests::identical_is_100000 ... ok\ntest tests::rgb8_luma8_goldens ... ok\ntest tests::tier_parity ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s\n\n   Doc-tests psnrhvs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nrun-heavy: done rc=0 4s | peak-RSS 0.32GiB | min-avail 23899MiB | peak-load 1.10\n",
+    "oracle": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24409MiB :: just snap-cargo @ test -p msssim --test ffi_libvmaf\nif [ \"@\" = \"@\" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi\nlock.sh: exported tracked tree e953ba7e2d15 (Cargo output excluded)\nlock.sh --check: PASS \u2014 Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).\ncd \"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics\" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR=\"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target\" cargo --locked test -p msssim --test ffi_libvmaf\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenrav1e)` was not used in the crate graph\n  |\n  = help: perhaps you meant one of the following:\n          \thttps://github.com/imazen/zenrav1e\n   Compiling psnrhvs v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/psnrhvs)\n   Compiling msssim v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/msssim)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s\n     Running tests/ffi_libvmaf.rs (/home/lilith/tmp/zenmetrics-lock-snap/target/debug/deps/ffi_libvmaf-6c541f008df0d5ab)\n\nrunning 6 tests\ntest float_ssim_parity_10bit ... ok\ntest identical_frames ... ok\ntest psnr_hvs_parity_444 ... ok\ntest float_ssim_parity ... ok\ntest psnr_hvs_parity ... ok\ntest float_ms_ssim_parity ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.46s\n\nrun-heavy: done rc=0 24s | peak-RSS 0.52GiB | min-avail 23768MiB | peak-load 0.75\n",
+    "clippy": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24380MiB :: just snap-cargo @ clippy --no-deps -p psnrhvs --all-targets --features parallel,avx512 -- -D warnings\nif [ \"@\" = \"@\" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi\nlock.sh: exported tracked tree e953ba7e2d15 (Cargo output excluded)\nlock.sh --check: PASS \u2014 Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).\ncd \"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics\" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR=\"${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target\" cargo --locked clippy --no-deps -p psnrhvs --all-targets --features parallel,avx512 -- -D warnings\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: profiles for the non root package will be ignored, specify profiles at the workspace root:\npackage:   /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml\nworkspace: /home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/Cargo.toml\nwarning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenrav1e)` was not used in the crate graph\n  |\n  = help: perhaps you meant one of the following:\n          \thttps://github.com/imazen/zenrav1e\n    Checking psnrhvs v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap/work/zenmetrics/crates/psnrhvs)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s\nrun-heavy: done rc=0 2s | peak-RSS 0.15GiB | min-avail 24380MiB | peak-load 0.55\n",
+    "profile": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24436MiB :: sudo -n --preserve-env=TMPDIR,RAYON_NUM_THREADS,NMW_CONTENT,NMW_MODES,NMW_MIN_ROUNDS,NMW_GROUP_WALL_S,NMW_CELL_MAX_S,ZENBENCH_PIN,ZENBENCH_DATA_DIR perf record -F 997 --call-graph dwarf,8192 -o /home/lilith/tmp/psnrhvs-daala-post-conversion-profile-20261012.data -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/psnrhvs-daala-rounding-candidate 3355x2516 /home/lilith/tmp/psnrhvs-daala-post-conversion-profile-20261012.tsv psnrhvs-daala\n[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help\n[zenbench] mode=iterate inference=exploratory workload=None\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n[zenbench] calibration: int=0.18ns/iter mem_bw=118.7GiB/s mem_lat=9.4ns\n[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)\n[zenbench] results \u2192 /home/lilith/tmp/zm-ranked-profile-evidence/attempts/18dde69d2cd0221f-12e271-e16c0f02af77a7d3.json.gz\n\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  zenbench  18dde69d2cd0221f-12e271-e16c0f02af77a7d3\n  git: c1079f26adf544b58f5567daa9135d5e8563f7e8\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n[zenbench] cpu_policy=auto cpu_placement=uniform_hardware cpu_class=\"capacity1024_l332768K\" cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=[2] cpu_thread_effective=[2] cpu_class_uniform=true pool_thread_count=unknown cpu_frequency_verified=false\n\n  new_metrics_wall_3355x2516  30 rounds \u00d7 1 calls\n                           mean \u00b1mad ms  95% CI vs base   \n  \u2570\u2500 psnrhvs-daala__lat   428.3 \u00b136.7ms  [420.2\u2013436.6]ms  \n[zenbench] evidence \u2192 /home/lilith/tmp/zm-ranked-profile-evidence/runs/18dde6a09bd9c1c7-12e271-b7f035a62dd97625.json\n\n  total: 14.5s  (5 noisy rounds)\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json\nsentinel 3355x2516/psnrhvs-daala: 34.765447061926444\nwrote wall rows for size 3355x2516 to /home/lilith/tmp/psnrhvs-daala-post-conversion-profile-20261012.tsv\n[ perf record: Woken up 486 times to write data ]\n[ perf record: Captured and wrote 121.173 MB /home/lilith/tmp/psnrhvs-daala-post-conversion-profile-20261012.data (15093 samples) ]\nrun-heavy: done rc=0 17s | peak-RSS 0.16GiB | min-avail 23762MiB | peak-load 1.46\n",
+    "pair": "sudo -n systemd-run --scope --quiet --property=AllowedCPUs=2 --property=MemoryMax=16G --property=MemorySwapMax=0 runuser -u \"$(id -un)\" -- env TMPDIR=\"$HOME/tmp\" ZENBENCH_CPU_SET=\"2\" \"$HOME/work/claudehints/scripts/run-heavy\" --mem 16G -- \"/home/lilith/tmp/zm-iqa-refresh-20261012/binaries/zenbench\" pair \"/home/lilith/tmp/zm-daala-resume-20261012/dct-pair-plan/pair.json\" --output \"/home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output\" --wait 30\nrun-heavy: mem-cap=NONE (no systemd user scope \u2014 niced+monitored only) jobs=1/1 avail=24294MiB :: /home/lilith/tmp/zm-iqa-refresh-20261012/binaries/zenbench pair /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-plan/pair.json --output /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output --wait 30\n[zenbench pair] attempt retained at /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output\nzenbench_pair schema=1 mode=iterate complete=true fingerprint=1a98e92d1aedf0e367f21cc3204cc36463d946a4c065e18eca83b64e25df5e49 decision={\"accept\":null,\"accepted\":false,\"exit_code\":0,\"mode\":\"iterate\",\"model_conditional\":true}\nplacement=\"enforced_uniform\" invocations_with_observed_cpu_load_above_5pct=0\ncase,arm,complete_blocks,planned_blocks,latency_change_pct,log_ratio_sd,inference,control_present,correctness_checked,lower_pct,upper_pct,verdict,ratio_median,ratio_min,ratio_mad\n\"psnrhvs-daala-3355x2516\",\"candidate\",4,4,-31.194914611587176,0.009300718676720166,\"exploratory\",true,true,null,null,\"exploratory\",0.6887902880024599,0.6810375314986356,0.004701307007659472\n\"psnrhvs-daala-3355x2516\",\"__aa\",4,4,-0.6234415689676346,0.01858995425825137,\"exploratory\",true,true,null,null,\"exploratory\",0.9979620679120762,0.9692436732673398,0.009778924379142295\n\nPositive change means slower. Intervals assume independent approximately normal block log ratios.\nIterate exit 0 means execution completed only; Confirm requires valid observations and A/A equivalence.\nDetails: [{\"arm\":\"candidate\",\"arm_ns\":{\"mad\":336546.5,\"mean\":242078561.0,\"median\":241377907.75,\"min\":241015364.5,\"n\":4},\"baseline_ns\":{\"mad\":2333447.0,\"mean\":351855055.75,\"median\":350357620.25,\"min\":347630698.5,\"n\":4},\"case\":\"psnrhvs-daala-3355x2516\",\"complete_blocks\":4,\"control_present\":true,\"correctness_checked\":true,\"effect_exceeds_control_diagnostic\":true,\"inference\":\"exploratory\",\"interval\":null,\"latency_change_pct\":-31.194914611587176,\"log_ratio_sd\":0.009300718676720166,\"mean_log_ratio\":-0.3738925282511554,\"paired_ratio\":{\"mad\":0.004701307007659472,\"mean\":0.6880731660344885,\"median\":0.6887902880024599,\"min\":0.6810375314986356,\"n\":4},\"planned_blocks\":4,\"validity_issues\":[],\"verdict\":\"exploratory\"},{\"arm\":\"__aa\",\"arm_ns\":{\"mad\":1077499.25,\"mean\":349634747.75,\"median\":349629818.5,\"min\":348030478.0,\"n\":4},\"baseline_ns\":{\"mad\":2333447.0,\"mean\":351855055.75,\"median\":350357620.25,\"min\":347630698.5,\"n\":4},\"case\":\"psnrhvs-daala-3355x2516\",\"complete_blocks\":4,\"control_present\":true,\"correctness_checked\":true,\"effect_exceeds_control_diagnostic\":false,\"inference\":\"exploratory\",\"interval\":null,\"latency_change_pct\":-0.6234415689676346,\"log_ratio_sd\":0.01858995425825137,\"mean_log_ratio\":-0.006253930811707775,\"paired_ratio\":{\"mad\":0.009778924379142295,\"mean\":0.9938939790182182,\"median\":0.9979620679120762,\"min\":0.9692436732673398,\"n\":4},\"planned_blocks\":4,\"validity_issues\":[],\"verdict\":\"exploratory\"}]\n[zenbench pair] evidence: /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output/packet.json.gz\n[zenbench pair] decode: zenbench data read /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output/packet.json.gz --format json\n[zenbench pair] selected export: /home/lilith/tmp/zm-daala-resume-20261012/dct-pair-output/selected.csv\nrun-heavy: done rc=0 13s | peak-RSS 0.10GiB | min-avail 24220MiB | peak-load 0.61\n",
+    "controls": "run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24385MiB :: just iqa-study-check /home/lilith/tmp/zm-daala-resume-20261012/dct-binaries /home/lilith/tmp/zm-daala-resume-20261012/dct-controls --size 3355 2516 --metric psnrhvs-daala\npython3 -B scripts/jobsys/check_iqa_study.py /home/lilith/tmp/zm-daala-resume-20261012/dct-binaries /home/lilith/tmp/zm-daala-resume-20261012/dct-controls --size 3355 2516 --metric psnrhvs-daala\n{\"sdr_metrics\": 1, \"width\": 3355, \"height\": 2516, \"instrumentation_and_stride_parity\": \"exact scalar products\", \"qualification\": \"functional control only; no accuracy or resource admission claim\"}\nrun-heavy: done rc=0 20s | peak-RSS 1.20GiB | min-avail 23331MiB | peak-load 0.64\n"
+  },
+  "tsv": {
+    "before_1t": "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore\tcontent\trayon_threads\tcpus\n3355x2516\tpsnrhvs-daala\tlat\tna\t3355\t2516\t429214453.1\t429.2145\t30\t34.765447061926444\tsynth\t1\t1\n",
+    "after_1t": "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore\tcontent\trayon_threads\tcpus\n3355x2516\tpsnrhvs-daala\tlat\tna\t3355\t2516\t292753960.6\t292.7540\t30\t34.765447061926444\tsynth\t1\t1\n",
+    "before_16t": "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore\tcontent\trayon_threads\tcpus\n3355x2516\tpsnrhvs-daala\tlat\tna\t3355\t2516\t349795214.9\t349.7952\t30\t34.765447061926444\tsynth\t16\t24\n",
+    "after_16t": "size_label\tmetric\tmode\tcold_or_warm\tw\th\tmean_ns\tmean_ms\tn_rounds\tscore\tcontent\trayon_threads\tcpus\n3355x2516\tpsnrhvs-daala\tlat\tna\t3355\t2516\t239767857.9\t239.7679\t30\t34.765447061926444\tsynth\t16\t24\n"
+  },
+  "controls": [
+    {
+      "case": "psnrhvs-daala-packed",
+      "products": [
+        [
+          {
+            "name": "psnrhvs_daala_y",
+            "bits": 4628718541904264254
+          },
+          {
+            "name": "psnrhvs_daala_cb",
+            "bits": 4634193939758058222
+          },
+          {
+            "name": "psnrhvs_daala_cr",
+            "bits": 4634012989713725636
+          },
+          {
+            "name": "psnrhvs_daala",
+            "bits": 4628991216420559661
+          }
+        ],
+        [
+          {
+            "name": "psnrhvs_daala_y",
+            "bits": 4628718541904264254
+          },
+          {
+            "name": "psnrhvs_daala_cb",
+            "bits": 4634193939758058222
+          },
+          {
+            "name": "psnrhvs_daala_cr",
+            "bits": 4634012989713725636
+          },
+          {
+            "name": "psnrhvs_daala",
+            "bits": 4628991216420559661
+          }
+        ]
+      ]
+    },
+    {
+      "case": "psnrhvs-daala-padded",
+      "products": [
+        [
+          {
+            "name": "psnrhvs_daala_y",
+            "bits": 4628718541904264254
+          },
+          {
+            "name": "psnrhvs_daala_cb",
+            "bits": 4634193939758058222
+          },
+          {
+            "name": "psnrhvs_daala_cr",
+            "bits": 4634012989713725636
+          },
+          {
+            "name": "psnrhvs_daala",
+            "bits": 4628991216420559661
+          }
+        ],
+        [
+          {
+            "name": "psnrhvs_daala_y",
+            "bits": 4628718541904264254
+          },
+          {
+            "name": "psnrhvs_daala_cb",
+            "bits": 4634193939758058222
+          },
+          {
+            "name": "psnrhvs_daala_cr",
+            "bits": 4634012989713725636
+          },
+          {
+            "name": "psnrhvs_daala",
+            "bits": 4628991216420559661
+          }
+        ]
+      ]
+    },
+    {
+      "refused": {
+        "schema": 3
+      }
+    },
+    {
+      "refused": {
+        "products": "diffmap"
+      }
+    },
+    {
+      "refused": {
+        "reuse": "warm_reference"
+      }
+    },
+    {
+      "refused": {
+        "warmup_operations": 1025
+      }
+    },
+    {
+      "refused": {
+        "unknown": true
+      }
+    }
+  ],
+  "pair_summary": [
+    {
+      "case": "psnrhvs-daala-3355x2516",
+      "arm": "candidate",
+      "complete_blocks": "4",
+      "planned_blocks": "4",
+      "latency_change_pct": "-31.194914611587176",
+      "log_ratio_sd": "0.009300718676720166",
+      "inference": "exploratory",
+      "control_present": "true",
+      "correctness_checked": "true",
+      "lower_pct": "null",
+      "upper_pct": "null",
+      "verdict": "exploratory",
+      "ratio_median": "0.6887902880024599",
+      "ratio_min": "0.6810375314986356",
+      "ratio_mad": "0.004701307007659472"
+    },
+    {
+      "case": "psnrhvs-daala-3355x2516",
+      "arm": "__aa",
+      "complete_blocks": "4",
+      "planned_blocks": "4",
+      "latency_change_pct": "-0.6234415689676346",
+      "log_ratio_sd": "0.01858995425825137",
+      "inference": "exploratory",
+      "control_present": "true",
+      "correctness_checked": "true",
+      "lower_pct": "null",
+      "upper_pct": "null",
+      "verdict": "exploratory",
+      "ratio_median": "0.9979620679120762",
+      "ratio_min": "0.9692436732673398",
+      "ratio_mad": "0.009778924379142295"
+    }
+  ],
+  "commands": [
+    "just snap-cargo @ test -p psnrhvs --features parallel,avx512",
+    "just snap-cargo @ test -p psnrhvs --no-default-features",
+    "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime RUSTFLAGS=\"-C target-feature=+simd128\" just snap-cargo @ test -p psnrhvs --no-default-features --target wasm32-wasip1 -- --test-threads=1",
+    "just snap-cargo @ test -p msssim --test ffi_libvmaf",
+    "just snap-cargo @ clippy --no-deps -p psnrhvs --all-targets --features parallel,avx512 -- -D warnings",
+    "just ranked-zenbench BINARY THREADS PREFIX psnrhvs-daala 3355x2516",
+    "just iqa-study-check BINARIES OUTPUT --size 3355 2516 --metric psnrhvs-daala",
+    "just ranked-fleet-pair-plan BASELINE CANDIDATE BASELINE_REV CANDIDATE_SOURCE CASE CONTROL RUNNER PLAN_DIR",
+    "just ranked-pair-scope RUNNER PLAN_DIR/pair.json OUTPUT 2"
+  ],
+  "build_log": {
+    "path": "~/tmp/zm-daala-vector-dct-build.log",
+    "sha256": "2af51431fbbdf0cfe595ba775a522653ea25133d53969d1ef01a3aa95804a5a0",
+    "result": "release passed; full log retains existing sibling/GPU feature warnings"
+  }
+}

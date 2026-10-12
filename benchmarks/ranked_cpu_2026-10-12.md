@@ -554,3 +554,55 @@ peak-RSS 0.13GiB | min-avail 22619MiB | peak-load 1.11` and
 peak-load 1.25`. The pair supervisor reported `run-heavy: done rc=0
 14s | peak-RSS 0.10GiB | min-avail 24313MiB | peak-load 0.79`; that
 supervisor RSS is not a metric-child peak measurement.
+
+## Daala integer DCT in eight independent lanes
+
+The post-conversion profile retained 15,093 samples with zero lost
+samples. The one-dimensional integer transform accounted for 24.22%
+of self samples, its 8×8 wrapper for 6.25%, and `calc_psnrhvs` for
+26.00%. The new DCT carries eight columns in integer SIMD lanes,
+uses bit-shuffle transposes between column-first passes, and retains
+each unbiased half shift and fixed-point multiply/shift. All scalar
+statistics, masking and the global coefficient fold remain ordered.
+AVX2 disassembly contains packed `vpmulld`, `vpsrad` and `vpsrld`;
+the block-row body contains no fused floating-point multiply-add.
+
+On r7900x, thirty production rounds at 3355×2516 measured
+429.2145 → 292.7540 ms/call with one thread. Complete-driver retired
+instructions were 235,620,157,956 → 134,387,110,205 and cycles
+84,100,506,147 → 60,773,398,633, including calibration, input setup
+and resource sampling. With the 16-thread pool, observations were
+349.7952 → 239.7679 ms/call; the Daala fold remains serial, so this
+does not establish thread scaling. Every synthetic-fixture sentinel
+remained 34.765447061926444. Peak RSS was 0.14 GiB in all four runs.
+
+Four fresh CPU-2 paired blocks on the separate patterned fixture
+measured −31.194915% latency change, with −0.623442% A/A change,
+under the 16 GiB system scope with swap disabled. Every operation's
+four scalar score columns matched the baseline exactly. Packed and
+padded controls also matched the retained instrumented oracle.
+The comparison completed without validity issues; it remains
+exploratory, without confirmation acceptance. Scalar performance,
+AArch64 performance and Zen 5 performance were not measured.
+
+The original scalar integer transform remains an independent test
+oracle for impulse, constant, patterned and pseudorandom RGB8-range
+blocks. Its coefficients match both scalar-vector and native AVX2
+paths exactly. Native default/parallel configurations passed, as did
+the full existing libvmaf oracle suite, including YUV420, YUV444 and
+identical-frame behavior, with no tolerance changes. WASM SIMD128
+executed the coefficient and golden tests successfully in Wasmtime.
+Owned all-target clippy with `-D warnings` and rustfmt passed.
+[Full verification and measurement receipt](psnrhvs_daala_vector_dct_2026-10-12.json).
+
+One-thread receipts: `run-heavy: done rc=0 16s | peak-RSS 0.14GiB |
+min-avail 24246MiB | peak-load 0.80` and `run-heavy: done rc=0 12s |
+peak-RSS 0.14GiB | min-avail 23690MiB | peak-load 2.47`.
+Sixteen-thread-pool receipts: `run-heavy: done rc=0 13s | peak-RSS
+0.14GiB | min-avail 24172MiB | peak-load 1.25` and `run-heavy: done
+rc=0 10s | peak-RSS 0.14GiB | min-avail 24252MiB | peak-load 0.64`.
+The pair supervisor reported `run-heavy: done rc=0 13s | peak-RSS
+0.10GiB | min-avail 24220MiB | peak-load 0.61`; that RSS is not a
+metric-child peak measurement. Full libvmaf validation reported
+`run-heavy: done rc=0 24s | peak-RSS 0.52GiB | min-avail 23768MiB |
+peak-load 0.75`.
