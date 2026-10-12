@@ -19,6 +19,10 @@ struct Case {
     pixel_format: String,
     reuse: String,
     threads: usize,
+    #[serde(default)]
+    products: Option<String>,
+    #[serde(default)]
+    warmup_operations: Option<usize>,
 }
 
 struct Phase {
@@ -149,7 +153,7 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     }
     let case_path = Path::new(&args[2]).canonicalize()?;
     let case: Case = serde_json::from_slice(&std::fs::read(&case_path)?)?;
-    if case.schema != 1
+    if ![1, 2].contains(&case.schema)
         || case.width == 0
         || case.height == 0
         || case.threads == 0
@@ -159,6 +163,12 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     {
         return Err("invalid SDR CPU case schema, metric, layout, threads or reuse mode".into());
     }
+    let all_products = match (case.schema, case.products.as_deref(), case.warmup_operations) {
+        (1, None, None) => false,
+        (2, Some("primary"), Some(n)) if n <= 1024 => false,
+        (2, Some("all"), Some(n)) if n <= 1024 && case.reuse == "cold" => true,
+        _ => return Err("schema 2 needs products=primary|all and warmup_operations=0..1024; all products require cold scoring; schema 1 has neither field".into()),
+    };
     let operations = std::env::var("ZENBENCH_OPERATIONS")?.parse::<usize>()?;
     if !(1..=1024).contains(&operations) {
         return Err("operations must be 1..1024".into());
@@ -172,6 +182,7 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     require_bundle_inputs(&[&case_path, &reference, &distorted])?;
     let mut records = Vec::with_capacity(20);
     let mut scores = Vec::with_capacity(operations);
+    let mut products = Vec::with_capacity(operations);
     let mut durations = Vec::with_capacity(operations);
     let preparation = Phase::begin()?;
     rayon::ThreadPoolBuilder::new()
@@ -194,28 +205,70 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
         phase.finish("reference_preparation", &mut records)?;
         // Explicit score warmup; retain the reference across measured calls.
         let phase = Phase::begin()?;
-        std::hint::black_box(warm.as_mut().unwrap().score(pixels(&d.pixels, &case)?)?);
+        for _ in 0..case.warmup_operations.unwrap_or(1) {
+            std::hint::black_box(warm.as_mut().unwrap().score(pixels(&d.pixels, &case)?)?);
+        }
+        phase.finish("score_warmup", &mut records)?;
+    }
+    let cold_kind = super::METRICS
+        .iter()
+        .find(|(name, _)| *name == case.metric)
+        .unwrap()
+        .1;
+    if case.reuse == "cold" && case.warmup_operations.unwrap_or(0) > 0 {
+        let phase = Phase::begin()?;
+        for _ in 0..case.warmup_operations.unwrap() {
+            std::hint::black_box(zenmetrics_cli::metrics::run_metric_display(
+                cold_kind,
+                &r,
+                &d,
+                zenmetrics_cli::metrics::GpuRuntime::Cpu,
+                Some(super::cvvdp_display()),
+            )?);
+        }
         phase.finish("score_warmup", &mut records)?;
     }
     let phase = Phase::begin()?;
     for _ in 0..operations {
         let start = std::time::Instant::now();
-        let value = match warm.as_mut() {
-            Some(warm) => warm.score(pixels(&d.pixels, &case)?)?.value,
-            None => super::score_once(&case.metric, &r, &d, 0),
+        let columns = match warm.as_mut() {
+            Some(warm) => {
+                let score = warm.score(pixels(&d.pixels, &case)?)?;
+                vec![(score.metric_name, score.value)]
+            }
+            None => zenmetrics_cli::metrics::run_metric_display(
+                cold_kind,
+                &r,
+                &d,
+                zenmetrics_cli::metrics::GpuRuntime::Cpu,
+                Some(super::cvvdp_display()),
+            )?,
         };
         let elapsed = start.elapsed().as_nanos();
-        if !value.is_finite() {
+        let value = columns.first().ok_or("metric returned no products")?.1;
+        if case.schema == 1 && !value.is_finite() {
             return Err("metric produced a non-finite score".into());
         }
         scores.push(value.to_bits());
+        if all_products {
+            products.push(
+                columns
+                    .iter()
+                    .map(|(name, value)| json!({"name":name,"bits":value.to_bits()}))
+                    .collect::<Vec<_>>(),
+            );
+        }
         durations.push(elapsed);
     }
     phase.finish("score", &mut records)?;
     let phase = Phase::begin()?;
     drop(warm);
     phase.finish("reference_release", &mut records)?;
-    let correctness = json!({"score_bits":scores});
+    let correctness = if all_products {
+        json!({"products":products})
+    } else {
+        json!({"score_bits":scores})
+    };
     let result =
         json!({"schema":1,"operations":operations,"correctness":correctness,"memory":records});
     if let Some(path) = std::env::var_os("ZENBENCH_RESULT_FILE") {
@@ -231,9 +284,11 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
         "timing_usable":!cfg!(feature="heap-phases"),"workload":{"metric":case.metric,
         "width":case.width,"height":case.height,"source_stride_bytes":case.stride_bytes,
         "dispatch_layout":"packed RGB8 after preparation","pixel_format":case.pixel_format,
-        "reuse":case.reuse,"rayon_threads":rayon::current_num_threads(),
+        "reuse":case.reuse,"warmup_operations":case.warmup_operations.unwrap_or(if case.reuse=="warm_reference" {1} else {0}),
+        "products":if all_products {"all CLI scalar columns"} else {"primary score"},
+        "rayon_threads":rayon::current_num_threads(),
         "simd":"metric runtime dispatch; effective tier not observed",
-        "display":"standard_fhd for cvvdp","output":"primary score; no retained diffmap"}})
+        "display":"standard_fhd for cvvdp","output":"scalar score products; no retained diffmap"}})
     );
     Ok(())
 }

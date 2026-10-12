@@ -90,3 +90,40 @@ in Git. Tests: `just benchmark-study-check`.
 See [the study design](MULTIDIMENSIONAL_BENCHMARKING.md) for timing boundaries,
 peak-memory coverage, independent process blocks, hardware confounding and
 the remaining platform/analysis qualification gates.
+
+## SDR driver coverage and scalar products
+
+The release fleet driver exposes **38 of 46 CLI variants**: all SDR CPU
+variants. The remaining eight are the six GPU variants and the two native HDR
+variants; they require separately qualified workload contracts. Warm-reference
+coverage remains four variants. These counts describe driver routes, not
+cross-platform build or accuracy certification.
+
+`just iqa-study-build DIRECTORY` retains separate release `latency` and `memory`
+executables from the pinned sibling snapshot. `just iqa-study-check DIRECTORY
+NEW_CONTROLS_DIRECTORY` checks all 38 SDR variants on a textured 256×256 pair,
+two operations per invocation, packed and padded rows, and both executables.
+The 2026-10-12 Linux x86-64 controls preserved every scalar product exactly
+across instrumentation and row layouts. The existing schema-1 matrix also
+passed its 32 cold/warm/thread/layout cases. These are functional controls;
+they establish neither metric accuracy nor admissible benchmark conditions.
+
+Standalone fleet cases may select schema 2, adding required fields
+`products:"primary"|"all"` and `warmup_operations:0..1024`. Schema 1 retains
+its previous contract: no added fields, zero cold warmup, one warm-reference
+warmup, and finite primary scores. Schema 2 executes the declared warmup count.
+`all` is available for cold scoring and preserves ordered CLI scalar columns
+as `{"products":[[{"name":"COLUMN","bits":U64},...],...]}`, one array per
+operation. This retains secondary outputs such as butteraugli norms, FSIMc and
+VMAF feature columns. It does not retain spatial maps. Schema 2 encodes IEEE
+bits, including mathematically defined infinity, without a JSON nonfinite
+number; the independent qualification must approve the exact expected values.
+An unexpected NaN cannot be accepted merely because it can be encoded.
+
+The study generator currently emits schema-1 primary-score cases. Schema-2
+bundles require their matching explicit correctness contract; schema-1 proofs
+cannot qualify them. Internal timing covers the metric call and its returned
+scalar-column collection. Supervisor `wall` covers the whole invocation,
+including preparation, warmup, measurement and serialization. Heap phase
+records include the harness allocations made inside each phase. Keep these
+boundaries labeled when comparing results.

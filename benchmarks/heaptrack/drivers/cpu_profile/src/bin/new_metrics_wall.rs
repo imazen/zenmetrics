@@ -181,14 +181,16 @@ fn size_dims(label: &str) -> Option<(u32, u32)> {
 }
 
 /// Every CPU metric the CLI scores from packed sRGB u8 (`run_metric_display`
-/// with `GpuRuntime::Cpu`). Luma-only twins (`*-y`) and the alternate VMAF
-/// models are left out: they share their parent's kernels. `cvvdp` is scored
+/// with `GpuRuntime::Cpu`). Every SDR CPU variant is represented. `cvvdp` is scored
 /// on `standard_fhd` (the CLI requires an explicit display; FHD is the AIC
 /// convention). `hdrvdp`/`hdrvdp3` are absent on purpose: they refuse sRGB8
 /// (absolute-nits input only); `crates/hdrvdp/benches/pipeline.rs` times v2.
 const METRICS: &[(&str, MetricKind)] = &[
     ("psnr", MetricKind::Psnr),
     ("psnr-y", MetricKind::PsnrY),
+    ("psnr-y601", MetricKind::PsnrY601),
+    ("psnr-y-studio601", MetricKind::PsnrYStudio601),
+    ("psnr-y-libvmaf", MetricKind::PsnrYLibvmaf),
     ("ssim", MetricKind::Ssim),
     ("ssim2", MetricKind::Ssim2),
     ("butteraugli", MetricKind::Butteraugli),
@@ -204,9 +206,12 @@ const METRICS: &[(&str, MetricKind)] = &[
     ("mdsi", MetricKind::Mdsi),
     ("ms-gmsd", MetricKind::MsGmsd),
     ("psnrhvs", MetricKind::Psnrhvs),
+    ("psnrhvs-y", MetricKind::PsnrhvsY),
     ("psnrhvs-daala", MetricKind::PsnrhvsDaala),
     ("haarpsi", MetricKind::Haarpsi),
+    ("haarpsi-y", MetricKind::HaarpsiY),
     ("fsim", MetricKind::Fsim),
+    ("fsim-y", MetricKind::FsimY),
     ("vsi", MetricKind::Vsi),
     ("msssim", MetricKind::Msssim),
     ("msssim-libvmaf", MetricKind::MsssimLibvmaf),
@@ -216,6 +221,9 @@ const METRICS: &[(&str, MetricKind)] = &[
     ("mad", MetricKind::Mad),
     ("mdctpsnr", MetricKind::Mdctpsnr),
     ("vmaf", MetricKind::Vmaf),
+    ("vmaf-neg", MetricKind::VmafNeg),
+    ("vmaf-4k", MetricKind::Vmaf4k),
+    ("vmaf-v1", MetricKind::VmafV1),
 ];
 
 fn mk_image(pixels: Vec<u8>, w: u32, h: u32) -> Rgb8Image {

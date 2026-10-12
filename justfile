@@ -375,6 +375,17 @@ iqa-fleet-build output:
     just snap-cargo @ build -p cpu-profile --bin new-metrics-wall --features heap-phases
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/debug/new-metrics-wall" {{output}}/memory
 
+# Release artifacts for study qualification; keep timing and heap instrumentation separate.
+iqa-study-build output:
+    mkdir -p {{output}}
+    just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/latency
+    just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features heap-phases
+    cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
+
+iqa-study-check binaries output:
+    python3 -B scripts/jobsys/check_iqa_study.py {{binaries}} {{output}}
+
 iqa-fleet-check binaries output:
     python3 -B scripts/jobsys/check_iqa_fleet.py {{binaries}} {{output}}
 
