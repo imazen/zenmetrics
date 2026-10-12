@@ -12,6 +12,19 @@ concurrency:
   group: checkpoint-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  release-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Verify publication refusal and ordering controls
+        run: |
+          mkdir -p "$HOME/tmp"
+          python3 scripts/checkpoint/test_release.py
+          python3 -m py_compile scripts/checkpoint/*.py
   native:
     strategy:
       fail-fast: false
