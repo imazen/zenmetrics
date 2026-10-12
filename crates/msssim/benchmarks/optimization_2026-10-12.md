@@ -75,3 +75,35 @@ vertical Gaussian 17.85%, horizontal Gaussian 16.18%, plane conversion 7.48%.
 These profiles used eight calls at 4096×2048; measured profile walls were
 157.1 ms/call (Wang), 43.3/367.8 ms/call (float_ssim/float_ms_ssim).
 They are separate observations from the perf-stat A/B table.
+
+## Fixed-block RGB ingress and final original-to-optimized A/B
+
+RGB conversion now handles eight pixels through fixed `[u8; 24]` blocks,
+with SIMD channel conversion and the original ordered f32 coefficient
+expression. Rows and scalar tails honor stride; the new test compares every
+luma sample bit with the original scalar formula over widths 1/7/8/9/17/40/257
+and padded rows. Plane-input entry points do not use this conversion.
+
+Incremental eight-call A/B against the row-ring-only version: 1t
+152.8→134.1 ms/call, 6,643,481,468→5,818,799,747 cycles; 16t
+76.7→61.7 ms/call, 11,353,832,801→10,637,125,164 cycles. Peak-RSS
+0.19 GiB (1t) and 0.21 GiB (16t) on both sides.
+
+Final eight-call A/B against the original 82eb7e9d binary:
+
+| Threads | Original ms/call | Final ms/call | Original cycles | Final cycles |
+|---|---:|---:|---:|---:|
+| 1 | 399.2 | 134.1 | 16,944,650,157 | 5,780,082,632 |
+| 16 | 175.2 | 68.6 | 35,931,397,485 | 10,781,038,221 |
+
+run-heavy peak-RSS: original 0.49/1.03 GiB (1t/16t), final 0.19/0.21 GiB.
+Final Wang top five user-cycle symbols: fused band 71.93%, score/pool entry
+7.22%, decimation 7.18%, RGB conversion 7.03%, fixture/main 1.42%.
+The profile's eight-call wall was 136.4 ms/call. Pool order and box
+arithmetic remain unchanged; intermediate map storage preserves exact
+raster folding. Neither variant's filters are declared optimal by this
+synthetic benchmark.
+
+After RGB changes, default and parallel/_dev/avx512 suites pass, including
+FFI parity. Scoped fmt and clippy pass without new warnings; msssim
+`cargo check --no-default-features` also passes.

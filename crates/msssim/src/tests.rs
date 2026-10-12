@@ -255,3 +255,26 @@ fn ring_band_thread_parity() {
         }
     }
 }
+
+#[test]
+fn rgb_luma_blocks_match_scalar_with_stride_and_tails() {
+    for w in [1, 7, 8, 9, 17, 40, 257] {
+        let (h, stride) = (19, w * 3 + 13);
+        let reference: Vec<u8> = (0..h * stride)
+            .map(|i| (i * 37 + i / stride * 17) as u8)
+            .collect();
+        let distorted: Vec<u8> = (0..h * stride).map(|i| (i * 53 + 29) as u8).collect();
+        let actual = crate::Inputs::from_rgb8(&reference, &distorted, w, h, stride);
+        for (src, got) in [(&reference, &actual.r), (&distorted, &actual.d)] {
+            for y in 0..h {
+                for x in 0..w {
+                    let i = y * stride + x * 3;
+                    let expected = (crate::LUMA_COEF[0] * src[i] as f32
+                        + crate::LUMA_COEF[1] * src[i + 1] as f32)
+                        + crate::LUMA_COEF[2] * src[i + 2] as f32;
+                    assert_eq!(got[y * w + x].to_bits(), expected.to_bits());
+                }
+            }
+        }
+    }
+}

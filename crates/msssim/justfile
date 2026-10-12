@@ -5,7 +5,7 @@ build:
     TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo build --release -p msssim --examples --features parallel
 
 test features='parallel,_dev,avx512':
-    TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo test -p msssim --features {{features}}
+    TMPDIR=$HOME/tmp ~/work/claudehints/scripts/run-heavy --mem 16G --jobs 8 -- cargo test -p msssim --features "{{features}}"
 
 wall binary='target/release/examples/wall' threads='1' w='4096' h='2048' reps='4':
     TMPDIR=$HOME/tmp RAYON_NUM_THREADS={{threads}} ~/work/claudehints/scripts/run-heavy --mem 16G --jobs {{threads}} -- perf stat -e cycles {{binary}} {{w}} {{h}} {{reps}}

@@ -217,6 +217,48 @@ fn gather_plane(buf: &[f32], w: usize, h: usize, stride: usize) -> Vec<f32> {
     out
 }
 
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn rgb_luma_inner(
+    token: Token,
+    reference: &[u8],
+    distorted: &[u8],
+    w: usize,
+    h: usize,
+    stride: usize,
+    r: &mut [f32],
+    d: &mut [f32],
+) {
+    let cr = f32x8::splat_t(token, LUMA_COEF[0]);
+    let cg = f32x8::splat_t(token, LUMA_COEF[1]);
+    let cb = f32x8::splat_t(token, LUMA_COEF[2]);
+    let convert = |pixels: &[u8; 24]| {
+        let red = f32x8::from_array_t(token, core::array::from_fn(|i| pixels[i * 3] as f32));
+        let green = f32x8::from_array_t(token, core::array::from_fn(|i| pixels[i * 3 + 1] as f32));
+        let blue = f32x8::from_array_t(token, core::array::from_fn(|i| pixels[i * 3 + 2] as f32));
+        (cr * red + cg * green + cb * blue).to_array()
+    };
+    for y in 0..h {
+        let rs = &reference[y * stride..y * stride + 3 * w];
+        let ds = &distorted[y * stride..y * stride + 3 * w];
+        let rout = &mut r[y * w..(y + 1) * w];
+        let dout = &mut d[y * w..(y + 1) * w];
+        let mut x = 0;
+        for (rp, dp) in rs.as_chunks::<24>().0.iter().zip(ds.as_chunks::<24>().0) {
+            rout[x..x + 8].copy_from_slice(&convert(rp));
+            dout[x..x + 8].copy_from_slice(&convert(dp));
+            x += 8;
+        }
+        for i in x..w {
+            rout[i] = LUMA_COEF[0] * rs[i * 3] as f32
+                + LUMA_COEF[1] * rs[i * 3 + 1] as f32
+                + LUMA_COEF[2] * rs[i * 3 + 2] as f32;
+            dout[i] = LUMA_COEF[0] * ds[i * 3] as f32
+                + LUMA_COEF[1] * ds[i * 3 + 1] as f32
+                + LUMA_COEF[2] * ds[i * 3 + 2] as f32;
+        }
+    }
+}
+
 impl Inputs {
     /// Luma planes from two packed RGB8 buffers (MATLAB `rgb2gray`,
     /// unrounded f32 result on the 0–255 scale).
@@ -228,26 +270,11 @@ impl Inputs {
         stride: usize,
     ) -> Self {
         let n = w * h;
-        let (mut r, mut d) = (Vec::with_capacity(n), Vec::with_capacity(n));
-        for y in 0..h {
-            let (rs, ds) = (
-                &reference[y * stride..y * stride + 3 * w],
-                &distorted[y * stride..y * stride + 3 * w],
-            );
-            for (&[pr, pg, pb], &[dr, dg, db]) in rs
-                .as_chunks::<3>()
-                .0
-                .iter()
-                .zip(ds.as_chunks::<3>().0.iter())
-            {
-                r.push(
-                    LUMA_COEF[0] * pr as f32 + LUMA_COEF[1] * pg as f32 + LUMA_COEF[2] * pb as f32,
-                );
-                d.push(
-                    LUMA_COEF[0] * dr as f32 + LUMA_COEF[1] * dg as f32 + LUMA_COEF[2] * db as f32,
-                );
-            }
-        }
+        let (mut r, mut d) = (alloc::vec![0.0f32; n], alloc::vec![0.0f32; n]);
+        archmage::attuned!(
+            rgb_luma_inner(reference, distorted, w, h, stride, &mut r, &mut d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
         Self { r, d }
     }
 }
