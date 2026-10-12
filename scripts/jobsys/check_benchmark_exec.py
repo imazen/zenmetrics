@@ -34,6 +34,8 @@ Path(os.environ['ZENBENCH_RESULT_FILE']).write_text(json.dumps({
     'schema':1,'operations':1,'correctness':'ok','memory':[]}))
 ''')
 records = []
+program = 'python.exe' if os.name == 'nt' else 'python'
+target_os = 'darwin' if caps['runner']['os'] == 'macos' else caps['runner']['os']
 for index, (backend, expected, sleep, status) in enumerate([
     ('wall', 'ok', False, 'complete'),
     ('os_peak', 'ok', False, 'complete'),
@@ -44,13 +46,13 @@ for index, (backend, expected, sleep, status) in enumerate([
     case = root/f'case-{index}'
     case.mkdir()
     bundle = case/'bundle'
-    plan = {'schema':1,'program':'python','args':['driver.py'],
-            'env':{'CONTROL_SLEEP':'1' if sleep else '0'},'backend':backend,
+    plan = {'schema':1,'program':program,'args':['driver.py'],
+            'env':{'CONTROL_SLEEP':'1' if sleep else '0', 'PYTHONHOME':sys.base_prefix},'backend':backend,
             'operations':1,'timeout_seconds':2,'expected_correctness':expected,
             'workload':{'fixture':'adapter-control','input':'synthetic-1MiB'}}
-    bundle_spec = {'schema':1,'target':f"{caps['runner']['process_arch']}-test-{caps['runner']['os']}",
+    bundle_spec = {'schema':1,'target':f"{caps['runner']['process_arch']}-test-{target_os}",
                    'plan':plan,'files':{
-                       'python':{'source':sys.executable,'executable':True},
+                       program:{'source':sys.executable,'executable':True},
                        'driver.py':{'source':str(driver),'executable':False}}}
     source = case/'spec.json'; source.write_text(json.dumps(bundle_spec))
     subprocess.run([str(runner),'bundle',str(source),str(bundle)],check=True,stdout=subprocess.DEVNULL)
@@ -74,7 +76,12 @@ for index, (backend, expected, sleep, status) in enumerate([
                 assert process.poll() is None, (case/'adapter.stderr').read_text()
                 assert time.monotonic() < deadline, 'runner did not start'
                 time.sleep(.02)
-            process.send_signal(signal.SIGTERM)
+            if os.name == 'nt':
+                attempt = next(json.loads(p.read_bytes())['attempt'] for p in started
+                               if json.loads(p.read_bytes())['replicate'] == index)
+                subprocess.run([sys.executable,str(adapter),'cancel',attempt],check=True)
+            else:
+                process.send_signal(signal.SIGTERM)
         assert process.wait(timeout=30) == 0, (case/'adapter.stderr').read_text()
     receipt = json.loads(receipt_file.read_bytes())
     assert receipt['status'] == status, receipt
@@ -99,7 +106,6 @@ else:
     raise AssertionError('wrong machine accepted')
 (root/'controls.json').write_text(json.dumps(records,indent=2)+'\n')
 if len(sys.argv) > 4:
-    import pyarrow.parquet as pq
     first_job['kind']['replicate'] = 100
     first_job['kind']['admission_seconds'] = 30
     first_job['cell'] = {'image_path':'control','codec':'benchmark','q':0,'knob_tuple_json':'{}'}
@@ -109,12 +115,17 @@ if len(sys.argv) > 4:
     manifest = root/'manifest.json'; manifest.write_text(json.dumps([first_job]))
     ledger = root/'ledger'; ledger.mkdir()
     command = [sys.argv[4],'--manifest',str(manifest),'--ledger-out',str(ledger/'result.parquet'),
-               '--blobs',str(root/'blobs'),'--exec',str(adapter)]
+               '--blobs',str(root/'blobs'),'--exec',str(adapter.with_name('benchmark-exec.cmd') if os.name == 'nt' else adapter)]
     env = dict(os.environ,ZEN_PERSISTENT_EXEC='1',ZEN_WARM_KINDS='all',ZEN_CHUNK_WALL_SEC='300')
     result = subprocess.run(command,env=env,capture_output=True,timeout=60)
     (root/'worker.stdout').write_bytes(result.stdout); (root/'worker.stderr').write_bytes(result.stderr)
     assert result.returncode == 0, result.stderr.decode()
-    rows = [r for p in ledger.glob('*.parquet') for r in pq.read_table(p).to_pylist()]
+    if len(sys.argv) > 5:
+        decoded = subprocess.run([sys.argv[5],str(ledger)],capture_output=True,check=True,timeout=30)
+        rows = json.loads(decoded.stdout)
+    else:
+        import pyarrow.parquet as pq
+        rows = [r for p in ledger.glob('*.parquet') for r in pq.read_table(p).to_pylist()]
     completed = [r for r in rows if r['status']=='done']
     assert len(completed)==1, rows
     receipt = json.loads(module.Store(root).get(completed[0]['output_sha']).read_bytes())

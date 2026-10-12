@@ -381,3 +381,6 @@ iqa-heap-oracle binary case output:
 
 iqa-bundle-check binaries runner case output:
     python3 -B scripts/jobsys/check_iqa_bundle.py {{binaries}} {{runner}} {{case}} {{output}}
+
+benchmark-native-check runner worker reader output:
+    python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}} scripts/jobsys/benchmark_exec.py {{worker}} {{reader}}

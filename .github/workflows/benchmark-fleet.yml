@@ -1,0 +1,57 @@
+name: Native benchmark fleet
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: benchmark-fleet-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash scripts/ci/clone-siblings.sh
+      - uses: actions/checkout@v7
+        with:
+          repository: imazen/zenbench
+          ref: 4f152ef95b700366642f7011972c302300ee6932
+          path: runner-source
+      - run: mv runner-source ../benchmark-runner
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: benchmark-fleet-${{ matrix.os }}
+          workspaces: |
+            .
+            ../benchmark-runner
+      - name: Build native worker and runner
+        run: |
+          cargo build --locked -p zenfleet-worker --bin zenfleet-worker --example benchmark_ledger_control
+          cargo build --locked --manifest-path ../benchmark-runner/Cargo.toml --bin zenbench
+      - name: Exercise native observation and ledger protocol
+        run: |
+          suffix=''
+          if [[ "$RUNNER_OS" == Windows ]]; then suffix='.exe'; fi
+          mkdir -p "$HOME/tmp"
+          TMPDIR="$HOME/tmp" python -B scripts/jobsys/check_benchmark_exec.py \
+            "../benchmark-runner/target/debug/zenbench$suffix" "$HOME/tmp/benchmark-fleet-control" \
+            scripts/jobsys/benchmark_exec.py "$(pwd)/target/debug/zenfleet-worker$suffix" \
+            "$(pwd)/target/debug/examples/benchmark_ledger_control$suffix"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: benchmark-fleet-${{ matrix.os }}
+          path: ~/tmp/benchmark-fleet-control/**/*.stderr
