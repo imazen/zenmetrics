@@ -162,3 +162,26 @@ Receipts:
 [candidate 16T](ssim_candidate_16t_2026-10-12.log).
 Build with `just snap-cargo @ build --release -p msssim
 --features parallel,avx512 --example classical_wall`, then use `ranked-wall`.
+
+## MS-SSIM scout audit
+
+The proposed exact separable replacement for libvmaf's 9×9 decimator
+cannot preserve its stored coefficients. Their leading 2×2 minor is
+exactly `-32317628725/73786976294838206464`, so the f32 table is not rank
+one. A 255-valued impulse distinguishes the original coefficient from
+the proposed center-row factorization after f32 rounding: 0.18207000195980072
+versus 0.18215307593345642. This audits coefficient/output equality; it
+does not measure an approximate implementation's final score error.
+
+Run `just lpf-rank-check`; the [receipt](msssim_lpf_rank_2026-10-12.log)
+records the source hash and an exactly separable negative control.
+The existing `dispatched_filters_match_ordered_scalar` test requires
+exact decimated output bits. All-feature tests pass, including six real
+libvmaf feature/frame comparisons, with unchanged expectations.
+
+The next native MS-SSIM scout suggestion is already implemented in the
+current `kernel.rs`: products form inside the horizontal filter and five
+eleven-row moment rings feed the vertical filter and statistic combine.
+Rayon bands own their halos, and the final fold stays in raster order.
+There are no materialized full-image product planes to remove from that
+path. These two scout findings are source checks, not new speedup claims.
