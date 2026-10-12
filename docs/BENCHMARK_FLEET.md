@@ -293,3 +293,20 @@ attempts of the same job. Supply all retained attempt ledgers; a lossy summary
 cannot recover discarded history. Missing, changed or unknown-schema metadata
 stops GC before deletion. Additional references in an archive remain valid
 explicit GC roots.
+
+For a native CUDA control on a host without a toolkit, export a scoped runtime
+from a Debian/Ubuntu SDK source host with `just cuda-runtime-sdk NEW_DIRECTORY`.
+The helper resolves package-owned headers with `dpkg-query -W/-L` and NVRTC
+with `ldconfig -p`, refuses ambiguous libraries or an existing output directory,
+and records file hashes and loader aliases in `manifest.json`. Preserve that
+directory outside git. On the destination, set `CUDA_PATH` to it and prepend
+its `lib64` to `LD_LIBRARY_PATH`; the destination still uses its own driver.
+
+On 2026-10-12, CUDA 12.4.127 headers/NVRTC exported this way executed all six
+CUDA metric variants on r5600g's GTX 1660 Ti. This qualifies the tested runtime,
+not every SDK version or GPU. Resolve hardware and driver versions with
+`nvidia-smi --query-gpu=name,driver_version --format=csv,noheader` before use.
+Pascal GPUs require the proprietary kernel module; NVIDIA's
+[kernel-module documentation](https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/kernel_open.html)
+limits the open module to Turing and newer. Use CUDA 12 for Pascal: CUDA 13
+[removed offline compilation for architectures before Turing](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/).

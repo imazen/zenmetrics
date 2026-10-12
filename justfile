@@ -453,6 +453,10 @@ iqa-gpu-study-build backend output:
     just snap-cargo @ build --release -p cpu-profile --bin new-metrics-wall --features study-gpu-{{backend}},heap-phases
     cp "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target/release/new-metrics-wall" {{output}}/memory
 
+# Run on a distro SDK source host; preserve the hash-manifested runtime directory.
+cuda-runtime-sdk output:
+    python3 -B scripts/cuda/export-runtime-sdk.py "{{output}}"
+
 iqa-gpu-check binaries backend output adapter:
     python3 -B scripts/jobsys/check_iqa_gpu.py {{binaries}} {{backend}} {{output}} "{{adapter}}"
 
