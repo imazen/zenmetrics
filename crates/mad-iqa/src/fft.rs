@@ -216,10 +216,14 @@ impl Plan {
         let (n, m) = (self.n, *m);
         debug_assert_eq!(bufs.len(), 8);
         debug_assert!(re8.len() >= m * 8 && im8.len() >= m * 8);
-        // Gather: a[k] = buf[k]·chirp[k], zeroed past n.
-        for (j, buf) in bufs.iter().enumerate() {
-            debug_assert_eq!(buf.len(), n);
-            for k in 0..m {
+        // Gather: a[k] = buf[k]·chirp[k], zeroed past n — 8×8 k-blocks keep
+        // the transposed load in registers (scalar tail for m % 8 ≠ 0).
+        let mb = m & !7;
+        for k0 in (0..mb).step_by(8) {
+            blue8_gather(bufs, n, k0, chirp, re8, im8);
+        }
+        for k in mb..m {
+            for (j, buf) in bufs.iter().enumerate() {
                 let (re, im) = if k < n {
                     let v = buf[k];
                     let c = chirp[k];
@@ -232,27 +236,11 @@ impl Plan {
             }
         }
         fft_batch8(re8, im8, m, mplan);
-        // k-outer: the SoA layout is contiguous per k, so these fuses
-        // stay per-element identical (bf-multiply then conjugate).
-        for k in 0..m {
-            let b = bf[k];
-            for j in 0..8 {
-                let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
-                re8[k * 8 + j] = re * b.re - im * b.im;
-                im8[k * 8 + j] = -(re * b.im + im * b.re);
-            }
-        }
+        blue8_bf(re8, im8, bf);
         fft_batch8(re8, im8, m, mplan);
         let s = 1.0 / m as f32;
-        for (j, buf) in bufs.iter_mut().enumerate() {
-            for k in 0..n {
-                let (re, im) = (re8[k * 8 + j], im8[k * 8 + j]);
-                let c = chirp[k];
-                // scale (re·s, −im·s) fused into the chirp multiply —
-                // same op order per element, one less full pass.
-                let (rs, ims) = (re * s, -(im * s));
-                buf[k] = Complex::new(rs * c.re - ims * c.im, rs * c.im + ims * c.re);
-            }
+        for k0 in (0..n).step_by(8) {
+            blue8_scatter(bufs, n, k0, chirp, s, re8, im8);
         }
     }
 
@@ -365,6 +353,132 @@ fn fft_batch8(re8: &mut [f32], im8: &mut [f32], n: usize, stages: &[Vec<Complex>
         fft_batch8_inner(re8, im8, n, stages),
         [v4x, v3, neon, wasm128, scalar]
     );
+}
+
+/// One 8×8 k-block of the [`Plan::run_bluestein8`] gather: lane `j` reads
+/// `bufs[j][k′]` (zeroed past `n`) and stores `·chirp[k′]` contiguously at
+/// `re8[k′·8+j]` for k′ = k0..k0+8. The fixed arrays keep the 8×8 transpose
+/// register-resident so each tier body lowers to unpack/permute shuffles.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn blue8_gather(
+    bufs: &[&mut [Complex]],
+    n: usize,
+    k0: usize,
+    chirp: &[Complex],
+    re8: &mut [f32],
+    im8: &mut [f32],
+) {
+    let cols = n.saturating_sub(k0).min(8);
+    let mut br = [[0.0f32; 8]; 8];
+    let mut bi = [[0.0f32; 8]; 8];
+    if cols == 8 {
+        // Fully fixed bounds: LLVM lowers this to ymm loads + deinterleave.
+        for (j, b) in br.iter_mut().zip(bi.iter_mut()).enumerate() {
+            let row = &*bufs[j];
+            for c in 0..8 {
+                let z = row[k0 + c];
+                b.0[c] = z.re;
+                b.1[c] = z.im;
+            }
+        }
+    } else {
+        for (j, b) in br.iter_mut().zip(bi.iter_mut()).enumerate() {
+            let row = &*bufs[j];
+            for c in 0..cols {
+                let z = row[k0 + c];
+                b.0[c] = z.re;
+                b.1[c] = z.im;
+            }
+        }
+    }
+    for k in 0..8 {
+        let d = (k0 + k) * 8;
+        if k >= cols {
+            // chirp is n-length: the padded lanes are zero, not c·0.
+            re8[d..d + 8].fill(0.0);
+            im8[d..d + 8].fill(0.0);
+            continue;
+        }
+        let c = chirp[k0 + k];
+        let (mut r, mut i) = ([0.0f32; 8], [0.0f32; 8]);
+        for j in 0..8 {
+            let (zr, zi) = (br[j][k], bi[j][k]);
+            r[j] = zr * c.re - zi * c.im;
+            i[j] = zr * c.im + zi * c.re;
+        }
+        re8[d..d + 8].copy_from_slice(&r);
+        im8[d..d + 8].copy_from_slice(&i);
+    }
+}
+
+/// The bf-multiply + conjugate pass of [`Plan::run_bluestein8`] — per k the
+/// eight SoA lanes are one vector, so the whole pass is contiguous.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn blue8_bf(re8: &mut [f32], im8: &mut [f32], bf: &[Complex]) {
+    for (k, &b) in bf.iter().enumerate() {
+        let d = k * 8;
+        let mut r: [f32; 8] = re8[d..d + 8].try_into().unwrap();
+        let mut i: [f32; 8] = im8[d..d + 8].try_into().unwrap();
+        for j in 0..8 {
+            let (zr, zi) = (r[j], i[j]);
+            r[j] = zr * b.re - zi * b.im;
+            i[j] = -(zr * b.im + zi * b.re);
+        }
+        re8[d..d + 8].copy_from_slice(&r);
+        im8[d..d + 8].copy_from_slice(&i);
+    }
+}
+
+/// One 8×8 k-block of the [`Plan::run_bluestein8`] scatter: the scale
+/// `(re·s, −im·s)` stays fused into the chirp multiply and `bufs[j][k′]` is
+/// written through a per-row contiguous copy for k′ = k0..k0+8, bounded by `n`.
+#[archmage::attune(dispatch, +v4x(cfg(avx512)))]
+fn blue8_scatter(
+    bufs: &mut [&mut [Complex]],
+    n: usize,
+    k0: usize,
+    chirp: &[Complex],
+    s: f32,
+    re8: &[f32],
+    im8: &[f32],
+) {
+    let cols = (n - k0).min(8);
+    let mut out = [[Complex::default(); 8]; 8];
+    if cols == 8 {
+        // Fully fixed bounds: the transpose-out lowers to unpacks and the
+        // 64-byte row stores to inline ymm ops.
+        for k in 0..8 {
+            let c = chirp[k0 + k];
+            let d = (k0 + k) * 8;
+            let mut r = [0.0f32; 8];
+            let mut i = [0.0f32; 8];
+            r.copy_from_slice(&re8[d..d + 8]);
+            i.copy_from_slice(&im8[d..d + 8]);
+            for j in 0..8 {
+                let (rs, ims) = (r[j] * s, -(i[j] * s));
+                out[j][k] = Complex::new(rs * c.re - ims * c.im, rs * c.im + ims * c.re);
+            }
+        }
+        for (j, o) in out.iter().enumerate() {
+            bufs[j][k0..k0 + 8].copy_from_slice(o);
+        }
+    } else {
+        for k in 0..cols {
+            let c = chirp[k0 + k];
+            let d = (k0 + k) * 8;
+            let mut r = [0.0f32; 8];
+            let mut i = [0.0f32; 8];
+            r.copy_from_slice(&re8[d..d + 8]);
+            i.copy_from_slice(&im8[d..d + 8]);
+            for j in 0..8 {
+                let (rs, ims) = (r[j] * s, -(i[j] * s));
+                out[j][k] = Complex::new(rs * c.re - ims * c.im, rs * c.im + ims * c.re);
+            }
+        }
+        for (j, o) in out.iter().enumerate() {
+            bufs[j][k0..k0 + cols].copy_from_slice(&o[..cols]);
+        }
+    }
 }
 
 /// Iterative radix-2 with precomputed per-stage twiddles.

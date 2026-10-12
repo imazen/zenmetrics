@@ -64,7 +64,7 @@ zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, fe
 zenbench = "0.1.7"
 # DEV-only: lets the bench disable the baseline SIMD token so the "scalar"
 # arm is real. Feature unification keeps this to test/bench builds.
-archmage = { version = "0.9.28", features = ["testable_dispatch"] }
+archmage = { workspace = true, features = ["testable_dispatch"] }
 # Corpus for parity tests (256² source + JPEG-q variants).
 zenmetrics-corpus = { workspace = true }
 # Used to decode the corpus PNG + JPEGs.

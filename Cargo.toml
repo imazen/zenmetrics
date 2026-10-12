@@ -167,8 +167,14 @@ ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
 # Common deps.
-archmage = { version = "0.9.23", features = ["macros", "avx512"] }
-magetypes = { version = "0.9.23", features = ["avx512"] }
+# Git pin (not a [patch]) so it can coexist with registry archmage/magetypes:
+# the rev declares 0.9.31-beta (attune/attuned!/reattune!), which sibling
+# path crates' ^0.9.x reqs can't satisfy — they resolve registry 0.9.30
+# while workspace members take this rev. Safe only because no archmage or
+# magetypes type crosses a workspace<->sibling API boundary. Once 0.9.31
+# stable ships, drop the git specs and restore a plain version + patch.
+archmage = { git = "https://github.com/imazen/archmage", rev = "72910a29", version = "0.9.31-beta", features = ["macros", "avx512"] }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "72910a29", version = "0.9.31-beta", features = ["avx512"] }
 bytemuck = "1"
 clap = { version = "4", default-features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
 csv = "1"
@@ -296,21 +302,9 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f62
 # Equivalent git ref (use when the sibling checkout is gone):
 #   { git = "https://github.com/imazen/zensim", rev = "<commit>" }
 zensim = { path = "../zensim/zensim" }
-# Temporary until the next magetypes/archmage release (> 0.9.30)
-# publishes; then bump the minimums and drop these patches. Note: main's
-# 0.9.31-beta (attune/attuned!/reattune!) cannot be pinned — a prerelease
-# version does not satisfy sibling crates' ^0.9.x reqs, which fall back
-# to the registry archmage and split the token types across the graph.
-# Migrate arcane/rite/incant! spellings to attune/attuned! once 0.9.31
-# stable ships; the legacy names emit identical code (shared emitters).
-# The pinned rev adds impls/x86_v4_narrow_delegated.rs — every W128/W256 backend +
-# F32x*Convert + *Bitcast delegated to V3 for the AVX-512 tokens —
-# which iwssim's +v4/+v4x kernel arms (F32x8Convert-bounded infow map,
-# f64x4 Gram rows) require. Pin all three crates to the same source
-# commit so their versions stay unified.
-archmage = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
-archmage-macros = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "dea3a461" }
+# 0.9.31-beta lives as a direct git dep in [workspace.dependencies] (see
+# above) — a [patch] here would force single-source resolution and fail:
+# the prerelease can't satisfy sibling crates' ^0.9.x reqs.
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no
