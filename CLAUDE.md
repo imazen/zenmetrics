@@ -1385,3 +1385,12 @@ control and its fingerprint fix (`4d999037`): the intervening control-only
 revision merges distinct chroma cells. The existing dedup assertion reproduced
 that collision; all 98 CLI library tests pass after the paired fix, with no
 assertion changes (two existing ignored tests remain).
+
+### Known Bugs: portable VMAF SIMD generation imports (2026-10-12)
+
+VMAF's `attune` macro import was restricted to x86 in the VIF and motion
+modules while their portable kernels and dispatch calls were enabled by `simd`
+on every architecture. ARM checkpoint builds failed before metric execution.
+Import `attune` under `simd` independently of the x86 token/trait imports.
+Pinned-source `cargo check` with `simd,avx512` passes on both aarch64 Linux and
+x86_64 Linux; this establishes compilation, not ARM numerical execution.

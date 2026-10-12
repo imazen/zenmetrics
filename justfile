@@ -445,3 +445,7 @@ benchmark-native-check runner worker reader output:
 dashboard-web-check npm_bin="npm":
     cd crates/zenfleet-dash/web && "{{npm_bin}}" ci --ignore-scripts --no-audit --no-fund --allow-remote=all
     cd crates/zenfleet-dash/web && "{{npm_bin}}" run build
+
+vmaf-portable-check:
+    cargo check --locked -p vmaf --lib --features simd,avx512 --target aarch64-unknown-linux-gnu
+    cargo check --locked -p vmaf --lib --features simd,avx512 --target x86_64-unknown-linux-gnu
