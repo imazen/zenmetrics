@@ -1,0 +1,19 @@
+binary_sha256: 53cfc30e96496e748c05dddbc456984f6a04acc5f0b86918e7aa4eaa7a3b41c0  /home/lilith/tmp/zm-ranked-binaries/iwssim-candidate
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/iwssim-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=22429MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/iwssim-candidate 3355 2516 5
+3355x2516 5 reps: 516.72 ms/call (score 0.99988338658570264, bits 3fefff0b71a660d0)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/iwssim-candidate 3355 2516 5':
+
+       37866480168      instructions                                                          
+       14646625910      cycles                                                                
+
+       2.673513999 seconds time elapsed
+
+       1.719153000 seconds user
+       0.953084000 seconds sys
+
+
+run-heavy: done rc=0 3s | peak-RSS 0.69GiB | min-avail 21964MiB | peak-load 1.55

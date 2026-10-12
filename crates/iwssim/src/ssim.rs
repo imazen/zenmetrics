@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 
 use crate::filters::SSIM_WIN_LEN;
 use crate::simd_kernels::{
-    cs_combine_into, mul_into, square_into, ssim_gauss_h_pass, ssim_gauss_v_pass,
+    cs_combine_into, ssim_gauss_h_pass, ssim_gauss_product_h_pass, ssim_gauss_v_pass,
 };
 
 const SSIM_L: f32 = 255.0;
@@ -94,13 +94,14 @@ pub(crate) fn compute_cs(
     gaussian_11x11_valid(img_dis, h, w, cs_h, cs_w, &mut h_scratch, &mut mu2);
 
     // E[x²], E[y²], E[x·y].
-    let mut sq_buf = alloc::vec![0.0_f32; h * w];
-    square_into(img_ref, &mut sq_buf);
-    gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma1_sq);
-    square_into(img_dis, &mut sq_buf);
-    gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma2_sq);
-    mul_into(img_ref, img_dis, &mut sq_buf);
-    gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma12);
+    for (a, b, dst) in [
+        (img_ref, img_ref, &mut sigma1_sq),
+        (img_dis, img_dis, &mut sigma2_sq),
+        (img_ref, img_dis, &mut sigma12),
+    ] {
+        ssim_gauss_product_h_pass(a, b, h, w, cs_w, &mut h_scratch);
+        ssim_gauss_v_pass(&h_scratch, h, cs_h, cs_w, dst);
+    }
 
     // σ² and σ₁₂ from raw moments + luminance (top scale).
     let mut cs = alloc::vec![0.0_f32; n_cs];

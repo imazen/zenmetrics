@@ -41,6 +41,7 @@ const SSIM_C2: f32 = crate::ssim::SSIM_C2;
 // Per-element kernels (no boundary handling).
 // ---------------------------------------------------------------------
 
+#[cfg(any(test, feature = "_dev"))]
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), dst.len());
@@ -73,6 +74,7 @@ fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
 /// BIT-IDENTICAL results over 65,536 values (a plain multiply, so there is no
 /// FMA-contraction difference to worry about). The other tiers keep their
 /// vector paths — x86's ratio is not measured on this host.
+#[cfg(any(test, feature = "_dev"))]
 pub fn square_into(src: &[f32], dst: &mut [f32]) {
     archmage::attuned!(
         square_inplace_inner(src, dst),
@@ -80,6 +82,7 @@ pub fn square_into(src: &[f32], dst: &mut [f32]) {
     );
 }
 
+#[cfg(any(test, feature = "_dev"))]
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(a.len(), b.len());
@@ -102,6 +105,7 @@ fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
 }
 
 /// `dst[i] = a[i] * b[i]`.
+#[cfg(any(test, feature = "_dev"))]
 pub fn mul_into(a: &[f32], b: &[f32], dst: &mut [f32]) {
     archmage::attuned!(
         mul_inplace_inner(a, b, dst),
@@ -456,6 +460,71 @@ pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mu
     );
 }
 
+// Materialize products one row at a time, then immediately consume them
+// in the ordered horizontal filter. Each band owns one row of scratch.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn ssim_gauss_product_h_inner(
+    token: Token,
+    a: &[f32],
+    b: &[f32],
+    w: usize,
+    y0: usize,
+    dst_w: usize,
+    dst: &mut [f32],
+) {
+    let weights = SSIM_WIN_1D.map(|weight| f32x8::splat_t(token, weight));
+    let mut product = alloc::vec![0.0_f32; w];
+    for (r, out) in dst.chunks_exact_mut(dst_w).enumerate() {
+        let off = (y0 + r) * w;
+        let (ac, at) = f32x8::partition_slice_t(token, &a[off..off + w]);
+        let (bc, bt) = f32x8::partition_slice_t(token, &b[off..off + w]);
+        let (pc, pt) = f32x8::partition_slice_mut_t(token, &mut product);
+        for ((aa, bb), pp) in ac.iter().zip(bc).zip(pc) {
+            (f32x8::load_t(token, aa) * f32x8::load_t(token, bb)).store(pp);
+        }
+        for ((&aa, &bb), pp) in at.iter().zip(bt).zip(pt) {
+            *pp = aa * bb;
+        }
+        let taps = core::array::from_fn::<_, 11, _>(|k| {
+            f32x8::partition_slice_t(token, &product[k..k + dst_w])
+        });
+        let (chunks, tail) = f32x8::partition_slice_mut_t(token, out);
+        for (i, chunk) in chunks.iter_mut().enumerate() {
+            let mut sum = f32x8::zero_t(token);
+            for k in 0..11 {
+                sum = f32x8::load_t(token, &taps[k].0[i]).mul_add(weights[k], sum);
+            }
+            sum.store(chunk);
+        }
+        for (i, value) in tail.iter_mut().enumerate() {
+            let mut sum = 0.0_f32;
+            for k in 0..11 {
+                sum += SSIM_WIN_1D[k] * taps[k].1[i];
+            }
+            *value = sum;
+        }
+    }
+}
+
+pub(crate) fn ssim_gauss_product_h_pass(
+    a: &[f32],
+    b: &[f32],
+    h: usize,
+    w: usize,
+    dst_w: usize,
+    dst: &mut [f32],
+) {
+    debug_assert_eq!(a.len(), h * w);
+    debug_assert_eq!(b.len(), h * w);
+    debug_assert_eq!(dst.len(), h * dst_w);
+    crate::par::map_rows(dst, dst_w, |y0, band| {
+        archmage::attuned!(
+            ssim_gauss_product_h_inner(a, b, w, y0, dst_w, band),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
+}
+
 // ---------------------------------------------------------------------
 // 11-tap vertical Gaussian (valid-mode, output h = h - 10).
 //
@@ -625,6 +694,26 @@ mod tests {
                     (got - expected).abs() < 1e-4,
                     "y={y} ox={ox}: simd={got} scalar={expected}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn ssim_product_h_matches_materialized_bits() {
+        for (h, w) in [(11, 11), (17, 31), (19, 23), (137, 1021)] {
+            let a: Vec<f32> = (0..h * w).map(|i| (i * 37 % 251) as f32 - 125.0).collect();
+            let b: Vec<f32> = (0..h * w).map(|i| (i * 91 % 241) as f32 - 121.0).collect();
+            let dst_w = w - 10;
+            for second in [&a, &b] {
+                let mut product = vec![0.0_f32; h * w];
+                mul_into(&a, second, &mut product);
+                let mut expected = vec![0.0_f32; h * dst_w];
+                ssim_gauss_h_pass(&product, h, w, dst_w, &mut expected);
+                let mut actual = vec![0.0_f32; h * dst_w];
+                ssim_gauss_product_h_pass(&a, second, h, w, dst_w, &mut actual);
+                for (i, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.to_bits(), e.to_bits(), "{w}x{h} pixel={i}");
+                }
             }
         }
     }

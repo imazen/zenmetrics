@@ -1,0 +1,10 @@
+Runner source: zenbench ac675d3a (0.1.10)
+Baseline source: ad6b49b9 with accompanying score-bit wall output; candidate: accompanying IW-SSIM product-row change
+Command: just ranked-pair-scope <runner> <plan> <new-output> 2
+Plan recipe: just ranked-pair-plan <baseline> <candidate> ad6b49b9 iwssim-product-row-bands <new-plan>
+Host: r7900x; Rayon threads: 1; outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0
+Raw evidence: r7900x:/home/lilith/tmp/zm-iwssim-pair-20261012/packet.json.gz
+Packet SHA-256: a573c51c07423d5a6be0222c586dc70051a0ae9d67fa9db6e09a32648e7c20c3
+Console receipt: r7900x:/home/lilith/tmp/zm-iwssim-pair-console.log
+run-heavy: done rc=0 41s | peak-RSS 0.69GiB | min-avail 21363MiB | peak-load 3.38
+The inner run-heavy reported no user scope; the outer system scope supplied the hard limits.

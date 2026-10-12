@@ -251,3 +251,49 @@ Receipts: [baseline 1T](nlpd_baseline_1t_2026-10-12.log),
 [first trial](nlpd_candidate_1t_2026-10-12.log).
 The [queued zenbench trial](nlpd_candidate_zenbench_1t_2026-10-12.log)
 was cancelled while waiting for another experiment; it produced no metric TSV.
+
+## IW-SSIM
+
+Baseline production source: `ad6b49b9`, with the accompanying wall output
+that exposes score bits. The candidate forms each square/cross-product row,
+then immediately runs the horizontal Gaussian on that row. It removes the
+full-image product scratch from `compute_cs`. Horizontal vector FMAs,
+scalar tails, vertical filtering and the final reduction remain ordered
+as before. Test and development builds retain the materialized kernels
+as independent comparison paths.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 555.47 | 516.72 |
+| One-thread instructions, five calls | 39,948,799,791 | 37,866,480,168 |
+| One-thread cycles, five calls | 15,542,770,749 | 14,646,625,910 |
+| Sixteen-thread ms/call | 358.27 | 330.04 |
+| One-thread run-heavy peak RSS, GiB | 0.67 | 0.69 |
+| Sixteen-thread run-heavy peak RSS, GiB | 0.67 | 0.68 |
+
+Peak RSS did not fall in this workload; no process-memory saving is
+claimed. Retired instructions fell. Wall deltas remain below the suite's
+15% noise caution. The four-block interleaved zenbench comparison reports
+an exploratory -6.061191841489869% latency change, with an A/A change of
+-0.7082316070614776%. Its hard system scope confines descendants to CPU 2
+and 16 GiB. Every arm passes the exact score checker; all large-image
+observations return `3fefff0b71a660d0`. There is no confirmation interval
+or promotion verdict.
+
+The ordered materialized-product test compares every horizontal output
+bit for squares and cross-products, including odd shapes, narrow valid
+regions, SIMD tails and parallel band boundaries. Default and all-feature
+tests pass, including Python goldens and strip parity, with unchanged
+assertions. All-target all-feature clippy and production-feature library
+clippy pass with `-D warnings`; the no-default wasm32 library check passes.
+Disassembly contains packed product multiplies followed by the eleven
+ordered Gaussian FMAs. Scope builds use the existing pinned snapshot.
+
+Receipts: [baseline 1T](iwssim_baseline_1t_2026-10-12.log),
+[candidate 1T](iwssim_candidate_1t_2026-10-12.log),
+[baseline 16T](iwssim_baseline_16t_2026-10-12.log),
+[candidate 16T](iwssim_candidate_16t_2026-10-12.log),
+[paired export](iwssim_pair_2026-10-12.csv),
+[raw-evidence pointer and resource receipt](iwssim_pair_2026-10-12.meta).
+Reproduce with the VSI build/wall recipes using `-p iwssim`, and the
+`ranked-pair-plan` / `ranked-pair-scope` recipes recorded in the metadata.

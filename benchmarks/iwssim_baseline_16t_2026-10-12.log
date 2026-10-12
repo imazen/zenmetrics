@@ -1,0 +1,7 @@
+binary_sha256: 6036dda69340a2be433e52223e8fa7bd5941d4adb82c5e7328ae312c49c80cb5  /home/lilith/tmp/zm-ranked-binaries/iwssim-baseline
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/iwssim-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24121MiB :: /home/lilith/tmp/zm-ranked-binaries/iwssim-baseline 3355 2516 5
+3355x2516 5 reps: 358.27 ms/call (score 0.99988338658570264, bits 3fefff0b71a660d0)
+run-heavy: done rc=0 2s | peak-RSS 0.67GiB | min-avail 24120MiB | peak-load 0.56
