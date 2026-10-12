@@ -23,13 +23,13 @@ struct Case {
 
 struct Phase {
     #[cfg(feature = "heap-phases")]
-    phase: zenbench_memory::HeapPhase,
+    phase: zenbench::HeapPhase,
 }
 impl Phase {
     fn begin() -> Result<Self, Error> {
         Ok(Self {
             #[cfg(feature = "heap-phases")]
-            phase: zenbench_memory::HeapPhase::begin()?,
+            phase: zenbench::HeapPhase::begin()?,
         })
     }
     fn finish(self, scope: &str, records: &mut Vec<Value>) -> Result<(), Error> {
@@ -98,6 +98,43 @@ fn warm_kind(name: &str) -> Result<MetricKind, Error> {
     }
 }
 
+fn input_path(base: &Path, relative: &Path) -> Result<PathBuf, Error> {
+    let name = relative.to_str().ok_or("input path must be UTF-8")?;
+    if name.is_empty()
+        || name.contains(['\\', ':'])
+        || !relative.components().all(|p| matches!(p, std::path::Component::Normal(_)))
+    {
+        return Err("input path must be relative without parent components".into());
+    }
+    let path = base.join(relative).canonicalize()?;
+    if !path.starts_with(base) || !path.is_file() {
+        return Err("input path escapes the case directory or is not a file".into());
+    }
+    Ok(path)
+}
+
+fn require_bundle_inputs(paths: &[&Path]) -> Result<(), Error> {
+    if std::env::var_os("ZENBENCH_RESULT_FILE").is_none() {
+        return Ok(());
+    }
+    // fleet-run verifies these manifest entries before and after execution.
+    // Refuse unlisted inputs even when another file happens to exist nearby.
+    let root = std::env::current_dir()?.canonicalize()?;
+    let manifest = root.join("bundle.json");
+    if std::fs::metadata(&manifest)?.len() > 8 * 1024 * 1024 {
+        return Err("bundle manifest exceeds metadata limit".into());
+    }
+    let manifest: Value = serde_json::from_slice(&std::fs::read(manifest)?)?;
+    let files = manifest["files"].as_object().ok_or("missing bundle files")?;
+    for path in paths {
+        let relative = path.strip_prefix(&root)?.to_str().ok_or("non-UTF-8 bundle path")?.replace('\\', "/");
+        if !files.contains_key(&relative) {
+            return Err(format!("IQA input is not bound by the bundle: {relative}").into());
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn run(args: &[String]) -> Result<(), Error> {
     if args.len() != 3 {
         return Err("usage: new-metrics-wall fleet CASE.json".into());
@@ -121,6 +158,10 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     if std::env::var("RAYON_NUM_THREADS")?.parse::<usize>()? != case.threads {
         return Err("declared threads differ from RAYON_NUM_THREADS".into());
     }
+    let base = case_path.parent().ok_or("case has no parent")?;
+    let reference = input_path(base, &case.reference)?;
+    let distorted = input_path(base, &case.distorted)?;
+    require_bundle_inputs(&[&case_path, &reference, &distorted])?;
     let mut records = Vec::with_capacity(20);
     let mut scores = Vec::with_capacity(operations);
     let mut durations = Vec::with_capacity(operations);
@@ -129,14 +170,13 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
         .num_threads(case.threads)
         .build_global()?;
     rayon::broadcast(|_| {});
-    let base = case_path.parent().ok_or("case has no parent")?;
     let r = super::mk_image(
-        input(&base.join(&case.reference), &case)?,
+        input(&reference, &case)?,
         case.width,
         case.height,
     );
     let d = super::mk_image(
-        input(&base.join(&case.distorted), &case)?,
+        input(&distorted, &case)?,
         case.width,
         case.height,
     );
@@ -181,9 +221,13 @@ pub(super) fn run(args: &[String]) -> Result<(), Error> {
     if let Some(path) = std::env::var_os("ZENBENCH_RESULT_FILE") {
         std::fs::write(path, serde_json::to_vec(&result)?)?;
     }
+    #[cfg(feature = "heap-phases")]
+    let lifetime = serde_json::to_value(zenbench::HeapSnapshot::get()?)?;
+    #[cfg(not(feature = "heap-phases"))]
+    let lifetime = Value::Null;
     println!(
         "{}",
-        json!({"driver":result,"operation_ns":durations,
+        json!({"driver":result,"operation_ns":durations,"lifetime":lifetime,
         "timing_usable":!cfg!(feature="heap-phases"),"workload":{"metric":case.metric,
         "width":case.width,"height":case.height,"source_stride_bytes":case.stride_bytes,
         "dispatch_layout":"packed RGB8 after preparation","pixel_format":case.pixel_format,

@@ -22,7 +22,7 @@ path = "src/bin/cpu_wall.rs"
 # reaches the CLI's copies, so `new-metrics-wall` then measures the same
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
-heap-phases = ["dep:zenbench-memory"]
+heap-phases = ["zenbench/heap-profiling"]
 metrics-parallel = [
     "cvvdp/parallel", "iwssim/parallel", "fast-ssim2/rayon",
     "dep:fsim", "fsim/parallel", "dep:haarpsi", "haarpsi/parallel",
@@ -33,12 +33,11 @@ metrics-parallel = [
 ]
 
 [dependencies]
-zenbench-memory = { package = "zenbench", git = "https://github.com/imazen/zenbench", rev = "77707b68eae6e5245d7f87a78e04a9453bcde4e5", default-features = false, features = ["heap-profiling"], optional = true }
 zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
-zenbench     = "0.1.8"
+zenbench = { git = "https://github.com/imazen/zenbench", rev = "77707b68eae6e5245d7f87a78e04a9453bcde4e5", default-features = false, features = ["precise-timing", "alloc-profiling"] }
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }

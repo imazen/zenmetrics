@@ -72,7 +72,7 @@ use zenmetrics_cli::metrics::{GpuRuntime, MetricKind, run_metric_display};
 mod fleet_case;
 #[cfg(feature = "heap-phases")]
 #[global_allocator]
-static HEAP: zenbench_memory::HeapProfiler = zenbench_memory::HeapProfiler::system();
+static HEAP: zenbench::HeapProfiler = zenbench::HeapProfiler::system();
 
 // ---------------------------------------------------------------------------
 // Synthetic inputs — identical pattern to cpu_wall.rs / the heaptrack driver
@@ -280,10 +280,10 @@ fn main() {
         });
         return;
     }
-    assert!(
-        !cfg!(feature = "heap-phases"),
-        "heap-phases is a memory-only build: use new-metrics-wall fleet CASE.json"
-    );
+    if cfg!(feature = "heap-phases") {
+        eprintln!("heap-phases is a memory-only build: use new-metrics-wall fleet CASE.json");
+        std::process::exit(2);
+    }
     if args.len() >= 2 && args[1] == "heap" {
         heap_mode(&args);
         return;
