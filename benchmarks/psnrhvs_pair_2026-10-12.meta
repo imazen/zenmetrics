@@ -1,0 +1,10 @@
+Runner source: zenbench ac675d3a (0.1.10)
+Baseline source: 62b5a420; candidate: accompanying PSNR-HVS transpose-load change
+Command: just ranked-pair-scope <runner> <plan> <new-output> 2
+Plan recipe: just ranked-pair-plan <baseline> <candidate> 62b5a420 psnrhvs-transpose-loads <new-plan>
+Host: r7900x; Rayon threads: 1; outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0
+Raw evidence: r7900x:/home/lilith/tmp/zm-psnrhvs-pair-20261012/packet.json.gz
+Packet SHA-256: 7e87f6112b6794b720912ce23fdeb7dd8b4c3fd1a740c5d0d2e807a6481c137b
+Console receipt: r7900x:/home/lilith/tmp/zm-psnrhvs-pair-console.log
+run-heavy: done rc=0 15s | peak-RSS 0.24GiB | min-avail 23951MiB | peak-load 0.36
+The inner run-heavy reported no user scope; the outer system scope supplied the hard limits. Both HVS and HVS-M score bits are checked.

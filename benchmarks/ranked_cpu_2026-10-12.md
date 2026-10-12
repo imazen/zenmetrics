@@ -297,3 +297,48 @@ Receipts: [baseline 1T](iwssim_baseline_1t_2026-10-12.log),
 [raw-evidence pointer and resource receipt](iwssim_pair_2026-10-12.meta).
 Reproduce with the VSI build/wall recipes using `-p iwssim`, and the
 `ranked-pair-plan` / `ranked-pair-scope` recipes recorded in the metadata.
+
+## PSNR-HVS
+
+Baseline source: `62b5a420`. Its native profile places 38.91% of sampled
+cycles in the AVX-512 block band; four indexed gathers carry substantial
+local-period samples. The candidate loads eight contiguous samples for
+each block and transposes eight blocks with magetypes. A sixteen-lane
+batch joins two transposed groups. Arithmetic, DCT tap order, masking and
+the raster fold remain unchanged. The candidate band's sampled share is
+33.45%; its annotated disassembly contains no indexed gathers. Sample
+shares are profile observations, not absolute speedups.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 146.03 | 132.56 |
+| One-thread instructions, five calls | 6,400,082,339 | 5,839,578,228 |
+| One-thread cycles, five calls | 4,209,813,128 | 3,861,499,873 |
+| Sixteen-thread ms/call | 30.99 | 30.41 |
+| Run-heavy peak RSS, GiB, both thread counts | 0.24 | 0.24 |
+
+Both score bits stay `40310dd0a5ede6f9/403415c9efc235c4`. Default and
+all-feature goldens/tier assertions pass unchanged. The new indexed-load
+oracle checks every transposed bit for padded rows, block steps 1/4/8/9/17,
+both eight-lane groups, every short-tail length, signed zero and a NaN
+payload. All-target all-feature clippy with `-D warnings`, scoped fmt
+and the no-default wasm32 library check pass.
+
+The four-block paired observation gives exploratory latency change
+-6.35602267886079%, with A/A change +1.028594259878394%. Both HVS and
+HVS-M are checked exactly in every arm. Wall changes remain within the
+earlier suite's 15% noise caution; there is no confirmation verdict. The
+retained result is fewer instructions and removal of indexed gathers,
+with unchanged measured RSS.
+
+Receipts: [baseline 1T](psnrhvs_baseline_1t_2026-10-12.log),
+[candidate 1T](psnrhvs_candidate_1t_2026-10-12.log),
+[baseline 16T](psnrhvs_baseline_16t_2026-10-12.log),
+[candidate 16T](psnrhvs_candidate_16t_2026-10-12.log),
+[baseline profile](psnrhvs_profile_2026-10-12.txt),
+[candidate profile](psnrhvs_candidate_profile_2026-10-12.txt),
+[paired results](psnrhvs_pair_2026-10-12.csv),
+[paired provenance](psnrhvs_pair_2026-10-12.meta). Profile metadata beside
+the reports records raw sample paths, binary hashes and resource receipts.
+Use `ranked-wall` with `-p psnrhvs`, `ranked-profile`, and the paired
+recipes.

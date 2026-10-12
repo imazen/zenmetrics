@@ -165,6 +165,83 @@ pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + 
     }
 }
 
+// Load each block's eight contiguous samples, then transpose so a vector
+// lane represents a block. Tail lanes repeat the last complete block.
+#[inline(always)]
+fn block_row_columns<T: magetypes::simd::backends::F32x8Backend>(
+    token: T,
+    source: &[f32],
+    base: usize,
+    first: usize,
+    last: usize,
+    step: usize,
+) -> [magetypes::simd::generic::f32x8<T>; 8] {
+    use magetypes::simd::generic::f32x8;
+    let mut blocks = core::array::from_fn(|b| {
+        let off = base + (first + b).min(last) * step;
+        let row: &[f32; 8] = source[off..off + 8].try_into().unwrap();
+        f32x8::load_t(token, row)
+    });
+    f32x8::transpose_8x8(&mut blocks);
+    blocks
+}
+
+#[cfg(test)]
+#[test]
+fn transposed_loads_match_indexed_gather_bits() {
+    fn check<T: magetypes::simd::backends::F32x8Backend>(token: T) {
+        let stride = 1018;
+        let source: Vec<f32> = (0..stride * 3)
+            .map(|i| match i % 17 {
+                0 => -0.0,
+                1 => f32::from_bits(0x7fc0_1234),
+                _ => (i as f32 * 0.37).sin(),
+            })
+            .collect();
+        for step in [1, 4, 8, 9, 17] {
+            for first in [0, 3, 17] {
+                for valid in 1..=16 {
+                    let last = first + valid - 1;
+                    for group in 0..2 {
+                        let start = first + group * 8;
+                        let got = block_row_columns(token, &source, stride * 2, start, last, step);
+                        for (m, column) in got.iter().enumerate() {
+                            for (lane, value) in column.to_array().iter().enumerate() {
+                                let expected =
+                                    source[stride * 2 + (start + lane).min(last) * step + m];
+                                assert_eq!(
+                                    value.to_bits(),
+                                    expected.to_bits(),
+                                    "step={step} first={first} valid={valid} group={group} m={m} lane={lane}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    check(archmage::ScalarToken);
+    #[cfg(target_arch = "x86_64")]
+    {
+        use archmage::SimdToken;
+        if let Some(t) = archmage::X64V3Token::summon() {
+            check(t);
+        }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            check(t);
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        use archmage::SimdToken;
+        if let Some(t) = archmage::NeonToken::summon() {
+            check(t);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------
 // Shared per-band body. `$F32`/`$LANES` select the vector width; the
 // logic is identical at every width so all tiers agree bit-for-bit.
@@ -193,16 +270,18 @@ macro_rules! band_body {
                 let mut xb = [zero; 64];
                 for rr in 0..8 {
                     let base = (by * $step + rr) * $stride;
+                    let aa = core::array::from_fn::<_, { $LANES / 8 }, _>(|g| {
+                        block_row_columns($token, $r, base, bx0 + g * 8, bx0 + last, $step)
+                    });
+                    let bb = core::array::from_fn::<_, { $LANES / 8 }, _>(|g| {
+                        block_row_columns($token, $d, base, bx0 + g * 8, bx0 + last, $step)
+                    });
                     for m in 0..8 {
                         let c = rr * 8 + m;
-                        xa[c] = V::from_array_t(
-                            $token,
-                            core::array::from_fn(|b| $r[base + (bx0 + b.min(last)) * $step + m]),
-                        );
-                        xb[c] = V::from_array_t(
-                            $token,
-                            core::array::from_fn(|b| $d[base + (bx0 + b.min(last)) * $step + m]),
-                        );
+                        let ac = aa.map(|group| group[m].to_array());
+                        let bc = bb.map(|group| group[m].to_array());
+                        xa[c] = V::from_array_t($token, core::array::from_fn(|b| ac[b / 8][b % 8]));
+                        xb[c] = V::from_array_t($token, core::array::from_fn(|b| bc[b / 8][b % 8]));
                     }
                 }
                 // --- 2D DCT-II: out[k][l] = Σ_m Σ_n T[k][m]·x[m][n]·T[l][n]

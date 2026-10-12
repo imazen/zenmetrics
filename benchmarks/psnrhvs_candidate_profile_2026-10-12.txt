@@ -1,0 +1,103 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cpu/cycles/P'
+# Event count (approx.): 22273222061
+#
+# Overhead  Command          Shared Object      Symbol                                          
+# ........  ...............  .................  ................................................
+#
+    33.45%  psnrhvs-candida  psnrhvs-candidate  [.] psnrhvs::kernel::__arcane_psnrhvs_band_v4x_t
+    12.81%  psnrhvs-candida  psnrhvs-candidate  [.] psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          
+            |--10.48%--psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          |          
+            |           --7.68%--0x80cd5b
+            |          
+             --1.06%--exc_page_fault
+                       asm_exc_page_fault
+
+     6.59%  psnrhvs-candida  [kernel.kallsyms]  [k] kernel_init_pages
+            |          
+            |--1.42%--kernel_init_pages
+            |          |          
+            |           --1.37%--post_alloc_hook
+            |                     get_page_from_freelist
+            |                     __alloc_frozen_pages_noprof
+            |                     alloc_pages_mpol
+            |                     vma_alloc_folio_noprof
+            |                     alloc_anon_folio
+            |                     do_anonymous_page
+            |                     handle_pte_fault
+            |                     __handle_mm_fault
+            |                     handle_mm_fault
+            |                     do_user_addr_fault
+            |                     exc_page_fault
+            |                     asm_exc_page_fault
+            |                     |          
+            |                      --1.35%--psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          
+            |--1.24%--__mem_cgroup_charge
+            |          |          
+            |           --1.12%--do_anonymous_page
+            |                     handle_pte_fault
+            |                     __handle_mm_fault
+            |                     handle_mm_fault
+            |                     do_user_addr_fault
+            |                     exc_page_fault
+            |                     asm_exc_page_fault
+            |                     psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          
+            |--1.16%--alloc_anon_folio
+            |          do_anonymous_page
+            |          handle_pte_fault
+            |          __handle_mm_fault
+            |          handle_mm_fault
+            |          do_user_addr_fault
+            |          exc_page_fault
+            |          asm_exc_page_fault
+            |          |          
+            |           --1.14%--psnrhvs::psnrhvs_rgb8::{closure#0}
+            |          
+             --1.14%--get_mem_cgroup_from_mm
+
+     3.95%  psnrhvs-candida  [kernel.kallsyms]  [k] mod_memcg_lruvec_state
+            |          
+             --2.30%--lru_gen_del_folio.constprop.0
+                       __page_cache_release.part.0
+                       folios_put_refs
+                       free_pages_and_swap_cache
+                       __tlb_batch_free_encoded_pages
+                       tlb_finish_mmu
+                       unmap_region
+                       vms_complete_munmap_vmas
+                       do_vmi_align_munmap
+                       do_vmi_munmap
+                       __vm_munmap
+                       __x64_sys_munmap
+                       x64_sys_call
+                       do_syscall_64
+                       entry_SYSCALL_64_after_hwframe
+                       __munmap
+                       _int_free_chunk
+                       psnrhvs::psnrhvs_rgb8
+
+     3.86%  psnrhvs-candida  [kernel.kallsyms]  [k] __irqentry_text_end
+            |          
+             --3.76%--psnrhvs::psnrhvs_rgb8::{closure#0}
+                       |          
+                        --2.46%--0x80cd5b
+
+     3.68%  psnrhvs-candida  libc.so.6          [.] __memset_avx512_unaligned_erms
+     2.10%  psnrhvs-candida  [kernel.kallsyms]  [k] do_anonymous_page
+     2.05%  psnrhvs-candida  [kernel.kallsyms]  [k] get_mem_cgroup_from_mm
+     1.18%  psnrhvs-candida  [kernel.kallsyms]  [k] srso_alias_return_thunk
+     1.16%  psnrhvs-candida  [kernel.kallsyms]  [k] srso_alias_safe_ret
+     1.13%  psnrhvs-candida  [kernel.kallsyms]  [k] lruvec_stat_mod_folio
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

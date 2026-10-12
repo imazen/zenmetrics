@@ -1,0 +1,7 @@
+binary_sha256: 8ef847818f2b080f604ffafd23285fca56b9dce94b290e4684802e8ddef4b59c  /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23911MiB :: /home/lilith/tmp/zm-ranked-binaries/psnrhvs-baseline 3355 2516 5
+3355x2516 5 reps: 30.99 ms/call (psnr_hvs 17.05396496828231889 psnr_hvs_m 20.08511255732970824, bits 40310dd0a5ede6f9/403415c9efc235c4)
+run-heavy: done rc=0 0s | peak-RSS 0.24GiB | min-avail 23911MiB | peak-load 0.39

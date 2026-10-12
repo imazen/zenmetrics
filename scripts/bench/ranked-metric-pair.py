@@ -10,7 +10,7 @@ import sys
 
 def score_bits(directory):
     text = (Path(directory) / 'stdout.txt').read_text()
-    matches = re.findall(r'bits ([0-9a-f]{16})\)', text)
+    matches = re.findall(r'bits ([0-9a-f]{16}(?:/[0-9a-f]{16})*)\)', text)
     if len(matches) != 1:
         raise ValueError(f'expected exactly one score bit pattern in {directory}')
     return matches[0]
