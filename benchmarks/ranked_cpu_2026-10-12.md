@@ -202,3 +202,52 @@ one Rayon thread, with source `bdc458e0`:
 [zenbench report](nlpd_baseline_zenbench_1t_2026-10-12.log),
 [TSV](nlpd_baseline_zenbench_1t_2026-10-12.tsv).
 They establish the next candidate's baseline, not an optimization result.
+
+
+## NLPD
+
+Baseline production source: `bdc458e0`. The candidate computes vertical
+blur and Laplacian subtraction into three rotating rows per Rayon band,
+then normalizes those rows directly. It removes one full-image scratch
+plane. The IQA-compatible path reuses its existing spare upsample plane;
+its filter and normalization formulas remain unchanged. The vector path
+retains the five blur FMAs, scalar tail, ordered normalization additions
+and exact division.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 470.54 | 421.94 |
+| One-thread instructions, five calls | 28,760,631,590 | 27,222,626,924 |
+| One-thread cycles, five calls | 13,070,938,636 | 11,710,515,648 |
+| Sixteen-thread ms/call | 251.68 | 223.24 |
+| Run-heavy peak RSS, GiB, both thread counts | 0.57 | 0.51 |
+
+The wall changes remain below the earlier suite's 15% noise caution.
+The retained result is the measured memory reduction and instruction
+reduction. All observations return score bits `401be9088775ba00`.
+A separate four-block zenbench comparison reports exploratory latency
+change -11.416297557380386%, with an A/A change of -1.1171817940483302%.
+Every candidate and control passed an exact score-bit checker. This is
+exploratory evidence, without a confirmation interval or promotion verdict.
+The hard system cpuset covered CPU 2 and descendants; an earlier attempt
+refused the requested set because the user scope did not enforce it.
+[Selected paired results](nlpd_pair_2026-10-12.csv) and
+[provenance/raw-evidence pointer](nlpd_pair_2026-10-12.meta).
+
+The independent materialized-band test compares every normalized pixel
+bit for all six levels, odd dimensions, vector tails and parallel band
+boundaries. Default and all-feature tests pass; the CI-pinned snapshot's
+all-feature tests and clippy with `-D warnings` pass. The no-default
+wasm32-unknown-unknown library build passes. Existing assertions are unchanged.
+Disassembly inspection found redundant bounds checks in the first trial's
+vertical row loads; partitioning each source row before the vector loop
+removed the observed regression. That trial measured 632.32 ms and 0.51 GiB,
+and is retained as a rejected timing result.
+
+Receipts: [baseline 1T](nlpd_baseline_1t_2026-10-12.log),
+[candidate 1T](nlpd_partition_candidate_1t_2026-10-12.log),
+[baseline 16T](nlpd_baseline_16t_2026-10-12.log),
+[candidate 16T](nlpd_candidate_16t_2026-10-12.log),
+[first trial](nlpd_candidate_1t_2026-10-12.log).
+The [queued zenbench trial](nlpd_candidate_zenbench_1t_2026-10-12.log)
+was cancelled while waiting for another experiment; it produced no metric TSV.

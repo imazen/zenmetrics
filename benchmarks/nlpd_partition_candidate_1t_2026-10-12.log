@@ -1,0 +1,19 @@
+binary_sha256: 620da95154446818ae9d63a1e85a5706aa4f3b9b395ad637ed708cca6e655f6e  /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24337MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate 3355 2516 5
+3355x2516 5 reps: 421.94 ms/call (score 6.97757159858747400, bits 401be9088775ba00)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-partition-candidate 3355 2516 5':
+
+       27222626924      instructions                                                          
+       11710515648      cycles                                                                
+
+       2.149537603 seconds time elapsed
+
+       1.328123000 seconds user
+       0.821076000 seconds sys
+
+
+run-heavy: done rc=0 3s | peak-RSS 0.51GiB | min-avail 23837MiB | peak-load 2.34

@@ -1,0 +1,7 @@
+binary_sha256: 0055e5aee3347854e1e107044956e3a0129414841a3952a157a58d5e7a8b3295  /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline
+host: r7900x
+rayon_threads: 16
+argv: /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=22858MiB :: /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline 3355 2516 5
+3355x2516 5 reps: 251.68 ms/call (score 6.97757159858747400, bits 401be9088775ba00)
+run-heavy: done rc=0 1s | peak-RSS 0.57GiB | min-avail 22858MiB | peak-load 6.79

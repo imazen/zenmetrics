@@ -1,0 +1,19 @@
+binary_sha256: 0055e5aee3347854e1e107044956e3a0129414841a3952a157a58d5e7a8b3295  /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline
+host: r7900x
+rayon_threads: 1
+argv: /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline 3355 2516 5
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=24930MiB :: perf stat -e instructions,cycles -- taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline 3355 2516 5
+3355x2516 5 reps: 470.54 ms/call (score 6.97757159858747400, bits 401be9088775ba00)
+
+ Performance counter stats for 'taskset -c 2 /home/lilith/tmp/zm-ranked-binaries/nlpd-baseline 3355 2516 5':
+
+       28760631590      instructions                                                          
+       13070938636      cycles                                                                
+
+       2.392371788 seconds time elapsed
+
+       1.492048000 seconds user
+       0.900029000 seconds sys
+
+
+run-heavy: done rc=0 3s | peak-RSS 0.57GiB | min-avail 24746MiB | peak-load 1.38

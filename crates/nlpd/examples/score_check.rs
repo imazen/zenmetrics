@@ -5,7 +5,7 @@ fn main() {
         .map(|i| ((i * 37 + i / 97) % 256) as u8)
         .collect::<Vec<_>>();
     let mut changed = reference.clone();
-    for p in changed.chunks_exact_mut(3).step_by(19) {
+    for p in changed.as_chunks_mut::<3>().0.iter_mut().step_by(19) {
         p[0] = p[0].saturating_add(20);
     }
     println!(

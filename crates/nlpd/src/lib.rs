@@ -209,9 +209,19 @@ fn for_each_row_init<T: Send>(
     init: impl Fn() -> T + Sync + Send,
     f: impl Fn(usize, &mut [f32], &mut T) + Sync + Send,
 ) {
+    for_each_row_init_min(dst, w, 4, init, f);
+}
+
+fn for_each_row_init_min<T: Send>(
+    dst: &mut [f32],
+    w: usize,
+    _min_rows: usize,
+    init: impl Fn() -> T + Sync + Send,
+    f: impl Fn(usize, &mut [f32], &mut T) + Sync + Send,
+) {
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 && dst.len() >= (1 << 15) {
-        let rows_per = (32768usize / w.max(1)).clamp(4, 512);
+        let rows_per = (32768usize / w.max(1)).clamp(_min_rows, 512);
         dst.par_chunks_mut(w * rows_per)
             .enumerate()
             .for_each(|(ci, chunk)| {
@@ -248,12 +258,10 @@ fn reflect(mut x: isize, len: usize) -> usize {
 struct Scratch {
     /// Horizontal low-pass output (downsample: `out_w*h`; blur: `w*h`).
     tmp_h: Vec<f32>,
-    /// Bilinear-upsampled low band.
+    /// Bilinear-upsampled low band, or the IQA path's Laplacian band.
     up: Vec<f32>,
     /// Blur horizontal-pass output.
     tmp_b: Vec<f32>,
-    /// Smoothed band, then reused in place as the Laplacian (`src - smoothed`).
-    lap: Vec<f32>,
     /// Normalized Laplacian band (per-channel result plane).
     normalized: Vec<f32>,
 }
@@ -264,7 +272,6 @@ impl Scratch {
             tmp_h: vec![0.0; n],
             up: vec![0.0; n],
             tmp_b: vec![0.0; n],
-            lap: vec![0.0; n],
             normalized: vec![0.0; n],
         }
     }
@@ -523,28 +530,45 @@ fn level_transform(
     let n = w * h;
     let (low, lw, lh) = downsample(src, w, h, &mut scratch.tmp_h);
     upsample_bilinear(&low, lw, lh, w, h, &mut scratch.up[..n]);
-    blur5(&scratch.up[..n], w, h, &mut scratch.tmp_b, &mut scratch.lap);
-    // lap = src - smoothed, folded elementwise over the smoothed slab.
-    #[cfg(feature = "parallel")]
-    scratch.lap[..n]
-        .par_chunks_mut(1 << 14)
-        .zip(src[..n].par_chunks(1 << 14))
-        .for_each(|(lc, sc)| {
-            for (s, &a) in lc.iter_mut().zip(sc) {
-                *s = a - *s;
-            }
-        });
-    #[cfg(not(feature = "parallel"))]
-    for (s, &a) in scratch.lap[..n].iter_mut().zip(src.iter()) {
-        *s = a - *s;
-    }
-    normalize_band(&scratch.lap[..n], w, h, level, &mut scratch.normalized);
+    filter5_horizontal(&scratch.up[..n], w, h, &mut scratch.tmp_b[..n], w, 1, 2);
+    simd::normalize_filtered(
+        src,
+        &scratch.tmp_b[..n],
+        w,
+        h,
+        level,
+        &mut scratch.normalized[..n],
+    );
     (low, lw, lh)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fused_normalization_matches_materialized_bits() {
+        for (w, h) in [(3, 3), (5, 7), (11, 13), (97, 99), (257, 193), (1024, 65)] {
+            let n = w * h;
+            let original: Vec<f32> = (0..n).map(|i| (i * 37 % 251) as f32 / 251.0).collect();
+            let up: Vec<f32> = (0..n).map(|i| (i * 91 % 241) as f32 / 241.0).collect();
+            let mut horizontal = vec![0.0; n];
+            let mut lap = vec![0.0; n];
+            blur5(&up, w, h, &mut horizontal, &mut lap);
+            for (value, &src) in lap.iter_mut().zip(&original) {
+                *value = src - *value;
+            }
+            for level in 0..6 {
+                let mut expected = vec![0.0; n];
+                normalize_band(&lap, w, h, level, &mut expected);
+                let mut actual = vec![0.0; n];
+                simd::normalize_filtered(&original, &horizontal, w, h, level, &mut actual);
+                for (i, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.to_bits(), e.to_bits(), "{w}x{h} level={level} pixel={i}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn identity_and_asymmetry() {
@@ -554,7 +578,7 @@ mod tests {
             .map(|i| ((i * 37 + i / 97) % 256) as u8)
             .collect::<Vec<_>>();
         let mut changed = reference.clone();
-        for p in changed.chunks_exact_mut(3).step_by(19) {
+        for p in changed.as_chunks_mut::<3>().0.iter_mut().step_by(19) {
             p[0] = p[0].saturating_add(20);
         }
         assert!(score_rgb_u8(&reference, &reference, w, h).unwrap() < 1e-9);
