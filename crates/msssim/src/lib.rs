@@ -11,7 +11,8 @@
 //! means the SSIM and contrast–structure maps; between scales both
 //! images are downsampled by `imfilter(ones(2)/4,'symmetric','same')`
 //! + `1:2:end` (forward 2×2 box, whole-point symmetric border). The
-//! score is `prod(mcs[1..L−1]^w[1..L−1]) · mssim[L]^w[L]` with the
+//!
+//! The score is `prod(mcs[1..L−1]^w[1..L−1]) · mssim[L]^w[L]` with the
 //! canonical weights `[0.0448 0.2856 0.3001 0.2363 0.1333]`,
 //! `C1 = (0.01·255)²`, `C2 = (0.03·255)²` — plane values are on the
 //! 0–255 scale.

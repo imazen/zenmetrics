@@ -31,3 +31,39 @@ exact raster pooling; the public API and thresholds are unchanged.
 Validation: default tests, parallel/_dev/avx512 tests (Octave goldens,
 scalar/AVX2 parity and libvmaf FFI parity), plus band/thread equality at
 11×11, 17×23, 176×177, 257×193, 513×257 with 1/2/3/16 threads.
+
+## libvmaf-compatible path
+
+`examples/wall_libvmaf.rs` measures both float_ssim and float_ms_ssim
+on its deterministic u16 pair. Runtime f64x4 AVX2 dispatch preserves
+multiply-then-add order (no FMA), f32 output storage, and reflected borders.
+The 9×9 filter remains a full 81-tap convolution: factoring its rounded
+2-D coefficients would change the filter. Fixed 15-element input windows
+cover four stride-two outputs and let the compiler prove tap bounds.
+
+| Path | Threads | Baseline ms/call | SIMD ms/call |
+|---|---:|---:|---:|
+| float_ssim | 1 | 58.1 | 47.2 |
+| float_ms_ssim | 1 | 972.8 | 454.2 |
+| float_ssim | 16 | 57.8 | 43.8 |
+| float_ms_ssim | 16 | 498.8 | 122.9 |
+
+Combined cycles: baseline 1t **11,310,273,709 for 2 calls of each metric**;
+SIMD 1t **10,639,316,407 for 4 calls of each metric**. Baseline 16t
+39,814,417,881 vs SIMD 23,301,384,403 (both 4 calls of each).
+Peak-RSS: baseline 1t 0.43 GiB, 16t 0.95 GiB; SIMD 1t 0.43 GiB,
+16t 0.91 GiB. run-heavy reports these process peaks; the two examples
+exercise different input/score conventions and should not be compared
+as equivalent algorithms.
+
+Baseline top five user-cycle symbols: filter_pixel 56.76%, vertical Gaussian
+24.66%, horizontal Gaussian 6.14%, score fold 6.03%, plane conversion 2.36%.
+After initial SIMD (before the fixed-array 9×9 specialization): decimation
+35.16%, score fold 16.74%, vertical Gaussian 16.19%, horizontal Gaussian
+14.40%, plane conversion 6.42%.
+
+Tests also compare every convolution/decimation output bit with an ordered
+scalar oracle across odd/even sizes, factors 2/3/4, and 2/3/4/9-tap kernels.
+Default and parallel tests, including real libvmaf frame/scale/LCS parity,
+pass without any threshold change. Clippy adds no warnings; existing FFI
+safety-comment warnings remain. API and no_std behavior are retained.

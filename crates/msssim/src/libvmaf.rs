@@ -102,7 +102,9 @@ fn filter_pixel(
 /// `(x·f, y·f)`, f64 accumulation. The `w&1` (not `w%f`) is the C
 /// original: for even `w` the trailing partial kernel column is skipped
 /// even when `f` doesn't divide `w`.
-fn decimate(
+#[archmage::attune(_*_t, define(f64x4))]
+fn decimate_inner(
+    token: Token,
     img: &[f32],
     w: usize,
     h: usize,
@@ -113,43 +115,159 @@ fn decimate(
     let sw = w / factor + (w & 1);
     let sh = h / factor + (h & 1);
     let mut out = vec![0.0f32; sw * sh];
+    let half = kw / 2;
+    let right = kw - half - 1;
     crate::kernel::for_each_row(&mut out, sw, |y, orow| {
-        for (x, o) in orow.iter_mut().enumerate() {
-            *o = filter_pixel(img, w, h, x * factor, y * factor, k, kw);
+        let cy = y * factor;
+        let mut x = 0;
+        // Resolve reflected rows once, rather than for every kernel column.
+        let row_offsets: Vec<usize> = (0..kw)
+            .map(|v| sym(cy as isize + v as isize - half as isize, h) * w)
+            .collect();
+        while x < sw && x * factor < half {
+            orow[x] = filter_pixel(img, w, h, x * factor, cy, k, kw);
+            x += 1;
+        }
+        if kw == 9 && factor == 2 {
+            let taps: &[f32; 81] = k.try_into().unwrap();
+            let rows: [&[f32]; 9] =
+                core::array::from_fn(|v| &img[row_offsets[v]..row_offsets[v] + w]);
+            while x + 4 <= sw && (x + 3) * 2 + 4 < w {
+                let mut sum = f64x4::splat_t(token, 0.0);
+                for v in 0..9 {
+                    let off = x * 2 - 4;
+                    let pixels: &[f32; 15] = rows[v][off..off + 15].try_into().unwrap();
+                    for u in 0..9 {
+                        let values = f64x4::from_array_t(
+                            token,
+                            [
+                                pixels[u] as f64,
+                                pixels[u + 2] as f64,
+                                pixels[u + 4] as f64,
+                                pixels[u + 6] as f64,
+                            ],
+                        );
+                        sum += values * f64x4::splat_t(token, taps[v * 9 + u] as f64);
+                    }
+                }
+                let values = sum.to_array();
+                for j in 0..4 {
+                    orow[x + j] = values[j] as f32;
+                }
+                x += 4;
+            }
+        }
+        while x + 4 <= sw && (x + 3) * factor + right < w {
+            let mut sum = f64x4::splat_t(token, 0.0);
+            for v in 0..kw {
+                let row = &img[row_offsets[v]..row_offsets[v] + w];
+                for u in 0..kw {
+                    let off = x * factor + u - half;
+                    let pixels = f64x4::from_array_t(
+                        token,
+                        core::array::from_fn(|j| row[off + j * factor] as f64),
+                    );
+                    sum += pixels * f64x4::splat_t(token, k[v * kw + u] as f64);
+                }
+            }
+            let values = sum.to_array();
+            for j in 0..4 {
+                orow[x + j] = values[j] as f32;
+            }
+            x += 4;
+        }
+        while x < sw {
+            orow[x] = filter_pixel(img, w, h, x * factor, cy, k, kw);
+            x += 1;
         }
     });
     (out, sw, sh)
 }
 
+fn decimate(
+    img: &[f32],
+    w: usize,
+    h: usize,
+    factor: usize,
+    k: &[f32],
+    kw: usize,
+) -> (Vec<f32>, usize, usize) {
+    archmage::attuned!(
+        decimate_inner(img, w, h, factor, k, kw),
+        [_v3, _neon, _wasm128, _scalar]
+    )
+}
+
 /// `_iqa_convolve` (IQA_CONVOLVE_1D separable path) — valid region only:
 /// output `(w-10) × (h-10)`, top-left anchored; f64 accumulation, f32 out.
-fn conv_gauss_valid(img: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize) {
+#[archmage::attune(_*_t, define(f64x4))]
+fn conv_gauss_valid_inner(
+    token: Token,
+    img: &[f32],
+    w: usize,
+    h: usize,
+) -> (Vec<f32>, usize, usize) {
     let dw = w - (GAUSS_LEN - 1);
     let dh = h - (GAUSS_LEN - 1);
-    // horizontal pass: rows cached at the reduced column band
     let mut tmp = vec![0.0f32; h * dw];
     crate::kernel::for_each_row(&mut tmp, dw, |y, trow| {
-        for (x, o) in trow.iter_mut().enumerate() {
+        let row = &img[y * w..(y + 1) * w];
+        let mut x = 0;
+        while x + 4 <= dw {
+            let mut sum = f64x4::splat_t(token, 0.0);
+            for u in 0..GAUSS_LEN {
+                let v = f64x4::from_array_t(token, core::array::from_fn(|j| row[x + u + j] as f64));
+                sum += v * f64x4::splat_t(token, GAUSS[u] as f64);
+            }
+            let values = sum.to_array();
+            for j in 0..4 {
+                trow[x + j] = values[j] as f32;
+            }
+            x += 4;
+        }
+        while x < dw {
             let mut sum = 0.0f64;
             for u in 0..GAUSS_LEN {
-                sum += img[y * w + x + u] as f64 * GAUSS[u] as f64;
+                sum += row[x + u] as f64 * GAUSS[u] as f64;
             }
-            *o = sum as f32;
+            trow[x] = sum as f32;
+            x += 1;
         }
     });
-    // vertical pass over the cached band → packed valid region
     let mut out = vec![0.0f32; dh * dw];
-    let tmp_ref = &tmp;
     crate::kernel::for_each_row(&mut out, dw, |y, orow| {
-        for (x, o) in orow.iter_mut().enumerate() {
-            let mut sum = 0.0f64;
-            for v in 0..GAUSS_LEN {
-                sum += tmp_ref[(y + v) * dw + x] as f64 * GAUSS[v] as f64;
+        let rows: [&[f32]; GAUSS_LEN] =
+            core::array::from_fn(|u| &tmp[(y + u) * dw..(y + u + 1) * dw]);
+        let mut x = 0;
+        while x + 4 <= dw {
+            let mut sum = f64x4::splat_t(token, 0.0);
+            for u in 0..GAUSS_LEN {
+                let v = f64x4::from_array_t(token, core::array::from_fn(|j| rows[u][x + j] as f64));
+                sum += v * f64x4::splat_t(token, GAUSS[u] as f64);
             }
-            *o = sum as f32;
+            let values = sum.to_array();
+            for j in 0..4 {
+                orow[x + j] = values[j] as f32;
+            }
+            x += 4;
+        }
+        while x < dw {
+            let mut sum = 0.0f64;
+            for u in 0..GAUSS_LEN {
+                sum += rows[u][x] as f64 * GAUSS[u] as f64;
+            }
+            orow[x] = sum as f32;
+            x += 1;
         }
     });
     (out, dw, dh)
+}
+
+fn conv_gauss_valid(img: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize) {
+    archmage::attuned!(
+        conv_gauss_valid_inner(img, w, h),
+        [_v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// Elementwise `out[i] = f(src[i])` — par under `parallel` when the
@@ -242,7 +360,10 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
         out
     };
     let mut rd = vec![0.0f32; r.len()];
+    #[cfg(feature = "parallel")]
     let mut ri = 0usize;
+    #[cfg(not(feature = "parallel"))]
+    let ri = 0usize;
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
@@ -470,4 +591,57 @@ pub fn float_ms_ssim_scales(
             * libm::pow(s, MS_BETAS[idx] as f64);
     }
     Ok((l_arr, c_arr, s_arr, msssim))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dispatched_filters_match_ordered_scalar() {
+        for (w, h) in [(11, 11), (17, 23), (31, 32), (177, 176), (257, 193)] {
+            let img: Vec<f32> = (0..w * h)
+                .map(|i| (((i * 17) ^ (i / w * 29)) % 1021) as f32 * 0.25)
+                .collect();
+            let (actual, dw, dh) = conv_gauss_valid(&img, w, h);
+            let mut tmp = vec![0.0f32; dw * h];
+            for y in 0..h {
+                for x in 0..dw {
+                    let mut sum = 0.0f64;
+                    for u in 0..GAUSS_LEN {
+                        sum += img[y * w + x + u] as f64 * GAUSS[u] as f64;
+                    }
+                    tmp[y * dw + x] = sum as f32;
+                }
+            }
+            for y in 0..dh {
+                for x in 0..dw {
+                    let mut sum = 0.0f64;
+                    for u in 0..GAUSS_LEN {
+                        sum += tmp[(y + u) * dw + x] as f64 * GAUSS[u] as f64;
+                    }
+                    assert_eq!(actual[y * dw + x].to_bits(), (sum as f32).to_bits());
+                }
+            }
+            for (factor, kw) in [(2, 9), (2, 2), (3, 3), (4, 4)] {
+                let kernel: Vec<f32> = if kw == 9 {
+                    LPF9.into_iter().flatten().collect()
+                } else {
+                    vec![1.0 / (kw * kw) as f32; kw * kw]
+                };
+                let (actual, sw, sh) = decimate(&img, w, h, factor, &kernel, kw);
+                for y in 0..sh {
+                    for x in 0..sw {
+                        let expected =
+                            filter_pixel(&img, w, h, x * factor, y * factor, &kernel, kw);
+                        assert_eq!(
+                            actual[y * sw + x].to_bits(),
+                            expected.to_bits(),
+                            "{w}x{h}, factor {factor}, {x},{y}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
