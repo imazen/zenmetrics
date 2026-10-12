@@ -610,6 +610,37 @@ macro_rules! corr_row_body {
     }};
 }
 
+// The pyramid uses only three kernel shapes. Specialize these at the
+// tier boundary so the compiler sees constant tap counts and lane stride.
+macro_rules! corr_shapes {
+    ($token:ident, $V:ty, $lanes:literal, $img:ident, $w:ident, $h:ident,
+     $filt:ident, $fw:ident, $fh:ident, $step:ident, $start:ident, $yc:ident, $out:ident) => {{
+        match ($fw, $fh, $step) {
+            (5, 5, 1) => {
+                let (fw, fh, step) = (5, 5, 1);
+                corr_row_body!(
+                    $token, $V, $lanes, $img, $w, $h, $filt, fw, fh, step, $start, $yc, $out
+                );
+            }
+            (7, 7, 1) => {
+                let (fw, fh, step) = (7, 7, 1);
+                corr_row_body!(
+                    $token, $V, $lanes, $img, $w, $h, $filt, fw, fh, step, $start, $yc, $out
+                );
+            }
+            (9, 9, 2) => {
+                let (fw, fh, step) = (9, 9, 2);
+                corr_row_body!(
+                    $token, $V, $lanes, $img, $w, $h, $filt, fw, fh, step, $start, $yc, $out
+                );
+            }
+            _ => corr_row_body!(
+                $token, $V, $lanes, $img, $w, $h, $filt, $fw, $fh, $step, $start, $yc, $out
+            ),
+        }
+    }};
+}
+
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
 #[allow(clippy::too_many_arguments)]
@@ -626,7 +657,7 @@ fn corr_row_tier_v3_t(
     yc: usize,
     out: &mut [f64],
 ) {
-    corr_row_body!(
+    corr_shapes!(
         token,
         magetypes::simd::generic::f64x4<archmage::X64V3Token>,
         4,
@@ -659,7 +690,7 @@ fn corr_row_tier_v4x_t(
     yc: usize,
     out: &mut [f64],
 ) {
-    corr_row_body!(
+    corr_shapes!(
         token,
         magetypes::simd::generic::f64x8<archmage::X64V4xToken>,
         8,
@@ -692,7 +723,7 @@ fn corr_row_tier_neon_t(
     yc: usize,
     out: &mut [f64],
 ) {
-    corr_row_body!(
+    corr_shapes!(
         token,
         magetypes::simd::generic::f64x4<archmage::NeonToken>,
         4,
@@ -725,7 +756,7 @@ fn corr_row_tier_wasm128_t(
     yc: usize,
     out: &mut [f64],
 ) {
-    corr_row_body!(
+    corr_shapes!(
         token,
         magetypes::simd::generic::f64x4<archmage::Wasm128Token>,
         4,
@@ -756,7 +787,7 @@ fn corr_row_tier_scalar_t(
     yc: usize,
     out: &mut [f64],
 ) {
-    corr_row_body!(
+    corr_shapes!(
         token,
         magetypes::simd::generic::f64x4<archmage::ScalarToken>,
         4,
