@@ -48,7 +48,7 @@ Use the two hashes from `identities.json` in this declaration:
 ```
 
 ```sh
-zenfleet-ctl declare-benchmarks --spec observations.json --out manifest.jsonl
+zenfleet-ctl declare-benchmarks --spec observations.json --out manifest.json
 ```
 
 Declare every machine/domain/replicate explicitly. Duplicate job IDs are refused.
@@ -235,7 +235,10 @@ for untested metrics, formats, sizes or target-specific SIMD paths.
 The native CI workflow runs the adapter and a real worker with the persistent
 executor option enabled, reads its Parquet ledger, recovers every artifact by
 hash, and checks success, wrong output, timeout, cancellation and wrong-machine
-routing. Linux image controls additionally exercise the baked executables.
+routing. All five native jobs passed on 2026-10-12: Linux, Windows x64/ARM64
+and macOS Intel/ARM64 ([run 38204891735](https://github.com/imazen/zenmetrics/actions/runs/38204891735)).
+The Windows controls include parent-process lifetime monitoring through a held
+process handle. Linux image controls additionally exercise the baked executables.
 These checks use explicitly unrestricted CPU placement and cannot produce
 confirmatory benchmark claims.
 

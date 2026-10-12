@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 - Benchmark fleet (`b98de605`, `31ecd846`, `773f5193`): content-addressed staging/recovery, fresh worker execution, bounded cancellation, retained failed observations and baked worker image.
 - IQA measurement (`a18f44b2`, `f140186d`, `57f4ee24`): separate latency and heap-phase builds, cold/cached-reference cases, stride and instrumentation parity controls, independent heaptrack control, and bundle-bound inputs.
+- Benchmark evidence retention (`554dd327`): GC follows bundle and receipt references for every retained attempt, failing before deletion when metadata cannot be verified.
+- Windows worker cancellation (`ef725c6f`): detect parent termination through a held process handle, including PID reuse protection.
 - Native fleet controls (`a064d4fe`): execute adapter and worker ledger paths on Linux, Windows x64/ARM64 and macOS Intel/ARM64 in CI.
 
 - zenfleet-core/worker/ctl (`e3359640`): benchmark observations bind runner, bundle, machine, CPU domain and planned replicate; explicit declaration/capability routing, fresh executors and long-cell lease renewal.
@@ -2668,7 +2670,7 @@ All five are the Nomad-migration ADR's stated preconditions
 
 ### QUEUED BREAKING CHANGES
 
-(none yet)
+- zenfleet-core (`e3359640`): `JobKind::Benchmark` adds an enum variant; downstream exhaustive matches must handle benchmark observations.
 
 ## Workspace
 
