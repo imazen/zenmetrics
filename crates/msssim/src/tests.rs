@@ -205,7 +205,7 @@ fn tier_parity() {
     let (w, h) = (96, 80);
     let r = gen1(w, h);
     let d = gen2(w, h);
-    let s_scalar = crate::dev::msssim_core_tier_scalar(
+    let s_scalar = crate::dev::msssim_core_tier_scalar_t(
         archmage::ScalarToken,
         crate::kernel::Args {
             im1: &r,
@@ -216,7 +216,7 @@ fn tier_parity() {
         },
     );
     if let Some(token) = archmage::X64V3Token::summon() {
-        let s_v3 = crate::dev::msssim_core_tier_v3(
+        let s_v3 = crate::dev::msssim_core_tier_v3_t(
             token,
             crate::kernel::Args {
                 im1: &r,

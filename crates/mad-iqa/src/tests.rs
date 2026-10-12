@@ -299,11 +299,11 @@ fn tier_parity() {
         let Some(t3) = archmage::X64V3Token::summon() else {
             return;
         };
-        let s3 = mad_core_tier_v3(t3, a);
+        let s3 = mad_core_tier_v3_t(t3, a);
         assert_eq!(s0, s3, "v3 diverged");
         #[cfg(feature = "avx512")]
         if let Some(t4) = archmage::X64V4xToken::summon() {
-            let s4 = mad_core_tier_v4x(
+            let s4 = mad_core_tier_v4x_t(
                 t4,
                 Args {
                     im1: &r,
@@ -318,7 +318,7 @@ fn tier_parity() {
     #[cfg(target_arch = "aarch64")]
     {
         let tn = archmage::NeonToken::summon().unwrap();
-        let sn = mad_core_tier_neon(
+        let sn = mad_core_tier_neon_t(
             tn,
             Args {
                 im1: &r,

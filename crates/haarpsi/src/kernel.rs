@@ -266,9 +266,9 @@ macro_rules! rowsum_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let mut v = $F32::from_array($token, core::array::from_fn(|k| $rows[0][PAD + x + k]));
+            let mut v = $F32::from_array_t($token, core::array::from_fn(|k| $rows[0][PAD + x + k]));
             for a in $rows.iter().skip(1) {
-                v = v + $F32::from_array($token, core::array::from_fn(|k| a[PAD + x + k]));
+                v = v + $F32::from_array_t($token, core::array::from_fn(|k| a[PAD + x + k]));
             }
             v.store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -293,9 +293,9 @@ macro_rules! tailbox_body {
         let h = $h;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let mut v = $F32::splat($token, 0.0);
+            let mut v = $F32::splat_t($token, 0.0);
             for u in 0..h {
-                v = v + $F32::from_array(
+                v = v + $F32::from_array_t(
                     $token,
                     core::array::from_fn(|k| $src[PAD + x + k + u + 1 - h]),
                 );
@@ -320,15 +320,15 @@ macro_rules! stripdiff_body {
     ($token:ident, $F32:ident, $LANES:literal, $a:ident, $b:ident, $dst:ident, $n:ident, $h:ident, $scale:ident) => {{
         let n = $n;
         let h = $h;
-        let sc = $F32::splat($token, $scale);
+        let sc = $F32::splat_t($token, $scale);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let mut v = $F32::splat($token, 0.0);
+            let mut v = $F32::splat_t($token, 0.0);
             for t in 0..2 * h {
                 let i = PAD + x + t + 1 - h;
                 v = v
-                    + ($F32::from_array($token, core::array::from_fn(|k| $a[i + k]))
-                        - $F32::from_array($token, core::array::from_fn(|k| $b[i + k])));
+                    + ($F32::from_array_t($token, core::array::from_fn(|k| $a[i + k]))
+                        - $F32::from_array_t($token, core::array::from_fn(|k| $b[i + k])));
             }
             (sc * v).store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -350,14 +350,14 @@ macro_rules! rowdiff_body {
     ($token:ident, $F32:ident, $LANES:literal, $rows:ident, $dst:ident, $n:ident, $h:ident, $scale:ident) => {{
         let n = $n;
         let h = $h;
-        let sc = $F32::splat($token, $scale);
+        let sc = $F32::splat_t($token, $scale);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let mut v = $F32::splat($token, 0.0);
+            let mut v = $F32::splat_t($token, 0.0);
             for a in $rows.iter() {
                 v = v
-                    + ($F32::from_array($token, core::array::from_fn(|k| a[PAD + x + k]))
-                        - $F32::from_array($token, core::array::from_fn(|k| a[PAD + x + k + h])));
+                    + ($F32::from_array_t($token, core::array::from_fn(|k| a[PAD + x + k]))
+                        - $F32::from_array_t($token, core::array::from_fn(|k| a[PAD + x + k + h])));
             }
             (sc * v).store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -379,13 +379,13 @@ macro_rules! rowdiff_body {
 macro_rules! box2abs_body {
     ($token:ident, $F32:ident, $LANES:literal, $r:ident, $s:ident, $dst:ident, $n:ident) => {{
         let n = $n;
-        let q = $F32::splat($token, 0.25);
+        let q = $F32::splat_t($token, 0.25);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let r0 = $F32::from_array($token, core::array::from_fn(|k| $r[PAD + x + k]));
-            let r1 = $F32::from_array($token, core::array::from_fn(|k| $r[PAD + x + k + 1]));
-            let s0 = $F32::from_array($token, core::array::from_fn(|k| $s[PAD + x + k]));
-            let s1 = $F32::from_array($token, core::array::from_fn(|k| $s[PAD + x + k + 1]));
+            let r0 = $F32::from_array_t($token, core::array::from_fn(|k| $r[PAD + x + k]));
+            let r1 = $F32::from_array_t($token, core::array::from_fn(|k| $r[PAD + x + k + 1]));
+            let s0 = $F32::from_array_t($token, core::array::from_fn(|k| $s[PAD + x + k]));
+            let s1 = $F32::from_array_t($token, core::array::from_fn(|k| $s[PAD + x + k + 1]));
             (q * ((r0 + r1) + (s0 + s1)))
                 .abs()
                 .store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
@@ -405,12 +405,12 @@ macro_rules! box2abs_body {
 macro_rules! sim_body {
     ($token:ident, $F32:ident, $LANES:literal, $a:ident, $b:ident, $dst:ident, $n:ident) => {{
         let n = $n;
-        let two = $F32::splat($token, 2.0);
-        let cc = $F32::splat($token, C30);
+        let two = $F32::splat_t($token, 2.0);
+        let cc = $F32::splat_t($token, C30);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let aa = $F32::from_array($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
-            let bb = $F32::from_array($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
+            let aa = $F32::from_array_t($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
+            let bb = $F32::from_array_t($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
             let num = (two * aa) * bb + cc;
             let den = (aa * aa + bb * bb) + cc;
             (num / den).store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
@@ -430,16 +430,16 @@ macro_rules! sim_body {
 macro_rules! simavg_body {
     ($token:ident, $F32:ident, $LANES:literal, $a:ident, $b:ident, $dst:ident, $n:ident) => {{
         let n = $n;
-        let two = $F32::splat($token, 2.0);
-        let half = $F32::splat($token, 0.5);
-        let cc = $F32::splat($token, C30);
+        let two = $F32::splat_t($token, 2.0);
+        let half = $F32::splat_t($token, 0.5);
+        let cc = $F32::splat_t($token, C30);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let aa = $F32::from_array($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
-            let bb = $F32::from_array($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
+            let aa = $F32::from_array_t($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
+            let bb = $F32::from_array_t($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
             let num = (two * aa) * bb + cc;
             let den = (aa * aa + bb * bb) + cc;
-            let prev = $F32::from_array($token, core::array::from_fn(|k| $dst[PAD + x + k]));
+            let prev = $F32::from_array_t($token, core::array::from_fn(|k| $dst[PAD + x + k]));
             ((prev + num / den) * half)
                 .store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -460,8 +460,8 @@ macro_rules! wmax_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let aa = $F32::from_array($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
-            let bb = $F32::from_array($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
+            let aa = $F32::from_array_t($token, core::array::from_fn(|k| $a[PAD + x + k])).abs();
+            let bb = $F32::from_array_t($token, core::array::from_fn(|k| $b[PAD + x + k])).abs();
             aa.max(bb)
                 .store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -478,11 +478,11 @@ macro_rules! wmax_body {
 macro_rules! avg2_body {
     ($token:ident, $F32:ident, $LANES:literal, $a:ident, $b:ident, $dst:ident, $n:ident) => {{
         let n = $n;
-        let half = $F32::splat($token, 0.5);
+        let half = $F32::splat_t($token, 0.5);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let va = $F32::from_array($token, core::array::from_fn(|k| $a[PAD + x + k]));
-            let vb = $F32::from_array($token, core::array::from_fn(|k| $b[PAD + x + k]));
+            let va = $F32::from_array_t($token, core::array::from_fn(|k| $a[PAD + x + k]));
+            let vb = $F32::from_array_t($token, core::array::from_fn(|k| $b[PAD + x + k]));
             ((va + vb) * half).store((&mut $dst[PAD + x..PAD + x + $LANES]).try_into().unwrap());
             x += $LANES;
         }
@@ -729,8 +729,8 @@ macro_rules! score_body {
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn haarpsi_core_tier_v3(
+#[archmage::attune]
+pub fn haarpsi_core_tier_v3_t(
     token: archmage::X64V3Token,
     pr: &Plane,
     pd: &Plane,
@@ -742,8 +742,8 @@ pub fn haarpsi_core_tier_v3(
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn haarpsi_core_tier_v4x(
+#[archmage::attune]
+pub fn haarpsi_core_tier_v4x_t(
     token: archmage::X64V4xToken,
     pr: &Plane,
     pd: &Plane,
@@ -755,8 +755,8 @@ pub fn haarpsi_core_tier_v4x(
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn haarpsi_core_tier_neon(
+#[archmage::attune]
+pub fn haarpsi_core_tier_neon_t(
     token: archmage::NeonToken,
     pr: &Plane,
     pd: &Plane,
@@ -768,8 +768,8 @@ pub fn haarpsi_core_tier_neon(
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
-pub fn haarpsi_core_tier_wasm128(
+#[archmage::attune]
+pub fn haarpsi_core_tier_wasm128_t(
     token: archmage::Wasm128Token,
     pr: &Plane,
     pd: &Plane,
@@ -780,7 +780,7 @@ pub fn haarpsi_core_tier_wasm128(
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn haarpsi_core_tier_scalar(
+pub fn haarpsi_core_tier_scalar_t(
     token: archmage::ScalarToken,
     pr: &Plane,
     pd: &Plane,
@@ -796,8 +796,8 @@ pub(crate) fn haarpsi_core(
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
 ) -> f64 {
-    archmage::incant!(
+    archmage::attuned!(
         haarpsi_core_tier(pr, pd, iq),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }

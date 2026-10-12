@@ -1,13 +1,13 @@
 //! SIMD reduction for the scale-wise mean squared distance.
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn squared_difference_inner(token: Token, a: &[f32], b: &[f32]) -> f64 {
     debug_assert_eq!(a.len(), b.len());
-    let (ac, at) = f32x8::partition_slice(token, a);
-    let (bc, bt) = f32x8::partition_slice(token, b);
-    let mut sum = f32x8::zero(token);
+    let (ac, at) = f32x8::partition_slice_t(token, a);
+    let (bc, bt) = f32x8::partition_slice_t(token, b);
+    let mut sum = f32x8::zero_t(token);
     for (aa, bb) in ac.iter().zip(bc) {
-        let d = f32x8::load(token, aa) - f32x8::load(token, bb);
+        let d = f32x8::load_t(token, aa) - f32x8::load_t(token, bb);
         sum = d.mul_add(d, sum);
     }
     let mut result = sum.to_array().into_iter().map(f64::from).sum::<f64>();
@@ -19,13 +19,13 @@ fn squared_difference_inner(token: Token, a: &[f32], b: &[f32]) -> f64 {
 }
 
 pub(crate) fn squared_difference(a: &[f32], b: &[f32]) -> f64 {
-    archmage::incant!(
+    archmage::attuned!(
         squared_difference_inner(a, b),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn filter5_vertical_inner(
     token: Token,
     src: &[f32],
@@ -36,18 +36,18 @@ fn filter5_vertical_inner(
     stride: usize,
     pad: usize,
 ) {
-    let weights = [0.05, 0.25, 0.4, 0.25, 0.05].map(|v| f32x8::splat(token, v));
+    let weights = [0.05, 0.25, 0.4, 0.25, 0.05].map(|v| f32x8::splat_t(token, v));
     super::for_each_row(dst, width, |oy, dst_row| {
         let rows = core::array::from_fn::<_, 5, _>(|ky| {
             let sy = super::reflect((oy * stride + ky) as isize - pad as isize, height);
             &src[sy * width..(sy + 1) * width]
         });
-        let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst_row);
-        let row_parts = rows.map(|r| f32x8::partition_slice(token, r));
+        let (dst_chunks, dst_tail) = f32x8::partition_slice_mut_t(token, dst_row);
+        let row_parts = rows.map(|r| f32x8::partition_slice_t(token, r));
         for (i, chunk) in dst_chunks.iter_mut().enumerate() {
-            let mut sum = f32x8::zero(token);
+            let mut sum = f32x8::zero_t(token);
             for k in 0..5 {
-                sum = f32x8::load(token, &row_parts[k].0[i]).mul_add(weights[k], sum);
+                sum = f32x8::load_t(token, &row_parts[k].0[i]).mul_add(weights[k], sum);
             }
             sum.store(chunk);
         }
@@ -73,8 +73,8 @@ pub(crate) fn filter5_vertical(
     // Callers pass level-0-sized scratch slabs for `dst` — iterate only
     // this level's out_height×width subregion (row chunking keys off it).
     let dst = &mut dst[..out_height * width];
-    archmage::incant!(
+    archmage::attuned!(
         filter5_vertical_inner(src, width, height, dst, out_height, stride, pad),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }

@@ -77,10 +77,10 @@ mod kernel;
 #[doc(hidden)]
 pub mod dev {
     #[cfg(target_arch = "x86_64")]
-    pub use crate::kernel::fsim_core_tier_v3;
+    pub use crate::kernel::fsim_core_tier_v3_t;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::fsim_core_tier_v4x;
-    pub use crate::kernel::{Planes, fsim_core_tier_scalar};
+    pub use crate::kernel::fsim_core_tier_v4x_t;
+    pub use crate::kernel::{Planes, fsim_core_tier_scalar_t};
 }
 
 #[cfg(test)]

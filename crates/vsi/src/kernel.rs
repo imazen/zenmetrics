@@ -591,18 +591,18 @@ macro_rules! pool_body {
         let mut den = 0.0f64;
         let mut i = 0usize;
         while i + $LANES <= n {
-            let a = <$F32>::from_array($token, core::array::from_fn(|k| sm1[i + k]));
-            let b = <$F32>::from_array($token, core::array::from_fn(|k| sm2[i + k]));
-            let x = <$F32>::from_array($token, core::array::from_fn(|k| g1[i + k]));
-            let z = <$F32>::from_array($token, core::array::from_fn(|k| g2[i + k]));
-            let mi = <$F32>::from_array($token, core::array::from_fn(|k| m1[i + k]));
-            let mj = <$F32>::from_array($token, core::array::from_fn(|k| m2[i + k]));
-            let qi = <$F32>::from_array($token, core::array::from_fn(|k| n1[i + k]));
-            let qj = <$F32>::from_array($token, core::array::from_fn(|k| n2[i + k]));
-            let cvs = <$F32>::splat($token, C_VS);
-            let cgm = <$F32>::splat($token, C_GM);
-            let cch = <$F32>::splat($token, C_CHROM);
-            let two = <$F32>::splat($token, 2.0);
+            let a = <$F32>::from_array_t($token, core::array::from_fn(|k| sm1[i + k]));
+            let b = <$F32>::from_array_t($token, core::array::from_fn(|k| sm2[i + k]));
+            let x = <$F32>::from_array_t($token, core::array::from_fn(|k| g1[i + k]));
+            let z = <$F32>::from_array_t($token, core::array::from_fn(|k| g2[i + k]));
+            let mi = <$F32>::from_array_t($token, core::array::from_fn(|k| m1[i + k]));
+            let mj = <$F32>::from_array_t($token, core::array::from_fn(|k| m2[i + k]));
+            let qi = <$F32>::from_array_t($token, core::array::from_fn(|k| n1[i + k]));
+            let qj = <$F32>::from_array_t($token, core::array::from_fn(|k| n2[i + k]));
+            let cvs = <$F32>::splat_t($token, C_VS);
+            let cgm = <$F32>::splat_t($token, C_GM);
+            let cch = <$F32>::splat_t($token, C_CHROM);
+            let two = <$F32>::splat_t($token, 2.0);
             let vssim = (two * a * b + cvs) / (a * a + b * b + cvs);
             let gsim = (two * x * z + cgm) / (x * x + z * z + cgm);
             let isim = (two * mi * mj + cch) / (mi * mi + mj * mj + cch);
@@ -655,38 +655,38 @@ macro_rules! pool_body {
 
 /// Scalar tier (the magetypes generic vec over `ScalarToken` — same
 /// lane count as `v3`, so per-lane extraction stays fixed-order).
-pub fn vsi_core_tier_scalar(token: archmage::ScalarToken, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_scalar_t(token: archmage::ScalarToken, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     pool_body!(token, V, 8, p)
 }
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn vsi_core_tier_v3(token: archmage::X64V3Token, p: Planes<'_>) -> f64 {
+#[archmage::attune]
+pub fn vsi_core_tier_v3_t(token: archmage::X64V3Token, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     pool_body!(token, V, 8, p)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn vsi_core_tier_v4x(token: archmage::X64V4xToken, p: Planes<'_>) -> f64 {
+#[archmage::attune]
+pub fn vsi_core_tier_v4x_t(token: archmage::X64V4xToken, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     pool_body!(token, V, 16, p)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn vsi_core_tier_neon(token: archmage::NeonToken, p: Planes<'_>) -> f64 {
+#[archmage::attune]
+pub fn vsi_core_tier_neon_t(token: archmage::NeonToken, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     pool_body!(token, V, 8, p)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
+#[archmage::attune]
 pub fn vsi_core_tier_wasm(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     pool_body!(token, V, 8, p)
@@ -694,7 +694,10 @@ pub fn vsi_core_tier_wasm(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
 
 /// Runtime-dispatched score: the best tier this CPU supports.
 fn vsi_core(p: Planes<'_>) -> f64 {
-    archmage::incant!(vsi_core_tier(p), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vsi_core_tier(p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// Full VSI pipeline on prepared inputs — preprocess scalar-shared,

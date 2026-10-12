@@ -2,12 +2,10 @@ use crate::pool;
 use crate::{Error, ModelVariant};
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 use archmage::X64V4xToken;
-#[cfg(feature = "simd")]
-use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-use archmage::{NeonToken, arcane};
+use archmage::{NeonToken, attune};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{X64V3Token, arcane};
+use archmage::{X64V3Token, attune};
 
 const BLOCK_SIZE: usize = 5;
 const NUM_SCALES: u32 = 4;
@@ -527,8 +525,8 @@ fn v4x_token() -> Option<X64V4xToken> {
 /// convolution, `tmp[j] = sum_k f[k] * src[k*stride + j]` over `0..wfloor8`.
 /// `src` starts at the first tap row (caller offsets by `i - radius`).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_filter1d_vrow_v3(
+#[attune(import_intrinsics)]
+fn vif_filter1d_vrow_v3_t(
     _token: X64V3Token,
     f: &[f32],
     src: &[f32],
@@ -550,8 +548,8 @@ fn vif_filter1d_vrow_v3(
 /// convolution, `dst[j + radius] = sum_k f[k] * tmp[j + k]` over `0..j_end`.
 /// The loads reach `j_end + 2*radius - 2`; `tmp` must have that much slack.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_filter1d_hrow_v3(
+#[attune(import_intrinsics)]
+fn vif_filter1d_hrow_v3_t(
     _token: X64V3Token,
     f: &[f32],
     tmp: &[f32],
@@ -569,12 +567,12 @@ fn vif_filter1d_hrow_v3(
     }
 }
 
-/// NEON port of `vif_filter1d_vrow_v3`: 8-wide vertical convolution as two
+/// NEON port of `vif_filter1d_vrow_v3_t`: 8-wide vertical convolution as two
 /// f32x4 halves. Separate mul+add keeps the scalar loop's two-rounding
 /// arithmetic bit-exact (an FMA would be single-rounding).
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn vif_filter1d_vrow_neon(
+#[attune(import_intrinsics)]
+fn vif_filter1d_vrow_neon_t(
     _token: NeonToken,
     f: &[f32],
     src: &[f32],
@@ -597,11 +595,11 @@ fn vif_filter1d_vrow_neon(
     }
 }
 
-/// NEON port of `vif_filter1d_hrow_v3`: `dst[j + radius] = sum_k f[k] *
+/// NEON port of `vif_filter1d_hrow_v3_t`: `dst[j + radius] = sum_k f[k] *
 /// tmp[j + k]` over `0..j_end`, two f32x4 halves, mul+add (see vrow note).
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn vif_filter1d_hrow_neon(
+#[attune(import_intrinsics)]
+fn vif_filter1d_hrow_neon_t(
     _token: NeonToken,
     f: &[f32],
     tmp: &[f32],
@@ -624,13 +622,13 @@ fn vif_filter1d_hrow_neon(
     }
 }
 
-/// NEON port of `compute_covariance_v3`: same two-chain f64 accumulator
+/// NEON port of `compute_covariance_v3_t`: same two-chain f64 accumulator
 /// structure, two f64x2 lanes per chain step (4 f64 lanes per iteration vs
 /// AVX2's 8, then 2-wide and scalar tails). FMA rounding matches.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn compute_covariance_neon(
+fn compute_covariance_neon_t(
     _token: NeonToken,
     data: &[f32],
     mean_x: f64,
@@ -688,9 +686,9 @@ fn compute_covariance_neon(
 /// parallel f64 accumulator chains hiding FMA latency, 8-wide then 4-wide
 /// then scalar per row. Returns the unnormalized sum (caller divides).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn compute_covariance_v3(
+fn compute_covariance_v3_t(
     _token: X64V3Token,
     data: &[f32],
     mean_x: f64,
@@ -760,9 +758,9 @@ fn compute_covariance_v3(
 /// two parallel f64x8 FMA chains as `_v3`, at 16 then 8 then scalar per row.
 /// Returns the unnormalized sum (caller divides).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn compute_covariance_v4x(
+fn compute_covariance_v4x_t(
     _token: X64V4xToken,
     data: &[f32],
     mean_x: f64,
@@ -839,7 +837,7 @@ fn compute_covariance(
     let mean_y = means[sry * dim.block_size + scy] as f64;
     #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
     if let Some(token) = v4x_token() {
-        let result = compute_covariance_v4x(
+        let result = compute_covariance_v4x_t(
             token,
             data,
             mean_x,
@@ -856,7 +854,7 @@ fn compute_covariance(
     }
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = <X64V3Token as archmage::SimdToken>::summon() {
-        let result = compute_covariance_v3(
+        let result = compute_covariance_v3_t(
             token,
             data,
             mean_x,
@@ -873,7 +871,7 @@ fn compute_covariance(
     }
     #[cfg(all(feature = "simd", target_arch = "aarch64"))]
     if let Some(token) = neon_token() {
-        let result = compute_covariance_neon(
+        let result = compute_covariance_neon_t(
             token,
             data,
             mean_x,
@@ -930,7 +928,7 @@ fn compute_covariance_matrix(
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn compute_independent_term(
     dim: &Dims,
     data: &[f32],
@@ -955,7 +953,7 @@ fn compute_independent_term(
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn update_entropy(dim: &Dims, entropy: &mut [f32], s: &[f32], l: f32, sigma_nn: f32) {
     for i in 0..dim.num_blocks_vertical {
         for j in 0..dim.num_blocks_horizontal {
@@ -1056,7 +1054,7 @@ fn get_speed_score(dim: &Dims, ref_r: &EstResult, dis_r: &EstResult) -> f32 {
     score / dim.num_blocks as f32
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn subtract_image(im1: &mut [f32], im2: &[f32], w: usize, h: usize, stride_px: usize) {
     for i in 0..h {
         for j in 0..w {
@@ -1107,7 +1105,7 @@ fn mirror_i32(idx: i32, size: usize) -> usize {
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, stride_px: usize) {
     let fwidth = f.len();
     let radius = fwidth / 2;
@@ -1128,7 +1126,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
         {
             let wfloor8 = w / 8 * 8;
             let base = (i - radius) * stride_px;
-            vif_filter1d_vrow_v3(
+            vif_filter1d_vrow_v3_t(
                 t,
                 f,
                 &src[base..base + (fwidth - 1) * stride_px + wfloor8],
@@ -1143,7 +1141,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
             if let Some(t) = neon_token() {
                 let wfloor8 = w / 8 * 8;
                 let base = (i - radius) * stride_px;
-                vif_filter1d_vrow_neon(
+                vif_filter1d_vrow_neon_t(
                     t,
                     f,
                     &src[base..base + (fwidth - 1) * stride_px + wfloor8],
@@ -1178,7 +1176,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
             let j_end = w.saturating_sub(radius) / 8 * 8;
-            vif_filter1d_hrow_v3(
+            vif_filter1d_hrow_v3_t(
                 t,
                 f,
                 &tmp,
@@ -1191,7 +1189,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
         #[cfg(all(feature = "simd", target_arch = "aarch64"))]
         if let Some(t) = neon_token() {
             let j_end = w.saturating_sub(radius) / 8 * 8;
-            vif_filter1d_hrow_neon(
+            vif_filter1d_hrow_neon_t(
                 t,
                 f,
                 &tmp,
@@ -1212,7 +1210,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn vif_dec16(src: &[f32], dst: &mut [f32], w: usize, h: usize, stride_px: usize) {
     for i in 0..h / 16 {
         for j in 0..w / 16 {
@@ -1231,7 +1229,7 @@ fn mirror_f32(i: f32, left: f32, right: f32) -> f32 {
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn bilinear_scale(
     src: &[f32],
     dst: &mut [f32],
@@ -1273,7 +1271,7 @@ fn bilinear_scale(
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn filter_and_downscale(dim: &Dims, prescale: f64, frame_buffer: &mut [f32], stride_px: usize) {
     let frame_size = stride_px * dim.alloc_height;
     // Pooled: every lane read is written earlier in this call (filter1d
@@ -1498,7 +1496,7 @@ mod tests {
                 let mx = 12.5f64;
                 let my = -7.25f64;
                 let avx2 =
-                    compute_covariance_v3(token, &data, mx, my, stride, srx, scx, sry, scy, w, h);
+                    compute_covariance_v3_t(token, &data, mx, my, stride, srx, scx, sry, scy, w, h);
                 let scalar = cov_scalar(&data, mx, my, stride, srx, scx, sry, scy, w, h);
                 let denom = scalar.abs().max(1.0);
                 assert!(
@@ -1523,8 +1521,9 @@ mod tests {
             for (srx, scx, sry, scy) in [(0usize, 0usize, 1usize, 2usize), (2, 3, 4, 0)] {
                 let mx = 12.5f64;
                 let my = -7.25f64;
-                let neon =
-                    compute_covariance_neon(token, &data, mx, my, stride, srx, scx, sry, scy, w, h);
+                let neon = compute_covariance_neon_t(
+                    token, &data, mx, my, stride, srx, scx, sry, scy, w, h,
+                );
                 let scalar = cov_scalar(&data, mx, my, stride, srx, scx, sry, scy, w, h);
                 let denom = scalar.abs().max(1.0);
                 assert!(
@@ -1535,7 +1534,7 @@ mod tests {
         }
     }
 
-    /// `vif_filter1d_vrow_v3`/`vif_filter1d_hrow_v3` (AVX mul+add, no FMA)
+    /// `vif_filter1d_vrow_v3_t`/`vif_filter1d_hrow_v3_t` (AVX mul+add, no FMA)
     /// and the `_neon` ports must bit-match the scalar mirrored-edge
     /// separable filter. Runs the whole `vif_filter1d` with and without the
     /// vector tier so dispatch coverage equals production.

@@ -358,17 +358,17 @@ fn rgb8_luma8_goldens() {
 #[test]
 fn tier_parity() {
     let (r, d) = (gen4(48, 40), off(&gen4(48, 40), 11));
-    let scalar = kernel::psnrhvs_band_scalar(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8);
+    let scalar = kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8);
     #[cfg(target_arch = "x86_64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::X64V3Token::summon() {
-            let got = kernel::psnrhvs_band_v3(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_v3_t(t, &r, &d, 48, 0, 5, 6, 8);
             assert_eq!(got, scalar, "v3 vs scalar");
         }
         #[cfg(feature = "avx512")]
         if let Some(t) = archmage::X64V4xToken::summon() {
-            let got = kernel::psnrhvs_band_v4x(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_v4x_t(t, &r, &d, 48, 0, 5, 6, 8);
             assert_eq!(got, scalar, "v4x vs scalar");
         }
     }
@@ -376,7 +376,7 @@ fn tier_parity() {
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::NeonToken::summon() {
-            let got = kernel::psnrhvs_band_neon(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_neon_t(t, &r, &d, 48, 0, 5, 6, 8);
             assert_eq!(got, scalar, "neon vs scalar");
         }
     }

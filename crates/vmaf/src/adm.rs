@@ -6,12 +6,10 @@ use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-use archmage::{NeonToken, SimdToken, arcane, rite};
+use archmage::{NeonToken, SimdToken, attune};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, arcane, rite};
+use archmage::{SimdToken, X64V3Token, attune};
 #[cfg(feature = "simd")]
-use archmage::{autoversion, magetypes};
-
 #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
@@ -266,7 +264,7 @@ fn dwt2_vertical_scalar(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(i32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(i32x8))]
 fn dwt2_vertical_simd(
     token: Token,
     src: &[u16],
@@ -283,43 +281,43 @@ fn dwt2_vertical_simd(
     for chunk in 0..chunks {
         let col = chunk * 8;
         let s = [
-            i32x8::from_array(
+            i32x8::from_array_t(
                 token,
                 core::array::from_fn(|lane| {
                     src[indices[0] as usize * src_stride + col + lane] as i32
                 }),
             ),
-            i32x8::from_array(
+            i32x8::from_array_t(
                 token,
                 core::array::from_fn(|lane| {
                     src[indices[1] as usize * src_stride + col + lane] as i32
                 }),
             ),
-            i32x8::from_array(
+            i32x8::from_array_t(
                 token,
                 core::array::from_fn(|lane| {
                     src[indices[2] as usize * src_stride + col + lane] as i32
                 }),
             ),
-            i32x8::from_array(
+            i32x8::from_array_t(
                 token,
                 core::array::from_fn(|lane| {
                     src[indices[3] as usize * src_stride + col + lane] as i32
                 }),
             ),
         ];
-        let mut lo = i32x8::zero(token);
+        let mut lo = i32x8::zero_t(token);
         for k in 0..4 {
-            lo += s[k] * i32x8::splat(token, DWT2_LO[k] as i32);
+            lo += s[k] * i32x8::splat_t(token, DWT2_LO[k] as i32);
         }
-        lo -= i32x8::splat(token, DWT2_LO_SUM * add_shift_vp);
-        lo = (lo + i32x8::splat(token, add_shift_vp)).shr_arithmetic_uniform(shift);
-        let mut hi = i32x8::zero(token);
+        lo -= i32x8::splat_t(token, DWT2_LO_SUM * add_shift_vp);
+        lo = (lo + i32x8::splat_t(token, add_shift_vp)).shr_arithmetic_uniform(shift);
+        let mut hi = i32x8::zero_t(token);
         for k in 0..4 {
-            hi += s[k] * i32x8::splat(token, DWT2_HI[k] as i32);
+            hi += s[k] * i32x8::splat_t(token, DWT2_HI[k] as i32);
         }
-        hi -= i32x8::splat(token, DWT2_HI_SUM * add_shift_vp);
-        hi = (hi + i32x8::splat(token, add_shift_vp)).shr_arithmetic_uniform(shift);
+        hi -= i32x8::splat_t(token, DWT2_HI_SUM * add_shift_vp);
+        hi = (hi + i32x8::splat_t(token, add_shift_vp)).shr_arithmetic_uniform(shift);
         let lo_arr = lo.to_array();
         let hi_arr = hi.to_array();
         for lane in 0..8 {
@@ -404,12 +402,12 @@ fn adm_dwt2(
         |src, src_stride, w, bit_depth, indices, tmplo, tmphi| {
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(token) = v3_token() {
-                dwt2_vertical_v3(token, src, src_stride, w, bit_depth, indices, tmplo, tmphi);
+                dwt2_vertical_v3_t(token, src, src_stride, w, bit_depth, indices, tmplo, tmphi);
                 return;
             }
-            archmage::incant!(
+            archmage::attuned!(
                 dwt2_vertical_simd(src, src_stride, w, bit_depth, indices, tmplo, tmphi),
-                [v3, neon, wasm128, scalar]
+                [_v3, _neon, _wasm128, _scalar]
             );
         },
         dwt2_horizontal_row,
@@ -510,7 +508,7 @@ fn dwt2_horizontal_row(
         // Every output below w_half - 2 uses consecutive (non-reflected)
         // indices, so the 16-output madd kernel applies.
         while j + 16 <= w_half - 2 {
-            dwt2_horizontal_16_v3(token, tmplo, tmphi, i, j, dst_stride, dst, a_row);
+            dwt2_horizontal_16_v3_t(token, tmplo, tmphi, i, j, dst_stride, dst, a_row);
             j += 16;
         }
         while j < w_half {
@@ -522,9 +520,9 @@ fn dwt2_horizontal_row(
     let mut j = 1;
     while j + 8 <= w_half - 2 {
         let mut out = [[0i16; 8]; 4];
-        archmage::incant!(
+        archmage::attuned!(
             dwt2_horizontal_simd(tmplo, tmphi, 2 * j - 1, &mut out),
-            [v3, neon, wasm128, scalar]
+            [_v3, _neon, _wasm128, _scalar]
         );
         let row = i * dst_stride + j;
         let mut a8 = [0i32; 8];
@@ -544,7 +542,7 @@ fn dwt2_horizontal_row(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(i16x16, i32x8))]
 fn dwt2_horizontal_simd(
     token: Token,
     tmplo: &[i16],
@@ -552,19 +550,19 @@ fn dwt2_horizontal_simd(
     base: usize,
     out: &mut [[i16; 8]; 4],
 ) {
-    let mut acc_a_lo = i32x8::zero(token);
-    let mut acc_a_hi = i32x8::zero(token);
-    let mut acc_v_lo = i32x8::zero(token);
-    let mut acc_v_hi = i32x8::zero(token);
-    let mut acc_h_lo = i32x8::zero(token);
-    let mut acc_h_hi = i32x8::zero(token);
-    let mut acc_d_lo = i32x8::zero(token);
-    let mut acc_d_hi = i32x8::zero(token);
+    let mut acc_a_lo = i32x8::zero_t(token);
+    let mut acc_a_hi = i32x8::zero_t(token);
+    let mut acc_v_lo = i32x8::zero_t(token);
+    let mut acc_v_hi = i32x8::zero_t(token);
+    let mut acc_h_lo = i32x8::zero_t(token);
+    let mut acc_h_hi = i32x8::zero_t(token);
+    let mut acc_d_lo = i32x8::zero_t(token);
+    let mut acc_d_hi = i32x8::zero_t(token);
     for t in 0..4 {
-        let wl = i32x8::splat(token, DWT2_LO[t] as i32);
-        let wh = i32x8::splat(token, DWT2_HI[t] as i32);
-        let lt = i16x16::load(token, tmplo[base + t..base + t + 16].try_into().unwrap());
-        let ht = i16x16::load(token, tmphi[base + t..base + t + 16].try_into().unwrap());
+        let wl = i32x8::splat_t(token, DWT2_LO[t] as i32);
+        let wh = i32x8::splat_t(token, DWT2_HI[t] as i32);
+        let lt = i16x16::load_t(token, tmplo[base + t..base + t + 16].try_into().unwrap());
+        let ht = i16x16::load_t(token, tmphi[base + t..base + t + 16].try_into().unwrap());
         let ltl = lt.widen_low();
         let lth = lt.widen_high();
         let htl = ht.widen_low();
@@ -578,7 +576,7 @@ fn dwt2_horizontal_simd(
         acc_d_lo += wh * htl;
         acc_d_hi += wh * hth;
     }
-    let add = i32x8::splat(token, 32768);
+    let add = i32x8::splat_t(token, 32768);
     let a_lo = (acc_a_lo + add).shr_arithmetic_uniform(16).to_array();
     let a_hi = (acc_a_hi + add).shr_arithmetic_uniform(16).to_array();
     let v_lo = (acc_v_lo + add).shr_arithmetic_uniform(16).to_array();
@@ -605,9 +603,9 @@ fn dwt2_horizontal_simd(
 /// the 4-tap convolution in i32 lanes; `srl`+blend_epi16(0xAA)+packus_epi32
 /// reproduces the scalar `(x + add) >> shift` then-truncate-to-i16 exactly.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_vertical_v3(
+fn dwt2_vertical_v3_t(
     _token: X64V3Token,
     src: &[u16],
     src_stride: usize,
@@ -705,9 +703,9 @@ fn dwt2_vertical_v3(
 /// feeding madd_epi16 pair-products. Callers must guarantee every output in
 /// [j, j+16) uses non-reflected indices (j + 16 <= w_half - 2).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_horizontal_16_v3(
+fn dwt2_horizontal_16_v3_t(
     _token: X64V3Token,
     tmplo: &[i16],
     tmphi: &[i16],
@@ -833,7 +831,7 @@ fn border_region_inner(w: usize, h: usize) -> (i32, i32, i32, i32) {
     (left, top, w as i32 - left, h as i32 - top)
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_decouple(
     ref_b: &BandI16,
     dis_b: &BandI16,
@@ -854,7 +852,7 @@ fn adm_decouple(
             {
                 #[cfg(feature = "avx512")]
                 let j_mid = if let Some(token) = v4x_token() {
-                    adm_decouple_row_v4x(
+                    adm_decouple_row_v4x_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -881,7 +879,7 @@ fn adm_decouple(
                 #[cfg(not(feature = "avx512"))]
                 let j_mid = left as usize;
                 if let Some(token) = v3_token() {
-                    adm_decouple_row_v3(
+                    adm_decouple_row_v3_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -910,7 +908,7 @@ fn adm_decouple(
             #[cfg(target_arch = "aarch64")]
             {
                 if let Some(token) = neon_token() {
-                    adm_decouple_row_neon(
+                    adm_decouple_row_neon_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -1021,18 +1019,18 @@ fn adm_decouple(
 /// high bits of the original — arithmetic >>15 on i64 lanes given products
 /// stay below 2^49.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn shift15_64b_v3(_token: X64V3Token, a: __m256i) -> __m256i {
+#[attune]
+fn shift15_64b_v3_t(_token: X64V3Token, a: __m256i) -> __m256i {
     _mm256_add_epi64(
         _mm256_srli_epi64(a, 15),
         _mm256_and_si256(a, _mm256_set1_epi64x(0xFFFE000000000000u64 as i64)),
     )
 }
 
-/// Safe lane-gather on an i32 table (see cambi's gather_u16_v3).
+/// Safe lane-gather on an i32 table (see cambi's gather_u16_v3_t).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn gather_i32_v3(_token: X64V3Token, table: &[i32], idx: __m256i) -> __m256i {
+#[attune]
+fn gather_i32_v3_t(_token: X64V3Token, table: &[i32], idx: __m256i) -> __m256i {
     let mut a = [0i32; 8];
     _mm256_storeu_si256(a8m::<i32, 8>(&mut a), idx);
     _mm256_setr_epi32(
@@ -1051,9 +1049,9 @@ fn gather_i32_v3(_token: X64V3Token, table: &[i32], idx: __m256i) -> __m256i {
 /// Vector loop is bounded by `j + 8 <= right` (C iterates to `right_mod8`
 /// which can overshoot `right` into border columns that are never read).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_row_v3(
+fn adm_decouple_row_v3_t(
     _token: X64V3Token,
     ref_h: &[i16],
     ref_v: &[i16],
@@ -1134,9 +1132,9 @@ fn adm_decouple_row_v3(
             _mm256_set1_epi32(-1),
         );
 
-        let oh_div = gather_i32_v3(_token, &div[..], _mm256_add_epi32(oh, const_32768));
-        let ov_div = gather_i32_v3(_token, &div[..], _mm256_add_epi32(ov, const_32768));
-        let od_div = gather_i32_v3(_token, &div[..], _mm256_add_epi32(od, const_32768));
+        let oh_div = gather_i32_v3_t(_token, &div[..], _mm256_add_epi32(oh, const_32768));
+        let ov_div = gather_i32_v3_t(_token, &div[..], _mm256_add_epi32(ov, const_32768));
+        let od_div = gather_i32_v3_t(_token, &div[..], _mm256_add_epi32(od, const_32768));
 
         let mut kh_lo = _mm256_mul_epi32(oh_div, th);
         let mut kh_hi = _mm256_mul_epi32(_mm256_srli_epi64(oh_div, 32), _mm256_srli_epi64(th, 32));
@@ -1145,12 +1143,12 @@ fn adm_decouple_row_v3(
         let mut kd_lo = _mm256_mul_epi32(od_div, td);
         let mut kd_hi = _mm256_mul_epi32(_mm256_srli_epi64(od_div, 32), _mm256_srli_epi64(td, 32));
 
-        kh_lo = shift15_64b_v3(_token, _mm256_add_epi64(kh_lo, const_16384_64));
-        kh_hi = shift15_64b_v3(_token, _mm256_add_epi64(kh_hi, const_16384_64));
-        kv_lo = shift15_64b_v3(_token, _mm256_add_epi64(kv_lo, const_16384_64));
-        kv_hi = shift15_64b_v3(_token, _mm256_add_epi64(kv_hi, const_16384_64));
-        kd_lo = shift15_64b_v3(_token, _mm256_add_epi64(kd_lo, const_16384_64));
-        kd_hi = shift15_64b_v3(_token, _mm256_add_epi64(kd_hi, const_16384_64));
+        kh_lo = shift15_64b_v3_t(_token, _mm256_add_epi64(kh_lo, const_16384_64));
+        kh_hi = shift15_64b_v3_t(_token, _mm256_add_epi64(kh_hi, const_16384_64));
+        kv_lo = shift15_64b_v3_t(_token, _mm256_add_epi64(kv_lo, const_16384_64));
+        kv_hi = shift15_64b_v3_t(_token, _mm256_add_epi64(kv_hi, const_16384_64));
+        kd_lo = shift15_64b_v3_t(_token, _mm256_add_epi64(kd_lo, const_16384_64));
+        kd_hi = shift15_64b_v3_t(_token, _mm256_add_epi64(kd_hi, const_16384_64));
 
         let mut tmp_kh = _mm256_or_si256(
             _mm256_and_si256(kh_lo, lo32_64),
@@ -1326,10 +1324,10 @@ fn adm_decouple_row_v3(
     }
 }
 
-/// Safe lane-gather on an i32 table (see cambi's gather_u16_v3).
+/// Safe lane-gather on an i32 table (see cambi's gather_u16_v3_t).
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[rite]
-fn gather_i32_neon(_token: NeonToken, table: &[i32], idx: int32x4_t) -> int32x4_t {
+#[attune]
+fn gather_i32_neon_t(_token: NeonToken, table: &[i32], idx: int32x4_t) -> int32x4_t {
     let mut a = [0i32; 4];
     vst1q_s32(a8m::<i32, 4>(&mut a), idx);
     vld1q_s32(a8::<i32, 4>(&[
@@ -1340,16 +1338,16 @@ fn gather_i32_neon(_token: NeonToken, table: &[i32], idx: int32x4_t) -> int32x4_
     ]))
 }
 
-/// NEON port of `adm_decouple_row_v3`, 4 lanes per iteration. The
+/// NEON port of `adm_decouple_row_v3_t`, 4 lanes per iteration. The
 /// `madd_epi16` dot-products (oh*th + ov*tv etc.) are `vpadalq_s16` on
 /// `vzip`-interleaved i16 pairs — matching the i32 lane results for i16
 /// inputs. `vshrq_n_s64` is a true arithmetic >>15 (the srli+mask trick the
 /// AVX2 needs). i32->i16 saturating pack = `vqmovn_s32`, matching
 /// `packs_epi32`.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_row_neon(
+fn adm_decouple_row_neon_t(
     _token: NeonToken,
     ref_h: &[i16],
     ref_v: &[i16],
@@ -1426,9 +1424,9 @@ fn adm_decouple_row_neon(
         }
         let angle_mask = vld1q_s32(a8::<i32, 4>(&angle_flag));
 
-        let oh_div = gather_i32_neon(_token, &div[..], vaddq_s32(oh, const_32768));
-        let ov_div = gather_i32_neon(_token, &div[..], vaddq_s32(ov, const_32768));
-        let od_div = gather_i32_neon(_token, &div[..], vaddq_s32(od, const_32768));
+        let oh_div = gather_i32_neon_t(_token, &div[..], vaddq_s32(oh, const_32768));
+        let ov_div = gather_i32_neon_t(_token, &div[..], vaddq_s32(ov, const_32768));
+        let od_div = gather_i32_neon_t(_token, &div[..], vaddq_s32(od, const_32768));
 
         // (div[o] * t + 16384) >> 15 on i64 lanes, then low-32 repack.
         let pack_i64 = |lo: int64x2_t, hi: int64x2_t| {
@@ -1567,9 +1565,9 @@ fn adm_decouple_row_neon(
 /// `forbid(unsafe_code)`). The i32→i16 pack uses `permutexvar_epi16`
 /// truncation — matching the scalar `as i16` and C's AVX-512 path.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_row_v4x(
+fn adm_decouple_row_v4x_t(
     _token: X64V4xToken,
     ref_h: &[i16],
     ref_v: &[i16],
@@ -1802,8 +1800,8 @@ fn get_best15_from32(temp: u32) -> (u16, i32) {
 /// Direct port of `sra_epi64`: variable arithmetic >> on i64 lanes —
 /// logical srlv plus the sign mask shifted into place.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn sra_epi64_v3(_token: X64V3Token, a: __m256i, mask: __m256i) -> __m256i {
+#[attune]
+fn sra_epi64_v3_t(_token: X64V3Token, a: __m256i, mask: __m256i) -> __m256i {
     let rl_shift = _mm256_srlv_epi64(a, mask);
     let signmask = _mm256_cmpgt_epi64(_mm256_setzero_si256(), a);
     let newmask = _mm256_sub_epi64(_mm256_set1_epi64x(64), mask);
@@ -1812,16 +1810,16 @@ fn sra_epi64_v3(_token: X64V3Token, a: __m256i, mask: __m256i) -> __m256i {
 
 /// Direct port of `blend(a, b, mask)`: select a where mask is set.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn blend_v3(_token: X64V3Token, a: __m256i, b: __m256i, mask: __m256i) -> __m256i {
+#[attune]
+fn blend_v3_t(_token: X64V3Token, a: __m256i, b: __m256i, mask: __m256i) -> __m256i {
     _mm256_or_si256(_mm256_and_si256(mask, a), _mm256_andnot_si256(mask, b))
 }
 
 /// Narrow each i64 lane to its low 32 bits; C stores to an i64 array and
 /// casts each element to int — identical to keeping the even dwords.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn pack_i64x4x2_i32_v3(_token: X64V3Token, lo: __m256i, hi: __m256i) -> __m256i {
+#[attune]
+fn pack_i64x4x2_i32_v3_t(_token: X64V3Token, lo: __m256i, hi: __m256i) -> __m256i {
     let idx = _mm256_setr_epi32(0, 2, 4, 6, 0, 0, 0, 0);
     let l = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(lo, idx));
     let h = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(hi, idx));
@@ -1834,9 +1832,9 @@ fn pack_i64x4x2_i32_v3(_token: X64V3Token, lo: __m256i, hi: __m256i) -> __m256i 
 /// lzcnt in AVX2 — C extracts to scalar the same way). Vector loop bounded by
 /// `j + 8 <= j_end`; scalar tail identical to C's `right_mod8..right`.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_s123_row_v3(
+fn adm_decouple_s123_row_v3_t(
     _token: X64V3Token,
     ref_h: &[i32],
     ref_v: &[i32],
@@ -2016,12 +2014,12 @@ fn adm_decouple_s123_row_v3(
         let mask_kh = _mm256_cmpgt_epi32(const_32768_epi32, abs_oh);
         let mask_kv = _mm256_cmpgt_epi32(const_32768_epi32, abs_ov);
         let mask_kd = _mm256_cmpgt_epi32(const_32768_epi32, abs_od);
-        kh_msb_v = blend_v3(_token, abs_oh, kh_msb_v, mask_kh);
-        kv_msb_v = blend_v3(_token, abs_ov, kv_msb_v, mask_kv);
-        kd_msb_v = blend_v3(_token, abs_od, kd_msb_v, mask_kd);
-        let kh_shift = blend_v3(_token, _mm256_setzero_si256(), kh_shift, mask_kh);
-        let kv_shift = blend_v3(_token, _mm256_setzero_si256(), kv_shift, mask_kv);
-        let kd_shift = blend_v3(_token, _mm256_setzero_si256(), kd_shift, mask_kd);
+        kh_msb_v = blend_v3_t(_token, abs_oh, kh_msb_v, mask_kh);
+        kv_msb_v = blend_v3_t(_token, abs_ov, kv_msb_v, mask_kv);
+        kd_msb_v = blend_v3_t(_token, abs_od, kd_msb_v, mask_kd);
+        let kh_shift = blend_v3_t(_token, _mm256_setzero_si256(), kh_shift, mask_kh);
+        let kv_shift = blend_v3_t(_token, _mm256_setzero_si256(), kv_shift, mask_kv);
+        let kd_shift = blend_v3_t(_token, _mm256_setzero_si256(), kd_shift, mask_kd);
 
         // tmp_k = (div[msb+32768] * t * sign + (1<<(14+shift))) >> (15+shift),
         // per i64 half; o == 0 lanes take 32768.
@@ -2058,7 +2056,7 @@ fn adm_decouple_s123_row_v3(
         .iter()
         .enumerate()
         {
-            let div_g = gather_i32_v3(_token, &div[..], *div_idx);
+            let div_g = gather_i32_v3_t(_token, &div[..], *div_idx);
             let one_shift =
                 _mm256_sllv_epi32(const_1_epi32, _mm256_add_epi32(const_14_epi32, *shift));
             let fifteen = _mm256_add_epi32(const_15_epi32, *shift);
@@ -2066,7 +2064,7 @@ fn adm_decouple_s123_row_v3(
                 _mm256_cvtepi32_epi64(_mm256_castsi256_si128(div_g)),
                 _mm256_mul_epi32(*t_lo, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(*sign))),
             );
-            cond_lo = sra_epi64_v3(
+            cond_lo = sra_epi64_v3_t(
                 _token,
                 _mm256_add_epi64(
                     cond_lo,
@@ -2075,7 +2073,7 @@ fn adm_decouple_s123_row_v3(
                 _mm256_cvtepi32_epi64(_mm256_castsi256_si128(fifteen)),
             );
             let mask_lo = _mm256_cmpeq_epi64(*o_lo, const_0_epi64);
-            tmp_k[k] = blend_v3(_token, const_32768_epi64, cond_lo, mask_lo);
+            tmp_k[k] = blend_v3_t(_token, const_32768_epi64, cond_lo, mask_lo);
             let mut cond_hi = _mm256_mul_epi32(
                 _mm256_cvtepi32_epi64(_mm256_extracti128_si256(div_g, 1)),
                 _mm256_mul_epi32(
@@ -2083,7 +2081,7 @@ fn adm_decouple_s123_row_v3(
                     _mm256_cvtepi32_epi64(_mm256_extracti128_si256(*sign, 1)),
                 ),
             );
-            cond_hi = sra_epi64_v3(
+            cond_hi = sra_epi64_v3_t(
                 _token,
                 _mm256_add_epi64(
                     cond_hi,
@@ -2092,18 +2090,18 @@ fn adm_decouple_s123_row_v3(
                 _mm256_cvtepi32_epi64(_mm256_extracti128_si256(fifteen, 1)),
             );
             let mask_hi = _mm256_cmpeq_epi64(*o_hi, const_0_epi64);
-            tmp_k[k + 3] = blend_v3(_token, const_32768_epi64, cond_hi, mask_hi);
+            tmp_k[k + 3] = blend_v3_t(_token, const_32768_epi64, cond_hi, mask_hi);
         }
 
         // kh/kv/kd clamped to [0, 32768].
         let clamp = |_token: X64V3Token, tmp: __m256i| {
-            let t = blend_v3(
+            let t = blend_v3_t(
                 _token,
                 const_32768_epi64,
                 tmp,
                 _mm256_cmpgt_epi64(tmp, const_32768_epi64),
             );
-            blend_v3(
+            blend_v3_t(
                 _token,
                 const_0_epi64,
                 t,
@@ -2143,13 +2141,13 @@ fn adm_decouple_s123_row_v3(
             _mm256_add_epi64(_mm256_mul_epi32(kd_hi, od_hi), const_16384_epi64),
             15,
         );
-        let mut rst_h32 = pack_i64x4x2_i32_v3(_token, rst_h_lo, rst_h_hi);
-        let mut rst_v32 = pack_i64x4x2_i32_v3(_token, rst_v_lo, rst_v_hi);
-        let mut rst_d32 = pack_i64x4x2_i32_v3(_token, rst_d_lo, rst_d_hi);
+        let mut rst_h32 = pack_i64x4x2_i32_v3_t(_token, rst_h_lo, rst_h_hi);
+        let mut rst_v32 = pack_i64x4x2_i32_v3_t(_token, rst_v_lo, rst_v_hi);
+        let mut rst_d32 = pack_i64x4x2_i32_v3_t(_token, rst_d_lo, rst_d_hi);
 
-        let kh_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3(_token, kh_lo, kh_hi));
-        let kv_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3(_token, kv_lo, kv_hi));
-        let kd_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3(_token, kd_lo, kd_hi));
+        let kh_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3_t(_token, kh_lo, kh_hi));
+        let kv_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3_t(_token, kv_lo, kv_hi));
+        let kd_f = _mm256_cvtepi32_ps(pack_i64x4x2_i32_v3_t(_token, kd_lo, kd_hi));
         let rst_h_f = _mm256_mul_ps(
             _mm256_mul_ps(kh_f, inv_32768_f),
             _mm256_mul_ps(_mm256_cvtepi32_ps(oh_epi32), inv_64_f),
@@ -2185,10 +2183,10 @@ fn adm_decouple_s123_row_v3(
         macro_rules! apply_gain {
             ($rst_lo:ident, $rst_hi:ident, $rst32:ident, $t_lo:ident, $t_hi:ident, $rst_f:ident) => {{
                 let (g_lo, g_hi) = gain_i64!($rst32);
-                let min_lo = blend_v3(_token, g_lo, $t_lo, _mm256_cmpgt_epi64($t_lo, g_lo));
-                let min_hi = blend_v3(_token, g_hi, $t_hi, _mm256_cmpgt_epi64($t_hi, g_hi));
-                let max_lo = blend_v3(_token, g_lo, $t_lo, _mm256_cmpgt_epi64(g_lo, $t_lo));
-                let max_hi = blend_v3(_token, g_hi, $t_hi, _mm256_cmpgt_epi64(g_hi, $t_hi));
+                let min_lo = blend_v3_t(_token, g_lo, $t_lo, _mm256_cmpgt_epi64($t_lo, g_lo));
+                let min_hi = blend_v3_t(_token, g_hi, $t_hi, _mm256_cmpgt_epi64($t_hi, g_hi));
+                let max_lo = blend_v3_t(_token, g_lo, $t_lo, _mm256_cmpgt_epi64(g_lo, $t_lo));
+                let max_hi = blend_v3_t(_token, g_hi, $t_hi, _mm256_cmpgt_epi64(g_hi, $t_hi));
                 let f_lo = _mm256_cvtps_pd(_mm256_castps256_ps128($rst_f));
                 let f_hi = _mm256_cvtps_pd(_mm256_extractf128_ps($rst_f, 1));
                 let mask_gt_lo = _mm256_and_si256(
@@ -2207,11 +2205,11 @@ fn adm_decouple_s123_row_v3(
                     angle_nz_hi,
                     _mm256_castpd_si256(_mm256_cmp_pd::<_CMP_LT_OS>(f_hi, const_0_pd)),
                 );
-                $rst_lo = blend_v3(_token, min_lo, $rst_lo, mask_gt_lo);
-                $rst_hi = blend_v3(_token, min_hi, $rst_hi, mask_gt_hi);
-                $rst_lo = blend_v3(_token, max_lo, $rst_lo, mask_lt_lo);
-                $rst_hi = blend_v3(_token, max_hi, $rst_hi, mask_lt_hi);
-                $rst32 = pack_i64x4x2_i32_v3(_token, $rst_lo, $rst_hi);
+                $rst_lo = blend_v3_t(_token, min_lo, $rst_lo, mask_gt_lo);
+                $rst_hi = blend_v3_t(_token, min_hi, $rst_hi, mask_gt_hi);
+                $rst_lo = blend_v3_t(_token, max_lo, $rst_lo, mask_lt_lo);
+                $rst_hi = blend_v3_t(_token, max_hi, $rst_hi, mask_lt_hi);
+                $rst32 = pack_i64x4x2_i32_v3_t(_token, $rst_lo, $rst_hi);
             }};
         }
         apply_gain!(rst_h_lo, rst_h_hi, rst_h32, th_lo, th_hi, rst_h_f);
@@ -2232,16 +2230,16 @@ fn adm_decouple_s123_row_v3(
     }
 }
 
-/// NEON port of `adm_decouple_s123_row_v3`, 4 lanes per iteration. i64 lanes
+/// NEON port of `adm_decouple_s123_row_v3_t`, 4 lanes per iteration. i64 lanes
 /// are native int64x2 pairs: `vshlq_s64` replaces `sra_epi64`'s srlv+signmask,
 /// `vcgtq_s64`/`vceqq_s64`/`vbslq_s64` the cmpgt/blend sequences, and
 /// `vcvtq_s64_f64` the per-lane f64->i64 extraction (`as i64` semantics:
 /// truncate-toward-zero with saturation). The get_best15_from32 / angle_flag
 /// extractions stay scalar exactly as in the AVX2 port.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_s123_row_neon(
+fn adm_decouple_s123_row_neon_t(
     _token: NeonToken,
     ref_h: &[i32],
     ref_v: &[i32],
@@ -2425,7 +2423,7 @@ fn adm_decouple_s123_row_neon(
         .iter()
         .enumerate()
         {
-            let div_g = gather_i32_neon(_token, &div[..], *div_idx);
+            let div_g = gather_i32_neon_t(_token, &div[..], *div_idx);
             for (half, (t, o, sg, dg)) in [
                 (
                     0usize,
@@ -2555,9 +2553,9 @@ fn adm_decouple_s123_row_neon(
 /// uses `_mm512_cvttpd_epi64` (truncation) to match the scalar `as i64`/v3
 /// path rather than C's `_mm512_cvtpd_epi64` round-to-nearest.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn adm_decouple_s123_row_v4x(
+fn adm_decouple_s123_row_v4x_t(
     token: X64V4xToken,
     ref_h: &[i32],
     ref_v: &[i32],
@@ -2881,7 +2879,7 @@ fn adm_decouple_s123_row_v4x(
     j
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_decouple_s123(
     ref_b: &BandI32,
     dis_b: &BandI32,
@@ -2902,7 +2900,7 @@ fn adm_decouple_s123(
             {
                 #[cfg(feature = "avx512")]
                 let j_mid = if let Some(token) = v4x_token() {
-                    adm_decouple_s123_row_v4x(
+                    adm_decouple_s123_row_v4x_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -2929,7 +2927,7 @@ fn adm_decouple_s123(
                 #[cfg(not(feature = "avx512"))]
                 let j_mid = left as usize;
                 if let Some(token) = v3_token() {
-                    adm_decouple_s123_row_v3(
+                    adm_decouple_s123_row_v3_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -2958,7 +2956,7 @@ fn adm_decouple_s123(
             #[cfg(target_arch = "aarch64")]
             {
                 if let Some(token) = neon_token() {
-                    adm_decouple_s123_row_neon(
+                    adm_decouple_s123_row_neon_t(
                         token,
                         &ref_b.h,
                         &ref_b.v,
@@ -3102,7 +3100,7 @@ fn adm_csf_i16(
             if let Some(t) = v3_token() {
                 while j + 8 <= right {
                     let idx = i as usize * stride + j as usize;
-                    adm_csf_i16_v3(
+                    adm_csf_i16_v3_t(
                         t,
                         a8(&src_p[idx..idx + 8]),
                         i_rfactor[theta] as i32,
@@ -3119,7 +3117,7 @@ fn adm_csf_i16(
                 let idx = i as usize * stride + j as usize;
                 let mut d16 = [0i16; 16];
                 let mut f16 = [0i16; 16];
-                archmage::incant!(
+                archmage::attuned!(
                     adm_csf_i16_simd(
                         &src_p[idx..idx + 16],
                         i_rfactor[theta] as i32,
@@ -3128,7 +3126,7 @@ fn adm_csf_i16(
                         &mut d16,
                         &mut f16
                     ),
-                    [v3, neon, wasm128, scalar]
+                    [_v3, _neon, _wasm128, _scalar]
                 );
                 dst_p[idx..idx + 16].copy_from_slice(&d16);
                 flt_p[idx..idx + 16].copy_from_slice(&f16);
@@ -3147,7 +3145,7 @@ fn adm_csf_i16(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(i16x16, i32x8))]
 fn adm_csf_i16_simd(
     token: Token,
     src: &[i16],
@@ -3157,13 +3155,13 @@ fn adm_csf_i16_simd(
     dst: &mut [i16; 16],
     flt: &mut [i16; 16],
 ) {
-    let s = i16x16::load(token, src[..16].try_into().unwrap());
+    let s = i16x16::load_t(token, src[..16].try_into().unwrap());
     let sl = s.widen_low();
     let sh = s.widen_high();
-    let rf = i32x8::splat(token, rfactor);
-    let add = i32x8::splat(token, shiftsadd);
-    let c4369 = i32x8::splat(token, 4369);
-    let a2048 = i32x8::splat(token, 2048);
+    let rf = i32x8::splat_t(token, rfactor);
+    let add = i32x8::splat_t(token, shiftsadd);
+    let c4369 = i32x8::splat_t(token, 4369);
+    let a2048 = i32x8::splat_t(token, 2048);
     let vtl = (rf * sl + add)
         .shr_arithmetic_uniform(shift)
         .shl_uniform(16)
@@ -3185,8 +3183,8 @@ fn adm_csf_i16_simd(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
-fn csf_den_scale_row_v3(_token: X64V3Token, src: &[i16]) -> (u64, usize) {
+#[attune]
+fn csf_den_scale_row_v3_t(_token: X64V3Token, src: &[i16]) -> (u64, usize) {
     let mut acc_lo = _mm256_setzero_si256();
     let mut acc_hi = _mm256_setzero_si256();
     let mut j = 0usize;
@@ -3207,9 +3205,9 @@ fn csf_den_scale_row_v3(_token: X64V3Token, src: &[i16]) -> (u64, usize) {
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
+#[attune]
 #[allow(clippy::too_many_arguments)]
-fn csf_den_s123_row_v3(
+fn csf_den_s123_row_v3_t(
     _token: X64V3Token,
     src: &[i32],
     add_sq: i64,
@@ -3235,12 +3233,12 @@ fn csf_den_s123_row_v3(
     (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x as u64)), j)
 }
 
-/// NEON port of `csf_den_scale_row_v3`: u64 cubes of |i16| rows. `v` fits
+/// NEON port of `csf_den_scale_row_v3_t`: u64 cubes of |i16| rows. `v` fits
 /// u16 so v^2 fits u32 — `vmull_u32` twice per pair, `vmovn_u64` recovering
 /// the (always exact) low 32 bits of the square for the second multiply.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn csf_den_scale_row_neon(_token: NeonToken, src: &[i16]) -> (u64, usize) {
+#[attune(import_intrinsics)]
+fn csf_den_scale_row_neon_t(_token: NeonToken, src: &[i16]) -> (u64, usize) {
     let mut acc0 = vdupq_n_u64(0);
     let mut acc1 = vdupq_n_u64(0);
     let mut j = 0usize;
@@ -3264,11 +3262,11 @@ fn csf_den_scale_row_neon(_token: NeonToken, src: &[i16]) -> (u64, usize) {
     (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x)), j)
 }
 
-/// NEON port of `csf_den_s123_row_v3`: `vmull_u32` on the unsigned |i32|
+/// NEON port of `csf_den_s123_row_v3_t`: `vmull_u32` on the unsigned |i32|
 /// halves reproduces `mul_epu32` (low-32-of-i64-lane multiply) exactly.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn csf_den_s123_row_neon(
+#[attune(import_intrinsics)]
+fn csf_den_s123_row_neon_t(
     _token: NeonToken,
     src: &[i32],
     add_sq: i64,
@@ -3305,8 +3303,8 @@ fn csf_den_s123_row_neon(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
-fn adm_csf_i16_v3(
+#[attune]
+fn adm_csf_i16_v3_t(
     _token: X64V3Token,
     src: &[i16; 8],
     rfactor: i32,
@@ -3342,9 +3340,9 @@ fn adm_csf_i16_v3(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
+#[attune]
 #[allow(clippy::too_many_arguments)]
-fn i4_adm_csf_v3(
+fn i4_adm_csf_v3_t(
     _token: X64V3Token,
     src: &[i32; 8],
     rfactor: i32,
@@ -3378,13 +3376,13 @@ fn i4_adm_csf_v3(
     _mm256_storeu_si256(a8m(&mut flt[..]), fpacked);
 }
 
-/// NEON port of `i4_adm_csf_v3`, 4 i32 lanes per call instead of 8:
+/// NEON port of `i4_adm_csf_v3_t`, 4 i32 lanes per call instead of 8:
 /// `vmull_s32` covers the i64 products, and the i64x2 pairs' low halves
 /// repack into i32 lanes with `vuzp1q_s32` — which makes srli vs srai
 /// indistinguishable (both place the same source bits in lanes 0..31).
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn i4_adm_csf_neon(
+#[attune(import_intrinsics)]
+fn i4_adm_csf_neon_t(
     _token: NeonToken,
     src: &[i32; 4],
     rfactor: i32,
@@ -3416,7 +3414,7 @@ fn i4_adm_csf_neon(
     vst1q_s32(a8m(&mut flt[..]), f);
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_csf_i32(
     src: &BandI32,
     dst: &mut BandI32,
@@ -3447,7 +3445,7 @@ fn adm_csf_i32(
             if let Some(t) = v3_token() {
                 while j + 8 <= right {
                     let idx = i as usize * stride + j as usize;
-                    i4_adm_csf_v3(
+                    i4_adm_csf_v3_t(
                         t,
                         a8(&src_p[idx..idx + 8]),
                         rf as i32,
@@ -3463,7 +3461,7 @@ fn adm_csf_i32(
             if let Some(t) = neon_token() {
                 while j + 4 <= right {
                     let idx = i as usize * stride + j as usize;
-                    i4_adm_csf_neon(
+                    i4_adm_csf_neon_t(
                         t,
                         a8(&src_p[idx..idx + 4]),
                         rf as i32,
@@ -3486,7 +3484,7 @@ fn adm_csf_i32(
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_csf_den_scale(
     src: &BandI16,
     w: usize,
@@ -3523,13 +3521,13 @@ fn adm_csf_den_scale(
             let done = 0usize;
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(t) = v3_token() {
-                let (sum, d) = csf_den_scale_row_v3(t, row);
+                let (sum, d) = csf_den_scale_row_v3_t(t, row);
                 inner = sum;
                 done = d;
             }
             #[cfg(all(feature = "simd", target_arch = "aarch64"))]
             if let Some(t) = neon_token() {
-                let (sum, d) = csf_den_scale_row_neon(t, row);
+                let (sum, d) = csf_den_scale_row_neon_t(t, row);
                 inner += sum;
                 done = d;
             }
@@ -3554,7 +3552,7 @@ fn adm_csf_den_scale(
         + powf_add
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_csf_den_s123(
     src: &BandI32,
     scale: usize,
@@ -3586,7 +3584,7 @@ fn adm_csf_den_s123(
             let done = 0usize;
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(t) = v3_token() {
-                let (sum, d) = csf_den_s123_row_v3(
+                let (sum, d) = csf_den_s123_row_v3_t(
                     t,
                     row,
                     add_shift_sq[scale - 1] as i64,
@@ -3599,7 +3597,7 @@ fn adm_csf_den_s123(
             }
             #[cfg(all(feature = "simd", target_arch = "aarch64"))]
             if let Some(t) = neon_token() {
-                let (sum, d) = csf_den_s123_row_neon(
+                let (sum, d) = csf_den_s123_row_neon_t(
                     t,
                     row,
                     add_shift_sq[scale - 1] as i64,
@@ -3752,7 +3750,7 @@ fn adm_cm_i16(
             #[cfg(feature = "simd")]
             while jj + 16 <= len {
                 let mut xbuf = [[0i32; 16]; 3];
-                archmage::incant!(
+                archmage::attuned!(
                     adm_cm_i16_front(
                         &win[jj..jj + 16],
                         &[
@@ -3774,13 +3772,13 @@ fn adm_cm_i16(
                         shift_xsub,
                         &mut xbuf
                     ),
-                    [v3, neon, wasm128, scalar]
+                    [_v3, _neon, _wasm128, _scalar]
                 );
                 #[allow(unused_mut)]
                 let mut used_simd = false;
                 #[cfg(target_arch = "x86_64")]
                 if let Some(token) = v3_token() {
-                    cm_accum16_v3(
+                    cm_accum16_v3_t(
                         token,
                         &xbuf,
                         add_shift_xsq,
@@ -3793,7 +3791,7 @@ fn adm_cm_i16(
                 }
                 #[cfg(target_arch = "aarch64")]
                 if let Some(token) = neon_token() {
-                    cm_accum16_neon(
+                    cm_accum16_neon_t(
                         token,
                         &xbuf,
                         add_shift_xsq,
@@ -3896,8 +3894,8 @@ fn adm_cm_i16(
 /// of x_sq matches the scalar `as i32` cast exactly. Returns (lo, hi) qword
 /// accumulators covering x lanes {0,2,4,6} and {1,3,5,7}.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn cm_accum_v3(
+#[attune]
+fn cm_accum_v3_t(
     _token: X64V3Token,
     x: __m256i,
     add_sq: i64,
@@ -3927,11 +3925,11 @@ fn cm_accum_v3(
     (cub_lo, cub_hi)
 }
 
-/// 16-wide driver for `cm_accum_v3` over the xbuf produced by
+/// 16-wide driver for `cm_accum_v3_t` over the xbuf produced by
 /// `adm_cm_i16_front`; reduces both qword accumulators into `inner`.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn cm_accum16_v3(
+#[attune(import_intrinsics)]
+fn cm_accum16_v3_t(
     token: X64V3Token,
     xbuf: &[[i32; 16]; 3],
     add_shift_xsq: [i64; 3],
@@ -3945,7 +3943,7 @@ fn cm_accum16_v3(
         let mut acc_hi = _mm256_setzero_si256();
         for xc in xbuf[t].as_chunks::<8>().0 {
             let x = _mm256_loadu_si256(a8::<i32, 8>(xc));
-            let (lo, hi) = cm_accum_v3(
+            let (lo, hi) = cm_accum_v3_t(
                 token,
                 x,
                 add_shift_xsq[t],
@@ -3971,9 +3969,9 @@ fn cm_accum16_v3(
 /// mirror I4_ADM_CM_THRESH_S_I_J_avx256 / I4_ADM_CM_ACCUM_ROUND_avx256.
 /// Returns the per-band row contribution and the count of pixels processed.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn i4_adm_cm_row_v3(
+fn i4_adm_cm_row_v3_t(
     _token: X64V3Token,
     win: &[i32],
     ang_rows: &[&[i32]; 3],
@@ -4042,13 +4040,13 @@ fn i4_adm_cm_row_v3(
     (inner, j)
 }
 
-/// NEON port of `cm_accum_v3`: x is already abs/sub/max-clamped so `vmull_s32`
+/// NEON port of `cm_accum_v3_t`: x is already abs/sub/max-clamped so `vmull_s32`
 /// sees non-negative i32 lanes; the variable i64 shifts are native
 /// `vshlq_s64` (negative count = arithmetic right shift, matching `>>`).
 /// Returns the (lo, hi) i64x2 accumulators for lanes {0,1} and {2,3}.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[rite]
-fn cm_accum_neon(
+#[attune]
+fn cm_accum_neon_t(
     _token: NeonToken,
     x: int32x4_t,
     add_sq: i64,
@@ -4073,11 +4071,11 @@ fn cm_accum_neon(
     (cub_lo, cub_hi)
 }
 
-/// NEON port of `cm_accum16_v3`: 4-wide `cm_accum_neon` over `xbuf`,
+/// NEON port of `cm_accum16_v3_t`: 4-wide `cm_accum_neon_t` over `xbuf`,
 /// reducing both i64x2 accumulators into `inner`.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn cm_accum16_neon(
+#[attune(import_intrinsics)]
+fn cm_accum16_neon_t(
     token: NeonToken,
     xbuf: &[[i32; 16]; 3],
     add_shift_xsq: [i64; 3],
@@ -4091,7 +4089,7 @@ fn cm_accum16_neon(
         let mut acc_hi = vdupq_n_s64(0);
         for xc in xbuf[t].chunks_exact(4) {
             let x = vld1q_s32(a8(&xc[..4]));
-            let (lo, hi) = cm_accum_neon(
+            let (lo, hi) = cm_accum_neon_t(
                 token,
                 x,
                 add_shift_xsq[t],
@@ -4109,14 +4107,14 @@ fn cm_accum16_neon(
     }
 }
 
-/// NEON port of `i4_adm_cm_row_v3`: i64 lanes as pairs of i64x2. AArch64 has
+/// NEON port of `i4_adm_cm_row_v3_t`: i64 lanes as pairs of i64x2. AArch64 has
 /// native `vabsq_s64`/`vcgtq_s64`/`vcltq_s64`/`vshlq_s64` for the abs, compare
 /// and arithmetic-shift steps AVX2 emulates with mul_epi32(-1)/masks/srli.
 /// Returns the per-band row contribution and the count of pixels processed.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn i4_adm_cm_row_neon(
+fn i4_adm_cm_row_neon_t(
     _token: NeonToken,
     win: &[i32],
     ang_rows: &[&[i32]; 3],
@@ -4192,9 +4190,9 @@ fn i4_adm_cm_row_neon(
 /// ~10-instruction emulated sequences in the v3 kernel (C's version measured
 /// ~2.7x faster than its AVX2 on Zen4).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn i4_adm_cm_row_v4x(
+fn i4_adm_cm_row_v4x_t(
     _token: X64V4xToken,
     win: &[i32],
     ang_rows: &[&[i32]; 3],
@@ -4254,7 +4252,7 @@ fn i4_adm_cm_row_v4x(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(i16x16, i32x8))]
 fn adm_cm_i16_front(
     token: Token,
     win: &[i32],
@@ -4265,13 +4263,13 @@ fn adm_cm_i16_front(
     shift_xsub: [i32; 3],
     x_out: &mut [[i32; 16]; 3],
 ) {
-    let mut thr_l = i32x8::load(token, win[..8].try_into().unwrap());
-    let mut thr_h = i32x8::load(token, win[8..16].try_into().unwrap());
-    let c15 = i32x8::splat(token, ONE_BY_15);
-    let a2048 = i32x8::splat(token, 2048);
+    let mut thr_l = i32x8::load_t(token, win[..8].try_into().unwrap());
+    let mut thr_h = i32x8::load_t(token, win[8..16].try_into().unwrap());
+    let c15 = i32x8::splat_t(token, ONE_BY_15);
+    let a2048 = i32x8::splat_t(token, 2048);
     for t in 0..3 {
-        let a = i16x16::load(token, ang[t][..16].try_into().unwrap());
-        let f = i16x16::load(token, flt[t][..16].try_into().unwrap());
+        let a = i16x16::load_t(token, ang[t][..16].try_into().unwrap());
+        let f = i16x16::load_t(token, flt[t][..16].try_into().unwrap());
         let (al, ah) = (a.widen_low(), a.widen_high());
         let (fl, fh) = (f.widen_low(), f.widen_high());
         let cl = (c15 * al.abs() + a2048)
@@ -4286,20 +4284,20 @@ fn adm_cm_i16_front(
         thr_h += ch - fh;
     }
     for t in 0..3 {
-        let s = i16x16::load(token, src[t][..16].try_into().unwrap());
+        let s = i16x16::load_t(token, src[t][..16].try_into().unwrap());
         let (sl, sh) = (s.widen_low(), s.widen_high());
-        let rf = i32x8::splat(token, i_rfactor[t]);
+        let rf = i32x8::splat_t(token, i_rfactor[t]);
         let sub = shift_xsub[t] as u32;
         let xl = (rf * sl).abs() - thr_l.shl_uniform(sub);
         let xh = (rf * sh).abs() - thr_h.shl_uniform(sub);
-        let xl = xl.max(i32x8::zero(token));
-        let xh = xh.max(i32x8::zero(token));
+        let xl = xl.max(i32x8::zero_t(token));
+        let xh = xh.max(i32x8::zero_t(token));
         x_out[t][..8].copy_from_slice(&xl.to_array());
         x_out[t][8..16].copy_from_slice(&xh.to_array());
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_cm_i32(
     src: &BandI32,
     csf_f: &BandI32,
@@ -4389,7 +4387,7 @@ fn adm_cm_i32(
             let jj = 0usize;
             #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
             if let Some(token) = v4x_token() {
-                let (vec_inner, done) = i4_adm_cm_row_v4x(
+                let (vec_inner, done) = i4_adm_cm_row_v4x_t(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -4411,7 +4409,7 @@ fn adm_cm_i32(
             if jj == 0
                 && let Some(token) = v3_token()
             {
-                let (vec_inner, done) = i4_adm_cm_row_v3(
+                let (vec_inner, done) = i4_adm_cm_row_v3_t(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -4431,7 +4429,7 @@ fn adm_cm_i32(
             }
             #[cfg(all(feature = "simd", target_arch = "aarch64"))]
             if let Some(token) = neon_token() {
-                let (vec_inner, done) = i4_adm_cm_row_neon(
+                let (vec_inner, done) = i4_adm_cm_row_neon_t(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -4526,9 +4524,9 @@ fn adm_cm_i32(
 /// (srli | v & (-1<<s)) which equals an arithmetic shift while |accum| < 2^(64-s)
 /// — the same bound libvmaf's AVX2 relies on. Packed via permutevar8x32(0,2,4,6).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
+#[attune]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_vrow_v3(
+fn dwt2_s123_vrow_v3_t(
     _token: X64V3Token,
     s0: &[i32; 4],
     s1: &[i32; 4],
@@ -4571,9 +4569,9 @@ fn dwt2_s123_vrow_v3(
 /// when ind_x[k][j+q] = ind_x[k][j]+2q (interior rows only). The caller pads
 /// tmp buffers by 8 so the load stays in bounds; slack lanes are discarded.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane]
+#[attune]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_hrow_v3(
+fn dwt2_s123_hrow_v3_t(
     _token: X64V3Token,
     lo: &[i32],
     hi: &[i32],
@@ -4616,14 +4614,14 @@ fn dwt2_s123_hrow_v3(
     }
 }
 
-/// NEON port of `dwt2_s123_vrow_v3`: `vmlal_s32` is the i32 x i32 -> i64 MAC
+/// NEON port of `dwt2_s123_vrow_v3_t`: `vmlal_s32` is the i32 x i32 -> i64 MAC
 /// that `mul_epi32` provides on AVX2, and `vshlq_s64` with a negative count
 /// is a native arithmetic right shift — no srli+sign-mask emulation needed.
 /// The i64 -> i32 even-lane pack (`permutevar8x32(0,2,4,6)`) is `vuzp1q_s32`.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_vrow_neon(
+fn dwt2_s123_vrow_neon_t(
     _token: NeonToken,
     s0: &[i32; 4],
     s1: &[i32; 4],
@@ -4659,13 +4657,13 @@ fn dwt2_s123_vrow_neon(
     }
 }
 
-/// NEON port of `dwt2_s123_hrow_v3`: the unaligned 8-wide i32 loads are
+/// NEON port of `dwt2_s123_hrow_v3_t`: the unaligned 8-wide i32 loads are
 /// deinterleaved by `vld2q_s32`, whose even half is exactly the lanes
 /// `mul_epi32` consumed on AVX2.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_hrow_neon(
+fn dwt2_s123_hrow_neon_t(
     _token: NeonToken,
     lo: &[i32],
     hi: &[i32],
@@ -4713,9 +4711,9 @@ fn dwt2_s123_hrow_neon(
 /// `srl | (and mask)` emulation is exact on this value range, and AVX-512F
 /// has the real instruction.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_vrow_v4x<const SHIFT: u32>(
+fn dwt2_s123_vrow_v4x_t<const SHIFT: u32>(
     _token: X64V4xToken,
     s0: &[i32; 8],
     s1: &[i32; 8],
@@ -4764,9 +4762,9 @@ fn dwt2_s123_vrow_v4_dyn(
     hi_out: &mut [i32; 8],
 ) {
     match shift {
-        0 => dwt2_s123_vrow_v4x::<0>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
-        15 => dwt2_s123_vrow_v4x::<15>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
-        _ => dwt2_s123_vrow_v4x::<16>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        0 => dwt2_s123_vrow_v4x_t::<0>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        15 => dwt2_s123_vrow_v4x_t::<15>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        _ => dwt2_s123_vrow_v4x_t::<16>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
     }
 }
 
@@ -4775,9 +4773,9 @@ fn dwt2_s123_vrow_v4_dyn(
 /// outputs j..j+7 where ind_x[k][j+q] = ind_x[k][j]+2q (interior only). Same
 /// convention as `_v3` — the tmp buffers carry +16 i32 slack.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn dwt2_s123_hrow_v4x<const SHIFT: u32>(
+fn dwt2_s123_hrow_v4x_t<const SHIFT: u32>(
     _token: X64V4xToken,
     lo: &[i32],
     hi: &[i32],
@@ -4813,7 +4811,7 @@ fn dwt2_s123_hrow_v4x<const SHIFT: u32>(
     }
 }
 
-/// Runtime-shift shim for `dwt2_s123_hrow_v4x` — see `dwt2_s123_vrow_v4_dyn`.
+/// Runtime-shift shim for `dwt2_s123_hrow_v4x_t` — see `dwt2_s123_vrow_v4_dyn`.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
@@ -4835,13 +4833,13 @@ fn dwt2_s123_hrow_v4_dyn(
     d_out: &mut [i32; 8],
 ) {
     match shift {
-        0 => dwt2_s123_hrow_v4x::<0>(
+        0 => dwt2_s123_hrow_v4x_t::<0>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
-        15 => dwt2_s123_hrow_v4x::<15>(
+        15 => dwt2_s123_hrow_v4x_t::<15>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
-        _ => dwt2_s123_hrow_v4x::<16>(
+        _ => dwt2_s123_hrow_v4x_t::<16>(
             token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
         ),
     }
@@ -4888,7 +4886,7 @@ fn dwt2_s123_hscalar(
     out.d[idx] = ((acc + add_hp) >> shift_hp) as i32;
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn adm_dwt2_s123_combined(
     i4_ref_scale: &[i32],
     i4_dis_scale: &[i32],
@@ -4977,7 +4975,7 @@ fn adm_dwt2_s123_combined(
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
             while j + 4 <= w {
-                dwt2_s123_vrow_v3(
+                dwt2_s123_vrow_v3_t(
                     t,
                     a8(&i4_ref_scale[ind_y[i][0] as usize * ref_stride + j..][..4]),
                     a8(&i4_ref_scale[ind_y[i][1] as usize * ref_stride + j..][..4]),
@@ -4991,7 +4989,7 @@ fn adm_dwt2_s123_combined(
                     a8m(&mut tmplo_ref[j..j + 4]),
                     a8m(&mut tmphi_ref[j..j + 4]),
                 );
-                dwt2_s123_vrow_v3(
+                dwt2_s123_vrow_v3_t(
                     t,
                     a8(&i4_dis_scale[ind_y[i][0] as usize * dis_stride + j..][..4]),
                     a8(&i4_dis_scale[ind_y[i][1] as usize * dis_stride + j..][..4]),
@@ -5011,7 +5009,7 @@ fn adm_dwt2_s123_combined(
         #[cfg(all(feature = "simd", target_arch = "aarch64"))]
         if let Some(t) = neon_token() {
             while j + 4 <= w {
-                dwt2_s123_vrow_neon(
+                dwt2_s123_vrow_neon_t(
                     t,
                     a8(&i4_ref_scale[ind_y[i][0] as usize * ref_stride + j..][..4]),
                     a8(&i4_ref_scale[ind_y[i][1] as usize * ref_stride + j..][..4]),
@@ -5024,7 +5022,7 @@ fn adm_dwt2_s123_combined(
                     a8m(&mut tmplo_ref[j..j + 4]),
                     a8m(&mut tmphi_ref[j..j + 4]),
                 );
-                dwt2_s123_vrow_neon(
+                dwt2_s123_vrow_neon_t(
                     t,
                     a8(&i4_dis_scale[ind_y[i][0] as usize * dis_stride + j..][..4]),
                     a8(&i4_dis_scale[ind_y[i][1] as usize * dis_stride + j..][..4]),
@@ -5151,7 +5149,7 @@ fn adm_dwt2_s123_combined(
                     ix[3] as usize,
                 );
                 let idx = i * dst_stride + j;
-                dwt2_s123_hrow_v3(
+                dwt2_s123_hrow_v3_t(
                     t,
                     &tmplo_ref,
                     &tmphi_ref,
@@ -5169,7 +5167,7 @@ fn adm_dwt2_s123_combined(
                     a8m(&mut ref_out.h[idx..idx + 4]),
                     a8m(&mut ref_out.d[idx..idx + 4]),
                 );
-                dwt2_s123_hrow_v3(
+                dwt2_s123_hrow_v3_t(
                     t,
                     &tmplo_dis,
                     &tmphi_dis,
@@ -5204,7 +5202,7 @@ fn adm_dwt2_s123_combined(
                     ix[3] as usize,
                 );
                 let idx = i * dst_stride + j;
-                dwt2_s123_hrow_neon(
+                dwt2_s123_hrow_neon_t(
                     t,
                     &tmplo_ref,
                     &tmphi_ref,
@@ -5221,7 +5219,7 @@ fn adm_dwt2_s123_combined(
                     a8m(&mut ref_out.h[idx..idx + 4]),
                     a8m(&mut ref_out.d[idx..idx + 4]),
                 );
-                dwt2_s123_hrow_neon(
+                dwt2_s123_hrow_neon_t(
                     t,
                     &tmplo_dis,
                     &tmphi_dis,
@@ -5617,7 +5615,7 @@ fn simd_dwt2_matches_scalar_for_edges_tails_and_bit_depths() {
     }
 }
 
-/// `adm_decouple_s123_row_v3` must bit-match the scalar loop on every interior
+/// `adm_decouple_s123_row_v3_t` must bit-match the scalar loop on every interior
 /// pixel, including the get_best15_from32 branch (|v| >= 32768) and zero refs.
 #[cfg(all(
     test,
@@ -5682,7 +5680,7 @@ fn simd_decouple_s123_matches_scalar_for_tails_zeros_and_gains() {
     }
 }
 
-/// `adm_decouple_row_v3` must bit-match the scalar loop on every interior
+/// `adm_decouple_row_v3_t` must bit-match the scalar loop on every interior
 /// pixel. Realistic DWT2 magnitudes (|v| <= 16000) keep th - rst in i16 range
 /// so scalar truncation and packs_epi32 saturation agree — the same bound
 /// libvmaf's own scalar/AVX2 paths rely on.
@@ -5751,7 +5749,7 @@ fn simd_decouple_matches_scalar_for_tails_zeros_and_gains() {
     }
 }
 
-/// `cm_accum16_v3` must bit-match the scalar x_sq/x_cub chain on every lane.
+/// `cm_accum16_v3_t` must bit-match the scalar x_sq/x_cub chain on every lane.
 /// |v| <= 16000 keeps x_sq < 2^31 so scalar's i32 wrap and the AVX2 path
 /// agree — the same bound the decouple parity test uses.
 #[cfg(all(
@@ -5791,7 +5789,7 @@ fn simd_cm_i16_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `i4_adm_cm_row_v3` must bit-match the scalar thr/x/accum chain. src bounded
+/// `i4_adm_cm_row_v3_t` must bit-match the scalar thr/x/accum chain. src bounded
 /// to +-2^20 keeps x_full in i32 range and x_sq positive, where libvmaf's own
 /// scalar/AVX2 paths agree. rf fractions keep rfactor < 2^31 (mul_epi32 sign).
 #[cfg(all(
@@ -5843,7 +5841,7 @@ fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `dwt2_s123_vrow_v3`/`dwt2_s123_hrow_v3` must bit-match the scalar 4-tap
+/// `dwt2_s123_vrow_v3_t`/`dwt2_s123_hrow_v3_t` must bit-match the scalar 4-tap
 /// fixed-point DWT on every band. |src| <= 2^24 keeps accum products inside
 /// 64-s bits so the C masked-shift trick equals the scalar arithmetic shift.
 #[cfg(all(
@@ -5920,7 +5918,7 @@ fn simd_dwt2_s123_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `adm_csf_i16_v3` must bit-match the scalar fixed-point chain. |src| <= 16000
+/// `adm_csf_i16_v3_t` must bit-match the scalar fixed-point chain. |src| <= 16000
 /// keeps |dst_val| < 29400 and flt < 32768, so packs_epi32 saturation and
 /// scalar i16 truncation agree — the same bound libvmaf's own paths rely on.
 #[cfg(all(
@@ -5986,7 +5984,7 @@ fn simd_csf_i16_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `i4_adm_csf_v3` must bit-match the scalar fixed-point chain (srli+msb-mask
+/// `i4_adm_csf_v3_t` must bit-match the scalar fixed-point chain (srli+msb-mask
 /// arithmetic >>28, -2^31 flt add, low-32 pack) for all lane values. rf < 0.5
 /// keeps rfactor < 2^31 so mul_epi32 signed semantics match scalar's u32.
 #[cfg(all(
@@ -6043,7 +6041,7 @@ fn simd_csf_i32_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `csf_den_scale_row_v3` must bit-match the scalar h^3 accumulation —
+/// `csf_den_scale_row_v3_t` must bit-match the scalar h^3 accumulation —
 /// mul_epu32 on cvtepu32 lanes is exact for |v| <= 32768.
 #[cfg(all(
     test,
@@ -6080,7 +6078,7 @@ fn simd_csf_den_scale_matches_scalar_for_tails_and_edges() {
     }
 }
 
-/// `csf_den_s123_row_v3` must bit-match the scalar shifted cubic chain —
+/// `csf_den_s123_row_v3_t` must bit-match the scalar shifted cubic chain —
 /// mul_epu32 products stay < 2^32 on the squared operand for all i32 inputs.
 #[cfg(all(
     test,
@@ -6159,7 +6157,7 @@ fn adm_decouple_s123_row_timing() {
     for _ in 0..3 {
         let t = std::time::Instant::now();
         for i in top..bottom {
-            adm_decouple_s123_row_v3(
+            adm_decouple_s123_row_v3_t(
                 t3,
                 &ref_b.h,
                 &ref_b.v,
@@ -6184,7 +6182,7 @@ fn adm_decouple_s123_row_timing() {
         let e3 = t.elapsed();
         let t = std::time::Instant::now();
         for i in top..bottom {
-            adm_decouple_s123_row_v4x(
+            adm_decouple_s123_row_v4x_t(
                 t4,
                 &ref_b.h,
                 &ref_b.v,

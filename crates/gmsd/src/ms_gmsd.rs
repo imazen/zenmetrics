@@ -9,7 +9,7 @@ use archmage::Wasm128Token;
 use archmage::X64V3Token;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use archmage::X64V4xToken;
-use archmage::magetypes;
+use archmage::attune;
 
 pub(crate) struct Planes {
     // Y reference/distortion, I reference/distortion, Q reference/distortion.
@@ -97,16 +97,16 @@ pub(crate) fn prepare(r: &[u8], d: &[u8], w: usize, h: usize, stride: usize) -> 
     p
 }
 
-#[magetypes(rite, define(f64x8), v4x, v3, neon, wasm128, scalar)]
+#[attune(_*, +v4x(cfg(avx512)), define(f64x8))]
 fn similarity_row(token: Token, p: &Planes, y: usize, stabilizer: f64, out: &mut [f64]) {
-    let t = f64x8::splat(token, 1.0 / 3.0);
-    let two = f64x8::splat(token, 2.0);
-    let alpha = f64x8::splat(token, 0.5);
-    let c = f64x8::splat(token, stabilizer);
+    let t = f64x8::splat_t(token, 1.0 / 3.0);
+    let two = f64x8::splat_t(token, 2.0);
+    let alpha = f64x8::splat_t(token, 0.5);
+    let c = f64x8::splat_t(token, stabilizer);
     for x in (0..p.width).step_by(8) {
         macro_rules! sample {
             ($plane:expr,$dy:expr,$dx:expr) => {
-                f64x8::from_array(
+                f64x8::from_array_t(
                     token,
                     core::array::from_fn(|k| p.data[$plane][(y + $dy) * p.pitch + x + k + $dx]),
                 )
@@ -123,7 +123,7 @@ fn similarity_row(token: Token, p: &Planes, y: usize, stabilizer: f64, out: &mut
 
 macro_rules! band {
     ($name:ident,$token:ident,$row:ident) => {
-        #[archmage::arcane]
+        #[archmage::attune]
         pub(crate) fn $name(token: $token, p: &Planes, y0: usize, c: f64, out: &mut [f64]) {
             for (y, row) in out.chunks_mut(p.width).enumerate() {
                 $row(token, p, y0 + y, c, row);
@@ -132,14 +132,14 @@ macro_rules! band {
     };
 }
 #[cfg(target_arch = "x86_64")]
-band!(ms_band_v3, X64V3Token, similarity_row_v3);
+band!(ms_band_v3_t, X64V3Token, similarity_row_v3);
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-band!(ms_band_v4x, X64V4xToken, similarity_row_v4x);
+band!(ms_band_v4x_t, X64V4xToken, similarity_row_v4x);
 #[cfg(target_arch = "aarch64")]
-band!(ms_band_neon, NeonToken, similarity_row_neon);
+band!(ms_band_neon_t, NeonToken, similarity_row_neon);
 #[cfg(target_arch = "wasm32")]
-band!(ms_band_wasm128, Wasm128Token, similarity_row_wasm128);
-pub(crate) fn ms_band_scalar(
+band!(ms_band_wasm128_t, Wasm128Token, similarity_row_wasm128);
+pub(crate) fn ms_band_scalar_t(
     token: archmage::ScalarToken,
     p: &Planes,
     y0: usize,
@@ -154,9 +154,9 @@ pub(crate) fn ms_band_scalar(
 pub(crate) fn map(p: &Planes, c: f64) -> Vec<f64> {
     let mut out = alloc::vec![0.0; p.width*p.height];
     let run = |i: usize, out: &mut [f64]| {
-        archmage::incant!(
+        archmage::attuned!(
             ms_band(p, i * super::BAND_ROWS, c, out),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     };
     #[cfg(feature = "parallel")]

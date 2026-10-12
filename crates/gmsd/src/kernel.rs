@@ -52,7 +52,7 @@
 //! The pooling (standard deviation of `q`) accumulates `1 − q` in f64; see
 //! `lib.rs`.
 
-use archmage::magetypes;
+use archmage::attune;
 
 /// libgmsd's Prewitt scale, `(matrix_data_t)(1. / 3.)`.
 pub(crate) const PREWITT_T: f32 = (1.0f64 / 3.0f64) as f32;
@@ -123,13 +123,13 @@ pub(crate) fn floor_nonneg(v: f64) -> f64 {
 macro_rules! gray_int_vec {
     ($token:ident, $I32:ident, $F32:ident, $w:expr) => {{
         let w = $w;
-        let m255 = $I32::splat($token, 0xFF);
+        let m255 = $I32::splat_t($token, 0xFF);
         let r = w & m255;
         let g = w.shr_logical_const::<8>() & m255;
         let b = w.shr_logical_const::<16>() & m255;
         let s = r * 299 + g * 587 + b * 114;
-        let q = ((s + 499).to_f32() * $F32::splat($token, 0.001)).to_i32();
-        let flag = (s - q * 1000).simd_eq($I32::splat($token, 500));
+        let q = ((s + 499).to_f32() * $F32::splat_t($token, 0.001)).to_i32();
+        let flag = (s - q * 1000).simd_eq($I32::splat_t($token, 500));
         (q, flag)
     }};
 }
@@ -147,7 +147,7 @@ macro_rules! gray_row_int_body {
         let chunks = nvec / $LANES;
         for i in 0..chunks {
             let x0 = $LANES * i;
-            let w = $I32::from_array(
+            let w = $I32::from_array_t(
                 $token,
                 core::array::from_fn(|k| {
                     u32::from_le_bytes(rgb[3 * (x0 + k)..3 * (x0 + k) + 4].try_into().unwrap())
@@ -188,12 +188,12 @@ macro_rules! rgb8_pair_half_row_body {
         // for x <= w2 − 2; the last output goes to the scalar tail.
         let nvec = w2.saturating_sub(1);
         let chunks = nvec / $LANES;
-        let quarter = $F32::splat($token, 0.25);
+        let quarter = $F32::splat_t($token, 0.25);
         for i in 0..chunks {
             let x0 = $LANES * i;
             macro_rules! wv {
                 ($row:ident, $off:literal) => {
-                    $I32::from_array(
+                    $I32::from_array_t(
                         $token,
                         core::array::from_fn(|k| {
                             u32::from_le_bytes(
@@ -240,7 +240,7 @@ macro_rules! rgb8_pair_half_row_body {
 }
 
 /// sRGB8 → gray for a whole strided image into a packed plane (integer path).
-#[magetypes(define(i32x8, f32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(i32x8, f32x8))]
 fn gray_plane(
     token: Token,
     rgb: &[u8],
@@ -257,8 +257,8 @@ fn gray_plane(
 }
 
 /// 16-wide `gray_plane` for the AVX-512 `v4x` tier (crate feature `avx512`).
-/// Emits `gray_plane_v4x`, which `incant!` picks up by name.
-#[magetypes(define(i32x16, f32x16), v4x, -scalar)]
+/// Emits `gray_plane_v4x_t`, which `attuned!` picks up by name.
+#[attune(_v4x_t(cfg(avx512)), define(i32x16, f32x16))]
 fn gray_plane(
     token: Token,
     rgb: &[u8],
@@ -282,9 +282,9 @@ pub(crate) fn rgb8_to_gray_plane(
     stride: usize,
     out: &mut [f32],
 ) {
-    archmage::incant!(
+    archmage::attuned!(
         gray_plane(rgb, width, height, stride, out),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -299,7 +299,7 @@ macro_rules! downsample_row_body {
         let n = $out.len();
         let r0 = &$r0[..2 * n];
         let r1 = &$r1[..2 * n];
-        let q = $F32::splat($token, 0.25);
+        let q = $F32::splat_t($token, 0.25);
         let chunks = n / $LANES;
         for i in 0..chunks {
             // Fixed-size windows: one range check each, none inside.
@@ -309,10 +309,10 @@ macro_rules! downsample_row_body {
             let b: &[f32; 2 * $LANES] = r1[2 * $LANES * i..2 * $LANES * i + 2 * $LANES]
                 .try_into()
                 .unwrap();
-            let ae = $F32::from_array($token, core::array::from_fn(|k| a[2 * k]));
-            let ao = $F32::from_array($token, core::array::from_fn(|k| a[2 * k + 1]));
-            let be = $F32::from_array($token, core::array::from_fn(|k| b[2 * k]));
-            let bo = $F32::from_array($token, core::array::from_fn(|k| b[2 * k + 1]));
+            let ae = $F32::from_array_t($token, core::array::from_fn(|k| a[2 * k]));
+            let ao = $F32::from_array_t($token, core::array::from_fn(|k| a[2 * k + 1]));
+            let be = $F32::from_array_t($token, core::array::from_fn(|k| b[2 * k]));
+            let bo = $F32::from_array_t($token, core::array::from_fn(|k| b[2 * k + 1]));
             let v = ((q * ae + q * ao) + q * be) + q * bo;
             v.store(
                 (&mut $out[$LANES * i..$LANES * i + $LANES])
@@ -332,15 +332,15 @@ macro_rules! downsample_row_body {
 macro_rules! gms_chunk {
     ($token:ident, $FV:ident, $W:literal, $x:expr, $ru:ident, $rm:ident, $rd:ident, $du:ident, $dm:ident, $dd:ident) => {{
         let x: usize = $x;
-        let t = $FV::splat($token, PREWITT_T);
-        let tn = $FV::splat($token, -PREWITT_T);
-        let two = $FV::splat($token, 2.0);
-        let c = $FV::splat($token, GMS_C);
+        let t = $FV::splat_t($token, PREWITT_T);
+        let tn = $FV::splat_t($token, -PREWITT_T);
+        let two = $FV::splat_t($token, 2.0);
+        let c = $FV::splat_t($token, GMS_C);
         // A macro, not a closure: closures do not reliably inherit the
         // enclosing `#[target_feature]` region.
         macro_rules! ld {
             ($win:ident, $s:literal) => {
-                $FV::from_array($token, core::array::from_fn(|k| $win[k + $s]))
+                $FV::from_array_t($token, core::array::from_fn(|k| $win[k + $s]))
             };
         }
         // ($W + 2)-wide windows: shifts 0, 1, 2 of $W lanes each.
@@ -470,7 +470,7 @@ macro_rules! gms_row_body {
 }
 
 /// 8-wide GMS row for `v3`/`neon`/`wasm128`/`scalar`.
-#[magetypes(rite, define(f32x8), v3, neon, wasm128, scalar)]
+#[attune(_*, define(f32x8))]
 fn gms_row(
     token: Token,
     ru: &[f32],
@@ -485,7 +485,7 @@ fn gms_row(
 }
 
 /// 16-wide GMS row for the AVX-512 `v4x` tier (crate feature `avx512`).
-#[magetypes(rite, define(f32x16, f32x8), v4x, -scalar)]
+#[attune(_v4x(cfg(avx512)), define(f32x16, f32x8))]
 fn gms_row16(
     token: Token,
     ru: &[f32],
@@ -554,7 +554,7 @@ pub(crate) fn padded_pitch(w2: usize) -> usize {
     w2 + 10
 }
 
-// One `#[arcane]` entry per tier; the per-row work is the shared body
+// One `#[attune]` entry per tier; the per-row work is the shared body
 // macros expanded inside this target-feature region, so no out-of-line
 // call remains per row. `$FV`/`$IV` are the tier's f32/i32 vector type
 // names, `$LANES` its width, `$gms` the tier-suffixed GMS row helper.
@@ -641,9 +641,9 @@ macro_rules! band_body {
 }
 
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `v3` tier of one band (map rows `step` apart, per-row pooling sums).
-pub fn gmsd_band_v3(
+pub fn gmsd_band_v3_t(
     token: archmage::X64V3Token,
     band: &Band<'_>,
     map: &mut [f32],
@@ -664,10 +664,10 @@ pub fn gmsd_band_v3(
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
+#[archmage::attune]
 /// The AVX-512 `v4x` tier of one band (16-wide; map rows `step` apart,
 /// per-row pooling sums).
-pub fn gmsd_band_v4x(
+pub fn gmsd_band_v4x_t(
     token: archmage::X64V4xToken,
     band: &Band<'_>,
     map: &mut [f32],
@@ -688,9 +688,9 @@ pub fn gmsd_band_v4x(
 }
 
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `neon` tier of one band (map rows `step` apart, per-row pooling sums).
-pub fn gmsd_band_neon(
+pub fn gmsd_band_neon_t(
     token: archmage::NeonToken,
     band: &Band<'_>,
     map: &mut [f32],
@@ -711,9 +711,9 @@ pub fn gmsd_band_neon(
 }
 
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `wasm128` tier of one band (map rows `step` apart, per-row pooling sums).
-pub fn gmsd_band_wasm128(
+pub fn gmsd_band_wasm128_t(
     token: archmage::Wasm128Token,
     band: &Band<'_>,
     map: &mut [f32],
@@ -734,7 +734,7 @@ pub fn gmsd_band_wasm128(
 }
 
 /// The `scalar` tier of one band (map rows `step` apart, per-row pooling sums).
-pub fn gmsd_band_scalar(
+pub fn gmsd_band_scalar_t(
     token: archmage::ScalarToken,
     band: &Band<'_>,
     map: &mut [f32],
@@ -756,9 +756,9 @@ pub fn gmsd_band_scalar(
 
 /// Runtime-dispatched band: the best tier this CPU supports.
 pub(crate) fn gmsd_band(band: &Band<'_>, map: &mut [f32], step: usize, sums: &mut [(f64, f64)]) {
-    archmage::incant!(
+    archmage::attuned!(
         gmsd_band(band, map, step, sums),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 

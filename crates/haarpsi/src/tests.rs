@@ -299,8 +299,8 @@ fn tier_parity() {
     };
     let pr = kernel::plane_from_f32(&r, 48, 40, 48, true);
     let pd = kernel::plane_from_f32(&d, 48, 40, 48, true);
-    let s_scalar = crate::dev::haarpsi_core_tier_scalar(archmage::ScalarToken, &pr, &pd, None);
-    let s_v3 = crate::dev::haarpsi_core_tier_v3(token, &pr, &pd, None);
+    let s_scalar = crate::dev::haarpsi_core_tier_scalar_t(archmage::ScalarToken, &pr, &pd, None);
+    let s_v3 = crate::dev::haarpsi_core_tier_v3_t(token, &pr, &pd, None);
     assert_eq!(s_scalar, s_v3);
 
     let mk = |img: &[u8]| {
@@ -312,12 +312,12 @@ fn tier_parity() {
     };
     let (yr, ir, qr) = mk(&rgb_r);
     let (yd, id, qd) = mk(&rgb_d);
-    let c_scalar = crate::dev::haarpsi_core_tier_scalar(
+    let c_scalar = crate::dev::haarpsi_core_tier_scalar_t(
         archmage::ScalarToken,
         &yr,
         &yd,
         Some((&ir, &id, &qr, &qd)),
     );
-    let c_v3 = crate::dev::haarpsi_core_tier_v3(token, &yr, &yd, Some((&ir, &id, &qr, &qd)));
+    let c_v3 = crate::dev::haarpsi_core_tier_v3_t(token, &yr, &yd, Some((&ir, &id, &qr, &qd)));
     assert_eq!(c_scalar, c_v3);
 }

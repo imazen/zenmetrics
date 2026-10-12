@@ -42,7 +42,9 @@ impl MathPolicy for Midp {
         }
         #[cfg(not(feature = "std"))]
         {
-            f32x8::splat(archmage::ScalarToken, x).exp_midp().to_array()[0]
+            f32x8::splat_t(archmage::ScalarToken, x)
+                .exp_midp()
+                .to_array()[0]
         }
     }
     #[inline(always)]
@@ -53,7 +55,9 @@ impl MathPolicy for Midp {
         }
         #[cfg(not(feature = "std"))]
         {
-            f32x8::splat(archmage::ScalarToken, x).ln_midp().to_array()[0]
+            f32x8::splat_t(archmage::ScalarToken, x)
+                .ln_midp()
+                .to_array()[0]
         }
     }
     #[inline(always)]
@@ -64,7 +68,7 @@ impl MathPolicy for Midp {
         }
         #[cfg(not(feature = "std"))]
         {
-            f32x8::splat(archmage::ScalarToken, x)
+            f32x8::splat_t(archmage::ScalarToken, x)
                 .pow_midp(p)
                 .to_array()[0]
         }

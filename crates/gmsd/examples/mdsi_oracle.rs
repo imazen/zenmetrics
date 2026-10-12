@@ -73,26 +73,26 @@ fn verify_tiers(s: &mdsi::Source<'_>, gcs: &[f64], cs: &[f64]) -> String {
     }
     check!(
         "scalar",
-        mdsi::prepare_band_scalar,
-        mdsi::maps_band_scalar,
+        mdsi::prepare_band_scalar_t,
+        mdsi::maps_band_scalar_t,
         archmage::ScalarToken
     );
     #[cfg(target_arch = "x86_64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::X64V3Token::summon() {
-            check!("v3", mdsi::prepare_band_v3, mdsi::maps_band_v3, t);
+            check!("v3", mdsi::prepare_band_v3_t, mdsi::maps_band_v3_t, t);
         }
         #[cfg(feature = "avx512")]
         if let Some(t) = archmage::X64V4xToken::summon() {
-            check!("v4x", mdsi::prepare_band_v4x, mdsi::maps_band_v4x, t);
+            check!("v4x", mdsi::prepare_band_v4x_t, mdsi::maps_band_v4x_t, t);
         }
     }
     #[cfg(target_arch = "aarch64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::NeonToken::summon() {
-            check!("neon", mdsi::prepare_band_neon, mdsi::maps_band_neon, t);
+            check!("neon", mdsi::prepare_band_neon_t, mdsi::maps_band_neon_t, t);
         }
     }
     #[cfg(target_arch = "wasm32")]
@@ -101,8 +101,8 @@ fn verify_tiers(s: &mdsi::Source<'_>, gcs: &[f64], cs: &[f64]) -> String {
         if let Some(t) = archmage::Wasm128Token::summon() {
             check!(
                 "wasm128",
-                mdsi::prepare_band_wasm128,
-                mdsi::maps_band_wasm128,
+                mdsi::prepare_band_wasm128_t,
+                mdsi::maps_band_wasm128_t,
                 t
             );
         }
@@ -132,30 +132,30 @@ fn verify_ms_tiers(p: &ms_gmsd::Planes, map: &[f64]) -> String {
             checked.push($name.to_string());
         }};
     }
-    check!("scalar", ms_gmsd::ms_band_scalar, archmage::ScalarToken);
+    check!("scalar", ms_gmsd::ms_band_scalar_t, archmage::ScalarToken);
     #[cfg(target_arch = "x86_64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::X64V3Token::summon() {
-            check!("v3", ms_gmsd::ms_band_v3, t);
+            check!("v3", ms_gmsd::ms_band_v3_t, t);
         }
         #[cfg(feature = "avx512")]
         if let Some(t) = archmage::X64V4xToken::summon() {
-            check!("v4x", ms_gmsd::ms_band_v4x, t);
+            check!("v4x", ms_gmsd::ms_band_v4x_t, t);
         }
     }
     #[cfg(target_arch = "aarch64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::NeonToken::summon() {
-            check!("neon", ms_gmsd::ms_band_neon, t);
+            check!("neon", ms_gmsd::ms_band_neon_t, t);
         }
     }
     #[cfg(target_arch = "wasm32")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::Wasm128Token::summon() {
-            check!("wasm128", ms_gmsd::ms_band_wasm128, t);
+            check!("wasm128", ms_gmsd::ms_band_wasm128_t, t);
         }
     }
     #[cfg(feature = "parallel")]

@@ -219,7 +219,7 @@ fn available_tiers_match_scalar() {
         .chunks_mut(BAND_ROWS * row_len)
         .enumerate()
     {
-        prepare_band_scalar(archmage::ScalarToken, &s, i * BAND_ROWS, chunk);
+        prepare_band_scalar_t(archmage::ScalarToken, &s, i * BAND_ROWS, chunk);
     }
     let planes = Planes {
         data: base.clone(),
@@ -235,7 +235,7 @@ fn available_tiers_match_scalar() {
         .zip(cs.chunks_mut(BAND_ROWS * planes.width))
         .enumerate()
     {
-        maps_band_scalar(archmage::ScalarToken, &planes, i * BAND_ROWS, &p, q, c);
+        maps_band_scalar_t(archmage::ScalarToken, &planes, i * BAND_ROWS, &p, q, c);
     }
 
     macro_rules! check {
@@ -270,18 +270,18 @@ fn available_tiers_match_scalar() {
     {
         use archmage::SimdToken;
         if let Some(t) = X64V3Token::summon() {
-            check!("v3", prepare_band_v3, maps_band_v3, t);
+            check!("v3", prepare_band_v3_t, maps_band_v3_t, t);
         }
         #[cfg(feature = "avx512")]
         if let Some(t) = X64V4xToken::summon() {
-            check!("v4x", prepare_band_v4x, maps_band_v4x, t);
+            check!("v4x", prepare_band_v4x_t, maps_band_v4x_t, t);
         }
     }
     #[cfg(target_arch = "aarch64")]
     {
         use archmage::SimdToken;
         if let Some(t) = NeonToken::summon() {
-            check!("neon", prepare_band_neon, maps_band_neon, t);
+            check!("neon", prepare_band_neon_t, maps_band_neon_t, t);
         }
     }
     // The production dispatch equals the scalar tier as well.

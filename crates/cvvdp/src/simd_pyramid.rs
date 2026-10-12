@@ -23,7 +23,7 @@
 //! so the FMA grouping of the patches is preserved.
 
 #![allow(clippy::needless_range_loop)]
-// The per-tier #[magetypes] expansion makes some loops appear as
+// The per-tier #[attune] family expansion makes some loops appear as
 // "manual memcpy" candidates to clippy, but the loop body inside the
 // expansion may include the SIMD-load pattern's bookkeeping. Suppress
 // at module scope rather than per-site (cleaner).
@@ -78,7 +78,7 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 // f32x{N} chunks across columns, broadcast-multiplying by the loop-
 // invariant scalar GAUSS5 taps.
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn reduce_v_inner(
     token: Token,
     src: &[f32],
@@ -88,11 +88,11 @@ fn reduce_v_inner(
     vscratch: &mut [f32],
 ) {
     let k = GAUSS5;
-    let k0 = f32x16::splat(token, k[0]);
-    let k1 = f32x16::splat(token, k[1]);
-    let k2 = f32x16::splat(token, k[2]);
-    let k3 = f32x16::splat(token, k[3]);
-    let k4 = f32x16::splat(token, k[4]);
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
 
     debug_assert_eq!(vscratch.len(), sw * dh);
     let n_groups = sw / 16;
@@ -121,7 +121,7 @@ fn reduce_v_inner(
                 let col = cg * 16;
                 let ld = |base: usize| -> f32x16 {
                     let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
-                    f32x16::from_array(token, arr)
+                    f32x16::from_array_t(token, arr)
                 };
                 // Interior rows have all five taps in bounds — one match
                 // per column-group instead of per-tap Option handling.
@@ -130,7 +130,7 @@ fn reduce_v_inner(
                         (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
                     }
                     _ => {
-                        let z = f32x16::zero(token);
+                        let z = f32x16::zero_t(token);
                         let or = |row: Option<usize>| row.map_or(z, ld);
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
@@ -158,7 +158,7 @@ fn reduce_v_inner(
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn reduce_v_inner(
     token: Token,
     src: &[f32],
@@ -168,11 +168,11 @@ fn reduce_v_inner(
     vscratch: &mut [f32],
 ) {
     let k = GAUSS5;
-    let k0 = f32x8::splat(token, k[0]);
-    let k1 = f32x8::splat(token, k[1]);
-    let k2 = f32x8::splat(token, k[2]);
-    let k3 = f32x8::splat(token, k[3]);
-    let k4 = f32x8::splat(token, k[4]);
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
 
     debug_assert_eq!(vscratch.len(), sw * dh);
     let n_groups = sw / 8;
@@ -199,14 +199,14 @@ fn reduce_v_inner(
                 let col = cg * 8;
                 let ld = |base: usize| -> f32x8 {
                     let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
-                    f32x8::from_array(token, arr)
+                    f32x8::from_array_t(token, arr)
                 };
                 let (v0, v1, v2, v3v, v4x) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
                     (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
                         (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
                     }
                     _ => {
-                        let z = f32x8::zero(token);
+                        let z = f32x8::zero_t(token);
                         let or = |row: Option<usize>| row.map_or(z, ld);
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
@@ -243,9 +243,9 @@ pub(crate) fn reduce_vertical_pass(
     vscratch: &mut [f32],
 ) {
     debug_assert_eq!(vscratch.len(), sw * dh);
-    archmage::incant!(
+    archmage::attuned!(
         reduce_v_inner(src, sw, sh, dh, vscratch),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -265,7 +265,7 @@ pub(crate) fn reduce_vertical_pass(
 // parallel. Each row reads vscratch[dy*sw + (cx-2..=cx+2)]. The 5 taps
 // stay loop-invariant scalars splatted across the N lanes.
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn reduce_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -275,11 +275,11 @@ fn reduce_h_inner(
     dst: &mut [f32],
 ) {
     let k = GAUSS5;
-    let k0 = f32x16::splat(token, k[0]);
-    let k1 = f32x16::splat(token, k[1]);
-    let k2 = f32x16::splat(token, k[2]);
-    let k3 = f32x16::splat(token, k[3]);
-    let k4 = f32x16::splat(token, k[4]);
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
 
     debug_assert_eq!(dst.len(), dw * dh);
     crate::par::map_rows(dst, dw, |y0, dst| {
@@ -326,11 +326,11 @@ fn reduce_h_inner(
                         arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
                     }
                 }
-                let v0 = f32x16::from_array(token, arrs[0]);
-                let v1 = f32x16::from_array(token, arrs[1]);
-                let v2 = f32x16::from_array(token, arrs[2]);
-                let v3v = f32x16::from_array(token, arrs[3]);
-                let v4x = f32x16::from_array(token, arrs[4]);
+                let v0 = f32x16::from_array_t(token, arrs[0]);
+                let v1 = f32x16::from_array_t(token, arrs[1]);
+                let v2 = f32x16::from_array_t(token, arrs[2]);
+                let v3v = f32x16::from_array_t(token, arrs[3]);
+                let v4x = f32x16::from_array_t(token, arrs[4]);
                 let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let res = acc.to_array();
                 for r in 0..16 {
@@ -353,7 +353,7 @@ fn reduce_h_inner(
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn reduce_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -363,11 +363,11 @@ fn reduce_h_inner(
     dst: &mut [f32],
 ) {
     let k = GAUSS5;
-    let k0 = f32x8::splat(token, k[0]);
-    let k1 = f32x8::splat(token, k[1]);
-    let k2 = f32x8::splat(token, k[2]);
-    let k3 = f32x8::splat(token, k[3]);
-    let k4 = f32x8::splat(token, k[4]);
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
 
     debug_assert_eq!(dst.len(), dw * dh);
     crate::par::map_rows(dst, dw, |y0, dst| {
@@ -412,11 +412,11 @@ fn reduce_h_inner(
                         arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
                     }
                 }
-                let v0 = f32x8::from_array(token, arrs[0]);
-                let v1 = f32x8::from_array(token, arrs[1]);
-                let v2 = f32x8::from_array(token, arrs[2]);
-                let v3v = f32x8::from_array(token, arrs[3]);
-                let v4x = f32x8::from_array(token, arrs[4]);
+                let v0 = f32x8::from_array_t(token, arrs[0]);
+                let v1 = f32x8::from_array_t(token, arrs[1]);
+                let v2 = f32x8::from_array_t(token, arrs[2]);
+                let v3v = f32x8::from_array_t(token, arrs[3]);
+                let v4x = f32x8::from_array_t(token, arrs[4]);
                 let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
                 let res = acc.to_array();
                 for r in 0..8 {
@@ -449,9 +449,9 @@ pub(crate) fn reduce_horizontal_pass(
 ) {
     debug_assert_eq!(vscratch.len(), sw * dh);
     debug_assert_eq!(dst.len(), dw * dh);
-    archmage::incant!(
+    archmage::attuned!(
         reduce_h_inner(vscratch, sw, dw, dh, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -473,7 +473,7 @@ pub(crate) fn reduce_horizontal_pass(
 // then sweep y with f32x{N} mul-adds. The 2× scaling is folded into
 // the kernel taps (DOUBLED_GAUSS5).
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn expand_v_inner(
     token: Token,
     src: &[f32],
@@ -483,11 +483,11 @@ fn expand_v_inner(
     vscratch: &mut [f32],
 ) {
     let k = GAUSS5;
-    let dk0 = f32x16::splat(token, 2.0 * k[0]);
-    let dk1 = f32x16::splat(token, 2.0 * k[1]);
-    let dk2 = f32x16::splat(token, 2.0 * k[2]);
-    let dk3 = f32x16::splat(token, 2.0 * k[3]);
-    let dk4 = f32x16::splat(token, 2.0 * k[4]);
+    let dk0 = f32x16::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x16::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x16::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x16::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x16::splat_t(token, 2.0 * k[4]);
 
     let odd_h = out_h & 1;
     let back_idx_v = out_h + 2 + odd_h;
@@ -513,11 +513,11 @@ fn expand_v_inner(
             let col_base = cg * 16;
             for y_l in 0..band_h {
                 let y = y0 + y_l;
-                let mut acc = f32x16::splat(token, 0.0);
+                let mut acc = f32x16::splat_t(token, 0.0);
                 for (j, dkj) in dk.iter().enumerate() {
                     if let Some(r) = z_row(y + j) {
                         let off = r * sw + col_base;
-                        let v = f32x16::from_array(token, src[off..off + 16].try_into().unwrap());
+                        let v = f32x16::from_array_t(token, src[off..off + 16].try_into().unwrap());
                         acc = v * *dkj + acc;
                     }
                 }
@@ -542,7 +542,7 @@ fn expand_v_inner(
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn expand_v_inner(
     token: Token,
     src: &[f32],
@@ -552,11 +552,11 @@ fn expand_v_inner(
     vscratch: &mut [f32],
 ) {
     let k = GAUSS5;
-    let dk0 = f32x8::splat(token, 2.0 * k[0]);
-    let dk1 = f32x8::splat(token, 2.0 * k[1]);
-    let dk2 = f32x8::splat(token, 2.0 * k[2]);
-    let dk3 = f32x8::splat(token, 2.0 * k[3]);
-    let dk4 = f32x8::splat(token, 2.0 * k[4]);
+    let dk0 = f32x8::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x8::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x8::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x8::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x8::splat_t(token, 2.0 * k[4]);
 
     let odd_h = out_h & 1;
     let back_idx_v = out_h + 2 + odd_h;
@@ -579,11 +579,11 @@ fn expand_v_inner(
             let col_base = cg * 8;
             for y_l in 0..band_h {
                 let y = y0 + y_l;
-                let mut acc = f32x8::splat(token, 0.0);
+                let mut acc = f32x8::splat_t(token, 0.0);
                 for (j, dkj) in dk.iter().enumerate() {
                     if let Some(r) = z_row(y + j) {
                         let off = r * sw + col_base;
-                        let v = f32x8::from_array(token, src[off..off + 8].try_into().unwrap());
+                        let v = f32x8::from_array_t(token, src[off..off + 8].try_into().unwrap());
                         acc = v * *dkj + acc;
                     }
                 }
@@ -617,9 +617,9 @@ pub(crate) fn expand_vertical_pass(
     vscratch: &mut [f32],
 ) {
     debug_assert_eq!(vscratch.len(), sw * out_h);
-    archmage::incant!(
+    archmage::attuned!(
         expand_v_inner(src, sw, sh, out_h, vscratch),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -640,7 +640,7 @@ pub(crate) fn expand_vertical_pass(
 // reads a sliding-window of 5 taps from z_h. The 5 taps are scalar
 // splats. z_h is per-row scratch (we re-use a caller-owned Vec).
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn expand_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -650,11 +650,11 @@ fn expand_h_inner(
     dst: &mut [f32],
 ) {
     let k = GAUSS5;
-    let dk0 = f32x16::splat(token, 2.0 * k[0]);
-    let dk1 = f32x16::splat(token, 2.0 * k[1]);
-    let dk2 = f32x16::splat(token, 2.0 * k[2]);
-    let dk3 = f32x16::splat(token, 2.0 * k[3]);
-    let dk4 = f32x16::splat(token, 2.0 * k[4]);
+    let dk0 = f32x16::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x16::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x16::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x16::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x16::splat_t(token, 2.0 * k[4]);
 
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
@@ -709,11 +709,11 @@ fn expand_h_inner(
                         }
                     }
                 }
-                let v0 = f32x16::from_array(token, arrs[0]);
-                let v1 = f32x16::from_array(token, arrs[1]);
-                let v2 = f32x16::from_array(token, arrs[2]);
-                let v3v = f32x16::from_array(token, arrs[3]);
-                let v4x = f32x16::from_array(token, arrs[4]);
+                let v0 = f32x16::from_array_t(token, arrs[0]);
+                let v1 = f32x16::from_array_t(token, arrs[1]);
+                let v2 = f32x16::from_array_t(token, arrs[2]);
+                let v3v = f32x16::from_array_t(token, arrs[3]);
+                let v4x = f32x16::from_array_t(token, arrs[4]);
                 let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
                 let arr = acc.to_array();
                 dst[y_l * out_w + x_base..y_l * out_w + x_base + 16].copy_from_slice(&arr);
@@ -731,7 +731,7 @@ fn expand_h_inner(
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn expand_h_inner(
     token: Token,
     vscratch: &[f32],
@@ -741,11 +741,11 @@ fn expand_h_inner(
     dst: &mut [f32],
 ) {
     let k = GAUSS5;
-    let dk0 = f32x8::splat(token, 2.0 * k[0]);
-    let dk1 = f32x8::splat(token, 2.0 * k[1]);
-    let dk2 = f32x8::splat(token, 2.0 * k[2]);
-    let dk3 = f32x8::splat(token, 2.0 * k[3]);
-    let dk4 = f32x8::splat(token, 2.0 * k[4]);
+    let dk0 = f32x8::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x8::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x8::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x8::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x8::splat_t(token, 2.0 * k[4]);
 
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
@@ -790,11 +790,11 @@ fn expand_h_inner(
                         }
                     }
                 }
-                let v0 = f32x8::from_array(token, arrs[0]);
-                let v1 = f32x8::from_array(token, arrs[1]);
-                let v2 = f32x8::from_array(token, arrs[2]);
-                let v3v = f32x8::from_array(token, arrs[3]);
-                let v4x = f32x8::from_array(token, arrs[4]);
+                let v0 = f32x8::from_array_t(token, arrs[0]);
+                let v1 = f32x8::from_array_t(token, arrs[1]);
+                let v2 = f32x8::from_array_t(token, arrs[2]);
+                let v3v = f32x8::from_array_t(token, arrs[3]);
+                let v4x = f32x8::from_array_t(token, arrs[4]);
                 let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
                 let arr = acc.to_array();
                 dst[y_l * out_w + x_base..y_l * out_w + x_base + 8].copy_from_slice(&arr);
@@ -822,9 +822,9 @@ pub(crate) fn expand_horizontal_pass(
     dst: &mut [f32],
 ) {
     debug_assert_eq!(dst.len(), out_w * out_h);
-    archmage::incant!(
+    archmage::attuned!(
         expand_h_inner(vscratch, sw, out_w, out_h, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -865,22 +865,22 @@ pub(crate) fn expand_horizontal_pass(
 //   - We do NOT pre-allocate a scratch z-buffer (unlike the pyramid
 //     expand) — the kernel reads source/scratch directly.
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
-    let k0 = f32x16::splat(token, k[0]);
-    let k1 = f32x16::splat(token, k[1]);
-    let k2 = f32x16::splat(token, k[2]);
-    let k3 = f32x16::splat(token, k[3]);
-    let k4 = f32x16::splat(token, k[4]);
-    let k5 = f32x16::splat(token, k[5]);
-    let k6 = f32x16::splat(token, k[6]);
-    let k7 = f32x16::splat(token, k[7]);
-    let k8 = f32x16::splat(token, k[8]);
-    let k9 = f32x16::splat(token, k[9]);
-    let k10 = f32x16::splat(token, k[10]);
-    let k11 = f32x16::splat(token, k[11]);
-    let k12 = f32x16::splat(token, k[12]);
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
+    let k5 = f32x16::splat_t(token, k[5]);
+    let k6 = f32x16::splat_t(token, k[6]);
+    let k7 = f32x16::splat_t(token, k[7]);
+    let k8 = f32x16::splat_t(token, k[8]);
+    let k9 = f32x16::splat_t(token, k[9]);
+    let k10 = f32x16::splat_t(token, k[10]);
+    let k11 = f32x16::splat_t(token, k[11]);
+    let k12 = f32x16::splat_t(token, k[12]);
 
     let lane = 16usize;
     // SIMD interior: for each `x_base`, process N=lane output cols
@@ -922,7 +922,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                 let load = |off: usize| -> f32x16 {
                     let base = src_off + row_off + x_base - 6 + off;
                     let arr: [f32; 16] = src[base..base + 16].try_into().unwrap();
-                    f32x16::from_array(token, arr)
+                    f32x16::from_array_t(token, arr)
                 };
                 let v0 = load(0);
                 let v1 = load(1);
@@ -967,22 +967,22 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
-    let k0 = f32x8::splat(token, k[0]);
-    let k1 = f32x8::splat(token, k[1]);
-    let k2 = f32x8::splat(token, k[2]);
-    let k3 = f32x8::splat(token, k[3]);
-    let k4 = f32x8::splat(token, k[4]);
-    let k5 = f32x8::splat(token, k[5]);
-    let k6 = f32x8::splat(token, k[6]);
-    let k7 = f32x8::splat(token, k[7]);
-    let k8 = f32x8::splat(token, k[8]);
-    let k9 = f32x8::splat(token, k[9]);
-    let k10 = f32x8::splat(token, k[10]);
-    let k11 = f32x8::splat(token, k[11]);
-    let k12 = f32x8::splat(token, k[12]);
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
+    let k5 = f32x8::splat_t(token, k[5]);
+    let k6 = f32x8::splat_t(token, k[6]);
+    let k7 = f32x8::splat_t(token, k[7]);
+    let k8 = f32x8::splat_t(token, k[8]);
+    let k9 = f32x8::splat_t(token, k[9]);
+    let k10 = f32x8::splat_t(token, k[10]);
+    let k11 = f32x8::splat_t(token, k[11]);
+    let k12 = f32x8::splat_t(token, k[12]);
 
     let lane = 8usize;
     let interior_lo = 6usize;
@@ -1011,7 +1011,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
                 let load = |off: usize| -> f32x8 {
                     let base = src_off + row_off + x_base - 6 + off;
                     let arr: [f32; 8] = src[base..base + 8].try_into().unwrap();
-                    f32x8::from_array(token, arr)
+                    f32x8::from_array_t(token, arr)
                 };
                 let v0 = load(0);
                 let v1 = load(1);
@@ -1063,28 +1063,28 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
 pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &mut [f32]) {
     debug_assert_eq!(src.len(), w * h);
     debug_assert_eq!(h_pass.len(), w * h);
-    archmage::incant!(
+    archmage::attuned!(
         pu_blur_h_inner(src, w, h, h_pass),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x16), +v4x, -v3, -neon, -wasm128, -scalar)]
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
-    let k0 = f32x16::splat(token, k[0]);
-    let k1 = f32x16::splat(token, k[1]);
-    let k2 = f32x16::splat(token, k[2]);
-    let k3 = f32x16::splat(token, k[3]);
-    let k4 = f32x16::splat(token, k[4]);
-    let k5 = f32x16::splat(token, k[5]);
-    let k6 = f32x16::splat(token, k[6]);
-    let k7 = f32x16::splat(token, k[7]);
-    let k8 = f32x16::splat(token, k[8]);
-    let k9 = f32x16::splat(token, k[9]);
-    let k10 = f32x16::splat(token, k[10]);
-    let k11 = f32x16::splat(token, k[11]);
-    let k12 = f32x16::splat(token, k[12]);
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
+    let k5 = f32x16::splat_t(token, k[5]);
+    let k6 = f32x16::splat_t(token, k[6]);
+    let k7 = f32x16::splat_t(token, k[7]);
+    let k8 = f32x16::splat_t(token, k[8]);
+    let k9 = f32x16::splat_t(token, k[9]);
+    let k10 = f32x16::splat_t(token, k[10]);
+    let k11 = f32x16::splat_t(token, k[11]);
+    let k12 = f32x16::splat_t(token, k[12]);
 
     let lane = 16usize;
     let n_groups = w / lane;
@@ -1123,7 +1123,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                 let load = |t: usize| -> f32x16 {
                     let off = (y - 6 + t) * w + x_base;
                     let arr: [f32; 16] = h_pass[off..off + 16].try_into().unwrap();
-                    f32x16::from_array(token, arr)
+                    f32x16::from_array_t(token, arr)
                 };
                 let v0 = load(0);
                 let v1 = load(1);
@@ -1182,22 +1182,22 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
     });
 }
 
-#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+#[archmage::attune(_*_t, define(f32x8))]
 fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
-    let k0 = f32x8::splat(token, k[0]);
-    let k1 = f32x8::splat(token, k[1]);
-    let k2 = f32x8::splat(token, k[2]);
-    let k3 = f32x8::splat(token, k[3]);
-    let k4 = f32x8::splat(token, k[4]);
-    let k5 = f32x8::splat(token, k[5]);
-    let k6 = f32x8::splat(token, k[6]);
-    let k7 = f32x8::splat(token, k[7]);
-    let k8 = f32x8::splat(token, k[8]);
-    let k9 = f32x8::splat(token, k[9]);
-    let k10 = f32x8::splat(token, k[10]);
-    let k11 = f32x8::splat(token, k[11]);
-    let k12 = f32x8::splat(token, k[12]);
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
+    let k5 = f32x8::splat_t(token, k[5]);
+    let k6 = f32x8::splat_t(token, k[6]);
+    let k7 = f32x8::splat_t(token, k[7]);
+    let k8 = f32x8::splat_t(token, k[8]);
+    let k9 = f32x8::splat_t(token, k[9]);
+    let k10 = f32x8::splat_t(token, k[10]);
+    let k11 = f32x8::splat_t(token, k[11]);
+    let k12 = f32x8::splat_t(token, k[12]);
 
     let lane = 8usize;
     let n_groups = w / lane;
@@ -1231,7 +1231,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                 let load = |t: usize| -> f32x8 {
                     let off = (y - 6 + t) * w + x_base;
                     let arr: [f32; 8] = h_pass[off..off + 8].try_into().unwrap();
-                    f32x8::from_array(token, arr)
+                    f32x8::from_array_t(token, arr)
                 };
                 let v0 = load(0);
                 let v1 = load(1);
@@ -1294,9 +1294,9 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
 pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     debug_assert_eq!(h_pass.len(), w * h);
     debug_assert_eq!(dst.len(), w * h);
-    archmage::incant!(
+    archmage::attuned!(
         pu_blur_v_inner(h_pass, w, h, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 

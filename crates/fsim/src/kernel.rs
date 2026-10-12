@@ -84,11 +84,11 @@ macro_rules! anacc_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let re = $F32::from_array($token, core::array::from_fn(|k| $e[x + k].re));
-            let im = $F32::from_array($token, core::array::from_fn(|k| $e[x + k].im));
-            let vse = $F32::from_array($token, core::array::from_fn(|k| $se[x + k]));
-            let vso = $F32::from_array($token, core::array::from_fn(|k| $so[x + k]));
-            let vsa = $F32::from_array($token, core::array::from_fn(|k| $sa[x + k]));
+            let re = $F32::from_array_t($token, core::array::from_fn(|k| $e[x + k].re));
+            let im = $F32::from_array_t($token, core::array::from_fn(|k| $e[x + k].im));
+            let vse = $F32::from_array_t($token, core::array::from_fn(|k| $se[x + k]));
+            let vso = $F32::from_array_t($token, core::array::from_fn(|k| $so[x + k]));
+            let vsa = $F32::from_array_t($token, core::array::from_fn(|k| $sa[x + k]));
             (vse + re).store((&mut $se[x..x + $LANES]).try_into().unwrap());
             (vso + im).store((&mut $so[x..x + $LANES]).try_into().unwrap());
             let an = (re * re + im * im).sqrt();
@@ -110,11 +110,11 @@ macro_rules! anacc_body {
 macro_rules! xenergy_body {
     ($token:ident, $F32:ident, $LANES:literal, $se:ident, $so:ident, $me:ident, $mo:ident, $n:ident) => {{
         let n = $n;
-        let eps = $F32::splat($token, EPSILON);
+        let eps = $F32::splat_t($token, EPSILON);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let vse = $F32::from_array($token, core::array::from_fn(|k| $se[x + k]));
-            let vso = $F32::from_array($token, core::array::from_fn(|k| $so[x + k]));
+            let vse = $F32::from_array_t($token, core::array::from_fn(|k| $se[x + k]));
+            let vso = $F32::from_array_t($token, core::array::from_fn(|k| $so[x + k]));
             let xe = (vse * vse + vso * vso).sqrt() + eps;
             (vse / xe).store((&mut $me[x..x + $LANES]).try_into().unwrap());
             (vso / xe).store((&mut $mo[x..x + $LANES]).try_into().unwrap());
@@ -136,11 +136,11 @@ macro_rules! energy_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let re = $F32::from_array($token, core::array::from_fn(|k| $e[x + k].re));
-            let im = $F32::from_array($token, core::array::from_fn(|k| $e[x + k].im));
-            let vme = $F32::from_array($token, core::array::from_fn(|k| $me[x + k]));
-            let vmo = $F32::from_array($token, core::array::from_fn(|k| $mo[x + k]));
-            let prev = $F32::from_array($token, core::array::from_fn(|k| $energy[x + k]));
+            let re = $F32::from_array_t($token, core::array::from_fn(|k| $e[x + k].re));
+            let im = $F32::from_array_t($token, core::array::from_fn(|k| $e[x + k].im));
+            let vme = $F32::from_array_t($token, core::array::from_fn(|k| $me[x + k]));
+            let vmo = $F32::from_array_t($token, core::array::from_fn(|k| $mo[x + k]));
+            let prev = $F32::from_array_t($token, core::array::from_fn(|k| $energy[x + k]));
             let term = (re * vme + im * vmo) - (re * vmo - im * vme).abs();
             (prev + term).store((&mut $energy[x..x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -158,14 +158,14 @@ macro_rules! energy_body {
 macro_rules! ethr_body {
     ($token:ident, $F32:ident, $LANES:literal, $energy:ident, $sa:ident, $eall:ident, $aall:ident, $t:ident, $n:ident) => {{
         let n = $n;
-        let tv = $F32::splat($token, $t);
-        let zv = $F32::splat($token, 0.0);
+        let tv = $F32::splat_t($token, $t);
+        let zv = $F32::splat_t($token, 0.0);
         let mut x = 0usize;
         while x + $LANES <= n {
-            let e = $F32::from_array($token, core::array::from_fn(|k| $energy[x + k]));
-            let sa = $F32::from_array($token, core::array::from_fn(|k| $sa[x + k]));
-            let pe = $F32::from_array($token, core::array::from_fn(|k| $eall[x + k]));
-            let pa = $F32::from_array($token, core::array::from_fn(|k| $aall[x + k]));
+            let e = $F32::from_array_t($token, core::array::from_fn(|k| $energy[x + k]));
+            let sa = $F32::from_array_t($token, core::array::from_fn(|k| $sa[x + k]));
+            let pe = $F32::from_array_t($token, core::array::from_fn(|k| $eall[x + k]));
+            let pa = $F32::from_array_t($token, core::array::from_fn(|k| $aall[x + k]));
             (pe + (e - tv).max(zv)).store((&mut $eall[x..x + $LANES]).try_into().unwrap());
             (pa + sa).store((&mut $aall[x..x + $LANES]).try_into().unwrap());
             x += $LANES;
@@ -184,8 +184,8 @@ macro_rules! pcdiv_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let e = $F32::from_array($token, core::array::from_fn(|k| $eall[x + k]));
-            let a = $F32::from_array($token, core::array::from_fn(|k| $aall[x + k]));
+            let e = $F32::from_array_t($token, core::array::from_fn(|k| $eall[x + k]));
+            let a = $F32::from_array_t($token, core::array::from_fn(|k| $aall[x + k]));
             (e / a).store((&mut $pc[x..x + $LANES]).try_into().unwrap());
             x += $LANES;
         }
@@ -202,8 +202,8 @@ macro_rules! grad_body {
         let n = $n;
         let mut x = 0usize;
         while x + $LANES <= n {
-            let vx = $F32::from_array($token, core::array::from_fn(|k| $ix[x + k]));
-            let vy = $F32::from_array($token, core::array::from_fn(|k| $iy[x + k]));
+            let vx = $F32::from_array_t($token, core::array::from_fn(|k| $ix[x + k]));
+            let vy = $F32::from_array_t($token, core::array::from_fn(|k| $iy[x + k]));
             (vx * vx + vy * vy)
                 .sqrt()
                 .store((&mut $g[x..x + $LANES]).try_into().unwrap());
@@ -646,8 +646,8 @@ pub type IqPlanes<'a> = (&'a [f32], &'a [f32], &'a [f32], &'a [f32]);
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn fsim_core_tier_v3(token: archmage::X64V3Token, p: Planes<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn fsim_core_tier_v3_t(token: archmage::X64V3Token, p: Planes<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 8, yr, yd, w, h, iq)
@@ -655,8 +655,8 @@ pub fn fsim_core_tier_v3(token: archmage::X64V3Token, p: Planes<'_>) -> (f64, f6
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn fsim_core_tier_v4x(token: archmage::X64V4xToken, p: Planes<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn fsim_core_tier_v4x_t(token: archmage::X64V4xToken, p: Planes<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 16, yr, yd, w, h, iq)
@@ -664,8 +664,8 @@ pub fn fsim_core_tier_v4x(token: archmage::X64V4xToken, p: Planes<'_>) -> (f64, 
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn fsim_core_tier_neon(token: archmage::NeonToken, p: Planes<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn fsim_core_tier_neon_t(token: archmage::NeonToken, p: Planes<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 8, yr, yd, w, h, iq)
@@ -673,15 +673,15 @@ pub fn fsim_core_tier_neon(token: archmage::NeonToken, p: Planes<'_>) -> (f64, f
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
-pub fn fsim_core_tier_wasm128(token: archmage::Wasm128Token, p: Planes<'_>) -> (f64, f64) {
+#[archmage::attune]
+pub fn fsim_core_tier_wasm128_t(token: archmage::Wasm128Token, p: Planes<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 8, yr, yd, w, h, iq)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn fsim_core_tier_scalar(token: archmage::ScalarToken, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_scalar_t(token: archmage::ScalarToken, p: Planes<'_>) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
     score_body!(token, V, 8, yr, yd, w, h, iq)
@@ -689,7 +689,10 @@ pub fn fsim_core_tier_scalar(token: archmage::ScalarToken, p: Planes<'_>) -> (f6
 
 /// Runtime-dispatched score: the best tier this CPU supports.
 fn fsim_core(p: Planes<'_>) -> (f64, f64) {
-    archmage::incant!(fsim_core_tier(p), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        fsim_core_tier(p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 // ------------------------------------------------------------------

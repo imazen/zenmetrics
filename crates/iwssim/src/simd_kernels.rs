@@ -21,7 +21,7 @@
 //! - `infow_map_into`        — `log2`/`pow` info-content map
 //!   (`F32x8Convert` tiers only: v3, neon, wasm128, scalar).
 //!
-//! Most entry points route through `archmage::incant!` with the tier
+//! Most entry points route through `archmage::attuned!` with the tier
 //! cascade `[v4x, v3, neon, wasm128, scalar]`; the f64x4 and
 //! transcendental kernels use `[v3, neon, wasm128, scalar]` because
 //! AVX-512 tokens lack `F64x4Backend`/`F32x8Convert`. AVX-512 (v4x) is
@@ -41,13 +41,13 @@ const SSIM_C2: f32 = crate::ssim::SSIM_C2;
 // Per-element kernels (no boundary handling).
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(src.len(), dst.len());
-    let (src_chunks, src_tail) = f32x8::partition_slice(token, src);
-    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst);
+    let (src_chunks, src_tail) = f32x8::partition_slice_t(token, src);
+    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut_t(token, dst);
     for (sc, dc) in src_chunks.iter().zip(dst_chunks.iter_mut()) {
-        let v = f32x8::load(token, sc);
+        let v = f32x8::load_t(token, sc);
         (v * v).store(dc);
     }
     for (s, d) in src_tail.iter().zip(dst_tail.iter_mut()) {
@@ -74,23 +74,26 @@ fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
 /// FMA-contraction difference to worry about). The other tiers keep their
 /// vector paths — x86's ratio is not measured on this host.
 pub fn square_into(src: &[f32], dst: &mut [f32]) {
-    archmage::incant!(square_inplace_inner(src, dst), [v4x, v3, wasm128, scalar]);
+    archmage::attuned!(
+        square_inplace_inner(src, dst),
+        [_v4x(cfg(avx512)), _v3, _wasm128, _scalar]
+    );
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert_eq!(a.len(), dst.len());
-    let (a_chunks, a_tail) = f32x8::partition_slice(token, a);
-    let (b_chunks, b_tail) = f32x8::partition_slice(token, b);
-    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst);
+    let (a_chunks, a_tail) = f32x8::partition_slice_t(token, a);
+    let (b_chunks, b_tail) = f32x8::partition_slice_t(token, b);
+    let (dst_chunks, dst_tail) = f32x8::partition_slice_mut_t(token, dst);
     for ((ac, bc), dc) in a_chunks
         .iter()
         .zip(b_chunks.iter())
         .zip(dst_chunks.iter_mut())
     {
-        let va = f32x8::load(token, ac);
-        let vb = f32x8::load(token, bc);
+        let va = f32x8::load_t(token, ac);
+        let vb = f32x8::load_t(token, bc);
         (va * vb).store(dc);
     }
     for ((a, b), d) in a_tail.iter().zip(b_tail.iter()).zip(dst_tail.iter_mut()) {
@@ -100,13 +103,13 @@ fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
 
 /// `dst[i] = a[i] * b[i]`.
 pub fn mul_into(a: &[f32], b: &[f32], dst: &mut [f32]) {
-    archmage::incant!(
+    archmage::attuned!(
         mul_inplace_inner(a, b, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn cs_combine_inner(
     token: Token,
     mu1: &[f32],
@@ -122,10 +125,10 @@ fn cs_combine_inner(
     debug_assert_eq!(s1sq_raw.len(), cs_out.len());
     debug_assert_eq!(s2sq_raw.len(), cs_out.len());
     debug_assert_eq!(s12_raw.len(), cs_out.len());
-    let c2_v = f32x8::splat(token, SSIM_C2);
-    let c1_v = f32x8::splat(token, SSIM_C1);
-    let two_v = f32x8::splat(token, 2.0);
-    let zero_v = f32x8::zero(token);
+    let c2_v = f32x8::splat_t(token, SSIM_C2);
+    let c1_v = f32x8::splat_t(token, SSIM_C1);
+    let two_v = f32x8::splat_t(token, 2.0);
+    let zero_v = f32x8::zero_t(token);
     let n = cs_out.len();
     let n_chunks = n / 8;
     for i in 0..n_chunks {
@@ -135,11 +138,11 @@ fn cs_combine_inner(
         let s1: &[f32; 8] = (&s1sq_raw[off..off + 8]).try_into().unwrap();
         let s2: &[f32; 8] = (&s2sq_raw[off..off + 8]).try_into().unwrap();
         let s12: &[f32; 8] = (&s12_raw[off..off + 8]).try_into().unwrap();
-        let m1_v = f32x8::load(token, m1);
-        let m2_v = f32x8::load(token, m2);
-        let s1_v = f32x8::load(token, s1);
-        let s2_v = f32x8::load(token, s2);
-        let s12_v = f32x8::load(token, s12);
+        let m1_v = f32x8::load_t(token, m1);
+        let m2_v = f32x8::load_t(token, m2);
+        let s1_v = f32x8::load_t(token, s1);
+        let s2_v = f32x8::load_t(token, s2);
+        let s12_v = f32x8::load_t(token, s12);
         let s1sq = (s1_v - m1_v * m1_v).max(zero_v);
         let s2sq = (s2_v - m2_v * m2_v).max(zero_v);
         let s12_c = s12_v - m1_v * m2_v;
@@ -184,7 +187,7 @@ pub fn cs_combine_into(
     cs_out: &mut [f32],
     with_luminance: bool,
 ) {
-    archmage::incant!(
+    archmage::attuned!(
         cs_combine_inner(
             mu1,
             mu2,
@@ -194,20 +197,20 @@ pub fn cs_combine_into(
             cs_out,
             with_luminance
         ),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
     debug_assert_eq!(cs.len(), iw.len());
-    let mut acc_csiw = f32x8::zero(token);
-    let mut acc_iw = f32x8::zero(token);
-    let (cs_chunks, cs_tail) = f32x8::partition_slice(token, cs);
-    let (iw_chunks, iw_tail) = f32x8::partition_slice(token, iw);
+    let mut acc_csiw = f32x8::zero_t(token);
+    let mut acc_iw = f32x8::zero_t(token);
+    let (cs_chunks, cs_tail) = f32x8::partition_slice_t(token, cs);
+    let (iw_chunks, iw_tail) = f32x8::partition_slice_t(token, iw);
     for (cc, ic) in cs_chunks.iter().zip(iw_chunks.iter()) {
-        let c_v = f32x8::load(token, cc);
-        let i_v = f32x8::load(token, ic);
+        let c_v = f32x8::load_t(token, cc);
+        let i_v = f32x8::load_t(token, ic);
         acc_csiw = c_v.mul_add(i_v, acc_csiw);
         acc_iw += i_v;
     }
@@ -236,9 +239,9 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
     let n = cs.len();
     let nb = crate::par::n_bands(n);
     if nb == 1 {
-        return archmage::incant!(
+        return archmage::attuned!(
             weighted_sum_pair_inner(cs, iw),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     }
     let sz = n.div_ceil(nb);
@@ -248,9 +251,9 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
         if lo >= hi {
             return (0.0, 0.0);
         }
-        archmage::incant!(
+        archmage::attuned!(
             weighted_sum_pair_inner(&cs[lo..hi], &iw[lo..hi]),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         )
     });
     parts
@@ -266,7 +269,7 @@ pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
 // `weights::quad_form_into`; only FMA contraction differs.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn quad_form_row_inner(
     token: Token,
     img: &[f32],
@@ -287,28 +290,28 @@ fn quad_form_row_inner(
     debug_assert_eq!(cinv.len(), big_n * big_n);
     debug_assert_eq!(out.len(), ncols);
     // Hoist the Cᵤ_inv splats out of the column loop.
-    let mut cinv_v = [f32x8::zero(token); 100];
+    let mut cinv_v = [f32x8::zero_t(token); 100];
     for k in 0..big_n * big_n {
-        cinv_v[k] = f32x8::splat(token, cinv[k]);
+        cinv_v[k] = f32x8::splat_t(token, cinv[k]);
     }
-    let nfv = f32x8::splat(token, n_f);
+    let nfv = f32x8::splat_t(token, n_f);
     let n_chunks = ncols / 8;
     for c in 0..n_chunks {
         let x = c * 8;
         // Gather the big_n tap vectors for outputs col0+x .. col0+x+8.
-        let mut yv = [f32x8::zero(token); 16];
+        let mut yv = [f32x8::zero_t(token); 16];
         for (k, &(dy, dx)) in taps.iter().enumerate() {
             let off = ((row_c as i32 + dy) as usize) * stride + (col0 as i32 + dx) as usize + x;
-            yv[k] = f32x8::load(token, (&img[off..off + 8]).try_into().unwrap());
+            yv[k] = f32x8::load_t(token, (&img[off..off + 8]).try_into().unwrap());
         }
         if has_parent {
             let off = row_c * stride + col0 + x;
-            yv[nb] = f32x8::load(token, (&parent[off..off + 8]).try_into().unwrap());
+            yv[nb] = f32x8::load_t(token, (&parent[off..off + 8]).try_into().unwrap());
         }
         // acc = Σ_i y_i · (Σ_j Cinv[i,j]·y_j)
-        let mut acc = f32x8::zero(token);
+        let mut acc = f32x8::zero_t(token);
         for i in 0..big_n {
-            let mut inner = f32x8::zero(token);
+            let mut inner = f32x8::zero_t(token);
             for j in 0..big_n {
                 inner = yv[j].mul_add(cinv_v[i * big_n + j], inner);
             }
@@ -367,7 +370,7 @@ pub fn quad_form_rows(
         let band_rows = band.len() / ncols;
         for r in 0..band_rows {
             let out_row = &mut band[r * ncols..(r + 1) * ncols];
-            archmage::incant!(
+            archmage::attuned!(
                 quad_form_row_inner(
                     img,
                     parent_s,
@@ -381,7 +384,7 @@ pub fn quad_form_rows(
                     n_f,
                     out_row
                 ),
-                [v4x, v3, neon, wasm128, scalar]
+                [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
             );
         }
     });
@@ -395,7 +398,7 @@ pub fn quad_form_rows(
 // SSIM_WIN_1D. Process 8 output samples in parallel.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn ssim_gauss_h_inner(
     token: Token,
     src: &[f32],
@@ -407,9 +410,9 @@ fn ssim_gauss_h_inner(
     debug_assert_eq!(src.len(), h * w);
     debug_assert_eq!(dst.len(), h * dst_w);
     // Splat each tap.
-    let mut k_v = [f32x8::zero(token); 11];
+    let mut k_v = [f32x8::zero_t(token); 11];
     for i in 0..11 {
-        k_v[i] = f32x8::splat(token, SSIM_WIN_1D[i]);
+        k_v[i] = f32x8::splat_t(token, SSIM_WIN_1D[i]);
     }
     let n_chunks = dst_w / 8;
     for y in 0..h {
@@ -420,12 +423,12 @@ fn ssim_gauss_h_inner(
             // Sequential 8 outputs at ox..ox+7 read src[ox..ox+18] (11+7).
             // For each tap k, the contribution to output[ox..ox+7] is
             // SSIM_WIN_1D[k] * src[ox+k..ox+k+7] — load 8 lanes per tap.
-            let mut acc = f32x8::zero(token);
+            let mut acc = f32x8::zero_t(token);
             for k in 0..11 {
                 let arr: &[f32; 8] = (&src[row_off + ox + k..row_off + ox + k + 8])
                     .try_into()
                     .unwrap();
-                let v = f32x8::load(token, arr);
+                let v = f32x8::load_t(token, arr);
                 acc = v.mul_add(k_v[k], acc);
             }
             let dst_slot: &mut [f32; 8] = (&mut dst[out_row_off + ox..out_row_off + ox + 8])
@@ -447,9 +450,9 @@ fn ssim_gauss_h_inner(
 /// 11-tap horizontal Gaussian, valid mode. `dst` is `(h, dst_w)` with
 /// `dst_w = w - 10`.
 pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mut [f32]) {
-    archmage::incant!(
+    archmage::attuned!(
         ssim_gauss_h_inner(src, h, w, dst_w, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -461,7 +464,7 @@ pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mu
 // in parallel.
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn ssim_gauss_v_inner(
     token: Token,
     src: &[f32],
@@ -472,9 +475,9 @@ fn ssim_gauss_v_inner(
 ) {
     debug_assert_eq!(src.len(), h * w);
     debug_assert_eq!(dst.len(), dst_h * w);
-    let mut k_v = [f32x8::zero(token); 11];
+    let mut k_v = [f32x8::zero_t(token); 11];
     for i in 0..11 {
-        k_v[i] = f32x8::splat(token, SSIM_WIN_1D[i]);
+        k_v[i] = f32x8::splat_t(token, SSIM_WIN_1D[i]);
     }
     let n_chunks = w / 8;
     for oy in 0..dst_h {
@@ -486,12 +489,12 @@ fn ssim_gauss_v_inner(
         }
         for c in 0..n_chunks {
             let x = c * 8;
-            let mut acc = f32x8::zero(token);
+            let mut acc = f32x8::zero_t(token);
             for k in 0..11 {
                 let arr: &[f32; 8] = (&src[row_offs[k] + x..row_offs[k] + x + 8])
                     .try_into()
                     .unwrap();
-                let v = f32x8::load(token, arr);
+                let v = f32x8::load_t(token, arr);
                 acc = v.mul_add(k_v[k], acc);
             }
             let dst_slot: &mut [f32; 8] = (&mut dst[out_row_off + x..out_row_off + x + 8])
@@ -513,9 +516,9 @@ fn ssim_gauss_v_inner(
 /// 11-tap vertical Gaussian, valid mode. `dst` is `(dst_h, w)` with
 /// `dst_h = h - 10`.
 pub fn ssim_gauss_v_pass(src: &[f32], h: usize, dst_h: usize, w: usize, dst: &mut [f32]) {
-    archmage::incant!(
+    archmage::attuned!(
         ssim_gauss_v_inner(src, h, dst_h, w, dst),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
@@ -712,7 +715,7 @@ fn box_gain_pixel(
     (g, vv)
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 #[allow(clippy::too_many_arguments)]
 fn box_gain_row_inner(
     token: Token,
@@ -738,24 +741,24 @@ fn box_gain_row_inner(
         }
         return;
     }
-    let inv9 = f32x8::splat(token, 1.0 / 9.0);
-    let tol_v = f32x8::splat(token, tol);
-    let zero = f32x8::zero(token);
+    let inv9 = f32x8::splat_t(token, 1.0 / 9.0);
+    let tol_v = f32x8::splat_t(token, tol);
+    let zero = f32x8::zero_t(token);
     // Interior vector cols: c..c+8 ⊆ [1, w-1) — all nine taps in-bounds.
     let vec_end = w - 1; // exclusive bound on c+8
     let mut c = 1usize;
     while c + 8 <= vec_end {
-        let mut sx = f32x8::zero(token);
-        let mut sy = f32x8::zero(token);
-        let mut sxx = f32x8::zero(token);
-        let mut syy = f32x8::zero(token);
-        let mut sxy = f32x8::zero(token);
+        let mut sx = f32x8::zero_t(token);
+        let mut sy = f32x8::zero_t(token);
+        let mut sxx = f32x8::zero_t(token);
+        let mut syy = f32x8::zero_t(token);
+        let mut sxy = f32x8::zero_t(token);
         for srow in sy_lo..=sy_hi {
             let row = srow * stride;
             for dx in [-1isize, 0, 1] {
                 let off = (row + c).wrapping_add_signed(dx);
-                let xv = f32x8::load(token, (&x[off..off + 8]).try_into().unwrap());
-                let yv = f32x8::load(token, (&y[off..off + 8]).try_into().unwrap());
+                let xv = f32x8::load_t(token, (&x[off..off + 8]).try_into().unwrap());
+                let yv = f32x8::load_t(token, (&y[off..off + 8]).try_into().unwrap());
                 sx += xv;
                 sy += yv;
                 sxx = xv.mul_add(xv, sxx);
@@ -816,7 +819,7 @@ pub fn box_gain_rows(
         let band_rows = gb.len() / w;
         for r in 0..band_rows {
             let out = r * w;
-            archmage::incant!(
+            archmage::attuned!(
                 box_gain_row_inner(
                     x,
                     y,
@@ -828,7 +831,7 @@ pub fn box_gain_rows(
                     &mut gb[out..out + w],
                     &mut vb[out..out + w]
                 ),
-                [v4x, v3, neon, wasm128, scalar]
+                [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
             );
         }
     });
@@ -863,7 +866,7 @@ fn corr5_reflect(src_row: &[f32], in_w: usize, xc: usize) -> f32 {
     acc
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 #[allow(clippy::too_many_arguments)]
 fn corr_dn_h_inner(
     token: Token,
@@ -875,7 +878,7 @@ fn corr_dn_h_inner(
     dst: &mut [f32],
 ) {
     debug_assert_eq!(corr_row.len(), in_w);
-    let k: [f32x8; 5] = core::array::from_fn(|i| f32x8::splat(token, BINOM5[i]));
+    let k: [f32x8; 5] = core::array::from_fn(|i| f32x8::splat_t(token, BINOM5[i]));
     let band_rows = dst.len() / out_w;
     for i in 0..band_rows {
         let y = y0 + i;
@@ -884,10 +887,10 @@ fn corr_dn_h_inner(
         let vec_hi = in_w.saturating_sub(BINOM5_RADIUS as usize);
         let mut c = BINOM5_RADIUS as usize;
         while c + 8 <= vec_hi {
-            let mut acc = f32x8::zero(token);
+            let mut acc = f32x8::zero_t(token);
             for t in 0..BINOM5_LEN {
                 let off = c - BINOM5_RADIUS as usize + t;
-                let v = f32x8::load(token, (&row[off..off + 8]).try_into().unwrap());
+                let v = f32x8::load_t(token, (&row[off..off + 8]).try_into().unwrap());
                 acc = v.mul_add(k[t], acc);
             }
             acc.store((&mut corr_row[c..c + 8]).try_into().unwrap());
@@ -913,16 +916,16 @@ pub fn corr_dn_h(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f3
         // Per-band correlation scratch — one alloc per band, reused
         // across the band's rows.
         let mut corr_row = alloc::vec![0.0_f32; in_w];
-        archmage::incant!(
+        archmage::attuned!(
             corr_dn_h_inner(src, in_w, out_w, y0, &mut corr_row, band),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     });
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn corr_dn_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, dst: &mut [f32]) {
-    let k: [f32x8; 5] = core::array::from_fn(|i| f32x8::splat(token, BINOM5[i]));
+    let k: [f32x8; 5] = core::array::from_fn(|i| f32x8::splat_t(token, BINOM5[i]));
     let in_h_i = in_h as i32;
     let band_rows = dst.len() / w;
     for i in 0..band_rows {
@@ -934,10 +937,10 @@ fn corr_dn_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
         let n_chunks = w / 8;
         for c in 0..n_chunks {
             let x = c * 8;
-            let mut acc = f32x8::zero(token);
+            let mut acc = f32x8::zero_t(token);
             for t in 0..BINOM5_LEN {
                 let off = ys[t] * w + x;
-                let v = f32x8::load(token, (&src[off..off + 8]).try_into().unwrap());
+                let v = f32x8::load_t(token, (&src[off..off + 8]).try_into().unwrap());
                 acc = v.mul_add(k[t], acc);
             }
             acc.store((&mut dst_row[x..x + 8]).try_into().unwrap());
@@ -957,20 +960,20 @@ pub fn corr_dn_v(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f3
     debug_assert_eq!(src.len(), in_h * w);
     debug_assert_eq!(dst.len(), out_h * w);
     crate::par::map_rows(dst, w, |y0, band| {
-        archmage::incant!(
+        archmage::attuned!(
             corr_dn_v_inner(src, in_h, w, y0, band),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     });
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, dst: &mut [f32]) {
-    let k0 = f32x8::splat(token, BINOM5[0]);
-    let k1 = f32x8::splat(token, BINOM5[1]);
-    let k2 = f32x8::splat(token, BINOM5[2]);
-    let k3 = f32x8::splat(token, BINOM5[3]);
-    let k4 = f32x8::splat(token, BINOM5[4]);
+    let k0 = f32x8::splat_t(token, BINOM5[0]);
+    let k1 = f32x8::splat_t(token, BINOM5[1]);
+    let k2 = f32x8::splat_t(token, BINOM5[2]);
+    let k3 = f32x8::splat_t(token, BINOM5[3]);
+    let k4 = f32x8::splat_t(token, BINOM5[4]);
     let in_h_i = in_h as i32;
     // Interior output rows whose every expanded-axis tap lands
     // in-bounds: oy ∈ [2, 2·in_h − 3]. Outside: scalar reflect path.
@@ -994,18 +997,18 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
             };
             for c in 0..n_chunks {
                 let x = c * 8;
-                let a = f32x8::load(
+                let a = f32x8::load_t(
                     token,
                     (&src[ra * w + x..ra * w + x + 8]).try_into().unwrap(),
                 );
-                let b = f32x8::load(
+                let b = f32x8::load_t(
                     token,
                     (&src[rb * w + x..rb * w + x + 8]).try_into().unwrap(),
                 );
-                let mut acc = a.mul_add(ka, f32x8::zero(token));
+                let mut acc = a.mul_add(ka, f32x8::zero_t(token));
                 acc = b.mul_add(kb, acc);
                 if oy.is_multiple_of(2) {
-                    let cv = f32x8::load(
+                    let cv = f32x8::load_t(
                         token,
                         (&src[rc * w + x..rc * w + x + 8]).try_into().unwrap(),
                     );
@@ -1057,9 +1060,9 @@ pub fn up_conv_v(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f3
     debug_assert_eq!(src.len(), in_h * w);
     debug_assert_eq!(dst.len(), out_h * w);
     crate::par::map_rows(dst, w, |y0, band| {
-        archmage::incant!(
+        archmage::attuned!(
             up_conv_v_inner(src, in_h, w, y0, band),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     });
 }
@@ -1092,7 +1095,7 @@ fn up_conv_h_pixel(src_row: &[f32], in_w: usize, ox: usize) -> f32 {
     acc
 }
 
-#[archmage::magetypes(define(f32x8), +v4x, +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn up_conv_h_inner(
     token: Token,
     src: &[f32],
@@ -1101,11 +1104,11 @@ fn up_conv_h_inner(
     y0: usize,
     dst: &mut [f32],
 ) {
-    let k0 = f32x8::splat(token, BINOM5[0]);
-    let k1 = f32x8::splat(token, BINOM5[1]);
-    let k2 = f32x8::splat(token, BINOM5[2]);
-    let k3 = f32x8::splat(token, BINOM5[3]);
-    let k4 = f32x8::splat(token, BINOM5[4]);
+    let k0 = f32x8::splat_t(token, BINOM5[0]);
+    let k1 = f32x8::splat_t(token, BINOM5[1]);
+    let k2 = f32x8::splat_t(token, BINOM5[2]);
+    let k3 = f32x8::splat_t(token, BINOM5[3]);
+    let k4 = f32x8::splat_t(token, BINOM5[4]);
     // Interior m range: even out 2m needs src[m-1], src[m+1] →
     // m ∈ [1, in_w-2]. Vector chunks need m+9 ≤ in_w → m ∈ [1, in_w-9].
     let vec_hi = in_w.saturating_sub(9);
@@ -1116,14 +1119,14 @@ fn up_conv_h_inner(
         let dst_row = &mut dst[i * out_w..(i + 1) * out_w];
         let mut m = 1usize;
         while m + 8 <= vec_hi {
-            let a = f32x8::load(token, (&row[m - 1..m + 7]).try_into().unwrap());
-            let b = f32x8::load(token, (&row[m..m + 8]).try_into().unwrap());
-            let c = f32x8::load(token, (&row[m + 1..m + 9]).try_into().unwrap());
+            let a = f32x8::load_t(token, (&row[m - 1..m + 7]).try_into().unwrap());
+            let b = f32x8::load_t(token, (&row[m..m + 8]).try_into().unwrap());
+            let c = f32x8::load_t(token, (&row[m + 1..m + 9]).try_into().unwrap());
             // Ascending-tap accumulation order (modulo FMA).
-            let mut ev = a.mul_add(k0, f32x8::zero(token));
+            let mut ev = a.mul_add(k0, f32x8::zero_t(token));
             ev = b.mul_add(k2, ev);
             ev = c.mul_add(k4, ev);
-            let mut ov = b.mul_add(k1, f32x8::zero(token));
+            let mut ov = b.mul_add(k1, f32x8::zero_t(token));
             ov = c.mul_add(k3, ov);
             let mut ea = [0.0_f32; 8];
             let mut oa = [0.0_f32; 8];
@@ -1155,9 +1158,9 @@ pub fn up_conv_h(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f3
     debug_assert_eq!(src.len(), h * in_w);
     debug_assert_eq!(dst.len(), h * out_w);
     crate::par::map_rows(dst, out_w, |y0, band| {
-        archmage::incant!(
+        archmage::attuned!(
             up_conv_h_inner(src, in_w, out_w, y0, band),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     });
 }
@@ -1190,21 +1193,21 @@ fn infow_kernel<T: magetypes::simd::backends::F32x8Convert>(
     debug_assert_eq!(ss.len(), g.len());
     debug_assert_eq!(out.len(), g.len());
     type F32x8<T> = magetypes::simd::generic::f32x8<T>;
-    let s2v = F32x8::<T>::splat(token, s2);
-    let inv_s4v = F32x8::<T>::splat(token, inv_s4);
-    let tolv = F32x8::<T>::splat(token, tol);
-    let one = F32x8::<T>::splat(token, 1.0);
-    let zero = F32x8::<T>::zero(token);
+    let s2v = F32x8::<T>::splat_t(token, s2);
+    let inv_s4v = F32x8::<T>::splat_t(token, inv_s4);
+    let tolv = F32x8::<T>::splat_t(token, tol);
+    let one = F32x8::<T>::splat_t(token, 1.0);
+    let zero = F32x8::<T>::zero_t(token);
     let mut lamv = [zero; 16];
     for (i, &l) in lambdas.iter().enumerate() {
-        lamv[i] = F32x8::<T>::splat(token, l);
+        lamv[i] = F32x8::<T>::splat_t(token, l);
     }
     let n_chunks = g.len() / 8;
     for c in 0..n_chunks {
         let i = c * 8;
-        let gv = F32x8::<T>::load(token, (&g[i..i + 8]).try_into().unwrap());
-        let vvv = F32x8::<T>::load(token, (&vv[i..i + 8]).try_into().unwrap());
-        let ssv = F32x8::<T>::load(token, (&ss[i..i + 8]).try_into().unwrap());
+        let gv = F32x8::<T>::load_t(token, (&g[i..i + 8]).try_into().unwrap());
+        let vvv = F32x8::<T>::load_t(token, (&vv[i..i + 8]).try_into().unwrap());
+        let ssv = F32x8::<T>::load_t(token, (&ss[i..i + 8]).try_into().unwrap());
         let one_plus_g2 = gv.mul_add(gv, one);
         let common_num = (vvv + one_plus_g2 * s2v) * ssv;
         let sn2_vv = s2v * vvv;
@@ -1250,14 +1253,14 @@ pub fn infow_map(
     let s4 = s2 * s2;
     let inv_s4 = 1.0 / s4;
     crate::par::map1_3(out, g, vv, ss, |d, a, b, c| {
-        archmage::incant!(
+        archmage::attuned!(
             infow_map_into(a, b, c, lambdas, s2, inv_s4, tol, d),
-            [v4x, v3, neon, wasm128, scalar]
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
         );
     });
 }
 
-pub(crate) fn infow_map_into_scalar(
+pub(crate) fn infow_map_into_scalar_t(
     token: archmage::ScalarToken,
     g: &[f32],
     vv: &[f32],
@@ -1278,8 +1281,8 @@ use infow_x64::*;
 mod infow_x64 {
     use super::*;
 
-    #[archmage::arcane]
-    pub(crate) fn infow_map_into_v3(
+    #[archmage::attune]
+    pub(crate) fn infow_map_into_v3_t(
         token: archmage::X64V3Token,
         g: &[f32],
         vv: &[f32],
@@ -1294,8 +1297,8 @@ mod infow_x64 {
     }
 
     #[cfg(feature = "avx512")]
-    #[archmage::arcane]
-    pub(crate) fn infow_map_into_v4x(
+    #[archmage::attune]
+    pub(crate) fn infow_map_into_v4x_t(
         token: archmage::X64V4xToken,
         g: &[f32],
         vv: &[f32],
@@ -1317,8 +1320,8 @@ use infow_neon::*;
 mod infow_neon {
     use super::*;
 
-    #[archmage::arcane]
-    pub(crate) fn infow_map_into_neon(
+    #[archmage::attune]
+    pub(crate) fn infow_map_into_neon_t(
         token: archmage::NeonToken,
         g: &[f32],
         vv: &[f32],
@@ -1340,8 +1343,8 @@ use infow_wasm::*;
 mod infow_wasm {
     use super::*;
 
-    #[archmage::arcane]
-    pub(crate) fn infow_map_into_wasm128(
+    #[archmage::attune]
+    pub(crate) fn infow_map_into_wasm128_t(
         token: archmage::Wasm128Token,
         g: &[f32],
         vv: &[f32],
@@ -1363,7 +1366,7 @@ mod infow_wasm {
 // contraction).
 // ---------------------------------------------------------------------
 
-#[archmage::magetypes(define(f64x4), +v3, +neon, +wasm128, +scalar)]
+#[archmage::attune(_*_t, define(f64x4))]
 pub(crate) fn gram_rows_inner(
     token: Token,
     img: &[f32],
@@ -1391,13 +1394,13 @@ pub(crate) fn gram_rows_inner(
                 yv[nb] = p[row_c * stride + col_c] as f64;
             }
             for i in 0..big_n {
-                let a = f64x4::splat(token, yv[i]);
+                let a = f64x4::splat_t(token, yv[i]);
                 let row = &mut gram[i * big_n + i..i * big_n + big_n];
-                let (chunks, tail) = f64x4::partition_slice_mut(token, row);
+                let (chunks, tail) = f64x4::partition_slice_mut_t(token, row);
                 let mut jj = i;
                 for ch in chunks.iter_mut() {
-                    let y = f64x4::load(token, (&yv[jj..jj + 4]).try_into().unwrap());
-                    let g = f64x4::load(token, ch);
+                    let y = f64x4::load_t(token, (&yv[jj..jj + 4]).try_into().unwrap());
+                    let g = f64x4::load_t(token, ch);
                     (g + a * y).store(ch);
                     jj += 4;
                 }

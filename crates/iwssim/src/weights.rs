@@ -146,11 +146,11 @@ fn gram_accumulate_rows(
     let big_n = nb + parent.is_some() as usize;
     debug_assert_eq!(gram.len(), big_n * big_n);
     debug_assert!(big_n <= 16);
-    archmage::incant!(
+    archmage::attuned!(
         crate::simd_kernels::gram_rows_inner(
             img, parent, stride, row0, col0, nrows, ncols, taps, gram
         ),
-        [v3, neon, wasm128, scalar]
+        [_v3, _neon, _wasm128, _scalar]
     );
 }
 

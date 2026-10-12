@@ -1,14 +1,12 @@
 use crate::{Error, pool};
-#[cfg(feature = "simd")]
-use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-use archmage::{NeonToken, SimdToken, arcane, rite};
+use archmage::{NeonToken, SimdToken, attune};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, arcane, rite};
+use archmage::{SimdToken, X64V3Token, attune};
 
 #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
@@ -4388,8 +4386,8 @@ fn adjust_window_size(window_size: usize, w: usize, h: usize, speedup: bool) -> 
 /// the write doesn't alias the +1-element reads); block writes stay strictly
 /// below the next block's reads, so the u16-wrapping adds are exact.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn anti_dithering_rows_neon(_token: NeonToken, data: &mut [u16], width: usize, height: usize) {
+#[attune(import_intrinsics)]
+fn anti_dithering_rows_neon_t(_token: NeonToken, data: &mut [u16], width: usize, height: usize) {
     for i in 0..height - 1 {
         let row = i * width;
         let nrow = (i + 1) * width;
@@ -4418,11 +4416,11 @@ fn anti_dithering_rows_neon(_token: NeonToken, data: &mut [u16], width: usize, h
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
     #[cfg(all(feature = "simd", target_arch = "aarch64"))]
     if let Some(token) = neon_token() {
-        anti_dithering_rows_neon(token, data, width, height);
+        anti_dithering_rows_neon_t(token, data, width, height);
         let i = height - 1;
         for j in 0..width - 1 {
             data[i * width + j] = (data[i * width + j].wrapping_add(data[i * width + j + 1])) >> 1;
@@ -4431,7 +4429,7 @@ fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
     }
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
-        anti_dithering_rows_v3(token, data, width, height);
+        anti_dithering_rows_v3_t(token, data, width, height);
         return;
     }
     for i in 0..height - 1 {
@@ -4456,8 +4454,8 @@ fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
 /// the left-neighbour windows — both read before the block that writes it.
 /// u16 lane sums can't overflow (bit_depth < 10 ⇒ values ≤ 1023, sum ≤ 4092).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn anti_dithering_rows_v3(_token: X64V3Token, data: &mut [u16], width: usize, height: usize) {
+#[attune(import_intrinsics)]
+fn anti_dithering_rows_v3_t(_token: X64V3Token, data: &mut [u16], width: usize, height: usize) {
     for i in 0..height - 1 {
         let (ra, rb) = data.split_at_mut((i + 1) * width);
         let a = &mut ra[i * width..i * width + width];
@@ -4489,16 +4487,16 @@ fn anti_dithering_rows_v3(_token: X64V3Token, data: &mut [u16], width: usize, he
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn decimate(data: &mut [u16], stride: usize, width: usize, height: usize) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
-        decimate_rows_v3(token, data, stride, width, height);
+        decimate_rows_v3_t(token, data, stride, width, height);
         return;
     }
     #[cfg(all(feature = "simd", target_arch = "aarch64"))]
     if let Some(token) = neon_token() {
-        decimate_rows_neon(token, data, stride, width, height);
+        decimate_rows_neon_t(token, data, stride, width, height);
         return;
     }
     for i in 0..height {
@@ -4512,8 +4510,8 @@ fn decimate(data: &mut [u16], stride: usize, width: usize, height: usize) {
 /// uint32-mask keeps the low u16 of each pair, packus_epi32 + permute4x64
 /// restores lane order. Reads stay ahead of writes so in-place is safe.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn decimate_rows_v3(
+#[attune(import_intrinsics)]
+fn decimate_rows_v3_t(
     _token: X64V3Token,
     data: &mut [u16],
     stride: usize,
@@ -4579,8 +4577,8 @@ fn mode3(a: u16, b: u16, c: u16) -> u16 {
 /// Direct port of `mode3_avx2`: duplicate among (a,b,c) else unsigned min.
 /// blendv_epi8 is safe at epi16 granularity since cmpeq_epi16 emits 0xFFFF.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn mode3_v3(_token: X64V3Token, a: __m256i, b: __m256i, c: __m256i) -> __m256i {
+#[attune]
+fn mode3_v3_t(_token: X64V3Token, a: __m256i, b: __m256i, c: __m256i) -> __m256i {
     let ab_eq = _mm256_cmpeq_epi16(a, b);
     let ac_eq = _mm256_cmpeq_epi16(a, c);
     let bc_eq = _mm256_cmpeq_epi16(b, c);
@@ -4593,7 +4591,7 @@ fn mode3_v3(_token: X64V3Token, a: __m256i, b: __m256i, c: __m256i) -> __m256i {
 /// Direct port of `filter_mode_avx2`: horizontal mode-3 into a three-row ring
 /// buffer, then vertical mode-3 writing row i-1 once three rows are buffered.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(wrap, import_intrinsics)]
 fn filter_mode_kernel(
     _token: X64V3Token,
     data: &mut [u16],
@@ -4616,7 +4614,7 @@ fn filter_mode_kernel(
             ));
             _mm256_storeu_si256(
                 a8m::<u16, 16>(&mut buffer[curr_line * width + j..curr_line * width + j + 16]),
-                mode3_v3(_token, a, b, c),
+                mode3_v3_t(_token, a, b, c),
             );
             j += 16;
         }
@@ -4639,7 +4637,7 @@ fn filter_mode_kernel(
                     _mm256_loadu_si256(a8::<u16, 16>(&buffer[2 * width + j2..2 * width + j2 + 16]));
                 _mm256_storeu_si256(
                     a8m::<u16, 16>(&mut data[(i - 1) * stride + j2..(i - 1) * stride + j2 + 16]),
-                    mode3_v3(_token, a, b, c),
+                    mode3_v3_t(_token, a, b, c),
                 );
                 j2 += 16;
             }
@@ -4653,13 +4651,13 @@ fn filter_mode_kernel(
     }
 }
 
-/// NEON port of `decimate_rows_v3`: in-place even-element extraction via
+/// NEON port of `decimate_rows_v3_t`: in-place even-element extraction via
 /// `vld2q_u16` deinterleave — the even half of each pair of registers is the
 /// packed result, no mask+packus+permute needed. Same in-place safety:
 /// reads stay ahead of writes.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn decimate_rows_neon(
+#[attune(import_intrinsics)]
+fn decimate_rows_neon_t(
     _token: NeonToken,
     data: &mut [u16],
     stride: usize,
@@ -4697,11 +4695,11 @@ fn decimate_rows_neon(
     }
 }
 
-/// NEON port of `mode3_v3`: duplicate among (a,b,c) else unsigned min.
+/// NEON port of `mode3_v3_t`: duplicate among (a,b,c) else unsigned min.
 /// `vbslq_u16` is `blendv_epi8`; `vceqq_u16` emits all-ones lanes.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[rite]
-fn mode3_neon(_token: NeonToken, a: uint16x8_t, b: uint16x8_t, c: uint16x8_t) -> uint16x8_t {
+#[attune]
+fn mode3_neon_t(_token: NeonToken, a: uint16x8_t, b: uint16x8_t, c: uint16x8_t) -> uint16x8_t {
     let ab_eq = vceqq_u16(a, b);
     let ac_eq = vceqq_u16(a, c);
     let bc_eq = vceqq_u16(b, c);
@@ -4715,8 +4713,8 @@ fn mode3_neon(_token: NeonToken, a: uint16x8_t, b: uint16x8_t, c: uint16x8_t) ->
 /// ring buffer, then vertical mode-3 writing row i-1 once three rows are
 /// buffered. 8 lanes per step instead of AVX2's 16.
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[arcane(import_intrinsics)]
-fn filter_mode_kernel_neon(
+#[attune(wrap, import_intrinsics)]
+fn filter_mode_kernel_neon_t(
     _token: NeonToken,
     data: &mut [u16],
     stride: usize,
@@ -4744,7 +4742,7 @@ fn filter_mode_kernel_neon(
             let a = vld1q_u16(a8::<u16, 8>(a));
             let b = vld1q_u16(a8::<u16, 8>(b));
             let c = vld1q_u16(a8::<u16, 8>(c));
-            vst1q_u16(a8m::<u16, 8>(out), mode3_neon(_token, a, b, c));
+            vst1q_u16(a8m::<u16, 8>(out), mode3_neon_t(_token, a, b, c));
             j += 8;
         }
         while j < width - 1 {
@@ -4765,7 +4763,7 @@ fn filter_mode_kernel_neon(
                 let a = vld1q_u16(a8::<u16, 8>(a));
                 let b = vld1q_u16(a8::<u16, 8>(b));
                 let c = vld1q_u16(a8::<u16, 8>(c));
-                vst1q_u16(a8m::<u16, 8>(out), mode3_neon(_token, a, b, c));
+                vst1q_u16(a8m::<u16, 8>(out), mode3_neon_t(_token, a, b, c));
                 j2 += 8;
             }
             while j2 < width {
@@ -4780,8 +4778,8 @@ fn filter_mode_kernel_neon(
 /// Direct port of `cambi_increment_range_avx2` / `cambi_decrement_range_avx2`:
 /// ±1 epi16 add/sub over a contiguous range, 16 lanes at a time.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn cambi_range_update_v3(_token: X64V3Token, arr: &mut [u16], decrement: bool) {
+#[attune(import_intrinsics)]
+fn cambi_range_update_v3_t(_token: X64V3Token, arr: &mut [u16], decrement: bool) {
     let val = _mm256_set1_epi16(if decrement { -1 } else { 1 });
     let mut col = 0usize;
     while col + 16 <= arr.len() {
@@ -4798,7 +4796,7 @@ fn cambi_range_update_v3(_token: X64V3Token, arr: &mut [u16], decrement: bool) {
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn filter_mode(data: &mut [u16], stride: usize, width: usize, height: usize, buffer: &mut [u16]) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
@@ -4807,7 +4805,7 @@ fn filter_mode(data: &mut [u16], stride: usize, width: usize, height: usize, buf
     }
     #[cfg(all(feature = "simd", target_arch = "aarch64"))]
     if let Some(token) = neon_token() {
-        filter_mode_kernel_neon(token, data, stride, width, height, buffer);
+        filter_mode_kernel_neon_t(token, data, stride, width, height, buffer);
         return;
     }
     let mut curr_line = 0usize;
@@ -4863,7 +4861,7 @@ fn derivative_row(
 ) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
-        derivative_row_v3(token, image, stride, deriv, row, width, height);
+        derivative_row_v3_t(token, image, stride, deriv, row, width, height);
         return;
     }
     let top = &image[row * stride..row * stride + width];
@@ -4882,8 +4880,8 @@ fn derivative_row(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn derivative_row_v3(
+#[attune(import_intrinsics)]
+fn derivative_row_v3_t(
     _token: X64V3Token,
     image: &[u16],
     stride: usize,
@@ -4956,7 +4954,7 @@ fn compute_dp_row(
 ) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
-        compute_dp_row_v3(token, dp_curr, dp_prev, deriv, width, pad, actual_width);
+        compute_dp_row_v3_t(token, dp_curr, dp_prev, deriv, width, pad, actual_width);
         return;
     }
     compute_dp_row_scalar(dp_curr, dp_prev, deriv, width, pad, actual_width);
@@ -4982,8 +4980,8 @@ fn compute_dp_row_scalar(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn compute_dp_row_v3(
+#[attune(import_intrinsics)]
+fn compute_dp_row_v3_t(
     _token: X64V3Token,
     dp_curr: &mut [u32],
     dp_prev: &[u32],
@@ -5041,7 +5039,7 @@ fn compute_mask_row(
 ) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
-        compute_mask_row_v3(token, mask_row, dp_bottom, dp_top, width, pad, mask_index);
+        compute_mask_row_v3_t(token, mask_row, dp_bottom, dp_top, width, pad, mask_index);
         return;
     }
     let delta = 2 * pad + 1;
@@ -5055,8 +5053,8 @@ fn compute_mask_row(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn compute_mask_row_v3(
+#[attune(import_intrinsics)]
+fn compute_mask_row_v3_t(
     _token: X64V3Token,
     mask_row: &mut [u16],
     dp_bottom: &[u32],
@@ -5233,8 +5231,8 @@ fn c_value_pixel(
 /// is fetched with a bounds-checked load — semantically identical to the C
 /// 4-byte gather + low-16 mask.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn gather_u16_v3(_token: X64V3Token, table: &[u16], idx: __m256i) -> __m256i {
+#[attune]
+fn gather_u16_v3_t(_token: X64V3Token, table: &[u16], idx: __m256i) -> __m256i {
     let mut a = [0i32; 8];
     _mm256_storeu_si256(a8m::<i32, 8>(&mut a), idx);
     _mm256_setr_epi32(
@@ -5251,8 +5249,8 @@ fn gather_u16_v3(_token: X64V3Token, table: &[u16], idx: __m256i) -> __m256i {
 
 /// Safe stand-in for `_mm256_i32gather_ps` — same lane-array approach.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
-fn gather_f32_v3(_token: X64V3Token, table: &[f32], idx: __m256i) -> __m256 {
+#[attune]
+fn gather_f32_v3_t(_token: X64V3Token, table: &[f32], idx: __m256i) -> __m256 {
     let mut a = [0i32; 8];
     _mm256_storeu_si256(a8m::<i32, 8>(&mut a), idx);
     _mm256_setr_ps(
@@ -5273,9 +5271,9 @@ fn gather_f32_v3(_token: X64V3Token, table: &[f32], idx: __m256i) -> __m256 {
 /// buffer (element `idx + 1` ≤ `band_size * width - 1`) — same invariant as C.
 /// `denom = p_max + p_0 ≤ window² < 4226` since bands count disjoint pixels.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn calculate_c_values_row_v3(
+fn calculate_c_values_row_v3_t(
     _token: X64V3Token,
     c_row: &mut [f32],
     histograms: &[u16],
@@ -5321,7 +5319,7 @@ fn calculate_c_values_row_v3(
         let col_v = _mm256_add_epi32(_mm256_set1_epi32(col as i32), col_base);
 
         let p0_idx = _mm256_add_epi32(_mm256_mullo_epi32(compact_v, width_v), col_v);
-        let p0 = _mm256_and_si256(gather_u16_v3(_token, histograms, p0_idx), lo16_mask);
+        let p0 = _mm256_and_si256(gather_u16_v3_t(_token, histograms, p0_idx), lo16_mask);
 
         let mut c_value = _mm256_setzero_ps();
 
@@ -5349,10 +5347,10 @@ fn calculate_c_values_row_v3(
             let compact_minus = _mm256_max_epi32(compact_minus_raw, zero);
 
             let p1_idx = _mm256_add_epi32(_mm256_mullo_epi32(compact_plus, width_v), col_v);
-            let p1 = _mm256_and_si256(gather_u16_v3(_token, histograms, p1_idx), lo16_mask);
+            let p1 = _mm256_and_si256(gather_u16_v3_t(_token, histograms, p1_idx), lo16_mask);
 
             let p2_idx = _mm256_add_epi32(_mm256_mullo_epi32(compact_minus, width_v), col_v);
-            let mut p2 = _mm256_and_si256(gather_u16_v3(_token, histograms, p2_idx), lo16_mask);
+            let mut p2 = _mm256_and_si256(gather_u16_v3_t(_token, histograms, p2_idx), lo16_mask);
             p2 = _mm256_and_si256(p2, p2_inbounds);
 
             let p_max = _mm256_max_epu32(p1, p2);
@@ -5364,7 +5362,7 @@ fn calculate_c_values_row_v3(
             );
             let num_f = _mm256_cvtepi32_ps(num_int);
 
-            let rcp = gather_f32_v3(_token, &RECIPROCAL_LUT, denom);
+            let rcp = gather_f32_v3_t(_token, &RECIPROCAL_LUT, denom);
 
             let mut val = _mm256_mul_ps(num_f, rcp);
             val = _mm256_and_ps(val, _mm256_castsi256_ps(predicate));
@@ -5397,7 +5395,7 @@ fn calculate_c_values_row_v3(
     }
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn calculate_c_values(
     image: &[u16],
     mask: &[u16],
@@ -5443,7 +5441,7 @@ fn calculate_c_values(
             let c_hi = (j + pad).min(width - 1);
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(token) = token {
-                cambi_range_update_v3(token, &mut row[c_lo..=c_hi], delta < 0);
+                cambi_range_update_v3_t(token, &mut row[c_lo..=c_hi], delta < 0);
                 continue;
             }
             for v in row[c_lo..=c_hi].iter_mut() {
@@ -5467,7 +5465,7 @@ fn calculate_c_values(
         let histograms = &histograms_acc[..];
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(token) = token {
-            calculate_c_values_row_v3(
+            calculate_c_values_row_v3_t(
                 token,
                 &mut c_values[i * width..(i + 1) * width],
                 histograms,

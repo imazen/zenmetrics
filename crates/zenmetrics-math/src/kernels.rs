@@ -21,16 +21,16 @@ macro_rules! kernels {
             debug_assert_eq!(xs.len(), out.len());
 
             type F32x8<T> = $Vector<T>;
-            let offset_v = F32x8::<T>::splat(token, offset);
-            let offset_pow_p_v = F32x8::<T>::splat(token, offset_pow_p);
-            let exact_offset = F32x8::<T>::splat(token, P::scalar_pow(offset, p) - offset_pow_p);
+            let offset_v = F32x8::<T>::splat_t(token, offset);
+            let offset_pow_p_v = F32x8::<T>::splat_t(token, offset_pow_p);
+            let exact_offset = F32x8::<T>::splat_t(token, P::scalar_pow(offset, p) - offset_pow_p);
 
-            let (in_chunks, in_tail) = F32x8::<T>::partition_slice(token, xs);
-            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut(token, out);
+            let (in_chunks, in_tail) = F32x8::<T>::partition_slice_t(token, xs);
+            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
             debug_assert_eq!(in_chunks.len(), out_chunks.len());
 
             for (in_chunk, out_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-                let x = F32x8::<T>::load(token, in_chunk);
+                let x = F32x8::<T>::load_t(token, in_chunk);
                 let shifted = x + offset_v;
                 // pow_midp_unchecked = exp2_midp_unchecked(p * log2_midp_unchecked(x)).
                 // Input is guaranteed > 0 because the caller pre-offsets by
@@ -55,10 +55,10 @@ macro_rules! kernels {
             debug_assert_eq!(xs.len(), out.len());
             type F32x8<T> = $Vector<T>;
 
-            let (in_chunks, in_tail) = F32x8::<T>::partition_slice(token, xs);
-            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut(token, out);
+            let (in_chunks, in_tail) = F32x8::<T>::partition_slice_t(token, xs);
+            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
             for (in_chunk, out_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-                P::$exp(F32x8::<T>::load(token, in_chunk)).store(out_chunk);
+                P::$exp(F32x8::<T>::load_t(token, in_chunk)).store(out_chunk);
             }
             for (xi, oi) in in_tail.iter().zip(out_tail.iter_mut()) {
                 *oi = P::scalar_exp(*xi);
@@ -71,10 +71,10 @@ macro_rules! kernels {
             debug_assert_eq!(xs.len(), out.len());
             type F32x8<T> = $Vector<T>;
 
-            let (in_chunks, in_tail) = F32x8::<T>::partition_slice(token, xs);
-            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut(token, out);
+            let (in_chunks, in_tail) = F32x8::<T>::partition_slice_t(token, xs);
+            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
             for (in_chunk, out_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-                P::$ln(F32x8::<T>::load(token, in_chunk)).store(out_chunk);
+                P::$ln(F32x8::<T>::load_t(token, in_chunk)).store(out_chunk);
             }
             for (xi, oi) in in_tail.iter().zip(out_tail.iter_mut()) {
                 *oi = P::scalar_ln(*xi);
@@ -92,10 +92,10 @@ macro_rules! kernels {
             debug_assert_eq!(xs.len(), out.len());
             type F32x8<T> = $Vector<T>;
 
-            let (in_chunks, in_tail) = F32x8::<T>::partition_slice(token, xs);
-            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut(token, out);
+            let (in_chunks, in_tail) = F32x8::<T>::partition_slice_t(token, xs);
+            let (out_chunks, out_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
             for (in_chunk, out_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-                P::$pow(F32x8::<T>::load(token, in_chunk), p).store(out_chunk);
+                P::$pow(F32x8::<T>::load_t(token, in_chunk), p).store(out_chunk);
             }
             for (xi, oi) in in_tail.iter().zip(out_tail.iter_mut()) {
                 *oi = P::scalar_pow(*xi, p);
@@ -122,15 +122,15 @@ macro_rules! kernels {
             debug_assert_eq!(band.len(), img_exp.len());
             debug_assert_eq!(band.len(), exp_l.len());
             type F32x8<T> = $Vector<T>;
-            let floor_v = F32x8::<T>::splat(token, 0.01);
-            let log10e = F32x8::<T>::splat(token, core::f32::consts::LOG10_E);
-            let hi = F32x8::<T>::splat(token, 1000.0);
-            let lo = F32x8::<T>::splat(token, -1000.0);
-            let (b_chunks, b_tail) = F32x8::<T>::partition_slice_mut(token, band);
-            let (l_chunks, l_tail) = F32x8::<T>::partition_slice_mut(token, log);
-            let (f_chunks, f_tail) = F32x8::<T>::partition_slice(token, fine);
-            let (e_chunks, e_tail) = F32x8::<T>::partition_slice(token, img_exp);
-            let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, exp_l);
+            let floor_v = F32x8::<T>::splat_t(token, 0.01);
+            let log10e = F32x8::<T>::splat_t(token, core::f32::consts::LOG10_E);
+            let hi = F32x8::<T>::splat_t(token, 1000.0);
+            let lo = F32x8::<T>::splat_t(token, -1000.0);
+            let (b_chunks, b_tail) = F32x8::<T>::partition_slice_mut_t(token, band);
+            let (l_chunks, l_tail) = F32x8::<T>::partition_slice_mut_t(token, log);
+            let (f_chunks, f_tail) = F32x8::<T>::partition_slice_t(token, fine);
+            let (e_chunks, e_tail) = F32x8::<T>::partition_slice_t(token, img_exp);
+            let (x_chunks, x_tail) = F32x8::<T>::partition_slice_t(token, exp_l);
             for ((((b, lg), f), e), x) in b_chunks
                 .iter_mut()
                 .zip(l_chunks.iter_mut())
@@ -138,8 +138,8 @@ macro_rules! kernels {
                 .zip(e_chunks.iter())
                 .zip(x_chunks.iter())
             {
-                let l = F32x8::<T>::load(token, x).max(floor_v);
-                let c = (F32x8::<T>::load(token, f) - F32x8::<T>::load(token, e)) / l;
+                let l = F32x8::<T>::load_t(token, x).max(floor_v);
+                let c = (F32x8::<T>::load_t(token, f) - F32x8::<T>::load_t(token, e)) / l;
                 c.min(hi).max(lo).store(b);
                 (P::$ln(l) * log10e).store(lg);
             }
@@ -174,12 +174,12 @@ macro_rules! kernels {
         ) {
             debug_assert_eq!(dst.len(), src.len());
             type F32x8<T> = $Vector<T>;
-            let av = F32x8::<T>::splat(token, a);
-            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut(token, dst);
-            let (s_chunks, s_tail) = F32x8::<T>::partition_slice(token, src);
+            let av = F32x8::<T>::splat_t(token, a);
+            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut_t(token, dst);
+            let (s_chunks, s_tail) = F32x8::<T>::partition_slice_t(token, src);
             for (d_chunk, s_chunk) in d_chunks.iter_mut().zip(s_chunks.iter()) {
-                let acc = F32x8::<T>::load(token, d_chunk);
-                let v = F32x8::<T>::load(token, s_chunk);
+                let acc = F32x8::<T>::load_t(token, d_chunk);
+                let v = F32x8::<T>::load_t(token, s_chunk);
                 (acc + v * av).store(d_chunk);
             }
             for (di, si) in d_tail.iter_mut().zip(s_tail.iter()) {
@@ -198,11 +198,11 @@ macro_rules! kernels {
         ) {
             debug_assert_eq!(dst.len(), src.len());
             type F32x8<T> = $Vector<T>;
-            let av = F32x8::<T>::splat(token, a);
-            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut(token, dst);
-            let (s_chunks, s_tail) = F32x8::<T>::partition_slice(token, src);
+            let av = F32x8::<T>::splat_t(token, a);
+            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut_t(token, dst);
+            let (s_chunks, s_tail) = F32x8::<T>::partition_slice_t(token, src);
             for (d_chunk, s_chunk) in d_chunks.iter_mut().zip(s_chunks.iter()) {
-                (F32x8::<T>::load(token, s_chunk) * av).store(d_chunk);
+                (F32x8::<T>::load_t(token, s_chunk) * av).store(d_chunk);
             }
             for (di, si) in d_tail.iter_mut().zip(s_tail.iter()) {
                 *di = *si * a;
@@ -220,16 +220,16 @@ macro_rules! kernels {
             debug_assert_eq!(out.len(), x.len());
             debug_assert_eq!(out.len(), y.len());
             type F32x8<T> = $Vector<T>;
-            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut(token, out);
-            let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, x);
-            let (y_chunks, y_tail) = F32x8::<T>::partition_slice(token, y);
+            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
+            let (x_chunks, x_tail) = F32x8::<T>::partition_slice_t(token, x);
+            let (y_chunks, y_tail) = F32x8::<T>::partition_slice_t(token, y);
             for ((o_chunk, x_chunk), y_chunk) in o_chunks
                 .iter_mut()
                 .zip(x_chunks.iter())
                 .zip(y_chunks.iter())
             {
-                let xv = F32x8::<T>::load(token, x_chunk);
-                let yv = F32x8::<T>::load(token, y_chunk);
+                let xv = F32x8::<T>::load_t(token, x_chunk);
+                let yv = F32x8::<T>::load_t(token, y_chunk);
                 (xv - yv).abs().store(o_chunk);
             }
             for ((oi, xi), yi) in o_tail.iter_mut().zip(x_tail.iter()).zip(y_tail.iter()) {
@@ -254,18 +254,19 @@ macro_rules! kernels {
             debug_assert_eq!(out.len(), x.len());
             debug_assert_eq!(x.len(), y.len());
             type F32x8<T> = $Vector<T>;
-            let offset_v = F32x8::<T>::splat(token, offset);
-            let offset_pow_p_v = F32x8::<T>::splat(token, offset_pow_p);
-            let exact_offset = F32x8::<T>::splat(token, P::scalar_pow(offset, p) - offset_pow_p);
-            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut(token, out);
-            let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, x);
-            let (y_chunks, y_tail) = F32x8::<T>::partition_slice(token, y);
+            let offset_v = F32x8::<T>::splat_t(token, offset);
+            let offset_pow_p_v = F32x8::<T>::splat_t(token, offset_pow_p);
+            let exact_offset = F32x8::<T>::splat_t(token, P::scalar_pow(offset, p) - offset_pow_p);
+            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
+            let (x_chunks, x_tail) = F32x8::<T>::partition_slice_t(token, x);
+            let (y_chunks, y_tail) = F32x8::<T>::partition_slice_t(token, y);
             for ((o_chunk, x_chunk), y_chunk) in o_chunks
                 .iter_mut()
                 .zip(x_chunks.iter())
                 .zip(y_chunks.iter())
             {
-                let d = (F32x8::<T>::load(token, x_chunk) - F32x8::<T>::load(token, y_chunk)).abs();
+                let d =
+                    (F32x8::<T>::load_t(token, x_chunk) - F32x8::<T>::load_t(token, y_chunk)).abs();
                 let shifted = d + offset_v;
                 let result = P::$pow(shifted, p) - offset_pow_p_v;
                 F32x8::<T>::blend(shifted.simd_eq(offset_v), exact_offset, result).store(o_chunk);
@@ -286,16 +287,16 @@ macro_rules! kernels {
             debug_assert_eq!(out.len(), x.len());
             debug_assert_eq!(out.len(), y.len());
             type F32x8<T> = $Vector<T>;
-            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut(token, out);
-            let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, x);
-            let (y_chunks, y_tail) = F32x8::<T>::partition_slice(token, y);
+            let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut_t(token, out);
+            let (x_chunks, x_tail) = F32x8::<T>::partition_slice_t(token, x);
+            let (y_chunks, y_tail) = F32x8::<T>::partition_slice_t(token, y);
             for ((o_chunk, x_chunk), y_chunk) in o_chunks
                 .iter_mut()
                 .zip(x_chunks.iter())
                 .zip(y_chunks.iter())
             {
-                let xv = F32x8::<T>::load(token, x_chunk);
-                let yv = F32x8::<T>::load(token, y_chunk);
+                let xv = F32x8::<T>::load_t(token, x_chunk);
+                let yv = F32x8::<T>::load_t(token, y_chunk);
                 xv.abs().min(yv.abs()).store(o_chunk);
             }
             for ((oi, xi), yi) in o_tail.iter_mut().zip(x_tail.iter()).zip(y_tail.iter()) {
@@ -319,21 +320,21 @@ macro_rules! kernels {
             debug_assert_eq!(band.len(), img_exp.len());
             debug_assert_eq!(band.len(), exp_l.len());
             type F32x8<T> = $Vector<T>;
-            let floor_v = F32x8::<T>::splat(token, 0.01);
-            let hi = F32x8::<T>::splat(token, 1000.0);
-            let lo = F32x8::<T>::splat(token, -1000.0);
-            let (b_chunks, b_tail) = F32x8::<T>::partition_slice_mut(token, band);
-            let (f_chunks, f_tail) = F32x8::<T>::partition_slice(token, fine);
-            let (e_chunks, e_tail) = F32x8::<T>::partition_slice(token, img_exp);
-            let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, exp_l);
+            let floor_v = F32x8::<T>::splat_t(token, 0.01);
+            let hi = F32x8::<T>::splat_t(token, 1000.0);
+            let lo = F32x8::<T>::splat_t(token, -1000.0);
+            let (b_chunks, b_tail) = F32x8::<T>::partition_slice_mut_t(token, band);
+            let (f_chunks, f_tail) = F32x8::<T>::partition_slice_t(token, fine);
+            let (e_chunks, e_tail) = F32x8::<T>::partition_slice_t(token, img_exp);
+            let (x_chunks, x_tail) = F32x8::<T>::partition_slice_t(token, exp_l);
             for (((b, f), e), x) in b_chunks
                 .iter_mut()
                 .zip(f_chunks.iter())
                 .zip(e_chunks.iter())
                 .zip(x_chunks.iter())
             {
-                let l = F32x8::<T>::load(token, x).max(floor_v);
-                let c = (F32x8::<T>::load(token, f) - F32x8::<T>::load(token, e)) / l;
+                let l = F32x8::<T>::load_t(token, x).max(floor_v);
+                let c = (F32x8::<T>::load_t(token, f) - F32x8::<T>::load_t(token, e)) / l;
                 c.min(hi).max(lo).store(b);
             }
             for (((b, f), e), x) in b_tail
@@ -362,13 +363,13 @@ macro_rules! kernels {
             debug_assert_eq!(d1.len(), src.len());
             debug_assert_eq!(d2.len(), src.len());
             type F32x8<T> = $Vector<T>;
-            let a1v = F32x8::<T>::splat(token, a1);
-            let a2v = F32x8::<T>::splat(token, a2);
-            let (d1c, d1t) = F32x8::<T>::partition_slice_mut(token, d1);
-            let (d2c, d2t) = F32x8::<T>::partition_slice_mut(token, d2);
-            let (s_chunks, s_tail) = F32x8::<T>::partition_slice(token, src);
+            let a1v = F32x8::<T>::splat_t(token, a1);
+            let a2v = F32x8::<T>::splat_t(token, a2);
+            let (d1c, d1t) = F32x8::<T>::partition_slice_mut_t(token, d1);
+            let (d2c, d2t) = F32x8::<T>::partition_slice_mut_t(token, d2);
+            let (s_chunks, s_tail) = F32x8::<T>::partition_slice_t(token, src);
             for ((o1, o2), s_chunk) in d1c.iter_mut().zip(d2c.iter_mut()).zip(s_chunks.iter()) {
-                let v = F32x8::<T>::load(token, s_chunk);
+                let v = F32x8::<T>::load_t(token, s_chunk);
                 (v * a1v).store(o1);
                 (v * a2v).store(o2);
             }
@@ -392,15 +393,15 @@ macro_rules! kernels {
             debug_assert_eq!(d1.len(), src.len());
             debug_assert_eq!(d2.len(), src.len());
             type F32x8<T> = $Vector<T>;
-            let a1v = F32x8::<T>::splat(token, a1);
-            let a2v = F32x8::<T>::splat(token, a2);
-            let (d1c, d1t) = F32x8::<T>::partition_slice_mut(token, d1);
-            let (d2c, d2t) = F32x8::<T>::partition_slice_mut(token, d2);
-            let (s_chunks, s_tail) = F32x8::<T>::partition_slice(token, src);
+            let a1v = F32x8::<T>::splat_t(token, a1);
+            let a2v = F32x8::<T>::splat_t(token, a2);
+            let (d1c, d1t) = F32x8::<T>::partition_slice_mut_t(token, d1);
+            let (d2c, d2t) = F32x8::<T>::partition_slice_mut_t(token, d2);
+            let (s_chunks, s_tail) = F32x8::<T>::partition_slice_t(token, src);
             for ((o1, o2), s_chunk) in d1c.iter_mut().zip(d2c.iter_mut()).zip(s_chunks.iter()) {
-                let v = F32x8::<T>::load(token, s_chunk);
-                let acc1 = F32x8::<T>::load(token, o1);
-                let acc2 = F32x8::<T>::load(token, o2);
+                let v = F32x8::<T>::load_t(token, s_chunk);
+                let acc1 = F32x8::<T>::load_t(token, o1);
+                let acc2 = F32x8::<T>::load_t(token, o2);
                 (acc1 + v * a1v).store(o1);
                 (acc2 + v * a2v).store(o2);
             }
@@ -428,16 +429,16 @@ macro_rules! kernels {
             debug_assert_eq!(srcs.len(), coeffs.len());
             debug_assert!(!srcs.is_empty());
             type F32x8<T> = $Vector<T>;
-            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut(token, dst);
-            let c0 = F32x8::<T>::splat(token, coeffs[0]);
+            let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut_t(token, dst);
+            let c0 = F32x8::<T>::splat_t(token, coeffs[0]);
             let mut i = 0usize;
             for dc in d_chunks.iter_mut() {
                 let b = off + i;
                 let mut acc =
-                    F32x8::<T>::load(token, srcs[0][b..b + $lanes].try_into().unwrap()) * c0;
+                    F32x8::<T>::load_t(token, srcs[0][b..b + $lanes].try_into().unwrap()) * c0;
                 for (s, &c) in srcs[1..].iter().zip(coeffs[1..].iter()) {
-                    let v = F32x8::<T>::load(token, s[b..b + $lanes].try_into().unwrap());
-                    acc += v * F32x8::<T>::splat(token, c);
+                    let v = F32x8::<T>::load_t(token, s[b..b + $lanes].try_into().unwrap());
+                    acc += v * F32x8::<T>::splat_t(token, c);
                 }
                 acc.store(dc);
                 i += $lanes;
@@ -472,14 +473,14 @@ macro_rules! kernels {
             debug_assert_eq!(srcs.len(), coeffs1.len());
             debug_assert!(!srcs.is_empty());
             type F32x8<T> = $Vector<T>;
-            let (d0c, d0t) = F32x8::<T>::partition_slice_mut(token, d0);
-            let (d1c, d1t) = F32x8::<T>::partition_slice_mut(token, d1);
-            let ca0 = F32x8::<T>::splat(token, coeffs0[0]);
-            let cb0 = F32x8::<T>::splat(token, coeffs1[0]);
+            let (d0c, d0t) = F32x8::<T>::partition_slice_mut_t(token, d0);
+            let (d1c, d1t) = F32x8::<T>::partition_slice_mut_t(token, d1);
+            let ca0 = F32x8::<T>::splat_t(token, coeffs0[0]);
+            let cb0 = F32x8::<T>::splat_t(token, coeffs1[0]);
             let mut i = 0usize;
             for (o0, o1) in d0c.iter_mut().zip(d1c.iter_mut()) {
                 let b = off + i;
-                let v0 = F32x8::<T>::load(token, srcs[0][b..b + $lanes].try_into().unwrap());
+                let v0 = F32x8::<T>::load_t(token, srcs[0][b..b + $lanes].try_into().unwrap());
                 let mut acc0 = v0 * ca0;
                 let mut acc1 = v0 * cb0;
                 for ((s, &c0k), &c1k) in srcs[1..]
@@ -487,9 +488,9 @@ macro_rules! kernels {
                     .zip(coeffs0[1..].iter())
                     .zip(coeffs1[1..].iter())
                 {
-                    let v = F32x8::<T>::load(token, s[b..b + $lanes].try_into().unwrap());
-                    acc0 += v * F32x8::<T>::splat(token, c0k);
-                    acc1 += v * F32x8::<T>::splat(token, c1k);
+                    let v = F32x8::<T>::load_t(token, s[b..b + $lanes].try_into().unwrap());
+                    acc0 += v * F32x8::<T>::splat_t(token, c0k);
+                    acc1 += v * F32x8::<T>::splat_t(token, c1k);
                 }
                 acc0.store(o0);
                 acc1.store(o1);
@@ -531,13 +532,13 @@ macro_rules! kernels {
             debug_assert_eq!(o2.len(), x2.len());
             debug_assert_eq!(o1.len(), w.len());
             type F32x8<T> = $Vector<T>;
-            let av = F32x8::<T>::splat(token, a);
-            let bv = F32x8::<T>::splat(token, b);
-            let (o1c, o1t) = F32x8::<T>::partition_slice_mut(token, o1);
-            let (o2c, o2t) = F32x8::<T>::partition_slice_mut(token, o2);
-            let (x1c, x1t) = F32x8::<T>::partition_slice(token, x1);
-            let (x2c, x2t) = F32x8::<T>::partition_slice(token, x2);
-            let (w_chunks, w_tail) = F32x8::<T>::partition_slice(token, w);
+            let av = F32x8::<T>::splat_t(token, a);
+            let bv = F32x8::<T>::splat_t(token, b);
+            let (o1c, o1t) = F32x8::<T>::partition_slice_mut_t(token, o1);
+            let (o2c, o2t) = F32x8::<T>::partition_slice_mut_t(token, o2);
+            let (x1c, x1t) = F32x8::<T>::partition_slice_t(token, x1);
+            let (x2c, x2t) = F32x8::<T>::partition_slice_t(token, x2);
+            let (w_chunks, w_tail) = F32x8::<T>::partition_slice_t(token, w);
             for ((((p1, p2), v1), v2), wv) in o1c
                 .iter_mut()
                 .zip(o2c.iter_mut())
@@ -545,9 +546,9 @@ macro_rules! kernels {
                 .zip(x2c.iter())
                 .zip(w_chunks.iter())
             {
-                let wv = F32x8::<T>::load(token, wv);
-                ((F32x8::<T>::load(token, v1) * av * wv) * bv).store(p1);
-                ((F32x8::<T>::load(token, v2) * av * wv) * bv).store(p2);
+                let wv = F32x8::<T>::load_t(token, wv);
+                ((F32x8::<T>::load_t(token, v1) * av * wv) * bv).store(p1);
+                ((F32x8::<T>::load_t(token, v2) * av * wv) * bv).store(p2);
             }
             for ((((p1, p2), &v1), &v2), &wv) in o1t
                 .iter_mut()
@@ -580,15 +581,15 @@ macro_rules! kernels {
                 return 0.0;
             }
             type F32x8<T> = $Vector<T>;
-            let e = F32x8::<T>::splat(token, LP_SAFE_EPS);
-            let e2 = F32x8::<T>::splat(token, LP_SAFE_EPS * LP_SAFE_EPS);
-            let (t_chunks, t_tail) = F32x8::<T>::partition_slice(token, t);
-            let (r_chunks, r_tail) = F32x8::<T>::partition_slice(token, r);
-            let (s_chunks, s_tail) = F32x8::<T>::partition_slice(token, s);
-            let mut acc = F32x8::<T>::zero(token);
+            let e = F32x8::<T>::splat_t(token, LP_SAFE_EPS);
+            let e2 = F32x8::<T>::splat_t(token, LP_SAFE_EPS * LP_SAFE_EPS);
+            let (t_chunks, t_tail) = F32x8::<T>::partition_slice_t(token, t);
+            let (r_chunks, r_tail) = F32x8::<T>::partition_slice_t(token, r);
+            let (s_chunks, s_tail) = F32x8::<T>::partition_slice_t(token, s);
+            let mut acc = F32x8::<T>::zero_t(token);
             for ((tc, rc), sc) in t_chunks.iter().zip(r_chunks.iter()).zip(s_chunks.iter()) {
-                let d = (F32x8::<T>::load(token, tc) - F32x8::<T>::load(token, rc)).abs()
-                    * F32x8::<T>::load(token, sc);
+                let d = (F32x8::<T>::load_t(token, tc) - F32x8::<T>::load_t(token, rc)).abs()
+                    * F32x8::<T>::load_t(token, sc);
                 let u = d.abs() + e;
                 acc += u * u - e2;
             }
@@ -621,44 +622,44 @@ macro_rules! kernels {
             debug_assert!(d.iter().all(|c| c.len() == n));
             debug_assert!(t.iter().all(|c| c.len() == n));
             type F32x8<T> = $Vector<T>;
-            let d_max_v = F32x8::<T>::splat(token, d_max);
-            let one = F32x8::<T>::splat(token, 1.0);
-            let e = F32x8::<T>::splat(token, LP_SAFE_EPS);
-            let e2 = F32x8::<T>::splat(token, LP_SAFE_EPS * LP_SAFE_EPS);
-            let mut wv = [[F32x8::<T>::zero(token); 4]; 4];
+            let d_max_v = F32x8::<T>::splat_t(token, d_max);
+            let one = F32x8::<T>::splat_t(token, 1.0);
+            let e = F32x8::<T>::splat_t(token, LP_SAFE_EPS);
+            let e2 = F32x8::<T>::splat_t(token, LP_SAFE_EPS * LP_SAFE_EPS);
+            let mut wv = [[F32x8::<T>::zero_t(token); 4]; 4];
             for (k, wv_row) in wv.iter_mut().enumerate() {
                 for (cc, wv_e) in wv_row.iter_mut().enumerate() {
-                    *wv_e = F32x8::<T>::splat(token, w[k][cc]);
+                    *wv_e = F32x8::<T>::splat_t(token, w[k][cc]);
                 }
             }
 
-            let (t0c, t0t) = F32x8::<T>::partition_slice(token, t[0]);
-            let (t1c, t1t) = F32x8::<T>::partition_slice(token, t[1]);
-            let (t2c, t2t) = F32x8::<T>::partition_slice(token, t[2]);
-            let (t3c, t3t) = F32x8::<T>::partition_slice(token, t[3]);
+            let (t0c, t0t) = F32x8::<T>::partition_slice_t(token, t[0]);
+            let (t1c, t1t) = F32x8::<T>::partition_slice_t(token, t[1]);
+            let (t2c, t2t) = F32x8::<T>::partition_slice_t(token, t[2]);
+            let (t3c, t3t) = F32x8::<T>::partition_slice_t(token, t[3]);
             let t_chunks = [t0c, t1c, t2c, t3c];
             let t_tails = [t0t, t1t, t2t, t3t];
-            let (d0c, d0t) = F32x8::<T>::partition_slice(token, d[0]);
-            let (d1c, d1t) = F32x8::<T>::partition_slice(token, d[1]);
-            let (d2c, d2t) = F32x8::<T>::partition_slice(token, d[2]);
-            let (d3c, d3t) = F32x8::<T>::partition_slice(token, d[3]);
+            let (d0c, d0t) = F32x8::<T>::partition_slice_t(token, d[0]);
+            let (d1c, d1t) = F32x8::<T>::partition_slice_t(token, d[1]);
+            let (d2c, d2t) = F32x8::<T>::partition_slice_t(token, d[2]);
+            let (d3c, d3t) = F32x8::<T>::partition_slice_t(token, d[3]);
             let d_chunks = [d0c, d1c, d2c, d3c];
             let d_tails = [d0t, d1t, d2t, d3t];
 
-            let mut acc = [F32x8::<T>::zero(token); 4];
+            let mut acc = [F32x8::<T>::zero_t(token); 4];
             for i in 0..t_chunks[0].len() {
                 let tv = [
-                    F32x8::<T>::load(token, &t_chunks[0][i]),
-                    F32x8::<T>::load(token, &t_chunks[1][i]),
-                    F32x8::<T>::load(token, &t_chunks[2][i]),
-                    F32x8::<T>::load(token, &t_chunks[3][i]),
+                    F32x8::<T>::load_t(token, &t_chunks[0][i]),
+                    F32x8::<T>::load_t(token, &t_chunks[1][i]),
+                    F32x8::<T>::load_t(token, &t_chunks[2][i]),
+                    F32x8::<T>::load_t(token, &t_chunks[3][i]),
                 ];
                 for cc in 0..4 {
                     let m = wv[0][cc] * tv[0]
                         + wv[1][cc] * tv[1]
                         + wv[2][cc] * tv[2]
                         + wv[3][cc] * tv[3];
-                    let dv = F32x8::<T>::load(token, &d_chunks[cc][i]);
+                    let dv = F32x8::<T>::load_t(token, &d_chunks[cc][i]);
                     let du = dv / (one + m);
                     let fin = (d_max_v * du) / (d_max_v + du);
                     let u = fin.abs() + e;
@@ -703,16 +704,16 @@ macro_rules! kernels {
             assert_eq!(xs.len(), out.len());
             assert!(lut.len() >= 2 && max_index >= 0.0 && max_index < (lut.len() - 1) as f32);
             type V<T> = $Vector<T>;
-            let min_v = V::<T>::splat(token, min);
-            let step_v = V::<T>::splat(token, inv_step);
-            let zero = V::<T>::zero(token);
-            let max_v = V::<T>::splat(token, max_index);
-            let offset_v = V::<T>::splat(token, offset);
-            let scale_v = V::<T>::splat(token, scale);
-            let (xc, xt) = V::<T>::partition_slice(token, xs);
-            let (oc, ot) = V::<T>::partition_slice_mut(token, out);
+            let min_v = V::<T>::splat_t(token, min);
+            let step_v = V::<T>::splat_t(token, inv_step);
+            let zero = V::<T>::zero_t(token);
+            let max_v = V::<T>::splat_t(token, max_index);
+            let offset_v = V::<T>::splat_t(token, offset);
+            let scale_v = V::<T>::splat_t(token, scale);
+            let (xc, xt) = V::<T>::partition_slice_t(token, xs);
+            let (oc, ot) = V::<T>::partition_slice_mut_t(token, out);
             for (x, o) in xc.iter().zip(oc) {
-                let idx = ((V::<T>::load(token, x) - min_v) * step_v)
+                let idx = ((V::<T>::load_t(token, x) - min_v) * step_v)
                     .max(zero)
                     .min(max_v);
                 let floor = idx.floor();
@@ -720,9 +721,11 @@ macro_rules! kernels {
                 // The safe hardware gather currently exists only on V4's f32x16.
                 // A lane gather keeps this single body valid on every tier.
                 let lo =
-                    V::<T>::from_array(token, core::array::from_fn(|j| lut[lanes[j] as usize]));
-                let hi =
-                    V::<T>::from_array(token, core::array::from_fn(|j| lut[lanes[j] as usize + 1]));
+                    V::<T>::from_array_t(token, core::array::from_fn(|j| lut[lanes[j] as usize]));
+                let hi = V::<T>::from_array_t(
+                    token,
+                    core::array::from_fn(|j| lut[lanes[j] as usize + 1]),
+                );
                 let value = lo + (idx - floor) * (hi - lo);
                 if EXP {
                     P::$exp((value + offset_v) * scale_v).store(o);

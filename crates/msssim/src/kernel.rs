@@ -126,7 +126,7 @@ where
     }
 }
 
-/// Arguments to one `msssim` run, bundled so `incant!` dispatches a
+/// Arguments to one `msssim` run, bundled so `attuned!` dispatches a
 /// single parameter.
 #[doc(hidden)]
 pub struct Args<'a> {
@@ -155,8 +155,8 @@ macro_rules! score_body {
         let (mut im1, mut im2) = ($a.im1.to_vec(), $a.im2.to_vec());
         let mut mcs = [0.0f64; 5];
         let mut mssim_last = 0.0f64;
-        let (c1v, c2v) = (<$F32>::splat($token, C1), <$F32>::splat($token, C2));
-        let twov = <$F32>::splat($token, 2.0);
+        let (c1v, c2v) = (<$F32>::splat_t($token, C1), <$F32>::splat_t($token, C2));
+        let twov = <$F32>::splat_t($token, 2.0);
 
         for l in 0..level {
             let (p1, p2, pp) = product_planes(&im1, &im2);
@@ -173,13 +173,13 @@ macro_rules! score_body {
                     let srow = &src[y * w..y * w + w];
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
-                        let mut v = <$F32>::splat($token, 0.0);
+                        let mut v = <$F32>::splat_t($token, 0.0);
                         for u in 0..GAUSS_K {
-                            let xv = <$F32>::from_array(
+                            let xv = <$F32>::from_array_t(
                                 $token,
                                 core::array::from_fn(|k| srow[x + u + k]),
                             );
-                            v += <$F32>::splat($token, taps[u]) * xv;
+                            v += <$F32>::splat_t($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;
@@ -200,13 +200,13 @@ macro_rules! score_body {
                 for_each_row(&mut out, out_w, |y, drow| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
-                        let mut v = <$F32>::splat($token, 0.0);
+                        let mut v = <$F32>::splat_t($token, 0.0);
                         for u in 0..GAUSS_K {
-                            let xv = <$F32>::from_array(
+                            let xv = <$F32>::from_array_t(
                                 $token,
                                 core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
                             );
-                            v += <$F32>::splat($token, taps[u]) * xv;
+                            v += <$F32>::splat_t($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;
@@ -232,11 +232,11 @@ macro_rules! score_body {
             let (mut sum_s, mut sum_c) = (0.0f64, 0.0f64);
             let mut i = 0usize;
             while i + $LANES <= n {
-                let m1 = <$F32>::from_array($token, core::array::from_fn(|k| mu1[i + k]));
-                let m2 = <$F32>::from_array($token, core::array::from_fn(|k| mu2[i + k]));
-                let v1 = <$F32>::from_array($token, core::array::from_fn(|k| s1p[i + k]));
-                let v2 = <$F32>::from_array($token, core::array::from_fn(|k| s2p[i + k]));
-                let vc = <$F32>::from_array($token, core::array::from_fn(|k| s12p[i + k]));
+                let m1 = <$F32>::from_array_t($token, core::array::from_fn(|k| mu1[i + k]));
+                let m2 = <$F32>::from_array_t($token, core::array::from_fn(|k| mu2[i + k]));
+                let v1 = <$F32>::from_array_t($token, core::array::from_fn(|k| s1p[i + k]));
+                let v2 = <$F32>::from_array_t($token, core::array::from_fn(|k| s2p[i + k]));
+                let vc = <$F32>::from_array_t($token, core::array::from_fn(|k| s12p[i + k]));
                 let s1sq = v1 - m1 * m1;
                 let s2sq = v2 - m2 * m2;
                 let s12 = vc - m1 * m2;
@@ -303,38 +303,38 @@ macro_rules! score_body {
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn msssim_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn msssim_core_tier_v3_t(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     score_body!(token, V, 8, a)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn msssim_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn msssim_core_tier_v4x_t(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, a)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn msssim_core_tier_neon(token: archmage::NeonToken, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn msssim_core_tier_neon_t(token: archmage::NeonToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     score_body!(token, V, 8, a)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
-pub fn msssim_core_tier_wasm128(token: archmage::Wasm128Token, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn msssim_core_tier_wasm128_t(token: archmage::Wasm128Token, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     score_body!(token, V, 8, a)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn msssim_core_tier_scalar(token: archmage::ScalarToken, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     score_body!(token, V, 8, a)
 }
@@ -348,5 +348,8 @@ pub(crate) fn msssim_core(inputs: &crate::Inputs, w: usize, h: usize, level: usi
         h,
         level,
     };
-    archmage::incant!(msssim_core_tier(a), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        msssim_core_tier(a),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }

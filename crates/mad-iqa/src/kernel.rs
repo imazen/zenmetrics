@@ -61,7 +61,7 @@ where
     }
 }
 
-/// Arguments to one MAD run, bundled for `incant!`.
+/// Arguments to one MAD run, bundled for `attuned!`.
 #[doc(hidden)]
 pub struct Args<'a> {
     /// Reference plane, packed `w·h`.

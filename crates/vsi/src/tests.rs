@@ -230,7 +230,7 @@ fn tier_parity() {
     let Some(token) = archmage::X64V3Token::summon() else {
         return;
     };
-    let s_scalar = crate::dev::vsi_core_tier_scalar(archmage::ScalarToken, p);
-    let s_v3 = crate::dev::vsi_core_tier_v3(token, p);
+    let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p);
+    let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p);
     assert_eq!(s_scalar, s_v3);
 }

@@ -176,11 +176,11 @@ pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + 
 macro_rules! band_body {
     ($token:ident, $r:ident, $d:ident, $stride:ident, $by0:ident, $by1:ident, $nb_x:ident, $step:ident, $FV:ty, $LANES:literal) => {{
         type V = $FV;
-        let zero = V::splat($token, 0.0);
+        let zero = V::splat_t($token, 0.0);
         // Hoisted table splats — one broadcast per constant per call.
-        let tv: [V; 64] = core::array::from_fn(|i| V::splat($token, DCT_T[i]));
-        let cv: [V; 64] = core::array::from_fn(|i| V::splat($token, CSF[i]));
-        let mv: [V; 64] = core::array::from_fn(|i| V::splat($token, MASK_COF[i]));
+        let tv: [V; 64] = core::array::from_fn(|i| V::splat_t($token, DCT_T[i]));
+        let cv: [V; 64] = core::array::from_fn(|i| V::splat_t($token, CSF[i]));
+        let mv: [V; 64] = core::array::from_fn(|i| V::splat_t($token, MASK_COF[i]));
         let mut s1_glob = 0.0f64;
         let mut s2_glob = 0.0f64;
         for by in $by0..$by1 {
@@ -195,11 +195,11 @@ macro_rules! band_body {
                     let base = (by * $step + rr) * $stride;
                     for m in 0..8 {
                         let c = rr * 8 + m;
-                        xa[c] = V::from_array(
+                        xa[c] = V::from_array_t(
                             $token,
                             core::array::from_fn(|b| $r[base + (bx0 + b.min(last)) * $step + m]),
                         );
-                        xb[c] = V::from_array(
+                        xb[c] = V::from_array_t(
                             $token,
                             core::array::from_fn(|b| $d[base + (bx0 + b.min(last)) * $step + m]),
                         );
@@ -249,13 +249,13 @@ macro_rules! band_body {
                         for c in 0..64 {
                             s = s + $x[c];
                         }
-                        let mu = s / V::splat($token, 64.0);
+                        let mu = s / V::splat_t($token, 64.0);
                         let mut ss = zero;
                         for c in 0..64 {
                             let dv = $x[c] - mu;
                             ss = ss + dv * dv;
                         }
-                        let vari = (ss / V::splat($token, 63.0)) * V::splat($token, 64.0);
+                        let vari = (ss / V::splat_t($token, 63.0)) * V::splat_t($token, 64.0);
                         // quadrant varis, MATLAB order TL+TR+BR+BL;
                         // each is var(quad)·16 = (SS_q/15)·16
                         macro_rules! qvari {
@@ -266,7 +266,7 @@ macro_rules! band_body {
                                         s = s + $x[($r0 + rr) * 8 + $c0 + c];
                                     }
                                 }
-                                let mu = s / V::splat($token, 16.0);
+                                let mu = s / V::splat_t($token, 16.0);
                                 let mut ss = zero;
                                 for rr in 0..4 {
                                     for c in 0..4 {
@@ -274,12 +274,12 @@ macro_rules! band_body {
                                         ss = ss + dv * dv;
                                     }
                                 }
-                                (ss / V::splat($token, 15.0)) * V::splat($token, 16.0)
+                                (ss / V::splat_t($token, 15.0)) * V::splat_t($token, 16.0)
                             }};
                         }
                         let quadsum = ((qvari!(0, 0) + qvari!(0, 4)) + qvari!(4, 4)) + qvari!(4, 0);
                         let pop = V::blend(vari.simd_eq(zero), zero, quadsum / vari);
-                        (e * pop).sqrt() / V::splat($token, 32.0)
+                        (e * pop).sqrt() / V::splat_t($token, 32.0)
                     }};
                 }
                 let maska = maskeff!(xa, da);
@@ -320,9 +320,9 @@ macro_rules! band_body {
 }
 
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `v3` tier of one block-row band — returns `(s1, s2)` f64 sums.
-pub fn psnrhvs_band_v3(
+pub fn psnrhvs_band_v3_t(
     token: archmage::X64V3Token,
     r: &[f32],
     d: &[f32],
@@ -347,9 +347,9 @@ pub fn psnrhvs_band_v3(
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
+#[archmage::attune]
 /// The AVX-512 `v4x` tier (16 blocks per batch).
-pub fn psnrhvs_band_v4x(
+pub fn psnrhvs_band_v4x_t(
     token: archmage::X64V4xToken,
     r: &[f32],
     d: &[f32],
@@ -374,9 +374,9 @@ pub fn psnrhvs_band_v4x(
 }
 
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `neon` tier (8 blocks per batch).
-pub fn psnrhvs_band_neon(
+pub fn psnrhvs_band_neon_t(
     token: archmage::NeonToken,
     r: &[f32],
     d: &[f32],
@@ -401,9 +401,9 @@ pub fn psnrhvs_band_neon(
 }
 
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
+#[archmage::attune]
 /// The `wasm128` tier (8 blocks per batch).
-pub fn psnrhvs_band_wasm128(
+pub fn psnrhvs_band_wasm128_t(
     token: archmage::Wasm128Token,
     r: &[f32],
     d: &[f32],
@@ -428,7 +428,7 @@ pub fn psnrhvs_band_wasm128(
 }
 
 /// The `scalar` tier (8 blocks per batch, scalar-emulated lanes).
-pub fn psnrhvs_band_scalar(
+pub fn psnrhvs_band_scalar_t(
     token: archmage::ScalarToken,
     r: &[f32],
     d: &[f32],
@@ -464,8 +464,8 @@ pub(crate) fn psnrhvs_band(
     nb_x: usize,
     step: usize,
 ) -> (f64, f64) {
-    archmage::incant!(
+    archmage::attuned!(
         psnrhvs_band(r, d, stride, by0, by1, nb_x, step),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }

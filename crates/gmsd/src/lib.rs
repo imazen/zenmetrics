@@ -31,9 +31,9 @@
 //!
 //! # SIMD
 //!
-//! One `#[arcane]` entry per tier (`v4x` AVX-512 behind crate feature
+//! One `#[attune]` entry per tier (`v4x` AVX-512 behind crate feature
 //! `avx512`, `v3` AVX2, `neon`, `wasm128`, `scalar`), with the per-row
-//! helpers as `#[rite]` variants of the same tier inlined into it.
+//! helpers as `#[attune]` variants of the same tier inlined into it.
 //! `_dev` exposes the per-tier entries for tier-parity tests.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -562,11 +562,11 @@ fn sqrt_f64(v: f64) -> f64 {
 #[cfg(feature = "_dev")]
 #[doc(hidden)]
 pub mod dev {
-    pub use crate::kernel::gmsd_band_scalar;
+    pub use crate::kernel::gmsd_band_scalar_t;
     #[cfg(target_arch = "x86_64")]
-    pub use crate::kernel::gmsd_band_v3;
+    pub use crate::kernel::gmsd_band_v3_t;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::gmsd_band_v4x;
+    pub use crate::kernel::gmsd_band_v4x_t;
     pub use crate::kernel::{Band, Plane, Source};
 }
 

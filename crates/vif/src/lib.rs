@@ -63,14 +63,14 @@ pub mod dev {
     //! points so tier parity can be tested and the kernels
     //! disassembled.
     #[cfg(target_arch = "aarch64")]
-    pub use crate::kernel::vifp_core_tier_neon;
+    pub use crate::kernel::vifp_core_tier_neon_t;
     #[cfg(target_arch = "x86_64")]
-    pub use crate::kernel::vifp_core_tier_v3;
+    pub use crate::kernel::vifp_core_tier_v3_t;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::vifp_core_tier_v4x;
+    pub use crate::kernel::vifp_core_tier_v4x_t;
     #[cfg(target_arch = "wasm32")]
-    pub use crate::kernel::vifp_core_tier_wasm128;
-    pub use crate::kernel::{Args, vifp_core_tier_scalar};
+    pub use crate::kernel::vifp_core_tier_wasm128_t;
+    pub use crate::kernel::{Args, vifp_core_tier_scalar_t};
 }
 
 #[cfg(test)]

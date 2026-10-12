@@ -247,7 +247,7 @@ fn tier_parity() {
     let (w, h) = (96, 80);
     let r: Vec<f64> = gen1(w, h).iter().map(|&v| v as f64).collect();
     let d: Vec<f64> = gen4(w, h).iter().map(|&v| v as f64).collect();
-    let s_scalar = crate::dev::vifp_core_tier_scalar(
+    let s_scalar = crate::dev::vifp_core_tier_scalar_t(
         archmage::ScalarToken,
         crate::kernel::Args {
             im1: &r,
@@ -257,7 +257,7 @@ fn tier_parity() {
         },
     );
     if let Some(token) = archmage::X64V3Token::summon() {
-        let s_v3 = crate::dev::vifp_core_tier_v3(
+        let s_v3 = crate::dev::vifp_core_tier_v3_t(
             token,
             crate::kernel::Args {
                 im1: &r,
@@ -270,7 +270,7 @@ fn tier_parity() {
     }
     #[cfg(feature = "avx512")]
     if let Some(token) = archmage::X64V4xToken::summon() {
-        let s_v4x = crate::dev::vifp_core_tier_v4x(
+        let s_v4x = crate::dev::vifp_core_tier_v4x_t(
             token,
             crate::kernel::Args {
                 im1: &r,

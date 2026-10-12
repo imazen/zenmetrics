@@ -252,8 +252,8 @@ fn tier_parity() {
         h: 40,
         iq: None,
     };
-    let s_scalar = crate::dev::fsim_core_tier_scalar(archmage::ScalarToken, p);
-    let s_v3 = crate::dev::fsim_core_tier_v3(token, p);
+    let s_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, p);
+    let s_v3 = crate::dev::fsim_core_tier_v3_t(token, p);
     assert_eq!(s_scalar, s_v3);
 
     let mk = |img: &[u8]| {
@@ -272,7 +272,7 @@ fn tier_parity() {
         h: 40,
         iq: Some((&ir, &id, &qr, &qd)),
     };
-    let c_scalar = crate::dev::fsim_core_tier_scalar(archmage::ScalarToken, pc);
-    let c_v3 = crate::dev::fsim_core_tier_v3(token, pc);
+    let c_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, pc);
+    let c_v3 = crate::dev::fsim_core_tier_v3_t(token, pc);
     assert_eq!(c_scalar, c_v3);
 }

@@ -28,10 +28,8 @@ use archmage::X64V4xToken;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, arcane, rite};
+use archmage::{SimdToken, X64V3Token, attune};
 #[cfg(feature = "simd")]
-use archmage::{autoversion, magetypes};
-
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
@@ -471,7 +469,7 @@ fn mirror(idx: isize, size: usize) -> usize {
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u16x16, u32x8, i32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u16x16, u32x8, i32x8))]
 fn motion_vertical_simd(
     token: Token,
     prev_rows: &[&[u16]; 5],
@@ -481,18 +479,18 @@ fn motion_vertical_simd(
     bpc: u32,
     out: &mut [i32; 16],
 ) {
-    let mut acc_l = i32x8::zero(token);
-    let mut acc_h = i32x8::zero(token);
+    let mut acc_l = i32x8::zero_t(token);
+    let mut acc_h = i32x8::zero_t(token);
     for k in 0..5 {
-        let p = u16x16::load(token, prev_rows[k][..16].try_into().unwrap());
-        let c = u16x16::load(token, cur_rows[k][..16].try_into().unwrap());
+        let p = u16x16::load_t(token, prev_rows[k][..16].try_into().unwrap());
+        let c = u16x16::load_t(token, cur_rows[k][..16].try_into().unwrap());
         let dl = p.widen_low().bitcast_i32x8() - c.widen_low().bitcast_i32x8();
         let dh = p.widen_high().bitcast_i32x8() - c.widen_high().bitcast_i32x8();
-        let w = i32x8::splat(token, coef[k] as i32);
+        let w = i32x8::splat_t(token, coef[k] as i32);
         acc_l += w * dl;
         acc_h += w * dh;
     }
-    let rnd = i32x8::splat(token, y_round);
+    let rnd = i32x8::splat_t(token, y_round);
     let yl = (acc_l + rnd).shr_arithmetic_uniform(bpc);
     let yh = (acc_h + rnd).shr_arithmetic_uniform(bpc);
     out[..8].copy_from_slice(&yl.to_array());
@@ -505,8 +503,8 @@ fn motion_vertical_simd(
 /// reorder. Processes 16 columns per call; our u16 input holds values <= 255
 /// so the direct u16 load equals C's `cvtepu8_epi16`.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_vertical8_v3(
+#[attune(import_intrinsics)]
+fn motion_vertical8_v3_t(
     _token: X64V3Token,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
@@ -550,8 +548,8 @@ fn motion_vertical8_v3(
 /// 32 bits identical to arithmetic shift for bpc < 32), permutevar pack.
 /// Processes 8 columns per call and is exact for any bpc <= 16.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_vertical16_v3(
+#[attune(import_intrinsics)]
+fn motion_vertical16_v3_t(
     _token: X64V3Token,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
@@ -602,8 +600,8 @@ fn motion_vertical16_v3(
 /// C's `cvtepu8_epi16`), mullo/mulhi_epi16 + unpack_epi16 products,
 /// `+128 >> 8`, then the four-way `permute2x128` reorder before storing.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_vertical8_v4x(
+#[attune(import_intrinsics)]
+fn motion_vertical8_v4x_t(
     _token: X64V4xToken,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
@@ -658,8 +656,8 @@ fn motion_vertical8_v4x(
 /// accumulation, and native `srav_epi64` rounding (AVX-512F has the
 /// variable i64 shift AVX2 lacked). Exact for any bpc <= 16.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_vertical16_v4x(
+#[attune(import_intrinsics)]
+fn motion_vertical16_v4x_t(
     _token: X64V4xToken,
     prev_rows: &[&[u16]; 5],
     cur_rows: &[&[u16]; 5],
@@ -703,7 +701,7 @@ fn motion_vertical16_v4x(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn srai_epi64_16(_token: X64V3Token, v: __m256i) -> __m256i {
     let lo = _mm256_srli_epi64(v, 16);
     let hi = _mm256_srai_epi32(v, 16);
@@ -715,8 +713,8 @@ fn srai_epi64_16(_token: X64V3Token, v: __m256i) -> __m256i {
 /// pack, abs_epi32, and a per-lane SAD sum reduced at the end. Edge columns
 /// use the scalar mirror path exactly as in C.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_xsad_v3(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
+#[attune(import_intrinsics)]
+fn motion_xsad_v3_t(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
     let g0 = _mm256_set1_epi32(3571);
     let g1 = _mm256_set1_epi32(16004);
     let g2 = _mm256_set1_epi32(26386);
@@ -796,8 +794,8 @@ fn motion_xsad_v3(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
 /// the two ops AVX2 had to emulate: native `srai_epi64` rounding and
 /// `cvtsepi64_epi32` narrowing, plus a single-instruction epi32 reduction.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn motion_xsad_v4x(_token: X64V4xToken, y_row: &[i32], w: usize) -> u64 {
+#[attune(import_intrinsics)]
+fn motion_xsad_v4x_t(_token: X64V4xToken, y_row: &[i32], w: usize) -> u64 {
     let g0 = _mm512_set1_epi32(3571);
     let g1 = _mm512_set1_epi32(16004);
     let g2 = _mm512_set1_epi32(26386);
@@ -867,7 +865,7 @@ fn motion_xsad_v4x(_token: X64V4xToken, y_row: &[i32], w: usize) -> u64 {
     row_sad
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn motion_horizontal_row(y_row: &[i32], width: usize) -> u64 {
     let x_round: i64 = 1 << 15;
     let mut row_sad: u64 = 0;
@@ -934,7 +932,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             {
                 while j + 32 <= width {
                     let mut out = [0i32; 32];
-                    motion_vertical8_v4x(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    motion_vertical8_v4x_t(token, &prev_rows(j), &cur_rows(j), &mut out);
                     y_row[j..j + 32].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 32;
@@ -946,7 +944,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             {
                 while j + 16 <= width {
                     let mut out = [0i32; 16];
-                    motion_vertical8_v3(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    motion_vertical8_v3_t(token, &prev_rows(j), &cur_rows(j), &mut out);
                     y_row[j..j + 16].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 16;
@@ -958,7 +956,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             {
                 while j + 16 <= width {
                     let mut out = [0i32; 16];
-                    motion_vertical16_v4x(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
+                    motion_vertical16_v4x_t(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
                     y_row[j..j + 16].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 16;
@@ -970,7 +968,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             {
                 while j + 8 <= width {
                     let mut out = [0i32; 8];
-                    motion_vertical16_v3(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
+                    motion_vertical16_v3_t(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
                     y_row[j..j + 8].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 8;
@@ -979,7 +977,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             if bpc < 16 && j == 0 {
                 while j + 16 <= width {
                     let mut out = [0i32; 16];
-                    archmage::incant!(
+                    archmage::attuned!(
                         motion_vertical_simd(
                             &prev_rows(j),
                             &cur_rows(j),
@@ -988,7 +986,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
                             bpc as u32,
                             &mut out
                         ),
-                        [v3, neon, wasm128, scalar]
+                        [_v3, _neon, _wasm128, _scalar]
                     );
                     y_row[j..j + 16].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
@@ -1012,15 +1010,15 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
         }
         #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
         if let Some(token) = v4x_token() {
-            sad += motion_xsad_v4x(token, &y_row, width);
+            sad += motion_xsad_v4x_t(token, &y_row, width);
         } else if let Some(token) = v3_token() {
-            sad += motion_xsad_v3(token, &y_row, width);
+            sad += motion_xsad_v3_t(token, &y_row, width);
         } else {
             sad += motion_horizontal_row(&y_row, width);
         }
         #[cfg(all(feature = "simd", not(feature = "avx512"), target_arch = "x86_64"))]
         if let Some(token) = v3_token() {
-            sad += motion_xsad_v3(token, &y_row, width);
+            sad += motion_xsad_v3_t(token, &y_row, width);
         } else {
             sad += motion_horizontal_row(&y_row, width);
         }

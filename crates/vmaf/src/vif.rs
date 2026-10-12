@@ -3,9 +3,8 @@ use archmage::X64V4xToken;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(feature = "simd")]
-use archmage::magetypes;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-use archmage::{SimdToken, X64V3Token, arcane, rite};
+use archmage::{SimdToken, X64V3Token, attune};
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
@@ -107,7 +106,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
             // Scale-0 8-bit planes hold v ≤ 255 — the i16 madd-pair kernel is
             // exact; higher-scale planes reach ~65280 and stay on v3.
             if let Some(token) = v4x_token() {
-                processed = vif_subsample_vertical_v4x(
+                processed = vif_subsample_vertical_v4x_t(
                     token,
                     &image.reference,
                     &image.distorted,
@@ -129,7 +128,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                 {
                     #[cfg(target_arch = "x86_64")]
                     if let Some(token) = v3_token() {
-                        vif_subsample_vertical_v3(
+                        vif_subsample_vertical_v3_t(
                             token,
                             &image.reference,
                             &image.distorted,
@@ -142,7 +141,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                             &mut vertical_distorted,
                         )
                     } else {
-                        archmage::incant!(
+                        archmage::attuned!(
                             vif_subsample_vertical_simd(
                                 &image.reference,
                                 &image.distorted,
@@ -154,12 +153,12 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                                 &mut vertical_reference,
                                 &mut vertical_distorted
                             ),
-                            [v3, neon, wasm128, scalar]
+                            [_v3, _neon, _wasm128, _scalar]
                         )
                     }
                     #[cfg(not(target_arch = "x86_64"))]
                     {
-                        archmage::incant!(
+                        archmage::attuned!(
                             vif_subsample_vertical_simd(
                                 &image.reference,
                                 &image.distorted,
@@ -171,7 +170,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                                 &mut vertical_reference,
                                 &mut vertical_distorted
                             ),
-                            [v3, neon, wasm128, scalar]
+                            [_v3, _neon, _wasm128, _scalar]
                         )
                     }
                 }
@@ -212,7 +211,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         while hcol + 16 <= width {
             #[cfg(target_arch = "x86_64")]
             let (out_ref, out_dis) = if let Some(token) = v3_token() {
-                vif_subsample_horizontal_v3(
+                vif_subsample_horizontal_v3_t(
                     token,
                     &vertical_reference,
                     &vertical_distorted,
@@ -220,25 +219,25 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                     hcol,
                 )
             } else {
-                archmage::incant!(
+                archmage::attuned!(
                     vif_subsample_horizontal_simd(
                         &vertical_reference,
                         &vertical_distorted,
                         filter,
                         hcol
                     ),
-                    [v3, neon, wasm128, scalar]
+                    [_v3, _neon, _wasm128, _scalar]
                 )
             };
             #[cfg(not(target_arch = "x86_64"))]
-            let (out_ref, out_dis) = archmage::incant!(
+            let (out_ref, out_dis) = archmage::attuned!(
                 vif_subsample_horizontal_simd(
                     &vertical_reference,
                     &vertical_distorted,
                     filter,
                     hcol
                 ),
-                [v3, neon, wasm128, scalar]
+                [_v3, _neon, _wasm128, _scalar]
             );
             let slot = (row / 2) * out_width + hcol / 2;
             out_reference[slot..slot + 8].copy_from_slice(&out_ref);
@@ -272,7 +271,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u16x16, u32x8))]
 fn vif_vertical_u8_simd(
     token: Token,
     reference: &[u16],
@@ -289,24 +288,24 @@ fn vif_vertical_u8_simd(
     let chunks = width / 16;
     for chunk in 0..chunks {
         let col = chunk * 16;
-        let mut ref_mean_lo = u32x8::zero(token);
-        let mut ref_mean_hi = u32x8::zero(token);
-        let mut dis_mean_lo = u32x8::zero(token);
-        let mut dis_mean_hi = u32x8::zero(token);
-        let mut ref_sq_lo = u32x8::zero(token);
-        let mut ref_sq_hi = u32x8::zero(token);
-        let mut dis_sq_lo = u32x8::zero(token);
-        let mut dis_sq_hi = u32x8::zero(token);
-        let mut ref_dis_lo = u32x8::zero(token);
-        let mut ref_dis_hi = u32x8::zero(token);
-        let weight = u32x8::splat(token, filter[8] as u32);
-        let center_ref = u16x16::load(
+        let mut ref_mean_lo = u32x8::zero_t(token);
+        let mut ref_mean_hi = u32x8::zero_t(token);
+        let mut dis_mean_lo = u32x8::zero_t(token);
+        let mut dis_mean_hi = u32x8::zero_t(token);
+        let mut ref_sq_lo = u32x8::zero_t(token);
+        let mut ref_sq_hi = u32x8::zero_t(token);
+        let mut dis_sq_lo = u32x8::zero_t(token);
+        let mut dis_sq_hi = u32x8::zero_t(token);
+        let mut ref_dis_lo = u32x8::zero_t(token);
+        let mut ref_dis_hi = u32x8::zero_t(token);
+        let weight = u32x8::splat_t(token, filter[8] as u32);
+        let center_ref = u16x16::load_t(
             token,
             reference[row_offsets[8] + col..row_offsets[8] + col + 16]
                 .try_into()
                 .unwrap(),
         );
-        let center_dis = u16x16::load(
+        let center_dis = u16x16::load_t(
             token,
             distorted[row_offsets[8] + col..row_offsets[8] + col + 16]
                 .try_into()
@@ -327,26 +326,26 @@ fn vif_vertical_u8_simd(
         ref_dis_lo += ref_lo * weight * dis_lo;
         ref_dis_hi += ref_hi * weight * dis_hi;
         for offset in 1..=8usize {
-            let weight = u32x8::splat(token, filter[8 - offset] as u32);
-            let left_ref = u16x16::load(
+            let weight = u32x8::splat_t(token, filter[8 - offset] as u32);
+            let left_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_ref = u16x16::load(
+            let right_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let left_dis = u16x16::load(
+            let left_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_dis = u16x16::load(
+            let right_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
                     .try_into()
@@ -371,7 +370,7 @@ fn vif_vertical_u8_simd(
             ref_dis_lo += weight * (lref_lo * ldis_lo + rref_lo * rdis_lo);
             ref_dis_hi += weight * (lref_hi * ldis_hi + rref_hi * rdis_hi);
         }
-        let rounding = u32x8::splat(token, 128);
+        let rounding = u32x8::splat_t(token, 128);
         let mean_lo_out = (ref_mean_lo + rounding).shr_logical_uniform(8).to_array();
         let mean_hi_out = (ref_mean_hi + rounding).shr_logical_uniform(8).to_array();
         let dis_lo_out = (dis_mean_lo + rounding).shr_logical_uniform(8).to_array();
@@ -403,7 +402,7 @@ fn vif_vertical_u8_simd(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u16x16, u32x8))]
 fn vif_vertical_u10_simd(
     token: Token,
     reference: &[u16],
@@ -418,33 +417,33 @@ fn vif_vertical_u10_simd(
 ) -> usize {
     let filter = FILTERS[0];
     let chunks = width / 16;
-    let mask16 = u32x8::splat(token, 0xffff);
+    let mask16 = u32x8::splat_t(token, 0xffff);
     for chunk in 0..chunks {
         let col = chunk * 16;
-        let mut ref_mean_lo = u32x8::zero(token);
-        let mut ref_mean_hi = u32x8::zero(token);
-        let mut dis_mean_lo = u32x8::zero(token);
-        let mut dis_mean_hi = u32x8::zero(token);
-        let mut ref_sq_lo16 = u32x8::zero(token);
-        let mut ref_sq_hi16 = u32x8::zero(token);
-        let mut ref_sq_lo8 = u32x8::zero(token);
-        let mut ref_sq_hi8 = u32x8::zero(token);
-        let mut dis_sq_lo16 = u32x8::zero(token);
-        let mut dis_sq_hi16 = u32x8::zero(token);
-        let mut dis_sq_lo8 = u32x8::zero(token);
-        let mut dis_sq_hi8 = u32x8::zero(token);
-        let mut ref_dis_lo16 = u32x8::zero(token);
-        let mut ref_dis_hi16 = u32x8::zero(token);
-        let mut ref_dis_lo8 = u32x8::zero(token);
-        let mut ref_dis_hi8 = u32x8::zero(token);
-        let weight = u32x8::splat(token, filter[8] as u32);
-        let center_ref = u16x16::load(
+        let mut ref_mean_lo = u32x8::zero_t(token);
+        let mut ref_mean_hi = u32x8::zero_t(token);
+        let mut dis_mean_lo = u32x8::zero_t(token);
+        let mut dis_mean_hi = u32x8::zero_t(token);
+        let mut ref_sq_lo16 = u32x8::zero_t(token);
+        let mut ref_sq_hi16 = u32x8::zero_t(token);
+        let mut ref_sq_lo8 = u32x8::zero_t(token);
+        let mut ref_sq_hi8 = u32x8::zero_t(token);
+        let mut dis_sq_lo16 = u32x8::zero_t(token);
+        let mut dis_sq_hi16 = u32x8::zero_t(token);
+        let mut dis_sq_lo8 = u32x8::zero_t(token);
+        let mut dis_sq_hi8 = u32x8::zero_t(token);
+        let mut ref_dis_lo16 = u32x8::zero_t(token);
+        let mut ref_dis_hi16 = u32x8::zero_t(token);
+        let mut ref_dis_lo8 = u32x8::zero_t(token);
+        let mut ref_dis_hi8 = u32x8::zero_t(token);
+        let weight = u32x8::splat_t(token, filter[8] as u32);
+        let center_ref = u16x16::load_t(
             token,
             reference[row_offsets[8] + col..row_offsets[8] + col + 16]
                 .try_into()
                 .unwrap(),
         );
-        let center_dis = u16x16::load(
+        let center_dis = u16x16::load_t(
             token,
             distorted[row_offsets[8] + col..row_offsets[8] + col + 16]
                 .try_into()
@@ -477,26 +476,26 @@ fn vif_vertical_u10_simd(
         ref_dis_lo8 += weight * (prod_rd_hi & mask16);
         ref_dis_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
         for offset in 1..=8usize {
-            let weight = u32x8::splat(token, filter[8 - offset] as u32);
-            let left_ref = u16x16::load(
+            let weight = u32x8::splat_t(token, filter[8 - offset] as u32);
+            let left_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_ref = u16x16::load(
+            let right_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let left_dis = u16x16::load(
+            let left_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_dis = u16x16::load(
+            let right_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
                     .try_into()
@@ -533,7 +532,7 @@ fn vif_vertical_u10_simd(
             ref_dis_lo8 += weight * (prod_rd_hi & mask16);
             ref_dis_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
         }
-        let rounding = u32x8::splat(token, 512);
+        let rounding = u32x8::splat_t(token, 512);
         let mean_lo_out = (ref_mean_lo + rounding).shr_logical_uniform(10).to_array();
         let mean_hi_out = (ref_mean_hi + rounding).shr_logical_uniform(10).to_array();
         let dis_lo_out = (dis_mean_lo + rounding).shr_logical_uniform(10).to_array();
@@ -577,7 +576,7 @@ fn vif_vertical_u10_simd(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u16x16, u32x8))]
 fn vif_vertical_hiscale_simd(
     token: Token,
     reference: &[u16],
@@ -594,45 +593,45 @@ fn vif_vertical_hiscale_simd(
     let filter = FILTERS[scale];
     let half = filter.len() / 2;
     let chunks = width / 16;
-    let mask16 = u32x8::splat(token, 0xffff);
+    let mask16 = u32x8::splat_t(token, 0xffff);
     for chunk in 0..chunks {
         let col = chunk * 16;
-        let mut ref_mean_lo = u32x8::zero(token);
-        let mut ref_mean_hi = u32x8::zero(token);
-        let mut dis_mean_lo = u32x8::zero(token);
-        let mut dis_mean_hi = u32x8::zero(token);
-        let mut ref_sq_l_lo16 = u32x8::zero(token);
-        let mut ref_sq_r_lo16 = u32x8::zero(token);
-        let mut ref_sq_l_hi16 = u32x8::zero(token);
-        let mut ref_sq_r_hi16 = u32x8::zero(token);
-        let mut ref_sq_l_lo8 = u32x8::zero(token);
-        let mut ref_sq_r_lo8 = u32x8::zero(token);
-        let mut ref_sq_l_hi8 = u32x8::zero(token);
-        let mut ref_sq_r_hi8 = u32x8::zero(token);
-        let mut dis_sq_l_lo16 = u32x8::zero(token);
-        let mut dis_sq_r_lo16 = u32x8::zero(token);
-        let mut dis_sq_l_hi16 = u32x8::zero(token);
-        let mut dis_sq_r_hi16 = u32x8::zero(token);
-        let mut dis_sq_l_lo8 = u32x8::zero(token);
-        let mut dis_sq_r_lo8 = u32x8::zero(token);
-        let mut dis_sq_l_hi8 = u32x8::zero(token);
-        let mut dis_sq_r_hi8 = u32x8::zero(token);
-        let mut ref_dis_l_lo16 = u32x8::zero(token);
-        let mut ref_dis_r_lo16 = u32x8::zero(token);
-        let mut ref_dis_l_hi16 = u32x8::zero(token);
-        let mut ref_dis_r_hi16 = u32x8::zero(token);
-        let mut ref_dis_l_lo8 = u32x8::zero(token);
-        let mut ref_dis_r_lo8 = u32x8::zero(token);
-        let mut ref_dis_l_hi8 = u32x8::zero(token);
-        let mut ref_dis_r_hi8 = u32x8::zero(token);
-        let weight = u32x8::splat(token, filter[half] as u32);
-        let center_ref = u16x16::load(
+        let mut ref_mean_lo = u32x8::zero_t(token);
+        let mut ref_mean_hi = u32x8::zero_t(token);
+        let mut dis_mean_lo = u32x8::zero_t(token);
+        let mut dis_mean_hi = u32x8::zero_t(token);
+        let mut ref_sq_l_lo16 = u32x8::zero_t(token);
+        let mut ref_sq_r_lo16 = u32x8::zero_t(token);
+        let mut ref_sq_l_hi16 = u32x8::zero_t(token);
+        let mut ref_sq_r_hi16 = u32x8::zero_t(token);
+        let mut ref_sq_l_lo8 = u32x8::zero_t(token);
+        let mut ref_sq_r_lo8 = u32x8::zero_t(token);
+        let mut ref_sq_l_hi8 = u32x8::zero_t(token);
+        let mut ref_sq_r_hi8 = u32x8::zero_t(token);
+        let mut dis_sq_l_lo16 = u32x8::zero_t(token);
+        let mut dis_sq_r_lo16 = u32x8::zero_t(token);
+        let mut dis_sq_l_hi16 = u32x8::zero_t(token);
+        let mut dis_sq_r_hi16 = u32x8::zero_t(token);
+        let mut dis_sq_l_lo8 = u32x8::zero_t(token);
+        let mut dis_sq_r_lo8 = u32x8::zero_t(token);
+        let mut dis_sq_l_hi8 = u32x8::zero_t(token);
+        let mut dis_sq_r_hi8 = u32x8::zero_t(token);
+        let mut ref_dis_l_lo16 = u32x8::zero_t(token);
+        let mut ref_dis_r_lo16 = u32x8::zero_t(token);
+        let mut ref_dis_l_hi16 = u32x8::zero_t(token);
+        let mut ref_dis_r_hi16 = u32x8::zero_t(token);
+        let mut ref_dis_l_lo8 = u32x8::zero_t(token);
+        let mut ref_dis_r_lo8 = u32x8::zero_t(token);
+        let mut ref_dis_l_hi8 = u32x8::zero_t(token);
+        let mut ref_dis_r_hi8 = u32x8::zero_t(token);
+        let weight = u32x8::splat_t(token, filter[half] as u32);
+        let center_ref = u16x16::load_t(
             token,
             reference[row_offsets[half] + col..row_offsets[half] + col + 16]
                 .try_into()
                 .unwrap(),
         );
-        let center_dis = u16x16::load(
+        let center_dis = u16x16::load_t(
             token,
             distorted[row_offsets[half] + col..row_offsets[half] + col + 16]
                 .try_into()
@@ -665,26 +664,26 @@ fn vif_vertical_hiscale_simd(
         ref_dis_l_lo8 += weight * (prod_rd_hi & mask16);
         ref_dis_l_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
         for offset in 1..=half {
-            let weight = u32x8::splat(token, filter[half - offset] as u32);
-            let left_ref = u16x16::load(
+            let weight = u32x8::splat_t(token, filter[half - offset] as u32);
+            let left_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_ref = u16x16::load(
+            let right_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let left_dis = u16x16::load(
+            let left_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_dis = u16x16::load(
+            let right_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
                     .try_into()
@@ -739,7 +738,7 @@ fn vif_vertical_hiscale_simd(
             ref_dis_r_lo8 += weight * (rd2_hi & mask16);
             ref_dis_r_hi8 += weight * rd2_hi.shr_logical_uniform(16);
         }
-        let rounding = u32x8::splat(token, 32768);
+        let rounding = u32x8::splat_t(token, 32768);
         let mean_lo_out = (ref_mean_lo + rounding).shr_logical_uniform(16).to_array();
         let mean_hi_out = (ref_mean_hi + rounding).shr_logical_uniform(16).to_array();
         let dis_lo_out = (dis_mean_lo + rounding).shr_logical_uniform(16).to_array();
@@ -810,7 +809,7 @@ fn vif_vertical_hiscale_simd(
 type VifHorizontalSums = ([u32; 16], [u32; 16], [u32; 16], [u32; 16], [u32; 16]);
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u32x8))]
 fn vif_horizontal_sums(
     token: Token,
     vertical_ref_mean: &[u32],
@@ -821,44 +820,44 @@ fn vif_horizontal_sums(
     filter: &[u16],
     col: usize,
 ) -> VifHorizontalSums {
-    let mask16 = u32x8::splat(token, 0xffff);
-    let mut ref_mean_lo = u32x8::zero(token);
-    let mut ref_mean_hi = u32x8::zero(token);
-    let mut dis_mean_lo = u32x8::zero(token);
-    let mut dis_mean_hi = u32x8::zero(token);
-    let mut ref_sq_lo16 = u32x8::zero(token);
-    let mut ref_sq_hi16 = u32x8::zero(token);
-    let mut ref_sq_lo8 = u32x8::zero(token);
-    let mut ref_sq_hi8 = u32x8::zero(token);
-    let mut dis_sq_lo16 = u32x8::zero(token);
-    let mut dis_sq_hi16 = u32x8::zero(token);
-    let mut dis_sq_lo8 = u32x8::zero(token);
-    let mut dis_sq_hi8 = u32x8::zero(token);
-    let mut ref_dis_lo16 = u32x8::zero(token);
-    let mut ref_dis_hi16 = u32x8::zero(token);
-    let mut ref_dis_lo8 = u32x8::zero(token);
-    let mut ref_dis_hi8 = u32x8::zero(token);
+    let mask16 = u32x8::splat_t(token, 0xffff);
+    let mut ref_mean_lo = u32x8::zero_t(token);
+    let mut ref_mean_hi = u32x8::zero_t(token);
+    let mut dis_mean_lo = u32x8::zero_t(token);
+    let mut dis_mean_hi = u32x8::zero_t(token);
+    let mut ref_sq_lo16 = u32x8::zero_t(token);
+    let mut ref_sq_hi16 = u32x8::zero_t(token);
+    let mut ref_sq_lo8 = u32x8::zero_t(token);
+    let mut ref_sq_hi8 = u32x8::zero_t(token);
+    let mut dis_sq_lo16 = u32x8::zero_t(token);
+    let mut dis_sq_hi16 = u32x8::zero_t(token);
+    let mut dis_sq_lo8 = u32x8::zero_t(token);
+    let mut dis_sq_hi8 = u32x8::zero_t(token);
+    let mut ref_dis_lo16 = u32x8::zero_t(token);
+    let mut ref_dis_hi16 = u32x8::zero_t(token);
+    let mut ref_dis_lo8 = u32x8::zero_t(token);
+    let mut ref_dis_hi8 = u32x8::zero_t(token);
     for (tap, &w) in filter.iter().enumerate() {
-        let weight = u32x8::splat(token, w as u32);
-        let rlo = u32x8::load(
+        let weight = u32x8::splat_t(token, w as u32);
+        let rlo = u32x8::load_t(
             token,
             vertical_ref_mean[col + tap..col + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let rhi = u32x8::load(
+        let rhi = u32x8::load_t(
             token,
             vertical_ref_mean[col + 8 + tap..col + 8 + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let dlo = u32x8::load(
+        let dlo = u32x8::load_t(
             token,
             vertical_dis_mean[col + tap..col + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let dhi = u32x8::load(
+        let dhi = u32x8::load_t(
             token,
             vertical_dis_mean[col + 8 + tap..col + 8 + tap + 8]
                 .try_into()
@@ -868,13 +867,13 @@ fn vif_horizontal_sums(
         ref_mean_hi += weight * rhi;
         dis_mean_lo += weight * dlo;
         dis_mean_hi += weight * dhi;
-        let sq_lo = u32x8::load(
+        let sq_lo = u32x8::load_t(
             token,
             vertical_ref_sq[col + tap..col + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let sq_hi = u32x8::load(
+        let sq_hi = u32x8::load_t(
             token,
             vertical_ref_sq[col + 8 + tap..col + 8 + tap + 8]
                 .try_into()
@@ -884,13 +883,13 @@ fn vif_horizontal_sums(
         ref_sq_hi16 += weight * sq_lo.shr_logical_uniform(16);
         ref_sq_lo8 += weight * (sq_hi & mask16);
         ref_sq_hi8 += weight * sq_hi.shr_logical_uniform(16);
-        let ds_lo = u32x8::load(
+        let ds_lo = u32x8::load_t(
             token,
             vertical_dis_sq[col + tap..col + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let ds_hi = u32x8::load(
+        let ds_hi = u32x8::load_t(
             token,
             vertical_dis_sq[col + 8 + tap..col + 8 + tap + 8]
                 .try_into()
@@ -900,13 +899,13 @@ fn vif_horizontal_sums(
         dis_sq_hi16 += weight * ds_lo.shr_logical_uniform(16);
         dis_sq_lo8 += weight * (ds_hi & mask16);
         dis_sq_hi8 += weight * ds_hi.shr_logical_uniform(16);
-        let rd_lo = u32x8::load(
+        let rd_lo = u32x8::load_t(
             token,
             vertical_ref_dis[col + tap..col + tap + 8]
                 .try_into()
                 .unwrap(),
         );
-        let rd_hi = u32x8::load(
+        let rd_hi = u32x8::load_t(
             token,
             vertical_ref_dis[col + 8 + tap..col + 8 + tap + 8]
                 .try_into()
@@ -926,7 +925,7 @@ fn vif_horizontal_sums(
     let mean_hi = ref_mean_hi.to_array();
     let dmean_lo = dis_mean_lo.to_array();
     let dmean_hi = dis_mean_hi.to_array();
-    let rounding = u32x8::splat(token, 32768);
+    let rounding = u32x8::splat_t(token, 32768);
     let sq_lo16 = (ref_sq_lo16 + rounding).shr_logical_uniform(16).to_array();
     let sq_hi16 = ref_sq_hi16.to_array();
     let sq_lo8 = (ref_sq_lo8 + rounding).shr_logical_uniform(16).to_array();
@@ -961,7 +960,7 @@ fn vif_horizontal_sums(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u16x16, u32x8))]
 fn vif_subsample_vertical_simd(
     token: Token,
     reference: &[u16],
@@ -976,21 +975,21 @@ fn vif_subsample_vertical_simd(
 ) -> usize {
     let half = filter.len() / 2;
     let chunks = width / 16;
-    let rounding = u32x8::splat(token, round);
+    let rounding = u32x8::splat_t(token, round);
     for chunk in 0..chunks {
         let col = chunk * 16;
-        let mut ref_lo = u32x8::zero(token);
-        let mut ref_hi = u32x8::zero(token);
-        let mut dis_lo = u32x8::zero(token);
-        let mut dis_hi = u32x8::zero(token);
-        let weight = u32x8::splat(token, filter[half] as u32);
-        let center_ref = u16x16::load(
+        let mut ref_lo = u32x8::zero_t(token);
+        let mut ref_hi = u32x8::zero_t(token);
+        let mut dis_lo = u32x8::zero_t(token);
+        let mut dis_hi = u32x8::zero_t(token);
+        let weight = u32x8::splat_t(token, filter[half] as u32);
+        let center_ref = u16x16::load_t(
             token,
             reference[row_offsets[half] + col..row_offsets[half] + col + 16]
                 .try_into()
                 .unwrap(),
         );
-        let center_dis = u16x16::load(
+        let center_dis = u16x16::load_t(
             token,
             distorted[row_offsets[half] + col..row_offsets[half] + col + 16]
                 .try_into()
@@ -1001,26 +1000,26 @@ fn vif_subsample_vertical_simd(
         dis_lo += weight * center_dis.widen_low();
         dis_hi += weight * center_dis.widen_high();
         for offset in 1..=half {
-            let weight = u32x8::splat(token, filter[half - offset] as u32);
-            let left_ref = u16x16::load(
+            let weight = u32x8::splat_t(token, filter[half - offset] as u32);
+            let left_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_ref = u16x16::load(
+            let right_ref = u16x16::load_t(
                 token,
                 reference[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let left_dis = u16x16::load(
+            let left_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
                     .try_into()
                     .unwrap(),
             );
-            let right_dis = u16x16::load(
+            let right_dis = u16x16::load_t(
                 token,
                 distorted[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
                     .try_into()
@@ -1057,9 +1056,9 @@ fn vif_subsample_vertical_simd(
 /// guarantees v ≤ 255; scale≥1 planes reach ~65280 and must use the u16 path).
 /// Odd `fwidth` is padded with a zero coefficient against a safe mirrored row.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_subsample_vertical_v4x(
+fn vif_subsample_vertical_v4x_t(
     _token: X64V4xToken,
     reference: &[u16],
     distorted: &[u16],
@@ -1143,9 +1142,9 @@ fn vif_subsample_vertical_v4x(
 
 /// iteration, writes the convolved row at `half + j` in the padded buffers.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_subsample_vertical_v3(
+fn vif_subsample_vertical_v3_t(
     _token: X64V3Token,
     reference: &[u16],
     distorted: &[u16],
@@ -1213,8 +1212,8 @@ fn vif_subsample_vertical_v3(
 /// decimated u16 outputs per call, covering input columns `col..col + 16`
 /// at even positions, matching `vif_subsample_horizontal_simd`.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_subsample_horizontal_v3(
+#[attune(import_intrinsics)]
+fn vif_subsample_horizontal_v3_t(
     _token: X64V3Token,
     vertical_reference: &[u32],
     vertical_distorted: &[u32],
@@ -1268,7 +1267,7 @@ fn vif_subsample_horizontal_v3(
 }
 
 #[cfg(feature = "simd")]
-#[magetypes(define(u32x8), v3, neon, wasm128, scalar)]
+#[attune(_*_t, define(u32x8))]
 fn vif_subsample_horizontal_simd(
     token: Token,
     vertical_reference: &[u32],
@@ -1276,42 +1275,42 @@ fn vif_subsample_horizontal_simd(
     filter: &[u16],
     col: usize,
 ) -> ([u16; 8], [u16; 8]) {
-    let mut ref_lo = u32x8::zero(token);
-    let mut ref_hi = u32x8::zero(token);
-    let mut dis_lo = u32x8::zero(token);
-    let mut dis_hi = u32x8::zero(token);
+    let mut ref_lo = u32x8::zero_t(token);
+    let mut ref_hi = u32x8::zero_t(token);
+    let mut dis_lo = u32x8::zero_t(token);
+    let mut dis_hi = u32x8::zero_t(token);
     for (tap, &w) in filter.iter().enumerate() {
-        let weight = u32x8::splat(token, w as u32);
+        let weight = u32x8::splat_t(token, w as u32);
         ref_lo += weight
-            * u32x8::load(
+            * u32x8::load_t(
                 token,
                 vertical_reference[col + tap..col + tap + 8]
                     .try_into()
                     .unwrap(),
             );
         ref_hi += weight
-            * u32x8::load(
+            * u32x8::load_t(
                 token,
                 vertical_reference[col + 8 + tap..col + 8 + tap + 8]
                     .try_into()
                     .unwrap(),
             );
         dis_lo += weight
-            * u32x8::load(
+            * u32x8::load_t(
                 token,
                 vertical_distorted[col + tap..col + tap + 8]
                     .try_into()
                     .unwrap(),
             );
         dis_hi += weight
-            * u32x8::load(
+            * u32x8::load_t(
                 token,
                 vertical_distorted[col + 8 + tap..col + 8 + tap + 8]
                     .try_into()
                     .unwrap(),
             );
     }
-    let rounding = u32x8::splat(token, 32768);
+    let rounding = u32x8::splat_t(token, 32768);
     let ref_lo = (ref_lo + rounding).shr_logical_uniform(16).to_array();
     let ref_hi = (ref_hi + rounding).shr_logical_uniform(16).to_array();
     let dis_lo = (dis_lo + rounding).shr_logical_uniform(16).to_array();
@@ -1328,7 +1327,7 @@ fn vif_subsample_horizontal_simd(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn vif_mul2(_token: X64V3Token, r0: __m256i, f: __m256i) -> (__m256i, __m256i) {
     let zero = _mm256_setzero_si256();
     (
@@ -1338,7 +1337,7 @@ fn vif_mul2(_token: X64V3Token, r0: __m256i, f: __m256i) -> (__m256i, __m256i) {
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn vif_mul2_acc(
     _token: X64V3Token,
     acc: (__m256i, __m256i),
@@ -1353,7 +1352,7 @@ fn vif_mul2_acc(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn vif_mul3(_token: X64V3Token, r0: __m256i, r1: __m256i, f: __m256i) -> (__m256i, __m256i) {
     let mul = _mm256_mullo_epi16(r0, r1);
     let lo = _mm256_mullo_epi16(mul, f);
@@ -1362,7 +1361,7 @@ fn vif_mul3(_token: X64V3Token, r0: __m256i, r1: __m256i, f: __m256i) -> (__m256
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn vif_mul3_acc(
     _token: X64V3Token,
     acc: (__m256i, __m256i),
@@ -1380,7 +1379,7 @@ fn vif_mul3_acc(
 }
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[rite]
+#[attune(v3)]
 fn vif_shuffle_save(_token: X64V3Token, addr: &mut [u32; 16], x: __m256i, y: __m256i) {
     let left = _mm256_permute2x128_si256(x, y, 0x20);
     let right = _mm256_permute2x128_si256(x, y, 0x31);
@@ -1395,9 +1394,9 @@ fn vif_shuffle_save(_token: X64V3Token, addr: &mut [u32; 16], x: __m256i, y: __m
 /// a single op. Requires `half` even (FILTERS[0] ⇒ 8) and bit_depth == 8 so
 /// pair sums ≤ 510 fit i16 and sq products fit i32.
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat8_vertical_v4x(
+fn vif_stat8_vertical_v4x_t(
     _token: X64V4xToken,
     reference: &[u16],
     distorted: &[u16],
@@ -1594,8 +1593,8 @@ fn vif_stat8_vertical_v4x(
 /// Faithful port of libvmaf's `vif_statistic_8_avx2` vertical pass for one row:
 /// fills the five padded tmp arrays for all `width` columns.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_stat8_vertical_v3(
+#[attune(import_intrinsics)]
+fn vif_stat8_vertical_v3_t(
     token: X64V3Token,
     reference: &[u16],
     distorted: &[u16],
@@ -1713,8 +1712,8 @@ fn vif_stat8_vertical_v3(
 /// consumes the padded tmp arrays and accumulates num/den for 16-column blocks.
 /// Returns the number of columns processed (a multiple of 16).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_stat8_horizontal_v3(
+#[attune(import_intrinsics)]
+fn vif_stat8_horizontal_v3_t(
     token: X64V3Token,
     tmp_mu1: &[u32],
     tmp_mu2: &[u32],
@@ -2094,9 +2093,9 @@ fn vif_stat8_horizontal_v3(
 /// the C which selects them from (bpc, scale). Returns columns completed
 /// (a multiple of 16); the caller's scalar loop finishes the tail.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat16_vertical_v3(
+fn vif_stat16_vertical_v3_t(
     token: X64V3Token,
     reference: &[u16],
     distorted: &[u16],
@@ -2308,9 +2307,9 @@ fn vif_stat16_vertical_v3(
 /// slli/blend/permutevar8x32. Mean-square terms are also stored linearly here
 /// (blend + shuffle_epi32(0xD8)). Returns columns processed (multiple of 16).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat16_horizontal_v3(
+fn vif_stat16_horizontal_v3_t(
     token: X64V3Token,
     tmp_mu1: &[u32],
     tmp_mu2: &[u32],
@@ -3012,7 +3011,7 @@ fn v4x_token() -> Option<X64V4xToken> {
 /// `i32gather_epi64(..., log2_table, 2) & 0xffff` but bounds-checked — indices
 /// are already in `[32768, 65536)` by construction (mantissa after srlv).
 /// Scalar-index gather of 8 table entries whose indices sit in the low u32 of
-/// each i64 lane — expands inline (a `#[rite]` fn can't force-inline through
+/// each i64 lane — expands inline (a `#[attune]` fn can't force-inline through
 /// `#[target_feature]` on stable, and per-iteration calls marshal zmm results
 /// through the stack).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
@@ -3040,7 +3039,7 @@ macro_rules! gather_log_u16_v4x {
 /// finalize for `vif_statistic_8`. Matches `vif_finalize_sigma` bit-for-bit —
 /// same log2 table approximation (k = 48 - lzcnt, `v >> k` mantissa index,
 /// `2048*k` exponent), same truncating f64 divides, same masks. A macro so it
-/// expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4x`).
+/// expands inside the caller's `#[attune]` body (see `gather_log_u16_v4x`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 macro_rules! vif_statistic_finalize_v4x {
     ($xx:expr, $xy:expr, $yy:expr, $table:expr, $gain_limit:expr, $num_log:expr, $den_log:expr, $num_non_log:expr, $den_non_log:expr) => {{
@@ -3133,11 +3132,11 @@ macro_rules! vif_statistic_finalize_v4x {
     }};
 }
 
-/// `vif_stat_horizontal_v4x` filtered-square accumulator: `sum_t filt[t] *
+/// `vif_stat_horizontal_v4x_t` filtered-square accumulator: `sum_t filt[t] *
 /// tmp[..]` over the symmetric fwidth window, widened through cvtepu32_epi64
 /// and accumulated in two i64×8 halves, then `(acc + 0x8000) >> 16` merged to
 /// 16 u32 lanes via mask2. Mirrors C's `refsq/dissq/refdis` blocks. A macro so
-/// it expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4x`).
+/// it expands inside the caller's `#[attune]` body (see `gather_log_u16_v4x`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 macro_rules! vif_stat_fsq_v4x {
     ($w:expr, $fqv:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
@@ -3170,9 +3169,9 @@ macro_rules! vif_stat_fsq_v4x {
 /// so this one kernel serves both `vif_stat8` and `vif_stat16` rows. Returns
 /// columns processed (a multiple of 16).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
+#[attune(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
-fn vif_stat_horizontal_v4x(
+fn vif_stat_horizontal_v4x_t(
     _token: X64V4xToken,
     tmp_mu1: &[u32],
     tmp_mu2: &[u32],
@@ -3390,7 +3389,7 @@ fn statistics(
         if !(bit_depth == 8 && scale == 0) {
             #[cfg(target_arch = "x86_64")]
             let avx2 = if let Some(token) = x64v3 {
-                processed = vif_stat16_vertical_v3(
+                processed = vif_stat16_vertical_v3_t(
                     token,
                     &image.reference,
                     &image.distorted,
@@ -3416,7 +3415,7 @@ fn statistics(
             let avx2 = false;
             if !avx2 {
                 if scale > 0 {
-                    processed = archmage::incant!(
+                    processed = archmage::attuned!(
                         vif_vertical_hiscale_simd(
                             &image.reference,
                             &image.distorted,
@@ -3429,12 +3428,12 @@ fn statistics(
                             &mut vertical_dis_sq,
                             &mut vertical_ref_dis
                         ),
-                        [v3, neon, wasm128, scalar]
+                        [_v3, _neon, _wasm128, _scalar]
                     );
                 }
                 #[cfg(feature = "simd")]
                 if bit_depth == 10 && scale == 0 {
-                    processed = archmage::incant!(
+                    processed = archmage::attuned!(
                         vif_vertical_u10_simd(
                             &image.reference,
                             &image.distorted,
@@ -3446,7 +3445,7 @@ fn statistics(
                             &mut vertical_dis_sq,
                             &mut vertical_ref_dis
                         ),
-                        [v3, neon, wasm128, scalar]
+                        [_v3, _neon, _wasm128, _scalar]
                     );
                 }
             }
@@ -3457,7 +3456,7 @@ fn statistics(
             && half % 2 == 0
             && let Some(token) = v4x_token()
         {
-            vif_stat8_vertical_v4x(
+            vif_stat8_vertical_v4x_t(
                 token,
                 &image.reference,
                 &image.distorted,
@@ -3477,7 +3476,7 @@ fn statistics(
         if bit_depth == 8 && scale == 0 && processed < width {
             #[cfg(target_arch = "x86_64")]
             let avx2 = if let Some(token) = x64v3 {
-                vif_stat8_vertical_v3(
+                vif_stat8_vertical_v3_t(
                     token,
                     &image.reference,
                     &image.distorted,
@@ -3499,7 +3498,7 @@ fn statistics(
             #[cfg(not(target_arch = "x86_64"))]
             let avx2 = false;
             if !avx2 {
-                processed = archmage::incant!(
+                processed = archmage::attuned!(
                     vif_vertical_u8_simd(
                         &image.reference,
                         &image.distorted,
@@ -3511,7 +3510,7 @@ fn statistics(
                         &mut vertical_dis_sq,
                         &mut vertical_ref_dis
                     ),
-                    [v3, neon, wasm128, scalar]
+                    [_v3, _neon, _wasm128, _scalar]
                 );
             }
         }
@@ -3571,7 +3570,7 @@ fn statistics(
                 && scale == 0
                 && let Some(token) = v4x_token()
             {
-                hcol = vif_stat_horizontal_v4x(
+                hcol = vif_stat_horizontal_v4x_t(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
@@ -3597,7 +3596,7 @@ fn statistics(
                 && scale == 0
                 && let Some(token) = x64v3
             {
-                hcol = vif_stat8_horizontal_v3(
+                hcol = vif_stat8_horizontal_v3_t(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
@@ -3624,7 +3623,7 @@ fn statistics(
             {
                 // Same horizontal math as the 8-bit path; the v4x kernel is
                 // width/bit-depth agnostic on the u32 tmp planes.
-                hcol = vif_stat_horizontal_v4x(
+                hcol = vif_stat_horizontal_v4x_t(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
@@ -3649,7 +3648,7 @@ fn statistics(
                 && !(bit_depth == 8 && scale == 0)
                 && let Some(token) = x64v3
             {
-                hcol = vif_stat16_horizontal_v3(
+                hcol = vif_stat16_horizontal_v3_t(
                     token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
@@ -3670,7 +3669,7 @@ fn statistics(
                 );
             }
             while hcol + 16 <= width {
-                let (ref_means, dis_means, ref_sqs, dis_sqs, ref_diss) = archmage::incant!(
+                let (ref_means, dis_means, ref_sqs, dis_sqs, ref_diss) = archmage::attuned!(
                     vif_horizontal_sums(
                         &vertical_ref_mean,
                         &vertical_dis_mean,
@@ -3680,7 +3679,7 @@ fn statistics(
                         filter,
                         hcol
                     ),
-                    [v3, neon, wasm128, scalar]
+                    [_v3, _neon, _wasm128, _scalar]
                 );
                 for lane in 0..16 {
                     vif_pixel_finalize(
@@ -3975,7 +3974,7 @@ mod tests {
                         ];
                         let [rm, dm, rsq, dsq, rd] = actual.each_mut();
                         let processed = if scalar_tier {
-                            vif_vertical_u10_simd_scalar(
+                            vif_vertical_u10_simd_scalar_t(
                                 archmage::ScalarToken,
                                 &reference,
                                 &distorted,
@@ -3988,7 +3987,7 @@ mod tests {
                                 rd,
                             )
                         } else {
-                            archmage::incant!(
+                            archmage::attuned!(
                                 vif_vertical_u10_simd(
                                     &reference,
                                     &distorted,
@@ -4000,7 +3999,7 @@ mod tests {
                                     dsq,
                                     rd
                                 ),
-                                [v3, neon, wasm128, scalar]
+                                [_v3, _neon, _wasm128, _scalar]
                             )
                         };
                         assert_eq!(processed, width / 16 * 16);
@@ -4152,7 +4151,7 @@ mod tests {
                             ];
                             let [rm, dm, rsq, dsq, rd] = actual.each_mut();
                             let processed = if scalar_tier {
-                                vif_vertical_hiscale_simd_scalar(
+                                vif_vertical_hiscale_simd_scalar_t(
                                     archmage::ScalarToken,
                                     &reference,
                                     &distorted,
@@ -4166,7 +4165,7 @@ mod tests {
                                     rd,
                                 )
                             } else {
-                                archmage::incant!(
+                                archmage::attuned!(
                                     vif_vertical_hiscale_simd(
                                         &reference,
                                         &distorted,
@@ -4179,7 +4178,7 @@ mod tests {
                                         dsq,
                                         rd
                                     ),
-                                    [v3, neon, wasm128, scalar]
+                                    [_v3, _neon, _wasm128, _scalar]
                                 )
                             };
                             assert_eq!(processed, width / 16 * 16);
@@ -4279,7 +4278,7 @@ mod tests {
                         ];
                         let [rm, dm, rsq, dsq, rd] = actual.each_mut();
                         let processed = if scalar_tier {
-                            vif_vertical_u8_simd_scalar(
+                            vif_vertical_u8_simd_scalar_t(
                                 archmage::ScalarToken,
                                 &reference,
                                 &distorted,
@@ -4292,7 +4291,7 @@ mod tests {
                                 rd,
                             )
                         } else {
-                            archmage::incant!(
+                            archmage::attuned!(
                                 vif_vertical_u8_simd(
                                     &reference,
                                     &distorted,
@@ -4304,7 +4303,7 @@ mod tests {
                                     dsq,
                                     rd
                                 ),
-                                [v3, neon, wasm128, scalar]
+                                [_v3, _neon, _wasm128, _scalar]
                             )
                         };
                         assert_eq!(processed, width / 16 * 16);

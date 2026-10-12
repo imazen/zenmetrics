@@ -121,7 +121,7 @@ where
     }
 }
 
-/// Arguments to one `vifp` run, bundled so `incant!` dispatches a
+/// Arguments to one `vifp` run, bundled so `attuned!` dispatches a
 /// single parameter.
 #[doc(hidden)]
 pub struct Args<'a> {
@@ -148,11 +148,11 @@ macro_rules! score_body {
         let (mut im1, mut im2) = ($a.im1.to_vec(), $a.im2.to_vec());
         let (mut num, mut den) = (0.0f64, 0.0f64);
         let (zero, epsv, snv) = (
-            <$V>::splat($token, 0.0),
-            <$V>::splat($token, EPS),
-            <$V>::splat($token, SIGMA_NSQ),
+            <$V>::splat_t($token, 0.0),
+            <$V>::splat_t($token, EPS),
+            <$V>::splat_t($token, SIGMA_NSQ),
         );
-        let one = <$V>::splat($token, 1.0);
+        let one = <$V>::splat_t($token, 1.0);
 
         for s in 0..NSCALES {
             let nk = (1 << (NSCALES - s)) + 1; // 17, 9, 5, 3
@@ -169,11 +169,13 @@ macro_rules! score_body {
                 let hrow = |drow: &mut [f64], srow: &[f64]| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
-                        let mut v = <$V>::splat($token, 0.0);
+                        let mut v = <$V>::splat_t($token, 0.0);
                         for u in 0..nk {
-                            let xv =
-                                <$V>::from_array($token, core::array::from_fn(|k| srow[x + u + k]));
-                            v = v + <$V>::splat($token, taps[u]) * xv;
+                            let xv = <$V>::from_array_t(
+                                $token,
+                                core::array::from_fn(|k| srow[x + u + k]),
+                            );
+                            v = v + <$V>::splat_t($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;
@@ -198,13 +200,13 @@ macro_rules! score_body {
                 crate::kernel::for_each_row(&mut out, out_w, |y, drow| {
                     let mut x = 0usize;
                     while x + $LANES <= out_w {
-                        let mut v = <$V>::splat($token, 0.0);
+                        let mut v = <$V>::splat_t($token, 0.0);
                         for u in 0..nk {
-                            let xv = <$V>::from_array(
+                            let xv = <$V>::from_array_t(
                                 $token,
                                 core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
                             );
-                            v = v + <$V>::splat($token, taps[u]) * xv;
+                            v = v + <$V>::splat_t($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;
@@ -263,11 +265,11 @@ macro_rules! score_body {
             let n = out_w * out_h;
             let mut i = 0usize;
             while i + $LANES <= n {
-                let m1 = <$V>::from_array($token, core::array::from_fn(|k| mu1[i + k]));
-                let m2 = <$V>::from_array($token, core::array::from_fn(|k| mu2[i + k]));
-                let v1 = <$V>::from_array($token, core::array::from_fn(|k| s1p[i + k]));
-                let v2 = <$V>::from_array($token, core::array::from_fn(|k| s2p[i + k]));
-                let vc = <$V>::from_array($token, core::array::from_fn(|k| s12p[i + k]));
+                let m1 = <$V>::from_array_t($token, core::array::from_fn(|k| mu1[i + k]));
+                let m2 = <$V>::from_array_t($token, core::array::from_fn(|k| mu2[i + k]));
+                let v1 = <$V>::from_array_t($token, core::array::from_fn(|k| s1p[i + k]));
+                let v2 = <$V>::from_array_t($token, core::array::from_fn(|k| s2p[i + k]));
+                let vc = <$V>::from_array_t($token, core::array::from_fn(|k| s12p[i + k]));
                 let mut s1sq = (v1 - m1 * m1).max(zero);
                 let s2sq = (v2 - m2 * m2).max(zero);
                 let s12 = vc - m1 * m2;
@@ -331,38 +333,38 @@ macro_rules! score_body {
 
 /// The `v3` tier (AVX2, 4-wide f64).
 #[cfg(target_arch = "x86_64")]
-#[archmage::arcane]
-pub fn vifp_core_tier_v3(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn vifp_core_tier_v3_t(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f64x4<archmage::X64V3Token>;
     score_body!(token, V, 4, a)
 }
 
 /// The `v4x` tier (AVX-512, 8-wide f64 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[archmage::arcane]
-pub fn vifp_core_tier_v4x(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn vifp_core_tier_v4x_t(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f64x8<archmage::X64V4xToken>;
     score_body!(token, V, 8, a)
 }
 
 /// The `neon` tier (4-wide f64).
 #[cfg(target_arch = "aarch64")]
-#[archmage::arcane]
-pub fn vifp_core_tier_neon(token: archmage::NeonToken, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn vifp_core_tier_neon_t(token: archmage::NeonToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f64x4<archmage::NeonToken>;
     score_body!(token, V, 4, a)
 }
 
 /// The `wasm128` tier (4-wide f64).
 #[cfg(target_arch = "wasm32")]
-#[archmage::arcane]
-pub fn vifp_core_tier_wasm128(token: archmage::Wasm128Token, a: Args<'_>) -> f64 {
+#[archmage::attune]
+pub fn vifp_core_tier_wasm128_t(token: archmage::Wasm128Token, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f64x4<archmage::Wasm128Token>;
     score_body!(token, V, 4, a)
 }
 
 /// The `scalar` tier (4-wide f64, scalar-emulated lanes).
-pub fn vifp_core_tier_scalar(token: archmage::ScalarToken, a: Args<'_>) -> f64 {
+pub fn vifp_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> f64 {
     type V = magetypes::simd::generic::f64x4<archmage::ScalarToken>;
     score_body!(token, V, 4, a)
 }
@@ -375,5 +377,8 @@ pub(crate) fn vifp_core(inputs: &crate::Inputs, w: usize, h: usize) -> f64 {
         w,
         h,
     };
-    archmage::incant!(vifp_core_tier(a), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vifp_core_tier(a),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }

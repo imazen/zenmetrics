@@ -35,7 +35,7 @@
 //!
 //! # SIMD
 //!
-//! One `#[arcane]` entry per tier (`v4x` AVX-512 behind crate feature
+//! One `#[attune]` entry per tier (`v4x` AVX-512 behind crate feature
 //! `avx512`, `v3` AVX2, `neon`, `wasm128`, `scalar`), processing
 //! `LANES` blocks per batch in a coefficient-major layout. All lanes are
 //! independent and every reduction has a fixed order, so all widths are
@@ -67,11 +67,11 @@ mod kernel;
 #[cfg(feature = "_dev")]
 #[doc(hidden)]
 pub mod dev {
-    pub use crate::kernel::psnrhvs_band_scalar;
+    pub use crate::kernel::psnrhvs_band_scalar_t;
     #[cfg(target_arch = "x86_64")]
-    pub use crate::kernel::psnrhvs_band_v3;
+    pub use crate::kernel::psnrhvs_band_v3_t;
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-    pub use crate::kernel::psnrhvs_band_v4x;
+    pub use crate::kernel::psnrhvs_band_v4x_t;
 }
 
 #[cfg(test)]

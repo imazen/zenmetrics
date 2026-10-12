@@ -50,7 +50,7 @@ pub fn xcm4_finish(sums: [f32; 4], n: usize) -> [f32; 4] {
         Midp::scalar_pow(sums[3] / nf + LP_SAFE_EPS, 0.5) - Midp::scalar_pow(LP_SAFE_EPS, 0.5),
     ]
 }
-pub(crate) fn safe_pow_with_offset_into_scalar(
+pub(crate) fn safe_pow_with_offset_into_scalar_t(
     token: ScalarToken,
     xs: &[f32],
     out: &mut [f32],
@@ -61,35 +61,35 @@ pub(crate) fn safe_pow_with_offset_into_scalar(
     width8::safe_pow_with_offset_kernel::<_, Midp>(token, xs, out, offset, p, offset_pow_p);
 }
 
-pub(crate) fn vexp_into_scalar(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
+pub(crate) fn vexp_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
     width8::vexp_kernel::<_, Midp>(token, xs, out);
 }
 
-pub(crate) fn vlog_into_scalar(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
+pub(crate) fn vlog_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
     width8::vlog_kernel::<_, Midp>(token, xs, out);
 }
 
-pub(crate) fn vpow_into_scalar(token: ScalarToken, xs: &[f32], out: &mut [f32], p: f32) {
+pub(crate) fn vpow_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32], p: f32) {
     width8::vpow_kernel::<_, Midp>(token, xs, out, p);
 }
 
-pub(crate) fn vaxpy_into_scalar(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
+pub(crate) fn vaxpy_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
     width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
 }
 
-pub(crate) fn vscale_into_scalar(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
+pub(crate) fn vscale_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
     width8::vscale_kernel::<_, Midp>(token, dst, src, a);
 }
 
-pub(crate) fn vabs_diff_into_scalar(token: ScalarToken, out: &mut [f32], x: &[f32], y: &[f32]) {
+pub(crate) fn vabs_diff_into_scalar_t(token: ScalarToken, out: &mut [f32], x: &[f32], y: &[f32]) {
     width8::vabs_diff_kernel::<_, Midp>(token, out, x, y);
 }
 
-pub(crate) fn vmin_abs_into_scalar(token: ScalarToken, out: &mut [f32], x: &[f32], y: &[f32]) {
+pub(crate) fn vmin_abs_into_scalar_t(token: ScalarToken, out: &mut [f32], x: &[f32], y: &[f32]) {
     width8::vmin_abs_kernel::<_, Midp>(token, out, x, y);
 }
 
-pub(crate) fn vweber_band_into_scalar(
+pub(crate) fn vweber_band_into_scalar_t(
     token: ScalarToken,
     band: &mut [f32],
     log: &mut [f32],
@@ -100,7 +100,7 @@ pub(crate) fn vweber_band_into_scalar(
     width8::vweber_band_kernel::<_, Midp>(token, band, log, fine, img_exp, exp_l);
 }
 
-pub(crate) fn vweber_band_nolog_into_scalar(
+pub(crate) fn vweber_band_nolog_into_scalar_t(
     token: ScalarToken,
     band: &mut [f32],
     fine: &[f32],
@@ -110,7 +110,7 @@ pub(crate) fn vweber_band_nolog_into_scalar(
     width8::vweber_band_nolog_kernel::<_, Midp>(token, band, fine, img_exp, exp_l);
 }
 
-pub(crate) fn vscale2_into_scalar(
+pub(crate) fn vscale2_into_scalar_t(
     token: ScalarToken,
     d1: &mut [f32],
     d2: &mut [f32],
@@ -121,7 +121,7 @@ pub(crate) fn vscale2_into_scalar(
     width8::vscale2_kernel::<_, Midp>(token, d1, d2, src, a1, a2);
 }
 
-pub(crate) fn vaxpy2_into_scalar(
+pub(crate) fn vaxpy2_into_scalar_t(
     token: ScalarToken,
     d1: &mut [f32],
     d2: &mut [f32],
@@ -132,7 +132,7 @@ pub(crate) fn vaxpy2_into_scalar(
     width8::vaxpy2_kernel::<_, Midp>(token, d1, d2, src, a1, a2);
 }
 
-pub(crate) fn vmul2_scale2_pair_into_scalar(
+pub(crate) fn vmul2_scale2_pair_into_scalar_t(
     token: ScalarToken,
     o1: &mut [f32],
     o2: &mut [f32],
@@ -145,7 +145,7 @@ pub(crate) fn vmul2_scale2_pair_into_scalar(
     width8::vmul2_scale2_pair_kernel::<_, Midp>(token, o1, o2, x1, x2, w, a, b);
 }
 
-pub(crate) fn vfir_into_scalar(
+pub(crate) fn vfir_into_scalar_t(
     token: ScalarToken,
     dst: &mut [f32],
     srcs: &[&[f32]],
@@ -156,7 +156,7 @@ pub(crate) fn vfir_into_scalar(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn vfir2_into_scalar(
+pub(crate) fn vfir2_into_scalar_t(
     token: ScalarToken,
     d0: &mut [f32],
     d1: &mut [f32],
@@ -169,7 +169,7 @@ pub(crate) fn vfir2_into_scalar(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn vabs_diff_pow_scalar(
+pub(crate) fn vabs_diff_pow_scalar_t(
     token: ScalarToken,
     out: &mut [f32],
     x: &[f32],
@@ -181,7 +181,7 @@ pub(crate) fn vabs_diff_pow_scalar(
     width8::vabs_diff_pow_kernel::<_, Midp>(token, out, x, y, offset, p, offset_pow_p)
 }
 
-pub(crate) fn vabs_diff_mul_lp2_sum_scalar(
+pub(crate) fn vabs_diff_mul_lp2_sum_scalar_t(
     token: ScalarToken,
     t: &[f32],
     r: &[f32],
@@ -190,7 +190,7 @@ pub(crate) fn vabs_diff_mul_lp2_sum_scalar(
     width8::vabs_diff_mul_lp2_sum_kernel::<_, Midp>(token, t, r, s)
 }
 
-pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_scalar(
+pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_scalar_t(
     token: ScalarToken,
     d: &[&[f32]; 4],
     t: &[&[f32]; 4],
@@ -218,9 +218,9 @@ pub fn safe_pow_with_offset_into(
     offset_pow_p: f32,
 ) {
     debug_assert_eq!(xs.len(), out.len());
-    archmage::incant!(
+    archmage::attuned!(
         safe_pow_with_offset_into(xs, out, offset, p, offset_pow_p),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -248,7 +248,10 @@ pub fn safe_pow_with_offset_into_vec(
 #[allow(dead_code)]
 pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
     debug_assert_eq!(xs.len(), out.len());
-    archmage::incant!(vexp_into(xs, out), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vexp_into(xs, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `out[i] = ln(xs[i])`. Positive inputs only. Reusable from Chunk 5.
@@ -256,7 +259,10 @@ pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
 #[allow(dead_code)]
 pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
     debug_assert_eq!(xs.len(), out.len());
-    archmage::incant!(vlog_into(xs, out), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vlog_into(xs, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `out[i] = xs[i].powf(p)`. Positive inputs only. Reusable from Chunk 5.
@@ -264,7 +270,10 @@ pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
 #[allow(dead_code)]
 pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
     debug_assert_eq!(xs.len(), out.len());
-    archmage::incant!(vpow_into(xs, out, p), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vpow_into(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -275,14 +284,20 @@ pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
 #[inline]
 pub fn vaxpy_into(dst: &mut [f32], src: &[f32], a: f32) {
     debug_assert_eq!(dst.len(), src.len());
-    archmage::incant!(vaxpy_into(dst, src, a), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vaxpy_into(dst, src, a),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `dst[i] = a * src[i]` into a distinct buffer.
 #[inline]
 pub fn vscale_into(dst: &mut [f32], src: &[f32], a: f32) {
     debug_assert_eq!(dst.len(), src.len());
-    archmage::incant!(vscale_into(dst, src, a), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vscale_into(dst, src, a),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `out[i] = |x[i] - y[i]|`.
@@ -290,7 +305,10 @@ pub fn vscale_into(dst: &mut [f32], src: &[f32], a: f32) {
 pub fn vabs_diff_into(out: &mut [f32], x: &[f32], y: &[f32]) {
     debug_assert_eq!(out.len(), x.len());
     debug_assert_eq!(out.len(), y.len());
-    archmage::incant!(vabs_diff_into(out, x, y), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vabs_diff_into(out, x, y),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `out[i] = min(|x[i]|, |y[i]|)` — mutual-mask raw term.
@@ -298,7 +316,10 @@ pub fn vabs_diff_into(out: &mut [f32], x: &[f32], y: &[f32]) {
 pub fn vmin_abs_into(out: &mut [f32], x: &[f32], y: &[f32]) {
     debug_assert_eq!(out.len(), x.len());
     debug_assert_eq!(out.len(), y.len());
-    archmage::incant!(vmin_abs_into(out, x, y), [v4x, v3, neon, wasm128, scalar])
+    archmage::attuned!(
+        vmin_abs_into(out, x, y),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
 }
 
 /// `band[i] = clamp((fine[i] − img_exp[i]) / max(exp_l[i], 0.01), ±1000)`
@@ -315,9 +336,9 @@ pub fn vweber_band_into(
     assert_eq!(band.len(), fine.len());
     assert_eq!(band.len(), img_exp.len());
     assert_eq!(band.len(), exp_l.len());
-    archmage::incant!(
+    archmage::attuned!(
         vweber_band_into(band, log, fine, img_exp, exp_l),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -328,9 +349,9 @@ pub fn vweber_band_nolog_into(band: &mut [f32], fine: &[f32], img_exp: &[f32], e
     assert_eq!(band.len(), fine.len());
     assert_eq!(band.len(), img_exp.len());
     assert_eq!(band.len(), exp_l.len());
-    archmage::incant!(
+    archmage::attuned!(
         vweber_band_nolog_into(band, fine, img_exp, exp_l),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -340,9 +361,9 @@ pub fn vweber_band_nolog_into(band: &mut [f32], fine: &[f32], img_exp: &[f32], e
 pub fn vscale2_into(d1: &mut [f32], d2: &mut [f32], src: &[f32], a1: f32, a2: f32) {
     debug_assert_eq!(d1.len(), src.len());
     debug_assert_eq!(d2.len(), src.len());
-    archmage::incant!(
+    archmage::attuned!(
         vscale2_into(d1, d2, src, a1, a2),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -352,9 +373,9 @@ pub fn vscale2_into(d1: &mut [f32], d2: &mut [f32], src: &[f32], a1: f32, a2: f3
 pub fn vaxpy2_into(d1: &mut [f32], d2: &mut [f32], src: &[f32], a1: f32, a2: f32) {
     debug_assert_eq!(d1.len(), src.len());
     debug_assert_eq!(d2.len(), src.len());
-    archmage::incant!(
+    archmage::attuned!(
         vaxpy2_into(d1, d2, src, a1, a2),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -364,9 +385,9 @@ pub fn vaxpy2_into(d1: &mut [f32], d2: &mut [f32], src: &[f32], a1: f32, a2: f32
 #[inline]
 pub fn vfir_into(dst: &mut [f32], srcs: &[&[f32]], coeffs: &[f32], off: usize) {
     debug_assert_eq!(srcs.len(), coeffs.len());
-    archmage::incant!(
+    archmage::attuned!(
         vfir_into(dst, srcs, coeffs, off),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -385,9 +406,9 @@ pub fn vfir2_into(
     debug_assert_eq!(d0.len(), d1.len());
     debug_assert_eq!(srcs.len(), coeffs0.len());
     debug_assert_eq!(srcs.len(), coeffs1.len());
-    archmage::incant!(
+    archmage::attuned!(
         vfir2_into(d0, d1, srcs, coeffs0, coeffs1, off),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -407,9 +428,9 @@ pub fn vmul2_scale2_pair_into(
     debug_assert_eq!(o1.len(), x1.len());
     debug_assert_eq!(o2.len(), x2.len());
     debug_assert_eq!(o1.len(), w.len());
-    archmage::incant!(
+    archmage::attuned!(
         vmul2_scale2_pair_into(o1, o2, x1, x2, w, a, b),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -420,9 +441,9 @@ pub fn vmul2_scale2_pair_into(
 pub fn vabs_diff_mul_lp2_sum(t: &[f32], r: &[f32], s: &[f32]) -> f32 {
     debug_assert_eq!(t.len(), r.len());
     debug_assert_eq!(t.len(), s.len());
-    archmage::incant!(
+    archmage::attuned!(
         vabs_diff_mul_lp2_sum(t, r, s),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -437,9 +458,9 @@ pub fn vabs_diff_pow_into(
     p: f32,
     offset_pow_p: f32,
 ) {
-    archmage::incant!(
+    archmage::attuned!(
         vabs_diff_pow(out, x, y, offset, p, offset_pow_p),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -454,9 +475,9 @@ pub fn vxcm_pool_clamp_4ch_sqsum_partial(
     w: &[[f32; 4]; 4],
     d_max: f32,
 ) -> [f32; 4] {
-    archmage::incant!(
+    archmage::attuned!(
         vxcm_pool_clamp_4ch_sqsum_partial(d, t, w, d_max),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -616,9 +637,9 @@ pub fn gather_lerp_into(
     max_index: f32,
     out: &mut [f32],
 ) {
-    archmage::incant!(
+    archmage::attuned!(
         gather_lerp(xs, lut, min, inv_step, max_index, 0.0, 1.0, out),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 /// Fused gather/interpolate followed by `exp((value+offset)*scale)`.
@@ -633,12 +654,12 @@ pub fn gather_lerp_exp_into(
     scale: f32,
     out: &mut [f32],
 ) {
-    archmage::incant!(
+    archmage::attuned!(
         gather_lerp_exp(xs, lut, min, inv_step, max_index, offset, scale, out),
-        [v4x, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
-pub(crate) fn gather_lerp_scalar(
+pub(crate) fn gather_lerp_scalar_t(
     token: ScalarToken,
     xs: &[f32],
     lut: &[f32],
@@ -653,7 +674,7 @@ pub(crate) fn gather_lerp_scalar(
         token, xs, lut, min, inv_step, max_index, offset, scale, out,
     )
 }
-pub(crate) fn gather_lerp_exp_scalar(
+pub(crate) fn gather_lerp_exp_scalar_t(
     token: ScalarToken,
     xs: &[f32],
     lut: &[f32],
@@ -680,7 +701,7 @@ fn scalar_floor(x: f32) -> f32 {
     }
     #[cfg(not(feature = "std"))]
     {
-        magetypes::simd::generic::f32x8::splat(ScalarToken, x)
+        magetypes::simd::generic::f32x8::splat_t(ScalarToken, x)
             .floor()
             .to_array()[0]
     }
