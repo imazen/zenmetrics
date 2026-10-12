@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenfleet-core/worker/ctl (`e3359640`): benchmark observations bind runner, bundle, machine, CPU domain and planned replicate; explicit declaration/capability routing, fresh executors and long-cell lease renewal.
+
 - zenmetrics-stats (`039eb247`): `jnd::MapFamily::KneePowerFixed(Shape, Knee)`, the knee power with a declared knee (`a`, `c` free), and `resample::Interval::student(groups, level)`, the small-G Student interval from the bootstrap SE (exact t quantile). Both checked against scipy in `tests/independent_reference.rs`. New public API: lands through a PR assigned to lilith.
 - zenmetrics-stats (`204f5062`, `e4a8c5a5`): `examples/jnd_calibrate.rs`, leave-one-source-out score→JND calibration with source-clustered intervals; primary family the fixed-knee knee power (`--knee`, default 100), the others report-only; a join-point support table (`j_star`).
 

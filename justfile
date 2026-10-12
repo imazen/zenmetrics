@@ -353,3 +353,10 @@ solmath-csf-bench *args:
 
 solmath-check *args:
     cd "$HOME/tmp/solmath-validation/work/zenmetrics" && TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="{{justfile_directory()}}/target/solmath" ~/work/zen/scripts/run-heavy --mem 12G -- cargo {{args}}
+
+benchmark-contract-check:
+    TMPDIR="${TMPDIR:-$HOME/tmp}" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
+    just snap-cargo @ test -p zenfleet-core -p zenfleet-worker -p zenfleet-ctl --lib --bins
+
+benchmark-executor-check runner output:
+    python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}}
