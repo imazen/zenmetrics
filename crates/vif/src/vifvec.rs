@@ -536,25 +536,13 @@ fn corr_dn(
     debug_assert!(start < w && start < h);
     let out_w = (w - 1 - start) / step + 1;
     let out_h = (h - 1 - start) / step + 1;
-    let cx = fw / 2;
-    let cy = fh / 2;
     let mut out = alloc::vec![0.0; out_w * out_h];
     let corr_row = |oy: usize, orow: &mut [f64]| {
-        let yc = (start + oy * step) as i64;
-        for ox in 0..out_w {
-            let xc = (start + ox * step) as i64;
-            let mut acc = 0.0f64;
-            for ky in 0..fh {
-                let iy = reflect1(yc + ky as i64 - cy as i64, h as i64);
-                let row = &img[iy * w..iy * w + w];
-                let frow = &filt[ky * fw..ky * fw + fw];
-                for (kx, &fv) in frow.iter().enumerate() {
-                    let ix = reflect1(xc + kx as i64 - cx as i64, w as i64);
-                    acc += fv * row[ix];
-                }
-            }
-            orow[ox] = acc;
-        }
+        let yc = start + oy * step;
+        archmage::attuned!(
+            corr_row_tier(img, w, h, filt, fw, fh, step, start, yc, orow),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
     };
     let mut ran_par = false;
     #[cfg(feature = "parallel")]
@@ -572,6 +560,217 @@ fn corr_dn(
         }
     }
     (out, out_w, out_h)
+}
+
+// Consecutive output lanes preserve the original ky/kx accumulation order.
+// Only the narrow boundary strips need reflected horizontal addressing.
+macro_rules! corr_row_body {
+    ($token:ident, $V:ty, $lanes:literal, $img:ident, $w:ident, $h:ident,
+     $filt:ident, $fw:ident, $fh:ident, $step:ident, $start:ident, $yc:ident, $out:ident) => {{
+        let (cx, cy) = ($fw / 2, $fh / 2);
+        let scalar = |ox: usize| {
+            let xc = ($start + ox * $step) as i64;
+            let mut acc = 0.0;
+            for ky in 0..$fh {
+                let iy = reflect1($yc as i64 + ky as i64 - cy as i64, $h as i64);
+                let row = &$img[iy * $w..(iy + 1) * $w];
+                for kx in 0..$fw {
+                    acc +=
+                        $filt[ky * $fw + kx] * row[reflect1(xc + kx as i64 - cx as i64, $w as i64)];
+                }
+            }
+            acc
+        };
+        let mut ox = 0;
+        while ox < $out.len() && $start + ox * $step < cx {
+            $out[ox] = scalar(ox);
+            ox += 1;
+        }
+        while ox + $lanes <= $out.len() && $start + (ox + $lanes - 1) * $step + ($fw - cx) <= $w {
+            let mut acc = <$V>::splat_t($token, 0.0);
+            let x = $start + ox * $step - cx;
+            for ky in 0..$fh {
+                let iy = reflect1($yc as i64 + ky as i64 - cy as i64, $h as i64);
+                let row = &$img[iy * $w..(iy + 1) * $w];
+                for kx in 0..$fw {
+                    let v = <$V>::from_array_t(
+                        $token,
+                        core::array::from_fn(|lane| row[x + kx + lane * $step]),
+                    );
+                    acc = acc + <$V>::splat_t($token, $filt[ky * $fw + kx]) * v;
+                }
+            }
+            $out[ox..ox + $lanes].copy_from_slice(&acc.to_array());
+            ox += $lanes;
+        }
+        while ox < $out.len() {
+            $out[ox] = scalar(ox);
+            ox += 1;
+        }
+    }};
+}
+
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn corr_row_tier_v3_t(
+    token: archmage::X64V3Token,
+    img: &[f64],
+    w: usize,
+    h: usize,
+    filt: &[f64],
+    fw: usize,
+    fh: usize,
+    step: usize,
+    start: usize,
+    yc: usize,
+    out: &mut [f64],
+) {
+    corr_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::X64V3Token>,
+        4,
+        img,
+        w,
+        h,
+        filt,
+        fw,
+        fh,
+        step,
+        start,
+        yc,
+        out
+    );
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn corr_row_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    img: &[f64],
+    w: usize,
+    h: usize,
+    filt: &[f64],
+    fw: usize,
+    fh: usize,
+    step: usize,
+    start: usize,
+    yc: usize,
+    out: &mut [f64],
+) {
+    corr_row_body!(
+        token,
+        magetypes::simd::generic::f64x8<archmage::X64V4xToken>,
+        8,
+        img,
+        w,
+        h,
+        filt,
+        fw,
+        fh,
+        step,
+        start,
+        yc,
+        out
+    );
+}
+
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn corr_row_tier_neon_t(
+    token: archmage::NeonToken,
+    img: &[f64],
+    w: usize,
+    h: usize,
+    filt: &[f64],
+    fw: usize,
+    fh: usize,
+    step: usize,
+    start: usize,
+    yc: usize,
+    out: &mut [f64],
+) {
+    corr_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::NeonToken>,
+        4,
+        img,
+        w,
+        h,
+        filt,
+        fw,
+        fh,
+        step,
+        start,
+        yc,
+        out
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn corr_row_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    img: &[f64],
+    w: usize,
+    h: usize,
+    filt: &[f64],
+    fw: usize,
+    fh: usize,
+    step: usize,
+    start: usize,
+    yc: usize,
+    out: &mut [f64],
+) {
+    corr_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::Wasm128Token>,
+        4,
+        img,
+        w,
+        h,
+        filt,
+        fw,
+        fh,
+        step,
+        start,
+        yc,
+        out
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn corr_row_tier_scalar_t(
+    token: archmage::ScalarToken,
+    img: &[f64],
+    w: usize,
+    h: usize,
+    filt: &[f64],
+    fw: usize,
+    fh: usize,
+    step: usize,
+    start: usize,
+    yc: usize,
+    out: &mut [f64],
+) {
+    corr_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::ScalarToken>,
+        4,
+        img,
+        w,
+        h,
+        filt,
+        fw,
+        fh,
+        step,
+        start,
+        yc,
+        out
+    );
 }
 
 /// A steerable-pyramid band (dense `w*h` f64, row-major).
@@ -643,7 +842,7 @@ fn build_bands(img: &[f64], w: usize, h: usize) -> [[Band; 2]; 4] {
 /// pivoting (same algorithm MATLAB's `inv`/`\` route through).
 /// Singular matrices produce `Inf`/`NaN` components — matching the
 /// reference's warned `inv` output.
-fn lu_solve(a: &mut [f64], b: &mut [f64], n: usize) {
+fn lu_factor(a: &mut [f64], pivots: &mut [usize; 9], n: usize) {
     // In-place LU (row-major): L unit-diagonal below, U on/above.
     for k in 0..n {
         // Partial pivot.
@@ -660,8 +859,8 @@ fn lu_solve(a: &mut [f64], b: &mut [f64], n: usize) {
             for j in 0..n {
                 a.swap(k * n + j, piv * n + j);
             }
-            b.swap(k, piv);
         }
+        pivots[k] = piv;
         let akk = a[k * n + k];
         for i in (k + 1)..n {
             let f = a[i * n + k] / akk;
@@ -670,6 +869,13 @@ fn lu_solve(a: &mut [f64], b: &mut [f64], n: usize) {
                 a[i * n + j] -= f * a[k * n + j];
             }
         }
+    }
+}
+
+fn lu_apply(a: &[f64], pivots: &[usize; 9], b: &mut [f64; 9]) {
+    let n = 9;
+    for (k, &piv) in pivots.iter().enumerate() {
+        b.swap(k, piv);
     }
     // Forward substitution (unit L), then back substitution (U).
     for i in 1..n {
@@ -860,7 +1066,12 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     let mut ss = alloc::vec![0.0f64; nbw * nbh];
     // Non-overlapping blocks are independent — disjoint ss writes with a
     // per-task LU scratch (identical per-block math either way).
-    let ss_block = |by: usize, bx: usize, lu: &mut [f64]| -> f64 {
+    // The covariance is shared by every block: factor it once. Applying
+    // the recorded pivots and triangular solves retains per-block rounding.
+    let mut lu = cu;
+    let mut pivots = [0; 9];
+    lu_factor(&mut lu, &mut pivots, n2);
+    let ss_block = |by: usize, bx: usize| -> f64 {
         let mut v = [0.0f64; 9];
         for c in 0..M {
             for r in 0..M {
@@ -868,8 +1079,7 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
             }
         }
         let mut x = v;
-        lu.copy_from_slice(&cu);
-        lu_solve(lu, &mut x, n2);
+        lu_apply(&lu, &pivots, &mut x);
         let mut s = 0.0;
         for i in 0..n2 {
             s += v[i] * x[i];
@@ -880,22 +1090,18 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
-        ss.par_chunks_mut(nbw).enumerate().for_each_init(
-            || alloc::vec![0.0f64; n2 * n2],
-            |lu, (by, row)| {
-                for (bx, e) in row.iter_mut().enumerate() {
-                    *e = ss_block(by, bx, lu);
-                }
-            },
-        );
+        ss.par_chunks_mut(nbw).enumerate().for_each(|(by, row)| {
+            for (bx, e) in row.iter_mut().enumerate() {
+                *e = ss_block(by, bx);
+            }
+        });
         ran_par = true;
     }
     let _ = ran_par;
     if !ran_par {
-        let mut lu = alloc::vec![0.0f64; n2 * n2];
         for by in 0..nbh {
             for bx in 0..nbw {
-                ss[by * nbw + bx] = ss_block(by, bx, &mut lu);
+                ss[by * nbw + bx] = ss_block(by, bx);
             }
         }
     }
@@ -1044,4 +1250,50 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
         }
     }
     num / den
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correlation_matches_direct_reflected_taps() {
+        // Odd widths exercise every vector tail; steps 1/2 cover bands
+        // and lowpass decimation, with both reflected borders included.
+        for (w, h) in [(9, 11), (18, 13), (71, 73)] {
+            let img: Vec<f64> = (0..w * h)
+                .map(|i| ((i * 37 % 257) as f64 - 123.0) / 7.0)
+                .collect();
+            for (filt, fw) in [(&LO0[..], 5), (&LOFILT[..], 9), (&BFILTS[0][..], 7)] {
+                for step in [1, 2] {
+                    for start in [0, 1] {
+                        let (actual, ow, oh) = corr_dn(&img, w, h, filt, fw, fw, step, start);
+                        for oy in 0..oh {
+                            for ox in 0..ow {
+                                let mut expected = 0.0;
+                                for ky in 0..fw {
+                                    for kx in 0..fw {
+                                        let y = reflect1(
+                                            (start + oy * step + ky) as i64 - (fw / 2) as i64,
+                                            h as i64,
+                                        );
+                                        let x = reflect1(
+                                            (start + ox * step + kx) as i64 - (fw / 2) as i64,
+                                            w as i64,
+                                        );
+                                        expected += filt[ky * fw + kx] * img[y * w + x];
+                                    }
+                                }
+                                assert_eq!(
+                                    actual[oy * ow + ox].to_bits(),
+                                    expected.to_bits(),
+                                    "{w}x{h}, kernel {fw}, step {step}, start {start}, ({ox},{oy})"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

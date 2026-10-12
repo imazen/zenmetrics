@@ -163,7 +163,6 @@ macro_rules! score_body {
             // across tiers.
             let filt = |src: &[f64], w: usize, h: usize| -> Vec<f64> {
                 let out_w = w - nk + 1;
-                let mut tmp = vec![0.0f64; h * out_w];
                 // Horizontal pass — per-row independent (same per-element
                 // tap order under either driver).
                 let hrow = |drow: &mut [f64], srow: &[f64]| {
@@ -189,37 +188,69 @@ macro_rules! score_body {
                         x += 1;
                     }
                 };
-                crate::kernel::for_each_row(&mut tmp, out_w, |y, drow| {
-                    hrow(drow, &src[y * w..y * w + w]);
-                });
                 let out_h = h - nk + 1;
                 let mut out = vec![0.0f64; out_h * out_w];
-                // Vertical pass — each output row reads `nk` tmp rows,
-                // writes only its own.
-                let tmp_ref = &tmp;
-                crate::kernel::for_each_row(&mut out, out_w, |y, drow| {
-                    let mut x = 0usize;
-                    while x + $LANES <= out_w {
-                        let mut v = <$V>::splat_t($token, 0.0);
-                        for u in 0..nk {
-                            let xv = <$V>::from_array_t(
-                                $token,
-                                core::array::from_fn(|k| tmp_ref[(y + u) * out_w + x + k]),
-                            );
-                            v = v + <$V>::splat_t($token, taps[u]) * xv;
-                        }
-                        drow[x..x + $LANES].copy_from_slice(&v.to_array());
-                        x += $LANES;
+                // Keep only nk horizontally filtered rows. Each worker owns
+                // a stripe and its ring; the tap order remains unchanged.
+                let stripe = |first_y: usize, dst: &mut [f64]| {
+                    let mut ring = vec![0.0f64; nk * out_w];
+                    for u in 0..nk - 1 {
+                        hrow(
+                            &mut ring[u * out_w..(u + 1) * out_w],
+                            &src[(first_y + u) * w..(first_y + u + 1) * w],
+                        );
                     }
-                    while x < out_w {
-                        let mut acc = 0.0f64;
-                        for u in 0..nk {
-                            acc += taps[u] * tmp_ref[(y + u) * out_w + x];
+                    for (dy, drow) in dst.chunks_mut(out_w).enumerate() {
+                        let y = first_y + dy;
+                        let slot = (dy + nk - 1) % nk;
+                        hrow(
+                            &mut ring[slot * out_w..(slot + 1) * out_w],
+                            &src[(y + nk - 1) * w..(y + nk) * w],
+                        );
+                        let rows: [&[f64]; 17] = core::array::from_fn(|u| {
+                            if u < nk {
+                                let slot = (dy + u) % nk;
+                                &ring[slot * out_w..(slot + 1) * out_w]
+                            } else {
+                                &[]
+                            }
+                        });
+                        let mut x = 0usize;
+                        while x + $LANES <= out_w {
+                            let mut v = <$V>::splat_t($token, 0.0);
+                            for u in 0..nk {
+                                let xv = <$V>::from_array_t(
+                                    $token,
+                                    core::array::from_fn(|k| rows[u][x + k]),
+                                );
+                                v = v + <$V>::splat_t($token, taps[u]) * xv;
+                            }
+                            drow[x..x + $LANES].copy_from_slice(&v.to_array());
+                            x += $LANES;
                         }
-                        drow[x] = acc;
-                        x += 1;
+                        while x < out_w {
+                            let mut acc = 0.0;
+                            for u in 0..nk {
+                                acc += taps[u] * rows[u][x];
+                            }
+                            drow[x] = acc;
+                            x += 1;
+                        }
                     }
-                });
+                };
+                let mut ran_par = false;
+                #[cfg(feature = "parallel")]
+                if rayon::current_num_threads() > 1 {
+                    use rayon::prelude::*;
+                    out.par_chunks_mut(out_w * 64)
+                        .enumerate()
+                        .for_each(|(s, dst)| stripe(s * 64, dst));
+                    ran_par = true;
+                }
+                let _ = ran_par;
+                if !ran_par {
+                    stripe(0, &mut out);
+                }
                 out
             };
             if s > 0 {

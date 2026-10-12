@@ -1,0 +1,15 @@
+# Caller may point at an isolated workspace with the same dependency pins.
+manifest := env_var_or_default("VIF_MANIFEST", "../../Cargo.toml")
+heavy := env_var("HOME") / "work/claudehints/scripts/run-heavy"
+
+verify features="std":
+    {{heavy}} -- cargo test --manifest-path {{manifest}} -p vif --features {{features}}
+
+build:
+    {{heavy}} -- cargo build --manifest-path {{manifest}} --release -p vif --examples --features parallel
+
+wall binary threads="1" w="3355" h="2516" reps="3":
+    RAYON_NUM_THREADS={{threads}} {{heavy}} -- perf stat -e cycles {{binary}} {{w}} {{h}} {{reps}}
+
+profile binary output w="3355" h="2516" reps="3":
+    RAYON_NUM_THREADS=1 {{heavy}} -- perf record -e cycles -o {{output}} {{binary}} {{w}} {{h}} {{reps}}
