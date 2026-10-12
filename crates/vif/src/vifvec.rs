@@ -1108,6 +1108,190 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     (ss, lambda, nbw, nbh)
 }
 
+struct EstRow<'a> {
+    y: &'a [f64],
+    yn: &'a [f64],
+    w: usize,
+    cw: usize,
+    ch: usize,
+    winsize: usize,
+    oy: usize,
+}
+
+fn channel_gain(sums: [f64; 5], n: f64) -> (f64, f64) {
+    let [sx, sy, sxy, sx2, sy2] = sums;
+    // corrDn with win = ones/N (means) and win = ones (raw
+    // sums), combined exactly as the reference does.
+    let mx = sx / n;
+    let my = sy / n;
+    let cov_xy = sxy - n * mx * my;
+    let mut ss_x = sx2 - n * mx * mx;
+    let mut ss_y = sy2 - n * my * my;
+    if ss_x < 0.0 {
+        ss_x = 0.0;
+    }
+    if ss_y < 0.0 {
+        ss_y = 0.0;
+    }
+    let mut gi = cov_xy / (ss_x + TOL);
+    let mut vvi = (ss_y - gi * cov_xy) / n;
+    // The reference's masking chain, in order.
+    if ss_x < TOL {
+        gi = 0.0;
+        vvi = ss_y;
+    }
+    ss_x = if ss_x < TOL { 0.0 } else { ss_x };
+    let _ = ss_x;
+    if ss_y < TOL {
+        gi = 0.0;
+        vvi = 0.0;
+    }
+    if gi < 0.0 {
+        vvi = ss_y;
+        gi = 0.0;
+    }
+    if vvi <= TOL {
+        vvi = TOL;
+    }
+    (gi, vvi)
+}
+
+fn est_scalar(a: &EstRow<'_>, ox: usize) -> (f64, f64) {
+    let cy = (1 + a.oy * M) as i64; // 0-based centre (1-based 2,5,8,…)
+    let cx = (1 + ox * M) as i64;
+    let (mut sx, mut sy, mut sxy, mut sx2, mut sy2) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    for ky in 0..a.winsize {
+        let iy = reflect1(cy + ky as i64 - (a.winsize / 2) as i64, a.ch as i64);
+        let rowr = &a.y[iy * a.w..];
+        let rowd = &a.yn[iy * a.w..];
+        for kx in 0..a.winsize {
+            let ix = reflect1(cx + kx as i64 - (a.winsize / 2) as i64, a.cw as i64);
+            let (a, b) = (rowr[ix], rowd[ix]);
+            sx += a;
+            sy += b;
+            sxy += a * b;
+            sx2 += a * a;
+            sy2 += b * b;
+        }
+    }
+    channel_gain([sx, sy, sxy, sx2, sy2], (a.winsize * a.winsize) as f64)
+}
+
+macro_rules! est_row_body {
+    ($token:ident, $V:ty, $lanes:literal, $a:ident, $g:ident, $vv:ident) => {{
+        let half = $a.winsize / 2;
+        let n = ($a.winsize * $a.winsize) as f64;
+        let cy = 1 + $a.oy * M;
+        let mut ox = 0;
+        while ox < $g.len() && 1 + ox * M < half {
+            ($g[ox], $vv[ox]) = est_scalar(&$a, ox);
+            ox += 1;
+        }
+        while ox + $lanes <= $g.len() && 1 + (ox + $lanes - 1) * M + ($a.winsize - half) <= $a.cw {
+            let mut sums = [<$V>::splat_t($token, 0.0); 5];
+            let x = 1 + ox * M - half;
+            for ky in 0..$a.winsize {
+                let iy = reflect1(cy as i64 + ky as i64 - half as i64, $a.ch as i64);
+                let r = &$a.y[iy * $a.w..(iy + 1) * $a.w];
+                let d = &$a.yn[iy * $a.w..(iy + 1) * $a.w];
+                for kx in 0..$a.winsize {
+                    let rv = <$V>::from_array_t(
+                        $token,
+                        core::array::from_fn(|lane| r[x + kx + lane * M]),
+                    );
+                    let dv = <$V>::from_array_t(
+                        $token,
+                        core::array::from_fn(|lane| d[x + kx + lane * M]),
+                    );
+                    sums[0] = sums[0] + rv;
+                    sums[1] = sums[1] + dv;
+                    sums[2] = sums[2] + rv * dv;
+                    sums[3] = sums[3] + rv * rv;
+                    sums[4] = sums[4] + dv * dv;
+                }
+            }
+            let arrays = sums.map(|v| v.to_array());
+            for lane in 0..$lanes {
+                ($g[ox + lane], $vv[ox + lane]) =
+                    channel_gain(core::array::from_fn(|k| arrays[k][lane]), n);
+            }
+            ox += $lanes;
+        }
+        while ox < $g.len() {
+            ($g[ox], $vv[ox]) = est_scalar(&$a, ox);
+            ox += 1;
+        }
+    }};
+}
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn est_row_tier_v3_t(token: archmage::X64V3Token, a: EstRow<'_>, g: &mut [f64], vv: &mut [f64]) {
+    est_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::X64V3Token>,
+        4,
+        a,
+        g,
+        vv
+    );
+}
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn est_row_tier_v4x_t(token: archmage::X64V4xToken, a: EstRow<'_>, g: &mut [f64], vv: &mut [f64]) {
+    est_row_body!(
+        token,
+        magetypes::simd::generic::f64x8<archmage::X64V4xToken>,
+        8,
+        a,
+        g,
+        vv
+    );
+}
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+fn est_row_tier_neon_t(token: archmage::NeonToken, a: EstRow<'_>, g: &mut [f64], vv: &mut [f64]) {
+    est_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::NeonToken>,
+        4,
+        a,
+        g,
+        vv
+    );
+}
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+fn est_row_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    a: EstRow<'_>,
+    g: &mut [f64],
+    vv: &mut [f64],
+) {
+    est_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::Wasm128Token>,
+        4,
+        a,
+        g,
+        vv
+    );
+}
+fn est_row_tier_scalar_t(
+    token: archmage::ScalarToken,
+    a: EstRow<'_>,
+    g: &mut [f64],
+    vv: &mut [f64],
+) {
+    est_row_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::ScalarToken>,
+        4,
+        a,
+        g,
+        vv
+    );
+}
+
 /// `vifsub_est_M` for one subband pair: `(g, vv)` maps of size
 /// `(h/M)×(w/M)` (the `corrDn` output grid — 1-based centres
 /// `2,5,8,… ≤ size−1` ↔ 0-based `1+3k`). `winsize` follows the
@@ -1121,67 +1305,25 @@ fn vifsub_est(
 ) -> (Vec<f64>, Vec<f64>, usize, usize) {
     let cw = (w / M) * M;
     let ch = (h / M) * M;
-    let n = (winsize * winsize) as f64;
-    let cx0 = winsize / 2;
 
     let nbw = cw / M;
     let nbh = ch / M;
     let mut g = alloc::vec![0.0f64; nbw * nbh];
     let mut vv = alloc::vec![0.0f64; nbw * nbh];
-    let est_block = |oy: usize, ox: usize| -> (f64, f64) {
-        let cy = (1 + oy * M) as i64; // 0-based centre (1-based 2,5,8,…)
-        let cx = (1 + ox * M) as i64;
-        let (mut sx, mut sy, mut sxy, mut sx2, mut sy2) = (0.0, 0.0, 0.0, 0.0, 0.0);
-        for ky in 0..winsize {
-            let iy = reflect1(cy + ky as i64 - cx0 as i64, ch as i64);
-            let rowr = &y[iy * w..];
-            let rowd = &yn[iy * w..];
-            for kx in 0..winsize {
-                let ix = reflect1(cx + kx as i64 - cx0 as i64, cw as i64);
-                let (a, b) = (rowr[ix], rowd[ix]);
-                sx += a;
-                sy += b;
-                sxy += a * b;
-                sx2 += a * a;
-                sy2 += b * b;
-            }
-        }
-        {
-            // corrDn with win = ones/N (means) and win = ones (raw
-            // sums), combined exactly as the reference does.
-            let mx = sx / n;
-            let my = sy / n;
-            let cov_xy = sxy - n * mx * my;
-            let mut ss_x = sx2 - n * mx * mx;
-            let mut ss_y = sy2 - n * my * my;
-            if ss_x < 0.0 {
-                ss_x = 0.0;
-            }
-            if ss_y < 0.0 {
-                ss_y = 0.0;
-            }
-            let mut gi = cov_xy / (ss_x + TOL);
-            let mut vvi = (ss_y - gi * cov_xy) / n;
-            // The reference's masking chain, in order.
-            if ss_x < TOL {
-                gi = 0.0;
-                vvi = ss_y;
-            }
-            ss_x = if ss_x < TOL { 0.0 } else { ss_x };
-            let _ = ss_x;
-            if ss_y < TOL {
-                gi = 0.0;
-                vvi = 0.0;
-            }
-            if gi < 0.0 {
-                vvi = ss_y;
-                gi = 0.0;
-            }
-            if vvi <= TOL {
-                vvi = TOL;
-            }
-            (gi, vvi)
-        }
+    let est_row = |oy: usize, gr: &mut [f64], vr: &mut [f64]| {
+        let a = EstRow {
+            y,
+            yn,
+            w,
+            cw,
+            ch,
+            winsize,
+            oy,
+        };
+        archmage::attuned!(
+            est_row_tier(a, gr, vr),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
     };
     let mut ran_par = false;
     #[cfg(feature = "parallel")]
@@ -1191,22 +1333,18 @@ fn vifsub_est(
             .zip(vv.par_chunks_mut(nbw))
             .enumerate()
             .for_each(|(oy, (gr, vr))| {
-                for (ox, (ge, ve)) in gr.iter_mut().zip(vr.iter_mut()).enumerate() {
-                    let (gi, vvi) = est_block(oy, ox);
-                    *ge = gi;
-                    *ve = vvi;
-                }
+                est_row(oy, gr, vr);
             });
         ran_par = true;
     }
     let _ = ran_par;
     if !ran_par {
         for oy in 0..nbh {
-            for ox in 0..nbw {
-                let (gi, vvi) = est_block(oy, ox);
-                g[oy * nbw + ox] = gi;
-                vv[oy * nbw + ox] = vvi;
-            }
+            est_row(
+                oy,
+                &mut g[oy * nbw..(oy + 1) * nbw],
+                &mut vv[oy * nbw..(oy + 1) * nbw],
+            );
         }
     }
     (g, vv, nbw, nbh)
@@ -1255,6 +1393,36 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_statistics_match_scalar_windows() {
+        let (w, h) = (83, 77);
+        let y: Vec<f64> = (0..w * h).map(|i| (i * 37 % 257) as f64 - 123.0).collect();
+        let yn: Vec<f64> = y
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| v + (i % 7) as f64)
+            .collect();
+        for winsize in [3, 5, 9, 17] {
+            let (g, vv, bw, bh) = vifsub_est(&y, &yn, w, h, winsize);
+            for oy in 0..bh {
+                let a = EstRow {
+                    y: &y,
+                    yn: &yn,
+                    w,
+                    cw: w / M * M,
+                    ch: h / M * M,
+                    winsize,
+                    oy,
+                };
+                for ox in 0..bw {
+                    let (eg, ev) = est_scalar(&a, ox);
+                    assert_eq!(g[oy * bw + ox].to_bits(), eg.to_bits());
+                    assert_eq!(vv[oy * bw + ox].to_bits(), ev.to_bits());
+                }
+            }
+        }
+    }
 
     #[test]
     fn correlation_matches_direct_reflected_taps() {
