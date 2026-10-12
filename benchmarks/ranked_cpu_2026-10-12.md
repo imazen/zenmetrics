@@ -75,3 +75,36 @@ Receipts:
 Use the VSI reproduction commands with `-p fsim`. The workspace's
 advisory `just quality` cannot start on this checkout because the quality
 kit is absent; scoped fmt, tests and clippy were run explicitly.
+
+## HaarPSI
+
+Baseline production source: `4b92dc7e`, with the accompanying wall example.
+Candidate: vectorized libm-equivalent logistic pooling. The bounded kernel
+uses libm 0.2.16's reduction cutoffs, constants, polynomial and ordered f32
+operations; other inputs use scalar libm. The f64 pooling order is unchanged.
+
+| Measurement | Baseline | Candidate |
+|---|---:|---:|
+| One-thread ms/call | 173.1 | 153.5 |
+| One-thread instructions, five calls | 16,038,749,636 | 14,215,812,899 |
+| One-thread cycles, five calls | 4,851,167,440 | 4,376,666,673 |
+| Sixteen-thread ms/call | 36.2 | 33.3 |
+| Run-heavy peak RSS, GiB, both thread counts | 0.18 | 0.18 |
+
+The wall deltas are below the suite's 15% noise caution; the retained
+evidence is the reduction in retired instructions, not a qualified wall
+speedup. The 8.4 MP score bits match exactly: `3fe818588024d55a`.
+Default and all-feature tests pass with unchanged golden/tier assertions.
+A dense bounded-domain grid, reduction-boundary neighbors, subnormals,
+signed zero and out-of-domain values compare the logistic results to libm
+bit for bit (NaNs remain NaNs), on scalar and dispatched kernels.
+All-feature clippy with `-D warnings` and scoped rustfmt pass. Disassembly
+of `__attune_pool_band_inner_v4x` contains packed multiply/add/divide
+instructions in the polynomial; there is no FMA in that formula.
+
+Receipts:
+[baseline 1T](haarpsi_baseline_1t_2026-10-12.log),
+[baseline 16T](haarpsi_baseline_16t_2026-10-12.log),
+[candidate 1T](haarpsi_vector_candidate_1t_2026-10-12.log),
+[candidate 16T](haarpsi_vector_candidate_16t_2026-10-12.log).
+Use the VSI reproduction commands with `-p haarpsi`.
