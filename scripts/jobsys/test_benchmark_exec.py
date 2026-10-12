@@ -4,6 +4,9 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -20,6 +23,33 @@ class Contract(unittest.TestCase):
         self.environment = patch.dict(os.environ, env, clear=True)
         self.environment.start()
         self.addCleanup(self.environment.stop)
+
+    def test_parent_watch_observes_parent_exit(self):
+        root=Path(tempfile.mkdtemp(prefix='benchmark-parent-',dir=os.environ.get('TMPDIR',str(Path.home()/'tmp'))))
+        child = f"""import runpy,time
+from pathlib import Path
+Watch=runpy.run_path({str(path.resolve())!r})['ParentWatch']
+with Watch() as parent:
+    Path({str(root/'ready')!r}).touch()
+    deadline=time.monotonic()+5
+    while parent.alive() and time.monotonic()<deadline: time.sleep(.02)
+    Path({str(root/'result')!r}).write_text('alive' if parent.alive() else 'gone')
+"""
+        launch = f"""import subprocess,sys,time
+from pathlib import Path
+p=subprocess.Popen([sys.executable,'-c',{child!r}])
+deadline=time.monotonic()+5
+while not Path({str(root/'ready')!r}).exists():
+    assert p.poll() is None
+    assert time.monotonic()<deadline
+    time.sleep(.02)
+"""
+        subprocess.run([sys.executable,'-c',launch],check=True,timeout=10)
+        deadline=time.monotonic()+10
+        while not (root/'result').exists():
+            self.assertLess(time.monotonic(),deadline)
+            time.sleep(.02)
+        self.assertEqual((root/'result').read_text(),'gone')
 
     def test_identity_golden_and_replication(self):
         job=json.loads(path.with_name('benchmark_identity_v1.json').read_text())

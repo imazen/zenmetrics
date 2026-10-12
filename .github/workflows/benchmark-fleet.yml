@@ -37,6 +37,10 @@ jobs:
           workspaces: |
             .
             ../benchmark-runner
+      - name: Check adapter contracts and parent lifetime
+        run: |
+          mkdir -p "$HOME/tmp"
+          TMPDIR="$HOME/tmp" python -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
       - name: Build native worker and runner
         run: |
           cargo build --locked -p zenfleet-worker --bin zenfleet-worker --example benchmark_ledger_control

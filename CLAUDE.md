@@ -1366,3 +1366,11 @@ GC only marked each Done row's output receipt. The benchmark GC expansion now
 marks bundle files, runner and all receipt artifacts before latest-wins folding.
 Changed or unknown-schema metadata refuses GC. Preserve the original attempt
 ledgers as inputs to reachability; discarded history cannot be reconstructed.
+
+### Known Bugs: Windows benchmark parent lifetime (2026-10-12)
+
+Windows preserves a dead parent's PID in child metadata, so comparing getppid
+alone does not detect worker exit. The adapter now holds a synchronization-only
+parent process handle and polls it without spawning monitoring processes. Native
+contract tests exit a real parent and require its surviving child's watcher to
+observe termination. The handle also prevents PID reuse from changing identity.

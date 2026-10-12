@@ -158,8 +158,32 @@ def capabilities(runner):
         tokens.add("benchmark-backend:os_peak")
     return caps, tokens
 
+class ParentWatch:
+    """A Windows process handle survives exit/PID reuse; getppid alone does not."""
+    def __enter__(self):
+        self.pid = os.getppid()
+        self.handle = None
+        if os.name == 'nt':
+            import _winapi
+            self.handle = _winapi.OpenProcess(_winapi.SYNCHRONIZE, False, self.pid)
+        return self
+
+    def alive(self):
+        if self.handle is not None:
+            import _winapi
+            return _winapi.WaitForSingleObject(self.handle, 0) == _winapi.WAIT_TIMEOUT
+        return os.getppid() == self.pid
+
+    def __exit__(self, *exc):
+        if self.handle is not None:
+            import _winapi
+            _winapi.CloseHandle(self.handle)
+
 def execute(job):
-    parent = os.getppid()
+    with ParentWatch() as parent:
+        return _execute(job, parent)
+
+def _execute(job, parent):
     kind = validate_job(job)
     runner = str(Path(os.environ["ZENBENCH_BIN"]).resolve())
     caps, supported = capabilities(runner)
@@ -194,7 +218,7 @@ def execute(job):
             began = time.monotonic()
             deadline = kind['admission_seconds'] + 2*kind['timeout_seconds'] + 60
             while process.poll() is None:
-                if os.getppid() != parent:
+                if not parent.alive():
                     interrupted = True
                     cancel.touch(exist_ok=True)
                 if time.monotonic()-began > deadline:
