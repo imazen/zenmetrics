@@ -63,6 +63,15 @@ pub(crate) struct CsStats {
     pub cs: Vec<f32>,
 }
 
+impl CsStats {
+    /// Return the retained planes to the buffer pool.
+    pub(crate) fn release(self) {
+        crate::pool::buf_give(self.mu1);
+        crate::pool::buf_give(self.mu2);
+        crate::pool::buf_give(self.cs);
+    }
+}
+
 /// Compute the cs map for one pyramid scale + (optionally) the
 /// luminance term `l = (2µ₁µ₂ + C₁) / (µ₁² + µ₂² + C₁)`.
 ///
@@ -82,12 +91,12 @@ pub(crate) fn compute_cs(
     let cs_w = w - (SSIM_WIN_LEN - 1);
     let n_cs = cs_h * cs_w;
 
-    let mut h_scratch = alloc::vec![0.0_f32; h * cs_w];
-    let mut mu1 = alloc::vec![0.0_f32; n_cs];
-    let mut mu2 = alloc::vec![0.0_f32; n_cs];
-    let mut sigma1_sq = alloc::vec![0.0_f32; n_cs];
-    let mut sigma2_sq = alloc::vec![0.0_f32; n_cs];
-    let mut sigma12 = alloc::vec![0.0_f32; n_cs];
+    let mut h_scratch = crate::pool::buf_take(h * cs_w);
+    let mut mu1 = crate::pool::buf_take(n_cs);
+    let mut mu2 = crate::pool::buf_take(n_cs);
+    let mut sigma1_sq = crate::pool::buf_take(n_cs);
+    let mut sigma2_sq = crate::pool::buf_take(n_cs);
+    let mut sigma12 = crate::pool::buf_take(n_cs);
 
     // mu1, mu2.
     gaussian_11x11_valid(img_ref, h, w, cs_h, cs_w, &mut h_scratch, &mut mu1);
@@ -104,7 +113,7 @@ pub(crate) fn compute_cs(
     }
 
     // σ² and σ₁₂ from raw moments + luminance (top scale).
-    let mut cs = alloc::vec![0.0_f32; n_cs];
+    let mut cs = crate::pool::buf_take(n_cs);
     cs_combine_into(
         &mu1,
         &mu2,
@@ -114,6 +123,11 @@ pub(crate) fn compute_cs(
         &mut cs,
         with_luminance,
     );
+
+    crate::pool::buf_give(h_scratch);
+    crate::pool::buf_give(sigma1_sq);
+    crate::pool::buf_give(sigma2_sq);
+    crate::pool::buf_give(sigma12);
 
     CsStats {
         cs_w,

@@ -335,7 +335,7 @@ fn fold_iw_for_strip_scale(
     // 3. Compute ss = (Y · C_u_inv) ⊙ Y / N at each body pixel.
     let c_u_inv = eig.c_u_inv_slice();
     debug_assert_eq!(c_u_inv.len(), big_n * big_n);
-    let mut ss_pix = alloc::vec![0.0_f32; nexp_body];
+    let mut ss_pix = crate::pool::buf_take(nexp_body);
     crate::simd_kernels::quad_form_rows(
         lp_ref,
         parent_band,
@@ -358,18 +358,21 @@ fn fold_iw_for_strip_scale(
         body_h_s, nblv,
         "box stats body rows ({body_h_s}) must equal Y nblv ({nblv})"
     );
-    let mut g_c = alloc::vec![0.0_f32; nblv * nblh];
-    let mut vv_c = alloc::vec![0.0_f32; nblv * nblh];
+    let mut g_c = crate::pool::buf_take(nblv * nblh);
+    let mut vv_c = crate::pool::buf_take(nblv * nblh);
     for r in 0..nblv {
         let src_row_off = r * w_at_s + lx;
-        for c in 0..nblh {
-            g_c[r * nblh + c] = g[src_row_off + c];
-            vv_c[r * nblh + c] = vv[src_row_off + c];
-        }
+        g_c[r * nblh..(r + 1) * nblh].copy_from_slice(&g[src_row_off..src_row_off + nblh]);
+        vv_c[r * nblh..(r + 1) * nblh].copy_from_slice(&vv[src_row_off..src_row_off + nblh]);
     }
+    crate::pool::buf_give(g);
+    crate::pool::buf_give(vv);
 
     // 5. infow per pixel.
     let infow = compute_infow_inline(&g_c, &vv_c, &ss_pix, eig.lambdas(), params.sigma_nsq);
+    crate::pool::buf_give(ss_pix);
+    crate::pool::buf_give(g_c);
+    crate::pool::buf_give(vv_c);
 
     // 6. Crop infow by bound1 on every side. The full-image path does
     //    `iw[bound1:-bound1]` on a (nblv, nblh) array; the cs map at
@@ -424,6 +427,7 @@ fn fold_iw_for_strip_scale(
     }
     accum.sum_csiw += sum_csiw;
     accum.sum_iw += sum_iw;
+    crate::pool::buf_give(infow);
 }
 
 /// Compute the strip body rows of the IW gain fields `(g, vv)` —
@@ -440,8 +444,8 @@ fn box_stats_and_gain_body(
     body_end_s: usize,
 ) -> (Vec<f32>, Vec<f32>) {
     let body_h = body_end_s - body_start_s;
-    let mut g = alloc::vec![0.0_f32; body_h * w];
-    let mut vv = alloc::vec![0.0_f32; body_h * w];
+    let mut g = crate::pool::buf_take(body_h * w);
+    let mut vv = crate::pool::buf_take(body_h * w);
     crate::simd_kernels::box_gain_rows(
         lp_ref,
         lp_dis,
@@ -469,7 +473,7 @@ fn compute_infow_inline(
     let n = g.len();
     debug_assert_eq!(vv.len(), n);
     debug_assert_eq!(ss.len(), n);
-    let mut infow = alloc::vec![0.0_f32; n];
+    let mut infow = crate::pool::buf_take(n);
     crate::simd_kernels::infow_map(
         g,
         vv,
@@ -734,8 +738,13 @@ pub(crate) fn score_strip_internal(
                     }
                     top_accum.n_cs += cs_body_h * cs_w_at_s;
                 }
+                cs_full.release();
             }
         }
+        for lvl in ref_levels {
+            crate::pool::buf_give(lvl.lp);
+        }
+        crate::pool::buf_give(dis_residual);
     }
 
     // ====== Eigendecomp per scale ======
@@ -898,7 +907,7 @@ pub(crate) fn score_strip_internal(
                     body_in_strip_s.1 - body_y_end_offset,
                 );
 
-                let mut cs_body = alloc::vec![0.0_f32; cs_body_h * cs_body_w];
+                let mut cs_body = crate::pool::buf_take(cs_body_h * cs_body_w);
                 for r in 0..cs_body_h {
                     let src_row = &cs_full.cs
                         [(cs_body_start + r) * cs_w_at_s..(cs_body_start + r + 1) * cs_w_at_s];
@@ -956,6 +965,14 @@ pub(crate) fn score_strip_internal(
                     cs_body_w,
                     &mut scale_accums[s],
                 );
+                crate::pool::buf_give(cs_pass2);
+                if let Some(pb) = parent_band {
+                    crate::pool::buf_give(pb);
+                }
+                cs_full.release();
+            }
+            for lvl in ref_levels.into_iter().chain(dis_levels) {
+                crate::pool::buf_give(lvl.lp);
             }
         }
     } else {
@@ -995,6 +1012,10 @@ pub(crate) fn score_strip_internal(
                         acc.sum_iw += 1.0;
                     }
                 }
+                cs_full.release();
+            }
+            for lvl in ref_levels.into_iter().chain(dis_levels) {
+                crate::pool::buf_give(lvl.lp);
             }
         }
     }
@@ -1206,7 +1227,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             // warm.lp_ref[s].
             let ref_lp_strip_at_s = {
                 let n = strip_h_at_s * w_s;
-                let mut buf = alloc::vec![0.0_f32; n];
+                let mut buf = crate::pool::buf_take(n);
                 let src_start = strip_start_at_s * w_s;
                 buf.copy_from_slice(&warm.lp_ref[s][src_start..src_start + n]);
                 buf
@@ -1235,7 +1256,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 body_in_strip_s.1 - body_y_end_offset,
             );
 
-            let mut cs_body = alloc::vec![0.0_f32; cs_body_h * cs_body_w];
+            let mut cs_body = crate::pool::buf_take(cs_body_h * cs_body_w);
             for r in 0..cs_body_h {
                 let src_row = &cs_full.cs
                     [(cs_body_start + r) * cs_w_at_s..(cs_body_start + r + 1) * cs_w_at_s];
@@ -1255,7 +1276,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 let strip_end_at_s1 = (sg.strip_end + ((1 << (s + 1)) - 1)) >> (s + 1);
                 let h_actual = strip_end_at_s1 - strip_start_at_s1;
                 let n = h_actual * w_nxt;
-                let mut lp_ref_strip_at_s1 = alloc::vec![0.0_f32; n];
+                let mut lp_ref_strip_at_s1 = crate::pool::buf_take(n);
                 let src_start = strip_start_at_s1 * w_nxt;
                 if src_start + n <= warm.lp_ref[s + 1].len() {
                     lp_ref_strip_at_s1
@@ -1266,13 +1287,9 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                     lp_ref_strip_at_s1.copy_from_slice(&warm.lp_ref[s + 1]);
                 }
                 let _ = h_nxt_strip;
-                Some(imenlarge2(
-                    &lp_ref_strip_at_s1,
-                    w_nxt,
-                    h_actual,
-                    w_s,
-                    strip_h_at_s,
-                ))
+                let out = imenlarge2(&lp_ref_strip_at_s1, w_nxt, h_actual, w_s, strip_h_at_s);
+                crate::pool::buf_give(lp_ref_strip_at_s1);
+                Some(out)
             } else {
                 None
             };
@@ -1291,6 +1308,12 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 cs_body_w,
                 &mut scale_accums[s],
             );
+            crate::pool::buf_give(ref_lp_strip_at_s);
+            crate::pool::buf_give(cs_body);
+            if let Some(pb) = parent_band {
+                crate::pool::buf_give(pb);
+            }
+            cs_full.release();
         }
 
         // Top scale (NUM_SCALES-1).
@@ -1303,7 +1326,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 let strip_start_at_s = sg.strip_start.div_ceil(1 << s);
                 let ref_lp_strip_at_s = {
                     let n = strip_h_at_s * w_s;
-                    let mut buf = alloc::vec![0.0_f32; n];
+                    let mut buf = crate::pool::buf_take(n);
                     let src_start = strip_start_at_s * w_s;
                     if src_start + n <= warm.lp_ref[s].len() {
                         buf.copy_from_slice(&warm.lp_ref[s][src_start..src_start + n]);
@@ -1313,6 +1336,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                     buf
                 };
                 let cs_full = compute_cs(&ref_lp_strip_at_s, lp_dis_v[s], strip_h_at_s, w_s, true);
+                crate::pool::buf_give(ref_lp_strip_at_s);
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
                 let (cs_body_start, cs_body_end) =
                     body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);
@@ -1327,6 +1351,10 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                     }
                     top_accum.n_cs += cs_body_h * cs_w_at_s;
                 }
+                cs_full.release();
+            }
+            for lvl in dis_levels {
+                crate::pool::buf_give(lvl.lp);
             }
         }
     }

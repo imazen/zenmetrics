@@ -239,6 +239,13 @@ pub(crate) struct IwMap {
     pub infow: Vec<f32>,
 }
 
+impl IwMap {
+    /// Return the plane to the buffer pool.
+    pub(crate) fn release(self) {
+        crate::pool::buf_give(self.infow);
+    }
+}
+
 /// Compute `infow` from cropped `(g, vv, ss)` slabs + eigendecomposition.
 ///
 /// Matches the Python:
@@ -251,7 +258,7 @@ fn compute_infow(g: &[f32], vv: &[f32], ss: &[f32], lambdas: &[f32], sigma_nsq: 
     let n = g.len();
     debug_assert_eq!(vv.len(), n);
     debug_assert_eq!(ss.len(), n);
-    let mut infow = alloc::vec![0.0_f32; n];
+    let mut infow = crate::pool::buf_take(n);
     crate::simd_kernels::infow_map(g, vv, ss, lambdas, sigma_nsq, TOL, &mut infow);
     infow
 }
@@ -284,8 +291,8 @@ pub(crate) fn compute_iw_maps(
         //    pass (`box_gain_rows`) — no mean/E[·] intermediates are
         //    materialized. Zero-pad 'same' borders, then `g`, `vv`
         //    cropped to the valid region below.
-        let mut g = alloc::vec![0.0_f32; h * w];
-        let mut vv = alloc::vec![0.0_f32; h * w];
+        let mut g = crate::pool::buf_take(h * w);
+        let mut vv = crate::pool::buf_take(h * w);
         crate::simd_kernels::box_gain_rows(imgo, imgd, h, w, 0, h, &mut g, &mut vv);
 
         // 2. Build the parent band (if enabled and scale < Nsc-1).
@@ -338,7 +345,7 @@ pub(crate) fn compute_iw_maps(
         // 5. Per-pixel quadratic form: ss = (Y · Cᵤ_inv) ⊙ Y / N as a
         //    dense stencil on `imgo` — same sums, no Y. SIMD via
         //    `quad_form_rows` (8-wide over output columns).
-        let mut ss_pix = alloc::vec![0.0_f32; nexp];
+        let mut ss_pix = crate::pool::buf_take(nexp);
         crate::simd_kernels::quad_form_rows(
             imgo,
             parent_band.as_deref(),
@@ -351,22 +358,28 @@ pub(crate) fn compute_iw_maps(
             c_u_inv,
             &mut ss_pix,
         );
+        if let Some(pb) = parent_band {
+            crate::pool::buf_give(pb);
+        }
 
         // 6. Crop g, vv to (nblv, nblh).
         let ly = (block_h - 1) / 2;
         let lx = (block_w - 1) / 2;
-        let mut g_c = alloc::vec![0.0_f32; nblv * nblh];
-        let mut vv_c = alloc::vec![0.0_f32; nblv * nblh];
+        let mut g_c = crate::pool::buf_take(nblv * nblh);
+        let mut vv_c = crate::pool::buf_take(nblv * nblh);
         for r in 0..nblv {
             let src_row_off = (r + ly) * w + lx;
-            for c in 0..nblh {
-                g_c[r * nblh + c] = g[src_row_off + c];
-                vv_c[r * nblh + c] = vv[src_row_off + c];
-            }
+            g_c[r * nblh..(r + 1) * nblh].copy_from_slice(&g[src_row_off..src_row_off + nblh]);
+            vv_c[r * nblh..(r + 1) * nblh].copy_from_slice(&vv[src_row_off..src_row_off + nblh]);
         }
+        crate::pool::buf_give(g);
+        crate::pool::buf_give(vv);
 
         // 7. infow.
         let infow = compute_infow(&g_c, &vv_c, &ss_pix, lambdas, params.sigma_nsq);
+        crate::pool::buf_give(ss_pix);
+        crate::pool::buf_give(g_c);
+        crate::pool::buf_give(vv_c);
 
         out.push(IwMap {
             h: nblv,

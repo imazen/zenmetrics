@@ -481,13 +481,17 @@ impl Iwssim {
         let dis_levels =
             build_laplacian_pyramid(&self.scratch.dis_work, self.work_w, self.work_h, NUM_SCALES);
         let lp_dis = split_levels(dis_levels);
-        score_with_split(
+        let r = score_with_split(
             &warm.lp_ref,
             &lp_dis,
             self.work_w,
             self.work_h,
             &self.params,
-        )
+        );
+        for v in lp_dis {
+            crate::pool::buf_give(v);
+        }
+        r
     }
 
     /// Tile / replicate `src` to `(work_w, work_h)` when `allow_small`
@@ -544,7 +548,11 @@ fn score_from_gray(
     let dis_levels = build_laplacian_pyramid(dis_gray, work_w, work_h, NUM_SCALES);
     let lp_ref = split_levels(ref_levels);
     let lp_dis = split_levels(dis_levels);
-    score_with_split(&lp_ref, &lp_dis, work_w, work_h, params)
+    let r = score_with_split(&lp_ref, &lp_dis, work_w, work_h, params);
+    for v in lp_ref.into_iter().chain(lp_dis) {
+        crate::pool::buf_give(v);
+    }
+    r
 }
 
 /// Shared back-end that consumes already-split pyramid bands and
@@ -612,6 +620,13 @@ fn score_with_split(
         }
     }
 
+    for s in cs_per_scale {
+        s.release();
+    }
+    for m in iw_maps {
+        m.release();
+    }
+
     // Final score: Π |wmcs_j|^β_j.
     let mut score = 1.0_f64;
     for s in 0..NUM_SCALES {
@@ -638,7 +653,7 @@ fn crop_2d(src: &[f32], h: usize, w: usize, bound: usize) -> (usize, usize, Vec<
     assert!(bound * 2 < w, "crop bound too large for width {w}");
     let crop_h = h - 2 * bound;
     let crop_w = w - 2 * bound;
-    let mut out = alloc::vec![0.0_f32; crop_h * crop_w];
+    let mut out = crate::pool::buf_take(crop_h * crop_w);
     for r in 0..crop_h {
         let src_row = &src[(r + bound) * w + bound..(r + bound) * w + bound + crop_w];
         let dst_row = &mut out[r * crop_w..(r + 1) * crop_w];

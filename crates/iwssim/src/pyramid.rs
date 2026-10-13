@@ -242,15 +242,16 @@ pub(crate) fn build_laplacian_pyramid(
         let g_nxt = gaussian_step(&g, w_cur, h_cur, w_nxt, h_nxt);
 
         // LP[s] = G[s] − expand(G[s+1]).
-        let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
+        let mut h_scratch = crate::pool::buf_take(h_nxt * w_cur);
         crate::simd_kernels::up_conv_h(&g_nxt, h_nxt, w_nxt, w_cur, &mut h_scratch);
-        let mut expanded = alloc::vec![0.0_f32; h_cur * w_cur];
+        let mut expanded = crate::pool::buf_take(h_cur * w_cur);
         crate::simd_kernels::up_conv_v(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
-        drop(h_scratch);
-        let mut lp = alloc::vec![0.0_f32; h_cur * w_cur];
+        crate::pool::buf_give(h_scratch);
+        let mut lp = crate::pool::buf_take(h_cur * w_cur);
         for i in 0..(h_cur * w_cur) {
             lp[i] = g[i] - expanded[i];
         }
+        crate::pool::buf_give(expanded);
         levels.push(PyrLevel {
             w: w_cur,
             h: h_cur,
@@ -268,10 +269,11 @@ pub(crate) fn build_laplacian_pyramid(
 }
 
 fn gaussian_step(src: &[f32], w: usize, h: usize, next_w: usize, next_h: usize) -> Vec<f32> {
-    let mut scratch = alloc::vec![0.0_f32; h * next_w];
+    let mut scratch = crate::pool::buf_take(h * next_w);
     crate::simd_kernels::corr_dn_h(src, h, w, next_w, &mut scratch);
-    let mut next = alloc::vec![0.0_f32; next_h * next_w];
+    let mut next = crate::pool::buf_take(next_h * next_w);
     crate::simd_kernels::corr_dn_v(&scratch, h, next_w, next_h, &mut next);
+    crate::pool::buf_give(scratch);
     next
 }
 
@@ -343,7 +345,7 @@ pub(crate) fn imenlarge2(
     let t2_w = t1_w + 2;
     let imu_h = t2_h.div_ceil(2);
     let imu_w = t2_w.div_ceil(2);
-    let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
+    let mut imu = crate::pool::buf_take(imu_h * imu_w);
 
     let t1_at = |dy: usize, dx: usize| -> f32 { t1_cell(src, src_w, src_h, dy, dx) };
 
@@ -399,6 +401,7 @@ pub(crate) fn imenlarge2(
             let dst_row = &mut out[y * dst_w..y * dst_w + copy_w];
             dst_row.copy_from_slice(src_row);
         }
+        crate::pool::buf_give(imu);
         out
     }
 }
@@ -450,6 +453,7 @@ fn imenlarge2_small(
             drow[1..1 + t1_w].copy_from_slice(src_row);
         }
     });
+    crate::pool::buf_give(t1);
     for x in 0..t2_w {
         if x == 0 || x == t2_w - 1 {
             continue;
@@ -464,7 +468,7 @@ fn imenlarge2_small(
 
     let imu_h = t2_h.div_ceil(2);
     let imu_w = t2_w.div_ceil(2);
-    let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
+    let mut imu = crate::pool::buf_take(imu_h * imu_w);
     let t2_ref = &t2;
     crate::par::map_rows(&mut imu, imu_w, |y0, band| {
         for (r, orow) in band.chunks_mut(imu_w).enumerate() {
@@ -474,7 +478,7 @@ fn imenlarge2_small(
             }
         }
     });
-    if dst_w == imu_w && dst_h == imu_h {
+    let result = if dst_w == imu_w && dst_h == imu_h {
         imu
     } else {
         let mut out = alloc::vec![0.0_f32; dst_w * dst_h];
@@ -487,15 +491,18 @@ fn imenlarge2_small(
                 drow[..copy_w].copy_from_slice(src_row);
             }
         });
+        crate::pool::buf_give(imu);
         out
-    }
+    };
+    crate::pool::buf_give(t2);
+    result
 }
 
 /// General `align_corners=True` bilinear — retained for
 /// [`imenlarge2_small`]'s degenerate shapes where the quarter-grid
 /// shortcut doesn't apply.
 fn bilinear_upsample_general(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
-    let mut out = alloc::vec![0.0_f32; dh * dw];
+    let mut out = crate::pool::buf_take(dh * dw);
     let sx_scale = (sw - 1) as f32 / (dw - 1) as f32;
     let sy_scale = (sh - 1) as f32 / (dh - 1) as f32;
     // Per-row independent — map_rows keeps the same elementwise math
