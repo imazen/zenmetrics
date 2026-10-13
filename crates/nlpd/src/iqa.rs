@@ -30,7 +30,10 @@
 //! op-order + torch bilinear edge detail). The crate's RGB `nlpd` reads
 //! ≈20.5× the column (~`6^(1/0.6)` pooling factor plus chroma energy).
 
-use super::{Error, Scratch, blur5, filter5_horizontal, normalize_band, simd, upsample_bilinear};
+use super::{
+    Error, Scratch, blur5, buf_give, buf_take, filter5_horizontal, normalize_band, simd,
+    upsample_bilinear,
+};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -100,12 +103,11 @@ pub fn score_y_f32(
     {
         return Err(Error::NonFiniteInput);
     }
-    Ok(score_planes(
-        reference_y.to_vec(),
-        distorted_y.to_vec(),
-        width,
-        height,
-    ))
+    let mut ry = buf_take(expected);
+    ry.copy_from_slice(reference_y);
+    let mut dy = buf_take(expected);
+    dy.copy_from_slice(distorted_y);
+    Ok(score_planes(ry, dy, width, height))
 }
 
 /// Harness BT.709 luma: f32 weighted sum of the u8 codes normalized to
@@ -135,10 +137,15 @@ fn score_planes(mut ref_p: Vec<f32>, mut dis_p: Vec<f32>, w: usize, h: usize) ->
             &dis_scratch.normalized[..w * h],
         );
         rms_sum += (sq / (w * h) as f64).sqrt();
-        ref_p = low_r;
-        dis_p = low_d;
+        buf_give(core::mem::replace(&mut ref_p, low_r));
+        buf_give(core::mem::replace(&mut dis_p, low_d));
         w = lw;
         h = lh;
+    }
+    buf_give(ref_p);
+    buf_give(dis_p);
+    for v in ref_scratch.into_bufs().chain(dis_scratch.into_bufs()) {
+        buf_give(v);
     }
     rms_sum / 6.0
 }
@@ -157,18 +164,18 @@ fn iqa_level(
     // the fixed pad-2 phase (not the Laparra path's parity-dependent pad).
     let (ow, oh) = (w.div_ceil(2), h.div_ceil(2));
     filter5_horizontal(src, w, h, &mut scratch.tmp_h[..ow * h], ow, 2, 2);
-    let mut low = vec![0.0; ow * oh];
+    let mut low = buf_take(ow * oh);
     simd::filter5_vertical(&scratch.tmp_h[..ow * h], ow, h, &mut low, oh, 2, 2);
 
     // Upsample: bilinear ×2 align-corners onto the 2ow×2oh grid.
     let (uw, uh) = (2 * ow, 2 * oh);
-    let mut up = vec![0.0; uw * uh];
+    let mut up = buf_take(uw * uh);
     upsample_bilinear(&low, ow, oh, uw, uh, &mut up);
-    let mut smooth = vec![0.0; uw * uh];
-    let mut tmp = vec![0.0; uw * uh];
+    let mut smooth = buf_take(uw * uh);
+    let mut tmp = buf_take(uw * uh);
     blur5(&up, uw, uh, &mut tmp, &mut smooth);
     // F.interpolate nearest crop when the ×2 grid overshoots odd dims.
-    let mut recon = vec![0.0; w * h];
+    let mut recon = buf_take(w * h);
     if (uw, uh) == (w, h) {
         recon.copy_from_slice(&smooth);
     } else {
@@ -194,6 +201,9 @@ fn iqa_level(
     #[cfg(not(feature = "parallel"))]
     for ((l, &a), &s) in scratch.up[..n].iter_mut().zip(src.iter()).zip(recon.iter()) {
         *l = a - s;
+    }
+    for v in [up, smooth, tmp, recon] {
+        buf_give(v);
     }
     normalize_band(&scratch.up[..n], w, h, level, &mut scratch.normalized);
     (low, ow, oh)

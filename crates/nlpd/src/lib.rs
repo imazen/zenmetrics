@@ -137,10 +137,16 @@ fn score_planes(
         }
         let rms = (squared_sum / (w * h * 3) as f64).sqrt();
         weighted_sum += rms.powf(0.6);
+        for v in core::mem::take(&mut ref_planes).into_iter().chain(core::mem::take(&mut dis_planes)) {
+            buf_give(v);
+        }
         ref_planes = next_ref;
         dis_planes = next_dis;
         w = w.div_ceil(2);
         h = h.div_ceil(2);
+    }
+    for v in ref_planes.into_iter().chain(dis_planes).chain(ref_scratch.into_bufs()).chain(dis_scratch.into_bufs()) {
+        buf_give(v);
     }
     weighted_sum.powf(1.0 / 0.6)
 }
@@ -156,23 +162,62 @@ fn validate_dimensions(width: usize, height: usize) -> Result<usize, Error> {
 }
 
 fn deinterleave_u8(src: &[u8], n: usize) -> Vec<Vec<f32>> {
-    let mut planes = vec![vec![0.0; n]; 3];
-    for (i, px) in src.as_chunks::<3>().0.iter().enumerate() {
-        for c in 0..3 {
-            planes[c][i] = px[c] as f32 / 255.0;
-        }
+    let mut planes: Vec<Vec<f32>> = (0..3).map(|_| buf_take(n)).collect();
+    for (c, plane) in planes.iter_mut().enumerate() {
+        simd::deinterleave_u8_ch(src, c, plane);
     }
     planes
 }
 
 fn deinterleave_f32(src: &[f32], n: usize) -> Vec<Vec<f32>> {
-    let mut planes = vec![vec![0.0; n]; 3];
-    for (i, px) in src.as_chunks::<3>().0.iter().enumerate() {
-        for c in 0..3 {
-            planes[c][i] = px[c];
-        }
+    let mut planes: Vec<Vec<f32>> = (0..3).map(|_| buf_take(n)).collect();
+    for (c, plane) in planes.iter_mut().enumerate() {
+        simd::deinterleave_f32_ch(src, c, plane);
     }
     planes
+}
+
+thread_local! {
+    /// Cross-call plane-buffer pool. Every slab and plane region is
+    /// fully written by its producing pass before it is read, so stale
+    /// pooled contents are never observed — the same invariant the
+    /// `Scratch` docs assert. Reusing allocations skips the zero-fill
+    /// and page-fault cost of ~n·60 bytes of `vec![0.0]` per call.
+    static BUF_POOL: std::cell::RefCell<Vec<Vec<f32>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Pooled buffers retained per thread — enough for one call's working
+/// set (6 planes + 8 scratch slabs + ~18 live level bands).
+const POOL_CAP: usize = 40;
+
+/// Take a length-`n` plane buffer, reusing a pooled allocation when one
+/// fits. Contents are unspecified — every element is written by the
+/// caller's producing pass before it is read.
+fn buf_take(n: usize) -> Vec<f32> {
+    let mut v = BUF_POOL.with(|p| {
+        let mut p = p.borrow_mut();
+        let idx = p
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| v.capacity() >= n)
+            .min_by_key(|(_, v)| v.capacity())
+            .map(|(i, _)| i);
+        idx.map(|i| p.swap_remove(i)).unwrap_or_default()
+    });
+    v.resize(n, 0.0);
+    v
+}
+
+/// Return a buffer to the pool for reuse by a later call.
+fn buf_give(v: Vec<f32>) {
+    if v.capacity() > 0 {
+        BUF_POOL.with(|p| {
+            let mut p = p.borrow_mut();
+            if p.len() < POOL_CAP {
+                p.push(v);
+            }
+        });
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -260,8 +305,6 @@ struct Scratch {
     tmp_h: Vec<f32>,
     /// Bilinear-upsampled low band, or the IQA path's Laplacian band.
     up: Vec<f32>,
-    /// Blur horizontal-pass output.
-    tmp_b: Vec<f32>,
     /// Normalized Laplacian band (per-channel result plane).
     normalized: Vec<f32>,
 }
@@ -269,11 +312,15 @@ struct Scratch {
 impl Scratch {
     fn new(n: usize) -> Self {
         Self {
-            tmp_h: vec![0.0; n],
-            up: vec![0.0; n],
-            tmp_b: vec![0.0; n],
-            normalized: vec![0.0; n],
+            tmp_h: buf_take(n),
+            up: buf_take(n),
+            normalized: buf_take(n),
         }
+    }
+
+    /// Drain the slabs for return to [`buf_give`].
+    fn into_bufs(self) -> impl Iterator<Item = Vec<f32>> {
+        [self.tmp_h, self.up, self.normalized].into_iter()
     }
 }
 
@@ -283,7 +330,7 @@ fn downsample(src: &[f32], w: usize, h: usize, tmp_h: &mut [f32]) -> (Vec<f32>, 
     let pad_x = ((out_w - 1) * 2 + 5 - w) / 2;
     let pad_y = ((out_h - 1) * 2 + 5 - h) / 2;
     filter5_horizontal(src, w, h, &mut tmp_h[..out_w * h], out_w, 2, pad_x);
-    let mut out = vec![0.0; out_w * out_h];
+    let mut out = buf_take(out_w * out_h);
     simd::filter5_vertical(&tmp_h[..out_w * h], out_w, h, &mut out, out_h, 2, pad_y);
     (out, out_w, out_h)
 }
@@ -341,29 +388,25 @@ fn filter5_horizontal(
         return;
     }
     for_each_row(dst, out_w, |y, out| {
-        let row = &src[y * w..(y + 1) * w];
-        for (ox, o) in out.iter_mut().enumerate().take(lo) {
-            *o = tap5(row, w, ox, stride, pad);
-        }
-        for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
-            *o = tap5(row, w, ox, stride, pad);
-        }
-        if lo < hi {
-            let span = hi - lo;
-            // k = 0 initializes (dst may be reused scratch); k = 1..5 accumulate.
-            let s0 = &row[lo * stride - pad..lo * stride - pad + span];
-            for (o, &v) in out[lo..hi].iter_mut().zip(s0) {
-                *o = v * LOWPASS[0];
-            }
-            for (k, weight) in LOWPASS.iter().enumerate().skip(1) {
-                // stride == 1: contiguous source window for contiguous out.
-                let s = &row[lo * stride + k - pad..lo * stride + k - pad + span];
-                for (o, &v) in out[lo..hi].iter_mut().zip(s) {
-                    *o += v * weight;
-                }
-            }
-        }
+        filter5_row(&src[y * w..(y + 1) * w], w, out, lo, hi);
     });
+}
+
+/// One row of the stride-1/pad-2 horizontal 5-tap: `tap5` borders plus
+/// the fused interior pass — the per-row body of [`filter5_horizontal`].
+fn filter5_row(row: &[f32], w: usize, out: &mut [f32], lo: usize, hi: usize) {
+    for (ox, o) in out.iter_mut().enumerate().take(lo) {
+        *o = tap5(row, w, ox, 1, 2);
+    }
+    let out_w = out.len();
+    for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
+        *o = tap5(row, w, ox, 1, 2);
+    }
+    if lo < hi {
+        // Fused single-pass conv — identical per-output product/add
+        // order to the former 5-pass accumulate.
+        simd::h5_fused::<false>(&row[lo - 2..], &mut out[lo..hi]);
+    }
 }
 
 /// Stride-2 path of [`filter5_horizontal`]: G[j] = Σ_k w_k·row[j+k] for
@@ -395,12 +438,9 @@ fn filter5_horizontal_decimate(
                 *o = tap5(row, w, ox, 2, pad);
             }
             if lo < hi {
-                g.iter_mut().for_each(|v| *v = 0.0);
-                for (k, weight) in LOWPASS.iter().enumerate() {
-                    for (j, &v) in g.iter_mut().zip(&row[k..k + g_len]) {
-                        *j += v * weight;
-                    }
-                }
+                // Fused single-pass G — same k-ordered sum as the former
+                // 5-pass accumulate, ZINIT replicates the cleared-slot `+=`.
+                simd::h5_fused::<true>(row, &mut g[..g_len]);
                 for ox in lo..hi {
                     out[ox] = g[2 * ox - pad];
                 }
@@ -422,33 +462,81 @@ fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst:
     debug_assert_eq!(dst.len(), w * h);
     // The x mapping is row-invariant — hoist the (x0, x1, tx) tables out of
     // the y loop; identical arithmetic to the per-pixel recomputation.
-    let mut xtab = vec![(0usize, 0usize, 0.0_f32); w];
-    for (x, t) in xtab.iter_mut().enumerate() {
+    // Split arrays so `tx` loads contiguously in the vector row kernel.
+    let mut x0v = vec![0usize; w];
+    let mut x1v = vec![0usize; w];
+    let mut txv = vec![0.0_f32; w];
+    for x in 0..w {
         let fx = if w > 1 {
             x as f32 * (sw - 1) as f32 / (w - 1) as f32
         } else {
             0.0
         };
         let x0 = fx.floor() as usize;
-        let x1 = (x0 + 1).min(sw - 1);
-        *t = (x0, x1, fx - x0 as f32);
+        x0v[x] = x0;
+        x1v[x] = (x0 + 1).min(sw - 1);
+        txv[x] = fx - x0 as f32;
     }
-    for_each_row(dst, w, |y, out| {
-        let fy = if h > 1 {
-            y as f32 * (sh - 1) as f32 / (h - 1) as f32
-        } else {
-            0.0
-        };
-        let y0 = fy.floor() as usize;
-        let y1 = (y0 + 1).min(sh - 1);
-        let ty = fy - y0 as f32;
-        let (r0, r1) = (&src[y0 * sw..(y0 + 1) * sw], &src[y1 * sw..(y1 + 1) * sw]);
-        for (x, &(x0, x1, tx)) in xtab.iter().enumerate() {
-            let a = r0[x0] * (1.0 - tx) + r0[x1] * tx;
-            let b = r1[x0] * (1.0 - tx) + r1[x1] * tx;
-            out[x] = a * (1.0 - ty) + b * ty;
-        }
-    });
+    // Each output row blends two pre-lerped source rows. A 2-slot ring
+    // keyed by source-row index lerps each source row once (y0 advances
+    // by ≤1 per output row) instead of once per output row — halving
+    // the gather work. Bit-identical: the same two lerps feed the same
+    // blend formula per pixel.
+    struct Ring {
+        bufs: [Vec<f32>; 2],
+        idx: [usize; 2],
+    }
+    for_each_row_init(
+        dst,
+        w,
+        || Ring {
+            bufs: [vec![0.0; w], vec![0.0; w]],
+            idx: [usize::MAX; 2],
+        },
+        |y, out, ring| {
+            let fy = if h > 1 {
+                y as f32 * (sh - 1) as f32 / (h - 1) as f32
+            } else {
+                0.0
+            };
+            let y0 = fy.floor() as usize;
+            let y1 = (y0 + 1).min(sh - 1);
+            let ty = fy - y0 as f32;
+            // Slot 0 tracks y0: an advance by one rotates the old
+            // y1 lerp into place; anything else recomputes.
+            if ring.idx[0] != y0 {
+                if ring.idx[1] == y0 {
+                    ring.bufs.swap(0, 1);
+                    ring.idx.swap(0, 1);
+                } else {
+                    simd::hlerp_row(
+                        &src[y0 * sw..(y0 + 1) * sw],
+                        &x0v,
+                        &x1v,
+                        &txv,
+                        &mut ring.bufs[0],
+                    );
+                    ring.idx[0] = y0;
+                }
+            }
+            if y1 == y0 {
+                // Clamped last source row: a == b.
+                simd::blend_rows(&ring.bufs[0], &ring.bufs[0], ty, out);
+            } else {
+                if ring.idx[1] != y1 {
+                    simd::hlerp_row(
+                        &src[y1 * sw..(y1 + 1) * sw],
+                        &x0v,
+                        &x1v,
+                        &txv,
+                        &mut ring.bufs[1],
+                    );
+                    ring.idx[1] = y1;
+                }
+                simd::blend_rows(&ring.bufs[0], &ring.bufs[1], ty, out);
+            }
+        },
+    );
 }
 
 fn blur5(src: &[f32], w: usize, h: usize, tmp_b: &mut [f32], out: &mut [f32]) {
@@ -530,15 +618,9 @@ fn level_transform(
     let n = w * h;
     let (low, lw, lh) = downsample(src, w, h, &mut scratch.tmp_h);
     upsample_bilinear(&low, lw, lh, w, h, &mut scratch.up[..n]);
-    filter5_horizontal(&scratch.up[..n], w, h, &mut scratch.tmp_b[..n], w, 1, 2);
-    simd::normalize_filtered(
-        src,
-        &scratch.tmp_b[..n],
-        w,
-        h,
-        level,
-        &mut scratch.normalized[..n],
-    );
+    // The H conv runs inside `normalize_filtered`'s row rings — no
+    // materialized horizontal-blur plane.
+    simd::normalize_filtered(src, &scratch.up[..n], w, h, level, &mut scratch.normalized[..n]);
     (low, lw, lh)
 }
 
@@ -562,7 +644,7 @@ mod tests {
                 let mut expected = vec![0.0; n];
                 normalize_band(&lap, w, h, level, &mut expected);
                 let mut actual = vec![0.0; n];
-                simd::normalize_filtered(&original, &horizontal, w, h, level, &mut actual);
+                simd::normalize_filtered(&original, &up, w, h, level, &mut actual);
                 for (i, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
                     assert_eq!(a.to_bits(), e.to_bits(), "{w}x{h} level={level} pixel={i}");
                 }
