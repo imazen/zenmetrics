@@ -620,8 +620,6 @@ fn real_pow_lambda(z: f32) -> f64 {
 struct FilterBank {
     /// `logg[s] · spread[o]` — the per-(o,s) filter, `[o][s]`.
     filters: [[Vec<f32>; NSCALE]; NORIENT],
-    /// `real(ifft2(filters[o][s])) · sqrt(n)`.
-    iff: [[Vec<f32>; NSCALE]; NORIENT],
     /// `Σ filters[o][0]²` (the s=0 filter energy per orientation).
     em_n: [f64; NORIENT],
     /// `Σ_s Σ_i iff[o][s][i]²` per orientation.
@@ -675,7 +673,6 @@ impl FilterBank {
         }
         FilterBank {
             filters,
-            iff,
             em_n,
             sum_sa2,
             sum_saij,

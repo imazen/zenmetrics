@@ -10,7 +10,6 @@ use alloc::vec::Vec;
 use crate::fft::{self, Complex};
 
 #[cfg(target_arch = "aarch64")]
-use archmage::SimdToken;
 
 /// `sdsp` works on a fixed 256×256 grid (the reference hardcodes the
 /// `imresize` target — input of any size is rescaled to it).
@@ -238,7 +237,8 @@ fn srgb_to_lab_tier_neon_t(
     type V = f32x4<archmage::NeonToken>;
     let s = |x: f32| V::splat_t(token, x);
     let n = dr.len();
-    for i in (0..n).step_by(4) {
+    let n4 = n & !3;
+    for i in (0..n4).step_by(4) {
         let lin = |p: &[f32]| {
             let v = V::load_t(token, p[i..][..4].first_chunk().unwrap()) * s(1.0 / 255.0);
             let lo = v * s(1.0 / 12.92);
@@ -261,6 +261,14 @@ fn srgb_to_lab_tier_neon_t(
         (s(500.0) * (fx - fy)).store(la[i..][..4].first_chunk_mut().unwrap());
         (s(200.0) * (fy - fz)).store(lb[i..][..4].first_chunk_mut().unwrap());
     }
+    srgb_to_lab_all_scalar(
+        &dr[n4..],
+        &dg[n4..],
+        &db[n4..],
+        &mut ll[n4..],
+        &mut la[n4..],
+        &mut lb[n4..],
+    );
 }
 
 /// Scalar-tier entry for `attuned!` — same signature shape as the NEON
@@ -288,10 +296,7 @@ fn srgb_to_lab_all(
     lb: &mut [f32],
 ) {
     #[cfg(target_arch = "aarch64")]
-    {
-        archmage::attuned!(srgb_to_lab_tier(dr, dg, db, ll, la, lb), [_neon, _scalar]);
-        return;
-    }
+    archmage::attuned!(srgb_to_lab_tier(dr, dg, db, ll, la, lb), [_neon, _scalar]);
     #[cfg(not(target_arch = "aarch64"))]
     srgb_to_lab_all_scalar(dr, dg, db, ll, la, lb);
 }
@@ -384,23 +389,26 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
         vec![0.0f32; n * n],
     ];
     let [ll, la, lb] = &mut lab;
-    let mut ran_par = false;
     #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
+    let ran_par = rayon::current_num_threads() > 1 && {
         use rayon::prelude::*;
-        ll.par_iter_mut()
-            .zip(la.par_iter_mut())
-            .zip(lb.par_iter_mut())
+        // Chunked through `srgb_to_lab_all` so the parallel path produces
+        // the same bits as the serial tier dispatch — the score must not
+        // depend on the rayon pool size.
+        const CHUNK: usize = 4096;
+        ll.par_chunks_mut(CHUNK)
+            .zip(la.par_chunks_mut(CHUNK))
+            .zip(lb.par_chunks_mut(CHUNK))
             .enumerate()
-            .for_each(|(i, ((l, a), b))| {
-                let (lv, av, bv) = srgb_to_lab(dr[i], dg[i], db[i]);
-                *l = lv;
-                *a = av;
-                *b = bv;
+            .for_each(|(ci, ((l, a), b))| {
+                let off = ci * CHUNK;
+                let end = off + l.len();
+                srgb_to_lab_all(&dr[off..end], &dg[off..end], &db[off..end], l, a, b);
             });
-        ran_par = true;
-    }
-    let _ = ran_par;
+        true
+    };
+    #[cfg(not(feature = "parallel"))]
+    let ran_par = false;
     if !ran_par {
         srgb_to_lab_all(&dr, &dg, &db, ll, la, lb);
     }

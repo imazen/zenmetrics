@@ -220,8 +220,7 @@ fn conv_gauss_valid_inner(
     let dw = w - (GAUSS_LEN - 1);
     let dh = h - (GAUSS_LEN - 1);
     // Broadcast taps once per call — every lane group reuses them.
-    let gv: [f64x4; GAUSS_LEN] =
-        core::array::from_fn(|u| f64x4::splat_t(token, GAUSS[u] as f64));
+    let gv: [f64x4; GAUSS_LEN] = core::array::from_fn(|u| f64x4::splat_t(token, GAUSS[u] as f64));
     let mut tmp = vec![0.0f32; h * dw];
     crate::kernel::for_each_row(&mut tmp, dw, |y, trow| {
         let row = &img[y * w..(y + 1) * w];
@@ -370,9 +369,7 @@ fn iqa_fold_inner(
     c3: f32,
     range: core::ops::Range<usize>,
 ) -> (f64, f64, f64, f64) {
-    let widen = |v: f32x4| -> f64x4 {
-        f64x4::from_array_t(token, v.to_array().map(|x| x as f64))
-    };
+    let widen = |v: f32x4| -> f64x4 { f64x4::from_array_t(token, v.to_array().map(|x| x as f64)) };
     let mut acc = [f64x4::splat_t(token, 0.0); 4];
     let mut i = range.start;
     while i + 4 <= range.end {
@@ -392,11 +389,11 @@ fn iqa_fold_inner(
         // l: f64 numerator, f32 denominator promoted.
         let mur64 = widen(mur);
         let mud64 = widen(mud);
-        let l = (f64x4::splat_t(token, 2.0) * mur64 * mud64
-            + f64x4::splat_t(token, c1 as f64))
+        let l = (f64x4::splat_t(token, 2.0) * mur64 * mud64 + f64x4::splat_t(token, c1 as f64))
             / widen(mur2 + mud2 + f32x4::splat_t(token, c1));
-        // c: f64 numerator, f32 denominator promoted.
-        let c = (f64x4::splat_t(token, 2.0) * s_rc64 + f64x4::splat_t(token, c2 as f64))
+        // c: f64 numerator — `widen(s_rc)` because the scalar narrows
+        // `s_rc` through f32 *before* promoting it (`2.0 * s_rc as f64`).
+        let c = (f64x4::splat_t(token, 2.0) * widen(s_rc) + f64x4::splat_t(token, c2 as f64))
             / widen(sr + sd + f32x4::splat_t(token, c2));
         // csb = (sb < 0 && s_rc <= 0) ? 0 : sb — then s stays in f32.
         let csb = f32x4::blend(sb.simd_lt(zero) & s_rc.simd_le(zero), zero, sb);
