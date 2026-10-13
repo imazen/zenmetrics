@@ -101,25 +101,7 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
             })))
         }
         Kind::Ssim => {
-            let mut sum = 0.0;
-            for channel in 0..3 {
-                let a: Vec<f64> = r
-                    .pixels
-                    .as_chunks::<3>()
-                    .0
-                    .iter()
-                    .map(|p| f64::from(p[channel]) / 255.0)
-                    .collect();
-                let b: Vec<f64> = d
-                    .pixels
-                    .as_chunks::<3>()
-                    .0
-                    .iter()
-                    .map(|p| f64::from(p[channel]) / 255.0)
-                    .collect();
-                sum += window_score(&a, &b, r.width as usize, r.height as usize);
-            }
-            Ok(sum / 3.0)
+            Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
     }
 }
@@ -344,7 +326,130 @@ fn vtap(t: &[f64], w: usize, h: usize, x: usize, y: usize, k: &[f64; 11]) -> f64
     sum
 }
 
+/// Row span covered by one streaming band.
+const SSIM_BAND: usize = 64;
+/// Ring depth: the 11-tap window plus no more — a slot per window row.
+const RING: usize = 11;
+
+/// Streaming `window_score`: the five blurred planes (a, b, a², b², ab)
+/// never materialize. Each band of [`SSIM_BAND`] output rows keeps a
+/// private 11-row-per-target ring of horizontally blurred rows and folds
+/// the SSIM map row as each vertical window completes. Per-element
+/// arithmetic is identical to the staged pipeline (same tap order, same
+/// l·c expressions); only the per-band partial sums reassociate the
+/// global fold, so the result is deterministic at any thread count.
+fn ssim_streamed(r: &[u8], d: &[u8], w: usize, h: usize) -> f64 {
+    let k = kernel11();
+    let nb = h.div_ceil(SSIM_BAND);
+    let mut partials = vec![0.0; 3 * nb];
+    #[cfg(not(target_family = "wasm"))]
+    {
+        use rayon::prelude::*;
+        partials
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, out)| *out = band_ssim(r, d, w, h, i / nb, i % nb, &k));
+    }
+    #[cfg(target_family = "wasm")]
+    for (i, out) in partials.iter_mut().enumerate() {
+        *out = band_ssim(r, d, w, h, i / nb, i % nb, &k);
+    }
+    let n = (w * h) as f64;
+    let mut sum = 0.0;
+    for channel in partials.as_chunks::<3>().0 {
+        sum += channel.iter().sum::<f64>() / n;
+    }
+    sum
+}
+
+/// One band of the streamed SSIM fold: fills the ring with the
+/// H-blurred transform rows its output window needs, then emits each
+/// output row's five vertical convolutions and the l·c terms in order.
+fn band_ssim(r: &[u8], d: &[u8], w: usize, h: usize, ch: usize, band: usize, k: &[f64; 11]) -> f64 {
+    let m0 = band * SSIM_BAND;
+    let m1 = (m0 + SSIM_BAND).min(h);
+    let rlo = m0.saturating_sub(5);
+    let rhi = (m1 + 4).min(h - 1);
+    let xlo = 5.min(w);
+    let xhi = w.saturating_sub(5).max(xlo);
+    let mut ring = vec![0.0; 5 * RING * w];
+    // Transform rows: source channel values plus the squared/product
+    // planes the five convolutions read.
+    let mut trows = vec![0.0; 5 * w];
+    let mut acc = vec![0.0; 5 * w];
+    let mut partial = 0.0;
+    let mut y_emit = m0;
+    for rr in rlo..=rhi {
+        let srow = &r[rr * w * 3..(rr * w + w) * 3];
+        let drow = &d[rr * w * 3..(rr * w + w) * 3];
+        let (ra, rest) = trows.split_at_mut(w);
+        let (rb, rest) = rest.split_at_mut(w);
+        let (a2, rest) = rest.split_at_mut(w);
+        let (b2, ab) = rest.split_at_mut(w);
+        for x in 0..w {
+            let av = f64::from(srow[x * 3 + ch]) / 255.0;
+            let bv = f64::from(drow[x * 3 + ch]) / 255.0;
+            ra[x] = av;
+            rb[x] = bv;
+            a2[x] = av * av;
+            b2[x] = bv * bv;
+            ab[x] = av * bv;
+        }
+        let slot = rr % RING;
+        for t in 0..5 {
+            let trow = &trows[t * w..(t + 1) * w];
+            let orow = &mut ring[(t * RING + slot) * w..(t * RING + slot + 1) * w];
+            for (x, o) in orow.iter_mut().enumerate().take(xlo) {
+                *o = htap(trow, w, x, k);
+            }
+            for (x, o) in orow.iter_mut().enumerate().take(w).skip(xhi) {
+                *o = htap(trow, w, x, k);
+            }
+            if xhi > xlo {
+                gaussian_interior(trow, 1, k, &mut orow[xlo..xhi]);
+            }
+        }
+        // Emit output rows whose 11-row window is now resident.
+        while y_emit < m1 && (y_emit + 5 <= rr || rr == h - 1) {
+            let mut s = [0usize; RING];
+            for (i, slot) in s.iter_mut().enumerate() {
+                *slot = reflect(y_emit as isize + i as isize - 5, h) % RING;
+            }
+            for t in 0..5 {
+                let base = (t * RING + s[0]) * w;
+                let acc_t = &mut acc[t * w..(t + 1) * w];
+                for (a, &v) in acc_t.iter_mut().zip(&ring[base..base + w]) {
+                    *a = k[0] * v;
+                }
+                for (i, &slot_i) in s.iter().enumerate().skip(1) {
+                    let ki = k[i];
+                    let row_i = &ring[(t * RING + slot_i) * w..(t * RING + slot_i) * w + w];
+                    for (a, &v) in acc_t.iter_mut().zip(row_i) {
+                        *a += ki * v;
+                    }
+                }
+            }
+            for x in 0..w {
+                let ma = acc[x];
+                let mb = acc[w + x];
+                let aa = acc[2 * w + x];
+                let bb = acc[3 * w + x];
+                let ab = acc[4 * w + x];
+                let va = (aa - ma * ma).max(0.0);
+                let vb = (bb - mb * mb).max(0.0);
+                let cov = ab - ma * mb;
+                let luminance = (2.0 * ma * mb + 0.0001) / (ma * ma + mb * mb + 0.0001);
+                let contrast = (2.0 * cov + 0.0009) / (va + vb + 0.0009);
+                partial += luminance * contrast;
+            }
+            y_emit += 1;
+        }
+    }
+    partial
+}
+
 // Returns means of SSIM and contrast-structure terms.
+#[allow(dead_code)]
 fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
     let k = kernel11();
     let n = a.len();
@@ -429,6 +534,56 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    /// The streamed pipeline produces the same per-element arithmetic as
+    /// the staged five-plane pipeline; only the global sum's association
+    /// differs, so the scores agree far inside any sane tolerance.
+    #[test]
+    fn streamed_ssim_matches_staged() {
+        let mut s = 88172645463325252u64;
+        for (w, h) in [
+            (1, 1),
+            (2, 2),
+            (3, 5),
+            (7, 4),
+            (16, 9),
+            (64, 48),
+            (129, 65),
+            (200, 150),
+            (257, 131),
+        ] {
+            let mut r = vec![0u8; w * h * 3];
+            let mut d = vec![0u8; w * h * 3];
+            for p in r.iter_mut().chain(d.iter_mut()) {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                *p = s as u8;
+            }
+            let streamed = ssim_streamed(&r, &d, w, h) / 3.0;
+            let mut staged = 0.0;
+            for channel in 0..3 {
+                let a: Vec<f64> = r
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .map(|p| f64::from(p[channel]) / 255.0)
+                    .collect();
+                let b: Vec<f64> = d
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .map(|p| f64::from(p[channel]) / 255.0)
+                    .collect();
+                staged += window_score(&a, &b, w, h);
+            }
+            let staged = staged / 3.0;
+            assert!(
+                (streamed - staged).abs() < 1e-12,
+                "{w}x{h}: streamed {streamed} vs staged {staged}"
+            );
         }
     }
 
