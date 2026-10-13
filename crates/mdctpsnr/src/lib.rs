@@ -1834,10 +1834,13 @@ fn dc_mask_fixup(img: &mut MeteredImage) {
 /// call numbering and errorline traces stay deterministic.
 #[cfg(feature = "parallel")]
 fn dump_env_set() -> bool {
-    std::env::var_os("DUMPT").is_some()
-        || std::env::var_os("DUMPP").is_some()
-        || std::env::var_os("DUMPI").is_some()
-        || std::env::var_os("DUMPW").is_some()
+    static DUMP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DUMP.get_or_init(|| {
+        std::env::var_os("DUMPT").is_some()
+            || std::env::var_os("DUMPP").is_some()
+            || std::env::var_os("DUMPI").is_some()
+            || std::env::var_os("DUMPW").is_some()
+    })
 }
 
 /// The `(c, yy, x)` band-measure sweep restricted to `errorline[lo..hi]`.
@@ -2033,33 +2036,52 @@ pub fn mdct_psnr_srgb8(
             &mut rows_d,
         );
 
+        // `par` gates every rayon dispatch below: a 1-thread pool runs the
+        // serial code verbatim — no per-row Vec collects, no par bridge,
+        // identical bit order. (The `parallel` feature alone must not make
+        // single-threaded scoring slower.)
         #[cfg(feature = "parallel")]
-        let ready = {
-            // Components are independent ring buffers; the bit pattern of
-            // each comp's output is unchanged by running them on threads.
-            // `ready` keeps the serial semantics — the last comp's flag.
-            let vr: Vec<bool> = img_r
-                .comps
-                .par_iter_mut()
-                .zip(rows_r.par_iter())
-                .map(|(c, r)| c.push_line(r))
-                .collect();
-            let _vd: Vec<bool> = img_d
-                .comps
-                .par_iter_mut()
-                .zip(rows_d.par_iter())
-                .map(|(c, r)| c.push_line(r))
-                .collect();
-            vr[2]
-        };
+        let par = rayon::current_num_threads() > 1;
         #[cfg(not(feature = "parallel"))]
+        let par = false;
+        let _ = par;
         let ready = {
-            let mut ready = false;
-            for c in 0..3 {
-                ready = img_r.comps[c].push_line(&rows_r[c]);
-                img_d.comps[c].push_line(&rows_d[c]);
+            #[cfg(feature = "parallel")]
+            if par {
+                // Components are independent ring buffers; the bit pattern
+                // of each comp's output is unchanged by running them on
+                // threads. `ready` keeps the serial semantics — the last
+                // comp's flag.
+                let vr: Vec<bool> = img_r
+                    .comps
+                    .par_iter_mut()
+                    .zip(rows_r.par_iter())
+                    .map(|(c, r)| c.push_line(r))
+                    .collect();
+                let _vd: Vec<bool> = img_d
+                    .comps
+                    .par_iter_mut()
+                    .zip(rows_d.par_iter())
+                    .map(|(c, r)| c.push_line(r))
+                    .collect();
+                vr[2]
+            } else {
+                let mut ready = false;
+                for c in 0..3 {
+                    ready = img_r.comps[c].push_line(&rows_r[c]);
+                    img_d.comps[c].push_line(&rows_d[c]);
+                }
+                ready
             }
-            ready
+            #[cfg(not(feature = "parallel"))]
+            {
+                let mut ready = false;
+                for c in 0..3 {
+                    ready = img_r.comps[c].push_line(&rows_r[c]);
+                    img_d.comps[c].push_line(&rows_d[c]);
+                }
+                ready
+            }
         };
         if ready {
             // SplitWork: run the sliding DCT (Component::Run) and push the
@@ -2070,22 +2092,36 @@ pub fn mdct_psnr_srgb8(
                 // disjoint state, identical results. The DUMPP/DUMPI/DUMPW
                 // forensic env vars fall back to the serial order so PCALL
                 // numbering stays deterministic for bit-level diffing.
-                if dump_env_set() {
+                if par && !dump_env_set() {
+                    img_r.comps.par_iter_mut().for_each(|c| c.run_dct());
+                    img_d.comps.par_iter_mut().for_each(|c| c.run_dct());
+                    // All 384 band masking pipelines are independent
+                    // objects. `with_min_len` keeps each rayon task a real
+                    // slice of work (a bare 384-item par_iter at these row
+                    // times is scheduler-bound, and stragglers on
+                    // heterogeneous cores cap scaling).
+                    let kernel = &kernel;
+                    let mut all: Vec<&mut BandMask> = Vec::with_capacity(384);
+                    for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
+                        all.extend(comp.bands.as_flattened_mut().iter_mut());
+                    }
+                    all.into_par_iter()
+                        .with_min_len(16)
+                        .for_each(|b| b.push_row(kernel));
+                } else {
                     for c in 0..3 {
                         img_r.comps[c].run_dct();
                         img_d.comps[c].run_dct();
                     }
-                } else {
-                    img_r.comps.par_iter_mut().for_each(|c| c.run_dct());
-                    img_d.comps.par_iter_mut().for_each(|c| c.run_dct());
+                    for c in 0..3 {
+                        for x in 0..8 {
+                            for yy in 0..8 {
+                                img_r.comps[c].bands[x][yy].push_row(&kernel);
+                                img_d.comps[c].bands[x][yy].push_row(&kernel);
+                            }
+                        }
+                    }
                 }
-                // All 384 band masking pipelines are independent objects.
-                let kernel = &kernel;
-                let mut all: Vec<&mut BandMask> = Vec::with_capacity(384);
-                for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
-                    all.extend(comp.bands.as_flattened_mut().iter_mut());
-                }
-                all.into_par_iter().for_each(|b| b.push_row(kernel));
             }
             #[cfg(not(feature = "parallel"))]
             {
@@ -2112,14 +2148,20 @@ pub fn mdct_psnr_srgb8(
             dc_mask_fixup(&mut img_r);
             dc_mask_fixup(&mut img_d);
             #[cfg(feature = "std")]
-            let dline: Option<usize> = std::env::var("DUMPT").ok().and_then(|s| s.parse().ok());
-            #[cfg(feature = "std")]
-            let tgt_i: usize = std::env::var("DUMPTI")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
+            let (dline, tgt_i) = {
+                static DT: std::sync::OnceLock<(Option<usize>, usize)> = std::sync::OnceLock::new();
+                *DT.get_or_init(|| {
+                    (
+                        std::env::var("DUMPT").ok().and_then(|s| s.parse().ok()),
+                        std::env::var("DUMPTI")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0),
+                    )
+                })
+            };
             #[cfg(feature = "parallel")]
-            let serial_measure = dump_env_set();
+            let serial_measure = !par || dump_env_set();
             #[cfg(not(feature = "parallel"))]
             let serial_measure = true;
             if serial_measure {

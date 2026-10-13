@@ -1676,7 +1676,13 @@ impl Cvvdp {
     ) -> (f32, Option<Vec<f32>>) {
         #[cfg(feature = "parallel")]
         {
-            self.fold_bands_parallel(ref_weber, dist_weber, n_levels, w, h, want_diffmap)
+            // A 1-thread pool gets the sequential path — the par bridge
+            // and per-band workspaces buy nothing single-threaded.
+            if rayon::current_num_threads() > 1 {
+                self.fold_bands_parallel(ref_weber, dist_weber, n_levels, w, h, want_diffmap)
+            } else {
+                self.fold_bands_sequential(ref_weber, dist_weber, n_levels, w, h, want_diffmap)
+            }
         }
         #[cfg(not(feature = "parallel"))]
         {
@@ -2982,7 +2988,7 @@ fn build_one_side_recycle(
     out: &mut [WeberPyramid; 3],
 ) {
     #[cfg(feature = "parallel")]
-    {
+    if rayon::current_num_threads() > 1 {
         // Split-borrow the 3 cache + 3 out slots.
         let (ca0, ca_rest) = caches.split_at_mut(1);
         let (ca1, ca2) = ca_rest.split_at_mut(1);
@@ -3019,8 +3025,8 @@ fn build_one_side_recycle(
                 );
             },
         );
+        return;
     }
-    #[cfg(not(feature = "parallel"))]
     {
         weber_contrast_pyr_into(
             plane_a,
@@ -3074,32 +3080,55 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
 
     #[cfg(feature = "parallel")]
     {
-        rayon::join(
-            || {
-                build_one_side_recycle(
-                    ref_a,
-                    ref_rg,
-                    ref_vy,
-                    w,
-                    h,
-                    n_levels,
-                    weber_cache_ref,
-                    weber_ref,
-                );
-            },
-            || {
-                build_one_side_recycle(
-                    dist_a,
-                    dist_rg,
-                    dist_vy,
-                    w,
-                    h,
-                    n_levels,
-                    weber_cache_dist,
-                    weber_dist,
-                );
-            },
-        );
+        if rayon::current_num_threads() > 1 {
+            rayon::join(
+                || {
+                    build_one_side_recycle(
+                        ref_a,
+                        ref_rg,
+                        ref_vy,
+                        w,
+                        h,
+                        n_levels,
+                        weber_cache_ref,
+                        weber_ref,
+                    );
+                },
+                || {
+                    build_one_side_recycle(
+                        dist_a,
+                        dist_rg,
+                        dist_vy,
+                        w,
+                        h,
+                        n_levels,
+                        weber_cache_dist,
+                        weber_dist,
+                    );
+                },
+            );
+        } else {
+            build_one_side_recycle(
+                ref_a,
+                ref_rg,
+                ref_vy,
+                w,
+                h,
+                n_levels,
+                weber_cache_ref,
+                weber_ref,
+            );
+            build_one_side_recycle(
+                dist_a,
+                dist_rg,
+                dist_vy,
+                w,
+                h,
+                n_levels,
+                weber_cache_dist,
+                weber_dist,
+            );
+        }
     }
     #[cfg(not(feature = "parallel"))]
     {

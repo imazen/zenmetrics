@@ -25,11 +25,16 @@ use rayon::prelude::*;
 /// at that boundary, so the threshold here is one octave lower.
 pub(crate) const PAR_MIN_SAMPLES: usize = 1 << 17;
 
-/// Band count for `n` samples — a pure function of `n`, capped so
-/// join overhead stays noise relative to ~64k-sample tasks while
-/// still filling an 8-way pool with headroom.
+/// Band count for `n` samples — a pure function of `n` and pool size,
+/// capped so join overhead stays noise relative to ~64k-sample tasks
+/// while still filling an 8-way pool with headroom. A 1-thread pool
+/// takes the serial path — par dispatch overhead buys nothing there.
 #[inline]
 pub(crate) fn n_bands(n: usize) -> usize {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() <= 1 {
+        return 1;
+    }
     if n < PAR_MIN_SAMPLES {
         1
     } else {
@@ -52,6 +57,9 @@ pub(crate) fn band_size(n: usize) -> usize {
 pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + Sync) -> Vec<T> {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (0..nb).map(f).collect();
+        }
         (0..nb).into_par_iter().map(f).collect()
     }
     #[cfg(not(feature = "parallel"))]
@@ -69,6 +77,9 @@ pub(crate) fn join2<A: Send, B: Send>(
 ) -> (A, B) {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (a(), b());
+        }
         rayon::join(a, b)
     }
     #[cfg(not(feature = "parallel"))]
