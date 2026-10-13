@@ -151,7 +151,13 @@ pub(crate) fn looks_relative(img: &[f64], channels: usize, channel: usize) -> bo
 
 /// `hdrvdp_local_adapt`'s active model (`if 0:` disables the fancy one):
 /// `exp(fast_gauss(log(max(L, 1e-6)), 10^-0.781367·ppd))`.
-pub(crate) fn local_adapt(l_otf: &[f64], width: usize, height: usize, ppd: f64) -> Vec<f64> {
+pub(crate) fn local_adapt(
+    l_otf: &[f64],
+    width: usize,
+    height: usize,
+    ppd: f64,
+    relaxed: bool,
+) -> Vec<f64> {
     let sigma = 10f64.powf(-0.781367) * ppd;
     let log_l: Vec<f64> = l_otf.iter().map(|&v| v.max(1e-6).ln()).collect();
     super::gauss::fast_gauss(
@@ -161,6 +167,7 @@ pub(crate) fn local_adapt(l_otf: &[f64], width: usize, height: usize, ppd: f64) 
         sigma,
         true,
         super::fft64::Pad::Replicate,
+        relaxed,
     )
     .iter()
     .map(|&v| v.exp())

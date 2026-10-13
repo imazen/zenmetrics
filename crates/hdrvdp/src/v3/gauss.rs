@@ -99,6 +99,7 @@ pub(super) fn fast_gauss(
     sigma: f64,
     do_norm: bool,
     pad: Pad,
+    relaxed: bool,
 ) -> Vec<f64> {
     assert_eq!(x.len(), w * h, "fast_gauss: size");
     if sigma >= 4.3 {
@@ -118,7 +119,7 @@ pub(super) fn fast_gauss(
                 *v /= mean;
             }
         }
-        fft64::conv_fft_pad(x, w, h, &k, pw, ph, pad)
+        fft64::conv_fft_pad(x, w, h, &k, pw, ph, pad, relaxed)
     } else {
         // Direct path: matlab-style kernel, conv 'same'.
         let ksize = (sigma * 6.0).round() as usize;
@@ -164,7 +165,7 @@ mod tests {
     fn fast_gauss_preserves_constant() {
         let x = vec![3.25; 24 * 24];
         for &sigma in &[1.0, 4.3, 8.0] {
-            let y = fast_gauss(&x, 24, 24, sigma, true, Pad::Replicate);
+            let y = fast_gauss(&x, 24, 24, sigma, true, Pad::Replicate, false);
             for &v in &y {
                 assert!((v - 3.25).abs() < 1e-9, "σ={sigma}: {v}");
             }
@@ -177,7 +178,7 @@ mod tests {
         let (w, h) = (16usize, 16usize);
         let mut x = vec![0.0; w * h];
         x[8 * w + 8] = 1.0;
-        let y = fast_gauss(&x, w, h, 1.0, true, Pad::Constant(0.0));
+        let y = fast_gauss(&x, w, h, 1.0, true, Pad::Constant(0.0), false);
         let k = matlab_gauss_2d(7, 1.0); // ksize = round(6)+1-6%2 = 7
         // centre pixel of output should be kernel's centre tap.
         assert!((y[8 * w + 8] - k[3 * 7 + 3]).abs() < 1e-12);

@@ -378,6 +378,12 @@ pub struct Options {
     /// `disable_lowvals_warning` — suppress the "input looks like relative
     /// values" signal. Default `false`.
     pub disable_lowvals_warning: bool,
+    /// Floating-point contract for the FFT/pyramid kernels:
+    /// [`FpMode::Relaxed`] (default) lets the SIMD kernels fuse
+    /// multiply-adds, a last-ulp-per-op reassociation; [`FpMode::Strict`]
+    /// keeps separate multiply/add so results stay bit-identical to the
+    /// scalar reference sequence for parity testing.
+    pub mode: crate::params::FpMode,
 }
 
 impl Options {
@@ -395,6 +401,7 @@ impl Options {
             ignore_freqs_lower_than: None,
             sensitivity_correction_delta: 0.0,
             disable_lowvals_warning: false,
+            mode: crate::params::FpMode::Relaxed,
         }
     }
 }

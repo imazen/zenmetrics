@@ -31,7 +31,7 @@ use crate::spyr::{max_pyr_height, reflect1};
 /// transposed tap windows for one `ky` (`wint[kx·8 + j]`).
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 #[allow(clippy::too_many_arguments)]
-fn corr8_inner(
+fn corr8_inner<const RELAXED: bool>(
     token: Token,
     image: &[f64],
     width: usize,
@@ -64,7 +64,8 @@ fn corr8_inner(
         let frow = &filter[ky * fs..ky * fs + fs];
         for kx in 0..fs {
             let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
-            acc = acc + f64x8::splat_t(token, frow[kx]) * t;
+            let c = f64x8::splat_t(token, frow[kx]);
+            acc = if RELAXED { c.mul_add(t, acc) } else { acc + c * t };
         }
     }
     acc.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
@@ -74,7 +75,7 @@ fn corr8_inner(
 /// window per lane (8 of them), `contig` flags lanes whose window is a
 /// contiguous run starting at `xtab[j*fs]`.
 #[allow(clippy::too_many_arguments)]
-fn corr8(
+fn corr8<const RELAXED: bool>(
     image: &[f64],
     width: usize,
     xtab: &[usize],
@@ -88,7 +89,7 @@ fn corr8(
     debug_assert_eq!(xtab.len(), 8 * fs);
     debug_assert_eq!(contig.len(), 8);
     archmage::attuned!(
-        corr8_inner(image, width, xtab, contig, yt, filter, fs, ox0, out_row),
+        corr8_inner::<RELAXED>(image, width, xtab, contig, yt, filter, fs, ox0, out_row),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -500,6 +501,7 @@ fn corr_dn64(
     filter: &[f64],
     fs: usize,
     step: usize,
+    relaxed: bool,
 ) -> Band3 {
     assert_eq!(image.len(), width * height, "corr_dn64: size");
     assert_eq!(filter.len(), fs * fs);
@@ -532,17 +534,31 @@ fn corr_dn64(
         let yt = &yoff[oy * fs..oy * fs + fs];
         let out_row = &mut out[oy * out_w..oy * out_w + out_w];
         for ox0 in (0..full).step_by(8) {
-            corr8(
-                image,
-                width,
-                &xtab[ox0 * fs..ox0 * fs + 8 * fs],
-                &contig[ox0..ox0 + 8],
-                yt,
-                filter,
-                fs,
-                ox0,
-                out_row,
-            );
+            if relaxed {
+                corr8::<true>(
+                    image,
+                    width,
+                    &xtab[ox0 * fs..ox0 * fs + 8 * fs],
+                    &contig[ox0..ox0 + 8],
+                    yt,
+                    filter,
+                    fs,
+                    ox0,
+                    out_row,
+                );
+            } else {
+                corr8::<false>(
+                    image,
+                    width,
+                    &xtab[ox0 * fs..ox0 * fs + 8 * fs],
+                    &contig[ox0..ox0 + 8],
+                    yt,
+                    filter,
+                    fs,
+                    ox0,
+                    out_row,
+                );
+            }
         }
         for ox in full..out_w {
             let xt = &xtab[ox * fs..ox * fs + fs];
@@ -570,7 +586,7 @@ fn corr_dn64(
 /// Returns the eight accumulator lanes.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 #[allow(clippy::too_many_arguments)]
-fn up8_inner(
+fn up8_inner<const RELAXED: bool>(
     token: Token,
     band: &[f64],
     bw: usize,
@@ -599,7 +615,8 @@ fn up8_inner(
         let frow = &filter[ky * fs..ky * fs + fs];
         for kx in 0..fs {
             let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
-            acc = acc + f64x8::splat_t(token, frow[kx]) * t;
+            let c = f64x8::splat_t(token, frow[kx]);
+            acc = if RELAXED { c.mul_add(t, acc) } else { acc + c * t };
         }
     }
     acc.to_array()
@@ -607,7 +624,7 @@ fn up8_inner(
 
 /// [`up8_inner`] with runtime tier dispatch.
 #[allow(clippy::too_many_arguments)]
-fn up8(
+fn up8<const RELAXED: bool>(
     band: &[f64],
     bw: usize,
     rrow: &[usize],
@@ -618,7 +635,7 @@ fn up8(
     fs: usize,
 ) -> [f64; 8] {
     archmage::attuned!(
-        up8_inner(band, bw, rrow, ron, rcol, rcon, filter, fs),
+        up8_inner::<RELAXED>(band, bw, rrow, ron, rcol, rcon, filter, fs),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -664,6 +681,7 @@ fn up_conv64(
     out_width: usize,
     out_height: usize,
     res: &mut [f64],
+    relaxed: bool,
 ) {
     assert_eq!(filter.len(), fs * fs);
     assert_eq!(res.len(), out_width * out_height);
@@ -711,16 +729,29 @@ fn up_conv64(
         let rn = &ron[py * fs..py * fs + fs];
         let res_row = &mut res[py * out_width..py * out_width + out_width];
         for px0 in (0..full).step_by(8) {
-            let acc = up8(
-                &band.data,
-                band.width,
-                rr,
-                rn,
-                &rcol[px0 * fs..px0 * fs + 8 * fs],
-                &rcon[px0 * fs..px0 * fs + 8 * fs],
-                filter,
-                fs,
-            );
+            let acc = if relaxed {
+                up8::<true>(
+                    &band.data,
+                    band.width,
+                    rr,
+                    rn,
+                    &rcol[px0 * fs..px0 * fs + 8 * fs],
+                    &rcon[px0 * fs..px0 * fs + 8 * fs],
+                    filter,
+                    fs,
+                )
+            } else {
+                up8::<false>(
+                    &band.data,
+                    band.width,
+                    rr,
+                    rn,
+                    &rcol[px0 * fs..px0 * fs + 8 * fs],
+                    &rcon[px0 * fs..px0 * fs + 8 * fs],
+                    filter,
+                    fs,
+                )
+            };
             for (j, a) in acc.iter().enumerate() {
                 // Skipped taps contributed f·(±0.0). Adding −0.0 is always
                 // the identity and adding +0.0 is too — unless every other
@@ -796,7 +827,13 @@ impl Spyr0 {
     /// rule, where 13 is the `lofilt` size. Returns `None` when the image is
     /// too small for even one level (min dimension < 13).
     #[must_use]
-    pub(super) fn decompose(image: &[f64], width: usize, height: usize, ppd: f64) -> Option<Self> {
+    pub(super) fn decompose(
+        image: &[f64],
+        width: usize,
+        height: usize,
+        ppd: f64,
+        relaxed: bool,
+    ) -> Option<Self> {
         assert_eq!(image.len(), width * height, "spyr0: size");
         let max_ht = max_pyr_height(width, height, 13);
         let levels = (ppd.log2().ceil() as i64 - 2).min(max_ht as i64);
@@ -806,11 +843,11 @@ impl Spyr0 {
         let levels = levels as usize;
 
         let mut bands = Vec::with_capacity(levels + 2);
-        bands.push(corr_dn64(image, width, height, &HI0FILT, 9, 1));
-        let mut lo = corr_dn64(image, width, height, &LO0FILT, 7, 1);
+        bands.push(corr_dn64(image, width, height, &HI0FILT, 9, 1, relaxed));
+        let mut lo = corr_dn64(image, width, height, &LO0FILT, 7, 1, relaxed);
         for _ in 0..levels {
-            bands.push(corr_dn64(&lo.data, lo.width, lo.height, &BFILT, 9, 1));
-            lo = corr_dn64(&lo.data, lo.width, lo.height, &LOFILT, 13, 2);
+            bands.push(corr_dn64(&lo.data, lo.width, lo.height, &BFILT, 9, 1, relaxed));
+            lo = corr_dn64(&lo.data, lo.width, lo.height, &LOFILT, 13, 2, relaxed);
         }
         bands.push(lo);
 
@@ -867,7 +904,7 @@ impl Spyr0 {
     /// the last bandpass level and the low-pass) to build the masking
     /// transform.
     #[must_use]
-    pub(super) fn reconstruct(&self, levs: &[usize]) -> Vec<f64> {
+    pub(super) fn reconstruct(&self, levs: &[usize], relaxed: bool) -> Vec<f64> {
         let (w0, h0) = self.band_dims(0);
         let n_levels = self.bands.len() - 2; // H
         let lowpass_idx = self.bands.len() - 1;
@@ -877,19 +914,21 @@ impl Spyr0 {
         // band index for sp0. Level `k` descends iff some requested level
         // is deeper than `k`; at the bottom call (`level == H`) the source
         // is the low-pass row.
-        fn rec(me: &Spyr0, level: usize, has: &dyn Fn(usize) -> bool) -> Band3 {
+        fn rec(me: &Spyr0, level: usize, has: &dyn Fn(usize) -> bool, relaxed: bool) -> Band3 {
             let (bw, bh) = me.band_dims(level);
             let mut acc = vec![0.0; bw * bh];
             if (level + 1..=me.bands.len() - 1).any(has) {
+                let deeper;
                 let src = if level < me.bands.len() - 2 {
-                    rec(me, level + 1, has)
+                    deeper = rec(me, level + 1, has, relaxed);
+                    &deeper
                 } else {
-                    me.bands[me.bands.len() - 1].clone() // low-pass row
+                    &me.bands[me.bands.len() - 1] // low-pass row
                 };
-                up_conv64(&src, &LOFILT, 13, 2, bw, bh, &mut acc);
+                up_conv64(src, &LOFILT, 13, 2, bw, bh, &mut acc, relaxed);
             }
             if has(level) {
-                up_conv64(&me.bands[level].clone(), &BFILT, 9, 1, bw, bh, &mut acc);
+                up_conv64(&me.bands[level], &BFILT, 9, 1, bw, bh, &mut acc, relaxed);
             }
             Band3 {
                 width: bw,
@@ -911,13 +950,13 @@ impl Spyr0 {
                 }
             }
         } else {
-            rec(self, 1, &has)
+            rec(self, 1, &has, relaxed)
         };
 
         let mut out = vec![0.0; w0 * h0];
-        up_conv64(&res1, &LO0FILT, 7, 1, w0, h0, &mut out);
+        up_conv64(&res1, &LO0FILT, 7, 1, w0, h0, &mut out, relaxed);
         if has(0) {
-            up_conv64(&self.bands[0].clone(), &HI0FILT, 9, 1, w0, h0, &mut out);
+            up_conv64(&self.bands[0], &HI0FILT, 9, 1, w0, h0, &mut out, relaxed);
         }
         out
     }
@@ -937,9 +976,9 @@ mod tests {
     fn decompose_reconstruct_roundtrip() {
         let (w, h) = (96, 96);
         let im = checker(w, h);
-        let p = Spyr0::decompose(&im, w, h, 30.0).unwrap();
+        let p = Spyr0::decompose(&im, w, h, 30.0, false).unwrap();
         let levs: Vec<usize> = (0..p.band_count()).collect();
-        let recon = p.reconstruct(&levs);
+        let recon = p.reconstruct(&levs, false);
         // sp0 filters are not a perfect-reconstruction set at the borders,
         // but the interior should come back within a few % of a 40-unit
         // checker amplitude.
@@ -955,7 +994,7 @@ mod tests {
     #[test]
     fn freqs_halve_per_band() {
         let im = vec![1.0; 64 * 64];
-        let p = Spyr0::decompose(&im, 64, 64, 30.0).unwrap();
+        let p = Spyr0::decompose(&im, 64, 64, 30.0, false).unwrap();
         for (b, &f) in p.freqs().iter().enumerate() {
             assert!((f - 30.0 / 2f64.powi(b as i32 + 1)).abs() < 1e-12);
         }

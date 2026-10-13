@@ -85,6 +85,7 @@ pub(crate) fn visual_pathway(
     viewing: &super::params::ViewingConditions,
     img_e: &[Vec<f64>],
     pad: &dyn Fn(usize) -> Pad,
+    relaxed: bool,
 ) -> Result<PathwayOut> {
     let npix = width * height;
     let had_nan = img.iter().any(|v| v.is_nan());
@@ -104,7 +105,7 @@ pub(crate) fn visual_pathway(
     for k in 0..channels {
         let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
         let filtered =
-            super::fft64::conv_fft_pad(&ch, width, height, &mtf, width * 2, height * 2, pad(k));
+            super::fft64::conv_fft_pad(&ch, width, height, &mtf, width * 2, height * 2, pad(k), relaxed);
         for (i, &v) in filtered.iter().enumerate() {
             l_o[i * channels + k] = v.clamp(1e-5, 1e10);
         }
@@ -155,7 +156,7 @@ pub(crate) fn visual_pathway(
         let lum: Vec<f64> = (0..npix)
             .map(|i| r_lmsr[i * 4] + r_lmsr[i * 4 + 1])
             .collect();
-        local_adapt(&lum, width, height, ppd)
+        local_adapt(&lum, width, height, ppd, relaxed)
     };
 
     // ---- senile miosis ----
@@ -196,7 +197,7 @@ pub(crate) fn visual_pathway(
 
     // ---- sp0 decomposition + baseband DC removal ----
     let mut bands =
-        Spyr0::decompose(&p, width, height, ppd).ok_or(crate::Error::ImageTooSmall {
+        Spyr0::decompose(&p, width, height, ppd, relaxed).ok_or(crate::Error::ImageTooSmall {
             size: (width, height),
             min: 13,
         })?;

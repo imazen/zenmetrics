@@ -93,7 +93,7 @@ mod tests {
 
         let pad_at = |_k: usize| Pad::Symmetric;
         let pr =
-            visual_pathway(&ref_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at).unwrap();
+            visual_pathway(&ref_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at, false).unwrap();
         assert_close(
             "L_adapt_R",
             &pr.l_adapt,
@@ -164,9 +164,9 @@ mod tests {
         // Stage 1: pathway outputs.
         let pad_at = |_k: usize| Pad::Symmetric;
         let pr =
-            visual_pathway(&ref_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at).unwrap();
+            visual_pathway(&ref_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at, false).unwrap();
         let pt =
-            visual_pathway(&test_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at).unwrap();
+            visual_pathway(&test_n, w, h, channels, &mp, &par.viewing, &img_e, &pad_at, false).unwrap();
 
         assert_close(
             "L_adapt_R",

@@ -79,6 +79,7 @@ pub fn hdrvdp3(
         });
     }
     let mp = par.task_par();
+    let relaxed = par.options.mode == crate::params::FpMode::Relaxed;
     let channels = match par.encoding.channels() {
         Some(c) => c,
         None => match &par.emission {
@@ -157,6 +158,7 @@ pub fn hdrvdp3(
         &par.viewing,
         &img_e,
         &pad_at,
+        relaxed,
     )?;
     let pt = visual_pathway(
         &test_n,
@@ -167,6 +169,7 @@ pub fn hdrvdp3(
         &par.viewing,
         &img_e,
         &pad_at,
+        relaxed,
     )?;
     let had_nan = pr.had_nan || pt.had_nan;
     let b_t = &pt.bands;
@@ -246,7 +249,7 @@ pub fn hdrvdp3(
         let n_ncsf: Vec<f64> = if b == b_count - 1 {
             // Base band: dominant-frequency sensitivity, scalar.
             let rho_bb = cycdeg_image(bw, bh, band_freq[b] * 4.0);
-            let mut f = super::fft64::fft2_of(&band_diff, bw, bh);
+            let mut f = super::fft64::fft2_of(&band_diff, bw, bh, relaxed);
             f[0] = super::fft64::C64::new(0.0, 0.0);
             let (mut best, mut idx) = (0.0f64, 0usize);
             for (i, c) in f.iter().enumerate() {
@@ -290,6 +293,7 @@ pub fn hdrvdp3(
                     &mp,
                     &mut q_err,
                     b_count,
+                    relaxed,
                 );
             }
         } else {
@@ -311,12 +315,13 @@ pub fn hdrvdp3(
                 &mp,
                 &mut q_err,
                 b_count,
+                relaxed,
             );
         }
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
-    let s_map: Vec<f64> = d_bands.reconstruct(&levs).iter().map(|v| v.abs()).collect();
+    let s_map: Vec<f64> = d_bands.reconstruct(&levs, relaxed).iter().map(|v| v.abs()).collect();
     let mut p_map: Vec<f64> = s_map
         .iter()
         .map(|&s| 1.0 - (0.5f64.ln() * s).exp())
@@ -324,7 +329,7 @@ pub fn hdrvdp3(
     if mp.do_sprob_sum {
         let si_sigma = 10f64.powf(mp.si_sigma) * ppd_of(&par.viewing);
         let log1m: Vec<f64> = p_map.iter().map(|&v| (1.0 - v + 1e-4).ln()).collect();
-        let g = fast_gauss(&log1m, width, height, si_sigma, true, Pad::Constant(0.0));
+        let g = fast_gauss(&log1m, width, height, si_sigma, true, Pad::Constant(0.0), relaxed);
         for (pm, &gv) in p_map.iter_mut().zip(&g) {
             *pm = 1.0 - gv.exp();
         }
@@ -384,6 +389,7 @@ fn apply_band(
     mp: &TaskPar,
     q_err: &mut f64,
     b_count: usize,
+    relaxed: bool,
 ) {
     let d: Vec<f64> = if mp.do_masking {
         let k_self = 10f64.powf(mp.mask_self);
@@ -391,10 +397,10 @@ fn apply_band(
         let k_xn = 10f64.powf(mp.mask_xn);
         let do_mask_xn = mp.mask_xn > -10.0;
 
-        let self_mask = mutual_masking(b_t, b_r, b, mp);
+        let self_mask = mutual_masking(b_t, b_r, b, mp, relaxed);
         let mut mask_xn = vec![0.0; bw * bh];
         if b > 0 && do_mask_xn {
-            let prev = mutual_masking(b_t, b_r, b - 1, mp);
+            let prev = mutual_masking(b_t, b_r, b - 1, mp, relaxed);
             let resized = imresize(
                 &prev,
                 b_t.band_dims(b - 1).0,
@@ -407,7 +413,7 @@ fn apply_band(
             }
         }
         if b < b_count - 2 && do_mask_xn {
-            let next = mutual_masking(b_t, b_r, b + 1, mp);
+            let next = mutual_masking(b_t, b_r, b + 1, mp, relaxed);
             let resized = imresize(
                 &next,
                 b_t.band_dims(b + 1).0,
@@ -496,7 +502,13 @@ fn pool8(m: &[f64], bw: usize, fs: usize, c: usize, y: usize, x0: usize, out: &m
 
 /// `mutual_masking(b, 0)` — 3×3 mean pool of `min(|T|, |R|)` with
 /// zero-filled borders (scipy `convolve2d 'same'`).
-fn mutual_masking(b_t: &Spyr0, b_r: &Spyr0, b: usize, mp: &TaskPar) -> Vec<f64> {
+fn mutual_masking(
+    b_t: &Spyr0,
+    b_r: &Spyr0,
+    b: usize,
+    mp: &TaskPar,
+    relaxed: bool,
+) -> Vec<f64> {
     let (bw, bh) = b_t.band_dims(b);
     let tb = b_t.band(b);
     let rb = b_r.band(b);
@@ -507,7 +519,7 @@ fn mutual_masking(b_t: &Spyr0, b_r: &Spyr0, b: usize, mp: &TaskPar) -> Vec<f64> 
         .collect();
     if mp.do_si_gauss {
         let sigma = 10f64.powf(mp.si_size);
-        m = fast_gauss(&m, bw, bh, sigma, false, Pad::Constant(0.0));
+        m = fast_gauss(&m, bw, bh, sigma, false, Pad::Constant(0.0), relaxed);
         return m;
     }
     let fs = mp.masking_pool_size;

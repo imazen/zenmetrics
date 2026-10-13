@@ -56,6 +56,7 @@ impl C64 {
         }
     }
 
+    #[cfg(test)]
     #[must_use]
     #[inline]
     fn mul(self, o: Self) -> Self {
@@ -197,7 +198,13 @@ fn fft_radix2(buf: &mut [C64], stages: &Stages2) {
 /// `re8[rev[k]·8 + j]` (see [`Stages2::rev`]), which writes the same
 /// permutation the scalar swap loop would — just without a separate pass.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
-fn fft8_inner(token: Token, re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
+fn fft8_inner<const RELAXED: bool>(
+    token: Token,
+    re8: &mut [f64],
+    im8: &mut [f64],
+    n: usize,
+    stages: &Stages2,
+) {
     debug_assert_eq!(re8.len(), n * 8);
     debug_assert_eq!(im8.len(), n * 8);
     for (wre, wim) in stages.wre.iter().zip(&stages.wim) {
@@ -213,8 +220,16 @@ fn fft8_inner(token: Token, re8: &mut [f64], im8: &mut [f64], n: usize, stages: 
                 let uim = f64x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
                 let vre = f64x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
                 let vim = f64x8::load_t(token, (&im8[b..b + 8]).try_into().unwrap());
-                let tre = vre * wre - vim * wim;
-                let tim = vre * wim + vim * wre;
+                // RELAXED: fuse one product per complex half — `vim·(−wim)`
+                // negates the splat scalar, never a vector (the x86 vector
+                // `Neg` maps +0 to +0), and the fused term keeps one
+                // rounding instead of two.
+                let (tre, tim) = if RELAXED {
+                    let nwim = f64x8::splat_t(token, -wi);
+                    (vim.mul_add(nwim, vre * wre), vre.mul_add(wim, vim * wre))
+                } else {
+                    (vre * wre - vim * wim, vre * wim + vim * wre)
+                };
                 (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
                 (uim + tim).store((&mut im8[a..a + 8]).try_into().unwrap());
                 (ure - tre).store((&mut re8[b..b + 8]).try_into().unwrap());
@@ -225,9 +240,9 @@ fn fft8_inner(token: Token, re8: &mut [f64], im8: &mut [f64], n: usize, stages: 
 }
 
 /// [`fft8_inner`] with runtime tier dispatch.
-fn fft8(re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
+fn fft8<const RELAXED: bool>(re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
     archmage::attuned!(
-        fft8_inner(re8, im8, n, stages),
+        fft8_inner::<RELAXED>(re8, im8, n, stages),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -238,7 +253,7 @@ fn fft8(re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
 /// positions so the following [`fft8`] needs no swap pass.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 #[allow(clippy::too_many_arguments)]
-fn blue8_in_inner(
+fn blue8_in_inner<const RELAXED: bool>(
     token: Token,
     re8: &[f64],
     im8: &[f64],
@@ -262,8 +277,14 @@ fn blue8_in_inner(
         let xim = f64x8::load_t(token, (&im8[s..s + 8]).try_into().unwrap());
         let cr = f64x8::splat_t(token, chirp_re[k]);
         let ci = f64x8::splat_t(token, chirp_im[k]);
-        (xre * cr - xim * ci).store((&mut sre8[d..d + 8]).try_into().unwrap());
-        (xre * ci + xim * cr).store((&mut sim8[d..d + 8]).try_into().unwrap());
+        let (tre, tim) = if RELAXED {
+            let nci = f64x8::splat_t(token, -chirp_im[k]);
+            (xim.mul_add(nci, xre * cr), xre.mul_add(ci, xim * cr))
+        } else {
+            (xre * cr - xim * ci, xre * ci + xim * cr)
+        };
+        tre.store((&mut sre8[d..d + 8]).try_into().unwrap());
+        tim.store((&mut sim8[d..d + 8]).try_into().unwrap());
     }
 }
 
@@ -277,7 +298,7 @@ fn blue8_in_inner(
 /// `s2re8`/`s2im8` at bit-reversed positions, feeding the second
 /// [`fft8`] without a swap pass.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
-fn blue8_bf_inner(
+fn blue8_bf_inner<const RELAXED: bool>(
     token: Token,
     sre8: &[f64],
     sim8: &[f64],
@@ -295,8 +316,14 @@ fn blue8_bf_inner(
         let br = f64x8::splat_t(token, bf_re[k]);
         let nbr = f64x8::splat_t(token, -bf_re[k]);
         let bi = f64x8::splat_t(token, bf_im[k]);
-        (xr * br - xi * bi).store((&mut s2re8[d..d + 8]).try_into().unwrap());
-        (xi * nbr - xr * bi).store((&mut s2im8[d..d + 8]).try_into().unwrap());
+        let (tre, tim) = if RELAXED {
+            let nbi = f64x8::splat_t(token, -bf_im[k]);
+            (xi.mul_add(nbi, xr * br), xr.mul_add(nbi, xi * nbr))
+        } else {
+            (xr * br - xi * bi, xi * nbr - xr * bi)
+        };
+        tre.store((&mut s2re8[d..d + 8]).try_into().unwrap());
+        tim.store((&mut s2im8[d..d + 8]).try_into().unwrap());
     }
 }
 
@@ -304,7 +331,7 @@ fn blue8_bf_inner(
 /// `re8[k·8+j] = (sre·s − i·sim·s)·chirp[k]`, matching the scalar sequence
 /// `v = v.conj(); v·= s; out = v·chirp[k]` exactly.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
-fn blue8_out_inner(
+fn blue8_out_inner<const RELAXED: bool>(
     token: Token,
     sre8: &[f64],
     sim8: &[f64],
@@ -325,14 +352,20 @@ fn blue8_out_inner(
         let is = f64x8::load_t(token, (&sim8[d..d + 8]).try_into().unwrap()) * nsv;
         let cr = f64x8::splat_t(token, chirp_re[k]);
         let ci = f64x8::splat_t(token, chirp_im[k]);
-        (rs * cr - is * ci).store((&mut re8[d..d + 8]).try_into().unwrap());
-        (rs * ci + is * cr).store((&mut im8[d..d + 8]).try_into().unwrap());
+        let (tre, tim) = if RELAXED {
+            let nci = f64x8::splat_t(token, -chirp_im[k]);
+            (is.mul_add(nci, rs * cr), rs.mul_add(ci, is * cr))
+        } else {
+            (rs * cr - is * ci, rs * ci + is * cr)
+        };
+        tre.store((&mut re8[d..d + 8]).try_into().unwrap());
+        tim.store((&mut im8[d..d + 8]).try_into().unwrap());
     }
 }
 
 /// [`blue8_in_inner`] with runtime tier dispatch.
 #[allow(clippy::too_many_arguments)]
-fn blue8_in(
+fn blue8_in<const RELAXED: bool>(
     re8: &[f64],
     im8: &[f64],
     sre8: &mut [f64],
@@ -344,13 +377,13 @@ fn blue8_in(
     chirp_im: &[f64],
 ) {
     archmage::attuned!(
-        blue8_in_inner(re8, im8, sre8, sim8, n, m, rev, chirp_re, chirp_im),
+        blue8_in_inner::<RELAXED>(re8, im8, sre8, sim8, n, m, rev, chirp_re, chirp_im),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
 /// [`blue8_bf_inner`] with runtime tier dispatch.
-fn blue8_bf(
+fn blue8_bf<const RELAXED: bool>(
     sre8: &[f64],
     sim8: &[f64],
     s2re8: &mut [f64],
@@ -360,14 +393,14 @@ fn blue8_bf(
     rev: &[u32],
 ) {
     archmage::attuned!(
-        blue8_bf_inner(sre8, sim8, s2re8, s2im8, bf_re, bf_im, rev),
+        blue8_bf_inner::<RELAXED>(sre8, sim8, s2re8, s2im8, bf_re, bf_im, rev),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
 
 /// [`blue8_out_inner`] with runtime tier dispatch.
 #[allow(clippy::too_many_arguments)]
-fn blue8_out(
+fn blue8_out<const RELAXED: bool>(
     sre8: &[f64],
     sim8: &[f64],
     re8: &mut [f64],
@@ -378,7 +411,7 @@ fn blue8_out(
     s: f64,
 ) {
     archmage::attuned!(
-        blue8_out_inner(sre8, sim8, re8, im8, n, chirp_re, chirp_im, s),
+        blue8_out_inner::<RELAXED>(sre8, sim8, re8, im8, n, chirp_re, chirp_im, s),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -439,9 +472,11 @@ enum Plan {
         /// Imaginary row of `bf`.
         bf_im: Vec<f64>,
         stages: Stages2,
-        /// Work rows (`m` each) for the chirp-z sequence.
+        /// Work rows (`m` each) for the scalar chirp-z sequence.
+        #[cfg(test)]
         sre: Vec<f64>,
         /// Imaginary work row.
+        #[cfg(test)]
         sim: Vec<f64>,
     },
 }
@@ -482,7 +517,9 @@ impl Plan {
             bf_re,
             bf_im,
             stages,
+            #[cfg(test)]
             sre: vec![0.0; m],
+            #[cfg(test)]
             sim: vec![0.0; m],
         }
     }
@@ -576,8 +613,9 @@ impl Plan {
 
     /// Eight forward transforms at once on `[k·8 + j]` SoA lanes —
     /// bit-identical to eight [`Self::forward_soa`] calls. The input must
-    /// already be laid out per [`Self::gather_perm`].
-    fn run8(
+    /// already be laid out per [`Self::gather_perm`]. `RELAXED` lets the
+    /// kernels fuse multiply-adds; `false` keeps the bit-exact sequence.
+    fn run8<const RELAXED: bool>(
         &self,
         re8: &mut [f64],
         im8: &mut [f64],
@@ -588,7 +626,7 @@ impl Plan {
     ) {
         match self {
             Self::Trivial => {}
-            Self::Radix2(stages) => fft8(re8, im8, re8.len() / 8, stages),
+            Self::Radix2(stages) => fft8::<RELAXED>(re8, im8, re8.len() / 8, stages),
             Self::Bluestein {
                 chirp_re,
                 chirp_im,
@@ -599,11 +637,13 @@ impl Plan {
             } => {
                 let n = re8.len() / 8;
                 let m = sre8.len() / 8;
-                blue8_in(re8, im8, sre8, sim8, n, m, &stages.rev, chirp_re, chirp_im);
-                fft8(sre8, sim8, m, stages);
-                blue8_bf(sre8, sim8, s2re8, s2im8, bf_re, bf_im, &stages.rev);
-                fft8(s2re8, s2im8, m, stages);
-                blue8_out(
+                blue8_in::<RELAXED>(
+                    re8, im8, sre8, sim8, n, m, &stages.rev, chirp_re, chirp_im,
+                );
+                fft8::<RELAXED>(sre8, sim8, m, stages);
+                blue8_bf::<RELAXED>(sre8, sim8, s2re8, s2im8, bf_re, bf_im, &stages.rev);
+                fft8::<RELAXED>(s2re8, s2im8, m, stages);
+                blue8_out::<RELAXED>(
                     s2re8,
                     s2im8,
                     re8,
@@ -614,6 +654,26 @@ impl Plan {
                     1.0 / m as f64,
                 );
             }
+        }
+    }
+
+    /// [`Self::run8`] with a runtime `FpMode` switch — `relaxed` picks the
+    /// FMA-fused const instantiation, `false` the bit-exact one.
+    #[allow(clippy::too_many_arguments)]
+    fn run8_mode(
+        &self,
+        relaxed: bool,
+        re8: &mut [f64],
+        im8: &mut [f64],
+        sre8: &mut [f64],
+        sim8: &mut [f64],
+        s2re8: &mut [f64],
+        s2im8: &mut [f64],
+    ) {
+        if relaxed {
+            self.run8::<true>(re8, im8, sre8, sim8, s2re8, s2im8);
+        } else {
+            self.run8::<false>(re8, im8, sre8, sim8, s2re8, s2im8);
         }
     }
 
@@ -690,7 +750,7 @@ impl Plan2 {
     /// Forward row pass: 8 rows of `buf` per block, transposed into the
     /// lane layout (bit-reversed positions for radix-2 plans),
     /// transformed, scattered into the working planes.
-    fn rows_fwd(&mut self, buf: &[C64]) {
+    fn rows_fwd(&mut self, buf: &[C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         for y0 in (0..h).step_by(8) {
@@ -714,7 +774,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -730,7 +790,8 @@ impl Plan2 {
     /// the per-axis input conjugate fused in, then the conjugate·`1/w`
     /// writeback fused into the `buf` store (`ifft` per axis is
     /// `conj∘fwd∘conj·(1/n)` — both conjugates land in the data passes).
-    fn rows_inv(&mut self, buf: &mut [C64]) {
+    #[cfg(test)]
+    fn rows_inv(&mut self, buf: &mut [C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
@@ -755,7 +816,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -768,7 +829,7 @@ impl Plan2 {
 
     /// Forward column pass: the `[k·8 + j]` lane layout is a contiguous
     /// 8-`f64` row of the working plane; results go straight back to `buf`.
-    fn columns_fwd(&mut self, buf: &mut [C64]) {
+    fn columns_fwd(&mut self, buf: &mut [C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.columns.gather_perm();
         for x0 in (0..w).step_by(8) {
@@ -792,7 +853,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -807,7 +868,8 @@ impl Plan2 {
     /// conjugate fused in (eight adjacent columns per block, bit-reversed
     /// positions for radix-2 plans), transform, scatter into the planes
     /// with the conjugate·`1/h` writeback fused in.
-    fn columns_inv(&mut self, buf: &[C64]) {
+    #[cfg(test)]
+    fn columns_inv(&mut self, buf: &[C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.columns.gather_perm();
         let sc = 1.0 / h as f64;
@@ -834,7 +896,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -849,7 +911,7 @@ impl Plan2 {
     /// Plane variants of the four passes: identical arithmetic, but the
     /// gathers/scatters touch contiguous `f64` runs instead of `C64`
     /// pairs — the hot `conv_fft_pad` path uses these.
-    fn rows_fwd_p(&mut self, re: &[f64], im: &[f64]) {
+    fn rows_fwd_p(&mut self, re: &[f64], im: &[f64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         for y0 in (0..h).step_by(8) {
@@ -873,7 +935,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -885,7 +947,7 @@ impl Plan2 {
         }
     }
 
-    fn rows_inv_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+    fn rows_inv_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
@@ -910,7 +972,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -922,7 +984,7 @@ impl Plan2 {
         }
     }
 
-    fn columns_fwd_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+    fn columns_fwd_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.columns.gather_perm();
         for x0 in (0..w).step_by(8) {
@@ -946,7 +1008,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -956,7 +1018,7 @@ impl Plan2 {
         }
     }
 
-    fn columns_inv_p(&mut self, re: &[f64], im: &mut [f64]) {
+    fn columns_inv_p(&mut self, re: &[f64], im: &mut [f64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.columns.gather_perm();
         let sc = 1.0 / h as f64;
@@ -983,7 +1045,7 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8(re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -997,66 +1059,67 @@ impl Plan2 {
 
     /// Forward transform on split real/imaginary planes — same results as
     /// [`forward`] on the equivalent `C64` buffer.
-    fn forward_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+    fn forward_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
         assert_eq!(
             (re.len(), im.len()),
             (self.width * self.height, self.width * self.height),
             "fft2: plane size mismatch"
         );
-        self.rows_fwd_p(re, im);
-        self.columns_fwd_p(re, im);
+        self.rows_fwd_p(re, im, relaxed);
+        self.columns_fwd_p(re, im, relaxed);
     }
 
     /// Inverse transform on split real/imaginary planes.
-    fn inverse_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+    fn inverse_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
         assert_eq!(
             (re.len(), im.len()),
             (self.width * self.height, self.width * self.height),
             "ifft2: plane size mismatch"
         );
-        self.columns_inv_p(re, im);
-        self.rows_inv_p(re, im);
+        self.columns_inv_p(re, im, relaxed);
+        self.rows_inv_p(re, im, relaxed);
     }
 
-    fn forward(&mut self, buf: &mut [C64]) {
+    fn forward(&mut self, buf: &mut [C64], relaxed: bool) {
         assert_eq!(
             buf.len(),
             self.width * self.height,
             "fft2: buffer size mismatch"
         );
-        self.rows_fwd(buf);
-        self.columns_fwd(buf);
+        self.rows_fwd(buf, relaxed);
+        self.columns_fwd(buf, relaxed);
     }
 
-    fn inverse(&mut self, buf: &mut [C64]) {
+    #[cfg(test)]
+    fn inverse(&mut self, buf: &mut [C64], relaxed: bool) {
         assert_eq!(
             buf.len(),
             self.width * self.height,
             "ifft2: buffer size mismatch"
         );
-        self.columns_inv(buf);
-        self.rows_inv(buf);
+        self.columns_inv(buf, relaxed);
+        self.rows_inv(buf, relaxed);
     }
 }
 
 /// Forward 2-D DFT of a row-major `height × width` buffer, in place.
-pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize) {
-    Plan2::new(width, height).forward(buf);
+pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize, relaxed: bool) {
+    Plan2::new(width, height).forward(buf, relaxed);
 }
 
 /// Inverse 2-D DFT of a row-major `height × width` buffer, in place,
 /// normalised by `1/(width·height)`.
 #[cfg(test)]
-fn ifft2(buf: &mut [C64], width: usize, height: usize) {
-    Plan2::new(width, height).inverse(buf);
+fn ifft2(buf: &mut [C64], width: usize, height: usize, relaxed: bool) {
+    Plan2::new(width, height).inverse(buf, relaxed);
 }
 
 /// `np.fft.fft2` of a real row-major `width × height` buffer.
 #[must_use]
-pub(super) fn fft2_of(x: &[f64], width: usize, height: usize) -> Vec<C64> {
+pub(super) fn fft2_of(x: &[f64], width: usize, height: usize, relaxed: bool) -> Vec<C64> {
     assert_eq!(x.len(), width * height, "fft2_of: size");
     let mut buf: Vec<C64> = x.iter().map(|&v| C64::new(v, 0.0)).collect();
-    fft2(&mut buf, width, height);
+    fft2(&mut buf, width, height, relaxed);
     buf
 }
 
@@ -1150,6 +1213,7 @@ pub(super) fn conv_fft_pad(
     pad_w: usize,
     pad_h: usize,
     pad: Pad,
+    relaxed: bool,
 ) -> Vec<f64> {
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
     // Split real/imaginary planes end to end: the pointwise multiply is
@@ -1157,14 +1221,14 @@ pub(super) fn conv_fft_pad(
     let mut re = pad_image(x, width, height, pad_w, pad_h, pad);
     let mut im = vec![0.0; pad_w * pad_h];
     let mut plan = Plan2::new(pad_w, pad_h);
-    plan.forward_p(&mut re, &mut im);
+    plan.forward_p(&mut re, &mut im, relaxed);
     for (r, &f) in re.iter_mut().zip(filter) {
         *r *= f;
     }
     for (v, &f) in im.iter_mut().zip(filter) {
         *v *= f;
     }
-    plan.inverse_p(&mut re, &mut im);
+    plan.inverse_p(&mut re, &mut im, relaxed);
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {
         out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
@@ -1236,10 +1300,10 @@ mod tests {
                     }
                 }
                 let mut got = input;
-                plan.forward(&mut got);
+                plan.forward(&mut got, false);
                 same_bits(&got, &expected);
                 let mut wrapper_inverse = got.clone();
-                ifft2(&mut wrapper_inverse, w, h);
+                ifft2(&mut wrapper_inverse, w, h, false);
                 for x in 0..w {
                     for y in 0..h {
                         col[y] = expected[y * w + x];
@@ -1252,7 +1316,7 @@ mod tests {
                 for row in expected.chunks_exact_mut(w) {
                     ifft(row);
                 }
-                plan.inverse(&mut got);
+                plan.inverse(&mut got, false);
                 same_bits(&got, &expected);
                 same_bits(&wrapper_inverse, &expected);
             }
@@ -1304,9 +1368,9 @@ mod tests {
                 kbuf[by * pw + bx] = C64::new(k[ky * 5 + kx], 0.0);
             }
         }
-        fft2(&mut kbuf, pw, ph);
+        fft2(&mut kbuf, pw, ph, false);
         let filt: Vec<f64> = kbuf.iter().map(|c| c.re).collect();
-        let got = conv_fft_pad(&x, w, h, &filt, pw, ph, Pad::Replicate);
+        let got = conv_fft_pad(&x, w, h, &filt, pw, ph, Pad::Replicate, false);
         // Direct model: the padded lattice is circular; a tap at centred
         // offset (ky-2, kx-2) reads padded[(y+ky-2) mod ph, (x+kx-2) mod pw],
         // where padded positions ≥ h/≥ w carry the replicate extension.

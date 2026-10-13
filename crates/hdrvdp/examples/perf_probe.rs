@@ -58,6 +58,7 @@ fn main() {
         ["v2", "v3"].contains(&version.as_str()),
         "expected v2 or v3"
     );
+    let strict = args.next().is_some_and(|a| a == "strict");
 
     let par = Params::new(30.0);
     let reference = hdr_field(side, side, 0xfeed);
@@ -76,12 +77,16 @@ fn main() {
         if version == "v3" {
             use hdrvdp::v3;
             let encoding = v3::InputEncoding::Luminance;
+            let mut opts = v3::Options::reference(v3::Task::Quality);
+            if strict {
+                opts.mode = hdrvdp::FpMode::Strict;
+            }
             let params = v3::Params::new(
                 v3::Task::Quality,
                 v3::ViewingConditions::new(30.0, v3::Surround::None, 24),
                 encoding,
                 v3::Emission::default_for(encoding),
-                v3::Options::reference(v3::Task::Quality),
+                opts,
             )
             .expect("perf_probe: invalid viewing conditions");
             let r = v3::hdrvdp3(&test, &reference, side, side, &params)
