@@ -237,3 +237,10 @@ Targeted library/oracle clippy passed with warnings denied. All-target clippy
 still finds existing test-only lints in the shared CLI sources (test-module
 placement and constant `chunks_exact` calls); this change does not claim those
 pre-existing lints are resolved.
+
+Source `9e45737c04a84fc213f5d5edaae940c1e79ba307` was deployed and its
+model-selection/native-oracle controls passed on https://metrics.imazen.org/.
+The cached-reference C scalar route also failed the feature-vector contract;
+C uses the direct native full-pair scalar route. No other model supplies its
+score or map. Native D resolver tests used run-heavy peak RSS 1.01 GiB;
+the live browser check used 0.18 GiB. Featureless browser compilation passed.

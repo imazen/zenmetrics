@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Browser Zensim models (`9e45737c`): explicit B/D/A/legacy-preview score and map selection, scalar-only C with explicit map refusal, profile-aware reference caching, and matching CLI profile commands. B remains the default.
+
 - Browser map visualization (`1652bcfb`): use per-image percentile square-root scaling by default, show the metric range, and verify visible Zensim/Butteraugli/CVVDP demo maps. Native maps, scalar scores and benchmark acceptance remain unchanged.
 
 - Browser upgrades (`e05d1c91`, `dee64105`, `e54713a7`): bind app/glue/WASM/Rayon workers to immutable source-version URLs, keep entry cache rules separate, show Brave Shields guidance, and probe WebGPU compute/readback readiness. Existing CPU scoring and benchmark acceptance are unchanged.
