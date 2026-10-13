@@ -184,6 +184,35 @@ try:
         page.locator('#demo').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
         assert page.locator('#score').inner_text()!='–'
+        # Verify actual rendered maps at the demo size, rather than only the
+        # existence of a finite raw map. A universal fixed maximum of one
+        # saturated Butteraugli/CVVDP and hid Zensim's small-valued output.
+        assert page.locator('#norm').input_value() == 'sqrt'
+        rendered = {}
+        for map_metric in ('zensim', 'butteraugli', 'cvvdp'):
+            page.locator('#map-metric').select_option(map_metric)
+            page.wait_for_function("metric => document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
+            page.locator('[data-mode="map"]').click()
+            colors = page.evaluate("""() => {
+              const canvas=document.getElementById('view');
+              const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+              const counts=new Map();
+              for(let i=0;i<pixels.length;i+=4){const key=(pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2];counts.set(key,(counts.get(key)||0)+1);}
+              return {colors:counts.size,largest_fraction:Math.max(...counts.values())/(canvas.width*canvas.height)};
+            }""")
+            assert colors['colors'] > 32, (map_metric, colors)
+            assert colors['largest_fraction'] < .5, (map_metric, colors)
+            assert 'per-image scale' in page.locator('#map-info').inner_text()
+            assert page.locator('#scale').is_disabled()
+            rendered[map_metric] = colors
+        # Fixed calibration is still explicit and does not recompute raw maps.
+        page.locator('#norm').select_option('fixed')
+        assert page.locator('#scale').is_enabled()
+        assert 'fixed' in page.locator('#map-info').inner_text()
+        page.locator('#norm').select_option('sqrt')
+        page.locator('#map-metric').select_option('zensim')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('zensim ·')",timeout=30000)
+        result['rendered_demo_maps'] = rendered
         # Invoke both UI handlers in one browser turn: a fast comparison must
         # not finish between two separate automation commands.
         page.evaluate('''() => {

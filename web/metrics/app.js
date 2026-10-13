@@ -166,7 +166,9 @@ function paint(){
   }
   canvas.getContext('2d').putImageData(output,0,0);canvas.style.width=`${r.width*S.zoom}px`;canvas.style.height=`${r.height*S.zoom}px`;
   $('zoom').textContent=`${Math.round(S.zoom*100)}%`;$('dimensions').textContent=`${r.width}×${r.height}`;
-  $('map-info').textContent=S.map?`${S.mapMetric} · scale ${top.toPrecision(4)}`:'No map yet';
+  $('scale').disabled=$('norm').value!=='fixed';
+  const units=S.mapMetric==='cvvdp'?'masked error':S.mapMetric==='butteraugli'?'Butteraugli error':'error';
+  $('map-info').textContent=S.map?`${S.mapMetric} · 0–${top.toPrecision(4)} ${units}${$('norm').value==='fixed'?' · fixed':' · per-image scale'}`:'No map yet';
 }
 function fit(){if(S.reference)S.zoom=Math.min(1,Math.max(.05,($('viewport').clientWidth||768)/S.reference.width));paint();}
 for(const id of ['opacity','scale','norm','background','grey','split'])$(id).oninput=paint;

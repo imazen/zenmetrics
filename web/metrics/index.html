@@ -115,13 +115,13 @@ details summary { cursor: pointer; color: var(--muted); }
 <section class="panel"><h2>Image comparison</h2>
 <div class="row"><div class="seg" id="views" role="group" aria-label="View mode">
 <button data-mode="reference">Reference</button><button data-mode="distorted">Distorted</button><button data-mode="split">Split</button><button data-mode="blink">Blink</button><button data-mode="overlay" class="on">Overlay</button><button data-mode="map">Map</button></div></div>
-<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim codec-target error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
+<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim codec-target error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP masked error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
 <label>Palette <select id="palette"><option value="viridis">Viridis</option><option value="turbo">Turbo</option></select></label>
 <label>Background <select id="background"><option value="reference">Reference</option><option value="distorted">Distorted</option></select></label>
 <label><input id="grey" type="checkbox"> Grey</label></div>
 <div class="row"><label>Overlay <input id="opacity" type="range" min="0" max="1" step=".01" value=".7"></label>
-<label>Scale <select id="norm"><option value="fixed">Fixed</option><option value="p995">99.5th percentile</option><option value="max">Maximum</option><option value="sqrt">Square root</option></select></label>
-<input id="scale" type="number" value="1" min=".000001" step=".1" aria-label="Fixed map maximum"></div>
+<label>Scale <select id="norm"><option value="sqrt">Auto · square root</option><option value="fixed">Fixed</option><option value="p995">99.5th percentile</option><option value="max">Maximum</option></select></label>
+<input id="scale" type="number" value="1" disabled min=".000001" step=".1" aria-label="Fixed map maximum"></div>
 <div class="row"><label>Split <input id="split" type="range" min="0" max="1" step=".01" value=".5"></label>
 <button id="fit">Fit</button><button id="actual">1:1</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" aria-label="Zoom in">+</button><span id="zoom">100%</span>
 <button id="download">Download raw map</button></div>

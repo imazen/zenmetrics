@@ -1452,3 +1452,12 @@ initialization failures remain preserved as historical attempts.
 Removing the temporary udev override and restoring unchanged vendor-rule
 behavior also passes a fresh 24/24 worker panel. Its [receipt](benchmarks/iqa_cuda_deployment_i134_vendor_2026-10-12.meta)
 records the cleanup and interval with no kernel unload/Xid errors.
+
+### Known Bugs: browser map visualization scale (2026-10-13)
+
+The shared fixed map maximum of 1 saturated Butteraugli and CVVDP maps and made
+small Zensim maps nearly invisible on the real JPEG demo. The viewer now starts
+with per-image 99.5th-percentile square-root scaling and labels its displayed
+range; fixed calibration remains explicit. Raw metric maps and scalar scores
+are unchanged. Pages qualification renders all three demo maps and checks
+visible color variation, in addition to existing native-array comparisons.

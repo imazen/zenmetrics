@@ -176,3 +176,23 @@ reported eight Rayon workers and SIMD128 plus relaxed SIMD. The live suite
 used run-heavy: peak RSS 0.18 GiB, minimum available 26636 MiB, peak load 0.22.
 The separate live-header check used peak RSS 0.13 GiB, minimum available
 27501 MiB, peak load 0.21. Remote workspace CI remained in progress.
+
+## Map visualization scale follow-up
+
+The deployed 768×512 JPEG demo exposed a visualization defect: a shared fixed
+maximum of 1 clipped 65.92508951822916% of Butteraugli samples and
+97.01156616210938% of CVVDP samples, while the Zensim maximum was
+0.026854952797293663. Native values use different metric units.
+
+The viewer now starts with square-root visualization at each map's 99.5th
+percentile. The legend shows its per-image range. Fixed, maximum and linear
+percentile scaling remain selectable; fixed scaling is the option for a shared
+calibration across images. This changes display colors only: raw downloads,
+scalar scores, native map calculations and benchmark acceptance are unchanged.
+CVVDP here exposes the CPU port's masked-error map, not its video raw heatmap.
+
+The Pages check now renders the actual demo's Zensim, Butteraugli and CVVDP maps
+and requires more than 32 colors with no single color covering half the image.
+This catches both a missing map and the previous widespread saturation, beyond
+the existing finite-array and native-output checks. The local Chromium check
+passed with run-heavy peak RSS 0.18 GiB.
