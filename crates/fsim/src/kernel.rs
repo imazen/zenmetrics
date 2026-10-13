@@ -451,6 +451,9 @@ where
 {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (fa(), fb());
+        }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
@@ -770,11 +773,15 @@ macro_rules! score_body {
             let mut aall = vec![0.0f32; n];
             #[cfg(feature = "parallel")]
             let parts: Vec<(Vec<f32>, Vec<f32>, f32)> = {
-                use rayon::prelude::*;
-                (0..NORIENT)
-                    .into_par_iter()
-                    .map(|o| orient(&yf, o))
-                    .collect()
+                if rayon::current_num_threads() > 1 {
+                    use rayon::prelude::*;
+                    (0..NORIENT)
+                        .into_par_iter()
+                        .map(|o| orient(&yf, o))
+                        .collect()
+                } else {
+                    (0..NORIENT).map(|o| orient(&yf, o)).collect()
+                }
             };
             #[cfg(not(feature = "parallel"))]
             let parts: Vec<(Vec<f32>, Vec<f32>, f32)> =

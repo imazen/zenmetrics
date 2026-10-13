@@ -388,7 +388,7 @@ fn fft2_rows_conj_mul(
         // Row blocks are disjoint slices of `buf`, so under `parallel` each
         // block's transpose+transform+writeback is an independent task.
         #[cfg(feature = "parallel")]
-        if height >= 4 * RB {
+        if height >= 4 * RB && rayon::current_num_threads() > 1 {
             use rayon::prelude::*;
             buf.par_chunks_mut(width * RB)
                 .enumerate()
@@ -493,7 +493,7 @@ fn fft2_cols_conj_scale(
         // gather (parallel over (block,row) cells), transform (parallel over
         // blocks), scatter (parallel over rows, fusing `conj·scale`).
         #[cfg(feature = "parallel")]
-        if width >= 4 * CB && height >= 4 * CB {
+        if width >= 4 * CB && height >= 4 * CB && rayon::current_num_threads() > 1 {
             use rayon::prelude::*;
             const SB: usize = 64; // blocks per super-block
             let mut x0 = 0usize;

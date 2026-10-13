@@ -192,7 +192,15 @@ fn axis_taps(in_n: usize, out_n: usize) -> Axis {
         blk_idx[b] = blk.len() as u32;
         blk.push((j0b, k_len, off));
     }
-    Axis { spans, taps, wt, j0, blk, blk_idx, wt8 }
+    Axis {
+        spans,
+        taps,
+        wt,
+        j0,
+        blk,
+        blk_idx,
+        wt8,
+    }
 }
 
 /// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
@@ -311,7 +319,12 @@ macro_rules! per_output {
 }
 
 /// Scalar tier — generic f32x8 polyfill.
-fn resize_h_row_tier_scalar_t(token: archmage::ScalarToken, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+fn resize_h_row_tier_scalar_t(
+    token: archmage::ScalarToken,
+    srow: &[f32],
+    drow: &mut [f32],
+    ax: &Axis,
+) {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     resize_h_body!(token, V, 8, V, srow, drow, ax)
 }
@@ -329,7 +342,12 @@ fn resize_h_row_tier_v3_t(token: archmage::X64V3Token, srow: &[f32], drow: &mut 
 /// the flat-image NaN path behave identically on both.
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::attune]
-fn resize_h_row_tier_v4x_t(token: archmage::X64V4xToken, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+fn resize_h_row_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    srow: &[f32],
+    drow: &mut [f32],
+    ax: &Axis,
+) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V4xToken>;
     resize_h_body!(token, V, 8, V, srow, drow, ax)
 }
@@ -345,14 +363,24 @@ fn resize_h_row_tier_neon_t(token: archmage::NeonToken, srow: &[f32], drow: &mut
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune(wasm128)]
-fn resize_h_row_tier_wasm(token: archmage::Wasm128Token, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+fn resize_h_row_tier_wasm(
+    token: archmage::Wasm128Token,
+    srow: &[f32],
+    drow: &mut [f32],
+    ax: &Axis,
+) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     resize_h_body!(token, V, 8, V, srow, drow, ax)
 }
 
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-fn resize_h_row_tier_wasm128_t(token: archmage::Wasm128Token, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+fn resize_h_row_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    srow: &[f32],
+    drow: &mut [f32],
+    ax: &Axis,
+) {
     resize_h_row_tier_wasm(token, srow, drow, ax)
 }
 
@@ -371,7 +399,14 @@ fn resize_v(src: &[f32], w: usize, _in_h: usize, ax: &Axis) -> Vec<f32> {
 /// Each output's taps accumulate in k order — vector lanes carry x, so
 /// per-element op order is unchanged; products/acc run in f32 (the same
 /// ≲1e-7 drift class the horizontal pass documents).
-fn resize_v_row(src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row(
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     archmage::attuned!(
         resize_v_row_tier(src, st, len, taps, w, orow),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -403,7 +438,15 @@ macro_rules! resize_v_body {
 }
 
 /// Scalar tier — generic f32x8 polyfill.
-fn resize_v_row_tier_scalar_t(token: archmage::ScalarToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_scalar_t(
+    token: archmage::ScalarToken,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
 }
@@ -411,7 +454,15 @@ fn resize_v_row_tier_scalar_t(token: archmage::ScalarToken, src: &[f32], st: usi
 /// The `v3` tier (AVX2, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
-fn resize_v_row_tier_v3_t(token: archmage::X64V3Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_v3_t(
+    token: archmage::X64V3Token,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
 }
@@ -419,7 +470,15 @@ fn resize_v_row_tier_v3_t(token: archmage::X64V3Token, src: &[f32], st: usize, l
 /// The `v4x` tier (AVX-512) — accumulators stay 8-wide for `v3` parity.
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::attune]
-fn resize_v_row_tier_v4x_t(token: archmage::X64V4xToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V4xToken>;
     resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
 }
@@ -427,7 +486,15 @@ fn resize_v_row_tier_v4x_t(token: archmage::X64V4xToken, src: &[f32], st: usize,
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
 #[archmage::attune]
-fn resize_v_row_tier_neon_t(token: archmage::NeonToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_neon_t(
+    token: archmage::NeonToken,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
 }
@@ -435,14 +502,30 @@ fn resize_v_row_tier_neon_t(token: archmage::NeonToken, src: &[f32], st: usize, 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune(wasm128)]
-fn resize_v_row_tier_wasm(token: archmage::Wasm128Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_wasm(
+    token: archmage::Wasm128Token,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
 }
 
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-fn resize_v_row_tier_wasm128_t(token: archmage::Wasm128Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+fn resize_v_row_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    src: &[f32],
+    st: usize,
+    len: usize,
+    taps: &[(u32, f32)],
+    w: usize,
+    orow: &mut [f32],
+) {
     resize_v_row_tier_wasm(token, src, st, len, taps, w, orow)
 }
 
@@ -597,19 +680,45 @@ fn rgb8_row_tier_neon_t(
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune(wasm128)]
-fn rgb8_row_tier_wasm(token: archmage::Wasm128Token, src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+fn rgb8_row_tier_wasm(
+    token: archmage::Wasm128Token,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     rgb8_body!(token, V, 8, src, l, m, n, rp, gp, bp)
 }
 
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-fn rgb8_row_tier_wasm128_t(token: archmage::Wasm128Token, src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+fn rgb8_row_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
     rgb8_row_tier_wasm(token, src, l, m, n, rp, gp, bp)
 }
 
 /// One source row → row `y` of every plane (runtime tier dispatch).
-fn rgb8_row(src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+fn rgb8_row(
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
     archmage::attuned!(
         rgb8_row_tier(src, l, m, n, rp, gp, bp),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -619,7 +728,12 @@ fn rgb8_row(src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f
 /// Build the `{L,M,N}` planes and the planar RGB copy for `sdsp`.
 /// Row-parallel under `parallel`; per-element arithmetic is identical
 /// to the scalar `from_rgb8` loop at any thread count.
-pub(crate) fn rgb8_planes(data: &[u8], w: usize, h: usize, stride: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+pub(crate) fn rgb8_planes(
+    data: &[u8],
+    w: usize,
+    h: usize,
+    stride: usize,
+) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
     let wh = w * h;
     let mut l = vec![0.0f32; wh];
     let mut m = vec![0.0f32; wh];
@@ -630,12 +744,12 @@ pub(crate) fn rgb8_planes(data: &[u8], w: usize, h: usize, stride: usize) -> (Ve
     let (rp, gb) = rgb.split_at_mut(wh);
     let (gp, bp) = gb.split_at_mut(wh);
     let row = |y: usize,
-                   lrow: &mut [f32],
-                   mrow: &mut [f32],
-                   nrow: &mut [f32],
-                   rrow: &mut [f32],
-                   grow: &mut [f32],
-                   brow: &mut [f32]| {
+               lrow: &mut [f32],
+               mrow: &mut [f32],
+               nrow: &mut [f32],
+               rrow: &mut [f32],
+               grow: &mut [f32],
+               brow: &mut [f32]| {
         let src = &data[y * stride..y * stride + w * 3];
         rgb8_row(src, lrow, mrow, nrow, rrow, grow, brow);
     };
@@ -1118,6 +1232,9 @@ where
 {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (fa(), fb());
+        }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
@@ -1341,7 +1458,14 @@ mod resize_block_tests {
     /// f32-reassociation class (≲1e-5), never a real error.
     #[test]
     fn resize_simd_matches_scalar_within_reassoc() {
-        for (in_w, out_w) in [(64usize, 256usize), (256, 64), (2898, 256), (64, 128), (7, 19), (19, 7)] {
+        for (in_w, out_w) in [
+            (64usize, 256usize),
+            (256, 64),
+            (2898, 256),
+            (64, 128),
+            (7, 19),
+            (19, 7),
+        ] {
             let ax = axis_taps(in_w, out_w);
             let in_h = 3;
             let src: Vec<f32> = (0..in_w * in_h)
