@@ -419,12 +419,15 @@ fn apply_band(
                 *m += v.max(0.0);
             }
         }
+        // `k_xo·0^q` is a per-call constant (upstream's cross-orientation
+        // term — sp0 has a single orientation); hoisted out of the map.
+        let kxo0 = k_xo * 0.0f64.powf(q);
         ex_diff
             .iter()
             .enumerate()
             .map(|(i, &e)| {
                 let n_mask = k_self * self_mask[i].abs().powf(q)
-                    + k_xo * 0.0f64.powf(q)
+                    + kxo0
                     + k_xn * mask_xn[i].abs().powf(q);
                 e / (n_ncsf[i].powf(2.0 * p) + n_mask.powi(2)).sqrt()
             })
@@ -452,6 +455,48 @@ fn apply_band(
     *q_err += (acc / (bw * bh) as f64).powf(1.0 / 0.8) / b_count as f64;
 }
 
+/// One output row of the masking pool for the eight outputs `x0..x0+8` —
+/// every tap is a contiguous lane load because the caller only hands it
+/// fully-interior blocks (`x0 ≥ c`, `x0 + 8 + fs - c ≤ bw`); edge columns
+/// take the scalar path. Per-lane tap order is the scalar `ky`-major,
+/// `kx`-minor order, so results are bit-identical.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[allow(clippy::too_many_arguments)]
+fn pool8_inner(
+    token: Token,
+    m: &[f64],
+    bw: usize,
+    fs: usize,
+    c: usize,
+    y: usize,
+    x0: usize,
+    out: &mut [f64],
+) {
+    let mut acc = f64x8::zero_t(token);
+    for ky in 0..fs {
+        let srow = &m[(y + ky - c) * bw..];
+        for kx in 0..fs {
+            let t = f64x8::load_t(
+                token,
+                (&srow[x0 + kx - c..x0 + kx - c + 8])
+                    .try_into()
+                    .unwrap(),
+            );
+            acc = acc + t;
+        }
+    }
+    acc.store((&mut out[x0..x0 + 8]).try_into().unwrap());
+}
+
+/// [`pool8_inner`] with runtime tier dispatch.
+#[allow(clippy::too_many_arguments)]
+fn pool8(m: &[f64], bw: usize, fs: usize, c: usize, y: usize, x0: usize, out: &mut [f64]) {
+    archmage::attuned!(
+        pool8_inner(m, bw, fs, c, y, x0, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// `mutual_masking(b, 0)` — 3×3 mean pool of `min(|T|, |R|)` with
 /// zero-filled borders (scipy `convolve2d 'same'`).
 fn mutual_masking(b_t: &Spyr0, b_r: &Spyr0, b: usize, mp: &TaskPar) -> Vec<f64> {
@@ -472,21 +517,48 @@ fn mutual_masking(b_t: &Spyr0, b_r: &Spyr0, b: usize, mp: &TaskPar) -> Vec<f64> 
     let norm = 10f64.powf(mp.masking_norm);
     let c = (fs / 2) as isize;
     let inv = 1.0 / (fs * fs) as f64;
-    let mut out = vec![0.0; bw * bh];
+    // Interior rows/columns where every tap is in bounds — lane `j` of a
+    // block sees the exact tap sequence the scalar loop adds (and the
+    // pool input is non-negative, so the sums can't distinguish a
+    // skipped tap from an added +0). Vector blocks tile a contiguous
+    // `[vx0, vx1)` run per interior row; the scalar loop takes the rest.
+    let y_in = (c as usize)..(bh + 1 - fs + c as usize).min(bh);
+    let x_in = (c as usize)..(bw + 1 - fs + c as usize).min(bw);
+    let vspan = fs <= bw && fs <= bh && x_in.end - x_in.start >= 8;
+    let vx1 = if vspan {
+        x_in.start + (x_in.end - x_in.start) / 8 * 8
+    } else {
+        0
+    };
+    let mut acc = vec![0.0; bw * bh];
     for y in 0..bh {
+        let v = vspan && y_in.contains(&y);
         for x in 0..bw {
-            let mut acc = 0.0;
+            if v && (x_in.start..vx1).contains(&x) {
+                continue;
+            }
+            let mut s = 0.0;
             for ky in 0..fs {
                 for kx in 0..fs {
                     let sy = y as isize + ky as isize - c;
                     let sx = x as isize + kx as isize - c;
                     if (0..bh as isize).contains(&sy) && (0..bw as isize).contains(&sx) {
-                        acc += m[sy as usize * bw + sx as usize];
+                        s += m[sy as usize * bw + sx as usize];
                     }
                 }
             }
-            out[y * bw + x] = (acc * inv).powf(1.0 / norm);
+            acc[y * bw + x] = s;
         }
+        if v {
+            let acc_row = &mut acc[y * bw..y * bw + bw];
+            for x0 in (x_in.start..vx1).step_by(8) {
+                pool8(&m, bw, fs, c as usize, y, x0, acc_row);
+            }
+        }
+    }
+    let mut out = vec![0.0; bw * bh];
+    for (o, &a) in out.iter_mut().zip(&acc) {
+        *o = (a * inv).powf(1.0 / norm);
     }
     out
 }
