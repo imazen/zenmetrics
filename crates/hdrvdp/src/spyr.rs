@@ -243,6 +243,25 @@ fn corr_dn_impl<const RELAXED: bool>(
     // Output rows are independent given `padded` — under `parallel` each
     // row is a task; otherwise the same body runs serially in row order.
     let row = |win_row: usize, out_row: &mut [f32]| {
+        if step == 1 {
+            // Row-transposed FIR: every output lane accumulates its taps in
+            // the original ky-major/kx-inner order — bit-identical — but the
+            // accumulator row sits in L1 and each lane is independent, so
+            // the inner loop is one contiguous vector FMA per tap instead of
+            // 81 chained FMAs per 8-output block.
+            let mut acc = vec![0.0f32; out_w];
+            for ky in 0..fs {
+                let prow = &padded[(win_row + ky) * pad_w..(win_row + ky + 1) * pad_w];
+                let frow = &filter[ky * fs..ky * fs + fs];
+                for (kx, &w) in frow.iter().enumerate() {
+                    for (a, v) in acc.iter_mut().zip(&prow[kx..kx + out_w]) {
+                        *a = madd::<RELAXED>(*a, w, *v);
+                    }
+                }
+            }
+            out_row.copy_from_slice(&acc);
+            return;
+        }
         const BLK: usize = 8;
         let mut ox = 0usize;
         while ox + BLK <= out_w {

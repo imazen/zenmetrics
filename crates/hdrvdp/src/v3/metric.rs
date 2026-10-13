@@ -326,7 +326,11 @@ pub fn hdrvdp3(
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
-    let s_map: Vec<f64> = d_bands.reconstruct(&levs, relaxed).iter().map(|v| v.abs()).collect();
+    let s_map: Vec<f64> = d_bands
+        .reconstruct(&levs, relaxed)
+        .iter()
+        .map(|v| v.abs())
+        .collect();
     let mut p_map: Vec<f64> = if relaxed {
         trans64::one_mexp_scale(&s_map, 0.5f64.ln())
     } else {
@@ -342,7 +346,15 @@ pub fn hdrvdp3(
         } else {
             p_map.iter().map(|&v| (1.0 - v + 1e-4).ln()).collect()
         };
-        let g = fast_gauss(&log1m, width, height, si_sigma, true, Pad::Constant(0.0), relaxed);
+        let g = fast_gauss(
+            &log1m,
+            width,
+            height,
+            si_sigma,
+            true,
+            Pad::Constant(0.0),
+            relaxed,
+        );
         if relaxed {
             p_map.copy_from_slice(&trans64::one_mexp_scale(&g, 1.0));
         } else {
@@ -452,14 +464,23 @@ fn apply_band(
         let kxo0 = k_xo * 0.0f64.powf(q);
         if relaxed {
             trans64::masked_e_vec(
-                ex_diff, n_ncsf, &self_mask, &mask_xn, k_self, kxo0, k_xn, q, 2.0 * p,
+                ex_diff,
+                n_ncsf,
+                &self_mask,
+                &mask_xn,
+                k_self,
+                kxo0,
+                k_xn,
+                q,
+                2.0 * p,
             )
         } else {
             ex_diff
                 .iter()
                 .enumerate()
                 .map(|(i, &e)| {
-                    let n_mask = k_self * self_mask[i].abs().powf(q) + kxo0
+                    let n_mask = k_self * self_mask[i].abs().powf(q)
+                        + kxo0
                         + k_xn * mask_xn[i].abs().powf(q);
                     e / (n_ncsf[i].powf(2.0 * p) + n_mask.powi(2)).sqrt()
                 })
@@ -541,13 +562,7 @@ fn pool8(m: &[f64], bw: usize, fs: usize, c: usize, y: usize, x0: usize, out: &m
 
 /// `mutual_masking(b, 0)` — 3×3 mean pool of `min(|T|, |R|)` with
 /// zero-filled borders (scipy `convolve2d 'same'`).
-fn mutual_masking(
-    b_t: &Spyr0,
-    b_r: &Spyr0,
-    b: usize,
-    mp: &TaskPar,
-    relaxed: bool,
-) -> Vec<f64> {
+fn mutual_masking(b_t: &Spyr0, b_r: &Spyr0, b: usize, mp: &TaskPar, relaxed: bool) -> Vec<f64> {
     let (bw, bh) = b_t.band_dims(b);
     let tb = b_t.band(b);
     let rb = b_r.band(b);

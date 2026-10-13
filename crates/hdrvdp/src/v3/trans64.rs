@@ -82,11 +82,7 @@ fn ln8<T: F64x8Backend>(token: T, x: f64x8<T>) -> f64x8<T> {
     // Pre-scale denormals into the normal range so the exponent field
     // extraction below works; the lane's `e` is corrected by −52.
     let tiny = x.simd_lt(f64x8::splat_t(token, 2.225_073_858_507_201_4e-308));
-    let xs = f64x8::blend(
-        tiny,
-        x * f64x8::splat_t(token, 4.503_599_627_370_496e15),
-        x,
-    );
+    let xs = f64x8::blend(tiny, x * f64x8::splat_t(token, 4.503_599_627_370_496e15), x);
 
     let xa = xs.to_array();
     let mut ef = [0.0f64; 8];
@@ -128,7 +124,11 @@ fn ln8<T: F64x8Backend>(token: T, x: f64x8<T>) -> f64x8<T> {
     let zero = f64x8::zero_t(token);
     let nan = f64x8::splat_t(token, f64::NAN);
     let inf = f64x8::splat_t(token, f64::INFINITY);
-    let res = f64x8::blend(x.simd_eq(zero), f64x8::splat_t(token, f64::NEG_INFINITY), res);
+    let res = f64x8::blend(
+        x.simd_eq(zero),
+        f64x8::splat_t(token, f64::NEG_INFINITY),
+        res,
+    );
     let res = f64x8::blend(x.simd_eq(inf), inf, res);
     let res = f64x8::blend(x.simd_lt(zero), nan, res);
     // Ordered compares make `x == x` false exactly for NaN — portable
@@ -315,9 +315,7 @@ fn masked_e_inner(
             abs_pow8(token, xnv, qv),
             ks.mul_add(abs_pow8(token, smv, qv), kxo),
         );
-        let den = n_mask
-            .mul_add(n_mask, raw_pow8(token, nv, p2v))
-            .sqrt();
+        let den = n_mask.mul_add(n_mask, raw_pow8(token, nv, p2v)).sqrt();
         (ev / den).store((&mut out[a..b]).try_into().unwrap());
     }
 }
@@ -642,12 +640,10 @@ pub(super) fn thresh_mul(pm: &mut [f64], pr: &[f64], pt: &[f64], m_thr: f64) {
     );
     for (i, pmv) in pm_tail.iter_mut().enumerate() {
         let i = full + i;
-        let is_diff = 1.0
-            - (0.5f64.ln() * ((pr[i] - pt[i]).abs() / pr[i] / m_thr).powf(3.5)).exp();
+        let is_diff = 1.0 - (0.5f64.ln() * ((pr[i] - pt[i]).abs() / pr[i] / m_thr).powf(3.5)).exp();
         *pmv *= is_diff;
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -671,12 +667,24 @@ mod tests {
         for (i, (&x, &g)) in xs.iter().zip(&got).enumerate() {
             let want = x.exp();
             if want.is_finite() && want > 0.0 {
-                assert!(rel_err(g, want) < 1e-13, "exp({x}) lane {i}: {g:e} vs {want:e}");
+                assert!(
+                    rel_err(g, want) < 1e-13,
+                    "exp({x}) lane {i}: {g:e} vs {want:e}"
+                );
             }
         }
         // Edges — padded to 8 lanes to stay on the vector path.
         let got = exp_vec(
-            &[f64::NEG_INFINITY, f64::INFINITY, f64::NAN, -1000.0, 800.0, 0.0, -0.0, 1.0],
+            &[
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NAN,
+                -1000.0,
+                800.0,
+                0.0,
+                -0.0,
+                1.0,
+            ],
             0.0,
         );
         assert_eq!(got[0], 0.0);
@@ -689,13 +697,14 @@ mod tests {
 
     #[test]
     fn ln_accuracy_and_edges() {
-        let xs: Vec<f64> = (1..=4000)
-            .map(|i| (i as f64 * 0.005).exp())
-            .collect();
+        let xs: Vec<f64> = (1..=4000).map(|i| (i as f64 * 0.005).exp()).collect();
         let got = ln_vec(&xs, 0.0);
         for (i, (&x, &g)) in xs.iter().zip(&got).enumerate() {
             let want = x.ln();
-            assert!(rel_err(g, want) < 1e-13, "ln({x}) lane {i}: {g:e} vs {want:e}");
+            assert!(
+                rel_err(g, want) < 1e-13,
+                "ln({x}) lane {i}: {g:e} vs {want:e}"
+            );
         }
         // Sub-unity, denormal and edge inputs.
         let xs = [1e-320, 5e-324, 2.3e-300, 1e-100, 0.5, 0.999, 1.0, 1.001];
@@ -703,7 +712,10 @@ mod tests {
         for (i, (&x, &g)) in xs.iter().zip(&got).enumerate() {
             assert!(rel_err(g, x.ln()) < 1e-13, "ln({x:e}) lane {i}");
         }
-        let got = ln_vec(&[0.0, -1.0, f64::NAN, f64::INFINITY, 2.0, 3.0, 4.0, 5.0], 0.0);
+        let got = ln_vec(
+            &[0.0, -1.0, f64::NAN, f64::INFINITY, 2.0, 3.0, 4.0, 5.0],
+            0.0,
+        );
         assert_eq!(got[0], f64::NEG_INFINITY);
         assert!(got[1].is_nan());
         eprintln!("ln got = {got:?}");
@@ -721,11 +733,17 @@ mod tests {
             for (i, (&x, &g)) in xs.iter().zip(&got).enumerate() {
                 let want = x.abs().powf(q);
                 if want.is_finite() && want != 0.0 {
-                    assert!(rel_err(g, want) < 5e-12, "|{x}|^{q} lane {i}: {g:e} vs {want:e}");
+                    assert!(
+                        rel_err(g, want) < 5e-12,
+                        "|{x}|^{q} lane {i}: {g:e} vs {want:e}"
+                    );
                 }
             }
         }
-        let got = abs_pow_vec(&[0.0, f64::INFINITY, f64::NAN, 2.0, 4.0, 8.0, 16.0, 0.5], 2.0);
+        let got = abs_pow_vec(
+            &[0.0, f64::INFINITY, f64::NAN, 2.0, 4.0, 8.0, 16.0, 0.5],
+            2.0,
+        );
         assert_eq!(got[0], 0.0);
         assert_eq!(got[1], f64::INFINITY);
         assert!(got[2].is_nan());
@@ -763,11 +781,18 @@ mod tests {
         }
         let dm: Vec<f64> = (0..40).map(|i| 0.8 + i as f64 * 0.01).collect();
         let got = acc_abspow(&e, &dm, 0.8);
-        let want: f64 = e.iter().zip(&dm).map(|(&a, &b)| (a * b).abs().powf(0.8)).sum();
+        let want: f64 = e
+            .iter()
+            .zip(&dm)
+            .map(|(&a, &b)| (a * b).abs().powf(0.8))
+            .sum();
         assert!(rel_err(got, want) < 5e-12, "acc_abspow");
         let got = one_mexp_scale(&e, 0.5f64.ln());
         for (i, &g) in got.iter().enumerate() {
-            assert!(rel_err(g, 1.0 - (0.5f64.ln() * e[i]).exp()) < 5e-12, "one_mexp[{i}]");
+            assert!(
+                rel_err(g, 1.0 - (0.5f64.ln() * e[i]).exp()) < 5e-12,
+                "one_mexp[{i}]"
+            );
         }
         let got = ln_1mx(&e.iter().map(|v| v.min(0.99)).collect::<Vec<_>>());
         let pm: Vec<f64> = e.iter().map(|v| v.min(0.99)).collect();

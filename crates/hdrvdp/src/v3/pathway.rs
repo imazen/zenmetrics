@@ -107,8 +107,16 @@ pub(crate) fn visual_pathway(
     let mut l_o = vec![0.0; npix * channels];
     for k in 0..channels {
         let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
-        let filtered =
-            super::fft64::conv_fft_pad(&ch, width, height, &mtf, width * 2, height * 2, pad(k), relaxed);
+        let filtered = super::fft64::conv_fft_pad(
+            &ch,
+            width,
+            height,
+            &mtf,
+            width * 2,
+            height * 2,
+            pad(k),
+            relaxed,
+        );
         for (i, &v) in filtered.iter().enumerate() {
             l_o[i * channels + k] = v.clamp(1e-5, 1e10);
         }

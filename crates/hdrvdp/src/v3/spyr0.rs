@@ -65,7 +65,11 @@ fn corr8_inner<const RELAXED: bool>(
         for kx in 0..fs {
             let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
             let c = f64x8::splat_t(token, frow[kx]);
-            acc = if RELAXED { c.mul_add(t, acc) } else { acc + c * t };
+            acc = if RELAXED {
+                c.mul_add(t, acc)
+            } else {
+                acc + c * t
+            };
         }
     }
     acc.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
@@ -616,7 +620,11 @@ fn up8_inner<const RELAXED: bool>(
         for kx in 0..fs {
             let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
             let c = f64x8::splat_t(token, frow[kx]);
-            acc = if RELAXED { c.mul_add(t, acc) } else { acc + c * t };
+            acc = if RELAXED {
+                c.mul_add(t, acc)
+            } else {
+                acc + c * t
+            };
         }
     }
     acc.to_array()
@@ -846,7 +854,9 @@ impl Spyr0 {
         bands.push(corr_dn64(image, width, height, &HI0FILT, 9, 1, relaxed));
         let mut lo = corr_dn64(image, width, height, &LO0FILT, 7, 1, relaxed);
         for _ in 0..levels {
-            bands.push(corr_dn64(&lo.data, lo.width, lo.height, &BFILT, 9, 1, relaxed));
+            bands.push(corr_dn64(
+                &lo.data, lo.width, lo.height, &BFILT, 9, 1, relaxed,
+            ));
             lo = corr_dn64(&lo.data, lo.width, lo.height, &LOFILT, 13, 2, relaxed);
         }
         bands.push(lo);

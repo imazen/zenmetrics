@@ -637,9 +637,7 @@ impl Plan {
             } => {
                 let n = re8.len() / 8;
                 let m = sre8.len() / 8;
-                blue8_in::<RELAXED>(
-                    re8, im8, sre8, sim8, n, m, &stages.rev, chirp_re, chirp_im,
-                );
+                blue8_in::<RELAXED>(re8, im8, sre8, sim8, n, m, &stages.rev, chirp_re, chirp_im);
                 fft8::<RELAXED>(sre8, sim8, m, stages);
                 blue8_bf::<RELAXED>(sre8, sim8, s2re8, s2im8, bf_re, bf_im, &stages.rev);
                 fft8::<RELAXED>(s2re8, s2im8, m, stages);
@@ -774,7 +772,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -816,7 +815,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -853,7 +853,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -896,7 +897,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -935,7 +937,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -972,7 +975,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.rows
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -1008,7 +1012,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
@@ -1045,7 +1050,8 @@ impl Plan2 {
                 let sim8 = &mut self.sim8[..m * 8];
                 let s2re8 = &mut self.s2re8[..m * 8];
                 let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns.run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                self.columns
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
                 let (d, s) = (y * 8, y * w + x0);
