@@ -611,6 +611,101 @@ fn real_pow_lambda(z: f32) -> f64 {
     }
 }
 
+/// Everything in the phase-congruency pipeline that is a pure function of
+/// `(w, h)`: the log-Gabor×spread filter planes, their `real(ifft2·√n)`
+/// planes (`iff`), and the per-orientation `em_n`/`sum_sa2`/`sum_saij`
+/// aggregates. Building this per call dominated FSIM's setup — ~5M libm
+/// calls plus `NSCALE·NORIENT` iffts — and is now cached per image size
+/// (single-entry; repeated same-size calls reuse it).
+struct FilterBank {
+    /// `logg[s] · spread[o]` — the per-(o,s) filter, `[o][s]`.
+    filters: [[Vec<f32>; NSCALE]; NORIENT],
+    /// `real(ifft2(filters[o][s])) · sqrt(n)`.
+    iff: [[Vec<f32>; NSCALE]; NORIENT],
+    /// `Σ filters[o][0]²` (the s=0 filter energy per orientation).
+    em_n: [f64; NORIENT],
+    /// `Σ_s Σ_i iff[o][s][i]²` per orientation.
+    sum_sa2: [f64; NORIENT],
+    /// `Σ_{si<sj} Σ_i iff[o][si][i]·iff[o][sj][i]` per orientation.
+    sum_saij: [f64; NORIENT],
+    wplan: Plan,
+    hplan: Plan,
+}
+
+impl FilterBank {
+    fn build(w: usize, h: usize) -> Self {
+        let n = w * h;
+        let sqrt_n = libm::sqrt(n as f64) as f32;
+        let (radius, sintheta, costheta) = freq_grids(w, h);
+        let logg = radial_filters(w, h, &radius);
+        let spread = angular_filters(w, h, &sintheta, &costheta);
+        let (wplan, hplan) = (Plan::new(w), Plan::new(h));
+        let mut filters: [[Vec<f32>; NSCALE]; NORIENT] =
+            core::array::from_fn(|_| core::array::from_fn(|_| Vec::new()));
+        let mut iff: [[Vec<f32>; NSCALE]; NORIENT] =
+            core::array::from_fn(|_| core::array::from_fn(|_| Vec::new()));
+        let mut em_n = [0.0f64; NORIENT];
+        let mut sum_sa2 = [0.0f64; NORIENT];
+        let mut sum_saij = [0.0f64; NORIENT];
+        for (o, (fo, io)) in filters.iter_mut().zip(iff.iter_mut()).enumerate() {
+            for (s, (f, is)) in fo.iter_mut().zip(io.iter_mut()).enumerate() {
+                f.extend(logg[s].iter().zip(&spread[o]).map(|(a, b)| a * b));
+                if s == 0 {
+                    for &v in f.iter() {
+                        em_n[o] += (v as f64) * (v as f64);
+                    }
+                }
+                let mut ff: Vec<Complex> = f.iter().map(|&v| Complex::new(v, 0.0)).collect();
+                ifft2_planned(&mut ff, w, h, &wplan, &hplan);
+                is.extend(ff.iter().map(|z| z.re * sqrt_n));
+            }
+            for s in 0..NSCALE {
+                for i in 0..n {
+                    let v = io[s][i] as f64;
+                    sum_sa2[o] += v * v;
+                }
+            }
+            for si in 0..NSCALE - 1 {
+                for sj in si + 1..NSCALE {
+                    for i in 0..n {
+                        sum_saij[o] += io[si][i] as f64 * io[sj][i] as f64;
+                    }
+                }
+            }
+        }
+        FilterBank {
+            filters,
+            iff,
+            em_n,
+            sum_sa2,
+            sum_saij,
+            wplan,
+            hplan,
+        }
+    }
+}
+
+/// Single-slot size-keyed bank — video IQA calls repeat one size.
+#[cfg(feature = "std")]
+fn filter_bank(w: usize, h: usize) -> std::sync::Arc<FilterBank> {
+    static CACHE: std::sync::Mutex<Option<(usize, usize, std::sync::Arc<FilterBank>)>> =
+        std::sync::Mutex::new(None);
+    let mut g = CACHE.lock().unwrap();
+    match &*g {
+        Some((bw, bh, b)) if *bw == w && *bh == h => b.clone(),
+        _ => {
+            let b = std::sync::Arc::new(FilterBank::build(w, h));
+            *g = Some((w, h, b.clone()));
+            b
+        }
+    }
+}
+
+#[cfg(not(feature = "std"))]
+fn filter_bank(w: usize, h: usize) -> FilterBank {
+    FilterBank::build(w, h)
+}
+
 // ------------------------------------------------------------------
 // Whole-pipeline body — instantiated once per tier.
 // ------------------------------------------------------------------
@@ -619,11 +714,8 @@ macro_rules! score_body {
     ($token:ident, $F32:ident, $LANES:literal, $yr:ident, $yd:ident, $w:ident, $h:ident, $iq:ident) => {{
         let (w, h) = ($w, $h);
         let n = w * h;
-        let wplan = Plan::new(w);
-        let hplan = Plan::new(h);
-        let (radius, sintheta, costheta) = freq_grids(w, h);
-        let logg = radial_filters(w, h, &radius);
-        let spread = angular_filters(w, h, &sintheta, &costheta);
+        let bank = filter_bank(w, h);
+        let (wplan, hplan) = (&bank.wplan, &bank.hplan);
 
         // One orientation's accumulators: `(Energy_o, An_o, T)` —
         // Energy_o is *not* yet thresholded (the fold applies `T`).
@@ -633,30 +725,17 @@ macro_rules! score_body {
             let mut sum_an = vec![0.0f32; n];
             let mut eo: [Vec<Complex>; NSCALE] =
                 core::array::from_fn(|_| vec![Complex::new(0.0, 0.0); n]);
-            let mut iff: [Vec<f32>; NSCALE] = core::array::from_fn(|_| vec![0.0; n]);
-            let mut em_n = 0.0f64;
-            let sqrt_n = libm::sqrt(n as f64) as f32;
+            let em_n = bank.em_n[o];
             for s in 0..NSCALE {
-                // filter = logGabor[s] · spread[o]
-                let filter: Vec<f32> = logg[s].iter().zip(&spread[o]).map(|(a, b)| a * b).collect();
-                // EO{s,o} = ifft2(imagefft · filter)
+                // filter = logGabor[s] · spread[o] — from the size-keyed
+                // bank; only the image-dependent ifft remains here.
+                let filter = &bank.filters[o][s];
                 let mut e: Vec<Complex> = yf
                     .iter()
-                    .zip(&filter)
+                    .zip(filter)
                     .map(|(c, f)| Complex::new(c.re * f, c.im * f))
                     .collect();
                 ifft2_planned(&mut e, w, h, &wplan, &hplan);
-                if s == 0 {
-                    for &f in &filter {
-                        em_n += (f as f64) * (f as f64);
-                    }
-                }
-                // ifftFilterArray{s} = real(ifft2(filter))·sqrt(n)
-                let mut ff: Vec<Complex> = filter.iter().map(|&v| Complex::new(v, 0.0)).collect();
-                ifft2_planned(&mut ff, w, h, &wplan, &hplan);
-                for i in 0..n {
-                    iff[s][i] = ff[i].re * sqrt_n;
-                }
                 anacc_body!($token, $F32, $LANES, e, sum_e, sum_o, sum_an, n);
                 eo[s] = e;
             }
@@ -675,21 +754,8 @@ macro_rules! score_body {
             let median_e2n = median_f32(&mut e2n);
             let mean_e2n = -median_e2n / libm::log(0.5f64);
             let noise_power = mean_e2n / em_n;
-            let mut sum_sa2 = 0.0f64;
-            for s in 0..NSCALE {
-                for i in 0..n {
-                    let f = iff[s][i] as f64;
-                    sum_sa2 += f * f;
-                }
-            }
-            let mut sum_saij = 0.0f64;
-            for si in 0..NSCALE - 1 {
-                for sj in si + 1..NSCALE {
-                    for i in 0..n {
-                        sum_saij += iff[si][i] as f64 * iff[sj][i] as f64;
-                    }
-                }
-            }
+            let sum_sa2 = bank.sum_sa2[o];
+            let sum_saij = bank.sum_saij[o];
             let est_ne2 = 2.0 * noise_power * sum_sa2 + 4.0 * noise_power * sum_saij;
             let tau = libm::sqrt(est_ne2 / 2.0);
             let est_noise_energy = tau * libm::sqrt(core::f64::consts::PI / 2.0);

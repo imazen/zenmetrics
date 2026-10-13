@@ -9,6 +9,9 @@ use alloc::vec::Vec;
 
 use crate::fft::{self, Complex};
 
+#[cfg(target_arch = "aarch64")]
+use archmage::SimdToken;
+
 /// `sdsp` works on a fixed 256×256 grid (the reference hardcodes the
 /// `imresize` target — input of any size is rescaled to it).
 const SDSP_N: usize = 256;
@@ -199,6 +202,100 @@ pub(crate) fn imresize(
 // own XYZ matrix, **D50** reference white (Xr 0.9642, Yr 1.0,
 // Zr 0.8251 — not the usual D65), ε = 0.008856, κ = 903.3.
 
+fn srgb_to_lab_all_scalar(
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    for i in 0..dr.len() {
+        let (l, a, bb) = srgb_to_lab(dr[i], dg[i], db[i]);
+        ll[i] = l;
+        la[i] = a;
+        lb[i] = bb;
+    }
+}
+
+/// `srgb_to_lab` at `f32x4` — the per-pixel f64 `pow(x, 2.4)` and
+/// `pow(t, 1/3)` calls are the bottleneck of `sdsp`; `pow_midp`/
+/// `cbrt_midp` keep ~1e-5 relative error (score tolerance is 1e-4).
+/// The branch thresholds become `blend` selects — same piecewise
+/// semantics, no per-lane divergence.
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+fn srgb_to_lab_tier_neon_t(
+    token: archmage::NeonToken,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    use magetypes::simd::generic::f32x4;
+    type V = f32x4<archmage::NeonToken>;
+    let s = |x: f32| V::splat_t(token, x);
+    let n = dr.len();
+    for i in (0..n).step_by(4) {
+        let lin = |p: &[f32]| {
+            let v = V::load_t(token, p[i..][..4].first_chunk().unwrap()) * s(1.0 / 255.0);
+            let lo = v * s(1.0 / 12.92);
+            let hi = ((v + s(0.055)) * s(1.0 / 1.055)).pow_midp(2.4);
+            V::blend(v.simd_le(s(0.04045)), lo, hi)
+        };
+        let (r, g, b) = (lin(dr), lin(dg), lin(db));
+        let x = r * s(0.4124564) + g * s(0.3575761) + b * s(0.1804375);
+        let y = r * s(0.2126729) + g * s(0.7151522) + b * s(0.0721750);
+        let z = r * s(0.0193339) + g * s(0.1191920) + b * s(0.9503041);
+        let f = |t: V| {
+            let hi = t.cbrt_midp();
+            let lo = (t * s(903.3) + s(16.0)) * s(1.0 / 116.0);
+            V::blend(t.simd_gt(s(0.008856)), hi, lo)
+        };
+        let fx = f(x * s(1.0 / 0.9642));
+        let fy = f(y);
+        let fz = f(z * s(1.0 / 0.8251));
+        (s(116.0) * fy - s(16.0)).store(ll[i..][..4].first_chunk_mut().unwrap());
+        (s(500.0) * (fx - fy)).store(la[i..][..4].first_chunk_mut().unwrap());
+        (s(200.0) * (fy - fz)).store(lb[i..][..4].first_chunk_mut().unwrap());
+    }
+}
+
+/// Scalar-tier entry for `attuned!` — same signature shape as the NEON
+/// twin; the actual conversion is `srgb_to_lab_all_scalar`.
+#[allow(dead_code)]
+fn srgb_to_lab_tier_scalar_t(
+    _token: archmage::ScalarToken,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    srgb_to_lab_all_scalar(dr, dg, db, ll, la, lb);
+}
+
+/// Runtime-dispatched Lab fill — `attuned!` expands to the best tier.
+fn srgb_to_lab_all(
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    #[cfg(target_arch = "aarch64")]
+    {
+        archmage::attuned!(srgb_to_lab_tier(dr, dg, db, ll, la, lb), [_neon, _scalar]);
+        return;
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    srgb_to_lab_all_scalar(dr, dg, db, ll, la, lb);
+}
+
 fn srgb_to_lab(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     fn lin(v: f64) -> f64 {
         if v <= 0.04045 {
@@ -305,12 +402,7 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
     }
     let _ = ran_par;
     if !ran_par {
-        for i in 0..n * n {
-            let (l, a, bb) = srgb_to_lab(dr[i], dg[i], db[i]);
-            ll[i] = l;
-            la[i] = a;
-            lb[i] = bb;
-        }
+        srgb_to_lab_all(&dr, &dg, &db, ll, la, lb);
     }
     // 3. log-Gabor bandpass per channel: real(ifft2(fft2(ch) .* LG)).
     let plan = fft::Plan::new(n);
