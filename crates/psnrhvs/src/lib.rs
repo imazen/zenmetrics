@@ -358,14 +358,12 @@ pub fn psnrhvs_rgb8(
         |y, (r0, r1, r2, d0, d1, d2)| {
             let rr = &reference[y * stride..y * stride + 3 * width];
             let dd = &distorted[y * stride..y * stride + 3 * width];
-            for x in 0..width {
-                r0[x] = rr[3 * x] as f32;
-                r1[x] = rr[3 * x + 1] as f32;
-                r2[x] = rr[3 * x + 2] as f32;
-                d0[x] = dd[3 * x] as f32;
-                d1[x] = dd[3 * x + 1] as f32;
-                d2[x] = dd[3 * x + 2] as f32;
-            }
+            kernel::deinterleave_u8_ch(rr, 0, r0);
+            kernel::deinterleave_u8_ch(rr, 1, r1);
+            kernel::deinterleave_u8_ch(rr, 2, r2);
+            kernel::deinterleave_u8_ch(dd, 0, d0);
+            kernel::deinterleave_u8_ch(dd, 1, d1);
+            kernel::deinterleave_u8_ch(dd, 2, d2);
         },
     );
     let ((red, green), blue) = crate::kernel::join2(

@@ -402,6 +402,33 @@ macro_rules! band_body {
     }};
 }
 
+/// Deinterleave one u8 RGB channel to f32 code values:
+/// `dst[i] = src[3i + c] as f32`. Lane-built i32 gathers widen to f32 —
+/// same conversion the scalar loop performs, so output is bit-identical.
+/// `dst.len()` pixels; `src.len() >= 3·dst.len()` (a stride-3 row slice).
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8, i32x8))]
+fn deinterleave_u8_ch_inner(token: Token, src: &[u8], c: usize, dst: &mut [f32]) {
+    let n = dst.len();
+    let full = n & !7;
+    for i in (0..full).step_by(8) {
+        let arr = core::array::from_fn(|j| src[3 * (i + j) + c] as i32);
+        i32x8::from_array_t(token, arr)
+            .to_f32()
+            .store((&mut dst[i..i + 8]).try_into().unwrap());
+    }
+    for (i, o) in dst.iter_mut().enumerate().skip(full) {
+        *o = src[3 * i + c] as f32;
+    }
+}
+
+/// `deinterleave_u8_ch_inner` dispatch.
+pub(crate) fn deinterleave_u8_ch(src: &[u8], c: usize, dst: &mut [f32]) {
+    archmage::attuned!(
+        deinterleave_u8_ch_inner(src, c, dst),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
 /// The `v3` tier of one block-row band — returns `(s1, s2)` f64 sums.
