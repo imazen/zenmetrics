@@ -9,8 +9,6 @@ use alloc::vec::Vec;
 
 use crate::fft::{self, Complex};
 
-#[cfg(target_arch = "aarch64")]
-
 /// `sdsp` works on a fixed 256×256 grid (the reference hardcodes the
 /// `imresize` target — input of any size is rescaled to it).
 const SDSP_N: usize = 256;
