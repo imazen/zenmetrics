@@ -1079,6 +1079,68 @@ pub fn box_gain_rows(
 }
 
 // ---------------------------------------------------------------------
+// `imenlarge2` interior row — `imu[y][x] = t1[2y-1][2x-1]` evaluated
+// straight from `src` (`t1_cell` math, same op order). For a fixed
+// row `y0`/`y1`/`wy` are constant; `dx = 2x-1` makes `wx` alternate
+// `0.25, 0.75` and `x0` advance every two lanes, so one contiguous
+// 8-load per source row covers a whole output block.
+// ---------------------------------------------------------------------
+
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+pub(crate) fn imu_interior_row_inner(
+    token: Token,
+    ra: &[f32],
+    rb: &[f32],
+    sw: usize,
+    wy: f32,
+    imu_w: usize,
+    row: &mut [f32],
+) {
+    debug_assert_eq!(row.len(), imu_w);
+    let wx_alt = f32x8::from_array_t(token, [0.25, 0.75, 0.25, 0.75, 0.25, 0.75, 0.25, 0.75]);
+    let wyv = f32x8::splat_t(token, wy);
+    let mut x = 1usize;
+    while x + 8 <= imu_w - 1 && ((x - 1) >> 1) + 8 <= sw {
+        let x0b = (x - 1) >> 1;
+        let va = f32x8::load_t(token, (&ra[x0b..x0b + 8]).try_into().unwrap()).to_array();
+        let vb = f32x8::load_t(token, (&rb[x0b..x0b + 8]).try_into().unwrap()).to_array();
+        let mut a00 = [0.0_f32; 8];
+        let mut a01 = [0.0_f32; 8];
+        let mut a10 = [0.0_f32; 8];
+        let mut a11 = [0.0_f32; 8];
+        for l in 0..8 {
+            let c = l >> 1;
+            a00[l] = va[c];
+            a01[l] = va[c + 1];
+            a10[l] = vb[c];
+            a11[l] = vb[c + 1];
+        }
+        let v00 = f32x8::from_array_t(token, a00);
+        let v01 = f32x8::from_array_t(token, a01);
+        let v10 = f32x8::from_array_t(token, a10);
+        let v11 = f32x8::from_array_t(token, a11);
+        let v0 = v00 + (v01 - v00) * wx_alt;
+        let v1 = v10 + (v11 - v10) * wx_alt;
+        (v0 + (v1 - v0) * wyv).store((&mut row[x..x + 8]).try_into().unwrap());
+        x += 8;
+    }
+    // Scalar tail — same `t1_cell` math element-wise.
+    for cx in x..imu_w - 1 {
+        let dx = 2 * cx - 1;
+        let x0 = dx >> 2;
+        let x1 = (x0 + 1).min(sw - 1);
+        let wx = [0.0_f32, 0.25, 0.5, 0.75][dx & 3];
+        let v00 = ra[x0];
+        let v01 = ra[x1];
+        let v10 = rb[x0];
+        let v11 = rb[x1];
+        let v0 = v00 + wx * (v01 - v00);
+        let v1 = v10 + wx * (v11 - v10);
+        row[cx] = v0 + wy * (v1 - v0);
+    }
+}
+
+// ---------------------------------------------------------------------
 // Laplacian-pyramid convolutions (`binom5`, `reflect1` borders).
 //
 // - `corr_dn_v` / `up_conv_v`: taps are whole rows — vectorized over
@@ -1221,8 +1283,45 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
     let vec_hi = (2 * in_h).saturating_sub(3);
     let n_chunks = w / 8;
     let band_rows = dst.len() / w;
-    for i in 0..band_rows {
+    let mut i = 0usize;
+    // Even/odd row pairs (oy=2m, 2m+1) share source rows {m, m+1} —
+    // three row loads serve both outputs. Each row keeps its own tap
+    // order — bit-identical to the unpaired loop.
+    while i < band_rows {
         let oy = y0 + i;
+        if i + 1 < band_rows && oy >= 2 && oy.is_multiple_of(2) && oy + 1 <= vec_hi {
+            let m = oy / 2;
+            let (ra, rb, rc) = (m - 1, m, m + 1);
+            let dst_e = i * w;
+            let dst_o = (i + 1) * w;
+            for c in 0..n_chunks {
+                let x = c * 8;
+                let a = f32x8::load_t(
+                    token,
+                    (&src[ra * w + x..ra * w + x + 8]).try_into().unwrap(),
+                );
+                let b = f32x8::load_t(
+                    token,
+                    (&src[rb * w + x..rb * w + x + 8]).try_into().unwrap(),
+                );
+                let cv = f32x8::load_t(
+                    token,
+                    (&src[rc * w + x..rc * w + x + 8]).try_into().unwrap(),
+                );
+                let acc_e = cv.mul_add(k4, b.mul_add(k2, a.mul_add(k0, f32x8::zero_t(token))));
+                let acc_o = cv.mul_add(k3, b.mul_add(k1, f32x8::zero_t(token)));
+                acc_e.store((&mut dst[dst_e + x..dst_e + x + 8]).try_into().unwrap());
+                acc_o.store((&mut dst[dst_o + x..dst_o + x + 8]).try_into().unwrap());
+            }
+            for x in n_chunks * 8..w {
+                dst[dst_e + x] = BINOM5[0] * src[ra * w + x]
+                    + BINOM5[2] * src[rb * w + x]
+                    + BINOM5[4] * src[rc * w + x];
+                dst[dst_o + x] = BINOM5[1] * src[rb * w + x] + BINOM5[3] * src[rc * w + x];
+            }
+            i += 2;
+            continue;
+        }
         let dst_row = &mut dst[i * w..(i + 1) * w];
         if oy >= 2 && oy <= vec_hi {
             // Parity split (see `up_conv_h` doc): even oy = 2m uses
@@ -1292,6 +1391,7 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
                 dst_row[x] = acc;
             }
         }
+        i += 1;
     }
 }
 

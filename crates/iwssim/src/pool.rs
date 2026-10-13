@@ -12,10 +12,12 @@
 
 use alloc::vec::Vec;
 
-/// Enough for one call's live set: pyramid scratch (~6), five scales of
-/// cs intermediates (~7 each) and IW maps (~7 each), plus slack for the
-/// strip path's per-strip bands.
-const POOL_CAP: usize = 80;
+/// Enough for one call's full give set: two pyramids' intermediates
+/// (~32), the lp planes (10), five scales of cs intermediates (~35)
+/// and IW maps (~20), plus slack for the strip path's per-strip
+/// bands. Below this the tail of each call's gives falls out of the
+/// pool and pays malloc+zero-fill churn every call.
+const POOL_CAP: usize = 128;
 
 /// Take a length-`n` buffer, reusing a pooled allocation when one fits.
 /// Contents are unspecified.

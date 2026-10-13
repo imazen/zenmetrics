@@ -366,11 +366,25 @@ pub(crate) fn imenlarge2(
                     row[x] = 2.0 * t1_at(ya, 2 * x - 1) - t1_at(yb, 2 * x - 1);
                 }
             } else {
-                // Interior: imu[y][x] = t1[2y-1][2x-1].
+                // Interior: imu[y][x] = t1[2y-1][2x-1] — the vector row
+                // kernel folds the per-cell bilinear into 8-wide lane
+                // work (same `t1_cell` op order).
                 let ty = 2 * y - 1;
-                for x in 1..imu_w - 1 {
-                    row[x] = t1_at(ty, 2 * x - 1);
-                }
+                let y0 = ty >> 2;
+                let y1 = (y0 + 1).min(src_h - 1);
+                const WX: [f32; 4] = [0.0, 0.25, 0.5, 0.75];
+                let wy = WX[ty & 3];
+                archmage::attuned!(
+                    crate::simd_kernels::imu_interior_row_inner(
+                        &src[y0 * src_w..],
+                        &src[y1 * src_w..],
+                        src_w,
+                        wy,
+                        imu_w,
+                        row
+                    ),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                );
                 // Border cols: imu[y][0] = 2·t1[ty][0] − t1[ty][1],
                 // mirrored on the right.
                 row[0] = 2.0 * t1_at(ty, 0) - t1_at(ty, 1);
