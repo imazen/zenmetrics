@@ -24,6 +24,10 @@ pub(crate) const PAR_MIN_SAMPLES: usize = 1 << 17;
 /// overhead stays noise relative to ~64k-sample tasks.
 #[inline]
 pub(crate) fn n_bands(n: usize) -> usize {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() <= 1 {
+        return 1;
+    }
     if n < PAR_MIN_SAMPLES {
         1
     } else {
@@ -37,6 +41,9 @@ pub(crate) fn n_bands(n: usize) -> usize {
 pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + Sync) -> Vec<T> {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (0..nb).map(f).collect();
+        }
         (0..nb).into_par_iter().map(f).collect()
     }
     #[cfg(not(feature = "parallel"))]

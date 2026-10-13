@@ -85,6 +85,9 @@ where
 {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (fa(), fb());
+        }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
@@ -240,7 +243,7 @@ macro_rules! score_body {
                 }
             };
             #[cfg(feature = "parallel")]
-            {
+            if rayon::current_num_threads() > 1 {
                 use rayon::prelude::*;
                 // Each worker computes its own halo; the final fold remains raster-ordered.
                 let band_rows = out_h.div_ceil(rayon::current_num_threads());
@@ -248,6 +251,8 @@ macro_rules! score_body {
                     .zip(cmap.par_chunks_mut(band_rows * out_w))
                     .enumerate()
                     .for_each(|(b, (s, c))| band(b * band_rows, s, c));
+            } else {
+                band(0, &mut smap, &mut cmap);
             }
             #[cfg(not(feature = "parallel"))]
             band(0, &mut smap, &mut cmap);

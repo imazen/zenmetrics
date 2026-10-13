@@ -128,6 +128,10 @@ pub(crate) const PAR_MIN_ROWS: usize = 8;
 /// Band count for `nb_y` block rows — pure function of `nb_y`.
 #[inline]
 pub(crate) fn n_bands(nb_y: usize) -> usize {
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() <= 1 {
+        return 1;
+    }
     if nb_y < PAR_MIN_ROWS {
         1
     } else {

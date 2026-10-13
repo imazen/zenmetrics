@@ -384,19 +384,31 @@ fn block_row(
         // (observed ret drift ≤1e-7 rel — far inside the 2e-4 dB FFI gate).
         let sm_lo = f32x8::load_t(
             token,
-            &[s_means[0], s_means[0], s_means[0], s_means[0], s_means[2], s_means[2], s_means[2], s_means[2]],
+            &[
+                s_means[0], s_means[0], s_means[0], s_means[0], s_means[2], s_means[2], s_means[2],
+                s_means[2],
+            ],
         );
         let sm_hi = f32x8::load_t(
             token,
-            &[s_means[1], s_means[1], s_means[1], s_means[1], s_means[3], s_means[3], s_means[3], s_means[3]],
+            &[
+                s_means[1], s_means[1], s_means[1], s_means[1], s_means[3], s_means[3], s_means[3],
+                s_means[3],
+            ],
         );
         let dm_lo = f32x8::load_t(
             token,
-            &[d_means[0], d_means[0], d_means[0], d_means[0], d_means[2], d_means[2], d_means[2], d_means[2]],
+            &[
+                d_means[0], d_means[0], d_means[0], d_means[0], d_means[2], d_means[2], d_means[2],
+                d_means[2],
+            ],
         );
         let dm_hi = f32x8::load_t(
             token,
-            &[d_means[1], d_means[1], d_means[1], d_means[1], d_means[3], d_means[3], d_means[3], d_means[3]],
+            &[
+                d_means[1], d_means[1], d_means[1], d_means[1], d_means[3], d_means[3], d_means[3],
+                d_means[3],
+            ],
         );
         let sg8 = f32x8::splat_t(token, s_gmean);
         let dg8 = f32x8::splat_t(token, d_gmean);
@@ -447,10 +459,10 @@ fn block_row(
         d_vars[1] = (dv13[0] + dv13[1]) + (dv13[2] + dv13[3]);
         d_vars[2] = (dv02[4] + dv02[5]) + (dv02[6] + dv02[7]);
         d_vars[3] = (dv13[4] + dv13[5]) + (dv13[6] + dv13[7]);
-        let mut s_gvar = (((sgv[0] + sgv[1]) + (sgv[2] + sgv[3]))
-            + ((sgv[4] + sgv[5]) + (sgv[6] + sgv[7])));
-        let mut d_gvar = (((dgv[0] + dgv[1]) + (dgv[2] + dgv[3]))
-            + ((dgv[4] + dgv[5]) + (dgv[6] + dgv[7])));
+        let mut s_gvar =
+            (((sgv[0] + sgv[1]) + (sgv[2] + sgv[3])) + ((sgv[4] + sgv[5]) + (sgv[6] + sgv[7])));
+        let mut d_gvar =
+            (((dgv[0] + dgv[1]) + (dgv[2] + dgv[3])) + ((dgv[4] + dgv[5]) + (dgv[6] + dgv[7])));
         // `*= 1/63.f*64` / `*= 1/15.f*16` — the constant folds in f32.
         s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
         d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
@@ -476,10 +488,10 @@ fn block_row(
         }
         let smv = smv.to_array();
         let dmv = dmv.to_array();
-        let mut s_mask = (((smv[0] + smv[1]) + (smv[2] + smv[3]))
-            + ((smv[4] + smv[5]) + (smv[6] + smv[7])));
-        let mut d_mask = (((dmv[0] + dmv[1]) + (dmv[2] + dmv[3]))
-            + ((dmv[4] + dmv[5]) + (dmv[6] + dmv[7])));
+        let mut s_mask =
+            (((smv[0] + smv[1]) + (smv[2] + smv[3])) + ((smv[4] + smv[5]) + (smv[6] + smv[7])));
+        let mut d_mask =
+            (((dmv[0] + dmv[1]) + (dmv[2] + dmv[3])) + ((dmv[4] + dmv[5]) + (dmv[6] + dmv[7])));
         // C: `s_mask = sqrt(s_mask*s_gvar) / 32.f` — double sqrt of
         // the float product, double division, float store.
         s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;
@@ -811,14 +823,32 @@ mod block_row_parity_tests {
             while y + 7 < h {
                 archmage::attuned!(
                     block_row(
-                        &src, w, &dst, w, w, y, 7, &mask, &CSF_Y,
-                        &mut got_ret, &mut got_px,
+                        &src,
+                        w,
+                        &dst,
+                        w,
+                        w,
+                        y,
+                        7,
+                        &mask,
+                        &CSF_Y,
+                        &mut got_ret,
+                        &mut got_px,
                     ),
                     [_v3_t, _neon_t, _wasm128_t, _scalar_t]
                 );
                 block_row_scalar(
-                    &src, w, &dst, w, w, y, 7, &mask, &CSF_Y,
-                    &mut want_ret, &mut want_px,
+                    &src,
+                    w,
+                    &dst,
+                    w,
+                    w,
+                    y,
+                    7,
+                    &mask,
+                    &CSF_Y,
+                    &mut want_ret,
+                    &mut want_px,
                 );
                 y += 7;
             }
