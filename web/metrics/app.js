@@ -111,7 +111,7 @@ $('compare').onclick=compare;
 $('metric').onchange=()=>{$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';snippet();S.revision++;schedule();};
 $('display').onchange=()=>{snippet();S.revision++;schedule();};
 $('live').onchange=()=>{if($('live').checked)compare();};
-$('map-metric').onchange=()=>{$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';S.map=null;S.revision++;schedule();};
+$('map-metric').onchange=()=>{$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';S.map=null;S.revision++;paint();schedule();};
 $('swap').onclick=()=>{[S.reference,S.distorted]=[S.distorted,S.reference];const a=$('name-reference'),b=$('name-distorted');[a.textContent,b.textContent]=[b.textContent,a.textContent];S.map=null;S.revision++;paint();schedule();};
 $('quality').oninput=()=>{$('quality-value').textContent=$('quality').value;};
 async function generate() {

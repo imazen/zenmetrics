@@ -191,7 +191,7 @@ try:
         rendered = {}
         for map_metric in ('zensim', 'butteraugli', 'cvvdp'):
             page.locator('#map-metric').select_option(map_metric)
-            page.wait_for_function("metric => document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
+            page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·') && document.getElementById('map-info').textContent.includes('per-image scale')",arg=map_metric,timeout=30000)
             page.locator('[data-mode="map"]').click()
             colors = page.evaluate("""() => {
               const canvas=document.getElementById('view');
