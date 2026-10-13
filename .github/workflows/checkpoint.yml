@@ -52,7 +52,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - run: bash scripts/ci/clone-siblings.sh
       - uses: actions/checkout@v7
         with:
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: i686-unknown-linux-gnu
       - run: bash scripts/ci/clone-siblings.sh
