@@ -687,6 +687,134 @@ macro_rules! kernels {
             sums
         }
 
+        /// Three-channel fused LUT/apply: the `(xs[i]-min)*inv_step` bracket,
+        /// its floor and its lane indices are identical across channels, so
+        /// phase one computes them once per stack-tile block instead of
+        /// three times per block (the index chain was ~40% of
+        /// `gather_lerp_exp`'s time: one vector truncate + sixteen scalar
+        /// table reads per channel otherwise). Phase two then runs each
+        /// channel's gather/exp/apply over the tile, keeping only ~4 stream
+        /// pointers + ~4 vector constants live per inner loop — single-loop
+        /// fusion spilled registers on 16-vector-register targets (v3).
+        /// Per channel, `sens = exp((lerp(luts[c], xs[i]) + offset) * scale)`
+        /// feeds the caller's multiply directly, in the caller's exact order:
+        ///   `out_a[c][i] = (in_a[c][i] * (band_mul * sens)) * gains[c]`
+        ///   `out_b[c][i] = (in_b[c][i] * (band_mul * sens)) * gains[c]`
+        /// so results are bit-identical to a per-channel `gather_lerp_exp`
+        /// followed by a separate `(v * bm) * gain` pass, while saving the
+        /// sens-plane round trip and 2/3 of the index work.
+        #[inline(always)]
+        pub fn gather_lerp_exp3_apply_kernel<T: $Convert, P: MathPolicy>(
+            token: T,
+            xs: &[f32],
+            luts: [&[f32]; 3],
+            min: f32,
+            inv_step: f32,
+            max_index: f32,
+            offset: f32,
+            scale: f32,
+            band_mul: f32,
+            gains: [f32; 3],
+            ins_a: [&[f32]; 3],
+            ins_b: [&[f32]; 3],
+            outs_a: [&mut [f32]; 3],
+            outs_b: [&mut [f32]; 3],
+        ) {
+            assert_eq!(xs.len(), ins_a[0].len());
+            for c in 1..3 {
+                assert_eq!(xs.len(), ins_a[c].len());
+            }
+            for c in 0..3 {
+                assert_eq!(xs.len(), ins_b[c].len());
+                assert_eq!(xs.len(), outs_a[c].len());
+                assert_eq!(xs.len(), outs_b[c].len());
+                assert!(luts[c].len() >= 2 && max_index < (luts[c].len() - 1) as f32);
+            }
+            assert!(max_index >= 0.0);
+            type V<T> = $Vector<T>;
+            const TB: usize = 8;
+            let min_v = V::<T>::splat_t(token, min);
+            let step_v = V::<T>::splat_t(token, inv_step);
+            let zero = V::<T>::zero_t(token);
+            let max_v = V::<T>::splat_t(token, max_index);
+            let offset_v = V::<T>::splat_t(token, offset);
+            let scale_v = V::<T>::splat_t(token, scale);
+            let bm_v = V::<T>::splat_t(token, band_mul);
+            let gain_v = gains.map(|g| V::<T>::splat_t(token, g));
+            let hi_cap = luts.map(|lut| lut.len() - 1);
+            let (xc, xt) = V::<T>::partition_slice_t(token, xs);
+            let pa = ins_a.map(|s| V::<T>::partition_slice_t(token, s));
+            let pb = ins_b.map(|s| V::<T>::partition_slice_t(token, s));
+            let oa = outs_a.map(|s| V::<T>::partition_slice_mut_t(token, s));
+            let ob = outs_b.map(|s| V::<T>::partition_slice_mut_t(token, s));
+            let n = xc.len();
+            let pa_c = [&pa[0].0[..n], &pa[1].0[..n], &pa[2].0[..n]];
+            let pb_c = [&pb[0].0[..n], &pb[1].0[..n], &pb[2].0[..n]];
+            let pa_t = [pa[0].1, pa[1].1, pa[2].1];
+            let pb_t = [pb[0].1, pb[1].1, pb[2].1];
+            let [(oa0c, oa0t), (oa1c, oa1t), (oa2c, oa2t)] = oa;
+            let [(ob0c, ob0t), (ob1c, ob1t), (ob2c, ob2t)] = ob;
+            let oa_c = [&mut oa0c[..n], &mut oa1c[..n], &mut oa2c[..n]];
+            let ob_c = [&mut ob0c[..n], &mut ob1c[..n], &mut ob2c[..n]];
+            let oa_t = [oa0t, oa1t, oa2t];
+            let ob_t = [ob0t, ob1t, ob2t];
+            let mut lanes_t = [[0i32; $lanes]; TB];
+            let mut frac_t = [[0f32; $lanes]; TB];
+            let mut blk = 0usize;
+            while blk < n {
+                let tb = (n - blk).min(TB);
+                for t in 0..tb {
+                    let idx = ((V::<T>::load_t(token, &xc[blk + t]) - min_v) * step_v)
+                        .max(zero)
+                        .min(max_v);
+                    lanes_t[t] = idx.to_i32().to_array();
+                    frac_t[t] = (idx - idx.floor()).to_array();
+                }
+                for c in 0..3 {
+                    let lut = luts[c];
+                    let cap = hi_cap[c];
+                    let pa_c = pa_c[c];
+                    let pb_c = pb_c[c];
+                    let oa_c = &mut *oa_c[c];
+                    let ob_c = &mut *ob_c[c];
+                    for t in 0..tb {
+                        let lanes = &lanes_t[t];
+                        let lo = V::<T>::from_array_t(
+                            token,
+                            core::array::from_fn(|j| lut[(lanes[j] as usize).min(cap - 1)]),
+                        );
+                        let hi = V::<T>::from_array_t(
+                            token,
+                            core::array::from_fn(|j| lut[(lanes[j] as usize + 1).min(cap)]),
+                        );
+                        let frac = V::<T>::from_array_t(token, frac_t[t]);
+                        let value = lo + frac * (hi - lo);
+                        let sens = P::$exp((value + offset_v) * scale_v);
+                        let bg = bm_v * sens;
+                        let va = V::<T>::load_t(token, &pa_c[blk + t]);
+                        let vb = V::<T>::load_t(token, &pb_c[blk + t]);
+                        ((va * bg) * gain_v[c]).store(&mut oa_c[blk + t]);
+                        ((vb * bg) * gain_v[c]).store(&mut ob_c[blk + t]);
+                    }
+                }
+                blk += tb;
+            }
+            let n_tail = xt.len();
+            for t in 0..n_tail {
+                let idx = ((xt[t] - min) * inv_step).clamp(0.0, max_index);
+                let floor = super::scalar_floor(idx);
+                for c in 0..3 {
+                    let lut = luts[c];
+                    let lo = (floor as usize).min(lut.len() - 2);
+                    let value = lut[lo] + (idx - floor) * (lut[lo + 1] - lut[lo]);
+                    let sens = P::scalar_exp((value + offset) * scale);
+                    let bg = band_mul * sens;
+                    oa_t[c][t] = (pa_t[c][t] * bg) * gains[c];
+                    ob_t[c][t] = (pb_t[c][t] * bg) * gains[c];
+                }
+            }
+        }
+
         /// Uniform-axis LUT interpolation, optionally followed by exp((value+offset)*scale).
         /// The bracket is bounded by `max_index < lut.len()-1`; finite x inputs only.
         #[inline(always)]
@@ -712,19 +840,28 @@ macro_rules! kernels {
             let scale_v = V::<T>::splat_t(token, scale);
             let (xc, xt) = V::<T>::partition_slice_t(token, xs);
             let (oc, ot) = V::<T>::partition_slice_mut_t(token, out);
+            // `idx` is clamped to [0, max_index] before `floor`, so
+            // trunc == floor and the lane index lies in
+            // [0, floor(max_index)] ⊆ [0, lut.len() - 2]. The `.min`
+            // clamps below are therefore identity maps — they exist
+            // only to prove the bound to the optimizer, replacing the
+            // per-lane panic branches a slice index would emit. Lanes
+            // come from one vector truncate instead of eight scalar
+            // `as usize` saturating casts (each ~7 uops on x86).
+            let hi_cap = lut.len() - 1;
             for (x, o) in xc.iter().zip(oc) {
                 let idx = ((V::<T>::load_t(token, x) - min_v) * step_v)
                     .max(zero)
                     .min(max_v);
                 let floor = idx.floor();
-                let lanes = floor.to_array();
-                // The safe hardware gather currently exists only on V4's f32x16.
-                // A lane gather keeps this single body valid on every tier.
-                let lo =
-                    V::<T>::from_array_t(token, core::array::from_fn(|j| lut[lanes[j] as usize]));
+                let lanes = idx.to_i32().to_array();
+                let lo = V::<T>::from_array_t(
+                    token,
+                    core::array::from_fn(|j| lut[(lanes[j] as usize).min(hi_cap - 1)]),
+                );
                 let hi = V::<T>::from_array_t(
                     token,
-                    core::array::from_fn(|j| lut[lanes[j] as usize + 1]),
+                    core::array::from_fn(|j| lut[(lanes[j] as usize + 1).min(hi_cap)]),
                 );
                 let value = lo + (idx - floor) * (hi - lo);
                 if EXP {
@@ -736,7 +873,7 @@ macro_rules! kernels {
             for (x, o) in xt.iter().zip(ot) {
                 let idx = ((*x - min) * inv_step).clamp(0.0, max_index);
                 let floor = super::scalar_floor(idx);
-                let lo = floor as usize;
+                let lo = (floor as usize).min(lut.len() - 2);
                 let value = lut[lo] + (idx - floor) * (lut[lo + 1] - lut[lo]);
                 *o = if EXP {
                     P::scalar_exp((value + offset) * scale)

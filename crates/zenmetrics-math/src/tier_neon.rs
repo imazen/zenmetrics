@@ -202,6 +202,29 @@ mod neon {
             token, xs, lut, min, inv_step, max_index, offset, scale, out,
         )
     }
+    #[archmage::attune]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn gather_lerp_exp3_apply_neon_t(
+        token: NeonToken,
+        xs: &[f32],
+        luts: [&[f32]; 3],
+        min: f32,
+        inv_step: f32,
+        max_index: f32,
+        offset: f32,
+        scale: f32,
+        band_mul: f32,
+        gains: [f32; 3],
+        ins_a: [&[f32]; 3],
+        ins_b: [&[f32]; 3],
+        outs_a: [&mut [f32]; 3],
+        outs_b: [&mut [f32]; 3],
+    ) {
+        width8::gather_lerp_exp3_apply_kernel::<_, Midp>(
+            token, xs, luts, min, inv_step, max_index, offset, scale, band_mul, gains, ins_a,
+            ins_b, outs_a, outs_b,
+        )
+    }
 }
 #[cfg(target_arch = "aarch64")]
 use neon::*;

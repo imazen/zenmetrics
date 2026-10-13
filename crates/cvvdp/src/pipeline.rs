@@ -76,6 +76,8 @@ fn apply_csf_row_per_pixel(log_l: f32, logs_row: &[f32; N_L_BKG]) -> f32 {
 
 /// Tile-local sensitivity evaluation; no band-sized scratch or extra allocation.
 /// The multiply order is the scalar pipeline's `sample * (band_mul*s) * gain`.
+/// Fused kernel: all 3 channels share `log_l`'s bracket computation and the
+/// `(v * bm) * gain` apply runs in the same pass — bit-identical output.
 fn apply_csf_pairs(
     log_l: &[f32],
     rows: [&[f32; N_L_BKG]; 3],
@@ -85,38 +87,21 @@ fn apply_csf_pairs(
     t_out: [&mut [f32]; 3],
     band_mul: f32,
 ) {
-    const TILE: usize = 256;
-    let mut sensitivity = [0.0_f32; TILE];
-    for (((((row, r), t), ro), to), gain) in rows
-        .into_iter()
-        .zip(reference)
-        .zip(distorted)
-        .zip(r_out)
-        .zip(t_out)
-        .zip(CH_GAIN)
-    {
-        assert_eq!(ro.len(), log_l.len());
-        assert_eq!(to.len(), log_l.len());
-        for start in (0..log_l.len()).step_by(TILE) {
-            let end = (start + TILE).min(log_l.len());
-            zenmetrics_math::gather_lerp_exp_into(
-                &log_l[start..end],
-                row,
-                CSF_L_BKG_AXIS_MIN,
-                CSF_L_BKG_INV_STEP,
-                CSF_L_BKG_MAX_IDX,
-                LOG_SENSITIVITY_CORRECTION,
-                core::f32::consts::LN_10,
-                &mut sensitivity[..end - start],
-            );
-            for (j, &sens) in sensitivity[..end - start].iter().enumerate() {
-                let i = start + j;
-                let bm = band_mul * sens;
-                to[i] = t[i] * bm * gain;
-                ro[i] = r[i] * bm * gain;
-            }
-        }
-    }
+    zenmetrics_math::gather_lerp_exp3_apply_into(
+        log_l,
+        rows.map(|r| &r[..]),
+        CSF_L_BKG_AXIS_MIN,
+        CSF_L_BKG_INV_STEP,
+        CSF_L_BKG_MAX_IDX,
+        LOG_SENSITIVITY_CORRECTION,
+        core::f32::consts::LN_10,
+        band_mul,
+        CH_GAIN,
+        reference,
+        distorted,
+        r_out,
+        t_out,
+    );
 }
 
 /// Baseband differences consume sensitivities immediately in the stack tile.

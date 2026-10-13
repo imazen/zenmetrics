@@ -182,7 +182,7 @@ mod v4x {
         scale: f32,
         out: &mut [f32],
     ) {
-        width16::gather_lerp_kernel::<_, Midp, false>(
+        width16::gather_lerp_kernel_v4::<Midp, false>(
             token, xs, lut, min, inv_step, max_index, offset, scale, out,
         )
     }
@@ -198,8 +198,31 @@ mod v4x {
         scale: f32,
         out: &mut [f32],
     ) {
-        width16::gather_lerp_kernel::<_, Midp, true>(
+        width16::gather_lerp_kernel_v4::<Midp, true>(
             token, xs, lut, min, inv_step, max_index, offset, scale, out,
+        )
+    }
+    #[archmage::attune]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn gather_lerp_exp3_apply_v4x_t(
+        token: X64V4xToken,
+        xs: &[f32],
+        luts: [&[f32]; 3],
+        min: f32,
+        inv_step: f32,
+        max_index: f32,
+        offset: f32,
+        scale: f32,
+        band_mul: f32,
+        gains: [f32; 3],
+        ins_a: [&[f32]; 3],
+        ins_b: [&[f32]; 3],
+        outs_a: [&mut [f32]; 3],
+        outs_b: [&mut [f32]; 3],
+    ) {
+        width16::gather_lerp_exp3_apply_kernel_v4::<Midp>(
+            token, xs, luts, min, inv_step, max_index, offset, scale, band_mul, gains, ins_a,
+            ins_b, outs_a, outs_b,
         )
     }
 }

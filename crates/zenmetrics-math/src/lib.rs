@@ -30,6 +30,190 @@ pub mod width8 {
 #[cfg(feature = "avx512")]
 pub mod width16 {
     kernels!(f32x16, F32x16Convert, 16, exp16, ln16, pow16);
+
+    /// x86-64-v4 specialization of `gather_lerp_kernel`: replaces the
+    /// 2×16 scalar loads + `vinsertps` assembly a lane gather emits
+    /// with two `VGATHERDPS` instructions. Bit-identical: same lanes,
+    /// same lerp, same exp input — only the table reads differ in
+    /// mechanism. `lut[lanes+1]` is `lut[1..][lanes]`, so the second
+    /// gather reuses the same index vector on a shifted table.
+    ///
+    /// `idx` is clamped to `[0, max_index]` before `floor`, so
+    /// `floor ≤ lut.len() - 2` and every lane read is in range; the
+    /// `or` fallback lanes never fire.
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    pub(crate) fn gather_lerp_kernel_v4<P: super::MathPolicy, const EXP: bool>(
+        token: archmage::X64V4xToken,
+        xs: &[f32],
+        lut: &[f32],
+        min: f32,
+        inv_step: f32,
+        max_index: f32,
+        offset: f32,
+        scale: f32,
+        out: &mut [f32],
+    ) {
+        use magetypes::simd::generic::{f32x16, u32x16};
+        type V = f32x16<archmage::X64V4Token>;
+        type U = u32x16<archmage::X64V4Token>;
+        assert_eq!(xs.len(), out.len());
+        assert!(lut.len() >= 2 && max_index >= 0.0 && max_index < (lut.len() - 1) as f32);
+        let token = token.v4();
+        let min_v = V::splat_t(token, min);
+        let step_v = V::splat_t(token, inv_step);
+        let zero = V::zero_t(token);
+        let max_v = V::splat_t(token, max_index);
+        let offset_v = V::splat_t(token, offset);
+        let scale_v = V::splat_t(token, scale);
+        let lut_hi = &lut[1..];
+        let or_v = V::zero_t(token);
+        let (xc, xt) = V::partition_slice_t(token, xs);
+        let (oc, ot) = V::partition_slice_mut_t(token, out);
+        for (x, o) in xc.iter().zip(oc) {
+            let idx = ((V::load_t(token, x) - min_v) * step_v)
+                .max(zero)
+                .min(max_v);
+            let floor = idx.floor();
+            let lanes = U::from_raw_t(token, idx.to_i32().raw());
+            let lo = V::gather_or(lut, lanes, or_v);
+            let hi = V::gather_or(lut_hi, lanes, or_v);
+            let value = lo + (idx - floor) * (hi - lo);
+            if EXP {
+                P::exp16::<archmage::X64V4Token>((value + offset_v) * scale_v).store(o);
+            } else {
+                value.store(o);
+            }
+        }
+        for (x, o) in xt.iter().zip(ot) {
+            let idx = ((*x - min) * inv_step).clamp(0.0, max_index);
+            let floor = super::scalar_floor(idx);
+            let lo = (floor as usize).min(lut.len() - 2);
+            let value = lut[lo] + (idx - floor) * (lut[lo + 1] - lut[lo]);
+            *o = if EXP {
+                P::scalar_exp((value + offset) * scale)
+            } else {
+                value
+            };
+        }
+    }
+
+    /// x86-64-v4 specialization of `gather_lerp_exp3_apply_kernel`:
+    /// shares one bracket computation across the three channels and
+    /// hardware-gathers the lo/hi table entries per channel.
+    /// Bit-identical to the lane-gathered generic body.
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn gather_lerp_exp3_apply_kernel_v4<P: super::MathPolicy>(
+        token: archmage::X64V4xToken,
+        xs: &[f32],
+        luts: [&[f32]; 3],
+        min: f32,
+        inv_step: f32,
+        max_index: f32,
+        offset: f32,
+        scale: f32,
+        band_mul: f32,
+        gains: [f32; 3],
+        ins_a: [&[f32]; 3],
+        ins_b: [&[f32]; 3],
+        outs_a: [&mut [f32]; 3],
+        outs_b: [&mut [f32]; 3],
+    ) {
+        use magetypes::simd::generic::{f32x16, u32x16};
+        type V = f32x16<archmage::X64V4Token>;
+        type U = u32x16<archmage::X64V4Token>;
+        assert_eq!(xs.len(), ins_a[0].len());
+        for c in 1..3 {
+            assert_eq!(xs.len(), ins_a[c].len());
+        }
+        for c in 0..3 {
+            assert_eq!(xs.len(), ins_b[c].len());
+            assert_eq!(xs.len(), outs_a[c].len());
+            assert_eq!(xs.len(), outs_b[c].len());
+            assert!(luts[c].len() >= 2 && max_index < (luts[c].len() - 1) as f32);
+        }
+        assert!(max_index >= 0.0);
+        let token = token.v4();
+        let min_v = V::splat_t(token, min);
+        let step_v = V::splat_t(token, inv_step);
+        let zero = V::zero_t(token);
+        let max_v = V::splat_t(token, max_index);
+        let offset_v = V::splat_t(token, offset);
+        let scale_v = V::splat_t(token, scale);
+        let bm_v = V::splat_t(token, band_mul);
+        let gain_v = gains.map(|g| V::splat_t(token, g));
+        let or_v = V::zero_t(token);
+        let (xc, xt) = V::partition_slice_t(token, xs);
+        let pa = ins_a.map(|s| V::partition_slice_t(token, s));
+        let pb = ins_b.map(|s| V::partition_slice_t(token, s));
+        let oa = outs_a.map(|s| V::partition_slice_mut_t(token, s));
+        let ob = outs_b.map(|s| V::partition_slice_mut_t(token, s));
+        // Same check-free indexing contract as the generic kernel:
+        // cut every stream's chunk view to the shared block count.
+        let n = xc.len();
+        let pa_c = [&pa[0].0[..n], &pa[1].0[..n], &pa[2].0[..n]];
+        let pb_c = [&pb[0].0[..n], &pb[1].0[..n], &pb[2].0[..n]];
+        let pa_t = [pa[0].1, pa[1].1, pa[2].1];
+        let pb_t = [pb[0].1, pb[1].1, pb[2].1];
+        let [(oa0c, oa0t), (oa1c, oa1t), (oa2c, oa2t)] = oa;
+        let [(ob0c, ob0t), (ob1c, ob1t), (ob2c, ob2t)] = ob;
+        let oa_c = [&mut oa0c[..n], &mut oa1c[..n], &mut oa2c[..n]];
+        let ob_c = [&mut ob0c[..n], &mut ob1c[..n], &mut ob2c[..n]];
+        let oa_t = [oa0t, oa1t, oa2t];
+        let ob_t = [ob0t, ob1t, ob2t];
+        // Two-phase: shared bracket per stack tile, then per-channel
+        // gather/apply — same shape as the generic tile kernel.
+        const TB: usize = 8;
+        let mut lanes_t = [[0u32; 16]; TB];
+        let mut frac_t = [[0f32; 16]; TB];
+        let mut blk = 0usize;
+        while blk < n {
+            let tb = (n - blk).min(TB);
+            for t in 0..tb {
+                let idx = ((V::load_t(token, &xc[blk + t]) - min_v) * step_v)
+                    .max(zero)
+                    .min(max_v);
+                let frac = idx - idx.floor();
+                lanes_t[t] = U::from_raw_t(token, idx.to_i32().raw()).to_array();
+                frac_t[t] = frac.to_array();
+            }
+            for c in 0..3 {
+                let pa_c = pa_c[c];
+                let pb_c = pb_c[c];
+                let oa_c = &mut *oa_c[c];
+                let ob_c = &mut *ob_c[c];
+                for t in 0..tb {
+                    let lanes = U::from_array_t(token, lanes_t[t]);
+                    let lo = V::gather_or(luts[c], lanes, or_v);
+                    let hi = V::gather_or(&luts[c][1..], lanes, or_v);
+                    let frac = V::from_array_t(token, frac_t[t]);
+                    let value = lo + frac * (hi - lo);
+                    let sens = P::exp16::<archmage::X64V4Token>((value + offset_v) * scale_v);
+                    let bg = bm_v * sens;
+                    let va = V::load_t(token, &pa_c[blk + t]);
+                    let vb = V::load_t(token, &pb_c[blk + t]);
+                    ((va * bg) * gain_v[c]).store(&mut oa_c[blk + t]);
+                    ((vb * bg) * gain_v[c]).store(&mut ob_c[blk + t]);
+                }
+            }
+            blk += tb;
+        }
+        for t in 0..xt.len() {
+            let idx = ((xt[t] - min) * inv_step).clamp(0.0, max_index);
+            let floor = super::scalar_floor(idx);
+            for c in 0..3 {
+                let lut = luts[c];
+                let lo = (floor as usize).min(lut.len() - 2);
+                let value = lut[lo] + (idx - floor) * (lut[lo + 1] - lut[lo]);
+                let sens = P::scalar_exp((value + offset) * scale);
+                let bg = band_mul * sens;
+                oa_t[c][t] = (pa_t[c][t] * bg) * gains[c];
+                ob_t[c][t] = (pb_t[c][t] * bg) * gains[c];
+            }
+        }
+    }
 }
 /// Finish the epsilon-offset L2 mean from a partial sum and sample count.
 #[inline]
@@ -659,6 +843,37 @@ pub fn gather_lerp_exp_into(
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
+/// Three-channel fused variant of [`gather_lerp_exp_into`]: the three
+/// `luts` share `xs`'s uniform axis, so the bracket/floor/lane-index
+/// chain runs once per block rather than once per channel, and each
+/// channel's sensitivity applies to two planes in the same pass:
+/// `out[c][i] = (in[c][i] * (band_mul * sens_c[i])) * gains[c]`.
+/// Bit-identical to three `gather_lerp_exp` calls plus a per-channel
+/// `(v * (band_mul*s)) * gain` multiply pass.
+#[allow(clippy::too_many_arguments)]
+pub fn gather_lerp_exp3_apply_into(
+    xs: &[f32],
+    luts: [&[f32]; 3],
+    min: f32,
+    inv_step: f32,
+    max_index: f32,
+    offset: f32,
+    scale: f32,
+    band_mul: f32,
+    gains: [f32; 3],
+    ins_a: [&[f32]; 3],
+    ins_b: [&[f32]; 3],
+    outs_a: [&mut [f32]; 3],
+    outs_b: [&mut [f32]; 3],
+) {
+    archmage::attuned!(
+        gather_lerp_exp3_apply(
+            xs, luts, min, inv_step, max_index, offset, scale, band_mul, gains, ins_a, ins_b,
+            outs_a, outs_b
+        ),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
 pub(crate) fn gather_lerp_scalar_t(
     token: ScalarToken,
     xs: &[f32],
@@ -687,6 +902,28 @@ pub(crate) fn gather_lerp_exp_scalar_t(
 ) {
     width8::gather_lerp_kernel::<_, Midp, true>(
         token, xs, lut, min, inv_step, max_index, offset, scale, out,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn gather_lerp_exp3_apply_scalar_t(
+    token: ScalarToken,
+    xs: &[f32],
+    luts: [&[f32]; 3],
+    min: f32,
+    inv_step: f32,
+    max_index: f32,
+    offset: f32,
+    scale: f32,
+    band_mul: f32,
+    gains: [f32; 3],
+    ins_a: [&[f32]; 3],
+    ins_b: [&[f32]; 3],
+    outs_a: [&mut [f32]; 3],
+    outs_b: [&mut [f32]; 3],
+) {
+    width8::gather_lerp_exp3_apply_kernel::<_, Midp>(
+        token, xs, luts, min, inv_step, max_index, offset, scale, band_mul, gains, ins_a, ins_b,
+        outs_a, outs_b,
     )
 }
 

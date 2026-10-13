@@ -106,6 +106,79 @@ macro_rules! check_tier {
             for i in 0..n {
                 assert!((scalar[i] - simd[i]).abs() <= 5e-5 * scalar[i].abs());
             }
+            // Three-channel fused apply: one shared bracket, per-channel LUTs,
+            // and `(v * (band_mul*sens)) * gain` against both inputs.
+            let luts_v: [Vec<f32>; 3] = core::array::from_fn(|k| {
+                (0..32)
+                    .map(|i| ((i * (7 + 2 * k)) % 13) as f32 * 0.1 - 0.6)
+                    .collect()
+            });
+            let luts = [&luts_v[0][..], &luts_v[1][..], &luts_v[2][..]];
+            let mk = |k: usize, salt: f32| -> Vec<f32> {
+                (0..n)
+                    .map(|i| ((i * 31 + k * 7) % 97) as f32 * salt - 0.5)
+                    .collect()
+            };
+            let ins_a = [mk(0, 0.03), mk(1, 0.07), mk(2, 0.05)];
+            let ins_b = [mk(3, 0.06), mk(4, 0.04), mk(5, 0.08)];
+            let ins_a_r = [&ins_a[0][..], &ins_a[1][..], &ins_a[2][..]];
+            let ins_b_r = [&ins_b[0][..], &ins_b[1][..], &ins_b[2][..]];
+            let mut sa: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let mut sb: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let mut ta: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let mut tb: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let [sa0, sa1, sa2] = &mut sa;
+            let [sb0, sb1, sb2] = &mut sb;
+            width8::gather_lerp_exp3_apply_kernel::<_, Midp>(
+                ScalarToken,
+                &xs,
+                luts,
+                -2.30103,
+                4.9198306,
+                30.999999,
+                -0.1,
+                core::f32::consts::LN_10,
+                1.3,
+                [1.0, 1.1, 0.9],
+                ins_a_r,
+                ins_b_r,
+                [&mut sa0[..], &mut sa1[..], &mut sa2[..]],
+                [&mut sb0[..], &mut sb1[..], &mut sb2[..]],
+            );
+            let [ta0, ta1, ta2] = &mut ta;
+            let [tb0, tb1, tb2] = &mut tb;
+            $width::gather_lerp_exp3_apply_kernel::<_, Midp>(
+                token,
+                &xs,
+                luts,
+                -2.30103,
+                4.9198306,
+                30.999999,
+                -0.1,
+                core::f32::consts::LN_10,
+                1.3,
+                [1.0, 1.1, 0.9],
+                ins_a_r,
+                ins_b_r,
+                [&mut ta0[..], &mut ta1[..], &mut ta2[..]],
+                [&mut tb0[..], &mut tb1[..], &mut tb2[..]],
+            );
+            for c in 0..3 {
+                for i in 0..n {
+                    assert!(
+                        (sa[c][i] - ta[c][i]).abs() <= 5e-5 * sa[c][i].abs().max(1e-6),
+                        "exp3_apply out_a c={c} n={n} i={i} scalar={} simd={}",
+                        sa[c][i],
+                        ta[c][i]
+                    );
+                    assert!(
+                        (sb[c][i] - tb[c][i]).abs() <= 5e-5 * sb[c][i].abs().max(1e-6),
+                        "exp3_apply out_b c={c} n={n} i={i} scalar={} simd={}",
+                        sb[c][i],
+                        tb[c][i]
+                    );
+                }
+            }
         }
     }};
 }
@@ -185,4 +258,87 @@ fn par_order_and_rows() {
 #[cfg(feature = "avx512")]
 fn scalar_native_width_contract() {
     check_tier!(ScalarToken, width16);
+}
+
+/// The v4x hardware-gather specialization must produce bit-identical
+/// output to the generic width16 tile kernel: gathers return the same
+/// lanes and every downstream op is the same vector arithmetic.
+#[test]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+fn v4_exp3_apply_matches_generic_width16() {
+    let Some(token) = archmage::X64V4xToken::summon() else {
+        return;
+    };
+    for n in [0, 1, 7, 8, 15, 16, 17, 33, 256, 257, 1029] {
+        let xs: Vec<f32> = (0..n).map(|i| (i as f32 - 40.0) * 0.061).collect();
+        let luts_v: [Vec<f32>; 3] = core::array::from_fn(|k| {
+            (0..32)
+                .map(|i| ((i * (5 + 3 * k)) % 11) as f32 * 0.1 - 0.55)
+                .collect()
+        });
+        let luts = [&luts_v[0][..], &luts_v[1][..], &luts_v[2][..]];
+        let mk = |k: usize, salt: f32| -> Vec<f32> {
+            (0..n)
+                .map(|i| ((i * 37 + k * 13) % 89) as f32 * salt - 0.4)
+                .collect()
+        };
+        let ins_a = [mk(0, 0.05), mk(1, 0.03), mk(2, 0.07)];
+        let ins_b = [mk(3, 0.04), mk(4, 0.08), mk(5, 0.06)];
+        let ins_a_r = [&ins_a[0][..], &ins_a[1][..], &ins_a[2][..]];
+        let ins_b_r = [&ins_b[0][..], &ins_b[1][..], &ins_b[2][..]];
+        let mut ga: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+        let mut gb: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+        let mut ha: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+        let mut hb: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+        let [ga0, ga1, ga2] = &mut ga;
+        let [gb0, gb1, gb2] = &mut gb;
+        width16::gather_lerp_exp3_apply_kernel::<_, Midp>(
+            token,
+            &xs,
+            luts,
+            -2.30103,
+            4.9198306,
+            30.999999,
+            -0.1,
+            core::f32::consts::LN_10,
+            1.7,
+            [1.0, 0.95, 1.05],
+            ins_a_r,
+            ins_b_r,
+            [&mut ga0[..], &mut ga1[..], &mut ga2[..]],
+            [&mut gb0[..], &mut gb1[..], &mut gb2[..]],
+        );
+        let [ha0, ha1, ha2] = &mut ha;
+        let [hb0, hb1, hb2] = &mut hb;
+        width16::gather_lerp_exp3_apply_kernel_v4::<Midp>(
+            token,
+            &xs,
+            luts,
+            -2.30103,
+            4.9198306,
+            30.999999,
+            -0.1,
+            core::f32::consts::LN_10,
+            1.7,
+            [1.0, 0.95, 1.05],
+            ins_a_r,
+            ins_b_r,
+            [&mut ha0[..], &mut ha1[..], &mut ha2[..]],
+            [&mut hb0[..], &mut hb1[..], &mut hb2[..]],
+        );
+        for c in 0..3 {
+            for i in 0..n {
+                assert_eq!(
+                    ga[c][i].to_bits(),
+                    ha[c][i].to_bits(),
+                    "exp3_apply v4-vs-generic out_a c={c} n={n} i={i}"
+                );
+                assert_eq!(
+                    gb[c][i].to_bits(),
+                    hb[c][i].to_bits(),
+                    "exp3_apply v4-vs-generic out_b c={c} n={n} i={i}"
+                );
+            }
+        }
+    }
 }
