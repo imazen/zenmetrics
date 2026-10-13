@@ -55,6 +55,20 @@ struct Axis {
     spans: Vec<(u32, u32)>,
     /// `(src_index, weight)` flat.
     taps: Vec<(u32, f32)>,
+    /// Weights only, same `[st, st+len)` layout as `taps` — lets the
+    /// contiguous-index fast path dot two flat slices.
+    wt: Vec<f32>,
+    /// Per output: first source index when the span's indices are
+    /// consecutive (`src[j0 + k]`), `u32::MAX` when sympad wrapped.
+    j0: Vec<u32>,
+    /// 8-output blocks realigned to a common source window for the
+    /// small-span (upscale) case: `(j0_base, k_len, wt8_offset)`.
+    blk: Vec<(u32, u32, u32)>,
+    /// `blk` index per 8-aligned output block, `u32::MAX` when the
+    /// block isn't usable (non-contiguous span or right-edge bounds).
+    blk_idx: Vec<u32>,
+    /// Transposed block weights, `[k * 8 + lane]`, zero-padded.
+    wt8: Vec<f32>,
 }
 
 fn sympad(i: isize, n: usize) -> usize {
@@ -115,7 +129,70 @@ fn axis_taps(in_n: usize, out_n: usize) -> Axis {
         }
         spans.push((start, len));
     }
-    Axis { spans, taps }
+    let mut wt = vec![0.0f32; taps.len()];
+    let mut j0 = vec![u32::MAX; spans.len()];
+    for (o, &(st, len)) in spans.iter().enumerate() {
+        let (st, len) = (st as usize, len as usize);
+        if len == 0 {
+            continue;
+        }
+        let base = taps[st].0;
+        let mut contig = true;
+        for k in 0..len {
+            contig &= taps[st + k].0.wrapping_sub(base) == k as u32;
+            wt[st + k] = taps[st + k].1;
+        }
+        if contig {
+            j0[o] = base;
+        }
+    }
+    // Transposed tables for the 8-outputs-per-vector path: worthwhile
+    // when a block's union window is small (upscale) — for downscale
+    // the union is ~7·stride wider than the per-o spans and loses.
+    let out_n = spans.len();
+    let mut blk = Vec::new();
+    let mut blk_idx = vec![u32::MAX; out_n / 8];
+    let mut wt8 = Vec::new();
+    for b in 0..out_n / 8 {
+        let o0 = b * 8;
+        let j0b = (0..8).map(|l| j0[o0 + l]).min().unwrap();
+        if j0b == u32::MAX {
+            continue;
+        }
+        let hi = (0..8)
+            .map(|l| {
+                if j0[o0 + l] == u32::MAX {
+                    u32::MAX
+                } else {
+                    j0[o0 + l] + spans[o0 + l].1
+                }
+            })
+            .max()
+            .unwrap();
+        if hi == u32::MAX {
+            continue;
+        }
+        let k_len = hi - j0b;
+        // `srow[j0b + k .. +8]` loads need 8 lanes past the window end.
+        if k_len > 24 || j0b as usize + k_len as usize + 7 > in_n {
+            continue;
+        }
+        let off = wt8.len() as u32;
+        for k in 0..k_len {
+            for l in 0..8 {
+                let (st, len) = spans[o0 + l];
+                let d = j0b as i64 + k as i64 - j0[o0 + l] as i64;
+                wt8.push(if d >= 0 && d < len as i64 {
+                    wt[(st as i64 + d) as usize]
+                } else {
+                    0.0
+                });
+            }
+        }
+        blk_idx[b] = blk.len() as u32;
+        blk.push((j0b, k_len, off));
+    }
+    Axis { spans, taps, wt, j0, blk, blk_idx, wt8 }
 }
 
 /// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
@@ -142,15 +219,141 @@ fn resize_h(src: &[f32], in_w: usize, in_h: usize, ax: &Axis) -> Vec<f32> {
     let mut out = vec![0.0f32; in_h * out_w];
     for_each_row(&mut out, out_w, |i, drow| {
         let srow = &src[i * in_w..(i + 1) * in_w];
-        for (o, &(st, len)) in ax.spans.iter().enumerate() {
-            let mut acc = 0.0f64;
-            for &(idx, w) in &ax.taps[st as usize..(st + len) as usize] {
-                acc += w as f64 * srow[idx as usize] as f64;
-            }
-            drow[o] = acc as f32;
-        }
+        resize_h_row(srow, drow, ax);
     });
     out
+}
+
+/// One output row of the horizontal pass. Interior spans have
+/// consecutive source indices (`src[j0 + k]`), so the tap loop becomes
+/// a contiguous dot product; spans whose `sympad` wrap broke
+/// consecutiveness keep the scalar indexed path.
+fn resize_h_row(srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    archmage::attuned!(
+        resize_h_row_tier(srow, drow, ax),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+macro_rules! resize_h_body {
+    ($token:ident, $V:ty, $N:literal, $V8:ty, $srow:ident, $drow:ident, $ax:ident) => {{
+        let out_w = $ax.spans.len();
+        let nblk8 = out_w / 8;
+        for b in 0..nblk8 {
+            let o0 = b * 8;
+            let bi = $ax.blk_idx[b];
+            if bi != u32::MAX {
+                // Transposed block: 8 outputs share one source window;
+                // zero-padded weights keep per-element k order. The
+                // block table is 8 lanes wide on every tier ($V8), so
+                // 16-wide tiers run 8-lane blocks here.
+                let (j0b, k_len, off) = $ax.blk[bi as usize];
+                let mut av = <$V8>::splat_t($token, 0.0);
+                for k in 0..k_len as usize {
+                    let wv = <$V8>::load_t(
+                        $token,
+                        $ax.wt8[off as usize + k * 8..][..8].first_chunk().unwrap(),
+                    );
+                    let xv = <$V8>::splat_t($token, $srow[j0b as usize + k]);
+                    av = av + wv * xv;
+                }
+                av.store($drow[o0..][..8].first_chunk_mut().unwrap());
+                continue;
+            }
+            for o in o0..o0 + 8 {
+                per_output!($token, $V, $N, $srow, $drow, $ax, o);
+            }
+        }
+        for o in nblk8 * 8..out_w {
+            per_output!($token, $V, $N, $srow, $drow, $ax, o);
+        }
+    }};
+}
+
+macro_rules! per_output {
+    ($token:ident, $V:ty, $N:literal, $srow:ident, $drow:ident, $ax:ident, $o:ident) => {{
+        let (st, len) = $ax.spans[$o];
+        let (st, len) = (st as usize, len as usize);
+        let j0 = $ax.j0[$o];
+        if j0 != u32::MAX && len >= $N {
+            let j0 = j0 as usize;
+            let wt = &$ax.wt[st..st + len];
+            let sv = &$srow[j0..j0 + len];
+            // Vector accumulator over tap chunks, then a lane-ordered
+            // fold into the f64 accumulator. Reassociates each output's
+            // sum (drift ≲1e-7, inside the crate's 1e-4 golden slack).
+            let mut av = <$V>::splat_t($token, 0.0);
+            let mut k = 0;
+            while k + $N <= len {
+                let wv = <$V>::load_t($token, wt[k..][..$N].first_chunk().unwrap());
+                let xv = <$V>::load_t($token, sv[k..][..$N].first_chunk().unwrap());
+                av = av + wv * xv;
+                k += $N;
+            }
+            let mut lanes = [0.0f32; $N];
+            av.store(&mut lanes);
+            let mut acc = 0.0f64;
+            for &p in &lanes {
+                acc += p as f64;
+            }
+            for k in k..len {
+                acc += wt[k] as f64 * sv[k] as f64;
+            }
+            $drow[$o] = acc as f32;
+        } else {
+            let mut acc = 0.0f64;
+            for &(idx, w) in &$ax.taps[st..st + len] {
+                acc += w as f64 * $srow[idx as usize] as f64;
+            }
+            $drow[$o] = acc as f32;
+        }
+    }};
+}
+
+/// Scalar tier — generic f32x8 polyfill.
+fn resize_h_row_tier_scalar_t(token: archmage::ScalarToken, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
+    resize_h_body!(token, V, 8, V, srow, drow, ax)
+}
+
+/// The `v3` tier (AVX2, 8-wide f32).
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn resize_h_row_tier_v3_t(token: archmage::X64V3Token, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
+    resize_h_body!(token, V, 8, V, srow, drow, ax)
+}
+
+/// The `v4x` tier (AVX-512). Resize accumulators stay 8-wide — the
+/// reassociation pattern then matches `v3` bitwise, so tier parity and
+/// the flat-image NaN path behave identically on both.
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn resize_h_row_tier_v4x_t(token: archmage::X64V4xToken, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    type V = magetypes::simd::generic::f32x8<archmage::X64V4xToken>;
+    resize_h_body!(token, V, 8, V, srow, drow, ax)
+}
+
+/// The `neon` tier (8-wide f32).
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+fn resize_h_row_tier_neon_t(token: archmage::NeonToken, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
+    resize_h_body!(token, V, 8, V, srow, drow, ax)
+}
+
+/// The `wasm128` tier (8-wide f32).
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune(wasm128)]
+fn resize_h_row_tier_wasm(token: archmage::Wasm128Token, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
+    resize_h_body!(token, V, 8, V, srow, drow, ax)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+fn resize_h_row_tier_wasm128_t(token: archmage::Wasm128Token, srow: &[f32], drow: &mut [f32], ax: &Axis) {
+    resize_h_row_tier_wasm(token, srow, drow, ax)
 }
 
 /// Vertical pass over a `in_w`-strided plane.
@@ -159,15 +362,88 @@ fn resize_v(src: &[f32], w: usize, _in_h: usize, ax: &Axis) -> Vec<f32> {
     let mut out = vec![0.0f32; out_h * w];
     for_each_row(&mut out, w, |o, orow| {
         let (st, len) = ax.spans[o];
-        for (x, v) in orow.iter_mut().enumerate() {
-            let mut acc = 0.0f64;
-            for &(idx, wt) in &ax.taps[st as usize..(st + len) as usize] {
-                acc += wt as f64 * src[idx as usize * w + x] as f64;
-            }
-            *v = acc as f32;
-        }
+        resize_v_row(&src[..], st as usize, len as usize, &ax.taps, w, orow);
     });
     out
+}
+
+/// One output row of the vertical pass: `out[x] = Σ_k w_k·src[idx_k·W+x]`.
+/// Each output's taps accumulate in k order — vector lanes carry x, so
+/// per-element op order is unchanged; products/acc run in f32 (the same
+/// ≲1e-7 drift class the horizontal pass documents).
+fn resize_v_row(src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    archmage::attuned!(
+        resize_v_row_tier(src, st, len, taps, w, orow),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+macro_rules! resize_v_body {
+    ($token:ident, $V:ty, $N:literal, $src:ident, $st:ident, $len:ident, $taps:ident, $w:ident, $orow:ident) => {{
+        let taps = &$taps[$st..$st + $len];
+        let mut x = 0;
+        while x + $N <= $w {
+            let mut av = <$V>::splat_t($token, 0.0);
+            for &(idx, wt) in taps {
+                let base = idx as usize * $w + x;
+                let xv = <$V>::load_t($token, $src[base..][..$N].first_chunk().unwrap());
+                av = av + <$V>::splat_t($token, wt) * xv;
+            }
+            av.store($orow[x..][..$N].first_chunk_mut().unwrap());
+            x += $N;
+        }
+        for xi in x..$w {
+            let mut acc = 0.0f64;
+            for &(idx, wt) in taps {
+                acc += wt as f64 * $src[idx as usize * $w + xi] as f64;
+            }
+            $orow[xi] = acc as f32;
+        }
+    }};
+}
+
+/// Scalar tier — generic f32x8 polyfill.
+fn resize_v_row_tier_scalar_t(token: archmage::ScalarToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
+    resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
+}
+
+/// The `v3` tier (AVX2, 8-wide f32).
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn resize_v_row_tier_v3_t(token: archmage::X64V3Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
+    resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
+}
+
+/// The `v4x` tier (AVX-512) — accumulators stay 8-wide for `v3` parity.
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn resize_v_row_tier_v4x_t(token: archmage::X64V4xToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::X64V4xToken>;
+    resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
+}
+
+/// The `neon` tier (8-wide f32).
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+fn resize_v_row_tier_neon_t(token: archmage::NeonToken, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
+    resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
+}
+
+/// The `wasm128` tier (8-wide f32).
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune(wasm128)]
+fn resize_v_row_tier_wasm(token: archmage::Wasm128Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
+    resize_v_body!(token, V, 8, src, st, len, taps, w, orow)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+fn resize_v_row_tier_wasm128_t(token: archmage::Wasm128Token, src: &[f32], st: usize, len: usize, taps: &[(u32, f32)], w: usize, orow: &mut [f32]) {
+    resize_v_row_tier_wasm(token, src, st, len, taps, w, orow)
 }
 
 /// `imresize(A, [out_h out_w], 'bilinear')` — column pass first
@@ -191,6 +467,205 @@ pub(crate) fn imresize(
         let ax = axis_taps(in_h, out_h);
         resize_v(&tmp, out_w, in_h, &ax)
     }
+}
+
+// ========================== RGB8 ingress planes ============================
+//
+// `Input::from_rgb8` from `VSI.m`: u8x3 → {L,M,N} opponent planes plus a
+// planar copy of the RGB used by `sdsp`. Per-pixel arithmetic is
+// `c0*r + c1*g + c2*b` (left-assoc); the vector form keeps that exact
+// order per lane, so every tier is bit-identical to the scalar loop.
+
+use crate::{L_COEF, M_COEF, N_COEF};
+
+macro_rules! rgb8_body {
+    ($token:ident, $V:ty, $N:literal, $src:ident, $l:ident, $m:ident, $n:ident, $rp:ident, $gp:ident, $bp:ident) => {{
+        let w = $l.len();
+        let mut x = 0;
+        while x + $N <= w {
+            let mut rr = [0f32; $N];
+            let mut gg = [0f32; $N];
+            let mut bb = [0f32; $N];
+            for j in 0..$N {
+                let p = (x + j) * 3;
+                rr[j] = $src[p] as f32;
+                gg[j] = $src[p + 1] as f32;
+                bb[j] = $src[p + 2] as f32;
+            }
+            let rv = <$V>::load_t($token, &rr);
+            let gv = <$V>::load_t($token, &gg);
+            let bv = <$V>::load_t($token, &bb);
+            let lv = <$V>::splat_t($token, L_COEF[0]) * rv
+                + <$V>::splat_t($token, L_COEF[1]) * gv
+                + <$V>::splat_t($token, L_COEF[2]) * bv;
+            let mv = <$V>::splat_t($token, M_COEF[0]) * rv
+                + <$V>::splat_t($token, M_COEF[1]) * gv
+                + <$V>::splat_t($token, M_COEF[2]) * bv;
+            let nv = <$V>::splat_t($token, N_COEF[0]) * rv
+                + <$V>::splat_t($token, N_COEF[1]) * gv
+                + <$V>::splat_t($token, N_COEF[2]) * bv;
+            lv.store($l[x..][..$N].first_chunk_mut().unwrap());
+            mv.store($m[x..][..$N].first_chunk_mut().unwrap());
+            nv.store($n[x..][..$N].first_chunk_mut().unwrap());
+            rv.store($rp[x..][..$N].first_chunk_mut().unwrap());
+            gv.store($gp[x..][..$N].first_chunk_mut().unwrap());
+            bv.store($bp[x..][..$N].first_chunk_mut().unwrap());
+            x += $N;
+        }
+        for px in x..w {
+            let (r, g, b) = (
+                $src[px * 3] as f32,
+                $src[px * 3 + 1] as f32,
+                $src[px * 3 + 2] as f32,
+            );
+            $l[px] = L_COEF[0] * r + L_COEF[1] * g + L_COEF[2] * b;
+            $m[px] = M_COEF[0] * r + M_COEF[1] * g + M_COEF[2] * b;
+            $n[px] = N_COEF[0] * r + N_COEF[1] * g + N_COEF[2] * b;
+            $rp[px] = r;
+            $gp[px] = g;
+            $bp[px] = b;
+        }
+    }};
+}
+
+/// Scalar tier — generic f32x8 polyfill, same per-lane order.
+fn rgb8_row_tier_scalar_t(
+    token: archmage::ScalarToken,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
+    type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
+    rgb8_body!(token, V, 8, src, l, m, n, rp, gp, bp)
+}
+
+/// The `v3` tier (AVX2, 8-wide f32).
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn rgb8_row_tier_v3_t(
+    token: archmage::X64V3Token,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
+    type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
+    rgb8_body!(token, V, 8, src, l, m, n, rp, gp, bp)
+}
+
+/// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn rgb8_row_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
+    type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
+    rgb8_body!(token, V, 16, src, l, m, n, rp, gp, bp)
+}
+
+/// The `neon` tier (8-wide f32).
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+fn rgb8_row_tier_neon_t(
+    token: archmage::NeonToken,
+    src: &[u8],
+    l: &mut [f32],
+    m: &mut [f32],
+    n: &mut [f32],
+    rp: &mut [f32],
+    gp: &mut [f32],
+    bp: &mut [f32],
+) {
+    type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
+    rgb8_body!(token, V, 8, src, l, m, n, rp, gp, bp)
+}
+
+/// The `wasm128` tier (8-wide f32).
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune(wasm128)]
+fn rgb8_row_tier_wasm(token: archmage::Wasm128Token, src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+    type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
+    rgb8_body!(token, V, 8, src, l, m, n, rp, gp, bp)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+fn rgb8_row_tier_wasm128_t(token: archmage::Wasm128Token, src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+    rgb8_row_tier_wasm(token, src, l, m, n, rp, gp, bp)
+}
+
+/// One source row → row `y` of every plane (runtime tier dispatch).
+fn rgb8_row(src: &[u8], l: &mut [f32], m: &mut [f32], n: &mut [f32], rp: &mut [f32], gp: &mut [f32], bp: &mut [f32]) {
+    archmage::attuned!(
+        rgb8_row_tier(src, l, m, n, rp, gp, bp),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// Build the `{L,M,N}` planes and the planar RGB copy for `sdsp`.
+/// Row-parallel under `parallel`; per-element arithmetic is identical
+/// to the scalar `from_rgb8` loop at any thread count.
+pub(crate) fn rgb8_planes(data: &[u8], w: usize, h: usize, stride: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+    let wh = w * h;
+    let mut l = vec![0.0f32; wh];
+    let mut m = vec![0.0f32; wh];
+    let mut n = vec![0.0f32; wh];
+    let mut rgb = vec![0.0f32; 3 * wh];
+    // Three channel views of the planar rgb — lets one row closure own
+    // all six outputs without unsafe.
+    let (rp, gb) = rgb.split_at_mut(wh);
+    let (gp, bp) = gb.split_at_mut(wh);
+    let row = |y: usize,
+                   lrow: &mut [f32],
+                   mrow: &mut [f32],
+                   nrow: &mut [f32],
+                   rrow: &mut [f32],
+                   grow: &mut [f32],
+                   brow: &mut [f32]| {
+        let src = &data[y * stride..y * stride + w * 3];
+        rgb8_row(src, lrow, mrow, nrow, rrow, grow, brow);
+    };
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        l.par_chunks_mut(w)
+            .zip(m.par_chunks_mut(w))
+            .zip(n.par_chunks_mut(w))
+            .zip(rp.par_chunks_mut(w))
+            .zip(gp.par_chunks_mut(w))
+            .zip(bp.par_chunks_mut(w))
+            .enumerate()
+            .for_each(|(y, (((((lr, mr), nr), rr), gr), br))| {
+                row(y, lr, mr, nr, rr, gr, br);
+            });
+        return (l, m, n, rgb);
+    }
+    for (y, (((((lr, mr), nr), rr), gr), br)) in l
+        .chunks_mut(w)
+        .zip(m.chunks_mut(w))
+        .zip(n.chunks_mut(w))
+        .zip(rp.chunks_mut(w))
+        .zip(gp.chunks_mut(w))
+        .zip(bp.chunks_mut(w))
+        .enumerate()
+    {
+        row(y, lr, mr, nr, rr, gr, br);
+    }
+    (l, m, n, rgb)
 }
 
 // ============================ sRGB → Lab (D50) =============================
@@ -855,4 +1330,44 @@ pub(crate) fn vsi_planes(r: &crate::Input, d: &crate::Input, w: usize, h: usize)
     let mut scratch = Scratch::new();
     let p = prepare(r, d, w, h, &mut scratch);
     vsi_core(p)
+}
+
+#[cfg(test)]
+mod resize_block_tests {
+    use super::*;
+
+    /// Vectorized resize paths (contiguous dots, transposed blocks)
+    /// against the scalar indexed reference — drift must stay in the
+    /// f32-reassociation class (≲1e-5), never a real error.
+    #[test]
+    fn resize_simd_matches_scalar_within_reassoc() {
+        for (in_w, out_w) in [(64usize, 256usize), (256, 64), (2898, 256), (64, 128), (7, 19), (19, 7)] {
+            let ax = axis_taps(in_w, out_w);
+            let in_h = 3;
+            let src: Vec<f32> = (0..in_w * in_h)
+                .map(|i| ((i * 37 % 251) as f32 - 125.0) / 7.0)
+                .collect();
+            let mut want = vec![0.0f32; in_h * out_w];
+            for i in 0..in_h {
+                let srow = &src[i * in_w..(i + 1) * in_w];
+                for (o, &(st, len)) in ax.spans.iter().enumerate() {
+                    let mut acc = 0.0f64;
+                    for &(idx, w) in &ax.taps[st as usize..(st + len) as usize] {
+                        acc += w as f64 * srow[idx as usize] as f64;
+                    }
+                    want[i * out_w + o] = acc as f32;
+                }
+            }
+            let got = resize_h(&src, in_w, in_h, &ax);
+            let mut worst = 0.0f64;
+            for (i, (&g, &w)) in got.iter().zip(want.iter()).enumerate() {
+                let d = (g as f64 - w as f64).abs();
+                assert!(d < 1e-5, "in {in_w}->out {out_w} @{i}: {d:e}");
+                if d > worst {
+                    worst = d;
+                }
+            }
+            eprintln!("in {in_w} -> out {out_w}: worst {worst:e}");
+        }
+    }
 }

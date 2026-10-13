@@ -154,25 +154,7 @@ pub fn vsi_rgb8(
 
 impl Input {
     pub(crate) fn from_rgb8(data: &[u8], w: usize, h: usize, stride: usize) -> Self {
-        let mut l = Vec::with_capacity(w * h);
-        let mut m = Vec::with_capacity(w * h);
-        let mut n = Vec::with_capacity(w * h);
-        let mut rgb = Vec::with_capacity(3 * w * h);
-        let plane_stride = w * h;
-        rgb.resize(3 * plane_stride, 0.0);
-        for y in 0..h {
-            let row = &data[y * stride..y * stride + w * 3];
-            for (x, px) in row.as_chunks::<3>().0.iter().enumerate() {
-                let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
-                l.push(L_COEF[0] * r + L_COEF[1] * g + L_COEF[2] * b);
-                m.push(M_COEF[0] * r + M_COEF[1] * g + M_COEF[2] * b);
-                n.push(N_COEF[0] * r + N_COEF[1] * g + N_COEF[2] * b);
-                let base = y * w + x;
-                rgb[base] = r;
-                rgb[plane_stride + base] = g;
-                rgb[2 * plane_stride + base] = b;
-            }
-        }
+        let (l, m, n, rgb) = kernel::rgb8_planes(data, w, h, stride);
         Self { l, m, n, rgb }
     }
 }
