@@ -16,6 +16,8 @@
 //! Twiddles are still computed in `f64` (`expi`) and cast down, so the error
 //! vs an `f64` transform is plane-quantisation only.
 
+#[cfg(feature = "parallel")]
+use crate::kernel::par_ok;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::f64::consts::PI;
@@ -1525,7 +1527,7 @@ fn fft2_rows_conj_mul(
         // Row blocks are disjoint slices of `buf`, so under `parallel` each
         // block's transpose+transform+writeback is an independent task.
         #[cfg(feature = "parallel")]
-        if height >= 4 * RB {
+        if height >= 4 * RB && par_ok() {
             use rayon::prelude::*;
             buf.par_chunks_mut(width * RB)
                 .enumerate()
@@ -1623,7 +1625,9 @@ fn fft2_rows_conj_mul(
         #[cfg(not(feature = "parallel"))]
         let done = false;
         #[cfg(feature = "parallel")]
-        if let PlanKind::Bluestein { m, .. } = &wplan.kind {
+        if par_ok()
+            && let PlanKind::Bluestein { m, .. } = &wplan.kind
+        {
             use rayon::prelude::*;
             let m = *m;
             buf.par_chunks_mut(width * 8).enumerate().for_each_init(
@@ -1706,7 +1710,7 @@ fn fft2_rows_conj_mul_io(
     if let PlanKind::Radix2 { mplan } = &wplan.kind {
         const RB: usize = 8;
         #[cfg(feature = "parallel")]
-        if height >= 4 * RB {
+        if height >= 4 * RB && par_ok() {
             use rayon::prelude::*;
             dst.par_chunks_mut(width * RB)
                 .zip(src.par_chunks(width * RB))
@@ -1788,44 +1792,49 @@ fn fft2_rows_conj_mul_io(
         let m = *m;
         // Parallel: disjoint src/dst chunk pairs are independent tasks.
         #[cfg(feature = "parallel")]
-        {
-            use rayon::prelude::*;
-            dst.par_chunks_mut(width * 8)
-                .zip(src.par_chunks(width * 8))
-                .enumerate()
-                .for_each_init(
-                    || {
-                        (
-                            vec![0.0f32; m * 8],
-                            vec![0.0f32; m * 8],
-                            vec![0.0f32; m * 8],
-                            vec![0.0f32; m * 8],
-                            vec![Complex::default(); m],
-                        )
-                    },
-                    |(re8, im8, re8b, im8b, a), (ci, (dchunk, schunk))| {
-                        let nb = dchunk.len() / width;
-                        let r0 = ci * 8;
-                        if nb == 8 {
-                            let sbufs: Vec<&[Complex]> = schunk.chunks(width).collect();
-                            let mut dbufs: Vec<&mut [Complex]> = dchunk.chunks_mut(width).collect();
-                            wplan.run_bluestein8_io(
-                                &sbufs, &mut dbufs, re8, im8, re8b, im8b, mul, conj, r0, width,
-                            );
-                        } else {
-                            for (j, (srow, drow)) in schunk
-                                .chunks(width)
-                                .zip(dchunk.chunks_mut(width))
-                                .enumerate()
-                            {
-                                wplan.run_bluestein_io(srow, drow, a, mul, conj, r0 + j, width);
-                            }
-                        }
-                    },
-                );
-        }
+        let par = par_ok();
         #[cfg(not(feature = "parallel"))]
-        {
+        let par = false;
+        if par {
+            #[cfg(feature = "parallel")]
+            {
+                use rayon::prelude::*;
+                dst.par_chunks_mut(width * 8)
+                    .zip(src.par_chunks(width * 8))
+                    .enumerate()
+                    .for_each_init(
+                        || {
+                            (
+                                vec![0.0f32; m * 8],
+                                vec![0.0f32; m * 8],
+                                vec![0.0f32; m * 8],
+                                vec![0.0f32; m * 8],
+                                vec![Complex::default(); m],
+                            )
+                        },
+                        |(re8, im8, re8b, im8b, a), (ci, (dchunk, schunk))| {
+                            let nb = dchunk.len() / width;
+                            let r0 = ci * 8;
+                            if nb == 8 {
+                                let sbufs: Vec<&[Complex]> = schunk.chunks(width).collect();
+                                let mut dbufs: Vec<&mut [Complex]> =
+                                    dchunk.chunks_mut(width).collect();
+                                wplan.run_bluestein8_io(
+                                    &sbufs, &mut dbufs, re8, im8, re8b, im8b, mul, conj, r0, width,
+                                );
+                            } else {
+                                for (j, (srow, drow)) in schunk
+                                    .chunks(width)
+                                    .zip(dchunk.chunks_mut(width))
+                                    .enumerate()
+                                {
+                                    wplan.run_bluestein_io(srow, drow, a, mul, conj, r0 + j, width);
+                                }
+                            }
+                        },
+                    );
+            }
+        } else {
             let (mut re8, mut im8, mut re8b, mut im8b, mut a) = (
                 vec![0.0f32; m * 8],
                 vec![0.0f32; m * 8],
@@ -1900,7 +1909,7 @@ fn fft2_cols_conj_scale(
         // gather (parallel over (block,row) cells), transform (parallel over
         // blocks), scatter (parallel over rows, fusing `conj·scale`).
         #[cfg(feature = "parallel")]
-        if width >= 4 * CB && height >= 4 * CB {
+        if width >= 4 * CB && height >= 4 * CB && par_ok() {
             use rayon::prelude::*;
             const SB: usize = 64; // blocks per super-block
             // The super-block buffers are sized for a full sweep once and
@@ -2039,6 +2048,7 @@ fn fft2_cols_conj_scale(
     if let PlanKind::Bluestein { m, .. } = &hplan.kind
         && width >= 4 * CB
         && height >= 4 * CB
+        && par_ok()
     {
         use rayon::prelude::*;
         let m = *m;

@@ -45,6 +45,14 @@ const LO_WEIGHTS: [f32; 5] = [
     6.0 / 13.25,
 ];
 
+/// `false` on a 1-thread pool — par dispatch buys nothing there and
+/// the steal machinery costs real time on every call.
+#[cfg(feature = "parallel")]
+#[inline]
+pub(crate) fn par_ok() -> bool {
+    rayon::current_num_threads() > 1
+}
+
 /// `rayon::join` under `parallel`, sequential otherwise.
 fn maybe_join<A, B>(fa: impl FnOnce() -> A + Send, fb: impl FnOnce() -> B + Send) -> (A, B)
 where
@@ -53,6 +61,9 @@ where
 {
     #[cfg(feature = "parallel")]
     {
+        if !par_ok() {
+            return (fa(), fb());
+        }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
@@ -106,15 +117,15 @@ fn make_csf(m: usize, n: usize) -> Vec<f32> {
         }
     };
     #[cfg(feature = "parallel")]
-    {
+    if par_ok() {
         use rayon::prelude::*;
         out.par_chunks_mut(n).enumerate().for_each(|(r, row)| {
             for (c, v) in row.iter_mut().enumerate() {
                 *v = csf_px(r, c);
             }
         });
+        return out;
     }
-    #[cfg(not(feature = "parallel"))]
     for r in 0..m {
         for c in 0..n {
             out[r * n + c] = csf_px(r, c);
@@ -231,7 +242,7 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
         (libm::sqrt(s2 / 255.0) as f32, mean2 as f32)
     };
     #[cfg(feature = "parallel")]
-    {
+    if par_ok() {
         use rayon::prelude::*;
         let g = jstrip_g(m);
         std2.par_chunks_mut(g * nt)
@@ -248,6 +259,15 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                     }
                 }
             });
+    } else {
+        for it in 0..nt {
+            for jt in 0..mt {
+                let (v2, v1) = block16(4 * jt, 4 * it);
+                let o = jt * nt + it;
+                std2[o] = v2;
+                m1[o] = v1;
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
     for it in 0..nt {
@@ -280,7 +300,7 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
         libm::sqrt(s2 / 63.0) as f32
     };
     #[cfg(feature = "parallel")]
-    {
+    if par_ok() {
         use rayon::prelude::*;
         let g = jstrip_g(m);
         tmp.par_chunks_mut(g * nt)
@@ -297,6 +317,14 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                     }
                 }
             });
+    } else {
+        for it in 0..nt {
+            for jt in 0..mt {
+                let stdev = block8(4 * jt, 4 * it);
+                tmp[jt * nt + it] = stdev;
+                std1[jt * nt + it] = stdev;
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
     for it in 0..nt {
@@ -312,7 +340,7 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
     // evaluates them. Tile reads reach one tile row past a strip's
     // edge but are immutable by then (pass 2 joined first).
     #[cfg(feature = "parallel")]
-    {
+    if par_ok() {
         use rayon::prelude::*;
         let g = jstrip_g(m);
         let tmp_ref: &[f32] = &tmp;
@@ -339,6 +367,24 @@ fn ical_std(diff: &[f32], reff: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f3
                     }
                 }
             });
+    } else {
+        for it in 0..nt {
+            let i = 4 * it;
+            for jt in 0..mt {
+                let j = 4 * jt;
+                let mut mn = tmp[jt * nt + it];
+                if i + 5 < n - 15 && j < m - 15 && mn > tmp[jt * nt + it + 1] {
+                    mn = tmp[jt * nt + it + 1];
+                }
+                if i < n - 15 && j + 5 < m - 15 && mn > tmp[(jt + 1) * nt + it] {
+                    mn = tmp[(jt + 1) * nt + it];
+                }
+                if i + 5 < n - 15 && j + 5 < m - 15 && mn > tmp[(jt + 1) * nt + it + 1] {
+                    mn = tmp[(jt + 1) * nt + it + 1];
+                }
+                std1[jt * nt + it] = mn;
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
     for it in 0..nt {
@@ -472,7 +518,7 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
         }
     };
     #[cfg(feature = "parallel")]
-    {
+    if par_ok() {
         use rayon::prelude::*;
         let g = jstrip_g(m);
         std_o
@@ -484,6 +530,8 @@ fn ical_stat(x: &[f32], m: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
                 let ts = ci * g;
                 strip(ts, (ts + g).min(mt), so, sk, kr);
             });
+    } else {
+        strip(0, mt, &mut std_o, &mut skw, &mut krt);
     }
     #[cfg(not(feature = "parallel"))]
     strip(0, mt, &mut std_o, &mut skw, &mut krt);
@@ -692,7 +740,13 @@ macro_rules! score_body {
             }
         };
         #[cfg(feature = "parallel")]
-        {
+        if !par_ok() {
+            let n_px = m * n;
+            lum_chunk(&mut lum_r, &$a.im1[..n_px]);
+            lum_chunk(&mut lum_d, &$a.im2[..n_px]);
+        }
+        #[cfg(feature = "parallel")]
+        if par_ok() {
             use rayon::prelude::*;
             let n_px = m * n;
             lum_r
