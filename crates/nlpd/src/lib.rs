@@ -692,6 +692,7 @@ fn level_transform(
         level,
         &mut scratch.normalized[..w * h],
     );
+
     (low, lw, lh)
 }
 

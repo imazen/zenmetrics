@@ -99,7 +99,9 @@ impl Plane {
         let lo = (r0 + PAD as isize) as usize;
         let hi = (r1 + PAD as isize) as usize;
         #[cfg(feature = "parallel")]
-        if rayon::current_num_threads() > 1 && (r1 - r0) as usize * stride >= (1 << 16) {
+        // Below ~64 KiB of band rows (and on ≤1-thread pools) the
+        // rayon rendezvous costs more than the row work itself.
+        if rayon::current_num_threads() > 1 && (r1 - r0).max(0) as usize * stride >= (1 << 16) {
             use rayon::prelude::*;
             // 16-row tasks: per-row work is ~hundreds of ns, so row-granular
             // dispatch drowns in stealing on heterogeneous pools.

@@ -463,10 +463,9 @@ fn block_row(
         // kept bit-identical to the reference reduction, not stylistic.
         #[allow(unused_parens)]
         let mut s_gvar =
-            (((sgv[0] + sgv[1]) + (sgv[2] + sgv[3])) + ((sgv[4] + sgv[5]) + (sgv[6] + sgv[7])));
-        #[allow(unused_parens)]
+            ((sgv[0] + sgv[1]) + (sgv[2] + sgv[3])) + ((sgv[4] + sgv[5]) + (sgv[6] + sgv[7]));
         let mut d_gvar =
-            (((dgv[0] + dgv[1]) + (dgv[2] + dgv[3])) + ((dgv[4] + dgv[5]) + (dgv[6] + dgv[7])));
+            ((dgv[0] + dgv[1]) + (dgv[2] + dgv[3])) + ((dgv[4] + dgv[5]) + (dgv[6] + dgv[7]));
         // `*= 1/63.f*64` / `*= 1/15.f*16` — the constant folds in f32.
         s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
         d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
@@ -496,10 +495,9 @@ fn block_row(
         // bit-identical to the reference reduction, not stylistic.
         #[allow(unused_parens)]
         let mut s_mask =
-            (((smv[0] + smv[1]) + (smv[2] + smv[3])) + ((smv[4] + smv[5]) + (smv[6] + smv[7])));
-        #[allow(unused_parens)]
+            ((smv[0] + smv[1]) + (smv[2] + smv[3])) + ((smv[4] + smv[5]) + (smv[6] + smv[7]));
         let mut d_mask =
-            (((dmv[0] + dmv[1]) + (dmv[2] + dmv[3])) + ((dmv[4] + dmv[5]) + (dmv[6] + dmv[7])));
+            ((dmv[0] + dmv[1]) + (dmv[2] + dmv[3])) + ((dmv[4] + dmv[5]) + (dmv[6] + dmv[7]));
         // C: `s_mask = sqrt(s_mask*s_gvar) / 32.f` — double sqrt of
         // the float product, double division, float store.
         s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;

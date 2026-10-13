@@ -177,6 +177,7 @@ fn iqa_level(
         level,
         &mut scratch.normalized[..w * h],
     );
+
     (low, ow, oh)
 }
 

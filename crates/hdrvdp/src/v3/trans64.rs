@@ -38,7 +38,10 @@ fn two_pow_k<T: F64x8Backend>(token: T, k: f64x8<T>) -> f64x8<T> {
 /// `exp(x)` per lane, ~2 ulp. `k = rint(x·log2e)`, `r = x − k·ln2` split
 /// hi/lo; `exp(r)` is a degree-13 Horner on `r ∈ [−ln2/2, ln2/2]`.
 /// `x = ±inf` leaves `r` NaN, so the result is blended on `k`: underflow
-/// → 0, overflow → ∞, matching libm.
+/// → 0, overflow → ∞, matching libm. Below `k ≈ −1022` libm's `exp`
+/// returns subnormals while this returns 0 — the "~2 ulp" bound only
+/// holds over the normal range (consumers feed `1 − exp` maps where the
+/// difference is unrepresentable anyway).
 #[inline(always)]
 fn exp8<T: F64x8Backend>(token: T, x: f64x8<T>) -> f64x8<T> {
     let k = (x * f64x8::splat_t(token, std::f64::consts::LOG2_E)).round();
@@ -718,7 +721,6 @@ mod tests {
         );
         assert_eq!(got[0], f64::NEG_INFINITY);
         assert!(got[1].is_nan());
-        eprintln!("ln got = {got:?}");
         assert!(got[2].is_nan(), "got[2] = {:e}", got[2]);
         assert_eq!(got[3], f64::INFINITY);
     }

@@ -118,9 +118,9 @@ pub(crate) const DCT_T: [f32; 64] = [
 
 // ---------------------------------------------------------------------
 // Deterministic banding — same contract as `iwssim::par`: band count is
-// a pure function of the block-row count, partials fold in band order,
-// so results are identical at every thread count (and bit-identical to
-// the sequential path).
+// a pure function of the block-row count (never of pool size), partials
+// fold in band order, so results are identical at every thread count
+// (and bit-identical to the sequential path).
 
 /// Block rows below which `rayon` dispatch is not worth its overhead.
 pub(crate) const PAR_MIN_ROWS: usize = 8;
@@ -128,10 +128,6 @@ pub(crate) const PAR_MIN_ROWS: usize = 8;
 /// Band count for `nb_y` block rows — pure function of `nb_y`.
 #[inline]
 pub(crate) fn n_bands(nb_y: usize) -> usize {
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() <= 1 {
-        return 1;
-    }
     if nb_y < PAR_MIN_ROWS {
         1
     } else {
@@ -147,6 +143,9 @@ where
 {
     #[cfg(feature = "parallel")]
     {
+        if rayon::current_num_threads() <= 1 {
+            return (fa(), fb());
+        }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
@@ -161,6 +160,9 @@ pub(crate) fn collect_bands<T: Send>(nb: usize, f: impl Fn(usize) -> T + Send + 
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
+        if rayon::current_num_threads() <= 1 {
+            return (0..nb).map(f).collect();
+        }
         (0..nb).into_par_iter().map(f).collect()
     }
     #[cfg(not(feature = "parallel"))]

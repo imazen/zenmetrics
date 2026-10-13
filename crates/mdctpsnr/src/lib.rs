@@ -1831,7 +1831,9 @@ fn dc_mask_fixup(img: &mut MeteredImage) {
 
 /// True when any of the bit-forensic `DUMPT`/`DUMPP`/`DUMPI`/`DUMPW` env
 /// vars is set. The `parallel` path runs the serial code order then so
-/// call numbering and errorline traces stay deterministic.
+/// call numbering and errorline traces stay deterministic. The result is
+/// frozen at first read (`OnceLock`): setting a DUMP var mid-process no
+/// longer takes effect — forensic runs always export them upfront.
 #[cfg(feature = "parallel")]
 fn dump_env_set() -> bool {
     static DUMP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -2104,9 +2106,9 @@ pub fn mdct_psnr_srgb8(
                         for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
                             s.spawn(|_| {
                                 comp.run_dct();
-                                // Split the 64 bands in two so >6 pools
-                                // have 12 tasks to steal — halves stay
-                                // comp-local (same 64-ring working set).
+                                // `with_min_len(16)` on the 64 bands → 4
+                                // chunks/comp = 24 stealable tasks total —
+                                // still comp-local (same 64-ring working set).
                                 comp.bands
                                     .as_flattened_mut()
                                     .into_par_iter()

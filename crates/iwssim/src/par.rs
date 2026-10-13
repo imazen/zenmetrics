@@ -20,14 +20,13 @@ use rayon::prelude::*;
 /// fast-ssim2's crossover).
 pub(crate) const PAR_MIN_SAMPLES: usize = 1 << 17;
 
-/// Band count for `n` samples — pure function of `n`, capped so join
-/// overhead stays noise relative to ~64k-sample tasks.
+/// Band count for `n` samples — a pure function of `n`, never of
+/// `RAYON_NUM_THREADS`: reduce kernels fold per-band partials in band
+/// order, so a fixed partition keeps results bit-identical across pool
+/// sizes. Capped so join overhead stays noise relative to ~64k-sample
+/// tasks.
 #[inline]
 pub(crate) fn n_bands(n: usize) -> usize {
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() <= 1 {
-        return 1;
-    }
     if n < PAR_MIN_SAMPLES {
         1
     } else {
@@ -61,7 +60,7 @@ pub(crate) fn map_rows(dst: &mut [f32], w: usize, f: impl Fn(usize, &mut [f32]) 
     {
         let n = dst.len();
         let nb = n_bands(n);
-        if nb > 1 {
+        if nb > 1 && rayon::current_num_threads() > 1 {
             debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             dst.par_chunks_mut(rows * w)
@@ -87,7 +86,7 @@ pub(crate) fn map_rows2(
     {
         let n = a.len();
         let nb = n_bands(n);
-        if nb > 1 {
+        if nb > 1 && rayon::current_num_threads() > 1 {
             debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             a.par_chunks_mut(rows * w)
@@ -115,7 +114,7 @@ pub(crate) fn map1_3(
     {
         let n = dst.len();
         let nb = n_bands(n);
-        if nb > 1 {
+        if nb > 1 && rayon::current_num_threads() > 1 {
             let sz = n.div_ceil(nb);
             dst.par_chunks_mut(sz)
                 .zip(s0.par_chunks(sz))

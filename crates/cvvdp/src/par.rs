@@ -25,16 +25,14 @@ use rayon::prelude::*;
 /// at that boundary, so the threshold here is one octave lower.
 pub(crate) const PAR_MIN_SAMPLES: usize = 1 << 17;
 
-/// Band count for `n` samples — a pure function of `n` and pool size,
-/// capped so join overhead stays noise relative to ~64k-sample tasks
-/// while still filling an 8-way pool with headroom. A 1-thread pool
-/// takes the serial path — par dispatch overhead buys nothing there.
+/// Band count for `n` samples — a pure function of `n`, never of
+/// `RAYON_NUM_THREADS`, so single- and multi-threaded runs execute
+/// the identical partition (reduce kernels fold per-band partials in
+/// band order — the partition must be fixed to keep results
+/// bit-identical across pool sizes). Capped so join overhead stays
+/// noise relative to ~64k-sample tasks.
 #[inline]
 pub(crate) fn n_bands(n: usize) -> usize {
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() <= 1 {
-        return 1;
-    }
     if n < PAR_MIN_SAMPLES {
         1
     } else {
@@ -100,7 +98,7 @@ pub(crate) fn map_rows(dst: &mut [f32], w: usize, f: impl Fn(usize, &mut [f32]) 
     {
         let n = dst.len();
         let nb = n_bands(n);
-        if nb > 1 {
+        if nb > 1 && rayon::current_num_threads() > 1 {
             debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             use rayon::prelude::*;
@@ -121,7 +119,7 @@ pub(crate) fn map1(dst: &mut [f32], src: &[f32], f: impl Fn(&mut [f32], &[f32]) 
     {
         let n = dst.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             dst.par_chunks_mut(sz)
                 .zip(src.par_chunks(sz))
                 .for_each(|(d, s)| f(d, s));
@@ -144,7 +142,7 @@ pub(crate) fn map1_3(
     {
         let n = dst.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             dst.par_chunks_mut(sz)
                 .zip(s0.par_chunks(sz))
                 .zip(s1.par_chunks(sz))
@@ -168,7 +166,7 @@ pub(crate) fn map1_2(
     {
         let n = dst.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             dst.par_chunks_mut(sz)
                 .zip(s0.par_chunks(sz))
                 .zip(s1.par_chunks(sz))
@@ -192,7 +190,7 @@ pub(crate) fn map2_1(
     {
         let n = d0.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             d0.par_chunks_mut(sz)
                 .zip(d1.par_chunks_mut(sz))
                 .zip(src.par_chunks(sz))
@@ -218,7 +216,7 @@ pub(crate) fn map2_3(
     {
         let n = d0.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             d0.par_chunks_mut(sz)
                 .zip(d1.par_chunks_mut(sz))
                 .zip(s0.par_chunks(sz))
@@ -245,7 +243,7 @@ pub(crate) fn map3_base(
     {
         let n = d0.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             d0.par_chunks_mut(sz)
                 .zip(d1.par_chunks_mut(sz))
                 .zip(d2.par_chunks_mut(sz))
@@ -266,7 +264,7 @@ pub(crate) fn map_base(dst: &mut [f32], f: impl Fn(usize, &mut [f32]) + Send + S
     {
         let n = dst.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             use rayon::prelude::*;
             dst.par_chunks_mut(sz)
                 .enumerate()
@@ -289,7 +287,7 @@ pub(crate) fn map2_base(
     {
         let n = d0.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             use rayon::prelude::*;
             d0.par_chunks_mut(sz)
                 .zip(d1.par_chunks_mut(sz))
@@ -315,7 +313,7 @@ pub(crate) fn map4_base(
     {
         let n = d0.len();
         let sz = band_size(n);
-        if sz < n {
+        if sz < n && rayon::current_num_threads() > 1 {
             use rayon::prelude::*;
             d0.par_chunks_mut(sz)
                 .zip(d1.par_chunks_mut(sz))
@@ -344,7 +342,7 @@ pub(crate) fn map3_rows(
     {
         let n = d0.len();
         let nb = n_bands(n);
-        if nb > 1 {
+        if nb > 1 && rayon::current_num_threads() > 1 {
             debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             use rayon::prelude::*;
