@@ -260,6 +260,7 @@ try:
         page.locator('#map-metric').select_option('zensim')
         page.wait_for_function("document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
         assert page.locator('#map-info').inner_text() == 'No map yet'
+        assert 'Map unavailable' in page.locator('#compute-timing').inner_text()
         assert 'model c' in page.locator('#score-info').inner_text()
         page.locator('#zensim-model').select_option('b')
         page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model b ·')",timeout=30000)

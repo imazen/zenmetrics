@@ -113,7 +113,12 @@ async function compare() {
     $('compute-timing').textContent=`Reference ${result.referenceMilliseconds.toFixed(1)} ms (${result.referencePrepared?'prepared':'cache check'}) · Score ${result.scoreMilliseconds.toFixed(1)} ms · Map ${result.mapMilliseconds.toFixed(1)} ms · Request wall ${result.requestMilliseconds.toFixed(1)} ms`;
 
     status(`${r.width}×${r.height} · ${result.score.backend} · ${result.mapMetric} map`);paint();
-  } catch(error){S.map=null;status(error.message,true);paint();}
+  } catch(error){
+    S.map=null;
+    const cancelled=error.message==='Cancelled';
+    $('compute-timing').textContent=$('compute-timing').textContent==='Computing…'?(cancelled?'Comparison cancelled':'Comparison failed'):$('compute-timing').textContent.replace('Map pending',cancelled?'Map cancelled':'Map unavailable');
+    status(error.message,true);paint();
+  }
   finally{S.pending=false;$('compare').disabled=!S.ready;if(S.dirty&&$('live').checked)compare();}
 }
 $('compare').onclick=compare;
