@@ -103,8 +103,9 @@ details summary { cursor: pointer; color: var(--muted); }
 </section>
 <section class="panel"><h2>Metric</h2><select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select>
 <div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
-<div class="row"><button id="compare" class="primary" disabled>Compare</button><label><input id="live" type="checkbox" checked> Live</label></div>
+<div class="row"><button id="compare" class="primary" disabled>Compare</button><button id="cancel" disabled>Cancel</button><label><input id="live" type="checkbox" checked> Live</label></div>
 <div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Worker time</small><b id="elapsed">–</b></div></div>
+<div id="job-progress" hidden><progress id="progress-bar"></progress><span id="progress-label">Starting job…</span></div>
 <output id="status" class="status">Starting threaded SIMD WASM…</output>
 <p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. The zensim profile is pinned to B.</p></details>
 </section>

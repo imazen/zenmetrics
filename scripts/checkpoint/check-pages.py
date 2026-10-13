@@ -51,9 +51,16 @@ try:
         assert page.evaluate('crossOriginIsolated && typeof SharedArrayBuffer !== "undefined"')
         result = page.evaluate('''async () => {
           const worker = new Worker(new URL('./worker.js', location.href), {type:'module'});
+          let publishedScore, sharedControls=0, earlyScores=0;
           const wait = () => new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Worker deadline expired')), 15000);
-            worker.onmessage = ({data}) => { if(data.type==='progress') return; clearTimeout(timer); resolve(data); };
+            worker.onmessage = ({data}) => {
+              if(data.type==='control'){if(!(data.buffer instanceof SharedArrayBuffer)||data.offset%4)throw new Error('Shared atomic control required');sharedControls++;return;}
+              if(data.type==='score'){publishedScore=data.score;earlyScores++;return;}
+              if(data.type==='progress')return;
+              if(data.type==='result'&&JSON.stringify(data.score)!==JSON.stringify(publishedScore))throw new Error('Final score differs from published scalar');
+              clearTimeout(timer);resolve(data);
+            };
             worker.onerror = error => reject(new Error(error.message));
           });
           let response = wait(); worker.postMessage({type:'init',threads:2});
@@ -106,7 +113,25 @@ try:
           for(let i=0;i<hr.length;i++){hr[i]=i%4===3?255:(i*17+Math.floor(i/(hd.width*4))*13)%256;hdist[i]=i%4===3?255:Math.max(0,hr[i]-7);}
           response=wait();worker.postMessage({type:'compare',metric:'ssim2',mapMetric:'psnr',reference:hr,distorted:hdist,...hd});
           const timed=await response;if(timed.type!=='result')throw new Error(JSON.stringify(timed));
-          worker.terminate();return {score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          // The previous viewer trapped in native thread creation at this size.
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference:hr,distorted:hdist,...hd});
+          const large=await response;if(large.type!=='result'||large.map.length!==hd.width*hd.height||!Number.isFinite(large.score.score)||!large.map.every(Number.isFinite))throw new Error('Full-HD zensim score/map failed');
+          // Main-thread atomic cancellation remains available during synchronous WASM.
+          const cancelImage=new Uint8Array(2048*2048*4);for(let i=0;i<cancelImage.length;i++)cancelImage[i]=i%4===3?255:i%251;
+          const cancelled=await new Promise((resolve,reject)=>{
+            const deadline=setTimeout(()=>reject(new Error('Native cancellation deadline expired')),10000);
+            worker.onmessage=({data})=>{
+              if(data.type==='control'){const state=new Int32Array(data.buffer,data.offset,4);Atomics.store(state,0,1);}
+              else if(data.type==='error'){clearTimeout(deadline);resolve(data);}
+              else if(data.type==='result'||data.type==='score'){clearTimeout(deadline);reject(new Error('Cancelled operation emitted a score'));}
+            };
+            worker.postMessage({id:99,type:'compare',metric:'zensim',mapMetric:'zensim',reference:cancelImage,distorted:cancelImage,width:2048,height:2048});
+          });
+          if(!cancelled.message.toLowerCase().includes('cancel'))throw new Error(JSON.stringify(cancelled));
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
+          const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
+          if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
+          worker.terminate();return {shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
@@ -127,6 +152,20 @@ try:
         assert not observed,observed
         result['offline_upload_ui_and_scoring']=True
         context.set_offline(False)
+        context.set_offline(False)
+        page.locator('#metric').select_option('zensim')
+        page.locator('#map-metric').select_option('zensim')
+        page.locator('#demo').click()
+        page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
+        assert page.locator('#score').inner_text()!='–'
+        page.locator('#compare').click()
+        page.locator('#cancel').click()
+        page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')",timeout=30000)
+        assert page.locator('#cancel').is_disabled()
+        page.locator('#compare').click()
+        page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
+        result['demo_completion']=True
+        result['ui_cancel_recovery']=True
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']

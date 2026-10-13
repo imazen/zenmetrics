@@ -47,7 +47,7 @@ try:
           const messages = [];
           const wait = () => new Promise((resolve,reject) => {
             const timer = setTimeout(() => reject(new Error('Worker response deadline expired')), 15000);
-            worker.onmessage = event => { if(event.data.type==='progress') return; clearTimeout(timer); messages.push(event.data); resolve(event.data); };
+            worker.onmessage = event => { if(['progress','control','score'].includes(event.data.type)) return; clearTimeout(timer); messages.push(event.data); resolve(event.data); };
             worker.onerror = event => reject(new Error(event.message));
           });
           let promise = wait(); worker.postMessage({type:'init',threads:2});

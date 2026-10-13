@@ -1,21 +1,74 @@
 const $ = id => document.getElementById(id);
-const worker = new Worker(new URL('./worker.js', import.meta.url), {type:'module'});
+let worker;
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0}};
 const requests = new Map();
 function status(message, error=false) { $('status').textContent=message; $('status').className=error?'error':'status'; }
-function rpc(data) {
-  return new Promise((resolve,reject)=>{const id=++S.id;requests.set(id,{resolve,reject});worker.postMessage({...data,id});});
+const phases={1:'Decoding',2:'Encoding JPEG',3:'Preparing reference',4:'Scoring',5:'Building spatial map'};
+function showScore(result) {
+  const values=result.score.values||[{column:result.score.metric,value:result.score.score}];
+  $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
+  $('score-label').textContent=result.score.metric;
+  $('score-info').textContent=values.map(v=>v.column).join(' / ');
+  $('elapsed').textContent=`${result.scoreMilliseconds.toFixed(0)} ms scoring`;
 }
-worker.onmessage=({data})=>{
-  if(data.type==='progress') {status(data.message);return;}
-  if(data.type==='ready') {
-    S.ready=true; $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;return o;}));
-    $('metric').value='zensim';snippet(); $('compare').disabled=false; status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`); return;
+function finishRequest(id,error,result) {
+  const request=requests.get(id);if(!request)return;
+  clearTimeout(request.timer);requests.delete(id);
+  if(error||request.cancelled)request.reject(error||new Error('Cancelled'));
+  else request.resolve(result);
+  $('cancel').disabled=!requests.size;
+  if(!requests.size)$('job-progress').hidden=true;
+}
+function restartWorker(message) {
+  worker?.terminate();S.ready=false;$('compare').disabled=true;
+  for(const id of [...requests.keys()])finishRequest(id,new Error(message));
+  startWorker();
+}
+function rpc(data) {
+  return new Promise((resolve,reject)=>{
+    const id=++S.id;
+    const request={resolve,reject,revision:S.revision,start:performance.now(),kind:data.type};
+    request.timer=setTimeout(()=>restartWorker('Job exceeded the 120 second browser deadline.'),120000);
+    requests.set(id,request);$('cancel').disabled=false;$('job-progress').hidden=false;
+    worker.postMessage({...data,id});
+  });
+}
+function startWorker() {
+  worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
+  worker.onmessage=({data})=>{
+    if(data.type==='progress'){status(data.message);return;}
+    if(data.type==='ready'){
+      S.ready=true;const selected=$('metric').value;
+      $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;return o;}));
+      $('metric').value=data.metrics.includes(selected)?selected:'zensim';snippet();$('compare').disabled=false;
+      status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`);return;
+    }
+    const request=requests.get(data.id);if(!request){if(data.type==='error'){S.ready=false;$('compare').disabled=true;status(data.message,true);}return;}
+    if(data.type==='control'){request.control=new Int32Array(data.buffer,data.offset,4);if(request.cancelled)Atomics.store(request.control,0,1);return;}
+    if(data.type==='score'){if(!request.cancelled&&request.revision===S.revision)showScore(data);return;}
+    finishRequest(data.id,data.type==='error'?new Error(request.cancelled?'Cancelled':data.message):null,data);
+    if(data.fatal)restartWorker('WASM runtime failed; starting a fresh worker.');
+  };
+  worker.onerror=event=>{worker.terminate();S.ready=false;$('compare').disabled=true;for(const id of [...requests.keys()])finishRequest(id,new Error(event.message));status(`Worker failed: ${event.message}`,true);};
+  worker.postMessage({type:'init',threads:Math.max(1,Math.min(8,navigator.hardwareConcurrency||1))});
+}
+setInterval(()=>{
+  const request=[...requests.values()].find(r=>r.control&&!r.cancelled);if(!request)return;
+  const phase=Atomics.load(request.control,1),completed=Atomics.load(request.control,2);
+  $('progress-label').textContent=`${phases[phase]||'Starting job'} · ${(performance.now()-request.start).toFixed(0)} ms${completed?` · ${completed} input rows prepared`:''}`;
+  // Kernel totals are unknown. Elapsed time and cancellation polls are not progress units.
+  $('progress-bar').removeAttribute('value');
+},80);
+$('cancel').onclick=()=>{
+  S.dirty=false;++S.revision;
+  for(const request of requests.values()){
+    request.cancelled=true;if(request.control)Atomics.store(request.control,0,1);
   }
-  const request=requests.get(data.id);if(!request){if(data.type==='error')status(data.message,true);return;}requests.delete(data.id);
-  if(data.type==='error')request.reject(new Error(data.message));else request.resolve(data);
+  status('Cancelling…');
+  // Some native metric adapters have no Stop API; dispose of their worker too.
+  const interrupted=worker;
+  setTimeout(()=>{if(worker===interrupted)restartWorker('Cancelled');},250);
 };
-worker.onerror=event=>{S.ready=false;$('compare').disabled=true;status(`Worker failed: ${event.message}`,true);for(const r of requests.values())r.reject(new Error(event.message));requests.clear();};
 async function loadFile(side,file) {
   if(!file)return;
   if(!S.ready){status('Wait for the metric worker to finish starting.',true);return;}
@@ -43,16 +96,13 @@ async function compare() {
   if(!S.ready||S.pending||!S.reference||!S.distorted)return;
   const r=S.reference,d=S.distorted;
   if(r.width!==d.width||r.height!==d.height){status(`Sizes differ: ${r.width}×${r.height} vs ${d.width}×${d.height}. Images are never resized for scoring.`,true);return;}
-  const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;status(`Computing ${$('metric').value}…`);
+  const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';status(`Computing ${$('metric').value}…`);
   try {
     const result=await rpc({type:'compare',metric:$('metric').value,mapMetric:$('map-metric').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value});
     if(revision!==S.revision)return;
     S.map=result.map;S.mapMetric=result.mapMetric;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;
-    const values=result.score.values||[{column:result.score.metric,value:result.score.score}];
-    $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
-    $('score-label').textContent=result.score.metric;
-    $('score-info').textContent=values.map(v=>v.column).join(' / ');
-    $('elapsed').textContent=`${result.milliseconds.toFixed(0)} ms`;
+    showScore(result);
+    $('elapsed').textContent=`${result.milliseconds.toFixed(0)} ms total`;
     status(`${r.width}×${r.height} · ${result.score.backend} · ${result.mapMetric} map`);paint();
   } catch(error){S.map=null;status(error.message,true);paint();}
   finally{S.pending=false;$('compare').disabled=!S.ready;if(S.dirty&&$('live').checked)compare();}
@@ -134,7 +184,7 @@ $('viewport').onpointerup=()=>{drag=null;};$('viewport').onpointercancel=()=>{dr
 $('download').onclick=()=>{if(!S.map)return;const blob=new Blob([S.map],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${S.mapMetric}-${S.mapWidth}x${S.mapHeight}-f32le.bin`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('theme').onclick=()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';};
 if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined')status('Threaded WASM requires HTTPS with COOP: same-origin and COEP: require-corp.',true);
-else worker.postMessage({type:'init',threads:Math.max(1,Math.min(8,navigator.hardwareConcurrency||1))});
+else startWorker();
 
 function snippet(){const metric=$('metric').value;
   $('cli-snippet').textContent=`zenmetrics${metric==='zensim'?' --zensim-profile b':''} score --metric ${metric} --reference reference.png --distorted distorted.jpg${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`;
