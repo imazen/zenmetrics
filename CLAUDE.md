@@ -1461,3 +1461,10 @@ with per-image 99.5th-percentile square-root scaling and labels its displayed
 range; fixed calibration remains explicit. Raw metric maps and scalar scores
 are unchanged. Pages qualification renders all three demo maps and checks
 visible color variation, in addition to existing native-array comparisons.
+
+### Known Bugs: browser CI lock resolution (2026-10-13)
+
+Website run 38362633510 failed before compilation because the checked-in lock
+no longer matched the pinned sibling manifests. The pinned snapshot reproduced
+that failure. Regeneration through `scripts/ci/lock.sh --regen` updated required
+codec/zensim transitive entries; the 23-sibling locked check then passed.
