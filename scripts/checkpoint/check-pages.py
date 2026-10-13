@@ -56,7 +56,7 @@ try:
         page.goto(url)
         page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')", timeout=30000)
         assert page.evaluate('crossOriginIsolated && typeof SharedArrayBuffer !== "undefined"')
-        assert 'Shields off' in page.locator('details').filter(has_text='Brave help').text_content()
+        assert 'Shields off' in page.locator('details').filter(has_text='Brave:').text_content()
         page.wait_for_function("!document.getElementById('capabilities').textContent.startsWith('Checking')",timeout=10000)
         assert 'WebGPU' in page.locator('#capabilities').inner_text()
         if asset_prefix:
