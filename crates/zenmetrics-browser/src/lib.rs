@@ -459,6 +459,7 @@ pub fn spatial_map(
     stride: usize,
     display: &str,
 ) -> Result<SpatialMap, JsError> {
+    let _ = display; // Also valid when the CVVDP feature is disabled.
     let r = rgb(reference, width, height, stride).map_err(|e| JsError::new(&e))?;
     let d = rgb(distorted, width, height, stride).map_err(|e| JsError::new(&e))?;
     let (w, h) = (width as usize, height as usize);
@@ -508,6 +509,7 @@ pub fn spatial_map(
             result.similarity = true;
             result.values = first.map.buf().to_vec();
         }
+        #[cfg(feature = "cpu-cvvdp")]
         "cvvdp" => {
             let display = metrics::display::parse_display(display).map_err(fail)?;
             let mut scorer = cvvdp::Cvvdp::with_geometry(
