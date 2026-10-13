@@ -393,9 +393,14 @@ pub(crate) fn imenlarge2(
     if dst_w == imu_w && dst_h == imu_h {
         imu
     } else {
-        let mut out = alloc::vec![0.0_f32; dst_w * dst_h];
         let copy_h = dst_h.min(imu_h);
         let copy_w = dst_w.min(imu_w);
+        // Full coverage needs no zero-init — take a pooled buffer.
+        let mut out = if copy_h == dst_h && copy_w == dst_w {
+            crate::pool::buf_take(dst_w * dst_h)
+        } else {
+            alloc::vec![0.0_f32; dst_w * dst_h]
+        };
         for y in 0..copy_h {
             let src_row = &imu[y * imu_w..y * imu_w + copy_w];
             let dst_row = &mut out[y * dst_w..y * dst_w + copy_w];
@@ -481,9 +486,13 @@ fn imenlarge2_small(
     let result = if dst_w == imu_w && dst_h == imu_h {
         imu
     } else {
-        let mut out = alloc::vec![0.0_f32; dst_w * dst_h];
         let copy_h = dst_h.min(imu_h);
         let copy_w = dst_w.min(imu_w);
+        let mut out = if copy_h == dst_h && copy_w == dst_w {
+            crate::pool::buf_take(dst_w * dst_h)
+        } else {
+            alloc::vec![0.0_f32; dst_w * dst_h]
+        };
         crate::par::map_rows(&mut out[..copy_h * dst_w], dst_w, |y0, band| {
             for (r, drow) in band.chunks_mut(dst_w).enumerate() {
                 let y = y0 + r;
