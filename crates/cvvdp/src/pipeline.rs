@@ -841,58 +841,30 @@ impl Cvvdp {
         // per-band allocation.
         build_both_sides_into(&mut self.scratch, w, h, n_levels);
 
-        // Phase 9.Z.F chunk 6 step 6: release weber cache memory after
-        // build. The `weber_cache_dist` (and `weber_cache_ref` if it
-        // grew) holds ~537 MB at 16 MP of gauss_img + gauss_l data that
-        // was only needed during the weber pyramid build. The fold
-        // stage reads from `weber_dist` / `weber_ref`, never the
-        // caches. Releasing the cache capacity here drops peak heap
-        // during fold by the cache size.
+        // The weber caches (`gauss_img`, `gauss_l`, vscratch, expanded,
+        // gauss_tmp) are only needed during the weber pyramid build —
+        // the fold stage reads `weber_dist` / `weber_ref`, never the
+        // caches. They are cleared but KEEP capacity: a former
+        // shrink_to_fit pass traded ~14% of per-call wall time at
+        // 8.4 MP (perf: munmap + page-fault zeroing) for peak heap,
+        // while `gauss_img`/`gauss_l` kept their capacity anyway. The
+        // whole `scratch` struct is persistent by design; peak-heap
+        // concerns belong at the `Cvvdp` drop boundary.
         //
-        // **Tradeoff:** the cache reallocates on the next call. At 16
-        // MP that's ~537 MB of fresh allocation per call, but the
-        // dominant cost is the actual gauss build (decompose +
-        // convolve), not the allocation itself. Per-call wall-time
-        // impact is small.
-        //
-        // **Bit-identical safety:** clearing capacity does not affect
-        // computed values — only the band-loop reads weber_*, which
-        // are unaffected.
+        // **Bit-identical safety:** clearing does not affect computed
+        // values — only the band-loop reads weber_*, which are
+        // unaffected.
         for c in 0..3 {
             self.scratch.weber_cache_dist[c].gauss_img.clear();
             self.scratch.weber_cache_dist[c].gauss_l.clear();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .vscratch
-                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.expanded.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .expanded
-                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .gauss_tmp
-                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].gauss_img.clear();
             self.scratch.weber_cache_ref[c].gauss_l.clear();
             self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_ref[c]
-                .scratch
-                .vscratch
-                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.expanded.clear();
-            self.scratch.weber_cache_ref[c]
-                .scratch
-                .expanded
-                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_ref[c]
-                .scratch
-                .gauss_tmp
-                .shrink_to_fit();
         }
 
         // Now consume the scratch slots immutably to fold bands. We
