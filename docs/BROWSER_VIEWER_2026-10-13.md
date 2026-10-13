@@ -92,3 +92,50 @@ advisory quality kit was absent on the build host; its wrapper could not run.
 Changed Rust files passed format checks, and the tracked-file hygiene check
 reported no address/identifier hits. Remote CI was started after the push;
 this observation does not claim every remote job was already green.
+
+## Large-image completion and job control follow-up
+
+The earlier small fixtures missed a deterministic trap in the live demo:
+768×512 JPEG encoding/decoding and zensim reference preparation succeeded,
+but comparison trapped in zensim's native background deallocation thread.
+`96c3c9bb` in zensim frees buffers synchronously on wasm32; Rayon computation
+and the metric definition remain unchanged.
+
+The revised viewer publishes the scalar before computing the optional map.
+Its `JobControl` uses how-far 0.1.0 `Stop` and `Report` over four shared atomic
+words. Completed input rows are actual work units. Native kernel totals are
+unknown: the UI shows the current stage and elapsed time with an indeterminate
+bar, rather than turning cancellation polls into a percentage.
+
+Zensim, PNG decoding and JPEG encoding receive cooperative Stop policies.
+Other native metric adapters have no browser Stop parameter. Cancel signals
+shared memory immediately and, after 250 ms, terminates and recreates the
+coordinator and its worker pool. A 120-second request deadline also prevents
+an unresolved promise from leaving the UI busy indefinitely. Runtime traps
+invalidate the worker. No alternate algorithm or backend supplies a score.
+
+Chromium 153.0.8010.12 passed all 38 scalar routes, exact existing zensim
+score/map oracle assertions, full-HD zensim score/map, the actual demo,
+atomic cancellation with no score, subsequent comparison and UI cancellation
+with fresh-worker recovery. `just viewer-check` now includes these regressions.
+The test run used run-heavy: peak RSS 0.17 GiB, minimum available 26579 MiB,
+peak load 1.64. This is browser verification, not benchmark acceptance.
+
+Workspace metrics use archmage/magetypes 0.9.31-beta.1 at published source
+revision `da0ed5deca40ac60df32dcf4f6e7602658b2f959`, verified from both crates'
+VCS metadata. Cargo rejects the registry prerelease alongside pinned siblings'
+registry `^0.9.30` constraints; the distinct git source preserves those stable
+requirements. The lock is resolved against all 23 pinned siblings.
+
+Native browser tests passed 39 tests with the same two existing ignores.
+Targeted browser clippy (`--no-deps -- -D warnings`) and formatting passed.
+A broader dependency clippy invocation stopped on an existing VMAF doc-comment
+lint; it did not establish workspace-wide lint cleanliness. The all-feature
+module now measures 12,734,524 bytes, or 2,980,985 bytes with Python gzip; the
+issue 70 size gate remains unmet.
+
+The follow-up source `a7803994280dc25d298d0a98ee620b556076504b` was deployed
+to https://metrics.imazen.org/ and the expanded browser checks passed there on
+2026-10-13, including the actual demo and cancellation/recovery. The live
+verification used run-heavy: peak RSS 0.18 GiB, minimum available 26633 MiB,
+peak load 0.50. Remote workspace CI was still running at this observation.
