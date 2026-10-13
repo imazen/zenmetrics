@@ -106,7 +106,9 @@ details summary { cursor: pointer; color: var(--muted); }
 <p id="zensim-model-note" class="note" hidden>C has no spatial map in the pinned library. Choose another map metric explicitly; no model is substituted.</p>
 <div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
 <div class="row"><button id="compare" class="primary" disabled>Compare</button><button id="cancel" disabled>Cancel</button><label><input id="live" type="checkbox" checked> Live</label></div>
-<div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Worker time</small><b id="elapsed">–</b></div></div>
+<div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Compute time</small><b id="elapsed">–</b></div></div>
+<p id="compute-timing" class="note">Reference, score and map timings appear after comparison.</p>
+<p id="startup-timing" class="note">Worker startup: starting…</p>
 <div id="job-progress" hidden><progress id="progress-bar"></progress><span id="progress-label">Starting job…</span></div>
 <p id="capabilities" class="status">Checking browser capabilities…</p>
 <details><summary>Brave: turn Shields off · Browser requirements</summary><p>In Brave, turn Shields off for this site, then reload. Relaxed SIMD128, shared memory and working Web Workers are required. HTTPS and cross-origin isolation enable the Rayon worker pool. WebGPU readiness is checked separately; the selectable metrics in this build run on the CPU.</p></details>

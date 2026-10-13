@@ -9,10 +9,13 @@ function showScore(result) {
   $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
   $('score-label').textContent=result.score.metric;
   $('score-info').textContent=values.map(v=>v.column).join(' / ')+(result.score.profile?` · model ${result.score.profile}`:'');
-  $('elapsed').textContent=`${result.scoreMilliseconds.toFixed(0)} ms scoring`;
+  $('elapsed').textContent=`${result.scoreMilliseconds.toFixed(1)} ms scoring`;
+  $('compute-timing').textContent=`Reference ${result.referenceMilliseconds.toFixed(1)} ms (${result.referencePrepared?'prepared':'cache check'}) · Score ${result.scoreMilliseconds.toFixed(1)} ms · Map pending`;
+
 }
 function finishRequest(id,error,result) {
   const request=requests.get(id);if(!request)return;
+  if(result)result.requestMilliseconds=performance.now()-request.start;
   clearTimeout(request.timer);requests.delete(id);
   if(error||request.cancelled)request.reject(error||new Error('Cancelled'));
   else request.resolve(result);
@@ -34,10 +37,14 @@ function rpc(data) {
   });
 }
 function startWorker() {
+  const startupStart=performance.now();
+  $('startup-timing').textContent='Worker startup: starting…';
   worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
   worker.onmessage=({data})=>{
     if(data.type==='progress'){status(data.message);return;}
     if(data.type==='ready'){
+      const startupMilliseconds=performance.now()-startupStart;
+      $('startup-timing').textContent=`Worker startup ${startupMilliseconds.toFixed(1)} ms · WASM load/init ${data.startup.wasmMilliseconds.toFixed(1)} ms · Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;
       S.ready=true;const selected=$('metric').value;
       $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;return o;}));
       $('metric').value=data.metrics.includes(selected)?selected:'zensim';snippet();$('compare').disabled=false;
@@ -96,13 +103,15 @@ async function compare() {
   if(!S.ready||S.pending||!S.reference||!S.distorted)return;
   const r=S.reference,d=S.distorted;
   if(r.width!==d.width||r.height!==d.height){status(`Sizes differ: ${r.width}×${r.height} vs ${d.width}×${d.height}. Images are never resized for scoring.`,true);return;}
-  const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';status(`Computing ${$('metric').value}…`);
+  const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';$('compute-timing').textContent='Computing…';status(`Computing ${$('metric').value}…`);
   try {
     const result=await rpc({type:'compare',metric:$('metric').value,mapMetric:$('map-metric').value,zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value});
     if(revision!==S.revision)return;
     S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;
     showScore(result);
-    $('elapsed').textContent=`${result.milliseconds.toFixed(0)} ms total`;
+    $('elapsed').textContent=`${result.milliseconds.toFixed(1)} ms total`;
+    $('compute-timing').textContent=`Reference ${result.referenceMilliseconds.toFixed(1)} ms (${result.referencePrepared?'prepared':'cache check'}) · Score ${result.scoreMilliseconds.toFixed(1)} ms · Map ${result.mapMilliseconds.toFixed(1)} ms · Request wall ${result.requestMilliseconds.toFixed(1)} ms`;
+
     status(`${r.width}×${r.height} · ${result.score.backend} · ${result.mapMetric} map`);paint();
   } catch(error){S.map=null;status(error.message,true);paint();}
   finally{S.pending=false;$('compare').disabled=!S.ready;if(S.dirty&&$('live').checked)compare();}

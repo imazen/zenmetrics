@@ -91,7 +91,7 @@ try:
           });
           let response = wait(); worker.postMessage({type:'init',threads:2});
           const ready = await response;
-          if (ready.type !== 'ready' || ready.threads !== 2) throw new Error(JSON.stringify(ready));
+          if (ready.type !== 'ready' || ready.threads !== 2 || !Number.isFinite(ready.startup?.wasmMilliseconds) || !Number.isFinite(ready.startup?.poolMilliseconds)) throw new Error(JSON.stringify(ready));
           const width=64,height=64,reference=new Uint8Array(width*height*4),distorted=new Uint8Array(reference.length);
           for(let y=0;y<height;y++) for(let x=0;x<width;x++) for(let c=0;c<4;c++) {
             const i=(y*width+x)*4+c; reference[i]=c===3?255:(x*17+y*13+c*41)%256;
@@ -102,6 +102,11 @@ try:
           if(first.type!=='result') throw new Error(JSON.stringify(first));
           response=wait();worker.postMessage({id:2,metric:'zensim',reference,distorted,width,height});
           const second=await response;
+          for(const got of [first,second]) {
+            for(const key of ['referenceMilliseconds','scoreMilliseconds','mapMilliseconds','milliseconds'])if(!Number.isFinite(got[key])||got[key]<0)throw new Error('Invalid timing '+key);
+            if(got.referenceMilliseconds+got.scoreMilliseconds+got.mapMilliseconds>got.milliseconds+.01)throw new Error('Compute phases exceed worker total');
+          }
+          if(!first.referencePrepared||second.referencePrepared)throw new Error('Warm reference timing is not identified');
           if(second.type!=='result'||JSON.stringify(first.score)!==JSON.stringify(second.score)||
              JSON.stringify(Array.from(first.map))!==JSON.stringify(Array.from(second.map))) throw new Error('Repeat differs');
           const spatial={};
@@ -171,7 +176,7 @@ try:
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
           const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
           if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
-          worker.terminate();return {profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          worker.terminate();return {startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
@@ -260,6 +265,11 @@ try:
         page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model b ·')",timeout=30000)
         assert page.locator('#score').inner_text() == default_score
         result['ui_model_selection'] = True
+        assert 'Reference ' in page.locator('#compute-timing').inner_text()
+        assert 'Score ' in page.locator('#compute-timing').inner_text()
+        assert 'Map ' in page.locator('#compute-timing').inner_text()
+        assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
+        result['ui_separate_timings']=True
         result['demo_completion']=True
         result['ui_cancel_recovery']=True
         result['capability_report']=page.locator('#capabilities').inner_text()
@@ -269,7 +279,9 @@ try:
             assert result['score']['score']==oracle['score']
             assert result['map']==oracle['map']
             for name, expected in oracle.get('profiles',{}).items():
-                assert result['profiles'][name] == expected, name
+                got=result['profiles'][name]
+                delta=max((abs(a-b) for a,b in zip(got['map'] or [],expected['map'] or [])),default=0)
+                assert got == expected, {'profile':name,'browser_score':got['score'],'native_score':expected['score'],'max_map_delta':delta}
             result['native_map_max_abs_delta']={}
             for name,expected in oracle['spatial_maps'].items():
                 got=result['spatial'][name]

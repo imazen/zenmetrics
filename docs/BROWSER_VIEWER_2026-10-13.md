@@ -244,3 +244,25 @@ The cached-reference C scalar route also failed the feature-vector contract;
 C uses the direct native full-pair scalar route. No other model supplies its
 score or map. Native D resolver tests used run-heavy peak RSS 1.01 GiB;
 the live browser check used 0.18 GiB. Featureless browser compilation passed.
+
+## Startup versus comparison timing
+
+Worker startup is measured on the main thread from worker creation until its
+ready message arrives. It includes the worker module loading/bootstrap and
+message transport. Separate worker-clock intervals record WASM load/compile/
+initialization and Rayon pool initialization; these are startup subintervals.
+They are shown independently and never added to a comparison's compute time.
+
+The compute tile measures the comparison inside the ready worker: reference
+preparation or cache verification, scalar scoring and spatial-map construction.
+The visible phase breakdown names all three. Map time includes the native map
+API's own work (including any repeated scalar calculation in that API).
+Request wall time is measured on the main thread from sending the comparison
+until receiving its final result, including data cloning, scheduling and message
+transport; it excludes subsequent canvas rendering. Upload decoding and JPEG
+encoding are separate jobs and are not included in comparison time.
+
+Controls require finite nonnegative durations, phase intervals contained in
+the comparison total, cold preparation versus warm cache verification, and
+separate startup/compute text after cancellation and model changes. These
+interactive durations do not qualify fleet benchmark acceptance.

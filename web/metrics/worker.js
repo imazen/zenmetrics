@@ -9,17 +9,21 @@ self.onmessage = async ({data}) => {
       postMessage({type:'progress', message:'Instantiating WASM…'});
       const relaxedProbe = new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,15,1,13,0,65,0,253,15,65,0,253,15,253,128,2,11]);
       if (!WebAssembly.validate(relaxedProbe)) throw new Error('Relaxed SIMD128 is required');
+      const wasmStart = performance.now();
       wasm = await init(); // Compilation rejects unsupported SIMD/relaxed SIMD; no alternate module.
+      const wasmMilliseconds = performance.now()-wasmStart;
       postMessage({type:'progress', message:'Starting Rayon workers…'});
+      const poolStart = performance.now();
       let timer;
       try {
         await Promise.race([initThreadPool(data.threads), new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error('Rayon worker initialization deadline expired')), 15000);
         })]);
       } finally { clearTimeout(timer); }
+      const poolMilliseconds=performance.now()-poolStart;
       ready = true;
       if (thread_count() !== data.threads) throw new Error('Rayon pool size differs from the request');
-      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics())});
+      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics()), startup:{wasmMilliseconds,poolMilliseconds}});
       return;
     }
     if (!ready) throw new Error('WASM worker has not initialized');
@@ -44,21 +48,23 @@ self.onmessage = async ({data}) => {
     const start = performance.now();
     const {reference, distorted, width, height, metric, id} = data;
 
+    let referencePrepared=false;
     if ((metric==='zensim'||!metric||data.mapMetric==='zensim'||!data.mapMetric) && (!previousReference || previousReference.profile !== profile || previousReference.width !== width || previousReference.height !== height ||
         previousReference.bytes.length !== reference.length || !reference.every((v,i) => v === previousReference.bytes[i]))) {
-      phase(3);const prepared = Reference.with_profile(reference, width, height, width * 4, profile);
+      referencePrepared=true;phase(3);const prepared = Reference.with_profile(reference, width, height, width * 4, profile);
       if (cached) cached.free();
       cached = prepared;
       previousReference = {width, height, profile, bytes: reference.slice()};
     }
+    const referenceMilliseconds=performance.now()-start;
     const selected = metric || 'zensim';
     const mapMetric = data.mapMetric || 'zensim';
     let score;const scoreStart=performance.now();phase(4);
     if(selected==='zensim') score={metric:'zensim',profile,backend:'native-cpu-wasm',score:cached.score(distorted,width*4)};
     else score=JSON.parse(score_rgba(selected,reference,distorted,width,height,width*4,data.display||''));
     const scoreMilliseconds=performance.now()-scoreStart;
-    postMessage({type:'score',id,score,scoreMilliseconds});
-    phase(5);
+    postMessage({type:'score',id,score,scoreMilliseconds,referenceMilliseconds,referencePrepared});
+    const mapStart=performance.now();phase(5);
     let map, mapWidth=width, mapHeight=height, similarity=false;
     if(mapMetric==='zensim') {
       const compared=cached.compare(distorted,width*4);map=compared.map;compared.free();
@@ -66,7 +72,7 @@ self.onmessage = async ({data}) => {
       const spatial=spatial_map(mapMetric,reference,distorted,width,height,width*4,data.display||'standard_4k');
       map=spatial.values;mapWidth=spatial.width;mapHeight=spatial.height;similarity=spatial.similarity;spatial.free();
     }
-    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,scoreMilliseconds,milliseconds:performance.now()-start},[map.buffer]);
+    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,referenceMilliseconds,referencePrepared,scoreMilliseconds,mapMilliseconds:performance.now()-mapStart,milliseconds:performance.now()-start},[map.buffer]);
   } catch (error) {
     postMessage({type: 'error', id: data.id, message: String(error), fatal: error instanceof WebAssembly.RuntimeError});
   }
