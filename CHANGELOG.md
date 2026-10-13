@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Browser upgrades (`e05d1c91`, `dee64105`, `e54713a7`): bind app/glue/WASM/Rayon workers to immutable source-version URLs, keep entry cache rules separate, show Brave Shields guidance, and probe WebGPU compute/readback readiness. Existing CPU scoring and benchmark acceptance are unchanged.
+
 - Browser completion and cancellation (`e58ba138`, `a7803994`, `8290373f`): pin zensim's WASM deallocation fix and published SIMD beta source, report actual prepared rows through how-far shared atomics, publish scalar scores before maps, and support cooperative cancellation with bounded worker disposal. Regression checks include full-HD zensim, the real demo and recovery after cancellation.
 
 - Browser viewer (`4f80a33b`, `319c2f33`, `cc6f9b95`, `172fb123`): native SDR metric selection, Zen JPEG/PNG/WebP/JXL decoding, JPEG candidates, native spatial maps, and current-source Pages deployments. Pin zenflate main and compatible zenpng together; refuse unsupported maps and non-opaque scoring. Validation and remaining issue 70 gates: [browser validation](docs/BROWSER_VIEWER_2026-10-13.md).

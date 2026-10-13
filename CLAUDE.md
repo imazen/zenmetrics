@@ -542,6 +542,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-13 — cached browser glue/WASM generation mismatch.** An older loader's 25-page shared memory failed against a module requiring 42 pages. Pages assembly now versions the app, coordinator, generated glue, WASM and nested Rayon helpers together (`e05d1c91`). Entry-page/source/compatibility-worker cache rules are disjoint from immutable asset rules (`dee64105`). Browser checks block historical package URLs, exercise an undersized-memory LinkError control, and retain demo/scalar/map/cancellation assertions. WebGPU readiness is a separate compute/readback diagnostic; the selectable browser metrics remain CPU routes.
+
+
 - **2026-10-13 — browser no-default-features compile failure.** The native CVVDP spatial arm used display methods even when browser cpu-cvvdp was disabled, making the display type uninhabited. `8290373f` gates that arm; the pinned no-default-features compile check passes. Default-feature browser behavior is unchanged.
 
 

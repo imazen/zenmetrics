@@ -139,3 +139,40 @@ to https://metrics.imazen.org/ and the expanded browser checks passed there on
 2026-10-13, including the actual demo and cancellation/recovery. The live
 verification used run-heavy: peak RSS 0.18 GiB, minimum available 26633 MiB,
 peak load 0.50. Remote workspace CI was still running at this observation.
+
+## Upgrade isolation and browser readiness
+
+A reported loader/module mismatch provided 25 pages to a module requiring 42.
+The current generated glue requests 42. An undersized-memory negative control
+produces the same WebAssembly LinkError signature; the matching generation
+passes initialization and the full viewer suite.
+
+Pages now places the app, coordinator, generated glue, WASM and nested Rayon
+helpers under `assets/<source-commit>/`. The browser tests block historical
+`/pkg/` URLs and still require the real demo, all 38 CPU scalar routes,
+full-HD zensim and cancellation/recovery. Root entry/source/worker files use
+no-store; immutable asset cache rules do not overlap those paths. Cloudflare
+[joins duplicate header values across matching rules](https://developers.cloudflare.com/pages/configuration/headers/),
+so a broad no-store rule would interfere with immutable caching.
+
+Brave users see the instruction to turn Shields off for this site. Actual
+relaxed-SIMD validation and Rayon pool initialization remain required.
+WebGPU is tested with adapter/device creation, compute dispatch and readback;
+missing adapters are reported explicitly. Headless Chromium on the validation
+host reported no WebGPU adapter. This is an honest readiness diagnostic, not
+GPU metric execution or hardware benchmark qualification; this browser build
+still selects native CPU metrics.
+
+The versioned local build passed the expanded checks under run-heavy: peak RSS
+0.18 GiB, minimum available 26555 MiB, peak load 0.52. The advisory quality kit
+was absent; JavaScript syntax, Python compilation and tracked-file hygiene
+checks passed.
+
+Source `e54713a7b2b5fffab06120f72173a25d627b6d96` was deployed and the expanded
+suite passed on https://metrics.imazen.org/ on 2026-10-13. Live responses
+reported `Cache-Control: no-store` for the entry page and
+`public, max-age=31536000, immutable` for versioned glue. The ready message
+reported eight Rayon workers and SIMD128 plus relaxed SIMD. The live suite
+used run-heavy: peak RSS 0.18 GiB, minimum available 26636 MiB, peak load 0.22.
+The separate live-header check used peak RSS 0.13 GiB, minimum available
+27501 MiB, peak load 0.21. Remote workspace CI remained in progress.
