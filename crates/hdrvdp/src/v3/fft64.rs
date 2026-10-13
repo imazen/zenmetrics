@@ -208,11 +208,11 @@ fn fft8_inner(token: Token, re8: &mut [f64], im8: &mut [f64], n: usize, stages: 
         let half = wre.len();
         let len = half * 2;
         for start in (0..n).step_by(len) {
-            for k in 0..half {
+            for (k, (&wr, &wi)) in wre.iter().zip(wim.iter()).enumerate() {
                 let a = (start + k) * 8;
                 let b = (start + k + half) * 8;
-                let wre = f64x8::splat_t(token, wre[k]);
-                let wim = f64x8::splat_t(token, wim[k]);
+                let wre = f64x8::splat_t(token, wr);
+                let wim = f64x8::splat_t(token, wi);
                 let ure = f64x8::load_t(token, (&re8[a..a + 8]).try_into().unwrap());
                 let uim = f64x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
                 let vre = f64x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
@@ -644,41 +644,40 @@ impl Plan2 {
         }
     }
 
-    /// Eight columns per block: the `[k·8 + j]` lane layout is a contiguous
-    /// 8-`f64` row of the working plane, so gather and scatter are copies.
-    fn columns(&mut self, inverse: bool) {
+    /// Forward row pass: 8 rows of `buf` per block, transposed into the
+    /// lane layout, transformed, scattered into the working planes.
+    fn rows_fwd(&mut self, buf: &[C64]) {
         let (w, h) = (self.width, self.height);
-        for x0 in (0..w).step_by(8) {
-            let cols = (w - x0).min(8);
-            for y in 0..h {
-                let (d, s) = (y * 8, y * w + x0);
-                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
-                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
-            }
-            {
-                let m = self.columns.work_len(h);
-                let re8 = &mut self.re8[..h * 8];
-                let im8 = &mut self.im8[..h * 8];
-                let sre8 = &mut self.sre8[..m * 8];
-                let sim8 = &mut self.sim8[..m * 8];
-                if inverse {
-                    self.columns.inverse8(re8, im8, sre8, sim8);
-                } else {
-                    self.columns.run8(re8, im8, sre8, sim8);
+        for y0 in (0..h).step_by(8) {
+            let rws = (h - y0).min(8);
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.re8[k * 8 + j] = buf[row + k].re;
+                    self.im8[k * 8 + j] = buf[row + k].im;
                 }
             }
-            for y in 0..h {
-                let (d, s) = (y * 8, y * w + x0);
-                self.pre[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
-                self.pim[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            {
+                let m = self.rows.work_len(w);
+                let re8 = &mut self.re8[..w * 8];
+                let im8 = &mut self.im8[..w * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.rows.run8(re8, im8, sre8, sim8);
+            }
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.pre[row + k] = self.re8[k * 8 + j];
+                    self.pim[row + k] = self.im8[k * 8 + j];
+                }
             }
         }
     }
 
-    /// Eight rows per block, transposed into the lane layout and back —
-    /// L2-resident for the widths this transforms, same trade as
-    /// `crate::fft::fft2_rows_planned`.
-    fn rows(&mut self, inverse: bool) {
+    /// Inverse row pass: transposed gather from the working planes, then a
+    /// contiguous row of `buf` written per lane.
+    fn rows_inv(&mut self, buf: &mut [C64]) {
         let (w, h) = (self.width, self.height);
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
@@ -695,11 +694,95 @@ impl Plan2 {
                 let im8 = &mut self.im8[..w * 8];
                 let sre8 = &mut self.sre8[..m * 8];
                 let sim8 = &mut self.sim8[..m * 8];
-                if inverse {
-                    self.rows.inverse8(re8, im8, sre8, sim8);
-                } else {
-                    self.rows.run8(re8, im8, sre8, sim8);
+                self.rows.inverse8(re8, im8, sre8, sim8);
+            }
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    buf[row + k] = C64::new(self.re8[k * 8 + j], self.im8[k * 8 + j]);
                 }
+            }
+        }
+    }
+
+    /// Forward column pass: the `[k·8 + j]` lane layout is a contiguous
+    /// 8-`f64` row of the working plane; results go straight back to `buf`.
+    fn columns_fwd(&mut self, buf: &mut [C64]) {
+        let (w, h) = (self.width, self.height);
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+            }
+            {
+                let m = self.columns.work_len(h);
+                let re8 = &mut self.re8[..h * 8];
+                let im8 = &mut self.im8[..h * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.columns.run8(re8, im8, sre8, sim8);
+            }
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                for j in 0..cols {
+                    buf[s + j] = C64::new(self.re8[d + j], self.im8[d + j]);
+                }
+            }
+        }
+    }
+
+    /// Inverse column pass: gather straight from `buf` (eight adjacent
+    /// columns per block), transform, scatter into the working planes.
+    fn columns_inv(&mut self, buf: &[C64]) {
+        let (w, h) = (self.width, self.height);
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                for j in 0..cols {
+                    self.re8[d + j] = buf[s + j].re;
+                    self.im8[d + j] = buf[s + j].im;
+                }
+            }
+            {
+                let m = self.columns.work_len(h);
+                let re8 = &mut self.re8[..h * 8];
+                let im8 = &mut self.im8[..h * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.columns.inverse8(re8, im8, sre8, sim8);
+            }
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.pre[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
+                self.pim[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            }
+        }
+    }
+
+    /// Plane variants of the four passes: identical arithmetic, but the
+    /// gathers/scatters touch contiguous `f64` runs instead of `C64`
+    /// pairs — the hot `conv_fft_pad` path uses these.
+    fn rows_fwd_p(&mut self, re: &[f64], im: &[f64]) {
+        let (w, h) = (self.width, self.height);
+        for y0 in (0..h).step_by(8) {
+            let rws = (h - y0).min(8);
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.re8[k * 8 + j] = re[row + k];
+                    self.im8[k * 8 + j] = im[row + k];
+                }
+            }
+            {
+                let m = self.rows.work_len(w);
+                let re8 = &mut self.re8[..w * 8];
+                let im8 = &mut self.im8[..w * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.rows.run8(re8, im8, sre8, sim8);
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
@@ -711,21 +794,116 @@ impl Plan2 {
         }
     }
 
+    fn rows_inv_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+        let (w, h) = (self.width, self.height);
+        for y0 in (0..h).step_by(8) {
+            let rws = (h - y0).min(8);
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.re8[k * 8 + j] = self.pre[row + k];
+                    self.im8[k * 8 + j] = self.pim[row + k];
+                }
+            }
+            {
+                let m = self.rows.work_len(w);
+                let re8 = &mut self.re8[..w * 8];
+                let im8 = &mut self.im8[..w * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.rows.inverse8(re8, im8, sre8, sim8);
+            }
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    re[row + k] = self.re8[k * 8 + j];
+                    im[row + k] = self.im8[k * 8 + j];
+                }
+            }
+        }
+    }
+
+    fn columns_fwd_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+        let (w, h) = (self.width, self.height);
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+            }
+            {
+                let m = self.columns.work_len(h);
+                let re8 = &mut self.re8[..h * 8];
+                let im8 = &mut self.im8[..h * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.columns.run8(re8, im8, sre8, sim8);
+            }
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                re[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
+                im[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            }
+        }
+    }
+
+    fn columns_inv_p(&mut self, re: &[f64], im: &[f64]) {
+        let (w, h) = (self.width, self.height);
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.re8[d..d + cols].copy_from_slice(&re[s..s + cols]);
+                self.im8[d..d + cols].copy_from_slice(&im[s..s + cols]);
+            }
+            {
+                let m = self.columns.work_len(h);
+                let re8 = &mut self.re8[..h * 8];
+                let im8 = &mut self.im8[..h * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                self.columns.inverse8(re8, im8, sre8, sim8);
+            }
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.pre[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
+                self.pim[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            }
+        }
+    }
+
+    /// Forward transform on split real/imaginary planes — same results as
+    /// [`forward`] on the equivalent `C64` buffer.
+    fn forward_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+        assert_eq!(
+            (re.len(), im.len()),
+            (self.width * self.height, self.width * self.height),
+            "fft2: plane size mismatch"
+        );
+        self.rows_fwd_p(re, im);
+        self.columns_fwd_p(re, im);
+    }
+
+    /// Inverse transform on split real/imaginary planes.
+    fn inverse_p(&mut self, re: &mut [f64], im: &mut [f64]) {
+        assert_eq!(
+            (re.len(), im.len()),
+            (self.width * self.height, self.width * self.height),
+            "ifft2: plane size mismatch"
+        );
+        self.columns_inv_p(re, im);
+        self.rows_inv_p(re, im);
+    }
+
     fn forward(&mut self, buf: &mut [C64]) {
         assert_eq!(
             buf.len(),
             self.width * self.height,
             "fft2: buffer size mismatch"
         );
-        for (i, c) in buf.iter().enumerate() {
-            self.pre[i] = c.re;
-            self.pim[i] = c.im;
-        }
-        self.rows(false);
-        self.columns(false);
-        for (c, (&r, &i)) in buf.iter_mut().zip(self.pre.iter().zip(&self.pim)) {
-            *c = C64::new(r, i);
-        }
+        self.rows_fwd(buf);
+        self.columns_fwd(buf);
     }
 
     fn inverse(&mut self, buf: &mut [C64]) {
@@ -734,15 +912,8 @@ impl Plan2 {
             self.width * self.height,
             "ifft2: buffer size mismatch"
         );
-        for (i, c) in buf.iter().enumerate() {
-            self.pre[i] = c.re;
-            self.pim[i] = c.im;
-        }
-        self.columns(true);
-        self.rows(true);
-        for (c, (&r, &i)) in buf.iter_mut().zip(self.pre.iter().zip(&self.pim)) {
-            *c = C64::new(r, i);
-        }
+        self.columns_inv(buf);
+        self.rows_inv(buf);
     }
 }
 
@@ -812,16 +983,26 @@ pub(super) fn pad_image(
         }
     };
     let mut out = vec![0.0; pad_w * pad_h];
+    // Column map hoisted once; interior columns map to themselves, so each
+    // output row is `srow` followed by the reflected/clamped pad run.
+    let xmap: Vec<usize> = (0..pad_w).map(|px| map(px, width)).collect();
     for py in 0..pad_h {
         let sy = map(py, height);
-        for px in 0..pad_w {
-            let sx = map(px, width);
-            out[py * pad_w + px] = match (sy, sx) {
-                (usize::MAX, _) | (_, usize::MAX) => match pad {
-                    Pad::Constant(v) => v,
-                    _ => unreachable!(),
-                },
-                _ => x[sy * width + sx],
+        let orow = &mut out[py * pad_w..py * pad_w + pad_w];
+        if sy == usize::MAX {
+            let Pad::Constant(v) = pad else { unreachable!() };
+            orow.fill(v);
+            continue;
+        }
+        let srow = &x[sy * width..sy * width + width];
+        orow[..width].copy_from_slice(srow);
+        for (o, &sx) in orow[width..].iter_mut().zip(&xmap[width..]) {
+            *o = match sx {
+                usize::MAX => {
+                    let Pad::Constant(v) = pad else { unreachable!() };
+                    v
+                }
+                sx => srow[sx],
             };
         }
     }
@@ -845,19 +1026,22 @@ pub(super) fn conv_fft_pad(
     pad: Pad,
 ) -> Vec<f64> {
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
-    let padded = pad_image(x, width, height, pad_w, pad_h, pad);
-    let mut buf: Vec<C64> = padded.iter().map(|&v| C64::new(v, 0.0)).collect();
+    // Split real/imaginary planes end to end: the pointwise multiply is
+    // contiguous and vectorizable, and no C64 (de)interleave is needed.
+    let mut re = pad_image(x, width, height, pad_w, pad_h, pad);
+    let mut im = vec![0.0; pad_w * pad_h];
     let mut plan = Plan2::new(pad_w, pad_h);
-    plan.forward(&mut buf);
-    for (b, &f) in buf.iter_mut().zip(filter) {
-        *b = C64::new(b.re * f, b.im * f);
+    plan.forward_p(&mut re, &mut im);
+    for (r, &f) in re.iter_mut().zip(filter) {
+        *r *= f;
     }
-    plan.inverse(&mut buf);
+    for (v, &f) in im.iter_mut().zip(filter) {
+        *v *= f;
+    }
+    plan.inverse_p(&mut re, &mut im);
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {
-        for x0 in 0..width {
-            out.push(buf[y * pad_w + x0].re);
-        }
+        out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
     }
     out
 }

@@ -25,6 +25,74 @@
 
 use crate::spyr::{max_pyr_height, reflect1};
 
+/// [`corr_dn64`] block kernel: eight output columns at once — lane `j` is
+/// output `ox0 + j`, so each lane's `acc` accumulates in the same tap order
+/// as the scalar loop and the result is bit-identical. `wint` holds the
+/// transposed tap windows for one `ky` (`wint[kx·8 + j]`).
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[allow(clippy::too_many_arguments)]
+fn corr8_inner(
+    token: Token,
+    image: &[f64],
+    width: usize,
+    xtab: &[usize],
+    contig: &[bool],
+    yt: &[usize],
+    filter: &[f64],
+    fs: usize,
+    ox0: usize,
+    out_row: &mut [f64],
+) {
+    let mut wint = [0.0f64; 8 * 16];
+    let mut acc = f64x8::zero_t(token);
+    for ky in 0..fs {
+        let row = &image[yt[ky]..yt[ky] + width];
+        let w = &mut wint[..fs * 8];
+        for (j, wt) in xtab.chunks_exact(fs).enumerate() {
+            if contig[j] {
+                // Interior lane: the reflected tap window is a contiguous
+                // run — sequential loads instead of table lookups.
+                for kx in 0..fs {
+                    w[kx * 8 + j] = row[wt[0] + kx];
+                }
+            } else {
+                for (kx, &ix) in wt.iter().enumerate() {
+                    w[kx * 8 + j] = row[ix];
+                }
+            }
+        }
+        let frow = &filter[ky * fs..ky * fs + fs];
+        for kx in 0..fs {
+            let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
+            acc = acc + f64x8::splat_t(token, frow[kx]) * t;
+        }
+    }
+    acc.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
+}
+
+/// [`corr8_inner`] with runtime tier dispatch; `xtab` holds one `fs`-tap
+/// window per lane (8 of them), `contig` flags lanes whose window is a
+/// contiguous run starting at `xtab[j*fs]`.
+#[allow(clippy::too_many_arguments)]
+fn corr8(
+    image: &[f64],
+    width: usize,
+    xtab: &[usize],
+    contig: &[bool],
+    yt: &[usize],
+    filter: &[f64],
+    fs: usize,
+    ox0: usize,
+    out_row: &mut [f64],
+) {
+    debug_assert_eq!(xtab.len(), 8 * fs);
+    debug_assert_eq!(contig.len(), 8);
+    archmage::attuned!(
+        corr8_inner(image, width, xtab, contig, yt, filter, fs, ox0, out_row),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// Pyramid low-pass pre-filter, 7×7 (upstream `sp0Filters` `lo0filt`).
 #[allow(clippy::excessive_precision)]
 const LO0FILT: [f64; 49] = [
@@ -441,8 +509,12 @@ fn corr_dn64(
     // Reflected tap indices are shared by every output row/column —
     // compute them once instead of per output pixel.
     let mut xtab = vec![0usize; out_w * fs];
+    // `contig[ox]` ⇔ the tap window never reflects, so lane `xtab[ox]`'s
+    // window is the contiguous run `xtab[ox*fs] .. +fs`.
+    let mut contig = vec![false; out_w];
     for ox in 0..out_w {
         let ix0 = ox * step;
+        contig[ox] = ix0 >= c as usize && ix0 - c as usize + fs <= width;
         for kx in 0..fs {
             xtab[ox * fs + kx] = reflect1(ix0 as isize + kx as isize - c, width);
         }
@@ -455,9 +527,24 @@ fn corr_dn64(
         }
     }
     let mut out = vec![0.0; out_w * out_h];
+    let full = out_w & !7;
     for oy in 0..out_h {
         let yt = &yoff[oy * fs..oy * fs + fs];
-        for ox in 0..out_w {
+        let out_row = &mut out[oy * out_w..oy * out_w + out_w];
+        for ox0 in (0..full).step_by(8) {
+            corr8(
+                image,
+                width,
+                &xtab[ox0 * fs..ox0 * fs + 8 * fs],
+                &contig[ox0..ox0 + 8],
+                yt,
+                filter,
+                fs,
+                ox0,
+                out_row,
+            );
+        }
+        for ox in full..out_w {
             let xt = &xtab[ox * fs..ox * fs + fs];
             let mut acc = 0.0;
             for ky in 0..fs {
@@ -466,7 +553,7 @@ fn corr_dn64(
                     acc += filter[ky * fs + kx] * row[xt[kx]];
                 }
             }
-            out[oy * out_w + ox] = acc;
+            out_row[ox] = acc;
         }
     }
     Band3 {
@@ -474,6 +561,96 @@ fn corr_dn64(
         height: out_h,
         data: out,
     }
+}
+
+/// [`up_conv64`] block kernel: eight output columns at once — lane `j` is
+/// output `px0 + j`. Unaligned taps load `0.0` into `wint`, which can only
+/// change the sign of an all-zero accumulator; the caller recomputes any
+/// `acc[j] == 0.0` lane with [`up_pixel`] so results stay bit-identical.
+/// Returns the eight accumulator lanes.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[allow(clippy::too_many_arguments)]
+fn up8_inner(
+    token: Token,
+    band: &[f64],
+    bw: usize,
+    rrow: &[usize],
+    ron: &[bool],
+    rcol: &[usize],
+    rcon: &[bool],
+    filter: &[f64],
+    fs: usize,
+) -> [f64; 8] {
+    let mut wint = [0.0f64; 8 * 16];
+    let mut acc = f64x8::zero_t(token);
+    for ky in 0..fs {
+        if !ron[ky] {
+            continue;
+        }
+        let brow = &band[rrow[ky]..rrow[ky] + bw];
+        let w = &mut wint[..fs * 8];
+        for j in 0..8 {
+            let cn = &rcon[j * fs..j * fs + fs];
+            let rc = &rcol[j * fs..j * fs + fs];
+            for kx in 0..fs {
+                w[kx * 8 + j] = if cn[kx] { brow[rc[kx]] } else { 0.0 };
+            }
+        }
+        let frow = &filter[ky * fs..ky * fs + fs];
+        for kx in 0..fs {
+            let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
+            acc = acc + f64x8::splat_t(token, frow[kx]) * t;
+        }
+    }
+    acc.to_array()
+}
+
+/// [`up8_inner`] with runtime tier dispatch.
+#[allow(clippy::too_many_arguments)]
+fn up8(
+    band: &[f64],
+    bw: usize,
+    rrow: &[usize],
+    ron: &[bool],
+    rcol: &[usize],
+    rcon: &[bool],
+    filter: &[f64],
+    fs: usize,
+) -> [f64; 8] {
+    archmage::attuned!(
+        up8_inner(band, bw, rrow, ron, rcol, rcon, filter, fs),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// One `up_conv64` output the original full-order way — every tap in
+/// sequence, zero contributions included (bit-exact signed-zero sums).
+#[allow(clippy::too_many_arguments)]
+fn up_pixel(
+    band: &Band3,
+    filter: &[f64],
+    fs: usize,
+    step: usize,
+    out_w: usize,
+    out_h: usize,
+    py: usize,
+    px: usize,
+) -> f64 {
+    let c = (fs / 2) as isize;
+    let mut acc = 0.0;
+    for ky in 0..fs {
+        for kx in 0..fs {
+            let y = reflect1(py as isize + ky as isize - c, out_h);
+            let x = reflect1(px as isize + kx as isize - c, out_w);
+            let v = if y.is_multiple_of(step) && x.is_multiple_of(step) {
+                band.data[(y / step) * band.width + (x / step)]
+            } else {
+                0.0
+            };
+            acc += filter[ky * fs + kx] * v;
+        }
+    }
+    acc
 }
 
 /// `f64` `upConv`: zero-upsample `band` by `step` onto the
@@ -528,10 +705,37 @@ fn up_conv64(
             }
         }
     }
+    let full = out_width & !7;
     for py in 0..out_height {
         let rr = &rrow[py * fs..py * fs + fs];
         let rn = &ron[py * fs..py * fs + fs];
-        for px in 0..out_width {
+        let res_row = &mut res[py * out_width..py * out_width + out_width];
+        for px0 in (0..full).step_by(8) {
+            let acc = up8(
+                &band.data,
+                band.width,
+                rr,
+                rn,
+                &rcol[px0 * fs..px0 * fs + 8 * fs],
+                &rcon[px0 * fs..px0 * fs + 8 * fs],
+                filter,
+                fs,
+            );
+            for (j, a) in acc.iter().enumerate() {
+                // Skipped taps contributed f·(±0.0). Adding −0.0 is always
+                // the identity and adding +0.0 is too — unless every other
+                // contribution was −0.0, in which case the full-order sum
+                // is +0.0 where the subset sum is −0.0. Recompute that one
+                // lane the original way so the result is bit-identical.
+                let a = if *a == 0.0 {
+                    up_pixel(band, filter, fs, step, out_width, out_height, py, px0 + j)
+                } else {
+                    *a
+                };
+                res_row[px0 + j] += a;
+            }
+        }
+        for px in full..out_width {
             let rc = &rcol[px * fs..px * fs + fs];
             let cn = &rcon[px * fs..px * fs + fs];
             let mut acc = 0.0;
@@ -547,11 +751,6 @@ fn up_conv64(
                     acc += filter[ky * fs + kx] * brow[rc[kx]];
                 }
             }
-            // Skipped taps contributed f·(±0.0). Adding −0.0 is always
-            // the identity and adding +0.0 is too — unless every other
-            // contribution was −0.0, in which case the full-order sum is
-            // +0.0 where the subset sum is −0.0. Recompute that one
-            // pixel the original way so the result is bit-identical.
             if acc == 0.0 {
                 acc = 0.0;
                 for ky in 0..fs {
@@ -561,7 +760,7 @@ fn up_conv64(
                     }
                 }
             }
-            res[py * out_width + px] += acc;
+            res_row[px] += acc;
         }
     }
 }
