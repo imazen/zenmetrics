@@ -101,12 +101,18 @@ impl Plane {
         #[cfg(feature = "parallel")]
         if rayon::current_num_threads() > 1 && (r1 - r0) as usize * stride >= (1 << 16) {
             use rayon::prelude::*;
+            // 16-row tasks: per-row work is ~hundreds of ns, so row-granular
+            // dispatch drowns in stealing on heterogeneous pools.
+            let rows_per = 16;
             self.buf
-                .par_chunks_mut(stride)
+                .par_chunks_mut(stride * rows_per)
                 .enumerate()
-                .for_each(|(ri, row)| {
-                    if ri >= lo && ri < hi {
-                        f(ri, row);
+                .for_each(|(ci, chunk)| {
+                    for (i, row) in chunk.chunks_mut(stride).enumerate() {
+                        let ri = ci * rows_per + i;
+                        if ri >= lo && ri < hi {
+                            f(ri, row);
+                        }
                     }
                 });
             return;
