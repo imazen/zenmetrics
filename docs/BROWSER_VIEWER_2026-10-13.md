@@ -266,3 +266,14 @@ Controls require finite nonnegative durations, phase intervals contained in
 the comparison total, cold preparation versus warm cache verification, and
 separate startup/compute text after cancellation and model changes. These
 interactive durations do not qualify fleet benchmark acceptance.
+
+Source `614994a5d4c391d568e58d4b06244c7d7d849b32` was freshly built,
+deployed and checked on https://metrics.imazen.org/. Its live controls passed,
+including cold versus warm reference timing and model/cancellation recovery.
+The build used run-heavy peak RSS 0.62 GiB and the live check 0.18 GiB.
+
+The earlier model-selection CI run 38386150704 failed exact native/WASM equality
+for legacy Preview v0.1, despite the local fixture matching. Timing changes
+keep that assertion intact and report the scalar values and maximum map delta
+on failure. The cause and cross-host envelope are not established by the local
+checks; no parity tolerance has been broadened.

@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Browser timing (`614994a5`): separate worker/WASM/Rayon startup from reference/cache verification, scalar scoring, map work and comparison request wall time. Interactive timings remain separate from fleet benchmark acceptance.
+
 - Browser Zensim models (`9e45737c`): explicit B/D/A/legacy-preview score and map selection, scalar-only C with explicit map refusal, profile-aware reference caching, and matching CLI profile commands. B remains the default.
 
 - Browser map visualization (`1652bcfb`): use per-image percentile square-root scaling by default, show the metric range, and verify visible Zensim/Butteraugli/CVVDP demo maps. Native maps, scalar scores and benchmark acceptance remain unchanged.

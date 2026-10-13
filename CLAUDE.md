@@ -1477,3 +1477,11 @@ works without a live stop token. The browser labels C scalar-only, disposes its
 worker for cancellation, and refuses C spatial maps explicitly. It never serves
 a B map as C. Native-oracle controls cover all six offered SDR models and the
 browser verifies cache invalidation when changing models.
+
+### Known Bugs: legacy browser profile exact parity on CI (2026-10-13)
+
+Website run 38386150704 failed the exact native/WASM profile assertion for
+Preview v0.1. The local native oracle and browser fixture matched exactly.
+The assertion now reports both scalar values and maximum map delta so CI can
+identify the difference. The cause remains unverified; numeric expectations
+and benchmark acceptance are unchanged.
