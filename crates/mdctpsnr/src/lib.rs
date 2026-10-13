@@ -224,7 +224,7 @@ fn ef(x: f32) -> f32 {
     }
 }
 /// Vector helpers for the measured hot loops, built on magetypes'
-/// mid-precision kernels (`pow_midp`, `exp_midp_unchecked`) through the
+/// mid-precision kernels (`pow_midp`, `exp_midp`) through the
 /// safe `f32x8` API — no extern calls, no `asm!`, no `transmute`. These
 /// kernels differ from glibc's `_ZGVdN8*` vector routines (and from scalar
 /// `powf`/`expf`) by up to ~30 ulp per lane — within the golden tolerance —
@@ -257,7 +257,7 @@ mod vecops {
 
     /// One 8-lane chunk of [`measure_in_band`]: the same lane-local ops the
     /// scalar loop runs, so each output lane matches. `vsqrtps` and
-    /// `vblendvps` are exact per lane; `exp_midp_unchecked` supplies the
+    /// `vblendvps` are exact per lane; `exp_midp` supplies the
     /// vector `expf` (mid-precision exp2 kernel, ≤~2 ulp near zero).
     #[attune(v3, import_intrinsics)]
     fn measure_in_band_chunk8(
@@ -289,9 +289,12 @@ mod vecops {
         );
         let mut neg = [0.0f32; 8];
         _mm256_storeu_ps(&mut neg, _mm256_xor_ps(p, _mm256_set1_ps(-0.0)));
+        // Checked `exp_midp` — `exp_midp_unchecked` wraps large `p` (err ≳
+        // 3.6) into garbage through the unclamped exponent build, where the
+        // scalar `expf` correctly returns 0.
         let e = _mm256_loadu_ps(
             &f32x8::<X64V3Token>::from_array_t(token, neg)
-                .exp_midp_unchecked()
+                .exp_midp()
                 .to_array(),
         );
         let cur = _mm256_loadu_ps(el);
@@ -393,6 +396,105 @@ mod vecops {
         e: f32,
     ) {
         type V = f32x8<X64V3Token>;
+        let visv = V::splat_t(token, vis);
+        let (ic, it) = V::partition_slice_t(token, inp);
+        let (oc, ot) = V::partition_slice_mut_t(token, out);
+        for (i, o) in ic.iter().zip(oc.iter_mut()) {
+            (V::load_t(token, i).abs() * visv).pow_midp(e).store(o);
+        }
+        for (o, &v) in ot.iter_mut().zip(it) {
+            *o = super::pf(v.abs() * vis, e);
+        }
+    }
+}
+
+/// aarch64 mirrors of the `vecops` x86 kernels: `f32x4<NeonToken>` lanes run
+/// the identical per-lane op order, and the same magetypes mid-precision
+/// exp2/pow kernels the AVX2 bodies use — same ~2 ulp tolerance class vs
+/// scalar `expf`/`powf`.
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
+mod vecops_neon {
+    use archmage::{NeonToken, SimdToken, arcane};
+    use magetypes::simd::generic::f32x4;
+
+    pub(crate) fn measure_in_band(
+        refline: &[f32],
+        dstline: &[f32],
+        refmask: &[f32],
+        dstmask: &[f32],
+        visbase: f32,
+        errorline: &mut [f32],
+    ) {
+        if let Some(token) = NeonToken::summon() {
+            measure_in_band_neon(
+                token, refline, dstline, refmask, dstmask, visbase, errorline,
+            );
+        } else {
+            super::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
+        }
+    }
+
+    /// Per-element `err = (|r−d|·visbase)·max(rm,dm)`, `errorline *=
+    /// exp(−(err·√err)·err²)` — `err == 0` lanes give `exp(0) = 1`, so the
+    /// scalar `err > 0` guard is absorbed (multiplying by 1 is exact).
+    #[arcane]
+    fn measure_in_band_neon(
+        token: NeonToken,
+        refline: &[f32],
+        dstline: &[f32],
+        refmask: &[f32],
+        dstmask: &[f32],
+        visbase: f32,
+        errorline: &mut [f32],
+    ) {
+        type V = f32x4<NeonToken>;
+        debug_assert_eq!(refline.len(), errorline.len());
+        debug_assert_eq!(dstline.len(), errorline.len());
+        debug_assert_eq!(refmask.len(), errorline.len());
+        debug_assert_eq!(dstmask.len(), errorline.len());
+        let visv = V::splat_t(token, visbase);
+        let (rc, rt) = refline.as_chunks::<4>();
+        let (dc, _) = dstline.as_chunks::<4>();
+        let (rmc, _) = refmask.as_chunks::<4>();
+        let (dmc, _) = dstmask.as_chunks::<4>();
+        let (ec, et) = errorline.as_chunks_mut::<4>();
+        for i in 0..ec.len() {
+            let err = ((V::load_t(token, &rc[i]) - V::load_t(token, &dc[i])).abs() * visv)
+                * V::load_t(token, &rmc[i]).max(V::load_t(token, &dmc[i]));
+            let p = (err * err.sqrt()) * (err * err);
+            // checked `exp_midp`: large `err` underflows toward 0, which the
+            // unchecked variant wraps into garbage through the exponent
+            // bit-field build.
+            let e = (-p).exp_midp();
+            (V::load_t(token, &ec[i]) * e).store(&mut ec[i]);
+        }
+        // Scalar tail — same op order as the scalar reference loop.
+        let off = ec.len() * 4;
+        for (i, e) in et.iter_mut().enumerate() {
+            let err =
+                (rt[i] - dstline[off + i]).abs() * visbase * refmask[off + i].max(dstmask[off + i]);
+            if err > 0.0 {
+                let p = (err * super::sq(err)) * (err * err);
+                *e *= super::ef(-p);
+            }
+        }
+    }
+
+    /// `mapped[i] = |in[i]|·vis` raised to `e` — same `pow_midp` the AVX2
+    /// body uses (edge-checked: `0^e` stays exact 0).
+    pub(crate) fn powf_mapped(out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
+        if let Some(token) = NeonToken::summon() {
+            powf_mapped_neon(token, out, inp, vis, e);
+        } else {
+            for (o, &v) in out.iter_mut().zip(inp) {
+                *o = super::pf(v.abs() * vis, e);
+            }
+        }
+    }
+
+    #[arcane]
+    fn powf_mapped_neon(token: NeonToken, out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
+        type V = f32x4<NeonToken>;
         let visv = V::splat_t(token, vis);
         let (ic, it) = V::partition_slice_t(token, inp);
         let (oc, ot) = V::partition_slice_mut_t(token, out);
@@ -907,7 +1009,14 @@ impl BandMask {
             {
                 vecops::powf_mapped(&mut self.mapped, &self.in_ring[slot], vis, e);
             }
-            #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
+            #[cfg(all(feature = "std", target_arch = "aarch64"))]
+            {
+                vecops_neon::powf_mapped(&mut self.mapped, &self.in_ring[slot], vis, e);
+            }
+            #[cfg(not(any(
+                all(feature = "std", target_arch = "x86_64"),
+                all(feature = "std", target_arch = "aarch64")
+            )))]
             {
                 for (m, &v) in self.mapped.iter_mut().zip(self.in_ring[slot].iter()) {
                     *m = pf(v.abs() * vis, e);
@@ -1537,7 +1646,7 @@ impl MeteredImage {
 /// `p = (err·√err)·err²`, then `errorline *= exp(−p)` for `err > 0` —
 /// reproduced here verbatim (multiply order verified from the
 /// `N_AVX2` clone's disassembly). On x86_64+std the 8-lane `expf` runs
-/// through `vecops` (`exp_midp_unchecked` — within ~2 ulp of glibc's
+/// through `vecops` (`exp_midp` — within ~2 ulp of glibc's
 /// `_ZGVdN8v_expf`, and of scalar `expf`, on the inputs this loop sees).
 #[allow(clippy::too_many_arguments)]
 fn measure_in_band(
@@ -1551,6 +1660,11 @@ fn measure_in_band(
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
         vecops::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
+        return;
+    }
+    #[cfg(all(feature = "std", target_arch = "aarch64"))]
+    {
+        vecops_neon::measure_in_band(refline, dstline, refmask, dstmask, visbase, errorline);
         return;
     }
     #[allow(unreachable_code)]
@@ -2273,6 +2387,53 @@ mod tests {
                 assert_eq!(CR_TBL[x + (y << 3)], CR_TBL[y + (x << 3)]);
                 assert_eq!(NORMS[x][y], NORMS[y][x]);
             }
+        }
+    }
+
+    /// NEON `measure_in_band`/`powf_mapped` vs the scalar reference loops —
+    /// `exp_midp`/`pow_midp` are ~2 ulp off libm, so the check is a
+    /// per-element relative bound rather than bit equality (aarch64 carries
+    /// no bit-locked golden anyway).
+    #[cfg(all(feature = "std", target_arch = "aarch64"))]
+    #[test]
+    fn neon_vecops_match_scalar() {
+        let n = 1029; // non-multiple of 4 for a real tail
+        let rf: Vec<f32> = (0..n).map(|i| (i as f32 * 0.013).sin() * 4.0).collect();
+        let ds: Vec<f32> = (0..n).map(|i| (i as f32 * 0.007).cos() * 3.0).collect();
+        let rm: Vec<f32> = (0..n).map(|i| ((i % 13) as f32 + 0.5) * 0.05).collect();
+        let dm: Vec<f32> = (0..n).map(|i| ((i % 11) as f32 + 0.25) * 0.04).collect();
+
+        // measure_in_band: scalar reference computed inline.
+        let mut a = alloc::vec![1.0f32; n];
+        let mut b = a.clone();
+        for i in 0..n {
+            let err = (rf[i] - ds[i]).abs() * 1.37 * rm[i].max(dm[i]);
+            if err > 0.0 {
+                let p = (err * sq(err)) * (err * err);
+                a[i] *= ef(-p);
+            }
+        }
+        vecops_neon::measure_in_band(&rf, &ds, &rm, &dm, 1.37, &mut b);
+        for (i, (x, y)) in a.iter().zip(&b).enumerate() {
+            assert!(
+                (x - y).abs() <= 4e-6 * x.abs().max(1.0),
+                "measure index {i}: scalar {x} vs neon {y}"
+            );
+        }
+
+        // powf_mapped (e = 0.8 band exponent).
+        let inp: Vec<f32> = (0..n).map(|i| (i as f32 * 0.031).sin() * 2.0).collect();
+        let mut a = alloc::vec![0.0f32; n];
+        let mut b = a.clone();
+        for (m, &v) in a.iter_mut().zip(&inp) {
+            *m = pf(v.abs() * 1.9, 0.8);
+        }
+        vecops_neon::powf_mapped(&mut b, &inp, 1.9, 0.8);
+        for (i, (x, y)) in a.iter().zip(&b).enumerate() {
+            assert!(
+                (x - y).abs() <= 1e-5 * x.abs().max(1.0),
+                "powf index {i}: scalar {x} vs neon {y}"
+            );
         }
     }
 }
