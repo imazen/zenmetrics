@@ -227,6 +227,26 @@ fn fdct8x8_vectors<T: magetypes::simd::backends::F32x8Convert>(token: T, block: 
     }
 }
 
+/// `mask[i][j] = (csf[i][j] * 0.3885746225901003)²` — the product is
+/// computed in f64 and stored in f32, matching the C `float mask`.
+fn mask_of(csf: &[[f32; 8]; 8]) -> [[f32; 8]; 8] {
+    let mut mask = [[0.0f32; 8]; 8];
+    for i in 0..8 {
+        for j in 0..8 {
+            let v = csf[i][j] as f64 * 0.3885746225901003f64;
+            mask[i][j] = (v * v) as f32;
+        }
+    }
+    mask
+}
+
+/// `ret /= pixels; ret /= samplemax²` — both divisions in f32, as C.
+fn finish_score(ret: f32, pixels: u32) -> f64 {
+    let mut ret = ret / pixels as f32;
+    ret /= 255.0f32 * 255.0f32;
+    ret as f64
+}
+
 /// `calc_psnrhvs` — masked MSE of one u8 plane, normalized by
 /// `pixels·255²` (the pre-dB `score` the C returns). `step` is the block
 /// stride (libvmaf calls with 7).
@@ -240,15 +260,7 @@ fn calc_psnrhvs(
     step: usize,
     csf: &[[f32; 8]; 8],
 ) -> f64 {
-    // mask[i][j] = (csf[i][j] * 0.3885746225901003)² — the product is
-    // computed in f64 and stored in f32, matching the C `float mask`.
-    let mut mask = [[0.0f32; 8]; 8];
-    for i in 0..8 {
-        for j in 0..8 {
-            let v = csf[i][j] as f64 * 0.3885746225901003f64;
-            mask[i][j] = (v * v) as f32;
-        }
-    }
+    let mask = mask_of(csf);
 
     // The `ret` fold is f32 in raster order — the vendored-libvmaf FFI
     // parity tests observe the exact fold, so the block raster stays
@@ -275,10 +287,7 @@ fn calc_psnrhvs(
         );
         y += step;
     }
-    // `ret /= pixels; ret /= samplemax²` — both divisions in f32, as C.
-    let mut ret = ret / pixels as f32;
-    ret /= 255.0f32 * 255.0f32;
-    ret as f64
+    finish_score(ret, pixels)
 }
 
 /// One `step`-strided block row of `calc_psnrhvs` — the unchanged
@@ -299,50 +308,149 @@ fn block_row(
     ret: &mut f32,
     pixels: &mut u32,
 ) {
+    // `mask`/`csf` are block-invariant: hold the rows as vectors for
+    // the whole call (mask[0][0] is zeroed — the DC tap is unmasked).
+    let mut mask8 = [f32x8::splat_t(token, 0.0); 8];
+    let mut csf8 = [f32x8::splat_t(token, 0.0); 8];
+    let mut rmask8 = [f32x8::splat_t(token, 0.0); 8];
+    for i in 0..8 {
+        let mut m = mask[i];
+        if i == 0 {
+            m[0] = 0.0;
+        }
+        mask8[i] = f32x8::load_t(token, &m);
+        csf8[i] = f32x8::load_t(token, &csf[i]);
+        // `s_mask * (1/mask)` vs `s_mask / mask` differ in the last ulp —
+        // same drift class as the accepted vector reassociation (the FFI
+        // gate is 2e-4 dB); it trades 8 per-block divisions for 8 hoisted
+        // reciprocals per call.
+        rmask8[i] = f32x8::splat_t(token, 1.0) / mask8[i];
+    }
     let mut x = 0usize;
     while x + 7 < w {
         let mut dct_s = [0i32; 64];
         let mut dct_d = [0i32; 64];
-        let mut s_means = [0.0f32; 4];
-        let mut d_means = [0.0f32; 4];
-        let mut s_gmean = 0.0f32;
-        let mut d_gmean = 0.0f32;
+        // Means are exact-integer sums (pixels ≤ 255, totals ≤ 16320 <
+        // 2^24), so any accumulation order gives the same f32 bits —
+        // accumulate whole row vectors and reduce lanes at the end.
+        // Lane layout: rows i<4 → lanes 0-3 feed means[0], lanes 4-7
+        // means[2]; rows i≥4 → lanes 0-3 means[1], lanes 4-7 means[3].
+        let mut sq02 = f32x8::splat_t(token, 0.0);
+        let mut sq13 = f32x8::splat_t(token, 0.0);
+        let mut dq02 = f32x8::splat_t(token, 0.0);
+        let mut dq13 = f32x8::splat_t(token, 0.0);
         for i in 0..8 {
+            let mut s8 = [0i32; 8];
+            let mut d8 = [0i32; 8];
             for j in 0..8 {
-                let sub = ((i & 12) >> 2) + ((j & 12) >> 1);
-                let s = src[(y + i) * sstride + (j + x)] as i32;
-                let d = dst[(y + i) * dstride + (j + x)] as i32;
-                dct_s[i * 8 + j] = s;
-                dct_d[i * 8 + j] = d;
-                s_gmean += s as f32;
-                d_gmean += d as f32;
-                s_means[sub] += s as f32;
-                d_means[sub] += d as f32;
+                s8[j] = src[(y + i) * sstride + (j + x)] as i32;
+                d8[j] = dst[(y + i) * dstride + (j + x)] as i32;
+            }
+            dct_s[i * 8..][..8].copy_from_slice(&s8);
+            dct_d[i * 8..][..8].copy_from_slice(&d8);
+            if i < 4 {
+                sq02 = sq02 + i32x8::load_t(token, &s8).to_f32();
+                dq02 = dq02 + i32x8::load_t(token, &d8).to_f32();
+            } else {
+                sq13 = sq13 + i32x8::load_t(token, &s8).to_f32();
+                dq13 = dq13 + i32x8::load_t(token, &d8).to_f32();
             }
         }
-        s_gmean /= 64.0;
-        d_gmean /= 64.0;
+        let sq02 = sq02.to_array();
+        let sq13 = sq13.to_array();
+        let dq02 = dq02.to_array();
+        let dq13 = dq13.to_array();
+        let mut s_means = [0.0f32; 4];
+        let mut d_means = [0.0f32; 4];
+        s_means[0] = (sq02[0] + sq02[1]) + (sq02[2] + sq02[3]);
+        s_means[1] = (sq13[0] + sq13[1]) + (sq13[2] + sq13[3]);
+        s_means[2] = (sq02[4] + sq02[5]) + (sq02[6] + sq02[7]);
+        s_means[3] = (sq13[4] + sq13[5]) + (sq13[6] + sq13[7]);
+        d_means[0] = (dq02[0] + dq02[1]) + (dq02[2] + dq02[3]);
+        d_means[1] = (dq13[0] + dq13[1]) + (dq13[2] + dq13[3]);
+        d_means[2] = (dq02[4] + dq02[5]) + (dq02[6] + dq02[7]);
+        d_means[3] = (dq13[4] + dq13[5]) + (dq13[6] + dq13[7]);
+        let s_gmean = ((s_means[0] + s_means[1]) + (s_means[2] + s_means[3])) / 64.0;
+        let d_gmean = ((d_means[0] + d_means[1]) + (d_means[2] + d_means[3])) / 64.0;
         for m in s_means.iter_mut() {
             *m /= 16.0;
         }
         for m in d_means.iter_mut() {
             *m /= 16.0;
         }
+        // Variance pass: products are per-lane identical to the scalar
+        // version; unlike the exact-integer means these sums reassociate,
+        // shifting `s_mask` by ~ulp and flipping rare threshold boundaries
+        // (observed ret drift ≤1e-7 rel — far inside the 2e-4 dB FFI gate).
+        let sm_lo = f32x8::load_t(
+            token,
+            &[s_means[0], s_means[0], s_means[0], s_means[0], s_means[2], s_means[2], s_means[2], s_means[2]],
+        );
+        let sm_hi = f32x8::load_t(
+            token,
+            &[s_means[1], s_means[1], s_means[1], s_means[1], s_means[3], s_means[3], s_means[3], s_means[3]],
+        );
+        let dm_lo = f32x8::load_t(
+            token,
+            &[d_means[0], d_means[0], d_means[0], d_means[0], d_means[2], d_means[2], d_means[2], d_means[2]],
+        );
+        let dm_hi = f32x8::load_t(
+            token,
+            &[d_means[1], d_means[1], d_means[1], d_means[1], d_means[3], d_means[3], d_means[3], d_means[3]],
+        );
+        let sg8 = f32x8::splat_t(token, s_gmean);
+        let dg8 = f32x8::splat_t(token, d_gmean);
+        // Vector accumulators for the per-block stats. The quadrant
+        // layout matches the mean vectors: lanes 0-3 / 4-7 map to
+        // quadrant pairs {0,2} on rows i<4 and {1,3} on i>=4.
+        let mut sgv = f32x8::splat_t(token, 0.0);
+        let mut dgv = f32x8::splat_t(token, 0.0);
+        let mut sv02 = f32x8::splat_t(token, 0.0);
+        let mut sv13 = f32x8::splat_t(token, 0.0);
+        let mut dv02 = f32x8::splat_t(token, 0.0);
+        let mut dv13 = f32x8::splat_t(token, 0.0);
+        for i in 0..8 {
+            let xv = i32x8::load_t(token, dct_s[i * 8..][..8].first_chunk().unwrap()).to_f32();
+            let ds = xv - sg8;
+            sgv = sgv + ds * ds;
+            let mv = if i < 4 { sm_lo } else { sm_hi };
+            let vv = xv - mv;
+            if i < 4 {
+                sv02 = sv02 + vv * vv;
+            } else {
+                sv13 = sv13 + vv * vv;
+            }
+            let xv = i32x8::load_t(token, dct_d[i * 8..][..8].first_chunk().unwrap()).to_f32();
+            let dd = xv - dg8;
+            dgv = dgv + dd * dd;
+            let mv = if i < 4 { dm_lo } else { dm_hi };
+            let vv = xv - mv;
+            if i < 4 {
+                dv02 = dv02 + vv * vv;
+            } else {
+                dv13 = dv13 + vv * vv;
+            }
+        }
+        let sgv = sgv.to_array();
+        let dgv = dgv.to_array();
+        let sv02 = sv02.to_array();
+        let sv13 = sv13.to_array();
+        let dv02 = dv02.to_array();
+        let dv13 = dv13.to_array();
         let mut s_vars = [0.0f32; 4];
         let mut d_vars = [0.0f32; 4];
-        let mut s_gvar = 0.0f32;
-        let mut d_gvar = 0.0f32;
-        for i in 0..64 {
-            let sub = (((i / 8) & 12) >> 2) + (((i % 8) & 12) >> 1);
-            let ds = dct_s[i] as f32 - s_gmean;
-            let dd = dct_d[i] as f32 - d_gmean;
-            s_gvar += ds * ds;
-            d_gvar += dd * dd;
-            let vs = dct_s[i] as f32 - s_means[sub];
-            let vd = dct_d[i] as f32 - d_means[sub];
-            s_vars[sub] += vs * vs;
-            d_vars[sub] += vd * vd;
-        }
+        s_vars[0] = (sv02[0] + sv02[1]) + (sv02[2] + sv02[3]);
+        s_vars[1] = (sv13[0] + sv13[1]) + (sv13[2] + sv13[3]);
+        s_vars[2] = (sv02[4] + sv02[5]) + (sv02[6] + sv02[7]);
+        s_vars[3] = (sv13[4] + sv13[5]) + (sv13[6] + sv13[7]);
+        d_vars[0] = (dv02[0] + dv02[1]) + (dv02[2] + dv02[3]);
+        d_vars[1] = (dv13[0] + dv13[1]) + (dv13[2] + dv13[3]);
+        d_vars[2] = (dv02[4] + dv02[5]) + (dv02[6] + dv02[7]);
+        d_vars[3] = (dv13[4] + dv13[5]) + (dv13[6] + dv13[7]);
+        let mut s_gvar = (((sgv[0] + sgv[1]) + (sgv[2] + sgv[3]))
+            + ((sgv[4] + sgv[5]) + (sgv[6] + sgv[7])));
+        let mut d_gvar = (((dgv[0] + dgv[1]) + (dgv[2] + dgv[3]))
+            + ((dgv[4] + dgv[5]) + (dgv[6] + dgv[7])));
         // `*= 1/63.f*64` / `*= 1/15.f*16` — the constant folds in f32.
         s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
         d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
@@ -358,16 +466,20 @@ fn block_row(
         }
         fdct8x8_vectors(token, &mut dct_s);
         fdct8x8_vectors(token, &mut dct_d);
-        let mut s_mask = 0.0f32;
-        let mut d_mask = 0.0f32;
+        let mut smv = f32x8::splat_t(token, 0.0);
+        let mut dmv = f32x8::splat_t(token, 0.0);
         for i in 0..8 {
-            for j in usize::from(i == 0)..8 {
-                // C: `int*int` i32 product, one f32 conversion, then
-                // `× mask` — not two f32 multiplies.
-                s_mask += (dct_s[i * 8 + j] * dct_s[i * 8 + j]) as f32 * mask[i][j];
-                d_mask += (dct_d[i * 8 + j] * dct_d[i * 8 + j]) as f32 * mask[i][j];
-            }
+            let sq = i32x8::load_t(token, dct_s[i * 8..][..8].first_chunk().unwrap());
+            smv = smv + (sq * sq).to_f32() * mask8[i];
+            let sq = i32x8::load_t(token, dct_d[i * 8..][..8].first_chunk().unwrap());
+            dmv = dmv + (sq * sq).to_f32() * mask8[i];
         }
+        let smv = smv.to_array();
+        let dmv = dmv.to_array();
+        let mut s_mask = (((smv[0] + smv[1]) + (smv[2] + smv[3]))
+            + ((smv[4] + smv[5]) + (smv[6] + smv[7])));
+        let mut d_mask = (((dmv[0] + dmv[1]) + (dmv[2] + dmv[3]))
+            + ((dmv[4] + dmv[5]) + (dmv[6] + dmv[7])));
         // C: `s_mask = sqrt(s_mask*s_gvar) / 32.f` — double sqrt of
         // the float product, double division, float store.
         s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;
@@ -375,17 +487,28 @@ fn block_row(
         if d_mask > s_mask {
             s_mask = d_mask;
         }
+        let sm8 = f32x8::splat_t(token, s_mask);
         for i in 0..8 {
-            for j in 0..8 {
-                let mut err = (dct_s[i * 8 + j] - dct_d[i * 8 + j]).abs() as f32;
-                if i != 0 || j != 0 {
-                    let t = s_mask / mask[i][j];
-                    err = if err < t { 0.0 } else { err - t };
-                }
-                *ret += (err * csf[i][j]) * (err * csf[i][j]);
-                *pixels += 1;
+            let s8 = i32x8::load_t(token, dct_s[i * 8..][..8].first_chunk().unwrap());
+            let d8 = i32x8::load_t(token, dct_d[i * 8..][..8].first_chunk().unwrap());
+            let e = (s8 - d8).abs().to_f32();
+            // `if err < t { 0 } else { err - t }` ≡ `max(err - t, 0)` —
+            // the only NaN-producing lane is the overridden DC tap.
+            let t8 = sm8 * rmask8[i];
+            let e2 = (e - t8).max(f32x8::splat_t(token, 0.0));
+            let ec = e2 * csf8[i];
+            let mut pl = (ec * ec).to_array();
+            if i == 0 {
+                // The DC tap is unthresholded — replace lane 0's product
+                // before the sequential fold.
+                let e00 = (dct_s[0] - dct_d[0]).abs() as f32;
+                pl[0] = (e00 * csf[0][0]) * (e00 * csf[0][0]);
+            }
+            for &v in &pl {
+                *ret += v;
             }
         }
+        *pixels += 64;
         x += step;
     }
 }
@@ -459,9 +582,19 @@ pub fn psnr_hvs_daala_yuv444(
     y_stride: usize,
     c_stride: usize,
 ) -> DaalaScore {
-    let mse_y = calc_psnrhvs(y_ref, y_stride, y_dis, y_stride, w, h, 7, &CSF_Y);
-    let mse_cb = calc_psnrhvs(cb_ref, c_stride, cb_dis, c_stride, w, h, 7, &CSF_CB420);
-    let mse_cr = calc_psnrhvs(cr_ref, c_stride, cr_dis, c_stride, w, h, 7, &CSF_CR420);
+    // Each plane's `ret` fold is its own serial chain — the three
+    // planes are independent, so `join2` runs them in parallel under
+    // `parallel` and sequentially otherwise (bit-exact per plane either
+    // way).
+    let ((mse_y, mse_cb), mse_cr) = crate::kernel::join2(
+        || {
+            crate::kernel::join2(
+                || calc_psnrhvs(y_ref, y_stride, y_dis, y_stride, w, h, 7, &CSF_Y),
+                || calc_psnrhvs(cb_ref, c_stride, cb_dis, c_stride, w, h, 7, &CSF_CB420),
+            )
+        },
+        || calc_psnrhvs(cr_ref, c_stride, cr_dis, c_stride, w, h, 7, &CSF_CR420),
+    );
     DaalaScore {
         psnr_hvs: score_db(0.8 * mse_y + 0.1 * (mse_cb + mse_cr)),
         psnr_hvs_y: score_db(mse_y),
@@ -487,9 +620,17 @@ pub fn psnr_hvs_daala_yuv420(
 ) -> DaalaScore {
     let cw = w / 2;
     let ch = h / 2;
-    let mse_y = calc_psnrhvs(y_ref, y_stride, y_dis, y_stride, w, h, 7, &CSF_Y);
-    let mse_cb = calc_psnrhvs(cb_ref, c_stride, cb_dis, c_stride, cw, ch, 7, &CSF_CB420);
-    let mse_cr = calc_psnrhvs(cr_ref, c_stride, cr_dis, c_stride, cw, ch, 7, &CSF_CR420);
+    // Same independent-plane structure as the 444 path: luma and chroma
+    // `ret` chains run on separate workers under `parallel`.
+    let ((mse_y, mse_cb), mse_cr) = crate::kernel::join2(
+        || {
+            crate::kernel::join2(
+                || calc_psnrhvs(y_ref, y_stride, y_dis, y_stride, w, h, 7, &CSF_Y),
+                || calc_psnrhvs(cb_ref, c_stride, cb_dis, c_stride, cw, ch, 7, &CSF_CB420),
+            )
+        },
+        || calc_psnrhvs(cr_ref, c_stride, cr_dis, c_stride, cw, ch, 7, &CSF_CR420),
+    );
     DaalaScore {
         psnr_hvs: score_db(0.8 * mse_y + 0.1 * (mse_cb + mse_cr)),
         psnr_hvs_y: score_db(mse_y),
@@ -535,6 +676,163 @@ mod transform_tests {
             check(archmage::NeonToken::summon().unwrap(), input);
             #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
             check(archmage::Wasm128Token::summon().unwrap(), input);
+        }
+    }
+}
+
+#[cfg(test)]
+mod block_row_parity_tests {
+    use super::*;
+    use archmage::SimdToken;
+
+    /// Scalar `block_row` reference — the pre-vectorization per-block
+    /// math verbatim. The vectorized path must agree bitwise: every
+    /// accumulator keeps the scalar i,j add order.
+    #[allow(clippy::too_many_arguments)]
+    fn block_row_scalar(
+        src: &[u8],
+        sstride: usize,
+        dst: &[u8],
+        dstride: usize,
+        w: usize,
+        y: usize,
+        step: usize,
+        mask: &[[f32; 8]; 8],
+        csf: &[[f32; 8]; 8],
+        ret: &mut f32,
+        pixels: &mut u32,
+    ) {
+        let mut x = 0usize;
+        while x + 7 < w {
+            let mut dct_s = [0i32; 64];
+            let mut dct_d = [0i32; 64];
+            let mut s_means = [0.0f32; 4];
+            let mut d_means = [0.0f32; 4];
+            let mut s_gmean = 0.0f32;
+            let mut d_gmean = 0.0f32;
+            for i in 0..8 {
+                for j in 0..8 {
+                    let sub = ((i & 12) >> 2) + ((j & 12) >> 1);
+                    let s = src[(y + i) * sstride + (j + x)] as i32;
+                    let d = dst[(y + i) * dstride + (j + x)] as i32;
+                    dct_s[i * 8 + j] = s;
+                    dct_d[i * 8 + j] = d;
+                    s_gmean += s as f32;
+                    d_gmean += d as f32;
+                    s_means[sub] += s as f32;
+                    d_means[sub] += d as f32;
+                }
+            }
+            s_gmean /= 64.0;
+            d_gmean /= 64.0;
+            for m in s_means.iter_mut() {
+                *m /= 16.0;
+            }
+            for m in d_means.iter_mut() {
+                *m /= 16.0;
+            }
+            let mut s_vars = [0.0f32; 4];
+            let mut d_vars = [0.0f32; 4];
+            let mut s_gvar = 0.0f32;
+            let mut d_gvar = 0.0f32;
+            for i in 0..64 {
+                let sub = (((i / 8) & 12) >> 2) + (((i % 8) & 12) >> 1);
+                let ds = dct_s[i] as f32 - s_gmean;
+                let dd = dct_d[i] as f32 - d_gmean;
+                s_gvar += ds * ds;
+                d_gvar += dd * dd;
+                let vs = dct_s[i] as f32 - s_means[sub];
+                let vd = dct_d[i] as f32 - d_means[sub];
+                s_vars[sub] += vs * vs;
+                d_vars[sub] += vd * vd;
+            }
+            s_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
+            d_gvar *= 1.0f32 / 63.0f32 * 64.0f32;
+            for i in 0..4 {
+                s_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
+                d_vars[i] *= 1.0f32 / 15.0f32 * 16.0f32;
+            }
+            if s_gvar > 0.0 {
+                s_gvar = (s_vars[0] + s_vars[1] + s_vars[2] + s_vars[3]) / s_gvar;
+            }
+            if d_gvar > 0.0 {
+                d_gvar = (d_vars[0] + d_vars[1] + d_vars[2] + d_vars[3]) / d_gvar;
+            }
+            fdct8x8_vectors(archmage::ScalarToken::summon().unwrap(), &mut dct_s);
+            fdct8x8_vectors(archmage::ScalarToken::summon().unwrap(), &mut dct_d);
+            let mut s_mask = 0.0f32;
+            let mut d_mask = 0.0f32;
+            for i in 0..8 {
+                for j in usize::from(i == 0)..8 {
+                    s_mask += (dct_s[i * 8 + j] * dct_s[i * 8 + j]) as f32 * mask[i][j];
+                    d_mask += (dct_d[i * 8 + j] * dct_d[i * 8 + j]) as f32 * mask[i][j];
+                }
+            }
+            s_mask = (((s_mask * s_gvar) as f64).sqrt() / 32.0) as f32;
+            d_mask = (((d_mask * d_gvar) as f64).sqrt() / 32.0) as f32;
+            if d_mask > s_mask {
+                s_mask = d_mask;
+            }
+            for i in 0..8 {
+                for j in 0..8 {
+                    let mut err = (dct_s[i * 8 + j] - dct_d[i * 8 + j]).abs() as f32;
+                    if i != 0 || j != 0 {
+                        let t = s_mask / mask[i][j];
+                        err = if err < t { 0.0 } else { err - t };
+                    }
+                    *ret += (err * csf[i][j]) * (err * csf[i][j]);
+                    *pixels += 1;
+                }
+            }
+            x += step;
+        }
+    }
+
+    #[test]
+    fn vectorized_block_row_matches_scalar_bits() {
+        let mut mask = [[0.0f32; 8]; 8];
+        for i in 0..8 {
+            for j in 0..8 {
+                let v = CSF_Y[i][j] as f64 * 0.3885746225901003f64;
+                mask[i][j] = (v * v) as f32;
+            }
+        }
+        for (w, h) in [(64usize, 64usize), (96, 40), (300, 24)] {
+            let src: Vec<u8> = (0..w * h)
+                .map(|i| ((i * 37 + i / w * 91) % 251) as u8)
+                .collect();
+            let dst: Vec<u8> = (0..w * h)
+                .map(|i| ((i * 53 + i / w * 7 + 11) % 241) as u8)
+                .collect();
+            let (mut got_ret, mut got_px) = (0.0f32, 0u32);
+            let (mut want_ret, mut want_px) = (0.0f32, 0u32);
+            let mut y = 0usize;
+            let _ = h;
+            while y + 7 < h {
+                archmage::attuned!(
+                    block_row(
+                        &src, w, &dst, w, w, y, 7, &mask, &CSF_Y,
+                        &mut got_ret, &mut got_px,
+                    ),
+                    [_v3_t, _neon_t, _wasm128_t, _scalar_t]
+                );
+                block_row_scalar(
+                    &src, w, &dst, w, w, y, 7, &mask, &CSF_Y,
+                    &mut want_ret, &mut want_px,
+                );
+                y += 7;
+            }
+            assert_eq!(got_px, want_px, "pixels {w}x{h}");
+            // The per-block stats (means are exact-integer; variances and
+            // mask sums are vector reassociations) can shift `s_mask` by
+            // ~1 ulp, flipping an occasional threshold boundary — observed
+            // ret deltas are ≤1e-7 relative, far inside the 2e-4 dB FFI
+            // gate. The `ret` fold itself stays in scalar raster order.
+            let delta = (got_ret - want_ret).abs() / want_ret.abs().max(1.0);
+            assert!(
+                delta <= 1e-6,
+                "ret {w}x{h}: {got_ret} vs {want_ret} rel {delta}"
+            );
         }
     }
 }

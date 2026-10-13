@@ -39,4 +39,34 @@ fn main() {
         s.0.to_bits(),
         s.1.to_bits()
     );
+
+    // Daala variant: same planes as u8 YUV420 (cw×ch chroma).
+    let (cw, ch) = (w / 2, h / 2);
+    let mut y_ref = vec![0u8; w * h];
+    let mut y_dis = vec![0u8; w * h];
+    let mut c_ref = vec![0u8; cw * ch];
+    let mut c_dis = vec![0u8; cw * ch];
+    for (i, (r, d)) in y_ref.iter_mut().zip(y_dis.iter_mut()).enumerate() {
+        *r = (i * 37 % 251) as u8;
+        *d = (i * 53 % 241) as u8;
+    }
+    for (i, (r, d)) in c_ref.iter_mut().zip(c_dis.iter_mut()).enumerate() {
+        *r = (i * 29 % 239) as u8;
+        *d = (i * 41 % 233) as u8;
+    }
+    let t0 = Instant::now();
+    let mut sd = 0.0f64;
+    for _ in 0..reps {
+        let r = psnrhvs::daala::psnr_hvs_daala_yuv420(
+            &y_ref, &y_dis, &c_ref, &c_dis, &c_ref, &c_dis, w, h, w, cw,
+        );
+        sd = r.psnr_hvs;
+    }
+    let dt = t0.elapsed();
+    println!(
+        "daala yuv420 {w}x{h} {reps} reps: {:.2} ms/call (psnr_hvs {:.17}, bits {:016x})",
+        dt.as_secs_f64() * 1e3 / reps as f64,
+        sd,
+        sd.to_bits()
+    );
 }
