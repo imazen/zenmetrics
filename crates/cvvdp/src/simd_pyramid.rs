@@ -449,18 +449,47 @@ fn expand_v_inner(
         let band_h = vscratch.len() / sw;
         for cg in 0..n_groups {
             let col_base = cg * 16;
-            for y_l in 0..band_h {
+            // Adjacent even/odd output rows share their source rows:
+            // y = 2m reads {m-1, m, m+1} (taps 0,2,4) and y = 2m+1
+            // reads {m, m+1} (taps 1,3) — 3 loads serve both rows.
+            // `min(m+1, sh-1)` covers both the clamp and the
+            // `back_idx_v` edge row. Per-row tap order is preserved.
+            let mut y_l = 0usize;
+            while y_l < band_h {
                 let y = y0 + y_l;
-                let mut acc = f32x16::splat_t(token, 0.0);
-                for (j, dkj) in dk.iter().enumerate() {
-                    if let Some(r) = z_row(y + j) {
-                        let off = r * sw + col_base;
-                        let v = f32x16::from_array_t(token, src[off..off + 16].try_into().unwrap());
-                        acc = v * *dkj + acc;
+                if y & 1 == 0 && y_l + 1 < band_h && y + 1 < out_h {
+                    let m = y / 2;
+                    let ra = m.saturating_sub(1).min(sh - 1) * sw + col_base;
+                    let rb = m.min(sh - 1) * sw + col_base;
+                    let rc = (m + 1).min(sh - 1) * sw + col_base;
+                    let va = f32x16::from_array_t(token, src[ra..ra + 16].try_into().unwrap());
+                    let vb = f32x16::from_array_t(token, src[rb..rb + 16].try_into().unwrap());
+                    let vc = f32x16::from_array_t(token, src[rc..rc + 16].try_into().unwrap());
+                    let mut acc_e = va * dk0;
+                    acc_e = vb * dk2 + acc_e;
+                    acc_e = vc * dk4 + acc_e;
+                    let mut acc_o = vb * dk1;
+                    acc_o = vc * dk3 + acc_o;
+                    let arre = acc_e.to_array();
+                    let arro = acc_o.to_array();
+                    vscratch[y_l * sw + col_base..y_l * sw + col_base + 16].copy_from_slice(&arre);
+                    vscratch[(y_l + 1) * sw + col_base..(y_l + 1) * sw + col_base + 16]
+                        .copy_from_slice(&arro);
+                    y_l += 2;
+                } else {
+                    let mut acc = f32x16::splat_t(token, 0.0);
+                    for (j, dkj) in dk.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            let off = r * sw + col_base;
+                            let v =
+                                f32x16::from_array_t(token, src[off..off + 16].try_into().unwrap());
+                            acc = v * *dkj + acc;
+                        }
                     }
+                    let arr = acc.to_array();
+                    vscratch[y_l * sw + col_base..y_l * sw + col_base + 16].copy_from_slice(&arr);
+                    y_l += 1;
                 }
-                let arr = acc.to_array();
-                vscratch[y_l * sw + col_base..y_l * sw + col_base + 16].copy_from_slice(&arr);
             }
         }
 
@@ -515,18 +544,47 @@ fn expand_v_inner(
         let band_h = vscratch.len() / sw;
         for cg in 0..n_groups {
             let col_base = cg * 8;
-            for y_l in 0..band_h {
+            // Adjacent even/odd output rows share their source rows:
+            // y = 2m reads {m-1, m, m+1} (taps 0,2,4) and y = 2m+1
+            // reads {m, m+1} (taps 1,3) — 3 loads serve both rows.
+            // `min(m+1, sh-1)` covers both the clamp and the
+            // `back_idx_v` edge row. Per-row tap order is preserved.
+            let mut y_l = 0usize;
+            while y_l < band_h {
                 let y = y0 + y_l;
-                let mut acc = f32x8::splat_t(token, 0.0);
-                for (j, dkj) in dk.iter().enumerate() {
-                    if let Some(r) = z_row(y + j) {
-                        let off = r * sw + col_base;
-                        let v = f32x8::from_array_t(token, src[off..off + 8].try_into().unwrap());
-                        acc = v * *dkj + acc;
+                if y & 1 == 0 && y_l + 1 < band_h && y + 1 < out_h {
+                    let m = y / 2;
+                    let ra = m.saturating_sub(1).min(sh - 1) * sw + col_base;
+                    let rb = m.min(sh - 1) * sw + col_base;
+                    let rc = (m + 1).min(sh - 1) * sw + col_base;
+                    let va = f32x8::from_array_t(token, src[ra..ra + 8].try_into().unwrap());
+                    let vb = f32x8::from_array_t(token, src[rb..rb + 8].try_into().unwrap());
+                    let vc = f32x8::from_array_t(token, src[rc..rc + 8].try_into().unwrap());
+                    let mut acc_e = va * dk0;
+                    acc_e = vb * dk2 + acc_e;
+                    acc_e = vc * dk4 + acc_e;
+                    let mut acc_o = vb * dk1;
+                    acc_o = vc * dk3 + acc_o;
+                    let arre = acc_e.to_array();
+                    let arro = acc_o.to_array();
+                    vscratch[y_l * sw + col_base..y_l * sw + col_base + 8].copy_from_slice(&arre);
+                    vscratch[(y_l + 1) * sw + col_base..(y_l + 1) * sw + col_base + 8]
+                        .copy_from_slice(&arro);
+                    y_l += 2;
+                } else {
+                    let mut acc = f32x8::splat_t(token, 0.0);
+                    for (j, dkj) in dk.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            let off = r * sw + col_base;
+                            let v =
+                                f32x8::from_array_t(token, src[off..off + 8].try_into().unwrap());
+                            acc = v * *dkj + acc;
+                        }
                     }
+                    let arr = acc.to_array();
+                    vscratch[y_l * sw + col_base..y_l * sw + col_base + 8].copy_from_slice(&arr);
+                    y_l += 1;
                 }
-                let arr = acc.to_array();
-                vscratch[y_l * sw + col_base..y_l * sw + col_base + 8].copy_from_slice(&arr);
             }
         }
 
@@ -597,45 +655,79 @@ fn expand_h_inner(
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
 
+    // `z_h` index map resolved inline — no materialized zero-inserted
+    // row. z[p] is row[0] at p==0, row[(p/2).saturating_sub(1)] at even
+    // p <= 2*sw, row[sw-1] at even p in (2*sw, back_idx_h], else 0.
     debug_assert_eq!(dst.len(), out_w * out_h);
     crate::par::map_rows(dst, out_w, |y0, dst| {
         let band_h = dst.len() / out_w;
-        // Per-row zero-inserted `z_h`: materialising it once turns all
-        // five taps into contiguous unaligned vector loads. Values are
-        // identical to the scalar reference's z_h (even p <= back_idx_h
-        // hold column `(p/2).saturating_sub(1).min(sw-1)`, else zero).
-        let mut zbuf = vec![0.0f32; out_w + 8];
         for y_l in 0..band_h {
             let row = &vscratch[(y0 + y_l) * sw..(y0 + y_l) * sw + sw];
-            zbuf[..out_w + 4].fill(0.0);
-            zbuf[0] = row[0];
-            let m_lim = sw.min((out_w + odd_w) / 2 + 1);
-            for (m, &v) in row.iter().enumerate().take(m_lim) {
-                zbuf[2 + 2 * m] = v;
-            }
-            for p in (2 * sw + 2..=back_idx_h).step_by(2) {
-                zbuf[p] = row[sw - 1];
+            let z_at = |p: usize| -> f32 {
+                if p == 0 {
+                    row[0]
+                } else if p & 1 == 0 {
+                    if p <= 2 * sw {
+                        row[p / 2 - 1]
+                    } else if p <= back_idx_h {
+                        row[sw - 1]
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                }
+            };
+
+            // A 32-output block at even x_base = 32*cg has q = x/2
+            // spanning q0..q0+16 for both parities. Interior blocks
+            // (cg >= 1 so q0 - 1 >= 0, and q0 + 17 <= sw so no tap
+            // clamps) read three contiguous 16-wide vectors: even
+            // outputs take dk0·row[q-1] + dk2·row[q] + dk4·row[q+1]
+            // (odd taps hit zero z positions) and odd outputs take
+            // dk1·row[q] + dk3·row[q+1] — same product order as the
+            // scalar/vector zbuf chain, whose zero taps add +0.
+            let n_blocks = out_w / 32;
+            let vec_hi = if sw >= 17 {
+                ((sw - 17) / 16 + 1).min(n_blocks)
+            } else {
+                0
+            };
+            let vec_lo = 1.min(vec_hi);
+            let head_end = (vec_lo * 32).min(out_w);
+
+            for x in 0..head_end {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                dst[y_l * out_w + x] = 2.0 * sum;
             }
 
-            let n_groups = out_w / 16;
-            for cg in 0..n_groups {
-                let x_base = cg * 16;
-                let v0 = f32x16::from_slice_t(token, &zbuf[x_base..x_base + 16]);
-                let v1 = f32x16::from_slice_t(token, &zbuf[x_base + 1..x_base + 17]);
-                let v2 = f32x16::from_slice_t(token, &zbuf[x_base + 2..x_base + 18]);
-                let v3v = f32x16::from_slice_t(token, &zbuf[x_base + 3..x_base + 19]);
-                let v4x = f32x16::from_slice_t(token, &zbuf[x_base + 4..x_base + 20]);
-                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
-                let arr = acc.to_array();
-                dst[y_l * out_w + x_base..y_l * out_w + x_base + 16].copy_from_slice(&arr);
+            for cg in vec_lo..vec_hi {
+                let x_base = cg * 32;
+                let q0 = cg * 16;
+                let ra = f32x16::from_slice_t(token, &row[q0 - 1..q0 + 15]);
+                let rb = f32x16::from_slice_t(token, &row[q0..q0 + 16]);
+                let rc = f32x16::from_slice_t(token, &row[q0 + 1..q0 + 17]);
+                let acc_e = ra * dk0 + rb * dk2 + rc * dk4;
+                let acc_o = rb * dk1 + rc * dk3;
+                let ae = acc_e.to_array();
+                let ao = acc_o.to_array();
+                let base = y_l * out_w + x_base;
+                for t in 0..16 {
+                    dst[base + 2 * t] = ae[t];
+                    dst[base + 2 * t + 1] = ao[t];
+                }
             }
 
-            for x in n_groups * 16..out_w {
-                let sum = k[0] * zbuf[x]
-                    + k[1] * zbuf[x + 1]
-                    + k[2] * zbuf[x + 2]
-                    + k[3] * zbuf[x + 3]
-                    + k[4] * zbuf[x + 4];
+            for x in vec_hi * 32..out_w {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
                 dst[y_l * out_w + x] = 2.0 * sum;
             }
         }
@@ -661,43 +753,71 @@ fn expand_h_inner(
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
 
+    // `z_h` index map resolved inline — no materialized zero-inserted
+    // row. Same pairing as the f32x16 variant: 16 outputs per block,
+    // three contiguous f32x8 loads.
     debug_assert_eq!(dst.len(), out_w * out_h);
     crate::par::map_rows(dst, out_w, |y0, dst| {
         let band_h = dst.len() / out_w;
-        // Per-row zero-inserted `z_h`: materialising it once turns all
-        // five taps into contiguous unaligned vector loads.
-        let mut zbuf = vec![0.0f32; out_w + 8];
         for y_l in 0..band_h {
             let row = &vscratch[(y0 + y_l) * sw..(y0 + y_l) * sw + sw];
-            zbuf[..out_w + 4].fill(0.0);
-            zbuf[0] = row[0];
-            let m_lim = sw.min((out_w + odd_w) / 2 + 1);
-            for (m, &v) in row.iter().enumerate().take(m_lim) {
-                zbuf[2 + 2 * m] = v;
-            }
-            for p in (2 * sw + 2..=back_idx_h).step_by(2) {
-                zbuf[p] = row[sw - 1];
+            let z_at = |p: usize| -> f32 {
+                if p == 0 {
+                    row[0]
+                } else if p & 1 == 0 {
+                    if p <= 2 * sw {
+                        row[p / 2 - 1]
+                    } else if p <= back_idx_h {
+                        row[sw - 1]
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                }
+            };
+
+            let n_blocks = out_w / 16;
+            let vec_hi = if sw >= 9 {
+                ((sw - 9) / 8 + 1).min(n_blocks)
+            } else {
+                0
+            };
+            let vec_lo = 1.min(vec_hi);
+            let head_end = (vec_lo * 16).min(out_w);
+
+            for x in 0..head_end {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                dst[y_l * out_w + x] = 2.0 * sum;
             }
 
-            let n_groups = out_w / 8;
-            for cg in 0..n_groups {
-                let x_base = cg * 8;
-                let v0 = f32x8::from_slice_t(token, &zbuf[x_base..x_base + 8]);
-                let v1 = f32x8::from_slice_t(token, &zbuf[x_base + 1..x_base + 9]);
-                let v2 = f32x8::from_slice_t(token, &zbuf[x_base + 2..x_base + 10]);
-                let v3v = f32x8::from_slice_t(token, &zbuf[x_base + 3..x_base + 11]);
-                let v4x = f32x8::from_slice_t(token, &zbuf[x_base + 4..x_base + 12]);
-                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4x * dk4;
-                let arr = acc.to_array();
-                dst[y_l * out_w + x_base..y_l * out_w + x_base + 8].copy_from_slice(&arr);
+            for cg in vec_lo..vec_hi {
+                let x_base = cg * 16;
+                let q0 = cg * 8;
+                let ra = f32x8::from_slice_t(token, &row[q0 - 1..q0 + 7]);
+                let rb = f32x8::from_slice_t(token, &row[q0..q0 + 8]);
+                let rc = f32x8::from_slice_t(token, &row[q0 + 1..q0 + 9]);
+                let acc_e = ra * dk0 + rb * dk2 + rc * dk4;
+                let acc_o = rb * dk1 + rc * dk3;
+                let ae = acc_e.to_array();
+                let ao = acc_o.to_array();
+                let base = y_l * out_w + x_base;
+                for t in 0..8 {
+                    dst[base + 2 * t] = ae[t];
+                    dst[base + 2 * t + 1] = ao[t];
+                }
             }
 
-            for x in n_groups * 8..out_w {
-                let sum = k[0] * zbuf[x]
-                    + k[1] * zbuf[x + 1]
-                    + k[2] * zbuf[x + 2]
-                    + k[3] * zbuf[x + 3]
-                    + k[4] * zbuf[x + 4];
+            for x in vec_hi * 16..out_w {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
                 dst[y_l * out_w + x] = 2.0 * sum;
             }
         }

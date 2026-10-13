@@ -227,23 +227,8 @@ fn symmetric_frame_index(fi: isize, frame_count: usize) -> usize {
 /// for every non-baseband level — the shared sustained-A expands all
 /// four channels consume. Serial over levels; the two sides run
 /// under [`crate::par::join2`].
-fn fill_l_expands(gauss_l: &[Band], l_exp: &mut [Vec<f32>], scratch: &mut PyramidScratch) {
-    for (k, dst) in l_exp.iter_mut().enumerate() {
-        let fine = &gauss_l[k];
-        let coarse = &gauss_l[k + 1];
-        if dst.len() < fine.w * fine.h {
-            dst.resize(fine.w * fine.h, 0.0);
-        }
-        gausspyr_expand(
-            &coarse.data,
-            coarse.w,
-            coarse.h,
-            fine.w,
-            fine.h,
-            scratch,
-            dst,
-        );
-    }
+fn fill_l_expands(gauss_l: &[Band], l_exp: &mut Vec<Vec<f32>>, scratch: &mut PyramidScratch) {
+    crate::pyramid::fill_l_expands(gauss_l, l_exp, scratch);
 }
 
 /// Result bundle for a scored clip — the Rust analog of the
@@ -392,6 +377,7 @@ impl VideoScratch {
                 Vec::new()
             },
             gauss_l: Vec::new(),
+            l_exp: Vec::new(),
             scratch: crate::pyramid::PyramidScratch::default(),
         };
         Self {

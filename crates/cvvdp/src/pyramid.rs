@@ -311,6 +311,34 @@ pub(crate) fn build_gauss_pyramid_into(
     }
 }
 
+/// Ownership-taking variant of [`build_gauss_pyramid_into`]: swaps
+/// `src` into band 0 (so `src` afterward holds the previous band-0
+/// buffer — reuse or drop as the caller sees fit). Call only when
+/// `src` is dead after this build; callers that read the plane again
+/// (channel-0's `gauss_img` build precedes `gauss_l`) must use the
+/// copying variant for all but the last build.
+pub(crate) fn build_gauss_pyramid_take(
+    src: &mut Vec<f32>,
+    sw: usize,
+    sh: usize,
+    n: usize,
+    scratch: &mut PyramidScratch,
+    out: &mut Vec<Band>,
+) {
+    if out.is_empty() {
+        out.push(Band {
+            w: 0,
+            h: 0,
+            data: Vec::new(),
+        });
+    }
+    core::mem::swap(&mut out[0].data, src);
+    out[0].w = sw;
+    out[0].h = sh;
+    debug_assert_eq!(out[0].data.len(), sw * sh);
+    build_gauss_pyramid_below(n, scratch, out);
+}
+
 /// Reduce-only continuation of [`build_gauss_pyramid_into`] for
 /// callers that have already filled `out[0]` — the video path writes
 /// the temporal-FIR output straight into the band-0 slots, skipping
@@ -375,6 +403,12 @@ pub(crate) fn gauss_bands_with_capacity(sw: usize, sh: usize, n_levels: usize) -
 pub(crate) struct WeberPyramidCache {
     pub gauss_img: Vec<Band>,
     pub gauss_l: Vec<Band>,
+    /// Shared achromatic-l expand set used by the still-image path's
+    /// `weber_bands_from_gauss_lexp` calls — `l_exp[k]` is
+    /// `gauss_l[k+1]` expanded to `gauss_l[k]`'s shape. Lazily sized by
+    /// `fill_l_expands`; `Vec<Vec<f32>>` slots keep capacity across
+    /// calls like the band Vecs.
+    pub l_exp: Vec<Vec<f32>>,
     pub scratch: PyramidScratch,
 }
 
@@ -412,6 +446,7 @@ impl WeberPyramidCache {
         Self {
             gauss_img,
             gauss_l,
+            l_exp: Vec::new(),
             scratch: PyramidScratch::default(),
         }
     }
@@ -471,6 +506,7 @@ impl WeberPyramidCache {
         Self {
             gauss_img,
             gauss_l,
+            l_exp: Vec::new(),
             scratch: PyramidScratch::default(),
         }
     }
@@ -485,6 +521,7 @@ impl WeberPyramidCache {
 /// `image_plane` is the channel under decomposition; `l_bkg_plane`
 /// is the achromatic plane used for the per-pixel L_bkg. For the
 /// achromatic channel itself they're the same buffer.
+#[cfg(test)]
 pub(crate) fn weber_contrast_pyr_into(
     image_plane: &[f32],
     l_bkg_plane: &[f32],
@@ -526,6 +563,7 @@ pub(crate) fn weber_contrast_pyr_into(
 /// (the fused `log10` + plane write): only the reference achromatic
 /// pyramid's `log_l_bkg` is ever consumed downstream, so the other
 /// seven video pyramids neither compute nor allocate it.
+#[cfg(test)]
 pub(crate) fn weber_bands_from_gauss(
     gauss_img: &[Band],
     gauss_l: &[Band],
@@ -667,6 +705,39 @@ pub(crate) fn weber_bands_from_gauss(
     }
 }
 
+/// Compute the shared achromatic-l expand set: `l_exp[k]` =
+/// `gauss_l[k+1]` upsampled to `gauss_l[k]`'s shape via
+/// [`gausspyr_expand`]. Used by the still path's shared-l build and
+/// the video path — both feed it to [`weber_bands_from_gauss_lexp`].
+/// `l_exp` is grown to `gauss_l.len() - 1` slots; each slot's Vec
+/// capacity persists across calls.
+pub(crate) fn fill_l_expands(
+    gauss_l: &[Band],
+    l_exp: &mut Vec<Vec<f32>>,
+    scratch: &mut PyramidScratch,
+) {
+    while l_exp.len() + 1 < gauss_l.len() {
+        l_exp.push(Vec::new());
+    }
+    l_exp.truncate(gauss_l.len() - 1);
+    for (k, dst) in l_exp.iter_mut().enumerate() {
+        let fine = &gauss_l[k];
+        let coarse = &gauss_l[k + 1];
+        if dst.len() < fine.w * fine.h {
+            dst.resize(fine.w * fine.h, 0.0);
+        }
+        gausspyr_expand(
+            &coarse.data,
+            coarse.w,
+            coarse.h,
+            fine.w,
+            fine.h,
+            scratch,
+            dst,
+        );
+    }
+}
+
 /// Shared-`l` variant of [`weber_bands_from_gauss`]: `l_exp[k]` is the
 /// caller-precomputed expand of `gauss_l[k + 1]` at `gauss_l[k]`'s
 /// shape. The video path divides every channel by the same
@@ -803,6 +874,7 @@ pub(crate) fn weber_contrast_pyr(
     let mut cache = WeberPyramidCache {
         gauss_img: Vec::new(),
         gauss_l: Vec::new(),
+        l_exp: Vec::new(),
         scratch: core::mem::take(scratch),
     };
     let mut out = WeberPyramid::empty();

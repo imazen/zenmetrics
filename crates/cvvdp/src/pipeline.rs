@@ -17,7 +17,7 @@ use crate::pool::{
     BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
     do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
-use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_contrast_pyr_into};
+use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies};
 // BandWorkspace is used by the strip-walk closures below (pipeline.rs ~1849,
 // ~1989) which are compiled under some feature configs but not others, so the
 // import is conditionally unused — keep it and allow the per-config dead import.
@@ -851,17 +851,19 @@ impl Cvvdp {
         // whole `scratch` struct is persistent by design; peak-heap
         // concerns belong at the `Cvvdp` drop boundary.
         //
-        // **Bit-identical safety:** clearing does not affect computed
-        // values — only the band-loop reads weber_*, which are
-        // unaffected.
+        // `Vec<Band>::clear()` would DROP each band's `data` Vec (the
+        // intended capacity retention requires leaving the `Vec<Band>`
+        // intact) — that was ~270 MB of free+remmap churn per call at
+        // 8.4 MP. Retained bands reuse cleanly: `build_gauss_pyramid_into`
+        // truncates to `n` and each kernel fully rewrites the `w*h`
+        // prefix before any read.
+        //
+        // **Bit-identical safety:** stale band data is never read —
+        // only the band-loop reads weber_*, which are unaffected.
         for c in 0..3 {
-            self.scratch.weber_cache_dist[c].gauss_img.clear();
-            self.scratch.weber_cache_dist[c].gauss_l.clear();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
             self.scratch.weber_cache_dist[c].scratch.expanded.clear();
             self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_ref[c].gauss_img.clear();
-            self.scratch.weber_cache_ref[c].gauss_l.clear();
             self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
             self.scratch.weber_cache_ref[c].scratch.expanded.clear();
             self.scratch.weber_cache_ref[c].scratch.gauss_tmp.clear();
@@ -1510,25 +1512,19 @@ impl Cvvdp {
 
             let ws = &mut self.scratch.band_ws[0];
 
-            ws.t_p_a.clear();
+            // `resize` alone (no `clear()` first): a no-op once the
+            // buffer holds `n_px` — every element is overwritten by
+            // the apply_csf_* / mult_mutual kernels below.
             ws.t_p_a.resize(n_px, 0.0);
-            ws.t_p_rg.clear();
             ws.t_p_rg.resize(n_px, 0.0);
-            ws.t_p_vy.clear();
             ws.t_p_vy.resize(n_px, 0.0);
-            ws.r_p_a.clear();
             ws.r_p_a.resize(n_px, 0.0);
-            ws.r_p_rg.clear();
             ws.r_p_rg.resize(n_px, 0.0);
-            ws.r_p_vy.clear();
             ws.r_p_vy.resize(n_px, 0.0);
 
             if is_baseband {
-                ws.d_a.clear();
                 ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.clear();
                 ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
                 apply_csf_diffs(
                     log_l_bkg_band,
@@ -1612,28 +1608,12 @@ impl Cvvdp {
         let n_levels = band_frequencies(self.ppd, w, h).len();
         build_one_side_dist_into(&mut self.scratch, w, h, n_levels);
 
-        // Phase 9.Z.F chunk 6 step 6: release weber cache memory after
-        // build. See [`Self::score_internal`] doc for tradeoff details.
-        // Only `weber_cache_dist` was used in this code path (REF is warm).
-        for c in 0..3 {
-            self.scratch.weber_cache_dist[c].gauss_img.clear();
-            self.scratch.weber_cache_dist[c].gauss_l.clear();
-            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .vscratch
-                .shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.expanded.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .expanded
-                .shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_dist[c]
-                .scratch
-                .gauss_tmp
-                .shrink_to_fit();
-        }
+        // weber_cache_dist is pre-allocated at `Scratch::new`, so its
+        // band Vecs are committed heap whether or not they are freed
+        // here — releasing them only forces re-mmap + page-fault
+        // zeroing on the next call (~135 MB at 8.4 MP). Retained bands
+        // reuse cleanly: the build truncates to `n` and each kernel
+        // fully rewrites the `w*h` prefix before any read.
 
         // Pull weber slots out of scratch via mem::replace so we can
         // pass them as `&[WeberPyramid; 3]` reference while holding
@@ -1809,17 +1789,13 @@ impl Cvvdp {
             let ws = &mut self.scratch.band_ws[0];
 
             // Compute T_p + R_p per channel into recycled workspace.
-            ws.t_p_a.clear();
+            // `resize` alone: a no-op at steady state; the kernels
+            // overwrite every element.
             ws.t_p_a.resize(n_px, 0.0);
-            ws.t_p_rg.clear();
             ws.t_p_rg.resize(n_px, 0.0);
-            ws.t_p_vy.clear();
             ws.t_p_vy.resize(n_px, 0.0);
-            ws.r_p_a.clear();
             ws.r_p_a.resize(n_px, 0.0);
-            ws.r_p_rg.clear();
             ws.r_p_rg.resize(n_px, 0.0);
-            ws.r_p_vy.clear();
             ws.r_p_vy.resize(n_px, 0.0);
 
             apply_csf_pairs(
@@ -1833,11 +1809,8 @@ impl Cvvdp {
             );
 
             if is_baseband {
-                ws.d_a.clear();
                 ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.clear();
                 ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
                 apply_csf_diffs(
                     log_l_bkg_band,
@@ -2021,11 +1994,8 @@ impl Cvvdp {
             let dis_vy_band = &dist_weber[2].bands[k].data;
 
             if is_baseband {
-                ws.d_a.clear();
                 ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.clear();
                 ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
                 apply_csf_diffs(
                     log_l_bkg_band,
@@ -2035,17 +2005,11 @@ impl Cvvdp {
                     [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
                 );
             } else {
-                ws.t_p_a.clear();
                 ws.t_p_a.resize(n_px, 0.0);
-                ws.t_p_rg.clear();
                 ws.t_p_rg.resize(n_px, 0.0);
-                ws.t_p_vy.clear();
                 ws.t_p_vy.resize(n_px, 0.0);
-                ws.r_p_a.clear();
                 ws.r_p_a.resize(n_px, 0.0);
-                ws.r_p_rg.clear();
                 ws.r_p_rg.resize(n_px, 0.0);
-                ws.r_p_vy.clear();
                 ws.r_p_vy.resize(n_px, 0.0);
                 apply_csf_pairs(
                     log_l_bkg_band,
@@ -2978,84 +2942,125 @@ fn process_shallow_strip_band(
 /// so band Vec<f32> capacity persists across calls.
 #[allow(clippy::too_many_arguments)]
 fn build_one_side_recycle(
-    plane_a: &[f32],
-    plane_rg: &[f32],
-    plane_vy: &[f32],
+    plane_a: &mut Vec<f32>,
+    plane_rg: &mut Vec<f32>,
+    plane_vy: &mut Vec<f32>,
     w: usize,
     h: usize,
     n_levels: usize,
     caches: &mut [WeberPyramidCache; 3],
     out: &mut [WeberPyramid; 3],
+    write_log_l_ch0: bool,
 ) {
+    use crate::pyramid::build_gauss_pyramid_take;
+
+    // Phase A — Gaussian pyramid builds. Every channel's l_bkg divides
+    // by the same achromatic plane, so `gauss_l` is built ONCE into
+    // `caches[0].gauss_l` (upstream built it 3× redundantly, plus a 4th
+    // for ch0's identical img). `*_take` swaps each DKL plane's buffer
+    // into band 0 — no `extend_from_slice` copy. Each plane is dead
+    // after its single build.
+    let (ca0, ca_rest) = caches.split_at_mut(1);
+    let (ca1, ca2) = ca_rest.split_at_mut(1);
+    let c0 = &mut ca0[0];
+    let c1 = &mut ca1[0];
+    let c2 = &mut ca2[0];
+    let mut build_l = || {
+        build_gauss_pyramid_take(
+            &mut *plane_a,
+            w,
+            h,
+            n_levels,
+            &mut c0.scratch,
+            &mut c0.gauss_l,
+        );
+    };
+    let mut build_i1 = || {
+        build_gauss_pyramid_take(
+            &mut *plane_rg,
+            w,
+            h,
+            n_levels,
+            &mut c1.scratch,
+            &mut c1.gauss_img,
+        );
+    };
+    let mut build_i2 = || {
+        build_gauss_pyramid_take(
+            &mut *plane_vy,
+            w,
+            h,
+            n_levels,
+            &mut c2.scratch,
+            &mut c2.gauss_img,
+        );
+    };
     #[cfg(feature = "parallel")]
     if rayon::current_num_threads() > 1 {
-        // Split-borrow the 3 cache + 3 out slots.
-        let (ca0, ca_rest) = caches.split_at_mut(1);
-        let (ca1, ca2) = ca_rest.split_at_mut(1);
-        let (o0, o_rest) = out.split_at_mut(1);
-        let (o1, o2) = o_rest.split_at_mut(1);
-        rayon::join(
-            || {
-                weber_contrast_pyr_into(plane_a, plane_a, w, h, n_levels, &mut ca0[0], &mut o0[0]);
-            },
-            || {
-                rayon::join(
-                    || {
-                        weber_contrast_pyr_into(
-                            plane_rg,
-                            plane_a,
-                            w,
-                            h,
-                            n_levels,
-                            &mut ca1[0],
-                            &mut o1[0],
-                        );
-                    },
-                    || {
-                        weber_contrast_pyr_into(
-                            plane_vy,
-                            plane_a,
-                            w,
-                            h,
-                            n_levels,
-                            &mut ca2[0],
-                            &mut o2[0],
-                        );
-                    },
-                );
-            },
-        );
+        rayon::join(build_l, || rayon::join(build_i1, build_i2));
+    } else {
+        build_l();
+        build_i1();
+        build_i2();
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        build_l();
+        build_i1();
+        build_i2();
+    }
+    finish_weber_from_shared_l(caches, out, write_log_l_ch0);
+}
+
+/// Phases B+C of the shared-luma weber build (the video path's
+/// structure applied to stills): `caches[0].gauss_l` must already hold
+/// the achromatic Gaussian pyramid and `caches[1]/[2].gauss_img` the
+/// chroma pyramids.
+///
+/// Phase B fills `caches[0].l_exp[k]` with `expand(gauss_l[k+1])` at
+/// level k's shape — the expands all three channels consume, replacing
+/// 2×(n−1) redundant per-channel expands. Phase C emits each channel's
+/// weber bands via [`weber_bands_from_gauss_lexp`]; channel 0 passes
+/// the l pyramid as its own `gauss_img` (identical input → identical
+/// pyramid, `same_img_l` elides its expand). `write_log_l_ch0` gates
+/// `log_l_bkg` on the ref side's ch0, the sole consumer downstream.
+fn finish_weber_from_shared_l(
+    caches: &mut [WeberPyramidCache; 3],
+    out: &mut [WeberPyramid; 3],
+    write_log_l_ch0: bool,
+) {
+    use crate::pyramid::{fill_l_expands, weber_bands_from_gauss_lexp};
+
+    let (ca0, ca_rest) = caches.split_at_mut(1);
+    let (ca1, ca2) = ca_rest.split_at_mut(1);
+    let (o0r, o_rest) = out.split_at_mut(1);
+    let (o1r, o2r) = o_rest.split_at_mut(1);
+    let c0 = &mut ca0[0];
+    let c1 = &mut ca1[0];
+    let c2 = &mut ca2[0];
+
+    fill_l_expands(&c0.gauss_l, &mut c0.l_exp, &mut c0.scratch);
+
+    let gl: &[crate::pyramid::Band] = &c0.gauss_l;
+    let le: &[Vec<f32>] = &c0.l_exp;
+    let c0_scratch = &mut c0.scratch;
+    let mut w0 = move || {
+        weber_bands_from_gauss_lexp(gl, gl, le, c0_scratch, &mut o0r[0], write_log_l_ch0);
+    };
+    let mut w1 = move || {
+        weber_bands_from_gauss_lexp(&c1.gauss_img, gl, le, &mut c1.scratch, &mut o1r[0], false);
+    };
+    let mut w2 = move || {
+        weber_bands_from_gauss_lexp(&c2.gauss_img, gl, le, &mut c2.scratch, &mut o2r[0], false);
+    };
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        rayon::join(w0, || rayon::join(w1, w2));
         return;
     }
-    {
-        weber_contrast_pyr_into(
-            plane_a,
-            plane_a,
-            w,
-            h,
-            n_levels,
-            &mut caches[0],
-            &mut out[0],
-        );
-        weber_contrast_pyr_into(
-            plane_rg,
-            plane_a,
-            w,
-            h,
-            n_levels,
-            &mut caches[1],
-            &mut out[1],
-        );
-        weber_contrast_pyr_into(
-            plane_vy,
-            plane_a,
-            w,
-            h,
-            n_levels,
-            &mut caches[2],
-            &mut out[2],
-        );
-    }
+    w0();
+    w1();
+    w2();
 }
 
 /// Build REF + DIST weber pyramids into the persistent slots on
@@ -3092,6 +3097,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
                         n_levels,
                         weber_cache_ref,
                         weber_ref,
+                        true,
                     );
                 },
                 || {
@@ -3104,6 +3110,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
                         n_levels,
                         weber_cache_dist,
                         weber_dist,
+                        false,
                     );
                 },
             );
@@ -3117,6 +3124,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
                 n_levels,
                 weber_cache_ref,
                 weber_ref,
+                true,
             );
             build_one_side_recycle(
                 dist_a,
@@ -3127,6 +3135,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
                 n_levels,
                 weber_cache_dist,
                 weber_dist,
+                false,
             );
         }
     }
@@ -3141,6 +3150,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
             n_levels,
             weber_cache_ref,
             weber_ref,
+            true,
         );
         build_one_side_recycle(
             dist_a,
@@ -3151,6 +3161,7 @@ fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: us
             n_levels,
             weber_cache_dist,
             weber_dist,
+            false,
         );
     }
 }
@@ -3175,6 +3186,7 @@ fn build_one_side_dist_into(scratch: &mut Scratch, w: usize, h: usize, n_levels:
         n_levels,
         weber_cache_dist,
         weber_dist,
+        false,
     );
 }
 
@@ -3206,21 +3218,41 @@ fn build_one_side_warm_ref_into(
     n_levels: usize,
     weber_ref_out: &mut [WeberPyramid; 3],
 ) {
+    use crate::pyramid::build_gauss_pyramid_into;
     let mut caches = [
         WeberPyramidCache::default(),
         WeberPyramidCache::default(),
         WeberPyramidCache::default(),
     ];
-    build_one_side_recycle(
-        plane_a,
-        plane_rg,
-        plane_vy,
-        w,
-        h,
-        n_levels,
-        &mut caches,
-        weber_ref_out,
-    );
+    // Shared-l structure like `build_one_side_recycle`, but with the
+    // copying variant: the caller keeps the DKL planes (they're the
+    // `warm_reference()` inputs, still borrowed).
+    let (ca0, ca_rest) = caches.split_at_mut(1);
+    let (ca1, ca2) = ca_rest.split_at_mut(1);
+    let c0 = &mut ca0[0];
+    let c1 = &mut ca1[0];
+    let c2 = &mut ca2[0];
+    let mut build_l =
+        || build_gauss_pyramid_into(plane_a, w, h, n_levels, &mut c0.scratch, &mut c0.gauss_l);
+    let mut build_i1 =
+        || build_gauss_pyramid_into(plane_rg, w, h, n_levels, &mut c1.scratch, &mut c1.gauss_img);
+    let mut build_i2 =
+        || build_gauss_pyramid_into(plane_vy, w, h, n_levels, &mut c2.scratch, &mut c2.gauss_img);
+    #[cfg(feature = "parallel")]
+    if rayon::current_num_threads() > 1 {
+        rayon::join(build_l, || rayon::join(build_i1, build_i2));
+    } else {
+        build_l();
+        build_i1();
+        build_i2();
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        build_l();
+        build_i1();
+        build_i2();
+    }
+    finish_weber_from_shared_l(&mut caches, weber_ref_out, true);
     // `caches` drop here — gauss_img / gauss_l intermediates are freed
     // (~700 MB at 40 MP).
 }
