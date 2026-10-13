@@ -61,9 +61,13 @@ use alloc::vec::Vec;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(any(all(feature = "std", target_arch = "aarch64"), target_arch = "x86_64"))]
+use archmage::attune;
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
+use archmage::{NeonToken, SimdToken as _};
 #[cfg(target_arch = "x86_64")]
 use archmage::{SimdToken, X64V3Token, attune};
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(all(feature = "std", target_arch = "aarch64"), target_arch = "x86_64"))]
 use magetypes::simd::generic::f32x8;
 
 /// Errors from [`mdct_psnr_srgb8`].
@@ -1262,7 +1266,19 @@ impl Component {
                 0
             }
         };
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(all(feature = "std", target_arch = "aarch64"))]
+        let start = {
+            let no_dumps =
+                dumpp.is_none() && !dumpi && dumpw.is_none() && dump_targets() == (None, None);
+            let n8 = self.w8 & !7;
+            if no_dumps && let Some(token) = NeonToken::summon() {
+                run_dct_soa_neon_t(token, self);
+                n8
+            } else {
+                0
+            }
+        };
+        #[cfg(not(any(target_arch = "x86_64", all(feature = "std", target_arch = "aarch64"))))]
         let start = 0;
         for i in start..self.w8 {
             #[cfg(feature = "std")]
@@ -1556,6 +1572,115 @@ fn run_dct_soa_v3_t(token: X64V3Token, comp: &mut Component) {
     let n8 = comp.w8 & !7;
     for i0 in (0..n8).step_by(8) {
         run_dct_soa8(token, comp, i0);
+    }
+}
+
+/// aarch64 twin of `aan_1d_x8` — `f32x8<NeonToken>` is a zero-cost
+/// `[float32x4_t; 2]` pair, so the butterfly runs the identical per-lane
+/// op order at half the per-instruction width. `mul_add` lowers to
+/// `vfmaq` (single-rounded), same contract as the v3 `fm`.
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
+#[attune]
+fn aan_1d_x8_neon(token: NeonToken, b: &[f32x8<NeonToken>; 8]) -> [f32x8<NeonToken>; 8] {
+    type V = f32x8<NeonToken>;
+    let s22 = V::splat_t(token, SQRT2_2);
+    let c2v = V::splat_t(token, C2);
+    let c3v = V::splat_t(token, C3);
+    let tmp0 = b[0] + b[7];
+    let tmp7 = b[0] - b[7];
+    let tmp1 = b[1] + b[6];
+    let tmp6 = b[1] - b[6];
+    let tmp2 = b[2] + b[5];
+    let tmp5 = b[2] - b[5];
+    let tmp3 = b[3] + b[4];
+
+    let tmp10 = tmp0 + tmp3;
+    let tmp13 = tmp0 - tmp3;
+    let tmp11 = tmp1 + tmp2;
+
+    let mut out = [V::zero_t(token); 8];
+    out[0] = tmp10 + tmp11;
+    out[4] = tmp10 - tmp11;
+
+    let z1n = tmp1 + (tmp13 - tmp2);
+    out[2] = z1n.mul_add(s22, tmp13);
+    out[6] = (-z1n).mul_add(s22, tmp13);
+
+    let o10 = b[3] + (tmp5 - b[4]);
+    let o11 = tmp6 + tmp5;
+    let o12 = tmp6 + tmp7;
+
+    let z5 = (o10 - o12) * C1;
+    let z2 = o10.mul_add(c2v, z5);
+    let z4 = o12.mul_add(c3v, z5);
+
+    let z11 = o11.mul_add(s22, tmp7);
+    let z13 = (-o11).mul_add(s22, tmp7);
+
+    out[5] = z13 + z2;
+    out[3] = z13 - z2;
+    out[1] = z11 + z4;
+    out[7] = z11 - z4;
+    out
+}
+
+/// aarch64 twin of `run_dct_soa8` — same eight-positions-in-lanes layout,
+/// one contiguous 8-wide store per band row. Per-lane arithmetic order is
+/// identical to the scalar loop, so results are bitwise equal.
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
+#[attune]
+fn run_dct_soa8_neon(token: NeonToken, comp: &mut Component, i0: usize) {
+    type V = f32x8<NeonToken>;
+    // `i0 + x + 8 <= i0 + 15 <= w8 + 7 < w` whenever `i0 + 8 <= w8`.
+    let mut b: [[V; 8]; 8] = core::array::from_fn(|y| {
+        core::array::from_fn(|x| {
+            V::load_t(token, comp.ring[y][i0 + x..][..8].first_chunk().unwrap())
+        })
+    });
+    let s: [V; 8] = core::array::from_fn(|x| {
+        ((b[0][x] + b[7][x]) + (b[5][x] + b[6][x])) + ((b[1][x] + b[2][x]) + (b[3][x] + b[4][x]))
+    });
+    let avg = ((s[0] + s[4]) + (s[2] + s[6])) + ((s[1] + s[5]) + (s[3] + s[7]));
+    let avg = avg * (1.0f32 / 64.0);
+    for y in 0..8 {
+        for x in 0..8 {
+            let w = WINDOW[y][x];
+            b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
+        }
+    }
+    let mut v = [[V::zero_t(token); 8]; 8];
+    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
+        [
+            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
+        ]
+    })
+    .into_iter()
+    .enumerate()
+    {
+        let cv = aan_1d_x8_neon(token, &col);
+        for (k, &c) in cv.iter().enumerate() {
+            v[k][x] = c;
+        }
+    }
+    for (vix, row) in v.iter().enumerate() {
+        let hv = aan_1d_x8_neon(token, row);
+        for (u, &c) in hv.iter().enumerate() {
+            c.store(
+                comp.bands[u][vix].next_row[i0..][..8]
+                    .first_chunk_mut()
+                    .unwrap(),
+            );
+        }
+    }
+}
+
+/// One `#[attune]` boundary for the whole position loop, aarch64 side.
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
+#[attune]
+fn run_dct_soa_neon_t(token: NeonToken, comp: &mut Component) {
+    let n8 = comp.w8 & !7;
+    for i0 in (0..n8).step_by(8) {
+        run_dct_soa8_neon(token, comp, i0);
     }
 }
 
