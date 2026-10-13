@@ -426,9 +426,8 @@ fn apply_band(
             .iter()
             .enumerate()
             .map(|(i, &e)| {
-                let n_mask = k_self * self_mask[i].abs().powf(q)
-                    + kxo0
-                    + k_xn * mask_xn[i].abs().powf(q);
+                let n_mask =
+                    k_self * self_mask[i].abs().powf(q) + kxo0 + k_xn * mask_xn[i].abs().powf(q);
                 e / (n_ncsf[i].powf(2.0 * p) + n_mask.powi(2)).sqrt()
             })
             .collect()
@@ -478,9 +477,7 @@ fn pool8_inner(
         for kx in 0..fs {
             let t = f64x8::load_t(
                 token,
-                (&srow[x0 + kx - c..x0 + kx - c + 8])
-                    .try_into()
-                    .unwrap(),
+                (&srow[x0 + kx - c..x0 + kx - c + 8]).try_into().unwrap(),
             );
             acc = acc + t;
         }

@@ -87,7 +87,7 @@ pub fn to_steerable(bp: &BandPyramid) -> SteerablePyramid {
 #[must_use]
 pub fn visibility(d_bands: &BandPyramid, par: &Params) -> Visibility {
     let pyr = to_steerable(d_bands);
-    let rec = reconstruct(&pyr);
+    let rec = reconstruct(&pyr, par.mode == crate::FpMode::Relaxed);
     let mut s_map: Vec<f32> = rec.data.iter().map(|v| v.abs()).collect();
 
     if par.do_spatial_pooling {
@@ -204,7 +204,7 @@ mod tests {
         let (w, h) = (64usize, 48usize);
         let par = Params::new(30.0);
         let im = vec![0.0f32; w * h];
-        let pyr = crate::spyr::build(&im, w, h, None);
+        let pyr = crate::spyr::build(&im, w, h, None, false);
         let bp = BandPyramid {
             bands: core::iter::once(vec![pyr.high_pass.clone()])
                 .chain(pyr.levels.iter().map(|l| l.to_vec()))
@@ -224,7 +224,7 @@ mod tests {
     fn to_steerable_round_trips_the_band_list() {
         let (w, h) = (64usize, 48usize);
         let im: Vec<f32> = (0..w * h).map(|i| (i as f32 * 0.21).sin()).collect();
-        let pyr = crate::spyr::build(&im, w, h, None);
+        let pyr = crate::spyr::build(&im, w, h, None, false);
         let bp = BandPyramid {
             bands: core::iter::once(vec![pyr.high_pass.clone()])
                 .chain(pyr.levels.iter().map(|l| l.to_vec()))
@@ -253,7 +253,7 @@ mod tests {
         // of 400 and concluding "400× threshold" is reading the wrong quantity.
         let (w, h) = (64usize, 64usize);
         let mut par = Params::new(30.0);
-        let zero = crate::spyr::build(&vec![0.0f32; w * h], w, h, None);
+        let zero = crate::spyr::build(&vec![0.0f32; w * h], w, h, None, false);
         let mut bp = BandPyramid {
             bands: core::iter::once(vec![zero.high_pass.clone()])
                 .chain(zero.levels.iter().map(|l| l.to_vec()))

@@ -604,7 +604,13 @@ impl Plan {
                 blue8_bf(sre8, sim8, s2re8, s2im8, bf_re, bf_im, &stages.rev);
                 fft8(s2re8, s2im8, m, stages);
                 blue8_out(
-                    s2re8, s2im8, re8, im8, n, chirp_re, chirp_im,
+                    s2re8,
+                    s2im8,
+                    re8,
+                    im8,
+                    n,
+                    chirp_re,
+                    chirp_im,
                     1.0 / m as f64,
                 );
             }
@@ -754,8 +760,7 @@ impl Plan2 {
             for j in 0..rws {
                 let row = (y0 + j) * w;
                 for k in 0..w {
-                    buf[row + k] =
-                        C64::new(self.re8[k * 8 + j] * s, -self.im8[k * 8 + j] * s);
+                    buf[row + k] = C64::new(self.re8[k * 8 + j] * s, -self.im8[k * 8 + j] * s);
                 }
             }
         }
@@ -1107,7 +1112,9 @@ pub(super) fn pad_image(
         let sy = map(py, height);
         let orow = &mut out[py * pad_w..py * pad_w + pad_w];
         if sy == usize::MAX {
-            let Pad::Constant(v) = pad else { unreachable!() };
+            let Pad::Constant(v) = pad else {
+                unreachable!()
+            };
             orow.fill(v);
             continue;
         }
@@ -1116,7 +1123,9 @@ pub(super) fn pad_image(
         for (o, &sx) in orow[width..].iter_mut().zip(&xmap[width..]) {
             *o = match sx {
                 usize::MAX => {
-                    let Pad::Constant(v) = pad else { unreachable!() };
+                    let Pad::Constant(v) = pad else {
+                        unreachable!()
+                    };
                     v
                 }
                 sx => srow[sx],

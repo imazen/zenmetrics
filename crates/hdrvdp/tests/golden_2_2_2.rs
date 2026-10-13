@@ -86,7 +86,8 @@ fn all_cases_match_official_hdrvdp_2_2_2() {
         let par = Params {
             pix_per_deg: g.ppd,
             ..Default::default()
-        };
+        }
+        .with_strict();
         let res = hdrvdp(&test, &refr, g.w, g.h, ColorEncoding::Luminance, &par)
             .unwrap_or_else(|e| panic!("{}: {e:?}", g.case));
 

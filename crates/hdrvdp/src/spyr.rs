@@ -155,6 +155,19 @@ pub fn reflect1(i: isize, n: usize) -> usize {
     i as usize
 }
 
+// `acc + w·v` — fused single-rounded `mul_add` under `relaxed`,
+// separate mul+add roundings under `Strict` ([`crate::FpMode`]).
+// `RELAXED` is a const generic so the choice monomorphizes: the relaxed
+// variant emits real `fmla`/`vfmadd` chains, strict stays mul+add.
+#[inline(always)]
+fn madd<const RELAXED: bool>(acc: f32, w: f32, v: f32) -> f32 {
+    if RELAXED {
+        w.mul_add(v, acc)
+    } else {
+        acc + w * v
+    }
+}
+
 /// Correlate `image` with a square `filter` of side `fs`, then keep every
 /// `step`-th sample starting at 0 — upstream's `corrDn(im, filt, 'reflect1',
 /// [step step], [1 1])`.
@@ -162,6 +175,22 @@ pub fn reflect1(i: isize, n: usize) -> usize {
 /// The filter origin is its centre, `fs/2`.
 #[must_use]
 pub fn corr_dn(
+    image: &[f32],
+    width: usize,
+    height: usize,
+    filter: &[f32],
+    fs: usize,
+    step: usize,
+    relaxed: bool,
+) -> Band {
+    if relaxed {
+        corr_dn_impl::<true>(image, width, height, filter, fs, step)
+    } else {
+        corr_dn_impl::<false>(image, width, height, filter, fs, step)
+    }
+}
+
+fn corr_dn_impl<const RELAXED: bool>(
     image: &[f32],
     width: usize,
     height: usize,
@@ -228,14 +257,14 @@ pub fn corr_dn(
                             .try_into()
                             .expect("BLK-sized window");
                         for (a, v) in acc.iter_mut().zip(s) {
-                            *a += w * v;
+                            *a = madd::<RELAXED>(*a, w, *v);
                         }
                     }
                 } else {
                     for (kx, &w) in frow.iter().enumerate() {
                         let s = &prow[x0 + kx..];
                         for (j, a) in acc.iter_mut().enumerate() {
-                            *a += w * s[j * step];
+                            *a = madd::<RELAXED>(*a, w, s[j * step]);
                         }
                     }
                 }
@@ -250,7 +279,7 @@ pub fn corr_dn(
                 let prow = &padded[(win_row + ky) * pad_w..];
                 let frow = &filter[ky * fs..ky * fs + fs];
                 for (kx, &w) in frow.iter().enumerate() {
-                    acc += w * prow[x0 + kx];
+                    acc = madd::<RELAXED>(acc, w, prow[x0 + kx]);
                 }
             }
             out_row[ox] = acc;
@@ -303,6 +332,23 @@ pub fn corr_dn(
 /// `analysis_and_synthesis_match_the_infinite_symmetric_extension`,
 /// which pins this to the infinite-domain operation exactly, borders included.
 pub fn up_conv(
+    band: &Band,
+    filter: &[f32],
+    fs: usize,
+    step: usize,
+    out_width: usize,
+    out_height: usize,
+    res: &mut [f32],
+    relaxed: bool,
+) {
+    if relaxed {
+        up_conv_impl::<true>(band, filter, fs, step, out_width, out_height, res)
+    } else {
+        up_conv_impl::<false>(band, filter, fs, step, out_width, out_height, res)
+    }
+}
+
+fn up_conv_impl<const RELAXED: bool>(
     band: &Band,
     filter: &[f32],
     fs: usize,
@@ -400,7 +446,7 @@ pub fn up_conv(
                     .try_into()
                     .expect("BLK-sized window");
                 for (a, v) in acc.iter_mut().zip(s) {
-                    *a += w * v;
+                    *a = madd::<RELAXED>(*a, w, *v);
                 }
             }
             for (j, a) in acc.iter().enumerate() {
@@ -411,7 +457,7 @@ pub fn up_conv(
         while px < out_width {
             let mut acc = 0.0;
             for &(w, dy, dx) in &taps {
-                acc += w * padded[(py + dy) * pad_w + px + dx];
+                acc = madd::<RELAXED>(acc, w, padded[(py + dy) * pad_w + px + dx]);
             }
             res[out_row + px] += acc;
             px += 1;
@@ -443,6 +489,7 @@ pub fn build(
     width: usize,
     height: usize,
     levels: Option<usize>,
+    relaxed: bool,
 ) -> SteerablePyramid {
     assert_eq!(image.len(), width * height, "build: image size mismatch");
     let lo0 = flat(&LO0FILT);
@@ -458,8 +505,8 @@ pub fn build(
     );
 
     let (high_pass, mut current) = crate::par::join2(
-        || corr_dn(image, width, height, &hi0, 15, 1),
-        || corr_dn(image, width, height, &lo0, 9, 1),
+        || corr_dn(image, width, height, &hi0, 15, 1, relaxed),
+        || corr_dn(image, width, height, &lo0, 9, 1, relaxed),
     );
 
     let mut out_levels: Vec<[Band; ORIENTATIONS]> = Vec::with_capacity(ht);
@@ -474,13 +521,22 @@ pub fn build(
                 &bfilts[o],
                 9,
                 1,
+                relaxed,
             )
         });
         let bands: [Band; ORIENTATIONS] = bands
             .try_into()
             .unwrap_or_else(|_| unreachable!("BFILTS has ORIENTATIONS entries"));
         out_levels.push(bands);
-        current = corr_dn(&current.data, current.width, current.height, &lo, 17, 2);
+        current = corr_dn(
+            &current.data,
+            current.width,
+            current.height,
+            &lo,
+            17,
+            2,
+            relaxed,
+        );
     }
 
     SteerablePyramid {
@@ -498,7 +554,7 @@ pub fn build(
 /// `sp3` filters are designed to be self-inverting, `reconstruct(&build(x))`
 /// returns `x` to numerical precision.
 #[must_use]
-pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
+pub fn reconstruct(pyr: &SteerablePyramid, relaxed: bool) -> Band {
     let lo0 = flat(&LO0FILT);
     let hi0 = flat(&HI0FILT);
     let lo = flat(&LOFILT);
@@ -514,9 +570,18 @@ pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
         let parts = crate::par::collect_indexed(1 + ORIENTATIONS, |k| {
             let mut part = vec![0.0; w * h];
             if k == 0 {
-                up_conv(&acc, &lo, 17, 2, w, h, &mut part);
+                up_conv(&acc, &lo, 17, 2, w, h, &mut part, relaxed);
             } else {
-                up_conv(&level[k - 1], &bfilts[k - 1], 9, 1, w, h, &mut part);
+                up_conv(
+                    &level[k - 1],
+                    &bfilts[k - 1],
+                    9,
+                    1,
+                    w,
+                    h,
+                    &mut part,
+                    relaxed,
+                );
             }
             part
         });
@@ -536,8 +601,17 @@ pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
 
     // Undo the lo0 / hi0 split.
     let mut out = vec![0.0; pyr.width * pyr.height];
-    up_conv(&acc, &lo0, 9, 1, pyr.width, pyr.height, &mut out);
-    up_conv(&pyr.high_pass, &hi0, 15, 1, pyr.width, pyr.height, &mut out);
+    up_conv(&acc, &lo0, 9, 1, pyr.width, pyr.height, &mut out, relaxed);
+    up_conv(
+        &pyr.high_pass,
+        &hi0,
+        15,
+        1,
+        pyr.width,
+        pyr.height,
+        &mut out,
+        relaxed,
+    );
     Band {
         width: pyr.width,
         height: pyr.height,
@@ -598,7 +672,7 @@ mod tests {
         let im = ramp_plus_texture(w, h);
         let mut f = vec![0.0f32; 81];
         f[4 * 9 + 4] = 1.0; // centre tap of a 9×9
-        let out = corr_dn(&im, w, h, &f, 9, 1);
+        let out = corr_dn(&im, w, h, &f, 9, 1, false);
         assert_eq!((out.width, out.height), (w, h));
         for (a, b) in out.data.iter().zip(&im) {
             assert!((a - b).abs() < 1e-15);
@@ -611,7 +685,7 @@ mod tests {
         f[4 * 9 + 4] = 1.0;
         for (w, h) in [(8usize, 8usize), (9, 7), (1, 1), (5, 12)] {
             let im = ramp_plus_texture(w, h);
-            let out = corr_dn(&im, w, h, &f, 9, 2);
+            let out = corr_dn(&im, w, h, &f, 9, 2, false);
             assert_eq!((out.width, out.height), (w.div_ceil(2), h.div_ceil(2)));
             // With a delta filter, decimation just picks even samples.
             for oy in 0..out.height {
@@ -639,7 +713,7 @@ mod tests {
             (40, 40, 1, 9, flat(&BFILTS[1])),
         ] {
             let x = ramp_plus_texture(w, h);
-            let cd = corr_dn(&x, w, h, &filt, fs, step);
+            let cd = corr_dn(&x, w, h, &filt, fs, step, false);
             // Zero out the coefficients whose footprint touches an edge, so
             // both sides of the inner product only see interior arithmetic.
             let margin = fs; // generous: fs/2 would do
@@ -661,7 +735,7 @@ mod tests {
                 data: y.clone(),
             };
             let mut back = vec![0.0f32; w * h];
-            up_conv(&yb, &filt, fs, step, w, h, &mut back);
+            up_conv(&yb, &filt, fs, step, w, h, &mut back, false);
 
             let lhs: f64 = cd
                 .data
@@ -700,9 +774,9 @@ mod tests {
             .collect();
         let f = flat(&LOFILT);
 
-        let lo = corr_dn(&small, n, n, &f, 17, 2);
+        let lo = corr_dn(&small, n, n, &f, 17, 2, false);
         let mut finite = vec![0.0f32; n * n];
-        up_conv(&lo, &f, 17, 2, n, n, &mut finite);
+        up_conv(&lo, &f, 17, 2, n, n, &mut finite, false);
 
         // Three periods of the reflect1 extension, so the middle one is
         // untouched by the big image's own borders. The period 2(n−1) = 94 is
@@ -717,9 +791,9 @@ mod tests {
                 small[ext(y) * n + ext(x)]
             })
             .collect();
-        let blo = corr_dn(&bigim, big, big, &f, 17, 2);
+        let blo = corr_dn(&bigim, big, big, &f, 17, 2, false);
         let mut infinite = vec![0.0f32; big * big];
-        up_conv(&blo, &f, 17, 2, big, big, &mut infinite);
+        up_conv(&blo, &f, 17, 2, big, big, &mut infinite, false);
 
         // Analysis must agree exactly, bit for bit.
         for i in 0..lo.height {
@@ -749,10 +823,10 @@ mod tests {
             data: (0..16).map(|i| i as f32).collect(),
         };
         let mut a = vec![0.0f32; 16];
-        up_conv(&b, &f, 9, 1, 4, 4, &mut a);
+        up_conv(&b, &f, 9, 1, 4, 4, &mut a, false);
         let mut twice = vec![0.0f32; 16];
-        up_conv(&b, &f, 9, 1, 4, 4, &mut twice);
-        up_conv(&b, &f, 9, 1, 4, 4, &mut twice);
+        up_conv(&b, &f, 9, 1, 4, 4, &mut twice, false);
+        up_conv(&b, &f, 9, 1, 4, 4, &mut twice, false);
         for (x, y) in a.iter().zip(&twice) {
             assert!((2.0 * x - y).abs() < 1e-12);
         }
@@ -762,7 +836,7 @@ mod tests {
     fn band_layout_matches_the_reference() {
         let (w, h) = (64usize, 48usize);
         let im = ramp_plus_texture(w, h);
-        let pyr = build(&im, w, h, None);
+        let pyr = build(&im, w, h, None, false);
         // 64×48 with a 17-tap lofilt: 48→24→12 < 17, so 2 levels.
         assert_eq!(max_pyr_height(w, h, 17), 2);
         assert_eq!(pyr.height_levels(), 2);
@@ -792,7 +866,7 @@ mod tests {
         // The 2.2 quality weights are tabulated at [15, 7.5, …, 0.2344] cpd,
         // which is exactly this grid at the 30 pixels/degree the fit used.
         let (w, h) = (512usize, 512usize);
-        let pyr = build(&ramp_plus_texture(w, h), w, h, None);
+        let pyr = build(&ramp_plus_texture(w, h), w, h, None, false);
         assert_eq!(pyr.height_levels(), 5);
         let f = pyr.band_frequencies(30.0);
         // 5 oriented levels → 7 entries: high-pass, 5 levels, low-pass. These
@@ -832,8 +906,8 @@ mod tests {
             .collect();
         let margin = 40usize;
         let interior_err = |levels: usize| -> f64 {
-            let pyr = build(&im, w, h, Some(levels));
-            let rec = reconstruct(&pyr);
+            let pyr = build(&im, w, h, Some(levels), false);
+            let rec = reconstruct(&pyr, false);
             assert_eq!((rec.width, rec.height), (w, h));
             (margin..h - margin)
                 .flat_map(|y| (margin..w - margin).map(move |x| y * w + x))
@@ -876,8 +950,8 @@ mod tests {
                 (pi * 8.0 * x / (w - 1) as f32).cos() * (pi * 6.0 * y / (h - 1) as f32).cos()
             })
             .collect();
-        let pyr = build(&im, w, h, None);
-        let rec = reconstruct(&pyr);
+        let pyr = build(&im, w, h, None, false);
+        let rec = reconstruct(&pyr, false);
         let m = 8usize;
         let interior = (m..h - m)
             .flat_map(|y| (m..w - m).map(move |x| y * w + x))
@@ -915,7 +989,7 @@ mod tests {
                     (2.0 * core::f32::consts::PI * t / 8.0).sin()
                 })
                 .collect();
-            let pyr = build(&im, w, h, None);
+            let pyr = build(&im, w, h, None, false);
             let mut e = [0.0; ORIENTATIONS];
             for (o, b) in pyr.levels[0].iter().enumerate() {
                 e[o] = b
@@ -955,7 +1029,7 @@ mod tests {
         // machine precision.
         let (w, h) = (48usize, 48usize);
         let level = 3.25f32;
-        let pyr = build(&vec![level; w * h], w, h, None);
+        let pyr = build(&vec![level; w * h], w, h, None, false);
         for lv in &pyr.levels {
             for b in lv {
                 for v in &b.data {

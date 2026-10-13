@@ -75,7 +75,7 @@ fn bench_kernels(suite: &mut Suite) {
                 .map(|v| v as f32)
                 .collect();
             let f: Vec<f32> = BFILTS[0].iter().flatten().map(|v| *v as f32).collect();
-            b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1))
+            b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1, true))
         });
         g.bench("lofilt_17x17_step2", move |b| {
             let im: Vec<f32> = hdr_field(SIDE, SIDE, 0xbead)
@@ -83,7 +83,7 @@ fn bench_kernels(suite: &mut Suite) {
                 .map(|v| v as f32)
                 .collect();
             let f: Vec<f32> = LOFILT.iter().flatten().map(|v| *v as f32).collect();
-            b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 17, 2))
+            b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 17, 2, true))
         });
     });
 
@@ -95,10 +95,10 @@ fn bench_kernels(suite: &mut Suite) {
                 .map(|v| v as f32)
                 .collect();
             let f: Vec<f32> = BFILTS[0].iter().flatten().map(|v| *v as f32).collect();
-            let band: Band = hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1);
+            let band: Band = hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1, true);
             b.iter(move || {
                 let mut res = vec![0.0f32; SIDE * SIDE];
-                hdrvdp::spyr::up_conv(&band, &f, 9, 1, SIDE, SIDE, &mut res);
+                hdrvdp::spyr::up_conv(&band, &f, 9, 1, SIDE, SIDE, &mut res, true);
                 res
             })
         });

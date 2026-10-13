@@ -92,7 +92,7 @@ pub use bands::{BandPyramid, decompose};
 pub use display::ColorEncoding;
 pub use masking::Masking;
 pub use metric::{HdrVdpResult, hdrvdp, score};
-pub use params::{Params, pix_per_deg};
+pub use params::{FpMode, Params, pix_per_deg};
 pub use pathway::{Pathway, visual_pathway};
 pub use photoreceptor::Photoreceptor;
 pub use pool::Visibility;

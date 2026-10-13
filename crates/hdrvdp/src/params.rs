@@ -36,9 +36,31 @@ pub const DEFAULT_PEAK_SENSITIVITY: f64 = 2.4;
 /// Number of orientations in the steerable-pyramid decomposition.
 pub const ORIENT_COUNT: usize = 4;
 
+/// Numerical mode for the metric's floating-point pipeline.
+///
+/// The upstream reference compiles under `-ffast-math`, whose FMA
+/// contraction changes rounding versus IEEE mul+add. [`FpMode::Strict`]
+/// keeps separate multiply/accumulate roundings — the bit-for-bit
+/// comparison point. [`FpMode::Relaxed`] permits single-rounded fused
+/// multiply-add in the steerable-pyramid convolution chains (the dominant
+/// cost of the metric); score deltas vs `Strict` are ~1e-3 Q or below.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FpMode {
+    /// Fused multiply-add permitted in the conv accumulation chains.
+    #[default]
+    Relaxed,
+    /// Separate multiply and accumulate roundings, bit-for-bit with the
+    /// upstream comparison baseline.
+    Strict,
+}
+
 /// HDR-VDP-2.2 model parameters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Params {
+    /// Numerical mode — [`FpMode::Relaxed`] (default) or
+    /// [`FpMode::Strict`] for bit-parity testing.
+    pub mode: FpMode,
+
     /// Visual resolution in pixels per degree of visual angle. There is no
     /// meaningful default — it depends on display size, resolution and viewing
     /// distance — so callers must supply it (see [`crate::pix_per_deg`]).
@@ -117,6 +139,7 @@ impl Default for Params {
         let p1 = 0.061_466_549_455_263_f64;
         let p2 = 0.997_273_700_237_770_7_f64;
         Self {
+            mode: FpMode::Relaxed,
             // No sane default exists; `Params::default()` is only useful once
             // the caller sets this (or builds through `Params::new`).
             pix_per_deg: f64::NAN,
@@ -171,6 +194,20 @@ impl Params {
             pix_per_deg,
             ..Self::default()
         }
+    }
+
+    /// Override the numerical mode — [`FpMode::Strict`] for bit-parity
+    /// against the upstream comparison baseline.
+    #[must_use]
+    pub fn with_mode(mut self, mode: FpMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// `Strict` shorthand — [`Params::with_mode`]`(FpMode::Strict)`.
+    #[must_use]
+    pub fn with_strict(self) -> Self {
+        self.with_mode(FpMode::Strict)
     }
 
     /// Override the peak-sensitivity exponent (upstream's `peak_sensitivity`

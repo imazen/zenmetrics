@@ -33,7 +33,7 @@
 use crate::bands;
 use crate::display::{ColorEncoding, looks_relative, to_nits};
 use crate::masking::{self, diff_mask};
-use crate::params::Params;
+use crate::params::{FpMode, Params};
 use crate::pathway::{mtf_filter_for, surround_per_channel, visual_pathway_with_filter};
 use crate::photoreceptor::Photoreceptor;
 use crate::pool::{Visibility, quality_correlate, quality_mos, visibility};
@@ -232,9 +232,10 @@ fn prepare(
     );
     drop(mtf_filter);
 
+    let relaxed = par.mode == FpMode::Relaxed;
     let (mut bands_ref, mut bands_test) = crate::par::join2(
-        || bands::decompose_build(&path_ref),
-        || bands::decompose_build(&path_test),
+        || bands::decompose_build(&path_ref, relaxed),
+        || bands::decompose_build(&path_test, relaxed),
     );
     // Reference first, so its base-band pad value can be reused.
     let pad = bands::finalize_baseband(&mut bands_ref, &path_ref, par, None);
@@ -280,6 +281,53 @@ mod tests {
 
     fn par() -> Params {
         Params::new(30.0)
+    }
+
+    /// `FpMode::Relaxed` is the shipping default — it must land within
+    /// noise of `Strict`, not silently diverge. Bound measured on this
+    /// pair: |Δq| ≈ 4e-6, |Δp_det| ≈ 1e-7 — keep generous headroom for
+    /// other inputs while still catching a wiring mistake (e.g. relaxed
+    /// accidentally running a different filter count).
+    #[test]
+    fn relaxed_mode_stays_within_tolerance_of_strict() {
+        let (w, h) = (96usize, 72usize);
+        let reference = hdr_reference(w, h);
+        let pi = core::f64::consts::PI;
+        let test: Vec<f64> = reference
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let (x, y) = ((i % w) as f64, (i / w) as f64);
+                v * (1.0 + 0.05 * (2.0 * pi * x / 5.0).sin() * (2.0 * pi * y / 7.0).sin())
+            })
+            .collect();
+        let strict = hdrvdp(
+            &test,
+            &reference,
+            w,
+            h,
+            ColorEncoding::Luminance,
+            &par().with_strict(),
+        )
+        .unwrap();
+        let relaxed = hdrvdp(&test, &reference, w, h, ColorEncoding::Luminance, &par()).unwrap();
+        assert!(
+            (strict.q - relaxed.q).abs() < 0.05,
+            "Q: strict {} vs relaxed {}",
+            strict.q,
+            relaxed.q
+        );
+        assert!(
+            (strict.p_det - relaxed.p_det).abs() < 0.01,
+            "P_det: strict {} vs relaxed {}",
+            strict.p_det,
+            relaxed.p_det
+        );
+        assert_eq!(
+            strict.p_map.len(),
+            relaxed.p_map.len(),
+            "mode must not change the visibility-map shape"
+        );
     }
 
     #[test]

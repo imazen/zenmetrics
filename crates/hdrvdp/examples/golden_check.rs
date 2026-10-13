@@ -93,7 +93,7 @@ fn diag_reconstruct(dir: &Path) {
         width: w,
         height: h,
     };
-    let rec = reconstruct(&sp);
+    let rec = reconstruct(&sp, false);
     let smap_up = read_f64(&dir.join("diag_smap.f64")); // col-major, POST-pool
     let smap_up = un_cm(&smap_up, h, w);
     // Undo spatial pooling: pre = post / (Σpost/max_post).
@@ -120,7 +120,7 @@ fn diag_pipeline(dir: &Path) {
     let (w, h) = (128usize, 128usize);
     let test = read_f64(&dir.join("noise_128x128_p30.f64"));
     let refr = read_f64(&dir.join("ref_128x128.f64"));
-    let par = Params::new(30.0);
+    let par = Params::new(30.0).with_strict();
     let channels = 1;
 
     let ref_nits = to_nits(&refr, w, h, ColorEncoding::Luminance).unwrap();

@@ -38,7 +38,7 @@
 
 use crate::csf::ncsf;
 use crate::fft::{conv_fft_real, cycles_per_degree_grid};
-use crate::params::Params;
+use crate::params::{FpMode, Params};
 use crate::pathway::Pathway;
 use crate::spyr::{Band, ORIENTATIONS, SteerablePyramid, build};
 
@@ -129,7 +129,7 @@ impl BandPyramid {
 /// back in for the second image.
 #[must_use]
 pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (BandPyramid, f64) {
-    let mut bp = decompose_build(pathway);
+    let mut bp = decompose_build(pathway, par.mode == FpMode::Relaxed);
     let pad = finalize_baseband(&mut bp, pathway, par, bb_padvalue);
     (bp, pad)
 }
@@ -138,8 +138,14 @@ pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (
 /// move its planes into the `[1, 4×H, 1]` band list. Split out so the two
 /// images' builds can run in parallel before the base-band filter couples
 /// them through `bb_padvalue` (see [`crate::metric`]).
-pub(crate) fn decompose_build(pathway: &Pathway) -> BandPyramid {
-    let pyr: SteerablePyramid = build(&pathway.achromatic, pathway.width, pathway.height, None);
+pub(crate) fn decompose_build(pathway: &Pathway, relaxed: bool) -> BandPyramid {
+    let pyr: SteerablePyramid = build(
+        &pathway.achromatic,
+        pathway.width,
+        pathway.height,
+        None,
+        relaxed,
+    );
     let levels = pyr.height_levels();
 
     // Move the pyramid's planes into the band list — it is consumed here, so
