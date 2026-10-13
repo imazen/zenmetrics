@@ -106,6 +106,8 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="row"><button id="compare" class="primary" disabled>Compare</button><button id="cancel" disabled>Cancel</button><label><input id="live" type="checkbox" checked> Live</label></div>
 <div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Worker time</small><b id="elapsed">–</b></div></div>
 <div id="job-progress" hidden><progress id="progress-bar"></progress><span id="progress-label">Starting job…</span></div>
+<p id="capabilities" class="status">Checking browser capabilities…</p>
+<details><summary>Browser requirements · Brave help</summary><p>In Brave, turn Shields off for this site, then reload. Relaxed SIMD128, shared memory and working Web Workers are required. HTTPS and cross-origin isolation enable the Rayon worker pool. WebGPU readiness is checked separately; the selectable metrics in this build run on the CPU.</p></details>
 <output id="status" class="status">Starting threaded SIMD WASM…</output>
 <p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. The zensim profile is pinned to B.</p></details>
 </section>

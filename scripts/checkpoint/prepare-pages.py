@@ -65,6 +65,17 @@ def main():
         text = text.replace('<h1>',
         '<nav><a href="https://github.com/imazen/zenmetrics">Source and documentation</a> · '
         '<a href="https://github.com/imazen/zenmetrics/releases">Native and browser downloads</a></nav>\n<h1>', 1)
+    # Every module, WASM file and nested Rayon worker shares one immutable URL
+    # generation. Fixed package paths can mix cached glue with a newer module.
+    generation = Path('assets') / args.source
+    destination = args.out / generation
+    destination.mkdir(parents=True)
+    for name in ('app.js', 'worker.js', 'pkg'):
+        shutil.move(str(args.out / name), destination / name)
+    text = text.replace('src="app.js"', f'src="{generation}/app.js"')
+    # Compatibility worker entry for qualification tools, never used by the UI.
+    (args.out / 'worker.js').write_text(f"import './{generation}/worker.js';\n")
+    provenance['asset_prefix'] = str(generation)
     index.write_text(text)
     if args.build:
         provenance['files']={str(path.relative_to(args.out)):hashlib.sha256(path.read_bytes()).hexdigest()

@@ -45,10 +45,36 @@ try:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         context = browser.new_context()
+        source_file=args.site/'site-source.json'
+        asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''
+        if asset_prefix:
+            # Historical fixed package URLs must never be used by a new viewer,
+            # even if their cached glue allocates an obsolete memory minimum.
+            from urllib.parse import urlparse
+            context.route('**/pkg/**', lambda route: route.abort() if urlparse(route.request.url).path.startswith('/pkg/') else route.continue_())
         page = context.new_page()
         page.goto(url)
         page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')", timeout=30000)
         assert page.evaluate('crossOriginIsolated && typeof SharedArrayBuffer !== "undefined"')
+        assert 'Shields off' in page.locator('details').filter(has_text='Brave help').text_content()
+        page.wait_for_function("!document.getElementById('capabilities').textContent.startsWith('Checking')",timeout=10000)
+        assert 'WebGPU' in page.locator('#capabilities').inner_text()
+        if asset_prefix:
+            assert asset_prefix in page.locator('script[type=module]').get_attribute('src')
+        # Negative control for the reported old-glue/new-module memory mismatch.
+        import re
+        glue=(args.site/asset_prefix/'pkg/zenmetrics_browser.js').read_text()
+        initial=int(re.search(r'initial:\s*(\d+)',glue).group(1))
+        mismatch=page.evaluate('''async ({prefix,pages}) => {
+          const module=await import(new URL(`${prefix?prefix+'/':''}pkg/zenmetrics_browser.js?memory-negative-control`,location.href));
+          try {
+            await module.default({memory:new WebAssembly.Memory({initial:pages,maximum:32768,shared:true})});
+            throw new Error('Undersized shared memory was accepted');
+          } catch(error) {
+            if(!(error instanceof WebAssembly.LinkError)||!String(error).includes('memory import'))throw error;
+            return String(error);
+          }
+        }''',{'prefix':asset_prefix,'pages':initial-1})
         result = page.evaluate('''async () => {
           const worker = new Worker(new URL('./worker.js', location.href), {type:'module'});
           let publishedScore, sharedControls=0, earlyScores=0;
@@ -158,14 +184,22 @@ try:
         page.locator('#demo').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
         assert page.locator('#score').inner_text()!='–'
-        page.locator('#compare').click()
-        page.locator('#cancel').click()
+        # Invoke both UI handlers in one browser turn: a fast comparison must
+        # not finish between two separate automation commands.
+        page.evaluate('''() => {
+          document.getElementById('compare').click();
+          const cancel=document.getElementById('cancel');
+          if(cancel.disabled)throw new Error('Cancel was not enabled for the active job');
+          cancel.click();
+        }''' )
         page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')",timeout=30000)
         assert page.locator('#cancel').is_disabled()
         page.locator('#compare').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
         result['demo_completion']=True
         result['ui_cancel_recovery']=True
+        result['capability_report']=page.locator('#capabilities').inner_text()
+        result['incompatible_memory_refused']=mismatch
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']
@@ -180,7 +214,9 @@ try:
                 result['native_map_max_abs_delta'][name]=delta
                 if name=='psnr': assert delta==0
         if args.report:
-            wasm=(args.site/'pkg/zenmetrics_browser_bg.wasm').read_bytes()
+            source_file=args.site/'site-source.json'
+            asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''
+            wasm=(args.site/asset_prefix/'pkg/zenmetrics_browser_bg.wasm').read_bytes()
             result['wasm_bytes']=len(wasm);result['wasm_gzip_bytes']=len(gzip.compress(wasm,mtime=0))
             result['browser']=browser.version
             args.report.write_text(json.dumps(result,indent=2)+'\n')
