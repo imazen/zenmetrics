@@ -21,9 +21,9 @@ use crate::kernels::masking::{
     D_MAX, MASK_C, MASK_P, MASK_Q, MASK_Q_4, PU_PADSIZE, XCM_3X3, XCM_4X4,
 };
 
-use crate::simd_pyramid::gaussian_blur_sigma3_simd;
+use crate::simd_pyramid::gaussian_blur_sigma3_scaled_simd;
 use zenmetrics_math::{
-    safe_pow_with_offset_into, vabs_diff_into, vabs_diff_pow_into, vmin_abs_into, vscale_into,
+    safe_pow_with_offset_into, vabs_diff_pow_into, vmin_abs_into,
     vxcm_pool_clamp_4ch_sqsum_partial, xcm4_finish,
 };
 
@@ -102,21 +102,18 @@ pub(crate) fn mult_mutual_band_into(
         // `gaussian_blur_sigma3` which allocated its h-pass buffer
         // internally). We thread `pu_scratch` as the h-pass scratch
         // (shared across the 3 channels — resized to n inside the
-        // SIMD entry) and write blur output into the free `term_*`
-        // buffers, which aren't consumed until Step 3 below. The
-        // blur's two passes are row-banded internally.
-        gaussian_blur_sigma3_simd(m_mm_a, bw, bh, pu_scratch, term_a);
-        crate::par::map1(&mut m_mm_a[..n], &term_a[..n], |o, s| {
-            vscale_into(o, s, mask_c_lin)
-        });
-        gaussian_blur_sigma3_simd(m_mm_rg, bw, bh, pu_scratch, term_rg);
-        crate::par::map1(&mut m_mm_rg[..n], &term_rg[..n], |o, s| {
-            vscale_into(o, s, mask_c_lin)
-        });
-        gaussian_blur_sigma3_simd(m_mm_vy, bw, bh, pu_scratch, term_vy);
-        crate::par::map1(&mut m_mm_vy[..n], &term_vy[..n], |o, s| {
-            vscale_into(o, s, mask_c_lin)
-        });
+        // SIMD entry) and write the SCALED blur into the free `term_*`
+        // buffers — `gaussian_blur_sigma3_scaled_simd` folds the
+        // `mask_c_lin` multiply into the vertical pass's final store,
+        // bit-identical to a separate `vscale` pass (removed).
+        gaussian_blur_sigma3_scaled_simd(m_mm_a, bw, bh, pu_scratch, term_a, mask_c_lin);
+        gaussian_blur_sigma3_scaled_simd(m_mm_rg, bw, bh, pu_scratch, term_rg, mask_c_lin);
+        gaussian_blur_sigma3_scaled_simd(m_mm_vy, bw, bh, pu_scratch, term_vy, mask_c_lin);
+        // term_* now hold min(|T|,|R|) blurred × mask_c_lin; m_mm_* are
+        // free and become step 3's pow outputs (pass 3 reads them).
+        core::mem::swap(&mut *term_a, &mut *m_mm_a);
+        core::mem::swap(&mut *term_rg, &mut *m_mm_rg);
+        core::mem::swap(&mut *term_vy, &mut *m_mm_vy);
     } else {
         for i in 0..n {
             m_mm_a[i] *= mask_c_lin;
@@ -128,11 +125,9 @@ pub(crate) fn mult_mutual_band_into(
     // Step 3: term[ch] = safe_pow(|M_mm[ch]|, q[ch])
     //                 = (|M_mm[ch]| + SAFE_EPS)^q[ch] - SAFE_EPS^q[ch].
     //
-    // After Step 2 the m_mm_* buffers hold `min(|T|, |R|) * mask_c_lin`,
-    // which is non-negative — no per-element `abs()` needed. We feed the
-    // slices straight into the SIMD pow kernel (one chunked
-    // pow_midp_unchecked per channel), which is the bulk of the per-pixel
-    // wall time for this stage.
+    // The m_mm_* buffers hold `min(|T|, |R|) * mask_c_lin` — non-negative,
+    // no per-element `abs()` needed. The SIMD pow kernel (one chunked
+    // pow_midp_unchecked per channel) is the bulk of this stage.
     let q_a = MASK_Q[0];
     let q_rg = MASK_Q[1];
     let q_vy = MASK_Q[2];
@@ -158,15 +153,16 @@ pub(crate) fn mult_mutual_band_into(
     //   (d) du[c]     = pow[c] / (1.0 + m[c])
     //   (e) d[c]      = D_MAX_LIN * du[c] / (D_MAX_LIN + du[c])
     //
-    // We split this into THREE passes so the heaviest stage (b) can run
-    // through the vectorized `safe_pow_with_offset_into`:
-    //   pass 1 (scalar, LLVM auto-vectorizes): write |T-R| into the now-free
-    //          m_mm_* buffers — these were last touched in Step 3 as the pow
-    //          input, are free as scratch from here on.
-    //   pass 2 (archmage SIMD): pow into d_* (we don't need d_* until
-    //          pass 3 anyway, and it's already the right size).
-    //   pass 3 (scalar): the cheap per-pixel pool + clamp; reads pow from
-    //          d_* and overwrites d_* with the final diff value.
+    // We split this into TWO passes so the heaviest stage (b) runs
+    // through the vectorized SIMD pow:
+    //   pass 1 (archmage SIMD): `vabs_diff_pow_into` computes
+    //          (|T−R| + eps)^p − eps^p straight into d_* — the |T−R|
+    //          plane is never materialised (the kernel performs the
+    //          same two ops per lane → bit-identical to the two-pass
+    //          chain; the same fusion is proven in `_4ch`).
+    //   pass 2 (scalar, auto-vectorizes): the cheap per-pixel pool +
+    //          clamp; reads pow from d_* and overwrites with the final
+    //          diff value.
     let xcm00 = XCM_3X3[0][0];
     let xcm10 = XCM_3X3[1][0];
     let xcm20 = XCM_3X3[2][0];
@@ -187,26 +183,15 @@ pub(crate) fn mult_mutual_band_into(
     let rrg = &r_p_per_ch[1];
     let rvy = &r_p_per_ch[2];
 
-    // Pass 1: diff[c] = |T[c] - R[c]| → m_mm_* (free scratch).
-    crate::par::map1_2(&mut m_mm_a[..n], &ta[..n], &ra[..n], |o, x, y| {
-        vabs_diff_into(o, x, y)
+    // Pass 1: pow[c] = (|T[c]−R[c]| + eps)^p − eps^p → d_* (vectorized).
+    crate::par::map1_2(&mut d_a[..n], &ta[..n], &ra[..n], |o, x, y| {
+        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
     });
-    crate::par::map1_2(&mut m_mm_rg[..n], &trg[..n], &rrg[..n], |o, x, y| {
-        vabs_diff_into(o, x, y)
+    crate::par::map1_2(&mut d_rg[..n], &trg[..n], &rrg[..n], |o, x, y| {
+        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
     });
-    crate::par::map1_2(&mut m_mm_vy[..n], &tvy[..n], &rvy[..n], |o, x, y| {
-        vabs_diff_into(o, x, y)
-    });
-
-    // Pass 2: pow[c] = (diff[c] + eps)^p - eps^p → d_* (vectorized).
-    crate::par::map1(&mut d_a[..n], &m_mm_a[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
-    });
-    crate::par::map1(&mut d_rg[..n], &m_mm_rg[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
-    });
-    crate::par::map1(&mut d_vy[..n], &m_mm_vy[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
+    crate::par::map1_2(&mut d_vy[..n], &tvy[..n], &rvy[..n], |o, x, y| {
+        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
     });
 
     // Pass 3: cross-channel pool + soft clamp, scalar (auto-vectorizes —
@@ -304,10 +289,17 @@ pub(crate) fn mult_mutual_band_4ch_into(
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         for c in 0..4 {
-            gaussian_blur_sigma3_simd(&m_mm[c][..n], bw, bh, pu_scratch, &mut term[c]);
-            crate::par::map1(&mut m_mm[c][..n], &term[c][..n], |o, s| {
-                vscale_into(o, s, mask_c_lin)
-            });
+            gaussian_blur_sigma3_scaled_simd(
+                &m_mm[c][..n],
+                bw,
+                bh,
+                pu_scratch,
+                &mut term[c],
+                mask_c_lin,
+            );
+            // term[c] now holds the scaled mask (step-3 input);
+            // m_mm[c] is free and becomes step 3's pow output.
+            core::mem::swap(&mut term[c], &mut m_mm[c]);
         }
     } else {
         for c in 0..4 {

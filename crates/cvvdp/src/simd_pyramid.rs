@@ -1082,7 +1082,7 @@ pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &
 }
 
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
-fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32], scale: f32) {
     let k = PU_BLUR_KERNEL_1D;
     let k0 = f32x16::splat_t(token, k[0]);
     let k1 = f32x16::splat_t(token, k[1]);
@@ -1097,6 +1097,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
     let k10 = f32x16::splat_t(token, k[10]);
     let k11 = f32x16::splat_t(token, k[11]);
     let k12 = f32x16::splat_t(token, k[12]);
+    let vs = f32x16::splat_t(token, scale);
 
     let lane = 16usize;
     let n_groups = w / lane;
@@ -1119,7 +1120,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
 
@@ -1163,7 +1164,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     + v10 * k10
                     + v11 * k11
                     + v12 * k12;
-                let arr = acc.to_array();
+                let arr = (acc * vs).to_array();
                 dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
             }
             // Scalar tail columns (< lane). No reflect needed (y is interior).
@@ -1173,7 +1174,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = y + t - 6; // safe: y >= 6
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
 
@@ -1188,14 +1189,14 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
     });
 }
 
 #[archmage::attune(_*_t, define(f32x8))]
-fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32], scale: f32) {
     let k = PU_BLUR_KERNEL_1D;
     let k0 = f32x8::splat_t(token, k[0]);
     let k1 = f32x8::splat_t(token, k[1]);
@@ -1210,6 +1211,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
     let k10 = f32x8::splat_t(token, k[10]);
     let k11 = f32x8::splat_t(token, k[11]);
     let k12 = f32x8::splat_t(token, k[12]);
+    let vs = f32x8::splat_t(token, scale);
 
     let lane = 8usize;
     let n_groups = w / lane;
@@ -1231,7 +1233,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
 
@@ -1271,7 +1273,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     + v10 * k10
                     + v11 * k11
                     + v12 * k12;
-                let arr = acc.to_array();
+                let arr = (acc * vs).to_array();
                 dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
             }
             for x in n_groups * lane..w {
@@ -1280,7 +1282,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = y + t - 6;
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
 
@@ -1294,7 +1296,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
                     let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
                     s += k[t] * h_pass[sy * w + x];
                 }
-                dst[row_off + x] = s;
+                dst[row_off + x] = s * scale;
             }
         }
     });
@@ -1304,10 +1306,26 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
 /// (output of `pu_blur_horizontal_pass`) and writes the final blur
 /// into `dst`.
 pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    pu_blur_vertical_pass_scaled(h_pass, w, h, dst, 1.0);
+}
+
+/// [`pu_blur_vertical_pass`] with a post-accumulate output scale —
+/// `dst[i] = (Σ_t k[t]·h_pass[..]) * scale`. `scale = 1.0` is
+/// bit-identical to the unscaled pass (x·1.0 == x for every finite
+/// f32, ±0 and NaN included). Used to fold the phase-uncertainty
+/// `mask_c_lin` multiply into the blur's final store, removing one
+/// full-plane read+write per channel per band.
+pub(crate) fn pu_blur_vertical_pass_scaled(
+    h_pass: &[f32],
+    w: usize,
+    h: usize,
+    dst: &mut [f32],
+    scale: f32,
+) {
     debug_assert_eq!(h_pass.len(), w * h);
     debug_assert_eq!(dst.len(), w * h);
     archmage::attuned!(
-        pu_blur_v_inner(h_pass, w, h, dst),
+        pu_blur_v_inner(h_pass, w, h, dst, scale),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -1341,6 +1359,29 @@ pub(crate) fn gaussian_blur_sigma3_simd(
     }
     pu_blur_horizontal_pass(src, w, h, &mut h_pass[..n]);
     pu_blur_vertical_pass(&h_pass[..n], w, h, &mut dst[..n]);
+}
+
+/// [`gaussian_blur_sigma3_simd`] with the output scale folded into
+/// the vertical pass's store — `dst[i] = blur(src)[i] * scale`,
+/// bit-identical to a separate `vscale` pass.
+pub(crate) fn gaussian_blur_sigma3_scaled_simd(
+    src: &[f32],
+    w: usize,
+    h: usize,
+    h_pass: &mut Vec<f32>,
+    dst: &mut Vec<f32>,
+    scale: f32,
+) {
+    debug_assert_eq!(src.len(), w * h);
+    let n = w * h;
+    if h_pass.len() < n {
+        h_pass.resize(n, 0.0);
+    }
+    if dst.len() < n {
+        dst.resize(n, 0.0);
+    }
+    pu_blur_horizontal_pass(src, w, h, &mut h_pass[..n]);
+    pu_blur_vertical_pass_scaled(&h_pass[..n], w, h, &mut dst[..n], scale);
 }
 
 // ============================================================================
