@@ -254,12 +254,40 @@ impl IwMap {
 ///     infow += log2(1 + ((vv + (1 + g²)·σ²)·ss·λ_k + σ²·vv) / σ⁴)
 /// infow[infow < tol] = 0
 /// ```
-fn compute_infow(g: &[f32], vv: &[f32], ss: &[f32], lambdas: &[f32], sigma_nsq: f32) -> Vec<f32> {
-    let n = g.len();
-    debug_assert_eq!(vv.len(), n);
-    debug_assert_eq!(ss.len(), n);
-    let mut infow = crate::pool::buf_take(n);
-    crate::simd_kernels::infow_map(g, vv, ss, lambdas, sigma_nsq, TOL, &mut infow);
+/// `g`/`vv` are read as `(nblv, nblh)` windows at offset `(off_y,
+/// off_x)` inside `src_stride`-spaced rows — avoids materializing
+/// cropped copies. `ss` is already dense `(nblv, nblh)`. Bit-identical
+/// to running `infow_map` row-by-row.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compute_infow_strided(
+    g: &[f32],
+    vv: &[f32],
+    src_stride: usize,
+    off_y: usize,
+    off_x: usize,
+    ss: &[f32],
+    nblv: usize,
+    nblh: usize,
+    lambdas: &[f32],
+    sigma_nsq: f32,
+) -> Vec<f32> {
+    debug_assert_eq!(ss.len(), nblv * nblh);
+    let mut infow = crate::pool::buf_take(nblv * nblh);
+    crate::par::map_rows(&mut infow, nblh, |y0, band| {
+        let band_rows = band.len() / nblh;
+        for r in 0..band_rows {
+            let so = (y0 + r + off_y) * src_stride + off_x;
+            crate::simd_kernels::infow_map(
+                &g[so..so + nblh],
+                &vv[so..so + nblh],
+                &ss[(y0 + r) * nblh..(y0 + r) * nblh + nblh],
+                lambdas,
+                sigma_nsq,
+                TOL,
+                &mut band[r * nblh..(r + 1) * nblh],
+            );
+        }
+    });
     infow
 }
 
@@ -362,24 +390,23 @@ pub(crate) fn compute_iw_maps(
             crate::pool::buf_give(pb);
         }
 
-        // 6. Crop g, vv to (nblv, nblh).
-        let ly = (block_h - 1) / 2;
-        let lx = (block_w - 1) / 2;
-        let mut g_c = crate::pool::buf_take(nblv * nblh);
-        let mut vv_c = crate::pool::buf_take(nblv * nblh);
-        for r in 0..nblv {
-            let src_row_off = (r + ly) * w + lx;
-            g_c[r * nblh..(r + 1) * nblh].copy_from_slice(&g[src_row_off..src_row_off + nblh]);
-            vv_c[r * nblh..(r + 1) * nblh].copy_from_slice(&vv[src_row_off..src_row_off + nblh]);
-        }
+        // 6. infow over the valid region of `g`/`vv` read strided —
+        //    no cropped copies.
+        let infow = compute_infow_strided(
+            &g,
+            &vv,
+            w,
+            ly,
+            lx,
+            &ss_pix,
+            nblv,
+            nblh,
+            lambdas,
+            params.sigma_nsq,
+        );
         crate::pool::buf_give(g);
         crate::pool::buf_give(vv);
-
-        // 7. infow.
-        let infow = compute_infow(&g_c, &vv_c, &ss_pix, lambdas, params.sigma_nsq);
         crate::pool::buf_give(ss_pix);
-        crate::pool::buf_give(g_c);
-        crate::pool::buf_give(vv_c);
 
         out.push(IwMap {
             h: nblv,

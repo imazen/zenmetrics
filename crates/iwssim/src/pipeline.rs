@@ -593,19 +593,23 @@ fn score_with_split(
         if params.iw_flag && s < NUM_SCALES - 1 {
             // IW weighted average.
             let iw = &iw_maps[s];
-            // Crop iw by bound1 on every side (matches the Python
-            // `iw[:, :, bound1: -bound1, bound1: -bound1]`).
-            let (crop_h, crop_w, iw_crop) = crop_2d(&iw.infow, iw.h, iw.w, bound1);
+            // Read iw through the bound1 crop window strided (matches
+            // the Python `iw[:, :, bound1: -bound1, bound1: -bound1]`)
+            // — no materialized crop.
+            let crop_w = iw.w - 2 * bound1;
             // The cropped iw shape MUST equal the cs map shape.
             // Sanity: cs_h = h - 10; iw.h = nblv = h - block_h + 1.
             // For block_h=3, nblv = h-2; iw_crop = nblv - 2*bound1 =
             // h - 2 - 8 = h - 10 = cs_h. ✓
             debug_assert_eq!(
-                (crop_h, crop_w),
+                (iw.h - 2 * bound1, crop_w),
                 (scale_h, scale_w),
                 "iw crop dims must match cs dims"
             );
-            let (sum_csiw, sum_iw) = weighted_sum(&cs.cs, &iw_crop, scale_h * scale_w);
+            let (sum_csiw64, sum_iw64) = crate::simd_kernels::weighted_sum_pair_iw_strided(
+                &cs.cs, &iw.infow, iw.w, bound1, bound1, crop_w,
+            );
+            let (sum_csiw, sum_iw) = (sum_csiw64 as f32, sum_iw64 as f32);
             let denom = if sum_iw == 0.0 { 1.0 } else { sum_iw };
             wmcs[s] = (sum_csiw / denom) as f64;
         } else {
@@ -637,38 +641,6 @@ fn score_with_split(
         score,
         per_scale: wmcs,
     })
-}
-
-/// Crop a 2D `(h, w)` slab by `bound` on every side. Returns
-/// `(crop_h, crop_w, cropped_data)`.
-///
-/// When `2*bound >= h` or `2*bound >= w`, returns the central pixel
-/// (or single column/row) — matches the Python's `[bound:-bound]`
-/// behavior for tiny slabs.
-fn crop_2d(src: &[f32], h: usize, w: usize, bound: usize) -> (usize, usize, Vec<f32>) {
-    // The Python's `iw[:, :, bound1:-bound1, ...]` is `iw[bound:h-bound, bound:w-bound]`.
-    // For h = nblv at scale 1, with block=3: nblv = h_work - 2 ≥ 174,
-    // bound1 = 4. crop_h = nblv - 8 ≥ 166 ≥ cs_h = h_work - 10 ≥ 166. ✓
-    assert!(bound * 2 < h, "crop bound too large for height {h}");
-    assert!(bound * 2 < w, "crop bound too large for width {w}");
-    let crop_h = h - 2 * bound;
-    let crop_w = w - 2 * bound;
-    let mut out = crate::pool::buf_take(crop_h * crop_w);
-    for r in 0..crop_h {
-        let src_row = &src[(r + bound) * w + bound..(r + bound) * w + bound + crop_w];
-        let dst_row = &mut out[r * crop_w..(r + 1) * crop_w];
-        dst_row.copy_from_slice(src_row);
-    }
-    (crop_h, crop_w, out)
-}
-
-/// Σ cs·iw and Σ iw (both as `f64` for precision). SIMD-routed via
-/// `simd_kernels::weighted_sum_pair`.
-fn weighted_sum(cs: &[f32], iw: &[f32], n: usize) -> (f32, f32) {
-    debug_assert_eq!(cs.len(), n);
-    debug_assert_eq!(iw.len(), n);
-    let (sum_csiw, sum_iw) = crate::simd_kernels::weighted_sum_pair(cs, iw);
-    (sum_csiw as f32, sum_iw as f32)
 }
 
 // Compile-time sanity: NUM_SCALES and SCALE_WEIGHTS lengths must agree.

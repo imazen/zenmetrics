@@ -234,6 +234,104 @@ fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
     (sum_csiw, sum_iw)
 }
 
+/// Strided-`iw` variant of `weighted_sum_pair_inner`: `cs` is a dense
+/// flat slice; `iw` flat position `pos0 + k` maps to the crop-space
+/// element `(row0 + (pos0+k)/crop_w, col0 + (pos0+k)%crop_w)` in the
+/// `iw_stride`-spaced source. Chunks that straddle a source row are
+/// gathered lane-wise — every lane sees the same values in the same
+/// order as the dense version, so results are bit-identical.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn weighted_sum_pair_iw_strided_inner(
+    token: Token,
+    cs: &[f32],
+    iw: &[f32],
+    iw_stride: usize,
+    crop_w: usize,
+    pos0: usize,
+) -> (f64, f64) {
+    let mut acc_csiw = f32x8::zero_t(token);
+    let mut acc_iw = f32x8::zero_t(token);
+    let (cs_chunks, cs_tail) = f32x8::partition_slice_t(token, cs);
+    let n_chunks = cs_chunks.len();
+    for (c, cc) in cs_chunks.iter().enumerate() {
+        let pos = pos0 + c * 8;
+        let row = pos / crop_w;
+        let col = pos - row * crop_w;
+        let c_v = f32x8::load_t(token, cc);
+        let i_v = if col + 8 <= crop_w {
+            let off = row * iw_stride + col;
+            f32x8::load_t(token, (&iw[off..off + 8]).try_into().unwrap())
+        } else {
+            let mut lanes = [0.0_f32; 8];
+            for (l, slot) in lanes.iter_mut().enumerate() {
+                let p = pos + l;
+                let r = p / crop_w;
+                *slot = iw[r * iw_stride + (p - r * crop_w)];
+            }
+            f32x8::load_t(token, &lanes)
+        };
+        acc_csiw = c_v.mul_add(i_v, acc_csiw);
+        acc_iw += i_v;
+    }
+    let mut sum_csiw = 0.0_f64;
+    let mut sum_iw = 0.0_f64;
+    let csiw_arr = acc_csiw.to_array();
+    let iw_arr = acc_iw.to_array();
+    for k in 0..8 {
+        sum_csiw += csiw_arr[k] as f64;
+        sum_iw += iw_arr[k] as f64;
+    }
+    for (t, c) in cs_tail.iter().enumerate() {
+        let p = pos0 + n_chunks * 8 + t;
+        let r = p / crop_w;
+        let i = iw[r * iw_stride + (p - r * crop_w)];
+        sum_csiw += (*c as f64) * (i as f64);
+        sum_iw += i as f64;
+    }
+    (sum_csiw, sum_iw)
+}
+
+/// Strided-`iw` [`weighted_sum_pair`]: `cs` is the dense `(crop_h ×
+/// crop_w)` cs map; `iw` is the full `(nblv, nblh)` infow plane read
+/// through the `(row0, col0)` crop window. Identical band split and
+/// per-lane arithmetic as `weighted_sum_pair` over the materialized
+/// crop — bit-identical results without copying `iw`.
+#[allow(clippy::too_many_arguments)]
+pub fn weighted_sum_pair_iw_strided(
+    cs: &[f32],
+    iw: &[f32],
+    iw_stride: usize,
+    row0: usize,
+    col0: usize,
+    crop_w: usize,
+) -> (f64, f64) {
+    let n = cs.len();
+    let iw_base = row0 * iw_stride + col0;
+    let iw_s = &iw[iw_base..];
+    let nb = crate::par::n_bands(n);
+    if nb == 1 {
+        return archmage::attuned!(
+            weighted_sum_pair_iw_strided_inner(cs, iw_s, iw_stride, crop_w, 0),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    }
+    let sz = n.div_ceil(nb);
+    let parts = crate::par::collect_bands(nb, |b| {
+        let lo = b * sz;
+        let hi = (lo + sz).min(n);
+        if lo >= hi {
+            return (0.0, 0.0);
+        }
+        archmage::attuned!(
+            weighted_sum_pair_iw_strided_inner(&cs[lo..hi], iw_s, iw_stride, crop_w, lo),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        )
+    });
+    parts
+        .iter()
+        .fold((0.0_f64, 0.0_f64), |(a0, a1), &(p0, p1)| (a0 + p0, a1 + p1))
+}
+
 /// Σ cs·iw, Σ iw as `f64`. SIMD accumulator into `f32` lanes; final
 /// reduction widens to `f64` for parity with the scalar Python path.
 /// Banded above `par::PAR_MIN_SAMPLES`: per-band partials fold in
@@ -549,7 +647,59 @@ fn ssim_gauss_v_inner(
         k_v[i] = f32x8::splat_t(token, SSIM_WIN_1D[i]);
     }
     let n_chunks = w / 8;
-    for oy in 0..dst_h {
+    // Four output rows share rows oy+1..oy+10, so loading the 14-row
+    // window once per column block replaces 44 loads with 14. Each
+    // accumulator keeps the original tap order — bit-identical.
+    let mut oy = 0;
+    while oy + 4 <= dst_h {
+        for c in 0..n_chunks {
+            let x = c * 8;
+            let mut s = [f32x8::zero_t(token); 14];
+            for k in 0..14 {
+                let arr: &[f32; 8] = (&src[(oy + k) * w + x..(oy + k) * w + x + 8])
+                    .try_into()
+                    .unwrap();
+                s[k] = f32x8::load_t(token, arr);
+            }
+            let mut a0 = f32x8::zero_t(token);
+            let mut a1 = f32x8::zero_t(token);
+            let mut a2 = f32x8::zero_t(token);
+            let mut a3 = f32x8::zero_t(token);
+            for k in 0..11 {
+                a0 = s[k].mul_add(k_v[k], a0);
+                a1 = s[k + 1].mul_add(k_v[k], a1);
+                a2 = s[k + 2].mul_add(k_v[k], a2);
+                a3 = s[k + 3].mul_add(k_v[k], a3);
+            }
+            a0.store((&mut dst[oy * w + x..oy * w + x + 8]).try_into().unwrap());
+            a1.store(
+                (&mut dst[(oy + 1) * w + x..(oy + 1) * w + x + 8])
+                    .try_into()
+                    .unwrap(),
+            );
+            a2.store(
+                (&mut dst[(oy + 2) * w + x..(oy + 2) * w + x + 8])
+                    .try_into()
+                    .unwrap(),
+            );
+            a3.store(
+                (&mut dst[(oy + 3) * w + x..(oy + 3) * w + x + 8])
+                    .try_into()
+                    .unwrap(),
+            );
+        }
+        for x in n_chunks * 8..w {
+            for j in 0..4 {
+                let mut acc_s = 0.0_f32;
+                for k in 0..11 {
+                    acc_s += SSIM_WIN_1D[k] * src[(oy + j + k) * w + x];
+                }
+                dst[(oy + j) * w + x] = acc_s;
+            }
+        }
+        oy += 4;
+    }
+    while oy < dst_h {
         let out_row_off = oy * w;
         // Pre-compute the 11 source row starts.
         let mut row_offs = [0usize; 11];
@@ -579,6 +729,7 @@ fn ssim_gauss_v_inner(
             }
             dst[out_row_off + x] = acc_s;
         }
+        oy += 1;
     }
 }
 

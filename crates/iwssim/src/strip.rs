@@ -358,21 +358,23 @@ fn fold_iw_for_strip_scale(
         body_h_s, nblv,
         "box stats body rows ({body_h_s}) must equal Y nblv ({nblv})"
     );
-    let mut g_c = crate::pool::buf_take(nblv * nblh);
-    let mut vv_c = crate::pool::buf_take(nblv * nblh);
-    for r in 0..nblv {
-        let src_row_off = r * w_at_s + lx;
-        g_c[r * nblh..(r + 1) * nblh].copy_from_slice(&g[src_row_off..src_row_off + nblh]);
-        vv_c[r * nblh..(r + 1) * nblh].copy_from_slice(&vv[src_row_off..src_row_off + nblh]);
-    }
+    // 5. infow per pixel over the strided `(nblv, nblh)` window of
+    //    `g`/`vv` — no cropped copies.
+    let infow = crate::weights::compute_infow_strided(
+        &g,
+        &vv,
+        w_at_s,
+        0,
+        lx,
+        &ss_pix,
+        nblv,
+        nblh,
+        eig.lambdas(),
+        params.sigma_nsq,
+    );
     crate::pool::buf_give(g);
     crate::pool::buf_give(vv);
-
-    // 5. infow per pixel.
-    let infow = compute_infow_inline(&g_c, &vv_c, &ss_pix, eig.lambdas(), params.sigma_nsq);
     crate::pool::buf_give(ss_pix);
-    crate::pool::buf_give(g_c);
-    crate::pool::buf_give(vv_c);
 
     // 6. Crop infow by bound1 on every side. The full-image path does
     //    `iw[bound1:-bound1]` on a (nblv, nblh) array; the cs map at
@@ -412,18 +414,17 @@ fn fold_iw_for_strip_scale(
         "nblh must equal cs_w + 2*bound1 (nblh={nblh}, cs_w={cs_w}, bound1={bound1})"
     );
 
-    // Accumulate sum_csiw, sum_iw over (cs_h, cs_w).
+    // Accumulate sum_csiw, sum_iw over (cs_h, cs_w) — per-row SIMD
+    // pair sums folded in row order (deterministic; the 1e-4 strip
+    // parity band absorbs the reassociation vs a flat fold).
     let mut sum_csiw = 0.0_f64;
     let mut sum_iw = 0.0_f64;
     for r in 0..cs_h {
         let iw_row = &infow[(r + bound1) * nblh + bound1..(r + bound1) * nblh + bound1 + cs_w];
         let cs_row = &cs[r * cs_w..(r + 1) * cs_w];
-        for c in 0..cs_w {
-            let iw = iw_row[c];
-            let cs_v = cs_row[c];
-            sum_csiw += (cs_v * iw) as f64;
-            sum_iw += iw as f64;
-        }
+        let (p_csiw, p_iw) = crate::simd_kernels::weighted_sum_pair(cs_row, iw_row);
+        sum_csiw += p_csiw;
+        sum_iw += p_iw;
     }
     accum.sum_csiw += sum_csiw;
     accum.sum_iw += sum_iw;
@@ -457,33 +458,6 @@ fn box_stats_and_gain_body(
         &mut vv,
     );
     (g, vv)
-}
-
-/// Inline copy of `weights.rs::compute_infow`, accepting the same
-/// `lambdas` slice from the shared `EigResult`. We avoid taking a
-/// public dep on `weights.rs` because that module is `pub(crate)` and
-/// the strip walker lives in a sibling module.
-fn compute_infow_inline(
-    g: &[f32],
-    vv: &[f32],
-    ss: &[f32],
-    lambdas: &[f32],
-    sigma_nsq: f32,
-) -> Vec<f32> {
-    let n = g.len();
-    debug_assert_eq!(vv.len(), n);
-    debug_assert_eq!(ss.len(), n);
-    let mut infow = crate::pool::buf_take(n);
-    crate::simd_kernels::infow_map(
-        g,
-        vv,
-        ss,
-        lambdas,
-        sigma_nsq,
-        crate::weights::TOL,
-        &mut infow,
-    );
-    infow
 }
 
 /// Per-scale cs body slice — extracts the body-portion of the strip's
