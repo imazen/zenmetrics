@@ -196,3 +196,13 @@ and requires more than 32 colors with no single color covering half the image.
 This catches both a missing map and the previous widespread saturation, beyond
 the existing finite-array and native-output checks. The local Chromium check
 passed with run-heavy peak RSS 0.18 GiB.
+
+Source `01b087df57db76472cc23639f962e4bf41939997` was freshly built from
+the pinned snapshot, deployed to https://metrics.imazen.org/ and checked live.
+The build used run-heavy peak RSS 0.62 GiB; the live Pages check used 0.18 GiB.
+Live screenshots showed localized map detail. The demo's native map minimum,
+median, 99.5th percentile and maximum were unchanged before/after this display
+fix. Browser qualification still checks all 38 scalar routes, native fixture
+outputs, full-HD completion, upload recovery and cancellation. Subsequent
+metric commits had reinstated the older unresolved lock; the pinned snapshot
+regeneration was retained again in `01b087df`.
