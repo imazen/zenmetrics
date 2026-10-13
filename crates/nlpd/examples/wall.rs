@@ -26,10 +26,17 @@ fn main() {
         }
     }
 
+    let iqa = std::env::args().nth(4).as_deref() == Some("iqa");
+
     let mut score = 0.0f64;
     let t0 = Instant::now();
     for _ in 0..reps {
-        score = nlpd::score_rgb_u8(&reference, &distorted, w, h).unwrap();
+        score = if iqa {
+            nlpd::iqa::score_rgb_u8(&reference, &distorted, w, h).unwrap()
+        } else {
+            nlpd::score_rgb_u8(&reference, &distorted, w, h).unwrap()
+        };
+        coz::progress!();
     }
     let dt = t0.elapsed();
     println!(

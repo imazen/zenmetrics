@@ -137,7 +137,10 @@ fn score_planes(
         }
         let rms = (squared_sum / (w * h * 3) as f64).sqrt();
         weighted_sum += rms.powf(0.6);
-        for v in core::mem::take(&mut ref_planes).into_iter().chain(core::mem::take(&mut dis_planes)) {
+        for v in core::mem::take(&mut ref_planes)
+            .into_iter()
+            .chain(core::mem::take(&mut dis_planes))
+        {
             buf_give(v);
         }
         ref_planes = next_ref;
@@ -145,7 +148,12 @@ fn score_planes(
         w = w.div_ceil(2);
         h = h.div_ceil(2);
     }
-    for v in ref_planes.into_iter().chain(dis_planes).chain(ref_scratch.into_bufs()).chain(dis_scratch.into_bufs()) {
+    for v in ref_planes
+        .into_iter()
+        .chain(dis_planes)
+        .chain(ref_scratch.into_bufs())
+        .chain(dis_scratch.into_bufs())
+    {
         buf_give(v);
     }
     weighted_sum.powf(1.0 / 0.6)
@@ -200,7 +208,9 @@ fn buf_take(n: usize) -> Vec<f32> {
             .iter()
             .enumerate()
             .filter(|(_, v)| v.capacity() >= n)
-            .min_by_key(|(_, v)| v.capacity())
+            // Prefer `len >= n` so `resize` truncates rather than
+            // zero-filling an extension; then smallest capacity.
+            .min_by_key(|(_, v)| (v.len() < n, v.capacity()))
             .map(|(i, _)| i);
         idx.map(|i| p.swap_remove(i)).unwrap_or_default()
     });
@@ -303,8 +313,6 @@ fn reflect(mut x: isize, len: usize) -> usize {
 struct Scratch {
     /// Horizontal low-pass output (downsample: `out_w*h`; blur: `w*h`).
     tmp_h: Vec<f32>,
-    /// Bilinear-upsampled low band, or the IQA path's Laplacian band.
-    up: Vec<f32>,
     /// Normalized Laplacian band (per-channel result plane).
     normalized: Vec<f32>,
 }
@@ -313,14 +321,13 @@ impl Scratch {
     fn new(n: usize) -> Self {
         Self {
             tmp_h: buf_take(n),
-            up: buf_take(n),
             normalized: buf_take(n),
         }
     }
 
     /// Drain the slabs for return to [`buf_give`].
     fn into_bufs(self) -> impl Iterator<Item = Vec<f32>> {
-        [self.tmp_h, self.up, self.normalized].into_iter()
+        [self.tmp_h, self.normalized].into_iter()
     }
 }
 
@@ -425,11 +432,22 @@ fn filter5_horizontal_decimate(
 ) {
     let _ = h; // rows are driven off `dst`'s length now
     let g_len = w - 4;
+    // pad ∈ {1,2} here: out_w = ceil(w/2) forces it. Splitting each row
+    // into even/odd halves turns the stride-2 taps into contiguous
+    // loads at half length — only the kept outputs are computed.
+    let eo = pad == 1 || pad == 2;
+    let ne = w.div_ceil(2);
+    let no = w / 2;
     for_each_row_init(
         dst,
         out_w,
-        || vec![0.0_f32; g_len],
-        |y, out, g| {
+        || {
+            (
+                vec![0.0_f32; ne.max(1)],
+                vec![0.0_f32; no.max(g_len.max(1))],
+            )
+        },
+        |y, out, eo_g| {
             let row = &src[y * w..(y + 1) * w];
             for (ox, o) in out.iter_mut().enumerate().take(lo) {
                 *o = tap5(row, w, ox, 2, pad);
@@ -438,11 +456,21 @@ fn filter5_horizontal_decimate(
                 *o = tap5(row, w, ox, 2, pad);
             }
             if lo < hi {
-                // Fused single-pass G — same k-ordered sum as the former
-                // 5-pass accumulate, ZINIT replicates the cleared-slot `+=`.
-                simd::h5_fused::<true>(row, &mut g[..g_len]);
-                for ox in lo..hi {
-                    out[ox] = g[2 * ox - pad];
+                if eo {
+                    // Deinterleaved conv — same k-ordered sum as tap5,
+                    // evaluated only at kept positions.
+                    let (e, og) = eo_g;
+                    let (e, o) = (&mut e[..ne], &mut og[..no]);
+                    simd::deinterleave2(row, e, o);
+                    simd::h5_eo(e, o, pad, lo, hi, out);
+                } else {
+                    // Fused single-pass G — same k-ordered sum as the
+                    // former 5-pass accumulate, ZINIT replicates the
+                    // cleared-slot `+=`.
+                    simd::h5_fused::<true>(row, &mut eo_g.1[..g_len]);
+                    for ox in lo..hi {
+                        out[ox] = eo_g.1[2 * ox - pad];
+                    }
                 }
             }
         },
@@ -458,11 +486,11 @@ fn tap5(row: &[f32], w: usize, ox: usize, stride: usize, pad: usize) -> f32 {
     sum
 }
 
-fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst: &mut [f32]) {
-    debug_assert_eq!(dst.len(), w * h);
-    // The x mapping is row-invariant — hoist the (x0, x1, tx) tables out of
-    // the y loop; identical arithmetic to the per-pixel recomputation.
-    // Split arrays so `tx` loads contiguously in the vector row kernel.
+/// Row-invariant x-mapping tables for the align-corners bilinear
+/// resample `(sw → w)`: per output column, the two source indices and
+/// the fractional weight. Split arrays so `tx` loads contiguously in the
+/// vector row kernel.
+fn upsample_xtabs(sw: usize, w: usize) -> (Vec<usize>, Vec<usize>, Vec<f32>) {
     let mut x0v = vec![0usize; w];
     let mut x1v = vec![0usize; w];
     let mut txv = vec![0.0_f32; w];
@@ -477,68 +505,98 @@ fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst:
         x1v[x] = (x0 + 1).min(sw - 1);
         txv[x] = fx - x0 as f32;
     }
-    // Each output row blends two pre-lerped source rows. A 2-slot ring
-    // keyed by source-row index lerps each source row once (y0 advances
-    // by ≤1 per output row) instead of once per output row — halving
-    // the gather work. Bit-identical: the same two lerps feed the same
-    // blend formula per pixel.
-    struct Ring {
-        bufs: [Vec<f32>; 2],
-        idx: [usize; 2],
+    (x0v, x1v, txv)
+}
+
+/// A 2-slot ring of horizontally-lerped source rows keyed by source-row
+/// index. Output-row y advances y0 by ≤1, so each source row is lerped
+/// once instead of once per output row — halving the gather work.
+/// Bit-identical: the same two lerps feed the same blend formula.
+struct LerpRing {
+    bufs: [Vec<f32>; 2],
+    idx: [usize; 2],
+}
+
+impl LerpRing {
+    fn new(w: usize) -> Self {
+        Self {
+            bufs: [vec![0.0; w], vec![0.0; w]],
+            idx: [usize::MAX; 2],
+        }
     }
+
+    /// Write output row `y` of the `(sw,sh) → (·,h)` bilinear resample of
+    /// `src` into `out` (w floats, with `xtabs` from [`upsample_xtabs`]).
+    #[allow(clippy::too_many_arguments)]
+    fn produce(
+        &mut self,
+        src: &[f32],
+        sw: usize,
+        sh: usize,
+        h: usize,
+        y: usize,
+        x0v: &[usize],
+        x1v: &[usize],
+        txv: &[f32],
+        out: &mut [f32],
+    ) {
+        let fy = if h > 1 {
+            y as f32 * (sh - 1) as f32 / (h - 1) as f32
+        } else {
+            0.0
+        };
+        let y0 = fy.floor() as usize;
+        let y1 = (y0 + 1).min(sh - 1);
+        let ty = fy - y0 as f32;
+        // Slot 0 tracks y0: an advance by one rotates the old
+        // y1 lerp into place; anything else recomputes.
+        if self.idx[0] != y0 {
+            if self.idx[1] == y0 {
+                self.bufs.swap(0, 1);
+                self.idx.swap(0, 1);
+            } else {
+                simd::hlerp_row(
+                    &src[y0 * sw..(y0 + 1) * sw],
+                    x0v,
+                    x1v,
+                    txv,
+                    &mut self.bufs[0],
+                );
+                self.idx[0] = y0;
+            }
+        }
+        if y1 == y0 {
+            // Clamped last source row: a == b.
+            simd::blend_rows(&self.bufs[0], &self.bufs[0], ty, out);
+        } else {
+            if self.idx[1] != y1 {
+                simd::hlerp_row(
+                    &src[y1 * sw..(y1 + 1) * sw],
+                    x0v,
+                    x1v,
+                    txv,
+                    &mut self.bufs[1],
+                );
+                self.idx[1] = y1;
+            }
+            simd::blend_rows(&self.bufs[0], &self.bufs[1], ty, out);
+        }
+    }
+}
+
+#[cfg(test)]
+fn upsample_bilinear(src: &[f32], sw: usize, sh: usize, w: usize, h: usize, dst: &mut [f32]) {
+    debug_assert_eq!(dst.len(), w * h);
+    let (x0v, x1v, txv) = upsample_xtabs(sw, w);
     for_each_row_init(
         dst,
         w,
-        || Ring {
-            bufs: [vec![0.0; w], vec![0.0; w]],
-            idx: [usize::MAX; 2],
-        },
-        |y, out, ring| {
-            let fy = if h > 1 {
-                y as f32 * (sh - 1) as f32 / (h - 1) as f32
-            } else {
-                0.0
-            };
-            let y0 = fy.floor() as usize;
-            let y1 = (y0 + 1).min(sh - 1);
-            let ty = fy - y0 as f32;
-            // Slot 0 tracks y0: an advance by one rotates the old
-            // y1 lerp into place; anything else recomputes.
-            if ring.idx[0] != y0 {
-                if ring.idx[1] == y0 {
-                    ring.bufs.swap(0, 1);
-                    ring.idx.swap(0, 1);
-                } else {
-                    simd::hlerp_row(
-                        &src[y0 * sw..(y0 + 1) * sw],
-                        &x0v,
-                        &x1v,
-                        &txv,
-                        &mut ring.bufs[0],
-                    );
-                    ring.idx[0] = y0;
-                }
-            }
-            if y1 == y0 {
-                // Clamped last source row: a == b.
-                simd::blend_rows(&ring.bufs[0], &ring.bufs[0], ty, out);
-            } else {
-                if ring.idx[1] != y1 {
-                    simd::hlerp_row(
-                        &src[y1 * sw..(y1 + 1) * sw],
-                        &x0v,
-                        &x1v,
-                        &txv,
-                        &mut ring.bufs[1],
-                    );
-                    ring.idx[1] = y1;
-                }
-                simd::blend_rows(&ring.bufs[0], &ring.bufs[1], ty, out);
-            }
-        },
+        || LerpRing::new(w),
+        |y, out, ring| ring.produce(src, sw, sh, h, y, &x0v, &x1v, &txv, out),
     );
 }
 
+#[cfg(test)]
 fn blur5(src: &[f32], w: usize, h: usize, tmp_b: &mut [f32], out: &mut [f32]) {
     filter5_horizontal(src, w, h, &mut tmp_b[..w * h], w, 1, 2);
     simd::filter5_vertical(&tmp_b[..w * h], w, h, out, h, 1, 2);
@@ -548,6 +606,7 @@ fn blur5(src: &[f32], w: usize, h: usize, tmp_b: &mut [f32], out: &mut [f32]) {
 /// (x∈[1,w-1), y∈[1,h-1)) take a reflect-free elementwise path that
 /// auto-vectorizes; the border ring keeps `reflect` indexing. Identical
 /// values either way.
+#[cfg(test)]
 fn normalize_band(lap: &[f32], w: usize, h: usize, level: usize, normalized: &mut [f32]) {
     let [top, left, right, bottom] = DN[level];
     let sigma = SIGMAS[level];
@@ -581,6 +640,7 @@ fn normalize_band(lap: &[f32], w: usize, h: usize, level: usize, normalized: &mu
     });
 }
 
+#[cfg(test)]
 fn norm_px(
     lap: &[f32],
     w: usize,
@@ -615,12 +675,23 @@ fn level_transform(
     level: usize,
     scratch: &mut Scratch,
 ) -> (Vec<f32>, usize, usize) {
-    let n = w * h;
     let (low, lw, lh) = downsample(src, w, h, &mut scratch.tmp_h);
-    upsample_bilinear(&low, lw, lh, w, h, &mut scratch.up[..n]);
-    // The H conv runs inside `normalize_filtered`'s row rings — no
-    // materialized horizontal-blur plane.
-    simd::normalize_filtered(src, &scratch.up[..n], w, h, level, &mut scratch.normalized[..n]);
+    // The upsample → H conv → lap → normalize chain runs as one fused
+    // row-ring pass: up rows are produced into a per-chunk scratch only
+    // as the H conv consumes them — neither `up` nor a horizontal-blur
+    // plane is ever materialized.
+    simd::normalize_filtered(
+        src,
+        &low,
+        lw,
+        lh,
+        w,
+        h,
+        w,
+        h,
+        level,
+        &mut scratch.normalized[..w * h],
+    );
     (low, lw, lh)
 }
 
@@ -633,7 +704,11 @@ mod tests {
         for (w, h) in [(3, 3), (5, 7), (11, 13), (97, 99), (257, 193), (1024, 65)] {
             let n = w * h;
             let original: Vec<f32> = (0..n).map(|i| (i * 37 % 251) as f32 / 251.0).collect();
-            let up: Vec<f32> = (0..n).map(|i| (i * 91 % 241) as f32 / 241.0).collect();
+            // Real low band — the fused path derives its own `up` rows.
+            let mut tmp = vec![0.0; n];
+            let (low, lw, lh) = downsample(&original, w, h, &mut tmp);
+            let mut up = vec![0.0; n];
+            upsample_bilinear(&low, lw, lh, w, h, &mut up);
             let mut horizontal = vec![0.0; n];
             let mut lap = vec![0.0; n];
             blur5(&up, w, h, &mut horizontal, &mut lap);
@@ -644,7 +719,7 @@ mod tests {
                 let mut expected = vec![0.0; n];
                 normalize_band(&lap, w, h, level, &mut expected);
                 let mut actual = vec![0.0; n];
-                simd::normalize_filtered(&original, &up, w, h, level, &mut actual);
+                simd::normalize_filtered(&original, &low, lw, lh, w, h, w, h, level, &mut actual);
                 for (i, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
                     assert_eq!(a.to_bits(), e.to_bits(), "{w}x{h} level={level} pixel={i}");
                 }

@@ -25,6 +25,7 @@ rayon = { version = "1.10", optional = true }
 
 [dev-dependencies]
 iai-callgrind = "0.16"
+coz = "0.1"
 
 [[bench]]
 name = "nlpd"

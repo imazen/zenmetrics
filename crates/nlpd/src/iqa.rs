@@ -30,12 +30,7 @@
 //! op-order + torch bilinear edge detail). The crate's RGB `nlpd` reads
 //! ≈20.5× the column (~`6^(1/0.6)` pooling factor plus chroma energy).
 
-use super::{
-    Error, Scratch, blur5, buf_give, buf_take, filter5_horizontal, normalize_band, simd,
-    upsample_bilinear,
-};
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
+use super::{Error, Scratch, buf_give, buf_take, filter5_horizontal, simd};
 
 /// Score two 8-bit sRGB images with the harness ingress: BT.709 luma
 /// `Y = 0.2126R + 0.7152G + 0.0722B` on `[0, 1]`, clamped and quantized
@@ -113,11 +108,10 @@ pub fn score_y_f32(
 /// Harness BT.709 luma: f32 weighted sum of the u8 codes normalized to
 /// `[0, 1]`, then `round(Y·255)/255` (the `round_plane(yuv, 8)` step).
 fn y709_u8_grid(rgb: &[u8], n: usize) -> Vec<f32> {
-    let mut y = Vec::with_capacity(n);
-    for px in rgb.as_chunks::<3>().0 {
-        let v = px[0] as f32 * 0.2126 + px[1] as f32 * 0.7152 + px[2] as f32 * 0.0722;
-        y.push(v.clamp(0.0, 255.0).round() / 255.0);
-    }
+    // SIMD path — see `simd::y709_grid` for the half-away `roundf`
+    // emulation; per-lane arithmetic is identical to the scalar form.
+    let mut y = buf_take(n);
+    simd::y709_grid(rgb, &mut y[..n]);
     y
 }
 
@@ -151,8 +145,11 @@ fn score_planes(mut ref_p: Vec<f32>, mut dis_p: Vec<f32>, w: usize, h: usize) ->
 }
 
 /// One dingkeyan93 pyramid level: reflect-2 downsample →
-/// bilinear-align-corners ×2 upsample → 5×5 low-pass → subtract →
-/// divisive-normalize into `scratch.normalized`. Returns the low band.
+/// bilinear-align-corners ×2 upsample → 5×5 low-pass → nearest-crop →
+/// subtract → divisive-normalize into `scratch.normalized`. The whole
+/// post-downsample chain runs as one fused row-ring pass in
+/// `simd::normalize_filtered` — no `up`/`smooth`/`recon` plane is
+/// materialized. Returns the low band.
 fn iqa_level(
     src: &[f32],
     w: usize,
@@ -166,46 +163,20 @@ fn iqa_level(
     filter5_horizontal(src, w, h, &mut scratch.tmp_h[..ow * h], ow, 2, 2);
     let mut low = buf_take(ow * oh);
     simd::filter5_vertical(&scratch.tmp_h[..ow * h], ow, h, &mut low, oh, 2, 2);
-
-    // Upsample: bilinear ×2 align-corners onto the 2ow×2oh grid.
-    let (uw, uh) = (2 * ow, 2 * oh);
-    let mut up = buf_take(uw * uh);
-    upsample_bilinear(&low, ow, oh, uw, uh, &mut up);
-    let mut smooth = buf_take(uw * uh);
-    let mut tmp = buf_take(uw * uh);
-    blur5(&up, uw, uh, &mut tmp, &mut smooth);
-    // F.interpolate nearest crop when the ×2 grid overshoots odd dims.
-    let mut recon = buf_take(w * h);
-    if (uw, uh) == (w, h) {
-        recon.copy_from_slice(&smooth);
-    } else {
-        super::for_each_row(&mut recon, w, |y, row| {
-            let sy = (y * uh / h).min(uh - 1);
-            for (x, px) in row.iter_mut().enumerate() {
-                let sx = (x * uw / w).min(uw - 1);
-                *px = smooth[sy * uw + sx];
-            }
-        });
-    }
-    let n = w * h;
-    #[cfg(feature = "parallel")]
-    scratch.up[..n]
-        .par_chunks_mut(1 << 14)
-        .zip(src[..n].par_chunks(1 << 14))
-        .zip(recon[..n].par_chunks(1 << 14))
-        .for_each(|((lc, sc), rc)| {
-            for ((l, &a), &s) in lc.iter_mut().zip(sc).zip(rc) {
-                *l = a - s;
-            }
-        });
-    #[cfg(not(feature = "parallel"))]
-    for ((l, &a), &s) in scratch.up[..n].iter_mut().zip(src.iter()).zip(recon.iter()) {
-        *l = a - s;
-    }
-    for v in [up, smooth, tmp, recon] {
-        buf_give(v);
-    }
-    normalize_band(&scratch.up[..n], w, h, level, &mut scratch.normalized);
+    // Upsample targets the ×2 grid (2ow×2oh ≥ w×h); the crop back to w×h
+    // is the same `F.interpolate`-nearest gather the ring applies per row.
+    simd::normalize_filtered(
+        src,
+        &low,
+        ow,
+        oh,
+        2 * ow,
+        2 * oh,
+        w,
+        h,
+        level,
+        &mut scratch.normalized[..w * h],
+    );
     (low, ow, oh)
 }
 
