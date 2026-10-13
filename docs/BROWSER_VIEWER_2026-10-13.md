@@ -77,3 +77,18 @@ PNG's dependency, rather than leaving an older registry copy in the decoder.
 The browser module requires relaxed SIMD128, shared memory and initialized
 Rayon workers. Missing isolation or unsupported WASM capabilities produce an
 error. Browser scores never satisfy fleet benchmark acceptance by themselves.
+
+## Live deployment observation
+
+Source `a94d4767be43cdccf9c08b96f512c9826a87ef9b` was deployed and the
+browser checks passed on both the Pages origin and https://metrics.imazen.org/
+on 2026-10-13. The custom domain was active at that observation. Resolve its
+current behavior with `just site-check-live <assembled-site> https://metrics.imazen.org/`;
+read `/site-source.json` to identify the currently deployed source and hashes.
+
+Local native browser tests passed 38 tests with two existing ignores unchanged.
+The native CLI compile check and targeted browser clippy completed. The wider
+advisory quality kit was absent on the build host; its wrapper could not run.
+Changed Rust files passed format checks, and the tracked-file hygiene check
+reported no address/identifier hits. Remote CI was started after the push;
+this observation does not claim every remote job was already green.
