@@ -622,6 +622,42 @@ impl HdrScorer {
     }
 }
 
+/// Row-wise descriptor conversion via `zenpixels_convert` — the CPU-side
+/// mirror of `zenmetrics_gpu_core::convert_to_srgb_rgb8`, kept local so
+/// `pixels` does not drag in the cubecl-carrying gpu-core crate.
+#[cfg(feature = "pixels")]
+fn convert_slice(
+    s: &zenpixels::PixelSlice<'_>,
+    target: zenpixels::PixelDescriptor,
+) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
+    use zenpixels_convert::{ConvertPlan, convert_row};
+    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    let w = s.width();
+    let h = s.rows();
+    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let mut out = vec![0u8; row_bytes * (h as usize)];
+    for y in 0..h {
+        let src_row = s.row(y);
+        let start = (y as usize) * row_bytes;
+        convert_row(&plan, src_row, &mut out[start..start + row_bytes], w);
+    }
+    Ok(out)
+}
+
+/// CPU-side mirror of `zenmetrics_gpu_core::convert_to_linear_f32`.
+#[cfg(feature = "pixels")]
+fn convert_slice_linear_f32(
+    s: &zenpixels::PixelSlice<'_>,
+) -> core::result::Result<Vec<f32>, zenpixels_convert::ConvertError> {
+    let out = convert_slice(s, zenpixels::PixelDescriptor::RGBF32_LINEAR)?;
+    Ok(out
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_ne_bytes(*b))
+        .collect())
+}
+
 /// Convert a slice to packed sRGB8 (validating dims) for the native SDR path.
 #[cfg(feature = "pixels")]
 pub(crate) fn slice_to_srgb8(
@@ -635,15 +671,14 @@ pub(crate) fn slice_to_srgb8(
             message: format!("slice {}x{} != metric {}x{}", s.width(), s.rows(), w, h),
         });
     }
-    zenmetrics_gpu_core::convert_to_srgb_rgb8(s, zenpixels::PixelDescriptor::RGB8_SRGB).map_err(
-        |e| crate::Error::Metric {
-            kind: "pixels",
-            message: format!("sRGB8 conversion failed: {e:?}"),
-        },
-    )
+    convert_slice(s, zenpixels::PixelDescriptor::RGB8_SRGB).map_err(|e| crate::Error::Metric {
+        kind: "pixels",
+        message: format!("sRGB8 conversion failed: {e:?}"),
+    })
 }
 
-/// The multiplier turning [`zenmetrics_gpu_core::convert_to_linear_f32`] output
+/// The multiplier turning [`convert_slice_linear_f32`] output (the CPU
+/// mirror of `zenmetrics_gpu_core::convert_to_linear_f32`)
 /// into **absolute display luminance (cd/m²)** — the one place the
 /// descriptor-vs-nits scale convention is encoded.
 ///
@@ -678,7 +713,7 @@ pub(crate) fn slice_to_display_relative_linear_interleaved(
     s: &zenpixels::PixelSlice<'_>,
     peak_nits: f32,
 ) -> crate::Result<Vec<f32>> {
-    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+    let lin = convert_slice_linear_f32(s).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
@@ -697,7 +732,7 @@ pub(crate) fn slice_to_absolute_nits_interleaved(
     s: &zenpixels::PixelSlice<'_>,
     peak_nits: f32,
 ) -> crate::Result<Vec<f32>> {
-    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+    let lin = convert_slice_linear_f32(s).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
@@ -714,7 +749,7 @@ pub(crate) fn slice_to_pu_rescaled_u8(
     transfer: HdrTransfer,
     peak_nits: f32,
 ) -> crate::Result<Vec<u8>> {
-    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+    let lin = convert_slice_linear_f32(s).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
