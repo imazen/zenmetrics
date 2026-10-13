@@ -99,7 +99,7 @@ impl Plane {
         let lo = (r0 + PAD as isize) as usize;
         let hi = (r1 + PAD as isize) as usize;
         #[cfg(feature = "parallel")]
-        {
+        if rayon::current_num_threads() > 1 && (r1 - r0) as usize * stride >= (1 << 16) {
             use rayon::prelude::*;
             self.buf
                 .par_chunks_mut(stride)
@@ -109,8 +109,8 @@ impl Plane {
                         f(ri, row);
                     }
                 });
+            return;
         }
-        #[cfg(not(feature = "parallel"))]
         {
             for (ri, row) in self.buf.chunks_mut(stride).enumerate() {
                 if ri >= lo && ri < hi {
