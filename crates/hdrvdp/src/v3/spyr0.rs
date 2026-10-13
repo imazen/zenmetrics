@@ -438,18 +438,32 @@ fn corr_dn64(
     let out_w = width.div_ceil(step);
     let out_h = height.div_ceil(step);
     let c = (fs / 2) as isize;
-    let mut out = vec![0.0; out_w * out_h];
+    // Reflected tap indices are shared by every output row/column —
+    // compute them once instead of per output pixel.
+    let mut xtab = vec![0usize; out_w * fs];
+    for ox in 0..out_w {
+        let ix0 = ox * step;
+        for kx in 0..fs {
+            xtab[ox * fs + kx] = reflect1(ix0 as isize + kx as isize - c, width);
+        }
+    }
+    let mut yoff = vec![0usize; out_h * fs];
     for oy in 0..out_h {
         let iy0 = oy * step;
+        for ky in 0..fs {
+            yoff[oy * fs + ky] = reflect1(iy0 as isize + ky as isize - c, height) * width;
+        }
+    }
+    let mut out = vec![0.0; out_w * out_h];
+    for oy in 0..out_h {
+        let yt = &yoff[oy * fs..oy * fs + fs];
         for ox in 0..out_w {
-            let ix0 = ox * step;
+            let xt = &xtab[ox * fs..ox * fs + fs];
             let mut acc = 0.0;
             for ky in 0..fs {
-                let sy = reflect1(iy0 as isize + ky as isize - c, height);
-                let row = &image[sy * width..sy * width + width];
+                let row = &image[yt[ky]..yt[ky] + width];
                 for kx in 0..fs {
-                    let sx = reflect1(ix0 as isize + kx as isize - c, width);
-                    acc += filter[ky * fs + kx] * row[sx];
+                    acc += filter[ky * fs + kx] * row[xt[kx]];
                 }
             }
             out[oy * out_w + ox] = acc;
@@ -490,13 +504,61 @@ fn up_conv64(
         }
         band.data[(y / step) * band.width + (x / step)]
     };
+    // Only `step`-aligned taps can be nonzero; precompute the aligned
+    // band row/col per (output, tap) so the inner loop walks just those.
+    let mut rrow = vec![0usize; out_height * fs];
+    let mut ron = vec![false; out_height * fs];
     for py in 0..out_height {
+        for ky in 0..fs {
+            let y = reflect1(py as isize + ky as isize - c, out_height);
+            if y.is_multiple_of(step) {
+                rrow[py * fs + ky] = (y / step) * band.width;
+                ron[py * fs + ky] = true;
+            }
+        }
+    }
+    let mut rcol = vec![0usize; out_width * fs];
+    let mut rcon = vec![false; out_width * fs];
+    for px in 0..out_width {
+        for kx in 0..fs {
+            let x = reflect1(px as isize + kx as isize - c, out_width);
+            if x.is_multiple_of(step) {
+                rcol[px * fs + kx] = x / step;
+                rcon[px * fs + kx] = true;
+            }
+        }
+    }
+    for py in 0..out_height {
+        let rr = &rrow[py * fs..py * fs + fs];
+        let rn = &ron[py * fs..py * fs + fs];
         for px in 0..out_width {
+            let rc = &rcol[px * fs..px * fs + fs];
+            let cn = &rcon[px * fs..px * fs + fs];
             let mut acc = 0.0;
             for ky in 0..fs {
+                if !rn[ky] {
+                    continue;
+                }
+                let brow = &band.data[rr[ky]..rr[ky] + band.width];
                 for kx in 0..fs {
-                    acc += filter[ky * fs + kx]
-                        * sample(py as isize + ky as isize - c, px as isize + kx as isize - c);
+                    if !cn[kx] {
+                        continue;
+                    }
+                    acc += filter[ky * fs + kx] * brow[rc[kx]];
+                }
+            }
+            // Skipped taps contributed f·(±0.0). Adding −0.0 is always
+            // the identity and adding +0.0 is too — unless every other
+            // contribution was −0.0, in which case the full-order sum is
+            // +0.0 where the subset sum is −0.0. Recompute that one
+            // pixel the original way so the result is bit-identical.
+            if acc == 0.0 {
+                acc = 0.0;
+                for ky in 0..fs {
+                    for kx in 0..fs {
+                        acc += filter[ky * fs + kx]
+                            * sample(py as isize + ky as isize - c, px as isize + kx as isize - c);
+                    }
                 }
             }
             res[py * out_width + px] += acc;

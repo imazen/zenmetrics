@@ -100,40 +100,260 @@ pub(super) fn ifft(buf: &mut [C64]) {
     }
 }
 
-fn radix2_stages(n: usize) -> Vec<Vec<C64>> {
+/// Radix-2 twiddle tables split into real and imaginary rows so stage
+/// butterflies run on contiguous `f64` slices (the same values, and the
+/// same per-element arithmetic, as the `Vec<Vec<C64>>` form).
+struct Stages2 {
+    /// `wre[s][k]` / `wim[s][k]` — twiddle `k` of stage `s`.
+    wre: Vec<Vec<f64>>,
+    /// Imaginary rows, parallel to `wre`.
+    wim: Vec<Vec<f64>>,
+}
+
+fn radix2_stages(n: usize) -> Stages2 {
     debug_assert!(n.is_power_of_two() && n >= 2);
-    let mut stages = Vec::with_capacity(n.trailing_zeros() as usize);
+    let mut wre = Vec::with_capacity(n.trailing_zeros() as usize);
+    let mut wim = Vec::with_capacity(n.trailing_zeros() as usize);
     let mut len = 2;
     while len <= n {
         let ang = -2.0 * PI / len as f64;
-        stages.push((0..len / 2).map(|k| C64::expi(ang * k as f64)).collect());
+        let mut r = Vec::with_capacity(len / 2);
+        let mut i = Vec::with_capacity(len / 2);
+        for k in 0..len / 2 {
+            let w = C64::expi(ang * k as f64);
+            r.push(w.re);
+            i.push(w.im);
+        }
+        wre.push(r);
+        wim.push(i);
         len <<= 1;
     }
-    stages
+    Stages2 { wre, wim }
 }
 
-fn fft_radix2(buf: &mut [C64], stages: &[Vec<C64>]) {
-    let n = buf.len();
-    debug_assert!(n.is_power_of_two());
+/// In-place radix-2 DFT on split real/imaginary planes. The butterfly
+/// arithmetic is identical to the complex-buffer version — only the
+/// layout changed, so results are bit-identical.
+fn fft_radix2_soa(re: &mut [f64], im: &mut [f64], stages: &Stages2) {
+    let n = re.len();
+    debug_assert!(n.is_power_of_two() && n == im.len());
     let bits = n.trailing_zeros();
     for i in 0..n {
         let j = (i as u32).reverse_bits() >> (32 - bits);
         if j as usize > i {
-            buf.swap(i, j as usize);
+            re.swap(i, j as usize);
+            im.swap(i, j as usize);
         }
     }
-    for tw in stages {
-        let half = tw.len();
+    for (wre, wim) in stages.wre.iter().zip(&stages.wim) {
+        let half = wre.len();
         let len = half * 2;
         for start in (0..n).step_by(len) {
-            for (k, &w) in tw.iter().enumerate() {
-                let u = buf[start + k];
-                let v = buf[start + k + half].mul(w);
-                buf[start + k] = C64::new(u.re + v.re, u.im + v.im);
-                buf[start + k + half] = C64::new(u.re - v.re, u.im - v.im);
+            let (a_re, b_re) = re[start..start + len].split_at_mut(half);
+            let (a_im, b_im) = im[start..start + len].split_at_mut(half);
+            for k in 0..half {
+                let vr = b_re[k] * wre[k] - b_im[k] * wim[k];
+                let vi = b_re[k] * wim[k] + b_im[k] * wre[k];
+                b_re[k] = a_re[k] - vr;
+                b_im[k] = a_im[k] - vi;
+                a_re[k] += vr;
+                a_im[k] += vi;
             }
         }
     }
+}
+
+/// Complex-buffer convenience wrapper: splits, transforms, merges.
+#[cfg(test)]
+fn fft_radix2(buf: &mut [C64], stages: &Stages2) {
+    let n = buf.len();
+    let mut re = Vec::with_capacity(n);
+    let mut im = Vec::with_capacity(n);
+    for c in buf.iter() {
+        re.push(c.re);
+        im.push(c.im);
+    }
+    fft_radix2_soa(&mut re, &mut im, stages);
+    for (c, (&r, &i)) in buf.iter_mut().zip(re.iter().zip(&im)) {
+        *c = C64::new(r, i);
+    }
+}
+
+/// Eight length-`n` radix-2 transforms at once on `[k·8 + j]` SoA lanes —
+/// the `f64` twin of `crate::fft::fft_batch8`: lane `j` is transform `j`, so
+/// every butterfly (including the small stages that are strided per row) is
+/// a full `f64x8` op with splat twiddles and no shuffles. The per-lane
+/// arithmetic is identical to [`fft_radix2_soa`] — same expression, same
+/// order — so batched results are bit-identical to the per-transform path.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+fn fft8_inner(token: Token, re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
+    debug_assert_eq!(re8.len(), n * 8);
+    debug_assert_eq!(im8.len(), n * 8);
+    let bits = n.trailing_zeros();
+    for i in 0..n {
+        let j = (i as u32).reverse_bits() >> (32 - bits);
+        let j = j as usize;
+        if j > i {
+            let a = f64x8::load_t(token, (&re8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f64x8::load_t(token, (&re8[j * 8..j * 8 + 8]).try_into().unwrap());
+            b.store((&mut re8[i * 8..i * 8 + 8]).try_into().unwrap());
+            a.store((&mut re8[j * 8..j * 8 + 8]).try_into().unwrap());
+            let a = f64x8::load_t(token, (&im8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f64x8::load_t(token, (&im8[j * 8..j * 8 + 8]).try_into().unwrap());
+            b.store((&mut im8[i * 8..i * 8 + 8]).try_into().unwrap());
+            a.store((&mut im8[j * 8..j * 8 + 8]).try_into().unwrap());
+        }
+    }
+    for (wre, wim) in stages.wre.iter().zip(&stages.wim) {
+        let half = wre.len();
+        let len = half * 2;
+        for start in (0..n).step_by(len) {
+            for k in 0..half {
+                let a = (start + k) * 8;
+                let b = (start + k + half) * 8;
+                let wre = f64x8::splat_t(token, wre[k]);
+                let wim = f64x8::splat_t(token, wim[k]);
+                let ure = f64x8::load_t(token, (&re8[a..a + 8]).try_into().unwrap());
+                let uim = f64x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
+                let vre = f64x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
+                let vim = f64x8::load_t(token, (&im8[b..b + 8]).try_into().unwrap());
+                let tre = vre * wre - vim * wim;
+                let tim = vre * wim + vim * wre;
+                (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
+                (uim + tim).store((&mut im8[a..a + 8]).try_into().unwrap());
+                (ure - tre).store((&mut re8[b..b + 8]).try_into().unwrap());
+                (uim - tim).store((&mut im8[b..b + 8]).try_into().unwrap());
+            }
+        }
+    }
+}
+
+/// [`fft8_inner`] with runtime tier dispatch.
+fn fft8(re8: &mut [f64], im8: &mut [f64], n: usize, stages: &Stages2) {
+    archmage::attuned!(
+        fft8_inner(re8, im8, n, stages),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// Bluestein gather for a batch of eight: `sre8[k·8+j] = re8[k·8+j]·chirp[k]`
+/// for `k < n`, zero for `k` in `n..m` — the SoA form of `a[k] = buf[k]·chirp[k]`.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+fn blue8_in_inner(
+    token: Token,
+    re8: &[f64],
+    im8: &[f64],
+    sre8: &mut [f64],
+    sim8: &mut [f64],
+    n: usize,
+    m: usize,
+    chirp_re: &[f64],
+    chirp_im: &[f64],
+) {
+    sre8[n * 8..m * 8].fill(0.0);
+    sim8[n * 8..m * 8].fill(0.0);
+    for k in 0..n {
+        let d = k * 8;
+        let xre = f64x8::load_t(token, (&re8[d..d + 8]).try_into().unwrap());
+        let xim = f64x8::load_t(token, (&im8[d..d + 8]).try_into().unwrap());
+        let cr = f64x8::splat_t(token, chirp_re[k]);
+        let ci = f64x8::splat_t(token, chirp_im[k]);
+        (xre * cr - xim * ci).store((&mut sre8[d..d + 8]).try_into().unwrap());
+        (xre * ci + xim * cr).store((&mut sim8[d..d + 8]).try_into().unwrap());
+    }
+}
+
+/// The `x·bf` multiply and conjugate of the Bluestein inner pass — fused so
+/// the imaginary part is stored negated, matching `x = x.mul(y); x = x.conj()`
+/// in the scalar sequence. The negation is folded into the `bf_re` splat
+/// (`xi·(−br) − xr·bi ≡ −(xr·bi + xi·br)` exactly, ±0 included) because the
+/// x86 vector `Neg` lowers to `0 − x`, which maps `+0` to `+0`.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+fn blue8_bf_inner(token: Token, sre8: &mut [f64], sim8: &mut [f64], bf_re: &[f64], bf_im: &[f64]) {
+    for k in 0..bf_re.len() {
+        let d = k * 8;
+        let xr = f64x8::load_t(token, (&sre8[d..d + 8]).try_into().unwrap());
+        let xi = f64x8::load_t(token, (&sim8[d..d + 8]).try_into().unwrap());
+        let br = f64x8::splat_t(token, bf_re[k]);
+        let nbr = f64x8::splat_t(token, -bf_re[k]);
+        let bi = f64x8::splat_t(token, bf_im[k]);
+        (xr * br - xi * bi).store((&mut sre8[d..d + 8]).try_into().unwrap());
+        (xi * nbr - xr * bi).store((&mut sim8[d..d + 8]).try_into().unwrap());
+    }
+}
+
+/// Bluestein writeback: conjugate·scale fused into the chirp multiply,
+/// `re8[k·8+j] = (sre·s − i·sim·s)·chirp[k]`, matching the scalar sequence
+/// `v = v.conj(); v·= s; out = v·chirp[k]` exactly.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+fn blue8_out_inner(
+    token: Token,
+    sre8: &[f64],
+    sim8: &[f64],
+    re8: &mut [f64],
+    im8: &mut [f64],
+    n: usize,
+    chirp_re: &[f64],
+    chirp_im: &[f64],
+    s: f64,
+) {
+    let sv = f64x8::splat_t(token, s);
+    // `is = −sim·s` computed as `sim·(−s)`: bitwise-identical including
+    // signed zeros, and avoids the `0 − x` vector negation quirk.
+    let nsv = f64x8::splat_t(token, -s);
+    for k in 0..n {
+        let d = k * 8;
+        let rs = f64x8::load_t(token, (&sre8[d..d + 8]).try_into().unwrap()) * sv;
+        let is = f64x8::load_t(token, (&sim8[d..d + 8]).try_into().unwrap()) * nsv;
+        let cr = f64x8::splat_t(token, chirp_re[k]);
+        let ci = f64x8::splat_t(token, chirp_im[k]);
+        (rs * cr - is * ci).store((&mut re8[d..d + 8]).try_into().unwrap());
+        (rs * ci + is * cr).store((&mut im8[d..d + 8]).try_into().unwrap());
+    }
+}
+
+/// [`blue8_in_inner`] with runtime tier dispatch.
+#[allow(clippy::too_many_arguments)]
+fn blue8_in(
+    re8: &[f64],
+    im8: &[f64],
+    sre8: &mut [f64],
+    sim8: &mut [f64],
+    n: usize,
+    m: usize,
+    chirp_re: &[f64],
+    chirp_im: &[f64],
+) {
+    archmage::attuned!(
+        blue8_in_inner(re8, im8, sre8, sim8, n, m, chirp_re, chirp_im),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// [`blue8_bf_inner`] with runtime tier dispatch.
+fn blue8_bf(sre8: &mut [f64], sim8: &mut [f64], bf_re: &[f64], bf_im: &[f64]) {
+    archmage::attuned!(
+        blue8_bf_inner(sre8, sim8, bf_re, bf_im),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// [`blue8_out_inner`] with runtime tier dispatch.
+#[allow(clippy::too_many_arguments)]
+fn blue8_out(
+    sre8: &[f64],
+    sim8: &[f64],
+    re8: &mut [f64],
+    im8: &mut [f64],
+    n: usize,
+    chirp_re: &[f64],
+    chirp_im: &[f64],
+    s: f64,
+) {
+    archmage::attuned!(
+        blue8_out_inner(sre8, sim8, re8, im8, n, chirp_re, chirp_im, s),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
 }
 
 /// Bluestein chirp-z transform for arbitrary `n`.
@@ -181,12 +401,21 @@ fn bluestein(buf: &mut [C64]) {
 
 enum Plan {
     Trivial,
-    Radix2(Vec<Vec<C64>>),
+    Radix2(Stages2),
     Bluestein {
-        chirp: Vec<C64>,
-        bf: Vec<C64>,
-        stages: Vec<Vec<C64>>,
-        scratch: Vec<C64>,
+        /// `e^{−iπk²/n}` split into re/im rows.
+        chirp_re: Vec<f64>,
+        /// Imaginary row of the chirp.
+        chirp_im: Vec<f64>,
+        /// DFT of the chirp-conjugate kernel, re/im rows.
+        bf_re: Vec<f64>,
+        /// Imaginary row of `bf`.
+        bf_im: Vec<f64>,
+        stages: Stages2,
+        /// Work rows (`m` each) for the chirp-z sequence.
+        sre: Vec<f64>,
+        /// Imaginary work row.
+        sim: Vec<f64>,
     },
 }
 
@@ -213,64 +442,166 @@ impl Plan {
                 bf[m - k] = c.conj();
             }
         }
-        fft_radix2(&mut bf, &stages);
+        let mut bf_re = Vec::with_capacity(m);
+        let mut bf_im = Vec::with_capacity(m);
+        for c in &bf {
+            bf_re.push(c.re);
+            bf_im.push(c.im);
+        }
+        fft_radix2_soa(&mut bf_re, &mut bf_im, &stages);
         Self::Bluestein {
-            chirp,
-            bf,
+            chirp_re: chirp.iter().map(|c| c.re).collect(),
+            chirp_im: chirp.iter().map(|c| c.im).collect(),
+            bf_re,
+            bf_im,
             stages,
-            scratch: vec![C64::default(); m],
+            sre: vec![0.0; m],
+            sim: vec![0.0; m],
         }
     }
 
-    fn forward(&mut self, buf: &mut [C64]) {
+    /// Forward DFT on split planes — the SoA form of `forward`, sharing
+    /// the same per-element arithmetic.
+    #[cfg(test)]
+    fn forward_soa(&mut self, re: &mut [f64], im: &mut [f64]) {
         match self {
             Self::Trivial => {}
-            Self::Radix2(stages) => fft_radix2(buf, stages),
+            Self::Radix2(stages) => fft_radix2_soa(re, im, stages),
             Self::Bluestein {
-                chirp,
-                bf,
+                chirp_re,
+                chirp_im,
+                bf_re,
+                bf_im,
                 stages,
-                scratch,
+                sre,
+                sim,
             } => {
-                scratch.fill(C64::default());
-                for (k, b) in buf.iter().enumerate() {
-                    scratch[k] = b.mul(chirp[k]);
+                sre.fill(0.0);
+                sim.fill(0.0);
+                for k in 0..re.len() {
+                    sre[k] = re[k] * chirp_re[k] - im[k] * chirp_im[k];
+                    sim[k] = re[k] * chirp_im[k] + im[k] * chirp_re[k];
                 }
-                fft_radix2(scratch, stages);
-                for (x, &y) in scratch.iter_mut().zip(bf.iter()) {
-                    *x = x.mul(y);
+                fft_radix2_soa(sre, sim, stages);
+                for k in 0..sre.len() {
+                    let xr = sre[k] * bf_re[k] - sim[k] * bf_im[k];
+                    sim[k] = sre[k] * bf_im[k] + sim[k] * bf_re[k];
+                    sre[k] = xr;
                 }
-                for v in scratch.iter_mut() {
-                    *v = v.conj();
+                for v in sim.iter_mut() {
+                    *v = -*v;
                 }
-                fft_radix2(scratch, stages);
-                let s = 1.0 / scratch.len() as f64;
-                for v in scratch.iter_mut() {
-                    *v = v.conj();
-                    v.re *= s;
-                    v.im *= s;
-                }
-                for (k, out) in buf.iter_mut().enumerate() {
-                    *out = scratch[k].mul(chirp[k]);
+                fft_radix2_soa(sre, sim, stages);
+                let s = 1.0 / sre.len() as f64;
+                for k in 0..re.len() {
+                    let vr = sre[k] * s;
+                    let vi = -sim[k] * s;
+                    re[k] = vr * chirp_re[k] - vi * chirp_im[k];
+                    im[k] = vr * chirp_im[k] + vi * chirp_re[k];
                 }
             }
         }
     }
 
-    fn inverse(&mut self, buf: &mut [C64]) {
-        let n = buf.len();
+    /// Forward DFT of `buf`, in place (complex-buffer form).
+    #[cfg(test)]
+    fn forward(&mut self, buf: &mut [C64]) {
+        let mut re = Vec::with_capacity(buf.len());
+        let mut im = Vec::with_capacity(buf.len());
+        for c in buf.iter() {
+            re.push(c.re);
+            im.push(c.im);
+        }
+        self.forward_soa(&mut re, &mut im);
+        for (c, (&r, &i)) in buf.iter_mut().zip(re.iter().zip(&im)) {
+            *c = C64::new(r, i);
+        }
+    }
+
+    #[cfg(test)]
+    fn inverse_soa(&mut self, re: &mut [f64], im: &mut [f64]) {
+        let n = re.len();
         if n <= 1 {
             return;
         }
-        for v in buf.iter_mut() {
-            *v = v.conj();
+        for v in im.iter_mut() {
+            *v = -*v;
         }
-        self.forward(buf);
+        self.forward_soa(re, im);
         let s = 1.0 / n as f64;
-        for v in buf.iter_mut() {
-            *v = v.conj();
-            v.re *= s;
-            v.im *= s;
+        for k in 0..n {
+            im[k] = -im[k] * s;
+            re[k] *= s;
+        }
+    }
+
+    /// Eight forward transforms at once on `[k·8 + j]` SoA lanes —
+    /// bit-identical to eight [`Self::forward_soa`] calls.
+    fn run8(&self, re8: &mut [f64], im8: &mut [f64], sre8: &mut [f64], sim8: &mut [f64]) {
+        match self {
+            Self::Trivial => {}
+            Self::Radix2(stages) => fft8(re8, im8, re8.len() / 8, stages),
+            Self::Bluestein {
+                chirp_re,
+                chirp_im,
+                bf_re,
+                bf_im,
+                stages,
+                ..
+            } => {
+                let n = re8.len() / 8;
+                let m = sre8.len() / 8;
+                blue8_in(re8, im8, sre8, sim8, n, m, chirp_re, chirp_im);
+                fft8(sre8, sim8, m, stages);
+                blue8_bf(sre8, sim8, bf_re, bf_im);
+                fft8(sre8, sim8, m, stages);
+                blue8_out(
+                    sre8, sim8, re8, im8, n, chirp_re, chirp_im,
+                    1.0 / m as f64,
+                );
+            }
+        }
+    }
+
+    /// Eight inverse transforms at once — conjugate, [`Self::run8`],
+    /// conjugate·scale, exactly as `inverse_soa`.
+    fn inverse8(&self, re8: &mut [f64], im8: &mut [f64], sre8: &mut [f64], sim8: &mut [f64]) {
+        let n = re8.len() / 8;
+        if n <= 1 {
+            return;
+        }
+        for v in im8.iter_mut() {
+            *v = -*v;
+        }
+        self.run8(re8, im8, sre8, sim8);
+        let s = 1.0 / n as f64;
+        for k in 0..n * 8 {
+            im8[k] = -im8[k] * s;
+            re8[k] *= s;
+        }
+    }
+
+    /// The `sre8`/`sim8` scratch length a batch call needs: `m·8` for
+    /// Bluestein, `n·8` for the direct plans.
+    fn work_len(&self, n: usize) -> usize {
+        match self {
+            Self::Trivial | Self::Radix2(_) => n,
+            Self::Bluestein { bf_re, .. } => bf_re.len(),
+        }
+    }
+
+    /// Inverse DFT of `buf`, in place, normalised by `1/n`.
+    #[cfg(test)]
+    fn inverse(&mut self, buf: &mut [C64]) {
+        let mut re = Vec::with_capacity(buf.len());
+        let mut im = Vec::with_capacity(buf.len());
+        for c in buf.iter() {
+            re.push(c.re);
+            im.push(c.im);
+        }
+        self.inverse_soa(&mut re, &mut im);
+        for (c, (&r, &i)) in buf.iter_mut().zip(re.iter().zip(&im)) {
+            *c = C64::new(r, i);
         }
     }
 }
@@ -280,32 +611,102 @@ struct Plan2 {
     height: usize,
     rows: Plan,
     columns: Plan,
-    column: Vec<C64>,
+    /// Batch-of-8 transform lanes, `axis_len·8`.
+    re8: Vec<f64>,
+    /// Imaginary lanes.
+    im8: Vec<f64>,
+    /// Bluestein work lanes for the larger axis plan.
+    sre8: Vec<f64>,
+    /// Imaginary work lanes.
+    sim8: Vec<f64>,
+    /// Whole-plane re/im copies — the transforms all run on these.
+    pre: Vec<f64>,
+    /// Imaginary plane.
+    pim: Vec<f64>,
 }
 
 impl Plan2 {
     fn new(width: usize, height: usize) -> Self {
+        let rows = Plan::new(width);
+        let columns = Plan::new(height);
+        let m8 = rows.work_len(width).max(columns.work_len(height)) * 8;
         Self {
             width,
             height,
-            rows: Plan::new(width),
-            columns: Plan::new(height),
-            column: vec![C64::default(); height],
+            rows,
+            columns,
+            re8: vec![0.0; width.max(height) * 8],
+            im8: vec![0.0; width.max(height) * 8],
+            sre8: vec![0.0; m8],
+            sim8: vec![0.0; m8],
+            pre: vec![0.0; width * height],
+            pim: vec![0.0; width * height],
         }
     }
 
-    fn columns(&mut self, buf: &mut [C64], inverse: bool) {
-        for x in 0..self.width {
-            for (y, c) in self.column.iter_mut().enumerate() {
-                *c = buf[y * self.width + x];
+    /// Eight columns per block: the `[k·8 + j]` lane layout is a contiguous
+    /// 8-`f64` row of the working plane, so gather and scatter are copies.
+    fn columns(&mut self, inverse: bool) {
+        let (w, h) = (self.width, self.height);
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
             }
-            if inverse {
-                self.columns.inverse(&mut self.column);
-            } else {
-                self.columns.forward(&mut self.column);
+            {
+                let m = self.columns.work_len(h);
+                let re8 = &mut self.re8[..h * 8];
+                let im8 = &mut self.im8[..h * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                if inverse {
+                    self.columns.inverse8(re8, im8, sre8, sim8);
+                } else {
+                    self.columns.run8(re8, im8, sre8, sim8);
+                }
             }
-            for (y, c) in self.column.iter().enumerate() {
-                buf[y * self.width + x] = *c;
+            for y in 0..h {
+                let (d, s) = (y * 8, y * w + x0);
+                self.pre[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
+                self.pim[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            }
+        }
+    }
+
+    /// Eight rows per block, transposed into the lane layout and back —
+    /// L2-resident for the widths this transforms, same trade as
+    /// `crate::fft::fft2_rows_planned`.
+    fn rows(&mut self, inverse: bool) {
+        let (w, h) = (self.width, self.height);
+        for y0 in (0..h).step_by(8) {
+            let rws = (h - y0).min(8);
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.re8[k * 8 + j] = self.pre[row + k];
+                    self.im8[k * 8 + j] = self.pim[row + k];
+                }
+            }
+            {
+                let m = self.rows.work_len(w);
+                let re8 = &mut self.re8[..w * 8];
+                let im8 = &mut self.im8[..w * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                if inverse {
+                    self.rows.inverse8(re8, im8, sre8, sim8);
+                } else {
+                    self.rows.run8(re8, im8, sre8, sim8);
+                }
+            }
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.pre[row + k] = self.re8[k * 8 + j];
+                    self.pim[row + k] = self.im8[k * 8 + j];
+                }
             }
         }
     }
@@ -316,10 +717,15 @@ impl Plan2 {
             self.width * self.height,
             "fft2: buffer size mismatch"
         );
-        for row in buf.chunks_exact_mut(self.width) {
-            self.rows.forward(row);
+        for (i, c) in buf.iter().enumerate() {
+            self.pre[i] = c.re;
+            self.pim[i] = c.im;
         }
-        self.columns(buf, false);
+        self.rows(false);
+        self.columns(false);
+        for (c, (&r, &i)) in buf.iter_mut().zip(self.pre.iter().zip(&self.pim)) {
+            *c = C64::new(r, i);
+        }
     }
 
     fn inverse(&mut self, buf: &mut [C64]) {
@@ -328,9 +734,14 @@ impl Plan2 {
             self.width * self.height,
             "ifft2: buffer size mismatch"
         );
-        self.columns(buf, true);
-        for row in buf.chunks_exact_mut(self.width) {
-            self.rows.inverse(row);
+        for (i, c) in buf.iter().enumerate() {
+            self.pre[i] = c.re;
+            self.pim[i] = c.im;
+        }
+        self.columns(true);
+        self.rows(true);
+        for (c, (&r, &i)) in buf.iter_mut().zip(self.pre.iter().zip(&self.pim)) {
+            *c = C64::new(r, i);
         }
     }
 }
