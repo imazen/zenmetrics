@@ -122,7 +122,8 @@ fn rgb(rgba: &[u8], width: u32, height: u32, stride: usize) -> Result<Vec<[u8; 3
 #[wasm_bindgen]
 pub struct Reference {
     scorer: Zensim,
-    reference: PrecomputedReference,
+    reference: Option<PrecomputedReference>,
+    raw_reference: Option<Vec<[u8; 3]>>,
     width: u32,
     height: u32,
 }
@@ -132,15 +133,44 @@ impl Reference {
     /// Accept declared, opaque sRGB8 rows with a byte stride.
     #[wasm_bindgen(constructor)]
     pub fn new(rgba: &[u8], width: u32, height: u32, stride: usize) -> Result<Reference, JsError> {
+        Self::with_profile(rgba, width, height, stride, "b")
+    }
+
+    /// Prepare an explicit SDR model. HDR models require a different ingress.
+    pub fn with_profile(
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+        stride: usize,
+        profile: &str,
+    ) -> Result<Reference, JsError> {
+        #[allow(deprecated)]
+        let profile = match profile {
+            "b" => ZensimProfile::B,
+            "a" => ZensimProfile::A,
+            "c" => ZensimProfile::C,
+            "d" => ZensimProfile::D,
+            "preview-v0.1" => ZensimProfile::PreviewV0_1,
+            "preview-v0.2" => ZensimProfile::PreviewV0_2,
+            _ => return Err(JsError::new("Unsupported SDR Zensim model")),
+        };
         let pixels = rgb(rgba, width, height, stride).map_err(|e| JsError::new(&e))?;
-        let scorer = Zensim::new(ZensimProfile::codec_target()).with_stop(control());
+        let scorer = Zensim::new(profile).with_stop(control());
         let source = RgbSlice::new(&pixels, width as usize, height as usize);
-        let reference = scorer
-            .precompute_reference(&source)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reference = if profile == ZensimProfile::C {
+            None
+        } else {
+            Some(
+                scorer
+                    .precompute_reference(&source)
+                    .map_err(|e| JsError::new(&e.to_string()))?,
+            )
+        };
+        let raw_reference = (profile == ZensimProfile::C).then_some(pixels);
         Ok(Self {
             scorer,
             reference,
+            raw_reference,
             width,
             height,
         })
@@ -150,23 +180,49 @@ impl Reference {
     pub fn score(&self, rgba: &[u8], stride: usize) -> Result<f64, JsError> {
         let pixels = rgb(rgba, self.width, self.height, stride).map_err(|e| JsError::new(&e))?;
         let source = RgbSlice::new(&pixels, self.width as usize, self.height as usize);
-        self.scorer
-            .clone()
-            .with_stop(control())
-            .compute_with_ref(&self.reference, &source)
+        let scorer = self.scorer.clone();
+        let result = if let Some(reference) = &self.raw_reference {
+            // C's canonical fold is available on the full pair entry only at
+            // this pin. Worker disposal provides cancellation without changing
+            // the selected model or scoring through an incomplete feature vector.
+            scorer.with_stop(enough::Unstoppable).compute(
+                &RgbSlice::new(reference, self.width as usize, self.height as usize),
+                &source,
+            )
+        } else {
+            let reference = self
+                .reference
+                .as_ref()
+                .ok_or_else(|| JsError::new("Missing prepared reference"))?;
+            scorer
+                .with_stop(control())
+                .compute_with_ref(reference, &source)
+        };
+        result
             .map(|result| result.score())
             .map_err(|e| JsError::new(&e.to_string()))
     }
 
     /// Score once, retaining both the scalar and the unnormalized map.
     pub fn compare(&self, rgba: &[u8], stride: usize) -> Result<Comparison, JsError> {
+        if self.scorer.profile() == ZensimProfile::C {
+            return Err(JsError::new(
+                "Model C spatial maps are unavailable in this pinned library; choose another map metric explicitly",
+            ));
+        }
         let pixels = rgb(rgba, self.width, self.height, stride).map_err(|e| JsError::new(&e))?;
         let source = RgbSlice::new(&pixels, self.width as usize, self.height as usize);
         let result = self
             .scorer
             .clone()
             .with_stop(control())
-            .compute_with_ref_and_diffmap(&self.reference, &source, DiffmapWeighting::default())
+            .compute_with_ref_and_diffmap(
+                self.reference
+                    .as_ref()
+                    .ok_or_else(|| JsError::new("Missing prepared reference"))?,
+                &source,
+                DiffmapWeighting::default(),
+            )
             .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(Comparison {
             score: result.score(),
@@ -184,7 +240,7 @@ pub struct Comparison {
 
 #[wasm_bindgen]
 impl Comparison {
-    /// The codec-target zensim score.
+    /// The selected Zensim model score.
     #[wasm_bindgen(getter)]
     pub fn score(&self) -> f64 {
         self.score

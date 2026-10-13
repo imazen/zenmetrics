@@ -102,6 +102,8 @@ details summary { cursor: pointer; color: var(--muted); }
 <p class="note">JPEG, PNG, WebP and JPEG XL use Zen decoders. SDR RGB8 ingress matches the CLI: transparency is preserved and scoring refuses non-opaque pixels. ICC metadata is not applied. Use already composited sRGB images for color-managed comparison.</p>
 </section>
 <section class="panel"><h2>Metric</h2><select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select>
+<label id="zensim-model-row">Zensim model <select id="zensim-model"><option value="b">B · codec target (default)</option><option value="c">C · candidate, scalar only</option><option value="d">D · fast</option><option value="a">A · legacy</option><option value="preview-v0.2">Preview v0.2 · legacy linear</option><option value="preview-v0.1">Preview v0.1 · legacy linear</option></select></label>
+<p id="zensim-model-note" class="note" hidden>C has no spatial map in the pinned library. Choose another map metric explicitly; no model is substituted.</p>
 <div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
 <div class="row"><button id="compare" class="primary" disabled>Compare</button><button id="cancel" disabled>Cancel</button><label><input id="live" type="checkbox" checked> Live</label></div>
 <div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Worker time</small><b id="elapsed">–</b></div></div>
@@ -109,13 +111,13 @@ details summary { cursor: pointer; color: var(--muted); }
 <p id="capabilities" class="status">Checking browser capabilities…</p>
 <details><summary>Brave: turn Shields off · Browser requirements</summary><p>In Brave, turn Shields off for this site, then reload. Relaxed SIMD128, shared memory and working Web Workers are required. HTTPS and cross-origin isolation enable the Rayon worker pool. WebGPU readiness is checked separately; the selectable metrics in this build run on the CPU.</p></details>
 <output id="status" class="status">Starting threaded SIMD WASM…</output>
-<p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. The zensim profile is pinned to B.</p></details>
+<p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. Zensim scoring and its map use the selected SDR model.</p></details>
 </section>
 </div><div>
 <section class="panel"><h2>Image comparison</h2>
 <div class="row"><div class="seg" id="views" role="group" aria-label="View mode">
 <button data-mode="reference">Reference</button><button data-mode="distorted">Distorted</button><button data-mode="split">Split</button><button data-mode="blink">Blink</button><button data-mode="overlay" class="on">Overlay</button><button data-mode="map">Map</button></div></div>
-<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim codec-target error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP masked error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
+<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP masked error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
 <label>Palette <select id="palette"><option value="viridis">Viridis</option><option value="turbo">Turbo</option></select></label>
 <label>Background <select id="background"><option value="reference">Reference</option><option value="distorted">Distorted</option></select></label>
 <label><input id="grey" type="checkbox"> Grey</label></div>

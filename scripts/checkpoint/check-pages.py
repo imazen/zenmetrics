@@ -110,6 +110,20 @@ try:
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,values:Array.from(got.map)};
           }
+          const profiles = {};
+          for(const zensimProfile of ['b','d','a','preview-v0.1','preview-v0.2','b']) {
+            response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile,reference,distorted,width,height});
+            const got=await response;
+            if(got.type!=='result'||got.score.profile!==zensimProfile||got.mapProfile!==zensimProfile)throw new Error('Selected model was not used for score/map');
+            profiles[zensimProfile]={score:got.score.score,map:Array.from(got.map)};
+          }
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'psnr',zensimProfile:'c',reference,distorted,width,height});
+          const candidate=await response;if(candidate.type!=='result'||candidate.score.profile!=='c')throw new Error(JSON.stringify(candidate));
+          profiles.c={score:candidate.score.score,map:null};
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'c',reference,distorted,width,height});
+          const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
+          if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
           response=wait();worker.postMessage({type:'generate',reference,width,height,quality:40});
           const jpeg=await response;if(jpeg.type!=='decoded'||!jpeg.encoded||jpeg.encoded[0]!==255||jpeg.encoded[1]!==216)throw new Error('JPEG generation failed');
           // The independent browser decoder validates the Zen encoder's bytes.
@@ -157,7 +171,7 @@ try:
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
           const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
           if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
-          worker.terminate();return {shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          worker.terminate();return {profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
@@ -225,6 +239,27 @@ try:
         assert page.locator('#cancel').is_disabled()
         page.locator('#compare').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
+        # Switching away and back must rebuild the cached reference for the
+        # selected model, update both outputs and name the CLI profile.
+        page.locator('details').filter(has_text='Run the same native metric').locator('summary').click()
+        default_score = page.locator('#score').inner_text()
+        for model in ('d', 'a', 'b'):
+            page.locator('#zensim-model').select_option(model)
+            page.wait_for_function("model => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model '+model+' ·')",arg=model,timeout=30000)
+            assert '--zensim-profile '+model in page.locator('#cli-snippet').inner_text()
+            assert 'model '+model in page.locator('#score-info').inner_text()
+        page.locator('#map-metric').select_option('psnr')
+        page.locator('#zensim-model').select_option('c')
+        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('score-info').textContent.includes('model c') && document.getElementById('status').textContent.includes('psnr map')",timeout=30000)
+        assert page.locator('#zensim-model-note').is_visible()
+        page.locator('#map-metric').select_option('zensim')
+        page.wait_for_function("document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
+        assert page.locator('#map-info').inner_text() == 'No map yet'
+        assert 'model c' in page.locator('#score-info').inner_text()
+        page.locator('#zensim-model').select_option('b')
+        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model b ·')",timeout=30000)
+        assert page.locator('#score').inner_text() == default_score
+        result['ui_model_selection'] = True
         result['demo_completion']=True
         result['ui_cancel_recovery']=True
         result['capability_report']=page.locator('#capabilities').inner_text()
@@ -233,6 +268,8 @@ try:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']
             assert result['map']==oracle['map']
+            for name, expected in oracle.get('profiles',{}).items():
+                assert result['profiles'][name] == expected, name
             result['native_map_max_abs_delta']={}
             for name,expected in oracle['spatial_maps'].items():
                 got=result['spatial'][name]

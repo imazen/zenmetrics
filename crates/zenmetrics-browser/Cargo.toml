@@ -38,7 +38,7 @@ zenpixels = { version = ">=0.2.16, <0.4.0" }
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimental"] }
 enough = "0.4.5"
 how-far = "0.1.0"
-zensim = { workspace = true, features = ["training", "feature-regime-v2", "custom-profiles"] }
+zensim = { workspace = true, features = ["training", "feature-regime-v2", "custom-profiles", "deprecated-profiles", "candidate-profiles"] }
 wasm-bindgen = "=0.2.129"
 rayon = "1.12.0"
 

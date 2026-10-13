@@ -40,20 +40,21 @@ self.onmessage = async ({data}) => {
       phase(1);const image=unpack(decode_image(encoded,'generated.jpg'));
       postMessage({type:'decoded',id:data.id,bytes:encoded.length,encoded,...image},[image.rgba.buffer,encoded.buffer]);return;
     }
+    const profile = data.zensimProfile || 'b';
     const start = performance.now();
     const {reference, distorted, width, height, metric, id} = data;
 
-    if ((metric==='zensim'||!metric||data.mapMetric==='zensim'||!data.mapMetric) && (!previousReference || previousReference.width !== width || previousReference.height !== height ||
+    if ((metric==='zensim'||!metric||data.mapMetric==='zensim'||!data.mapMetric) && (!previousReference || previousReference.profile !== profile || previousReference.width !== width || previousReference.height !== height ||
         previousReference.bytes.length !== reference.length || !reference.every((v,i) => v === previousReference.bytes[i]))) {
-      phase(3);const prepared = new Reference(reference, width, height, width * 4);
+      phase(3);const prepared = Reference.with_profile(reference, width, height, width * 4, profile);
       if (cached) cached.free();
       cached = prepared;
-      previousReference = {width, height, bytes: reference.slice()};
+      previousReference = {width, height, profile, bytes: reference.slice()};
     }
     const selected = metric || 'zensim';
     const mapMetric = data.mapMetric || 'zensim';
     let score;const scoreStart=performance.now();phase(4);
-    if(selected==='zensim') score={metric:'zensim',profile:'codec_target',backend:'native-cpu-wasm',score:cached.score(distorted,width*4)};
+    if(selected==='zensim') score={metric:'zensim',profile,backend:'native-cpu-wasm',score:cached.score(distorted,width*4)};
     else score=JSON.parse(score_rgba(selected,reference,distorted,width,height,width*4,data.display||''));
     const scoreMilliseconds=performance.now()-scoreStart;
     postMessage({type:'score',id,score,scoreMilliseconds});
@@ -65,7 +66,7 @@ self.onmessage = async ({data}) => {
       const spatial=spatial_map(mapMetric,reference,distorted,width,height,width*4,data.display||'standard_4k');
       map=spatial.values;mapWidth=spatial.width;mapHeight=spatial.height;similarity=spatial.similarity;spatial.free();
     }
-    postMessage({type:'result',id,score,map,mapMetric,mapWidth,mapHeight,similarity,scoreMilliseconds,milliseconds:performance.now()-start},[map.buffer]);
+    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,scoreMilliseconds,milliseconds:performance.now()-start},[map.buffer]);
   } catch (error) {
     postMessage({type: 'error', id: data.id, message: String(error), fatal: error instanceof WebAssembly.RuntimeError});
   }

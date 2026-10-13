@@ -168,6 +168,7 @@ pub fn builtin_names() -> Vec<&'static str> {
     if builtin("zensim-c").is_some() {
         v.push("zensim-c");
         v.push("zensim-c-hdr");
+        v.push("zensim-d");
     }
     v.sort_unstable();
     v
@@ -197,6 +198,8 @@ pub fn builtin(name: &str) -> Option<::zensim::ZensimProfile> {
         "c" => Some(P::C),
         #[cfg(feature = "zensim-candidate-profiles")]
         "c-hdr" | "chdr" => Some(P::CHdr),
+        #[cfg(feature = "zensim-candidate-profiles")]
+        "d" => Some(P::D),
         _ => None,
     }
 }
@@ -371,6 +374,15 @@ mod tests {
             );
         }
         assert!(builtin("not-a-profile").is_none());
+    }
+
+    #[cfg(feature = "zensim-candidate-profiles")]
+    #[test]
+    fn builtin_d_matches_the_native_candidate() {
+        for spec in ["d", "zensim-d", "D"] {
+            assert_eq!(resolve(spec).unwrap(), ::zensim::ZensimProfile::D);
+        }
+        assert!(builtin_names().contains(&"zensim-d"));
     }
 
     #[test]

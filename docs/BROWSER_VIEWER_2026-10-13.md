@@ -206,3 +206,34 @@ fix. Browser qualification still checks all 38 scalar routes, native fixture
 outputs, full-HD completion, upload recovery and cancellation. Subsequent
 metric commits had reinstated the older unresolved lock; the pinned snapshot
 regeneration was retained again in `01b087df`.
+
+## Explicit Zensim model selection
+
+The viewer defaults explicitly to generation B, the pinned library's current
+codec-target SDR profile. Its model selector also offers candidate C, fast D,
+legacy A and the legacy linear previews v0.1/v0.2. One selection controls the
+Zensim scalar and, where supported, its Zensim map; results name the selection. Changing models
+invalidates the prepared reference cache, and the CLI snippet names the model.
+The existing browser constructor remains equivalent to B; `Reference.with_profile`
+is the additive browser entry point for explicit SDR selection. Unknown models
+and HDR profiles are refused through this opaque sRGB8 ingress.
+
+The CLI built-in resolver also accepts D and includes it in its model inventory,
+so the viewer's generated D command selects the same native model.
+
+The pinned C diffmap route fails the native feature-vector contract. C is labeled
+scalar-only: its canonical full-pair scalar fold uses no live stop token or cached-reference
+route, and cancellation
+disposes the worker. Requesting a Zensim C map fails explicitly; another map
+metric requires the user's own selection. B/D/A/previews retain native maps.
+
+On the textured 64×64 fixture, all six browser scalars matched the direct native
+oracle exactly. All five supported model maps also matched exactly. Worker/UI
+checks cover switching models back to B, naming the score/map model, explicit
+C-map refusal and recovery, and refusal of HDR models on SDR ingress. The CLI
+D resolver and existing invalid-model controls passed four native tests.
+
+Targeted library/oracle clippy passed with warnings denied. All-target clippy
+still finds existing test-only lints in the shared CLI sources (test-module
+placement and constant `chunks_exact` calls); this change does not claim those
+pre-existing lints are resolved.

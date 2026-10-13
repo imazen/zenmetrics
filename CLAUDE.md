@@ -1468,3 +1468,12 @@ Website run 38362633510 failed before compilation because the checked-in lock
 no longer matched the pinned sibling manifests. The pinned snapshot reproduced
 that failure. Regeneration through `scripts/ci/lock.sh --regen` updated required
 codec/zensim transitive entries; the 23-sibling locked check then passed.
+
+### Known Bugs: candidate C browser spatial maps (2026-10-13)
+
+The pinned Zensim C native diffmap route fails with `ModelForwardFailed` because
+its bake reads beyond that route's feature vector. Canonical C scalar scoring
+works without a live stop token. The browser labels C scalar-only, disposes its
+worker for cancellation, and refuses C spatial maps explicitly. It never serves
+a B map as C. Native-oracle controls cover all six offered SDR models and the
+browser verifies cache invalidation when changing models.

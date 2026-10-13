@@ -8,7 +8,7 @@ function showScore(result) {
   const values=result.score.values||[{column:result.score.metric,value:result.score.score}];
   $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
   $('score-label').textContent=result.score.metric;
-  $('score-info').textContent=values.map(v=>v.column).join(' / ');
+  $('score-info').textContent=values.map(v=>v.column).join(' / ')+(result.score.profile?` · model ${result.score.profile}`:'');
   $('elapsed').textContent=`${result.scoreMilliseconds.toFixed(0)} ms scoring`;
 }
 function finishRequest(id,error,result) {
@@ -98,9 +98,9 @@ async function compare() {
   if(r.width!==d.width||r.height!==d.height){status(`Sizes differ: ${r.width}×${r.height} vs ${d.width}×${d.height}. Images are never resized for scoring.`,true);return;}
   const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';status(`Computing ${$('metric').value}…`);
   try {
-    const result=await rpc({type:'compare',metric:$('metric').value,mapMetric:$('map-metric').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value});
+    const result=await rpc({type:'compare',metric:$('metric').value,mapMetric:$('map-metric').value,zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value});
     if(revision!==S.revision)return;
-    S.map=result.map;S.mapMetric=result.mapMetric;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;
+    S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;
     showScore(result);
     $('elapsed').textContent=`${result.milliseconds.toFixed(0)} ms total`;
     status(`${r.width}×${r.height} · ${result.score.backend} · ${result.mapMetric} map`);paint();
@@ -109,9 +109,10 @@ async function compare() {
 }
 $('compare').onclick=compare;
 $('metric').onchange=()=>{$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';snippet();S.revision++;schedule();};
+$('zensim-model').onchange=()=>{snippet();S.map=null;S.revision++;paint();schedule();};
 $('display').onchange=()=>{snippet();S.revision++;schedule();};
 $('live').onchange=()=>{if($('live').checked)compare();};
-$('map-metric').onchange=()=>{$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';S.map=null;S.revision++;paint();schedule();};
+$('map-metric').onchange=()=>{snippet();$('display-row').hidden=$('metric').value!=='cvvdp'&&$('map-metric').value!=='cvvdp';S.map=null;S.revision++;paint();schedule();};
 $('swap').onclick=()=>{[S.reference,S.distorted]=[S.distorted,S.reference];const a=$('name-reference'),b=$('name-distorted');[a.textContent,b.textContent]=[b.textContent,a.textContent];S.map=null;S.revision++;paint();schedule();};
 $('quality').oninput=()=>{$('quality-value').textContent=$('quality').value;};
 async function generate() {
@@ -168,7 +169,7 @@ function paint(){
   $('zoom').textContent=`${Math.round(S.zoom*100)}%`;$('dimensions').textContent=`${r.width}×${r.height}`;
   $('scale').disabled=$('norm').value!=='fixed';
   const units=S.mapMetric==='cvvdp'?'masked error':S.mapMetric==='butteraugli'?'Butteraugli error':'error';
-  $('map-info').textContent=S.map?`${S.mapMetric} · 0–${top.toPrecision(4)} ${units}${$('norm').value==='fixed'?' · fixed':' · per-image scale'}`:'No map yet';
+  $('map-info').textContent=S.map?`${S.mapMetric} · ${S.mapProfile?`model ${S.mapProfile} · `:''}0–${top.toPrecision(4)} ${units}${$('norm').value==='fixed'?' · fixed':' · per-image scale'}`:'No map yet';
 }
 function fit(){if(S.reference)S.zoom=Math.min(1,Math.max(.05,($('viewport').clientWidth||768)/S.reference.width));paint();}
 for(const id of ['opacity','scale','norm','background','grey','split'])$(id).oninput=paint;
@@ -189,7 +190,9 @@ if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined')status('Threaded
 else startWorker();
 
 function snippet(){const metric=$('metric').value;
-  $('cli-snippet').textContent=`zenmetrics${metric==='zensim'?' --zensim-profile b':''} score --metric ${metric} --reference reference.png --distorted distorted.jpg${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`;
+  $('zensim-model-row').hidden=metric!=='zensim'&&$('map-metric').value!=='zensim';
+  $('zensim-model-note').hidden=$('zensim-model-row').hidden||$('zensim-model').value!=='c';
+  $('cli-snippet').textContent=`zenmetrics${metric==='zensim'?` --zensim-profile ${$('zensim-model').value}`:''} score --metric ${metric} --reference reference.png --distorted distorted.jpg${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`;
 }
 $('copy-cli').onclick=async()=>{try{await navigator.clipboard.writeText($('cli-snippet').textContent);status('CLI command copied.');}catch(error){status(error.message,true);}};
 $('download-jpeg').onclick=()=>{if(!S.encoded)return;const url=URL.createObjectURL(new Blob([S.encoded],{type:'image/jpeg'})),a=document.createElement('a');a.href=url;a.download='distorted.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};

@@ -86,8 +86,46 @@ fn main() {
         "psnr".into(),
         serde_json::json!({"width":w,"height":h,"similarity":false,"values":psnr}),
     );
+    let mut profiles = serde_json::Map::new();
+    #[allow(deprecated)]
+    let named = [
+        ("b", ZensimProfile::B),
+        ("c", ZensimProfile::C),
+        ("d", ZensimProfile::D),
+        ("a", ZensimProfile::A),
+        ("preview-v0.1", ZensimProfile::PreviewV0_1),
+        ("preview-v0.2", ZensimProfile::PreviewV0_2),
+    ];
+    for (name, profile) in named {
+        let scorer = Zensim::new(profile);
+        let score = scorer
+            .compute(
+                &RgbSlice::new(&reference, w, h),
+                &RgbSlice::new(&distorted, w, h),
+            )
+            .unwrap()
+            .score();
+        let map = scorer.compute_with_diffmap(
+            &RgbSlice::new(&reference, w, h),
+            &RgbSlice::new(&distorted, w, h),
+            DiffmapWeighting::default(),
+        );
+        if name == "c" {
+            assert!(
+                map.is_err(),
+                "Update C map support when its native route is fixed"
+            );
+            profiles.insert(name.into(), serde_json::json!({"score":score,"map":null}));
+        } else {
+            let map = map.unwrap();
+            profiles.insert(
+                name.into(),
+                serde_json::json!({"score":score,"map":map.diffmap()}),
+            );
+        }
+    }
     println!(
         "{}",
-        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps})
+        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps,"profiles":profiles})
     );
 }
