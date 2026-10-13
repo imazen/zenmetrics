@@ -2093,21 +2093,28 @@ pub fn mdct_psnr_srgb8(
                 // forensic env vars fall back to the serial order so PCALL
                 // numbering stays deterministic for bit-level diffing.
                 if par && !dump_env_set() {
-                    img_r.comps.par_iter_mut().for_each(|c| c.run_dct());
-                    img_d.comps.par_iter_mut().for_each(|c| c.run_dct());
-                    // All 384 band masking pipelines are independent
-                    // objects. `with_min_len` keeps each rayon task a real
-                    // slice of work (a bare 384-item par_iter at these row
-                    // times is scheduler-bound, and stragglers on
-                    // heterogeneous cores cap scaling).
-                    let kernel = &kernel;
-                    let mut all: Vec<&mut BandMask> = Vec::with_capacity(384);
-                    for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
-                        all.extend(comp.bands.as_flattened_mut().iter_mut());
-                    }
-                    all.into_par_iter()
-                        .with_min_len(16)
-                        .for_each(|b| b.push_row(kernel));
+                    // Each (image, comp) is a self-contained chain —
+                    // `run_dct` then 64 band `push_row`s — on disjoint
+                    // state. Six fat tasks per row beat ~390 tiny ones:
+                    // no intra-phase rendezvous, and the per-thread
+                    // working set stays inside one comp's 64 BandMask
+                    // rings (cache-local) instead of interleaving all
+                    // ~4600 scattered rows across the pool.
+                    rayon::scope(|s| {
+                        for comp in img_r.comps.iter_mut().chain(img_d.comps.iter_mut()) {
+                            s.spawn(|_| {
+                                comp.run_dct();
+                                // Split the 64 bands in two so >6 pools
+                                // have 12 tasks to steal — halves stay
+                                // comp-local (same 64-ring working set).
+                                comp.bands
+                                    .as_flattened_mut()
+                                    .into_par_iter()
+                                    .with_min_len(16)
+                                    .for_each(|b| b.push_row(&kernel));
+                            });
+                        }
+                    });
                 } else {
                     for c in 0..3 {
                         img_r.comps[c].run_dct();
