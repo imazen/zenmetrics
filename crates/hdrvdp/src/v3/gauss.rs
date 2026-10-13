@@ -105,12 +105,18 @@ pub(super) fn fast_gauss(
     if sigma >= 4.3 {
         // Fourier path: K = exp(−0.5·(KX²+KY²)·σ²) on the 2× lattice.
         let (pw, ph) = (2 * w, 2 * h);
-        let mut k = vec![0.0; pw * ph];
-        for y in 0..ph {
-            let ky = ((0.5 + y as f64 / ph as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
-            for xx in 0..pw {
-                let kx = ((0.5 + xx as f64 / pw as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
-                k[y * pw + xx] = (-0.5 * (kx * kx + ky * ky) * sigma * sigma).exp();
+        let mut k = if relaxed {
+            super::trans64::gauss_kern(pw, ph, sigma)
+        } else {
+            vec![0.0; pw * ph]
+        };
+        if !relaxed {
+            for y in 0..ph {
+                let ky = ((0.5 + y as f64 / ph as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
+                for xx in 0..pw {
+                    let kx = ((0.5 + xx as f64 / pw as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
+                    k[y * pw + xx] = (-0.5 * (kx * kx + ky * ky) * sigma * sigma).exp();
+                }
             }
         }
         if !do_norm {

@@ -26,6 +26,7 @@ use super::ingress::{joint_rod_cone_sens, local_adapt, pn_jnd_luts, pupil_d_unif
 use super::params::TaskPar;
 use super::spectral;
 use super::spyr0::Spyr0;
+use super::trans64;
 use crate::Result;
 use crate::interp::{interp1_linear, trapz};
 
@@ -46,27 +47,29 @@ pub(crate) struct PathwayOut {
 /// `create_cycdeg_image` — per-coefficient spatial frequency in cpd for a
 /// `w×h` lattice sampled at `ppd` pixels/degree.
 pub(crate) fn cycdeg_image(width: usize, height: usize, ppd: f64) -> Vec<f64> {
-    let mut out = vec![0.0; width * height];
-    for y in 0..height {
-        let ky = ((0.5 + y as f64 / height as f64) % 1.0 - 0.5) * ppd;
-        for x in 0..width {
-            let kx = ((0.5 + x as f64 / width as f64) % 1.0 - 0.5) * ppd;
-            out[y * width + x] = (kx * kx + ky * ky).sqrt();
-        }
-    }
-    out
+    // Vectorised fill — bit-identical to the scalar nested loop (same
+    // per-element op order; no transcendentals involved).
+    trans64::cycdeg(width, height, ppd)
 }
 
 /// `hdrvdp_mtf` — `Σ a_k·exp(−b_k·ρ)` evaluated on the frequency grid.
-pub(crate) fn mtf_filter(rho: &[f64], a: &[f64; 4], b: &[f64; 4]) -> Vec<f64> {
+pub(crate) fn mtf_filter(rho: &[f64], a: &[f64; 4], b: &[f64; 4], relaxed: bool) -> Vec<f64> {
+    if relaxed {
+        return trans64::mtf_vec(rho, a, b);
+    }
     rho.iter()
         .map(|&r| (0..4).map(|k| a[k] * (-b[k] * r).exp()).sum::<f64>())
         .collect()
 }
 
 /// The geomean of one channel's pixels.
-pub(crate) fn geomean(v: &[f64]) -> f64 {
-    (v.iter().map(|x| x.max(0.0).ln()).sum::<f64>() / v.len() as f64).exp()
+pub(crate) fn geomean(v: &[f64], relaxed: bool) -> f64 {
+    let logs = if relaxed {
+        trans64::ln_max_vec(v, 0.0)
+    } else {
+        v.iter().map(|x| x.max(0.0).ln()).collect()
+    };
+    (logs.iter().sum::<f64>() / v.len() as f64).exp()
 }
 
 /// `hdrvdp_visual_pathway(img_native, name, metric_par, …)`.
@@ -100,7 +103,7 @@ pub(crate) fn visual_pathway(
 
     // ---- optical MTF (Fourier domain on the 2× lattice) ----
     let rho2 = cycdeg_image(width * 2, height * 2, ppd);
-    let mtf = mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b);
+    let mtf = mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b, relaxed);
     let mut l_o = vec![0.0; npix * channels];
     for k in 0..channels {
         let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
@@ -161,7 +164,7 @@ pub(crate) fn visual_pathway(
 
     // ---- senile miosis ----
     if par.do_slum {
-        let l_a = geomean(&l_adapt);
+        let l_a = geomean(&l_adapt, relaxed);
         let area = npix as f64 / (ppd * ppd);
         let d_ref = pupil_d_unified(l_a, area, 28.0);
         let d_age = pupil_d_unified(l_a, area, f64::from(viewing.observer_age));

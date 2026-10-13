@@ -14,6 +14,7 @@ use super::params::{Emission, InputEncoding, Params, Surround, TaskPar, ViewingC
 use super::pathway::{cycdeg_image, mtf_filter, visual_pathway};
 use super::spectral;
 use super::spyr0::Spyr0;
+use super::trans64;
 use crate::interp::interp1_linear;
 use crate::resize::imresize;
 use crate::{Error, Result};
@@ -266,7 +267,11 @@ pub fn hdrvdp3(
             csf_b.iter().map(|&c| 1.0 / c).collect()
         };
 
-        let ex_diff: Vec<f64> = band_diff.iter().map(|&v| sign_pow(v, p)).collect();
+        let ex_diff: Vec<f64> = if relaxed {
+            trans64::sign_pow_vec(&band_diff, p)
+        } else {
+            band_diff.iter().map(|&v| sign_pow(v, p)).collect()
+        };
 
         if let Some(thr) = mp.ignore_freqs_lower_than {
             // Upstream quirk: reads the PREVIOUS band's frequency
@@ -322,26 +327,43 @@ pub fn hdrvdp3(
 
     let levs: Vec<usize> = (0..b_count).collect();
     let s_map: Vec<f64> = d_bands.reconstruct(&levs, relaxed).iter().map(|v| v.abs()).collect();
-    let mut p_map: Vec<f64> = s_map
-        .iter()
-        .map(|&s| 1.0 - (0.5f64.ln() * s).exp())
-        .collect();
+    let mut p_map: Vec<f64> = if relaxed {
+        trans64::one_mexp_scale(&s_map, 0.5f64.ln())
+    } else {
+        s_map
+            .iter()
+            .map(|&s| 1.0 - (0.5f64.ln() * s).exp())
+            .collect()
+    };
     if mp.do_sprob_sum {
         let si_sigma = 10f64.powf(mp.si_sigma) * ppd_of(&par.viewing);
-        let log1m: Vec<f64> = p_map.iter().map(|&v| (1.0 - v + 1e-4).ln()).collect();
+        let log1m: Vec<f64> = if relaxed {
+            trans64::ln_1mx(&p_map)
+        } else {
+            p_map.iter().map(|&v| (1.0 - v + 1e-4).ln()).collect()
+        };
         let g = fast_gauss(&log1m, width, height, si_sigma, true, Pad::Constant(0.0), relaxed);
-        for (pm, &gv) in p_map.iter_mut().zip(&g) {
-            *pm = 1.0 - gv.exp();
+        if relaxed {
+            p_map.copy_from_slice(&trans64::one_mexp_scale(&g, 1.0));
+        } else {
+            for (pm, &gv) in p_map.iter_mut().zip(&g) {
+                *pm = 1.0 - gv.exp();
+            }
         }
     }
     if mp.do_pixel_threshold {
         let m_thr = 0.01;
-        for (i, pm) in p_map.iter_mut().enumerate() {
-            let is_diff = 1.0
-                - (0.5f64.ln()
-                    * (((pr.l_adapt[i] - pt.l_adapt[i]).abs() / pr.l_adapt[i] / m_thr).powf(3.5)))
-                .exp();
-            *pm *= is_diff;
+        if relaxed {
+            trans64::thresh_mul(&mut p_map, &pr.l_adapt, &pt.l_adapt, m_thr);
+        } else {
+            for (i, pm) in p_map.iter_mut().enumerate() {
+                let is_diff = 1.0
+                    - (0.5f64.ln()
+                        * (((pr.l_adapt[i] - pt.l_adapt[i]).abs() / pr.l_adapt[i] / m_thr)
+                            .powf(3.5)))
+                    .exp();
+                *pm *= is_diff;
+            }
         }
     }
 
@@ -428,15 +450,23 @@ fn apply_band(
         // `k_xo·0^q` is a per-call constant (upstream's cross-orientation
         // term — sp0 has a single orientation); hoisted out of the map.
         let kxo0 = k_xo * 0.0f64.powf(q);
-        ex_diff
-            .iter()
-            .enumerate()
-            .map(|(i, &e)| {
-                let n_mask =
-                    k_self * self_mask[i].abs().powf(q) + kxo0 + k_xn * mask_xn[i].abs().powf(q);
-                e / (n_ncsf[i].powf(2.0 * p) + n_mask.powi(2)).sqrt()
-            })
-            .collect()
+        if relaxed {
+            trans64::masked_e_vec(
+                ex_diff, n_ncsf, &self_mask, &mask_xn, k_self, kxo0, k_xn, q, 2.0 * p,
+            )
+        } else {
+            ex_diff
+                .iter()
+                .enumerate()
+                .map(|(i, &e)| {
+                    let n_mask = k_self * self_mask[i].abs().powf(q) + kxo0
+                        + k_xn * mask_xn[i].abs().powf(q);
+                    e / (n_ncsf[i].powf(2.0 * p) + n_mask.powi(2)).sqrt()
+                })
+                .collect()
+        }
+    } else if relaxed {
+        trans64::e_div_np_vec(ex_diff, n_ncsf, p)
     } else {
         ex_diff
             .iter()
@@ -444,7 +474,11 @@ fn apply_band(
             .map(|(i, &e)| e / n_ncsf[i].powf(p))
             .collect()
     };
-    let d_norm: Vec<f64> = d.iter().map(|&v| sign_pow(v, pf)).collect();
+    let d_norm: Vec<f64> = if relaxed {
+        trans64::sign_pow_vec(&d, pf)
+    } else {
+        d.iter().map(|&v| sign_pow(v, pf)).collect()
+    };
     d_bands.set_band(b, &d_norm);
 
     // Per-band error → Q accumulator.
@@ -453,10 +487,15 @@ fn apply_band(
     } else {
         imresize(diff_mask, img_w, img_h, bw, bh)
     };
-    let mut acc = 0.0;
-    for (i, &dv) in d.iter().enumerate() {
-        acc += (dv * diff_mask_b[i]).abs().powf(0.8);
-    }
+    let acc = if relaxed {
+        trans64::acc_abspow(&d, &diff_mask_b, 0.8)
+    } else {
+        let mut acc = 0.0;
+        for (i, &dv) in d.iter().enumerate() {
+            acc += (dv * diff_mask_b[i]).abs().powf(0.8);
+        }
+        acc
+    };
     *q_err += (acc / (bw * bh) as f64).powf(1.0 / 0.8) / b_count as f64;
 }
 
@@ -565,11 +604,15 @@ fn mutual_masking(
             }
         }
     }
-    let mut out = vec![0.0; bw * bh];
-    for (o, &a) in out.iter_mut().zip(&acc) {
-        *o = (a * inv).powf(1.0 / norm);
+    if relaxed {
+        trans64::pow_scale_vec(&acc, inv, 1.0 / norm)
+    } else {
+        let mut out = vec![0.0; bw * bh];
+        for (o, &a) in out.iter_mut().zip(&acc) {
+            *o = (a * inv).powf(1.0 / norm);
+        }
+        out
     }
-    out
 }
 
 /// The neural CSF — `hdrvdp_ncsf` for one (ρ, La) pair.
@@ -588,7 +631,7 @@ pub(crate) fn ncsf(rho: f64, lum: f64, mp: &TaskPar) -> f64 {
         / ((1.0 + (par[0] * rho).powf(par[1]))
             * (1.0 / (1.0 - (-(rho / 7.0).powi(2)).exp())).powf(par[2]))
         .sqrt();
-    let mtf = mtf_filter(&[rho], &mp.mtf_params_a, &mp.mtf_params_b)[0];
+    let mtf = mtf_filter(&[rho], &mp.mtf_params_a, &mp.mtf_params_b, false)[0];
     let mut s = s / mtf;
     if mp.do_aesl {
         // `hdrvdp_aesl` — 10^(−(10^slope_freq·log2(ρ+γ))·max(0, age−24)).
@@ -637,7 +680,7 @@ fn determine_pad(surround: &Surround, reference: &[f64], channels: usize) -> Pad
                     .step_by(channels)
                     .copied()
                     .collect();
-                *slot = super::pathway::geomean(&col);
+                *slot = super::pathway::geomean(&col, false);
             }
             PadKind::PerChannel(g)
         }

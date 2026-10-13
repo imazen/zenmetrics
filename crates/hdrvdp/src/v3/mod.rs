@@ -49,6 +49,7 @@ pub mod params;
 mod pathway;
 mod spectral;
 mod spyr0;
+mod trans64;
 #[cfg(test)]
 mod stage_test;
 

@@ -16,6 +16,7 @@
 //! (`hdrvdp_colorspace_transform` + `fix_out_of_gamut`) for the encodings
 //! that carry one.
 
+use super::trans64;
 use crate::interp::cumtrapz;
 
 /// `display_model`: `peak·V^gamma + black_level` — the `luma-display`
@@ -159,8 +160,12 @@ pub(crate) fn local_adapt(
     relaxed: bool,
 ) -> Vec<f64> {
     let sigma = 10f64.powf(-0.781367) * ppd;
-    let log_l: Vec<f64> = l_otf.iter().map(|&v| v.max(1e-6).ln()).collect();
-    super::gauss::fast_gauss(
+    let log_l: Vec<f64> = if relaxed {
+        trans64::ln_max_vec(l_otf, 1e-6)
+    } else {
+        l_otf.iter().map(|&v| v.max(1e-6).ln()).collect()
+    };
+    let g = super::gauss::fast_gauss(
         &log_l,
         width,
         height,
@@ -168,10 +173,12 @@ pub(crate) fn local_adapt(
         true,
         super::fft64::Pad::Replicate,
         relaxed,
-    )
-    .iter()
-    .map(|&v| v.exp())
-    .collect()
+    );
+    if relaxed {
+        trans64::exp_vec(&g, 0.0)
+    } else {
+        g.iter().map(|&v| v.exp()).collect()
+    }
 }
 
 /// `pupil_d_unified` — Watson & Yellott unified pupil model.
