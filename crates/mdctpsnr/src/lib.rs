@@ -66,7 +66,7 @@ use archmage::attune;
 #[cfg(all(feature = "std", target_arch = "aarch64"))]
 use archmage::{NeonToken, SimdToken as _};
 #[cfg(target_arch = "x86_64")]
-use archmage::{SimdToken, X64V3Token, attune};
+use archmage::{SimdToken, X64V3Token};
 #[cfg(any(all(feature = "std", target_arch = "aarch64"), target_arch = "x86_64"))]
 use magetypes::simd::generic::f32x8;
 
