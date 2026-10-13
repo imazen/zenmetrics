@@ -4,7 +4,8 @@ use archmage::X64V4xToken;
 use archmage::attune;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
-#[cfg(feature = "simd")]
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::{NeonToken, SimdToken as _};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token};
 use std::borrow::Cow;
@@ -2999,6 +3000,162 @@ fn vif_pixel_finalize(
     );
 }
 
+/// Scalar-per-lane `log2_64`: NEON has neither a 64-bit clz nor a gather, so
+/// the mantissa normalize + table load run per lane — what the vector port
+/// buys back is the surrounding arithmetic. `k < 0` (value < 2^16) yields
+/// index 0 — such lanes are masked out by callers; `log2_64` is only ever
+/// invoked on values ≥ 2^16 in live lanes. `log2_32`/`log2_64` agree for
+/// the same value (`16 - lz32 == 48 - lz64`), so this serves both the `den`
+/// and `num` gathers.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[inline(always)]
+fn vif_log2_neon(table: &[u16; 65536], a: u64) -> i64 {
+    let k = 48 - a.leading_zeros() as i64;
+    let idx = if k >= 0 { (a >> k) as usize } else { 0 };
+    table[idx] as i64 + 2048 * k.max(0)
+}
+
+/// NEON port of `vif_statistic_finalize_v4x!` over one 16-lane block of
+/// `vif_horizontal_sums` output. Same lane-local arithmetic as
+/// `vif_pixel_finalize` — u64 products for the mean-squares, truncating f64
+/// divides for the gain, `clz`-based mantissa extraction for the u16 log
+/// table — at i64x2/f64x2 width. The table loads themselves stay scalar
+/// (NEON has no gather), but `k = 48 - clz` and `v >> k` are computed in
+/// vector so the per-lane tail is just the load. Accumulators are exact i64
+/// sums, so lane grouping is order-safe.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[attune(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_finalize16_neon_t(
+    _token: NeonToken,
+    ref_mean: &[u32; 16],
+    dis_mean: &[u32; 16],
+    ref_sq_shifted: &[u32; 16],
+    dis_sq_shifted: &[u32; 16],
+    ref_dis_shifted: &[u32; 16],
+    table: &[u16; 65536],
+    gain_limit: f64,
+    num_log: &mut i64,
+    den_log: &mut i64,
+    num_non_log: &mut i64,
+    den_non_log: &mut i64,
+) {
+    // hi-32 of `(a·b + 2^31)` for four u32 lanes — the scalar's
+    // `(x as u64 * y as u64 + 2147483648) >> 32`.
+    let hi32prod = |a: uint32x4_t, b: uint32x4_t| -> uint32x4_t {
+        let r = vdupq_n_u64(2147483648);
+        let lo = vshrq_n_u64::<32>(vaddq_u64(vmull_u32(vget_low_u32(a), vget_low_u32(b)), r));
+        let hi = vshrq_n_u64::<32>(vaddq_u64(vmull_u32(vget_high_u32(a), vget_high_u32(b)), r));
+        vcombine_u32(vmovn_u64(lo), vmovn_u64(hi))
+    };
+    // `vif_log2_neon` on both i64 lanes of a pair, repacked.
+    let log2x2 = |v: int64x2_t| -> int64x2_t {
+        let a0 = vgetq_lane_s64::<0>(v) as u64;
+        let a1 = vgetq_lane_s64::<1>(v) as u64;
+        vsetq_lane_s64::<1>(
+            vif_log2_neon(table, a1),
+            vdupq_n_s64(vif_log2_neon(table, a0)),
+        )
+    };
+    // No smax.2d on NEON — max(v,0) = v & (v>0).
+    let pos64 = |v: int64x2_t| -> int64x2_t {
+        let zero = vdupq_n_s64(0);
+        vreinterpretq_s64_u64(vandq_u64(vreinterpretq_u64_s64(v), vcgtq_s64(v, zero)))
+    };
+
+    let nsq64 = vdupq_n_s64(SIGMA_NSQ as i64);
+    let eps = vdupq_n_f64(65536.0e-10);
+    let limit = vdupq_n_f64(gain_limit);
+    let c17 = vdupq_n_s64(2048 * 17);
+    let zero = vdupq_n_s64(0);
+    let mut acc_num = zero;
+    let mut acc_den = zero;
+    let mut acc_nnl = zero;
+    let mut acc_dnl = zero;
+
+    for g in 0..4 {
+        let rm = vld1q_u32(&ref_mean[4 * g..4 * g + 4].try_into().unwrap());
+        let dm = vld1q_u32(&dis_mean[4 * g..4 * g + 4].try_into().unwrap());
+        let rsq = vld1q_u32(&ref_sq_shifted[4 * g..4 * g + 4].try_into().unwrap());
+        let dsq = vld1q_u32(&dis_sq_shifted[4 * g..4 * g + 4].try_into().unwrap());
+        let rds = vld1q_u32(&ref_dis_shifted[4 * g..4 * g + 4].try_into().unwrap());
+
+        let sigma_ref = vreinterpretq_s32_u32(vsubq_u32(rsq, hi32prod(rm, rm)));
+        let sigma_dis = vreinterpretq_s32_u32(vsubq_u32(dsq, hi32prod(dm, dm)));
+        let sigma_rdis = vreinterpretq_s32_u32(vsubq_u32(rds, hi32prod(rm, dm)));
+
+        for half in 0..2 {
+            let widen = |v: int32x4_t| -> int64x2_t {
+                if half == 0 {
+                    vmovl_s32(vget_low_s32(v))
+                } else {
+                    vmovl_s32(vget_high_s32(v))
+                }
+            };
+            let m1 = widen(sigma_ref); // sigma_ref
+            let m2 = pos64(widen(sigma_dis)); // sigma_dis.max(0)
+            let m12 = pos64(widen(sigma_rdis)); // gated lanes only
+
+            // den = log2_32(sigma_ref + NSQ) - 2048·17, masked by sigma_ref>=NSQ.
+            let stage1 = vaddq_s64(m1, nsq64);
+            let mden = vsubq_s64(log2x2(stage1), c17);
+
+            let sigma1_small = vcgtq_s64(nsq64, m1);
+            let sigma2_pos = vcgtq_s64(m2, zero);
+            let sigma12_pos = vcgtq_s64(m12, zero);
+
+            let m1d = vcvtq_f64_s64(m1);
+            let m12d = vcvtq_f64_s64(m12);
+            let mg = vdivq_f64(m12d, vaddq_f64(m1d, eps));
+            // residual = max(trunc(sd - g·srd), 0) — separate mul+sub keeps the
+            // scalar's two-rounding arithmetic.
+            let msv = pos64(vcvtq_s64_f64(vsubq_f64(
+                vcvtq_f64_s64(m2),
+                vmulq_f64(mg, m12d),
+            )));
+            let mgc = vminq_f64(mg, limit);
+
+            // log2_64(first = residual + NSQ)
+            let numer1 = vaddq_s64(msv, nsq64);
+            let n1log = log2x2(numer1);
+
+            // log2_64(second = first + trunc(g_c²·sigma_ref))
+            let second_add = vcvtq_s64_f64(vmulq_f64(vmulq_f64(mgc, mgc), m1d));
+            let numer2 = vaddq_s64(numer1, second_add);
+            let n2log = log2x2(numer2);
+
+            let mnum = vsubq_s64(n2log, n1log);
+            let num_mask = vandq_u64(vbicq_u64(sigma12_pos, sigma1_small), sigma2_pos);
+            let not_small = vbicq_u64(vreinterpretq_u64_s64(mden), sigma1_small);
+            acc_num = vaddq_s64(
+                acc_num,
+                vreinterpretq_s64_u64(vandq_u64(vreinterpretq_u64_s64(mnum), num_mask)),
+            );
+            acc_den = vaddq_s64(acc_den, vreinterpretq_s64_u64(not_small));
+            acc_nnl = vaddq_s64(
+                acc_nnl,
+                vreinterpretq_s64_u64(vandq_u64(vreinterpretq_u64_s64(m2), sigma1_small)),
+            );
+            // count of sigma1_small lanes (mask lanes are -1)
+            acc_dnl = vsubq_s64(acc_dnl, vreinterpretq_s64_u64(sigma1_small));
+        }
+    }
+    *num_log += vgetq_lane_s64::<0>(acc_num) + vgetq_lane_s64::<1>(acc_num);
+    *den_log += vgetq_lane_s64::<0>(acc_den) + vgetq_lane_s64::<1>(acc_den);
+    *num_non_log += vgetq_lane_s64::<0>(acc_nnl) + vgetq_lane_s64::<1>(acc_nnl);
+    *den_non_log += vgetq_lane_s64::<0>(acc_dnl) + vgetq_lane_s64::<1>(acc_dnl);
+}
+
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[inline(always)]
+fn neon_token() -> Option<NeonToken> {
+    #[cfg(test)]
+    if V3_DISABLED_FOR_TEST.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    NeonToken::summon()
+}
+
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 #[inline(always)]
 fn v4x_token() -> Option<X64V4xToken> {
@@ -3339,7 +3496,11 @@ fn v3_token() -> Option<X64V3Token> {
     X64V3Token::summon()
 }
 
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 static V3_DISABLED_FOR_TEST: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -3683,6 +3844,25 @@ fn statistics(
                     ),
                     [_v3, _neon, _wasm128, _scalar]
                 );
+                #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+                if let Some(token) = neon_token() {
+                    vif_finalize16_neon_t(
+                        token,
+                        &ref_means,
+                        &dis_means,
+                        &ref_sqs,
+                        &dis_sqs,
+                        &ref_diss,
+                        table,
+                        gain_limit,
+                        &mut num_log,
+                        &mut den_log,
+                        &mut num_non_log,
+                        &mut den_non_log,
+                    );
+                    hcol += 16;
+                    continue;
+                }
                 for lane in 0..16 {
                     vif_pixel_finalize(
                         table,
@@ -4376,7 +4556,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
     #[test]
     fn v3_stat8_matches_simd_fallback_at_odd_widths() {
         for (width, height) in [
@@ -4437,7 +4617,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
     #[test]
     fn v3_stat16_matches_simd_fallback_at_odd_widths() {
         // The _16 kernel covers every (bit_depth, scale) pair except 8-bit
@@ -4500,7 +4680,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
     #[test]
     fn v3_subsample_matches_simd_fallback_at_odd_widths() {
         // subsample() handles the scale transitions 0->1 (9-tap), 1->2 (5-tap),
