@@ -176,14 +176,10 @@ ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
 # Common deps.
-# Git pin (not a [patch]) so it can coexist with registry archmage/magetypes:
-# the rev declares 0.9.31-beta (attune/attuned!/reattune!), which sibling
-# path crates' ^0.9.x reqs can't satisfy — they resolve registry 0.9.30
-# while workspace members take this rev. Safe only because no archmage or
-# magetypes type crosses a workspace<->sibling API boundary. Once 0.9.31
-# stable ships, drop the git specs and restore a plain version + patch.
-archmage = { git = "https://github.com/imazen/archmage", rev = "72910a29", version = "0.9.31-beta", features = ["macros", "avx512"] }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "72910a29", version = "0.9.31-beta", features = ["avx512"] }
+# Published 0.9.31-beta.1 source revision (crate VCS metadata). Keep a
+# distinct Cargo source while sibling ^0.9.30 requirements remain stable.
+archmage = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["macros", "avx512"] }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["avx512"] }
 bytemuck = "1"
 clap = { version = "4", default-features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
 csv = "1"

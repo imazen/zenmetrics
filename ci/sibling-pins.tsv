@@ -122,7 +122,7 @@ ravif	https://github.com/imazen/cavif-rs.git	../ravif	cb06487cfc8013413f5cb268a9
 # wgpu,all-metrics -- -D warnings` — both verified locally against
 # this exact pin via a full sibling-worktree CI reproduction before
 # landing.
-zensim	https://github.com/imazen/zensim.git	../zensim	5a4d5fa3c21386b93e232d4777d456dc64d6d12d	-
+zensim	https://github.com/imazen/zensim.git	../zensim	96c3c9bb900b580a4d9c0266a0a0b50203757528	-
 # butteraugli's local layout is a Cargo workspace at
 # ~/work/butteraugli/ with the package at
 # ~/work/butteraugli/butteraugli/. The workspace's
