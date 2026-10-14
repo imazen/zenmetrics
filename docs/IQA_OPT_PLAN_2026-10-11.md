@@ -225,8 +225,7 @@ Second optimisation pass; all scores bit-identical unless noted.
 - **zenmetrics-math `powf_libm`** (`d747a7b6`, powf lane): fdlibm
   `e_powf` onto `f32x8`/`f32x16` + slice drivers `vpow_libm_into` /
   `vpowf_libm_pairs_into`; edge-matrix + 10M-pair differentials clean;
-  ~5–11× vs scalar `libm::powf` on Zen 4. VSI pooling integration by
-  the same lane pending at write time.
+  ~5–11× vs scalar `libm::powf` on Zen 4.
 - **vsi pooling on `powf_libm`** (`a4add208`): both pool powers on the
   lane `powf`; maps bit-identical, score bits identical on non-NaN.
   Paired A/B (avx512 build, 1T): 256² −4.60%, 3355×2516 −0.67% (A/A
@@ -235,6 +234,29 @@ Second optimisation pass; all scores bit-identical unless noted.
   (7.0% of samples, avx512 build, 3355×2516, 1T, after this change) is
   the **f64** `pow` in `srgb_to_lab` (`lin()` `^2.4`, `f()` `^(1/3)`,
   its only call sites), not this `powf`; that is the follow-up.
+- **zenmetrics-math `pow64_libm`** (fdlibm f64 port): `e_pow.c` onto
+  `f64x4`/`i64x4` lanes — bit tricks/comparisons/blends in the `i64x4`
+  integer domain, polynomial+divide bodies on `f64x4`, variable shifts
+  as masked const-shift trees, exceptional lanes (x≤0/NaN, special y,
+  |y|>2³¹, subnormal i/o, overflow boundary) → scalar `libm::pow`.
+  `y==±0`/`x==1`→1.0 ahead of the NaN checks, same as fdlibm order.
+  Drivers `vpow64_libm_into`/`vpow64_libm_pairs_into` across all five
+  tiers; six bitwise differential tests vs scalar `libm::pow` green on
+  every tier (edge matrix, range thresholds, exact ties, dense
+  positive+subnormal, seeded random, tails). Lane bench ~10.2 vs 21.7
+  ns/elem (~2.1× scalar). fsim's pooling `pow` now uses the shared port
+  (same bits; local `pow64_x4` is a wrapper).
+- **vsi sRGB→Lab on `pow64_libm`**: the six per-pixel f64 pows run
+  through `pow64_libm_4x` inside `srgb_to_lab_x86_body!`, a macro so
+  every lane op lands inside the attuned tier fns — a prior
+  generic-fn/closure version emitted `__simd_inner_*` calls and
+  regressed 76→280ms. Thresholds are `blend` selects; masked lanes get
+  pow arg 1.0 so they never take the scalar fallback. 1024² wall
+  **76→~53ms serial (−30%), ~19.7ms @24T** (avx512 build; v3-only build
+  also ~53ms — v4x delegates f64x4 to 256-bit ops); score bits
+  `3fefb77a83788424` identical on default/avx512/parallel builds. The
+  aarch64 twin keeps its midp-approximate path (different bits there
+  already).
 - **Failed/kept-out experiments this pass**: fsim filtered-ifft fusion
   (src→dst `yf·filter` fold into the row transpose-in) measured
   net-neutral-to-negative — the collect pass's cost was already
