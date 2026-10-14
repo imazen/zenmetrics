@@ -219,28 +219,37 @@ pub fn hdrvdp3(
     };
 
     // ---- both images through the visual pathway ----
-    let pr = visual_pathway(
-        &ref_n,
-        width,
-        height,
-        channels,
-        &mp,
-        &par.viewing,
-        &img_e,
-        &pad_at,
-        relaxed,
-    )?;
-    let pt = visual_pathway(
-        &test_n,
-        width,
-        height,
-        channels,
-        &mp,
-        &par.viewing,
-        &img_e,
-        &pad_at,
-        relaxed,
-    )?;
+    // Independent pipelines → `join2` (parallel under `parallel`,
+    // sequential in order otherwise; results are returned, not merged).
+    let (pr, pt) = crate::par::join2(
+        || {
+            visual_pathway(
+                &ref_n,
+                width,
+                height,
+                channels,
+                &mp,
+                &par.viewing,
+                &img_e,
+                &pad_at,
+                relaxed,
+            )
+        },
+        || {
+            visual_pathway(
+                &test_n,
+                width,
+                height,
+                channels,
+                &mp,
+                &par.viewing,
+                &img_e,
+                &pad_at,
+                relaxed,
+            )
+        },
+    );
+    let (pr, pt) = (pr?, pt?);
     let had_nan = pr.had_nan || pt.had_nan;
     let b_t = &pt.bands;
     let b_r = &pr.bands;

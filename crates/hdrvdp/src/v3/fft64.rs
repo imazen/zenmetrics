@@ -1076,20 +1076,38 @@ impl Plan2 {
                             }
                         }
                     } else {
-                        for k in k0..kend {
-                            let lane = k * 8;
-                            let xm = xmap[k];
-                            for j in 0..8 {
-                                let (sy, sx) = (ybase[j], xm);
-                                self.re8[lane + j] = match (sy, sx) {
-                                    (usize::MAX, _) | (_, usize::MAX) => {
-                                        let Pad::Constant(v) = pad else {
-                                            unreachable!()
-                                        };
-                                        v
-                                    }
-                                    (sy, sx) => x[sy * src_w + sx],
+                        // Tail tile straddling/past `src_w`: contiguous
+                        // copy for the identity columns, then the pad
+                        // columns — constant lane-fill for `Constant`,
+                        // edge broadcast for `Replicate`, mirror reads
+                        // for `Symmetric`.
+                        let id_end = src_w.clamp(k0, kend);
+                        let mut tile = [[0.0f64; 8]; 8];
+                        for j in 0..8 {
+                            let sy = ybase[j];
+                            if sy == usize::MAX {
+                                let Pad::Constant(v) = pad else {
+                                    unreachable!()
                                 };
+                                tile[j] = [v; 8];
+                                continue;
+                            }
+                            let srow = &x[sy * src_w..sy * src_w + src_w];
+                            if id_end > k0 {
+                                tile[j][..id_end - k0].copy_from_slice(&srow[k0..id_end]);
+                            }
+                            for t in id_end..kend {
+                                tile[j][t - k0] = match pad {
+                                    Pad::Constant(v) => v,
+                                    Pad::Replicate => srow[src_w - 1],
+                                    Pad::Symmetric => srow[xmap[t]],
+                                };
+                            }
+                        }
+                        for t in 0..kend - k0 {
+                            let lane = (k0 + t) * 8;
+                            for j in 0..8 {
+                                self.re8[lane + j] = tile[j][t];
                             }
                         }
                     }
