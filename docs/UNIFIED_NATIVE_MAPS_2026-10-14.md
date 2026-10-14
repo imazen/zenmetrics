@@ -103,3 +103,34 @@ Validation (`crates/mdctpsnr`):
   bit-identical. Strided input gives the packed map. Subsampled and stopped
   requests behave as specified. Tests pass with default, `parallel` and
   no-std builds.
+
+## MAD (`mad-iqa`)
+
+| Map | Values | Polarity | Grid |
+| --- | --- | --- | --- |
+| `hi` (primary) | `hi_index`'s map: contrast-threshold mask × 16×16 local MSE | Difference | 1-pixel cells over the interior |
+| `lo` | `lo_index`'s map: `Σ_s w_s·(|Δσ| + 2|Δskew| + |Δkurt|)` over the log-Gabor bank | Difference | 4×4 tiles over the interior |
+
+Both indices pool only the interior `[16, w−17) × [16, h−17)`, so the maps
+cover just that region. `HI = 10·RMS(hi)`. `LO` is the RMS of the tile values
+over interior pixels; the last tile row and column reach up to 3 pixels past
+the interior. Each tile value covers the 4×4 pixels at its tile origin, as
+the reference writes it. Support is global (DFT-domain CSF and log-Gabor
+filters). These are the two strategy components: `MAD = HI^σ·LO^(1−σ)`
+combines the indices, so there is no per-pixel MAD, and MAD is 0 whenever
+HI is. Below 34 pixels there is no interior and a map request fails with
+`NoMap`.
+
+Validation (`crates/mad-iqa`):
+
+- `HI` and `LO` fold from the maps bit for bit at 96×96, 77×61, 34×40 and
+  130×70. The existing Octave goldens are unchanged.
+- A bright patch on a flat field lights `hi` only inside the 16×16
+  local-MSE box `{x−7 … x+8}` that holds it, which pins the pixel alignment.
+  A faint change in texture can stay below the contrast threshold, and then
+  `hi` is legitimately 0.
+- The `hi` and `lo` peaks sit at a localized patch. Identical pairs give zero
+  maps. Map-on and map-off scores are bit-identical. Strided input gives the
+  packed maps. Subsampled, stopped and too-small requests behave as
+  specified. Tests pass with default, `parallel`, `_dev,avx512` and no-std
+  builds.
