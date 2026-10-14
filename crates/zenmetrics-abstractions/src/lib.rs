@@ -16,8 +16,8 @@
 //!   `gms`, cvvdp/butteraugli diffmaps), `map_polarity()` says which way
 //!   is better;
 //! - **map-as-artifact** — the headline score is *one fold* over the
-//!   map and the caller can ask for others: `map_score("pnorm:12")`,
-//!   `"mean"`, `"std"`, `"max"` are default-implemented for any map;
+//!   map and the caller can ask for others: `map_score(MapFold::PNorm { p: 12.0 })`,
+//!   `Mean`/`Std`/`Max`/`PNorm{p}`/`FractionAbove{t}` are default-implemented for any map;
 //!   metrics override for their own fold grammars.
 //!
 //! `extras()` is the open-ended metadata channel (butteraugli's norm
@@ -32,6 +32,8 @@ extern crate alloc;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+/// f32↔u8 casts without a per-leaf bytemuck dep.
+pub use bytemuck;
 /// Re-export of the pixel crate the trait signatures are written in —
 /// implementors don't need their own `zenpixels` dep; write
 /// `zenmetrics_abstractions::zenpixels::PixelSlice`.
@@ -88,6 +90,131 @@ pub enum ScoreKind {
 }
 
 // ---------------------------------------------------------------------------
+// Map folds — the typed replacement for a `&str` spec.
+// ---------------------------------------------------------------------------
+
+/// A fold over a per-pixel map — typed, `#[non_exhaustive]` (new fold
+/// kinds are additive), with a `Custom` escape hatch for metric-defined
+/// grammars.
+///
+/// This replaces any `"pnorm:12"` string grammar: [`Evaluation::map_score`]
+/// takes `MapFold`, and the shared [`map_fold`] helper implements the
+/// common cases over any map so every metric gets butteraugli-style
+/// "arbitrary norms over the diffmap" for free.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MapFold<'a> {
+    /// Arithmetic mean — `Σv/n`.
+    Mean,
+    /// Population standard deviation — GMSD's headline fold
+    /// (`gmsd == MapFold::Std` over the `gms` map).
+    Std,
+    /// Maximum element.
+    Max,
+    /// Minimum element.
+    Min,
+    /// p-norm `(Σ|v|^p / n)^(1/p)` — the butteraugli norm family
+    /// (`PNorm { p: 12.0 }` is butteraugli's canonical combine).
+    PNorm {
+        /// The norm exponent.
+        p: f64,
+    },
+    /// Fraction of pixels `≥ threshold` — HDR-VDP's `visible_fraction`
+    /// is `FractionAbove { threshold: 0.5 }` over `P_map`.
+    FractionAbove {
+        /// The inclusion threshold.
+        threshold: f64,
+    },
+    /// Metric-defined fold — the escape hatch for grammars outside the
+    /// shared set (e.g. HDR-VDP's `"c_max"` alias).
+    Custom(&'a str),
+}
+
+/// What kind of per-pixel map [`EvalOpts`] asks for — `#[non_exhaustive]`
+/// so new request shapes (region-of-interest, per-channel) add
+/// non-breaking variants.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MapRequest {
+    /// The metric's canonical resolution — the map its upstream
+    /// reference publishes (GMSD's `w/2 × h/2`, MS-SSIM's `(w−10) ×
+    /// (h−10)` interior, FSIM's decimated grid are all `Native`).
+    #[default]
+    Native,
+    /// ~`factor`× coarser than `Native` — the zensim-binned shape:
+    /// box-mean cell averages for thumbnail maps and partition-aligned
+    /// consumers. Implementors may compute at low res directly; the
+    /// default is [`map_subsample_f32`].
+    Subsampled {
+        /// Linear downsampling factor (`4` → ~`w/4 × h/4`).
+        factor: u32,
+    },
+}
+
+/// What [`Metric::evaluate`] should compute — `#[non_exhaustive]` so new
+/// optional outputs (uncertainty maps, per-channel results) add fields
+/// without breaking callers.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct EvalOpts {
+    /// Map request: `None` = score only, `Some(_)` = produce a map.
+    /// Default `None`.
+    pub map: Option<MapRequest>,
+}
+
+impl EvalOpts {
+    /// Score only.
+    pub const SCORE_ONLY: Self = Self { map: None };
+    /// Score + canonical-resolution map.
+    pub const WITH_MAP: Self = Self {
+        map: Some(MapRequest::Native),
+    };
+    /// Score + a `factor`-coarsened map.
+    pub const fn map_subsampled(factor: u32) -> Self {
+        Self {
+            map: Some(MapRequest::Subsampled { factor }),
+        }
+    }
+}
+
+/// The shared typed viewing-condition carrier for
+/// [`Metric::viewing_conditions`] — covers the common core the
+/// viewing-conditioned metrics (cvvdp's display geometry, hdrvdp's
+/// `pixels_per_degree`/`surround`, butteraugli's `intensity_target`)
+/// actually share. Richer settings (surround models, observer age, EOTF
+/// curves) stay metric-specific and ride [`Metric::config`].
+///
+/// `#[non_exhaustive]` — fields may be added (ambient lux, observer age);
+/// construct with `..` spread or the builder.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewingConditions {
+    /// Pixels per visual degree — cvvdp's geometry-derived ppd, hdrvdp's
+    /// `pixels_per_degree`.
+    pub ppd: f32,
+    /// Display peak luminance in cd/m² — `None` when the metric assumes
+    /// the sRGB nominal (~80) or doesn't model display light.
+    pub display_peak_nits: Option<f32>,
+}
+
+impl ViewingConditions {
+    /// Constructor — `ppd` + optional display peak (nits).
+    pub fn new(ppd: f32, display_peak_nits: Option<f32>) -> Self {
+        Self {
+            ppd,
+            display_peak_nits,
+        }
+    }
+
+    /// Builder — set the display peak.
+    #[must_use]
+    pub fn with_display_peak_nits(mut self, nits: f32) -> Self {
+        self.display_peak_nits = Some(nits);
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The result object.
 // ---------------------------------------------------------------------------
 
@@ -136,13 +263,13 @@ pub trait Evaluation {
 
     /// A named fold over the map — "another score, computed on demand".
     ///
-    /// The shared default handles `"mean"`, `"max"`, `"std"`, and
-    /// `"pnorm:<p>"` for any map — that's the butteraugli-norm shape
-    /// (`pnorm:12` is butteraugli's canonical combine) and it works for
-    /// every error/similarity map in-tree. Metrics may override to add
-    /// their own grammar or reject specs they don't define.
-    fn map_score(&self, spec: &str) -> Option<f64> {
-        map_fold(self.map()?, spec)
+    /// The shared default handles [`MapFold`]`::Mean`/`Max`/`Min`/`Std`,
+    /// `PNorm { p }` (the butteraugli norm family — `p: 12` is the
+    /// canonical combine), and `FractionAbove { threshold }` for any
+    /// map. Metrics may override to add their own `Custom` grammar or
+    /// richer folds (per-channel, region-weighted).
+    fn map_score(&self, fold: MapFold<'_>) -> Option<f64> {
+        map_fold(self.map()?, fold)
     }
 
     /// Metric-specific metadata as `(key, value)` pairs with stable
@@ -197,26 +324,6 @@ impl Evaluation for ScalarEval {
 // The metric surface.
 // ---------------------------------------------------------------------------
 
-/// What [`Metric::evaluate`] should compute — `#[non_exhaustive]` so new
-/// optional outputs (uncertainty maps, per-channel results) add fields
-/// without breaking callers.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default)]
-pub struct EvalOpts {
-    /// Produce the canonical per-pixel map. Costs one extra
-    /// width×height·4-byte allocation and the map-write work — free for
-    /// metrics whose map falls out of pooling anyway, real extra work
-    /// for cvvdp (masked-error accumulation). Default `false`.
-    pub map: bool,
-}
-
-impl EvalOpts {
-    /// Score only.
-    pub const SCORE_ONLY: Self = Self { map: false };
-    /// Score + canonical map.
-    pub const WITH_MAP: Self = Self { map: true };
-}
-
 /// Error for the generic surface — leaf errors are boxed through this
 /// so `Box<dyn Metric>` doesn't need a concrete `Error` associated type.
 pub type MetricResult<T> = Result<T, Box<dyn core::error::Error + Send + Sync + 'static>>;
@@ -232,6 +339,28 @@ pub trait Metric {
 
     /// What [`Evaluation::score`]'s headline means — direction + scale.
     fn score_kind(&self) -> ScoreKind;
+
+    /// The scorer's variant label within the family — `"vifvec"`,
+    /// `"v3"`, `"hdr"`… Default: [`Self::name`].
+    fn variant(&self) -> &'static str {
+        self.name()
+    }
+
+    /// Construction-time knobs echoed for observability — display model,
+    /// geometry, model variant, formula revision, preprocess flags.
+    /// Metric-defined keys; a logging surface, not a typed contract.
+    /// Default: empty.
+    fn config(&self) -> Box<dyn Iterator<Item = (Cow<'static, str>, Cow<'static, str>)> + '_> {
+        Box::new(core::iter::empty())
+    }
+
+    /// Typed viewing conditions when the metric is viewing-conditioned
+    /// (cvvdp, hdrvdp, cambi, butteraugli) — `None` for unconditioned
+    /// metrics. This is *inspection*, not mutation: viewing conditions
+    /// are a construction-time decision (scorer geometry is baked in).
+    fn viewing_conditions(&self) -> Option<ViewingConditions> {
+        None
+    }
 
     /// Whether [`Self::evaluate`] accepts input slices with this
     /// descriptor. Metrics declare their native inputs; conversion
@@ -332,27 +461,20 @@ pub fn rgb8_pair<'a>(
 // Map helpers.
 // ---------------------------------------------------------------------------
 
-/// Named folds over a `GRAYF32_LINEAR` map — the shared default grammar
-/// behind [`Evaluation::map_score`].
-///
-/// - `"mean"` — arithmetic mean
-/// - `"max"` / `"min"` — extremes
-/// - `"std"` — population standard deviation (GMSD's headline fold)
-/// - `"pnorm:<p>"` — `(Σ|v|^p / n)^(1/p)` — butteraugli's norm family
-///
-/// Returns `None` on an empty map or an unrecognized spec.
+/// Typed folds over a `GRAYF32_LINEAR` map — the shared default behind
+/// [`Evaluation::map_score`].
 #[must_use]
-pub fn map_fold(map: PixelCow<'_, ()>, spec: &str) -> Option<f64> {
+pub fn map_fold(map: PixelCow<'_, ()>, fold: MapFold<'_>) -> Option<f64> {
     let vals = map_f32s(&map)?;
     if vals.is_empty() {
         return None;
     }
-    match spec {
-        "mean" => Some(vals.iter().map(|&v| v as f64).sum::<f64>() / vals.len() as f64),
-        "max" => vals.iter().copied().reduce(f32::max).map(|v| v as f64),
-        "min" => vals.iter().copied().reduce(f32::min).map(|v| v as f64),
-        "std" => {
-            let n = vals.len() as f64;
+    let n = vals.len() as f64;
+    match fold {
+        MapFold::Mean => Some(vals.iter().map(|&v| v as f64).sum::<f64>() / n),
+        MapFold::Max => vals.iter().copied().reduce(f32::max).map(f64::from),
+        MapFold::Min => vals.iter().copied().reduce(f32::min).map(f64::from),
+        MapFold::Std => {
             let mean = vals.iter().map(|&v| v as f64).sum::<f64>() / n;
             let var = vals
                 .iter()
@@ -364,14 +486,15 @@ pub fn map_fold(map: PixelCow<'_, ()>, spec: &str) -> Option<f64> {
                 / n;
             Some(libm::sqrt(var))
         }
-        _ => spec
-            .strip_prefix("pnorm:")
-            .and_then(|p| p.parse::<f64>().ok())
-            .map(|p| {
-                let n = vals.len() as f64;
-                let sum: f64 = vals.iter().map(|&v| libm::pow((v as f64).abs(), p)).sum();
-                (sum / n) /*keep*/
-            }),
+        MapFold::PNorm { p } => {
+            let sum: f64 = vals.iter().map(|&v| libm::pow((v as f64).abs(), p)).sum();
+            Some(libm::pow(sum / n, p.recip()))
+        }
+        MapFold::FractionAbove { threshold } => {
+            let t = threshold as f32;
+            Some(vals.iter().filter(|&&v| v >= t).count() as f64 / n)
+        }
+        MapFold::Custom(_) => None,
     }
 }
 
@@ -431,4 +554,38 @@ pub fn contiguous_rgb8<'a>(r: &'a Rgb8In<'a>) -> Cow<'a, [u8]> {
         }
         Cow::Owned(out)
     }
+}
+
+/// Box-mean downsample of a packed `w × h` f32 map by an integer factor —
+/// the default [`MapRequest::Subsampled`] implementation (the zensim
+/// "binned density" shape: each output cell is its `f × f` block's mean,
+/// edge cells clipped to the remainder). Returns `(pixels, w_out, h_out)`.
+///
+/// `factor` clamps to `max(1, …)`; `factor == 1` returns the input's
+/// dims with a copied buffer (callers usually early-out).
+#[must_use]
+pub fn map_subsample_f32(map: &[f32], w: u32, h: u32, factor: u32) -> (Vec<f32>, u32, u32) {
+    let f = factor.max(1) as usize;
+    let (w, h) = (w as usize, h as usize);
+    debug_assert_eq!(map.len(), w * h);
+    let (wo, ho) = (w.div_ceil(f), h.div_ceil(f));
+    let mut out = alloc::vec![0.0f32; wo * ho];
+    for oy in 0..ho {
+        let y0 = oy * f;
+        let y1 = (y0 + f).min(h);
+        for ox in 0..wo {
+            let x0 = ox * f;
+            let x1 = (x0 + f).min(w);
+            let mut sum = 0.0f64;
+            let mut cnt = 0u32;
+            for y in y0..y1 {
+                for &v in &map[y * w + x0..y * w + x1] {
+                    sum += v as f64;
+                    cnt += 1;
+                }
+            }
+            out[oy * wo + ox] = (sum / cnt as f64) as f32;
+        }
+    }
+    (out, wo as u32, ho as u32)
 }

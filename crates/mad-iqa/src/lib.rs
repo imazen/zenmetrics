@@ -189,7 +189,6 @@ impl zenmetrics_abstractions::Metric for Mad {
     ) -> zenmetrics_abstractions::MetricResult<
         alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
     > {
-        use zenmetrics_abstractions as za;
         let box_err = |e: Error| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         };

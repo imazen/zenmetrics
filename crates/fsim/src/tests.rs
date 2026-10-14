@@ -364,8 +364,22 @@ fn metric_trait_object_scores_and_maps() {
         Some(zenmetrics_abstractions::MapPolarity::Similarity)
     );
     // Named map folds — mean is the default grammar.
-    assert!(ev.map_score("mean").is_some());
-    assert!(ev.map_score("pnorm:4").is_some());
+    assert!(
+        ev.map_score(zenmetrics_abstractions::MapFold::Mean)
+            .is_some()
+    );
+    assert!(
+        ev.map_score(zenmetrics_abstractions::MapFold::PNorm { p: 4.0 })
+            .is_some()
+    );
     // Downcast to the concrete result.
     assert!(ev.as_any().is::<crate::FsimDiffmap>());
+    // Subsampled map request: 4× coarser → ~(w/4) × (h/4).
+    let ev = m
+        .evaluate(mk(&r), mk(&d), EvalOpts::map_subsampled(4))
+        .unwrap();
+    let dm = ev.map().unwrap();
+    let sl = dm.as_slice();
+    // F=1 at this size (min dim <256) — native is w×h, /4 → w/4 × h/4.
+    assert_eq!((sl.width(), sl.rows()), ((w / 4) as u32, (h / 4) as u32));
 }

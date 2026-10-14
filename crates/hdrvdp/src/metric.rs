@@ -111,15 +111,20 @@ impl zenmetrics_abstractions::Evaluation for HdrVdpResult {
         Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
     }
 
-    /// `"mean"` over `p_map` ≈ `p_det`'s spatial pool; `pnorm:<p>` works
-    /// too — plus `"c_max"`/`"visible_fraction"` aliases on the fold.
-    fn map_score(&self, spec: &str) -> Option<f64> {
-        match spec {
-            "c_max" => Some(self.c_max),
-            "visible_fraction" => Some(self.visible_fraction()),
+    /// `MapFold::FractionAbove { 0.5 }` over `p_map` = `visible_fraction`;
+    /// `Custom("c_max")` / `Custom("visible_fraction")` alias the scalar
+    /// fields; the shared grammar (Mean/Std/PNorm/…) folds the map.
+    fn map_score(&self, fold: zenmetrics_abstractions::MapFold<'_>) -> Option<f64> {
+        use zenmetrics_abstractions::MapFold;
+        match fold {
+            MapFold::Custom("c_max") => Some(self.c_max),
+            MapFold::Custom("visible_fraction") => Some(self.visible_fraction()),
+            MapFold::FractionAbove { threshold } if threshold == 0.5 => {
+                Some(self.visible_fraction())
+            }
             _ => self
                 .map()
-                .and_then(|m| zenmetrics_abstractions::map_fold(m, spec)),
+                .and_then(|m| zenmetrics_abstractions::map_fold(m, fold)),
         }
     }
 
@@ -591,5 +596,157 @@ mod tests {
             !r.input_looks_relative,
             "code values must not trip the flag"
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Generic Metric surface.
+// ---------------------------------------------------------------------------
+
+/// The HDR-VDP-2 metric as a generic scorer — the params-carrying shape:
+/// viewing conditions, encoding and emission are construction-time, so
+/// [`HdrVdp::new`] takes them explicitly.
+///
+/// Accepts `RGBF32_LINEAR` (nits) or `GRAYF32_LINEAR` when `encoding` is
+/// luminance — `f32` input widens to `f64` exactly; strided planes are
+/// repacked.
+#[derive(Debug, Clone)]
+pub struct HdrVdp {
+    /// Display/observer/viewing params.
+    pub par: Params,
+    /// Color encoding the scorer expects.
+    pub encoding: ColorEncoding,
+}
+
+impl HdrVdp {
+    /// Constructor — all configuration is explicit, matching `hdrvdp()`.
+    #[must_use]
+    pub fn new(par: Params, encoding: ColorEncoding) -> Self {
+        Self { par, encoding }
+    }
+}
+
+impl zenmetrics_abstractions::Metric for HdrVdp {
+    fn name(&self) -> &'static str {
+        "hdrvdp"
+    }
+
+    fn variant(&self) -> &'static str {
+        "v2"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Quality100
+    }
+
+    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
+        matches!(
+            descriptor.format,
+            zenpixels::PixelFormat::RgbF32 | zenpixels::PixelFormat::GrayF32
+        )
+    }
+
+    fn config(
+        &self,
+    ) -> std::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    std::borrow::Cow<'static, str>,
+                    std::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        std::boxed::Box::new(
+            [
+                (
+                    std::borrow::Cow::Borrowed("pix_per_deg"),
+                    std::borrow::Cow::Owned(std::format!("{}", self.par.pix_per_deg)),
+                ),
+                (
+                    std::borrow::Cow::Borrowed("mode"),
+                    std::borrow::Cow::Owned(std::format!("{:?}", self.par.mode)),
+                ),
+            ]
+            .into_iter(),
+        )
+    }
+
+    fn viewing_conditions(&self) -> Option<zenmetrics_abstractions::ViewingConditions> {
+        Some(zenmetrics_abstractions::ViewingConditions::new(
+            self.par.pix_per_deg as f32,
+            None,
+        ))
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        std::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let box_err = |e: Error| {
+            std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
+        };
+        // Widen a strided f32 slice to packed f64, per channel layout the
+        // encoding expects.
+        let widen = |s: zenpixels::PixelSlice<'_>| -> std::result::Result<
+            Vec<f64>,
+            std::boxed::Box<dyn core::error::Error + Send + Sync>,
+        > {
+            let (w, h) = (s.width() as usize, s.rows() as usize);
+            let ch = s.descriptor().format.channels() as usize;
+            let mut out = Vec::with_capacity(w * h * ch);
+            for row in s.as_strided_bytes().chunks_exact(s.stride()).take(h) {
+                let px: &[f32] = zenmetrics_abstractions::bytemuck::cast_slice(&row[..w * ch * 4]);
+                out.extend(px.iter().map(|&v| v as f64));
+            }
+            Ok(out)
+        };
+        let (w, h) = (r.width() as usize, r.rows() as usize);
+        let rv = widen(r).map_err(|e| e)?;
+        let dv = widen(d).map_err(|e| e)?;
+        let res = hdrvdp(&dv, &rv, w, h, self.encoding, &self.par).map_err(box_err)?;
+        Ok(std::boxed::Box::new(res))
+    }
+}
+
+#[cfg(test)]
+mod metric_trait_tests {
+    use super::*;
+
+    /// `HdrVdp` scorer through `Box<dyn Metric>` — LuminanceF32 nits
+    /// input, viewing conditions introspected.
+    #[test]
+    fn hdrvdp_metric_surface() {
+        use zenmetrics_abstractions::{EvalOpts, Metric};
+        let par = Params::new(30.0);
+        let mut m: std::boxed::Box<dyn Metric> =
+            std::boxed::Box::new(HdrVdp::new(par, ColorEncoding::Luminance));
+        assert_eq!(m.name(), "hdrvdp");
+        assert_eq!(m.variant(), "v2");
+        let vc = m.viewing_conditions().unwrap();
+        assert!((vc.ppd - 30.0).abs() < 1e-6);
+
+        let (w, h) = (32usize, 32usize);
+        let r: Vec<f32> = vec![100.0; w * h];
+        let mut d = r.clone();
+        d[100] = 80.0;
+        fn mk(px: &[f32]) -> zenpixels::PixelSlice<'_> {
+            zenpixels::PixelSlice::new(
+                zenmetrics_abstractions::bytemuck::cast_slice(px),
+                32,
+                32,
+                32 * 4,
+                zenpixels::PixelDescriptor::GRAYF32_LINEAR,
+            )
+            .unwrap()
+        }
+        let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY).unwrap();
+        assert!(ev.score().is_finite());
+        // p_map exists even on the "score-only" path — v2 always
+        // produces it; EvalOpts::map gates *exposure cost*, not compute.
+        assert!(ev.map().is_some());
     }
 }

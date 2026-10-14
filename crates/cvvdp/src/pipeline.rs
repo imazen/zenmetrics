@@ -4335,6 +4335,49 @@ impl zenmetrics_abstractions::Metric for Cvvdp {
         descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
     }
 
+    /// `"hdr"` when the display model's peak exceeds sRGB territory.
+    fn variant(&self) -> &'static str {
+        if self.params.display.y_peak > 200.0 {
+            "hdr"
+        } else {
+            "sdr"
+        }
+    }
+
+    fn config(
+        &self,
+    ) -> alloc::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    alloc::borrow::Cow<'static, str>,
+                    alloc::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        let f = |k: &'static str, v: f32| {
+            (
+                alloc::borrow::Cow::Borrowed(k),
+                alloc::borrow::Cow::Owned(alloc::format!("{v}")),
+            )
+        };
+        alloc::boxed::Box::new(
+            [
+                f("y_peak", self.params.display.y_peak),
+                f("y_black", self.params.display.y_black),
+                f("e_ambient_lux", self.params.display.e_ambient_lux),
+                f("ppd", self.ppd),
+            ]
+            .into_iter(),
+        )
+    }
+
+    fn viewing_conditions(&self) -> Option<zenmetrics_abstractions::ViewingConditions> {
+        Some(zenmetrics_abstractions::ViewingConditions::new(
+            self.ppd,
+            Some(self.params.display.y_peak),
+        ))
+    }
+
     fn evaluate(
         &mut self,
         r: zenpixels::PixelSlice<'_>,
@@ -4349,10 +4392,16 @@ impl zenmetrics_abstractions::Metric for Cvvdp {
         })?;
         // cvvdp takes packed rgb8 — repack when the slice is strided.
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
-        if opts.map {
-            let (_jod, dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
+        if let Some(req) = opts.map {
+            let (_jod, mut dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
                 alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
             })?;
+            if let za::MapRequest::Subsampled { factor } = req {
+                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
+                dm.map = m;
+                dm.width = w;
+                dm.height = h;
+            }
             return Ok(alloc::boxed::Box::new(dm));
         }
         let jod = self.score(&rp, &dp).map_err(|e| {

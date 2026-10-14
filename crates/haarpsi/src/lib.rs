@@ -439,19 +439,25 @@ impl zenmetrics_abstractions::Metric for Haarpsi {
         let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        if opts.map {
-            let (_s, dm) =
+        if let Some(req) = opts.map {
+            let (_s, mut dm) =
                 haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
                     .map_err(|e| {
                         alloc::boxed::Box::new(e)
                             as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
                     })?;
+            if let za::MapRequest::Subsampled { factor } = req {
+                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
+                dm.map = m;
+                dm.width = w;
+                dm.height = h;
+            }
             return Ok(alloc::boxed::Box::new(dm));
         }
         let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        let mut out = za::ScalarEval::single("haarpsi", s);
+        let out = za::ScalarEval::single("haarpsi", s);
         Ok(alloc::boxed::Box::new(out))
     }
 }

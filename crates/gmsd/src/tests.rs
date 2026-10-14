@@ -556,7 +556,7 @@ fn gmsd_diffmap_matches_score() {
     let kv: alloc::vec::Vec<_> = dm.scores().collect();
     assert_eq!(kv[0].0, "gmsd");
     assert_eq!(kv[1].0, "mean_gms");
-    let folded = dm.map_score("std").unwrap();
+    let folded = dm.map_score(zenmetrics_abstractions::MapFold::Std).unwrap();
     assert!(
         (folded - score.gmsd).abs() < 1e-4,
         "std(map)={folded} vs gmsd={}",

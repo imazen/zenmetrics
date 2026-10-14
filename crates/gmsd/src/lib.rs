@@ -234,12 +234,19 @@ impl zenmetrics_abstractions::Metric for Gmsd {
         let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        if opts.map {
-            let (_s, dm) = gmsd_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
-                .map_err(|e| {
-                    alloc::boxed::Box::new(e)
-                        as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-                })?;
+        if let Some(req) = opts.map {
+            let (_s, mut dm) = gmsd_rgb8_with_diffmap(
+                r.pixels, d.pixels, r.width, r.height, r.stride,
+            )
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+            if let za::MapRequest::Subsampled { factor } = req {
+                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
+                dm.map = m;
+                dm.width = w;
+                dm.height = h;
+            }
             return Ok(alloc::boxed::Box::new(dm));
         }
         let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
