@@ -219,25 +219,37 @@ Validation (`crates/vif`):
 | Map | Values | Polarity | Grid |
 | --- | --- | --- | --- |
 | `speed_u` (primary), `speed_v` | SPEED's per-block `|S_ref − S_dist|`, the entropy-weighted local difference of one chroma plane | Difference | 5×5 operating-sample blocks; global support |
+| `aim_{s}_{h,v,d}`, `s` = 0…3 | ADM3's AIM terms: per band sample, the cube of the additive impairment left visible after masking by the restored signal | Difference (`0` = no visible impairment) | `2^(s+1)`-pixel blocks over ADM's pooled inner region; global support |
 | `cambi_0` … `cambi_4` | CAMBI's per-scale c-values of the distorted frame | Feature (higher = more visible banding) | point samples at `2^s·k`; local support |
 
-Coverage: 2 of the model's 4 elementary features (SPEED chroma, CAMBI).
-VMAF has no per-pixel score; it is an SVM over pooled features. SPEED
-chroma's per-block terms have an f32 mean equal to the channel score (before
-the U/V combine and the 45 clamp). CAMBI's c-values are what its top-k
-pooling reads, and libvmaf dumps the same values with `heatmaps_path`. CAMBI
-measures banding in the distorted frame alone, so it has no reference
-comparison. ADM3's terms live inside the fixed-point fused kernels that hold
-libvmaf parity and are not exposed. `motion3` is temporal and
+Coverage: 3 of the model's 4 elementary features (SPEED chroma, ADM3's AIM
+half, CAMBI). VMAF has no per-pixel score; it is an SVM over pooled
+features. SPEED chroma's per-block terms have an f32 mean equal to the
+channel score (before the U/V combine and the 45 clamp). ADM3 blends
+`1 − AIM` (weight 0.3) with the detail-loss ratio `Σnum/Σden` (0.7); AIM is
+`Σ_s aim_num_s / Σ_s den_s`, and `aim_num_s` adds, per band, the cube root
+of the band's summed AIM terms. The AIM maps are those terms, so each band
+map sums (before the cube root) to its band's argument, not to a share of
+the score. The detail-loss numerator and denominator are not exposed.
+CAMBI's c-values are what its top-k pooling reads, and libvmaf dumps the
+same values with `heatmaps_path`. CAMBI measures banding in the distorted
+frame alone, so it has no reference comparison. `motion3` is temporal and
 reference-only.
 
-SPEED geometry. An operating sample is every 16th sample of the antialiased,
-prescaled chroma plane, and a block is 5×5 of them. A block is therefore 160
-luma pixels at prescale 1 (origin −15) and 320 at prescale 0.5 (origin −30),
-in continuous luma coordinates. Support is global: the block entropies use
-frame-wide covariance eigenvalues. The phone models' 0.6 prescale has no
-whole-pixel grid, so they serve CAMBI maps only, not an approximated SPEED
-grid.
+SPEED geometry. An operating sample is every 16th sample of the
+antialiased, prescaled chroma plane, and a block is 5×5 of them. A block is
+therefore 160 luma pixels at prescale 1 (origin −15) and 320 at prescale 0.5
+(origin −30), in continuous luma coordinates. Support is global: the block
+entropies use frame-wide covariance eigenvalues. The phone models' 0.6
+prescale has no whole-pixel grid, so they serve no SPEED maps rather than an
+approximated grid.
+
+AIM geometry. ADM's DWT output `k` reads inputs `2k − 1 … 2k + 2`, so a
+scale-`s` band sample owns the `2^(s+1)`-pixel block at `k·2^(s+1)`; the
+maps cover the region ADM pools, the band minus `⌊0.1·w_s − 0.5⌋` samples on
+each side (rows likewise). ADM has no prescale, so every model, phone
+included, serves AIM maps; they are the phone models' primary maps. The
+masking and decoupling chain is declared global rather than bounded.
 
 CAMBI geometry. `decimate` point-samples even positions per scale, so
 scale-`s` sample `k` is input pixel `2^s·k` (doubled under the
@@ -257,15 +269,24 @@ Validation (`crates/vmaf`):
   block's cell. Identical frames leave per-block terms up to 3.05e-5 at
   prescale 1, from `log2(1 + σ²)` taken in f32 for the reference and f64 for
   the distorted side, as libvmaf computes it; they are 0 at prescale 0.5.
+- AIM: the per-position integer terms, folded with ADM's per-row rounding
+  shift, reproduce each scale's AIM numerator from the score path bit for
+  bit (five sizes from 33×40 to 321×183, 8- and 10-bit, four models), with
+  default, `simd`, `simd,parallel` and `avx512,parallel` features. The host
+  has no AVX-512, so the `avx512` build ran its AVX2 kernels. The f32 maps
+  sum to each band's argument within the reference's per-row rounding (half
+  a unit per row) plus f32 storage. Identical frames give exact zeros. A
+  luma change confined to one region puts every scale-0 band's peak cell
+  over it.
 - CAMBI: the served maps, quantized as libvmaf quantizes its heatmaps, match
   libvmaf's `heatmaps_path` dump exactly (0 samples differ; 91,133 nonzero;
   640×360 10-bit banded fixture). Folding them through the same top-k
   selection reproduces the CAMBI score bit for bit. Changing the distorted
   frame outside a cell's declared support leaves the cell bit-identical, and
   changing the reference changes nothing.
-- Phone models serve CAMBI only; sequence and stopped requests refuse. Tests
-  pass with default, `simd`, `simd,parallel` and `avx512,parallel` features,
-  libvmaf parity included.
+- Sequence and stopped requests refuse. Tests pass with default (43),
+  `simd` (64), `simd,parallel` (66) and `avx512,parallel` (66)
+  features, libvmaf parity included.
 
 ## Browser viewer
 

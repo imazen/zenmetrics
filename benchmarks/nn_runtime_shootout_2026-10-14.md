@@ -71,3 +71,20 @@ of an LPIPS score); fresh input per iteration, synced before the timer starts.
 - **ORT** beats PyTorch on CPU but links C++: oracle only.
 - The `burn-conv-spike` verdict (cubek conv 4.32× slower than a hand stencil) was a
   1-channel separable blur and does not transfer to 64–512-channel CNN layers.
+
+## burn + zenforks-cubecl in one binary
+
+Probe: `nn_runtime_shootout_2026-10-14/coexist-probe/` (own `[workspace]`, path dep on
+`crates/ssim2-gpu`; built at master `b1d63847` under `run-heavy`, 160 s, peak RSS
+3.47 GiB). It links burn 0.22.0 (`flex,cuda,vulkan,fusion,autotune`; upstream cubecl
+0.11.0, wgpu 30.0.1) and `ssim2-gpu` (zenforks-cubecl 0.10.2 @ `90842401`, wgpu 29.0.4)
+and, in one process, alternates a burn 512² matmul-sum with an ssim2-gpu 256² score,
+five rounds, on CUDA and then on wgpu (Vulkan), each mode run twice (`run.log`).
+
+- Builds, links, runs: yes, on both backends.
+- ssim2 score: 8.939322 (CUDA) and 8.938630 (wgpu) on every round of both runs.
+- `cargo tree -d`: cubecl-{common,ir,macros,zspace} 0.10 + 0.11 and wgpu 29 + 30 side
+  by side; **one shared `cudarc` 0.19.10**, feature set identical with and without burn
+  (`cuda-version-from-build-system, driver, fallback-dynamic-loading, fallback-latest,
+  nccl, nccl-02030, nvrtc, std`).
+- Not measured: VRAM overhead of two pools, binary size delta, Metal.
