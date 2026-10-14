@@ -66,6 +66,9 @@ pub struct Iwssim {
     scratch: Scratch,
     /// Cached state from `warm_reference`, if any.
     pub(crate) warm: Option<WarmState>,
+    /// When `Some`, the next full-image score also collects its per-scale
+    /// contrast-structure maps here (the generic surface's map requests).
+    map_sink: Option<Vec<CsMap>>,
 }
 
 /// State cached by `warm_reference`. Holds the per-scale Laplacian
@@ -109,6 +112,7 @@ impl Iwssim {
             work_h,
             scratch,
             warm: None,
+            map_sink: None,
         })
     }
 
@@ -206,6 +210,7 @@ impl Iwssim {
             self.work_w,
             self.work_h,
             &self.params,
+            self.map_sink.as_mut(),
         )
     }
 
@@ -487,6 +492,7 @@ impl Iwssim {
             self.work_w,
             self.work_h,
             &self.params,
+            self.map_sink.as_mut(),
         );
         for v in lp_dis {
             crate::pool::buf_give(v);
@@ -543,12 +549,13 @@ fn score_from_gray(
     work_w: usize,
     work_h: usize,
     params: &IwssimParams,
+    maps: Option<&mut Vec<CsMap>>,
 ) -> Result<IwssimScore> {
     let ref_levels = build_laplacian_pyramid(ref_gray, work_w, work_h, NUM_SCALES);
     let dis_levels = build_laplacian_pyramid(dis_gray, work_w, work_h, NUM_SCALES);
     let lp_ref = split_levels(ref_levels);
     let lp_dis = split_levels(dis_levels);
-    let r = score_with_split(&lp_ref, &lp_dis, work_w, work_h, params);
+    let r = score_with_split(&lp_ref, &lp_dis, work_w, work_h, params, maps);
     for v in lp_ref.into_iter().chain(lp_dis) {
         crate::pool::buf_give(v);
     }
@@ -558,12 +565,21 @@ fn score_from_gray(
 /// Shared back-end that consumes already-split pyramid bands and
 /// produces the final score. Used by both the one-shot and warm-ref
 /// paths.
+/// One scale's contrast-structure map (`cs·l` at the coarsest scale), the
+/// valid-mode `(w_s − 10) × (h_s − 10)` plane the scale's pooling reads.
+pub(crate) struct CsMap {
+    pub(crate) w: usize,
+    pub(crate) h: usize,
+    pub(crate) cs: Vec<f32>,
+}
+
 fn score_with_split(
     lp_ref: &[Vec<f32>],
     lp_dis: &[Vec<f32>],
     work_w: usize,
     work_h: usize,
     params: &IwssimParams,
+    mut maps: Option<&mut Vec<CsMap>>,
 ) -> Result<IwssimScore> {
     let dims = pyramid_dims(work_w, work_h, NUM_SCALES);
 
@@ -625,6 +641,13 @@ fn score_with_split(
     }
 
     for s in cs_per_scale {
+        if let Some(sink) = maps.as_deref_mut() {
+            sink.push(CsMap {
+                w: s.cs_w,
+                h: s.cs_h,
+                cs: s.cs.clone(),
+            });
+        }
         s.release();
     }
     for m in iw_maps {
@@ -679,15 +702,114 @@ const OUTPUTS: &[za::ScoreSpec] = &[
 ];
 const _: () = assert!(OUTPUTS.len() == NUM_SCALES + 1);
 
-fn za_evaluation(s: IwssimScore) -> alloc::boxed::Box<dyn za::Evaluation> {
+fn za_scalars(s: &IwssimScore) -> za::ScalarEval {
     let mut out = za::ScalarEval::single("iwssim", s.score);
     for (spec, &v) in OUTPUTS[1..].iter().zip(&s.per_scale) {
         out.push(spec.key.clone(), v);
     }
-    alloc::boxed::Box::new(out)
+    out
+}
+
+fn za_evaluation(s: IwssimScore) -> alloc::boxed::Box<dyn za::Evaluation> {
+    alloc::boxed::Box::new(za_scalars(&s))
+}
+
+/// Map names, finest scale first; the coarsest map includes luminance.
+const CS_NAMES: [&str; NUM_SCALES] = ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4"];
+
+/// A scored pair with its per-scale contrast-structure maps.
+struct IwssimMaps {
+    score: IwssimScore,
+    maps: Vec<CsMap>,
+    geometry: Vec<za::MapGeometry>,
+}
+
+impl IwssimMaps {
+    /// Scale `s` samples the input at `2^s·k` (the binom5 `corr_dn` keeps
+    /// even positions), and cell `i` of its valid 11×11 window map is
+    /// centred on scale sample `i + 5`; cells are `2^s`-wide blocks around
+    /// that centre. The value reads the scale's Laplacian band within 5
+    /// samples, and a band sample reads the input within `6·2^s − 2`
+    /// pixels (`2^{s+1} − 2` for the residual lowpass at the top scale):
+    /// halo `11·2^s − 2`, `7·2^s − 2` at the top. When `allow_small`
+    /// tiled a small input up to the working size, values also read the
+    /// wrapped copies, so support is global.
+    fn new(score: IwssimScore, maps: Vec<CsMap>, input: (u32, u32), tiled: bool) -> Self {
+        let geometry = maps
+            .iter()
+            .enumerate()
+            .map(|(s, m)| {
+                let cell = 1u32 << s;
+                let origin = 5 * i64::from(cell) - i64::from(cell / 2);
+                let g = za::MapGeometry::grid(
+                    input.0, input.1, origin, origin, cell, cell, m.w as u32, m.h as u32,
+                );
+                if tiled {
+                    g.with_support(za::Support::Global)
+                } else {
+                    let halo = if s + 1 == NUM_SCALES {
+                        7 * cell - 2
+                    } else {
+                        11 * cell - 2
+                    };
+                    g.with_halo(halo, halo)
+                }
+            })
+            .collect();
+        Self {
+            score,
+            maps,
+            geometry,
+        }
+    }
+
+    fn view(&self, s: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry[s];
+        let px = za::gray_f32_slice(&self.maps[s].cs, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(CS_NAMES[s], px, za::MapPolarity::Similarity, g).ok()
+    }
+}
+
+impl za::Evaluation for IwssimMaps {
+    fn score(&self) -> f64 {
+        self.score.score
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(za_scalars(&self.score).named.into_iter())
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..self.maps.len()).filter_map(|s| self.view(s)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 impl Iwssim {
+    /// Run `score` with the map sink armed; the sink is always disarmed
+    /// again, whatever `score` returns.
+    fn za_with_maps(
+        &mut self,
+        req: za::MapRequest,
+        score: impl FnOnce(&mut Self) -> Result<IwssimScore>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        self.map_sink = Some(Vec::new());
+        let scored = score(self);
+        let maps = self.map_sink.take().unwrap_or_default();
+        let s = scored.metric_err_with("iwssim", Error::kind)?;
+        let tiled = (self.work_w, self.work_h) != (self.width as usize, self.height as usize);
+        let eval = IwssimMaps::new(s, maps, (self.width, self.height), tiled);
+        za::apply_map_request(alloc::boxed::Box::new(eval), req)
+    }
+
     /// Re-plan for a `w × h` input when it differs from the configured
     /// size (keeping the params), so the generic surface takes any size.
     fn za_fit(&mut self, w: usize, h: usize) -> za::MetricResult<()> {
@@ -702,8 +824,17 @@ impl Iwssim {
 
 /// `Iwssim` implements the generic surface on packed `RGB8_SRGB`, re-planning
 /// when the input size differs from the constructed one. `per_scale` values
-/// ride `scores()` as `wmcs_0..4`. No map. [`za::Metric::warm_reference`]
-/// reuses the reference pyramid and weights ([`Iwssim::warm_reference`]).
+/// ride `scores()` as `wmcs_0..4`. [`za::Metric::warm_reference`] reuses the
+/// reference pyramid ([`Iwssim::warm_reference`]); warm candidates serve maps
+/// too, bit-identical to cold ones.
+///
+/// Maps, on request: the per-scale contrast-structure maps the scales pool,
+/// `cs_0` (finest, primary) … `cs_3` and `csl_4` (coarsest, `cs·l`), each the
+/// valid 11×11-window `(w_s − 10) × (h_s − 10)` plane at scale `s`
+/// ([`za::MapPolarity::Similarity`], `1` = identical). Scales 0–3 pool their
+/// map with the information-content weights, the top scale by its plain
+/// mean, and the score is `Π wmcs_s^β_s`: these are per-scale components,
+/// not a per-pixel IW-SSIM.
 impl za::Metric for Iwssim {
     fn id(&self) -> za::MetricId {
         let p = &self.params;
@@ -733,10 +864,12 @@ impl za::Metric for Iwssim {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("iwssim")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         self.za_fit(r.width, r.height)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        if let Some(req) = opts.map {
+            return self.za_with_maps(req, |m| m.score(&rp, &dp));
+        }
         let s = self
             .score(&rp, &dp)
             .metric_err_with("iwssim", Error::kind)?;
@@ -771,7 +904,6 @@ impl za::WarmReference for IwssimWarm<'_> {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("iwssim")?;
         let d = za::rgb8_view(&d)?;
         if (d.width, d.height) != (self.metric.width as usize, self.metric.height as usize) {
             return za::fail(
@@ -786,9 +918,15 @@ impl za::WarmReference for IwssimWarm<'_> {
                     )),
             );
         }
+        let dp = za::contiguous_rgb8(&d);
+        if let Some(req) = opts.map {
+            return self
+                .metric
+                .za_with_maps(req, |m| m.score_with_warm_ref(&dp));
+        }
         let s = self
             .metric
-            .score_with_warm_ref(&za::contiguous_rgb8(&d))
+            .score_with_warm_ref(&dp)
             .metric_err_with("iwssim", Error::kind)?;
         Ok(za_evaluation(s))
     }
