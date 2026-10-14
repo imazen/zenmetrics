@@ -287,7 +287,7 @@ fn tier_parity() {
         w: 96,
         h: 96,
     };
-    let s0 = mad_core_tier_scalar(archmage::ScalarToken, a);
+    let s0 = mad_core_tier_scalar_t(archmage::ScalarToken, a);
     #[cfg(target_arch = "x86_64")]
     {
         let a = Args {

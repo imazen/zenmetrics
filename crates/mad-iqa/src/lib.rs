@@ -70,7 +70,7 @@ pub mod dev {
     pub use crate::kernel::mad_core_tier_v4x_t;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::mad_core_tier_wasm128_t;
-    pub use crate::kernel::{Args, mad_core_tier_scalar};
+    pub use crate::kernel::{Args, mad_core_tier_scalar_t};
 }
 
 #[cfg(test)]
