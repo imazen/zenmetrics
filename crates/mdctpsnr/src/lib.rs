@@ -56,6 +56,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 use alloc::vec::Vec;
 
 #[cfg(feature = "parallel")]
@@ -81,8 +83,7 @@ pub enum Error {
     ImageTooSmall,
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// Stable column-name identifier for sweep sidecars:
 /// `mdctpsnr_imazen_v<MAJOR>_<MINOR>_<PATCH>` (overridable at build time
@@ -2622,43 +2623,52 @@ mod tests {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MdctPsnr;
 
-impl zenmetrics_abstractions::Metric for MdctPsnr {
-    fn name(&self) -> &'static str {
-        "mdctpsnr"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::LengthMismatch => za::ErrorKind::InvalidInput,
+            Error::ImageTooSmall => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for MdctPsnr {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("mdctpsnr", za::implementation!(SCORE_REVISION))
+            .with_reference("mDCTpsnr dctpsnr (Richter 2009), default build")
+            .with_config("color", "linear")
+            .with_config("detection", "ahumada")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Decibels
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("mdctpsnr", za::ScoreKind::Decibels)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
-        }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (
-            zenmetrics_abstractions::contiguous_rgb8(&r),
-            zenmetrics_abstractions::contiguous_rgb8(&d),
-        );
-        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(alloc::boxed::Box::new(
-            zenmetrics_abstractions::ScalarEval::single("mdctpsnr", s as f64),
-        ))
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("mdctpsnr")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height)
+            .metric_err_with("mdctpsnr", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
+            "mdctpsnr",
+            f64::from(s),
+        )))
     }
 }

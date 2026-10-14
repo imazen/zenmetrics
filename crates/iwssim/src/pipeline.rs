@@ -654,48 +654,171 @@ const _: () = {
 // Generic Metric surface.
 // ---------------------------------------------------------------------------
 
-/// `Iwssim` implements the generic surface — `RGB8_SRGB` inputs score
-/// via [`Self::score`]; `per_scale` values ride `scores()`. No canonical
-/// upstream map.
-impl zenmetrics_abstractions::Metric for Iwssim {
-    fn name(&self) -> &'static str {
-        "iwssim"
+use zenmetrics_abstractions as za;
+
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::DimensionMismatch { .. } => za::ErrorKind::DimensionMismatch,
+            Error::NoWarmReference => za::ErrorKind::Internal,
+            Error::InvalidImageSize { .. } => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of [`Iwssim`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+const OUTPUTS: &[za::ScoreSpec] = &[
+    za::ScoreSpec::new("iwssim", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_0", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_1", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_2", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_3", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_4", za::ScoreKind::Similarity),
+];
+const _: () = assert!(OUTPUTS.len() == NUM_SCALES + 1);
+
+fn za_evaluation(s: IwssimScore) -> alloc::boxed::Box<dyn za::Evaluation> {
+    let mut out = za::ScalarEval::single("iwssim", s.score);
+    for (spec, &v) in OUTPUTS[1..].iter().zip(&s.per_scale) {
+        out.push(spec.key.clone(), v);
+    }
+    alloc::boxed::Box::new(out)
+}
+
+impl Iwssim {
+    /// Re-plan for a `w × h` input when it differs from the configured
+    /// size (keeping the params), so the generic surface takes any size.
+    fn za_fit(&mut self, w: usize, h: usize) -> za::MetricResult<()> {
+        use za::ResultMetricExt as _;
+        if (self.width as usize, self.height as usize) != (w, h) {
+            *self = Iwssim::with_params(w as u32, h as u32, self.params)
+                .metric_err_with("iwssim", Error::kind)?;
+        }
+        Ok(())
+    }
+}
+
+/// `Iwssim` implements the generic surface on packed `RGB8_SRGB`, re-planning
+/// when the input size differs from the constructed one. `per_scale` values
+/// ride `scores()` as `wmcs_0..4`. No map. [`za::Metric::warm_reference`]
+/// reuses the reference pyramid and weights ([`Iwssim::warm_reference`]).
+impl za::Metric for Iwssim {
+    fn id(&self) -> za::MetricId {
+        let p = &self.params;
+        za::MetricId::new("iwssim", za::implementation!(SCORE_REVISION))
+            .with_reference("Python-IW-SSIM f9de37cd (Wang & Li 2011)")
+            .with_config("iw_flag", p.iw_flag)
+            .with_config("bl_sz", alloc::format!("{}x{}", p.bl_sz_x, p.bl_sz_y))
+            .with_config("parent", p.parent)
+            .with_config("sigma_nsq", p.sigma_nsq)
+            .with_config("allow_small", p.allow_small)
+            .with_config("luma", alloc::format!("{:?}", p.luma))
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("iwssim")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        self.za_fit(r.width, r.height)?;
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        let s = self
+            .score(&rp, &dp)
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(za_evaluation(s))
+    }
+
+    fn warm_reference<'m>(
+        &'m mut self,
+        r: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::WarmReference + 'm>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let r = za::rgb8_view(&r)?;
+        self.za_fit(r.width, r.height)?;
+        self.warm_reference(&za::contiguous_rgb8(&r))
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(alloc::boxed::Box::new(IwssimWarm { metric: self }))
+    }
+}
+
+/// A warmed [`Iwssim`]: candidates reuse the reference pyramid.
+struct IwssimWarm<'m> {
+    metric: &'m mut Iwssim,
+}
+
+impl za::WarmReference for IwssimWarm<'_> {
+    fn evaluate(
+        &mut self,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("iwssim")?;
+        let d = za::rgb8_view(&d)?;
+        if (d.width, d.height) != (self.metric.width as usize, self.metric.height as usize) {
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                    .with_metric("iwssim")
+                    .with_message(alloc::format!(
+                        "warm reference {}x{}, candidate {}x{}",
+                        self.metric.width,
+                        self.metric.height,
+                        d.width,
+                        d.height
+                    )),
+            );
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (
-            zenmetrics_abstractions::contiguous_rgb8(&r),
-            zenmetrics_abstractions::contiguous_rgb8(&d),
-        );
-        let s = self.score(&rp, &dp).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let mut out = zenmetrics_abstractions::ScalarEval::single("iwssim", s.score);
-        for (i, &v) in s.per_scale.iter().enumerate() {
-            out.push(alloc::format!("wmcs_{i}"), v);
-        }
-        Ok(alloc::boxed::Box::new(out))
+        let s = self
+            .metric
+            .score_with_warm_ref(&za::contiguous_rgb8(&d))
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(za_evaluation(s))
+    }
+
+    fn reuses_reference_work(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(test)]
+mod za_tests {
+    use super::*;
+
+    #[test]
+    fn generic_surface_conforms_and_warm_reuses() {
+        // allow_small lets the conformance pair stay cheap; the warm path
+        // must still be bit-identical to cold scoring.
+        let params = IwssimParams {
+            allow_small: true,
+            ..IwssimParams::default()
+        };
+        let mut m = Iwssim::with_params(8, 8, params).unwrap();
+        za::conformance::assert_conforms_rgb8(&mut m, 64, 48);
+        let a = za::conformance::textured_rgb8(64, 48, 9);
+        let warm = za::Metric::warm_reference(
+            &mut m,
+            za::conformance::rgb8_image(&a, 64, 48),
+            za::EvalOpts::SCORE_ONLY,
+        )
+        .unwrap();
+        assert!(warm.reuses_reference_work());
     }
 }

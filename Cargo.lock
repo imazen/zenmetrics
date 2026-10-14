@@ -6039,6 +6039,7 @@ dependencies = [
  "rayon",
  "serde_json",
  "vmaf-head-sys",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -7726,7 +7727,10 @@ name = "zenmetrics-abstractions"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
+ "enough",
+ "how-far",
  "libm",
+ "whereat",
  "zenpixels",
 ]
 

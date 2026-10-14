@@ -1,6 +1,13 @@
 #![forbid(unsafe_code)]
 //! Opaque sRGB8 rows, a cached reference and raw spatial error maps.
 use wasm_bindgen::prelude::*;
+
+/// Whether an evaluation's primary map is similarity-direction.
+#[allow(dead_code)]
+fn map_is_similarity(e: &dyn zenmetrics_abstractions::Evaluation) -> bool {
+    e.map()
+        .is_some_and(|m| m.polarity == zenmetrics_abstractions::MapPolarity::Similarity)
+}
 // These are the native CLI adapters themselves, so browser variants preserve
 // each metric's ingress and implementation identity.
 #[path = "../../zenmetrics-cli/src/decode.rs"]
@@ -562,58 +569,68 @@ pub fn spatial_map(
                 .ok_or_else(|| fail("DSSIM returned no spatial map".into()))?;
             result.width = first.map.width() as u32;
             result.height = first.map.height() as u32;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            // DSSIM's saved maps hold per-pixel SSIM: higher = more similar.
+            result.similarity = true;
             result.values = first.map.buf().to_vec();
         }
         #[cfg(feature = "cpu-fsim")]
         "fsim" | "fsimc" => {
-            let (_, dm) = fsim::fsim_rgb8_with_diffmap(&r, &d, w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = fsim::fsim_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            result.similarity = map_is_similarity(&dm);
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-haarpsi")]
         "haarpsi" => {
-            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(&r, &d, w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            result.similarity = map_is_similarity(&dm);
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-vsi")]
         "vsi" => {
-            let (_, dm) =
-                vsi::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = vsi::vsi_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            result.similarity = map_is_similarity(&dm);
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-msssim")]
         "msssim" => {
-            let (_, dm) = msssim::msssim_rgb8_with_diffmap(&r, &d, w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = msssim::msssim_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            result.similarity = map_is_similarity(&dm);
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-cvvdp")]
@@ -647,10 +664,8 @@ pub fn spatial_map(
             let (mw, mh) = gmsd::map_dims(w, h);
             result.width = mw as u32;
             result.height = mh as u32;
-            result.similarity = matches!(
-                dm.map_polarity(),
-                Some(zenmetrics_abstractions::MapPolarity::Similarity)
-            );
+            // The GMS map is a similarity map (higher = more similar).
+            result.similarity = true;
             result.values = vec![0.; mw * mh];
             gmsd::gmsd_with_map(
                 gmsd::GrayImage::packed(&rg, w, h).map_err(|e| fail(e.to_string()))?,

@@ -15,6 +15,9 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- zenmetrics-abstractions v2 (`8143292f`, `c9248347`, `3f146a2d`; PR, review required): errors are `whereat::At<MetricError>` with an `ErrorKind`, the metric family and the boxed original error, interoperating with enough/how-far (`From<StopReason>`, `AsStopReason`, `is_stopped`). `MetricId` records family, variant, reproduced reference, implementing crate, `score_revision`, backend and configuration; `MetricId::column` names a fully qualified column (`cvvdp_jod__cvvdp_r1_cpu_<fp8>`) whose fingerprint excludes crate version and build id. Inputs are packed or planar (`Image`, `Planes`); maps carry polarity and `MapGeometry`; `Metric: Send`, `Evaluation: Send + Sync`; `EvalOpts` carries a how-far pulse. New `Metric::warm_reference` (real sessions for cvvdp and iwssim, copy-and-replay elsewhere) and `Metric::sequence`: VMAF v1.0.16's lagged per-frame stream (`Temporal::Stateful`) and cvvdp's video scorer (`Temporal::Pooled`, one JOD per clip). `conformance::assert_conforms` / `check_sequence` check every implementor. The existing `*_COLUMN_NAME` sidecar names are unchanged.
+- Fixes found while migrating (`c9248347`, `3f146a2d`): VSI diffmap size/geometry at min(w,h) ≥ 384 (see Known Bugs in CLAUDE.md); FSIM's headline was `fsim` with a map and `fsimc` without; NLPD's score kind is `Difference`; cvvdp no longer infers an "hdr" variant from `y_peak`; HDR-VDP-2 refuses inputs whose descriptor does not match the configured encoding instead of relabeling them; the browser crate builds again (unbound `dm` in the dssim/gmsd arms, `&Vec<[u8; 3]>` passed as `&[u8]`).
+
 - vsi (`a4add208`, `2f98686e`): the pooling fold computes `gradSim^α` and `real((ISim·QSim)^λ)` with the bit-exact lane `powf` instead of per-lane scalar `libm::powf`. Qualitymaps are bit-identical to the previous pool (NaN payloads included) and scores bit-identical when not NaN; paired wall A/B: 256² −4.60%, 3355×2516 −0.67% (within A/A noise). The wall example prints score bits. Record: `benchmarks/vsi_powf_pair_2026-10-14.meta`.
 
 - zenmetrics-math (`d747a7b6`): `fdlibm::powf_libm_8x` / `powf_libm_16x` and the `vpow_libm_into` / `vpowf_libm_pairs_into` slice drivers: a lane transcription of libm 0.2.16 `e_powf`, bit-identical to `libm::powf` on every input (edge lanes recompute with scalar libm). Differential tests cover an edge matrix, range thresholds, exact ties, a dense sweep and 10M seeded pairs; 5.1–6.6× (v3) and 8.9–11.3× (v4x) faster than scalar `libm::powf` on Zen 4, 4.8–5.3× (neon) on Neoverse-N1, where the differential and vsi tests also pass (`benchmarks/powf_libm_microbench_2026-10-14.txt`).
@@ -2706,6 +2709,7 @@ All five are the Nomad-migration ADR's stated preconditions
 
 ### QUEUED BREAKING CHANGES
 
+- zenmetrics-abstractions (`8143292f`): the generic surface is redesigned (v2). `Metric::name`/`variant`/`config` become `Metric::id()`; `evaluate` takes `Image`s and `EvalOpts<'_>`; `accepts` takes `&InputFormat`; `Evaluation::map` returns `MapView`; `map_score` returns `MetricResult`; `MetricResult` is `Result<T, At<MetricError>>`; `NoMap`, `UnsupportedInput`, `map_f32s` and `bytemuck_vec` are gone; `MapRequest::Subsampled` gains `reduce`; hdrvdp's `HdrVdpEval` is private. All in-tree implementors and consumers are migrated.
 - zenfleet-core (`e3359640`): `JobKind::Benchmark` adds an enum variant; downstream exhaustive matches must handle benchmark observations.
 
 ## Workspace

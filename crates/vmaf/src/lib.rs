@@ -2,6 +2,7 @@
 
 mod adm;
 mod cambi;
+mod metric;
 mod pool;
 mod score;
 mod speed;
@@ -11,6 +12,7 @@ mod vif;
 
 pub use adm::{adm2_v0_from_luma, adm3_v1_from_luma};
 pub use cambi::cambi_v1_from_luma;
+pub use metric::Vmaf;
 pub use score::{
     PoolingMethod, VmafFrameResult, VmafV1Scorer, VmafV1Stream, Yuv420Frame, pool_v1_scores,
     score_v1_420,

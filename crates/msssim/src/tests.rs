@@ -299,11 +299,22 @@ fn msssim_diffmap_matches_score() {
     assert_eq!(plain, score);
     assert_eq!((dm.width as usize, dm.height as usize), (w - 10, h - 10));
     assert_eq!(dm.map().len(), (w - 10) * (h - 10));
+    let view = Evaluation::map(&dm).expect("map");
     assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
+    assert_eq!(
+        view.geometry.cell_rect(0, 0).map(|r| (r.x, r.y)),
+        Some((5, 5))
     );
     assert_eq!(dm.score(), score);
     // map stays in similarity range
     assert!(dm.map().iter().all(|v| v.is_finite()));
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Msssim, 48, 40);
 }

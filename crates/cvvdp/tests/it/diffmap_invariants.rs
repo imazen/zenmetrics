@@ -250,7 +250,7 @@ fn warm_ref_diffmap_matches_cold_path() {
 }
 
 /// `score_and_diffmap` wraps `score_with_diffmap` — identical JOD and
-/// identical pixels, now as a `Diffmap` trait object.
+/// identical pixels, as an `Evaluation` trait object.
 #[test]
 fn score_and_diffmap_matches_vec_api() {
     use zenmetrics_abstractions::Evaluation;
@@ -267,16 +267,125 @@ fn score_and_diffmap_matches_vec_api() {
     let jod2 = cv2.score_with_diffmap(&r, &d, &mut vec_out).unwrap();
     assert_eq!(jod, jod2);
     assert_eq!(dm.map(), vec_out.as_slice());
+    let view = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
     assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Difference)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Difference
     );
     assert_eq!(dm.score(), jod as f64);
-    let px = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
     assert_eq!(
-        (px.as_slice().width(), px.as_slice().rows()),
+        (
+            view.pixels.as_slice().width(),
+            view.pixels.as_slice().rows()
+        ),
         (w as u32, h as u32)
     );
     let boxed: Box<dyn Evaluation> = Box::new(dm);
     assert_eq!(boxed.score(), jod as f64);
+}
+
+/// The generic surface honors the abstractions contract, including a
+/// warm reference that reuses work and scores bit-identically to cold.
+#[test]
+fn generic_surface_conforms_with_real_warm_reference() {
+    use zenmetrics_abstractions as za;
+    let mut cv = Cvvdp::new(8, 8, CvvdpParams::default()).unwrap();
+    za::conformance::assert_conforms_rgb8(&mut cv, 72, 56);
+    let a = za::conformance::textured_rgb8(72, 56, 2);
+    let b = za::conformance::distort_rgb8(&a, 72, 56);
+    let cold = za::Metric::evaluate(
+        &mut cv,
+        za::conformance::rgb8_image(&a, 72, 56),
+        za::conformance::rgb8_image(&b, 72, 56),
+        za::EvalOpts::SCORE_ONLY.with_native_map(),
+    )
+    .unwrap();
+    let mut warm = za::Metric::warm_reference(
+        &mut cv,
+        za::conformance::rgb8_image(&a, 72, 56),
+        za::EvalOpts::SCORE_ONLY,
+    )
+    .unwrap();
+    assert!(warm.reuses_reference_work());
+    let hot = warm
+        .evaluate(
+            za::conformance::rgb8_image(&b, 72, 56),
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .unwrap();
+    assert_eq!(cold.score().to_bits(), hot.score().to_bits());
+    assert_eq!(
+        cold.map().unwrap().values(),
+        hot.map().unwrap().values(),
+        "warm diffmap == cold diffmap"
+    );
+}
+
+/// cvvdp's video path through the generic surface: one pooled JOD, no
+/// per-frame results; a one-frame clip equals the still score bit for bit;
+/// a missing frame rate is a configuration error.
+#[test]
+fn generic_video_sequence_pools_one_jod() {
+    use zenmetrics_abstractions as za;
+    let (w, h) = (64usize, 48usize);
+    let frames: Vec<(Vec<u8>, Vec<u8>)> = (0..4)
+        .map(|t| {
+            let a = za::conformance::textured_rgb8(w, h, 20 + t);
+            let b = za::conformance::distort_rgb8(&a, w, h);
+            (a, b)
+        })
+        .collect();
+    let images: Vec<_> = frames
+        .iter()
+        .map(|(a, b)| {
+            (
+                za::conformance::rgb8_image(a, w, h),
+                za::conformance::rgb8_image(b, w, h),
+            )
+        })
+        .collect();
+    let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
+    assert_eq!(za::Metric::temporal(&cv), za::Temporal::Pooled);
+    let rep = za::conformance::check_sequence(
+        &mut cv,
+        za::SequenceInfo::new().with_frame_rate(30, 1),
+        &images,
+    );
+    assert!(rep.violations.is_empty(), "{:?}", rep.violations);
+    let pooled = rep.pooled.unwrap()[0].1;
+    let mut direct = cvvdp::VideoScorer::new(
+        w as u32,
+        h as u32,
+        30.0,
+        CvvdpParams::default(),
+        cvvdp::DisplayGeometry::STANDARD_4K,
+    )
+    .unwrap();
+    for (a, b) in &frames {
+        direct.push_frame(a, b).unwrap();
+    }
+    assert_eq!(
+        pooled.to_bits(),
+        f64::from(direct.finish().unwrap()).to_bits()
+    );
+
+    let one = za::conformance::check_sequence(
+        &mut cv,
+        za::SequenceInfo::new().with_frame_rate(30, 1),
+        &images[..1],
+    );
+    assert!(one.violations.is_empty(), "{:?}", one.violations);
+    let still = za::Metric::evaluate(
+        &mut cv,
+        images[0].0.clone(),
+        images[0].1.clone(),
+        za::EvalOpts::SCORE_ONLY,
+    )
+    .unwrap();
+    assert_eq!(one.pooled.unwrap()[0].1.to_bits(), still.score().to_bits());
+
+    let err = za::Metric::sequence(&mut cv, za::SequenceInfo::new())
+        .err()
+        .unwrap();
+    assert_eq!(err.error().kind(), za::ErrorKind::InvalidConfig);
 }

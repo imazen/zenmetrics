@@ -49,14 +49,36 @@ pub struct HdrVdp3Result {
     pub had_nan: bool,
 }
 
-impl zenmetrics_abstractions::Evaluation for HdrVdp3Result {
+use zenmetrics_abstractions as za;
+
+impl HdrVdp3Result {
+    /// One cell per pixel; support is global (FFT-domain pyramid).
+    pub fn geometry(&self) -> za::MapGeometry {
+        za::MapGeometry::identity(self.width as u32, self.height as u32)
+            .with_support(za::Support::Global)
+    }
+
+    fn view(
+        &self,
+        name: &'static str,
+        map: &[f64],
+        polarity: za::MapPolarity,
+    ) -> Option<za::MapView<'static>> {
+        let narrowed: Vec<f32> = map.iter().map(|&v| v as f32).collect();
+        let buf = za::gray_f32_buffer(&narrowed, self.width as u32, self.height as u32).ok()?;
+        za::MapView::new(name, buf, polarity, self.geometry()).ok()
+    }
+}
+
+/// The direct-call result is an [`za::Evaluation`]. Maps are `f64`
+/// internally and are narrowed to owned `f32` views: `p_det` (detection
+/// probability, primary) and `s` (normalized difference, 1 ≈ threshold).
+impl za::Evaluation for HdrVdp3Result {
     fn score(&self) -> f64 {
         self.q_jod
     }
 
-    fn scores(
-        &self,
-    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
+    fn scores(&self) -> za::Scores<'_> {
         std::boxed::Box::new(
             [
                 (std::borrow::Cow::Borrowed("q_jod"), self.q_jod),
@@ -66,48 +88,35 @@ impl zenmetrics_abstractions::Evaluation for HdrVdp3Result {
         )
     }
 
-    /// Canonical map = `p_map` (detection probability). `p_map` is `f64`
-    /// internally — the `Gray<f32>` view needs a conversion copy, so
-    /// `map()` returns `PixelCow::Owned`. `s_map` (normalized-difference,
-    /// 1 ≈ threshold) stays on the concrete type.
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        let f32_map: Vec<f32> = self.p_map.iter().map(|&v| v as f32).collect();
-        let bytes = zenmetrics_abstractions::bytemuck_vec(f32_map);
-        Some(zenpixels::PixelCow::Owned(
-            zenpixels::PixelBuffer::from_vec(
-                bytes,
-                self.width as u32,
-                self.height as u32,
-                zenpixels::PixelDescriptor::GRAYF32_LINEAR,
-            )
-            .expect("converted map always validates"),
-        ))
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view("p_det", &self.p_map, za::MapPolarity::DetectionProbability)
     }
 
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        [
+            self.view("p_det", &self.p_map, za::MapPolarity::DetectionProbability),
+            self.view("s", &self.s_map, za::MapPolarity::Difference),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
-    fn extras(
-        &self,
-    ) -> std::boxed::Box<
-        dyn Iterator<
-                Item = (
-                    std::borrow::Cow<'static, str>,
-                    std::borrow::Cow<'static, str>,
-                ),
-            > + '_,
-    > {
-        let f = |k: &'static str, v: f64| {
-            (
-                std::borrow::Cow::Borrowed(k),
-                std::borrow::Cow::Owned(std::format!("{v}")),
-            )
+    fn extras(&self) -> za::Extras<'_> {
+        let f = |k: &'static str, v: std::string::String| {
+            (std::borrow::Cow::Borrowed(k), std::borrow::Cow::Owned(v))
         };
         std::boxed::Box::new(
             [
-                f("q", self.q),
-                f("gamut_clamped_fraction", self.gamut_clamped_fraction),
+                f(
+                    "gamut_clamped_fraction",
+                    std::format!("{}", self.gamut_clamped_fraction),
+                ),
+                f(
+                    "input_looks_relative",
+                    std::format!("{}", self.input_looks_relative),
+                ),
+                f("had_nan", std::format!("{}", self.had_nan)),
             ]
             .into_iter(),
         )
@@ -251,7 +260,8 @@ pub fn hdrvdp3(
         },
     );
     let (pr, pt) = (pr?, pt?);
-    crate::par::timed_eprintln!("pathways: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("pathways: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     let had_nan = pr.had_nan || pt.had_nan;
     let b_t = &pt.bands;
     let b_r = &pr.bands;
@@ -289,14 +299,11 @@ pub fn hdrvdp3(
                 any = true;
             }
         }
-        if any {
-            1.0
-        } else {
-            0.0
-        }
+        if any { 1.0 } else { 0.0 }
     });
 
-    crate::par::timed_eprintln!("csf/diff: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("csf/diff: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     let mut d_bands = b_t.clone();
     let mut q_err = 0.0f64;
 
@@ -335,7 +342,8 @@ pub fn hdrvdp3(
     });
     // Band bodies are independent planes — parallel under `parallel`,
     // sequential otherwise; (d_norm, q_err contribution) return in order.
-    crate::par::timed_eprintln!("masks: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("masks: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     let results: Vec<(Vec<f64>, f64)> = crate::par::collect_indexed(b_count, |b| {
         let p = 10f64.powf(mp.mask_p);
         let q = 10f64.powf(mp.mask_q);
@@ -360,8 +368,7 @@ pub fn hdrvdp3(
         });
 
         let (tb, rb) = (b_t.band(b), b_r.band(b));
-        let band_diff: Vec<f64> =
-            crate::par::collect_indexed(tb.len(), |i| tb[i] - rb[i]);
+        let band_diff: Vec<f64> = crate::par::collect_indexed(tb.len(), |i| tb[i] - rb[i]);
 
         let n_ncsf: Vec<f64> = if b == b_count - 1 {
             // Base band: dominant-frequency sensitivity, scalar.
@@ -400,7 +407,8 @@ pub fn hdrvdp3(
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
-    crate::par::timed_eprintln!("bands: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("bands: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     let rec = d_bands.reconstruct(&levs, relaxed);
     let s_map: Vec<f64> = crate::par::collect_indexed(rec.len(), |i| rec[i].abs());
     let mut p_map: Vec<f64> = if relaxed {
