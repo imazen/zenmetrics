@@ -72,6 +72,22 @@ pub(crate) fn geomean(v: &[f64], relaxed: bool) -> f64 {
     (logs.iter().sum::<f64>() / v.len() as f64).exp()
 }
 
+type MtfKey = (usize, usize, u64, [u64; 4], [u64; 4], bool);
+type JndKey = ([u64; 4], [u64; 6], u64, u64);
+type JndLuts = (Vec<f64>, Vec<f64>, Vec<f64>);
+
+thread_local! {
+    /// Per-thread MTF filter planes, keyed on `(w, h, ppd, a, b, relaxed)`.
+    /// The 2×-lattice grid + `exp` eval is a pure function of the key; the
+    /// metric runs the pathway twice (reference + test) with identical
+    /// parameters, so the second call is free.
+    static MTF_CACHE: core::cell::RefCell<std::collections::HashMap<MtfKey, Vec<f64>>> =
+        core::cell::RefCell::new(std::collections::HashMap::new());
+    /// Per-thread JND lookup tables, keyed on the CSF parameter block.
+    static JND_CACHE: core::cell::RefCell<std::collections::HashMap<JndKey, JndLuts>> =
+        core::cell::RefCell::new(std::collections::HashMap::new());
+}
+
 /// `hdrvdp_visual_pathway(img_native, name, metric_par, …)`.
 ///
 /// `img` is interleaved `width·height·channels`, already in *native*
@@ -92,35 +108,61 @@ pub(crate) fn visual_pathway(
 ) -> Result<PathwayOut> {
     let npix = width * height;
     let had_nan = img.iter().any(|v| v.is_nan());
-    let mut img = img.to_vec();
-    for v in img.iter_mut() {
-        if v.is_nan() {
-            *v = 1e-5;
+    // Copy only when repair is needed — the NaN-free path borrows.
+    let mut owned;
+    let img: &[f64] = if had_nan {
+        owned = img.to_vec();
+        for v in owned.iter_mut() {
+            if v.is_nan() {
+                *v = 1e-5;
+            }
         }
-    }
+        &owned
+    } else {
+        img
+    };
 
     let ppd = viewing.pixels_per_degree;
 
     // ---- optical MTF (Fourier domain on the 2× lattice) ----
-    let rho2 = cycdeg_image(width * 2, height * 2, ppd);
-    let mtf = mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b, relaxed);
+    // The filter plane is a pure function of (dims, ppd, a, b) — cache it
+    // so the reference/test calls don't each rebuild a 4 MP grid + 4 M
+    // `exp` evaluations. Bounded like the Plan2 cache.
     let mut l_o = vec![0.0; npix * channels];
-    for k in 0..channels {
-        let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
-        let filtered = super::fft64::conv_fft_pad(
-            &ch,
+    MTF_CACHE.with(|c| {
+        let mut map = c.borrow_mut();
+        let key = (
             width,
             height,
-            &mtf,
-            width * 2,
-            height * 2,
-            pad(k),
+            ppd.to_bits(),
+            par.mtf_params_a.map(f64::to_bits),
+            par.mtf_params_b.map(f64::to_bits),
             relaxed,
         );
-        for (i, &v) in filtered.iter().enumerate() {
-            l_o[i * channels + k] = v.clamp(1e-5, 1e10);
+        if map.len() >= 8 && !map.contains_key(&key) {
+            map.clear();
         }
-    }
+        let mtf = map.entry(key).or_insert_with(|| {
+            let rho2 = cycdeg_image(width * 2, height * 2, ppd);
+            mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b, relaxed)
+        });
+        for k in 0..channels {
+            let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
+            let filtered = super::fft64::conv_fft_pad(
+                &ch,
+                width,
+                height,
+                mtf,
+                width * 2,
+                height * 2,
+                pad(k),
+                relaxed,
+            );
+            for (i, &v) in filtered.iter().enumerate() {
+                l_o[i * channels + k] = v.clamp(1e-5, 1e10);
+            }
+        }
+    });
 
     // ---- aging optical density (spectral, on the emission table) ----
     let mut img_e = img_e.to_vec();
@@ -183,18 +225,36 @@ pub(crate) fn visual_pathway(
     }
 
     // ---- photoreceptor non-linearity (JND space) ----
-    let c_l: Vec<f64> = (0..2048)
-        .map(|i| 10f64.powf(-5.0 + 10.0 * i as f64 / 2047.0))
-        .collect();
-    let s_a: Vec<f64> = c_l
-        .iter()
-        .map(|&l| joint_rod_cone_sens(l, &par.csf_sa))
-        .collect();
-    let s_r: Vec<f64> = c_l
-        .iter()
-        .map(|&l| rod_sens(l, &par.csf_sr) * 10f64.powf(par.rod_sensitivity))
-        .collect();
-    let (y_lut, jnd_cone, jnd_rod) = pn_jnd_luts(&s_a, &s_r, &c_l, par.base_sensitivity_correction);
+    // The LUTs are a pure function of the (fixed) CSF parameters — cached
+    // so the second pathway call skips ~4K powf/eval and the trapz build.
+    let (y_lut, jnd_cone, jnd_rod) = JND_CACHE.with(|c| {
+        let key = (
+            par.csf_sa.map(f64::to_bits),
+            par.csf_sr.map(f64::to_bits),
+            par.rod_sensitivity.to_bits(),
+            par.base_sensitivity_correction.to_bits(),
+        );
+        let mut map = c.borrow_mut();
+        if map.len() >= 4 && !map.contains_key(&key) {
+            map.clear();
+        }
+        map.entry(key)
+            .or_insert_with(|| {
+                let c_l: Vec<f64> = (0..2048)
+                    .map(|i| 10f64.powf(-5.0 + 10.0 * i as f64 / 2047.0))
+                    .collect();
+                let s_a: Vec<f64> = c_l
+                    .iter()
+                    .map(|&l| joint_rod_cone_sens(l, &par.csf_sa))
+                    .collect();
+                let s_r: Vec<f64> = c_l
+                    .iter()
+                    .map(|&l| rod_sens(l, &par.csf_sr) * 10f64.powf(par.rod_sensitivity))
+                    .collect();
+                pn_jnd_luts(&s_a, &s_r, &c_l, par.base_sensitivity_correction)
+            })
+            .clone()
+    });
     let y0 = 10f64.powf(y_lut[0]);
     let y1 = 10f64.powf(y_lut[y_lut.len() - 1]);
 

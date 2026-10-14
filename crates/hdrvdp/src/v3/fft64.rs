@@ -941,15 +941,37 @@ impl Plan2 {
         let s = 1.0 / w as f64;
         for y0 in (0..out_h).step_by(8) {
             let rws = (out_h - y0).min(8);
-            for j in 0..rws {
-                let row = (y0 + j) * w;
-                for k in 0..w {
-                    let d = match perm {
-                        Some(r) => r[k] as usize,
-                        None => k,
-                    } * 8;
-                    self.re8[d + j] = self.pre[row + k];
-                    self.im8[d + j] = -self.pim[row + k];
+            if perm.is_none() && rws == 8 {
+                // Tiled 8×8 transpose gather: contiguous row reads out of
+                // pre/pim, contiguous 64 B lane writes (im negated).
+                for k0 in (0..w).step_by(8) {
+                    let kn = (k0 + 8).min(w) - k0;
+                    let mut tre = [[0.0f64; 8]; 8];
+                    let mut tim = [[0.0f64; 8]; 8];
+                    for j in 0..8 {
+                        let row = (y0 + j) * w + k0;
+                        tre[j][..kn].copy_from_slice(&self.pre[row..row + kn]);
+                        tim[j][..kn].copy_from_slice(&self.pim[row..row + kn]);
+                    }
+                    for t in 0..kn {
+                        let lane = (k0 + t) * 8;
+                        for j in 0..8 {
+                            self.re8[lane + j] = tre[j][t];
+                            self.im8[lane + j] = -tim[j][t];
+                        }
+                    }
+                }
+            } else {
+                for j in 0..rws {
+                    let row = (y0 + j) * w;
+                    for k in 0..w {
+                        let d = match perm {
+                            Some(r) => r[k] as usize,
+                            None => k,
+                        } * 8;
+                        self.re8[d + j] = self.pre[row + k];
+                        self.im8[d + j] = -self.pim[row + k];
+                    }
                 }
             }
             {
@@ -963,10 +985,27 @@ impl Plan2 {
                 self.rows
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
-            for j in 0..rws {
-                let row = (y0 + j) * out_w;
-                for k in 0..out_w {
-                    out[row + k] = self.re8[k * 8 + j] * s;
+            if perm.is_none() && rws == 8 {
+                for k0 in (0..out_w).step_by(8) {
+                    let kn = (k0 + 8).min(out_w) - k0;
+                    let mut tre = [[0.0f64; 8]; 8];
+                    for t in 0..kn {
+                        let lane = (k0 + t) * 8;
+                        for j in 0..8 {
+                            tre[j][t] = self.re8[lane + j] * s;
+                        }
+                    }
+                    for j in 0..8 {
+                        let row = (y0 + j) * out_w + k0;
+                        out[row..row + kn].copy_from_slice(&tre[j][..kn]);
+                    }
+                }
+            } else {
+                for j in 0..rws {
+                    let row = (y0 + j) * out_w;
+                    for k in 0..out_w {
+                        out[row + k] = self.re8[k * 8 + j] * s;
+                    }
                 }
             }
         }
@@ -997,39 +1036,87 @@ impl Plan2 {
         let ymap: Vec<usize> = (0..h).map(|py| Self::pad_index(py, src_h, pad)).collect();
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
-            for j in 0..rws {
-                let d_row = y0 + j;
-                let sy = ymap[d_row];
-                if sy == usize::MAX {
-                    let Pad::Constant(v) = pad else {
-                        unreachable!()
-                    };
+            // Imaginary lanes are all +0 for real input — one memset per
+            // row block instead of an interleaved store per lane.
+            self.im8[..w * 8].fill(0.0);
+            if perm.is_none() && rws == 8 {
+                // Tiled 8×8 transpose gather: contiguous reads out of the
+                // source rows, contiguous 64 B lane writes into re8.
+                let ybase: [usize; 8] = core::array::from_fn(|j| ymap[y0 + j]);
+                for k0 in (0..w).step_by(8) {
+                    let kend = (k0 + 8).min(w);
+                    if kend <= src_w {
+                        let mut tile = [[0.0f64; 8]; 8];
+                        for j in 0..8 {
+                            let sy = ybase[j];
+                            if sy == usize::MAX {
+                                let Pad::Constant(v) = pad else {
+                                    unreachable!()
+                                };
+                                tile[j] = [v; 8];
+                            } else {
+                                tile[j][..kend - k0]
+                                    .copy_from_slice(&x[sy * src_w + k0..sy * src_w + kend]);
+                            }
+                        }
+                        for t in 0..kend - k0 {
+                            let lane = (k0 + t) * 8;
+                            for j in 0..8 {
+                                self.re8[lane + j] = tile[j][t];
+                            }
+                        }
+                    } else {
+                        for k in k0..kend {
+                            let lane = k * 8;
+                            let xm = xmap[k];
+                            for j in 0..8 {
+                                let (sy, sx) = (ybase[j], xm);
+                                self.re8[lane + j] = match (sy, sx) {
+                                    (usize::MAX, _) | (_, usize::MAX) => {
+                                        let Pad::Constant(v) = pad else {
+                                            unreachable!()
+                                        };
+                                        v
+                                    }
+                                    (sy, sx) => x[sy * src_w + sx],
+                                };
+                            }
+                        }
+                    }
+                }
+            } else {
+                for j in 0..rws {
+                    let d_row = y0 + j;
+                    let sy = ymap[d_row];
+                    if sy == usize::MAX {
+                        let Pad::Constant(v) = pad else {
+                            unreachable!()
+                        };
+                        for k in 0..w {
+                            let d = match perm {
+                                Some(r) => r[k] as usize,
+                                None => k,
+                            } * 8;
+                            self.re8[d + j] = v;
+                        }
+                        continue;
+                    }
+                    let srow = &x[sy * src_w..sy * src_w + src_w];
                     for k in 0..w {
                         let d = match perm {
                             Some(r) => r[k] as usize,
                             None => k,
                         } * 8;
-                        self.re8[d + j] = v;
-                        self.im8[d + j] = 0.0;
+                        self.re8[d + j] = match xmap[k] {
+                            usize::MAX => {
+                                let Pad::Constant(v) = pad else {
+                                    unreachable!()
+                                };
+                                v
+                            }
+                            sx => srow[sx],
+                        };
                     }
-                    continue;
-                }
-                let srow = &x[sy * src_w..sy * src_w + src_w];
-                for k in 0..w {
-                    let d = match perm {
-                        Some(r) => r[k] as usize,
-                        None => k,
-                    } * 8;
-                    self.re8[d + j] = match xmap[k] {
-                        usize::MAX => {
-                            let Pad::Constant(v) = pad else {
-                                unreachable!()
-                            };
-                            v
-                        }
-                        sx => srow[sx],
-                    };
-                    self.im8[d + j] = 0.0;
                 }
             }
             {
@@ -1043,11 +1130,33 @@ impl Plan2 {
                 self.rows
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
-            for j in 0..rws {
-                let row = (y0 + j) * w;
-                for k in 0..w {
-                    self.pre[row + k] = self.re8[k * 8 + j];
-                    self.pim[row + k] = self.im8[k * 8 + j];
+            if perm.is_none() && rws == 8 {
+                // Transposed scatter: contiguous 64 B lane reads, contiguous
+                // row writes into pre/pim.
+                for k0 in (0..w).step_by(8) {
+                    let kn = (k0 + 8).min(w) - k0;
+                    let mut tre = [[0.0f64; 8]; 8];
+                    let mut tim = [[0.0f64; 8]; 8];
+                    for t in 0..kn {
+                        let lane = (k0 + t) * 8;
+                        for j in 0..8 {
+                            tre[j][t] = self.re8[lane + j];
+                            tim[j][t] = self.im8[lane + j];
+                        }
+                    }
+                    for j in 0..8 {
+                        let row = (y0 + j) * w + k0;
+                        self.pre[row..row + kn].copy_from_slice(&tre[j][..kn]);
+                        self.pim[row..row + kn].copy_from_slice(&tim[j][..kn]);
+                    }
+                }
+            } else {
+                for j in 0..rws {
+                    let row = (y0 + j) * w;
+                    for k in 0..w {
+                        self.pre[row + k] = self.re8[k * 8 + j];
+                        self.pim[row + k] = self.im8[k * 8 + j];
+                    }
                 }
             }
         }
