@@ -6,6 +6,18 @@
 //! that directly; [`za::Metric::evaluate`] scores one pair as a one-frame
 //! sequence (motion 0, as libvmaf scores a single frame).
 //!
+//! Maps, on request, for a single pair ([`za::Metric::evaluate`]; sequences
+//! refuse map requests): SPEED's chroma block maps `speed_u` (primary) and
+//! `speed_v`, each block's `|S_ref − S_dist|` entropy-weighted difference,
+//! the terms whose block mean is that channel's SPEED score before the U/V
+//! combine and the 45 clamp ([`za::MapPolarity::Difference`]). They are one
+//! feature's components, not a per-pixel VMAF; the other features (ADM3,
+//! CAMBI, motion) are not exposed as maps. A block is 5×5 operating samples
+//! (every 16th sample of the prescaled chroma plane): 160 luma pixels at
+//! prescale 1, 320 at 0.5. The phone models' 0.6 prescale has no
+//! whole-pixel grid, so their map requests fail with `NoMap`. Support is
+//! global (the block entropies use frame-wide covariance eigenvalues).
+//!
 //! Input is planar YCbCr 4:2:0 (`PlaneLayout::ycbcr_420`) with U8 samples,
 //! or U16 samples carrying 10 significant bits. VMAF is defined on code
 //! values: transfer, primaries and signal range are used as given, exactly
@@ -179,15 +191,60 @@ fn frame(img: &za::Image<'_>) -> za::MetricResult<(Frame, (u32, u32, u8))> {
     ))
 }
 
-fn evaluation(r: &VmafFrameResult) -> Box<dyn za::Evaluation> {
+fn scalars(r: &VmafFrameResult) -> za::ScalarEval {
     let f = &r.features;
-    Box::new(
-        za::ScalarEval::single("vmaf", r.score)
-            .with("cambi", f.cambi)
-            .with("speed_chroma_uv", f.speed_chroma_uv)
-            .with("adm3", f.adm3)
-            .with("motion3", f.motion3),
-    )
+    za::ScalarEval::single("vmaf", r.score)
+        .with("cambi", f.cambi)
+        .with("speed_chroma_uv", f.speed_chroma_uv)
+        .with("adm3", f.adm3)
+        .with("motion3", f.motion3)
+}
+
+fn evaluation(r: &VmafFrameResult) -> Box<dyn za::Evaluation> {
+    Box::new(scalars(r))
+}
+
+/// A single scored pair with SPEED's chroma block maps.
+struct VmafMaps {
+    scalars: za::ScalarEval,
+    maps: [Vec<f32>; 2],
+    geometry: za::MapGeometry,
+}
+
+impl VmafMaps {
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry;
+        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(
+            ["speed_u", "speed_v"][i],
+            px,
+            za::MapPolarity::Difference,
+            g,
+        )
+        .ok()
+    }
+}
+
+impl za::Evaluation for VmafMaps {
+    fn score(&self) -> f64 {
+        za::Evaluation::score(&self.scalars)
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        self.scalars.scores()
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..2).filter_map(|i| self.view(i)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 impl za::Metric for Vmaf {
@@ -213,15 +270,66 @@ impl za::Metric for Vmaf {
         d: za::Image<'_>,
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("vmaf")?;
+        let request = opts.map;
+        let scoring = opts.without_map();
         let mut seq = za::Metric::sequence(self, za::SequenceInfo::new().with_frame_count(1))?;
-        let mut frames = seq.push(r, d, opts)?;
-        frames.extend(seq.finish(opts)?.frames);
-        match frames.pop() {
-            Some(f) if frames.is_empty() && f.index == 0 => Ok(f.evaluation),
-            _ => za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("vmaf")),
-        }
+        let mut frames = seq.push(r.clone(), d.clone(), scoring)?;
+        frames.extend(seq.finish(scoring)?.frames);
+        let evaluation = match frames.pop() {
+            Some(f) if frames.is_empty() && f.index == 0 => f.evaluation,
+            _ => {
+                return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("vmaf"));
+            }
+        };
+        let Some(req) = request else {
+            return Ok(evaluation);
+        };
+        let Some(scalars) = evaluation.as_any().downcast_ref::<za::ScalarEval>() else {
+            return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("vmaf"));
+        };
+        // SPEED's block maps come from the same computation as its
+        // feature; the frames were validated by the push above.
+        let ((rf, (w, h, bits)), (df, _)) = (frame(&r)?, frame(&d)?);
+        let (_, speed) = crate::speed::speed_v1_chroma_420_maps(
+            &rf.u,
+            &rf.v,
+            &df.u,
+            &df.v,
+            w as usize,
+            h as usize,
+            bits,
+            self.variant,
+        )
+        .metric_err_with("vmaf", Error::kind)?;
+        opts.checkpoint()?;
+        let Some((cell, origin)) = speed.luma_grid else {
+            // The phone models' 0.6 prescale puts SPEED's blocks on a
+            // fractional pixel grid; there is no exact geometry to serve.
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::NoMap)
+                    .with_metric("vmaf")
+                    .with_message("SPEED blocks of a 0.6-prescale model are not whole pixels"),
+            );
+        };
+        let geometry = za::MapGeometry::grid(
+            w,
+            h,
+            origin,
+            origin,
+            cell,
+            cell,
+            speed.blocks.0 as u32,
+            speed.blocks.1 as u32,
+        )
+        .with_support(za::Support::Global);
+        let eval = VmafMaps {
+            scalars: scalars.clone(),
+            maps: speed.maps,
+            geometry,
+        };
+        za::apply_map_request(Box::new(eval), req)
     }
 
     fn temporal(&self) -> za::Temporal {
@@ -569,6 +677,196 @@ mod tests {
             .err()
             .unwrap();
         assert_eq!(e.error().kind(), za::ErrorKind::SequenceOrder);
+    }
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+    use za::Metric as _;
+    use za::zenpixels::{PixelDescriptor, PlaneLayout};
+
+    const W: usize = 640;
+    const H: usize = 360;
+
+    fn gray8(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
+        PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
+    }
+
+    /// A textured 4:2:0 frame with varied chroma (SPEED reads chroma).
+    fn frame8(seed: usize) -> [Vec<u8>; 3] {
+        let y = (0..W * H)
+            .map(|i| (((i % W) * 3 + (i / W) * 5 + (i * 7 + seed) % 13) % 230) as u8)
+            .collect();
+        let c = |k: usize| {
+            (0..(W / 2) * (H / 2))
+                .map(|i| {
+                    let (x, yy) = (i % (W / 2), i / (W / 2));
+                    (40 + (x * k + yy * 3 + (i * 31 + seed * k) % 23) % 170) as u8
+                })
+                .collect()
+        };
+        [y, c(3), c(5)]
+    }
+
+    fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
+        za::Planes::new(
+            PlaneLayout::ycbcr_420(ChannelType::U8),
+            vec![
+                gray8(&p[0], W, H),
+                gray8(&p[1], W / 2, H / 2),
+                gray8(&p[2], W / 2, H / 2),
+            ],
+        )
+        .unwrap()
+        .into()
+    }
+
+    fn bits(e: &dyn za::Evaluation) -> Vec<u64> {
+        e.scores().map(|(_, v)| v.to_bits()).collect()
+    }
+
+    /// Map requests leave every output bit-identical, and SPEED's block maps
+    /// fold back to the `speed_chroma_uv` feature bit for bit: each channel
+    /// is its blocks' f32 mean, combined as SPEED combines them.
+    #[test]
+    fn speed_maps_keep_the_scores_and_fold_to_the_feature() {
+        for variant in [ModelVariant::Standard1080p, ModelVariant::Consumer4k] {
+            let (r, d) = (frame8(0), frame8(9));
+            let mut d2 = r.clone();
+            for v in d2[1].iter_mut().step_by(7) {
+                *v = v.saturating_add(30);
+            }
+            for (rr, dd) in [(&r, &d), (&r, &r), (&r, &d2)] {
+                let mut m = Vmaf::new(variant);
+                let plain = m
+                    .evaluate(image(rr), image(dd), za::EvalOpts::SCORE_ONLY)
+                    .unwrap();
+                let mapped = m
+                    .evaluate(
+                        image(rr),
+                        image(dd),
+                        za::EvalOpts::SCORE_ONLY.with_native_map(),
+                    )
+                    .unwrap();
+                assert_eq!(bits(&*mapped), bits(&*plain), "{variant:?}");
+                let maps = mapped.maps();
+                assert_eq!(
+                    maps.iter().map(|m| m.name).collect::<Vec<_>>(),
+                    ["speed_u", "speed_v"]
+                );
+                let (cell, origin) = match variant {
+                    ModelVariant::Consumer4k => (320, -30),
+                    _ => (160, -15),
+                };
+                let mut channel = [0.0f32; 2];
+                for (c, map) in maps.iter().enumerate() {
+                    assert_eq!(map.polarity, za::MapPolarity::Difference);
+                    let g = map.geometry;
+                    assert_eq!(
+                        (g.cell_width, g.origin_x, g.support),
+                        (cell, origin, za::Support::Global)
+                    );
+                    let v = map.values();
+                    let mut sum = 0.0f32;
+                    for &x in v.iter() {
+                        assert!(x.is_finite() && x >= 0.0);
+                        sum += x;
+                    }
+                    channel[c] = sum / v.len() as f32;
+                }
+                // Neither fixture is singular, so SPEED averages U and V.
+                let uv = ((channel[0] + channel[1]) / 2.0).min(45.0) as f64;
+                let feature = plain
+                    .scores()
+                    .find(|(k, _)| k == "speed_chroma_uv")
+                    .unwrap()
+                    .1;
+                assert_eq!(
+                    uv.to_bits(),
+                    feature.to_bits(),
+                    "{variant:?}: {uv} vs {feature}"
+                );
+                if std::ptr::eq(rr, dd) {
+                    // SPEED evaluates `log2(1 + σ²)` in f32 for the
+                    // reference and in f64 for the distorted side, as
+                    // libvmaf does, so identical frames leave only that
+                    // rounding in each block term.
+                    let worst = maps
+                        .iter()
+                        .flat_map(|m| m.values().into_owned())
+                        .fold(0.0f32, f32::max);
+                    eprintln!("{variant:?}: identical-frame SPEED block terms reach {worst:e}");
+                    assert!(worst < 1e-4, "{worst}");
+                }
+            }
+        }
+    }
+
+    /// A chroma change confined to one block peaks in that block's cell.
+    #[test]
+    fn a_chroma_change_peaks_in_its_block() {
+        let r = frame8(4);
+        let mut d = r.clone();
+        // Chroma rows/cols 90..110 × 170..190 → luma (340..380, 180..220),
+        // inside block (2, 1) of the 160-pixel grid that starts at -15.
+        for yy in 90..110 {
+            for x in 170..190 {
+                let i = yy * (W / 2) + x;
+                d[2][i] = d[2][i].wrapping_add(90);
+            }
+        }
+        let mut m = Vmaf::new(ModelVariant::Standard1080p);
+        let e = m
+            .evaluate(
+                image(&r),
+                image(&d),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .unwrap();
+        let v_map = &e.maps()[1];
+        let v = v_map.values();
+        let k = (0..v.len()).max_by(|&a, &b| v[a].total_cmp(&v[b])).unwrap() as u32;
+        let cell = (k % v_map.width(), k / v_map.width());
+        assert_eq!(Some(cell), v_map.geometry.cell_at(360, 200));
+    }
+
+    #[test]
+    fn phone_models_and_sequences_refuse_maps() {
+        let (r, d) = (frame8(0), frame8(1));
+        let mut phone = Vmaf::new(ModelVariant::Phone);
+        let e = phone
+            .evaluate(
+                image(&r),
+                image(&d),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .err()
+            .unwrap();
+        assert_eq!(e.error().kind(), za::ErrorKind::NoMap);
+        let mut m = Vmaf::new(ModelVariant::Standard1080p);
+        {
+            let mut seq = m.sequence(za::SequenceInfo::new()).unwrap();
+            let e = seq
+                .push(
+                    image(&r),
+                    image(&d),
+                    za::EvalOpts::SCORE_ONLY.with_native_map(),
+                )
+                .err()
+                .unwrap();
+            assert_eq!(e.error().kind(), za::ErrorKind::NoMap);
+        }
+        let stop = za::how_far::StopOnly::new(za::AlwaysStop(za::how_far::StopReason::Cancelled));
+        let e = m
+            .evaluate(
+                image(&r),
+                image(&d),
+                za::EvalOpts::SCORE_ONLY.with_native_map().with_pulse(&stop),
+            )
+            .err()
+            .unwrap();
+        assert!(za::is_stopped(&e));
     }
 }
 
