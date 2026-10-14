@@ -45,6 +45,85 @@ fn gaussian_taps(n: usize) -> Vec<f64> {
     g.iter().map(|&v| v / sum).collect()
 }
 
+// `libm::log10` polynomial constants (fdlibm `e_log10.c`) — the lane
+// transcription below keeps the same constants, operation order and bit
+// tricks, so every lane is bit-identical to `libm::log10` on x >= 1
+// (the pooling domain: `1 + nonneg`).
+const IVLN10HI: f64 = 4.34294481878168880939e-01;
+const IVLN10LO: f64 = 2.50829467116452752298e-11;
+const LOG10_2HI: f64 = 3.01029995663611771306e-01;
+const LOG10_2LO: f64 = 3.69423907715893078616e-13;
+const LG1: f64 = 6.666666666666735130e-01;
+const LG2: f64 = 3.999999999940941908e-01;
+const LG3: f64 = 2.857142874366239149e-01;
+const LG4: f64 = 2.222219843214978396e-01;
+const LG5: f64 = 1.818357216161805012e-01;
+const LG6: f64 = 1.531383769920937332e-01;
+const LG7: f64 = 1.479819860511658591e-01;
+
+/// Lane-vectorised `libm::log10` for `x >= 1`. The frexp-style reduce
+/// and `hi` truncation run as per-lane scalar bit ops; the polynomial,
+/// divide and hi/lo reconstruction run lane-parallel with *separate*
+/// `mul`/`add` (never fused), so each lane reproduces `libm::log10`
+/// bitwise. Same shape as `vifvec`'s `log2_lanes!`.
+macro_rules! log10_lanes {
+    ($token:ident, $V:ty, $lanes:literal, $x:expr) => {{
+        let xa: &[f64; $lanes] = $x;
+        let mut xr = [0.0f64; $lanes];
+        let mut kk = [0.0f64; $lanes];
+        for i in 0..$lanes {
+            let ui = xa[i].to_bits();
+            let mut hx = (ui >> 32) as u32;
+            hx = hx.wrapping_add(0x3ff0_0000u32.wrapping_sub(0x3fe6_a09e));
+            kk[i] = ((hx >> 20) as i32 - 0x3ff) as f64;
+            hx = (hx & 0x000f_ffff).wrapping_add(0x3fe6_a09e);
+            xr[i] = f64::from_bits(((hx as u64) << 32) | (ui & 0xffff_ffff));
+        }
+        let xv = <$V>::from_array_t($token, xr);
+        let kv = <$V>::from_array_t($token, kk);
+        let f = xv - <$V>::splat_t($token, 1.0);
+        let hfsq = <$V>::splat_t($token, 0.5) * f * f;
+        let s = f / (<$V>::splat_t($token, 2.0) + f);
+        let z = s * s;
+        let w = z * z;
+        let t1 = w
+            * (<$V>::splat_t($token, LG2)
+                + w * (<$V>::splat_t($token, LG4) + w * <$V>::splat_t($token, LG6)));
+        let t2 = z
+            * (<$V>::splat_t($token, LG1)
+                + w * (<$V>::splat_t($token, LG3)
+                    + w * (<$V>::splat_t($token, LG5) + w * <$V>::splat_t($token, LG7))));
+        let r = t2 + t1;
+        // hi = f - hfsq with the low 32 mantissa bits cleared.
+        let mut ha = (f - hfsq).to_array();
+        for v in ha.iter_mut() {
+            *v = f64::from_bits(v.to_bits() & !0xffff_ffffu64);
+        }
+        let hi = <$V>::from_array_t($token, ha);
+        let lo = f - hi - hfsq + s * (hfsq + r);
+        // val_hi + val_lo ~ log10(1+f) + k·log10(2) — the e_log10
+        // reconstruction (y = k·log10_2hi enters like e_log2's k·ivln2hi).
+        let val_hi = hi * <$V>::splat_t($token, IVLN10HI);
+        let y = kv * <$V>::splat_t($token, LOG10_2HI);
+        let val_lo = kv * <$V>::splat_t($token, LOG10_2LO)
+            + (lo + hi) * <$V>::splat_t($token, IVLN10LO)
+            + lo * <$V>::splat_t($token, IVLN10HI);
+        let wv = y + val_hi;
+        let val_lo = val_lo + ((y - wv) + val_hi);
+        let mut ra = (val_lo + wv).to_array();
+        for i in 0..$lanes {
+            // libm early-outs for the x >= 1 domain: `x == 1 → 0`;
+            // `exp == 0x7ff → x` (inf → inf, NaN → NaN anyway).
+            if xa[i] == 1.0 {
+                ra[i] = 0.0;
+            } else if (xa[i].to_bits() >> 52) & 0x7ff == 0x7ff {
+                ra[i] = xa[i];
+            }
+        }
+        ra
+    }};
+}
+
 /// `ref(1:2:end, 1:2:end)` on a `'valid'` map — plain stride-2
 /// subsample (0-based even indices).
 fn decimate(x: &[f64], w: usize, h: usize) -> (usize, usize, Vec<f64>) {
@@ -413,9 +492,33 @@ macro_rules! score_body {
             if !ran_par {
                 stripe(0, &mut terms_n, &mut terms_d);
             }
-            for (&tn, &td) in terms_n.iter().zip(&terms_d) {
-                num += libm::log10(tn);
-                den += libm::log10(td);
+            // Lane-evaluate `libm::log10` (bit-identical per element via
+            // `log10_lanes!`), keep the sequential `+=` per accumulator.
+            let n_terms = terms_n.len();
+            let mut i = 0usize;
+            while i + $LANES <= n_terms {
+                let na = log10_lanes!(
+                    $token,
+                    $V,
+                    $LANES,
+                    terms_n[i..i + $LANES].try_into().unwrap()
+                );
+                let da = log10_lanes!(
+                    $token,
+                    $V,
+                    $LANES,
+                    terms_d[i..i + $LANES].try_into().unwrap()
+                );
+                for l in 0..$LANES {
+                    num += na[l];
+                    den += da[l];
+                }
+                i += $LANES;
+            }
+            while i < n_terms {
+                num += libm::log10(terms_n[i]);
+                den += libm::log10(terms_d[i]);
+                i += 1;
             }
         }
 
