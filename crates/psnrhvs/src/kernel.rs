@@ -257,7 +257,8 @@ fn transposed_loads_match_indexed_gather_bits() {
 // coefficient-major, DCT'd, masked and accumulated into per-lane f32
 // sums, then folded into the returned f64 totals in raster order.
 macro_rules! band_body {
-    ($token:ident, $r:ident, $d:ident, $stride:ident, $by0:ident, $by1:ident, $nb_x:ident, $step:ident, $FV:ty, $LANES:literal) => {{
+    ($token:ident, $r:ident, $d:ident, $stride:ident, $by0:ident, $by1:ident, $nb_x:ident, $step:ident, $blocks:ident, $FV:ty, $LANES:literal) => {{
+        let mut blocks: Option<(&mut [f32], &mut [f32])> = $blocks;
         type V = $FV;
         let zero = V::splat_t($token, 0.0);
         // Hoisted table splats — one broadcast per constant per call.
@@ -397,6 +398,15 @@ macro_rules! band_body {
                     s1_glob += s1a[b] as f64;
                     s2_glob += s2a[b] as f64;
                 }
+                // Optional per-block maps: each block's mean coefficient
+                // energy (`/64` is exact), written after the fold above.
+                if let Some((masked, unmasked)) = blocks.as_mut() {
+                    let row = (by - $by0) * $nb_x + bx0;
+                    for b in 0..valid {
+                        masked[row + b] = s1a[b] / 64.0;
+                        unmasked[row + b] = s2a[b] / 64.0;
+                    }
+                }
                 bx0 += $LANES;
             }
         }
@@ -443,6 +453,7 @@ pub fn psnrhvs_band_v3_t(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     band_body!(
         token,
@@ -453,6 +464,7 @@ pub fn psnrhvs_band_v3_t(
         by1,
         nb_x,
         step,
+        blocks,
         magetypes::simd::generic::f32x8<archmage::X64V3Token>,
         8
     )
@@ -470,6 +482,7 @@ pub fn psnrhvs_band_v4x_t(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     band_body!(
         token,
@@ -480,6 +493,7 @@ pub fn psnrhvs_band_v4x_t(
         by1,
         nb_x,
         step,
+        blocks,
         magetypes::simd::generic::f32x16<archmage::X64V4xToken>,
         16
     )
@@ -497,6 +511,7 @@ pub fn psnrhvs_band_neon_t(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     band_body!(
         token,
@@ -507,6 +522,7 @@ pub fn psnrhvs_band_neon_t(
         by1,
         nb_x,
         step,
+        blocks,
         magetypes::simd::generic::f32x8<archmage::NeonToken>,
         8
     )
@@ -524,6 +540,7 @@ pub fn psnrhvs_band_wasm128_t(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     band_body!(
         token,
@@ -534,6 +551,7 @@ pub fn psnrhvs_band_wasm128_t(
         by1,
         nb_x,
         step,
+        blocks,
         magetypes::simd::generic::f32x8<archmage::Wasm128Token>,
         8
     )
@@ -549,6 +567,7 @@ pub fn psnrhvs_band_scalar_t(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     band_body!(
         token,
@@ -559,6 +578,7 @@ pub fn psnrhvs_band_scalar_t(
         by1,
         nb_x,
         step,
+        blocks,
         magetypes::simd::generic::f32x8<archmage::ScalarToken>,
         8
     )
@@ -566,7 +586,9 @@ pub fn psnrhvs_band_scalar_t(
 
 /// Runtime-dispatched band scorer: the best tier this CPU supports.
 /// Returns `(s1, s2)` — the band's masked (HVS-M) and unmasked (HVS)
-/// f64 coefficient-energy sums over `nb_x`·(`by1`−`by0`) blocks.
+/// f64 coefficient-energy sums over `nb_x`·(`by1`−`by0`) blocks. With
+/// `blocks = Some((masked, unmasked))`, each block's mean coefficient
+/// energy is also written there, raster order within the band.
 pub(crate) fn psnrhvs_band(
     r: &[f32],
     d: &[f32],
@@ -575,9 +597,10 @@ pub(crate) fn psnrhvs_band(
     by1: usize,
     nb_x: usize,
     step: usize,
+    blocks: Option<(&mut [f32], &mut [f32])>,
 ) -> (f64, f64) {
     archmage::attuned!(
-        psnrhvs_band(r, d, stride, by0, by1, nb_x, step),
+        psnrhvs_band(r, d, stride, by0, by1, nb_x, step, blocks),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }

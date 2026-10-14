@@ -816,10 +816,10 @@ mod block_row_parity_tests {
             }
         }
         for (w, h) in [(64usize, 64usize), (96, 40), (300, 24)] {
-            let src: Vec<u8> = (0..w * h)
+            let src: alloc::vec::Vec<u8> = (0..w * h)
                 .map(|i| ((i * 37 + i / w * 91) % 251) as u8)
                 .collect();
-            let dst: Vec<u8> = (0..w * h)
+            let dst: alloc::vec::Vec<u8> = (0..w * h)
                 .map(|i| ((i * 53 + i / w * 7 + 11) % 241) as u8)
                 .collect();
             let (mut got_ret, mut got_px) = (0.0f32, 0u32);
