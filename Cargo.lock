@@ -6897,6 +6897,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenanalyze"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
+dependencies = [
+ "archmage 0.9.30",
+ "garb",
+ "linear-srgb",
+ "magetypes 0.9.30",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "zenav1-aom-bench"
 version = "0.0.1"
 dependencies = [
@@ -7128,6 +7141,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenblend"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d66daf1f95f9f3a3c7c4529ea1f993069e2691cc89a4f8b0f4002ced96179f68"
+dependencies = [
+ "archmage 0.9.30",
+ "magetypes 0.9.30",
+ "safe_unaligned_simd",
+]
+
+[[package]]
 name = "zencodec"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7286,7 +7310,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "zenanalyze",
+ "zenanalyze 0.2.0",
  "zenfleet-cloud",
  "zenmetrics-cli",
 ]
@@ -7574,7 +7598,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "whereat",
- "zenanalyze",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -7948,11 +7972,12 @@ dependencies = [
  "magetypes 0.9.30",
  "memchr",
  "rgb",
+ "rustix",
  "safe_unaligned_simd",
  "thiserror 2.0.21",
  "whereat",
  "zencodec",
- "zenflate 0.3.6",
+ "zenflate 0.4.1",
  "zenpixels",
  "zenpixels-convert",
  "zenquant",
@@ -7985,7 +8010,7 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=05de3cbc44b19d8769077d99710b0146c761d6df#05de3cbc44b19d8769077d99710b0146c761d6df"
+source = "git+https://github.com/imazen/zenanalyze?rev=417cc785b83bee0b3f827ae85c5203f5e104a308#417cc785b83bee0b3f827ae85c5203f5e104a308"
 dependencies = [
  "archmage 0.9.30",
  "bytemuck",
@@ -8057,6 +8082,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenresize"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012#e3975fb9d6d6b7baa96038a0eb8e27febb37c012"
+dependencies = [
+ "archmage 0.9.30",
+ "imgref",
+ "libm",
+ "linear-srgb",
+ "magetypes 0.9.30",
+ "rgb",
+ "safe_unaligned_simd",
+ "whereat",
+ "zenblend",
+ "zenpixels",
+]
+
+[[package]]
 name = "zensim"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8087,6 +8129,7 @@ dependencies = [
  "rgb",
  "thiserror 2.0.21",
  "zenpredict",
+ "zenresize",
 ]
 
 [[package]]
@@ -8159,7 +8202,6 @@ name = "zenyuv"
 version = "0.1.3"
 dependencies = [
  "archmage 0.9.30",
- "imgref",
  "libm",
  "linear-srgb",
  "magetypes 0.9.30",
