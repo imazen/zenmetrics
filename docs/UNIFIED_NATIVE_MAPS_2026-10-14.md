@@ -220,17 +220,22 @@ Validation (`crates/vif`):
 | --- | --- | --- | --- |
 | `speed_u` (primary), `speed_v` | SPEED's per-block `|S_ref − S_dist|`, the entropy-weighted local difference of one chroma plane | Difference | 5×5 operating-sample blocks; global support |
 | `aim_{s}_{h,v,d}`, `s` = 0…3 | ADM3's AIM terms: per band sample, the cube of the additive impairment left visible after masking by the restored signal | Difference (`0` = no visible impairment) | `2^(s+1)`-pixel blocks over ADM's pooled inner region; global support |
+| `adm_num_{s}_{h,v,d}`, `adm_den_{s}_{h,v,d}` | ADM3's detail-loss terms: the cube of the restored detail left visible after masking by the additive impairment, and the cube of the reference's CSF-weighted detail | Feature | the same grids as AIM |
 | `cambi_0` … `cambi_4` | CAMBI's per-scale c-values of the distorted frame | Feature (higher = more visible banding) | point samples at `2^s·k`; local support |
 
-Coverage: 3 of the model's 4 elementary features (SPEED chroma, ADM3's AIM
-half, CAMBI). VMAF has no per-pixel score; it is an SVM over pooled
+Coverage: 3 of the model's 4 elementary features (SPEED chroma, ADM3,
+CAMBI). VMAF has no per-pixel score; it is an SVM over pooled
 features. SPEED chroma's per-block terms have an f32 mean equal to the
 channel score (before the U/V combine and the 45 clamp). ADM3 blends
 `1 − AIM` (weight 0.3) with the detail-loss ratio `Σnum/Σden` (0.7); AIM is
 `Σ_s aim_num_s / Σ_s den_s`, and `aim_num_s` adds, per band, the cube root
-of the band's summed AIM terms. The AIM maps are those terms, so each band
-map sums (before the cube root) to its band's argument, not to a share of
-the score. The detail-loss numerator and denominator are not exposed.
+of the band's summed AIM terms; `num_s` and `den_s` are built the same way
+from their terms, plus a noise floor per band. The maps are those terms, so
+each band map sums (before the cube root) to its band's argument, not to a
+share of the score. The detail-loss terms have no reference-comparison
+reading of their own (more restored detail is not, by itself, worse), so
+they are Feature maps; their per-scale ratio after the cube roots is ADM's
+detail-loss measure.
 CAMBI's c-values are what its top-k pooling reads, and libvmaf dumps the
 same values with `heatmaps_path`. CAMBI measures banding in the distorted
 frame alone, so it has no reference comparison. `motion3` is temporal and
@@ -269,15 +274,17 @@ Validation (`crates/vmaf`):
   block's cell. Identical frames leave per-block terms up to 3.05e-5 at
   prescale 1, from `log2(1 + σ²)` taken in f32 for the reference and f64 for
   the distorted side, as libvmaf computes it; they are 0 at prescale 0.5.
-- AIM: the per-position integer terms, folded with ADM's per-row rounding
-  shift, reproduce each scale's AIM numerator from the score path bit for
-  bit (five sizes from 33×40 to 321×183, 8- and 10-bit, four models), with
-  default, `simd`, `simd,parallel` and `avx512,parallel` features. The host
+- ADM: the per-position integer terms, folded with ADM's per-row rounding
+  shifts, reproduce each scale's detail-loss numerator and denominator and
+  AIM numerator from the score path bit for bit (five sizes from 33×40 to
+  321×183, 8- and 10-bit, four models), with default, `simd`,
+  `simd,parallel` and `avx512,parallel` features; debug builds assert it on
+  every map request. The host
   has no AVX-512, so the `avx512` build ran its AVX2 kernels. The f32 maps
   sum to each band's argument within the reference's per-row rounding (half
-  a unit per row) plus f32 storage. Identical frames give exact zeros. A
-  luma change confined to one region puts every scale-0 band's peak cell
-  over it.
+  a unit per row) plus f32 storage. Identical frames give exact AIM zeros.
+  A luma change confined to one region puts every scale-0 AIM band's peak
+  cell over it.
 - CAMBI: the served maps, quantized as libvmaf quantizes its heatmaps, match
   libvmaf's `heatmaps_path` dump exactly (0 samples differ; 91,133 nonzero;
   640×360 10-bit banded fixture). Folding them through the same top-k

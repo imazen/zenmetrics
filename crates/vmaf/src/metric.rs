@@ -236,6 +236,22 @@ const AIM_NAMES: [[&str; 3]; 4] = [
     ["aim_3_h", "aim_3_v", "aim_3_d"],
 ];
 
+/// ADM detail-loss numerator map names by scale and band.
+const ADM_NUM_NAMES: [[&str; 3]; 4] = [
+    ["adm_num_0_h", "adm_num_0_v", "adm_num_0_d"],
+    ["adm_num_1_h", "adm_num_1_v", "adm_num_1_d"],
+    ["adm_num_2_h", "adm_num_2_v", "adm_num_2_d"],
+    ["adm_num_3_h", "adm_num_3_v", "adm_num_3_d"],
+];
+
+/// ADM detail-loss denominator map names by scale and band.
+const ADM_DEN_NAMES: [[&str; 3]; 4] = [
+    ["adm_den_0_h", "adm_den_0_v", "adm_den_0_d"],
+    ["adm_den_1_h", "adm_den_1_v", "adm_den_1_d"],
+    ["adm_den_2_h", "adm_den_2_v", "adm_den_2_d"],
+    ["adm_den_3_h", "adm_den_3_v", "adm_den_3_d"],
+];
+
 impl VmafMaps {
     fn view(&self, i: usize) -> Option<za::MapView<'_>> {
         let (name, data, g, polarity) = &self.maps[i];
@@ -323,8 +339,8 @@ impl za::Metric for Vmaf {
         )
         .metric_err_with("vmaf", Error::kind)?;
         opts.checkpoint()?;
-        let (_, aim) =
-            crate::adm::adm3_v1_aim_terms(&rf.y, &df.y, w as usize, h as usize, bits, self.variant)
+        let (_, adm) =
+            crate::adm::adm3_v1_terms(&rf.y, &df.y, w as usize, h as usize, bits, self.variant)
                 .metric_err_with("vmaf", Error::kind)?;
         opts.checkpoint()?;
         let (_, cambi) = crate::cambi::cambi_v1_maps(&df.y, w as usize, h as usize, bits)
@@ -351,10 +367,13 @@ impl za::Metric for Vmaf {
         }
         // ADM's DWT output `k` reads inputs `2k − 1 .. 2k + 2`, so a scale-`s`
         // band sample owns the `2^(s+1)`-pixel block at `k·2^(s+1)`. The
-        // masking and decoupling chain makes support global.
-        for (s, t) in aim.iter().enumerate() {
+        // masking and decoupling chain makes support global. The detail-loss
+        // terms have no reference-comparison reading of their own: the
+        // numerator is restored detail left visible, the denominator the
+        // reference's detail.
+        let adm_grid = |s: usize, t: &crate::adm::BandTerms| {
             let cell = 2u32 << s;
-            let g = za::MapGeometry::grid(
+            za::MapGeometry::grid(
                 w,
                 h,
                 t.left as i64 * i64::from(cell),
@@ -364,9 +383,23 @@ impl za::Metric for Vmaf {
                 t.cols as u32,
                 t.rows as u32,
             )
-            .with_support(za::Support::Global);
-            for (b, name) in AIM_NAMES[s].into_iter().enumerate() {
-                maps.push((name, t.map(b), g, za::MapPolarity::Difference));
+            .with_support(za::Support::Global)
+        };
+        for (names, polarity, pick) in [
+            (
+                &AIM_NAMES,
+                za::MapPolarity::Difference,
+                (|t| &t.aim) as fn(&crate::adm::AdmScaleTerms) -> &crate::adm::BandTerms,
+            ),
+            (&ADM_NUM_NAMES, za::MapPolarity::Feature, |t| &t.num),
+            (&ADM_DEN_NAMES, za::MapPolarity::Feature, |t| &t.den),
+        ] {
+            for (s, scale) in adm.iter().enumerate() {
+                let t = pick(scale);
+                let g = adm_grid(s, t);
+                for (b, name) in names[s].into_iter().enumerate() {
+                    maps.push((name, t.map(b), g, polarity));
+                }
             }
         }
         // CAMBI point-samples even positions per scale (`decimate`), so
@@ -823,6 +856,8 @@ mod map_tests {
                     ["speed_u", "speed_v"]
                         .into_iter()
                         .chain(AIM_NAMES.into_iter().flatten())
+                        .chain(ADM_NUM_NAMES.into_iter().flatten())
+                        .chain(ADM_DEN_NAMES.into_iter().flatten())
                         .chain(CAMBI_NAMES)
                         .collect::<Vec<_>>()
                 );
@@ -903,11 +938,12 @@ mod map_tests {
         assert_eq!(Some(cell), v_map.geometry.cell_at(360, 200));
     }
 
-    /// AIM maps keep the scores, sit on their scale's block grid over the
-    /// pooled inner region, vanish for identical frames and respond where
-    /// the luma changed. Phone models serve them without SPEED.
+    /// ADM maps (AIM, and the detail-loss numerator and denominator) keep the
+    /// scores and sit on their scale's block grid over the pooled inner
+    /// region; AIM vanishes for identical frames and responds where the luma
+    /// changed. Phone models serve them without SPEED.
     #[test]
-    fn aim_maps_are_adm_terms_on_their_band_grids() {
+    fn adm_maps_are_adm_terms_on_their_band_grids() {
         let (r, d) = (frame8(2), frame8(5));
         for variant in [ModelVariant::Standard1080p, ModelVariant::Phone] {
             let mut m = Vmaf::new(variant);
@@ -923,14 +959,14 @@ mod map_tests {
                 .unwrap();
             assert_eq!(bits(&*mapped), bits(&*plain), "{variant:?}");
             let maps = mapped.maps();
-            let aim: Vec<_> = maps.iter().filter(|m| m.name.starts_with("aim_")).collect();
-            assert_eq!(aim.len(), 12);
             if matches!(variant, ModelVariant::Phone) {
                 assert_eq!(
                     maps.iter().map(|m| m.name).collect::<Vec<_>>(),
                     AIM_NAMES
                         .into_iter()
                         .flatten()
+                        .chain(ADM_NUM_NAMES.into_iter().flatten())
+                        .chain(ADM_DEN_NAMES.into_iter().flatten())
                         .chain(CAMBI_NAMES)
                         .collect::<Vec<_>>(),
                     "phone models have no SPEED grid"
@@ -939,41 +975,49 @@ mod map_tests {
             }
             let (luma, _) = frame(&image(&r)).unwrap();
             let y: Vec<u16> = luma.y;
-            let (_, terms) = crate::adm::adm3_v1_aim_terms(
-                &y,
-                &frame(&image(&d)).unwrap().0.y,
-                W,
-                H,
-                8,
-                variant,
-            )
-            .unwrap();
-            for (k, map) in aim.iter().enumerate() {
-                let (s, b) = (k / 3, k % 3);
-                assert_eq!(map.name, AIM_NAMES[s][b]);
-                assert_eq!(map.polarity, za::MapPolarity::Difference);
-                let g = map.geometry;
-                let (cell, t) = (2u32 << s, &terms[s]);
-                assert_eq!(
-                    g,
-                    za::MapGeometry::grid(
-                        W as u32,
-                        H as u32,
-                        t.left as i64 * i64::from(cell),
-                        t.top as i64 * i64::from(cell),
-                        cell,
-                        cell,
-                        t.cols as u32,
-                        t.rows as u32
-                    )
-                    .with_support(za::Support::Global)
-                );
-                // The pooled region is the inner 80% of the band.
-                assert!(g.origin_x > 0 && g.origin_x < W as i64 / 5);
-                assert_eq!(map.values().as_ref(), t.map(b).as_slice());
-                assert!(map.values().iter().all(|&v| v >= 0.0));
+            let (_, terms) =
+                crate::adm::adm3_v1_terms(&y, &frame(&image(&d)).unwrap().0.y, W, H, 8, variant)
+                    .unwrap();
+            let kinds: [(
+                &[[&str; 3]; 4],
+                za::MapPolarity,
+                fn(&crate::adm::AdmScaleTerms) -> &crate::adm::BandTerms,
+            ); 3] = [
+                (&AIM_NAMES, za::MapPolarity::Difference, |t| &t.aim),
+                (&ADM_NUM_NAMES, za::MapPolarity::Feature, |t| &t.num),
+                (&ADM_DEN_NAMES, za::MapPolarity::Feature, |t| &t.den),
+            ];
+            for (names, polarity, pick) in kinds {
+                let prefix = &names[0][0][..names[0][0].len() - 3];
+                let kind: Vec<_> = maps.iter().filter(|m| m.name.starts_with(prefix)).collect();
+                assert_eq!(kind.len(), 12, "{prefix}");
+                for (k, map) in kind.iter().enumerate() {
+                    let (s, b) = (k / 3, k % 3);
+                    assert_eq!(map.name, names[s][b]);
+                    assert_eq!(map.polarity, polarity);
+                    let g = map.geometry;
+                    let (cell, t) = (2u32 << s, pick(&terms[s]));
+                    assert_eq!(
+                        g,
+                        za::MapGeometry::grid(
+                            W as u32,
+                            H as u32,
+                            t.left as i64 * i64::from(cell),
+                            t.top as i64 * i64::from(cell),
+                            cell,
+                            cell,
+                            t.cols as u32,
+                            t.rows as u32
+                        )
+                        .with_support(za::Support::Global)
+                    );
+                    // The pooled region is the inner 80% of the band.
+                    assert!(g.origin_x > 0 && g.origin_x < W as i64 / 5);
+                    assert_eq!(map.values().as_ref(), t.map(b).as_slice());
+                    assert!(map.values().iter().all(|&v| v >= 0.0));
+                }
+                assert!(kind.iter().any(|m| m.values().iter().any(|&v| v > 0.0)));
             }
-            assert!(aim.iter().any(|m| m.values().iter().any(|&v| v > 0.0)));
         }
         // Identical frames have no additive impairment.
         let mapped = Vmaf::new(ModelVariant::Standard1080p)
