@@ -293,6 +293,127 @@ fn for_each_compact_row<T: Send>(
     }
 }
 
+/// One horizontal window for a single decimated output — the reference's
+/// per-pixel `sums[c] += coef·rgb` accumulation order. Used for edge and
+/// tail outputs; the interior runs through [`decimate_hwin_rgb8_inner`].
+#[inline]
+fn decimate_hwin_one<const N: usize>(
+    pixels: &[u8],
+    w: usize,
+    f: usize,
+    oj: usize,
+    coefficients: &[[f32; 3]; N],
+    out: &mut [f32; N],
+) {
+    let s = f / 2;
+    let j = oj * f;
+    let lo = (j + s).saturating_sub(f - 1);
+    let hi = (j + s).min(w - 1);
+    for px in pixels[lo * 3..(hi + 1) * 3].as_chunks::<3>().0 {
+        let [r, g, b] = px.map(f32::from);
+        for c in 0..N {
+            let coef = coefficients[c];
+            out[c] += coef[0] * r + coef[1] * g + coef[2] * b;
+        }
+    }
+}
+
+/// Eight interior (full-width) horizontal windows at once — lanes are
+/// consecutive decimated outputs. Lane `j` accumulates its window's
+/// pixels in the same left-to-right `acc += coef·rgb` order as
+/// [`decimate_hwin_one`], so results are bit-identical. `row` is the
+/// flat `[f32]` view of the interior output run (stride `n_ch`).
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn decimate_hwin_rgb8_inner(
+    token: Token,
+    pixels: &[u8],
+    row: &mut [f32],
+    n_ch: usize,
+    first_oj: usize,
+    f: usize,
+    coefficients: &[[f32; 3]],
+) {
+    let s = f / 2;
+    let zero = f32x8::splat_t(token, 0.0);
+    let ngroups = row.len() / n_ch / 8;
+    let cs: [[f32x8; 3]; 3] = core::array::from_fn(|c| {
+        let k = coefficients.get(c).copied().unwrap_or([0.0; 3]);
+        [
+            f32x8::splat_t(token, k[0]),
+            f32x8::splat_t(token, k[1]),
+            f32x8::splat_t(token, k[2]),
+        ]
+    });
+    for g in 0..ngroups {
+        let oj0 = first_oj + g * 8;
+        // Interior windows tile exactly: lane j's t-th source pixel is
+        // at x = (oj0+j)·f + s − (f−1) + t, i.e. stride f across lanes.
+        let x0 = oj0 * f + s + 1 - f;
+        let mut acc: [f32x8; 3] = core::array::from_fn(|_| zero);
+        for t in 0..f {
+            let ra: [f32; 8] = core::array::from_fn(|j| pixels[(x0 + j * f + t) * 3] as f32);
+            let ga: [f32; 8] = core::array::from_fn(|j| pixels[(x0 + j * f + t) * 3 + 1] as f32);
+            let ba: [f32; 8] = core::array::from_fn(|j| pixels[(x0 + j * f + t) * 3 + 2] as f32);
+            let rv = f32x8::load_t(token, &ra);
+            let gv = f32x8::load_t(token, &ga);
+            let bv = f32x8::load_t(token, &ba);
+            for c in 0..n_ch {
+                acc[c] = acc[c] + (cs[c][0] * rv + cs[c][1] * gv + cs[c][2] * bv);
+            }
+        }
+        for c in 0..n_ch {
+            let mut tmp = [0.0f32; 8];
+            acc[c].store(&mut tmp);
+            for j in 0..8 {
+                row[(g * 8 + j) * n_ch + c] = tmp[j];
+            }
+        }
+    }
+}
+
+/// Horizontal decimation pass over one source row: interior outputs go
+/// through the batched kernel, edge and tail outputs stay scalar.
+fn decimate_hwin_rgb8<const N: usize>(
+    pixels: &[u8],
+    w: usize,
+    f: usize,
+    coefficients: &[[f32; 3]; N],
+    row: &mut [[f32; N]],
+) {
+    let s = f / 2;
+    let w2 = row.len();
+    // Interior outputs have an unclamped f-pixel window:
+    // `oj·f + s ≥ f−1` on the left and `oj·f + s ≤ w−1` on the right.
+    let first = f.saturating_sub(1 + s).div_ceil(f).min(w2);
+    let last = w
+        .checked_sub(1 + s)
+        .map_or(0, |v| v / f + 1)
+        .min(w2)
+        .max(first);
+    for oj in 0..first {
+        decimate_hwin_one(pixels, w, f, oj, coefficients, &mut row[oj]);
+    }
+    let flat = row[first..last].as_flattened_mut();
+    let nfull = (flat.len() / N / 8) * 8;
+    archmage::attuned!(
+        decimate_hwin_rgb8_inner(
+            pixels,
+            &mut flat[..nfull * N],
+            N,
+            first,
+            f,
+            coefficients.as_slice()
+        ),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+    for k in nfull..(last - first) {
+        decimate_hwin_one(pixels, w, f, first + k, coefficients, &mut row[first + k]);
+    }
+    for oj in last..w2 {
+        decimate_hwin_one(pixels, w, f, oj, coefficients, &mut row[oj]);
+    }
+}
+
 // Convert each RGB pixel inside its retained horizontal window. This keeps
 // the same rounded color values and sum order without full-size YIQ planes.
 fn decimate_rgb8<const N: usize>(
@@ -316,19 +437,7 @@ fn decimate_rgb8<const N: usize>(
     let mut horizontal = vec![[0.0f32; N]; w2 * h];
     for_each_compact_row(&mut horizontal, w2, |y, row| {
         let pixels = &data[y * stride..y * stride + w * 3];
-        for (oj, sums) in row.iter_mut().enumerate() {
-            let j = oj * f;
-            let lo = (j + s).saturating_sub(f - 1);
-            let hi = (j + s).min(w - 1);
-            for px in pixels[lo * 3..(hi + 1) * 3].as_chunks::<3>().0 {
-                let [r, g, b] = px.map(f32::from);
-                for c in 0..N {
-                    let coef = coefficients[c];
-                    let value = coef[0] * r + coef[1] * g + coef[2] * b;
-                    sums[c] += value;
-                }
-            }
-        }
+        decimate_hwin_rgb8(pixels, w, f, &coefficients, row);
     });
     let inv = 1.0 / (f * f) as f32;
     let mut compact = vec![[0.0f32; N]; w2 * h2];
