@@ -281,7 +281,7 @@ fn tier_parity() {
 /// a sane similarity map at the decimated resolution.
 #[test]
 fn fsim_diffmap_matches_score_and_is_similarity() {
-    use zenmetrics_abstractions::Diffmap;
+    use zenmetrics_abstractions::Evaluation;
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 37 + 11) % 251) as f32).collect();
     let mut d = r.clone();
@@ -308,11 +308,11 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
     assert!(damaged < clean, "{damaged} !< {clean}");
     // Trait surface.
     assert_eq!(
-        dm.polarity(),
-        zenmetrics_abstractions::MapPolarity::Similarity
+        dm.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
     );
     assert_eq!(dm.score(), map_score);
-    let px = dm.pixels();
+    let px = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
     let slice = px.as_slice();
     assert_eq!((slice.width(), slice.rows()), (dm.width, dm.height));
     // Identical inputs → map saturates to 1.
@@ -323,7 +323,11 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
 /// The generic surface: `Box<dyn Metric>` scores + maps a pair.
 #[test]
 fn metric_trait_object_scores_and_maps() {
-    use zenmetrics_abstractions::{Metric, ScoreKind};
+    use zenmetrics_abstractions::{EvalOpts, Metric, ScoreKind};
+
+    fn ev_score(named: &[(alloc::borrow::Cow<'static, str>, f64)], key: &str) -> f64 {
+        named.iter().find(|(k, _)| *k == key).unwrap().1
+    }
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<u8> = (0..w * h * 3)
         .map(|i| ((i * 17 + 11) % 251) as u8)
@@ -339,15 +343,29 @@ fn metric_trait_object_scores_and_maps() {
     let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim);
     assert_eq!(m.name(), "fsim");
     assert_eq!(m.score_kind(), ScoreKind::Similarity);
-    let scores = m.score(mk(&r), mk(&d)).unwrap();
-    let (headline, named) = (scores.headline, scores.named);
+    assert!(m.accepts(zenpixels::PixelDescriptor::RGB8_SRGB));
+    // Score-only evaluation: ScalarEval with both named scores.
+    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY).unwrap();
+    let named: alloc::vec::Vec<_> = ev.scores().collect();
     assert_eq!(
-        headline,
+        ev.score(),
         named.iter().find(|(k, _)| *k == "fsimc").unwrap().1
     );
     assert_eq!(named.len(), 2);
-    let (scores, dm) = m.score_with_map(mk(&r), mk(&d)).unwrap();
-    assert_eq!(scores.headline, headline);
-    let px = dm.pixels();
-    assert!(matches!(px, zenpixels::PixelCow::Borrowed(_)));
+    assert!(ev.map().is_none());
+    // With map: the FsimDiffmap Evaluation — scores + borrowed map +
+    // on-demand folds.
+    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::WITH_MAP).unwrap();
+    assert_eq!(ev.score(), ev_score(&named, "fsim"));
+    let dm = ev.map().unwrap();
+    assert!(matches!(dm, zenpixels::PixelCow::Borrowed(_)));
+    assert_eq!(
+        ev.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+    );
+    // Named map folds — mean is the default grammar.
+    assert!(ev.map_score("mean").is_some());
+    assert!(ev.map_score("pnorm:4").is_some());
+    // Downcast to the concrete result.
+    assert!(ev.as_any().is::<crate::FsimDiffmap>());
 }

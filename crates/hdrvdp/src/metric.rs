@@ -76,24 +76,51 @@ pub struct HdrVdpResult {
     pub input_looks_relative: bool,
 }
 
-impl zenmetrics_abstractions::Diffmap for HdrVdpResult {
+impl zenmetrics_abstractions::Evaluation for HdrVdpResult {
+    fn score(&self) -> f64 {
+        self.q
+    }
+
+    fn scores(
+        &self,
+    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
+        std::boxed::Box::new(
+            [
+                (std::borrow::Cow::Borrowed("q"), self.q),
+                (std::borrow::Cow::Borrowed("q_mos"), self.q_mos),
+                (std::borrow::Cow::Borrowed("p_det"), self.p_det),
+                (std::borrow::Cow::Borrowed("c_max"), self.c_max),
+            ]
+            .into_iter(),
+        )
+    }
+
     /// The canonical map is `p_map` — per-pixel detection probability.
     /// `c_map` (normalized threshold units) stays on the concrete type.
-    fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
-            &self.p_map,
-            self.width as u32,
-            self.height as u32,
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
+        Some(zenpixels::PixelCow::Borrowed(
+            zenmetrics_abstractions::gray_f32_slice(
+                &self.p_map,
+                self.width as u32,
+                self.height as u32,
+            ),
         ))
     }
 
-    /// `P_map` is error-direction: higher = more *detectable*.
-    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
-        zenmetrics_abstractions::MapPolarity::DetectionProbability
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
     }
 
-    fn score(&self) -> f64 {
-        self.q
+    /// `"mean"` over `p_map` ≈ `p_det`'s spatial pool; `pnorm:<p>` works
+    /// too — plus `"c_max"`/`"visible_fraction"` aliases on the fold.
+    fn map_score(&self, spec: &str) -> Option<f64> {
+        match spec {
+            "c_max" => Some(self.c_max),
+            "visible_fraction" => Some(self.visible_fraction()),
+            _ => self
+                .map()
+                .and_then(|m| zenmetrics_abstractions::map_fold(m, spec)),
+        }
     }
 
     fn extras(
@@ -121,6 +148,10 @@ impl zenmetrics_abstractions::Diffmap for HdrVdpResult {
             ]
             .into_iter(),
         )
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 

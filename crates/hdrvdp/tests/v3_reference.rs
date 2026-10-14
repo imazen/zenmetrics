@@ -302,7 +302,7 @@ fn invalid_inputs_err_not_panic() {
 /// f32; extras carry `q` and the gamut fraction.
 #[test]
 fn v3_result_is_a_diffmap() {
-    use zenmetrics_abstractions::Diffmap;
+    use zenmetrics_abstractions::Evaluation;
     let (w, h) = (64usize, 64usize);
     let par = Params::new(
         Task::Quality,
@@ -318,12 +318,12 @@ fn v3_result_is_a_diffmap() {
         refr[i] = 80.0;
     }
     let res = hdrvdp3(&test, &refr, w, h, &par).unwrap();
-    let px = res.pixels();
+    let px = res.map().unwrap();
     let sl = px.as_slice();
     assert_eq!((sl.width(), sl.rows()), (w as u32, h as u32));
     assert_eq!(
-        res.polarity(),
-        zenmetrics_abstractions::MapPolarity::DetectionProbability
+        res.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
     );
     assert_eq!(res.score(), res.q_jod);
     let kv: Vec<_> = res.extras().collect();

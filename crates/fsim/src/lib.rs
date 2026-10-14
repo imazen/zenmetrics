@@ -258,43 +258,44 @@ impl FsimDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Diffmap for FsimDiffmap {
-    fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
-            &self.map,
-            self.width,
-            self.height,
-        ))
-    }
-
-    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
-        zenmetrics_abstractions::MapPolarity::Similarity
-    }
-
+impl zenmetrics_abstractions::Evaluation for FsimDiffmap {
     fn score(&self) -> f64 {
         self.fsim
     }
 
-    fn extras(
+    fn scores(
         &self,
-    ) -> alloc::boxed::Box<
-        dyn Iterator<
-                Item = (
-                    alloc::borrow::Cow<'static, str>,
-                    alloc::borrow::Cow<'static, str>,
-                ),
-            > + '_,
-    > {
+    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
         alloc::boxed::Box::new(
             self.fsimc
                 .map(|v| {
-                    (
-                        alloc::borrow::Cow::Borrowed("fsimc"),
-                        alloc::format!("{v}").into(),
-                    )
+                    [
+                        (alloc::borrow::Cow::Borrowed("fsim"), self.fsim),
+                        (alloc::borrow::Cow::Borrowed("fsimc"), v),
+                    ]
+                })
+                .unwrap_or_else(|| {
+                    [
+                        (alloc::borrow::Cow::Borrowed("fsim"), self.fsim),
+                        (alloc::borrow::Cow::Borrowed("fsimc"), f64::NAN),
+                    ]
                 })
                 .into_iter(),
         )
+    }
+
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
+        Some(zenpixels::PixelCow::Borrowed(
+            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
+        ))
+    }
+
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 
@@ -381,40 +382,34 @@ impl zenmetrics_abstractions::Metric for Fsim {
         zenmetrics_abstractions::ScoreKind::Similarity
     }
 
-    fn score(
-        &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let mut out = zenmetrics_abstractions::MetricScores::single("fsimc", s.fsimc);
-        out.push("fsim", s.fsim);
-        Ok(out)
+    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
     }
 
-    fn score_with_map(
+    fn evaluate(
         &mut self,
         r: zenpixels::PixelSlice<'_>,
         d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<(
-        zenmetrics_abstractions::MetricScores,
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
-    )> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+        opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        use zenmetrics_abstractions as za;
+        let box_err = |e: Error| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        };
+        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        let (s, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
-            .map_err(|e| {
-                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-            })?;
-        let mut out = zenmetrics_abstractions::MetricScores::single("fsimc", s.fsimc);
+        if opts.map {
+            let (s, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .map_err(box_err)?;
+            return Ok(alloc::boxed::Box::new(dm));
+        }
+        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
+        let mut out = za::ScalarEval::single("fsimc", s.fsimc);
         out.push("fsim", s.fsim);
-        Ok((out, alloc::boxed::Box::new(dm)))
+        Ok(alloc::boxed::Box::new(out))
     }
 }
 

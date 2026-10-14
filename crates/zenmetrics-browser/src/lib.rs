@@ -563,8 +563,8 @@ pub fn spatial_map(
             result.width = first.map.width() as u32;
             result.height = first.map.height() as u32;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = first.map.buf().to_vec();
         }
@@ -575,8 +575,8 @@ pub fn spatial_map(
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = dm.map().to_vec();
         }
@@ -587,8 +587,8 @@ pub fn spatial_map(
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = dm.map().to_vec();
         }
@@ -599,8 +599,8 @@ pub fn spatial_map(
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = dm.map().to_vec();
         }
@@ -611,8 +611,8 @@ pub fn spatial_map(
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = dm.map().to_vec();
         }
@@ -648,8 +648,8 @@ pub fn spatial_map(
             result.width = mw as u32;
             result.height = mh as u32;
             result.similarity = matches!(
-                dm.polarity(),
-                zenmetrics_abstractions::MapPolarity::Similarity
+                dm.map_polarity(),
+                Some(zenmetrics_abstractions::MapPolarity::Similarity)
             );
             result.values = vec![0.; mw * mh];
             gmsd::gmsd_with_map(

@@ -253,7 +253,7 @@ fn warm_ref_diffmap_matches_cold_path() {
 /// identical pixels, now as a `Diffmap` trait object.
 #[test]
 fn score_and_diffmap_matches_vec_api() {
-    use zenmetrics_abstractions::Diffmap;
+    use zenmetrics_abstractions::Evaluation;
     let (w, h) = (96, 64);
     let r = make_grid(w, h, 7);
     let mut d = r.clone();
@@ -268,15 +268,15 @@ fn score_and_diffmap_matches_vec_api() {
     assert_eq!(jod, jod2);
     assert_eq!(dm.map(), vec_out.as_slice());
     assert_eq!(
-        dm.polarity(),
-        zenmetrics_abstractions::MapPolarity::Difference
+        dm.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::Difference)
     );
     assert_eq!(dm.score(), jod as f64);
-    let px = dm.pixels();
+    let px = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
     assert_eq!(
         (px.as_slice().width(), px.as_slice().rows()),
         (w as u32, h as u32)
     );
-    let boxed: Box<dyn Diffmap> = Box::new(dm);
+    let boxed: Box<dyn Evaluation> = Box::new(dm);
     assert_eq!(boxed.score(), jod as f64);
 }

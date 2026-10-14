@@ -49,16 +49,31 @@ pub struct HdrVdp3Result {
     pub had_nan: bool,
 }
 
-impl zenmetrics_abstractions::Diffmap for HdrVdp3Result {
-    /// Canonical map = `p_map` (per-pixel detection probability).
-    /// `p_map` is `f64` internally — the `Gray<f32>` view requires a
-    /// conversion copy, so `pixels()` returns `PixelCow::Owned` here.
-    /// `s_map` (normalized-difference, 1 ≈ threshold) stays on the
-    /// concrete type.
-    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+impl zenmetrics_abstractions::Evaluation for HdrVdp3Result {
+    fn score(&self) -> f64 {
+        self.q_jod
+    }
+
+    fn scores(
+        &self,
+    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
+        std::boxed::Box::new(
+            [
+                (std::borrow::Cow::Borrowed("q_jod"), self.q_jod),
+                (std::borrow::Cow::Borrowed("q"), self.q),
+            ]
+            .into_iter(),
+        )
+    }
+
+    /// Canonical map = `p_map` (detection probability). `p_map` is `f64`
+    /// internally — the `Gray<f32>` view needs a conversion copy, so
+    /// `map()` returns `PixelCow::Owned`. `s_map` (normalized-difference,
+    /// 1 ≈ threshold) stays on the concrete type.
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
         let f32_map: Vec<f32> = self.p_map.iter().map(|&v| v as f32).collect();
-        let bytes: Vec<u8> = zenmetrics_abstractions::bytemuck_vec(f32_map);
-        zenpixels::PixelCow::Owned(
+        let bytes = zenmetrics_abstractions::bytemuck_vec(f32_map);
+        Some(zenpixels::PixelCow::Owned(
             zenpixels::PixelBuffer::from_vec(
                 bytes,
                 self.width as u32,
@@ -66,15 +81,11 @@ impl zenmetrics_abstractions::Diffmap for HdrVdp3Result {
                 zenpixels::PixelDescriptor::GRAYF32_LINEAR,
             )
             .expect("converted map always validates"),
-        )
+        ))
     }
 
-    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
-        zenmetrics_abstractions::MapPolarity::DetectionProbability
-    }
-
-    fn score(&self) -> f64 {
-        self.q_jod
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
     }
 
     fn extras(
@@ -90,7 +101,7 @@ impl zenmetrics_abstractions::Diffmap for HdrVdp3Result {
         let f = |k: &'static str, v: f64| {
             (
                 std::borrow::Cow::Borrowed(k),
-                std::borrow::Cow::Owned(format!("{v}")),
+                std::borrow::Cow::Owned(std::format!("{v}")),
             )
         };
         std::boxed::Box::new(
@@ -100,6 +111,10 @@ impl zenmetrics_abstractions::Diffmap for HdrVdp3Result {
             ]
             .into_iter(),
         )
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 

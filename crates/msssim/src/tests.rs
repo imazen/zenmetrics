@@ -285,7 +285,7 @@ fn rgb_luma_blocks_match_scalar_with_stride_and_tails() {
 /// is the level-0 SSIM map at the `(w-10)x(h-10)` valid interior.
 #[test]
 fn msssim_diffmap_matches_score() {
-    use zenmetrics_abstractions::Diffmap;
+    use zenmetrics_abstractions::Evaluation;
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 23 + 5) % 241) as f32).collect();
     let mut d = r.clone();
@@ -300,8 +300,8 @@ fn msssim_diffmap_matches_score() {
     assert_eq!((dm.width as usize, dm.height as usize), (w - 10, h - 10));
     assert_eq!(dm.map().len(), (w - 10) * (h - 10));
     assert_eq!(
-        dm.polarity(),
-        zenmetrics_abstractions::MapPolarity::Similarity
+        dm.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
     );
     assert_eq!(dm.score(), score);
     // map stays in similarity range

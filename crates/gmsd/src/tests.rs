@@ -530,7 +530,7 @@ fn fused_rgb8_equals_convert_then_score() {
 /// `gmsd_with_diffmap` == `gmsd` score + a half-res similarity map.
 #[test]
 fn gmsd_diffmap_matches_score() {
-    use zenmetrics_abstractions::Diffmap;
+    use zenmetrics_abstractions::Evaluation;
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 29 + 3) % 233) as f32).collect();
     let mut d = r.clone();
@@ -548,11 +548,18 @@ fn gmsd_diffmap_matches_score() {
     assert_eq!((dm.width as usize, dm.height as usize), (mw, mh));
     assert_eq!(dm.map().len(), mw * mh);
     assert_eq!(
-        dm.polarity(),
-        zenmetrics_abstractions::MapPolarity::Similarity
+        dm.map_polarity(),
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
     );
     assert_eq!(dm.score(), score.gmsd);
-    // Extras carry the map mean.
-    let kv: alloc::vec::Vec<_> = dm.extras().collect();
-    assert_eq!(kv[0].0, "mean_gms");
+    // scores() carries the map mean as mean_gms; std-of-map == headline.
+    let kv: alloc::vec::Vec<_> = dm.scores().collect();
+    assert_eq!(kv[0].0, "gmsd");
+    assert_eq!(kv[1].0, "mean_gms");
+    let folded = dm.map_score("std").unwrap();
+    assert!(
+        (folded - score.gmsd).abs() < 1e-4,
+        "std(map)={folded} vs gmsd={}",
+        score.gmsd
+    );
 }

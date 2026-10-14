@@ -4239,43 +4239,36 @@ impl zenmetrics_abstractions::Metric for Cvvdp {
         zenmetrics_abstractions::ScoreKind::Jod
     }
 
-    fn score(
+    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
         &mut self,
         r: zenpixels::PixelSlice<'_>,
         d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+        opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        use zenmetrics_abstractions as za;
+        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        // `score` takes packed rgb8 — repack when the slice is strided.
+        // cvvdp takes packed rgb8 — repack when the slice is strided.
         let (rp, dp) = (contiguous_rgb8(&r), contiguous_rgb8(&d));
+        if opts.map {
+            let (_jod, dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+            return Ok(alloc::boxed::Box::new(dm));
+        }
         let jod = self.score(&rp, &dp).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        Ok(zenmetrics_abstractions::MetricScores::single(
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
             "jod", jod as f64,
-        ))
-    }
-
-    fn score_with_map(
-        &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<(
-        zenmetrics_abstractions::MetricScores,
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
-    )> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (contiguous_rgb8(&r), contiguous_rgb8(&d));
-        let (jod, dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok((
-            zenmetrics_abstractions::MetricScores::single("jod", jod as f64),
-            alloc::boxed::Box::new(dm),
-        ))
+        )))
     }
 }
 

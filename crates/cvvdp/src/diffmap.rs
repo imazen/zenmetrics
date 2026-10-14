@@ -214,37 +214,32 @@ impl CvvdpDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Diffmap for CvvdpDiffmap {
-    fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
-            &self.map,
-            self.width,
-            self.height,
-        ))
-    }
-
-    /// Masked error is error-direction: higher = more visible.
-    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
-        zenmetrics_abstractions::MapPolarity::Difference
-    }
-
+impl zenmetrics_abstractions::Evaluation for CvvdpDiffmap {
     fn score(&self) -> f64 {
         self.jod as f64
     }
 
-    fn extras(
+    fn scores(
         &self,
-    ) -> alloc::boxed::Box<
-        dyn Iterator<
-                Item = (
-                    alloc::borrow::Cow<'static, str>,
-                    alloc::borrow::Cow<'static, str>,
-                ),
-            > + '_,
-    > {
-        alloc::boxed::Box::new(core::iter::once((
-            alloc::borrow::Cow::Borrowed("jod"),
-            alloc::borrow::Cow::Owned(alloc::format!("{}", self.jod)),
+    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
+        std::boxed::Box::new(core::iter::once((
+            std::borrow::Cow::Borrowed("jod"),
+            self.jod as f64,
         )))
+    }
+
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
+        Some(zenpixels::PixelCow::Borrowed(
+            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
+        ))
+    }
+
+    /// Masked error is error-direction: higher = more visible.
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        Some(zenmetrics_abstractions::MapPolarity::Difference)
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }

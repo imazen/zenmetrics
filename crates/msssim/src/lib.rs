@@ -167,21 +167,28 @@ impl MsssimDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Diffmap for MsssimDiffmap {
-    fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
-            &self.map,
-            self.width,
-            self.height,
+impl zenmetrics_abstractions::Evaluation for MsssimDiffmap {
+    fn score(&self) -> f64 {
+        self.msssim
+    }
+
+    fn scores(
+        &self,
+    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("msssim"),
+            self.msssim,
+        )))
+    }
+
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
+        Some(zenpixels::PixelCow::Borrowed(
+            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
         ))
     }
 
-    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
-        zenmetrics_abstractions::MapPolarity::Similarity
-    }
-
-    fn score(&self) -> f64 {
-        self.msssim
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        Some(zenmetrics_abstractions::MapPolarity::Similarity)
     }
 
     fn extras(
@@ -196,8 +203,12 @@ impl zenmetrics_abstractions::Diffmap for MsssimDiffmap {
     > {
         alloc::boxed::Box::new(core::iter::once((
             alloc::borrow::Cow::Borrowed("level"),
-            alloc::borrow::Cow::Owned(alloc::format!("{}", self.level)),
+            alloc::format!("{}", self.level).into(),
         )))
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 
@@ -248,39 +259,36 @@ impl zenmetrics_abstractions::Metric for Msssim {
         zenmetrics_abstractions::ScoreKind::Similarity
     }
 
-    fn score(
-        &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(zenmetrics_abstractions::MetricScores::single("msssim", s))
+    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
     }
 
-    fn score_with_map(
+    fn evaluate(
         &mut self,
         r: zenpixels::PixelSlice<'_>,
         d: zenpixels::PixelSlice<'_>,
-    ) -> zenmetrics_abstractions::MetricResult<(
-        zenmetrics_abstractions::MetricScores,
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
-    )> {
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+        opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        use zenmetrics_abstractions as za;
+        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
-        let (s, dm) = msssim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+        if opts.map {
+            let (_s, dm) = msssim_rgb8_with_diffmap(
+                r.pixels, d.pixels, r.width, r.height, r.stride,
+            )
             .map_err(|e| {
                 alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
             })?;
-        Ok((
-            zenmetrics_abstractions::MetricScores::single("msssim", s),
-            alloc::boxed::Box::new(dm),
-        ))
+            return Ok(alloc::boxed::Box::new(dm));
+        }
+        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let mut out = za::ScalarEval::single("msssim", s);
+        Ok(alloc::boxed::Box::new(out))
     }
 }
 
