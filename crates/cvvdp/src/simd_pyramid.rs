@@ -2062,8 +2062,17 @@ fn pu_blur_fused_inner(
     if w == 0 || h == 0 {
         return;
     }
+    // With `src_b`, the ring scratch gains a 14th row that holds the
+    // row's `min(|a|,|b|)` values — each source element's min is then
+    // computed once instead of once per h-tap (13×). Same values the
+    // materialized `vmin_abs` plane held → bit-identical.
+    let scratch_len = if src_b.is_some() {
+        (RING + 1) * w
+    } else {
+        RING * w
+    };
 
-    crate::par::map_rows_scratch(dst, w, ring_scratch, RING * w, |y0, dst, ring| {
+    crate::par::map_rows_scratch(dst, w, ring_scratch, scratch_len, |y0, dst, ring| {
         let h_band = dst.len() / w;
         // First real src row output row y0 can need.
         let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
@@ -2074,18 +2083,37 @@ fn pu_blur_fused_inner(
             let need_hi = (y + 6).min(h - 1);
             while next_row <= need_hi {
                 let srow = &src[next_row * w..next_row * w + w];
-                let brow = src_b.map(|b| &b[next_row * w..next_row * w + w]);
                 let slot = (next_row % RING) * w;
-                let out = &mut ring[slot..slot + w];
+                // When `src_b` is present, materialize the row's
+                // `min(|a|,|b|)` into `mrow` (the spare 14th scratch
+                // row) once; the filter taps then read it exactly as
+                // they read `srow` in the single-source variant.
+                let (head, tail) = ring.split_at_mut(RING * w);
+                let (mrow, out) = if let Some(b) = src_b {
+                    let brow = &b[next_row * w..next_row * w + w];
+                    let mrow = &mut tail[..w];
+                    let mut x = 0usize;
+                    while x + lane <= w {
+                        let aarr: [f32; 16] = srow[x..x + 16].try_into().unwrap();
+                        let barr: [f32; 16] = brow[x..x + 16].try_into().unwrap();
+                        let av = f32x16::from_array_t(token, aarr);
+                        let bv = f32x16::from_array_t(token, barr);
+                        mrow[x..x + 16].copy_from_slice(&av.abs().min(bv.abs()).to_array());
+                        x += lane;
+                    }
+                    while x < w {
+                        mrow[x] = srow[x].abs().min(brow[x].abs());
+                        x += 1;
+                    }
+                    (&mrow[..], &mut head[slot..slot + w])
+                } else {
+                    (&srow[..], &mut head[slot..slot + w])
+                };
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        let v = match brow {
-                            Some(b) => srow[sx].abs().min(b[sx].abs()),
-                            None => srow[sx],
-                        };
-                        s += k[t] * v;
+                        s += k[t] * mrow[sx];
                     }
                     out[x] = s;
                 }
@@ -2093,15 +2121,8 @@ fn pu_blur_fused_inner(
                 while x_base < h_interior_hi_excl {
                     let load = |off: usize| -> f32x16 {
                         let base = x_base - 6 + off;
-                        let arr: [f32; 16] = srow[base..base + 16].try_into().unwrap();
-                        let av = f32x16::from_array_t(token, arr);
-                        match brow {
-                            Some(b) => {
-                                let barr: [f32; 16] = b[base..base + 16].try_into().unwrap();
-                                av.abs().min(f32x16::from_array_t(token, barr).abs())
-                            }
-                            None => av,
-                        }
+                        let arr: [f32; 16] = mrow[base..base + 16].try_into().unwrap();
+                        f32x16::from_array_t(token, arr)
                     };
                     let v0 = load(0);
                     let v1 = load(1);
@@ -2136,11 +2157,7 @@ fn pu_blur_fused_inner(
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        let v = match brow {
-                            Some(b) => srow[sx].abs().min(b[sx].abs()),
-                            None => srow[sx],
-                        };
-                        s += k[t] * v;
+                        s += k[t] * mrow[sx];
                     }
                     out[x] = s;
                 }
@@ -2258,8 +2275,15 @@ fn pu_blur_fused_inner(
     if w == 0 || h == 0 {
         return;
     }
+    // See the width-16 twin: `src_b` adds a 14th scratch row holding
+    // the row's `min(|a|,|b|)` — computed once, not once per h-tap.
+    let scratch_len = if src_b.is_some() {
+        (RING + 1) * w
+    } else {
+        RING * w
+    };
 
-    crate::par::map_rows_scratch(dst, w, ring_scratch, RING * w, |y0, dst, ring| {
+    crate::par::map_rows_scratch(dst, w, ring_scratch, scratch_len, |y0, dst, ring| {
         let h_band = dst.len() / w;
         let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
         for yl in 0..h_band {
@@ -2268,18 +2292,33 @@ fn pu_blur_fused_inner(
             let need_hi = (y + 6).min(h - 1);
             while next_row <= need_hi {
                 let srow = &src[next_row * w..next_row * w + w];
-                let brow = src_b.map(|b| &b[next_row * w..next_row * w + w]);
                 let slot = (next_row % RING) * w;
-                let out = &mut ring[slot..slot + w];
+                let (head, tail) = ring.split_at_mut(RING * w);
+                let (mrow, out) = if let Some(b) = src_b {
+                    let brow = &b[next_row * w..next_row * w + w];
+                    let mrow = &mut tail[..w];
+                    let mut x = 0usize;
+                    while x + lane <= w {
+                        let aarr: [f32; 8] = srow[x..x + 8].try_into().unwrap();
+                        let barr: [f32; 8] = brow[x..x + 8].try_into().unwrap();
+                        let av = f32x8::from_array_t(token, aarr);
+                        let bv = f32x8::from_array_t(token, barr);
+                        mrow[x..x + 8].copy_from_slice(&av.abs().min(bv.abs()).to_array());
+                        x += lane;
+                    }
+                    while x < w {
+                        mrow[x] = srow[x].abs().min(brow[x].abs());
+                        x += 1;
+                    }
+                    (&mrow[..], &mut head[slot..slot + w])
+                } else {
+                    (&srow[..], &mut head[slot..slot + w])
+                };
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        let v = match brow {
-                            Some(b) => srow[sx].abs().min(b[sx].abs()),
-                            None => srow[sx],
-                        };
-                        s += k[t] * v;
+                        s += k[t] * mrow[sx];
                     }
                     out[x] = s;
                 }
@@ -2287,15 +2326,8 @@ fn pu_blur_fused_inner(
                 while x_base < h_interior_hi_excl {
                     let load = |off: usize| -> f32x8 {
                         let base = x_base - 6 + off;
-                        let arr: [f32; 8] = srow[base..base + 8].try_into().unwrap();
-                        let av = f32x8::from_array_t(token, arr);
-                        match brow {
-                            Some(b) => {
-                                let barr: [f32; 8] = b[base..base + 8].try_into().unwrap();
-                                av.abs().min(f32x8::from_array_t(token, barr).abs())
-                            }
-                            None => av,
-                        }
+                        let arr: [f32; 8] = mrow[base..base + 8].try_into().unwrap();
+                        f32x8::from_array_t(token, arr)
                     };
                     let v0 = load(0);
                     let v1 = load(1);
@@ -2330,11 +2362,7 @@ fn pu_blur_fused_inner(
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        let v = match brow {
-                            Some(b) => srow[sx].abs().min(b[sx].abs()),
-                            None => srow[sx],
-                        };
-                        s += k[t] * v;
+                        s += k[t] * mrow[sx];
                     }
                     out[x] = s;
                 }
@@ -2529,8 +2557,9 @@ pub(crate) fn gaussian_blur_sigma3_minabs_scaled(
     debug_assert_eq!(src_a.len(), w * h);
     debug_assert_eq!(src_b.len(), w * h);
     let n = w * h;
-    if h_pass.len() < 13 * w {
-        h_pass.resize(13 * w, 0.0);
+    // 13 ring rows + 1 min(|a|,|b|) materialization row.
+    if h_pass.len() < 14 * w {
+        h_pass.resize(14 * w, 0.0);
     }
     if dst.len() < n {
         dst.resize(n, 0.0);

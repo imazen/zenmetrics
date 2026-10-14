@@ -15,7 +15,7 @@ use crate::color::{
 use crate::diffmap::{DiffmapAccum, accumulate_band_diffmap, finalize_diffmap};
 use crate::pool::{
     BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
-    do_pooling_and_jod_still_3ch, lp_norm_mean,
+    do_pooling_and_jod_still_3ch, lp_norm_mean3,
 };
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies};
 // BandWorkspace is used by the strip-walk closures below (pipeline.rs ~1849,
@@ -2553,12 +2553,11 @@ fn pool_band_3ch(
     strip_counter: &core::sync::atomic::AtomicU32,
 ) -> [f32; 3] {
     let Some(h_body) = strip_h_body else {
-        // Full mode: identical to the pre-strip code path.
-        return [
-            lp_norm_mean(d_a, BETA_SPATIAL),
-            lp_norm_mean(d_rg, BETA_SPATIAL),
-            lp_norm_mean(d_vy, BETA_SPATIAL),
-        ];
+        // Full mode: three interleaved sequential accumulators —
+        // bit-identical to three `lp_norm_mean` calls (each chain's
+        // add order is unchanged), ~3× the throughput on the
+        // add-latency-bound pass.
+        return lp_norm_mean3(d_a, d_rg, d_vy, BETA_SPATIAL);
     };
 
     // Strip mode: per-band strip body at this level.

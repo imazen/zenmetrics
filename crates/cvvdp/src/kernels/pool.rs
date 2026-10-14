@@ -147,6 +147,52 @@ pub fn lp_norm_mean(values: &[f32], p: f32) -> f32 {
     safe_pow_lp(acc / n, 1.0 / p)
 }
 
+/// Three `lp_norm_mean` evaluations in one pass. Each channel's
+/// accumulator applies `safe_pow_lp` in the same left-to-right order
+/// a standalone call would, so the results are **bit-identical** to
+/// three `lp_norm_mean` calls — the interleave only overlaps the
+/// three otherwise-serial add chains' latencies.
+///
+/// ```
+/// let a = [0.5f32, -0.25, 1.5, 0.0, 2.25];
+/// let b = [1.0f32; 5];
+/// let c = [-0.1f32, 0.2, -0.3, 0.4, -0.5];
+/// let got = cvvdp::kernels::pool::lp_norm_mean3(&a, &b, &c, 2.0);
+/// for (i, (got, s)) in got
+///     .iter()
+///     .zip([
+///         cvvdp::kernels::pool::lp_norm_mean(&a, 2.0),
+///         cvvdp::kernels::pool::lp_norm_mean(&b, 2.0),
+///         cvvdp::kernels::pool::lp_norm_mean(&c, 2.0),
+///     ])
+///     .enumerate()
+/// {
+///     assert_eq!(got.to_bits(), s.to_bits(), "channel {i} bit mismatch");
+/// }
+/// ```
+#[must_use]
+pub fn lp_norm_mean3(a: &[f32], b: &[f32], c: &[f32], p: f32) -> [f32; 3] {
+    let n = a.len();
+    debug_assert_eq!(b.len(), n);
+    debug_assert_eq!(c.len(), n);
+    if n == 0 {
+        return [0.0, 0.0, 0.0];
+    }
+    let (mut sa, mut sb, mut sc) = (0.0f32, 0.0f32, 0.0f32);
+    for i in 0..n {
+        sa += safe_pow_lp(a[i], p);
+        sb += safe_pow_lp(b[i], p);
+        sc += safe_pow_lp(c[i], p);
+    }
+    let nf = n as f32;
+    let rp = 1.0 / p;
+    [
+        safe_pow_lp(sa / nf, rp),
+        safe_pow_lp(sb / nf, rp),
+        safe_pow_lp(sc / nf, rp),
+    ]
+}
+
 /// cvvdp's `lp_norm` with `normalize=False`.
 ///
 /// # Examples
