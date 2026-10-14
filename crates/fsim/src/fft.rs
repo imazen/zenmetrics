@@ -219,6 +219,134 @@ impl Plan {
             }
         }
     }
+
+    /// `f32` scratch length (per side) [`run_batch8`] needs: `8·m` for
+    /// Bluestein plans, `0` otherwise.
+    fn batch_scratch_len(&self) -> usize {
+        match &self.kind {
+            PlanKind::Bluestein { m, .. } => 8 * m,
+            _ => 0,
+        }
+    }
+
+    /// Batched [`run`]: `re8`/`im8` hold eight independent length-`n`
+    /// transforms in the SoA batch layout (element `k` of lane `j` at
+    /// `[k·8 + j]`, matching [`fft_batch8`]). Every step reproduces
+    /// [`run`]'s per-lane complex op sequence, so each lane's result
+    /// is bit-identical. `are`/`aim` are `batch_scratch_len()` scratch.
+    fn run_batch8(&self, re8: &mut [f32], im8: &mut [f32], are: &mut [f32], aim: &mut [f32]) {
+        debug_assert_eq!(re8.len(), self.n * 8);
+        debug_assert_eq!(im8.len(), self.n * 8);
+        match &self.kind {
+            PlanKind::Trivial => {}
+            PlanKind::Radix2 { stages } => fft_batch8(re8, im8, self.n, stages),
+            PlanKind::Bluestein {
+                chirp,
+                bf,
+                m,
+                mplan,
+            } => bluestein_batch8(re8, im8, self.n, chirp, bf, *m, mplan, are, aim),
+        }
+    }
+}
+
+/// Batched Bluestein chirp-z, the SoA twin of the Bluestein arm in
+/// [`Plan::run`]: `a = buf·chirp` → FFT(m) → `a·bf` → conj → FFT(m)
+/// → conj·(1/m) → `out = a·chirp`. Each lane's op sequence is
+/// identical to the scalar path — `x·y` expands to
+/// `re·re − im·im`/`re·im + im·re` either way — so results are
+/// bit-identical. `fft_batch8` itself re-dispatches to the same tier.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn bluestein_batch8_inner(
+    token: Token,
+    re8: &mut [f32],
+    im8: &mut [f32],
+    n: usize,
+    chirp: &[Complex],
+    bf: &[Complex],
+    m: usize,
+    mplan: &[Vec<Complex>],
+    are: &mut [f32],
+    aim: &mut [f32],
+) {
+    debug_assert_eq!(re8.len(), n * 8);
+    debug_assert_eq!(im8.len(), n * 8);
+    debug_assert_eq!(are.len(), m * 8);
+    debug_assert_eq!(aim.len(), m * 8);
+    let zero = f32x8::splat_t(token, 0.0);
+
+    // a[k] = buf[k]·chirp[k] for k < n, zero elsewhere.
+    for k in 0..n {
+        let cr = f32x8::splat_t(token, chirp[k].re);
+        let ci = f32x8::splat_t(token, chirp[k].im);
+        let br = f32x8::load_t(token, (&re8[k * 8..k * 8 + 8]).try_into().unwrap());
+        let bi = f32x8::load_t(token, (&im8[k * 8..k * 8 + 8]).try_into().unwrap());
+        (br * cr - bi * ci).store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
+        (br * ci + bi * cr).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+    for k in n..m {
+        zero.store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
+        zero.store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+
+    fft_batch8(are, aim, m, mplan);
+
+    // a[k] *= bf[k]
+    for k in 0..m {
+        let br = f32x8::splat_t(token, bf[k].re);
+        let bi = f32x8::splat_t(token, bf[k].im);
+        let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
+        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ar * br - ai * bi).store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ar * bi + ai * br).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+
+    // conj
+    for k in 0..m {
+        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
+        (zero - ai).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+
+    fft_batch8(are, aim, m, mplan);
+
+    // conj·(1/m): `im·(−s)` ≡ `(−im)·s` bitwise (IEEE mul signs).
+    let s = f32x8::splat_t(token, 1.0 / m as f32);
+    let negs = f32x8::splat_t(token, -1.0 / m as f32);
+    for k in 0..m {
+        let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
+        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ar * s).store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ai * negs).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+
+    // out[k] = a[k]·chirp[k]
+    for k in 0..n {
+        let cr = f32x8::splat_t(token, chirp[k].re);
+        let ci = f32x8::splat_t(token, chirp[k].im);
+        let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
+        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ar * cr - ai * ci).store((&mut re8[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ar * ci + ai * cr).store((&mut im8[k * 8..k * 8 + 8]).try_into().unwrap());
+    }
+}
+
+/// [`bluestein_batch8_inner`] with runtime tier dispatch.
+#[allow(clippy::too_many_arguments)]
+fn bluestein_batch8(
+    re8: &mut [f32],
+    im8: &mut [f32],
+    n: usize,
+    chirp: &[Complex],
+    bf: &[Complex],
+    m: usize,
+    mplan: &[Vec<Complex>],
+    are: &mut [f32],
+    aim: &mut [f32],
+) {
+    archmage::attuned!(
+        bluestein_batch8_inner(re8, im8, n, chirp, bf, m, mplan, are, aim),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
 }
 
 /// Batched radix-2 FFT: **eight** independent length-`n` transforms at once,
@@ -450,15 +578,83 @@ fn fft2_rows_conj_mul(
             y += nb;
         }
     } else {
-        if conj || filter.is_some() {
-            for (i, v) in buf.iter_mut().enumerate() {
-                let f = filter.map_or(1.0, |f| f[i]);
-                let im = if conj { -v.im } else { v.im };
-                *v = Complex::new(v.re * f, im * f);
-            }
+        // Non-radix-2 (Bluestein) plans: batch eight rows through the
+        // SoA `run_batch8` — same per-lane op sequence as the scalar
+        // `Plan::run`, so results are bit-identical. `conj`/`filter`
+        // fold into the transpose-in exactly like the radix-2 arm.
+        const RB: usize = 8;
+        #[cfg(feature = "parallel")]
+        if height >= 4 * RB && rayon::current_num_threads() > 1 {
+            use rayon::prelude::*;
+            let scratch_len = wplan.batch_scratch_len();
+            buf.par_chunks_mut(width * RB)
+                .enumerate()
+                .map_init(
+                    || {
+                        (
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; width * RB],
+                            vec![0.0f32; scratch_len],
+                            vec![0.0f32; scratch_len],
+                        )
+                    },
+                    |(re8, im8, are, aim), (ci, chunk)| {
+                        let nb = chunk.len() / width;
+                        for x in 0..width {
+                            for j in 0..nb {
+                                let i = j * width + x;
+                                let v = chunk[i];
+                                let f = filter.map_or(1.0, |f| f[(ci * RB + j) * width + x]);
+                                let im = if conj { -v.im } else { v.im };
+                                re8[x * RB + j] = v.re * f;
+                                im8[x * RB + j] = im * f;
+                            }
+                            for j in nb..RB {
+                                re8[x * RB + j] = 0.0;
+                                im8[x * RB + j] = 0.0;
+                            }
+                        }
+                        wplan.run_batch8(re8, im8, are, aim);
+                        for x in 0..width {
+                            for j in 0..nb {
+                                chunk[j * width + x] =
+                                    Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                            }
+                        }
+                    },
+                )
+                .for_each(|()| ());
+            return;
         }
-        for row in buf.chunks_exact_mut(width) {
-            wplan.run(row);
+        let scratch_len = wplan.batch_scratch_len();
+        let mut re8 = vec![0.0f32; width * RB];
+        let mut im8 = vec![0.0f32; width * RB];
+        let mut are = vec![0.0f32; scratch_len];
+        let mut aim = vec![0.0f32; scratch_len];
+        let mut y = 0usize;
+        while y < height {
+            let nb = RB.min(height - y);
+            for x in 0..width {
+                for j in 0..nb {
+                    let i = (y + j) * width + x;
+                    let v = buf[i];
+                    let f = filter.map_or(1.0, |f| f[i]);
+                    let im = if conj { -v.im } else { v.im };
+                    re8[x * RB + j] = v.re * f;
+                    im8[x * RB + j] = im * f;
+                }
+                for j in nb..RB {
+                    re8[x * RB + j] = 0.0;
+                    im8[x * RB + j] = 0.0;
+                }
+            }
+            wplan.run_batch8(&mut re8, &mut im8, &mut are, &mut aim);
+            for x in 0..width {
+                for j in 0..nb {
+                    buf[(y + j) * width + x] = Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                }
+            }
+            y += nb;
         }
     }
 }
@@ -582,33 +778,103 @@ fn fft2_cols_conj_scale(
         return;
     }
 
-    let mut cols = vec![Complex::default(); height * CB];
+    // Non-radix-2 (Bluestein) plans: batch eight columns through the
+    // SoA `run_batch8` — same per-lane op sequence as the scalar
+    // `Plan::run`, so results are bit-identical. `conj·scale` folds
+    // into the scatter, same as the radix-2 arm.
+    #[cfg(feature = "parallel")]
+    if width >= 4 * CB && height >= 4 * CB && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        const SB: usize = 64; // blocks per super-block
+        let scratch_len = hplan.batch_scratch_len();
+        let mut x0 = 0usize;
+        while x0 < width {
+            let nb_cols = (SB * CB).min(width - x0);
+            let nblocks = nb_cols.div_ceil(CB);
+            let mut re_all = vec![0.0f32; nblocks * height * CB];
+            let mut im_all = vec![0.0f32; nblocks * height * CB];
+            {
+                let ro: &[Complex] = buf;
+                re_all
+                    .par_chunks_mut(CB)
+                    .zip(im_all.par_chunks_mut(CB))
+                    .enumerate()
+                    .for_each(|(j, (rc, ic))| {
+                        let (b, y) = (j / height, j % height);
+                        for (l, (rc, ic)) in rc.iter_mut().zip(ic.iter_mut()).enumerate() {
+                            let x = x0 + b * CB + l;
+                            if x < width {
+                                let v = ro[y * width + x];
+                                *rc = v.re;
+                                *ic = v.im;
+                            }
+                        }
+                    });
+            }
+            re_all
+                .par_chunks_mut(height * CB)
+                .zip(im_all.par_chunks_mut(height * CB))
+                .map_init(
+                    || (vec![0.0f32; scratch_len], vec![0.0f32; scratch_len]),
+                    |(are, aim), (rc, ic)| hplan.run_batch8(rc, ic, are, aim),
+                )
+                .for_each(|()| ());
+            let s = scale.unwrap_or(1.0);
+            let negate = scale.is_some();
+            buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                for b in 0..nblocks {
+                    let base = (b * height + y) * CB;
+                    for l in 0..CB {
+                        let x = x0 + b * CB + l;
+                        if x < width {
+                            let (re, im) = (re_all[base + l], im_all[base + l]);
+                            row[x] = Complex::new(re * s, if negate { -im * s } else { im * s });
+                        }
+                    }
+                }
+            });
+            x0 += nb_cols;
+        }
+        return;
+    }
+    let scratch_len = hplan.batch_scratch_len();
+    let mut re8 = vec![0.0f32; height * CB];
+    let mut im8 = vec![0.0f32; height * CB];
+    let mut are = vec![0.0f32; scratch_len];
+    let mut aim = vec![0.0f32; scratch_len];
     let mut x = 0usize;
     while x < width {
         let nb = CB.min(width - x);
         for y in 0..height {
-            let src = &buf[y * width + x..y * width + x + nb];
-            for (j, &v) in src.iter().enumerate() {
-                cols[j * height + y] = v;
+            for j in 0..nb {
+                let v = buf[y * width + x + j];
+                re8[y * CB + j] = v.re;
+                im8[y * CB + j] = v.im;
+            }
+            for j in nb..CB {
+                re8[y * CB + j] = 0.0;
+                im8[y * CB + j] = 0.0;
             }
         }
-        for c in cols.chunks_exact_mut(height).take(nb) {
-            hplan.run(c);
-        }
-        for y in 0..height {
-            let dst = &mut buf[y * width + x..y * width + x + nb];
-            for (j, d) in dst.iter_mut().enumerate() {
-                *d = cols[j * height + y];
+        hplan.run_batch8(&mut re8, &mut im8, &mut are, &mut aim);
+        match scale {
+            Some(s) => {
+                for y in 0..height {
+                    for j in 0..nb {
+                        buf[y * width + x + j] =
+                            Complex::new(re8[y * CB + j] * s, -im8[y * CB + j] * s);
+                    }
+                }
+            }
+            None => {
+                for y in 0..height {
+                    for j in 0..nb {
+                        buf[y * width + x + j] = Complex::new(re8[y * CB + j], im8[y * CB + j]);
+                    }
+                }
             }
         }
         x += nb;
-    }
-    // The trailing `conj·scale` applies to the TRANSFORMED data — on the
-    // scalar fallback it stays a separate final pass.
-    if let Some(s) = scale {
-        for v in buf.iter_mut() {
-            *v = Complex::new(v.re, -v.im).scale(s);
-        }
     }
 }
 
@@ -662,8 +928,12 @@ mod tests {
     }
 
     fn seeded(n: usize) -> Vec<Complex> {
+        seeded_with(0x2545_F491_4F6C_DD1Du64, n)
+    }
+
+    fn seeded_with(seed: u64, n: usize) -> Vec<Complex> {
         // Deterministic pseudo-random-ish input; no dependency needed.
-        let mut s = 0x2545_F491_4F6C_DD1Du64;
+        let mut s = seed | 1;
         (0..n)
             .map(|_| {
                 let mut next = || {
@@ -734,6 +1004,66 @@ mod tests {
             let mut y = x.clone();
             fft2(&mut y, w, h);
             ifft2(&mut y, w, h);
+            for (a, b) in y.iter().zip(&x) {
+                assert!((a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4);
+            }
+        }
+    }
+
+    #[test]
+    fn run_batch8_matches_scalar_bitexact() {
+        // The SoA batched `Plan::run` must reproduce the scalar `run`
+        // bit-for-bit on every lane: identical complex op sequence per
+        // element. Covers radix-2, Bluestein (prime, odd composite,
+        // pow2-adjacent), and trivial lengths.
+        for n in [1usize, 2, 4, 8, 16, 3, 5, 6, 7, 9, 11, 15, 17, 33, 100, 129] {
+            let plan = Plan::new(n);
+            let mut re8 = vec![0.0f32; n * 8];
+            let mut im8 = vec![0.0f32; n * 8];
+            let mut want: Vec<Complex> = Vec::with_capacity(n * 8);
+            for j in 0..8 {
+                let lane = seeded_with(0x9E37_9B97_F4A7_C15u64.wrapping_mul(j as u64 + 1), n);
+                for (k, v) in lane.iter().enumerate() {
+                    re8[k * 8 + j] = v.re;
+                    im8[k * 8 + j] = v.im;
+                }
+                let mut w = lane;
+                plan.run(&mut w);
+                want.extend(w);
+            }
+            let scratch_len = plan.batch_scratch_len();
+            let mut are = vec![0.0f32; scratch_len];
+            let mut aim = vec![0.0f32; scratch_len];
+            plan.run_batch8(&mut re8, &mut im8, &mut are, &mut aim);
+            for j in 0..8 {
+                for k in 0..n {
+                    let got = Complex::new(re8[k * 8 + j], im8[k * 8 + j]);
+                    let w = want[j * n + k];
+                    assert_eq!(
+                        got.re.to_bits(),
+                        w.re.to_bits(),
+                        "n={n} lane={j} k={k} re: {got:?} vs {w:?}"
+                    );
+                    assert_eq!(
+                        got.im.to_bits(),
+                        w.im.to_bits(),
+                        "n={n} lane={j} k={k} im: {got:?} vs {w:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fft2_planned_non_pow2_matches_naive_roundtrip() {
+        // The batched Bluestein drivers (fft2/ifft2 row+col passes)
+        // must still round-trip — exercises the run_batch8 path
+        // end-to-end including partial 8-lane blocks.
+        for (w, h) in [(7usize, 5usize), (13, 9), (33, 17)] {
+            let x = seeded(w * h);
+            let mut y = x.clone();
+            fft2_planned(&mut y, w, h, &Plan::new(w), &Plan::new(h));
+            ifft2_planned(&mut y, w, h, &Plan::new(w), &Plan::new(h));
             for (a, b) in y.iter().zip(&x) {
                 assert!((a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4);
             }
