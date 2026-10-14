@@ -1239,16 +1239,29 @@ impl Plan2 {
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
             if cols == 8 {
-                for y in 0..h {
-                    let (d, s) = (
-                        match perm {
-                            Some(r) => r[y] as usize,
-                            None => y,
-                        } * 8,
-                        y * stride + x0,
-                    );
-                    self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
-                    self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
+                match perm {
+                    None => {
+                        // Contiguous dst / strided src — slice-adapted
+                        // chunks keep bounds checks out of the loop.
+                        for (y, (d8, d8i)) in self
+                            .re8
+                            .chunks_exact_mut(8)
+                            .zip(self.im8.chunks_exact_mut(8))
+                            .enumerate()
+                            .take(h)
+                        {
+                            let s = y * stride + x0;
+                            d8.copy_from_slice(&self.pre[s..s + 8]);
+                            d8i.copy_from_slice(&self.pim[s..s + 8]);
+                        }
+                    }
+                    Some(r) => {
+                        for y in 0..h {
+                            let (d, s) = (r[y] as usize * 8, y * stride + x0);
+                            self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
+                            self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
+                        }
+                    }
                 }
                 {
                     let m = self.columns.work_len(h);
@@ -1267,10 +1280,15 @@ impl Plan2 {
                 match perm {
                     None => {
                         for y in 0..h {
-                            let s = y * w + x0;
+                            let f8: &[f64; 8] =
+                                filt[y * w + x0..y * w + x0 + 8].try_into().unwrap();
+                            let re: &mut [f64; 8] =
+                                (&mut self.re8[y * 8..y * 8 + 8]).try_into().unwrap();
+                            let im: &mut [f64; 8] =
+                                (&mut self.im8[y * 8..y * 8 + 8]).try_into().unwrap();
                             for j in 0..8 {
-                                self.re8[y * 8 + j] *= filt[s + j];
-                                self.im8[y * 8 + j] = -(self.im8[y * 8 + j] * filt[s + j]);
+                                re[j] *= f8[j];
+                                im[j] = -(im[j] * f8[j]);
                             }
                         }
                     }
@@ -1300,9 +1318,15 @@ impl Plan2 {
                 }
                 for y in 0..keep_rows {
                     let (d, s) = (y * 8, y * stride + x0);
+                    let re: &[f64; 8] = (&self.re8[d..d + 8]).try_into().unwrap();
+                    let im: &[f64; 8] = (&self.im8[d..d + 8]).try_into().unwrap();
+                    let pr: &mut [f64; 8] =
+                        (&mut self.pre[s..s + 8]).try_into().unwrap();
+                    let pi: &mut [f64; 8] =
+                        (&mut self.pim[s..s + 8]).try_into().unwrap();
                     for j in 0..8 {
-                        self.pre[s + j] = self.re8[d + j] * sc;
-                        self.pim[s + j] = -self.im8[d + j] * sc;
+                        pr[j] = re[j] * sc;
+                        pi[j] = -im[j] * sc;
                     }
                 }
             } else {

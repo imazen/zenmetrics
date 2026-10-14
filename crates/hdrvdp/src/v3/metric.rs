@@ -300,6 +300,7 @@ pub fn hdrvdp3(
 
     let mut d_bands = b_t.clone();
     let mut q_err = 0.0f64;
+    let mut mask_memo: Vec<Option<Vec<f64>>> = vec![None; b_count];
 
     for b in 0..b_count {
         let p = 10f64.powf(mp.mask_p);
@@ -381,6 +382,7 @@ pub fn hdrvdp3(
                     &mut q_err,
                     b_count,
                     relaxed,
+                    &mut mask_memo,
                 );
             }
         } else {
@@ -403,6 +405,7 @@ pub fn hdrvdp3(
                 &mut q_err,
                 b_count,
                 relaxed,
+                &mut mask_memo,
             );
         }
     }
@@ -506,6 +509,7 @@ fn apply_band(
     q_err: &mut f64,
     b_count: usize,
     relaxed: bool,
+    mask_memo: &mut Vec<Option<Vec<f64>>>,
 ) {
     let d: Vec<f64> = if mp.do_masking {
         let k_self = 10f64.powf(mp.mask_self);
@@ -513,12 +517,28 @@ fn apply_band(
         let k_xn = 10f64.powf(mp.mask_xn);
         let do_mask_xn = mp.mask_xn > -10.0;
 
-        let self_mask = mutual_masking(b_t, b_r, b, mp, relaxed);
+        // A band's mask is a pure function of it — computed up to 3× as
+        // self/prev/next across the band loop without the memo.
+        let mask_at = |memo: &mut Vec<Option<Vec<f64>>>, bb: usize| {
+            if memo[bb].is_none() {
+                memo[bb] = Some(mutual_masking(b_t, b_r, bb, mp, relaxed));
+            }
+        };
+        mask_at(mask_memo, b);
+        if do_mask_xn {
+            if b > 0 {
+                mask_at(mask_memo, b - 1);
+            }
+            if b < b_count - 2 {
+                mask_at(mask_memo, b + 1);
+            }
+        }
+        let self_mask = mask_memo[b].as_deref().unwrap();
         let mut mask_xn = vec![0.0; bw * bh];
         if b > 0 && do_mask_xn {
-            let prev = mutual_masking(b_t, b_r, b - 1, mp, relaxed);
+            let prev = mask_memo[b - 1].as_deref().unwrap();
             let resized = imresize(
-                &prev,
+                prev,
                 b_t.band_dims(b - 1).0,
                 b_t.band_dims(b - 1).1,
                 bw,
@@ -529,9 +549,9 @@ fn apply_band(
             }
         }
         if b < b_count - 2 && do_mask_xn {
-            let next = mutual_masking(b_t, b_r, b + 1, mp, relaxed);
+            let next = mask_memo[b + 1].as_deref().unwrap();
             let resized = imresize(
-                &next,
+                next,
                 b_t.band_dims(b + 1).0,
                 b_t.band_dims(b + 1).1,
                 bw,
