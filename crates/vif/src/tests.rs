@@ -110,7 +110,8 @@ fn plane_goldens() {
             "{name}: {s} vs golden {expected} (delta {delta:e})"
         );
     }
-    eprintln!("worst plane golden delta: {worst:e}");
+    #[cfg(feature = "std")]
+    std::eprintln!("worst plane golden delta: {worst:e}");
 }
 
 /// The reference returns `NaN` whenever the denominator accumulator
@@ -169,7 +170,8 @@ fn vifvec_plane_goldens() {
             "vifvec ({kr},{kd},{w}x{h}): {s} vs golden {expected} (delta {delta:e})"
         );
     }
-    eprintln!("worst vifvec plane golden delta: {worst:e}");
+    #[cfg(feature = "std")]
+    std::eprintln!("worst vifvec plane golden delta: {worst:e}");
 }
 
 /// `vifvec`'s size floor is the reference's `maxPyrHt(im, 9) >= 4`
@@ -254,6 +256,7 @@ fn tier_parity() {
             im2: &d,
             w,
             h,
+            maps: None,
         },
     );
     if let Some(token) = archmage::X64V3Token::summon() {
@@ -264,6 +267,7 @@ fn tier_parity() {
                 im2: &d,
                 w,
                 h,
+                maps: None,
             },
         );
         assert_eq!(s_scalar, s_v3);
@@ -277,8 +281,61 @@ fn tier_parity() {
                 im2: &d,
                 w,
                 h,
+                maps: None,
             },
         );
         assert_eq!(s_scalar, s_v4x);
+    }
+}
+
+/// The captured per-element terms are exactly what the score sums: one
+/// running accumulator over scales then elements reproduces VIF's bits.
+#[test]
+fn vifp_terms_fold_to_the_score_exactly() {
+    for (w, h) in [(64usize, 48usize), (97, 61), (17, 17), (130, 129), (40, 18)] {
+        let a = rgb_planes([1, 2, 4], w, h);
+        let b = rgb_planes([2, 1, 3], w, h);
+        let plain = vif_rgb8(&a, &b, w, h, w * 3).unwrap();
+        let (vif, terms) = vif_rgb8_terms(&a, &b, w, h, w * 3).unwrap();
+        assert_eq!(vif.to_bits(), plain.to_bits(), "{w}x{h}");
+        let (mut num, mut den) = (0.0f64, 0.0f64);
+        let mut last = None;
+        for t in &terms {
+            assert!(last.is_none_or(|s| s < t.scale), "scales in order");
+            last = Some(t.scale);
+            assert_eq!((t.num.len(), t.den.len()), (t.w * t.h, t.w * t.h));
+            for (n, d) in t.num.iter().zip(&t.den) {
+                num += n;
+                den += d;
+            }
+        }
+        let folded = num / den;
+        assert_eq!(
+            folded.to_bits(),
+            plain.to_bits(),
+            "{w}x{h}: {folded} vs {plain}"
+        );
+    }
+}
+
+/// Per-block vifvec terms add up to the pooled sums (they regroup the same
+/// per-element `log2`s, so only summation order differs) and fold to VIF.
+#[test]
+fn vifvec_block_terms_fold_to_the_score() {
+    for (w, h) in [(96usize, 80usize), (128, 112), (75, 101)] {
+        let a = rgb_planes([1, 4, 2], w, h);
+        let b = rgb_planes([3, 1, 2], w, h);
+        let plain = vifvec_rgb8(&a, &b, w, h, w * 3).unwrap();
+        let (vif, subs) = vifvec_rgb8_terms(&a, &b, w, h, w * 3).unwrap();
+        assert_eq!(vif.to_bits(), plain.to_bits(), "{w}x{h}");
+        assert_eq!(subs.len(), 8);
+        let (num, den): (f64, f64) = subs.iter().fold((0.0, 0.0), |(n, d), t| {
+            (n + t.num.iter().sum::<f64>(), d + t.den.iter().sum::<f64>())
+        });
+        let folded = num / den;
+        assert!(
+            (folded - plain).abs() <= 1e-12 * plain.abs(),
+            "{w}x{h}: {folded} vs {plain}"
+        );
     }
 }

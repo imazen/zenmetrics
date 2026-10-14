@@ -1938,16 +1938,50 @@ fn pool_log2(
 // Driver.
 // ------------------------------------------------------------------
 
+/// One subband's per-block information terms over the cropped block grid
+/// the score pools: `num[i] = Σ_λ log2(1 + g²·s·λ/(σᵥ² + σₙ²))`,
+/// `den[i] = Σ_λ log2(1 + s·λ/σₙ²)` (λ in eigenvalue order), each block
+/// summed on its own; the score sums the same per-element `log2` terms in
+/// λ-major order.
+#[derive(Debug)]
+pub(crate) struct SubTerms {
+    /// Pyramid level, 1-based (1 = full resolution).
+    pub(crate) level: usize,
+    /// MATLAB band index, 1 or 4.
+    pub(crate) band: usize,
+    /// Blocks cropped from each side of the subband's block grid.
+    pub(crate) offset: usize,
+    /// Cropped grid width in 3×3 blocks.
+    pub(crate) w: usize,
+    /// Cropped grid height in blocks.
+    pub(crate) h: usize,
+    pub(crate) num: Vec<f64>,
+    pub(crate) den: Vec<f64>,
+}
+
 /// Vector-GSM VIF of two `w×h` f64 planes (0–255 signal scale).
 /// Returns `NaN` when the reference would (empty/degenerate fields).
 pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
+    vifvec_core_impl(r, d, w, h, None)
+}
+
+/// [`vifvec_core`]; with `maps`, also collects every selected subband's
+/// [`SubTerms`] in `SUBS` order after its pooling terms are computed.
+pub(crate) fn vifvec_core_impl(
+    r: &[f64],
+    d: &[f64],
+    w: usize,
+    h: usize,
+    maps: Option<&mut Vec<SubTerms>>,
+) -> f64 {
+    let with_maps = maps.is_some();
     // The two pyramid decompositions are independent.
     let (rb, db) = crate::kernel::maybe_join(|| build_bands(r, w, h), || build_bands(d, w, h));
 
     // Per-subband work is independent; collect each band's 9 (t1,t2)
     // pairs in band order and fold serially — the fold visits terms in
     // the original (sub, lam) order, so the sum is bit-identical.
-    let sub_terms = |si: usize| -> Vec<(f64, f64)> {
+    let sub_terms = |si: usize| -> (Vec<(f64, f64)>, Option<SubTerms>) {
         let (level, band, winsize, offset) = SUBS[si];
         let y = &rb[level - 1][usize::from(band == 4)];
         let yn = &db[level - 1][usize::from(band == 4)];
@@ -1958,12 +1992,39 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
         // Crop `offset` entries on every side of the block maps
         // (reference: `g(offset+1:end-offset, …)`).
         let (iw, ih) = (nbw - 2 * offset, nbh - 2 * offset);
-        lambda
+        let terms: Vec<(f64, f64)> = lambda
             .iter()
             .map(|&lam| pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam))
-            .collect()
+            .collect();
+        let blocks = with_maps.then(|| {
+            // The same per-element `libm::log2` terms `pool_log2` adds
+            // (its lanes are bit-identical to it), summed per block.
+            let (mut num, mut den) = (alloc::vec![0.0f64; iw * ih], alloc::vec![0.0f64; iw * ih]);
+            for &lam in &lambda {
+                for by in 0..ih {
+                    let row = (by + offset) * nbw + offset;
+                    for bx in 0..iw {
+                        let i = row + bx;
+                        let (gi, vi, si) = (g[i], vv[i], ss[i]);
+                        num[by * iw + bx] +=
+                            libm::log2(1.0 + gi * gi * si * lam / (vi + SIGMA_NSQ));
+                        den[by * iw + bx] += libm::log2(1.0 + si * lam / SIGMA_NSQ);
+                    }
+                }
+            }
+            SubTerms {
+                level,
+                band,
+                offset,
+                w: iw,
+                h: ih,
+                num,
+                den,
+            }
+        });
+        (terms, blocks)
     };
-    let subs_terms: Vec<Vec<(f64, f64)>> = {
+    let subs_terms: Vec<(Vec<(f64, f64)>, Option<SubTerms>)> = {
         #[cfg(feature = "parallel")]
         {
             use rayon::prelude::*;
@@ -1980,11 +2041,14 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
     };
     let mut num = 0.0f64;
     let mut den = 0.0f64;
-    for terms in &subs_terms {
+    for (terms, _) in &subs_terms {
         for &(t1, t2) in terms {
             num += t1;
             den += t2;
         }
+    }
+    if let Some(sink) = maps {
+        sink.extend(subs_terms.into_iter().filter_map(|(_, b)| b));
     }
     num / den
 }

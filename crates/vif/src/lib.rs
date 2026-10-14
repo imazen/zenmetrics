@@ -189,7 +189,7 @@ pub fn vif_plane_f32(
     check_plane(distorted, width, height, stride)?;
     let r = gather_plane(reference, width, height, stride);
     let d = gather_plane(distorted, width, height, stride);
-    Ok(kernel::vifp_core(&Inputs { r, d }, width, height))
+    Ok(kernel::vifp_core(&Inputs { r, d }, width, height, None))
 }
 
 /// VIFp of two interleaved sRGB RGB8 pairs, on the MATLAB `rgb2gray`
@@ -204,7 +204,158 @@ pub fn vif_rgb8(
     check_rgb(reference, width, height, stride)?;
     check_rgb(distorted, width, height, stride)?;
     let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
-    Ok(kernel::vifp_core(&inputs, width, height))
+    Ok(kernel::vifp_core(&inputs, width, height, None))
+}
+
+/// [`vif_rgb8`] plus every non-empty scale's per-element information terms.
+fn vif_rgb8_terms(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, Vec<kernel::ScaleTerms>), Error> {
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
+    let mut terms = Vec::new();
+    let score = kernel::vifp_core(&inputs, width, height, Some(&mut terms));
+    Ok((score, terms))
+}
+
+/// Information-loss map names, one per VIFp scale.
+const VIFP_NAMES: [&str; 4] = ["info_loss_0", "info_loss_1", "info_loss_2", "info_loss_3"];
+
+/// A scored pair with its per-scale information-loss maps.
+struct VifMaps {
+    vif: f64,
+    names: Vec<&'static str>,
+    maps: Vec<Vec<f32>>,
+    geometry: Vec<za::MapGeometry>,
+}
+
+impl VifMaps {
+    /// VIFp scale `s` samples the input at `c_s + 2^s·i` with
+    /// `c_s = 8 + 4s`: scale `s > 0` is the previous plane filtered
+    /// 'valid' by this scale's own `N = 2^(4−s)+1`-tap window and
+    /// decimated `1:2:end`, and the statistics grid is that window's
+    /// 'valid' output. Cells are `2^s` blocks around those centres. A value
+    /// reads the input within `8 + 4s` pixels of its centre.
+    fn vifp(vif: f64, terms: Vec<kernel::ScaleTerms>, w: usize, h: usize) -> Self {
+        let mut out = Self {
+            vif,
+            names: Vec::new(),
+            maps: Vec::new(),
+            geometry: Vec::new(),
+        };
+        for t in terms {
+            let cell = 1u32 << t.scale;
+            let centre = 8 + 4 * t.scale as i64;
+            let halo = 8 + 4 * t.scale as u32;
+            out.names.push(VIFP_NAMES[t.scale]);
+            out.maps.push(
+                t.den
+                    .iter()
+                    .zip(&t.num)
+                    .map(|(&d, &n)| (d - n) as f32)
+                    .collect(),
+            );
+            out.geometry.push(
+                za::MapGeometry::grid(
+                    w as u32,
+                    h as u32,
+                    centre - i64::from(cell / 2),
+                    centre - i64::from(cell / 2),
+                    cell,
+                    cell,
+                    t.w as u32,
+                    t.h as u32,
+                )
+                .with_halo(halo, halo),
+            );
+        }
+        out
+    }
+
+    /// `vifvec`'s level `L` (1-based) samples the input at `2^(L−1)·k`
+    /// (`corrDn` start 0, the inter-level lowpass at stride 2), and each
+    /// block is 3×3 subband samples, so cell `i` is block `i + offset` of
+    /// the cropped grid: `3·2^(L−1)` pixels starting `2^(L−2)` before its
+    /// first sample's position. The S-field and eigenvalues come from the
+    /// whole subband's covariance, so support is global.
+    fn vifvec(vif: f64, subs: Vec<vifvec::SubTerms>, w: usize, h: usize) -> Self {
+        let mut out = Self {
+            vif,
+            names: Vec::new(),
+            maps: Vec::new(),
+            geometry: Vec::new(),
+        };
+        // `SUBS` runs coarse to fine; serve the finest first.
+        for t in subs.into_iter().rev() {
+            let step = 1u32 << (t.level - 1);
+            let cell = 3 * step;
+            let origin = i64::from(cell) * t.offset as i64 - i64::from(step / 2);
+            out.names
+                .push(VIFVEC_NAMES[(t.level - 1) * 2 + usize::from(t.band == 4)]);
+            out.maps.push(
+                t.den
+                    .iter()
+                    .zip(&t.num)
+                    .map(|(&d, &n)| (d - n) as f32)
+                    .collect(),
+            );
+            out.geometry.push(
+                za::MapGeometry::grid(
+                    w as u32, h as u32, origin, origin, cell, cell, t.w as u32, t.h as u32,
+                )
+                .with_support(za::Support::Global),
+            );
+        }
+        out
+    }
+
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry[i];
+        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(self.names[i], px, za::MapPolarity::Difference, g).ok()
+    }
+}
+
+/// `vifvec` map names by `(level, band)`, finest level first.
+const VIFVEC_NAMES: [&str; 8] = [
+    "info_loss_l1_b1",
+    "info_loss_l1_b4",
+    "info_loss_l2_b1",
+    "info_loss_l2_b4",
+    "info_loss_l3_b1",
+    "info_loss_l3_b4",
+    "info_loss_l4_b1",
+    "info_loss_l4_b4",
+];
+
+impl za::Evaluation for VifMaps {
+    fn score(&self) -> f64 {
+        self.vif
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("vif"),
+            self.vif,
+        )))
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..self.maps.len()).filter_map(|i| self.view(i)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 /// `vifvec` (vector-GSM steerable-pyramid VIF — the original release)
@@ -246,6 +397,23 @@ pub fn vifvec_rgb8(
     check_rgb(distorted, width, height, stride)?;
     let inputs = Inputs::from_rgb8_rounded(reference, distorted, width, height, stride);
     Ok(vifvec::vifvec_core(&inputs.r, &inputs.d, width, height))
+}
+
+/// [`vifvec_rgb8`] plus every selected subband's per-block terms.
+fn vifvec_rgb8_terms(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, Vec<vifvec::SubTerms>), Error> {
+    check_vifvec_size(width, height)?;
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8_rounded(reference, distorted, width, height, stride);
+    let mut subs = Vec::new();
+    let score = vifvec::vifvec_core_impl(&inputs.r, &inputs.d, width, height, Some(&mut subs));
+    Ok((score, subs))
 }
 
 /// Gathered level-0 input planes (`f64` — see the crate docs).
@@ -352,6 +520,16 @@ impl Inputs {
 
 /// The pixel-domain VIF metric as a generic scorer — packed `RGB8_SRGB`.
 /// The vector-GSM variant is [`Vifvec`].
+///
+/// Maps, on request: `info_loss_0` (primary) … `info_loss_3`, one per
+/// scale with a non-empty statistics grid. Each value is
+/// `log10(1 + σ₁²/σₙ²) − log10(1 + g²σ₁²/(σᵥ² + σₙ²))`: the information
+/// the reference channel carries at that position minus what survives the
+/// distortion channel. `VIF = Σnum/Σden`, so the maps summed over all
+/// scales, divided by `Σden`, give `1 − VIF`. They are per-position
+/// contributions, not a local VIF ratio: `0` = no loss, higher = more
+/// lost, negative where the distortion adds information (VIF > 1)
+/// ([`za::MapPolarity::Difference`]).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vif;
 
@@ -391,8 +569,14 @@ impl za::Metric for Vif {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("vif")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (vif, terms) = vif_rgb8_terms(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("vif", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = VifMaps::vifp(vif, terms, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
+        }
         let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
             .metric_err_with("vif", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
@@ -400,6 +584,18 @@ impl za::Metric for Vif {
 }
 
 /// The vector-GSM VIF variant (`vifvec`) as a generic scorer.
+///
+/// Maps, on request: one per pooled subband, finest first —
+/// `info_loss_l1_b1` (primary), `info_loss_l1_b4`, … `info_loss_l4_b4`
+/// (pyramid level, MATLAB band). Each cell is one 3×3 block of the
+/// cropped block grid the score pools, valued
+/// `Σ_λ [log2(1 + s·λ/σₙ²) − log2(1 + g²·s·λ/(σᵥ² + σₙ²))]`: the bits the
+/// reference channel carries in that block minus those the distorted
+/// channel keeps. Summed over all blocks and subbands and divided by the
+/// total reference information they give `1 − VIF`. Per-block
+/// contributions, not a local VIF ([`za::MapPolarity::Difference`]),
+/// with global support (the S-field and eigenvalues use whole-subband
+/// statistics).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vifvec;
 
@@ -428,8 +624,14 @@ impl za::Metric for Vifvec {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("vif")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (vif, subs) = vifvec_rgb8_terms(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("vif", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = VifMaps::vifvec(vif, subs, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
+        }
         let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
             .metric_err_with("vif", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
