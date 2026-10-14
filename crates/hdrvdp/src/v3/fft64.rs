@@ -1108,9 +1108,33 @@ impl Plan2 {
     }
 }
 
+std::thread_local! {
+    /// Per-thread `(width, height) → Plan2` cache. A plan carries twiddle
+    /// tables plus ~5·w·h of batch/scratch lanes, so rebuilding per call is a
+    /// real fixed cost in `conv_fft_pad`. Plans are a pure function of the
+    /// dims — reuse is bit-identical (`reused_2d_plans_*` tests).
+    static PLAN2_CACHE: core::cell::RefCell<
+        std::collections::HashMap<(usize, usize), Plan2>,
+    > = core::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Run `f` on the cached plan for `width × height`, constructing it on
+/// first use. Bounded to a handful of resident shapes — the metric works a
+/// fixed lattice set per call.
+fn with_plan2<R>(width: usize, height: usize, f: impl FnOnce(&mut Plan2) -> R) -> R {
+    PLAN2_CACHE.with(|c| {
+        let mut map = c.borrow_mut();
+        if map.len() >= 8 && !map.contains_key(&(width, height)) {
+            map.clear();
+        }
+        let plan = map.entry((width, height)).or_insert_with(|| Plan2::new(width, height));
+        f(plan)
+    })
+}
+
 /// Forward 2-D DFT of a row-major `height × width` buffer, in place.
 pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize, relaxed: bool) {
-    Plan2::new(width, height).forward(buf, relaxed);
+    with_plan2(width, height, |p| p.forward(buf, relaxed));
 }
 
 /// Inverse 2-D DFT of a row-major `height × width` buffer, in place,
@@ -1226,15 +1250,14 @@ pub(super) fn conv_fft_pad(
     // contiguous and vectorizable, and no C64 (de)interleave is needed.
     let mut re = pad_image(x, width, height, pad_w, pad_h, pad);
     let mut im = vec![0.0; pad_w * pad_h];
-    let mut plan = Plan2::new(pad_w, pad_h);
-    plan.forward_p(&mut re, &mut im, relaxed);
-    for (r, &f) in re.iter_mut().zip(filter) {
-        *r *= f;
-    }
-    for (v, &f) in im.iter_mut().zip(filter) {
-        *v *= f;
-    }
-    plan.inverse_p(&mut re, &mut im, relaxed);
+    with_plan2(pad_w, pad_h, |plan| {
+        plan.forward_p(&mut re, &mut im, relaxed);
+        for ((r, v), &f) in re.iter_mut().zip(im.iter_mut()).zip(filter) {
+            *r *= f;
+            *v *= f;
+        }
+        plan.inverse_p(&mut re, &mut im, relaxed);
+    });
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {
         out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
