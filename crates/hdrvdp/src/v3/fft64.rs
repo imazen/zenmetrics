@@ -734,14 +734,18 @@ impl Plan2 {
             height,
             rows,
             columns,
+            // `pre`/`pim` rows padded to `width + 8`: column passes read
+            // one 64 B lane group per row, and a pow-2 `w` makes them
+            // stride-by-16 KB — every read lands in the same L1 set. The
+            // +8 rotates the set index one line per row.
             re8: vec![0.0; width.max(height) * 8],
             im8: vec![0.0; width.max(height) * 8],
             sre8: vec![0.0; m8],
             sim8: vec![0.0; m8],
             s2re8: vec![0.0; m8],
             s2im8: vec![0.0; m8],
-            pre: vec![0.0; width * height],
-            pim: vec![0.0; width * height],
+            pre: vec![0.0; height * (width + 8)],
+            pim: vec![0.0; height * (width + 8)],
         }
     }
 
@@ -750,6 +754,7 @@ impl Plan2 {
     /// transformed, scattered into the working planes.
     fn rows_fwd(&mut self, buf: &[C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
+        let stride = w + 8;
         let perm = self.rows.gather_perm();
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
@@ -776,7 +781,7 @@ impl Plan2 {
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
-                let row = (y0 + j) * w;
+                let row = (y0 + j) * stride;
                 for k in 0..w {
                     self.pre[row + k] = self.re8[k * 8 + j];
                     self.pim[row + k] = self.im8[k * 8 + j];
@@ -792,12 +797,13 @@ impl Plan2 {
     #[cfg(test)]
     fn rows_inv(&mut self, buf: &mut [C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
+        let stride = w + 8;
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
             for j in 0..rws {
-                let row = (y0 + j) * w;
+                let row = (y0 + j) * stride;
                 for k in 0..w {
                     let d = match perm {
                         Some(r) => r[k] as usize,
@@ -831,6 +837,7 @@ impl Plan2 {
     /// 8-`f64` row of the working plane; results go straight back to `buf`.
     fn columns_fwd(&mut self, buf: &mut [C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
+        let stride = w + 8;
         let perm = self.columns.gather_perm();
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
@@ -843,7 +850,7 @@ impl Plan2 {
                             Some(r) => r[y] as usize,
                             None => y,
                         } * 8,
-                        y * w + x0,
+                        y * stride + x0,
                     );
                     self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
                     self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
@@ -855,7 +862,7 @@ impl Plan2 {
                             Some(r) => r[y] as usize,
                             None => y,
                         } * 8,
-                        y * w + x0,
+                        y * stride + x0,
                     );
                     self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
                     self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
@@ -888,6 +895,7 @@ impl Plan2 {
     #[cfg(test)]
     fn columns_inv(&mut self, buf: &[C64], relaxed: bool) {
         let (w, h) = (self.width, self.height);
+        let stride = w + 8;
         let perm = self.columns.gather_perm();
         let sc = 1.0 / h as f64;
         for x0 in (0..w).step_by(8) {
@@ -917,7 +925,7 @@ impl Plan2 {
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for y in 0..h {
-                let (d, s) = (y * 8, y * w + x0);
+                let (d, s) = (y * 8, y * stride + x0);
                 for j in 0..cols {
                     self.pre[s + j] = self.re8[d + j] * sc;
                     self.pim[s + j] = -self.im8[d + j] * sc;
@@ -936,6 +944,7 @@ impl Plan2 {
     /// (every output needs the full conjugated input).
     fn rows_inv_out(&mut self, out: &mut [f64], relaxed: bool, out_w: usize, out_h: usize) {
         let (w, _h) = (self.width, self.height);
+        let stride = w + 8;
         debug_assert!(out.len() >= out_h * out_w);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
@@ -949,7 +958,7 @@ impl Plan2 {
                     let mut tre = [[0.0f64; 8]; 8];
                     let mut tim = [[0.0f64; 8]; 8];
                     for j in 0..8 {
-                        let row = (y0 + j) * w + k0;
+                        let row = (y0 + j) * stride + k0;
                         tre[j][..kn].copy_from_slice(&self.pre[row..row + kn]);
                         tim[j][..kn].copy_from_slice(&self.pim[row..row + kn]);
                     }
@@ -963,7 +972,7 @@ impl Plan2 {
                 }
             } else {
                 for j in 0..rws {
-                    let row = (y0 + j) * w;
+                    let row = (y0 + j) * stride;
                     for k in 0..w {
                         let d = match perm {
                             Some(r) => r[k] as usize,
@@ -1031,6 +1040,7 @@ impl Plan2 {
     /// into `pre`/`pim` for the column stage.
     fn rows_fwd_p_pad(&mut self, x: &[f64], src_w: usize, src_h: usize, pad: Pad, relaxed: bool) {
         let (w, h) = (self.width, self.height);
+        let stride = w + 8;
         let perm = self.rows.gather_perm();
         let xmap: Vec<usize> = (0..w).map(|px| Self::pad_index(px, src_w, pad)).collect();
         let ymap: Vec<usize> = (0..h).map(|py| Self::pad_index(py, src_h, pad)).collect();
@@ -1145,14 +1155,14 @@ impl Plan2 {
                         }
                     }
                     for j in 0..8 {
-                        let row = (y0 + j) * w + k0;
+                        let row = (y0 + j) * stride + k0;
                         self.pre[row..row + kn].copy_from_slice(&tre[j][..kn]);
                         self.pim[row..row + kn].copy_from_slice(&tim[j][..kn]);
                     }
                 }
             } else {
                 for j in 0..rws {
-                    let row = (y0 + j) * w;
+                    let row = (y0 + j) * stride;
                     for k in 0..w {
                         self.pre[row + k] = self.re8[k * 8 + j];
                         self.pim[row + k] = self.im8[k * 8 + j];
@@ -1171,6 +1181,9 @@ impl Plan2 {
     /// sequence, so results are bit-identical.
     fn columns_filt_rt_p(&mut self, filt: &[f64], relaxed: bool, keep_rows: usize) {
         let (w, h) = (self.width, self.height);
+        // `pre`/`pim` rows stride by `w + 8` (set-rotation padding); `filt`
+        // is the caller's unpadded `w·h` plane — keep `y*w` for it.
+        let stride = w + 8;
         let perm = self.columns.gather_perm();
         let sc = 1.0 / h as f64;
         for x0 in (0..w).step_by(8) {
@@ -1182,7 +1195,7 @@ impl Plan2 {
                             Some(r) => r[y] as usize,
                             None => y,
                         } * 8,
-                        y * w + x0,
+                        y * stride + x0,
                     );
                     self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
                     self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
@@ -1236,7 +1249,7 @@ impl Plan2 {
                         .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
                 }
                 for y in 0..keep_rows {
-                    let (d, s) = (y * 8, y * w + x0);
+                    let (d, s) = (y * 8, y * stride + x0);
                     for j in 0..8 {
                         self.pre[s + j] = self.re8[d + j] * sc;
                         self.pim[s + j] = -self.im8[d + j] * sc;
@@ -1249,7 +1262,7 @@ impl Plan2 {
                             Some(r) => r[y] as usize,
                             None => y,
                         } * 8,
-                        y * w + x0,
+                        y * stride + x0,
                     );
                     self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
                     self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
@@ -1300,7 +1313,7 @@ impl Plan2 {
                         .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
                 }
                 for y in 0..keep_rows {
-                    let (d, s) = (y * 8, y * w + x0);
+                    let (d, s) = (y * 8, y * stride + x0);
                     for j in 0..cols {
                         self.pre[s + j] = self.re8[d + j] * sc;
                         self.pim[s + j] = -self.im8[d + j] * sc;
