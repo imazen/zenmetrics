@@ -313,9 +313,13 @@ pub fn hdrvdp3(
             .iter()
             .map(|&v| v.clamp(csf_log_la[0], csf_log_la[255]))
             .collect();
+        // `csf_log_la` is log10 of a log-spaced grid — uniform to ulp
+        // precision, so the direct-index probe lands on the identical
+        // interval the binary search would (same lerp, same bits).
+        let csf_dx = (csf_log_la[255] - csf_log_la[0]) / 255.0;
         let csf_b: Vec<f64> = log_la_rs
             .iter()
-            .map(|&l| interp1_linear(&csf_log_la, &csf[b], l))
+            .map(|&l| crate::interp::interp1_linear_dx(&csf_log_la, &csf[b], l, csf_dx))
             .collect();
 
         let band_diff: Vec<f64> = b_t
