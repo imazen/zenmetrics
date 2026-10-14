@@ -78,6 +78,7 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 // f32x{N} chunks across columns, broadcast-multiplying by the loop-
 // invariant scalar GAUSS5 taps.
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn reduce_v_inner(
     token: Token,
@@ -158,6 +159,7 @@ fn reduce_v_inner(
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn reduce_v_inner(
     token: Token,
@@ -235,6 +237,7 @@ fn reduce_v_inner(
 
 /// Vertical pass of `gausspyr_reduce`: writes the `sw × dh` scratch
 /// buffer.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn reduce_vertical_pass(
     src: &[f32],
     sw: usize,
@@ -265,6 +268,7 @@ pub(crate) fn reduce_vertical_pass(
 // parallel. Each row reads vscratch[dy*sw + (cx-2..=cx+2)]. The 5 taps
 // stay loop-invariant scalars splatted across the N lanes.
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn reduce_h_inner(
     token: Token,
@@ -322,6 +326,7 @@ fn reduce_h_inner(
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn reduce_h_inner(
     token: Token,
@@ -378,6 +383,7 @@ fn reduce_h_inner(
 
 /// Horizontal pass of `gausspyr_reduce`: reads `sw × dh` scratch,
 /// writes `dw × dh` output.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn reduce_horizontal_pass(
     vscratch: &[f32],
     sw: usize,
@@ -389,6 +395,308 @@ pub(crate) fn reduce_horizontal_pass(
     debug_assert_eq!(dst.len(), dw * dh);
     archmage::attuned!(
         reduce_h_inner(vscratch, sw, dw, dh, dst),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+// ============================================================================
+// reduce_fused — vertical + horizontal in one row-streamed pass
+// ============================================================================
+//
+// The v-pass's `sw × dh` scratch never leaves cache: for each output
+// row `dy` we compute the 5-tap vertical row (identical `acc` order to
+// `reduce_v_inner`), apply the boundary `+=` patches, deinterleave into
+// pe/po, run the 5-tap horizontal filter (identical to
+// `reduce_h_inner`), then the dst `+=` boundary patches — all before
+// moving to the next row. Saves a full scratch write+read per reduce
+// (~half of the pass's memory traffic) while staying bit-identical:
+// every element sees the same ops in the same order.
+
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
+fn reduce_fused_inner(
+    token: Token,
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+    dst: &mut [f32],
+) {
+    let k = GAUSS5;
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
+
+    debug_assert_eq!(dst.len(), dw * dh);
+    let n_groups_v = sw / 16;
+    let n_groups_h = dw / 16;
+    crate::par::map_rows(dst, dw, |y0, dst| {
+        let band_dh = dst.len() / dw;
+        let mut vrow = alloc::vec![0.0f32; sw];
+        let mut pe = alloc::vec![0.0f32; dw + 24];
+        let mut po = alloc::vec![0.0f32; dw + 24];
+        for dy_l in 0..band_dh {
+            let dy = y0 + dy_l;
+            let cy = 2 * dy as isize;
+            let row_at = |off: isize| -> Option<usize> {
+                let r = cy + off;
+                if r < 0 || r >= sh as isize {
+                    None
+                } else {
+                    Some(r as usize * sw)
+                }
+            };
+            let (r_m2, r_m1, r_0, r_p1, r_p2) =
+                (row_at(-2), row_at(-1), row_at(0), row_at(1), row_at(2));
+
+            // --- vertical taps into vrow (same acc order as reduce_v) ---
+            for cg in 0..n_groups_v {
+                let col = cg * 16;
+                let ld = |base: usize| -> f32x16 {
+                    let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
+                    f32x16::from_array_t(token, arr)
+                };
+                let (v0, v1, v2, v3v, v4x) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                    (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                        (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                    }
+                    _ => {
+                        let z = f32x16::zero_t(token);
+                        let or = |row: Option<usize>| row.map_or(z, ld);
+                        (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
+                    }
+                };
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
+                vrow[col..col + 16].copy_from_slice(&acc.to_array());
+            }
+            for x in n_groups_v * 16..sw {
+                let read = |row: Option<usize>| -> f32 {
+                    match row {
+                        Some(base) => src[base + x],
+                        None => 0.0,
+                    }
+                };
+                vrow[x] = k[0] * read(r_m2)
+                    + k[1] * read(r_m1)
+                    + k[2] * read(r_0)
+                    + k[3] * read(r_p1)
+                    + k[4] * read(r_p2);
+            }
+
+            // --- vertical boundary patches (same as gausspyr_reduce) ---
+            if dy == 0 && sh >= 2 {
+                for x in 0..sw {
+                    vrow[x] += src[x] * k[1] + src[sw + x] * k[0];
+                }
+            }
+            if dy == dh - 1 {
+                if sh % 2 == 1 && sh >= 2 {
+                    for x in 0..sw {
+                        vrow[x] += src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
+                    }
+                } else if sh.is_multiple_of(2) {
+                    for x in 0..sw {
+                        vrow[x] += src[(sh - 1) * sw + x] * k[4];
+                    }
+                }
+            }
+
+            // --- deinterleave vrow → pe/po (stride-2 split) ---
+            pe[..dw + 4].fill(0.0);
+            po[..dw + 4].fill(0.0);
+            for (j, pair) in vrow.chunks(2).enumerate().take(dw + 6) {
+                pe[j + 1] = pair[0];
+                po[j + 1] = *pair.get(1).unwrap_or(&0.0);
+            }
+
+            // --- horizontal taps → dst row (same as reduce_h) ---
+            let orow = &mut dst[dy_l * dw..dy_l * dw + dw];
+            for cg in 0..n_groups_h {
+                let x = cg * 16;
+                let v0 = f32x16::from_slice_t(token, &pe[x..x + 16]);
+                let v1 = f32x16::from_slice_t(token, &po[x..x + 16]);
+                let v2 = f32x16::from_slice_t(token, &pe[x + 1..x + 17]);
+                let v3v = f32x16::from_slice_t(token, &po[x + 1..x + 17]);
+                let v4x = f32x16::from_slice_t(token, &pe[x + 2..x + 18]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
+                orow[x..x + 16].copy_from_slice(&acc.to_array());
+            }
+            for dx in n_groups_h * 16..dw {
+                orow[dx] = k[0] * pe[dx]
+                    + k[1] * po[dx]
+                    + k[2] * pe[dx + 1]
+                    + k[3] * po[dx + 1]
+                    + k[4] * pe[dx + 2];
+            }
+
+            // --- horizontal boundary patches (same as gausspyr_reduce) ---
+            if dw > 0 && sw >= 2 {
+                orow[0] += vrow[0] * k[1] + vrow[1] * k[0];
+            }
+            if dw > 0 {
+                let last_dx = dw - 1;
+                if sh % 2 == 1 && sw >= 2 {
+                    orow[last_dx] += vrow[sw - 1] * k[3] + vrow[sw - 2] * k[4];
+                } else if sh.is_multiple_of(2) {
+                    orow[last_dx] += vrow[sw - 1] * k[4];
+                }
+            }
+        }
+    });
+}
+
+#[archmage::attune(_*_t, define(f32x8))]
+fn reduce_fused_inner(
+    token: Token,
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+    dst: &mut [f32],
+) {
+    let k = GAUSS5;
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
+
+    debug_assert_eq!(dst.len(), dw * dh);
+    let n_groups_v = sw / 8;
+    let n_groups_h = dw / 8;
+    crate::par::map_rows(dst, dw, |y0, dst| {
+        let band_dh = dst.len() / dw;
+        let mut vrow = alloc::vec![0.0f32; sw];
+        let mut pe = alloc::vec![0.0f32; dw + 16];
+        let mut po = alloc::vec![0.0f32; dw + 16];
+        for dy_l in 0..band_dh {
+            let dy = y0 + dy_l;
+            let cy = 2 * dy as isize;
+            let row_at = |off: isize| -> Option<usize> {
+                let r = cy + off;
+                if r < 0 || r >= sh as isize {
+                    None
+                } else {
+                    Some(r as usize * sw)
+                }
+            };
+            let (r_m2, r_m1, r_0, r_p1, r_p2) =
+                (row_at(-2), row_at(-1), row_at(0), row_at(1), row_at(2));
+
+            // --- vertical taps into vrow (same acc order as reduce_v) ---
+            for cg in 0..n_groups_v {
+                let col = cg * 8;
+                let ld = |base: usize| -> f32x8 {
+                    let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
+                    f32x8::from_array_t(token, arr)
+                };
+                let (v0, v1, v2, v3v, v4x) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                    (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                        (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                    }
+                    _ => {
+                        let z = f32x8::zero_t(token);
+                        let or = |row: Option<usize>| row.map_or(z, ld);
+                        (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
+                    }
+                };
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
+                vrow[col..col + 8].copy_from_slice(&acc.to_array());
+            }
+            for x in n_groups_v * 8..sw {
+                let read = |row: Option<usize>| -> f32 {
+                    match row {
+                        Some(base) => src[base + x],
+                        None => 0.0,
+                    }
+                };
+                vrow[x] = k[0] * read(r_m2)
+                    + k[1] * read(r_m1)
+                    + k[2] * read(r_0)
+                    + k[3] * read(r_p1)
+                    + k[4] * read(r_p2);
+            }
+
+            // --- vertical boundary patches (same as gausspyr_reduce) ---
+            if dy == 0 && sh >= 2 {
+                for x in 0..sw {
+                    vrow[x] += src[x] * k[1] + src[sw + x] * k[0];
+                }
+            }
+            if dy == dh - 1 {
+                if sh % 2 == 1 && sh >= 2 {
+                    for x in 0..sw {
+                        vrow[x] += src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
+                    }
+                } else if sh.is_multiple_of(2) {
+                    for x in 0..sw {
+                        vrow[x] += src[(sh - 1) * sw + x] * k[4];
+                    }
+                }
+            }
+
+            // --- deinterleave vrow → pe/po (stride-2 split) ---
+            pe[..dw + 4].fill(0.0);
+            po[..dw + 4].fill(0.0);
+            for (j, pair) in vrow.chunks(2).enumerate().take(dw + 6) {
+                pe[j + 1] = pair[0];
+                po[j + 1] = *pair.get(1).unwrap_or(&0.0);
+            }
+
+            // --- horizontal taps → dst row (same as reduce_h) ---
+            let orow = &mut dst[dy_l * dw..dy_l * dw + dw];
+            for cg in 0..n_groups_h {
+                let x = cg * 8;
+                let v0 = f32x8::from_slice_t(token, &pe[x..x + 8]);
+                let v1 = f32x8::from_slice_t(token, &po[x..x + 8]);
+                let v2 = f32x8::from_slice_t(token, &pe[x + 1..x + 9]);
+                let v3v = f32x8::from_slice_t(token, &po[x + 1..x + 9]);
+                let v4x = f32x8::from_slice_t(token, &pe[x + 2..x + 10]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4x * k4;
+                orow[x..x + 8].copy_from_slice(&acc.to_array());
+            }
+            for dx in n_groups_h * 8..dw {
+                orow[dx] = k[0] * pe[dx]
+                    + k[1] * po[dx]
+                    + k[2] * pe[dx + 1]
+                    + k[3] * po[dx + 1]
+                    + k[4] * pe[dx + 2];
+            }
+
+            // --- horizontal boundary patches (same as gausspyr_reduce) ---
+            if dw > 0 && sw >= 2 {
+                orow[0] += vrow[0] * k[1] + vrow[1] * k[0];
+            }
+            if dw > 0 {
+                let last_dx = dw - 1;
+                if sh % 2 == 1 && sw >= 2 {
+                    orow[last_dx] += vrow[sw - 1] * k[3] + vrow[sw - 2] * k[4];
+                } else if sh.is_multiple_of(2) {
+                    orow[last_dx] += vrow[sw - 1] * k[4];
+                }
+            }
+        }
+    });
+}
+
+/// Fused `gausspyr_reduce` entry: vertical + horizontal passes in one
+/// row-streamed sweep. `dst` receives `dw × dh`; bit-identical to the
+/// `reduce_vertical_pass` + patches + `reduce_horizontal_pass` chain.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn reduce_fused_pass(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+    dst: &mut [f32],
+) {
+    debug_assert_eq!(dst.len(), dw * dh);
+    archmage::attuned!(
+        reduce_fused_inner(src, sw, sh, dw, dh, dst),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -1562,6 +1870,47 @@ mod tests {
             let want = reduce_h_scalar_ref(&vs, sw, dw, dh);
             let mut got = alloc::vec![0.0_f32; dw * dh];
             reduce_horizontal_pass(&vs, sw, dw, dh, &mut got);
+            for i in 0..want.len() {
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "case {sw}x{sh} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reduce_fused_matches_scalar_chain_random() {
+        // The fused row-streamed reduce must match the full scalar
+        // chain (v-pass + boundary patches + h-pass + boundary
+        // patches) — `gausspyr_reduce_scalar` is that chain.
+        let cases: &[(usize, usize)] = &[
+            (4, 4),
+            (8, 8),
+            (16, 16),
+            (17, 19),
+            (24, 24),
+            (32, 32),
+            (33, 35),
+            (40, 24),
+            (64, 64),
+            (73, 91),
+            (128, 128),
+            (256, 256),
+            (129, 7),
+            (5, 129),
+            (1, 1),
+            (3, 2),
+            (2, 3),
+        ];
+        for &(sw, sh) in cases {
+            let src = rng_seq(0x51ce5eed ^ ((sw as u32) << 16) ^ (sh as u32), sw * sh);
+            let mut want = Vec::new();
+            let (dw, dh) = crate::kernels::pyramid::gausspyr_reduce_scalar(&src, sw, sh, &mut want);
+            let mut got = alloc::vec![0.0_f32; dw * dh];
+            reduce_fused_pass(&src, sw, sh, dw, dh, &mut got);
             for i in 0..want.len() {
                 assert!(
                     (want[i] - got[i]).abs() < 1e-5,

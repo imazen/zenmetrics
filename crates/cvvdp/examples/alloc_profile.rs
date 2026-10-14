@@ -19,6 +19,7 @@ use cvvdp::{Cvvdp, CvvdpParams};
 static ALLOCS: AtomicU64 = AtomicU64::new(0);
 static FREES: AtomicU64 = AtomicU64::new(0);
 static BYTES: AtomicU64 = AtomicU64::new(0);
+static FREE_BYTES: AtomicU64 = AtomicU64::new(0);
 
 struct Counting;
 
@@ -33,6 +34,7 @@ unsafe impl GlobalAlloc for Counting {
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         FREES.fetch_add(1, Ordering::Relaxed);
+        FREE_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
         // SAFETY: The caller supplies a live pointer and its original layout;
         // Counting returns the unmodified System allocation pointer.
         unsafe { System.dealloc(ptr, layout) }
@@ -42,7 +44,7 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static A: Counting = Counting;
 
-const SIZES: &[(u32, u32)] = &[(256, 256), (512, 512), (1024, 1024)];
+const SIZES: &[(u32, u32)] = &[(256, 256), (512, 512), (1024, 1024), (2898, 2898)];
 
 fn make_image(w: u32, h: u32, seed: u32) -> Vec<u8> {
     let n = (w as usize) * (h as usize);
@@ -55,11 +57,12 @@ fn make_image(w: u32, h: u32, seed: u32) -> Vec<u8> {
     out
 }
 
-fn snap() -> (u64, u64, u64) {
+fn snap() -> (u64, u64, u64, u64) {
     (
         ALLOCS.load(Ordering::Relaxed),
         FREES.load(Ordering::Relaxed),
         BYTES.load(Ordering::Relaxed),
+        FREE_BYTES.load(Ordering::Relaxed),
     )
 }
 
@@ -74,44 +77,48 @@ fn run_one(w: u32, h: u32, writer: &mut File) -> std::io::Result<()> {
     let _ = cv.score(&r, &d).unwrap();
 
     // COLD path: one fresh score call.
-    let (a0, f0, b0) = snap();
+    let (a0, f0, b0, fb0) = snap();
     let _ = cv.score(&r, &d).unwrap();
-    let (a1, f1, b1) = snap();
+    let (a1, f1, b1, fb1) = snap();
     writeln!(
         writer,
-        "{w}\t{h}\t{}\tcold\t{}\t{}\t{}",
+        "{w}\t{h}\t{}\tcold\t{}\t{}\t{}\t{}",
         (w as u64) * (h as u64),
         a1 - a0,
         f1 - f0,
-        b1 - b0
+        b1 - b0,
+        fb1 - fb0
     )?;
     eprintln!(
-        "  {w}x{h} cold: allocs={} frees={} bytes={}",
+        "  {w}x{h} cold: allocs={} frees={} bytes={} free_bytes={}",
         a1 - a0,
         f1 - f0,
-        b1 - b0
+        b1 - b0,
+        fb1 - fb0
     );
 
     // WARM path: warm_reference then score_with_warm_ref.
     cv.warm_reference(&r).unwrap();
     let _ = cv.score_with_warm_ref(&d).unwrap();
 
-    let (a2, f2, b2) = snap();
+    let (a2, f2, b2, fb2) = snap();
     let _ = cv.score_with_warm_ref(&d).unwrap();
-    let (a3, f3, b3) = snap();
+    let (a3, f3, b3, fb3) = snap();
     writeln!(
         writer,
-        "{w}\t{h}\t{}\twarm\t{}\t{}\t{}",
+        "{w}\t{h}\t{}\twarm\t{}\t{}\t{}\t{}",
         (w as u64) * (h as u64),
         a3 - a2,
         f3 - f2,
-        b3 - b2
+        b3 - b2,
+        fb3 - fb2
     )?;
     eprintln!(
-        "  {w}x{h} warm: allocs={} frees={} bytes={}",
+        "  {w}x{h} warm: allocs={} frees={} bytes={} free_bytes={}",
         a3 - a2,
         f3 - f2,
-        b3 - b2
+        b3 - b2,
+        fb3 - fb2
     );
 
     Ok(())
@@ -136,7 +143,10 @@ fn main() -> std::io::Result<()> {
         .unwrap_or(std::path::Path::new("."));
     std::fs::create_dir_all(parent).ok();
     let mut out = File::create(&path)?;
-    writeln!(out, "size_w\tsize_h\tpixels\tpath\tallocs\tfrees\tbytes")?;
+    writeln!(
+        out,
+        "size_w\tsize_h\tpixels\tpath\tallocs\tfrees\tbytes\tfree_bytes"
+    )?;
     eprintln!("Writing alloc profile TSV to {path}");
 
     for &(w, h) in SIZES {

@@ -687,6 +687,131 @@ macro_rules! kernels {
             sums
         }
 
+        /// Three-channel masking fold for the still pipeline — one pass
+        /// replacing the separate `safe_pow(|M_mm|, q_c)`, `|T−R|+eps)^p`
+        /// and scalar pool+clamp passes (`mult_mutual_band_into` steps
+        /// 3+4). Per lane, for each channel c:
+        ///   `term_c = (ms_c + offset)^qs_c − offset_pow_qs_c`
+        ///   `pw_c   = (|t_c − r_c| + offset)^p − offset_pow_p`
+        ///   `m_c    = w[0][c]·term_0 + w[1][c]·term_1 + w[2][c]·term_2`
+        ///   `du     = pw_c / (1 + m_c)`
+        ///   `out_c  = d_max·du / (d_max + du)`
+        /// Each stage keeps its original per-element op order (mul/add —
+        /// no FMA — plain div), so results are bit-identical to the
+        /// three-pass chain. `w` is `XCM_3X3` (`w[in][c]`).
+        #[inline(always)]
+        #[allow(clippy::too_many_arguments)]
+        pub fn mask_fold_pool_kernel<T: $Convert, P: MathPolicy>(
+            token: T,
+            mut d: [&mut [f32]; 3],
+            t: [&[f32]; 3],
+            r: [&[f32]; 3],
+            mm: [&[f32]; 3],
+            offset: f32,
+            p: f32,
+            offset_pow_p: f32,
+            qs: [f32; 3],
+            offset_pow_qs: [f32; 3],
+            w: &[[f32; 3]; 3],
+            d_max: f32,
+        ) {
+            let n = d[0].len();
+            debug_assert!(d[1].len() == n && d[2].len() == n);
+            debug_assert!(t.iter().all(|c| c.len() == n));
+            debug_assert!(r.iter().all(|c| c.len() == n));
+            debug_assert!(mm.iter().all(|c| c.len() == n));
+            type F32x8<T> = $Vector<T>;
+            let offset_v = F32x8::<T>::splat_t(token, offset);
+            let off_p_v = F32x8::<T>::splat_t(token, offset_pow_p);
+            let exact_p = F32x8::<T>::splat_t(token, P::scalar_pow(offset, p) - offset_pow_p);
+            let off_q_v = offset_pow_qs.map(|o| F32x8::<T>::splat_t(token, o));
+            let exact_q = qs.map(|q| P::scalar_pow(offset, q));
+            let exact_q = [
+                exact_q[0] - offset_pow_qs[0],
+                exact_q[1] - offset_pow_qs[1],
+                exact_q[2] - offset_pow_qs[2],
+            ]
+            .map(|v| F32x8::<T>::splat_t(token, v));
+
+            // Two-phase stack tiles: phase 1 evaluates the six
+            // transcendentals into `pw`/`tm` (pow constants live), phase
+            // 2 runs the XCM pool + clamp (XCM/one/d_max constants live).
+            // A single fused loop keeps ~19 vector constants live and
+            // spills on 16-vector-register targets; the tile split keeps
+            // each phase inside the register file. TILE is a multiple of
+            // both native widths so the scalar/vector element split is
+            // identical to a whole-slice partition → bit-identical.
+            const TILE: usize = 64;
+            let n = d[0].len();
+            let mut pw = [[0.0f32; TILE]; 3];
+            let mut tm = [[0.0f32; TILE]; 3];
+            let mut start = 0;
+            while start < n {
+                let tl = TILE.min(n - start);
+                for c in 0..3 {
+                    let (tc, tt) = F32x8::<T>::partition_slice_t(token, &t[c][start..start + tl]);
+                    let (rc, rt) = F32x8::<T>::partition_slice_t(token, &r[c][start..start + tl]);
+                    let (mc, mt) = F32x8::<T>::partition_slice_t(token, &mm[c][start..start + tl]);
+                    let (pwc, pwt) = F32x8::<T>::partition_slice_mut_t(token, &mut pw[c][..tl]);
+                    let (tmc, tmt) = F32x8::<T>::partition_slice_mut_t(token, &mut tm[c][..tl]);
+                    for i in 0..tc.len() {
+                        let sh = (F32x8::<T>::load_t(token, &tc[i])
+                            - F32x8::<T>::load_t(token, &rc[i]))
+                        .abs()
+                            + offset_v;
+                        let rp = P::$pow(sh, p) - off_p_v;
+                        F32x8::<T>::blend(sh.simd_eq(offset_v), exact_p, rp).store(&mut pwc[i]);
+                        let mq = F32x8::<T>::load_t(token, &mc[i]) + offset_v;
+                        let rq = P::$pow(mq, qs[c]) - off_q_v[c];
+                        F32x8::<T>::blend(mq.simd_eq(offset_v), exact_q[c], rq).store(&mut tmc[i]);
+                    }
+                    for i in 0..tt.len() {
+                        pwt[i] = P::scalar_pow((tt[i] - rt[i]).abs() + offset, p) - offset_pow_p;
+                        tmt[i] = P::scalar_pow(mt[i] + offset, qs[c]) - offset_pow_qs[c];
+                    }
+                }
+                let one = F32x8::<T>::splat_t(token, 1.0);
+                let d_max_v = F32x8::<T>::splat_t(token, d_max);
+                let mut wv = [[F32x8::<T>::zero_t(token); 3]; 3];
+                for (k, wv_row) in wv.iter_mut().enumerate() {
+                    for (cc, wv_e) in wv_row.iter_mut().enumerate() {
+                        *wv_e = F32x8::<T>::splat_t(token, w[k][cc]);
+                    }
+                }
+                let pw_sl: [&[f32]; 3] = [&pw[0][..tl], &pw[1][..tl], &pw[2][..tl]];
+                let tm_sl: [&[f32]; 3] = [&tm[0][..tl], &tm[1][..tl], &tm[2][..tl]];
+                let pc = pw_sl.map(|s| F32x8::<T>::partition_slice_t(token, s));
+                let tmc2 = tm_sl.map(|s| F32x8::<T>::partition_slice_t(token, s));
+                let dc = d
+                    .each_mut()
+                    .map(|s| F32x8::<T>::partition_slice_mut_t(token, &mut s[start..start + tl]));
+                let nc = pc[0].0.len();
+                for i in 0..nc {
+                    let tv = [
+                        F32x8::<T>::load_t(token, &tmc2[0].0[i]),
+                        F32x8::<T>::load_t(token, &tmc2[1].0[i]),
+                        F32x8::<T>::load_t(token, &tmc2[2].0[i]),
+                    ];
+                    for c in 0..3 {
+                        let m = wv[0][c] * tv[0] + wv[1][c] * tv[1] + wv[2][c] * tv[2];
+                        let dv = F32x8::<T>::load_t(token, &pc[c].0[i]);
+                        let du = dv / (one + m);
+                        ((d_max_v * du) / (d_max_v + du)).store(&mut dc[c].0[i]);
+                    }
+                }
+                for i in 0..pc[0].1.len() {
+                    for c in 0..3 {
+                        let m = w[0][c] * tmc2[0].1[i]
+                            + w[1][c] * tmc2[1].1[i]
+                            + w[2][c] * tmc2[2].1[i];
+                        let du = pc[c].1[i] / (1.0 + m);
+                        dc[c].1[i] = d_max * du / (d_max + du);
+                    }
+                }
+                start += tl;
+            }
+        }
+
         /// Three-channel fused LUT/apply: the `(xs[i]-min)*inv_step` bracket,
         /// its floor and its lane indices are identical across channels, so
         /// phase one computes them once per stack-tile block instead of

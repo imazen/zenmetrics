@@ -852,7 +852,7 @@ impl Cvvdp {
         // The weber caches (`gauss_img`, `gauss_l`, vscratch, expanded,
         // gauss_tmp) are only needed during the weber pyramid build —
         // the fold stage reads `weber_dist` / `weber_ref`, never the
-        // caches. They are cleared but KEEP capacity: a former
+        // caches. They are left fully intact: a former
         // shrink_to_fit pass traded ~14% of per-call wall time at
         // 8.4 MP (perf: munmap + page-fault zeroing) for peak heap,
         // while `gauss_img`/`gauss_l` kept their capacity anyway. The
@@ -864,18 +864,14 @@ impl Cvvdp {
         // intact) — that was ~270 MB of free+remmap churn per call at
         // 8.4 MP. Retained bands reuse cleanly: `build_gauss_pyramid_into`
         // truncates to `n` and each kernel fully rewrites the `w*h`
-        // prefix before any read.
+        // prefix before any read. Even a plain `.clear()` on the flat
+        // scratch Vecs costs a full-buffer `resize(.., 0.0)` memset on
+        // the next call's regrow (~600 MB zeroed per call at 8.4 MP,
+        // ~5–6% of score time) — the kernels overwrite every entry, so
+        // stale contents are never observable.
         //
-        // **Bit-identical safety:** stale band data is never read —
+        // **Bit-identical safety:** stale scratch data is never read —
         // only the band-loop reads weber_*, which are unaffected.
-        for c in 0..3 {
-            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c].scratch.expanded.clear();
-            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_ref[c].scratch.expanded.clear();
-            self.scratch.weber_cache_ref[c].scratch.gauss_tmp.clear();
-        }
 
         // Now consume the scratch slots immutably to fold bands. We
         // temporarily move the WeberPyramids out so we can pass them
@@ -1785,9 +1781,16 @@ impl Cvvdp {
                 q_per_ch.push(q_band);
                 if let Some(acc) = accum.as_mut() {
                     let ws = &mut self.scratch.band_ws[0];
-                    let d_per_ch: [Vec<f32>; 3] =
-                        [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
+                    let d_per_ch: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.d_a),
+                        core::mem::take(&mut ws.d_rg),
+                        core::mem::take(&mut ws.d_vy),
+                    ];
                     accumulate_band_diffmap(acc, &d_per_ch, bw, bh, false, n_levels);
+                    let [da, drg, dvy] = d_per_ch;
+                    ws.d_a = da;
+                    ws.d_rg = drg;
+                    ws.d_vy = dvy;
                 }
                 continue;
             }
@@ -1884,12 +1887,19 @@ impl Cvvdp {
             q_per_ch.push(q_band);
 
             // Accumulate diffmap. accumulate_band_diffmap takes
-            // `&[Vec<f32>; 3]`. Clone (sequential path is rare; this
-            // doesn't show in any benchmark since `parallel` is the
-            // default feature).
+            // `&[Vec<f32>; 3]` — move the workspace planes out and back
+            // (no clone; capacities persist across calls).
             if let Some(acc) = accum.as_mut() {
-                let d_per_ch: [Vec<f32>; 3] = [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
+                let d_per_ch: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.d_a),
+                    core::mem::take(&mut ws.d_rg),
+                    core::mem::take(&mut ws.d_vy),
+                ];
                 accumulate_band_diffmap(acc, &d_per_ch, bw, bh, is_baseband, n_levels);
+                let [da, drg, dvy] = d_per_ch;
+                ws.d_a = da;
+                ws.d_rg = drg;
+                ws.d_vy = dvy;
             }
         }
 
@@ -1971,121 +1981,128 @@ impl Cvvdp {
         // make progress; within each, par_iter_mut over its band slots.
         let n_deep = n_levels - k_split;
 
-        let process_deep_band = |k_deep_local: usize,
-                                 ws: &mut BandWorkspace|
-         -> ([f32; 3], Option<DiffmapAccum>) {
-            let k = k_split + k_deep_local;
-            let is_first = k == 0;
-            let is_baseband = k == n_levels - 1;
-            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
-            let rho = if is_baseband {
-                CSF_BASEBAND_RHO
-            } else {
-                ppd_freqs[k]
-            };
-            let bw = ref_weber[0].bands[k].w;
-            let bh = ref_weber[0].bands[k].h;
-            let n_px = bw * bh;
-            let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
-            debug_assert_eq!(log_l_bkg_band.len(), n_px);
+        let process_deep_band =
+            |k_deep_local: usize, ws: &mut BandWorkspace| -> ([f32; 3], Option<DiffmapAccum>) {
+                let k = k_split + k_deep_local;
+                let is_first = k == 0;
+                let is_baseband = k == n_levels - 1;
+                let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+                let rho = if is_baseband {
+                    CSF_BASEBAND_RHO
+                } else {
+                    ppd_freqs[k]
+                };
+                let bw = ref_weber[0].bands[k].w;
+                let bh = ref_weber[0].bands[k].h;
+                let n_px = bw * bh;
+                let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+                debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
-            let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
-            let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
-            let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
-            debug_assert_eq!(logs_row_a.len(), N_L_BKG);
+                let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
+                let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
+                let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
+                debug_assert_eq!(logs_row_a.len(), N_L_BKG);
 
-            let ref_a_band = &ref_weber[0].bands[k].data;
-            let ref_rg_band = &ref_weber[1].bands[k].data;
-            let ref_vy_band = &ref_weber[2].bands[k].data;
-            let dis_a_band = &dist_weber[0].bands[k].data;
-            let dis_rg_band = &dist_weber[1].bands[k].data;
-            let dis_vy_band = &dist_weber[2].bands[k].data;
+                let ref_a_band = &ref_weber[0].bands[k].data;
+                let ref_rg_band = &ref_weber[1].bands[k].data;
+                let ref_vy_band = &ref_weber[2].bands[k].data;
+                let dis_a_band = &dist_weber[0].bands[k].data;
+                let dis_rg_band = &dist_weber[1].bands[k].data;
+                let dis_vy_band = &dist_weber[2].bands[k].data;
 
-            if is_baseband {
-                ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.resize(n_px, 0.0);
-                apply_csf_diffs(
-                    log_l_bkg_band,
-                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
-                    [ref_a_band, ref_rg_band, ref_vy_band],
-                    [dis_a_band, dis_rg_band, dis_vy_band],
-                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
-                );
-            } else {
-                ws.t_p_a.resize(n_px, 0.0);
-                ws.t_p_rg.resize(n_px, 0.0);
-                ws.t_p_vy.resize(n_px, 0.0);
-                ws.r_p_a.resize(n_px, 0.0);
-                ws.r_p_rg.resize(n_px, 0.0);
-                ws.r_p_vy.resize(n_px, 0.0);
-                apply_csf_pairs(
-                    log_l_bkg_band,
-                    [&logs_row_a, &logs_row_rg, &logs_row_vy],
-                    [ref_a_band, ref_rg_band, ref_vy_band],
-                    [dis_a_band, dis_rg_band, dis_vy_band],
-                    [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
-                    [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
-                    band_mul,
-                );
-                let t_p_taken: [Vec<f32>; 3] = [
-                    core::mem::take(&mut ws.t_p_a),
-                    core::mem::take(&mut ws.t_p_rg),
-                    core::mem::take(&mut ws.t_p_vy),
-                ];
-                let r_p_taken: [Vec<f32>; 3] = [
-                    core::mem::take(&mut ws.r_p_a),
-                    core::mem::take(&mut ws.r_p_rg),
-                    core::mem::take(&mut ws.r_p_vy),
-                ];
-                mult_mutual_band_into(
-                    &t_p_taken,
-                    &r_p_taken,
+                if is_baseband {
+                    ws.d_a.resize(n_px, 0.0);
+                    ws.d_rg.resize(n_px, 0.0);
+                    ws.d_vy.resize(n_px, 0.0);
+                    apply_csf_diffs(
+                        log_l_bkg_band,
+                        [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                        [ref_a_band, ref_rg_band, ref_vy_band],
+                        [dis_a_band, dis_rg_band, dis_vy_band],
+                        [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                    );
+                } else {
+                    ws.t_p_a.resize(n_px, 0.0);
+                    ws.t_p_rg.resize(n_px, 0.0);
+                    ws.t_p_vy.resize(n_px, 0.0);
+                    ws.r_p_a.resize(n_px, 0.0);
+                    ws.r_p_rg.resize(n_px, 0.0);
+                    ws.r_p_vy.resize(n_px, 0.0);
+                    apply_csf_pairs(
+                        log_l_bkg_band,
+                        [&logs_row_a, &logs_row_rg, &logs_row_vy],
+                        [ref_a_band, ref_rg_band, ref_vy_band],
+                        [dis_a_band, dis_rg_band, dis_vy_band],
+                        [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
+                        [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                        band_mul,
+                    );
+                    let t_p_taken: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.t_p_a),
+                        core::mem::take(&mut ws.t_p_rg),
+                        core::mem::take(&mut ws.t_p_vy),
+                    ];
+                    let r_p_taken: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.r_p_a),
+                        core::mem::take(&mut ws.r_p_rg),
+                        core::mem::take(&mut ws.r_p_vy),
+                    ];
+                    mult_mutual_band_into(
+                        &t_p_taken,
+                        &r_p_taken,
+                        bw,
+                        bh,
+                        &mut ws.d_a,
+                        &mut ws.d_rg,
+                        &mut ws.d_vy,
+                        &mut ws.m_mm_a,
+                        &mut ws.m_mm_rg,
+                        &mut ws.m_mm_vy,
+                        &mut ws.term_a,
+                        &mut ws.term_rg,
+                        &mut ws.term_vy,
+                        &mut ws.pu_h,
+                    );
+                    let [t_a, t_rg, t_vy] = t_p_taken;
+                    let [r_a, r_rg, r_vy] = r_p_taken;
+                    ws.t_p_a = t_a;
+                    ws.t_p_rg = t_rg;
+                    ws.t_p_vy = t_vy;
+                    ws.r_p_a = r_a;
+                    ws.r_p_rg = r_rg;
+                    ws.r_p_vy = r_vy;
+                }
+
+                let q_band = pool_band_3ch(
+                    &ws.d_a,
+                    &ws.d_rg,
+                    &ws.d_vy,
                     bw,
                     bh,
-                    &mut ws.d_a,
-                    &mut ws.d_rg,
-                    &mut ws.d_vy,
-                    &mut ws.m_mm_a,
-                    &mut ws.m_mm_rg,
-                    &mut ws.m_mm_vy,
-                    &mut ws.term_a,
-                    &mut ws.term_rg,
-                    &mut ws.term_vy,
-                    &mut ws.pu_h,
+                    k,
+                    strip_h_body,
+                    strip_counter,
                 );
-                let [t_a, t_rg, t_vy] = t_p_taken;
-                let [r_a, r_rg, r_vy] = r_p_taken;
-                ws.t_p_a = t_a;
-                ws.t_p_rg = t_rg;
-                ws.t_p_vy = t_vy;
-                ws.r_p_a = r_a;
-                ws.r_p_rg = r_rg;
-                ws.r_p_vy = r_vy;
-            }
 
-            let q_band = pool_band_3ch(
-                &ws.d_a,
-                &ws.d_rg,
-                &ws.d_vy,
-                bw,
-                bh,
-                k,
-                strip_h_body,
-                strip_counter,
-            );
+                let band_accum = if want_diffmap {
+                    let mut acc = DiffmapAccum::new(w, h);
+                    let d_per_ch: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.d_a),
+                        core::mem::take(&mut ws.d_rg),
+                        core::mem::take(&mut ws.d_vy),
+                    ];
+                    accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
+                    let [da, drg, dvy] = d_per_ch;
+                    ws.d_a = da;
+                    ws.d_rg = drg;
+                    ws.d_vy = dvy;
+                    Some(acc)
+                } else {
+                    None
+                };
 
-            let band_accum = if want_diffmap {
-                let mut acc = DiffmapAccum::new(w, h);
-                let d_per_ch: [Vec<f32>; 3] = [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
-                accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
-                Some(acc)
-            } else {
-                None
+                (q_band, band_accum)
             };
-
-            (q_band, band_accum)
-        };
 
         let process_shallow_band = |k: usize,
                                     sws: &mut StripBandWorkspace,
@@ -2152,11 +2169,15 @@ impl Cvvdp {
             let band_accum = if want_diffmap {
                 let mut acc = DiffmapAccum::new(w, h);
                 let d_per_ch: [Vec<f32>; 3] = [
-                    bws_for_diff.d_a.clone(),
-                    bws_for_diff.d_rg.clone(),
-                    bws_for_diff.d_vy.clone(),
+                    core::mem::take(&mut bws_for_diff.d_a),
+                    core::mem::take(&mut bws_for_diff.d_rg),
+                    core::mem::take(&mut bws_for_diff.d_vy),
                 ];
                 accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, false, n_levels);
+                let [da, drg, dvy] = d_per_ch;
+                bws_for_diff.d_a = da;
+                bws_for_diff.d_rg = drg;
+                bws_for_diff.d_vy = dvy;
                 Some(acc)
             } else {
                 None
@@ -3324,9 +3345,9 @@ fn build_full_weber_band_at_k_same_cache(
     let n_px = fine_w * fine_h;
     out_band.w = fine_w;
     out_band.h = fine_h;
-    out_band.data.clear();
+    // `resize` alone (no `clear()` first): a no-op once these buffers
+    // hold `n_px` — both branches below fully overwrite `[..n_px]`.
     out_band.data.resize(n_px, 0.0);
-    out_log_l_bkg.clear();
     out_log_l_bkg.resize(n_px, 0.0);
 
     if is_baseband {
@@ -3343,33 +3364,37 @@ fn build_full_weber_band_at_k_same_cache(
             *v = log_l;
         }
     } else {
-        let coarse_l_data: Vec<f32> = cache.gauss_l[k + 1].data.clone();
-        let coarse_l_w = cache.gauss_l[k + 1].w;
-        let coarse_l_h = cache.gauss_l[k + 1].h;
-        let img_coarse_data: Vec<f32> = cache.gauss_img[k + 1].data.clone();
-        let img_coarse_w = cache.gauss_img[k + 1].w;
-        let img_coarse_h = cache.gauss_img[k + 1].h;
-        let mut expanded_l = core::mem::take(&mut cache.scratch.expanded);
+        // Disjoint field borrows: `gauss_*` planes are read while
+        // `scratch` drives the expand intermediates — no clones.
+        let crate::pyramid::WeberPyramidCache {
+            gauss_l,
+            gauss_img,
+            scratch,
+            ..
+        } = &mut *cache;
+        let coarse_l = &gauss_l[k + 1];
+        let img_coarse = &gauss_img[k + 1];
+        let mut expanded_l = core::mem::take(&mut scratch.expanded);
         gausspyr_expand(
-            &coarse_l_data,
-            coarse_l_w,
-            coarse_l_h,
+            &coarse_l.data,
+            coarse_l.w,
+            coarse_l.h,
             fine_w,
             fine_h,
-            &mut cache.scratch,
+            scratch,
             &mut expanded_l,
         );
-        let mut img_expanded = core::mem::take(&mut cache.scratch.gauss_tmp);
+        let mut img_expanded = core::mem::take(&mut scratch.gauss_tmp);
         gausspyr_expand(
-            &img_coarse_data,
-            img_coarse_w,
-            img_coarse_h,
+            &img_coarse.data,
+            img_coarse.w,
+            img_coarse.h,
             fine_w,
             fine_h,
-            &mut cache.scratch,
+            scratch,
             &mut img_expanded,
         );
-        let fine_data = &cache.gauss_img[k].data;
+        let fine_data = &gauss_img[k].data;
         let band_data = &mut out_band.data;
         let log_band = &mut *out_log_l_bkg;
         for i in 0..n_px {
@@ -3379,8 +3404,8 @@ fn build_full_weber_band_at_k_same_cache(
             band_data[i] = c;
             log_band[i] = l_bkg.log10();
         }
-        cache.scratch.expanded = expanded_l;
-        cache.scratch.gauss_tmp = img_expanded;
+        scratch.expanded = expanded_l;
+        scratch.gauss_tmp = img_expanded;
     }
 }
 
@@ -3411,9 +3436,9 @@ fn build_full_weber_band_at_k(
     let n_px = fine_w * fine_h;
     out_band.w = fine_w;
     out_band.h = fine_h;
-    out_band.data.clear();
+    // `resize` alone (no `clear()` first): a no-op once these buffers
+    // hold `n_px` — both branches below fully overwrite `[..n_px]`.
     out_band.data.resize(n_px, 0.0);
-    out_log_l_bkg.clear();
     out_log_l_bkg.resize(n_px, 0.0);
 
     if is_baseband {
@@ -3431,35 +3456,35 @@ fn build_full_weber_band_at_k(
         }
     } else {
         // Non-baseband: expand coarse → fine, subtract, divide by l_bkg.
-        // Clone the coarse data so we can borrow img_cache.scratch mutably
-        // for the expand intermediates.
-        let coarse_l_data: Vec<f32> = l_cache.gauss_l[k + 1].data.clone();
-        let coarse_l_w = l_cache.gauss_l[k + 1].w;
-        let coarse_l_h = l_cache.gauss_l[k + 1].h;
-        let img_coarse_data: Vec<f32> = img_cache.gauss_img[k + 1].data.clone();
-        let img_coarse_w = img_cache.gauss_img[k + 1].w;
-        let img_coarse_h = img_cache.gauss_img[k + 1].h;
-        let mut expanded_l = core::mem::take(&mut img_cache.scratch.expanded);
+        // Disjoint field borrows — `img_cache.gauss_img` is read while
+        // `img_cache.scratch` drives the expand intermediates, and the
+        // l-bkg source lives in the separate `l_cache` — no clones.
+        let crate::pyramid::WeberPyramidCache {
+            gauss_img, scratch, ..
+        } = &mut *img_cache;
+        let coarse_l = &l_cache.gauss_l[k + 1];
+        let img_coarse = &gauss_img[k + 1];
+        let mut expanded_l = core::mem::take(&mut scratch.expanded);
         gausspyr_expand(
-            &coarse_l_data,
-            coarse_l_w,
-            coarse_l_h,
+            &coarse_l.data,
+            coarse_l.w,
+            coarse_l.h,
             fine_w,
             fine_h,
-            &mut img_cache.scratch,
+            scratch,
             &mut expanded_l,
         );
-        let mut img_expanded = core::mem::take(&mut img_cache.scratch.gauss_tmp);
+        let mut img_expanded = core::mem::take(&mut scratch.gauss_tmp);
         gausspyr_expand(
-            &img_coarse_data,
-            img_coarse_w,
-            img_coarse_h,
+            &img_coarse.data,
+            img_coarse.w,
+            img_coarse.h,
             fine_w,
             fine_h,
-            &mut img_cache.scratch,
+            scratch,
             &mut img_expanded,
         );
-        let fine_data = &img_cache.gauss_img[k].data;
+        let fine_data = &gauss_img[k].data;
         let band_data = &mut out_band.data;
         let log_band = &mut *out_log_l_bkg;
         for i in 0..n_px {
@@ -3469,8 +3494,8 @@ fn build_full_weber_band_at_k(
             band_data[i] = c;
             log_band[i] = l_bkg.log10();
         }
-        img_cache.scratch.expanded = expanded_l;
-        img_cache.scratch.gauss_tmp = img_expanded;
+        scratch.expanded = expanded_l;
+        scratch.gauss_tmp = img_expanded;
     }
 }
 

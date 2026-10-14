@@ -38,8 +38,8 @@ const SAFE_EPS: f32 = 1e-5;
 /// - `d_a`, `d_rg`, `d_vy` — output buffers (resized to `bw*bh`).
 /// - `m_mm_a` / `m_mm_rg` / `m_mm_vy` — scratch buffers used for the
 ///   per-channel `min(|T|, |R|)` intermediates.
-/// - `term_a`, `term_rg`, `term_vy` — scratch buffers used for
-///   `safe_pow(|M_mm|, q[ch])` intermediates.
+/// - `term_a`, `term_rg`, `term_vy` — scratch buffers used as the
+///   scaled-blur output (swapped into `m_mm_*` before the fused fold).
 /// - `pu_scratch` — scratch buffer used by `gaussian_blur_sigma3` for
 ///   large bands (resized internally when needed).
 #[allow(clippy::too_many_arguments)]
@@ -122,59 +122,21 @@ pub(crate) fn mult_mutual_band_into(
         }
     }
 
-    // Step 3: term[ch] = safe_pow(|M_mm[ch]|, q[ch])
-    //                 = (|M_mm[ch]| + SAFE_EPS)^q[ch] - SAFE_EPS^q[ch].
-    //
-    // The m_mm_* buffers hold `min(|T|, |R|) * mask_c_lin` — non-negative,
-    // no per-element `abs()` needed. The SIMD pow kernel (one chunked
-    // pow_midp_unchecked per channel) is the bulk of this stage.
-    let q_a = MASK_Q[0];
-    let q_rg = MASK_Q[1];
-    let q_vy = MASK_Q[2];
-    let eps_qa = SAFE_EPS.powf(q_a);
-    let eps_qrg = SAFE_EPS.powf(q_rg);
-    let eps_qvy = SAFE_EPS.powf(q_vy);
-    crate::par::map1(&mut term_a[..n], &m_mm_a[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, q_a, eps_qa)
-    });
-    crate::par::map1(&mut term_rg[..n], &m_mm_rg[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, q_rg, eps_qrg)
-    });
-    crate::par::map1(&mut term_vy[..n], &m_mm_vy[..n], |o, s| {
-        safe_pow_with_offset_into(s, o, SAFE_EPS, q_vy, eps_qvy)
-    });
-
-    // Step 4: cross-channel pool + masked diff.
-    //
-    // The per-pixel work splits into:
-    //   (a) diff[c]   = |T[c] - R[c]|                     (3 reads + abs + sub)
-    //   (b) pow[c]    = (diff[c] + eps)^p - eps^p          (the hot transcendental)
-    //   (c) m[c]      = Σ_in XCM[in][c] * term[in]        (3×3 fused-multiply-add)
-    //   (d) du[c]     = pow[c] / (1.0 + m[c])
-    //   (e) d[c]      = D_MAX_LIN * du[c] / (D_MAX_LIN + du[c])
-    //
-    // We split this into TWO passes so the heaviest stage (b) runs
-    // through the vectorized SIMD pow:
-    //   pass 1 (archmage SIMD): `vabs_diff_pow_into` computes
-    //          (|T−R| + eps)^p − eps^p straight into d_* — the |T−R|
-    //          plane is never materialised (the kernel performs the
-    //          same two ops per lane → bit-identical to the two-pass
-    //          chain; the same fusion is proven in `_4ch`).
-    //   pass 2 (scalar, auto-vectorizes): the cheap per-pixel pool +
-    //          clamp; reads pow from d_* and overwrites with the final
-    //          diff value.
-    let xcm00 = XCM_3X3[0][0];
-    let xcm10 = XCM_3X3[1][0];
-    let xcm20 = XCM_3X3[2][0];
-    let xcm01 = XCM_3X3[0][1];
-    let xcm11 = XCM_3X3[1][1];
-    let xcm21 = XCM_3X3[2][1];
-    let xcm02 = XCM_3X3[0][2];
-    let xcm12 = XCM_3X3[1][2];
-    let xcm22 = XCM_3X3[2][2];
+    // Steps 3+4 fused (`mask_fold_pool_into`): per element, per channel
+    //   term_c = (m_mm_c + eps)^q_c − eps^q_c     (was the safe_pow pass)
+    //   pw_c   = (|t_c − r_c| + eps)^p − eps^p    (was the vabs_diff_pow pass)
+    //   m_c    = XCM[0][c]·term_0 + XCM[1][c]·term_1 + XCM[2][c]·term_2
+    //   d_c    = D_MAX_LIN·du/(D_MAX_LIN+du), du = pw_c/(1+m_c)
+    // (was the scalar pool+clamp pass). Same per-element op order as the
+    // three-pass chain → bit-identical; term_* is never materialised.
     let p = MASK_P;
     let eps_p = SAFE_EPS.powf(p);
     let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
+    let eps_qs = [
+        SAFE_EPS.powf(MASK_Q[0]),
+        SAFE_EPS.powf(MASK_Q[1]),
+        SAFE_EPS.powf(MASK_Q[2]),
+    ];
 
     let ta = &t_p_per_ch[0];
     let trg = &t_p_per_ch[1];
@@ -183,48 +145,37 @@ pub(crate) fn mult_mutual_band_into(
     let rrg = &r_p_per_ch[1];
     let rvy = &r_p_per_ch[2];
 
-    // Pass 1: pow[c] = (|T[c]−R[c]| + eps)^p − eps^p → d_* (vectorized).
-    crate::par::map1_2(&mut d_a[..n], &ta[..n], &ra[..n], |o, x, y| {
-        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
-    });
-    crate::par::map1_2(&mut d_rg[..n], &trg[..n], &rrg[..n], |o, x, y| {
-        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
-    });
-    crate::par::map1_2(&mut d_vy[..n], &tvy[..n], &rvy[..n], |o, x, y| {
-        vabs_diff_pow_into(o, x, y, SAFE_EPS, p, eps_p)
-    });
-
-    // Pass 3: cross-channel pool + soft clamp, scalar (auto-vectorizes —
-    // no transcendentals left). Banded: `d_*` bands hold their own pow
-    // inputs and are overwritten with the clamped result; `term_*`
-    // reads stay absolute via the band base index.
     crate::par::map3_base(
         &mut d_a[..n],
         &mut d_rg[..n],
         &mut d_vy[..n],
         |base, oa, org, ovy| {
-            for i in 0..oa.len() {
-                let j = base + i;
-                let t0 = term_a[j];
-                let t1 = term_rg[j];
-                let t2 = term_vy[j];
-                let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
-                let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
-                let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
-
-                let pow0 = oa[i];
-                let pow1 = org[i];
-                let pow2 = ovy[i];
-
-                let du0 = pow0 / (1.0 + m0);
-                let du1 = pow1 / (1.0 + m1);
-                let du2 = pow2 / (1.0 + m2);
-
-                // clamp_diff_soft: D_MAX_LIN * d / (D_MAX_LIN + d).
-                oa[i] = d_max_lin * du0 / (d_max_lin + du0);
-                org[i] = d_max_lin * du1 / (d_max_lin + du1);
-                ovy[i] = d_max_lin * du2 / (d_max_lin + du2);
-            }
+            let len = oa.len();
+            zenmetrics_math::mask_fold_pool_into(
+                [oa, org, ovy],
+                [
+                    &ta[base..base + len],
+                    &trg[base..base + len],
+                    &tvy[base..base + len],
+                ],
+                [
+                    &ra[base..base + len],
+                    &rrg[base..base + len],
+                    &rvy[base..base + len],
+                ],
+                [
+                    &m_mm_a[base..base + len],
+                    &m_mm_rg[base..base + len],
+                    &m_mm_vy[base..base + len],
+                ],
+                SAFE_EPS,
+                p,
+                eps_p,
+                MASK_Q,
+                eps_qs,
+                &XCM_3X3,
+                d_max_lin,
+            );
         },
     );
 }

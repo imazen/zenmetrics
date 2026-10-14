@@ -235,6 +235,26 @@ mod wasm128 {
             ins_b, outs_a, outs_b,
         )
     }
+    #[archmage::attune]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn mask_fold_pool_wasm128_t(
+        token: Wasm128Token,
+        d: [&mut [f32]; 3],
+        t: [&[f32]; 3],
+        r: [&[f32]; 3],
+        mm: [&[f32]; 3],
+        offset: f32,
+        p: f32,
+        offset_pow_p: f32,
+        qs: [f32; 3],
+        offset_pow_qs: [f32; 3],
+        w: &[[f32; 3]; 3],
+        d_max: f32,
+    ) {
+        width8::mask_fold_pool_kernel::<_, Midp>(
+            token, d, t, r, mm, offset, p, offset_pow_p, qs, offset_pow_qs, w, d_max,
+        )
+    }
 }
 #[cfg(target_arch = "wasm32")]
 use wasm128::*;

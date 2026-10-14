@@ -19,7 +19,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub(crate) use crate::kernels::pyramid::{GAUSS5, band_frequencies};
+pub(crate) use crate::kernels::pyramid::band_frequencies;
 
 /// One Laplacian / Weber pyramid band.
 pub(crate) struct Band {
@@ -153,76 +153,21 @@ pub(crate) fn gausspyr_reduce(
     src: &[f32],
     sw: usize,
     sh: usize,
-    scratch: &mut PyramidScratch,
+    _scratch: &mut PyramidScratch,
     dst: &mut Vec<f32>,
 ) -> (usize, usize) {
     let dw = sw.div_ceil(2);
     let dh = sh.div_ceil(2);
     dst.resize(dw * dh, 0.0);
-    let k = GAUSS5;
 
-    // Vertical pass: zero-pad rows above/below, conv stride 2.
-    // Grow-only scratch: shared across levels, so `resize` would
-    // memset on every regrow — the SIMD pass overwrites every entry.
-    if scratch.vscratch.len() < sw * dh {
-        scratch.vscratch.resize(sw * dh, 0.0);
-    }
-    let vscratch = &mut scratch.vscratch[..sw * dh];
-
-    // SIMD inner pass — covers all rows uniformly. Note: the SIMD pass
-    // overwrites every entry of `vscratch` so the zero-fill above is
-    // strictly redundant (kept for parity with the prior scalar code
-    // path and for easy debugging — `Vec::resize` on a warm Vec is
-    // ~~free since capacity matches; on cold first-call the alloc cost
-    // dominates the zero-fill cost regardless).
-    crate::simd_pyramid::reduce_vertical_pass(src, sw, sh, dh, vscratch);
-
-    // First-row patch: pycvvdp adds reflected-row contribution. Scalar
-    // because it's a one-row scan and preserves the historical FMA
-    // ordering (`+= a*k[1] + b*k[0]`) for bit-identical golden parity
-    // with the patches alone.
-    if dh > 0 && sh >= 2 {
-        for x in 0..sw {
-            vscratch[x] += src[x] * k[1] + src[sw + x] * k[0];
-        }
-    }
-    if dh > 0 {
-        let last_dy = dh - 1;
-        if sh % 2 == 1 && sh >= 2 {
-            for x in 0..sw {
-                vscratch[last_dy * sw + x] +=
-                    src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
-            }
-        } else if sh.is_multiple_of(2) {
-            for x in 0..sw {
-                vscratch[last_dy * sw + x] += src[(sh - 1) * sw + x] * k[4];
-            }
-        }
-    }
-
-    // Horizontal pass — SIMD inner pass over rows, then scalar boundary
-    // patches replicating the upstream parity-on-rows bug.
-    crate::simd_pyramid::reduce_horizontal_pass(vscratch, sw, dw, dh, dst);
-
-    if dw > 0 && sw >= 2 {
-        for dy in 0..dh {
-            dst[dy * dw] += vscratch[dy * sw] * k[1] + vscratch[dy * sw + 1] * k[0];
-        }
-    }
-    if dw > 0 {
-        let last_dx = dw - 1;
-        // Replicate pycvvdp's parity-on-rows bug — see upstream notes.
-        if sh % 2 == 1 && sw >= 2 {
-            for dy in 0..dh {
-                dst[dy * dw + last_dx] +=
-                    vscratch[dy * sw + sw - 1] * k[3] + vscratch[dy * sw + sw - 2] * k[4];
-            }
-        } else if sh.is_multiple_of(2) {
-            for dy in 0..dh {
-                dst[dy * dw + last_dx] += vscratch[dy * sw + sw - 1] * k[4];
-            }
-        }
-    }
+    // Row-streamed fused pass: per output row, the 5-tap vertical row
+    // is computed into a small stack-resident buffer (identical acc
+    // order to `reduce_vertical_pass`), boundary patches applied,
+    // stride-2 deinterleaved, then the 5-tap horizontal filter and its
+    // `+=` boundary patches run — the `sw × dh` scratch round-trip is
+    // eliminated. Bit-identical to the split-pass chain: every element
+    // sees the same ops in the same order.
+    crate::simd_pyramid::reduce_fused_pass(src, sw, sh, dw, dh, dst);
     (dw, dh)
 }
 

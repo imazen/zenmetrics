@@ -20,6 +20,142 @@ use crate::kernels::color::{
 };
 use crate::params::{DisplayModel, Eotf, Primaries};
 
+/// Fast-path inner kernel: packed `RGBRGB…` u8 → DKL planes through the
+/// pre-scaled LUT `ls[i] = s*SRGB8_TO_LINEAR_LUT[i] + bias` and the 3×3
+/// matrix. Lane-built LUT reads + vector mul/add — per-element op order
+/// matches the scalar loop exactly → bit-identical.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+#[allow(clippy::too_many_arguments)]
+fn srgb8_dkl_lut_packed_inner(
+    token: Token,
+    src: &[u8],
+    ls: &[f32],
+    m: &[[f32; 3]; 3],
+    oa: &mut [f32],
+    org: &mut [f32],
+    ovy: &mut [f32],
+) {
+    let n = oa.len();
+    debug_assert!(src.len() >= 3 * n && org.len() == n && ovy.len() == n);
+    let m00 = f32x8::splat_t(token, m[0][0]);
+    let m01 = f32x8::splat_t(token, m[0][1]);
+    let m02 = f32x8::splat_t(token, m[0][2]);
+    let m10 = f32x8::splat_t(token, m[1][0]);
+    let m11 = f32x8::splat_t(token, m[1][1]);
+    let m12 = f32x8::splat_t(token, m[1][2]);
+    let m20 = f32x8::splat_t(token, m[2][0]);
+    let m21 = f32x8::splat_t(token, m[2][1]);
+    let m22 = f32x8::splat_t(token, m[2][2]);
+    let full = n & !7;
+    for i in (0..full).step_by(8) {
+        let lra: [f32; 8] = core::array::from_fn(|j| ls[src[3 * (i + j)] as usize]);
+        let lga: [f32; 8] = core::array::from_fn(|j| ls[src[3 * (i + j) + 1] as usize]);
+        let lba: [f32; 8] = core::array::from_fn(|j| ls[src[3 * (i + j) + 2] as usize]);
+        let lr = f32x8::load_t(token, &lra);
+        let lg = f32x8::load_t(token, &lga);
+        let lb = f32x8::load_t(token, &lba);
+        (m00 * lr + m01 * lg + m02 * lb).store((&mut oa[i..i + 8]).try_into().unwrap());
+        (m10 * lr + m11 * lg + m12 * lb).store((&mut org[i..i + 8]).try_into().unwrap());
+        (m20 * lr + m21 * lg + m22 * lb).store((&mut ovy[i..i + 8]).try_into().unwrap());
+    }
+    for i in full..n {
+        let lr = ls[src[3 * i] as usize];
+        let lg = ls[src[3 * i + 1] as usize];
+        let lb = ls[src[3 * i + 2] as usize];
+        oa[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+        org[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+        ovy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
+    }
+}
+
+/// Planar-u8 variant of [`srgb8_dkl_lut_packed_inner`]: `pr`/`pg`/`pb`
+/// are the band's R/G/B channel slices (`len` pixels each). Identical
+/// LUT + matrix op order → bit-identical to the scalar loop.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+#[allow(clippy::too_many_arguments)]
+fn srgb8_dkl_lut_planes_inner(
+    token: Token,
+    pr: &[u8],
+    pg: &[u8],
+    pb: &[u8],
+    ls: &[f32],
+    m: &[[f32; 3]; 3],
+    oa: &mut [f32],
+    org: &mut [f32],
+    ovy: &mut [f32],
+) {
+    let n = oa.len();
+    debug_assert!(pr.len() >= n && pg.len() >= n && pb.len() >= n);
+    let m00 = f32x8::splat_t(token, m[0][0]);
+    let m01 = f32x8::splat_t(token, m[0][1]);
+    let m02 = f32x8::splat_t(token, m[0][2]);
+    let m10 = f32x8::splat_t(token, m[1][0]);
+    let m11 = f32x8::splat_t(token, m[1][1]);
+    let m12 = f32x8::splat_t(token, m[1][2]);
+    let m20 = f32x8::splat_t(token, m[2][0]);
+    let m21 = f32x8::splat_t(token, m[2][1]);
+    let m22 = f32x8::splat_t(token, m[2][2]);
+    let full = n & !7;
+    for i in (0..full).step_by(8) {
+        let lra: [f32; 8] = core::array::from_fn(|j| ls[pr[i + j] as usize]);
+        let lga: [f32; 8] = core::array::from_fn(|j| ls[pg[i + j] as usize]);
+        let lba: [f32; 8] = core::array::from_fn(|j| ls[pb[i + j] as usize]);
+        let lr = f32x8::load_t(token, &lra);
+        let lg = f32x8::load_t(token, &lga);
+        let lb = f32x8::load_t(token, &lba);
+        (m00 * lr + m01 * lg + m02 * lb).store((&mut oa[i..i + 8]).try_into().unwrap());
+        (m10 * lr + m11 * lg + m12 * lb).store((&mut org[i..i + 8]).try_into().unwrap());
+        (m20 * lr + m21 * lg + m22 * lb).store((&mut ovy[i..i + 8]).try_into().unwrap());
+    }
+    for i in full..n {
+        let lr = ls[pr[i] as usize];
+        let lg = ls[pg[i] as usize];
+        let lb = ls[pb[i] as usize];
+        oa[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+        org[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+        ovy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
+    }
+}
+
+/// `ls[i] = s * SRGB8_TO_LINEAR_LUT[i] + bias` — the display scale and
+/// bias folded into the LUT once per call; per-element `s*lin+bias`
+/// order is preserved, so results are bit-identical to applying it in
+/// the inner loop.
+fn scaled_srgb_lut(s: f32, bias: f32) -> [f32; 256] {
+    core::array::from_fn(|i| s * SRGB8_TO_LINEAR_LUT[i] + bias)
+}
+
+fn srgb8_dkl_lut_packed(
+    src: &[u8],
+    ls: &[f32],
+    m: &[[f32; 3]; 3],
+    oa: &mut [f32],
+    org: &mut [f32],
+    ovy: &mut [f32],
+) {
+    archmage::attuned!(
+        srgb8_dkl_lut_packed_inner(src, ls, m, oa, org, ovy),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn srgb8_dkl_lut_planes(
+    pr: &[u8],
+    pg: &[u8],
+    pb: &[u8],
+    ls: &[f32],
+    m: &[[f32; 3]; 3],
+    oa: &mut [f32],
+    org: &mut [f32],
+    ovy: &mut [f32],
+) {
+    archmage::attuned!(
+        srgb8_dkl_lut_planes_inner(pr, pg, pb, ls, m, oa, org, ovy),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// sRGB packed-u8 (RGBRGB…) → DKL planar (A, RG, VY).
 ///
 /// Strided-friendly: source slice is contiguous `RGB` triples,
@@ -31,6 +167,11 @@ use crate::params::{DisplayModel, Eotf, Primaries};
 /// - `(Srgb, Bt709)` → fast LUT path (bit-identical to v0.0.1).
 /// - Any other combination → per-pixel
 ///   [`display_byte_to_dkl_scalar`] dispatch.
+/// `Eotf::Srgb + Primaries::Bt709` — the LUT fast-path gate.
+fn srgb_bt709_fast(display: &DisplayModel) -> bool {
+    matches!(display.eotf, Eotf::Srgb) && matches!(display.primaries, Primaries::Bt709)
+}
+
 pub(crate) fn srgb_to_dkl_planar(
     src: &[u8],
     width: usize,
@@ -42,6 +183,25 @@ pub(crate) fn srgb_to_dkl_planar(
 ) {
     let n = width * height;
     debug_assert_eq!(src.len(), n * 3);
+    if srgb_bt709_fast(&display) {
+        let m = display.primaries.linear_rgb_to_dkl();
+        let s = display.y_peak - display.y_black;
+        let bias = display.y_black + display.y_refl;
+        let ls = scaled_srgb_lut(s, bias);
+        out_a.resize(n, 0.0);
+        out_rg.resize(n, 0.0);
+        out_vy.resize(n, 0.0);
+        crate::par::map3_base(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            |base, oa, org, ovy| {
+                let len = oa.len();
+                srgb8_dkl_lut_packed(&src[3 * base..3 * base + 3 * len], &ls, &m, oa, org, ovy)
+            },
+        );
+        return;
+    }
     srgb8_to_dkl_planar_inner(
         n,
         display,
@@ -68,6 +228,36 @@ pub(crate) fn srgb_planar_to_dkl_planar(
 ) {
     let n = width * height;
     debug_assert_eq!(src.len(), n * 3);
+    if srgb_bt709_fast(&display) {
+        let m = display.primaries.linear_rgb_to_dkl();
+        let s = display.y_peak - display.y_black;
+        let bias = display.y_black + display.y_refl;
+        let ls = scaled_srgb_lut(s, bias);
+        let (pr, rest) = src.split_at(n);
+        let (pg, pb) = rest.split_at(n);
+        out_a.resize(n, 0.0);
+        out_rg.resize(n, 0.0);
+        out_vy.resize(n, 0.0);
+        crate::par::map3_base(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            |base, oa, org, ovy| {
+                let len = oa.len();
+                srgb8_dkl_lut_planes(
+                    &pr[base..base + len],
+                    &pg[base..base + len],
+                    &pb[base..base + len],
+                    &ls,
+                    &m,
+                    oa,
+                    org,
+                    ovy,
+                )
+            },
+        );
+        return;
+    }
     srgb8_to_dkl_planar_inner(
         n,
         display,
@@ -78,8 +268,10 @@ pub(crate) fn srgb_planar_to_dkl_planar(
     );
 }
 
-/// Shared sRGB-8 → DKL planar conversion. `fetch(i)` returns the
-/// `(r, g, b)` bytes for output pixel `i`.
+/// Shared sRGB-8 → DKL planar conversion for the non-fast display
+/// models (the `Srgb + Bt709` case is handled by the SIMD LUT kernels
+/// before this is ever called). `fetch(i)` returns the `(r, g, b)`
+/// bytes for output pixel `i`.
 fn srgb8_to_dkl_planar_inner(
     n: usize,
     display: DisplayModel,
@@ -92,51 +284,22 @@ fn srgb8_to_dkl_planar_inner(
     out_rg.resize(n, 0.0);
     out_vy.resize(n, 0.0);
 
-    if matches!(display.eotf, Eotf::Srgb) && matches!(display.primaries, Primaries::Bt709) {
-        // Fast path — preserve v0.0.1 numerics bit-for-bit. The
-        // hard-coded SRGB_LINEAR_TO_DKL matrix is also what
-        // `Primaries::Bt709.linear_rgb_to_dkl()` returns, so this
-        // path is equivalent to the dispatch path at the f32 level.
-        let m = display.primaries.linear_rgb_to_dkl();
-        let s = display.y_peak - display.y_black;
-        let bias = display.y_black + display.y_refl;
-        crate::par::map3_base(
-            &mut out_a[..n],
-            &mut out_rg[..n],
-            &mut out_vy[..n],
-            |base, oa, org, ovy| {
-                for i in 0..oa.len() {
-                    let (r, g, b) = fetch(base + i);
-                    let lin_r = SRGB8_TO_LINEAR_LUT[r as usize];
-                    let lin_g = SRGB8_TO_LINEAR_LUT[g as usize];
-                    let lin_b = SRGB8_TO_LINEAR_LUT[b as usize];
-                    let lr = s * lin_r + bias;
-                    let lg = s * lin_g + bias;
-                    let lb = s * lin_b + bias;
-                    oa[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
-                    org[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
-                    ovy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
-                }
-            },
-        );
-    } else {
-        // Dispatch path — honors arbitrary EOTF + primaries. HLG
-        // needs per-RGB-triple OOTF, hence the per-pixel call.
-        crate::par::map3_base(
-            &mut out_a[..n],
-            &mut out_rg[..n],
-            &mut out_vy[..n],
-            |base, oa, org, ovy| {
-                for i in 0..oa.len() {
-                    let (r, g, b) = fetch(base + i);
-                    let (a, rg, vy) = display_byte_to_dkl_scalar(r, g, b, display);
-                    oa[i] = a;
-                    org[i] = rg;
-                    ovy[i] = vy;
-                }
-            },
-        );
-    }
+    // Dispatch path — honors arbitrary EOTF + primaries. HLG
+    // needs per-RGB-triple OOTF, hence the per-pixel call.
+    crate::par::map3_base(
+        &mut out_a[..n],
+        &mut out_rg[..n],
+        &mut out_vy[..n],
+        |base, oa, org, ovy| {
+            for i in 0..oa.len() {
+                let (r, g, b) = fetch(base + i);
+                let (a, rg, vy) = display_byte_to_dkl_scalar(r, g, b, display);
+                oa[i] = a;
+                org[i] = rg;
+                ovy[i] = vy;
+            }
+        },
+    );
 }
 
 /// Display-encoded u16 packed (`RGBRGB…`, `v/65535` normalized) →

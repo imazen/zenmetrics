@@ -179,6 +179,78 @@ macro_rules! check_tier {
                     );
                 }
             }
+            // Masking fold: fused safe_pow + |T−R|^p + XCM pool + clamp.
+            // `mm` is the blurred min (non-negative — include exact 0s to
+            // exercise the `shifted == offset` blend lanes).
+            let tq = [mk(6, 0.05), mk(7, 0.06), mk(8, 0.04)];
+            let rq = [mk(9, 0.03), mk(10, 0.07), mk(11, 0.05)];
+            let mmq: [Vec<f32>; 3] = core::array::from_fn(|k| {
+                (0..n)
+                    .map(|i| {
+                        if i % 5 == 0 {
+                            0.0
+                        } else {
+                            ((i * 29 + k * 11) % 83) as f32 * 0.04
+                        }
+                    })
+                    .collect()
+            });
+            let w3 = [[0.3_f32, 0.5, 0.2], [0.6, -0.2, 0.1], [0.1, 0.3, 0.7]];
+            let qs3 = [1.30_f32, 2.89, 3.68];
+            let eps_qs3 = [
+                1e-5_f32.powf(qs3[0]),
+                1e-5_f32.powf(qs3[1]),
+                1e-5_f32.powf(qs3[2]),
+            ];
+            let mut sd: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let mut td: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; n]);
+            let tq_r = [&tq[0][..], &tq[1][..], &tq[2][..]];
+            let rq_r = [&rq[0][..], &rq[1][..], &rq[2][..]];
+            let mm_r = [&mmq[0][..], &mmq[1][..], &mmq[2][..]];
+            {
+                let [sd0, sd1, sd2] = &mut sd;
+                width8::mask_fold_pool_kernel::<_, Midp>(
+                    ScalarToken,
+                    [&mut sd0[..], &mut sd1[..], &mut sd2[..]],
+                    tq_r,
+                    rq_r,
+                    mm_r,
+                    1e-5,
+                    2.26,
+                    1e-5_f32.powf(2.26),
+                    qs3,
+                    eps_qs3,
+                    &w3,
+                    370.0,
+                );
+            }
+            {
+                let [td0, td1, td2] = &mut td;
+                $width::mask_fold_pool_kernel::<_, Midp>(
+                    token,
+                    [&mut td0[..], &mut td1[..], &mut td2[..]],
+                    tq_r,
+                    rq_r,
+                    mm_r,
+                    1e-5,
+                    2.26,
+                    1e-5_f32.powf(2.26),
+                    qs3,
+                    eps_qs3,
+                    &w3,
+                    370.0,
+                );
+            }
+            for c in 0..3 {
+                for i in 0..n {
+                    assert!(
+                        (sd[c][i] - td[c][i]).abs() <= 5e-5 * sd[c][i].abs().max(1e-6),
+                        "mask_fold_pool c={c} n={n} i={i} scalar={} simd={}",
+                        sd[c][i],
+                        td[c][i]
+                    );
+                }
+            }
         }
     }};
 }

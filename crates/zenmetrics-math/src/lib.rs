@@ -273,6 +273,37 @@ pub(crate) fn vmin_abs_into_scalar_t(token: ScalarToken, out: &mut [f32], x: &[f
     width8::vmin_abs_kernel::<_, Midp>(token, out, x, y);
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mask_fold_pool_scalar_t(
+    token: ScalarToken,
+    d: [&mut [f32]; 3],
+    t: [&[f32]; 3],
+    r: [&[f32]; 3],
+    mm: [&[f32]; 3],
+    offset: f32,
+    p: f32,
+    offset_pow_p: f32,
+    qs: [f32; 3],
+    offset_pow_qs: [f32; 3],
+    w: &[[f32; 3]; 3],
+    d_max: f32,
+) {
+    width8::mask_fold_pool_kernel::<_, Midp>(
+        token,
+        d,
+        t,
+        r,
+        mm,
+        offset,
+        p,
+        offset_pow_p,
+        qs,
+        offset_pow_qs,
+        w,
+        d_max,
+    );
+}
+
 pub(crate) fn vweber_band_into_scalar_t(
     token: ScalarToken,
     band: &mut [f32],
@@ -661,6 +692,48 @@ pub fn vxcm_pool_clamp_4ch_sqsum_partial(
 ) -> [f32; 4] {
     archmage::attuned!(
         vxcm_pool_clamp_4ch_sqsum_partial(d, t, w, d_max),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// Three-channel masking fold, fully fused into one pass: for each
+/// element and channel c,
+/// `term_c = (mm_c + offset)^qs_c − offset_pow_qs_c`,
+/// `pw_c = (|t_c − r_c| + offset)^p − offset_pow_p`,
+/// `m_c = w[0][c]·term_0 + w[1][c]·term_1 + w[2][c]·term_2`,
+/// `d_c = d_max·(pw_c/(1+m_c)) / (d_max + pw_c/(1+m_c))`.
+/// Bit-identical to chaining `safe_pow_with_offset` on `mm`,
+/// `vabs_diff_pow` on `(t, r)`, then the scalar XCM pool + soft clamp.
+/// `w` is `XCM_3X3` indexed `[in][c]`.
+#[allow(clippy::too_many_arguments)]
+pub fn mask_fold_pool_into(
+    d: [&mut [f32]; 3],
+    t: [&[f32]; 3],
+    r: [&[f32]; 3],
+    mm: [&[f32]; 3],
+    offset: f32,
+    p: f32,
+    offset_pow_p: f32,
+    qs: [f32; 3],
+    offset_pow_qs: [f32; 3],
+    w: &[[f32; 3]; 3],
+    d_max: f32,
+) {
+    debug_assert!(d[1].len() == d[0].len() && d[2].len() == d[0].len());
+    archmage::attuned!(
+        mask_fold_pool(
+            d,
+            t,
+            r,
+            mm,
+            offset,
+            p,
+            offset_pow_p,
+            qs,
+            offset_pow_qs,
+            w,
+            d_max
+        ),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
