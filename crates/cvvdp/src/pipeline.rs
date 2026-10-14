@@ -416,7 +416,7 @@ impl Cvvdp {
 
     /// One-shot score returning the diffmap as an owned
     /// [`crate::diffmap::CvvdpDiffmap`] (implements
-    /// [`zenmetrics_diffmap::Diffmap`]). Prefer this over
+    /// [`zenmetrics_abstractions::Diffmap`]). Prefer this over
     /// [`Self::score_with_diffmap`] when the caller wants the
     /// polymorphic map type.
     pub fn score_and_diffmap(
@@ -4221,5 +4221,75 @@ mod csf_simd_tests {
             }
         }
         eprintln!("CSF max_relative={max_relative:e}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Generic Metric surface.
+// ---------------------------------------------------------------------------
+
+/// `Cvvdp` implements the generic surface — `RGB8_SRGB` inputs score via
+/// [`Self::score`]; `score_with_map` returns the masked-error diffmap.
+impl zenmetrics_abstractions::Metric for Cvvdp {
+    fn name(&self) -> &'static str {
+        "cvvdp"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Jod
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        // `score` takes packed rgb8 — repack when the slice is strided.
+        let (rp, dp) = (contiguous_rgb8(&r), contiguous_rgb8(&d));
+        let jod = self.score(&rp, &dp).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(zenmetrics_abstractions::MetricScores::single(
+            "jod", jod as f64,
+        ))
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (rp, dp) = (contiguous_rgb8(&r), contiguous_rgb8(&d));
+        let (jod, dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok((
+            zenmetrics_abstractions::MetricScores::single("jod", jod as f64),
+            alloc::boxed::Box::new(dm),
+        ))
+    }
+}
+
+/// Repack a strided rgb8 view to packed (a no-op `Cow` borrow when the
+/// stride is already `w·3`).
+fn contiguous_rgb8<'a>(r: &'a zenmetrics_abstractions::Rgb8In<'a>) -> alloc::borrow::Cow<'a, [u8]> {
+    let n = r.width * r.height * 3;
+    if r.stride == r.width * 3 {
+        alloc::borrow::Cow::Borrowed(&r.pixels[..n])
+    } else {
+        let mut out = alloc::vec::Vec::with_capacity(n);
+        for row in r.pixels.chunks_exact(r.stride).take(r.height) {
+            out.extend_from_slice(&row[..r.width * 3]);
+        }
+        alloc::borrow::Cow::Owned(out)
     }
 }

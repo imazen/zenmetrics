@@ -329,7 +329,7 @@ fn tier_parity() {
 /// similarity map at the preprocessed resolution.
 #[test]
 fn haarpsi_diffmap_matches_score() {
-    use zenmetrics_diffmap::Diffmap;
+    use zenmetrics_abstractions::Diffmap;
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 31 + 7) % 229) as f32).collect();
     let mut d = r.clone();
@@ -344,6 +344,9 @@ fn haarpsi_diffmap_matches_score() {
     let map = dm.map();
     assert_eq!(map.len(), dm.width as usize * dm.height as usize);
     assert!(map.iter().all(|v| v.is_finite()));
-    assert!(dm.similarity());
+    assert_eq!(
+        dm.polarity(),
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
     assert_eq!(dm.score(), score);
 }

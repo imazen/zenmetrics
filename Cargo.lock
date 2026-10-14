@@ -1456,8 +1456,8 @@ dependencies = [
  "rayon",
  "serde_json",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenmetrics-abstractions",
  "zenmetrics-corpus",
- "zenmetrics-diffmap",
  "zenmetrics-math",
  "zenpixels",
  "zenpixels-convert",
@@ -2088,7 +2088,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "zenmetrics-diffmap",
+ "zenmetrics-abstractions",
  "zenpixels",
 ]
 
@@ -2315,7 +2315,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "zenmetrics-diffmap",
+ "zenmetrics-abstractions",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -2389,7 +2389,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "zenmetrics-diffmap",
+ "zenmetrics-abstractions",
  "zenpixels",
 ]
 
@@ -2450,8 +2450,8 @@ dependencies = [
  "rayon",
  "rgb",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenmetrics-abstractions",
  "zenmetrics-corpus",
- "zenmetrics-diffmap",
  "zenpixels",
  "zenpng 0.2.0 (git+https://github.com/imazen/zenpng?branch=main)",
 ]
@@ -3501,7 +3501,7 @@ dependencies = [
  "psnrhvs",
  "rayon",
  "vmaf-head-sys",
- "zenmetrics-diffmap",
+ "zenmetrics-abstractions",
  "zenpixels",
 ]
 
@@ -6053,7 +6053,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "zenmetrics-diffmap",
+ "zenmetrics-abstractions",
  "zenpixels",
 ]
 
@@ -7713,6 +7713,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenmetrics-abstractions"
+version = "0.0.1"
+dependencies = [
+ "bytemuck",
+ "zenpixels",
+]
+
+[[package]]
 name = "zenmetrics-api"
 version = "0.0.1"
 dependencies = [
@@ -7774,6 +7782,7 @@ dependencies = [
  "wasm-bindgen-rayon",
  "zenjpeg",
  "zenjxl",
+ "zenmetrics-abstractions",
  "zenmetrics-api",
  "zenpixels",
  "zenpixels-convert",
@@ -7858,14 +7867,6 @@ dependencies = [
 [[package]]
 name = "zenmetrics-corpus"
 version = "0.1.0"
-
-[[package]]
-name = "zenmetrics-diffmap"
-version = "0.0.1"
-dependencies = [
- "bytemuck",
- "zenpixels",
-]
 
 [[package]]
 name = "zenmetrics-gpu-core"

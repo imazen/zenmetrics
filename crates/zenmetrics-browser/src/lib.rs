@@ -562,7 +562,10 @@ pub fn spatial_map(
                 .ok_or_else(|| fail("DSSIM returned no spatial map".into()))?;
             result.width = first.map.width() as u32;
             result.height = first.map.height() as u32;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = first.map.buf().to_vec();
         }
         #[cfg(feature = "cpu-fsim")]
@@ -571,7 +574,10 @@ pub fn spatial_map(
                 .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-haarpsi")]
@@ -580,7 +586,10 @@ pub fn spatial_map(
                 .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-vsi")]
@@ -589,7 +598,10 @@ pub fn spatial_map(
                 vsi::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-msssim")]
@@ -598,7 +610,10 @@ pub fn spatial_map(
                 .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = dm.map().to_vec();
         }
         #[cfg(feature = "cpu-cvvdp")]
@@ -632,7 +647,10 @@ pub fn spatial_map(
             let (mw, mh) = gmsd::map_dims(w, h);
             result.width = mw as u32;
             result.height = mh as u32;
-            result.similarity = true;
+            result.similarity = matches!(
+                dm.polarity(),
+                zenmetrics_abstractions::MapPolarity::Similarity
+            );
             result.values = vec![0.; mw * mh];
             gmsd::gmsd_with_map(
                 gmsd::GrayImage::packed(&rg, w, h).map_err(|e| fail(e.to_string()))?,

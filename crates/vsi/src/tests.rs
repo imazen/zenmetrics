@@ -239,7 +239,7 @@ fn tier_parity() {
 /// similarity map.
 #[test]
 fn vsi_diffmap_matches_score() {
-    use zenmetrics_diffmap::Diffmap;
+    use zenmetrics_abstractions::Diffmap;
     let (w, h) = (48usize, 40usize);
     let r: alloc::vec::Vec<u8> = (0..w * h * 3).map(|i| (i * 13 + 7) as u8 % 251).collect();
     let mut d = r.clone();
@@ -250,5 +250,8 @@ fn vsi_diffmap_matches_score() {
     let (score, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
     assert_eq!(plain, score);
     assert_eq!(dm.map().len(), w * h);
-    assert!(dm.similarity());
+    assert_eq!(
+        dm.polarity(),
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
 }

@@ -106,8 +106,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// Opponent-channel coefficients from `VSI.m` (ported verbatim — these
 /// are the reference's own, not standard YIQ).
@@ -157,7 +156,7 @@ pub fn vsi_rgb8(
 /// (`SimMatrixC`: grad-sim^α · VS-sim · real((I-sim·Q-sim)^λ) · weight),
 /// full input resolution. Higher = more similar.
 ///
-/// Implements [`zenmetrics_diffmap::Diffmap`].
+/// Implements [`zenmetrics_abstractions::Diffmap`].
 #[non_exhaustive]
 pub struct VsiDiffmap {
     map: alloc::vec::Vec<f32>,
@@ -176,17 +175,17 @@ impl VsiDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for VsiDiffmap {
+impl zenmetrics_abstractions::Diffmap for VsiDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
         ))
     }
 
-    fn similarity(&self) -> bool {
-        true
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Similarity
     }
 
     fn score(&self) -> f64 {
@@ -232,6 +231,56 @@ impl Input {
     pub(crate) fn from_rgb8(data: &[u8], w: usize, h: usize, stride: usize) -> Self {
         let (l, m, n, rgb) = kernel::rgb8_planes(data, w, h, stride);
         Self { l, m, n, rgb }
+    }
+}
+
+/// The VSI metric as a generic scorer — accepts `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Vsi;
+
+impl zenmetrics_abstractions::Metric for Vsi {
+    fn name(&self) -> &'static str {
+        "vsi"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(zenmetrics_abstractions::MetricScores::single("vsi", s))
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (s, dm) = vsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+        Ok((
+            zenmetrics_abstractions::MetricScores::single("vsi", s),
+            alloc::boxed::Box::new(dm),
+        ))
     }
 }
 

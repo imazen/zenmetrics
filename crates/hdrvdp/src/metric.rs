@@ -76,11 +76,11 @@ pub struct HdrVdpResult {
     pub input_looks_relative: bool,
 }
 
-impl zenmetrics_diffmap::Diffmap for HdrVdpResult {
+impl zenmetrics_abstractions::Diffmap for HdrVdpResult {
     /// The canonical map is `p_map` — per-pixel detection probability.
     /// `c_map` (normalized threshold units) stays on the concrete type.
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.p_map,
             self.width as u32,
             self.height as u32,
@@ -88,8 +88,8 @@ impl zenmetrics_diffmap::Diffmap for HdrVdpResult {
     }
 
     /// `P_map` is error-direction: higher = more *detectable*.
-    fn similarity(&self) -> bool {
-        false
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::DetectionProbability
     }
 
     fn score(&self) -> f64 {

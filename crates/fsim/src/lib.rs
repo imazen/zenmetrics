@@ -156,8 +156,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// The two scores an RGB comparison produces. FSIM uses only the luma
 /// phase-congruency/gradient maps; FSIMc adds the I/Q chroma weighting.
@@ -237,7 +236,7 @@ pub fn fsim_luma8(
 /// (`GSim · PCsim` at the decimated `w2×h2` resolution; `F` downsampling
 /// applies). `map[i]` ∈ \[0,1\], higher = more similar.
 ///
-/// Implements [`zenmetrics_diffmap::Diffmap`] — `Box<dyn Diffmap>` works
+/// Implements [`zenmetrics_abstractions::Diffmap`] — `Box<dyn Diffmap>` works
 /// directly for heterogeneous consumers.
 #[non_exhaustive]
 pub struct FsimDiffmap {
@@ -259,17 +258,17 @@ impl FsimDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for FsimDiffmap {
+impl zenmetrics_abstractions::Diffmap for FsimDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
         ))
     }
 
-    fn similarity(&self) -> bool {
-        true
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Similarity
     }
 
     fn score(&self) -> f64 {
@@ -365,6 +364,58 @@ pub fn fsim_rgb8_with_diffmap(
             fsimc: Some(fsimc),
         },
     ))
+}
+
+/// The FSIM/FSIMc metric as a generic scorer — the
+/// [`zenmetrics_abstractions::Metric`] impl takes `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs (strided views welcome).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Fsim;
+
+impl zenmetrics_abstractions::Metric for Fsim {
+    fn name(&self) -> &'static str {
+        "fsim"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let mut out = zenmetrics_abstractions::MetricScores::single("fsimc", s.fsimc);
+        out.push("fsim", s.fsim);
+        Ok(out)
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (s, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+        let mut out = zenmetrics_abstractions::MetricScores::single("fsimc", s.fsimc);
+        out.push("fsim", s.fsim);
+        Ok((out, alloc::boxed::Box::new(dm)))
+    }
 }
 
 fn check_len(data: &[f32], w: usize, h: usize, stride: usize) -> Result<(), Error> {

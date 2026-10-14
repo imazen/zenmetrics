@@ -21,7 +21,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = ["zenmetrics-diffmap/std"]
+std = ["zenmetrics-abstractions/std"]
 # Rayon band parallelism. Results are bit-identical at every thread count:
 # per-row partial sums are combined in row order regardless of banding.
 parallel = ["std", "dep:rayon"]
@@ -36,7 +36,7 @@ pixels = ["std", "dep:zenpixels-convert"]
 avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
-zenmetrics-diffmap = { path = "../zenmetrics-diffmap", default-features = false }
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
 
 archmage = { workspace = true }

@@ -27,7 +27,7 @@ parallel = ["dep:rayon"]
 [dependencies]
 archmage = { workspace = true }
 magetypes = { workspace = true }
-zenmetrics-diffmap = { path = "../zenmetrics-diffmap" }
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions" }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
 rayon = { version = "1.10", optional = true }
 

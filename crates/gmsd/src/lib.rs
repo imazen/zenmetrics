@@ -201,8 +201,59 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
+
+/// The GMSD metric as a generic scorer — accepts `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs. Headline = `gmsd` (the std of the
+/// GMS map — error-direction).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Gmsd;
+
+impl zenmetrics_abstractions::Metric for Gmsd {
+    fn name(&self) -> &'static str {
+        "gmsd"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Difference
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let mut out = zenmetrics_abstractions::MetricScores::single("gmsd", s.gmsd);
+        out.push("mean_gms", s.mean_gms);
+        Ok(out)
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (s, dm) = gmsd_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+        let mut out = zenmetrics_abstractions::MetricScores::single("gmsd", s.gmsd);
+        out.push("mean_gms", s.mean_gms);
+        Ok((out, alloc::boxed::Box::new(dm)))
+    }
+}
 
 /// `Result<T, gmsd::Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -230,7 +281,7 @@ pub fn gmsd_with_map(
 
 /// GMSD's per-pixel GMS map, owned — the canonical `gmsd_map` output of
 /// the reference (`gmsd.m` returns `[gmsd, gmsd_map]`). Implements
-/// [`zenmetrics_diffmap::Diffmap`].
+/// [`zenmetrics_abstractions::Diffmap`].
 #[non_exhaustive]
 pub struct GmsdDiffmap {
     map: Vec<f32>,
@@ -249,9 +300,9 @@ impl GmsdDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for GmsdDiffmap {
+impl zenmetrics_abstractions::Diffmap for GmsdDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
@@ -260,8 +311,8 @@ impl zenmetrics_diffmap::Diffmap for GmsdDiffmap {
 
     /// The GMS map is a similarity map (higher = more similar); note the
     /// *score* is error-direction (its std).
-    fn similarity(&self) -> bool {
-        true
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Similarity
     }
 
     fn score(&self) -> f64 {

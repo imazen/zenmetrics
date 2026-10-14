@@ -121,8 +121,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// MATLAB `rgb2gray` luma coefficients (`0.2989 0.5870 0.1140`) — the
 /// conversion Wang's pipeline applies to colour input.
@@ -147,7 +146,7 @@ pub(crate) fn auto_level(w: usize, h: usize) -> Result<usize, Error> {
 /// scale (the `ssimmap` MATLAB `ssim` returns), `(w−10)×(h−10)` after
 /// the level-0 valid Gaussian window. Higher = more similar.
 ///
-/// Implements [`zenmetrics_diffmap::Diffmap`].
+/// Implements [`zenmetrics_abstractions::Diffmap`].
 #[non_exhaustive]
 pub struct MsssimDiffmap {
     map: alloc::vec::Vec<f32>,
@@ -168,17 +167,17 @@ impl MsssimDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for MsssimDiffmap {
+impl zenmetrics_abstractions::Diffmap for MsssimDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
         ))
     }
 
-    fn similarity(&self) -> bool {
-        true
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Similarity
     }
 
     fn score(&self) -> f64 {
@@ -233,6 +232,56 @@ pub fn msssim_plane_f32_with_diffmap(
             level: level as u32,
         },
     ))
+}
+
+/// The MS-SSIM metric as a generic scorer — accepts `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Msssim;
+
+impl zenmetrics_abstractions::Metric for Msssim {
+    fn name(&self) -> &'static str {
+        "msssim"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(zenmetrics_abstractions::MetricScores::single("msssim", s))
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (s, dm) = msssim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+        Ok((
+            zenmetrics_abstractions::MetricScores::single("msssim", s),
+            alloc::boxed::Box::new(dm),
+        ))
+    }
 }
 
 fn check_plane(buf: &[f32], w: usize, h: usize, stride: usize) -> Result<(), Error> {

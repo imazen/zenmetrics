@@ -195,7 +195,7 @@ mod tests {
 
 /// Owned diffmap — the masked per-pixel error at base resolution
 /// (`w×h`, higher = more visible error). Implements
-/// [`zenmetrics_diffmap::Diffmap`].
+/// [`zenmetrics_abstractions::Diffmap`].
 #[non_exhaustive]
 pub struct CvvdpDiffmap {
     pub(crate) map: Vec<f32>,
@@ -214,9 +214,9 @@ impl CvvdpDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for CvvdpDiffmap {
+impl zenmetrics_abstractions::Diffmap for CvvdpDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
@@ -224,8 +224,8 @@ impl zenmetrics_diffmap::Diffmap for CvvdpDiffmap {
     }
 
     /// Masked error is error-direction: higher = more visible.
-    fn similarity(&self) -> bool {
-        false
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Difference
     }
 
     fn score(&self) -> f64 {

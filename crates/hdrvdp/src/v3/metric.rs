@@ -49,7 +49,7 @@ pub struct HdrVdp3Result {
     pub had_nan: bool,
 }
 
-impl zenmetrics_diffmap::Diffmap for HdrVdp3Result {
+impl zenmetrics_abstractions::Diffmap for HdrVdp3Result {
     /// Canonical map = `p_map` (per-pixel detection probability).
     /// `p_map` is `f64` internally — the `Gray<f32>` view requires a
     /// conversion copy, so `pixels()` returns `PixelCow::Owned` here.
@@ -57,7 +57,7 @@ impl zenmetrics_diffmap::Diffmap for HdrVdp3Result {
     /// concrete type.
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
         let f32_map: Vec<f32> = self.p_map.iter().map(|&v| v as f32).collect();
-        let bytes: Vec<u8> = zenmetrics_diffmap::bytemuck_vec(f32_map);
+        let bytes: Vec<u8> = zenmetrics_abstractions::bytemuck_vec(f32_map);
         zenpixels::PixelCow::Owned(
             zenpixels::PixelBuffer::from_vec(
                 bytes,
@@ -69,8 +69,8 @@ impl zenmetrics_diffmap::Diffmap for HdrVdp3Result {
         )
     }
 
-    fn similarity(&self) -> bool {
-        false
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::DetectionProbability
     }
 
     fn score(&self) -> f64 {

@@ -22,6 +22,7 @@ iwssim = { workspace = true, features = ["std", "parallel"] }
 gmsd = { workspace = true, features = ["std", "parallel"] }
 psnrhvs = { workspace = true, features = ["std", "parallel"] }
 haarpsi = { workspace = true, features = ["std", "parallel"] }
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 fsim = { workspace = true, features = ["std", "parallel"] }
 vsi = { workspace = true, features = ["std", "parallel"] }
 msssim = { workspace = true, features = ["std", "parallel"] }

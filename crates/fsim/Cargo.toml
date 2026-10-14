@@ -19,7 +19,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = ["zenmetrics-diffmap/std"]
+std = ["zenmetrics-abstractions/std"]
 # Rayon parallelism across the four phase-congruency orientations. Results
 # are bit-identical at every thread count: each orientation writes its own
 # accumulator planes, which are combined in fixed orientation order, and the
@@ -33,7 +33,7 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
 archmage = { workspace = true }
-zenmetrics-diffmap = { path = "../zenmetrics-diffmap", default-features = false }
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
 libm = "0.2.16"
 magetypes = { workspace = true }

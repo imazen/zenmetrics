@@ -1,8 +1,8 @@
 [package]
-name = "zenmetrics-diffmap"
+name = "zenmetrics-abstractions"
 version = "0.0.1"
 edition = "2024"
-description = "Per-pixel metric map trait — object-safe `Diffmap` with zenpixels `PixelCow` storage"
+description = "Shared metric abstractions — the object-safe Diffmap trait, the generic PixelSlice-driven Metric surface, and the ScoreKind/MapPolarity semantics enums"
 license = "MIT OR Apache-2.0"
 
 [features]

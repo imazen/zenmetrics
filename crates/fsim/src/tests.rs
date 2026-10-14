@@ -281,7 +281,7 @@ fn tier_parity() {
 /// a sane similarity map at the decimated resolution.
 #[test]
 fn fsim_diffmap_matches_score_and_is_similarity() {
-    use zenmetrics_diffmap::Diffmap;
+    use zenmetrics_abstractions::Diffmap;
     let (w, h) = (64usize, 48usize);
     let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 37 + 11) % 251) as f32).collect();
     let mut d = r.clone();
@@ -307,7 +307,10 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
     let clean = map[2 * w2 + (w2 - 4)];
     assert!(damaged < clean, "{damaged} !< {clean}");
     // Trait surface.
-    assert!(dm.similarity());
+    assert_eq!(
+        dm.polarity(),
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
     assert_eq!(dm.score(), map_score);
     let px = dm.pixels();
     let slice = px.as_slice();
@@ -315,4 +318,36 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
     // Identical inputs → map saturates to 1.
     let (_, dm_id) = crate::fsim_plane_f32_with_diffmap(&r, &r, w, h, w).unwrap();
     assert!(dm_id.map().iter().all(|&v| (v - 1.0).abs() < 1e-4));
+}
+
+/// The generic surface: `Box<dyn Metric>` scores + maps a pair.
+#[test]
+fn metric_trait_object_scores_and_maps() {
+    use zenmetrics_abstractions::{Metric, ScoreKind};
+    let (w, h) = (64usize, 48usize);
+    let r: alloc::vec::Vec<u8> = (0..w * h * 3)
+        .map(|i| ((i * 17 + 11) % 251) as u8)
+        .collect();
+    let mut d = r.clone();
+    for i in (0..w * h).step_by(7) {
+        d[i * 3] = 200 - d[i * 3] / 2;
+    }
+    fn mk(px: &[u8]) -> zenpixels::PixelSlice<'_> {
+        zenpixels::PixelSlice::new(px, 64, 48, 64 * 3, zenpixels::PixelDescriptor::RGB8_SRGB)
+            .unwrap()
+    }
+    let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim);
+    assert_eq!(m.name(), "fsim");
+    assert_eq!(m.score_kind(), ScoreKind::Similarity);
+    let scores = m.score(mk(&r), mk(&d)).unwrap();
+    let (headline, named) = (scores.headline, scores.named);
+    assert_eq!(
+        headline,
+        named.iter().find(|(k, _)| *k == "fsimc").unwrap().1
+    );
+    assert_eq!(named.len(), 2);
+    let (scores, dm) = m.score_with_map(mk(&r), mk(&d)).unwrap();
+    assert_eq!(scores.headline, headline);
+    let px = dm.pixels();
+    assert!(matches!(px, zenpixels::PixelCow::Borrowed(_)));
 }

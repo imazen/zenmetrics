@@ -125,8 +125,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// HaarPSI of two strided f32 planes on the 0..255 scale, with the
 /// reference's default 2× subsample preprocessing.
@@ -334,7 +333,7 @@ pub(crate) const Q_COEF: [f64; 3] = [0.211, -0.523, 0.312];
 /// chroma similarity planes, at the preprocessed resolution — `w×h`
 /// after the default 2× subsample). Higher = more similar.
 ///
-/// Implements [`zenmetrics_diffmap::Diffmap`].
+/// Implements [`zenmetrics_abstractions::Diffmap`].
 #[non_exhaustive]
 pub struct HaarpsiDiffmap {
     map: alloc::vec::Vec<f32>,
@@ -353,17 +352,17 @@ impl HaarpsiDiffmap {
     }
 }
 
-impl zenmetrics_diffmap::Diffmap for HaarpsiDiffmap {
+impl zenmetrics_abstractions::Diffmap for HaarpsiDiffmap {
     fn pixels(&self) -> zenpixels::PixelCow<'_> {
-        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+        zenpixels::PixelCow::Borrowed(zenmetrics_abstractions::gray_f32_slice(
             &self.map,
             self.width,
             self.height,
         ))
     }
 
-    fn similarity(&self) -> bool {
-        true
+    fn polarity(&self) -> zenmetrics_abstractions::MapPolarity {
+        zenmetrics_abstractions::MapPolarity::Similarity
     }
 
     fn score(&self) -> f64 {
@@ -397,6 +396,56 @@ pub fn haarpsi_plane_f32_with_diffmap(
             haarpsi: score,
         },
     ))
+}
+
+/// The HaarPSI metric as a generic scorer — accepts `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs via the color path.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Haarpsi;
+
+impl zenmetrics_abstractions::Metric for Haarpsi {
+    fn name(&self) -> &'static str {
+        "haarpsi"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn score(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<zenmetrics_abstractions::MetricScores> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(zenmetrics_abstractions::MetricScores::single("haarpsi", s))
+    }
+
+    fn score_with_map(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> zenmetrics_abstractions::MetricResult<(
+        zenmetrics_abstractions::MetricScores,
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Diffmap>,
+    )> {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (s, dm) = haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .map_err(|e| {
+                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+            })?;
+        Ok((
+            zenmetrics_abstractions::MetricScores::single("haarpsi", s),
+            alloc::boxed::Box::new(dm),
+        ))
+    }
 }
 
 fn check_plane(
