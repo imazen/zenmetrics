@@ -7,16 +7,26 @@
 //! sequence (motion 0, as libvmaf scores a single frame).
 //!
 //! Maps, on request, for a single pair ([`za::Metric::evaluate`]; sequences
-//! refuse map requests): SPEED's chroma block maps `speed_u` (primary) and
-//! `speed_v`, each block's `|S_ref − S_dist|` entropy-weighted difference,
-//! the terms whose block mean is that channel's SPEED score before the U/V
-//! combine and the 45 clamp ([`za::MapPolarity::Difference`]). They are one
-//! feature's components, not a per-pixel VMAF; the other features (ADM3,
-//! CAMBI, motion) are not exposed as maps. A block is 5×5 operating samples
-//! (every 16th sample of the prescaled chroma plane): 160 luma pixels at
-//! prescale 1, 320 at 0.5. The phone models' 0.6 prescale has no
-//! whole-pixel grid, so their map requests fail with `NoMap`. Support is
-//! global (the block entropies use frame-wide covariance eigenvalues).
+//! refuse map requests), all [`za::MapPolarity::Difference`] components of
+//! one feature, not a per-pixel VMAF:
+//!
+//! - SPEED's chroma block maps `speed_u` (primary) and `speed_v`, each
+//!   block's `|S_ref − S_dist|` entropy-weighted difference, the terms whose
+//!   block mean is that channel's SPEED score before the U/V combine and the
+//!   45 clamp. A block is 5×5 operating samples (every 16th sample of the
+//!   prescaled chroma plane): 160 luma pixels at prescale 1, 320 at 0.5. The
+//!   phone models' 0.6 prescale has no whole-pixel grid, so they serve no
+//!   SPEED maps. Support is global (frame-wide covariance eigenvalues).
+//! - ADM3's AIM maps `aim_{s}_{h,v,d}` for scales 0–3 and the horizontal,
+//!   vertical and diagonal bands: per band sample, the cube of the additive
+//!   impairment left visible after masking by the restored signal, the
+//!   integer terms whose cube-rooted band sums form AIM's numerator (`adm3`
+//!   blends `1 − AIM` with the detail-loss ratio). Values are in the units of
+//!   the band's cube-root argument. Scale `s` samples `2^(s+1)`-pixel blocks
+//!   from the origin, cropped to the pooled inner region; support is global.
+//!   They are the primary maps of the phone models.
+//!
+//! CAMBI and motion are not exposed as maps.
 //!
 //! Input is planar YCbCr 4:2:0 (`PlaneLayout::ycbcr_420`) with U8 samples,
 //! or U16 samples carrying 10 significant bits. VMAF is defined on code
@@ -207,21 +217,22 @@ fn evaluation(r: &VmafFrameResult) -> Box<dyn za::Evaluation> {
 /// A single scored pair with SPEED's chroma block maps.
 struct VmafMaps {
     scalars: za::ScalarEval,
-    maps: [Vec<f32>; 2],
-    geometry: za::MapGeometry,
+    maps: Vec<(&'static str, Vec<f32>, za::MapGeometry, za::MapPolarity)>,
 }
+
+/// AIM map names by scale and band (horizontal, vertical, diagonal).
+const AIM_NAMES: [[&str; 3]; 4] = [
+    ["aim_0_h", "aim_0_v", "aim_0_d"],
+    ["aim_1_h", "aim_1_v", "aim_1_d"],
+    ["aim_2_h", "aim_2_v", "aim_2_d"],
+    ["aim_3_h", "aim_3_v", "aim_3_d"],
+];
 
 impl VmafMaps {
     fn view(&self, i: usize) -> Option<za::MapView<'_>> {
-        let g = self.geometry;
-        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
-        za::MapView::new(
-            ["speed_u", "speed_v"][i],
-            px,
-            za::MapPolarity::Difference,
-            g,
-        )
-        .ok()
+        let (name, data, g, polarity) = &self.maps[i];
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(name, px, *polarity, *g).ok()
     }
 }
 
@@ -239,7 +250,7 @@ impl za::Evaluation for VmafMaps {
     }
 
     fn maps(&self) -> Vec<za::MapView<'_>> {
-        (0..2).filter_map(|i| self.view(i)).collect()
+        (0..self.maps.len()).filter_map(|i| self.view(i)).collect()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -304,30 +315,52 @@ impl za::Metric for Vmaf {
         )
         .metric_err_with("vmaf", Error::kind)?;
         opts.checkpoint()?;
-        let Some((cell, origin)) = speed.luma_grid else {
-            // The phone models' 0.6 prescale puts SPEED's blocks on a
-            // fractional pixel grid; there is no exact geometry to serve.
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::NoMap)
-                    .with_metric("vmaf")
-                    .with_message("SPEED blocks of a 0.6-prescale model are not whole pixels"),
-            );
-        };
-        let geometry = za::MapGeometry::grid(
-            w,
-            h,
-            origin,
-            origin,
-            cell,
-            cell,
-            speed.blocks.0 as u32,
-            speed.blocks.1 as u32,
-        )
-        .with_support(za::Support::Global);
+        let (_, aim) =
+            crate::adm::adm3_v1_aim_terms(&rf.y, &df.y, w as usize, h as usize, bits, self.variant)
+                .metric_err_with("vmaf", Error::kind)?;
+        opts.checkpoint()?;
+        let mut maps = Vec::new();
+        // The phone models' 0.6 prescale puts SPEED's blocks on a fractional
+        // pixel grid; there is no exact geometry to serve, so they get none.
+        if let Some((cell, origin)) = speed.luma_grid {
+            let g = za::MapGeometry::grid(
+                w,
+                h,
+                origin,
+                origin,
+                cell,
+                cell,
+                speed.blocks.0 as u32,
+                speed.blocks.1 as u32,
+            )
+            .with_support(za::Support::Global);
+            let [u, v] = speed.maps;
+            maps.push(("speed_u", u, g, za::MapPolarity::Difference));
+            maps.push(("speed_v", v, g, za::MapPolarity::Difference));
+        }
+        // ADM's DWT output `k` reads inputs `2k − 1 .. 2k + 2`, so a scale-`s`
+        // band sample owns the `2^(s+1)`-pixel block at `k·2^(s+1)`. The
+        // masking and decoupling chain makes support global.
+        for (s, t) in aim.iter().enumerate() {
+            let cell = 2u32 << s;
+            let g = za::MapGeometry::grid(
+                w,
+                h,
+                t.left as i64 * i64::from(cell),
+                t.top as i64 * i64::from(cell),
+                cell,
+                cell,
+                t.cols as u32,
+                t.rows as u32,
+            )
+            .with_support(za::Support::Global);
+            for (b, name) in AIM_NAMES[s].into_iter().enumerate() {
+                maps.push((name, t.map(b), g, za::MapPolarity::Difference));
+            }
+        }
         let eval = VmafMaps {
             scalars: scalars.clone(),
-            maps: speed.maps,
-            geometry,
+            maps,
         };
         za::apply_map_request(Box::new(eval), req)
     }
@@ -750,11 +783,15 @@ mod map_tests {
                     )
                     .unwrap();
                 assert_eq!(bits(&*mapped), bits(&*plain), "{variant:?}");
-                let maps = mapped.maps();
+                let all = mapped.maps();
                 assert_eq!(
-                    maps.iter().map(|m| m.name).collect::<Vec<_>>(),
+                    all.iter().map(|m| m.name).collect::<Vec<_>>(),
                     ["speed_u", "speed_v"]
+                        .into_iter()
+                        .chain(AIM_NAMES.into_iter().flatten())
+                        .collect::<Vec<_>>()
                 );
+                let maps = &all[..2];
                 let (cell, origin) = match variant {
                     ModelVariant::Consumer4k => (320, -30),
                     _ => (160, -15),
@@ -831,19 +868,116 @@ mod map_tests {
         assert_eq!(Some(cell), v_map.geometry.cell_at(360, 200));
     }
 
+    /// AIM maps keep the scores, sit on their scale's block grid over the
+    /// pooled inner region, vanish for identical frames and respond where
+    /// the luma changed. Phone models serve them without SPEED.
     #[test]
-    fn phone_models_and_sequences_refuse_maps() {
-        let (r, d) = (frame8(0), frame8(1));
-        let mut phone = Vmaf::new(ModelVariant::Phone);
-        let e = phone
+    fn aim_maps_are_adm_terms_on_their_band_grids() {
+        let (r, d) = (frame8(2), frame8(5));
+        for variant in [ModelVariant::Standard1080p, ModelVariant::Phone] {
+            let mut m = Vmaf::new(variant);
+            let plain = m
+                .evaluate(image(&r), image(&d), za::EvalOpts::SCORE_ONLY)
+                .unwrap();
+            let mapped = m
+                .evaluate(
+                    image(&r),
+                    image(&d),
+                    za::EvalOpts::SCORE_ONLY.with_native_map(),
+                )
+                .unwrap();
+            assert_eq!(bits(&*mapped), bits(&*plain), "{variant:?}");
+            let maps = mapped.maps();
+            let aim: Vec<_> = maps.iter().filter(|m| m.name.starts_with("aim_")).collect();
+            assert_eq!(aim.len(), 12);
+            if matches!(variant, ModelVariant::Phone) {
+                assert_eq!(maps.len(), 12, "phone models have no SPEED grid");
+                assert_eq!(mapped.map().unwrap().name, "aim_0_h");
+            }
+            let (luma, _) = frame(&image(&r)).unwrap();
+            let y: Vec<u16> = luma.y;
+            let (_, terms) = crate::adm::adm3_v1_aim_terms(
+                &y,
+                &frame(&image(&d)).unwrap().0.y,
+                W,
+                H,
+                8,
+                variant,
+            )
+            .unwrap();
+            for (k, map) in aim.iter().enumerate() {
+                let (s, b) = (k / 3, k % 3);
+                assert_eq!(map.name, AIM_NAMES[s][b]);
+                assert_eq!(map.polarity, za::MapPolarity::Difference);
+                let g = map.geometry;
+                let (cell, t) = (2u32 << s, &terms[s]);
+                assert_eq!(
+                    g,
+                    za::MapGeometry::grid(
+                        W as u32,
+                        H as u32,
+                        t.left as i64 * i64::from(cell),
+                        t.top as i64 * i64::from(cell),
+                        cell,
+                        cell,
+                        t.cols as u32,
+                        t.rows as u32
+                    )
+                    .with_support(za::Support::Global)
+                );
+                // The pooled region is the inner 80% of the band.
+                assert!(g.origin_x > 0 && g.origin_x < W as i64 / 5);
+                assert_eq!(map.values().as_ref(), t.map(b).as_slice());
+                assert!(map.values().iter().all(|&v| v >= 0.0));
+            }
+            assert!(aim.iter().any(|m| m.values().iter().any(|&v| v > 0.0)));
+        }
+        // Identical frames have no additive impairment.
+        let mapped = Vmaf::new(ModelVariant::Standard1080p)
+            .evaluate(
+                image(&r),
+                image(&r),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .unwrap();
+        for m in mapped.maps().iter().filter(|m| m.name.starts_with("aim_")) {
+            assert!(m.values().iter().all(|&v| v == 0.0), "{}", m.name);
+        }
+        // A luma change confined to one region peaks in a scale-0 cell over it.
+        let mut d = r.clone();
+        for yy in 150..170 {
+            for x in 300..330 {
+                d[0][yy * W + x] = d[0][yy * W + x].wrapping_add(70);
+            }
+        }
+        let mapped = Vmaf::new(ModelVariant::Standard1080p)
             .evaluate(
                 image(&r),
                 image(&d),
                 za::EvalOpts::SCORE_ONLY.with_native_map(),
             )
-            .err()
             .unwrap();
-        assert_eq!(e.error().kind(), za::ErrorKind::NoMap);
+        for name in AIM_NAMES[0] {
+            let maps = mapped.maps();
+            let m = maps.iter().find(|m| m.name == name).unwrap();
+            let v = m.values();
+            let k = (0..v.len()).max_by(|&a, &b| v[a].total_cmp(&v[b])).unwrap() as u32;
+            let g = m.geometry;
+            let (cx, cy) = (k % m.width(), k / m.width());
+            let (x0, y0) = (
+                g.origin_x + i64::from(cx * g.cell_width),
+                g.origin_y + i64::from(cy * g.cell_height),
+            );
+            assert!(
+                (296..334).contains(&x0) && (146..172).contains(&y0),
+                "{name}: peak cell at ({x0}, {y0})"
+            );
+        }
+    }
+
+    #[test]
+    fn sequences_refuse_maps() {
+        let (r, d) = (frame8(0), frame8(1));
         let mut m = Vmaf::new(ModelVariant::Standard1080p);
         {
             let mut seq = m.sequence(za::SequenceInfo::new()).unwrap();

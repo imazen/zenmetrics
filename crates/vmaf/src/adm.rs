@@ -4524,6 +4524,217 @@ fn adm_cm_i32(
 /// cvtepi32_epi64 + mul_epi32 per tap, +add, then the C masked-shift
 /// (srli | v & (-1<<s)) which equals an arithmetic shift while |accum| < 2^(64-s)
 /// — the same bound libvmaf's AVX2 relies on. Packed via permutevar8x32(0,2,4,6).
+/// AIM's per-position terms at one scale: for each band, the integer cube
+/// contributions `adm_cm_*` sums over the pooled region when it measures the
+/// additive impairment masked by the restored signal (`noise_weight` 0).
+pub(crate) struct AimTerms {
+    /// Pooled band region `[left, left + cols) × [top, top + rows)`, in band
+    /// samples.
+    pub(crate) left: usize,
+    pub(crate) top: usize,
+    pub(crate) cols: usize,
+    pub(crate) rows: usize,
+    /// Row-major `[h, v, d]` terms, before the per-row rounding shift.
+    pub(crate) vals: [Vec<i64>; 3],
+    /// Band `t`'s cube-root argument is
+    /// `Σ_rows((Σ_row vals + half) >> row_shift) / divisor[t]`.
+    pub(crate) row_shift: u32,
+    pub(crate) divisor: [f64; 3],
+    /// The score path's AIM numerator for this scale.
+    pub(crate) aim_num: f32,
+}
+
+impl AimTerms {
+    /// The scale's AIM numerator rebuilt from the terms in the reference's
+    /// operation order; equals [`Self::aim_num`] bit for bit.
+    #[cfg(test)]
+    pub(crate) fn fold(&self) -> f32 {
+        let add = 1i64 << (self.row_shift - 1);
+        let arg = |t: usize| {
+            let accum: i64 = self.vals[t]
+                .chunks_exact(self.cols.max(1))
+                .map(|row| (row.iter().sum::<i64>() + add) >> self.row_shift)
+                .sum();
+            ((accum as f64 / self.divisor[t]) as f32).powf(1.0 / 3.0)
+        };
+        let powf_add = (((self.rows * self.cols) as f64 * 0.0) as f32).powf(1.0 / 3.0);
+        arg(0) + powf_add + arg(1) + powf_add + arg(2) + powf_add
+    }
+
+    /// Band `t`'s terms in the units of its cube-root argument.
+    pub(crate) fn map(&self, t: usize) -> Vec<f32> {
+        let unit = self.divisor[t] * 2f64.powi(self.row_shift as i32);
+        self.vals[t]
+            .iter()
+            .map(|&v| (v as f64 / unit) as f32)
+            .collect()
+    }
+}
+
+/// The region `adm_cm_*` pools in a `w × h` band, as `(left, top, cols, rows)`.
+fn cm_region(w: usize, h: usize) -> (usize, usize, usize, usize) {
+    let (left, top, right, bottom) = border_region_inner(w, h);
+    let (i0, i1) = (top.max(0) as usize, bottom.min(h as i32).max(0) as usize);
+    let (j0, j1) = (left.max(0) as usize, right.min(w as i32).max(0) as usize);
+    (j0, i0, j1.saturating_sub(j0), i1.saturating_sub(i0))
+}
+
+/// [`AimTerms`] for scale 0 (`i16` bands): the per-position values
+/// [`adm_cm_i16`] accumulates, with the same arguments.
+#[allow(clippy::too_many_arguments)]
+fn adm_cm_terms_i16(
+    src: &BandI16,
+    csf_f: &BandI16,
+    csf_a: &BandI16,
+    w: usize,
+    h: usize,
+    stride: usize,
+    rf: [f32; 3],
+    watson_fixed: bool,
+) -> AimTerms {
+    let i_rfactor = if watson_fixed {
+        [36453, 36453, 49417]
+    } else {
+        [
+            (rf[0] as f64 * 2f64.powi(21)) as u64 as u16 as i32,
+            (rf[1] as f64 * 2f64.powi(21)) as u64 as u16 as i32,
+            (rf[2] as f64 * 2f64.powi(23)) as u64 as u16 as i32,
+        ]
+    };
+    let shift_xsub = [10i32, 10, 12];
+    let shift_xsq = [29u32, 29, 30];
+    let add_shift_xsq = [1i64 << 28, 1i64 << 28, 1i64 << 29];
+    let shift_xcub = [
+        ((w as f64).log2() - 4.0).ceil() as u32,
+        ((w as f64).log2() - 4.0).ceil() as u32,
+        ((w as f64).log2() - 3.0).ceil() as u32,
+    ];
+    let add_shift_xcub = shift_xcub.map(|s| 1i64 << (s - 1));
+    let shift_inner_accum = (h as f64).log2().ceil() as u32;
+    let src_b = [&src.h, &src.v, &src.d];
+    let angles = [&csf_a.h, &csf_a.v, &csf_a.d];
+    let flt = [&csf_f.h, &csf_f.v, &csf_f.d];
+    let (left, top, cols, rows) = cm_region(w, h);
+    let mut vals: [Vec<i64>; 3] = std::array::from_fn(|_| Vec::with_capacity(cols * rows));
+    for i in top..top + rows {
+        for j in left..left + cols {
+            let idx = i * stride + j;
+            let mut thr = 0i32;
+            for t in 0..3 {
+                for dy in -1i32..=1 {
+                    for dx in -1i32..=1 {
+                        if dy == 0 && dx == 0 {
+                            thr += (((ONE_BY_15 * (angles[t][idx] as i32).abs()) + 2048) >> 12)
+                                as i16 as i32;
+                        } else {
+                            let yy = edge_y(i as i32 + dy, h);
+                            let xx = edge_x(j as i32 + dx, w);
+                            thr += flt[t][yy * stride + xx] as i32;
+                        }
+                    }
+                }
+            }
+            for (t, out) in vals.iter_mut().enumerate() {
+                let x =
+                    ((src_b[t][idx] as i32 * i_rfactor[t]).abs() - (thr << shift_xsub[t])).max(0);
+                let x_sq = (((x as i64 * x as i64) + add_shift_xsq[t]) >> shift_xsq[t]) as i32;
+                out.push(((x_sq as i64 * x as i64) + add_shift_xcub[t]) >> shift_xcub[t]);
+            }
+        }
+    }
+    let divisor = [
+        2f64.powi(52 - shift_xcub[0] as i32 - shift_inner_accum as i32),
+        2f64.powi(52 - shift_xcub[1] as i32 - shift_inner_accum as i32),
+        2f64.powi(57 - shift_xcub[2] as i32 - shift_inner_accum as i32),
+    ];
+    AimTerms {
+        left,
+        top,
+        cols,
+        rows,
+        vals,
+        row_shift: shift_inner_accum,
+        divisor,
+        aim_num: f32::NAN,
+    }
+}
+
+/// [`AimTerms`] for scales 1–3 (`i32` bands): the per-position values
+/// [`adm_cm_i32`] accumulates, with the same arguments.
+#[allow(clippy::too_many_arguments)]
+fn adm_cm_terms_i32(
+    src: &BandI32,
+    csf_f: &BandI32,
+    csf_a: &BandI32,
+    scale: usize,
+    w: usize,
+    h: usize,
+    stride: usize,
+    rf: [f32; 3],
+) -> AimTerms {
+    let rfactor = [
+        (rf[0] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[1] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[2] as f64 * 2f64.powi(32)) as u64 as u32,
+    ];
+    let add_bef_shift_dst = 1i64 << 27;
+    let add_bef_shift_flt = -(1i64 << 31);
+    let shift_flt = 32u32;
+    let shift_cub = (w as f64).log2().ceil() as u32;
+    let add_shift_cub = 1i64 << (shift_cub - 1);
+    let shift_inner_accum = (h as f64).log2().ceil() as u32;
+    let final_shift = [
+        2f64.powi(45 - shift_cub as i32 - shift_inner_accum as i32),
+        2f64.powi(39 - shift_cub as i32 - shift_inner_accum as i32),
+        2f64.powi(36 - shift_cub as i32 - shift_inner_accum as i32),
+    ][scale - 1];
+    let add_shift_sq = 1i64 << 29;
+    let shift_sq = 30u32;
+    let src_b = [&src.h, &src.v, &src.d];
+    let angles = [&csf_a.h, &csf_a.v, &csf_a.d];
+    let flt = [&csf_f.h, &csf_f.v, &csf_f.d];
+    let (left, top, cols, rows) = cm_region(w, h);
+    let mut vals: [Vec<i64>; 3] = std::array::from_fn(|_| Vec::with_capacity(cols * rows));
+    for i in top..top + rows {
+        for j in left..left + cols {
+            let idx = i * stride + j;
+            let mut thr = 0i32;
+            for t in 0..3 {
+                for dy in -1i32..=1 {
+                    for dx in -1i32..=1 {
+                        if dy == 0 && dx == 0 {
+                            thr += ((I4_ONE_BY_15 * (angles[t][idx] as i64).abs()
+                                + add_bef_shift_flt)
+                                >> shift_flt) as i32;
+                        } else {
+                            let yy = edge_y(i as i32 + dy, h);
+                            let xx = edge_x(j as i32 + dx, w);
+                            thr += flt[t][yy * stride + xx];
+                        }
+                    }
+                }
+            }
+            for (t, out) in vals.iter_mut().enumerate() {
+                let x_full =
+                    ((src_b[t][idx] as i64 * rfactor[t] as i64 + add_bef_shift_dst) >> 28) as i32;
+                let x = (x_full.abs() - thr).max(0);
+                let x_sq = (((x as i64 * x as i64) + add_shift_sq) >> shift_sq) as i32;
+                out.push(((x_sq as i64 * x as i64) + add_shift_cub) >> shift_cub);
+            }
+        }
+    }
+    AimTerms {
+        left,
+        top,
+        cols,
+        rows,
+        vals,
+        row_shift: shift_inner_accum,
+        divisor: [final_shift; 3],
+        aim_num: f32::NAN,
+    }
+}
+
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[attune]
 #[allow(clippy::too_many_arguments)]
@@ -5259,6 +5470,7 @@ fn compute_adm(
     height: usize,
     bit_depth: u8,
     settings: &AdmSettings,
+    mut aim_terms: Option<&mut Vec<AimTerms>>,
 ) -> Result<(f64, f64), Error> {
     if !matches!(bit_depth, 8 | 10) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -5430,6 +5642,20 @@ fn compute_adm(
                 0.0,
                 settings.watson_fixed,
             );
+            if let Some(terms) = aim_terms.as_deref_mut() {
+                let mut t = adm_cm_terms_i16(
+                    &a,
+                    &csf_a,
+                    &csf_f,
+                    w,
+                    h,
+                    buf_stride,
+                    rf,
+                    settings.watson_fixed,
+                );
+                t.aim_num = aim_num_scale;
+                terms.push(t);
+            }
         } else {
             adm_dwt2_s123_combined(
                 &i4_ref_scale,
@@ -5478,6 +5704,11 @@ fn compute_adm(
             );
             adm_csf_i32(&r32, &mut csf_f32, &mut csf_a32, w, h, buf_stride, rf);
             aim_num_scale = adm_cm_i32(&a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf, 0.0);
+            if let Some(terms) = aim_terms.as_deref_mut() {
+                let mut t = adm_cm_terms_i32(&a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf);
+                t.aim_num = aim_num_scale;
+                terms.push(t);
+            }
         }
         num += num_scale as f64;
         den += den_scale as f64;
@@ -5498,6 +5729,23 @@ fn compute_adm(
     Ok((score, score_aim))
 }
 
+fn v1_settings(variant: ModelVariant) -> AdmSettings {
+    let (norm_view_dist, ref_display_height) = match variant {
+        ModelVariant::Standard1080p | ModelVariant::HfrStandard1080p => (3.0f64, 1080),
+        ModelVariant::Phone | ModelVariant::HfrPhone => (5.0, 1080),
+        ModelVariant::Default4k | ModelVariant::HfrDefault4k => (1.5, 2160),
+        ModelVariant::Consumer4k | ModelVariant::HfrConsumer4k => (3.0, 2160),
+    };
+    AdmSettings {
+        factors: csf_table(variant),
+        enhn_gain_limit: ENHN_GAIN_LIMIT,
+        noise_weight: NOISE_WEIGHT,
+        watson_fixed: false,
+        norm_view_dist,
+        ref_display_height,
+    }
+}
+
 pub fn adm3_v1_from_luma(
     reference_y: &[u16],
     distorted_y: &[u16],
@@ -5506,29 +5754,40 @@ pub fn adm3_v1_from_luma(
     bit_depth: u8,
     variant: ModelVariant,
 ) -> Result<f64, Error> {
-    let (norm_view_dist, ref_display_height) = match variant {
-        ModelVariant::Standard1080p | ModelVariant::HfrStandard1080p => (3.0f64, 1080),
-        ModelVariant::Phone | ModelVariant::HfrPhone => (5.0, 1080),
-        ModelVariant::Default4k | ModelVariant::HfrDefault4k => (1.5, 2160),
-        ModelVariant::Consumer4k | ModelVariant::HfrConsumer4k => (3.0, 2160),
-    };
-    let settings = AdmSettings {
-        factors: csf_table(variant),
-        enhn_gain_limit: ENHN_GAIN_LIMIT,
-        noise_weight: NOISE_WEIGHT,
-        watson_fixed: false,
-        norm_view_dist,
-        ref_display_height,
-    };
     let (score, aim) = compute_adm(
         reference_y,
         distorted_y,
         width,
         height,
         bit_depth,
-        &settings,
+        &v1_settings(variant),
+        None,
     )?;
     Ok((score * DLM_WEIGHT + (1.0 - aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL))
+}
+
+/// ADM3's AIM terms per scale (finest first), from the same computation as
+/// [`adm3_v1_from_luma`], whose value is returned with them.
+pub(crate) fn adm3_v1_aim_terms(
+    reference_y: &[u16],
+    distorted_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    variant: ModelVariant,
+) -> Result<(f64, Vec<AimTerms>), Error> {
+    let mut terms = Vec::with_capacity(4);
+    let (score, aim) = compute_adm(
+        reference_y,
+        distorted_y,
+        width,
+        height,
+        bit_depth,
+        &v1_settings(variant),
+        Some(&mut terms),
+    )?;
+    let adm3 = (score * DLM_WEIGHT + (1.0 - aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL);
+    Ok((adm3, terms))
 }
 
 pub fn adm2_v0_from_luma(
@@ -5558,6 +5817,7 @@ pub fn adm2_v0_from_luma(
         height,
         bit_depth,
         &settings,
+        None,
     )
     .map(|(score, _)| score)
 }
@@ -6212,5 +6472,82 @@ fn adm_decouple_s123_row_timing() {
             e4,
             e4.as_secs_f64() / e3.as_secs_f64()
         );
+    }
+}
+
+#[cfg(test)]
+mod aim_terms_tests {
+    use super::*;
+
+    /// A textured `bits`-deep plane: a gradient, a checker edge and noise.
+    fn plane(w: usize, h: usize, seed: u32, bits: u8) -> Vec<u16> {
+        let max = (1u32 << bits) - 1;
+        let mut s = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+        (0..w * h)
+            .map(|i| {
+                s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let (x, y) = (i % w, i / w);
+                let edge = if (x / 9 + y / 7) % 2 == 0 { 40 } else { 0 };
+                let base = ((x * 7 + y * 5) % 200 + edge) as u32;
+                ((base << (bits - 8)) + (s >> 27)).min(max) as u16
+            })
+            .collect()
+    }
+
+    const CASES: [(usize, usize, u8, ModelVariant); 5] = [
+        (64, 48, 8, ModelVariant::Standard1080p),
+        (97, 71, 10, ModelVariant::Phone),
+        (256, 144, 8, ModelVariant::Consumer4k),
+        (33, 40, 8, ModelVariant::Standard1080p),
+        (321, 183, 10, ModelVariant::Default4k),
+    ];
+
+    #[test]
+    fn aim_terms_fold_to_the_score_path() {
+        for (w, h, bits, variant) in CASES {
+            let r = plane(w, h, 1, bits);
+            let d = plane(w, h, 2, bits);
+            let (adm3, terms) = adm3_v1_aim_terms(&r, &d, w, h, bits, variant).unwrap();
+            let plain = adm3_v1_from_luma(&r, &d, w, h, bits, variant).unwrap();
+            assert_eq!(adm3.to_bits(), plain.to_bits(), "{w}x{h}");
+            assert_eq!(terms.len(), 4);
+            for (s, t) in terms.iter().enumerate() {
+                assert_eq!(t.fold().to_bits(), t.aim_num.to_bits(), "{w}x{h} scale {s}");
+                for b in 0..3 {
+                    assert_eq!(t.vals[b].len(), t.cols * t.rows);
+                    let add = 1i64 << (t.row_shift - 1);
+                    let accum: i64 = t.vals[b]
+                        .chunks_exact(t.cols)
+                        .map(|row| (row.iter().sum::<i64>() + add) >> t.row_shift)
+                        .sum();
+                    let arg = accum as f64 / t.divisor[b];
+                    // The map skips only the reference's per-row rounding
+                    // (at most half a unit per row) and f32 storage.
+                    let summed: f64 = t.map(b).iter().map(|&v| f64::from(v)).sum();
+                    let bound = (t.rows as f64 * 0.5) / t.divisor[b] + arg * 1e-6;
+                    assert!(
+                        (summed - arg).abs() <= bound,
+                        "{w}x{h} scale {s} band {b}: {summed:e} vs {arg:e}"
+                    );
+                }
+            }
+            assert!(
+                terms
+                    .iter()
+                    .any(|t| t.vals.iter().flatten().any(|&v| v > 0))
+            );
+        }
+    }
+
+    #[test]
+    fn identical_frames_have_no_additive_impairment() {
+        for (w, h, bits, variant) in CASES {
+            let r = plane(w, h, 3, bits);
+            let (_, terms) = adm3_v1_aim_terms(&r, &r, w, h, bits, variant).unwrap();
+            for t in &terms {
+                assert!(t.vals.iter().flatten().all(|&v| v == 0), "{w}x{h}");
+                assert_eq!(t.fold().to_bits(), t.aim_num.to_bits());
+            }
+        }
     }
 }
