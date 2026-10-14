@@ -22,7 +22,7 @@ default = ["std"]
 # Dev-only: exposes internal SIMD kernels for per-tier benchmarking. Not API.
 _dev = ["archmage/testable_dispatch"]
 # Use the standard library — most users want this. Off → core + alloc only.
-std = []
+std = ["zenmetrics-abstractions/std"]
 # Opt-in AVX-512 tier on archmage `incant!` sites. Without this flag the
 # pyramid 5-tap blur runs the 8-wide AVX2 tier on AVX-512 CPUs — still
 # faster than scalar, just not the 16-wide AVX-512 win.
@@ -37,6 +37,7 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 #   cargo test -p iwssim-gpu --features cuda --test it parity_cpu -- --ignored
 
 [dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 # Safe SIMD dispatch via capability tokens. Used by:
 #  - the pyramid 5-tap binom5 SIMD port (build.rs-generated filters
 #    drive the same blur shape as cvvdp's pyramid 5-tap).

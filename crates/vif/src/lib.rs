@@ -348,3 +348,81 @@ impl Inputs {
         Self { r, d }
     }
 }
+
+/// The VIF metric as a generic scorer — accepts `RGB8_SRGB`
+/// `PixelSlice` inputs. Headline = `vif` (the reference VIF); `vifvec`
+/// (the vector-GSM pyramid variant) rides as a named secondary only
+/// when [`Self::VIFVEC`] scoring is selected — construct [`Vifvec`] for
+/// that surface.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Vif;
+
+impl zenmetrics_abstractions::Metric for Vif {
+    fn name(&self) -> &'static str {
+        "vif"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(alloc::boxed::Box::new(
+            zenmetrics_abstractions::ScalarEval::single("vif", s),
+        ))
+    }
+}
+
+/// The vector-GSM VIF variant (`vifvec`) as a generic scorer.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Vifvec;
+
+impl zenmetrics_abstractions::Metric for Vifvec {
+    fn name(&self) -> &'static str {
+        "vifvec"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(alloc::boxed::Box::new(
+            zenmetrics_abstractions::ScalarEval::single("vifvec", s),
+        ))
+    }
+}

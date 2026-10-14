@@ -19,7 +19,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = []
+std = ["zenmetrics-abstractions/std"]
 # Rayon band parallelism over block-rows. Results are bit-identical at every
 # thread count: per-band f64 partial sums are combined in raster order.
 parallel = ["std", "dep:rayon"]
@@ -30,6 +30,7 @@ _dev = ["archmage/testable_dispatch"]
 avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 archmage = { workspace = true }
 libm = "0.2.16"
 magetypes = { workspace = true }

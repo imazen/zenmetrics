@@ -2947,6 +2947,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenmetrics-abstractions",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -3328,6 +3329,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -3410,6 +3412,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -3599,6 +3602,7 @@ dependencies = [
  "iai-callgrind",
  "magetypes 0.9.31-beta.1",
  "rayon",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -4131,6 +4135,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -6020,6 +6025,7 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]
@@ -7717,6 +7723,7 @@ name = "zenmetrics-abstractions"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
+ "libm",
  "zenpixels",
 ]
 

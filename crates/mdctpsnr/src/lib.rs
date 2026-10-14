@@ -2613,3 +2613,46 @@ mod tests {
         }
     }
 }
+
+/// The mDCT-PSNR metric as a generic scorer — accepts `RGB8_SRGB`
+/// `PixelSlice` inputs (strided repacked). Headline is dB PSNR — `+inf`
+/// on identical inputs, matching `dctpsnr` default output.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MdctPsnr;
+
+impl zenmetrics_abstractions::Metric for MdctPsnr {
+    fn name(&self) -> &'static str {
+        "mdctpsnr"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Decibels
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (rp, dp) = (
+            zenmetrics_abstractions::contiguous_rgb8(&r),
+            zenmetrics_abstractions::contiguous_rgb8(&d),
+        );
+        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(alloc::boxed::Box::new(
+            zenmetrics_abstractions::ScalarEval::single("mdctpsnr", s as f64),
+        ))
+    }
+}

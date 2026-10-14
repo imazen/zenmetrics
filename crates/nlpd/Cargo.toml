@@ -19,6 +19,7 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 parallel = ["dep:rayon"]
 
 [dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 archmage = { workspace = true }
 magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }

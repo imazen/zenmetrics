@@ -747,3 +747,46 @@ mod tests {
         assert!(a > 0.0 && (a - b).abs() < 1e-9);
     }
 }
+
+/// The NLPD metric as a generic scorer — accepts `RGB8_SRGB`
+/// `PixelSlice` inputs (packed or strided — strided is repacked).
+/// No canonical upstream map.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Nlpd;
+
+impl zenmetrics_abstractions::Metric for Nlpd {
+    fn name(&self) -> &'static str {
+        "nlpd"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        std::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (rp, dp) = (
+            zenmetrics_abstractions::contiguous_rgb8(&r),
+            zenmetrics_abstractions::contiguous_rgb8(&d),
+        );
+        let s = score_rgb_u8(&rp, &dp, r.width, r.height).map_err(|e| {
+            std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        Ok(std::boxed::Box::new(
+            zenmetrics_abstractions::ScalarEval::single("nlpd", s),
+        ))
+    }
+}

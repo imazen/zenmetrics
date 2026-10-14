@@ -14,12 +14,13 @@ publish = false
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = []
+std = ["zenmetrics-abstractions/std"]
 # Rayon row-band parallelism over the independent masking pipelines and
 # column-striped errorline measurement. Implies std (rayon requires it).
 parallel = ["std", "dep:rayon"]
 
 [dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 archmage = { workspace = true }
 libm = "0.2.16"
 magetypes = { workspace = true }

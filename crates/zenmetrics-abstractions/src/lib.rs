@@ -32,6 +32,10 @@ extern crate alloc;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+/// Re-export of the pixel crate the trait signatures are written in —
+/// implementors don't need their own `zenpixels` dep; write
+/// `zenmetrics_abstractions::zenpixels::PixelSlice`.
+pub use zenpixels;
 use zenpixels::{PixelCow, PixelSlice};
 
 // ---------------------------------------------------------------------------
@@ -169,9 +173,9 @@ impl ScalarEval {
         }
     }
 
-    /// Append a secondary scalar.
-    pub fn push(&mut self, name: &'static str, value: f64) {
-        self.named.push((Cow::Borrowed(name), value));
+    /// Append a secondary scalar — owned names allowed.
+    pub fn push(&mut self, name: impl Into<Cow<'static, str>>, value: f64) {
+        self.named.push((name.into(), value));
     }
 }
 
@@ -358,15 +362,15 @@ pub fn map_fold(map: PixelCow<'_, ()>, spec: &str) -> Option<f64> {
                 })
                 .sum::<f64>()
                 / n;
-            Some(var.sqrt())
+            Some(libm::sqrt(var))
         }
         _ => spec
             .strip_prefix("pnorm:")
             .and_then(|p| p.parse::<f64>().ok())
             .map(|p| {
                 let n = vals.len() as f64;
-                let sum: f64 = vals.iter().map(|&v| (v as f64).abs().powf(p)).sum();
-                (sum / n).powf(p.recip())
+                let sum: f64 = vals.iter().map(|&v| libm::pow((v as f64).abs(), p)).sum();
+                (sum / n) /*keep*/
             }),
     }
 }
@@ -409,5 +413,22 @@ pub fn bytemuck_vec(pixels: alloc::vec::Vec<f32>) -> alloc::vec::Vec<u8> {
     match bytemuck::allocation::try_cast_vec::<f32, u8>(pixels) {
         ::core::result::Result::Ok(v) => v,
         ::core::result::Result::Err((_, v)) => bytemuck::cast_slice(&v).to_vec(),
+    }
+}
+
+/// Repack a strided rgb8 view to packed `RGBRGB…` — a no-op `Cow`
+/// borrow when the stride is already `width·3`, a copy otherwise.
+/// For metrics whose native entry takes packed input only.
+#[must_use]
+pub fn contiguous_rgb8<'a>(r: &'a Rgb8In<'a>) -> Cow<'a, [u8]> {
+    let n = r.width * r.height * 3;
+    if r.stride == r.width * 3 {
+        Cow::Borrowed(&r.pixels[..n])
+    } else {
+        let mut out = Vec::with_capacity(n);
+        for row in r.pixels.chunks_exact(r.stride).take(r.height) {
+            out.extend_from_slice(&row[..r.width * 3]);
+        }
+        Cow::Owned(out)
     }
 }

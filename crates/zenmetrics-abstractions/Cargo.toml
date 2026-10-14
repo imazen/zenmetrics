@@ -12,3 +12,4 @@ std = []
 [dependencies]
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
+libm = { version = "0.2", default-features = false }

@@ -4256,7 +4256,7 @@ impl zenmetrics_abstractions::Metric for Cvvdp {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
         // cvvdp takes packed rgb8 — repack when the slice is strided.
-        let (rp, dp) = (contiguous_rgb8(&r), contiguous_rgb8(&d));
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
         if opts.map {
             let (_jod, dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
                 alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
@@ -4269,20 +4269,5 @@ impl zenmetrics_abstractions::Metric for Cvvdp {
         Ok(alloc::boxed::Box::new(za::ScalarEval::single(
             "jod", jod as f64,
         )))
-    }
-}
-
-/// Repack a strided rgb8 view to packed (a no-op `Cow` borrow when the
-/// stride is already `w·3`).
-fn contiguous_rgb8<'a>(r: &'a zenmetrics_abstractions::Rgb8In<'a>) -> alloc::borrow::Cow<'a, [u8]> {
-    let n = r.width * r.height * 3;
-    if r.stride == r.width * 3 {
-        alloc::borrow::Cow::Borrowed(&r.pixels[..n])
-    } else {
-        let mut out = alloc::vec::Vec::with_capacity(n);
-        for row in r.pixels.chunks_exact(r.stride).take(r.height) {
-            out.extend_from_slice(&row[..r.width * 3]);
-        }
-        alloc::borrow::Cow::Owned(out)
     }
 }

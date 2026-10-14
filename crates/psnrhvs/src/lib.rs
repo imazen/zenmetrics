@@ -506,3 +506,47 @@ fn gray_px(r: u8, g: u8, b: u8) -> f32 {
     let v = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64;
     (v + 0.5) as i64 as f32
 }
+
+/// The psnrhvs metric as a generic scorer — accepts `RGB8_SRGB`
+/// [`zenpixels::PixelSlice`] inputs. No canonical upstream map —
+/// `Evaluation::map()` is `None`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Psnrhvs;
+
+impl zenmetrics_abstractions::Metric for Psnrhvs {
+    fn name(&self) -> &'static str {
+        "psnrhvs"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Decibels
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        use zenmetrics_abstractions as za;
+        let box_err = |e: Error| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        };
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
+        let s = s; // RgbScore
+        let mut out = zenmetrics_abstractions::ScalarEval::single("psnrhvs", s.psnr_hvs);
+        out.push("psnrhvs_r", s.red.psnr_hvs);
+        out.push("psnrhvs_g", s.green.psnr_hvs);
+        out.push("psnrhvs_b", s.blue.psnr_hvs);
+        Ok(alloc::boxed::Box::new(out))
+    }
+}

@@ -649,3 +649,49 @@ const _: () = {
     // Ensure 11-tap window radius arithmetic is consistent.
     assert!(SSIM_WIN_LEN == 11);
 };
+
+// ---------------------------------------------------------------------------
+// Generic Metric surface.
+// ---------------------------------------------------------------------------
+
+/// `Iwssim` implements the generic surface — `RGB8_SRGB` inputs score
+/// via [`Self::score`]; `per_scale` values ride `scores()`. No canonical
+/// upstream map.
+impl zenmetrics_abstractions::Metric for Iwssim {
+    fn name(&self) -> &'static str {
+        "iwssim"
+    }
+
+    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
+        zenmetrics_abstractions::ScoreKind::Similarity
+    }
+
+    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
+        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    }
+
+    fn evaluate(
+        &mut self,
+        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
+        _opts: zenmetrics_abstractions::EvalOpts,
+    ) -> zenmetrics_abstractions::MetricResult<
+        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
+    > {
+        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let (rp, dp) = (
+            zenmetrics_abstractions::contiguous_rgb8(&r),
+            zenmetrics_abstractions::contiguous_rgb8(&d),
+        );
+        let s = self.score(&rp, &dp).map_err(|e| {
+            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
+        })?;
+        let mut out = zenmetrics_abstractions::ScalarEval::single("iwssim", s.score);
+        for (i, &v) in s.per_scale.iter().enumerate() {
+            out.push(alloc::format!("wmcs_{i}"), v);
+        }
+        Ok(alloc::boxed::Box::new(out))
+    }
+}
