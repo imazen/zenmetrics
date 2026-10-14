@@ -966,12 +966,23 @@ impl Plan2 {
         }
     }
 
-    fn rows_inv_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
-        let (w, h) = (self.width, self.height);
+    /// Inverse row pass, writing only the `out_h × out_w` top-left output
+    /// region — `conv_fft_pad` crops to it, so the rest is dead work. The
+    /// gather still reads all `w` columns (every output needs the full
+    /// transform); only the scatter trims to `out_w`.
+    fn rows_inv_p(
+        &mut self,
+        re: &mut [f64],
+        im: &mut [f64],
+        relaxed: bool,
+        out_w: usize,
+        out_h: usize,
+    ) {
+        let (w, _h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
-        for y0 in (0..h).step_by(8) {
-            let rws = (h - y0).min(8);
+        for y0 in (0..out_h).step_by(8) {
+            let rws = (out_h - y0).min(8);
             for j in 0..rws {
                 let row = (y0 + j) * w;
                 for k in 0..w {
@@ -996,7 +1007,7 @@ impl Plan2 {
             }
             for j in 0..rws {
                 let row = (y0 + j) * w;
-                for k in 0..w {
+                for k in 0..out_w {
                     re[row + k] = self.re8[k * 8 + j] * s;
                     im[row + k] = -self.im8[k * 8 + j] * s;
                 }
@@ -1067,12 +1078,16 @@ impl Plan2 {
     /// into the gather — `conv_fft_pad` uses this to skip a full plane
     /// sweep. The products are computed in the same order as a separate
     /// multiply pass, so results are bit-identical.
+    /// `keep_rows` bounds the scatter — output rows past it are dead once
+    /// the caller crops (the gather still reads the full `h`, since every
+    /// column output needs all its inputs).
     fn columns_inv_p_filtered(
         &mut self,
         re: &[f64],
         im: &mut [f64],
         filt: Option<&[f64]>,
         relaxed: bool,
+        keep_rows: usize,
     ) {
         let (w, h) = (self.width, self.height);
         let perm = self.columns.gather_perm();
@@ -1143,7 +1158,7 @@ impl Plan2 {
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             if cols == 8 {
-                for y in 0..h {
+                for y in 0..keep_rows {
                     let (d, s) = (y * 8, y * w + x0);
                     for j in 0..8 {
                         self.pre[s + j] = self.re8[d + j] * sc;
@@ -1151,7 +1166,7 @@ impl Plan2 {
                     }
                 }
             } else {
-                for y in 0..h {
+                for y in 0..keep_rows {
                     let (d, s) = (y * 8, y * w + x0);
                     for j in 0..cols {
                         self.pre[s + j] = self.re8[d + j] * sc;
@@ -1176,21 +1191,24 @@ impl Plan2 {
 
     /// Inverse transform on split real/imaginary planes, with `filt`
     /// multiplied into the planes during the column gather — identical
-    /// results to multiplying first when `filt` is `Some`.
+    /// results to multiplying first when `filt` is `Some`. `crop` bounds the
+    /// useful output region: only `crop.0 × crop.1` (w×h order) is written;
+    /// the rest of `re`/`im` is left unmodified.
     fn inverse_p_filtered(
         &mut self,
         re: &mut [f64],
         im: &mut [f64],
         filt: Option<&[f64]>,
         relaxed: bool,
+        crop: (usize, usize),
     ) {
         assert_eq!(
             (re.len(), im.len()),
             (self.width * self.height, self.width * self.height),
             "ifft2: plane size mismatch"
         );
-        self.columns_inv_p_filtered(re, im, filt, relaxed);
-        self.rows_inv_p(re, im, relaxed);
+        self.columns_inv_p_filtered(re, im, filt, relaxed, crop.1);
+        self.rows_inv_p(re, im, relaxed, crop.0, crop.1);
     }
 
     fn forward(&mut self, buf: &mut [C64], relaxed: bool) {
@@ -1393,7 +1411,7 @@ pub(super) fn conv_fft_pad(
             plan.forward_p(re, im, relaxed);
             // The pointwise filter multiply folds into the inverse column
             // gather — same products, same order, no extra plane sweep.
-            plan.inverse_p_filtered(re, im, Some(filter), relaxed);
+            plan.inverse_p_filtered(re, im, Some(filter), relaxed, (width, height));
         });
         let mut out = Vec::with_capacity(width * height);
         for y in 0..height {
