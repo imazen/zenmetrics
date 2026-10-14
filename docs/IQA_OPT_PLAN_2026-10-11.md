@@ -227,6 +227,14 @@ Second optimisation pass; all scores bit-identical unless noted.
   `vpowf_libm_pairs_into`; edge-matrix + 10M-pair differentials clean;
   ~5–11× vs scalar `libm::powf` on Zen 4. VSI pooling integration by
   the same lane pending at write time.
+- **vsi pooling on `powf_libm`** (`a4add208`): both pool powers on the
+  lane `powf`; maps bit-identical, score bits identical on non-NaN.
+  Paired A/B (avx512 build, 1T): 256² −4.60%, 3355×2516 −0.67% (A/A
+  noise). The pool runs on the decimated grid, so it saves ~2–3 ms per
+  call at any size. The remaining `libm::pow` in vsi's serial profile
+  (7.0% of samples, avx512 build, 3355×2516, 1T, after this change) is
+  the **f64** `pow` in `srgb_to_lab` (`lin()` `^2.4`, `f()` `^(1/3)`,
+  its only call sites), not this `powf`; that is the follow-up.
 - **Failed/kept-out experiments this pass**: fsim filtered-ifft fusion
   (src→dst `yf·filter` fold into the row transpose-in) measured
   net-neutral-to-negative — the collect pass's cost was already
