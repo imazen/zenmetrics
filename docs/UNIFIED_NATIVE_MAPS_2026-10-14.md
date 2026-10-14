@@ -75,3 +75,31 @@ Validation (`crates/psnrhvs`):
   odd sizes); strided input gives the packed maps. Subsampled and stopped
   requests behave as specified. Tests pass with default, `parallel`,
   `avx512,parallel` and no-std builds.
+
+## mDCT-PSNR (`mdctpsnr`)
+
+| Map | Values | Polarity | Grid |
+| --- | --- | --- | --- |
+| `detection` | `1 − Π exp(−(|Δc|·vis·mask)^3.5)` over the 195 band/component terms at one sliding-window position | DetectionProbability (`0` = identical) | `W−13` × `H−12` cells of 1 pixel |
+
+These are the terms the score sums: `score = −20·log10(Σ / ((W−13)(H−13)·3))`
+(the reference's `H−13` denominator over `H−12` measured lines is kept).
+Map row `j` is measured image line `j + 12`, which scores block row `j + 3`
+(the warm-up skips block rows 0–2). Column `i` scores block column `i + 2`,
+masked by block positions `i … i+4`. The value therefore reads input pixels
+`[i, i+12) × [j+1, j+13)`. The cell owns pixel `(i+5, j+6)`, the upper-left
+of the scored block's four centre pixels, and the halo is 6.
+
+Validation (`crates/mdctpsnr`):
+
+- Folding the map rows in the reference's vectorized f32 order reproduces the
+  score bits at 64×48, 37×29, 14×14, 100×23 and 45×61. The existing
+  `dctpsnr` goldens are unchanged.
+- Cells whose window misses a changed patch are exactly 0. For an 8×8 patch,
+  the responding cells fill exactly the predicted window box on both axes.
+  When a window holds only one column or row of a few changed pixels,
+  `exp(−p)` can round to 1 in f32 and that edge cell stays 0.
+- Identical pairs detect nothing. Map-on and map-off scores are
+  bit-identical. Strided input gives the packed map. Subsampled and stopped
+  requests behave as specified. Tests pass with default, `parallel` and
+  no-std builds.
