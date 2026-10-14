@@ -1517,9 +1517,11 @@ fn aan_1d(b: &[f32; 8]) -> [f32; 8] {
 
 /// `aan_1d` with 8 consecutive window positions in the `f32x8` lanes —
 /// identical arithmetic per lane, so each position's coefficients are
-/// bit-identical to the scalar butterfly.
+/// bit-identical to the scalar butterfly. `#[inline(always)]`: called
+/// 16× per `run_dct_soa8` — a dispatch boundary would materialize the
+/// 256 B `&[V; 8]` argument per call.
 #[cfg(target_arch = "x86_64")]
-#[attune(v3)]
+#[inline(always)]
 fn aan_1d_x8(token: X64V3Token, b: &[f32x8<X64V3Token>; 8]) -> [f32x8<X64V3Token>; 8] {
     type V = f32x8<X64V3Token>;
     let s22 = V::splat_t(token, SQRT2_2);
@@ -1579,8 +1581,9 @@ fn run_dct_soa_v3_t(token: X64V3Token, comp: &mut Component) {
 /// `[float32x4_t; 2]` pair, so the butterfly runs the identical per-lane
 /// op order at half the per-instruction width. `mul_add` lowers to
 /// `vfmaq` (single-rounded), same contract as the v3 `fm`.
+/// `#[inline(always)]` — see `aan_1d_x8`.
 #[cfg(all(feature = "std", target_arch = "aarch64"))]
-#[attune]
+#[inline(always)]
 fn aan_1d_x8_neon(token: NeonToken, b: &[f32x8<NeonToken>; 8]) -> [f32x8<NeonToken>; 8] {
     type V = f32x8<NeonToken>;
     let s22 = V::splat_t(token, SQRT2_2);
@@ -1648,22 +1651,19 @@ fn run_dct_soa8_neon(token: NeonToken, comp: &mut Component, i0: usize) {
             b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
-    let mut v = [[V::zero_t(token); 8]; 8];
-    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
-        [
-            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
-        ]
-    })
-    .into_iter()
-    .enumerate()
-    {
-        let cv = aan_1d_x8_neon(token, &col);
-        for (k, &c) in cv.iter().enumerate() {
-            v[k][x] = c;
-        }
-    }
-    for (vix, row) in v.iter().enumerate() {
-        let hv = aan_1d_x8_neon(token, row);
+    // Pass 1 (vertical): `vx[x][k]` — built by `from_fn`, see the x86
+    // twin for the rationale (a zero-init pass preceded every block).
+    let vx: [[V; 8]; 8] = core::array::from_fn(|x| {
+        aan_1d_x8_neon(
+            token,
+            &[
+                b[0][x], b[1][x], b[2][x], b[3][x], b[4][x], b[5][x], b[6][x], b[7][x],
+            ],
+        )
+    });
+    for vix in 0..8 {
+        let row: [V; 8] = core::array::from_fn(|x| vx[x][vix]);
+        let hv = aan_1d_x8_neon(token, &row);
         for (u, &c) in hv.iter().enumerate() {
             c.store(
                 comp.bands[u][vix].next_row[i0..][..8]
@@ -1716,26 +1716,23 @@ fn run_dct_soa8(token: X64V3Token, comp: &mut Component, i0: usize) {
             b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
-    // Pass 1 (vertical): `aan_1d` per column — `v[k][x]` lane `j` is
-    // vertical frequency `k` of column `x` at position `i0+j`.
-    let mut v = [[V::zero_t(token); 8]; 8];
-    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
-        [
-            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
-        ]
-    })
-    .into_iter()
-    .enumerate()
-    {
-        let cv = aan_1d_x8(token, &col);
-        for (k, &c) in cv.iter().enumerate() {
-            v[k][x] = c;
-        }
-    }
+    // Pass 1 (vertical): `aan_1d` per column — `vx[x][k]` lane `j` is
+    // vertical frequency `k` of column `x` at position `i0+j`. Built by
+    // `from_fn` so no zero-init pass precedes it (a 2 KB memset per
+    // position block was ~10 % of this kernel's time).
+    let vx: [[V; 8]; 8] = core::array::from_fn(|x| {
+        aan_1d_x8(
+            token,
+            &[
+                b[0][x], b[1][x], b[2][x], b[3][x], b[4][x], b[5][x], b[6][x], b[7][x],
+            ],
+        )
+    });
     // Pass 2 (horizontal): `aan_1d` per vertical-frequency row —
     // `hv[u]` is horizontal frequency `u`, stored contiguously.
-    for (vix, row) in v.iter().enumerate() {
-        let hv = aan_1d_x8(token, row);
+    for vix in 0..8 {
+        let row: [V; 8] = core::array::from_fn(|x| vx[x][vix]);
+        let hv = aan_1d_x8(token, &row);
         for (u, &c) in hv.iter().enumerate() {
             c.store(
                 comp.bands[u][vix].next_row[i0..][..8]
@@ -2234,7 +2231,12 @@ pub fn mdct_psnr_srgb8(
                 // every element's `*=` sequence in the serial (c,yy,x)
                 // band order — bit-identical to the serial loop.
                 let w = errorline.len();
-                let stripes = (rayon::current_num_threads() * 2).min(w.max(1));
+                // Each stripe re-iterates all 384 band planes, so keep
+                // spans ≥128 elems for the v3 kernel's 8-lane runs to
+                // amortize per-band prologue/tail work.
+                let stripes = (w / 128)
+                    .max(1)
+                    .min(rayon::current_num_threads() * 2);
                 let stripe_len = w.div_ceil(stripes);
                 let (cr, cd) = (&img_r.comps, &img_d.comps);
                 errorline
