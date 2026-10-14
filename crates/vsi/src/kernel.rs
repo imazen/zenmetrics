@@ -830,7 +830,19 @@ macro_rules! srgb_to_lab_exact_body {
                         $token,
                         core::array::from_fn(|k| $p[i + k] as f64 / 255.0),
                     );
-                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                    // arg in [0.0521, 1.0], result in [8e-4, 1]: `BULK`
+                    // (coverage) — no edge or range lane is reachable, and
+                    // arg == 1.0 computes exactly 1.0 through the poly.
+                    // arg in [0.0521, 1.0], result in [8e-4, 1]: `BULK`
+                    // (coverage) — no edge or range lane is reachable, and
+                    // arg == 1.0 computes exactly 1.0 through the poly.
+                    // arg in [0.0521, 1.0], result in [8e-4, 1]: `BULK`
+                    // (coverage) — no edge or range lane is reachable, and
+                    // arg == 1.0 computes exactly 1.0 through the poly.
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x_gated::<
+                        { zenmetrics_math::fdlibm::coverage::BULK },
+                        _,
+                    >(
                         $token,
                         (v + $F64::splat_t($token, 0.055)) / $F64::splat_t($token, 1.055),
                         $F64::splat_t($token, 2.4),
@@ -857,7 +869,10 @@ macro_rules! srgb_to_lab_exact_body {
                     let t = $t;
                     let sel = t.simd_gt($F64::splat_t($token, 0.008856));
                     let arg = $F64::blend(sel, t, $F64::splat_t($token, 1.0));
-                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x_gated::<
+                        { zenmetrics_math::fdlibm::coverage::BULK },
+                        _,
+                    >(
                         $token,
                         arg,
                         $F64::splat_t($token, 1.0 / 3.0),

@@ -563,21 +563,25 @@ fn sym(mut i: isize, n: usize) -> usize {
 fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
     // round(x/2+1) 1-based → 0-based
     let (rc, cc) = (m.div_ceil(2), n.div_ceil(2));
-    let mut radius = vec![0.0f64; m * n];
     let mut theta = vec![0.0f64; m * n];
+    // x,y ∈ [-1,1] → x²+y² ≤ 2: no overflow, ~1 ulp vs hypot. The
+    // centre lane gets arg 1.0 — `0.5·log(1) = 0`, the reference's
+    // radius fudge — then the f64 `log` runs on lanes (bit-identical
+    // to `libm::log` per element).
+    let mut a64 = vec![0.0f64; m * n];
     for r in 0..m {
         for c in 0..n {
             let x = (c as f64 - n as f64 / 2.0) / (n as f64 / 2.0);
             let y = (r as f64 - m as f64 / 2.0) / (m as f64 / 2.0);
             let i = r * n + c;
-            // x,y ∈ [-1,1] → x²+y² ≤ 2: no overflow, ~1 ulp vs hypot.
-            radius[i] = if r == rc && c == cc {
-                0.0 // log(1) — the reference's radius fudge
-            } else {
-                0.5 * libm::log(x * x + y * y)
-            };
+            a64[i] = if r == rc && c == cc { 1.0 } else { x * x + y * y };
             theta[i] = libm::atan2(-y, x);
         }
+    }
+    let mut radius = vec![0.0f64; m * n];
+    zenmetrics_math::vlog_libm_into(&a64, &mut radius);
+    for v in radius.iter_mut() {
+        *v *= 0.5;
     }
     let sigma_onf = 0.55f64;
     let theta_sigma = core::f64::consts::PI / 4.0 / 1.5;
@@ -617,6 +621,29 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
         spreads.push(sp);
     }
     (logs, spreads)
+}
+
+/// Single-slot size-keyed bank — video IQA calls repeat one size
+/// (same shape as fsim's `filter_bank` cache).
+#[cfg(feature = "std")]
+fn gabor_grids_cached(m: usize, n: usize) -> std::sync::Arc<(Vec<Vec<f32>>, Vec<Vec<f32>>)> {
+    static CACHE: std::sync::Mutex<
+        Option<(usize, usize, std::sync::Arc<(Vec<Vec<f32>>, Vec<Vec<f32>>)>)>,
+    > = std::sync::Mutex::new(None);
+    let mut g = CACHE.lock().unwrap();
+    match &*g {
+        Some((bm, bn, b)) if *bm == m && *bn == n => b.clone(),
+        _ => {
+            let b = std::sync::Arc::new(gabor_grids(m, n));
+            *g = Some((m, n, b.clone()));
+            b
+        }
+    }
+}
+
+#[cfg(not(feature = "std"))]
+fn gabor_grids_cached(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
+    gabor_grids(m, n)
 }
 
 /// `|ifft2(imagefft .* fftshift(logGabor·spread))|` — the EO magnitude
@@ -916,7 +943,8 @@ macro_rules! score_body {
         }
 
         // ---------- lo_index ----------
-        let (logs, spreads) = gabor_grids(m, n);
+        let gb = gabor_grids_cached(m, n);
+        let (logs, spreads) = (&gb.0, &gb.1);
         let (xfft_r, xfft_d) = maybe_join(
             || spectrum(&$a.im1, m, n, &wplan, &hplan),
             || spectrum(&$a.im2, m, n, &wplan, &hplan),

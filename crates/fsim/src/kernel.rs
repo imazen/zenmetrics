@@ -727,12 +727,29 @@ fn radial_filters(w: usize, h: usize, radius: &[f32]) -> [Vec<f32>; NSCALE] {
     let n = w * h;
     let mut lg: [Vec<f32>; NSCALE] = core::array::from_fn(|_| vec![0.0; n]);
     let log_sigma = libm::log(SIGMA_ONF);
+    let mut a64 = vec![0.0f64; n];
+    let mut l64 = vec![0.0f64; n];
+    let mut p64 = vec![0.0f64; n];
+    {
+        let mut pw_in = vec![0.0f64; n];
+        for i in 0..n {
+            pw_in[i] = radius[i] as f64 / LP_CUTOFF;
+        }
+        // lp = 1/(1 + pow(r/LP_CUTOFF, 2·LP_ORDER)) — the pow is
+        // scale-invariant, so it runs on lanes once (bit-identical to
+        // `libm::pow` per element).
+        zenmetrics_math::vpow64_libm_into(&pw_in, &mut p64, 2.0 * LP_ORDER);
+    }
     for (s, lg_s) in lg.iter_mut().enumerate() {
         let fo = 1.0 / (MIN_WAVELENGTH * libm::pow(MULT, s as f64));
         for i in 0..n {
-            let r = radius[i] as f64;
-            let lp = 1.0 / (1.0 + libm::pow(r / LP_CUTOFF, 2.0 * LP_ORDER));
-            let l = libm::log(r / fo);
+            a64[i] = radius[i] as f64 / fo;
+        }
+        // l = log(r / fo) on lanes — bit-identical to `libm::log`.
+        zenmetrics_math::vlog_libm_into(&a64, &mut l64);
+        for i in 0..n {
+            let l = l64[i];
+            let lp = 1.0 / (1.0 + p64[i]);
             lg_s[i] = (libm::exp(-(l * l) / (2.0 * log_sigma * log_sigma)) * lp) as f32;
         }
         lg_s[0] = 0.0; // undo the radius fudge at DC.

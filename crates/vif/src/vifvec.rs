@@ -60,18 +60,7 @@ const SUBS: [(usize, usize, usize, usize); 8] = [
     (1, 1, 17, 3),
 ];
 
-// `libm::log2` polynomial constants (fdlibm `e_log2.c`) — the lane-
-// vectorised transcription below uses the same constants, operation
-// order and bit tricks, so every lane is bit-identical to `libm::log2`.
-const IVLN2HI: f64 = 1.44269504072144627571e+00;
-const IVLN2LO: f64 = 1.67517131648865118353e-10;
-const LG1: f64 = 6.666666666666735130e-01;
-const LG2: f64 = 3.999999999940941908e-01;
-const LG3: f64 = 2.857142874366239149e-01;
-const LG4: f64 = 2.222219843214978396e-01;
-const LG5: f64 = 1.818357216161805012e-01;
-const LG6: f64 = 1.531383769920937332e-01;
-const LG7: f64 = 1.479819860511658591e-01;
+// `libm::log2` lanes moved to zenmetrics-math (`fdlibm64::log2_libm_4x`).
 
 // ------------------------------------------------------------------
 // sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim).
@@ -1526,62 +1515,26 @@ fn vifsub_est(
 // Pooled log2 accumulation (vector-GSM pooling).
 // ------------------------------------------------------------------
 
-/// Lane-vectorised `libm::log2` for `x >= 1` (the pooling domain:
-/// `1 + nonneg`). The frexp-style reduce and the `hi` truncation are
-/// per-lane scalar bit ops; the polynomial, divide and the `hi/lo`
-/// reconstruction run lane-parallel with *separate* `mul`/`add`
-/// (never fused), so each lane reproduces `libm::log2` bitwise.
+/// Lane-vectorised `libm::log2` — delegates to zenmetrics-math's
+/// lane-exact fdlibm `e_log2` port (`log2_libm_4x`), bit-identical to
+/// `libm::log2` on every input (this call site only feeds `x >= 1`,
+/// the `1 + nonneg` pooling domain). 8-lane tiers run two 4-lane
+/// calls — the port is `f64x4`-wide on every tier.
 macro_rules! log2_lanes {
     ($token:ident, $V:ty, $lanes:literal, $x:expr) => {{
         let xa: [f64; $lanes] = $x;
-        let mut xr = [0.0f64; $lanes];
-        let mut kk = [0.0f64; $lanes];
-        for i in 0..$lanes {
-            // libm's `hx += 0x3ff00000 - 0x3fe6a09e` reduce:
-            // folds x into m ∈ [√2/2, √2] and counts k.
-            let ui = xa[i].to_bits();
-            let mut hx = (ui >> 32) as u32;
-            hx = hx.wrapping_add(0x3ff0_0000u32.wrapping_sub(0x3fe6_a09e));
-            kk[i] = ((hx >> 20) as i32 - 0x3ff) as f64;
-            hx = (hx & 0x000f_ffff).wrapping_add(0x3fe6_a09e);
-            xr[i] = f64::from_bits(((hx as u64) << 32) | (ui & 0xffff_ffff));
-        }
-        let xv = <$V>::from_array_t($token, xr);
-        let kv = <$V>::from_array_t($token, kk);
-        let f = xv - <$V>::splat_t($token, 1.0);
-        let hfsq = <$V>::splat_t($token, 0.5) * f * f;
-        let s = f / (<$V>::splat_t($token, 2.0) + f);
-        let z = s * s;
-        let w = z * z;
-        let t1 = w
-            * (<$V>::splat_t($token, LG2)
-                + w * (<$V>::splat_t($token, LG4) + w * <$V>::splat_t($token, LG6)));
-        let t2 = z
-            * (<$V>::splat_t($token, LG1)
-                + w * (<$V>::splat_t($token, LG3)
-                    + w * (<$V>::splat_t($token, LG5) + w * <$V>::splat_t($token, LG7))));
-        let r = t2 + t1;
-        // hi = f - hfsq with the low 32 mantissa bits cleared.
-        let mut ha = (f - hfsq).to_array();
-        for v in ha.iter_mut() {
-            *v = f64::from_bits(v.to_bits() & !0xffff_ffffu64);
-        }
-        let hi = <$V>::from_array_t($token, ha);
-        let lo = f - hi - hfsq + s * (hfsq + r);
-        let val_hi = hi * <$V>::splat_t($token, IVLN2HI);
-        let val_lo =
-            (lo + hi) * <$V>::splat_t($token, IVLN2LO) + lo * <$V>::splat_t($token, IVLN2HI);
-        let wv = kv + val_hi;
-        let val_lo = val_lo + ((kv - wv) + val_hi);
-        let mut ra = (val_lo + wv).to_array();
-        for i in 0..$lanes {
-            // libm early-outs: `x == 1 → 0`; `exp == 0x7ff → x`
-            // (inf → inf, NaN → NaN — NaN also propagates anyway).
-            if xa[i] == 1.0 {
-                ra[i] = 0.0;
-            } else if (xa[i].to_bits() >> 52) & 0x7ff == 0x7ff {
-                ra[i] = xa[i];
-            }
+        let mut ra = [0.0f64; $lanes];
+        let mut k = 0;
+        while k < $lanes {
+            let r = zenmetrics_math::fdlibm64::log2_libm_4x(
+                $token,
+                magetypes::simd::generic::f64x4::<_>::from_array_t(
+                    $token,
+                    core::array::from_fn(|j| xa[k + j]),
+                ),
+            );
+            ra[k..k + 4].copy_from_slice(&r.to_array());
+            k += 4;
         }
         ra
     }};
