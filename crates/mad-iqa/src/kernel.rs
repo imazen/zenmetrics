@@ -83,6 +83,22 @@ pub struct Args<'a> {
     pub w: usize,
     /// Height.
     pub h: usize,
+    /// When `Some`, receives the run's strategy maps after the indices
+    /// are computed from them.
+    pub maps: Option<&'a mut MapsOut>,
+}
+
+/// The two strategy maps of one run, before the interior trim.
+#[derive(Debug, Default)]
+pub struct MapsOut {
+    /// `hi_index`'s map: contrast-threshold mask × 16×16 local MSE, full
+    /// resolution, `w·h` row-major.
+    pub hi: Vec<f32>,
+    /// `lo_index`'s map at its native tile resolution: one value per 4×4
+    /// tile at pixel `(4·jt, 4·it)`, `tiles.0 × tiles.1` row-major.
+    pub lo: Vec<f32>,
+    /// `(tile rows, tile cols)`.
+    pub tiles: (usize, usize),
 }
 
 // ============================ shared helpers ============================
@@ -1036,6 +1052,11 @@ macro_rules! score_body {
         // ---------- trim + norms ----------
         let hi = interior_norm(&mp_hi, m, n) * 10.0;
         let lo = interior_norm(&mp_lo, m, n);
+        if let Some(out) = $a.maps {
+            out.hi = mp_hi;
+            out.lo = mp_lo_t;
+            out.tiles = (mt, nt);
+        }
         (hi, lo)
     }};
 }
@@ -1080,12 +1101,18 @@ pub fn mad_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> (f64
 }
 
 /// Runtime-dispatched MAD score → [`crate::MadScore`].
-pub(crate) fn mad_score(inputs: &crate::Inputs, w: usize, h: usize) -> crate::MadScore {
+pub(crate) fn mad_score(
+    inputs: &crate::Inputs,
+    w: usize,
+    h: usize,
+    maps: Option<&mut MapsOut>,
+) -> crate::MadScore {
     let a = Args {
         im1: &inputs.r,
         im2: &inputs.d,
         w,
         h,
+        maps,
     };
     let (hi, lo) = archmage::attuned!(
         mad_core_tier(a),

@@ -164,8 +164,25 @@ pub struct MadScore {
 const LUMA_COEF: [f32; 3] = [0.2989, 0.5870, 0.1140];
 
 /// The mad-iqa metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs. No canonical upstream map —
-/// `Evaluation::map()` is `None`.
+/// [`zenpixels::PixelSlice`] inputs.
+///
+/// Maps, on request, are the reference's two strategy maps over the
+/// interior both indices pool, `[16, w−17) × [16, h−17)`:
+///
+/// - `hi` (primary): `hi_index`'s visible-distortion map, the
+///   contrast-threshold mask times the 16×16 local MSE, one value per
+///   pixel; `HI = 10·RMS(hi)`.
+/// - `lo`: `lo_index`'s statistical-difference map at its native 4×4
+///   tile resolution, `Σ_scales w_s·(|Δσ| + 2|Δskew| + |Δkurt|)` over the
+///   log-Gabor bank; each tile's value covers the 4×4 pixels at its tile
+///   origin as the reference writes it, and `LO` is the RMS over interior
+///   pixels. The last tile row/column reaches up to 3 pixels past the
+///   interior.
+///
+/// Both are [`za::MapPolarity::Difference`] (`0` = identical) with global
+/// support (DFT-domain CSF and log-Gabor filters). They are the strategy
+/// components, not a per-pixel MAD: `MAD = HI^σ · LO^(1−σ)` combines the
+/// two indices. Below 34 pixels there is no interior and no map.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Mad;
 
@@ -208,8 +225,14 @@ impl za::Metric for Mad {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("mad")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (s, raw) = mad_rgb8_maps(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("mad", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = MadMaps::new(s, raw, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
+        }
         let s = mad_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
             .metric_err_with("mad", Error::kind)?;
         Ok(alloc::boxed::Box::new(
@@ -257,7 +280,7 @@ pub fn mad_plane_f32(
     check_plane(distorted, width, height, stride)?;
     let r = gather_plane(reference, width, height, stride);
     let d = gather_plane(distorted, width, height, stride);
-    Ok(kernel::mad_score(&Inputs { r, d }, width, height))
+    Ok(kernel::mad_score(&Inputs { r, d }, width, height, None))
 }
 
 /// MAD of two interleaved sRGB RGB8 pairs, on the MATLAB `rgb2gray`
@@ -272,7 +295,114 @@ pub fn mad_rgb8(
     check_rgb(reference, width, height, stride)?;
     check_rgb(distorted, width, height, stride)?;
     let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
-    Ok(kernel::mad_score(&inputs, width, height))
+    Ok(kernel::mad_score(&inputs, width, height, None))
+}
+
+/// [`mad_rgb8`] plus the two strategy maps the indices are computed from.
+fn mad_rgb8_maps(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(MadScore, kernel::MapsOut), Error> {
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
+    let mut maps = kernel::MapsOut::default();
+    let score = kernel::mad_score(&inputs, width, height, Some(&mut maps));
+    Ok((score, maps))
+}
+
+/// The pooled interior: `[16, n−17) × [16, m−17)`, `None` below 34.
+fn interior(w: usize, h: usize) -> Option<(usize, usize)> {
+    (w >= 34 && h >= 34).then(|| (w - 33, h - 33))
+}
+
+/// A scored pair with its interior strategy maps.
+struct MadMaps {
+    score: MadScore,
+    /// `(w−33) × (h−33)` interior of `hi_index`'s map.
+    hi: Vec<f32>,
+    /// The tiles of `lo_index`'s map that start inside the interior.
+    lo: Vec<f32>,
+    geometry: [za::MapGeometry; 2],
+}
+
+impl MadMaps {
+    fn new(score: MadScore, raw: kernel::MapsOut, w: usize, h: usize) -> Self {
+        let Some((iw, ih)) = interior(w, h) else {
+            return Self {
+                score,
+                hi: Vec::new(),
+                lo: Vec::new(),
+                geometry: [za::MapGeometry::identity(w as u32, h as u32); 2],
+            };
+        };
+        let mut hi = Vec::with_capacity(iw * ih);
+        for r in 16..16 + ih {
+            hi.extend_from_slice(&raw.hi[r * w + 16..r * w + 16 + iw]);
+        }
+        // Tiles start at pixel (4·jt, 4·it); those inside the interior run
+        // from tile 4 to the one holding its last row/column.
+        let (tx, ty) = ((w - 18) / 4 - 3, (h - 18) / 4 - 3);
+        let nt = raw.tiles.1;
+        let mut lo = Vec::with_capacity(tx * ty);
+        for jt in 4..4 + ty {
+            lo.extend_from_slice(&raw.lo[jt * nt + 4..jt * nt + 4 + tx]);
+        }
+        let (w32, h32) = (w as u32, h as u32);
+        Self {
+            score,
+            hi,
+            lo,
+            geometry: [
+                za::MapGeometry::grid(w32, h32, 16, 16, 1, 1, iw as u32, ih as u32)
+                    .with_support(za::Support::Global),
+                za::MapGeometry::grid(w32, h32, 16, 16, 4, 4, tx as u32, ty as u32)
+                    .with_support(za::Support::Global),
+            ],
+        }
+    }
+
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let (name, data) = [("hi", &self.hi), ("lo", &self.lo)][i];
+        let g = self.geometry[i];
+        if data.is_empty() {
+            return None;
+        }
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(name, px, za::MapPolarity::Difference, g).ok()
+    }
+}
+
+impl za::Evaluation for MadMaps {
+    fn score(&self) -> f64 {
+        self.score.mad
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(
+            [
+                (alloc::borrow::Cow::Borrowed("mad"), self.score.mad),
+                (alloc::borrow::Cow::Borrowed("hi"), self.score.hi),
+                (alloc::borrow::Cow::Borrowed("lo"), self.score.lo),
+            ]
+            .into_iter(),
+        )
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..2).filter_map(|i| self.view(i)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 /// Gathered level-0 input planes.
