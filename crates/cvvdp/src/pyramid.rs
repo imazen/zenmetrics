@@ -189,26 +189,25 @@ pub(crate) fn gausspyr_expand(
     debug_assert!(out_w >= 2 * sw - 1 && out_w <= 2 * sw);
     debug_assert!(out_h >= 2 * sh - 1 && out_h <= 2 * sh);
 
-    // Vertical pass: SIMD inner sweep, reads source rows directly via
-    // the zero-insertion index map (no z buffer at all). Grow-only
+    // Fused vertical+horizontal pass: each output row-pair streams
+    // through a `2*sw` row buffer — the `sw × out_h` `vscratch`
+    // intermediate and its memory round-trip are eliminated. Grow-only
     // scratch: the shared Vec keeps its high-water length between
-    // levels/frames, so `resize` would memset on every regrow.
-    if scratch.vscratch.len() < sw * out_h {
-        scratch.vscratch.resize(sw * out_h, 0.0);
+    // levels/frames, so `resize` would memset on every regrow. The
+    // fused kernel needs only `2*sw` of it on the serial path.
+    if scratch.vscratch.len() < 2 * sw {
+        scratch.vscratch.resize(2 * sw, 0.0);
     }
-    let vscratch = &mut scratch.vscratch[..sw * out_h];
-    crate::simd_pyramid::expand_vertical_pass(src, sw, sh, out_h, vscratch);
-
-    // Horizontal pass: SIMD inner sweep, same index-map trick (no
-    // `z_h` scratch needed anymore).
     if dst.len() < out_w * out_h {
         dst.resize(out_w * out_h, 0.0);
     }
-    crate::simd_pyramid::expand_horizontal_pass(
-        vscratch,
+    crate::simd_pyramid::expand_fused_pass(
+        src,
         sw,
+        sh,
         out_w,
         out_h,
+        &mut scratch.vscratch,
         &mut dst[..out_w * out_h],
     );
 }

@@ -719,6 +719,7 @@ pub(crate) fn reduce_fused_pass(
 // then sweep y with f32x{N} mul-adds. The 2× scaling is folded into
 // the kernel taps (DOUBLED_GAUSS5).
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn expand_v_inner(
     token: Token,
@@ -817,6 +818,7 @@ fn expand_v_inner(
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn expand_v_inner(
     token: Token,
@@ -913,6 +915,7 @@ fn expand_v_inner(
 
 /// Vertical pass of `gausspyr_expand`: writes `sw × out_h` vscratch
 /// using the zero-insertion + 5-tap kernel.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn expand_vertical_pass(
     src: &[f32],
     sw: usize,
@@ -944,6 +947,7 @@ pub(crate) fn expand_vertical_pass(
 // reads a sliding-window of 5 taps from z_h. The 5 taps are scalar
 // splats. z_h is per-row scratch (we re-use a caller-owned Vec).
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn expand_h_inner(
     token: Token,
@@ -1042,6 +1046,7 @@ fn expand_h_inner(
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn expand_h_inner(
     token: Token,
@@ -1134,6 +1139,7 @@ fn expand_h_inner(
 
 /// Horizontal pass of `gausspyr_expand`: reads `sw × out_h` vscratch,
 /// writes `out_w × out_h` dst using the zero-insertion + 5-tap kernel.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn expand_horizontal_pass(
     vscratch: &[f32],
     sw: usize,
@@ -1144,6 +1150,387 @@ pub(crate) fn expand_horizontal_pass(
     debug_assert_eq!(dst.len(), out_w * out_h);
     archmage::attuned!(
         expand_h_inner(vscratch, sw, out_w, out_h, dst),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+// ============================================================================
+// expand_fused_pass — single streaming pass over output rows
+// ============================================================================
+//
+// `expand_h` consumes exactly one v-pass row per output row, and
+// `expand_v`'s adjacent even/odd rows share their three source rows —
+// so each fused iteration writes a 2×sw row buffer then h-expands
+// both rows straight into `dst`, eliminating the `sw × out_h`
+// `vscratch` plane and its memory round-trip.
+// Bit-identical to `expand_vertical_pass` + `expand_horizontal_pass`:
+// same taps, same accumulation order, same scalar head/tail patches.
+
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
+fn expand_fused_inner(
+    token: Token,
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    out_w: usize,
+    out_h: usize,
+    row_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+) {
+    let k = GAUSS5;
+    let dk0 = f32x16::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x16::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x16::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x16::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x16::splat_t(token, 2.0 * k[4]);
+
+    let odd_h = out_h & 1;
+    let back_idx_v = out_h + 2 + odd_h;
+    let z_row = |p: usize| -> Option<usize> {
+        if p == back_idx_v {
+            Some(sh - 1)
+        } else if p & 1 == 0 && p <= 2 * sh {
+            Some((p / 2).saturating_sub(1).min(sh - 1))
+        } else {
+            None
+        }
+    };
+    let dk = [dk0, dk1, dk2, dk3, dk4];
+    let n_groups = sw / 16;
+
+    let odd_w = out_w & 1;
+    let back_idx_h = out_w + 2 + odd_w;
+    let n_blocks = out_w / 32;
+    let vec_hi = if sw >= 17 {
+        ((sw - 17) / 16 + 1).min(n_blocks)
+    } else {
+        0
+    };
+    let vec_lo = 1.min(vec_hi);
+    let head_end = (vec_lo * 32).min(out_w);
+
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    crate::par::map_rows_scratch(dst, out_w, row_scratch, 2 * sw, |y0, dst, rowbuf| {
+        let band_h = dst.len() / out_w;
+        let (re, ro) = rowbuf.split_at_mut(sw);
+
+        // Horizontal expand of one v-pass row — identical per-row
+        // logic to `expand_h_inner` (inline z map, scalar head/tail,
+        // paired-interleave interior blocks).
+        let h_expand = |row: &[f32], out_row: &mut [f32]| {
+            let z_at = |p: usize| -> f32 {
+                if p == 0 {
+                    row[0]
+                } else if p & 1 == 0 {
+                    if p <= 2 * sw {
+                        row[p / 2 - 1]
+                    } else if p <= back_idx_h {
+                        row[sw - 1]
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                }
+            };
+            for x in 0..head_end {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                out_row[x] = 2.0 * sum;
+            }
+            for cg in vec_lo..vec_hi {
+                let x_base = cg * 32;
+                let q0 = cg * 16;
+                let ra = f32x16::from_slice_t(token, &row[q0 - 1..q0 + 15]);
+                let rb = f32x16::from_slice_t(token, &row[q0..q0 + 16]);
+                let rc = f32x16::from_slice_t(token, &row[q0 + 1..q0 + 17]);
+                let acc_e = ra * dk0 + rb * dk2 + rc * dk4;
+                let acc_o = rb * dk1 + rc * dk3;
+                let ae = acc_e.to_array();
+                let ao = acc_o.to_array();
+                for t in 0..16 {
+                    out_row[x_base + 2 * t] = ae[t];
+                    out_row[x_base + 2 * t + 1] = ao[t];
+                }
+            }
+            for x in vec_hi * 32..out_w {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                out_row[x] = 2.0 * sum;
+            }
+        };
+
+        let mut y_l = 0usize;
+        while y_l < band_h {
+            let y = y0 + y_l;
+            if y & 1 == 0 && y_l + 1 < band_h && y + 1 < out_h {
+                // V-pair: same 3-load/2-row sharing as expand_v_inner.
+                let m = y / 2;
+                let ra = m.saturating_sub(1).min(sh - 1) * sw;
+                let rb = m.min(sh - 1) * sw;
+                let rc = (m + 1).min(sh - 1) * sw;
+                for cg in 0..n_groups {
+                    let cb = cg * 16;
+                    let va =
+                        f32x16::from_array_t(token, src[ra + cb..ra + cb + 16].try_into().unwrap());
+                    let vb =
+                        f32x16::from_array_t(token, src[rb + cb..rb + cb + 16].try_into().unwrap());
+                    let vc =
+                        f32x16::from_array_t(token, src[rc + cb..rc + cb + 16].try_into().unwrap());
+                    let mut acc_e = va * dk0;
+                    acc_e = vb * dk2 + acc_e;
+                    acc_e = vc * dk4 + acc_e;
+                    let mut acc_o = vb * dk1;
+                    acc_o = vc * dk3 + acc_o;
+                    re[cb..cb + 16].copy_from_slice(&acc_e.to_array());
+                    ro[cb..cb + 16].copy_from_slice(&acc_o.to_array());
+                }
+                for x in n_groups * 16..sw {
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    re[x] = 2.0 * sum;
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + 1 + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    ro[x] = 2.0 * sum;
+                }
+                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                y_l += 2;
+            } else {
+                // Single row — same z_row tap walk as expand_v_inner's
+                // scalar fallback (covers odd first rows, the last
+                // unpaired row, and every edge case).
+                for cg in 0..n_groups {
+                    let cb = cg * 16;
+                    let mut acc = f32x16::splat_t(token, 0.0);
+                    for (j, dkj) in dk.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            let off = r * sw + cb;
+                            let v =
+                                f32x16::from_array_t(token, src[off..off + 16].try_into().unwrap());
+                            acc = v * *dkj + acc;
+                        }
+                    }
+                    re[cb..cb + 16].copy_from_slice(&acc.to_array());
+                }
+                for x in n_groups * 16..sw {
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    re[x] = 2.0 * sum;
+                }
+                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                y_l += 1;
+            }
+        }
+    });
+}
+
+#[archmage::attune(_*_t, define(f32x8))]
+fn expand_fused_inner(
+    token: Token,
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    out_w: usize,
+    out_h: usize,
+    row_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+) {
+    let k = GAUSS5;
+    let dk0 = f32x8::splat_t(token, 2.0 * k[0]);
+    let dk1 = f32x8::splat_t(token, 2.0 * k[1]);
+    let dk2 = f32x8::splat_t(token, 2.0 * k[2]);
+    let dk3 = f32x8::splat_t(token, 2.0 * k[3]);
+    let dk4 = f32x8::splat_t(token, 2.0 * k[4]);
+
+    let odd_h = out_h & 1;
+    let back_idx_v = out_h + 2 + odd_h;
+    let z_row = |p: usize| -> Option<usize> {
+        if p == back_idx_v {
+            Some(sh - 1)
+        } else if p & 1 == 0 && p <= 2 * sh {
+            Some((p / 2).saturating_sub(1).min(sh - 1))
+        } else {
+            None
+        }
+    };
+    let dk = [dk0, dk1, dk2, dk3, dk4];
+    let n_groups = sw / 8;
+
+    let odd_w = out_w & 1;
+    let back_idx_h = out_w + 2 + odd_w;
+    let n_blocks = out_w / 16;
+    let vec_hi = if sw >= 9 {
+        ((sw - 9) / 8 + 1).min(n_blocks)
+    } else {
+        0
+    };
+    let vec_lo = 1.min(vec_hi);
+    let head_end = (vec_lo * 16).min(out_w);
+
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    crate::par::map_rows_scratch(dst, out_w, row_scratch, 2 * sw, |y0, dst, rowbuf| {
+        let band_h = dst.len() / out_w;
+        let (re, ro) = rowbuf.split_at_mut(sw);
+
+        let h_expand = |row: &[f32], out_row: &mut [f32]| {
+            let z_at = |p: usize| -> f32 {
+                if p == 0 {
+                    row[0]
+                } else if p & 1 == 0 {
+                    if p <= 2 * sw {
+                        row[p / 2 - 1]
+                    } else if p <= back_idx_h {
+                        row[sw - 1]
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                }
+            };
+            for x in 0..head_end {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                out_row[x] = 2.0 * sum;
+            }
+            for cg in vec_lo..vec_hi {
+                let x_base = cg * 16;
+                let q0 = cg * 8;
+                let ra = f32x8::from_slice_t(token, &row[q0 - 1..q0 + 7]);
+                let rb = f32x8::from_slice_t(token, &row[q0..q0 + 8]);
+                let rc = f32x8::from_slice_t(token, &row[q0 + 1..q0 + 9]);
+                let acc_e = ra * dk0 + rb * dk2 + rc * dk4;
+                let acc_o = rb * dk1 + rc * dk3;
+                let ae = acc_e.to_array();
+                let ao = acc_o.to_array();
+                for t in 0..8 {
+                    out_row[x_base + 2 * t] = ae[t];
+                    out_row[x_base + 2 * t + 1] = ao[t];
+                }
+            }
+            for x in vec_hi * 16..out_w {
+                let sum = k[0] * z_at(x)
+                    + k[1] * z_at(x + 1)
+                    + k[2] * z_at(x + 2)
+                    + k[3] * z_at(x + 3)
+                    + k[4] * z_at(x + 4);
+                out_row[x] = 2.0 * sum;
+            }
+        };
+
+        let mut y_l = 0usize;
+        while y_l < band_h {
+            let y = y0 + y_l;
+            if y & 1 == 0 && y_l + 1 < band_h && y + 1 < out_h {
+                let m = y / 2;
+                let ra = m.saturating_sub(1).min(sh - 1) * sw;
+                let rb = m.min(sh - 1) * sw;
+                let rc = (m + 1).min(sh - 1) * sw;
+                for cg in 0..n_groups {
+                    let cb = cg * 8;
+                    let va =
+                        f32x8::from_array_t(token, src[ra + cb..ra + cb + 8].try_into().unwrap());
+                    let vb =
+                        f32x8::from_array_t(token, src[rb + cb..rb + cb + 8].try_into().unwrap());
+                    let vc =
+                        f32x8::from_array_t(token, src[rc + cb..rc + cb + 8].try_into().unwrap());
+                    let mut acc_e = va * dk0;
+                    acc_e = vb * dk2 + acc_e;
+                    acc_e = vc * dk4 + acc_e;
+                    let mut acc_o = vb * dk1;
+                    acc_o = vc * dk3 + acc_o;
+                    re[cb..cb + 8].copy_from_slice(&acc_e.to_array());
+                    ro[cb..cb + 8].copy_from_slice(&acc_o.to_array());
+                }
+                for x in n_groups * 8..sw {
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    re[x] = 2.0 * sum;
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + 1 + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    ro[x] = 2.0 * sum;
+                }
+                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                y_l += 2;
+            } else {
+                for cg in 0..n_groups {
+                    let cb = cg * 8;
+                    let mut acc = f32x8::splat_t(token, 0.0);
+                    for (j, dkj) in dk.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            let off = r * sw + cb;
+                            let v =
+                                f32x8::from_array_t(token, src[off..off + 8].try_into().unwrap());
+                            acc = v * *dkj + acc;
+                        }
+                    }
+                    re[cb..cb + 8].copy_from_slice(&acc.to_array());
+                }
+                for x in n_groups * 8..sw {
+                    let mut sum = 0.0f32;
+                    for (j, kj) in k.iter().enumerate() {
+                        if let Some(r) = z_row(y + j) {
+                            sum += kj * src[r * sw + x];
+                        }
+                    }
+                    re[x] = 2.0 * sum;
+                }
+                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                y_l += 1;
+            }
+        }
+    });
+}
+
+/// Fused `gausspyr_expand`: vertical + horizontal passes streamed
+/// per output row-pair through a `2*sw` row buffer instead of the
+/// `sw × out_h` `vscratch` plane. `row_scratch` backs the row buffer
+/// on the serial path; parallel bands allocate private rows.
+///
+/// Bit-identical to the split-pass chain.
+pub(crate) fn expand_fused_pass(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    out_w: usize,
+    out_h: usize,
+    row_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+) {
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    archmage::attuned!(
+        expand_fused_inner(src, sw, sh, out_w, out_h, row_scratch, dst),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -1185,6 +1572,7 @@ pub(crate) fn expand_horizontal_pass(
 //   - We do NOT pre-allocate a scratch z-buffer (unlike the pyramid
 //     expand) — the kernel reads source/scratch directly.
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
@@ -1287,6 +1675,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     let k = PU_BLUR_KERNEL_1D;
@@ -1380,6 +1769,7 @@ fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32
 /// padding. Bit-equivalent to `gaussian_blur_sigma3`'s horizontal
 /// pass except for SIMD FMA-grouping in the interior (well below
 /// 1e-5 abs).
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &mut [f32]) {
     debug_assert_eq!(src.len(), w * h);
     debug_assert_eq!(h_pass.len(), w * h);
@@ -1389,6 +1779,7 @@ pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &
     );
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32], scale: f32) {
     let k = PU_BLUR_KERNEL_1D;
@@ -1503,6 +1894,7 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
     });
 }
 
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 #[archmage::attune(_*_t, define(f32x8))]
 fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32], scale: f32) {
     let k = PU_BLUR_KERNEL_1D;
@@ -1610,9 +2002,375 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
     });
 }
 
+/// Fused σ=3 13-tap separable blur: the horizontal pass runs into a
+/// rolling 13-row ring (`ring[(r % 13)]` = h-filtered src row `r`)
+/// that the vertical pass consumes immediately, eliminating the
+/// `w*h` `h_pass` intermediate and its memory round-trip.
+/// Bit-identical to `pu_blur_horizontal_pass` +
+/// `pu_blur_vertical_pass_scaled` — per-element tap order, scalar
+/// boundary patches and the post-accumulate scale are unchanged.
+///
+/// Output row `y` needs real src rows `[lo(y), min(h-1, y+6)]` where
+/// `lo(y) = 0` for `y < 6` else `y - 6` (reflected taps stay inside
+/// that window: `reflect(x) <= max(x, 2h-2-x)`), so rows are
+/// h-filtered lazily as the window advances and any two live rows are
+/// `< 13` apart — `r % 13` is collision-free.
+///
+/// `ring_scratch` (len >= 13*w) is the serial-path ring; parallel
+/// bands get private rings via `map_rows_scratch`.
+#[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
+fn pu_blur_fused_inner(
+    token: Token,
+    src: &[f32],
+    w: usize,
+    h: usize,
+    ring_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+    scale: f32,
+) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x16::splat_t(token, k[0]);
+    let k1 = f32x16::splat_t(token, k[1]);
+    let k2 = f32x16::splat_t(token, k[2]);
+    let k3 = f32x16::splat_t(token, k[3]);
+    let k4 = f32x16::splat_t(token, k[4]);
+    let k5 = f32x16::splat_t(token, k[5]);
+    let k6 = f32x16::splat_t(token, k[6]);
+    let k7 = f32x16::splat_t(token, k[7]);
+    let k8 = f32x16::splat_t(token, k[8]);
+    let k9 = f32x16::splat_t(token, k[9]);
+    let k10 = f32x16::splat_t(token, k[10]);
+    let k11 = f32x16::splat_t(token, k[11]);
+    let k12 = f32x16::splat_t(token, k[12]);
+    let vs = f32x16::splat_t(token, scale);
+
+    let lane = 16usize;
+    let h_interior_lo = 6usize;
+    let h_interior_hi_excl = w.saturating_sub(lane + 5);
+    let n_groups = w / lane;
+    let v_interior_lo = 6usize;
+    let v_interior_hi = h.saturating_sub(6);
+    const RING: usize = 13;
+    debug_assert_eq!(dst.len(), w * h);
+    debug_assert_eq!(src.len(), w * h);
+    if w == 0 || h == 0 {
+        return;
+    }
+
+    crate::par::map_rows_scratch(dst, w, ring_scratch, RING * w, |y0, dst, ring| {
+        let h_band = dst.len() / w;
+        // First real src row output row y0 can need.
+        let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
+        for yl in 0..h_band {
+            let y = y0 + yl;
+            let row_off = yl * w;
+            // H-filter src rows as the window's leading edge passes.
+            let need_hi = (y + 6).min(h - 1);
+            while next_row <= need_hi {
+                let srow = &src[next_row * w..next_row * w + w];
+                let slot = (next_row % RING) * w;
+                let out = &mut ring[slot..slot + w];
+                for x in 0..h_interior_lo.min(w) {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                        s += k[t] * srow[sx];
+                    }
+                    out[x] = s;
+                }
+                let mut x_base = h_interior_lo;
+                while x_base < h_interior_hi_excl {
+                    let load = |off: usize| -> f32x16 {
+                        let base = x_base - 6 + off;
+                        let arr: [f32; 16] = srow[base..base + 16].try_into().unwrap();
+                        f32x16::from_array_t(token, arr)
+                    };
+                    let v0 = load(0);
+                    let v1 = load(1);
+                    let v2 = load(2);
+                    let v3 = load(3);
+                    let v4x = load(4);
+                    let v5 = load(5);
+                    let v6 = load(6);
+                    let v7 = load(7);
+                    let v8 = load(8);
+                    let v9 = load(9);
+                    let v10 = load(10);
+                    let v11 = load(11);
+                    let v12 = load(12);
+                    let acc = v0 * k0
+                        + v1 * k1
+                        + v2 * k2
+                        + v3 * k3
+                        + v4x * k4
+                        + v5 * k5
+                        + v6 * k6
+                        + v7 * k7
+                        + v8 * k8
+                        + v9 * k9
+                        + v10 * k10
+                        + v11 * k11
+                        + v12 * k12;
+                    out[x_base..x_base + 16].copy_from_slice(&acc.to_array());
+                    x_base += lane;
+                }
+                for x in x_base..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                        s += k[t] * srow[sx];
+                    }
+                    out[x] = s;
+                }
+                next_row += 1;
+            }
+            // V-pass for output row y — identical structure to
+            // pu_blur_v_inner: scalar boundary rows, SIMD column
+            // groups + scalar tail for interior rows.
+            if y < v_interior_lo || y >= v_interior_hi {
+                for x in 0..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                        s += k[t] * ring[(sy % RING) * w + x];
+                    }
+                    dst[row_off + x] = s * scale;
+                }
+            } else {
+                let mut slot = (y - 6) % RING;
+                let mut roff = [0usize; 13];
+                for t in 0..13 {
+                    roff[t] = slot * w;
+                    slot += 1;
+                    if slot == RING {
+                        slot = 0;
+                    }
+                }
+                for cg in 0..n_groups {
+                    let x_base = cg * lane;
+                    let load = |t: usize| -> f32x16 {
+                        let off = roff[t] + x_base;
+                        let arr: [f32; 16] = ring[off..off + 16].try_into().unwrap();
+                        f32x16::from_array_t(token, arr)
+                    };
+                    let v0 = load(0);
+                    let v1 = load(1);
+                    let v2 = load(2);
+                    let v3 = load(3);
+                    let v4x = load(4);
+                    let v5 = load(5);
+                    let v6 = load(6);
+                    let v7 = load(7);
+                    let v8 = load(8);
+                    let v9 = load(9);
+                    let v10 = load(10);
+                    let v11 = load(11);
+                    let v12 = load(12);
+                    let acc = v0 * k0
+                        + v1 * k1
+                        + v2 * k2
+                        + v3 * k3
+                        + v4x * k4
+                        + v5 * k5
+                        + v6 * k6
+                        + v7 * k7
+                        + v8 * k8
+                        + v9 * k9
+                        + v10 * k10
+                        + v11 * k11
+                        + v12 * k12;
+                    let arr = (acc * vs).to_array();
+                    dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
+                }
+                for x in n_groups * lane..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        s += k[t] * ring[roff[t] + x];
+                    }
+                    dst[row_off + x] = s * scale;
+                }
+            }
+        }
+    });
+}
+
+/// 8-wide twin of the 16-wide `pu_blur_fused_inner` — see its
+/// doc comment for the ring-window invariant.
+#[archmage::attune(_*_t, define(f32x8))]
+fn pu_blur_fused_inner(
+    token: Token,
+    src: &[f32],
+    w: usize,
+    h: usize,
+    ring_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+    scale: f32,
+) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x8::splat_t(token, k[0]);
+    let k1 = f32x8::splat_t(token, k[1]);
+    let k2 = f32x8::splat_t(token, k[2]);
+    let k3 = f32x8::splat_t(token, k[3]);
+    let k4 = f32x8::splat_t(token, k[4]);
+    let k5 = f32x8::splat_t(token, k[5]);
+    let k6 = f32x8::splat_t(token, k[6]);
+    let k7 = f32x8::splat_t(token, k[7]);
+    let k8 = f32x8::splat_t(token, k[8]);
+    let k9 = f32x8::splat_t(token, k[9]);
+    let k10 = f32x8::splat_t(token, k[10]);
+    let k11 = f32x8::splat_t(token, k[11]);
+    let k12 = f32x8::splat_t(token, k[12]);
+    let vs = f32x8::splat_t(token, scale);
+
+    let lane = 8usize;
+    let h_interior_lo = 6usize;
+    let h_interior_hi_excl = w.saturating_sub(lane + 5);
+    let n_groups = w / lane;
+    let v_interior_lo = 6usize;
+    let v_interior_hi = h.saturating_sub(6);
+    const RING: usize = 13;
+    debug_assert_eq!(dst.len(), w * h);
+    debug_assert_eq!(src.len(), w * h);
+    if w == 0 || h == 0 {
+        return;
+    }
+
+    crate::par::map_rows_scratch(dst, w, ring_scratch, RING * w, |y0, dst, ring| {
+        let h_band = dst.len() / w;
+        let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
+        for yl in 0..h_band {
+            let y = y0 + yl;
+            let row_off = yl * w;
+            let need_hi = (y + 6).min(h - 1);
+            while next_row <= need_hi {
+                let srow = &src[next_row * w..next_row * w + w];
+                let slot = (next_row % RING) * w;
+                let out = &mut ring[slot..slot + w];
+                for x in 0..h_interior_lo.min(w) {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                        s += k[t] * srow[sx];
+                    }
+                    out[x] = s;
+                }
+                let mut x_base = h_interior_lo;
+                while x_base < h_interior_hi_excl {
+                    let load = |off: usize| -> f32x8 {
+                        let base = x_base - 6 + off;
+                        let arr: [f32; 8] = srow[base..base + 8].try_into().unwrap();
+                        f32x8::from_array_t(token, arr)
+                    };
+                    let v0 = load(0);
+                    let v1 = load(1);
+                    let v2 = load(2);
+                    let v3 = load(3);
+                    let v4x = load(4);
+                    let v5 = load(5);
+                    let v6 = load(6);
+                    let v7 = load(7);
+                    let v8 = load(8);
+                    let v9 = load(9);
+                    let v10 = load(10);
+                    let v11 = load(11);
+                    let v12 = load(12);
+                    let acc = v0 * k0
+                        + v1 * k1
+                        + v2 * k2
+                        + v3 * k3
+                        + v4x * k4
+                        + v5 * k5
+                        + v6 * k6
+                        + v7 * k7
+                        + v8 * k8
+                        + v9 * k9
+                        + v10 * k10
+                        + v11 * k11
+                        + v12 * k12;
+                    out[x_base..x_base + 8].copy_from_slice(&acc.to_array());
+                    x_base += lane;
+                }
+                for x in x_base..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                        s += k[t] * srow[sx];
+                    }
+                    out[x] = s;
+                }
+                next_row += 1;
+            }
+            if y < v_interior_lo || y >= v_interior_hi {
+                for x in 0..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                        s += k[t] * ring[(sy % RING) * w + x];
+                    }
+                    dst[row_off + x] = s * scale;
+                }
+            } else {
+                let mut slot = (y - 6) % RING;
+                let mut roff = [0usize; 13];
+                for t in 0..13 {
+                    roff[t] = slot * w;
+                    slot += 1;
+                    if slot == RING {
+                        slot = 0;
+                    }
+                }
+                for cg in 0..n_groups {
+                    let x_base = cg * lane;
+                    let load = |t: usize| -> f32x8 {
+                        let off = roff[t] + x_base;
+                        let arr: [f32; 8] = ring[off..off + 8].try_into().unwrap();
+                        f32x8::from_array_t(token, arr)
+                    };
+                    let v0 = load(0);
+                    let v1 = load(1);
+                    let v2 = load(2);
+                    let v3 = load(3);
+                    let v4x = load(4);
+                    let v5 = load(5);
+                    let v6 = load(6);
+                    let v7 = load(7);
+                    let v8 = load(8);
+                    let v9 = load(9);
+                    let v10 = load(10);
+                    let v11 = load(11);
+                    let v12 = load(12);
+                    let acc = v0 * k0
+                        + v1 * k1
+                        + v2 * k2
+                        + v3 * k3
+                        + v4x * k4
+                        + v5 * k5
+                        + v6 * k6
+                        + v7 * k7
+                        + v8 * k8
+                        + v9 * k9
+                        + v10 * k10
+                        + v11 * k11
+                        + v12 * k12;
+                    let arr = (acc * vs).to_array();
+                    dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
+                }
+                for x in n_groups * lane..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        s += k[t] * ring[roff[t] + x];
+                    }
+                    dst[row_off + x] = s * scale;
+                }
+            }
+        }
+    });
+}
+
 /// Vertical pass of the σ=3 13-tap Gaussian blur. Reads `h_pass`
 /// (output of `pu_blur_horizontal_pass`) and writes the final blur
 /// into `dst`.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
     pu_blur_vertical_pass_scaled(h_pass, w, h, dst, 1.0);
 }
@@ -1623,6 +2381,7 @@ pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mu
 /// f32, ±0 and NaN included). Used to fold the phase-uncertainty
 /// `mask_c_lin` multiply into the blur's final store, removing one
 /// full-plane read+write per channel per band.
+#[cfg(any(test, feature = "__simd_equiv_test"))]
 pub(crate) fn pu_blur_vertical_pass_scaled(
     h_pass: &[f32],
     w: usize,
@@ -1638,14 +2397,38 @@ pub(crate) fn pu_blur_vertical_pass_scaled(
     );
 }
 
+/// Single-pass dispatch of [`pu_blur_fused_inner`]: h-filtered rows
+/// stream through a 13-row ring into the vertical pass instead of a
+/// full `w*h` intermediate. `ring_scratch` backs the ring on the
+/// serial path (needs `13*w`, not `w*h`); parallel bands allocate
+/// private rings.
+///
+/// Bit-identical to `pu_blur_horizontal_pass` +
+/// `pu_blur_vertical_pass_scaled`.
+pub(crate) fn pu_blur_fused_scaled(
+    src: &[f32],
+    w: usize,
+    h: usize,
+    ring_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+    scale: f32,
+) {
+    debug_assert_eq!(src.len(), w * h);
+    debug_assert_eq!(dst.len(), w * h);
+    archmage::attuned!(
+        pu_blur_fused_inner(src, w, h, ring_scratch, dst, scale),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// Full σ=3 13-tap separable Gaussian blur with caller-owned scratch.
 ///
 /// Replacement for `crate::kernels::masking::gaussian_blur_sigma3`
 /// that avoids an internal allocation. `h_pass` is the horizontal-pass
-/// scratch (resized to `w*h` internally); `dst` receives the final
-/// blurred output. Same reflect-padding semantics as the upstream
-/// scalar reference; SIMD-vectorized interior with scalar boundary
-/// patches.
+/// scratch (the fused kernel needs only `13*w` of it — see
+/// [`pu_blur_fused_inner`]); `dst` receives the final blurred output.
+/// Same reflect-padding semantics as the upstream scalar reference;
+/// SIMD-vectorized interior with scalar boundary patches.
 ///
 /// Caller invariants: `src.len() == w * h`, `w >= 1`, `h >= 1`.
 pub(crate) fn gaussian_blur_sigma3_simd(
@@ -1658,15 +2441,14 @@ pub(crate) fn gaussian_blur_sigma3_simd(
     debug_assert_eq!(src.len(), w * h);
     let n = w * h;
     // Grow-only: h_pass/dst are shared scratch — a truncate+regrow
-    // would memset every call, and both passes overwrite fully anyway.
-    if h_pass.len() < n {
-        h_pass.resize(n, 0.0);
+    // would memset every call, and the fused pass overwrites fully.
+    if h_pass.len() < 13 * w {
+        h_pass.resize(13 * w, 0.0);
     }
     if dst.len() < n {
         dst.resize(n, 0.0);
     }
-    pu_blur_horizontal_pass(src, w, h, &mut h_pass[..n]);
-    pu_blur_vertical_pass(&h_pass[..n], w, h, &mut dst[..n]);
+    pu_blur_fused_scaled(src, w, h, h_pass, &mut dst[..n], 1.0);
 }
 
 /// [`gaussian_blur_sigma3_simd`] with the output scale folded into
@@ -1682,14 +2464,13 @@ pub(crate) fn gaussian_blur_sigma3_scaled_simd(
 ) {
     debug_assert_eq!(src.len(), w * h);
     let n = w * h;
-    if h_pass.len() < n {
-        h_pass.resize(n, 0.0);
+    if h_pass.len() < 13 * w {
+        h_pass.resize(13 * w, 0.0);
     }
     if dst.len() < n {
         dst.resize(n, 0.0);
     }
-    pu_blur_horizontal_pass(src, w, h, &mut h_pass[..n]);
-    pu_blur_vertical_pass_scaled(&h_pass[..n], w, h, &mut dst[..n], scale);
+    pu_blur_fused_scaled(src, w, h, h_pass, &mut dst[..n], scale);
 }
 
 // ============================================================================
@@ -1979,6 +2760,48 @@ mod tests {
     }
 
     #[test]
+    fn expand_fused_matches_split_bitexact() {
+        // Fused row-streamed expand must reproduce the split
+        // v-pass + h-pass chain bit-for-bit: identical taps,
+        // accumulation order and scalar head/tail patches — only the
+        // intermediate layout differs (2×sw row buffer vs sw×out_h
+        // plane). Covers odd/even out dims, small widths (no vector
+        // blocks), and one plane past PAR_MIN_SAMPLES for the
+        // multi-band path when `parallel` is active.
+        let cases: &[(usize, usize, usize, usize)] = &[
+            (4, 4, 8, 8),
+            (4, 4, 7, 7),
+            (8, 6, 16, 12),
+            (8, 6, 15, 11),
+            (16, 12, 32, 24),
+            (24, 16, 48, 32),
+            (33, 17, 65, 33),
+            (64, 32, 128, 64),
+            (200, 170, 400, 340),
+            (201, 170, 401, 339),
+        ];
+        for &(sw, sh, ow, oh) in cases {
+            let src = rng_seq(0x5EED ^ ((sw as u32) << 16) ^ (sh as u32), sw * sh);
+            let mut vs = alloc::vec![0.0_f32; sw * oh];
+            let mut want = alloc::vec![0.0_f32; ow * oh];
+            expand_vertical_pass(&src, sw, sh, oh, &mut vs);
+            expand_horizontal_pass(&vs, sw, ow, oh, &mut want);
+            let mut rowbuf: Vec<f32> = Vec::new();
+            let mut got = alloc::vec![0.0_f32; ow * oh];
+            expand_fused_pass(&src, sw, sh, ow, oh, &mut rowbuf, &mut got);
+            for i in 0..ow * oh {
+                assert_eq!(
+                    want[i].to_bits(),
+                    got[i].to_bits(),
+                    "case {sw}x{sh}->{ow}x{oh} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn reduce_v_dc_preservation() {
         // Uniform input → uniform interior output (DC=1.0).
         let sw: usize = 64;
@@ -2060,6 +2883,53 @@ mod tests {
                     (v - 3.5).abs() < 1e-5,
                     "DC not preserved at {w}x{h}: {v} vs 3.5"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_fused_matches_split_bitexact() {
+        // The ring-buffer fused kernel must reproduce the split
+        // h-pass + v-scaled-pass chain bit-for-bit (identical tap
+        // order, identical scalar boundaries — only the intermediate
+        // layout differs). Covers h < 13 (ring never wraps), w <
+        // lane, w not a multiple of the lane, boundary-heavy shapes,
+        // and one plane large enough to take the multi-band path
+        // (>= PAR_MIN_SAMPLES) when `parallel` is active.
+        let cases: &[(usize, usize)] = &[
+            (7, 7),
+            (8, 8),
+            (13, 13),
+            (16, 16),
+            (17, 19),
+            (24, 32),
+            (33, 35),
+            (5, 9),
+            (3, 64),
+            (64, 3),
+            (100, 101),
+            (128, 128),
+            (400, 340),
+        ];
+        for &(w, h) in cases {
+            for &scale in &[1.0f32, 2.5] {
+                let src = rng_seq(0xBEEF ^ ((w as u32) << 16) ^ (h as u32), w * h);
+                let mut hp = alloc::vec![0.0f32; w * h];
+                let mut want = alloc::vec![0.0f32; w * h];
+                pu_blur_horizontal_pass(&src, w, h, &mut hp);
+                pu_blur_vertical_pass_scaled(&hp, w, h, &mut want, scale);
+                let mut ring: Vec<f32> = Vec::new();
+                let mut got = alloc::vec![0.0f32; w * h];
+                pu_blur_fused_scaled(&src, w, h, &mut ring, &mut got, scale);
+                for i in 0..w * h {
+                    assert_eq!(
+                        want[i].to_bits(),
+                        got[i].to_bits(),
+                        "case {w}x{h} scale={scale} idx {i}: want={}, got={}",
+                        want[i],
+                        got[i]
+                    );
+                }
             }
         }
     }

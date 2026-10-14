@@ -112,6 +112,45 @@ pub(crate) fn map_rows(dst: &mut [f32], w: usize, f: impl Fn(usize, &mut [f32]) 
     f(0, dst);
 }
 
+/// Row bands like [`map_rows`] plus a per-band scratch slice of
+/// `scratch_len` elements — for fused kernels whose intermediate is a
+/// bounded per-row window (ring buffer) instead of a full plane.
+/// Serial reuses `serial_scratch` (grow-only; if it already covers
+/// `scratch_len` it is sliced, not resized — callers overwrite every
+/// element before reading). Parallel bands allocate private scratch
+/// once per band — far cheaper than the full-plane round-trip this
+/// replaces.
+#[inline]
+pub(crate) fn map_rows_scratch(
+    dst: &mut [f32],
+    w: usize,
+    serial_scratch: &mut Vec<f32>,
+    scratch_len: usize,
+    f: impl Fn(usize, &mut [f32], &mut [f32]) + Send + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    {
+        let n = dst.len();
+        let nb = n_bands(n);
+        if nb > 1 && rayon::current_num_threads() > 1 {
+            debug_assert!(w > 0 && n.is_multiple_of(w));
+            let rows = (n / w).div_ceil(nb);
+            dst.par_chunks_mut(rows * w)
+                .enumerate()
+                .for_each(|(i, band)| {
+                    let mut s = alloc::vec![0.0f32; scratch_len];
+                    f(i * rows, band, &mut s)
+                });
+            return;
+        }
+    }
+    let _ = w;
+    if serial_scratch.len() < scratch_len {
+        serial_scratch.resize(scratch_len, 0.0);
+    }
+    f(0, dst, &mut serial_scratch[..scratch_len]);
+}
+
 /// `f(dst_band, src_band)` over aligned bands.
 #[inline]
 pub(crate) fn map1(dst: &mut [f32], src: &[f32], f: impl Fn(&mut [f32], &[f32]) + Send + Sync) {
