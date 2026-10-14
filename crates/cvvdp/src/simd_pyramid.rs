@@ -1252,6 +1252,7 @@ fn expand_fused_inner(
     sh: usize,
     out_w: usize,
     out_h: usize,
+    weber: Option<(&[f32], &[f32])>,
     row_scratch: &mut Vec<f32>,
     dst: &mut [f32],
 ) {
@@ -1288,9 +1289,13 @@ fn expand_fused_inner(
     let head_end = (vec_lo * 32).min(out_w);
 
     debug_assert_eq!(dst.len(), out_w * out_h);
-    crate::par::map_rows_scratch(dst, out_w, row_scratch, 2 * sw, |y0, dst, rowbuf| {
+    // `weber` folds `(f − e) / max(l, 0.01)` clamped to ±1000 into each
+    // emitted row — the expanded plane is never materialized.
+    let scratch_len = 2 * sw + if weber.is_some() { out_w } else { 0 };
+    crate::par::map_rows_scratch(dst, out_w, row_scratch, scratch_len, |y0, dst, rowbuf| {
         let band_h = dst.len() / out_w;
-        let (re, ro) = rowbuf.split_at_mut(sw);
+        let (re, rest) = rowbuf.split_at_mut(sw);
+        let (ro, orow) = rest.split_at_mut(sw);
 
         // Horizontal expand of one v-pass row — identical per-row
         // logic to `expand_h_inner` (inline z map, scalar head/tail,
@@ -1385,8 +1390,27 @@ fn expand_fused_inner(
                     }
                     ro[x] = 2.0 * sum;
                 }
-                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
-                h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                if let Some((fine, lexp)) = weber {
+                    let ra = (y0 + y_l) * out_w;
+                    let rb = (y0 + y_l + 1) * out_w;
+                    h_expand(re, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[y_l * out_w..(y_l + 1) * out_w],
+                        &fine[ra..ra + out_w],
+                        &orow[..out_w],
+                        &lexp[ra..ra + out_w],
+                    );
+                    h_expand(ro, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w],
+                        &fine[rb..rb + out_w],
+                        &orow[..out_w],
+                        &lexp[rb..rb + out_w],
+                    );
+                } else {
+                    h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                    h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                }
                 y_l += 2;
             } else {
                 // Single row — same z_row tap walk as expand_v_inner's
@@ -1414,7 +1438,18 @@ fn expand_fused_inner(
                     }
                     re[x] = 2.0 * sum;
                 }
-                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                if let Some((fine, lexp)) = weber {
+                    let ra = (y0 + y_l) * out_w;
+                    h_expand(re, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[y_l * out_w..(y_l + 1) * out_w],
+                        &fine[ra..ra + out_w],
+                        &orow[..out_w],
+                        &lexp[ra..ra + out_w],
+                    );
+                } else {
+                    h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                }
                 y_l += 1;
             }
         }
@@ -1429,6 +1464,7 @@ fn expand_fused_inner(
     sh: usize,
     out_w: usize,
     out_h: usize,
+    weber: Option<(&[f32], &[f32])>,
     row_scratch: &mut Vec<f32>,
     dst: &mut [f32],
 ) {
@@ -1465,9 +1501,11 @@ fn expand_fused_inner(
     let head_end = (vec_lo * 16).min(out_w);
 
     debug_assert_eq!(dst.len(), out_w * out_h);
-    crate::par::map_rows_scratch(dst, out_w, row_scratch, 2 * sw, |y0, dst, rowbuf| {
+    let scratch_len = 2 * sw + if weber.is_some() { out_w } else { 0 };
+    crate::par::map_rows_scratch(dst, out_w, row_scratch, scratch_len, |y0, dst, rowbuf| {
         let band_h = dst.len() / out_w;
-        let (re, ro) = rowbuf.split_at_mut(sw);
+        let (re, rest) = rowbuf.split_at_mut(sw);
+        let (ro, orow) = rest.split_at_mut(sw);
 
         let h_expand = |row: &[f32], out_row: &mut [f32]| {
             let z_at = |p: usize| -> f32 {
@@ -1558,8 +1596,27 @@ fn expand_fused_inner(
                     }
                     ro[x] = 2.0 * sum;
                 }
-                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
-                h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                if let Some((fine, lexp)) = weber {
+                    let ra = (y0 + y_l) * out_w;
+                    let rb = (y0 + y_l + 1) * out_w;
+                    h_expand(re, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[y_l * out_w..(y_l + 1) * out_w],
+                        &fine[ra..ra + out_w],
+                        &orow[..out_w],
+                        &lexp[ra..ra + out_w],
+                    );
+                    h_expand(ro, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w],
+                        &fine[rb..rb + out_w],
+                        &orow[..out_w],
+                        &lexp[rb..rb + out_w],
+                    );
+                } else {
+                    h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                    h_expand(ro, &mut dst[(y_l + 1) * out_w..(y_l + 2) * out_w]);
+                }
                 y_l += 2;
             } else {
                 for cg in 0..n_groups {
@@ -1584,7 +1641,18 @@ fn expand_fused_inner(
                     }
                     re[x] = 2.0 * sum;
                 }
-                h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                if let Some((fine, lexp)) = weber {
+                    let ra = (y0 + y_l) * out_w;
+                    h_expand(re, &mut orow[..out_w]);
+                    zenmetrics_math::vweber_band_nolog_into(
+                        &mut dst[y_l * out_w..(y_l + 1) * out_w],
+                        &fine[ra..ra + out_w],
+                        &orow[..out_w],
+                        &lexp[ra..ra + out_w],
+                    );
+                } else {
+                    h_expand(re, &mut dst[y_l * out_w..(y_l + 1) * out_w]);
+                }
                 y_l += 1;
             }
         }
@@ -1608,7 +1676,42 @@ pub(crate) fn expand_fused_pass(
 ) {
     debug_assert_eq!(dst.len(), out_w * out_h);
     archmage::attuned!(
-        expand_fused_inner(src, sw, sh, out_w, out_h, row_scratch, dst),
+        expand_fused_inner(src, sw, sh, out_w, out_h, None, row_scratch, dst),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// Expand + Weber band in one row-streamed pass: identical taps and
+/// per-element weber math to `expand_fused_pass` followed by
+/// `vweber_band_nolog_into`, with the expanded plane never written.
+/// `fine`/`exp_l` are the weber numerator-side fine band and expanded
+/// background luminance at `out_w × out_h`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn expand_fused_weber_pass(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    out_w: usize,
+    out_h: usize,
+    fine: &[f32],
+    exp_l: &[f32],
+    row_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+) {
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    debug_assert_eq!(fine.len(), out_w * out_h);
+    debug_assert_eq!(exp_l.len(), out_w * out_h);
+    archmage::attuned!(
+        expand_fused_inner(
+            src,
+            sw,
+            sh,
+            out_w,
+            out_h,
+            Some((fine, exp_l)),
+            row_scratch,
+            dst
+        ),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -2960,6 +3063,52 @@ mod tests {
             let mut rowbuf: Vec<f32> = Vec::new();
             let mut got = alloc::vec![0.0_f32; ow * oh];
             expand_fused_pass(&src, sw, sh, ow, oh, &mut rowbuf, &mut got);
+            for i in 0..ow * oh {
+                assert_eq!(
+                    want[i].to_bits(),
+                    got[i].to_bits(),
+                    "case {sw}x{sh}->{ow}x{oh} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn expand_fused_weber_matches_split_bitexact() {
+        // The fused expand+weber pass must reproduce
+        // `expand_fused_pass` followed by `vweber_band_nolog_into`
+        // bit-for-bit: identical expand taps and per-element weber
+        // math — only the expanded plane materialization is dropped.
+        let cases: &[(usize, usize, usize, usize)] = &[
+            (4, 4, 8, 8),
+            (4, 4, 7, 7),
+            (8, 6, 16, 12),
+            (8, 6, 15, 11),
+            (16, 12, 32, 24),
+            (24, 16, 48, 32),
+            (33, 17, 65, 33),
+            (64, 32, 128, 64),
+            (200, 170, 400, 340),
+            (201, 170, 401, 339),
+        ];
+        for &(sw, sh, ow, oh) in cases {
+            let src = rng_seq(0x5EED ^ ((sw as u32) << 16) ^ (sh as u32), sw * sh);
+            let fine = rng_seq(0xF1E ^ (sw as u32), ow * oh);
+            // exp_l must stay positive-ish like real luminance planes.
+            let exp_l: Vec<f32> = rng_seq(0xE07 ^ (sh as u32), ow * oh)
+                .iter()
+                .map(|v| v.abs() + 0.5)
+                .collect();
+            let mut e = alloc::vec![0.0_f32; ow * oh];
+            let mut rowbuf: Vec<f32> = Vec::new();
+            expand_fused_pass(&src, sw, sh, ow, oh, &mut rowbuf, &mut e);
+            let mut want = alloc::vec![0.0_f32; ow * oh];
+            zenmetrics_math::vweber_band_nolog_into(&mut want, &fine, &e, &exp_l);
+            let mut rowbuf2: Vec<f32> = Vec::new();
+            let mut got = alloc::vec![0.0_f32; ow * oh];
+            expand_fused_weber_pass(&src, sw, sh, ow, oh, &fine, &exp_l, &mut rowbuf2, &mut got);
             for i in 0..ow * oh {
                 assert_eq!(
                     want[i].to_bits(),

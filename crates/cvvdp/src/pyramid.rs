@@ -212,6 +212,48 @@ pub(crate) fn gausspyr_expand(
     );
 }
 
+/// Expand `src` to `out_w × out_h` AND fold the no-log Weber band
+/// `clamp((fine − e) / max(exp_l, 0.01), ±1000)` into the same pass —
+/// the expanded plane is never materialized. Bit-identical to
+/// [`gausspyr_expand`] followed by `vweber_band_nolog_into`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn gausspyr_expand_weber(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    out_w: usize,
+    out_h: usize,
+    fine: &[f32],
+    exp_l: &[f32],
+    scratch: &mut PyramidScratch,
+    dst: &mut Vec<f32>,
+) {
+    debug_assert!(out_w >= 2 * sw - 1 && out_w <= 2 * sw);
+    debug_assert!(out_h >= 2 * sh - 1 && out_h <= 2 * sh);
+
+    // Grow-only scratch (see `gausspyr_expand`): the fused kernel
+    // needs `2*sw` v-pass rows + one `out_w` h-pass row on the serial
+    // path; parallel bands allocate private rows.
+    let need = 2 * sw + out_w;
+    if scratch.vscratch.len() < need {
+        scratch.vscratch.resize(need, 0.0);
+    }
+    if dst.len() < out_w * out_h {
+        dst.resize(out_w * out_h, 0.0);
+    }
+    crate::simd_pyramid::expand_fused_weber_pass(
+        src,
+        sw,
+        sh,
+        out_w,
+        out_h,
+        fine,
+        exp_l,
+        &mut scratch.vscratch,
+        &mut dst[..out_w * out_h],
+    );
+}
+
 /// Build a single-channel Gaussian pyramid (`n_levels` bands) into
 /// `out`. `out` is grown / shrunk to `n` bands; existing band Vec
 /// allocations are reused (clear + resize) when present, eliminating
@@ -754,50 +796,70 @@ pub(crate) fn weber_bands_from_gauss_lexp(
             let expanded_l = &l_exp[k];
             debug_assert_eq!(expanded_l.len(), n_px);
             let fine_data: &[f32] = &fine.data;
-            // `gauss_img == gauss_l` → `expanded_l` IS the img expand
-            // and no expand runs; otherwise expand into the taken-out
-            // `gauss_tmp` (returned to scratch after the vweber call,
-            // same dance as `weber_bands_from_gauss`).
-            let img_expanded = if same_img_l {
-                None
-            } else {
+            if !same_img_l && !write_log_l_bkg {
+                // Fused expand+weber: identical expand taps and weber
+                // math to the split path, but the img-side expanded
+                // plane is never materialized — one plane write and
+                // one plane read eliminated per band.
                 let img_coarse = &gauss_img[k + 1];
-                let mut e = core::mem::take(&mut scratch.gauss_tmp);
-                gausspyr_expand(
+                gausspyr_expand_weber(
                     &img_coarse.data,
                     img_coarse.w,
                     img_coarse.h,
                     fine.w,
                     fine.h,
-                    scratch,
-                    &mut e,
-                );
-                Some(e)
-            };
-            let img_exp: &[f32] = match &img_expanded {
-                Some(e) => &e[..n_px],
-                None => &expanded_l[..n_px],
-            };
-            if write_log_l_bkg {
-                crate::par::map2_3(
-                    &mut out.bands[k].data,
-                    &mut out.log_l_bkg[k],
                     fine_data,
-                    img_exp,
                     &expanded_l[..n_px],
-                    zenmetrics_math::vweber_band_into,
+                    scratch,
+                    &mut out.bands[k].data,
                 );
             } else {
-                crate::par::map1_3(
-                    &mut out.bands[k].data,
-                    fine_data,
-                    img_exp,
-                    &expanded_l[..n_px],
-                    zenmetrics_math::vweber_band_nolog_into,
-                );
-            }
-            if let Some(e) = img_expanded {
-                scratch.gauss_tmp = e;
+                // `gauss_img == gauss_l` → `expanded_l` IS the img
+                // expand and no expand runs; otherwise expand into
+                // the taken-out `gauss_tmp` (returned to scratch
+                // after the vweber call, same dance as
+                // `weber_bands_from_gauss`).
+                let img_expanded = if same_img_l {
+                    None
+                } else {
+                    let img_coarse = &gauss_img[k + 1];
+                    let mut e = core::mem::take(&mut scratch.gauss_tmp);
+                    gausspyr_expand(
+                        &img_coarse.data,
+                        img_coarse.w,
+                        img_coarse.h,
+                        fine.w,
+                        fine.h,
+                        scratch,
+                        &mut e,
+                    );
+                    Some(e)
+                };
+                let img_exp: &[f32] = match &img_expanded {
+                    Some(e) => &e[..n_px],
+                    None => &expanded_l[..n_px],
+                };
+                if write_log_l_bkg {
+                    crate::par::map2_3(
+                        &mut out.bands[k].data,
+                        &mut out.log_l_bkg[k],
+                        fine_data,
+                        img_exp,
+                        &expanded_l[..n_px],
+                        zenmetrics_math::vweber_band_into,
+                    );
+                } else {
+                    crate::par::map1_3(
+                        &mut out.bands[k].data,
+                        fine_data,
+                        img_exp,
+                        &expanded_l[..n_px],
+                        zenmetrics_math::vweber_band_nolog_into,
+                    );
+                }
+                if let Some(e) = img_expanded {
+                    scratch.gauss_tmp = e;
+                }
             }
         }
     }
