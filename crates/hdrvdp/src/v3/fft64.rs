@@ -962,6 +962,11 @@ impl Plan2 {
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
         let clamp = clamp.unwrap_or((f64::NEG_INFINITY, f64::INFINITY));
+        #[cfg(feature = "parallel")]
+        if out_h >= 16 && w >= 64 && rayon::current_num_threads() > 1 {
+            self.rows_inv_out_par(out, relaxed, out_w, out_h, xstride, xoff, clamp);
+            return;
+        }
         for y0 in (0..out_h).step_by(8) {
             let rws = (out_h - y0).min(8);
             if perm.is_none() && rws == 8 {
@@ -1035,6 +1040,310 @@ impl Plan2 {
         }
     }
 
+    /// `parallel` variant of [`Self::rows_inv_out`]: row-blocks are
+    /// disjoint, so each chunk gathers + inverse-transforms into a strip
+    /// (`[row][k]` of `re8` lane outputs); the serial tail applies the
+    /// `1/w` scale, clamp and interleaved store — identical arithmetic,
+    /// only loop distribution differs.
+    #[cfg(feature = "parallel")]
+    #[allow(clippy::too_many_arguments)]
+    fn rows_inv_out_par(
+        &mut self,
+        out: &mut [f64],
+        relaxed: bool,
+        out_w: usize,
+        out_h: usize,
+        xstride: usize,
+        xoff: usize,
+        clamp: (f64, f64),
+    ) {
+        let (w, _h) = (self.width, self.height);
+        let stride = w + 8;
+        let w8 = w * 8;
+        let m8 = self.rows.work_len(w) * 8;
+        let rows = &self.rows;
+        let perm = rows.gather_perm();
+        let pre = &self.pre;
+        let pim = &self.pim;
+        let nblk = out_h.div_ceil(8);
+        let nchunks = nblk.min(rayon::current_num_threads());
+        let chunk_len = nblk.div_ceil(nchunks);
+        // Strip per block: `rws` rows × `out_w` re-lane outputs (the
+        // inverse's imaginary lanes are dropped by the caller anyway).
+        let strips: Vec<(usize, Vec<f64>)> = crate::par::collect_indexed(nchunks, |c| {
+            let b0 = c * chunk_len;
+            let bn = nblk.saturating_sub(b0).min(chunk_len);
+            let mut re8 = vec![0.0; w8];
+            let mut im8 = vec![0.0; w8];
+            let mut sre8 = vec![0.0; m8];
+            let mut sim8 = vec![0.0; m8];
+            let mut s2re8 = vec![0.0; m8];
+            let mut s2im8 = vec![0.0; m8];
+            let mut strip = Vec::with_capacity(bn * 8 * out_w);
+            for bi in b0..b0 + bn {
+                let y0 = bi * 8;
+                let rws = (out_h - y0).min(8);
+                if perm.is_none() && rws == 8 {
+                    for k0 in (0..w).step_by(8) {
+                        let kn = (k0 + 8).min(w) - k0;
+                        let mut tre = [[0.0f64; 8]; 8];
+                        let mut tim = [[0.0f64; 8]; 8];
+                        for j in 0..8 {
+                            let row = (y0 + j) * stride + k0;
+                            tre[j][..kn].copy_from_slice(&pre[row..row + kn]);
+                            tim[j][..kn].copy_from_slice(&pim[row..row + kn]);
+                        }
+                        for t in 0..kn {
+                            let lane = (k0 + t) * 8;
+                            for j in 0..8 {
+                                re8[lane + j] = tre[j][t];
+                                im8[lane + j] = -tim[j][t];
+                            }
+                        }
+                    }
+                } else {
+                    for j in 0..rws {
+                        let row = (y0 + j) * stride;
+                        for k in 0..w {
+                            let d = match perm {
+                                Some(r) => r[k] as usize,
+                                None => k,
+                            } * 8;
+                            re8[d + j] = pre[row + k];
+                            im8[d + j] = -pim[row + k];
+                        }
+                    }
+                }
+                rows.run8_mode(
+                    relaxed,
+                    &mut re8,
+                    &mut im8,
+                    &mut sre8,
+                    &mut sim8,
+                    &mut s2re8,
+                    &mut s2im8,
+                );
+                for j in 0..rws {
+                    for k in 0..out_w {
+                        strip.push(re8[k * 8 + j]);
+                    }
+                }
+            }
+            (b0, strip)
+        });
+        let s = 1.0 / w as f64;
+        let mut y = 0;
+        for (_b0, strip) in strips {
+            let mut off = 0;
+            while off < strip.len() {
+                let rws = (out_h - y).min(8);
+                for j in 0..rws {
+                    let row = (y + j) * out_w;
+                    for k in 0..out_w {
+                        out[(row + k) * xstride + xoff] =
+                            (strip[off] * s).clamp(clamp.0, clamp.1);
+                        off += 1;
+                    }
+                }
+                y += rws;
+            }
+        }
+    }
+
+    /// `parallel` variant of [`Self::rows_fwd_p_pad`]: row-blocks are
+    /// disjoint, so each chunk gathers + transforms into strips
+    /// (`[row][k]` lane outputs). The serial tail scatters strips into
+    /// `pre`/`pim` and replays the pad-row dedup copy — identical
+    /// arithmetic, only loop distribution differs.
+    #[cfg(feature = "parallel")]
+    #[allow(clippy::too_many_arguments)]
+    fn rows_fwd_p_pad_par(
+        &mut self,
+        x: &[f64],
+        src_w: usize,
+        src_h: usize,
+        pad: Pad,
+        relaxed: bool,
+        xmap: &[usize],
+        ymap: &[usize],
+    ) {
+        let (w, h) = (self.width, self.height);
+        let stride = w + 8;
+        let w8 = w * 8;
+        let m8 = self.rows.work_len(w) * 8;
+        let rows = &self.rows;
+        let perm = rows.gather_perm();
+        let dedup_pad = !matches!(pad, Pad::Symmetric) && h > src_h;
+        let nblk = h.div_ceil(8);
+        let nchunks = nblk.min(rayon::current_num_threads());
+        let chunk_len = nblk.div_ceil(nchunks);
+        // Blocks `y0 <= src_h` need real transforms; later all-pad blocks
+        // copy the canonical row (dedup). When dedup is off every block
+        // transforms.
+        let strips: Vec<(usize, Vec<f64>, Vec<f64>)> =
+            crate::par::collect_indexed(nchunks, |c| {
+                let b0 = c * chunk_len;
+                let bn = nblk.saturating_sub(b0).min(chunk_len);
+                let mut re8 = vec![0.0; w8];
+                let mut im8 = vec![0.0; w8];
+                let mut sre8 = vec![0.0; m8];
+                let mut sim8 = vec![0.0; m8];
+                let mut s2re8 = vec![0.0; m8];
+                let mut s2im8 = vec![0.0; m8];
+                let mut sre = Vec::new();
+                let mut sim = Vec::new();
+                for bi in b0..b0 + bn {
+                    let y0 = bi * 8;
+                    let rws = (h - y0).min(8);
+                    if dedup_pad && y0 > src_h {
+                        // All-pad block — no transform output; the tail
+                        // phase writes the canonical row.
+                        continue;
+                    }
+                    im8[..w8].fill(0.0);
+                    if perm.is_none() && rws == 8 {
+                        let ybase: [usize; 8] = core::array::from_fn(|j| ymap[y0 + j]);
+                        for k0 in (0..w).step_by(8) {
+                            let kend = (k0 + 8).min(w);
+                            if kend <= src_w {
+                                let mut tile = [[0.0f64; 8]; 8];
+                                for j in 0..8 {
+                                    let sy = ybase[j];
+                                    if sy == usize::MAX {
+                                        let Pad::Constant(v) = pad else {
+                                            unreachable!()
+                                        };
+                                        tile[j] = [v; 8];
+                                    } else {
+                                        tile[j][..kend - k0].copy_from_slice(
+                                            &x[sy * src_w + k0..sy * src_w + kend],
+                                        );
+                                    }
+                                }
+                                for t in 0..kend - k0 {
+                                    let lane = (k0 + t) * 8;
+                                    for j in 0..8 {
+                                        re8[lane + j] = tile[j][t];
+                                    }
+                                }
+                            } else {
+                                let id_end = src_w.clamp(k0, kend);
+                                let mut tile = [[0.0f64; 8]; 8];
+                                for j in 0..8 {
+                                    let sy = ybase[j];
+                                    if sy == usize::MAX {
+                                        let Pad::Constant(v) = pad else {
+                                            unreachable!()
+                                        };
+                                        tile[j] = [v; 8];
+                                        continue;
+                                    }
+                                    let srow = &x[sy * src_w..sy * src_w + src_w];
+                                    if id_end > k0 {
+                                        tile[j][..id_end - k0]
+                                            .copy_from_slice(&srow[k0..id_end]);
+                                    }
+                                    for t in id_end..kend {
+                                        tile[j][t - k0] = match pad {
+                                            Pad::Constant(v) => v,
+                                            Pad::Replicate => srow[src_w - 1],
+                                            Pad::Symmetric => srow[xmap[t]],
+                                        };
+                                    }
+                                }
+                                for t in 0..kend - k0 {
+                                    let lane = (k0 + t) * 8;
+                                    for j in 0..8 {
+                                        re8[lane + j] = tile[j][t];
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for j in 0..rws {
+                            let d_row = y0 + j;
+                            let sy = ymap[d_row];
+                            if sy == usize::MAX {
+                                let Pad::Constant(v) = pad else {
+                                    unreachable!()
+                                };
+                                for k in 0..w {
+                                    let d = match perm {
+                                        Some(r) => r[k] as usize,
+                                        None => k,
+                                    } * 8;
+                                    re8[d + j] = v;
+                                }
+                                continue;
+                            }
+                            let srow = &x[sy * src_w..sy * src_w + src_w];
+                            for k in 0..w {
+                                let d = match perm {
+                                    Some(r) => r[k] as usize,
+                                    None => k,
+                                } * 8;
+                                re8[d + j] = match xmap[k] {
+                                    usize::MAX => {
+                                        let Pad::Constant(v) = pad else {
+                                            unreachable!()
+                                        };
+                                        v
+                                    }
+                                    sx => srow[sx],
+                                };
+                            }
+                        }
+                    }
+                    rows.run8_mode(
+                        relaxed,
+                        &mut re8,
+                        &mut im8,
+                        &mut sre8,
+                        &mut sim8,
+                        &mut s2re8,
+                        &mut s2im8,
+                    );
+                    for j in 0..rws {
+                        for k in 0..w {
+                            sre.push(re8[k * 8 + j]);
+                            sim.push(im8[k * 8 + j]);
+                        }
+                    }
+                }
+                (b0, sre, sim)
+            });
+        // Serial tail: scatter strips into pre/pim in order, then replay
+        // the pad-row dedup exactly as the sequential pass does.
+        let mut y0 = 0usize;
+        for (_b0, sre, sim) in &strips {
+            let mut off = 0usize;
+            while off < sre.len() {
+                let rws = (h - y0).min(8);
+                for j in 0..rws {
+                    let row = (y0 + j) * stride;
+                    self.pre[row..row + w].copy_from_slice(&sre[off..off + w]);
+                    self.pim[row..row + w].copy_from_slice(&sim[off..off + w]);
+                    off += w;
+                }
+                y0 += rws;
+            }
+        }
+        if dedup_pad {
+            // Canonical pad row sits at `src_h`; every row of the skipped
+            // all-pad blocks gets it — same copy_within as sequential.
+            for y0 in (0..h).step_by(8) {
+                if y0 <= src_h {
+                    continue;
+                }
+                for row in y0..(y0 + 8).min(h) {
+                    let dst = row * stride;
+                    self.pre.copy_within(src_h * stride..src_h * stride + w, dst);
+                    self.pim.copy_within(src_h * stride..src_h * stride + w, dst);
+                }
+            }
+        }
+    }
+
     /// Pad-index map: `i` → source coordinate, or `usize::MAX` for
     /// [`Pad::Constant`] positions. Interior maps to itself.
     fn pad_index(i: usize, n: usize, pad: Pad) -> usize {
@@ -1064,6 +1373,11 @@ impl Plan2 {
         // of re-running the FFT per block. `Symmetric` rows differ.
         let dedup_pad = !matches!(pad, Pad::Symmetric) && h > src_h;
         let mut pad_row_ready = false;
+        #[cfg(feature = "parallel")]
+        if h >= 16 && w >= 64 && rayon::current_num_threads() > 1 {
+            self.rows_fwd_p_pad_par(x, src_w, src_h, pad, relaxed, &xmap, &ymap);
+            return;
+        }
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
             if dedup_pad && y0 >= src_h && pad_row_ready {
@@ -1236,6 +1550,11 @@ impl Plan2 {
         let stride = w + 8;
         let perm = self.columns.gather_perm();
         let sc = 1.0 / h as f64;
+        #[cfg(feature = "parallel")]
+        if w % 8 == 0 && w.div_ceil(8) >= 8 && rayon::current_num_threads() > 1 {
+            self.columns_filt_rt_par(filt, relaxed, keep_rows);
+            return;
+        }
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
             if cols == 8 {
@@ -1397,6 +1716,140 @@ impl Plan2 {
         }
     }
 
+    /// `parallel` fast path for [`Self::columns_filt_rt_p`]: column tiles
+    /// are independent, so each chunk of tiles gathers, transforms,
+    /// filters and inverse-transforms into a strip buffer; a serial
+    /// scatter then writes the `keep_rows` crop back into `pre`/`pim`.
+    /// Identical per-element arithmetic — only loop distribution differs.
+    #[cfg(feature = "parallel")]
+    fn columns_filt_rt_par(&mut self, filt: &[f64], relaxed: bool, keep_rows: usize) {
+        let (w, h) = (self.width, self.height);
+        let stride = w + 8;
+        let h8 = h * 8;
+        let sc = 1.0 / h as f64;
+        let ntiles = w.div_ceil(8);
+        let m8 = self.columns.work_len(h) * 8;
+        let columns = &self.columns;
+        let perm = columns.gather_perm();
+        let pre = &self.pre;
+        let pim = &self.pim;
+        // One task per worker: each allocates its lane scratch once and
+        // returns `(first_tile, strips)` with strips laid
+        // `[tile][y][8]` for re and im.
+        let nchunks = ntiles.min(rayon::current_num_threads());
+        let chunk_len = ntiles.div_ceil(nchunks);
+        let strips: Vec<(usize, Vec<f64>, Vec<f64>)> =
+            crate::par::collect_indexed(nchunks, |c| {
+                let t0 = c * chunk_len;
+                let tn = ntiles.saturating_sub(t0).min(chunk_len);
+                let mut re8 = vec![0.0; h8];
+                let mut im8 = vec![0.0; h8];
+                let mut sre8 = vec![0.0; m8];
+                let mut sim8 = vec![0.0; m8];
+                let mut s2re8 = vec![0.0; m8];
+                let mut s2im8 = vec![0.0; m8];
+                let mut sre = Vec::with_capacity(tn * keep_rows * 8);
+                let mut sim = Vec::with_capacity(tn * keep_rows * 8);
+                for t in t0..t0 + tn {
+                    let x0 = t * 8;
+                    let cols = (w - x0).min(8);
+                    match perm {
+                        None => {
+                            for y in 0..h {
+                                let s = y * stride + x0;
+                                re8[y * 8..y * 8 + cols]
+                                    .copy_from_slice(&pre[s..s + cols]);
+                                im8[y * 8..y * 8 + cols]
+                                    .copy_from_slice(&pim[s..s + cols]);
+                            }
+                        }
+                        Some(r) => {
+                            for y in 0..h {
+                                let (d, s) = (r[y] as usize * 8, y * stride + x0);
+                                re8[d..d + cols].copy_from_slice(&pre[s..s + cols]);
+                                im8[d..d + cols].copy_from_slice(&pim[s..s + cols]);
+                            }
+                        }
+                    }
+                    columns.run8_mode(
+                        relaxed,
+                        &mut re8,
+                        &mut im8,
+                        &mut sre8,
+                        &mut sim8,
+                        &mut s2re8,
+                        &mut s2im8,
+                    );
+                    // Filter + input-conjugate of the inverse; `perm`
+                    // lands products at the input slots the second
+                    // transform reads.
+                    match perm {
+                        None => {
+                            for y in 0..h {
+                                let s = y * w + x0;
+                                for j in 0..cols {
+                                    re8[y * 8 + j] *= filt[s + j];
+                                    im8[y * 8 + j] = -(im8[y * 8 + j] * filt[s + j]);
+                                }
+                            }
+                        }
+                        Some(r) => {
+                            for y in 0..h {
+                                let (d, s) = (r[y] as usize * 8, y * w + x0);
+                                for j in 0..cols {
+                                    s2re8[d + j] = re8[y * 8 + j] * filt[s + j];
+                                    s2im8[d + j] = -(im8[y * 8 + j] * filt[s + j]);
+                                }
+                            }
+                            re8[..h8].copy_from_slice(&s2re8[..h8]);
+                            im8[..h8].copy_from_slice(&s2im8[..h8]);
+                        }
+                    }
+                    columns.run8_mode(
+                        relaxed,
+                        &mut re8,
+                        &mut im8,
+                        &mut sre8,
+                        &mut sim8,
+                        &mut s2re8,
+                        &mut s2im8,
+                    );
+                    for y in 0..keep_rows {
+                        let mut r8 = [0.0f64; 8];
+                        let mut i8 = [0.0f64; 8];
+                        for j in 0..cols {
+                            r8[j] = re8[y * 8 + j] * sc;
+                            i8[j] = -im8[y * 8 + j] * sc;
+                        }
+                        sre.extend_from_slice(&r8[..cols]);
+                        sim.extend_from_slice(&i8[..cols]);
+                    }
+                }
+                (t0, sre, sim)
+            });
+        // Serial scatter-back: `keep_rows` rows × all tile columns.
+        let mut x0 = 0;
+        for (_, sre, sim) in strips {
+            for (rstrip, istrip) in sre
+                .chunks_exact(keep_rows * 8)
+                .zip(sim.chunks_exact(keep_rows * 8))
+            {
+                let cols = (w - x0).min(8);
+                for (y, (r8, i8)) in rstrip
+                    .chunks_exact(8)
+                    .zip(istrip.chunks_exact(8))
+                    .enumerate()
+                    .take(keep_rows)
+                {
+                    let s = y * stride + x0;
+                    self.pre[s..s + cols].copy_from_slice(&r8[..cols]);
+                    self.pim[s..s + cols].copy_from_slice(&i8[..cols]);
+                }
+                x0 += 8;
+            }
+        }
+    }
+
     fn forward(&mut self, buf: &mut [C64], relaxed: bool) {
         assert_eq!(
             buf.len(),
@@ -1419,30 +1872,40 @@ impl Plan2 {
     }
 }
 
-std::thread_local! {
-    /// Per-thread `(width, height) → Plan2` cache. A plan carries twiddle
-    /// tables plus ~5·w·h of batch/scratch lanes, so rebuilding per call is a
-    /// real fixed cost in `conv_fft_pad`. Plans are a pure function of the
-    /// dims — reuse is bit-identical (`reused_2d_plans_*` tests).
-    static PLAN2_CACHE: core::cell::RefCell<
-        std::collections::HashMap<(usize, usize), Plan2>,
-    > = core::cell::RefCell::new(std::collections::HashMap::new());
+/// Shared `(width, height) → Plan2` pool. A plan carries twiddle tables
+/// plus ~5·w·h of batch/scratch lanes, so rebuilding per call is a real
+/// fixed cost in `conv_fft_pad`. A per-thread cache would hoard a full
+/// shape set on every rayon worker under `parallel`; the pool instead
+/// retains what the workload actually needs concurrently — one plan per
+/// in-flight call per shape. Plans are a pure function of the dims —
+/// reuse is bit-identical (`reused_2d_plans_*` tests).
+static PLAN2_POOL: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<(usize, usize), Vec<Plan2>>>,
+> = std::sync::LazyLock::new(|| {
+    std::sync::Mutex::new(std::collections::HashMap::new())
+});
 
-}
-/// Run `f` on the cached plan for `width × height`, constructing it on
-/// first use. Bounded to a handful of resident shapes — the metric works a
-/// fixed lattice set per call.
+/// Run `f` on a pooled plan for `width × height`, constructing it on
+/// first use.
 fn with_plan2<R>(width: usize, height: usize, f: impl FnOnce(&mut Plan2) -> R) -> R {
-    PLAN2_CACHE.with(|c| {
-        let mut map = c.borrow_mut();
-        if map.len() >= 8 && !map.contains_key(&(width, height)) {
-            map.clear();
+    let mut plan = {
+        let mut g = PLAN2_POOL.lock().unwrap_or_else(|e| e.into_inner());
+        g.get_mut(&(width, height))
+            .and_then(Vec::pop)
+            .unwrap_or_else(|| Plan2::new(width, height))
+    };
+    let r = f(&mut plan);
+    {
+        let mut g = PLAN2_POOL.lock().unwrap_or_else(|e| e.into_inner());
+        let v = g.entry((width, height)).or_default();
+        // Retain enough instances to cover steady-state concurrency —
+        // too few and tasks thrash `Plan2::new` (~70 MB + twiddle build).
+        let keep = if cfg!(feature = "parallel") { 32 } else { 4 };
+        if v.len() < keep {
+            v.push(plan);
         }
-        let plan = map
-            .entry((width, height))
-            .or_insert_with(|| Plan2::new(width, height));
-        f(plan)
-    })
+    }
+    r
 }
 
 /// Forward 2-D DFT of a row-major `height × width` buffer, in place.
