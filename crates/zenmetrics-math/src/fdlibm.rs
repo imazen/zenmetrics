@@ -308,3 +308,139 @@ powf_libm_lanes!(
     /// Sixteen-lane [`powf_libm_8x`]: bit-identical per lane to `libm::powf`.
     powf_libm_16x, vpow_libm_kernel_16, vpowf_libm_pairs_kernel_16, f32x16, i32x16, F32x16Convert, 16
 );
+
+const INV_LN2: f32 = 1.4426950216e+00; /* 0x3fb8aa3b */
+const LN2_HI: f32 = 6.9314575195e-01; /* 0x3f317200 */
+const LN2_LO: f32 = 1.4286067653e-06; /* 0x35bfbe8e */
+const EP1: f32 = 1.6666625440e-1; /* e_expf P1 */
+const EP2: f32 = -2.7667332906e-3; /* e_expf P2 */
+const X1P127: f32 = f32::from_bits(0x7f00_0000); /* 2^127 */
+/// `2^-102` = `f_exp_min * f_pow_subnorm`, scalbnf's f32 prescale.
+const X1P_102: f32 = f32::from_bits(0x0c80_0000);
+
+macro_rules! expf_libm_lanes {
+    (
+        $(#[$doc:meta])*
+        $name:ident, $kernel:ident, $F:ident, $I:ident, $Convert:ident, $lanes:literal
+    ) => {
+        $(#[$doc])*
+        #[inline(always)]
+        pub fn $name<T: $Convert>(token: T, x: $F<T>) -> $F<T> {
+            type F<T> = $F<T>;
+            type I<T> = $I<T>;
+            let x0 = x;
+            let hx = x.bitcast_to_i32();
+            let signb = hx.simd_lt(ci!(token, I, 0));
+            let ahx = hx & ci!(token, I, 0x7fff_ffff);
+
+            // |x| <= 2^-14 -> `1 + x`; x <= -103.972084 -> `0`;
+            // x >= 88.722839 (finite) -> `x * 2^127` = +inf; NaN -> x.
+            // The `force_eval` inexact-raises in e_expf produce no value
+            // bits, so every case is a lane computation — no scalar
+            // fallback exists in this port.
+            let tiny = ahx.simd_le(ci!(token, I, 0x3900_0000));
+            let tozero = ahx.simd_ge(ci!(token, I, 0x42cf_f1b5)) & signb;
+            let overf = ahx.simd_ge(ci!(token, I, 0x42b1_7218))
+                & ahx.simd_le(ci!(token, I, 0x7f80_0000))
+                & signb.not();
+            let nan = ahx.simd_gt(ci!(token, I, 0x7f80_0000));
+
+            // argument reduction: k via INV_LN2*x +- 0.5 (trunc) on
+            // |x| > 1.5 ln2, else k = 1 - 2*sign on |x| > 0.5 ln2,
+            // else k = 0.
+            let use_k = ahx.simd_gt(ci!(token, I, 0x3eb1_7218));
+            let k_big = ahx.simd_gt(ci!(token, I, 0x3f85_1592));
+            let half = F::<T>::blend(
+                signb.bitcast_to_f32(),
+                cf!(token, F, -0.5),
+                cf!(token, F, 0.5),
+            );
+            let k_from = (x * cf!(token, F, INV_LN2) + half).to_i32();
+            let k_mid = I::<T>::blend(signb, ci!(token, I, -1), ci!(token, I, 1));
+            let k = I::<T>::blend(
+                use_k,
+                I::<T>::blend(k_big, k_from, k_mid),
+                ci!(token, I, 0),
+            );
+            let kf = k.to_f32();
+            let hi = F::<T>::blend(
+                use_k.bitcast_to_f32(),
+                x0 - kf * cf!(token, F, LN2_HI),
+                x0,
+            );
+            let lo = F::<T>::blend(
+                use_k.bitcast_to_f32(),
+                kf * cf!(token, F, LN2_LO),
+                cf!(token, F, 0.0),
+            );
+            let xr = hi - lo;
+
+            // e_expf's two-term polynomial, same op order.
+            let xx = xr * xr;
+            let c = xr - xx * (cf!(token, F, EP1) + xx * cf!(token, F, EP2));
+            let y = cf!(token, F, 1.0) + (xr * c / (cf!(token, F, 2.0) - c) - lo + hi);
+
+            // scalbnf(y, k): the libm generic scalbn — pos prescale by
+            // 2^127 (twice, clamped), neg prescale by 2^-102 (twice,
+            // clamped), then a single exponent-field multiply. The
+            // k==0 case needs no special: n=0 builds scale=2^0=1.0 and
+            // y*1.0 is bit-identical to y.
+            let mut n = k;
+            let mut v = y;
+            let m = n.simd_gt(ci!(token, I, 127));
+            v = F::<T>::blend(m.bitcast_to_f32(), v * cf!(token, F, X1P127), v);
+            n = I::<T>::blend(m, n - ci!(token, I, 127), n);
+            let m = n.simd_gt(ci!(token, I, 127));
+            v = F::<T>::blend(m.bitcast_to_f32(), v * cf!(token, F, X1P127), v);
+            n = I::<T>::blend(m, n - ci!(token, I, 127), n);
+            n = I::<T>::blend(n.simd_gt(ci!(token, I, 127)), ci!(token, I, 127), n);
+            let m = n.simd_lt(ci!(token, I, -126));
+            v = F::<T>::blend(m.bitcast_to_f32(), v * cf!(token, F, X1P_102), v);
+            n = I::<T>::blend(m, n + ci!(token, I, 102), n);
+            let m = n.simd_lt(ci!(token, I, -126));
+            v = F::<T>::blend(m.bitcast_to_f32(), v * cf!(token, F, X1P_102), v);
+            n = I::<T>::blend(m, n + ci!(token, I, 102), n);
+            n = I::<T>::blend(n.simd_lt(ci!(token, I, -126)), ci!(token, I, -126), n);
+            let scale =
+                F::<T>::from_i32_bitcast_t(token, (n + ci!(token, I, 127)).shl_const::<23>());
+            let mut r = v * scale;
+
+            r = F::<T>::blend(tiny.bitcast_to_f32(), cf!(token, F, 1.0) + x0, r);
+            r = F::<T>::blend(tozero.bitcast_to_f32(), cf!(token, F, 0.0), r);
+            r = F::<T>::blend(
+                overf.bitcast_to_f32(),
+                x0 * cf!(token, F, X1P127),
+                r,
+            );
+            F::<T>::blend(nan.bitcast_to_f32(), x0, r)
+        }
+
+        /// `out[i] = libm::expf(xs[i])`, bit-identical to the scalar call.
+        #[inline(always)]
+        pub fn $kernel<T: $Convert>(token: T, xs: &[f32], out: &mut [f32]) {
+            assert_eq!(xs.len(), out.len());
+            let (in_chunks, in_tail) = $F::<T>::partition_slice_t(token, xs);
+            let (out_chunks, out_tail) = $F::<T>::partition_slice_mut_t(token, out);
+            for (x, o) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                $name(token, $F::<T>::load_t(token, x)).store(o);
+            }
+            for (x, o) in in_tail.iter().zip(out_tail.iter_mut()) {
+                *o = libm::expf(*x);
+            }
+        }
+    };
+}
+
+expf_libm_lanes!(
+    /// Lane-vectorized `libm::expf` — bit-identical per lane on all inputs.
+    ///
+    /// Every e_expf branch is a blend select; `force_eval` raises only FP
+    /// flags (no value bits), so no lane ever takes a scalar fallback.
+    expf_libm_8x, vexpf_libm_kernel_8, f32x8, i32x8, F32x8Convert, 8
+);
+
+#[cfg(feature = "avx512")]
+expf_libm_lanes!(
+    /// Sixteen-lane [`expf_libm_8x`]: bit-identical per lane to `libm::expf`.
+    expf_libm_16x, vexpf_libm_kernel_16, f32x16, i32x16, F32x16Convert, 16
+);

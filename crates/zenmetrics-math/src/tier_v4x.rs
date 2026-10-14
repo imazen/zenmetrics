@@ -60,6 +60,11 @@ mod v4x {
     }
 
     #[archmage::attune]
+    pub(crate) fn vexpf_libm_into_v4x_t(token: X64V4xToken, xs: &[f32], out: &mut [f32]) {
+        fdlibm::vexpf_libm_kernel_16(token, xs, out);
+    }
+
+    #[archmage::attune]
     pub(crate) fn vaxpy_into_v4x_t(token: X64V4xToken, dst: &mut [f32], src: &[f32], a: f32) {
         width16::vaxpy_kernel::<_, Midp>(token, dst, src, a);
     }

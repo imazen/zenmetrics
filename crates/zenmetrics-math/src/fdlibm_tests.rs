@@ -387,3 +387,164 @@ fn vpow_libm_into_matches_scalar() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// expf_libm (e_expf port) — same differential rigor vs scalar `libm::expf`.
+// ---------------------------------------------------------------------------
+
+/// Every tier available on this host, as `(name, unary-fn)`.
+fn tiers_expf() -> Vec<(&'static str, fn(&[f32], &mut [f32]))> {
+    let mut t: Vec<(&'static str, fn(&[f32], &mut [f32]))> = vec![
+        ("scalar", |x, o| {
+            fdlibm::vexpf_libm_kernel_8(ScalarToken, x, o)
+        }),
+        ("dispatch", |x, o| vexpf_libm_into(x, o)),
+    ];
+    #[cfg(target_arch = "x86_64")]
+    if archmage::X64V3Token::summon().is_some() {
+        t.push(("v3", |x, o| {
+            v3::vexpf_libm_into_v3_t(archmage::X64V3Token::summon().unwrap(), x, o)
+        }));
+    }
+    #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+    if archmage::X64V4xToken::summon().is_some() {
+        t.push(("v4x", |x, o| {
+            v4x::vexpf_libm_into_v4x_t(archmage::X64V4xToken::summon().unwrap(), x, o)
+        }));
+    }
+    #[cfg(target_arch = "aarch64")]
+    if archmage::NeonToken::summon().is_some() {
+        t.push(("neon", |x, o| {
+            neon::vexpf_libm_into_neon_t(archmage::NeonToken::summon().unwrap(), x, o)
+        }));
+    }
+    #[cfg(target_arch = "wasm32")]
+    if archmage::Wasm128Token::summon().is_some() {
+        t.push(("wasm128", |x, o| {
+            wasm128::vexpf_libm_into_wasm128_t(
+                archmage::Wasm128Token::summon().unwrap(),
+                x,
+                o,
+            )
+        }));
+    }
+    t
+}
+
+/// Run `xs` through every tier and compare against scalar `libm::expf`.
+fn check_expf(label: &str, xs: &[f32]) -> usize {
+    let want: Vec<u32> = xs.iter().map(|&x| libm::expf(x).to_bits()).collect();
+    let mut got = vec![0.0f32; xs.len()];
+    for (name, f) in tiers_expf() {
+        got.fill(f32::from_bits(0x7fc0_dead));
+        f(xs, &mut got);
+        let mut bad = 0usize;
+        let mut first = String::new();
+        for i in 0..xs.len() {
+            if got[i].to_bits() != want[i] {
+                if bad < 8 {
+                    first += &alloc::format!(
+                        "\n  x={:#010x} ({:e}) libm={:#010x} lane={:#010x}",
+                        xs[i].to_bits(),
+                        xs[i],
+                        want[i],
+                        got[i].to_bits()
+                    );
+                }
+                bad += 1;
+            }
+        }
+        assert_eq!(
+            bad,
+            0,
+            "{label}/{name}: {bad} of {} lanes differ:{first}",
+            xs.len()
+        );
+    }
+    xs.len()
+}
+
+#[test]
+fn expf_libm_edge_matrix_bit_exact() {
+    let mut xs: Vec<f32> = Vec::new();
+    // Every e_expf branch boundary, both signs, ±3 ulp each side.
+    for bits in [
+        0x0000_0000u32,
+        0x0000_0001,
+        0x007f_ffff,
+        0x0080_0000,
+        0x3900_0000, // 2^-14: tiny-result boundary
+        0x3eb1_7218, // 0.5 ln2
+        0x3f85_1592, // 1.5 ln2
+        0x42ae_ac50, // underflow boundary (|x| >= 87.33655)
+        0x42b1_7218, // overflow boundary (x >= 88.722839)
+        0x42cf_f1b5, // result-zero boundary (x <= -103.972084)
+        0x7f80_0000, // inf
+    ] {
+        for d in -3i32..=3 {
+            for &s in &[1u32, 0x8000_0000] {
+                let b = (bits as i32).wrapping_add(d) as u32 | s;
+                if (b & 0x7f80_0000) != 0 {
+                    xs.push(f32::from_bits(b));
+                }
+            }
+        }
+    }
+    // NaN payload/sign variants + canonical.
+    xs.extend_from_slice(&[
+        f32::NAN,
+        f32::from_bits(0x7fc0_0001),
+        f32::from_bits(0x7fa0_0000),
+        f32::from_bits(0xffc0_0001),
+        f32::from_bits(0x7f80_0001),
+    ]);
+    check_expf("edges", &xs);
+}
+
+#[test]
+fn expf_libm_dense_domain_bit_exact() {
+    // Dense coverage of the live domain [-105, 90]: crosses the k
+    // boundaries (±0.5ln2, ±1.5ln2), the subnormal-output band
+    // [-103.97, -87.34], the result-zero boundary, and overflow.
+    let xs: Vec<f32> = (0..600_000u32)
+        .map(|i| -105.0f32 + (i as f32) * (195.0 / 600_000.0))
+        .collect();
+    check_expf("dense", &xs);
+}
+
+#[test]
+fn expf_libm_random_sweep_bit_exact() {
+    let mut rng = Rng(0x5eed_e1);
+    let mut xs = vec![0.0f32; 4096];
+    for rep in 0..64 {
+        for v in xs.iter_mut() {
+            *v = match rng.next() % 6 {
+                0 => rng.range(-110.0, 100.0),
+                1 => rng.range(-104.5, -86.5), // subnormal-output band
+                2 => rng.range(-1.5, 1.5),     // k-boundary straddle
+                3 => rng.range(87.0, 89.5),    // overflow edge
+                4 => f32::from_bits(rng.bits() & 0x007f_ffff), // subnormal x
+                _ => f32::from_bits(rng.bits()), // anything incl NaN/inf
+            };
+        }
+        check_expf("random", &xs[..2048]);
+    }
+}
+
+#[test]
+fn vexpf_libm_into_matches_scalar() {
+    let mut rng = Rng(7);
+    for n in [0usize, 1, 7, 8, 9, 15, 16, 17, 31, 33, 257, 1000] {
+        let xs: Vec<f32> = (0..n).map(|_| rng.range(-110.0, 100.0)).collect();
+        let mut out = vec![0.0; n];
+        vexpf_libm_into(&xs, &mut out);
+        for i in 0..n {
+            assert_eq!(
+                out[i].to_bits(),
+                libm::expf(xs[i]).to_bits(),
+                "n={n} i={i} x={:e}",
+                xs[i]
+            );
+        }
+    }
+}

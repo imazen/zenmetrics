@@ -60,6 +60,11 @@ mod v3 {
     }
 
     #[archmage::attune]
+    pub(crate) fn vexpf_libm_into_v3_t(token: X64V3Token, xs: &[f32], out: &mut [f32]) {
+        fdlibm::vexpf_libm_kernel_8(token, xs, out);
+    }
+
+    #[archmage::attune]
     pub(crate) fn vaxpy_into_v3_t(token: X64V3Token, dst: &mut [f32], src: &[f32], a: f32) {
         width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
     }

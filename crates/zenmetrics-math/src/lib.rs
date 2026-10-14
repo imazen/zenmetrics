@@ -287,6 +287,10 @@ pub(crate) fn vpow64_libm_pairs_into_scalar_t(
     fdlibm64::vpow64_libm_pairs_kernel_4(token, xs, ys, out);
 }
 
+pub(crate) fn vexpf_libm_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
+    fdlibm::vexpf_libm_kernel_8(token, xs, out);
+}
+
 pub(crate) fn vaxpy_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
     width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
 }
@@ -565,6 +569,18 @@ pub fn vpow64_libm_pairs_into(xs: &[f64], ys: &[f64], out: &mut [f64]) {
     assert_eq!(ys.len(), out.len());
     archmage::attuned!(
         vpow64_libm_pairs_into(xs, ys, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::expf(xs[i])`, bit-identical to the scalar call on every
+/// input — the e_expf port handles all branches in lanes (`force_eval`
+/// produces no value bits), so there is no scalar fallback.
+#[inline]
+pub fn vexpf_libm_into(xs: &[f32], out: &mut [f32]) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vexpf_libm_into(xs, out),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
