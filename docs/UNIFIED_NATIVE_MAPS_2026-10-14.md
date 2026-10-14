@@ -281,8 +281,14 @@ Validation:
   maps; strided input; cancellation.
 - Pin: moving zenmetrics from fast-ssim2 96ad1ab0 to the PR head leaves
   SSIMULACRA2 score bits unchanged on seven fixtures (64×48 to 1024×768 with
-  rayon, sub-8, the tank pair). Browser native tests pass (44, 2 ignored, as
-  before), and the zenmetrics-api CPU suite passes (22).
+  rayon, sub-8, the tank pair). Browser native tests passed (44, 2 ignored, as
+  before) and the zenmetrics-api CPU suite passed (22) at the PR head; after
+  merging master's eight newer browser routes the browser tests pass (46, 2
+  ignored).
+- Chromium (`check-pages.py`): the `ssim2` route matches fast-ssim2's own
+  scale-0 Y term from `browser_oracle` exactly on the 64×64 fixture (4,096
+  samples), identical 257×253 inputs give exact zeros, and the demo UI
+  renders it.
 
 ## Browser viewer
 

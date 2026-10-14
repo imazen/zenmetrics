@@ -59,6 +59,9 @@ merges). The `ssim2` map choice shows `ssim_y_0`, the full-resolution Y-channel
 SSIM error term. The score pools 54 such terms (6 scales × X/Y/B × SSIM error,
 edge artifact, detail lost) by L1 and 4-norm, so this is one component, not a
 per-pixel score. The browser keeps scoring SSIMULACRA2 through zenmetrics-api.
+The Pages check compares the map with fast-ssim2's own scale-0 Y term
+(`browser_oracle`): exact on the 64×64 fixture, and exact zeros for identical
+257×253 inputs.
 
 The native CLI does not currently expose issue 70's alpha-policy flag. The viewer
 preserves alpha and refuses non-opaque scoring. Noise/minimum-white-black alpha
