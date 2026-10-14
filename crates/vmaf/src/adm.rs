@@ -4520,10 +4520,6 @@ fn adm_cm_i32(
         + powf_add
 }
 
-/// Vertical pass of `adm_dwt2_s123_combined_avx2`: 4 i32 cols per iteration,
-/// cvtepi32_epi64 + mul_epi32 per tap, +add, then the C masked-shift
-/// (srli | v & (-1<<s)) which equals an arithmetic shift while |accum| < 2^(64-s)
-/// — the same bound libvmaf's AVX2 relies on. Packed via permutevar8x32(0,2,4,6).
 /// AIM's per-position terms at one scale: for each band, the integer cube
 /// contributions `adm_cm_*` sums over the pooled region when it measures the
 /// additive impairment masked by the restored signal (`noise_weight` 0).
@@ -4735,6 +4731,10 @@ fn adm_cm_terms_i32(
     }
 }
 
+/// Vertical pass of `adm_dwt2_s123_combined_avx2`: 4 i32 cols per iteration,
+/// cvtepi32_epi64 + mul_epi32 per tap, +add, then the C masked-shift
+/// (srli | v & (-1<<s)) which equals an arithmetic shift while |accum| < 2^(64-s)
+/// — the same bound libvmaf's AVX2 relies on. Packed via permutevar8x32(0,2,4,6).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[attune]
 #[allow(clippy::too_many_arguments)]
