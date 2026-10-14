@@ -60,6 +60,19 @@ const SUBS: [(usize, usize, usize, usize); 8] = [
     (1, 1, 17, 3),
 ];
 
+// `libm::log2` polynomial constants (fdlibm `e_log2.c`) — the lane-
+// vectorised transcription below uses the same constants, operation
+// order and bit tricks, so every lane is bit-identical to `libm::log2`.
+const IVLN2HI: f64 = 1.44269504072144627571e+00;
+const IVLN2LO: f64 = 1.67517131648865118353e-10;
+const LG1: f64 = 6.666666666666735130e-01;
+const LG2: f64 = 3.999999999940941908e-01;
+const LG3: f64 = 2.857142874366239149e-01;
+const LG4: f64 = 2.222219843214978396e-01;
+const LG5: f64 = 1.818357216161805012e-01;
+const LG6: f64 = 1.531383769920937332e-01;
+const LG7: f64 = 1.479819860511658591e-01;
+
 // ------------------------------------------------------------------
 // sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim).
 // ------------------------------------------------------------------
@@ -589,6 +602,14 @@ macro_rules! corr_row_body {
             $out[ox] = scalar(ox);
             ox += 1;
         }
+        // Broadcast the (loop-invariant) filter taps once — same
+        // values, same multiply-add order per output. Fixed 9×9
+        // capacity: `corr_dn` filters never exceed it, and the `big`
+        // fallback keeps an unexpected larger kernel correct.
+        let big = $fh * $fw > 81;
+        let ftaps: [$V; 81] = core::array::from_fn(|t| {
+            <$V>::splat_t($token, if t < $fh * $fw && !big { $filt[t] } else { 0.0 })
+        });
         while ox + $lanes <= $out.len() && $start + (ox + $lanes - 1) * $step + ($fw - cx) <= $w {
             let mut acc = <$V>::splat_t($token, 0.0);
             let x = $start + ox * $step - cx;
@@ -596,11 +617,24 @@ macro_rules! corr_row_body {
                 let iy = reflect1($yc as i64 + ky as i64 - cy as i64, $h as i64);
                 let row = &$img[iy * $w..(iy + 1) * $w];
                 for kx in 0..$fw {
-                    let v = <$V>::from_array_t(
-                        $token,
-                        core::array::from_fn(|lane| row[x + kx + lane * $step]),
-                    );
-                    acc = acc + <$V>::splat_t($token, $filt[ky * $fw + kx]) * v;
+                    let v = if $step == 1 {
+                        // Contiguous lanes — one packed load instead of
+                        // per-lane scalar reads. In bounds: the guard
+                        // above keeps `x + fw - 1 + lanes - 1 < w`.
+                        <$V>::load_t($token, row[x + kx..x + kx + $lanes].try_into().unwrap())
+                    } else {
+                        <$V>::from_array_t(
+                            $token,
+                            core::array::from_fn(|lane| row[x + kx + lane * $step]),
+                        )
+                    };
+                    let t = ky * $fw + kx;
+                    let f = if big {
+                        <$V>::splat_t($token, $filt[t])
+                    } else {
+                        ftaps[t]
+                    };
+                    acc = acc + f * v;
                 }
             }
             $out[ox..ox + $lanes].copy_from_slice(&acc.to_array());
@@ -1397,6 +1431,273 @@ fn vifsub_est(
 }
 
 // ------------------------------------------------------------------
+// Pooled log2 accumulation (vector-GSM pooling).
+// ------------------------------------------------------------------
+
+/// Lane-vectorised `libm::log2` for `x >= 1` (the pooling domain:
+/// `1 + nonneg`). The frexp-style reduce and the `hi` truncation are
+/// per-lane scalar bit ops; the polynomial, divide and the `hi/lo`
+/// reconstruction run lane-parallel with *separate* `mul`/`add`
+/// (never fused), so each lane reproduces `libm::log2` bitwise.
+macro_rules! log2_lanes {
+    ($token:ident, $V:ty, $lanes:literal, $x:expr) => {{
+        let xa: [f64; $lanes] = $x;
+        let mut xr = [0.0f64; $lanes];
+        let mut kk = [0.0f64; $lanes];
+        for i in 0..$lanes {
+            // libm's `hx += 0x3ff00000 - 0x3fe6a09e` reduce:
+            // folds x into m ∈ [√2/2, √2] and counts k.
+            let ui = xa[i].to_bits();
+            let mut hx = (ui >> 32) as u32;
+            hx = hx.wrapping_add(0x3ff0_0000u32.wrapping_sub(0x3fe6_a09e));
+            kk[i] = ((hx >> 20) as i32 - 0x3ff) as f64;
+            hx = (hx & 0x000f_ffff).wrapping_add(0x3fe6_a09e);
+            xr[i] = f64::from_bits(((hx as u64) << 32) | (ui & 0xffff_ffff));
+        }
+        let xv = <$V>::from_array_t($token, xr);
+        let kv = <$V>::from_array_t($token, kk);
+        let f = xv - <$V>::splat_t($token, 1.0);
+        let hfsq = <$V>::splat_t($token, 0.5) * f * f;
+        let s = f / (<$V>::splat_t($token, 2.0) + f);
+        let z = s * s;
+        let w = z * z;
+        let t1 = w
+            * (<$V>::splat_t($token, LG2)
+                + w * (<$V>::splat_t($token, LG4) + w * <$V>::splat_t($token, LG6)));
+        let t2 = z
+            * (<$V>::splat_t($token, LG1)
+                + w * (<$V>::splat_t($token, LG3)
+                    + w * (<$V>::splat_t($token, LG5) + w * <$V>::splat_t($token, LG7))));
+        let r = t2 + t1;
+        // hi = f - hfsq with the low 32 mantissa bits cleared.
+        let mut ha = (f - hfsq).to_array();
+        for v in ha.iter_mut() {
+            *v = f64::from_bits(v.to_bits() & !0xffff_ffffu64);
+        }
+        let hi = <$V>::from_array_t($token, ha);
+        let lo = f - hi - hfsq + s * (hfsq + r);
+        let val_hi = hi * <$V>::splat_t($token, IVLN2HI);
+        let val_lo =
+            (lo + hi) * <$V>::splat_t($token, IVLN2LO) + lo * <$V>::splat_t($token, IVLN2HI);
+        let wv = kv + val_hi;
+        let val_lo = val_lo + ((kv - wv) + val_hi);
+        let mut ra = (val_lo + wv).to_array();
+        for i in 0..$lanes {
+            // libm early-outs: `x == 1 → 0`; `exp == 0x7ff → x`
+            // (inf → inf, NaN → NaN — NaN also propagates anyway).
+            if xa[i] == 1.0 {
+                ra[i] = 0.0;
+            } else if (xa[i].to_bits() >> 52) & 0x7ff == 0x7ff {
+                ra[i] = xa[i];
+            }
+        }
+        ra
+    }};
+}
+
+/// Accumulate `t1`/`t2` for one eigenvalue `lam` over the cropped
+/// `(iw, ih)` block map — same sequential `+=` order per accumulator
+/// as the scalar loop, so results are bit-identical.
+macro_rules! pool_log2_body {
+    ($token:ident, $V:ty, $lanes:literal, $g:ident, $vv:ident, $ss:ident,
+     $nbw:ident, $iw:ident, $ih:ident, $offset:ident, $lam:ident) => {{
+        let mut t1 = 0.0f64;
+        let mut t2 = 0.0f64;
+        for by in 0..$ih {
+            let row = (by + $offset) * $nbw + $offset;
+            let mut bx = 0;
+            while bx + $lanes <= $iw {
+                let mut a1 = [0.0f64; $lanes];
+                let mut a2 = [0.0f64; $lanes];
+                for j in 0..$lanes {
+                    let i = row + bx + j;
+                    let (gi, vi, si) = ($g[i], $vv[i], $ss[i]);
+                    a1[j] = 1.0 + gi * gi * si * $lam / (vi + SIGMA_NSQ);
+                    a2[j] = 1.0 + si * $lam / SIGMA_NSQ;
+                }
+                let l1 = log2_lanes!($token, $V, $lanes, a1);
+                let l2 = log2_lanes!($token, $V, $lanes, a2);
+                for j in 0..$lanes {
+                    t1 += l1[j];
+                    t2 += l2[j];
+                }
+                bx += $lanes;
+            }
+            while bx < $iw {
+                let i = row + bx;
+                let (gi, vi, si) = ($g[i], $vv[i], $ss[i]);
+                t1 += libm::log2(1.0 + gi * gi * si * $lam / (vi + SIGMA_NSQ));
+                t2 += libm::log2(1.0 + si * $lam / SIGMA_NSQ);
+                bx += 1;
+            }
+        }
+        (t1, t2)
+    }};
+}
+
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn pool_log2_tier_v3_t(
+    token: archmage::X64V3Token,
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    pool_log2_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::X64V3Token>,
+        4,
+        g,
+        vv,
+        ss,
+        nbw,
+        iw,
+        ih,
+        offset,
+        lam
+    )
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn pool_log2_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    pool_log2_body!(
+        token,
+        magetypes::simd::generic::f64x8<archmage::X64V4xToken>,
+        8,
+        g,
+        vv,
+        ss,
+        nbw,
+        iw,
+        ih,
+        offset,
+        lam
+    )
+}
+
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn pool_log2_tier_neon_t(
+    token: archmage::NeonToken,
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    pool_log2_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::NeonToken>,
+        4,
+        g,
+        vv,
+        ss,
+        nbw,
+        iw,
+        ih,
+        offset,
+        lam
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn pool_log2_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    pool_log2_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::Wasm128Token>,
+        4,
+        g,
+        vv,
+        ss,
+        nbw,
+        iw,
+        ih,
+        offset,
+        lam
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn pool_log2_tier_scalar_t(
+    token: archmage::ScalarToken,
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    pool_log2_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::ScalarToken>,
+        4,
+        g,
+        vv,
+        ss,
+        nbw,
+        iw,
+        ih,
+        offset,
+        lam
+    )
+}
+
+/// `(t1, t2)` pooling sums for one eigenvalue, bit-identical to the
+/// original scalar `libm::log2` loop on every dispatch tier.
+#[allow(clippy::too_many_arguments)]
+fn pool_log2(
+    g: &[f64],
+    vv: &[f64],
+    ss: &[f64],
+    nbw: usize,
+    iw: usize,
+    ih: usize,
+    offset: usize,
+    lam: f64,
+) -> (f64, f64) {
+    archmage::attuned!(
+        pool_log2_tier(g, vv, ss, nbw, iw, ih, offset, lam),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+// ------------------------------------------------------------------
 // Driver.
 // ------------------------------------------------------------------
 
@@ -1419,16 +1720,7 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
         // (reference: `g(offset+1:end-offset, …)`).
         let (iw, ih) = (nbw - 2 * offset, nbh - 2 * offset);
         for &lam in &lambda {
-            let mut t1 = 0.0f64;
-            let mut t2 = 0.0f64;
-            for by in 0..ih {
-                for bx in 0..iw {
-                    let i = (by + offset) * nbw + bx + offset;
-                    let (gi, vi, si) = (g[i], vv[i], ss[i]);
-                    t1 += libm::log2(1.0 + gi * gi * si * lam / (vi + SIGMA_NSQ));
-                    t2 += libm::log2(1.0 + si * lam / SIGMA_NSQ);
-                }
-            }
+            let (t1, t2) = pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam);
             num += t1;
             den += t2;
         }
@@ -1508,6 +1800,41 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn pool_log2_matches_scalar_libm_bits() {
+        // Block maps with exact-1.0 args (ss = 0 → `1 + 0`), varied
+        // magnitudes (arg up to ~1e6 → nonzero `k`), an `inf` arg and
+        // a `NaN` arg — every early-out and reduce path in the kernel.
+        let (nbw, nbh) = (37, 29);
+        let g: Vec<f64> = (0..nbw * nbh)
+            .map(|i| ((i * 37 % 251) as f64 - 100.0) * 0.031)
+            .collect();
+        let vv: Vec<f64> = (0..nbw * nbh)
+            .map(|i| ((i * 53 % 191) as f64) * 0.005)
+            .collect();
+        let mut ss: Vec<f64> = (0..nbw * nbh)
+            .map(|i| ((i * 29 % 313) as f64) * 0.07)
+            .collect();
+        ss[3] = 0.0;
+        ss[40] = f64::INFINITY;
+        ss[77] = f64::NAN;
+        let (offset, iw, ih) = (3usize, nbw - 6, nbh - 6);
+        for lam in [0.0, 1e-6, 0.5, 1.0, 37.3, 1e4] {
+            let (t1, t2) = pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam);
+            let (mut r1, mut r2) = (0.0f64, 0.0f64);
+            for by in 0..ih {
+                for bx in 0..iw {
+                    let i = (by + offset) * nbw + bx + offset;
+                    let (gi, vi, si) = (g[i], vv[i], ss[i]);
+                    r1 += libm::log2(1.0 + gi * gi * si * lam / (vi + SIGMA_NSQ));
+                    r2 += libm::log2(1.0 + si * lam / SIGMA_NSQ);
+                }
+            }
+            assert_eq!(t1.to_bits(), r1.to_bits(), "t1 lam={lam}");
+            assert_eq!(t2.to_bits(), r2.to_bits(), "t2 lam={lam}");
         }
     }
 }
