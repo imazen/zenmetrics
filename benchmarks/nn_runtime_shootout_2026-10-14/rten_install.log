@@ -1,0 +1,4 @@
+  Installing /home/lilith/tmp/nnrt-research/bin/bin/rten
+   Installed package `rten-cli v0.27.0` (executable `rten`)
+warning: be sure to add `/home/lilith/tmp/nnrt-research/bin/bin` to your PATH to be able to run the installed binaries
+run-heavy: done rc=0 13s | peak-RSS 1.25GiB | min-avail 22296MiB | peak-load 9.67

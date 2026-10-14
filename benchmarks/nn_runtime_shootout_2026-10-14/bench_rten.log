@@ -1,0 +1,13 @@
+# rten-cli 0.27.0, -k prepack, n=10 (first iter included in mean; min reported)
+t=1	vgg16lpips_256	  Duration stats: mean 301.96ms, min 292.40ms, max 331.14ms, std dev 10.48ms
+t=1	vgg16lpips_512	  Duration stats: mean 1229.25ms, min 1213.05ms, max 1270.51ms, std dev 16.24ms
+t=1	resnet50_224	  Duration stats: mean 67.47ms, min 63.96ms, max 90.20ms, std dev 7.64ms
+t=1	resnet50_384	  Duration stats: mean 186.38ms, min 181.87ms, max 214.68ms, std dev 9.52ms
+t=8	vgg16lpips_256	  Duration stats: mean 57.19ms, min 45.74ms, max 86.95ms, std dev 11.89ms
+t=8	vgg16lpips_512	  Duration stats: mean 199.79ms, min 190.24ms, max 226.68ms, std dev 9.81ms
+t=8	resnet50_224	  Duration stats: mean 22.44ms, min 20.74ms, max 26.41ms, std dev 1.69ms
+t=8	resnet50_384	  Duration stats: mean 51.61ms, min 48.18ms, max 58.68ms, std dev 3.04ms
+t=16	vgg16lpips_256	  Duration stats: mean 40.86ms, min 38.39ms, max 47.98ms, std dev 2.85ms
+t=16	vgg16lpips_512	  Duration stats: mean 150.09ms, min 143.09ms, max 156.36ms, std dev 3.76ms
+t=16	resnet50_224	  Duration stats: mean 19.69ms, min 18.26ms, max 23.00ms, std dev 1.31ms
+t=16	resnet50_384	  Duration stats: mean 38.58ms, min 37.41ms, max 43.47ms, std dev 1.70ms

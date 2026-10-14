@@ -1,0 +1,11 @@
+# burn 0.22.0, f32, fusion+autotune, burn-onnx codegen. Timer = forward + device-side sum() per output + scalar readback (resnet: [1,2048] readback). fresh random input per iter, synced before timer. iters=20 after 3 warm. RTX 4080 driver 595.99
+burn cuda	vgg16lpips_256	min=2.80ms	med=3.10ms	checksum=1.432e7
+burn cuda	vgg16lpips_512	min=6.98ms	med=7.59ms	checksum=5.771e7
+burn cuda	resnet50_224	min=2.74ms	med=2.80ms	checksum=8.622e5
+burn cuda	resnet50_384	min=3.02ms	med=3.12ms	checksum=9.578e5
+burn vulkan	vgg16lpips_256	min=144.24ms	med=146.22ms	checksum=1.433e7
+burn vulkan	vgg16lpips_512	min=581.78ms	med=584.93ms	checksum=5.771e7
+burn vulkan	resnet50_224	min=11.56ms	med=12.37ms	checksum=8.615e5
+burn vulkan	resnet50_384	min=28.05ms	med=29.03ms	checksum=9.577e5
+t=16 burn flex	vgg16lpips_256	min=142.18ms	med=152.46ms	checksum=8.094e6
+t=16 burn flex	resnet50_224	min=41.18ms	med=45.02ms	checksum=4.869e5

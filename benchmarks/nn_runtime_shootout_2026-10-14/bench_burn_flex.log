@@ -1,0 +1,13 @@
+# burn 0.22.0 burn-onnx codegen; flex = burn-flex CPU (rayon threads via RAYON_NUM_THREADS); iters=10 after 3 warm
+t=1 burn flex	vgg16lpips_256	min=432.50ms	med=434.07ms
+t=1 burn flex	vgg16lpips_512	min=1739.10ms	med=1781.74ms
+t=1 burn flex	resnet50_224	min=106.99ms	med=110.72ms
+t=1 burn flex	resnet50_384	min=263.36ms	med=264.01ms
+t=8 burn flex	vgg16lpips_256	min=150.84ms	med=156.98ms
+t=8 burn flex	vgg16lpips_512	min=501.07ms	med=525.47ms
+t=8 burn flex	resnet50_224	min=46.56ms	med=70.23ms
+t=8 burn flex	resnet50_384	min=120.34ms	med=147.40ms
+t=16 burn flex	vgg16lpips_256	min=129.28ms	med=145.33ms
+t=16 burn flex	vgg16lpips_512	min=387.81ms	med=409.04ms
+t=16 burn flex	resnet50_224	min=47.54ms	med=72.08ms
+t=16 burn flex	resnet50_384	min=98.56ms	med=113.68ms
