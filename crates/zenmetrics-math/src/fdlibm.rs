@@ -61,7 +61,12 @@ pub const HI15: i32 = 0xffff_8000_u32 as i32;
 /// Recompute the flagged lanes with scalar `libm::powf`.
 #[cold]
 #[inline(never)]
-pub fn scalar_lanes<const N: usize>(x: &[f32; N], y: &[f32; N], need: &[i32; N], out: &mut [f32; N]) {
+pub fn scalar_lanes<const N: usize>(
+    x: &[f32; N],
+    y: &[f32; N],
+    need: &[i32; N],
+    out: &mut [f32; N],
+) {
     for i in 0..N {
         if need[i] != 0 {
             out[i] = libm::powf(x[i], y[i]);

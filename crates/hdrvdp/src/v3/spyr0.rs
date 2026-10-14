@@ -639,68 +639,68 @@ fn corr_dn64(
     crate::par::for_each_dst_chunk(&mut out, rb * out_w, |o, out_c| {
         let oy0 = o / out_w;
         for ly in 0..out_c.len() / out_w {
-        let oy = oy0 + ly;
-        let yt = &yoff[oy * fs..oy * fs + fs];
-        let out_row = &mut out_c[ly * out_w..ly * out_w + out_w];
-        // 32-output groups chain four accumulators for FMA latency; blocks
-        // covered by a `corr32` call are skipped via `skip_until`.
-        let mut skip_until = 0usize;
-        for ox0 in (0..full).step_by(8) {
-            if ox0 < skip_until {
-                continue;
-            }
-            // `unit` ⇔ lane `j`'s window start is `xtab[ox0*fs] + j`, i.e.
-            // every lane contiguous and the block at step 1 — the kernel
-            // then reads each tap as one vector load instead of gathering.
-            let unit = step == 1 && contig[ox0..ox0 + 8].iter().all(|&c| c);
-            if unit && ox0 + 32 <= full && contig[ox0 + 8..ox0 + 32].iter().all(|&c| c) {
+            let oy = oy0 + ly;
+            let yt = &yoff[oy * fs..oy * fs + fs];
+            let out_row = &mut out_c[ly * out_w..ly * out_w + out_w];
+            // 32-output groups chain four accumulators for FMA latency; blocks
+            // covered by a `corr32` call are skipped via `skip_until`.
+            let mut skip_until = 0usize;
+            for ox0 in (0..full).step_by(8) {
+                if ox0 < skip_until {
+                    continue;
+                }
+                // `unit` ⇔ lane `j`'s window start is `xtab[ox0*fs] + j`, i.e.
+                // every lane contiguous and the block at step 1 — the kernel
+                // then reads each tap as one vector load instead of gathering.
+                let unit = step == 1 && contig[ox0..ox0 + 8].iter().all(|&c| c);
+                if unit && ox0 + 32 <= full && contig[ox0 + 8..ox0 + 32].iter().all(|&c| c) {
+                    if relaxed {
+                        corr32::<true>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
+                    } else {
+                        corr32::<false>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
+                    }
+                    skip_until = ox0 + 32;
+                    continue;
+                }
                 if relaxed {
-                    corr32::<true>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
+                    corr8::<true>(
+                        image,
+                        width,
+                        &xtab[ox0 * fs..ox0 * fs + 8 * fs],
+                        &contig[ox0..ox0 + 8],
+                        unit,
+                        yt,
+                        filter,
+                        fs,
+                        ox0,
+                        out_row,
+                    );
                 } else {
-                    corr32::<false>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
-                }
-                skip_until = ox0 + 32;
-                continue;
-            }
-            if relaxed {
-                corr8::<true>(
-                    image,
-                    width,
-                    &xtab[ox0 * fs..ox0 * fs + 8 * fs],
-                    &contig[ox0..ox0 + 8],
-                    unit,
-                    yt,
-                    filter,
-                    fs,
-                    ox0,
-                    out_row,
-                );
-            } else {
-                corr8::<false>(
-                    image,
-                    width,
-                    &xtab[ox0 * fs..ox0 * fs + 8 * fs],
-                    &contig[ox0..ox0 + 8],
-                    unit,
-                    yt,
-                    filter,
-                    fs,
-                    ox0,
-                    out_row,
-                );
-            }
-        }
-        for ox in full..out_w {
-            let xt = &xtab[ox * fs..ox * fs + fs];
-            let mut acc = 0.0;
-            for ky in 0..fs {
-                let row = &image[yt[ky]..yt[ky] + width];
-                for kx in 0..fs {
-                    acc += filter[ky * fs + kx] * row[xt[kx]];
+                    corr8::<false>(
+                        image,
+                        width,
+                        &xtab[ox0 * fs..ox0 * fs + 8 * fs],
+                        &contig[ox0..ox0 + 8],
+                        unit,
+                        yt,
+                        filter,
+                        fs,
+                        ox0,
+                        out_row,
+                    );
                 }
             }
-            out_row[ox] = acc;
-        }
+            for ox in full..out_w {
+                let xt = &xtab[ox * fs..ox * fs + fs];
+                let mut acc = 0.0;
+                for ky in 0..fs {
+                    let row = &image[yt[ky]..yt[ky] + width];
+                    for kx in 0..fs {
+                        acc += filter[ky * fs + kx] * row[xt[kx]];
+                    }
+                }
+                out_row[ox] = acc;
+            }
         }
     });
     Band3 {
@@ -892,89 +892,92 @@ fn up_conv64(
     crate::par::for_each_dst_chunk(res, rb * out_width, |o, res_c| {
         let py0 = o / out_width;
         for ly in 0..res_c.len() / out_width {
-        let py = py0 + ly;
-        let rr = &rrow[py * fs..py * fs + fs];
-        let rn = &ron[py * fs..py * fs + fs];
-        let res_row = &mut res_c[ly * out_width..ly * out_width + out_width];
-        for &(r, kx0, ntaps, m_lo, m_vec, _) in &phases {
-            let off = (r as isize + kx0 as isize - c) / step as isize;
-            for m0 in (m_lo..m_vec).step_by(8) {
-                let base = (m0 as isize + off) as usize;
-                let acc = if relaxed {
-                    up8_phase::<true>(
-                        &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
-                    )
-                } else {
-                    up8_phase::<false>(
-                        &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
-                    )
-                };
-                for (j, a) in acc.iter().enumerate() {
-                    // A ±0 lane can differ from the full-order sum only in
-                    // the sign of zero — recompute it like the scalar path.
-                    let a = if *a == 0.0 {
-                        up_pixel(
-                            band,
-                            filter,
-                            fs,
-                            step,
-                            out_width,
-                            out_height,
-                            py,
-                            r + (m0 + j) * step,
+            let py = py0 + ly;
+            let rr = &rrow[py * fs..py * fs + fs];
+            let rn = &ron[py * fs..py * fs + fs];
+            let res_row = &mut res_c[ly * out_width..ly * out_width + out_width];
+            for &(r, kx0, ntaps, m_lo, m_vec, _) in &phases {
+                let off = (r as isize + kx0 as isize - c) / step as isize;
+                for m0 in (m_lo..m_vec).step_by(8) {
+                    let base = (m0 as isize + off) as usize;
+                    let acc = if relaxed {
+                        up8_phase::<true>(
+                            &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
                         )
                     } else {
-                        *a
+                        up8_phase::<false>(
+                            &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
+                        )
                     };
-                    res_row[r + (m0 + j) * step] += a;
+                    for (j, a) in acc.iter().enumerate() {
+                        // A ±0 lane can differ from the full-order sum only in
+                        // the sign of zero — recompute it like the scalar path.
+                        let a = if *a == 0.0 {
+                            up_pixel(
+                                band,
+                                filter,
+                                fs,
+                                step,
+                                out_width,
+                                out_height,
+                                py,
+                                r + (m0 + j) * step,
+                            )
+                        } else {
+                            *a
+                        };
+                        res_row[r + (m0 + j) * step] += a;
+                    }
                 }
             }
-        }
-        // `px < out_w & !7` historically ran the vector kernel: relaxed mode
-        // therefore needs the FMA chain over every tap (unaligned taps add
-        // f·(±0.0)), while all other outputs sum aligned taps in plain
-        // mul+add order. Zero accumulators recompute full-order either way.
-        let full8 = out_width & !7;
-        for &px in &uncovered {
-            let rc = &rcol[px * fs..px * fs + fs];
-            let cn = &rcon[px * fs..px * fs + fs];
-            let mut acc = 0.0;
-            if relaxed && px < full8 {
-                for ky in 0..fs {
-                    if !rn[ky] {
-                        continue;
-                    }
-                    let brow = &band.data[rr[ky]..rr[ky] + band.width];
-                    for kx in 0..fs {
-                        let v = if cn[kx] { brow[rc[kx]] } else { 0.0 };
-                        acc = filter[ky * fs + kx].mul_add(v, acc);
-                    }
-                }
-            } else {
-                for ky in 0..fs {
-                    if !rn[ky] {
-                        continue;
-                    }
-                    let brow = &band.data[rr[ky]..rr[ky] + band.width];
-                    for kx in 0..fs {
-                        if !cn[kx] {
+            // `px < out_w & !7` historically ran the vector kernel: relaxed mode
+            // therefore needs the FMA chain over every tap (unaligned taps add
+            // f·(±0.0)), while all other outputs sum aligned taps in plain
+            // mul+add order. Zero accumulators recompute full-order either way.
+            let full8 = out_width & !7;
+            for &px in &uncovered {
+                let rc = &rcol[px * fs..px * fs + fs];
+                let cn = &rcon[px * fs..px * fs + fs];
+                let mut acc = 0.0;
+                if relaxed && px < full8 {
+                    for ky in 0..fs {
+                        if !rn[ky] {
                             continue;
                         }
-                        acc += filter[ky * fs + kx] * brow[rc[kx]];
+                        let brow = &band.data[rr[ky]..rr[ky] + band.width];
+                        for kx in 0..fs {
+                            let v = if cn[kx] { brow[rc[kx]] } else { 0.0 };
+                            acc = filter[ky * fs + kx].mul_add(v, acc);
+                        }
+                    }
+                } else {
+                    for ky in 0..fs {
+                        if !rn[ky] {
+                            continue;
+                        }
+                        let brow = &band.data[rr[ky]..rr[ky] + band.width];
+                        for kx in 0..fs {
+                            if !cn[kx] {
+                                continue;
+                            }
+                            acc += filter[ky * fs + kx] * brow[rc[kx]];
+                        }
                     }
                 }
-            }
-            if acc == 0.0 {
-                acc = 0.0;
-                for ky in 0..fs {
-                    for kx in 0..fs {
-                        acc += filter[ky * fs + kx]
-                            * sample(py as isize + ky as isize - c, px as isize + kx as isize - c);
+                if acc == 0.0 {
+                    acc = 0.0;
+                    for ky in 0..fs {
+                        for kx in 0..fs {
+                            acc += filter[ky * fs + kx]
+                                * sample(
+                                    py as isize + ky as isize - c,
+                                    px as isize + kx as isize - c,
+                                );
+                        }
                     }
                 }
+                res_row[px] += acc;
             }
-            res_row[px] += acc;
-        }
         }
     });
 }

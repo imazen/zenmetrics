@@ -4,7 +4,9 @@ fn main() {
     let mut xs = vec![0.0f64; n];
     let mut st = 0x243f6a8885a308d3u64;
     for i in 0..n {
-        st ^= st << 13; st ^= st >> 7; st ^= st << 17;
+        st ^= st << 13;
+        st ^= st >> 7;
+        st ^= st << 17;
         xs[i] = 0.5 + (st >> 11) as f64 / (1u64 << 53) as f64;
     }
     let mut out = vec![0.0f64; n];
@@ -20,6 +22,14 @@ fn main() {
         }
     }
     let scalar = t.elapsed();
-    println!("lane: {:?} ({:.2} ns/elem)", lane, lane.as_nanos() as f64 / (20.0 * n as f64));
-    println!("scalar: {:?} ({:.2} ns/elem)", scalar, scalar.as_nanos() as f64 / (20.0 * n as f64));
+    println!(
+        "lane: {:?} ({:.2} ns/elem)",
+        lane,
+        lane.as_nanos() as f64 / (20.0 * n as f64)
+    );
+    println!(
+        "scalar: {:?} ({:.2} ns/elem)",
+        scalar,
+        scalar.as_nanos() as f64 / (20.0 * n as f64)
+    );
 }

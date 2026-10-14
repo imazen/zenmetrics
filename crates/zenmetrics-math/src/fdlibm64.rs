@@ -223,7 +223,11 @@ pub fn pow64_libm_4x_gated<const G: u8, T: I64x4Bitcast>(
     }
     s2 = s_h * s_h;
     let t_h = trunc!(token, cf!(token, 3.0) + s2 + r);
-    let t_l = if tail { r - ((t_h - cf!(token, 3.0)) - s2) } else { cf!(token, 0.0) };
+    let t_l = if tail {
+        r - ((t_h - cf!(token, 3.0)) - s2)
+    } else {
+        cf!(token, 0.0)
+    };
     /* u+v = s*(1+...) */
     u = s_h * t_h;
     v = s_l * t_h + t_l * s;
@@ -234,7 +238,11 @@ pub fn pow64_libm_4x_gated<const G: u8, T: I64x4Bitcast>(
     let z_l = cf!(token, CP_L) * p_h + p_l * cf!(token, CP) + dp_l;
     /* log2(ax) = (s+..)*2/(3*log2) = n + dp_h + z_h + z_l */
     let t1 = trunc!(token, ((z_h + z_l) + dp_h) + nf);
-    let t2 = if tail { z_l - (((t1 - nf) - dp_h) - z_h) } else { cf!(token, 0.0) };
+    let t2 = if tail {
+        z_l - (((t1 - nf) - dp_h) - z_h)
+    } else {
+        cf!(token, 0.0)
+    };
 
     /* split up y into y1+y2 and compute (y1+y2)*(t1+t2) */
     let y1 = trunc!(token, y);
@@ -274,7 +282,11 @@ pub fn pow64_libm_4x_gated<const G: u8, T: I64x4Bitcast>(
     let u3 = t3 * cf!(token, LG2_H);
     let v3 = (p_l - (t3 - p_h)) * cf!(token, LG2) + t3 * cf!(token, LG2_L);
     let z3 = u3 + v3;
-    let w = if tail { v3 - (z3 - u3) } else { cf!(token, 0.0) };
+    let w = if tail {
+        v3 - (z3 - u3)
+    } else {
+        cf!(token, 0.0)
+    };
     let tt = z3 * z3;
     let t1p = z3
         - tt * (cf!(token, P1)
@@ -382,8 +394,7 @@ fn log_libm_4x_impl<T: I64x4Bitcast, const LOG2: bool>(token: T, x: f64x4<T>) ->
         x,
     );
     let k = subm & ci!(token, -54);
-    let xnbits =
-        i64x4::<T>::from_array_t(token, xn.to_array().map(|v| v.to_bits() as i64));
+    let xnbits = i64x4::<T>::from_array_t(token, xn.to_array().map(|v| v.to_bits() as i64));
     let mut hxr = xnbits.shr_logical_const::<32>();
 
     /* reduce x into [sqrt(2)/2, sqrt(2)] */
@@ -397,11 +408,9 @@ fn log_libm_4x_impl<T: I64x4Bitcast, const LOG2: bool>(token: T, x: f64x4<T>) ->
     let s = f / (cf!(token, 2.0) + f);
     let z = s * s;
     let w = z * z;
-    let t1 = w
-        * (cf!(token, LG2C) + w * (cf!(token, LG4) + w * cf!(token, LG6C)));
-    let t2 = z
-        * (cf!(token, LG1)
-            + w * (cf!(token, LG3) + w * (cf!(token, LG5) + w * cf!(token, LG7))));
+    let t1 = w * (cf!(token, LG2C) + w * (cf!(token, LG4) + w * cf!(token, LG6C)));
+    let t2 =
+        z * (cf!(token, LG1) + w * (cf!(token, LG3) + w * (cf!(token, LG5) + w * cf!(token, LG7))));
     let r = t2 + t1;
     let dk = f64x4::<T>::from_array_t(token, k.to_array().map(|v| v as f64));
 
@@ -410,8 +419,7 @@ fn log_libm_4x_impl<T: I64x4Bitcast, const LOG2: bool>(token: T, x: f64x4<T>) ->
         let hi = trunc!(token, f - hfsq);
         let lo = f - hi - hfsq + s * (hfsq + r);
         let val_hi = hi * cf!(token, IVLN2HI);
-        let mut val_lo =
-            (lo + hi) * cf!(token, IVLN2LO) + lo * cf!(token, IVLN2HI);
+        let mut val_lo = (lo + hi) * cf!(token, IVLN2LO) + lo * cf!(token, IVLN2HI);
         /* spadd(val_hi, val_lo, dk) */
         let wv = dk + val_hi;
         val_lo = val_lo + ((dk - wv) + val_hi);

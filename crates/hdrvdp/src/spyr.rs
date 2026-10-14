@@ -199,7 +199,11 @@ fn corr_row1_t<const RELAXED: bool>(
             for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
                 let wv = f32x8::splat_t(token, w);
                 let pv = f32x8::load_t(token, (&prow[kx..kx + 8]).try_into().unwrap());
-                av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+                av = if RELAXED {
+                    wv.mul_add(pv, av)
+                } else {
+                    av + wv * pv
+                };
             }
         }
         av.store((&mut out_row[i..i + 8]).try_into().unwrap());
@@ -270,7 +274,11 @@ fn corr_rows_t<const RELAXED: bool>(
                         s[7 * step],
                     ],
                 );
-                av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+                av = if RELAXED {
+                    wv.mul_add(pv, av)
+                } else {
+                    av + wv * pv
+                };
             }
         }
         av.store((&mut out_row[ox..ox + 8]).try_into().unwrap());
@@ -322,9 +330,17 @@ fn upconv_row_t<const RELAXED: bool>(
         let mut av = f32x8::zero_t(token);
         for &(w, off) in taps {
             let wv = f32x8::splat_t(token, w);
-            let pv =
-                f32x8::load_t(token, (&padded[base + px + off..base + px + off + 8]).try_into().unwrap());
-            av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+            let pv = f32x8::load_t(
+                token,
+                (&padded[base + px + off..base + px + off + 8])
+                    .try_into()
+                    .unwrap(),
+            );
+            av = if RELAXED {
+                wv.mul_add(pv, av)
+            } else {
+                av + wv * pv
+            };
         }
         let mut a = [0.0f32; 8];
         av.store(&mut a);

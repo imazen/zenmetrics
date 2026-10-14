@@ -190,8 +190,7 @@ pub(crate) fn visual_pathway(
             });
         } else {
             for k in 0..channels {
-                let ch: Vec<f64> =
-                    crate::par::collect_indexed(npix, |i| img[i * channels + k]);
+                let ch: Vec<f64> = crate::par::collect_indexed(npix, |i| img[i * channels + k]);
                 super::fft64::conv_fft_pad_into(
                     &ch,
                     width,
@@ -210,7 +209,8 @@ pub(crate) fn visual_pathway(
         }
     });
 
-    crate::par::timed_eprintln!("  mtf: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("  mtf: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     // ---- aging optical density (spectral, on the emission table) ----
     let mut img_e = img_e.to_vec();
     if par.do_aod {
@@ -256,7 +256,8 @@ pub(crate) fn visual_pathway(
     })
     .into_flattened();
 
-    crate::par::timed_eprintln!("  lmsr: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("  lmsr: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     // ---- local adaptation ----
     let l_adapt = {
         let lum: Vec<f64> =
@@ -264,7 +265,8 @@ pub(crate) fn visual_pathway(
         local_adapt(&lum, width, height, ppd, relaxed)
     };
 
-    crate::par::timed_eprintln!("  ladapt: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("  ladapt: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     // ---- senile miosis ----
     if par.do_slum {
         let l_a = geomean(&l_adapt, relaxed);
@@ -311,7 +313,8 @@ pub(crate) fn visual_pathway(
     let y0 = 10f64.powf(y_lut[0]);
     let y1 = 10f64.powf(y_lut[y_lut.len() - 1]);
 
-    crate::par::timed_eprintln!("    jnd_lut: {:?}", t0.elapsed()); let t1 = std::time::Instant::now();
+    crate::par::timed_eprintln!("    jnd_lut: {:?}", t0.elapsed());
+    let t1 = std::time::Instant::now();
     // `y_lut` is log10 of a log-spaced grid — uniform to ulp precision, so
     // the interval probe lands in ~1 step instead of a 11-level search.
     let dx = (y_lut[y_lut.len() - 1] - y_lut[0]) / (y_lut.len() - 1) as f64;
@@ -324,7 +327,8 @@ pub(crate) fn visual_pathway(
         acc
     });
 
-    crate::par::timed_eprintln!("  jnd: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("  jnd: {:?}", t0.elapsed());
+    let t0 = std::time::Instant::now();
     crate::par::timed_eprintln!("    jnd_ploop: {:?}", t1.elapsed());
     // ---- sp0 decomposition + baseband DC removal ----
     let mut bands =

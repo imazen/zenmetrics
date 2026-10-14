@@ -13,32 +13,57 @@ const DEFAULT_RANDOM_PAIRS: usize = 10_000_000;
 fn tiers() -> Vec<(&'static str, fn(&[f32], &[f32], &mut [f32]))> {
     let mut t: Vec<(&'static str, fn(&[f32], &[f32], &mut [f32]))> = vec![
         ("scalar", |x, y, o| {
-            fdlibm::vpowf_libm_pairs_kernel_8::<{ fdlibm::coverage::EXACT }, _>(ScalarToken, x, y, o)
+            fdlibm::vpowf_libm_pairs_kernel_8::<{ fdlibm::coverage::EXACT }, _>(
+                ScalarToken,
+                x,
+                y,
+                o,
+            )
         }),
         ("dispatch", |x, y, o| vpowf_libm_pairs_into(x, y, o)),
     ];
     #[cfg(target_arch = "x86_64")]
     if archmage::X64V3Token::summon().is_some() {
         t.push(("v3", |x, y, o| {
-            v3::vpowf_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V3Token::summon().unwrap(), x, y, o)
+            v3::vpowf_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::X64V3Token::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     if archmage::X64V4xToken::summon().is_some() {
         t.push(("v4x", |x, y, o| {
-            v4x::vpowf_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V4xToken::summon().unwrap(), x, y, o)
+            v4x::vpowf_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::X64V4xToken::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(target_arch = "aarch64")]
     if archmage::NeonToken::summon().is_some() {
         t.push(("neon", |x, y, o| {
-            neon::vpowf_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(archmage::NeonToken::summon().unwrap(), x, y, o)
+            neon::vpowf_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::NeonToken::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(target_arch = "wasm32")]
     if archmage::Wasm128Token::summon().is_some() {
         t.push(("wasm128", |x, y, o| {
-            wasm128::vpowf_libm_pairs_into_gated_wasm128_t::<{ fdlibm::coverage::EXACT }>(archmage::Wasm128Token::summon().unwrap(), x, y, o)
+            wasm128::vpowf_libm_pairs_into_gated_wasm128_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::Wasm128Token::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     t
@@ -416,11 +441,7 @@ fn tiers_expf() -> Vec<(&'static str, fn(&[f32], &mut [f32]))> {
     #[cfg(target_arch = "wasm32")]
     if archmage::Wasm128Token::summon().is_some() {
         t.push(("wasm128", |x, o| {
-            wasm128::vexpf_libm_into_wasm128_t(
-                archmage::Wasm128Token::summon().unwrap(),
-                x,
-                o,
-            )
+            wasm128::vexpf_libm_into_wasm128_t(archmage::Wasm128Token::summon().unwrap(), x, o)
         }));
     }
     t
@@ -557,8 +578,8 @@ fn powf_libm_gated_tiers_bit_exact_on_domain() {
             let xs: Vec<f32> = (0..4096)
                 .map(|i| match i % 4 {
                     0 => f32::from_bits(0x0000_0001 + (rng.bits() & 0x007f_fffe)), // subnormal
-                    1 => rng.range(1e-37, 1.0),  // small normal → underflow result
-                    2 => rng.range(1.0, 16.0),   // mid
+                    1 => rng.range(1e-37, 1.0), // small normal → underflow result
+                    2 => rng.range(1.0, 16.0),  // mid
                     _ => rng.range(1e-30, 1e30), // wide normal
                 })
                 .collect();

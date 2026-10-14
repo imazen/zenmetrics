@@ -11,7 +11,7 @@
 //! `cargo run --release -p zenmetrics-math --features avx512 --example powf_coverage_bench`
 
 use std::time::Instant;
-use zenmetrics_math::{fdlibm::coverage::*, vpow64_libm_into_gated, vpow_libm_into_gated};
+use zenmetrics_math::{fdlibm::coverage::*, vpow_libm_into_gated, vpow64_libm_into_gated};
 
 fn bench<const G: u8>(label: &str, xs: &[f32], p: f32, reps: usize) {
     let n = xs.len();
@@ -105,7 +105,9 @@ fn main() {
             .wrapping_add(1_442_695_040_888_963_407);
         (state >> 40) as f64 / (1u64 << 24) as f64
     };
-    let xs32: Vec<f32> = (0..n).map(|_| (lcg() * 2.0) as f32 + f32::MIN_POSITIVE).collect();
+    let xs32: Vec<f32> = (0..n)
+        .map(|_| (lcg() * 2.0) as f32 + f32::MIN_POSITIVE)
+        .collect();
     let xs64: Vec<f64> = (0..n).map(|_| lcg() * 2.0 + f64::MIN_POSITIVE).collect();
     let p = 2.4f32;
     let p64 = 2.4f64;
@@ -171,7 +173,10 @@ fn main() {
             _ => -150.0,
         });
     }
-    println!("hostile domain ({} lanes): mismatches vs scalar libm::powf", h.len());
+    println!(
+        "hostile domain ({} lanes): mismatches vs scalar libm::powf",
+        h.len()
+    );
     hostile32::<{ EXACT }>("full", &h, &hy);
     hostile32::<{ POSITIVE_FINITE }>("no EDGE", &h, &hy);
     hostile32::<{ POSITIVE_NORMAL }>("POSITIVE_NORMAL", &h, &hy);

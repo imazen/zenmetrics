@@ -13,26 +13,46 @@ const DEFAULT_RANDOM_PAIRS: usize = 2_000_000;
 fn tiers() -> Vec<(&'static str, fn(&[f64], &[f64], &mut [f64]))> {
     let mut t: Vec<(&'static str, fn(&[f64], &[f64], &mut [f64]))> = vec![
         ("scalar", |x, y, o| {
-            fdlibm64::vpow64_libm_pairs_kernel_4::<{ fdlibm::coverage::EXACT }, _>(ScalarToken, x, y, o)
+            fdlibm64::vpow64_libm_pairs_kernel_4::<{ fdlibm::coverage::EXACT }, _>(
+                ScalarToken,
+                x,
+                y,
+                o,
+            )
         }),
         ("dispatch", |x, y, o| vpow64_libm_pairs_into(x, y, o)),
     ];
     #[cfg(target_arch = "x86_64")]
     if archmage::X64V3Token::summon().is_some() {
         t.push(("v3", |x, y, o| {
-            v3::vpow64_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V3Token::summon().unwrap(), x, y, o)
+            v3::vpow64_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::X64V3Token::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     if archmage::X64V4xToken::summon().is_some() {
         t.push(("v4x", |x, y, o| {
-            v4x::vpow64_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V4xToken::summon().unwrap(), x, y, o)
+            v4x::vpow64_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::X64V4xToken::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(target_arch = "aarch64")]
     if archmage::NeonToken::summon().is_some() {
         t.push(("neon", |x, y, o| {
-            neon::vpow64_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(archmage::NeonToken::summon().unwrap(), x, y, o)
+            neon::vpow64_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(
+                archmage::NeonToken::summon().unwrap(),
+                x,
+                y,
+                o,
+            )
         }));
     }
     #[cfg(target_arch = "wasm32")]
@@ -306,7 +326,18 @@ fn pow64_libm_exact_ties_bit_exact() {
 fn pow64_libm_dense_positive_bit_exact() {
     let ys_grid: Vec<f64> = (-40..=40)
         .map(|k| k as f64 * 0.1)
-        .chain([0.02, -0.02, 0.4, 2.4, 1.0 / 2.4, 1.0 / 3.0, 0.6, 1.3, 2.26, 3.7])
+        .chain([
+            0.02,
+            -0.02,
+            0.4,
+            2.4,
+            1.0 / 2.4,
+            1.0 / 3.0,
+            0.6,
+            1.3,
+            2.26,
+            3.7,
+        ])
         .collect();
     let mut xs = Vec::new();
     let mut ys = Vec::new();
@@ -439,17 +470,9 @@ fn tiers_log<const LOG2: bool>() -> Vec<(&'static str, fn(&[f64], &mut [f64]))> 
     if archmage::Wasm128Token::summon().is_some() {
         t.push(("wasm128", |x, o| {
             if LOG2 {
-                wasm128::vlog2_libm_into_wasm128_t(
-                    archmage::Wasm128Token::summon().unwrap(),
-                    x,
-                    o,
-                )
+                wasm128::vlog2_libm_into_wasm128_t(archmage::Wasm128Token::summon().unwrap(), x, o)
             } else {
-                wasm128::vlog_libm_into_wasm128_t(
-                    archmage::Wasm128Token::summon().unwrap(),
-                    x,
-                    o,
-                )
+                wasm128::vlog_libm_into_wasm128_t(archmage::Wasm128Token::summon().unwrap(), x, o)
             }
         }));
     }
@@ -505,21 +528,21 @@ fn log64_libm_edge_matrix_bit_exact() {
     let mut xs: Vec<f64> = Vec::new();
     for bits in [
         0x0000_0000_0000_0000u64, // +0
-        0x0000_0000_0000_0001,      // smallest subnormal
-        0x000f_ffff_ffff_ffff,      // largest subnormal
-        0x0010_0000_0000_0000,      // smallest normal
-        0x3fe6_a09d_ffff_ffff,      // just below the reduce pivot
-        0x3fe6_a09e_0000_0000,      // ~sqrt(2)/2 — reduce pivot
-        0x3fe6_a09e_667f_3bcd,      // sqrt(2)/2 exactly
-        0x3ff0_0000_0000_0000,      // 1.0
-        0x3ff0_0000_0000_0001,      // 1+ulp
-        0x3fef_ffff_ffff_ffff,      // 1-ulp
-        0x4000_0000_0000_0000,      // 2.0
-        0x3fe0_0000_0000_0000,      // 0.5
-        0x7fe0_0000_0000_0000,      // huge normal
-        0x7fef_ffff_ffff_ffff,      // max finite
-        0x7ff0_0000_0000_0000,      // +inf
-        0x7ff8_0000_0000_0000,      // +NaN
+        0x0000_0000_0000_0001,    // smallest subnormal
+        0x000f_ffff_ffff_ffff,    // largest subnormal
+        0x0010_0000_0000_0000,    // smallest normal
+        0x3fe6_a09d_ffff_ffff,    // just below the reduce pivot
+        0x3fe6_a09e_0000_0000,    // ~sqrt(2)/2 — reduce pivot
+        0x3fe6_a09e_667f_3bcd,    // sqrt(2)/2 exactly
+        0x3ff0_0000_0000_0000,    // 1.0
+        0x3ff0_0000_0000_0001,    // 1+ulp
+        0x3fef_ffff_ffff_ffff,    // 1-ulp
+        0x4000_0000_0000_0000,    // 2.0
+        0x3fe0_0000_0000_0000,    // 0.5
+        0x7fe0_0000_0000_0000,    // huge normal
+        0x7fef_ffff_ffff_ffff,    // max finite
+        0x7ff0_0000_0000_0000,    // +inf
+        0x7ff8_0000_0000_0000,    // +NaN
     ] {
         for d in -2i64..=2 {
             let b = (bits as i64).wrapping_add(d);
@@ -569,7 +592,7 @@ fn log64_libm_random_sweep_bit_exact() {
                 0 => rng.range(0.0, 4.0),
                 1 => rng.range(1e-320, 1e-280), // subnormal-heavy
                 2 => f64::from_bits(rng.next() & 0x000f_ffff_ffff_ffff), // subnormal
-                3 => -rng.range(0.0, 1e300),  // negatives → fallback
+                3 => -rng.range(0.0, 1e300),    // negatives → fallback
                 _ => f64::from_bits(rng.next()), // anything incl NaN/inf
             };
         }

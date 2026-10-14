@@ -872,11 +872,7 @@ macro_rules! srgb_to_lab_exact_body {
                     let hi = zenmetrics_math::fdlibm64::pow64_libm_4x_gated::<
                         { zenmetrics_math::fdlibm::coverage::BULK },
                         _,
-                    >(
-                        $token,
-                        arg,
-                        $F64::splat_t($token, 1.0 / 3.0),
-                    );
+                    >($token, arg, $F64::splat_t($token, 1.0 / 3.0));
                     let lo = (t * $F64::splat_t($token, 903.3) + $F64::splat_t($token, 16.0))
                         / $F64::splat_t($token, 116.0);
                     $F64::blend(sel, hi, lo)

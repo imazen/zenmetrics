@@ -1359,7 +1359,7 @@ mod pow_tests {
         xs.extend([
             0.0,
             f64::MIN_POSITIVE,
-            f64::from_bits(1), // smallest subnormal
+            f64::from_bits(1),                  // smallest subnormal
             f64::from_bits(0x000fffffffffffff), // largest subnormal
             f64::MAX,
             f64::INFINITY,

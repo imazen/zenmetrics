@@ -2235,9 +2235,7 @@ pub fn mdct_psnr_srgb8(
                 // Each stripe re-iterates all 384 band planes, so keep
                 // spans ≥128 elems for the v3 kernel's 8-lane runs to
                 // amortize per-band prologue/tail work.
-                let stripes = (w / 128)
-                    .max(1)
-                    .min(rayon::current_num_threads() * 2);
+                let stripes = (w / 128).max(1).min(rayon::current_num_threads() * 2);
                 let stripe_len = w.div_ceil(stripes);
                 let (cr, cd) = (&img_r.comps, &img_d.comps);
                 errorline

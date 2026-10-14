@@ -1165,9 +1165,9 @@ pub(crate) fn gather_lerp_exp3_apply_scalar_t(
 }
 
 #[cfg(test)]
-mod fdlibm_tests;
-#[cfg(test)]
 mod fdlibm64_tests;
+#[cfg(test)]
+mod fdlibm_tests;
 #[cfg(test)]
 mod tier_tests;
 

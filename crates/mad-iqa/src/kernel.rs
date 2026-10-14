@@ -574,7 +574,11 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
             let x = (c as f64 - n as f64 / 2.0) / (n as f64 / 2.0);
             let y = (r as f64 - m as f64 / 2.0) / (m as f64 / 2.0);
             let i = r * n + c;
-            a64[i] = if r == rc && c == cc { 1.0 } else { x * x + y * y };
+            a64[i] = if r == rc && c == cc {
+                1.0
+            } else {
+                x * x + y * y
+            };
             theta[i] = libm::atan2(-y, x);
         }
     }
