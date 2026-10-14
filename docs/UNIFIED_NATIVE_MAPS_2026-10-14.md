@@ -248,3 +248,11 @@ Validation (`crates/vmaf`):
 - Phone-model, sequence and stopped requests refuse. Tests pass with default,
   `simd`, `simd,parallel` and `avx512,parallel` features, libvmaf parity
   included.
+
+## Browser viewer
+
+The WASM viewer serves each metric's primary map through the same call
+(`feaafabd`): `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`, `vifvec`
+and `vmaf-v1`. The other maps stay available to native callers through
+`Evaluation::maps()`. Routes and browser parity:
+[browser viewer](BROWSER_VIEWER_2026-10-13.md).
