@@ -291,42 +291,33 @@ fn bluestein_batch8_inner(
 
     fft_batch8(are, aim, m, mplan);
 
-    // a[k] *= bf[k]
+    // a[k] = a[k]·bf[k], then a[k] = conj(a[k]) — one fused sweep.
     for k in 0..m {
         let br = f32x8::splat_t(token, bf[k].re);
         let bi = f32x8::splat_t(token, bf[k].im);
         let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
         let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
         (ar * br - ai * bi).store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
-        (ar * bi + ai * br).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
-    }
-
-    // conj
-    for k in 0..m {
-        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
-        (zero - ai).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
+        (zero - (ar * bi + ai * br)).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
     }
 
     fft_batch8(are, aim, m, mplan);
 
-    // conj·(1/m): `im·(−s)` ≡ `(−im)·s` bitwise (IEEE mul signs).
+    // out[k] = (conj(a[k])·(1/m))·chirp[k] for k < n — fused into one
+    // sweep. Elements k ≥ n are never read after this point, so their
+    // conj·scale is dead work the scalar path performed anyway; the
+    // per-lane expression `im·(−s)` ≡ `(−im)·s` bitwise.
     let s = f32x8::splat_t(token, 1.0 / m as f32);
     let negs = f32x8::splat_t(token, -1.0 / m as f32);
-    for k in 0..m {
-        let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
-        let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
-        (ar * s).store((&mut are[k * 8..k * 8 + 8]).try_into().unwrap());
-        (ai * negs).store((&mut aim[k * 8..k * 8 + 8]).try_into().unwrap());
-    }
-
-    // out[k] = a[k]·chirp[k]
     for k in 0..n {
         let cr = f32x8::splat_t(token, chirp[k].re);
         let ci = f32x8::splat_t(token, chirp[k].im);
         let ar = f32x8::load_t(token, (&are[k * 8..k * 8 + 8]).try_into().unwrap());
         let ai = f32x8::load_t(token, (&aim[k * 8..k * 8 + 8]).try_into().unwrap());
-        (ar * cr - ai * ci).store((&mut re8[k * 8..k * 8 + 8]).try_into().unwrap());
-        (ar * ci + ai * cr).store((&mut im8[k * 8..k * 8 + 8]).try_into().unwrap());
+        let ore = ar * s;
+        let oim = ai * negs;
+        (ore * cr - oim * ci).store((&mut re8[k * 8..k * 8 + 8]).try_into().unwrap());
+        (ore * ci + oim * cr).store((&mut im8[k * 8..k * 8 + 8]).try_into().unwrap());
     }
 }
 
@@ -390,25 +381,101 @@ fn fft_batch8_inner(
         }
     }
 
-    for tw in stages {
-        let half = tw.len();
-        let len = half * 2;
-        for start in (0..n).step_by(len) {
-            for (k, &w) in tw.iter().enumerate() {
-                let a = (start + k) * 8;
-                let b = (start + k + half) * 8;
-                let wre = f32x8::splat_t(token, w.re);
-                let wim = f32x8::splat_t(token, w.im);
-                let ure = f32x8::load_t(token, (&re8[a..a + 8]).try_into().unwrap());
-                let uim = f32x8::load_t(token, (&im8[a..a + 8]).try_into().unwrap());
-                let vre = f32x8::load_t(token, (&re8[b..b + 8]).try_into().unwrap());
-                let vim = f32x8::load_t(token, (&im8[b..b + 8]).try_into().unwrap());
-                let tre = vre * wre - vim * wim;
-                let tim = vre * wim + vim * wre;
-                (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
-                (uim + tim).store((&mut im8[a..a + 8]).try_into().unwrap());
-                (ure - tre).store((&mut re8[b..b + 8]).try_into().unwrap());
-                (uim - tim).store((&mut im8[b..b + 8]).try_into().unwrap());
+    // Stages run in fused pairs: the two butterflies of stage `s`
+    // inside one stage-`s+1` span and the two `s+1` butterflies that
+    // combine them are all computed in registers before storing. The
+    // per-element op sequence is identical to the unfused sweep —
+    // every butterfly still applies `u±v·w` in the same order — so
+    // results are bit-identical; the win is halved sweep traffic.
+    let mut it = stages.iter();
+    loop {
+        let (tw_a, tw_b) = match (it.next(), it.next()) {
+            (Some(a), Some(b)) => (a, b),
+            (Some(a), None) => {
+                // Odd trailing stage: plain sweep.
+                let half = a.len();
+                let len = half * 2;
+                for start in (0..n).step_by(len) {
+                    for (k, &w) in a.iter().enumerate() {
+                        let aa = (start + k) * 8;
+                        let bb = (start + k + half) * 8;
+                        let wre = f32x8::splat_t(token, w.re);
+                        let wim = f32x8::splat_t(token, w.im);
+                        let ure = f32x8::load_t(token, (&re8[aa..aa + 8]).try_into().unwrap());
+                        let uim = f32x8::load_t(token, (&im8[aa..aa + 8]).try_into().unwrap());
+                        let vre = f32x8::load_t(token, (&re8[bb..bb + 8]).try_into().unwrap());
+                        let vim = f32x8::load_t(token, (&im8[bb..bb + 8]).try_into().unwrap());
+                        let tre = vre * wre - vim * wim;
+                        let tim = vre * wim + vim * wre;
+                        (ure + tre).store((&mut re8[aa..aa + 8]).try_into().unwrap());
+                        (uim + tim).store((&mut im8[aa..aa + 8]).try_into().unwrap());
+                        (ure - tre).store((&mut re8[bb..bb + 8]).try_into().unwrap());
+                        (uim - tim).store((&mut im8[bb..bb + 8]).try_into().unwrap());
+                    }
+                }
+                break;
+            }
+            (None, _) => break,
+        };
+        let half1 = tw_a.len();
+        let half2 = tw_b.len();
+        debug_assert_eq!(half2, half1 * 2);
+        let len2 = half2 * 2;
+        for start in (0..n).step_by(len2) {
+            for k in 0..half1 {
+                // Stage-s butterflies at (start+k, +half1) and
+                // (start+k+half2, +half1) share twiddle tw_a[k]; the
+                // stage-s+1 butterflies then join them: upper pair uses
+                // tw_b[k], lower pair tw_b[k+half1].
+                let a0 = (start + k) * 8;
+                let b0 = (start + k + half1) * 8;
+                let a1 = (start + k + half2) * 8;
+                let b1 = (start + k + half2 + half1) * 8;
+                let wa = tw_a[k];
+                let ware = f32x8::splat_t(token, wa.re);
+                let waim = f32x8::splat_t(token, wa.im);
+                let u0re = f32x8::load_t(token, (&re8[a0..a0 + 8]).try_into().unwrap());
+                let u0im = f32x8::load_t(token, (&im8[a0..a0 + 8]).try_into().unwrap());
+                let v0re = f32x8::load_t(token, (&re8[b0..b0 + 8]).try_into().unwrap());
+                let v0im = f32x8::load_t(token, (&im8[b0..b0 + 8]).try_into().unwrap());
+                let u1re = f32x8::load_t(token, (&re8[a1..a1 + 8]).try_into().unwrap());
+                let u1im = f32x8::load_t(token, (&im8[a1..a1 + 8]).try_into().unwrap());
+                let v1re = f32x8::load_t(token, (&re8[b1..b1 + 8]).try_into().unwrap());
+                let v1im = f32x8::load_t(token, (&im8[b1..b1 + 8]).try_into().unwrap());
+                // stage s, upper block: t0 = v0·wa
+                let t0re = v0re * ware - v0im * waim;
+                let t0im = v0re * waim + v0im * ware;
+                let p0re = u0re + t0re;
+                let p0im = u0im + t0im;
+                let q0re = u0re - t0re;
+                let q0im = u0im - t0im;
+                // stage s, lower block: t1 = v1·wa
+                let t1re = v1re * ware - v1im * waim;
+                let t1im = v1re * waim + v1im * ware;
+                let p1re = u1re + t1re;
+                let p1im = u1im + t1im;
+                let q1re = u1re - t1re;
+                let q1im = u1im - t1im;
+                // stage s+1, upper butterfly: v = p1·tw_b[k]
+                let wb = tw_b[k];
+                let wre = f32x8::splat_t(token, wb.re);
+                let wim = f32x8::splat_t(token, wb.im);
+                let tre = p1re * wre - p1im * wim;
+                let tim = p1re * wim + p1im * wre;
+                (p0re + tre).store((&mut re8[a0..a0 + 8]).try_into().unwrap());
+                (p0im + tim).store((&mut im8[a0..a0 + 8]).try_into().unwrap());
+                (p0re - tre).store((&mut re8[a1..a1 + 8]).try_into().unwrap());
+                (p0im - tim).store((&mut im8[a1..a1 + 8]).try_into().unwrap());
+                // stage s+1, lower butterfly: v = q1·tw_b[k+half1]
+                let wb2 = tw_b[k + half1];
+                let wre = f32x8::splat_t(token, wb2.re);
+                let wim = f32x8::splat_t(token, wb2.im);
+                let tre = q1re * wre - q1im * wim;
+                let tim = q1re * wim + q1im * wre;
+                (q0re + tre).store((&mut re8[b0..b0 + 8]).try_into().unwrap());
+                (q0im + tim).store((&mut im8[b0..b0 + 8]).try_into().unwrap());
+                (q0re - tre).store((&mut re8[b1..b1 + 8]).try_into().unwrap());
+                (q0im - tim).store((&mut im8[b1..b1 + 8]).try_into().unwrap());
             }
         }
     }

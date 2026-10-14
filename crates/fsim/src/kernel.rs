@@ -571,25 +571,91 @@ where
     }
 }
 
+/// One output element of `conv2_same_3x3` — the per-tap `acc += k·y`
+/// accumulation with edge skips, identical for every driver.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn conv2_same_3x3_one(
+    o: &mut f32,
+    y: &[f32],
+    w: usize,
+    h: usize,
+    i: usize,
+    j: usize,
+    k: &[[f32; 3]; 3],
+) {
+    let mut acc = 0.0f32;
+    for a in 0..3isize {
+        let r = i as isize + 1 - a;
+        if r < 0 || r >= h as isize {
+            continue;
+        }
+        for b in 0..3isize {
+            let c = j as isize + 1 - b;
+            if c < 0 || c >= w as isize {
+                continue;
+            }
+            acc += k[a as usize][b as usize] * y[r as usize * w + c as usize];
+        }
+    }
+    *o = acc;
+}
+
+/// Eight interior outputs of one `conv2_same_3x3` row — lanes are
+/// consecutive columns; every tap is an unaligned contiguous load and
+/// `acc += k·y` keeps the same (a,b) order per lane, so results are
+/// bit-identical to [`conv2_same_3x3_one`]. `out[t]` is column `j0+t`.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn conv2_same_3x3_row_inner(
+    token: Token,
+    out: &mut [f32],
+    y: &[f32],
+    w: usize,
+    i: usize,
+    j0: usize,
+    k: &[[f32; 3]; 3],
+) {
+    let ks: [[f32x8; 3]; 3] =
+        core::array::from_fn(|a| core::array::from_fn(|b| f32x8::splat_t(token, k[a][b])));
+    let zero = f32x8::splat_t(token, 0.0);
+    let nfull = out.len() & !7;
+    let mut t = 0;
+    while t < nfull {
+        let j = j0 + t;
+        let mut acc = zero;
+        for a in 0..3 {
+            let r = i + 1 - a;
+            for b in 0..3 {
+                let base = r * w + j + 1 - b;
+                let v = f32x8::load_t(token, (&y[base..base + 8]).try_into().unwrap());
+                acc = acc + ks[a][b] * v;
+            }
+        }
+        acc.store((&mut out[t..t + 8]).try_into().unwrap());
+        t += 8;
+    }
+}
+
 /// One output row of `conv2_same_3x3` — per-element tap order identical
 /// under either driver (reads at most the two neighbouring source rows).
 fn conv2_same_3x3_row(out: &mut [f32], y: &[f32], w: usize, h: usize, i: usize, k: &[[f32; 3]; 3]) {
-    for (j, o) in out.iter_mut().enumerate() {
-        let mut acc = 0.0f32;
-        for a in 0..3isize {
-            let r = i as isize + 1 - a;
-            if r < 0 || r >= h as isize {
-                continue;
-            }
-            for b in 0..3isize {
-                let c = j as isize + 1 - b;
-                if c < 0 || c >= w as isize {
-                    continue;
-                }
-                acc += k[a as usize][b as usize] * y[r as usize * w + c as usize];
-            }
+    // Edge rows (and narrow planes) keep the per-tap skip loop scalar.
+    if i == 0 || i + 1 == h || w < 3 {
+        for (j, o) in out.iter_mut().enumerate() {
+            conv2_same_3x3_one(o, y, w, h, i, j, k);
         }
-        *o = acc;
+        return;
+    }
+    conv2_same_3x3_one(&mut out[0], y, w, h, i, 0, k);
+    conv2_same_3x3_one(&mut out[w - 1], y, w, h, i, w - 1, k);
+    let interior = &mut out[1..w - 1];
+    let nfull = interior.len() & !7;
+    archmage::attuned!(
+        conv2_same_3x3_row_inner(&mut interior[..nfull], y, w, i, 1, k),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+    for j in 1 + nfull..w - 1 {
+        conv2_same_3x3_one(&mut out[j], y, w, h, i, j, k);
     }
 }
 
@@ -698,17 +764,24 @@ fn angular_filters(w: usize, h: usize, sintheta: &[f32], costheta: &[f32]) -> [V
 }
 
 /// MATLAB `median` of a f32 vector: mean of the two middle elements
-/// for even counts, the middle for odd — computed in f64.
+/// for even counts, the middle for odd — computed in f64. Uses O(n)
+/// selection instead of a full sort; the selected values are identical
+/// to the sorted-order medians, so results are bit-identical.
 fn median_f32(v: &mut [f32]) -> f64 {
-    v.sort_unstable_by(f32::total_cmp);
     let n = v.len();
     if n == 0 {
         return 0.0;
     }
     if n % 2 == 1 {
-        v[n / 2] as f64
+        *v.select_nth_unstable_by(n / 2, f32::total_cmp).1 as f64
     } else {
-        (v[n / 2 - 1] as f64 + v[n / 2] as f64) / 2.0
+        let hi = *v.select_nth_unstable_by(n / 2, f32::total_cmp).1;
+        // Everything at index ≥ n/2 is ≥ hi; the lower-middle element
+        // is the max of the strict lower half under total_cmp order.
+        let lo = *v[..n / 2]
+            .select_nth_unstable_by(n / 2 - 1, f32::total_cmp)
+            .1;
+        (lo as f64 + hi as f64) / 2.0
     }
 }
 
