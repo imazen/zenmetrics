@@ -15,6 +15,7 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Unified native maps, PSNR-HVS (`07a7d273`): per-8×8-block mean coefficient energies, `csf_error_{r,g,b}` (PSNR-HVS) and `masked_error_{r,g,b}` (PSNR-HVS-M), plus their channel means `csf_error` (primary) and `masked_error`. Per-channel maps fold to the channel scores bit for bit; an f64 block oracle agrees to 2.0e-6. Scores are unchanged with maps.
 - Unified native maps, NLPD (`74650264`): `Evaluation::maps()` serves `level_0` … `level_5`, each level's squared normalized-Laplacian difference summed over R, G, B (Difference polarity; per-level components of the score). Geometry follows the downsample's parity-dependent phase. Scores are bit-identical with and without maps; level maps equal the materialized reference bands bit for bit. Semantics and validation: [native maps](docs/UNIFIED_NATIVE_MAPS_2026-10-14.md).
 - Formatting (`bc144cf6`): rustfmt 1.10.0 reflow in fsim, hdrvdp, mad-iqa, mdctpsnr, vsi and zenmetrics-math, which CI's fmt check had been rejecting.
 

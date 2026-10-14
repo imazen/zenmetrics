@@ -45,3 +45,33 @@ Validation (`crates/nlpd`):
   patched pairs at 112×100, 97×101, 96×98 and 131×96. Strided input gives the
   packed maps. Subsampled requests and cancellation behave as specified. Tests
   pass with default, `parallel` and `avx512,parallel` features.
+
+## PSNR-HVS (`psnrhvs`)
+
+| Map | Values | Polarity | Grid |
+| --- | --- | --- | --- |
+| `csf_error` (primary) | mean over R, G, B of `csf_error_{r,g,b}` | Difference | complete 8×8 blocks |
+| `masked_error` | mean over R, G, B of `masked_error_{r,g,b}` | Difference | same |
+| `csf_error_r`, `_g`, `_b` | block mean per-coefficient CSF-weighted squared DCT error, `S_block / 64` (PSNR-HVS) | Difference | same |
+| `masked_error_r`, `_g`, `_b` | same after between-coefficient contrast masking (PSNR-HVS-M) | Difference | same |
+
+The grid is the score's own: `⌊(w−8)/8⌋+1 × ⌊(h−8)/8⌋+1` blocks from the
+origin. The reference drops partial right/bottom strips, so they have no
+cells. Each value depends only on its block (support halo 0). A channel's
+score is `10·log10(255² / mean(map))`; the headline averages the three
+channels' decibels, so no single map folds to it.
+
+Validation (`crates/psnrhvs`):
+
+- Per-channel maps fold to `psnr_hvs` and `psnr_hvs_m` bit for bit using
+  the kernel's band split (64×48, 37×29, 8×8, 130×75). The block energies
+  are written after each band's own fold.
+- An independent f64 transcription of one `psnrhvsm.m` block (DCT by
+  definition, `maskeff`, both energies) agrees with every block to 2.0e-6
+  relative.
+- Block maps are bit-identical across SIMD tiers. A change inside one block
+  moves only that block; a change in the unscored strip moves none.
+- Map-on and map-off scores are bit-identical (textured, identical, flat,
+  odd sizes); strided input gives the packed maps. Subsampled and stopped
+  requests behave as specified. Tests pass with default, `parallel`,
+  `avx512,parallel` and no-std builds.
