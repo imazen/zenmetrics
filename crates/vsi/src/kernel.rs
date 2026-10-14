@@ -1045,7 +1045,7 @@ fn srgb_to_lab(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 // `([1:256]-129)/256`, mask `u1²+u2² ≤ 0.25`, `ifftshift`, radius with
 // DC=1 fudge, `LG = exp(−(log(r/ω0))²/(2σf²))`, `LG(1,1) = 0`.
 
-fn loggabor_256() -> Vec<f32> {
+fn loggabor_256_build() -> Vec<f32> {
     let n = SDSP_N;
     let mut lg = vec![0.0f32; n * n];
     for i in 0..n {
@@ -1072,6 +1072,20 @@ fn loggabor_256() -> Vec<f32> {
         }
     }
     lg
+}
+
+/// The log-Gabor grid is a pure function of the crate constants — a
+/// per-process constant. `std` builds compute it once and reuse it;
+/// `no_std` rebuilds it per call. Either way the stored bits are the
+/// same `libm` results.
+#[cfg(feature = "std")]
+fn loggabor_256() -> &'static [f32] {
+    static LG: std::sync::LazyLock<Vec<f32>> = std::sync::LazyLock::new(loggabor_256_build);
+    &LG
+}
+#[cfg(not(feature = "std"))]
+fn loggabor_256() -> Vec<f32> {
+    loggabor_256_build()
 }
 
 // ================================ SDSP ===================================
@@ -1135,8 +1149,30 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
     for s in &mut sf {
         *s = libm::sqrtf(*s);
     }
-    // 4. centre prior: coords 1..=256, centre rows/2 = 128.
+    // 4. centre prior: coords 1..=256, centre rows/2 = 128. The
+    // Gaussian window is constant per process (see `loggabor_256`) —
+    // under `std` the 65k `expf`s run once for the whole process.
     let mut vs = vec![0.0f32; n * n];
+    #[cfg(feature = "std")]
+    {
+        static GW: std::sync::LazyLock<Vec<f32>> = std::sync::LazyLock::new(|| {
+            let n = SDSP_N;
+            let mut gw = vec![0.0f32; n * n];
+            for i in 0..n {
+                let dy = (i + 1) as f32 - (n / 2) as f32;
+                for j in 0..n {
+                    let dx = (j + 1) as f32 - (n / 2) as f32;
+                    gw[i * n + j] =
+                        libm::expf(-(dx * dx + dy * dy) / (SIGMA_D * SIGMA_D));
+                }
+            }
+            gw
+        });
+        for i in 0..n * n {
+            vs[i] = sf[i] * GW[i];
+        }
+    }
+    #[cfg(not(feature = "std"))]
     for i in 0..n {
         let dy = (i + 1) as f32 - (n / 2) as f32;
         for j in 0..n {
