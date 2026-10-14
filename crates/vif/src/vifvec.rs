@@ -610,6 +610,80 @@ macro_rules! corr_row_body {
         let ftaps: [$V; 81] = core::array::from_fn(|t| {
             <$V>::splat_t($token, if t < $fh * $fw && !big { $filt[t] } else { 0.0 })
         });
+        // Four output blocks at once: each `acc` keeps its own serial
+        // tap order (bit-identical); the four independent chains hide
+        // the ~4-cycle add latency.
+        while ox + 4 * $lanes <= $out.len()
+            && $start + (ox + 4 * $lanes - 1) * $step + ($fw - cx) <= $w
+        {
+            let zero = <$V>::splat_t($token, 0.0);
+            let (mut a0, mut a1, mut a2, mut a3) = (zero, zero, zero, zero);
+            let x = $start + ox * $step - cx;
+            let dx = $lanes * $step;
+            for ky in 0..$fh {
+                let iy = reflect1($yc as i64 + ky as i64 - cy as i64, $h as i64);
+                let row = &$img[iy * $w..(iy + 1) * $w];
+                for kx in 0..$fw {
+                    let (v0, v1, v2, v3) = if $step == 1 {
+                        // Contiguous lanes — packed loads. In bounds: the
+                        // guard keeps `x + 3·dx + fw - 1 + lanes - 1 < w`.
+                        (
+                            <$V>::load_t($token, row[x + kx..x + kx + $lanes].try_into().unwrap()),
+                            <$V>::load_t(
+                                $token,
+                                row[x + kx + dx..x + kx + dx + $lanes].try_into().unwrap(),
+                            ),
+                            <$V>::load_t(
+                                $token,
+                                row[x + kx + 2 * dx..x + kx + 2 * dx + $lanes]
+                                    .try_into()
+                                    .unwrap(),
+                            ),
+                            <$V>::load_t(
+                                $token,
+                                row[x + kx + 3 * dx..x + kx + 3 * dx + $lanes]
+                                    .try_into()
+                                    .unwrap(),
+                            ),
+                        )
+                    } else {
+                        (
+                            <$V>::from_array_t(
+                                $token,
+                                core::array::from_fn(|lane| row[x + kx + lane * $step]),
+                            ),
+                            <$V>::from_array_t(
+                                $token,
+                                core::array::from_fn(|lane| row[x + kx + dx + lane * $step]),
+                            ),
+                            <$V>::from_array_t(
+                                $token,
+                                core::array::from_fn(|lane| row[x + kx + 2 * dx + lane * $step]),
+                            ),
+                            <$V>::from_array_t(
+                                $token,
+                                core::array::from_fn(|lane| row[x + kx + 3 * dx + lane * $step]),
+                            ),
+                        )
+                    };
+                    let t = ky * $fw + kx;
+                    let f = if big {
+                        <$V>::splat_t($token, $filt[t])
+                    } else {
+                        ftaps[t]
+                    };
+                    a0 = a0 + f * v0;
+                    a1 = a1 + f * v1;
+                    a2 = a2 + f * v2;
+                    a3 = a3 + f * v3;
+                }
+            }
+            $out[ox..ox + $lanes].copy_from_slice(&a0.to_array());
+            $out[ox + $lanes..ox + 2 * $lanes].copy_from_slice(&a1.to_array());
+            $out[ox + 2 * $lanes..ox + 3 * $lanes].copy_from_slice(&a2.to_array());
+            $out[ox + 3 * $lanes..ox + 4 * $lanes].copy_from_slice(&a3.to_array());
+            ox += 4 * $lanes;
+        }
         while ox + $lanes <= $out.len() && $start + (ox + $lanes - 1) * $step + ($fw - cx) <= $w {
             let mut acc = <$V>::splat_t($token, 0.0);
             let x = $start + ox * $step - cx;
@@ -1168,8 +1242,13 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     if rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
         ss.par_chunks_mut(nbw).enumerate().for_each(|(by, row)| {
-            for (bx, e) in row.iter_mut().enumerate() {
-                *e = ss_block(by, bx);
+            let mut bx = 0;
+            while bx + 8 <= nbw {
+                bx += ss_lu_batch(&lu, &pivots, y, w, by, bx, row);
+            }
+            while bx < nbw {
+                row[bx] = ss_block(by, bx);
+                bx += 1;
             }
         });
         ran_par = true;
@@ -1177,8 +1256,21 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
     let _ = ran_par;
     if !ran_par {
         for by in 0..nbh {
-            for bx in 0..nbw {
+            let mut bx = 0;
+            while bx + 8 <= nbw {
+                bx += ss_lu_batch(
+                    &lu,
+                    &pivots,
+                    y,
+                    w,
+                    by,
+                    bx,
+                    &mut ss[by * nbw..(by + 1) * nbw],
+                );
+            }
+            while bx < nbw {
                 ss[by * nbw + bx] = ss_block(by, bx);
+                bx += 1;
             }
         }
     }
@@ -1678,6 +1770,198 @@ fn pool_log2_tier_scalar_t(
     )
 }
 
+/// `ss` for `$lanes` consecutive blocks at row `by`: a lane-parallel
+/// LU solve — the shared pivot record permutes whole SoA vectors, and
+/// every substitution/dot op is elementwise per lane, so each block
+/// sees bit-identical math to the scalar `ss_block`.
+macro_rules! ss_lu_body {
+    ($token:ident, $V:ty, $lanes:literal, $lu:ident, $pivots:ident, $y:ident, $w:ident,
+     $by:ident, $bx:ident, $out:ident) => {{
+        let mut x: [$V; 9] = core::array::from_fn(|k| {
+            let (c, r) = (k / M, k % M);
+            <$V>::from_array_t(
+                $token,
+                core::array::from_fn(|l| $y[($by * M + r) * $w + ($bx + l) * M + c]),
+            )
+        });
+        // Original block vectors for the quadratic form `v·x`.
+        let v = x;
+        for (k, &p) in $pivots.iter().enumerate() {
+            x.swap(k, p);
+        }
+        for i in 1..9 {
+            for j in 0..i {
+                x[i] = x[i] - <$V>::splat_t($token, $lu[i * 9 + j]) * x[j];
+            }
+        }
+        for i in (0..9).rev() {
+            let mut s = x[i];
+            for j in (i + 1)..9 {
+                s = s - <$V>::splat_t($token, $lu[i * 9 + j]) * x[j];
+            }
+            x[i] = s / <$V>::splat_t($token, $lu[i * 9 + i]);
+        }
+        let mut s = <$V>::splat_t($token, 0.0);
+        for i in 0..9 {
+            s = s + v[i] * x[i];
+        }
+        let s = s / <$V>::splat_t($token, 9.0);
+        $out[$bx..$bx + $lanes].copy_from_slice(&s.to_array());
+        $lanes
+    }};
+}
+
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_tier_v3_t(
+    token: archmage::X64V3Token,
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    ss_lu_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::X64V3Token>,
+        4,
+        lu,
+        pivots,
+        y,
+        w,
+        by,
+        bx,
+        out
+    )
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    ss_lu_body!(
+        token,
+        magetypes::simd::generic::f64x8<archmage::X64V4xToken>,
+        8,
+        lu,
+        pivots,
+        y,
+        w,
+        by,
+        bx,
+        out
+    )
+}
+
+#[cfg(target_arch = "aarch64")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_tier_neon_t(
+    token: archmage::NeonToken,
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    ss_lu_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::NeonToken>,
+        4,
+        lu,
+        pivots,
+        y,
+        w,
+        by,
+        bx,
+        out
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+#[archmage::attune]
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    ss_lu_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::Wasm128Token>,
+        4,
+        lu,
+        pivots,
+        y,
+        w,
+        by,
+        bx,
+        out
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_tier_scalar_t(
+    token: archmage::ScalarToken,
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    ss_lu_body!(
+        token,
+        magetypes::simd::generic::f64x4<archmage::ScalarToken>,
+        4,
+        lu,
+        pivots,
+        y,
+        w,
+        by,
+        bx,
+        out
+    )
+}
+
+/// `ss` outputs starting at `(by, bx)`; returns the dispatch
+/// width written (4 or 8).
+#[allow(clippy::too_many_arguments)]
+fn ss_lu_batch(
+    lu: &[f64],
+    pivots: &[usize; 9],
+    y: &[f64],
+    w: usize,
+    by: usize,
+    bx: usize,
+    out: &mut [f64],
+) -> usize {
+    archmage::attuned!(
+        ss_lu_tier(lu, pivots, y, w, by, bx, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
 /// `(t1, t2)` pooling sums for one eigenvalue, bit-identical to the
 /// original scalar `libm::log2` loop on every dispatch tier.
 #[allow(clippy::too_many_arguments)]
@@ -1835,6 +2119,80 @@ mod tests {
             }
             assert_eq!(t1.to_bits(), r1.to_bits(), "t1 lam={lam}");
             assert_eq!(t2.to_bits(), r2.to_bits(), "t2 lam={lam}");
+        }
+    }
+
+    #[test]
+    fn ss_lu_batch_matches_scalar_solve_bits() {
+        let scalar_block = |lu: &[f64], pivots: &[usize; 9], y: &[f64], w, by, bx| {
+            let mut v = [0.0f64; 9];
+            for c in 0..M {
+                for r in 0..M {
+                    v[c * M + r] = y[(by * M + r) * w + bx * M + c];
+                }
+            }
+            let mut x = v;
+            lu_apply(lu, pivots, &mut x);
+            let mut s = 0.0;
+            for i in 0..9 {
+                s += v[i] * x[i];
+            }
+            s / 9.0
+        };
+        let (nbw, nbh) = (11usize, 7usize);
+        let (w, h) = (M * nbw, M * nbh);
+        let y: Vec<f64> = (0..w * h)
+            .map(|i| ((i * 31) % 197) as f64 * 0.5 - 40.0)
+            .collect();
+        // A well-conditioned system and a near-singular one (inf/NaN
+        // lanes must propagate identically through the batch path).
+        for near_singular in [false, true] {
+            let mut a = [0.0f64; 81];
+            for i in 0..9 {
+                for j in 0..9 {
+                    a[i * 9 + j] = if near_singular && i > 6 {
+                        a[j]
+                    } else {
+                        ((i * 7 + j * 3) % 11) as f64 * 0.1
+                            + if i == j {
+                                4.0
+                            } else {
+                                ((i * 13 + j * 5) % 7) as f64 * 0.2 - 0.5
+                            }
+                    };
+                }
+            }
+            let mut lu = a.to_vec();
+            let mut pivots = [0usize; 9];
+            lu_factor(&mut lu, &mut pivots, 9);
+            let mut out = alloc::vec![0.0f64; nbw * nbh];
+            for by in 0..nbh {
+                let mut bx = 0;
+                while bx + 8 <= nbw {
+                    bx += ss_lu_batch(
+                        &lu,
+                        &pivots,
+                        &y,
+                        w,
+                        by,
+                        bx,
+                        &mut out[by * nbw..(by + 1) * nbw],
+                    );
+                }
+                while bx < nbw {
+                    out[by * nbw + bx] = scalar_block(&lu, &pivots, &y, w, by, bx);
+                    bx += 1;
+                }
+            }
+            for by in 0..nbh {
+                for bx in 0..nbw {
+                    assert_eq!(
+                        out[by * nbw + bx].to_bits(),
+                        scalar_block(&lu, &pivots, &y, w, by, bx).to_bits(),
+                        "({by},{bx}) near_singular={near_singular}"
+                    );
+                }
+            }
         }
     }
 }
