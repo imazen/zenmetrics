@@ -486,19 +486,57 @@ fn reduce_fused_inner(
             }
 
             // --- vertical boundary patches (same as gausspyr_reduce) ---
+            // Vectorized: `vrow[x] = vrow[x] + (a·ka + b·kb)` per
+            // element — identical op order to the scalar patch.
             if dy == 0 && sh >= 2 {
-                for x in 0..sw {
+                let mut x = 0usize;
+                while x + 16 <= sw {
+                    let va: [f32; 16] = vrow[x..x + 16].try_into().unwrap();
+                    let a: [f32; 16] = src[x..x + 16].try_into().unwrap();
+                    let b: [f32; 16] = src[sw + x..sw + x + 16].try_into().unwrap();
+                    let acc = f32x16::from_array_t(token, va)
+                        + (f32x16::from_array_t(token, a) * k1
+                            + f32x16::from_array_t(token, b) * k0);
+                    vrow[x..x + 16].copy_from_slice(&acc.to_array());
+                    x += 16;
+                }
+                while x < sw {
                     vrow[x] += src[x] * k[1] + src[sw + x] * k[0];
+                    x += 1;
                 }
             }
             if dy == dh - 1 {
                 if sh % 2 == 1 && sh >= 2 {
-                    for x in 0..sw {
-                        vrow[x] += src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
+                    let (r3, r4) = ((sh - 1) * sw, (sh - 2) * sw);
+                    let mut x = 0usize;
+                    while x + 16 <= sw {
+                        let va: [f32; 16] = vrow[x..x + 16].try_into().unwrap();
+                        let a: [f32; 16] = src[r3 + x..r3 + x + 16].try_into().unwrap();
+                        let b: [f32; 16] = src[r4 + x..r4 + x + 16].try_into().unwrap();
+                        let acc = f32x16::from_array_t(token, va)
+                            + (f32x16::from_array_t(token, a) * k3
+                                + f32x16::from_array_t(token, b) * k4);
+                        vrow[x..x + 16].copy_from_slice(&acc.to_array());
+                        x += 16;
+                    }
+                    while x < sw {
+                        vrow[x] += src[r3 + x] * k[3] + src[r4 + x] * k[4];
+                        x += 1;
                     }
                 } else if sh.is_multiple_of(2) {
-                    for x in 0..sw {
-                        vrow[x] += src[(sh - 1) * sw + x] * k[4];
+                    let r4 = (sh - 1) * sw;
+                    let mut x = 0usize;
+                    while x + 16 <= sw {
+                        let va: [f32; 16] = vrow[x..x + 16].try_into().unwrap();
+                        let b: [f32; 16] = src[r4 + x..r4 + x + 16].try_into().unwrap();
+                        let acc =
+                            f32x16::from_array_t(token, va) + f32x16::from_array_t(token, b) * k4;
+                        vrow[x..x + 16].copy_from_slice(&acc.to_array());
+                        x += 16;
+                    }
+                    while x < sw {
+                        vrow[x] += src[r4 + x] * k[4];
+                        x += 1;
                     }
                 }
             }
@@ -621,19 +659,56 @@ fn reduce_fused_inner(
             }
 
             // --- vertical boundary patches (same as gausspyr_reduce) ---
+            // Vectorized like the width-16 twin: identical per-element
+            // op order to the scalar patch.
             if dy == 0 && sh >= 2 {
-                for x in 0..sw {
+                let mut x = 0usize;
+                while x + 8 <= sw {
+                    let va: [f32; 8] = vrow[x..x + 8].try_into().unwrap();
+                    let a: [f32; 8] = src[x..x + 8].try_into().unwrap();
+                    let b: [f32; 8] = src[sw + x..sw + x + 8].try_into().unwrap();
+                    let acc = f32x8::from_array_t(token, va)
+                        + (f32x8::from_array_t(token, a) * k1 + f32x8::from_array_t(token, b) * k0);
+                    vrow[x..x + 8].copy_from_slice(&acc.to_array());
+                    x += 8;
+                }
+                while x < sw {
                     vrow[x] += src[x] * k[1] + src[sw + x] * k[0];
+                    x += 1;
                 }
             }
             if dy == dh - 1 {
                 if sh % 2 == 1 && sh >= 2 {
-                    for x in 0..sw {
-                        vrow[x] += src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
+                    let (r3, r4) = ((sh - 1) * sw, (sh - 2) * sw);
+                    let mut x = 0usize;
+                    while x + 8 <= sw {
+                        let va: [f32; 8] = vrow[x..x + 8].try_into().unwrap();
+                        let a: [f32; 8] = src[r3 + x..r3 + x + 8].try_into().unwrap();
+                        let b: [f32; 8] = src[r4 + x..r4 + x + 8].try_into().unwrap();
+                        let acc = f32x8::from_array_t(token, va)
+                            + (f32x8::from_array_t(token, a) * k3
+                                + f32x8::from_array_t(token, b) * k4);
+                        vrow[x..x + 8].copy_from_slice(&acc.to_array());
+                        x += 8;
+                    }
+                    while x < sw {
+                        vrow[x] += src[r3 + x] * k[3] + src[r4 + x] * k[4];
+                        x += 1;
                     }
                 } else if sh.is_multiple_of(2) {
-                    for x in 0..sw {
-                        vrow[x] += src[(sh - 1) * sw + x] * k[4];
+                    let r4 = (sh - 1) * sw;
+                    let mut x = 0usize;
+                    while x + 8 <= sw {
+                        let va: [f32; 8] = vrow[x..x + 8].try_into().unwrap();
+                        let b: [f32; 8] = src[r4 + x..r4 + x + 8].try_into().unwrap();
+                        let acc =
+                            f32x8::from_array_t(token, va) + f32x8::from_array_t(token, b) * k4;
+                        vrow[x..x + 8].copy_from_slice(&acc.to_array());
+                        x += 8;
+                    }
+                    while x < sw {
+                        vrow[x] += src[r4 + x] * k[4];
+                        x += 1;
                     }
                 }
             }
@@ -2164,70 +2239,70 @@ fn pu_blur_fused_inner(
                 next_row += 1;
             }
             // V-pass for output row y — identical structure to
-            // pu_blur_v_inner: scalar boundary rows, SIMD column
-            // groups + scalar tail for interior rows.
-            if y < v_interior_lo || y >= v_interior_hi {
-                for x in 0..w {
-                    let mut s = 0.0f32;
-                    for t in 0..13 {
-                        let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
-                        s += k[t] * ring[(sy % RING) * w + x];
-                    }
-                    dst[row_off + x] = s * scale;
-                }
+            // pu_blur_v_inner. Boundary rows use the same SIMD
+            // column groups as the interior; only the tap row
+            // offsets differ — `reflect_idx` maps them onto real
+            // rows already present in the ring (bit-identical to
+            // the scalar boundary chain: same per-element add
+            // order).
+            let roff: [usize; 13] = if y < v_interior_lo || y >= v_interior_hi {
+                core::array::from_fn(|t| {
+                    let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                    (sy % RING) * w
+                })
             } else {
                 let mut slot = (y - 6) % RING;
-                let mut roff = [0usize; 13];
-                for t in 0..13 {
-                    roff[t] = slot * w;
+                core::array::from_fn(|_| {
+                    let off = slot * w;
                     slot += 1;
                     if slot == RING {
                         slot = 0;
                     }
+                    off
+                })
+            };
+            for cg in 0..n_groups {
+                let x_base = cg * lane;
+                let load = |t: usize| -> f32x16 {
+                    let off = roff[t] + x_base;
+                    let arr: [f32; 16] = ring[off..off + 16].try_into().unwrap();
+                    f32x16::from_array_t(token, arr)
+                };
+                let v0 = load(0);
+                let v1 = load(1);
+                let v2 = load(2);
+                let v3 = load(3);
+                let v4x = load(4);
+                let v5 = load(5);
+                let v6 = load(6);
+                let v7 = load(7);
+                let v8 = load(8);
+                let v9 = load(9);
+                let v10 = load(10);
+                let v11 = load(11);
+                let v12 = load(12);
+                let acc = v0 * k0
+                    + v1 * k1
+                    + v2 * k2
+                    + v3 * k3
+                    + v4x * k4
+                    + v5 * k5
+                    + v6 * k6
+                    + v7 * k7
+                    + v8 * k8
+                    + v9 * k9
+                    + v10 * k10
+                    + v11 * k11
+                    + v12 * k12;
+                let arr = (acc * vs).to_array();
+                dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
+            }
+            for x in n_groups * lane..w {
+                let mut s = 0.0f32;
+                for t in 0..13 {
+                    s += k[t] * ring[roff[t] + x];
                 }
-                for cg in 0..n_groups {
-                    let x_base = cg * lane;
-                    let load = |t: usize| -> f32x16 {
-                        let off = roff[t] + x_base;
-                        let arr: [f32; 16] = ring[off..off + 16].try_into().unwrap();
-                        f32x16::from_array_t(token, arr)
-                    };
-                    let v0 = load(0);
-                    let v1 = load(1);
-                    let v2 = load(2);
-                    let v3 = load(3);
-                    let v4x = load(4);
-                    let v5 = load(5);
-                    let v6 = load(6);
-                    let v7 = load(7);
-                    let v8 = load(8);
-                    let v9 = load(9);
-                    let v10 = load(10);
-                    let v11 = load(11);
-                    let v12 = load(12);
-                    let acc = v0 * k0
-                        + v1 * k1
-                        + v2 * k2
-                        + v3 * k3
-                        + v4x * k4
-                        + v5 * k5
-                        + v6 * k6
-                        + v7 * k7
-                        + v8 * k8
-                        + v9 * k9
-                        + v10 * k10
-                        + v11 * k11
-                        + v12 * k12;
-                    let arr = (acc * vs).to_array();
-                    dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
-                }
-                for x in n_groups * lane..w {
-                    let mut s = 0.0f32;
-                    for t in 0..13 {
-                        s += k[t] * ring[roff[t] + x];
-                    }
-                    dst[row_off + x] = s * scale;
-                }
+                dst[row_off + x] = s * scale;
             }
         }
     });
@@ -2368,68 +2443,67 @@ fn pu_blur_fused_inner(
                 }
                 next_row += 1;
             }
-            if y < v_interior_lo || y >= v_interior_hi {
-                for x in 0..w {
-                    let mut s = 0.0f32;
-                    for t in 0..13 {
-                        let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
-                        s += k[t] * ring[(sy % RING) * w + x];
-                    }
-                    dst[row_off + x] = s * scale;
-                }
+            // Same as the width-16 twin: boundary rows reuse the
+            // SIMD column path — `reflect_idx` yields real ring
+            // rows; the per-element add order is unchanged.
+            let roff: [usize; 13] = if y < v_interior_lo || y >= v_interior_hi {
+                core::array::from_fn(|t| {
+                    let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                    (sy % RING) * w
+                })
             } else {
                 let mut slot = (y - 6) % RING;
-                let mut roff = [0usize; 13];
-                for t in 0..13 {
-                    roff[t] = slot * w;
+                core::array::from_fn(|_| {
+                    let off = slot * w;
                     slot += 1;
                     if slot == RING {
                         slot = 0;
                     }
+                    off
+                })
+            };
+            for cg in 0..n_groups {
+                let x_base = cg * lane;
+                let load = |t: usize| -> f32x8 {
+                    let off = roff[t] + x_base;
+                    let arr: [f32; 8] = ring[off..off + 8].try_into().unwrap();
+                    f32x8::from_array_t(token, arr)
+                };
+                let v0 = load(0);
+                let v1 = load(1);
+                let v2 = load(2);
+                let v3 = load(3);
+                let v4x = load(4);
+                let v5 = load(5);
+                let v6 = load(6);
+                let v7 = load(7);
+                let v8 = load(8);
+                let v9 = load(9);
+                let v10 = load(10);
+                let v11 = load(11);
+                let v12 = load(12);
+                let acc = v0 * k0
+                    + v1 * k1
+                    + v2 * k2
+                    + v3 * k3
+                    + v4x * k4
+                    + v5 * k5
+                    + v6 * k6
+                    + v7 * k7
+                    + v8 * k8
+                    + v9 * k9
+                    + v10 * k10
+                    + v11 * k11
+                    + v12 * k12;
+                let arr = (acc * vs).to_array();
+                dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
+            }
+            for x in n_groups * lane..w {
+                let mut s = 0.0f32;
+                for t in 0..13 {
+                    s += k[t] * ring[roff[t] + x];
                 }
-                for cg in 0..n_groups {
-                    let x_base = cg * lane;
-                    let load = |t: usize| -> f32x8 {
-                        let off = roff[t] + x_base;
-                        let arr: [f32; 8] = ring[off..off + 8].try_into().unwrap();
-                        f32x8::from_array_t(token, arr)
-                    };
-                    let v0 = load(0);
-                    let v1 = load(1);
-                    let v2 = load(2);
-                    let v3 = load(3);
-                    let v4x = load(4);
-                    let v5 = load(5);
-                    let v6 = load(6);
-                    let v7 = load(7);
-                    let v8 = load(8);
-                    let v9 = load(9);
-                    let v10 = load(10);
-                    let v11 = load(11);
-                    let v12 = load(12);
-                    let acc = v0 * k0
-                        + v1 * k1
-                        + v2 * k2
-                        + v3 * k3
-                        + v4x * k4
-                        + v5 * k5
-                        + v6 * k6
-                        + v7 * k7
-                        + v8 * k8
-                        + v9 * k9
-                        + v10 * k10
-                        + v11 * k11
-                        + v12 * k12;
-                    let arr = (acc * vs).to_array();
-                    dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
-                }
-                for x in n_groups * lane..w {
-                    let mut s = 0.0f32;
-                    for t in 0..13 {
-                        s += k[t] * ring[roff[t] + x];
-                    }
-                    dst[row_off + x] = s * scale;
-                }
+                dst[row_off + x] = s * scale;
             }
         }
     });
