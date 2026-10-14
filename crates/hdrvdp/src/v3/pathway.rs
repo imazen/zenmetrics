@@ -28,7 +28,7 @@ use super::spectral;
 use super::spyr0::Spyr0;
 use super::trans64;
 use crate::Result;
-use crate::interp::{interp1_linear, trapz};
+use crate::interp::{interp1_linear_dx, trapz};
 
 /// What a single image's trip through the pathway produces.
 pub(crate) struct PathwayOut {
@@ -198,11 +198,14 @@ pub(crate) fn visual_pathway(
     let y0 = 10f64.powf(y_lut[0]);
     let y1 = 10f64.powf(y_lut[y_lut.len() - 1]);
 
+    // `y_lut` is log10 of a log-spaced grid — uniform to ulp precision, so
+    // the interval probe lands in ~1 step instead of a 11-level search.
+    let dx = (y_lut[y_lut.len() - 1] - y_lut[0]) / (y_lut.len() - 1) as f64;
     let mut p = vec![0.0; npix];
     for i in 0..npix {
         for (k, lut) in [(0usize, &jnd_cone), (1, &jnd_cone), (3, &jnd_rod)] {
             let v = r_lmsr[i * 4 + k].clamp(y0, y1).log10();
-            p[i] += interp1_linear(&y_lut, lut, v);
+            p[i] += interp1_linear_dx(&y_lut, lut, v, dx);
         }
     }
 

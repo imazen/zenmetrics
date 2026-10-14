@@ -1023,14 +1023,10 @@ impl Plan2 {
         }
     }
 
-    fn columns_inv_p(&mut self, re: &[f64], im: &mut [f64], relaxed: bool) {
-        self.columns_inv_p_filtered(re, im, None, relaxed);
-    }
-
-    /// `columns_inv_p` with an optional pointwise plane multiply folded into
-    /// the gather — `conv_fft_pad` uses this to skip a full plane sweep. The
-    /// products are computed in the same order as a separate multiply pass,
-    /// so results are bit-identical.
+    /// Inverse column stage with an optional pointwise plane multiply folded
+    /// into the gather — `conv_fft_pad` uses this to skip a full plane
+    /// sweep. The products are computed in the same order as a separate
+    /// multiply pass, so results are bit-identical.
     fn columns_inv_p_filtered(
         &mut self,
         re: &[f64],
@@ -1100,13 +1096,9 @@ impl Plan2 {
         self.columns_fwd_p(re, im, relaxed);
     }
 
-    /// Inverse transform on split real/imaginary planes.
-    fn inverse_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
-        self.inverse_p_filtered(re, im, None, relaxed);
-    }
-
-    /// [`inverse_p`] with `filt` multiplied into the planes during the
-    /// column gather — identical results to multiplying first.
+    /// Inverse transform on split real/imaginary planes, with `filt`
+    /// multiplied into the planes during the column gather — identical
+    /// results to multiplying first when `filt` is `Some`.
     fn inverse_p_filtered(
         &mut self,
         re: &mut [f64],

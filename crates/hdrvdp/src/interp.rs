@@ -44,6 +44,34 @@ pub fn interp1_linear(xs: &[f64], ys: &[f64], x: f64) -> f64 {
     ys[i] + t * (ys[i + 1] - ys[i])
 }
 
+/// [`interp1_linear`] when `xs` is known (near-)uniform with spacing `dx`:
+/// direct-index into the grid, then a bounded linear probe to the exact
+/// interval. Finds the identical interval as the binary search on any
+/// monotone grid — the probe just takes longer for skewed ones.
+#[must_use]
+#[inline]
+pub fn interp1_linear_dx(xs: &[f64], ys: &[f64], x: f64, dx: f64) -> f64 {
+    debug_assert_eq!(xs.len(), ys.len());
+    debug_assert!(xs.len() >= 2);
+    if x <= xs[0] {
+        return ys[0];
+    }
+    let n = xs.len();
+    if x >= xs[n - 1] {
+        return ys[n - 1];
+    }
+    let mut i = ((x - xs[0]) / dx) as usize;
+    i = i.min(n - 2);
+    while xs[i] > x {
+        i -= 1;
+    }
+    while xs[i + 1] <= x {
+        i += 1;
+    }
+    let t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+    ys[i] + t * (ys[i + 1] - ys[i])
+}
+
 /// [`clamp`] on `f32` — same `NaN → lo` semantics.
 #[must_use]
 #[inline]
