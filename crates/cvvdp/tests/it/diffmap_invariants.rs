@@ -250,7 +250,7 @@ fn warm_ref_diffmap_matches_cold_path() {
 }
 
 /// `score_and_diffmap` wraps `score_with_diffmap` — identical JOD and
-/// identical pixels, now as a `Diffmap` trait object.
+/// identical pixels, as an `Evaluation` trait object.
 #[test]
 fn score_and_diffmap_matches_vec_api() {
     use zenmetrics_abstractions::Evaluation;
@@ -267,16 +267,36 @@ fn score_and_diffmap_matches_vec_api() {
     let jod2 = cv2.score_with_diffmap(&r, &d, &mut vec_out).unwrap();
     assert_eq!(jod, jod2);
     assert_eq!(dm.map(), vec_out.as_slice());
-    assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Difference)
-    );
+    let view = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
+    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Difference);
     assert_eq!(dm.score(), jod as f64);
-    let px = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
     assert_eq!(
-        (px.as_slice().width(), px.as_slice().rows()),
+        (view.pixels.as_slice().width(), view.pixels.as_slice().rows()),
         (w as u32, h as u32)
     );
     let boxed: Box<dyn Evaluation> = Box::new(dm);
     assert_eq!(boxed.score(), jod as f64);
+}
+
+/// The generic surface honors the abstractions contract, including a
+/// warm reference that reuses work and scores bit-identically to cold.
+#[test]
+fn generic_surface_conforms_with_real_warm_reference() {
+    use zenmetrics_abstractions as za;
+    let mut cv = Cvvdp::new(8, 8, CvvdpParams::default()).unwrap();
+    za::conformance::assert_conforms_rgb8(&mut cv, 72, 56);
+    let a = za::conformance::textured_rgb8(72, 56, 2);
+    let b = za::conformance::distort_rgb8(&a, 72, 56);
+    let cold = za::Metric::evaluate(
+        &mut cv,
+        za::conformance::rgb8_image(&a, 72, 56),
+        za::conformance::rgb8_image(&b, 72, 56),
+        za::EvalOpts::SCORE_ONLY.with_native_map(),
+    )
+    .unwrap();
+    let mut warm = za::Metric::warm_reference(&mut cv, za::conformance::rgb8_image(&a, 72, 56), za::EvalOpts::SCORE_ONLY).unwrap();
+    assert!(warm.reuses_reference_work());
+    let hot = warm.evaluate(za::conformance::rgb8_image(&b, 72, 56), za::EvalOpts::SCORE_ONLY.with_native_map()).unwrap();
+    assert_eq!(cold.score().to_bits(), hot.score().to_bits());
+    assert_eq!(cold.map().unwrap().values(), hot.map().unwrap().values(), "warm diffmap == cold diffmap");
 }

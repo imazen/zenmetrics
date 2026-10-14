@@ -201,6 +201,9 @@ pub struct Cvvdp {
     /// allocation (the default for Full-mode `score()` callers).
     /// Phase 9.Z.F Path A.
     strip_scratch_h_body: Option<u32>,
+    /// The display geometry `ppd` was derived from (recorded for the
+    /// generic surface's identity and re-planning).
+    geometry: DisplayGeometry,
 }
 
 impl Cvvdp {
@@ -239,6 +242,7 @@ impl Cvvdp {
             strip_h_body: core::cell::Cell::new(None),
             strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
             strip_scratch_h_body: None,
+            geometry,
         })
     }
 
@@ -344,6 +348,7 @@ impl Cvvdp {
             strip_h_body: core::cell::Cell::new(None),
             strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
             strip_scratch_h_body: Some(h_body),
+            geometry,
         })
     }
 
@@ -426,15 +431,7 @@ impl Cvvdp {
     ) -> Result<(f32, crate::diffmap::CvvdpDiffmap)> {
         let mut map = Vec::new();
         let jod = self.score_with_diffmap(ref_srgb, dist_srgb, &mut map)?;
-        Ok((
-            jod,
-            crate::diffmap::CvvdpDiffmap {
-                map,
-                width: self.width as u32,
-                height: self.height as u32,
-                jod,
-            },
-        ))
+        Ok((jod, self.za_diffmap(map, jod)))
     }
 
     /// One-shot score: display-encoded u16 REF + DIST (interleaved
@@ -4320,95 +4317,165 @@ mod csf_simd_tests {
 // Generic Metric surface.
 // ---------------------------------------------------------------------------
 
-/// `Cvvdp` implements the generic surface — `RGB8_SRGB` inputs score via
-/// [`Self::score`]; `score_with_map` returns the masked-error diffmap.
-impl zenmetrics_abstractions::Metric for Cvvdp {
-    fn name(&self) -> &'static str {
-        "cvvdp"
-    }
+use zenmetrics_abstractions as za;
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Jod
-    }
-
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
-    }
-
-    /// `"hdr"` when the display model's peak exceeds sRGB territory.
-    fn variant(&self) -> &'static str {
-        if self.params.display.y_peak > 200.0 {
-            "hdr"
-        } else {
-            "sdr"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::DimensionMismatch { .. } | Error::PlaneShapeMismatch { .. } => za::ErrorKind::DimensionMismatch,
+            Error::NoWarmReference => za::ErrorKind::Internal,
+            Error::InvalidImageSize { .. } | Error::TooShortForFilter { .. } | Error::NoFrames => za::ErrorKind::TooSmall,
+            Error::InvalidFps => za::ErrorKind::InvalidConfig,
+            Error::MixedSampleTypes => za::ErrorKind::UnsupportedInput,
         }
     }
+}
 
-    fn config(
-        &self,
-    ) -> alloc::boxed::Box<
-        dyn Iterator<
-                Item = (
-                    alloc::borrow::Cow<'static, str>,
-                    alloc::borrow::Cow<'static, str>,
-                ),
-            > + '_,
-    > {
-        let f = |k: &'static str, v: f32| {
-            (
-                alloc::borrow::Cow::Borrowed(k),
-                alloc::borrow::Cow::Owned(alloc::format!("{v}")),
-            )
+/// Output revision of [`Cvvdp`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+impl Cvvdp {
+    /// Re-plan for a `w × h` input when it differs from the configured
+    /// size, keeping params, geometry and strip mode.
+    fn za_fit(&mut self, w: usize, h: usize) -> za::MetricResult<()> {
+        use za::ResultMetricExt as _;
+        if (self.width, self.height) == (w, h) {
+            return Ok(());
+        }
+        let (w, h) = (w as u32, h as u32);
+        let next = match self.strip_scratch_h_body {
+            Some(h_body) => Cvvdp::new_strip(w, h, self.params, h_body),
+            None => Cvvdp::with_geometry(w, h, self.params, self.geometry),
         };
-        alloc::boxed::Box::new(
-            [
-                f("y_peak", self.params.display.y_peak),
-                f("y_black", self.params.display.y_black),
-                f("e_ambient_lux", self.params.display.e_ambient_lux),
-                f("ppd", self.ppd),
-            ]
-            .into_iter(),
-        )
+        *self = next.metric_err_with("cvvdp", Error::kind)?;
+        Ok(())
     }
 
-    fn viewing_conditions(&self) -> Option<zenmetrics_abstractions::ViewingConditions> {
-        Some(zenmetrics_abstractions::ViewingConditions::new(
-            self.ppd,
-            Some(self.params.display.y_peak),
-        ))
+    fn za_diffmap(&self, map: Vec<f32>, jod: f32) -> crate::diffmap::CvvdpDiffmap {
+        crate::diffmap::CvvdpDiffmap {
+            map,
+            width: self.width as u32,
+            height: self.height as u32,
+            jod,
+        }
+    }
+}
+
+/// `Cvvdp` implements the generic surface on packed `RGB8_SRGB` (strided
+/// input is repacked), re-planning when the input size differs. Map: the
+/// masked-error diffmap. [`za::Metric::warm_reference`] caches the
+/// reference DKL planes and Weber pyramid ([`Cvvdp::warm_reference`]).
+impl za::Metric for Cvvdp {
+    /// Every knob that reaches the arithmetic: the display model, the
+    /// geometry behind `ppd`, and the perf mode. The `csf`/`masking`/
+    /// `pooling`/`jod` parameter bundles are unread scaffolding (see
+    /// [`CvvdpParams`]) and are not recorded. Strip mode is bit-identical
+    /// to full-frame and is not identity either.
+    fn id(&self) -> za::MetricId {
+        let d = &self.params.display;
+        let g = &self.geometry;
+        za::MetricId::new("cvvdp", za::implementation!(SCORE_REVISION))
+            .with_reference(alloc::format!("pycvvdp {}", crate::PYCVVDP_REFERENCE_VERSION))
+            .with_config("y_peak", d.y_peak)
+            .with_config("y_black", d.y_black)
+            .with_config("y_refl", d.y_refl)
+            .with_config("eotf", alloc::format!("{:?}", d.eotf))
+            .with_config("primaries", alloc::format!("{:?}", d.primaries))
+            .with_config("e_ambient_lux", d.e_ambient_lux)
+            .with_config("k_refl", d.k_refl)
+            .with_config(
+                "geometry",
+                alloc::format!("{}x{}@{}m/{}in", g.resolution_w, g.resolution_h, g.distance_m, g.diagonal_inches),
+            )
+            .with_config("ppd", self.ppd)
+            .with_config("perf_mode", alloc::format!("{:?}", self.params.perf_mode))
+    }
+
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("jod", za::ScoreKind::Jod)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
+    }
+
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
+    }
+
+    fn viewing_conditions(&self) -> Option<za::ViewingConditions> {
+        Some(za::ViewingConditions::new(self.ppd, Some(self.params.display.y_peak)))
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        // cvvdp takes packed rgb8 — repack when the slice is strided.
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        self.za_fit(r.width, r.height)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
         if let Some(req) = opts.map {
-            let (_jod, mut dm) = self.score_and_diffmap(&rp, &dp).map_err(|e| {
-                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-            })?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) = self.score_and_diffmap(&rp, &dp).metric_err_with("cvvdp", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let jod = self.score(&rp, &dp).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
-            "jod", jod as f64,
-        )))
+        let jod = self.score(&rp, &dp).metric_err_with("cvvdp", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("jod", f64::from(jod))))
+    }
+
+    fn warm_reference<'m>(
+        &'m mut self,
+        r: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::WarmReference + 'm>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let r = za::rgb8_view(&r)?;
+        self.za_fit(r.width, r.height)?;
+        self.warm_reference(&za::contiguous_rgb8(&r)).metric_err_with("cvvdp", Error::kind)?;
+        Ok(alloc::boxed::Box::new(CvvdpWarm { metric: self }))
+    }
+}
+
+/// A warmed [`Cvvdp`]: candidates reuse the reference DKL planes and
+/// Weber pyramid.
+struct CvvdpWarm<'m> {
+    metric: &'m mut Cvvdp,
+}
+
+impl za::WarmReference for CvvdpWarm<'_> {
+    fn evaluate(
+        &mut self,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let d = za::rgb8_view(&d)?;
+        if (d.width, d.height) != (self.metric.width, self.metric.height) {
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                    .with_metric("cvvdp")
+                    .with_message(alloc::format!(
+                        "warm reference {}x{}, candidate {}x{}",
+                        self.metric.width,
+                        self.metric.height,
+                        d.width,
+                        d.height
+                    )),
+            );
+        }
+        let dp = za::contiguous_rgb8(&d);
+        if let Some(req) = opts.map {
+            let mut map = Vec::new();
+            let jod = self.metric.score_with_warm_ref_diffmap(&dp, &mut map).metric_err_with("cvvdp", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(self.metric.za_diffmap(map, jod)), req);
+        }
+        let jod = self.metric.score_with_warm_ref(&dp).metric_err_with("cvvdp", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("jod", f64::from(jod))))
+    }
+
+    fn reuses_reference_work(&self) -> bool {
+        true
     }
 }

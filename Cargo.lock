@@ -6037,6 +6037,7 @@ dependencies = [
  "rayon",
  "serde_json",
  "vmaf-head-sys",
+ "zenmetrics-abstractions",
 ]
 
 [[package]]

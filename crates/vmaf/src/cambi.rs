@@ -61,7 +61,7 @@ const TVI_THRESHOLD: f64 = 0.019;
 const VIS_LUM_THRESHOLD: f64 = 0.06;
 const MAX_LOG_CONTRAST: u32 = 2;
 const CAMBI_MAX_VAL: f64 = 17.0;
-const CAMBI_MIN_WIDTH_HEIGHT: usize = 216;
+pub(crate) const CAMBI_MIN_WIDTH_HEIGHT: usize = 216;
 const SPEEDUP_THRESHOLD_1080P: usize = 1920 * 1080;
 
 static RECIPROCAL_LUT: [f32; 4226] = [

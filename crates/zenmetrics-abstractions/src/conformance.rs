@@ -223,6 +223,83 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
     out
 }
 
+/// What [`check_sequence`] observed.
+#[derive(Debug, Default)]
+pub struct SequenceReport {
+    /// Failed checks; empty when the session conforms.
+    pub violations: Vec<Violation>,
+    /// Every frame result in arrival order: `(index, scores)`.
+    pub frames: Vec<(u64, Vec<(Cow<'static, str>, f64)>)>,
+    /// The pooled result's scores, when the metric pools.
+    pub pooled: Option<Vec<(Cow<'static, str>, f64)>>,
+}
+
+/// Drive a full sequence over `pairs` and check the [`crate::Sequence`]
+/// contract: every pushed frame's result arrives exactly once, in index
+/// order, no later than [`Temporal::Stateful`]'s `latency` pushes after
+/// its own (immediately for [`Temporal::Stateless`]); `frames_pushed` and
+/// the summary's `frame_count` agree; each result's `score()` is its first
+/// `scores()` value.
+pub fn check_sequence(metric: &mut dyn Metric, pairs: &[(Image<'_>, Image<'_>)]) -> SequenceReport {
+    let mut rep = SequenceReport::default();
+    let latency = match metric.temporal() {
+        Temporal::Stateless => 0,
+        Temporal::Stateful { latency, .. } => u64::from(latency),
+    };
+    let mut seq = match metric.sequence(SequenceInfo::new().with_frame_count(pairs.len() as u64)) {
+        Ok(s) => s,
+        Err(e) => {
+            rep.violations.push(Violation { check: "sequence", detail: format!("sequence failed: {e}") });
+            return rep;
+        }
+    };
+    let accept = |rep: &mut SequenceReport, pushed: u64, frames: Vec<crate::metric::FrameEvaluation>, finishing: bool| {
+        for f in frames {
+            let expected = rep.frames.len() as u64;
+            if f.index != expected {
+                rep.violations.push(Violation { check: "sequence", detail: format!("got frame {} where {expected} was due", f.index) });
+            }
+            if !finishing && pushed.saturating_sub(1).saturating_sub(f.index) > latency {
+                rep.violations.push(Violation {
+                    check: "sequence",
+                    detail: format!("frame {} arrived after push {} (latency {latency})", f.index, pushed - 1),
+                });
+            }
+            let s = scores_of(&*f.evaluation);
+            if s.first().is_none_or(|(_, v)| !bits_eq(*v, f.evaluation.score())) {
+                rep.violations.push(Violation { check: "sequence", detail: format!("frame {}: score() is not the first scores() value", f.index) });
+            }
+            rep.frames.push((f.index, s));
+        }
+    };
+    for (i, (r, d)) in pairs.iter().enumerate() {
+        match seq.push(r.clone(), d.clone(), EvalOpts::SCORE_ONLY) {
+            Ok(frames) => accept(&mut rep, i as u64 + 1, frames, false),
+            Err(e) => {
+                rep.violations.push(Violation { check: "sequence", detail: format!("push {i} failed: {e}") });
+                return rep;
+            }
+        }
+        if seq.frames_pushed() != i as u64 + 1 {
+            rep.violations.push(Violation { check: "sequence", detail: format!("frames_pushed {} after {} pushes", seq.frames_pushed(), i + 1) });
+        }
+    }
+    match seq.finish(EvalOpts::SCORE_ONLY) {
+        Ok(summary) => {
+            if summary.frame_count != pairs.len() as u64 {
+                rep.violations.push(Violation { check: "sequence", detail: format!("frame_count {} for {} pushes", summary.frame_count, pairs.len()) });
+            }
+            accept(&mut rep, pairs.len() as u64, summary.frames, true);
+            rep.pooled = summary.pooled.as_deref().map(scores_of);
+        }
+        Err(e) => rep.violations.push(Violation { check: "sequence", detail: format!("finish failed: {e}") }),
+    }
+    if rep.frames.len() != pairs.len() {
+        rep.violations.push(Violation { check: "sequence", detail: format!("{} results for {} frames", rep.frames.len(), pairs.len()) });
+    }
+    rep
+}
+
 /// Panic with every violation when `metric` does not conform.
 ///
 /// # Panics
@@ -337,6 +414,16 @@ mod tests {
             let s: f64 = a.pixels.iter().zip(b.pixels).map(|(x, y)| f64::from(x.abs_diff(*y))).sum();
             Ok(Box::new(ScalarEval::single("mad", s / a.pixels.len() as f64)))
         }
+    }
+
+    #[test]
+    fn stateless_sequence_conforms() {
+        let imgs: Vec<_> = (0..3).map(|k| (textured_rgb8(8, 6, k), textured_rgb8(8, 6, k + 9))).collect();
+        let pairs: Vec<_> = imgs.iter().map(|(a, b)| (rgb8_image(a, 8, 6), rgb8_image(b, 8, 6))).collect();
+        let rep = check_sequence(&mut Mad8 { forget_checkpoint: false }, &pairs);
+        assert!(rep.violations.is_empty(), "{:?}", rep.violations);
+        assert_eq!(rep.frames.iter().map(|f| f.0).collect::<Vec<_>>(), [0, 1, 2]);
+        assert!(rep.pooled.is_none());
     }
 
     #[test]
