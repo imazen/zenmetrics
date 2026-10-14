@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let worker;
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0}};
-const mapLabels={zensim:'Zensim error',butteraugli:'Butteraugli error',dssim:'DSSIM scale-0 SSIM',cvvdp:'CVVDP masked error',gmsd:'GMSD similarity',psnr:'PSNR squared error',fsim:'FSIM luminance similarity',fsimc:'FSIMc luminance similarity',haarpsi:'HaarPSI similarity',vsi:'VSI saliency-weighted contribution',msssim:'MS-SSIM level-0 SSIM'};
+const mapLabels={zensim:'Zensim error',butteraugli:'Butteraugli error',dssim:'DSSIM scale-0 SSIM',cvvdp:'CVVDP masked error',gmsd:'GMSD similarity',psnr:'PSNR squared error',fsim:'FSIM luminance similarity',fsimc:'FSIMc luminance similarity',haarpsi:'HaarPSI similarity',vsi:'VSI saliency-weighted contribution',msssim:'MS-SSIM level-0 SSIM',ssim2:'SSIMULACRA2 Y scale-0 SSIM error'};
 const requests = new Map();
 function status(message, error=false) { $('status').textContent=message; $('status').className=error?'error':'status'; }
 const phases={1:'Decoding',2:'Encoding JPEG',3:'Preparing reference',4:'Scoring',5:'Building spatial map'};

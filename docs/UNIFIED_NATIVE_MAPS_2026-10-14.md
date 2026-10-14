@@ -248,3 +248,38 @@ Validation (`crates/vmaf`):
 - Phone-model, sequence and stopped requests refuse. Tests pass with default,
   `simd`, `simd,parallel` and `avx512,parallel` features, libvmaf parity
   included.
+
+## SSIMULACRA2 (`fast-ssim2`, adapter `zenmetrics-browser::ssim2_map`)
+
+fast-ssim2 `compute_ssimulacra2_maps` (PR #12) returns, per pyramid scale and
+positive-XYB channel, the three per-pixel terms the score pools:
+`max(0, 1 − SSIM)`, edge artifact and edge detail lost. The adapter serves
+them as `{ssim,artifact,detail_lost}_{x,y,b}_{scale}`, with `ssim_y_0` as the
+primary map; all are Difference polarity. The score takes the mean and the
+4-norm of each term per scale, then a weighted sum of the 108 aggregates and
+a nonlinear transform, so there is no per-pixel SSIMULACRA2.
+
+Geometry. Scale `s` samples `2^s × 2^s` pixel blocks from the origin, and a
+value reads its scale within the blur's 5-sample radius (halo `5·2^s`).
+fast-ssim2 measured recursive-blur rounding residue past that radius of up to
+1.7e-4 against a 0.66 peak. Inputs under 8×8 are reflect-padded, so their
+cells beyond the image clip and their support is global.
+
+The adapter lives in the browser crate because the CLI does not depend on
+the abstractions. It accepts packed RGB8/RGBA8 sRGB and linear RGBF32
+(strided rows natively), and its warm reference reuses
+`Ssimulacra2Reference` for score-only candidates.
+
+Validation:
+
+- fast-ssim2: the map-path score is bit-identical to the score path (14
+  input shapes and formats, both kernels, every cancellation poll). Scale-0
+  L1/L4 from the maps match the reference-order helpers to 1e-6 relative, and
+  the score rebuilt from the maps is within 4.7e-7.
+- Adapter: the headline equals `fast_ssim2::compute_ssimulacra2` bit for bit;
+  it passes conformance at 64×48 and 5×7; warm candidates match cold scores and
+  maps; strided input; cancellation.
+- Pin: moving zenmetrics from fast-ssim2 96ad1ab0 to the PR head leaves
+  SSIMULACRA2 score bits unchanged on seven fixtures (64×48 to 1024×768 with
+  rayon, sub-8, the tank pair). Browser native tests pass (44, 2 ignored, as
+  before), and the zenmetrics-api CPU suite passes (22).
