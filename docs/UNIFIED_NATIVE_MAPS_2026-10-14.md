@@ -169,3 +169,43 @@ Validation (`crates/iwssim`):
   gives the packed maps, and stopped requests fail as specified. Tests pass
   with default, `parallel`, no-std and `_dev,avx512` builds; the Python parity
   and strip goldens are unchanged.
+
+## VIF (`vif`: `Vif` = VIFp, `Vifvec`)
+
+VIF is `Σnum / Σden`: the information the distorted channel carries over
+the information the reference channel carries. The maps are per-position
+information loss, `den − num`. Summed over all maps and divided by `Σden`,
+they give `1 − VIF`. They are contributions, not a local VIF ratio. They
+are Difference polarity: `0` means no loss, and values are negative where
+the distortion adds information (VIF > 1). The raw `num` and `den` maps
+would need a non-quality map polarity, which the abstractions do not
+define yet.
+
+| Metric | Maps | Values | Grid |
+| --- | --- | --- | --- |
+| `Vif` | `info_loss_0` (primary) … `info_loss_3`, one per scale with a non-empty statistics grid | `log10(1 + σ₁²/σₙ²) − log10(1 + g²σ₁²/(σᵥ² + σₙ²))` | scale `s` samples input `8 + 4s + 2^s·i`; `2^s` cells, halo `8 + 4s` |
+| `Vifvec` | `info_loss_l1_b1` (primary), `info_loss_l1_b4`, … `info_loss_l4_b4` (level, MATLAB band) | per 3×3 block, `Σ_λ [log2(1 + s·λ/σₙ²) − log2(1 + g²·s·λ/(σᵥ² + σₙ²))]` | cropped block grid; `3·2^(L−1)` pixels; global support |
+
+VIFp geometry. Scale `s > 0` filters the previous plane 'valid' with this
+scale's own `N = 2^(4−s)+1`-tap window and decimates `1:2:end`, as
+`vifp_mscale.m` does. The statistics grid is that window's 'valid' output,
+so the sample centres are 8, 12, 16 and 20 plus `2^s·i`, and a value reads
+the input within `8 + 4s` pixels of its centre. In vifvec, `corrDn` (start 0,
+stride 2 between levels) puts level-`L` sample `k` at input `2^(L−1)·k`. Cell
+`i` is block `i + offset` of the cropped grid. Its S-field and eigenvalues
+come from whole-subband statistics.
+
+Validation (`crates/vif`):
+
+- The captured VIFp terms fold to the score bit for bit in one running
+  accumulator (64×48, 97×61, 17×17, 130×129, 40×18). The vifvec block terms
+  regroup the same `log2` terms and fold within 1e-12.
+- VIFp cells whose declared support misses a changed patch match the
+  unchanged pair bit for bit. The support is a bound: the 'valid' decimation
+  chain need not reach a corner at coarse scales. A single changed pixel
+  peaks `info_loss_0` at the cell that owns it, and vifvec's finest-level
+  peak sits at a localized patch.
+- Map-on and map-off scores are bit-identical. Strided input gives the
+  packed maps. Subsampled and stopped requests behave as specified. Tests
+  pass with default, `parallel`, no-std and `_dev,avx512` builds; the Octave
+  goldens are unchanged.
