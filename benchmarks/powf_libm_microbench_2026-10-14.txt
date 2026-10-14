@@ -15,9 +15,9 @@ p=  2.4: lane 2.404 / 2.351 ns  scalar 25.965 / 25.576 ns  speedup 10.80x (media
 p= -1.5: lane 2.400 / 2.348 ns  scalar 27.174 / 26.791 ns  speedup 11.32x (median)
 
 # aarch64: zen-arm-xl (Hetzner cax41, Ampere Altra Neoverse-N1, NEON), taskset -c 3, load avg 2.19 (niced zen-fuzz service running); tree 02b41cbd via the lock.sh pinned snapshot, cargo --locked build --release -p zenmetrics-math --example powf_libm_bench; dispatch picks neon (f32x8 = 2x float32x4)
-16
 n=1048576 reps=31 (median / min ns per element)
 p=  0.4: lane 13.552 / 13.505 ns  scalar 67.523 / 67.441 ns  speedup 4.98x (median)
 p= 0.02: lane 13.538 / 13.483 ns  scalar 64.946 / 64.853 ns  speedup 4.80x (median)
 p=  2.4: lane 13.580 / 13.530 ns  scalar 71.977 / 71.669 ns  speedup 5.30x (median)
+p= -1.5: lane 13.572 / 13.523 ns  scalar 71.851 / 71.591 ns  speedup 5.29x (median)
 # Same tree on zen-arm-xl: cargo --locked test -p zenmetrics-math --release (10,000,000-pair differential on tiers scalar, dispatch, neon: 0 mismatches) and -p vsi --release (pool_exact_tests with the neon tier): all pass.
