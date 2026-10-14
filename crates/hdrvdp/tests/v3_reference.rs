@@ -297,3 +297,32 @@ fn invalid_inputs_err_not_panic() {
         .is_err()
     );
 }
+
+/// `HdrVdp3Result` implements `Diffmap` — `pixels()` narrows `p_map` to
+/// f32; extras carry `q` and the gamut fraction.
+#[test]
+fn v3_result_is_a_diffmap() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (64usize, 64usize);
+    let par = Params::new(
+        Task::Quality,
+        ViewingConditions::new(30.0, Surround::None, 24),
+        InputEncoding::Luminance,
+        Emission::default_for(InputEncoding::Luminance),
+        Options::reference(Task::Quality),
+    )
+    .unwrap();
+    let test: Vec<f64> = vec![100.0; w * h];
+    let mut refr = test.clone();
+    for i in (0..w * h).step_by(16) {
+        refr[i] = 80.0;
+    }
+    let res = hdrvdp3(&test, &refr, w, h, &par).unwrap();
+    let px = res.pixels();
+    let sl = px.as_slice();
+    assert_eq!((sl.width(), sl.rows()), (w as u32, h as u32));
+    assert!(!res.similarity());
+    assert_eq!(res.score(), res.q_jod);
+    let kv: Vec<_> = res.extras().collect();
+    assert!(kv.iter().any(|(k, _)| k == "q"));
+}

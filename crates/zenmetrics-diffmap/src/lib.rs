@@ -95,3 +95,14 @@ pub fn gray_f32_slice(data: &[f32], w: u32, h: u32) -> zenpixels::PixelSlice<'_>
     )
     .expect("packed f32 slice always validates as GRAYF32_LINEAR")
 }
+
+/// Move a `Vec<f32>` into `Vec<u8>` for `PixelBuffer::from_vec` —
+/// `bytemuck::cast_vec` when the capacity aligns (f32 → u8 always does:
+/// both alignments divide the f32 allocs), else a by-value copy.
+#[must_use]
+pub fn bytemuck_vec(pixels: alloc::vec::Vec<f32>) -> alloc::vec::Vec<u8> {
+    match bytemuck::allocation::try_cast_vec::<f32, u8>(pixels) {
+        ::core::result::Result::Ok(v) => v,
+        ::core::result::Result::Err((_, v)) => bytemuck::cast_slice(&v).to_vec(),
+    }
+}

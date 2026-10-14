@@ -49,6 +49,60 @@ pub struct HdrVdp3Result {
     pub had_nan: bool,
 }
 
+impl zenmetrics_diffmap::Diffmap for HdrVdp3Result {
+    /// Canonical map = `p_map` (per-pixel detection probability).
+    /// `p_map` is `f64` internally — the `Gray<f32>` view requires a
+    /// conversion copy, so `pixels()` returns `PixelCow::Owned` here.
+    /// `s_map` (normalized-difference, 1 ≈ threshold) stays on the
+    /// concrete type.
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        let f32_map: Vec<f32> = self.p_map.iter().map(|&v| v as f32).collect();
+        let bytes: Vec<u8> = zenmetrics_diffmap::bytemuck_vec(f32_map);
+        zenpixels::PixelCow::Owned(
+            zenpixels::PixelBuffer::from_vec(
+                bytes,
+                self.width as u32,
+                self.height as u32,
+                zenpixels::PixelDescriptor::GRAYF32_LINEAR,
+            )
+            .expect("converted map always validates"),
+        )
+    }
+
+    fn similarity(&self) -> bool {
+        false
+    }
+
+    fn score(&self) -> f64 {
+        self.q_jod
+    }
+
+    fn extras(
+        &self,
+    ) -> std::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    std::borrow::Cow<'static, str>,
+                    std::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        let f = |k: &'static str, v: f64| {
+            (
+                std::borrow::Cow::Borrowed(k),
+                std::borrow::Cow::Owned(format!("{v}")),
+            )
+        };
+        std::boxed::Box::new(
+            [
+                f("q", self.q),
+                f("gamut_clamped_fraction", self.gamut_clamped_fraction),
+            ]
+            .into_iter(),
+        )
+    }
+}
+
 /// `hdrvdp3(task, test, reference, color_encoding, pixels_per_degree, {})`
 /// — except everything that was ambient upstream is required in `par`:
 /// viewing conditions, display emission, the lot.
