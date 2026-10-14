@@ -248,3 +248,32 @@ fn warm_ref_diffmap_matches_cold_path() {
         "max diffmap drift between cold/warm: {max_diff}"
     );
 }
+
+/// `score_and_diffmap` wraps `score_with_diffmap` — identical JOD and
+/// identical pixels, now as a `Diffmap` trait object.
+#[test]
+fn score_and_diffmap_matches_vec_api() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (96, 64);
+    let r = make_grid(w, h, 7);
+    let mut d = r.clone();
+    for i in (0..w * h).step_by(9) {
+        d[i * 3] = 255 - d[i * 3];
+    }
+    let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
+    let (jod, dm) = cv.score_and_diffmap(&r, &d).unwrap();
+    let mut cv2 = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
+    let mut vec_out = Vec::new();
+    let jod2 = cv2.score_with_diffmap(&r, &d, &mut vec_out).unwrap();
+    assert_eq!(jod, jod2);
+    assert_eq!(dm.map(), vec_out.as_slice());
+    assert!(!dm.similarity());
+    assert_eq!(dm.score(), jod as f64);
+    let px = dm.pixels();
+    assert_eq!(
+        (px.as_slice().width(), px.as_slice().rows()),
+        (w as u32, h as u32)
+    );
+    let boxed: Box<dyn Diffmap> = Box::new(dm);
+    assert_eq!(boxed.score(), jod as f64);
+}

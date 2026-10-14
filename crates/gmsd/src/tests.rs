@@ -526,3 +526,30 @@ fn fused_rgb8_equals_convert_then_score() {
         }
     }
 }
+
+/// `gmsd_with_diffmap` == `gmsd` score + a half-res similarity map.
+#[test]
+fn gmsd_diffmap_matches_score() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (64usize, 48usize);
+    let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 29 + 3) % 233) as f32).collect();
+    let mut d = r.clone();
+    for y in 10..20 {
+        for x in 10..20 {
+            d[y * w + x] = 230.0;
+        }
+    }
+    let ri = crate::GrayImage::packed(&r, w, h).unwrap();
+    let di = crate::GrayImage::packed(&d, w, h).unwrap();
+    let plain = crate::gmsd(ri, di).unwrap();
+    let (score, dm) = crate::gmsd_with_diffmap(ri, di).unwrap();
+    assert_eq!(plain, score);
+    let (mw, mh) = crate::map_dims(w, h);
+    assert_eq!((dm.width as usize, dm.height as usize), (mw, mh));
+    assert_eq!(dm.map().len(), mw * mh);
+    assert!(dm.similarity());
+    assert_eq!(dm.score(), score.gmsd);
+    // Extras carry the map mean.
+    let kv: alloc::vec::Vec<_> = dm.extras().collect();
+    assert_eq!(kv[0].0, "mean_gms");
+}

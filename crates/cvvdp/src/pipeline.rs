@@ -414,6 +414,29 @@ impl Cvvdp {
         Ok(jod)
     }
 
+    /// One-shot score returning the diffmap as an owned
+    /// [`crate::diffmap::CvvdpDiffmap`] (implements
+    /// [`zenmetrics_diffmap::Diffmap`]). Prefer this over
+    /// [`Self::score_with_diffmap`] when the caller wants the
+    /// polymorphic map type.
+    pub fn score_and_diffmap(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<(f32, crate::diffmap::CvvdpDiffmap)> {
+        let mut map = Vec::new();
+        let jod = self.score_with_diffmap(ref_srgb, dist_srgb, &mut map)?;
+        Ok((
+            jod,
+            crate::diffmap::CvvdpDiffmap {
+                map,
+                width: self.width as u32,
+                height: self.height as u32,
+                jod,
+            },
+        ))
+    }
+
     /// One-shot score: display-encoded u16 REF + DIST (interleaved
     /// `RGBRGB…`, `v/65535` normalized), returns JOD ∈ `[0, 10]`.
     ///

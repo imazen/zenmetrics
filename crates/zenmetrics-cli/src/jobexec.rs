@@ -1877,6 +1877,7 @@ fn diffmap_pair_to_blob(
     match metric {
         "butteraugli" | "cvvdp" => {}
         _ if cvvdp_sdr_display.is_some() => {}
+        "fsim" | "fsimc" | "haarpsi" | "vsi" | "msssim" | "gmsd" if !hdr => {}
         "ssim2" | "ssim2-gpu" => {
             return Err(
                 "diffmap: ssim2 has no per-pixel map API in-tree — recorded \
@@ -1894,7 +1895,7 @@ fn diffmap_pair_to_blob(
                 .into());
             }
             return Err(format!(
-                "diffmap: no per-pixel map for metric {other:?} (supported: butteraugli, cvvdp)"
+                "diffmap: no per-pixel map for metric {other:?} (supported: butteraugli, cvvdp;                  SDR-only: fsim, fsimc, haarpsi, vsi, msssim, gmsd)"
             )
             .into());
         }
@@ -2016,6 +2017,68 @@ fn diffmap_pair_to_blob(
                 "butteraugli" => Err("diffmap: butteraugli map needs --features cpu-metrics \
                      (the CPU reference crate)"
                     .into()),
+                #[cfg(feature = "cpu-fsim")]
+                "fsim" | "fsimc" => {
+                    let (_, dm) = fsim::fsim_rgb8_with_diffmap(
+                        &reference.pixels,
+                        &distorted.pixels,
+                        w as usize,
+                        h as usize,
+                        w as usize * 3,
+                    )
+                    .map_err(|e| format!("fsim diffmap: {e:?}"))?;
+                    diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
+                }
+                #[cfg(feature = "cpu-haarpsi")]
+                "haarpsi" => {
+                    // haarpsi's luma entry expects f32 planes — convert via
+                    // the crate's rgb8 path.
+                    let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(
+                        &reference.pixels,
+                        &distorted.pixels,
+                        w as usize,
+                        h as usize,
+                        w as usize * 3,
+                    )
+                    .map_err(|e| format!("haarpsi diffmap: {e:?}"))?;
+                    diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
+                }
+                #[cfg(feature = "cpu-vsi")]
+                "vsi" => {
+                    let (_, dm) = vsi::vsi_rgb8_with_diffmap(
+                        &reference.pixels,
+                        &distorted.pixels,
+                        w as usize,
+                        h as usize,
+                        w as usize * 3,
+                    )
+                    .map_err(|e| format!("vsi diffmap: {e:?}"))?;
+                    diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
+                }
+                #[cfg(feature = "cpu-msssim")]
+                "msssim" => {
+                    let (_, dm) = msssim::msssim_rgb8_with_diffmap(
+                        &reference.pixels,
+                        &distorted.pixels,
+                        w as usize,
+                        h as usize,
+                        w as usize * 3,
+                    )
+                    .map_err(|e| format!("msssim diffmap: {e:?}"))?;
+                    diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
+                }
+                #[cfg(feature = "cpu-gmsd")]
+                "gmsd" => {
+                    let (_, dm) = gmsd::gmsd_rgb8_with_diffmap(
+                        &reference.pixels,
+                        &distorted.pixels,
+                        w as usize,
+                        h as usize,
+                        w as usize * 3,
+                    )
+                    .map_err(|e| format!("gmsd diffmap: {e:?}"))?;
+                    diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
+                }
                 _ if cvvdp_sdr_display.is_some() => {
                     let display = cvvdp_sdr_display.expect("guarded");
                     let display = crate::metrics::display::parse_display(display)

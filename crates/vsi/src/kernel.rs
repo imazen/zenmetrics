@@ -1316,7 +1316,8 @@ impl Scratch {
 /// (NaN-propagating, MATLAB `max` semantics). Fixed-order f64
 /// accumulation — identical on every tier.
 macro_rules! pool_body {
-    ($token:ident, $F32:ty, $LANES:expr, $p:ident) => {{
+    ($token:ident, $F32:ty, $LANES:expr, $p:ident, $map:ident) => {{
+        let mut $map = $map;
         let n = $p.w * $p.h;
         let (sm1, sm2) = $p.sm;
         let (g1, g2) = $p.g;
@@ -1361,6 +1362,10 @@ macro_rules! pool_body {
                 let contrib = libm::powf(vg[k], ALPHA) * vv[k] * iqreal * w;
                 num += contrib as f64;
                 den += w as f64;
+                // Canonical `qualitymap` = SimMatrixC (score = Σcontrib/Σw).
+                if let Some(m) = $map.as_deref_mut() {
+                    m[i + k] = contrib;
+                }
             }
             i += $LANES;
         }
@@ -1382,6 +1387,9 @@ macro_rules! pool_body {
             let contrib = libm::powf(gsim, ALPHA) * vssim * iqreal * w;
             num += contrib as f64;
             den += w as f64;
+            if let Some(m) = $map.as_deref_mut() {
+                m[i] = contrib;
+            }
             i += 1;
         }
         num / den
@@ -1390,63 +1398,93 @@ macro_rules! pool_body {
 
 /// Scalar tier (the magetypes generic vec over `ScalarToken` — same
 /// lane count as `v3`, so per-lane extraction stays fixed-order).
-pub fn vsi_core_tier_scalar_t(token: archmage::ScalarToken, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_scalar_t(
+    token: archmage::ScalarToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
-    pool_body!(token, V, 8, p)
+    pool_body!(token, V, 8, p, map)
 }
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
-pub fn vsi_core_tier_v3_t(token: archmage::X64V3Token, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_v3_t(
+    token: archmage::X64V3Token,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
-    pool_body!(token, V, 8, p)
+    pool_body!(token, V, 8, p, map)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::attune]
-pub fn vsi_core_tier_v4x_t(token: archmage::X64V4xToken, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
-    pool_body!(token, V, 16, p)
+    pool_body!(token, V, 16, p, map)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
 #[archmage::attune]
-pub fn vsi_core_tier_neon_t(token: archmage::NeonToken, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_neon_t(
+    token: archmage::NeonToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
-    pool_body!(token, V, 8, p)
+    pool_body!(token, V, 8, p, map)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune(wasm128)]
-pub fn vsi_core_tier_wasm(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
+pub fn vsi_core_tier_wasm(
+    token: archmage::Wasm128Token,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
-    pool_body!(token, V, 8, p)
+    pool_body!(token, V, 8, p, map)
 }
 
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-fn vsi_core_tier_wasm128_t(token: archmage::Wasm128Token, p: Planes<'_>) -> f64 {
-    vsi_core_tier_wasm(token, p)
+fn vsi_core_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
+    vsi_core_tier_wasm(token, p, map)
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.
-fn vsi_core(p: Planes<'_>) -> f64 {
+fn vsi_core(p: Planes<'_>, map: Option<&mut [f32]>) -> f64 {
     archmage::attuned!(
-        vsi_core_tier(p),
+        vsi_core_tier(p, map),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 /// Full VSI pipeline on prepared inputs — preprocess scalar-shared,
 /// pool dispatched to the widest available tier.
-pub(crate) fn vsi_planes(r: &crate::Input, d: &crate::Input, w: usize, h: usize) -> f64 {
+pub(crate) fn vsi_planes(
+    r: &crate::Input,
+    d: &crate::Input,
+    w: usize,
+    h: usize,
+    map: Option<&mut [f32]>,
+) -> f64 {
     let mut scratch = Scratch::new();
     let p = prepare(r, d, w, h, &mut scratch);
-    vsi_core(p)
+    vsi_core(p, map)
 }
 
 #[cfg(test)]

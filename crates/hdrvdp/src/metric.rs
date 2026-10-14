@@ -76,6 +76,54 @@ pub struct HdrVdpResult {
     pub input_looks_relative: bool,
 }
 
+impl zenmetrics_diffmap::Diffmap for HdrVdpResult {
+    /// The canonical map is `p_map` — per-pixel detection probability.
+    /// `c_map` (normalized threshold units) stays on the concrete type.
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.p_map,
+            self.width as u32,
+            self.height as u32,
+        ))
+    }
+
+    /// `P_map` is error-direction: higher = more *detectable*.
+    fn similarity(&self) -> bool {
+        false
+    }
+
+    fn score(&self) -> f64 {
+        self.q
+    }
+
+    fn extras(
+        &self,
+    ) -> std::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    std::borrow::Cow<'static, str>,
+                    std::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        let f = |k: &'static str, v: f64| {
+            (
+                std::borrow::Cow::Borrowed(k),
+                std::borrow::Cow::Owned(std::format!("{v}")),
+            )
+        };
+        std::boxed::Box::new(
+            [
+                f("p_det", self.p_det),
+                f("c_max", self.c_max),
+                f("q_mos", self.q_mos),
+                f("visible_fraction", self.visible_fraction()),
+            ]
+            .into_iter(),
+        )
+    }
+}
+
 impl HdrVdpResult {
     /// Fraction of pixels whose difference is above the detection threshold
     /// (`P ≥ 0.5`, equivalently `C ≥ 1`).

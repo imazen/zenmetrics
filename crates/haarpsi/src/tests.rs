@@ -299,8 +299,9 @@ fn tier_parity() {
     };
     let pr = kernel::plane_from_f32(&r, 48, 40, 48, true);
     let pd = kernel::plane_from_f32(&d, 48, 40, 48, true);
-    let s_scalar = crate::dev::haarpsi_core_tier_scalar_t(archmage::ScalarToken, &pr, &pd, None);
-    let s_v3 = crate::dev::haarpsi_core_tier_v3_t(token, &pr, &pd, None);
+    let s_scalar =
+        crate::dev::haarpsi_core_tier_scalar_t(archmage::ScalarToken, &pr, &pd, None, None);
+    let s_v3 = crate::dev::haarpsi_core_tier_v3_t(token, &pr, &pd, None, None);
     assert_eq!(s_scalar, s_v3);
 
     let mk = |img: &[u8]| {
@@ -317,7 +318,32 @@ fn tier_parity() {
         &yr,
         &yd,
         Some((&ir, &id, &qr, &qd)),
+        None,
     );
-    let c_v3 = crate::dev::haarpsi_core_tier_v3_t(token, &yr, &yd, Some((&ir, &id, &qr, &qd)));
+    let c_v3 =
+        crate::dev::haarpsi_core_tier_v3_t(token, &yr, &yd, Some((&ir, &id, &qr, &qd)), None);
     assert_eq!(c_scalar, c_v3);
+}
+
+/// `*_with_diffmap` returns the identical score; the map is a
+/// similarity map at the preprocessed resolution.
+#[test]
+fn haarpsi_diffmap_matches_score() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (64usize, 48usize);
+    let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 31 + 7) % 229) as f32).collect();
+    let mut d = r.clone();
+    for y in 8..18 {
+        for x in 8..18 {
+            d[y * w + x] = 255.0;
+        }
+    }
+    let plain = crate::haarpsi_plane_f32(&r, &d, w, h, w).unwrap();
+    let (score, dm) = crate::haarpsi_plane_f32_with_diffmap(&r, &d, w, h, w).unwrap();
+    assert_eq!(plain, score);
+    let map = dm.map();
+    assert_eq!(map.len(), dm.width as usize * dm.height as usize);
+    assert!(map.iter().all(|v| v.is_finite()));
+    assert!(dm.similarity());
+    assert_eq!(dm.score(), score);
 }

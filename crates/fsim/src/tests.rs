@@ -252,8 +252,8 @@ fn tier_parity() {
         h: 40,
         iq: None,
     };
-    let s_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, p);
-    let s_v3 = crate::dev::fsim_core_tier_v3_t(token, p);
+    let s_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, p, None);
+    let s_v3 = crate::dev::fsim_core_tier_v3_t(token, p, None);
     assert_eq!(s_scalar, s_v3);
 
     let mk = |img: &[u8]| {
@@ -272,7 +272,47 @@ fn tier_parity() {
         h: 40,
         iq: Some((&ir, &id, &qr, &qd)),
     };
-    let c_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, pc);
-    let c_v3 = crate::dev::fsim_core_tier_v3_t(token, pc);
+    let c_scalar = crate::dev::fsim_core_tier_scalar_t(archmage::ScalarToken, pc, None);
+    let c_v3 = crate::dev::fsim_core_tier_v3_t(token, pc, None);
     assert_eq!(c_scalar, c_v3);
+}
+
+/// `*_with_diffmap` returns the identical score as the plain entry and
+/// a sane similarity map at the decimated resolution.
+#[test]
+fn fsim_diffmap_matches_score_and_is_similarity() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (64usize, 48usize);
+    let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 37 + 11) % 251) as f32).collect();
+    let mut d = r.clone();
+    // Localized damage — the map should dip there.
+    for y in 10..20 {
+        for x in 10..20 {
+            d[y * w + x] = 200.0;
+        }
+    }
+    let (plain, (map_score, dm)) = (
+        crate::fsim_plane_f32(&r, &d, w, h, w).unwrap(),
+        crate::fsim_plane_f32_with_diffmap(&r, &d, w, h, w).unwrap(),
+    );
+    assert_eq!(plain, map_score);
+    let f = crate::kernel::downsample_factor(w, h);
+    let (w2, h2) = (w.div_ceil(f), h.div_ceil(f));
+    assert_eq!((dm.width as usize, dm.height as usize), (w2, h2));
+    let map = dm.map();
+    assert_eq!(map.len(), w2 * h2);
+    assert!(map.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+    // Damaged region reads lower than a clean corner.
+    let damaged = map[6 * w2 + 6];
+    let clean = map[2 * w2 + (w2 - 4)];
+    assert!(damaged < clean, "{damaged} !< {clean}");
+    // Trait surface.
+    assert!(dm.similarity());
+    assert_eq!(dm.score(), map_score);
+    let px = dm.pixels();
+    let slice = px.as_slice();
+    assert_eq!((slice.width(), slice.rows()), (dm.width, dm.height));
+    // Identical inputs → map saturates to 1.
+    let (_, dm_id) = crate::fsim_plane_f32_with_diffmap(&r, &r, w, h, w).unwrap();
+    assert!(dm_id.map().iter().all(|&v| (v - 1.0).abs() < 1e-4));
 }

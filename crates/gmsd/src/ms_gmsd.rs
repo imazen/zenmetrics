@@ -87,15 +87,11 @@ fn fill_row_inner(
     oi: &mut [f64],
     oq: &mut [f64],
 ) {
-    let cvs: [[f64x8; 3]; 3] = core::array::from_fn(|c| {
-        core::array::from_fn(|k| f64x8::splat_t(token, COEF[c][k]))
-    });
+    let cvs: [[f64x8; 3]; 3] =
+        core::array::from_fn(|c| core::array::from_fn(|k| f64x8::splat_t(token, COEF[c][k])));
     let mut x = 0;
     while x + 8 <= w {
-        let rv = f64x8::from_array_t(
-            token,
-            core::array::from_fn(|j| f64::from(src[3 * (x + j)])),
-        );
+        let rv = f64x8::from_array_t(token, core::array::from_fn(|j| f64::from(src[3 * (x + j)])));
         let gv = f64x8::from_array_t(
             token,
             core::array::from_fn(|j| f64::from(src[3 * (x + j) + 1])),
@@ -195,26 +191,15 @@ pub(crate) fn fill_row_scalar_t(
 /// `((a + b) + c + d) * 0.25` expression as the scalar loop —
 /// bit-identical.
 #[attune(_*, +v4x(cfg(avx512)), define(f64x8))]
-fn half_row_inner(
-    token: Token,
-    r0: &[f64],
-    r1: &[f64],
-    orow: &mut [f64],
-    sw: usize,
-    ow: usize,
-) {
+fn half_row_inner(token: Token, r0: &[f64], r1: &[f64], orow: &mut [f64], sw: usize, ow: usize) {
     let quarter = f64x8::splat_t(token, 0.25);
     let interior = sw / 2;
     let mut x = 0;
     while x + 8 <= interior {
-        let p00 =
-            f64x8::from_array_t(token, core::array::from_fn(|j| r0[2 * (x + j) + 1]));
-        let p01 =
-            f64x8::from_array_t(token, core::array::from_fn(|j| r0[2 * (x + j) + 2]));
-        let p10 =
-            f64x8::from_array_t(token, core::array::from_fn(|j| r1[2 * (x + j) + 1]));
-        let p11 =
-            f64x8::from_array_t(token, core::array::from_fn(|j| r1[2 * (x + j) + 2]));
+        let p00 = f64x8::from_array_t(token, core::array::from_fn(|j| r0[2 * (x + j) + 1]));
+        let p01 = f64x8::from_array_t(token, core::array::from_fn(|j| r0[2 * (x + j) + 2]));
+        let p10 = f64x8::from_array_t(token, core::array::from_fn(|j| r1[2 * (x + j) + 1]));
+        let p11 = f64x8::from_array_t(token, core::array::from_fn(|j| r1[2 * (x + j) + 2]));
         let v = (((p00 + p01) + p10) + p11) * quarter;
         orow[1 + x..1 + x + 8].copy_from_slice(&v.to_array());
         x += 8;
@@ -423,7 +408,16 @@ fn stream_level0(
     let ph = np * band_rows;
     let noh = next.height;
     let [d0, d1, d2, d3, d4, d5] = &mut next.data;
-    let run = |b: usize, args: (&mut [f64], &mut [f64], &mut [f64], &mut [f64], &mut [f64], &mut [f64], &mut [f64])| {
+    let run = |b: usize,
+               args: (
+        &mut [f64],
+        &mut [f64],
+        &mut [f64],
+        &mut [f64],
+        &mut [f64],
+        &mut [f64],
+        &mut [f64],
+    )| {
         let (mb, p0, p1, p2, p3, p4, p5) = args;
         let m0 = b * STREAM_BAND;
         let m1 = (m0 + STREAM_BAND).min(h);
@@ -619,9 +613,7 @@ pub(crate) fn ms_band_scalar_t(
     for (y, row) in out.chunks_mut(p.width).enumerate() {
         let y = y0 + y;
         let rows: [[&[f64]; 3]; 2] = core::array::from_fn(|plane| {
-            core::array::from_fn(|dy| {
-                &p.data[plane][(y + dy) * p.pitch..(y + dy + 1) * p.pitch]
-            })
+            core::array::from_fn(|dy| &p.data[plane][(y + dy) * p.pitch..(y + dy + 1) * p.pitch])
         });
         similarity_row_scalar(token, &rows, p.width, c, row);
     }
@@ -738,13 +730,7 @@ mod tests {
     /// six planes, then `map`/`half` per scale. Kept in-tree via `prepare`
     /// for the oracle examples — the streamed `run` must reproduce it
     /// bit-for-bit.
-    fn staged_run(
-        r: &[u8],
-        d: &[u8],
-        w: usize,
-        h: usize,
-        stride: usize,
-    ) -> (f64, f64) {
+    fn staged_run(r: &[u8], d: &[u8], w: usize, h: usize, stride: usize) -> (f64, f64) {
         let mut p = prepare(r, d, w, h, stride);
         let mut variances = [0.0; 4];
         for (scale, v) in variances.iter_mut().enumerate() {

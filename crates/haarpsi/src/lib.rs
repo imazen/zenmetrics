@@ -157,7 +157,7 @@ pub fn haarpsi_plane_f32_opts(
     check_plane(reference, distorted, width, height, stride)?;
     let pr = kernel::plane_from_f32(reference, width, height, stride, preprocess_subsample);
     let pd = kernel::plane_from_f32(distorted, width, height, stride, preprocess_subsample);
-    Ok(kernel::haarpsi_core(&pr, &pd, None))
+    Ok(kernel::haarpsi_core(&pr, &pd, None, None))
 }
 
 /// HaarPSI of two interleaved sRGB RGB8 pairs — the reference's color
@@ -234,7 +234,47 @@ pub fn haarpsi_rgb8_opts(
         Q_COEF,
         preprocess_subsample,
     );
-    Ok(kernel::haarpsi_core(&yr, &yd, Some((&ir, &id, &qr, &qd))))
+    Ok(kernel::haarpsi_core(
+        &yr,
+        &yd,
+        Some((&ir, &id, &qr, &qd)),
+        None,
+    ))
+}
+
+/// [`haarpsi_rgb8`] plus the per-pixel similarity map (color path —
+/// the chroma similarity is folded into the map the way the reference's
+/// `sum(...,3)` pooling does).
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w·3`.
+pub fn haarpsi_rgb8_with_diffmap(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, HaarpsiDiffmap), Error> {
+    check_rgb(reference, distorted, width, height, stride)?;
+    let mk = |data: &[u8], coef| kernel::plane_from_rgb8(data, width, height, stride, coef, true);
+    let yr = mk(reference, Y_COEF);
+    let yd = mk(distorted, Y_COEF);
+    let ir = mk(reference, I_COEF);
+    let id = mk(distorted, I_COEF);
+    let qr = mk(reference, Q_COEF);
+    let qd = mk(distorted, Q_COEF);
+    let mut map = alloc::vec![0.0f32; yr.w * yr.h];
+    let score = kernel::haarpsi_core(&yr, &yd, Some((&ir, &id, &qr, &qd)), Some(&mut map));
+    Ok((
+        score,
+        HaarpsiDiffmap {
+            map,
+            width: yr.w as u32,
+            height: yr.h as u32,
+            haarpsi: score,
+        },
+    ))
 }
 
 /// HaarPSI of two interleaved sRGB RGB8 pairs on the **unrounded
@@ -278,7 +318,7 @@ pub fn haarpsi_luma8_opts(
         Y_COEF,
         preprocess_subsample,
     );
-    Ok(kernel::haarpsi_core(&pr, &pd, None))
+    Ok(kernel::haarpsi_core(&pr, &pd, None, None))
 }
 
 /// The reference's YIQ coefficient sets (applied to unrounded channel
@@ -288,6 +328,76 @@ pub fn haarpsi_luma8_opts(
 pub(crate) const Y_COEF: [f64; 3] = [0.299, 0.587, 0.114];
 pub(crate) const I_COEF: [f64; 3] = [0.596, -0.274, -0.322];
 pub(crate) const Q_COEF: [f64; 3] = [0.211, -0.523, 0.312];
+
+/// HaarPSI's per-pixel similarity map — the reference's
+/// `similarity_map` output (the weighted mean of the orientation and
+/// chroma similarity planes, at the preprocessed resolution — `w×h`
+/// after the default 2× subsample). Higher = more similar.
+///
+/// Implements [`zenmetrics_diffmap::Diffmap`].
+#[non_exhaustive]
+pub struct HaarpsiDiffmap {
+    map: alloc::vec::Vec<f32>,
+    /// Map width — the preprocessed plane width.
+    pub width: u32,
+    /// Map height — the preprocessed plane height.
+    pub height: u32,
+    /// The HaarPSI score computed alongside the map.
+    pub haarpsi: f64,
+}
+
+impl HaarpsiDiffmap {
+    /// The packed `width·height` similarity map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for HaarpsiDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    fn similarity(&self) -> bool {
+        true
+    }
+
+    fn score(&self) -> f64 {
+        self.haarpsi
+    }
+}
+
+/// [`haarpsi_plane_f32`] plus the per-pixel similarity map.
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w`.
+pub fn haarpsi_plane_f32_with_diffmap(
+    reference: &[f32],
+    distorted: &[f32],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, HaarpsiDiffmap), Error> {
+    check_plane(reference, distorted, width, height, stride)?;
+    let pr = kernel::plane_from_f32(reference, width, height, stride, true);
+    let pd = kernel::plane_from_f32(distorted, width, height, stride, true);
+    let mut map = alloc::vec![0.0f32; pr.w * pr.h];
+    let score = kernel::haarpsi_core(&pr, &pd, None, Some(&mut map));
+    Ok((
+        score,
+        HaarpsiDiffmap {
+            map,
+            width: pr.w as u32,
+            height: pr.h as u32,
+            haarpsi: score,
+        },
+    ))
+}
 
 fn check_plane(
     reference: &[f32],

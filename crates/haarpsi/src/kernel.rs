@@ -748,7 +748,7 @@ fn pool_map(ls: &Plane, w: &Plane) -> (f64, f64) {
 /// the color path. Runs under a tier token so every leaf body is the
 /// tier's vector width — bit-identical output for any tier.
 macro_rules! score_body {
-    ($token:ident, $F32:ident, $LANES:literal, $pr:ident, $pd:ident, $iq:ident) => {{
+    ($token:ident, $F32:ident, $LANES:literal, $pr:ident, $pd:ident, $iq:ident, $map:ident) => {{
         let (w, h) = ($pr.w, $pr.h);
         // Orientation similarity/weight accumulators + Haar scratch.
         let mut ls = [Plane::new(w, h), Plane::new(w, h)];
@@ -873,6 +873,35 @@ macro_rules! score_body {
             s_w += wsum;
         }
         let m = s_t / s_w;
+        // Canonical similarity map: per-pixel weighted mean of the
+        // similarity planes — same (l, w) pairs the pool folded, so the
+        // map's arithmetic mean is `s_t/s_w` up to f64 vs f32 rounding.
+        if let Some(map) = $map {
+            debug_assert_eq!(map.len(), w * h);
+            // `ls`/`wm` are `[Plane; 2]`.
+            for y in 0..h {
+                let rows: [(&[f32], &[f32]); 2] = [
+                    (ls[0].data(y), wm[0].data(y)),
+                    (ls[1].data(y), wm[1].data(y)),
+                ];
+                let (l3r, w3r) = ls3w3.as_ref().map_or((None, None), |(l3, w3)| {
+                    (Some(l3.data(y)), Some(w3.data(y)))
+                });
+                for x in 0..w {
+                    let mut num = 0.0f32;
+                    let mut den = 0.0f32;
+                    for &(l, m) in rows.iter() {
+                        num += l[x] * m[x];
+                        den += m[x];
+                    }
+                    if let (Some(l3), Some(w3)) = (l3r, w3r) {
+                        num += l3[x] * w3[x];
+                        den += w3[x];
+                    }
+                    map[y * w + x] = num / den;
+                }
+            }
+        }
         // HaarPSILogInv(m, alpha)^2 — NaN propagates like the reference.
         let li = libm::log(m / (1.0 - m)) / ALPHA as f64;
         li * li
@@ -887,9 +916,10 @@ pub fn haarpsi_core_tier_v3_t(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
-    score_body!(token, V, 8, pr, pd, iq)
+    score_body!(token, V, 8, pr, pd, iq, map)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
@@ -900,9 +930,10 @@ pub fn haarpsi_core_tier_v4x_t(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
-    score_body!(token, V, 16, pr, pd, iq)
+    score_body!(token, V, 16, pr, pd, iq, map)
 }
 
 /// The `neon` tier (8-wide f32).
@@ -913,9 +944,10 @@ pub fn haarpsi_core_tier_neon_t(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
-    score_body!(token, V, 8, pr, pd, iq)
+    score_body!(token, V, 8, pr, pd, iq, map)
 }
 
 /// The `wasm128` tier (8-wide f32).
@@ -926,9 +958,10 @@ pub fn haarpsi_core_tier_wasm128_t(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
-    score_body!(token, V, 8, pr, pd, iq)
+    score_body!(token, V, 8, pr, pd, iq, map)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
@@ -937,9 +970,10 @@ pub fn haarpsi_core_tier_scalar_t(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
-    score_body!(token, V, 8, pr, pd, iq)
+    score_body!(token, V, 8, pr, pd, iq, map)
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.
@@ -947,9 +981,10 @@ pub(crate) fn haarpsi_core(
     pr: &Plane,
     pd: &Plane,
     iq: Option<(&Plane, &Plane, &Plane, &Plane)>,
+    map: Option<&mut [f32]>,
 ) -> f64 {
     archmage::attuned!(
-        haarpsi_core_tier(pr, pd, iq),
+        haarpsi_core_tier(pr, pd, iq, map),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }

@@ -1,0 +1,14 @@
+[package]
+name = "zenmetrics-diffmap"
+version = "0.0.1"
+edition = "2024"
+description = "Per-pixel metric map trait — object-safe `Diffmap` with zenpixels `PixelCow` storage"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }

@@ -21,7 +21,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = []
+std = ["zenmetrics-diffmap/std"]
 # Rayon band parallelism. Results are bit-identical at every thread count:
 # per-row partial sums are combined in row order regardless of banding.
 parallel = ["std", "dep:rayon"]
@@ -30,17 +30,19 @@ parallel = ["std", "dep:rayon"]
 _dev = ["archmage/testable_dispatch"]
 # zenpixels input: score any `PixelSlice` (any depth / layout / transfer that
 # zenpixels-convert can bring to sRGB RGB8), converted row by row.
-pixels = ["std", "dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["std", "dep:zenpixels-convert"]
 # Opt-in AVX-512 `v4` tier (16-wide), like crates/iwssim: enables the
 # archmage/magetypes AVX-512 support the tier is built on.
 avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
+zenmetrics-diffmap = { path = "../zenmetrics-diffmap", default-features = false }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
+
 archmage = { workspace = true }
 magetypes = { workspace = true }
 libm = { version = "0.2.16", default-features = false }
 rayon = { version = "1.10", optional = true }
-zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]

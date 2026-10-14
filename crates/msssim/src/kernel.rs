@@ -119,8 +119,9 @@ pub struct Args<'a> {
 /// fixed-order `f32` chain, and the two map means accumulate `f64` in
 /// raster order — bit-identical on every tier and lane count.
 macro_rules! score_body {
-    ($token:ident, $F32:ident, $LANES:literal, $a:ident) => {{
+    ($token:ident, $F32:ident, $LANES:literal, $a:ident, $map:ident) => {{
         let (mut w, mut h, level) = ($a.w, $a.h, $a.level);
+        let mut $map = $map;
         let taps = gaussian_taps();
         let (mut im1, mut im2) = (
             alloc::borrow::Cow::Borrowed($a.im1),
@@ -257,6 +258,14 @@ macro_rules! score_body {
             #[cfg(not(feature = "parallel"))]
             band(0, &mut smap, &mut cmap);
             // Preserve the original raster-order f64 fold exactly.
+            // Canonical map = level-0's SSIM map (finest scale) — the
+            // `ssimmap` MATLAB `ssim` returns. Packed `out_w×out_h`.
+            if l == 0
+                && let Some(m) = $map.as_deref_mut()
+            {
+                debug_assert_eq!(m.len(), n);
+                m.copy_from_slice(&smap);
+            }
             let (mut sum_s, mut sum_c) = (0.0f64, 0.0f64);
             for (&s, &c) in smap.iter().zip(&cmap) {
                 sum_s += s as f64;
@@ -299,43 +308,69 @@ macro_rules! score_body {
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
-pub fn msssim_core_tier_v3_t(token: archmage::X64V3Token, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_v3_t(
+    token: archmage::X64V3Token,
+    a: Args<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
-    score_body!(token, V, 8, a)
+    score_body!(token, V, 8, a, map)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::attune]
-pub fn msssim_core_tier_v4x_t(token: archmage::X64V4xToken, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    a: Args<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
-    score_body!(token, V, 16, a)
+    score_body!(token, V, 16, a, map)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
 #[archmage::attune]
-pub fn msssim_core_tier_neon_t(token: archmage::NeonToken, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_neon_t(
+    token: archmage::NeonToken,
+    a: Args<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
-    score_body!(token, V, 8, a)
+    score_body!(token, V, 8, a, map)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-pub fn msssim_core_tier_wasm128_t(token: archmage::Wasm128Token, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    a: Args<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
-    score_body!(token, V, 8, a)
+    score_body!(token, V, 8, a, map)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn msssim_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> f64 {
+pub fn msssim_core_tier_scalar_t(
+    token: archmage::ScalarToken,
+    a: Args<'_>,
+    map: Option<&mut [f32]>,
+) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
-    score_body!(token, V, 8, a)
+    score_body!(token, V, 8, a, map)
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.
-pub(crate) fn msssim_core(inputs: &crate::Inputs, w: usize, h: usize, level: usize) -> f64 {
+pub(crate) fn msssim_core(
+    inputs: &crate::Inputs,
+    w: usize,
+    h: usize,
+    level: usize,
+    map: Option<&mut [f32]>,
+) -> f64 {
     let a = Args {
         im1: &inputs.r,
         im2: &inputs.d,
@@ -344,7 +379,7 @@ pub(crate) fn msssim_core(inputs: &crate::Inputs, w: usize, h: usize, level: usi
         level,
     };
     archmage::attuned!(
-        msssim_core_tier(a),
+        msssim_core_tier(a, map),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }

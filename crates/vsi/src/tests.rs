@@ -230,7 +230,25 @@ fn tier_parity() {
     let Some(token) = archmage::X64V3Token::summon() else {
         return;
     };
-    let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p);
-    let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p);
+    let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p, None);
+    let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p, None);
     assert_eq!(s_scalar, s_v3);
+}
+
+/// `vsi_rgb8_with_diffmap` returns the identical score and a full-res
+/// similarity map.
+#[test]
+fn vsi_diffmap_matches_score() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (48usize, 40usize);
+    let r: alloc::vec::Vec<u8> = (0..w * h * 3).map(|i| (i * 13 + 7) as u8 % 251).collect();
+    let mut d = r.clone();
+    for i in (300..700).step_by(3) {
+        d[i] = 255 - d[i];
+    }
+    let plain = crate::vsi_rgb8(&r, &d, w, h, w * 3).unwrap();
+    let (score, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
+    assert_eq!(plain, score);
+    assert_eq!(dm.map().len(), w * h);
+    assert!(dm.similarity());
 }

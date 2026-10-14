@@ -17,8 +17,7 @@ fn main() {
     let mut score = 0.0;
     for _ in 0..reps {
         let t0 = std::time::Instant::now();
-        score =
-            std::hint::black_box(gmsd::ms_gmsd_rgb8(&r, &d, w, h, w * 3).unwrap());
+        score = std::hint::black_box(gmsd::ms_gmsd_rgb8(&r, &d, w, h, w * 3).unwrap());
         times.push(t0.elapsed().as_secs_f64() * 1e3);
     }
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());

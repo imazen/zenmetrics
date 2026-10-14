@@ -65,6 +65,7 @@
 
 extern crate alloc;
 
+use alloc::vec;
 use alloc::vec::Vec;
 
 mod fft;
@@ -186,9 +187,7 @@ pub fn fsim_plane_f32(
 ) -> Result<f64, Error> {
     check_len(reference, width, height, stride)?;
     check_len(distorted, width, height, stride)?;
-    Ok(kernel::fsim_planes(
-        reference, distorted, width, height, stride,
-    ))
+    Ok(kernel::fsim_planes(reference, distorted, width, height, stride, None).0)
 }
 
 /// FSIM and FSIMc of two packed sRGB8 images (`rgb` triplets, `stride`
@@ -210,7 +209,8 @@ pub fn fsim_rgb8(
 ) -> Result<Scores, Error> {
     check_len_rgb(reference, width, height, stride)?;
     check_len_rgb(distorted, width, height, stride)?;
-    let (fsim, fsimc) = kernel::fsim_rgb8_planes(reference, distorted, width, height, stride);
+    let ((fsim, fsimc), _, _) =
+        kernel::fsim_rgb8_planes(reference, distorted, width, height, stride, None);
     Ok(Scores { fsim, fsimc })
 }
 
@@ -230,8 +230,140 @@ pub fn fsim_luma8(
 ) -> Result<f64, Error> {
     check_len_rgb(reference, width, height, stride)?;
     check_len_rgb(distorted, width, height, stride)?;
-    Ok(kernel::fsim_luma8_planes(
-        reference, distorted, width, height, stride,
+    Ok(kernel::fsim_luma8_planes(reference, distorted, width, height, stride, None).0)
+}
+
+/// FSIM's per-pixel similarity map — the reference's `FSIMmap`
+/// (`GSim · PCsim` at the decimated `w2×h2` resolution; `F` downsampling
+/// applies). `map[i]` ∈ \[0,1\], higher = more similar.
+///
+/// Implements [`zenmetrics_diffmap::Diffmap`] — `Box<dyn Diffmap>` works
+/// directly for heterogeneous consumers.
+#[non_exhaustive]
+pub struct FsimDiffmap {
+    map: Vec<f32>,
+    /// Map width — the decimated plane width.
+    pub width: u32,
+    /// Map height — the decimated plane height.
+    pub height: u32,
+    /// The FSIM score computed alongside the map.
+    pub fsim: f64,
+    /// FSIMc when chroma was compared (`fsim_rgb8_with_diffmap`).
+    pub fsimc: Option<f64>,
+}
+
+impl FsimDiffmap {
+    /// The packed `width·height` similarity map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for FsimDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    fn similarity(&self) -> bool {
+        true
+    }
+
+    fn score(&self) -> f64 {
+        self.fsim
+    }
+
+    fn extras(
+        &self,
+    ) -> alloc::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    alloc::borrow::Cow<'static, str>,
+                    alloc::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        alloc::boxed::Box::new(
+            self.fsimc
+                .map(|v| {
+                    (
+                        alloc::borrow::Cow::Borrowed("fsimc"),
+                        alloc::format!("{v}").into(),
+                    )
+                })
+                .into_iter(),
+        )
+    }
+}
+
+/// FSIM of two strided `f32` planes plus the per-pixel similarity map
+/// (see [`FsimDiffmap`]; `w2×h2` is the *decimated* resolution).
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w`.
+pub fn fsim_plane_f32_with_diffmap(
+    reference: &[f32],
+    distorted: &[f32],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, FsimDiffmap), Error> {
+    check_len(reference, width, height, stride)?;
+    check_len(distorted, width, height, stride)?;
+    // Map dims are the decimated dims — size the buffer once we know f.
+    let f = kernel::downsample_factor(width, height);
+    let w2 = width.div_ceil(f);
+    let h2 = height.div_ceil(f);
+    let mut map = vec![0.0f32; w2 * h2];
+    let (fsim, w2, h2) =
+        kernel::fsim_planes(reference, distorted, width, height, stride, Some(&mut map));
+    map.truncate(w2 * h2);
+    Ok((
+        fsim,
+        FsimDiffmap {
+            map,
+            width: w2 as u32,
+            height: h2 as u32,
+            fsim,
+            fsimc: None,
+        },
+    ))
+}
+
+/// FSIM + FSIMc of two packed sRGB8 images plus the FSIMmap.
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w·3`.
+pub fn fsim_rgb8_with_diffmap(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(Scores, FsimDiffmap), Error> {
+    check_len_rgb(reference, width, height, stride)?;
+    check_len_rgb(distorted, width, height, stride)?;
+    let f = kernel::downsample_factor(width, height);
+    let w2 = width.div_ceil(f);
+    let h2 = height.div_ceil(f);
+    let mut map = vec![0.0f32; w2 * h2];
+    let ((fsim, fsimc), w2, h2) =
+        kernel::fsim_rgb8_planes(reference, distorted, width, height, stride, Some(&mut map));
+    map.truncate(w2 * h2);
+    Ok((
+        Scores { fsim, fsimc },
+        FsimDiffmap {
+            map,
+            width: w2 as u32,
+            height: h2 as u32,
+            fsim,
+            fsimc: Some(fsimc),
+        },
     ))
 }
 

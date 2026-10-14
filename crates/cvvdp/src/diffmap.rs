@@ -192,3 +192,59 @@ mod tests {
         }
     }
 }
+
+/// Owned diffmap — the masked per-pixel error at base resolution
+/// (`w×h`, higher = more visible error). Implements
+/// [`zenmetrics_diffmap::Diffmap`].
+#[non_exhaustive]
+pub struct CvvdpDiffmap {
+    pub(crate) map: Vec<f32>,
+    /// Map width (= image width).
+    pub width: u32,
+    /// Map height (= image height).
+    pub height: u32,
+    /// The JOD score computed alongside the map.
+    pub jod: f32,
+}
+
+impl CvvdpDiffmap {
+    /// The packed `width·height` masked-error map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for CvvdpDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    /// Masked error is error-direction: higher = more visible.
+    fn similarity(&self) -> bool {
+        false
+    }
+
+    fn score(&self) -> f64 {
+        self.jod as f64
+    }
+
+    fn extras(
+        &self,
+    ) -> alloc::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    alloc::borrow::Cow<'static, str>,
+                    alloc::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("jod"),
+            alloc::borrow::Cow::Owned(alloc::format!("{}", self.jod)),
+        )))
+    }
+}

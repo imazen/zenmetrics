@@ -143,6 +143,98 @@ pub(crate) fn auto_level(w: usize, h: usize) -> Result<usize, Error> {
     Ok(l.min(5))
 }
 
+/// MS-SSIM's per-pixel map — the canonical SSIM map at the finest
+/// scale (the `ssimmap` MATLAB `ssim` returns), `(w−10)×(h−10)` after
+/// the level-0 valid Gaussian window. Higher = more similar.
+///
+/// Implements [`zenmetrics_diffmap::Diffmap`].
+#[non_exhaustive]
+pub struct MsssimDiffmap {
+    map: alloc::vec::Vec<f32>,
+    /// Map width — `width−10` (valid convolution interior).
+    pub width: u32,
+    /// Map height — `height−10`.
+    pub height: u32,
+    /// The MS-SSIM score computed alongside the map.
+    pub msssim: f64,
+    /// Level count the score used.
+    pub level: u32,
+}
+
+impl MsssimDiffmap {
+    /// The packed `width·height` SSIM map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for MsssimDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    fn similarity(&self) -> bool {
+        true
+    }
+
+    fn score(&self) -> f64 {
+        self.msssim
+    }
+
+    fn extras(
+        &self,
+    ) -> alloc::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    alloc::borrow::Cow<'static, str>,
+                    alloc::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("level"),
+            alloc::borrow::Cow::Owned(alloc::format!("{}", self.level)),
+        )))
+    }
+}
+
+/// [`msssim_plane_f32`] plus the level-0 SSIM map.
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w`.
+pub fn msssim_plane_f32_with_diffmap(
+    reference: &[f32],
+    distorted: &[f32],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, MsssimDiffmap), Error> {
+    check_plane(reference, width, height, stride)?;
+    check_plane(distorted, width, height, stride)?;
+    let level = auto_level(width, height)?;
+    let r = gather_plane(reference, width, height, stride);
+    let d = gather_plane(distorted, width, height, stride);
+    let mw = width - 10;
+    let mh = height - 10;
+    let mut map = alloc::vec![0.0f32; mw * mh];
+    let score = kernel::msssim_core(&Inputs { r, d }, width, height, level, Some(&mut map));
+    Ok((
+        score,
+        MsssimDiffmap {
+            map,
+            width: mw as u32,
+            height: mh as u32,
+            msssim: score,
+            level: level as u32,
+        },
+    ))
+}
+
 fn check_plane(buf: &[f32], w: usize, h: usize, stride: usize) -> Result<(), Error> {
     let needed = if h == 0 { 0 } else { stride * (h - 1) + w };
     if buf.len() < needed {
@@ -182,7 +274,13 @@ pub fn msssim_plane_f32(
     let level = auto_level(width, height)?;
     let r = gather_plane(reference, width, height, stride);
     let d = gather_plane(distorted, width, height, stride);
-    Ok(kernel::msssim_core(&Inputs { r, d }, width, height, level))
+    Ok(kernel::msssim_core(
+        &Inputs { r, d },
+        width,
+        height,
+        level,
+        None,
+    ))
 }
 
 /// MS-SSIM of two interleaved sRGB RGB8 pairs, on the MATLAB
@@ -198,7 +296,39 @@ pub fn msssim_rgb8(
     check_rgb(distorted, width, height, stride)?;
     let level = auto_level(width, height)?;
     let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
-    Ok(kernel::msssim_core(&inputs, width, height, level))
+    Ok(kernel::msssim_core(&inputs, width, height, level, None))
+}
+
+/// [`msssim_rgb8`] plus the level-0 SSIM map.
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w·3`.
+pub fn msssim_rgb8_with_diffmap(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, MsssimDiffmap), Error> {
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let level = auto_level(width, height)?;
+    let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
+    let mw = width - 10;
+    let mh = height - 10;
+    let mut map = alloc::vec![0.0f32; mw * mh];
+    let score = kernel::msssim_core(&inputs, width, height, level, Some(&mut map));
+    Ok((
+        score,
+        MsssimDiffmap {
+            map,
+            width: mw as u32,
+            height: mh as u32,
+            msssim: score,
+            level: level as u32,
+        },
+    ))
 }
 
 /// Gathered level-0 input planes.

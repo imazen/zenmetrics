@@ -214,6 +214,7 @@ fn tier_parity() {
             h,
             level: 3,
         },
+        None,
     );
     if let Some(token) = archmage::X64V3Token::summon() {
         let s_v3 = crate::dev::msssim_core_tier_v3_t(
@@ -225,6 +226,7 @@ fn tier_parity() {
                 h,
                 level: 3,
             },
+            None,
         );
         assert_eq!(s_scalar, s_v3);
     }
@@ -277,4 +279,28 @@ fn rgb_luma_blocks_match_scalar_with_stride_and_tails() {
             }
         }
     }
+}
+
+/// `msssim_plane_f32_with_diffmap` returns the identical score; the map
+/// is the level-0 SSIM map at the `(w-10)x(h-10)` valid interior.
+#[test]
+fn msssim_diffmap_matches_score() {
+    use zenmetrics_diffmap::Diffmap;
+    let (w, h) = (64usize, 48usize);
+    let r: alloc::vec::Vec<f32> = (0..w * h).map(|i| ((i * 23 + 5) % 241) as f32).collect();
+    let mut d = r.clone();
+    for y in 12..22 {
+        for x in 12..22 {
+            d[y * w + x] = 240.0;
+        }
+    }
+    let plain = crate::msssim_plane_f32(&r, &d, w, h, w).unwrap();
+    let (score, dm) = crate::msssim_plane_f32_with_diffmap(&r, &d, w, h, w).unwrap();
+    assert_eq!(plain, score);
+    assert_eq!((dm.width as usize, dm.height as usize), (w - 10, h - 10));
+    assert_eq!(dm.map().len(), (w - 10) * (h - 10));
+    assert!(dm.similarity());
+    assert_eq!(dm.score(), score);
+    // map stays in similarity range
+    assert!(dm.map().iter().all(|v| v.is_finite()));
 }

@@ -22,14 +22,14 @@ avx512 = ["zenmetrics-math/avx512", "archmage/avx512", "magetypes/avx512"]
 # Use the standard library — most users want this. With `std` disabled
 # the crate falls back to `core + alloc` only, which is what no_std
 # wasm32 targets need.
-std = ["zenmetrics-math/std"]
+std = ["zenmetrics-diffmap/std", "zenmetrics-math/std"]
 # Allocator-only build. `alloc` is implied — kept as a feature to
 # make intent explicit. no_std + alloc is the minimum target.
 alloc = []
 # Rayon-backed per-band parallelism. Implies std (rayon requires std).
 parallel = ["std", "dep:rayon"]
 # `zenpixels` integration smoke (scoring direct from `PixelLayout`).
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["dep:zenpixels-convert"]
 # TEST-ONLY: re-export the `pub(crate)` SIMD kernel entry points
 # (simd_pyramid + zenmetrics-math) through a `#[doc(hidden)]` module so the
 # brute-force SIMD-vs-scalar equivalence harness in
@@ -57,7 +57,8 @@ magetypes = { workspace = true }
 # preset registry (src/presets.rs).
 serde_json = { workspace = true }
 rayon = { version = "1.10", optional = true }
-zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
+zenmetrics-diffmap = { path = "../zenmetrics-diffmap", default-features = false }
 zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]

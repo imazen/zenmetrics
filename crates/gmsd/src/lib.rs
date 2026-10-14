@@ -228,6 +228,107 @@ pub fn gmsd_with_map(
     run(reference, distorted, Some(map))
 }
 
+/// GMSD's per-pixel GMS map, owned — the canonical `gmsd_map` output of
+/// the reference (`gmsd.m` returns `[gmsd, gmsd_map]`). Implements
+/// [`zenmetrics_diffmap::Diffmap`].
+#[non_exhaustive]
+pub struct GmsdDiffmap {
+    map: Vec<f32>,
+    /// Map width — `width / 2` ([`map_dims`]).
+    pub width: u32,
+    /// Map height — `height / 2`.
+    pub height: u32,
+    /// The score computed alongside the map.
+    pub score: GmsdScore,
+}
+
+impl GmsdDiffmap {
+    /// The packed `width·height` GMS map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for GmsdDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    /// The GMS map is a similarity map (higher = more similar); note the
+    /// *score* is error-direction (its std).
+    fn similarity(&self) -> bool {
+        true
+    }
+
+    fn score(&self) -> f64 {
+        self.score.gmsd
+    }
+
+    fn extras(
+        &self,
+    ) -> alloc::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    alloc::borrow::Cow<'static, str>,
+                    alloc::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("mean_gms"),
+            alloc::borrow::Cow::Owned(alloc::format!("{}", self.score.mean_gms)),
+        )))
+    }
+}
+
+/// [`gmsd_rgb8`]-equivalent convenience: convert packed sRGB8 pairs to
+/// gray then run [`gmsd_with_diffmap`].
+///
+/// # Errors
+/// Same as [`gmsd`] / [`rgb8_to_gray`].
+pub fn gmsd_rgb8_with_diffmap(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(GmsdScore, GmsdDiffmap)> {
+    let n = width * height;
+    let (mut rg, mut dg) = (alloc::vec![0.0f32; n], alloc::vec![0.0f32; n]);
+    rgb8_to_gray(reference, width, height, stride, &mut rg)?;
+    rgb8_to_gray(distorted, width, height, stride, &mut dg)?;
+    gmsd_with_diffmap(
+        GrayImage::packed(&rg, width, height)?,
+        GrayImage::packed(&dg, width, height)?,
+    )
+}
+
+/// [`gmsd`] plus the GMS map as an owned [`GmsdDiffmap`].
+///
+/// # Errors
+/// Same as [`gmsd`].
+pub fn gmsd_with_diffmap(
+    reference: GrayImage<'_>,
+    distorted: GrayImage<'_>,
+) -> Result<(GmsdScore, GmsdDiffmap)> {
+    let (mw, mh) = map_dims(reference.width(), reference.height());
+    let mut map = alloc::vec![0.0f32; mw * mh];
+    let score = run(reference, distorted, Some(&mut map))?;
+    Ok((
+        score,
+        GmsdDiffmap {
+            map,
+            width: mw as u32,
+            height: mh as u32,
+            score,
+        },
+    ))
+}
+
 /// sRGB8 → gray exactly as libgmsd's command-line tool (and MATLAB's
 /// `rgb2gray` on uint8, to within its coefficient rounding):
 /// `round(0.299·R + 0.587·G + 0.114·B)` in f64, half away from zero.

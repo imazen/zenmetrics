@@ -565,6 +565,42 @@ pub fn spatial_map(
             result.similarity = true;
             result.values = first.map.buf().to_vec();
         }
+        #[cfg(feature = "cpu-fsim")]
+        "fsim" | "fsimc" => {
+            let (_, dm) = fsim::fsim_rgb8_with_diffmap(&r, &d, w, h, w * 3)
+                .map_err(|e| fail(e.to_string()))?;
+            result.width = dm.width;
+            result.height = dm.height;
+            result.similarity = true;
+            result.values = dm.map().to_vec();
+        }
+        #[cfg(feature = "cpu-haarpsi")]
+        "haarpsi" => {
+            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(&r, &d, w, h, w * 3)
+                .map_err(|e| fail(e.to_string()))?;
+            result.width = dm.width;
+            result.height = dm.height;
+            result.similarity = true;
+            result.values = dm.map().to_vec();
+        }
+        #[cfg(feature = "cpu-vsi")]
+        "vsi" => {
+            let (_, dm) =
+                vsi::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).map_err(|e| fail(e.to_string()))?;
+            result.width = dm.width;
+            result.height = dm.height;
+            result.similarity = true;
+            result.values = dm.map().to_vec();
+        }
+        #[cfg(feature = "cpu-msssim")]
+        "msssim" => {
+            let (_, dm) = msssim::msssim_rgb8_with_diffmap(&r, &d, w, h, w * 3)
+                .map_err(|e| fail(e.to_string()))?;
+            result.width = dm.width;
+            result.height = dm.height;
+            result.similarity = true;
+            result.values = dm.map().to_vec();
+        }
         #[cfg(feature = "cpu-cvvdp")]
         "cvvdp" => {
             let display = metrics::display::parse_display(display).map_err(fail)?;

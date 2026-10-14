@@ -223,7 +223,7 @@ macro_rules! grad_body {
 /// `F = max(1, round(min(w,h)/256))` — the reference's automatic
 /// downsampling factor. Integer-exact: `round` on a positive real is
 /// `(2m + 256) / 512` floored, i.e. `(m + 128) / 256` for `m ≥ 0`.
-fn downsample_factor(w: usize, h: usize) -> usize {
+pub(crate) fn downsample_factor(w: usize, h: usize) -> usize {
     ((w.min(h) + 128) / 256).max(1)
 }
 
@@ -711,8 +711,11 @@ fn filter_bank(w: usize, h: usize) -> FilterBank {
 // ------------------------------------------------------------------
 
 macro_rules! score_body {
-    ($token:ident, $F32:ident, $LANES:literal, $yr:ident, $yd:ident, $w:ident, $h:ident, $iq:ident) => {{
+    ($token:ident, $F32:ident, $LANES:literal, $yr:ident, $yd:ident, $w:ident, $h:ident, $iq:ident, $map:ident) => {{
         let (w, h) = ($w, $h);
+        // Rebind `mut` so the pool loop can `as_deref_mut` per pixel.
+        #[allow(unused_mut)]
+        let mut $map = $map;
         let n = w * h;
         let bank = filter_bank(w, h);
         let (wplan, hplan) = (&bank.wplan, &bank.hplan);
@@ -828,6 +831,11 @@ macro_rules! score_body {
             let pcsim = (2.0 * a * b + T1) / (a * a + b * b + T1);
             let (x, z) = (g1[i], g2[i]);
             let gsim = (2.0 * x * z + T2) / (x * x + z * z + T2);
+            // FSIMmap = GSim·PCsim — the canonical per-pixel similarity.
+            // A pure store; score accumulation is unchanged.
+            if let Some(m) = $map.as_deref_mut() {
+                m[i] = gsim * pcsim;
+            }
             // MATLAB `max(PC1,PC2)` propagates NaN; `f32::max` would
             // swallow it. Constant inputs produce NaN PC maps — the
             // reference's NaN FSIM depends on this.
@@ -882,50 +890,70 @@ pub(crate) type IqPlanes<'a> = (&'a [f32], &'a [f32], &'a [f32], &'a [f32]);
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
-pub fn fsim_core_tier_v3_t(token: archmage::X64V3Token, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_v3_t(
+    token: archmage::X64V3Token,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
-    score_body!(token, V, 8, yr, yd, w, h, iq)
+    score_body!(token, V, 8, yr, yd, w, h, iq, map)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[archmage::attune]
-pub fn fsim_core_tier_v4x_t(token: archmage::X64V4xToken, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
-    score_body!(token, V, 16, yr, yd, w, h, iq)
+    score_body!(token, V, 16, yr, yd, w, h, iq, map)
 }
 
 /// The `neon` tier (8-wide f32).
 #[cfg(target_arch = "aarch64")]
 #[archmage::attune]
-pub fn fsim_core_tier_neon_t(token: archmage::NeonToken, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_neon_t(
+    token: archmage::NeonToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
-    score_body!(token, V, 8, yr, yd, w, h, iq)
+    score_body!(token, V, 8, yr, yd, w, h, iq, map)
 }
 
 /// The `wasm128` tier (8-wide f32).
 #[cfg(target_arch = "wasm32")]
 #[archmage::attune]
-pub fn fsim_core_tier_wasm128_t(token: archmage::Wasm128Token, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_wasm128_t(
+    token: archmage::Wasm128Token,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
-    score_body!(token, V, 8, yr, yd, w, h, iq)
+    score_body!(token, V, 8, yr, yd, w, h, iq, map)
 }
 
 /// The `scalar` tier (8-wide f32, scalar-emulated lanes).
-pub fn fsim_core_tier_scalar_t(token: archmage::ScalarToken, p: Planes<'_>) -> (f64, f64) {
+pub fn fsim_core_tier_scalar_t(
+    token: archmage::ScalarToken,
+    p: Planes<'_>,
+    map: Option<&mut [f32]>,
+) -> (f64, f64) {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     let (yr, yd, w, h, iq) = (p.yr, p.yd, p.w, p.h, p.iq);
-    score_body!(token, V, 8, yr, yd, w, h, iq)
+    score_body!(token, V, 8, yr, yd, w, h, iq, map)
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.
-fn fsim_core(p: Planes<'_>) -> (f64, f64) {
+fn fsim_core(p: Planes<'_>, map: Option<&mut [f32]>) -> (f64, f64) {
     archmage::attuned!(
-        fsim_core_tier(p),
+        fsim_core_tier(p, map),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -936,18 +964,29 @@ fn fsim_core(p: Planes<'_>) -> (f64, f64) {
 
 /// FSIM of two strided f32 luma planes (`w`×`h` inputs, the reference's
 /// automatic `F` decimation applied inside).
-pub(crate) fn fsim_planes(r: &[f32], d: &[f32], w: usize, h: usize, stride: usize) -> f64 {
+pub(crate) fn fsim_planes(
+    r: &[f32],
+    d: &[f32],
+    w: usize,
+    h: usize,
+    stride: usize,
+    map: Option<&mut [f32]>,
+) -> (f64, usize, usize) {
     let f = downsample_factor(w, h);
     let (w2, h2, yr) = decimate_plane(&crate::plane_from_f32(r, w, h, stride), w, h, f);
     let (_, _, yd) = decimate_plane(&crate::plane_from_f32(d, w, h, stride), w, h, f);
-    fsim_core(Planes {
-        yr: &yr,
-        yd: &yd,
-        w: w2,
-        h: h2,
-        iq: None,
-    })
-    .0
+    debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));
+    let (s, _) = fsim_core(
+        Planes {
+            yr: &yr,
+            yd: &yd,
+            w: w2,
+            h: h2,
+            iq: None,
+        },
+        map,
+    );
+    (s, w2, h2)
 }
 
 /// FSIM + FSIMc of two packed sRGB8 images.
@@ -957,30 +996,47 @@ pub(crate) fn fsim_rgb8_planes(
     w: usize,
     h: usize,
     stride: usize,
-) -> (f64, f64) {
+    map: Option<&mut [f32]>,
+) -> ((f64, f64), usize, usize) {
     let f = downsample_factor(w, h);
     let (w2, h2, [yr, ir, qr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     let (_, _, [yd, id, qd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
-    fsim_core(Planes {
-        yr: &yr,
-        yd: &yd,
-        w: w2,
-        h: h2,
-        iq: Some((&ir, &id, &qr, &qd)),
-    })
+    debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));
+    let (fsim, fsimc) = fsim_core(
+        Planes {
+            yr: &yr,
+            yd: &yd,
+            w: w2,
+            h: h2,
+            iq: Some((&ir, &id, &qr, &qd)),
+        },
+        map,
+    );
+    ((fsim, fsimc), w2, h2)
 }
 
 /// FSIM of the unrounded BT.601 luma of two packed sRGB8 images.
-pub(crate) fn fsim_luma8_planes(r: &[u8], d: &[u8], w: usize, h: usize, stride: usize) -> f64 {
+pub(crate) fn fsim_luma8_planes(
+    r: &[u8],
+    d: &[u8],
+    w: usize,
+    h: usize,
+    stride: usize,
+    map: Option<&mut [f32]>,
+) -> (f64, usize, usize) {
     let f = downsample_factor(w, h);
     let (w2, h2, [yr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF]);
     let (_, _, [yd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF]);
-    fsim_core(Planes {
-        yr: &yr,
-        yd: &yd,
-        w: w2,
-        h: h2,
-        iq: None,
-    })
-    .0
+    debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));
+    let (s, _) = fsim_core(
+        Planes {
+            yr: &yr,
+            yd: &yd,
+            w: w2,
+            h: h2,
+            iq: None,
+        },
+        map,
+    );
+    (s, w2, h2)
 }

@@ -149,6 +149,82 @@ pub fn vsi_rgb8(
         &Input::from_rgb8(distorted, w, h, stride),
         w,
         h,
+        None,
+    ))
+}
+
+/// VSI's per-pixel quality map — the reference's `qualitymap` output
+/// (`SimMatrixC`: grad-sim^α · VS-sim · real((I-sim·Q-sim)^λ) · weight),
+/// full input resolution. Higher = more similar.
+///
+/// Implements [`zenmetrics_diffmap::Diffmap`].
+#[non_exhaustive]
+pub struct VsiDiffmap {
+    map: alloc::vec::Vec<f32>,
+    /// Map width (input width — VSI's map is full-resolution).
+    pub width: u32,
+    /// Map height (input height).
+    pub height: u32,
+    /// The VSI score computed alongside the map.
+    pub vsi: f64,
+}
+
+impl VsiDiffmap {
+    /// The packed `width·height` quality map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+}
+
+impl zenmetrics_diffmap::Diffmap for VsiDiffmap {
+    fn pixels(&self) -> zenpixels::PixelCow<'_> {
+        zenpixels::PixelCow::Borrowed(zenmetrics_diffmap::gray_f32_slice(
+            &self.map,
+            self.width,
+            self.height,
+        ))
+    }
+
+    fn similarity(&self) -> bool {
+        true
+    }
+
+    fn score(&self) -> f64 {
+        self.vsi
+    }
+}
+
+/// [`vsi_rgb8`] plus the per-pixel quality map.
+///
+/// # Errors
+/// [`Error::BufferLength`] when `data` is shorter than
+/// `stride·(h−1) + w·3`.
+pub fn vsi_rgb8_with_diffmap(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, VsiDiffmap), Error> {
+    check_len(reference, width, height, stride)?;
+    check_len(distorted, width, height, stride)?;
+    let (w, h) = (width, height);
+    let mut map = alloc::vec![0.0f32; w * h];
+    let score = kernel::vsi_planes(
+        &Input::from_rgb8(reference, w, h, stride),
+        &Input::from_rgb8(distorted, w, h, stride),
+        w,
+        h,
+        Some(&mut map),
+    );
+    Ok((
+        score,
+        VsiDiffmap {
+            map,
+            width: w as u32,
+            height: h as u32,
+            vsi: score,
+        },
     ))
 }
 
