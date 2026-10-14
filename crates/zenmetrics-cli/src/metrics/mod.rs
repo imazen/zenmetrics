@@ -2863,7 +2863,9 @@ mod tests {
         {
             assert_eq!(cols[0], "cvvdp_gpu");
         }
-        // SDR output names the display on top of the implementation tag.
+        // SDR output names the display on top of the implementation tag
+        // (display presets exist only when a cvvdp backend is compiled).
+        #[cfg(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
         assert_eq!(
             MetricKind::CvvdpGpu.columns_for(Some(&display::DisplayPreset::Standard4k.into()))[0],
             format!("{}_standard_4k", cols[0])
@@ -2894,15 +2896,19 @@ mod tests {
             assert_eq!(cols[0], "cvvdp");
         }
         // SDR output names the display; HDR (`None`) keeps the base.
-        assert_eq!(
-            MetricKind::Cvvdp.columns_for(Some(&display::DisplayPreset::StandardFhd.into()))[0],
-            format!("{}_standard_fhd", cols[0])
-        );
+        // Display presets exist only when a cvvdp backend is compiled.
+        #[cfg(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
+        {
+            assert_eq!(
+                MetricKind::Cvvdp.columns_for(Some(&display::DisplayPreset::StandardFhd.into()))[0],
+                format!("{}_standard_fhd", cols[0])
+            );
+            assert_eq!(
+                MetricKind::Ssim2.columns_for(Some(&display::DisplayPreset::StandardFhd.into())),
+                MetricKind::Ssim2.column_names()
+            );
+        }
         assert_eq!(MetricKind::Cvvdp.columns_for(None), cols);
-        assert_eq!(
-            MetricKind::Ssim2.columns_for(Some(&display::DisplayPreset::StandardFhd.into())),
-            MetricKind::Ssim2.column_names()
-        );
         // In any build where BOTH backends are compiled, the columns must
         // differ — that is the whole point of the CPU/GPU split.
         #[cfg(all(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
