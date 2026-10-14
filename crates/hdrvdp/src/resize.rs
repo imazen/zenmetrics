@@ -229,11 +229,27 @@ pub fn imresize32(
 
     let hc = contributions(width, out_width);
     let mut tmp = vec![0.0f32; out_width * height];
-    for (row, src) in tmp
-        .chunks_exact_mut(out_width)
-        .zip(image.chunks_exact(width))
-    {
-        for (x, o) in row.iter_mut().enumerate() {
+    // Rows are disjoint — parallel row-ranges under `parallel`.
+    let rb = height.div_ceil(64).max(1);
+    crate::par::for_each_dst_chunk(&mut tmp, rb * out_width, |o, tmp_c| {
+        let y0 = o / out_width;
+        for (ly, row) in tmp_c.chunks_exact_mut(out_width).enumerate() {
+        let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
+        let mut x = 0usize;
+        while x + 4 <= out_width {
+            let mut acc = [0.0f64; 4];
+            for t in 0..hc.taps {
+                for j in 0..4 {
+                    let base = (x + j) * hc.taps;
+                    acc[j] += hc.weights[base + t] * f64::from(src[hc.indices[base + t]]);
+                }
+            }
+            for j in 0..4 {
+                row[x + j] = acc[j] as f32;
+            }
+            x += 4;
+        }
+        while x < out_width {
             let base = x * hc.taps;
             let wr = &hc.weights[base..base + hc.taps];
             let ir = &hc.indices[base..base + hc.taps];
@@ -241,14 +257,20 @@ pub fn imresize32(
             for (w, &i) in wr.iter().zip(ir) {
                 acc += w * f64::from(src[i]);
             }
-            *o = acc as f32;
+            row[x] = acc as f32;
+            x += 1;
         }
-    }
+        }
+    });
 
     let vc = contributions(height, out_height);
     let mut out = vec![0.0f32; out_width * out_height];
     const BLK: usize = 8;
-    for (y, orow) in out.chunks_exact_mut(out_width).enumerate() {
+    let rb2 = out_height.div_ceil(64).max(1);
+    crate::par::for_each_dst_chunk(&mut out, rb2 * out_width, |o, out_c| {
+        let yy0 = o / out_width;
+        for (ly, orow) in out_c.chunks_exact_mut(out_width).enumerate() {
+        let y = yy0 + ly;
         let base = y * vc.taps;
         let wr = &vc.weights[base..base + vc.taps];
         let ir = &vc.indices[base..base + vc.taps];
@@ -276,7 +298,8 @@ pub fn imresize32(
             orow[x] = acc as f32;
             x += 1;
         }
-    }
+        }
+    });
     out
 }
 

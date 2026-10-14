@@ -49,10 +49,10 @@ pub(crate) fn collect_indexed<T: Send>(n: usize, f: impl Fn(usize) -> T + Send +
 /// independent, so the result cannot depend on scheduling. The
 /// sequential build calls `f` once on the whole slice — same code path
 /// as an unchunked call.
-pub(crate) fn for_each_dst_chunk(
-    dst: &mut [f64],
+pub(crate) fn for_each_dst_chunk<T: Send>(
+    dst: &mut [T],
     n: usize,
-    f: impl Fn(usize, &mut [f64]) + Send + Sync,
+    f: impl Fn(usize, &mut [T]) + Send + Sync,
 ) {
     #[cfg(feature = "parallel")]
     {

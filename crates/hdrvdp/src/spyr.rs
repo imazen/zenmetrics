@@ -168,6 +168,193 @@ fn madd<const RELAXED: bool>(acc: f32, w: f32, v: f32) -> f32 {
     }
 }
 
+// ── Attuned row kernels ──────────────────────────────────────────────────
+//
+// The scalar `madd::<true>` lowers `f32::mul_add` to a libm `fmaf` call per
+// element when the enclosing codegen unit has no FMA target feature — under
+// profiling that libcall was ~44 % of the whole metric. Routing the same
+// arithmetic through `f32x8` lanes emits real `vfmadd`/`fmla`, which is
+// single-rounded exactly like `fmaf`, so relaxed results are bit-identical;
+// strict mode keeps separate mul+add in lanes for the same reason.
+
+/// `corr_dn` step-1 row body: `out[j] = Σ_{ky,kx} f[ky,kx]·padded[(win+ky)·pad_w + kx + j]`.
+/// Each output lane accumulates the taps in the same ky-major/kx-inner order
+/// as the scalar body — bit-identical per lane.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn corr_row1_t<const RELAXED: bool>(
+    token: Token,
+    padded: &[f32],
+    pad_w: usize,
+    filter: &[f32],
+    fs: usize,
+    win_row: usize,
+    out_row: &mut [f32],
+) {
+    let out_w = out_row.len();
+    let mut i = 0usize;
+    while i + 8 <= out_w {
+        let mut av = f32x8::zero_t(token);
+        for ky in 0..fs {
+            let prow = &padded[(win_row + ky) * pad_w + i..];
+            for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
+                let wv = f32x8::splat_t(token, w);
+                let pv = f32x8::load_t(token, (&prow[kx..kx + 8]).try_into().unwrap());
+                av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+            }
+        }
+        av.store((&mut out_row[i..i + 8]).try_into().unwrap());
+        i += 8;
+    }
+    while i < out_w {
+        let mut acc = 0.0;
+        for ky in 0..fs {
+            let prow = &padded[(win_row + ky) * pad_w + i..];
+            for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
+                acc = madd::<RELAXED>(acc, w, prow[kx]);
+            }
+        }
+        out_row[i] = acc;
+        i += 1;
+    }
+}
+
+fn corr_row1<const RELAXED: bool>(
+    padded: &[f32],
+    pad_w: usize,
+    filter: &[f32],
+    fs: usize,
+    win_row: usize,
+    out_row: &mut [f32],
+) {
+    archmage::attuned!(
+        corr_row1_t::<RELAXED>(padded, pad_w, filter, fs, win_row, out_row),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// `corr_dn` step>1 output row: `out[ox] = Σ_{ky,kx} f[ky,kx]·padded[(win+ky)·pad_w + ox·step+kx]`.
+/// Blocks of 8 lanes gather the strided taps; the tail keeps the scalar body.
+/// Same per-lane tap order — bit-identical.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+#[allow(clippy::too_many_arguments)]
+fn corr_rows_t<const RELAXED: bool>(
+    token: Token,
+    padded: &[f32],
+    pad_w: usize,
+    filter: &[f32],
+    fs: usize,
+    win_row: usize,
+    step: usize,
+    out_row: &mut [f32],
+) {
+    let out_w = out_row.len();
+    let mut ox = 0usize;
+    while ox + 8 <= out_w {
+        let x0 = ox * step;
+        let mut av = f32x8::zero_t(token);
+        for ky in 0..fs {
+            let prow = &padded[(win_row + ky) * pad_w + x0..];
+            for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
+                let wv = f32x8::splat_t(token, w);
+                let s = &prow[kx..];
+                let pv = f32x8::from_array_t(
+                    token,
+                    [
+                        s[0],
+                        s[step],
+                        s[2 * step],
+                        s[3 * step],
+                        s[4 * step],
+                        s[5 * step],
+                        s[6 * step],
+                        s[7 * step],
+                    ],
+                );
+                av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+            }
+        }
+        av.store((&mut out_row[ox..ox + 8]).try_into().unwrap());
+        ox += 8;
+    }
+    while ox < out_w {
+        let mut acc = 0.0;
+        let x0 = ox * step;
+        for ky in 0..fs {
+            let prow = &padded[(win_row + ky) * pad_w + x0..];
+            for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
+                acc = madd::<RELAXED>(acc, w, prow[kx]);
+            }
+        }
+        out_row[ox] = acc;
+        ox += 1;
+    }
+}
+
+fn corr_rows<const RELAXED: bool>(
+    padded: &[f32],
+    pad_w: usize,
+    filter: &[f32],
+    fs: usize,
+    win_row: usize,
+    step: usize,
+    out_row: &mut [f32],
+) {
+    archmage::attuned!(
+        corr_rows_t::<RELAXED>(padded, pad_w, filter, fs, win_row, step, out_row),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
+/// `up_conv` output row: `res_row[px] += Σ_taps w·padded[py·pad_w + px + off]`
+/// over the precomputed nonzero-tap list `(w, dy·pad_w + dx)` — contiguous
+/// loads, same tap order, then one `+=` into `res` exactly like the scalar.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn upconv_row_t<const RELAXED: bool>(
+    token: Token,
+    padded: &[f32],
+    taps: &[(f32, usize)],
+    base: usize,
+    res_row: &mut [f32],
+) {
+    let out_w = res_row.len();
+    let mut px = 0usize;
+    while px + 8 <= out_w {
+        let mut av = f32x8::zero_t(token);
+        for &(w, off) in taps {
+            let wv = f32x8::splat_t(token, w);
+            let pv =
+                f32x8::load_t(token, (&padded[base + px + off..base + px + off + 8]).try_into().unwrap());
+            av = if RELAXED { wv.mul_add(pv, av) } else { av + wv * pv };
+        }
+        let mut a = [0.0f32; 8];
+        av.store(&mut a);
+        for (j, &v) in a.iter().enumerate() {
+            res_row[px + j] += v;
+        }
+        px += 8;
+    }
+    while px < out_w {
+        let mut acc = 0.0;
+        for &(w, off) in taps {
+            acc = madd::<RELAXED>(acc, w, padded[base + px + off]);
+        }
+        res_row[px] += acc;
+        px += 1;
+    }
+}
+
+fn upconv_row<const RELAXED: bool>(
+    padded: &[f32],
+    taps: &[(f32, usize)],
+    base: usize,
+    res_row: &mut [f32],
+) {
+    archmage::attuned!(
+        upconv_row_t::<RELAXED>(padded, taps, base, res_row),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// Correlate `image` with a square `filter` of side `fs`, then keep every
 /// `step`-th sample starting at 0 — upstream's `corrDn(im, filt, 'reflect1',
 /// [step step], [1 1])`.
@@ -244,65 +431,9 @@ fn corr_dn_impl<const RELAXED: bool>(
     // row is a task; otherwise the same body runs serially in row order.
     let row = |win_row: usize, out_row: &mut [f32]| {
         if step == 1 {
-            // Row-transposed FIR: every output lane accumulates its taps in
-            // the original ky-major/kx-inner order — bit-identical — but the
-            // accumulator row sits in L1 and each lane is independent, so
-            // the inner loop is one contiguous vector FMA per tap instead of
-            // 81 chained FMAs per 8-output block.
-            let mut acc = vec![0.0f32; out_w];
-            for ky in 0..fs {
-                let prow = &padded[(win_row + ky) * pad_w..(win_row + ky + 1) * pad_w];
-                let frow = &filter[ky * fs..ky * fs + fs];
-                for (kx, &w) in frow.iter().enumerate() {
-                    for (a, v) in acc.iter_mut().zip(&prow[kx..kx + out_w]) {
-                        *a = madd::<RELAXED>(*a, w, *v);
-                    }
-                }
-            }
-            out_row.copy_from_slice(&acc);
-            return;
-        }
-        const BLK: usize = 8;
-        let mut ox = 0usize;
-        while ox + BLK <= out_w {
-            let mut acc = [0.0f32; BLK];
-            let x0 = ox * step;
-            for ky in 0..fs {
-                let prow = &padded[(win_row + ky) * pad_w..(win_row + ky + 1) * pad_w];
-                let frow = &filter[ky * fs..ky * fs + fs];
-                if step == 1 {
-                    for (kx, &w) in frow.iter().enumerate() {
-                        let s: &[f32; BLK] = prow[x0 + kx..x0 + kx + BLK]
-                            .try_into()
-                            .expect("BLK-sized window");
-                        for (a, v) in acc.iter_mut().zip(s) {
-                            *a = madd::<RELAXED>(*a, w, *v);
-                        }
-                    }
-                } else {
-                    for (kx, &w) in frow.iter().enumerate() {
-                        let s = &prow[x0 + kx..];
-                        for (j, a) in acc.iter_mut().enumerate() {
-                            *a = madd::<RELAXED>(*a, w, s[j * step]);
-                        }
-                    }
-                }
-            }
-            out_row[ox..ox + BLK].copy_from_slice(&acc);
-            ox += BLK;
-        }
-        while ox < out_w {
-            let mut acc = 0.0;
-            let x0 = ox * step;
-            for ky in 0..fs {
-                let prow = &padded[(win_row + ky) * pad_w..];
-                let frow = &filter[ky * fs..ky * fs + fs];
-                for (kx, &w) in frow.iter().enumerate() {
-                    acc = madd::<RELAXED>(acc, w, prow[x0 + kx]);
-                }
-            }
-            out_row[ox] = acc;
-            ox += 1;
+            corr_row1::<RELAXED>(&padded, pad_w, filter, fs, win_row, out_row);
+        } else {
+            corr_rows::<RELAXED>(&padded, pad_w, filter, fs, win_row, step, out_row);
         }
     };
     #[cfg(feature = "parallel")]
@@ -440,47 +571,47 @@ fn up_conv_impl<const RELAXED: bool>(
     }
 
     // Non-zero taps in the original iteration order (ky-major, kx within);
-    // the `w == 0.0` filter mirrors the original `continue`.
-    let mut taps: Vec<(f32, usize, usize)> = Vec::with_capacity(fs * fs);
+    // the `w == 0.0` filter mirrors the original `continue`. Stored as flat
+    // `padded` offsets: tap (ky, kx) of output (py, px) reads
+    // `padded[py·pad_w + px + (fs−1−ky)·pad_w + (fs−1−kx)]`.
+    let mut taps: Vec<(f32, usize)> = Vec::with_capacity(fs * fs);
     for ky in 0..fs {
         for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
             if w == 0.0 {
                 continue;
             }
-            // `padded` index of tap (ky, kx) for output (py, px) is
-            // `(py + fs−1−ky) · pad_w + px + fs−1−kx`.
-            taps.push((w, fs - 1 - ky, fs - 1 - kx));
+            taps.push((w, (fs - 1 - ky) * pad_w + (fs - 1 - kx)));
         }
     }
 
-    const BLK: usize = 8;
+    // Output rows are independent given `padded` — each `res` cell receives
+    // exactly one `+=` per call, so row order doesn't affect the result.
+    #[cfg(feature = "parallel")]
+    if out_height >= 8 {
+        use rayon::prelude::*;
+        res.par_chunks_mut(out_width)
+            .enumerate()
+            .for_each(|(py, res_row)| {
+                upconv_row::<RELAXED>(&padded, &taps, py * pad_w, res_row);
+            });
+    } else {
+        for py in 0..out_height {
+            upconv_row::<RELAXED>(
+                &padded,
+                &taps,
+                py * pad_w,
+                &mut res[py * out_width..py * out_width + out_width],
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
     for py in 0..out_height {
-        let out_row = py * out_width;
-        let mut px = 0usize;
-        while px + BLK <= out_width {
-            let mut acc = [0.0f32; BLK];
-            for &(w, dy, dx) in &taps {
-                let base = (py + dy) * pad_w + px + dx;
-                let s: &[f32; BLK] = padded[base..base + BLK]
-                    .try_into()
-                    .expect("BLK-sized window");
-                for (a, v) in acc.iter_mut().zip(s) {
-                    *a = madd::<RELAXED>(*a, w, *v);
-                }
-            }
-            for (j, a) in acc.iter().enumerate() {
-                res[out_row + px + j] += a;
-            }
-            px += BLK;
-        }
-        while px < out_width {
-            let mut acc = 0.0;
-            for &(w, dy, dx) in &taps {
-                acc = madd::<RELAXED>(acc, w, padded[(py + dy) * pad_w + px + dx]);
-            }
-            res[out_row + px] += acc;
-            px += 1;
-        }
+        upconv_row::<RELAXED>(
+            &padded,
+            &taps,
+            py * pad_w,
+            &mut res[py * out_width..py * out_width + out_width],
+        );
     }
     // `sample` stays for documentation of the semantics; keep it referenced so
     // the compiler enforces it stays in sync with the padded builder above.
