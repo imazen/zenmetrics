@@ -188,3 +188,48 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
   `cargo check -p zenmetrics-cli --no-default-features --features cpu-metrics`.
 - archmage repo has two other live lanes (codex + opencode) — do not edit
   magetypes from this effort; all work lands in zenmetrics-math.
+
+## Addendum — 2026-10-14 (r7900x, Zen 4)
+
+Second optimisation pass; all scores bit-identical unless noted.
+
+- **fsim e_pow lane port** (`40493c9c`): `pow64_x4` transcribes libm
+  `e_pow` onto `f64x4` for the FSIMc pooling fold — per-lane scalar
+  decode/early-outs/`[z+0.5]` extract/rebuild (verbatim), lane-parallel
+  polynomial/division bodies, `&`-clears for `with_set_low_word`.
+  Early-out/edge lanes (y∈{0,±1,2,0.5,±inf,NaN}, x≤0/NaN, |y|>2³¹,
+  |z|≥1024 or ≤−1075, subnormal output) flagged → scalar `libm::pow`.
+  88k-pair bitwise differential + full suite. `libm::pow` share
+  11.8%→0.8%; wall 20.7→20.0ms serial, ~10.3→9.5ms @24T.
+- **fsim pooling fold vectorised** (`3c88a75d`): pcsim/gsim/isim/qsim/
+  pcm per `$LANES` block on the tier vector; scalar ordered `+=`
+  accumulation unchanged; map store via `.store()`; MATLAB NaN-max →
+  `blend(neq|neq, NaN, max)`. Wall 19.9→18.0ms serial, ~9.4ms @24T.
+- **mdctpsnr** (`a4d0b8fc`): inlined AAN butterfly (removed per-call
+  `&[V;8]` stack copies), dropped a 2 KiB zero-init via direct
+  construction, widened measure stripes — 700→647ms serial,
+  573→503ms @24T.
+- **vif scalar path** (`a2053b19`): lane-vectorised libm-exact `log10`
+  fold — 77→57.5ms serial.
+- **vifvec parallel** (`adcf7e37`): independent subband bodies parallel,
+  ordered serial fold — 45→31ms.
+- **hdrvdp v2** (`513a02d8`): attuned `f32x8` row kernels for the
+  `madd::<true>` paths (`f32::mul_add` had been lowering to libm `fmaf`
+  calls — 44% of runtime) + `up_conv`/`imresize32` row parallelism —
+  1.65s→0.55s serial, 0.157ms→0.157s @24T… i.e. ~0.16s.
+- **hdrvdp3 parallel decompose/elementwise/imresize/channel-parallel
+  MTF** (`3699cf8a`, `c97c09d1`, `689764ec`): 0.73s serial / ~0.21s @24T.
+- **hdrvdp3 score-only entry** — `v3::score` skips the reconstruct +
+  s_map/p_map phase (~17% @24T) with bit-identical `q_jod`; new public
+  API → PR #76 (assigned lilith).
+- **zenmetrics-math `powf_libm`** (`d747a7b6`, powf lane): fdlibm
+  `e_powf` onto `f32x8`/`f32x16` + slice drivers `vpow_libm_into` /
+  `vpowf_libm_pairs_into`; edge-matrix + 10M-pair differentials clean;
+  ~5–11× vs scalar `libm::powf` on Zen 4. VSI pooling integration by
+  the same lane pending at write time.
+- **Failed/kept-out experiments this pass**: fsim filtered-ifft fusion
+  (src→dst `yf·filter` fold into the row transpose-in) measured
+  net-neutral-to-negative — the collect pass's cost was already
+  bandwidth, and the fused version trades a warm read for a cold `yf`
+  read; reverted. vifvec parallel-mean regrouping (9 scans → 3 grouped
+  tasks) regressed under nested parallelism; kept 9-scan.
