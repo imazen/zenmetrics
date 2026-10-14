@@ -1991,9 +1991,11 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
     // The two pyramid decompositions are independent.
     let (rb, db) = crate::kernel::maybe_join(|| build_bands(r, w, h), || build_bands(d, w, h));
 
-    let mut num = 0.0f64;
-    let mut den = 0.0f64;
-    for &(level, band, winsize, offset) in &SUBS {
+    // Per-subband work is independent; collect each band's 9 (t1,t2)
+    // pairs in band order and fold serially — the fold visits terms in
+    // the original (sub, lam) order, so the sum is bit-identical.
+    let sub_terms = |si: usize| -> Vec<(f64, f64)> {
+        let (level, band, winsize, offset) = SUBS[si];
         let y = &rb[level - 1][usize::from(band == 4)];
         let yn = &db[level - 1][usize::from(band == 4)];
         let (ss, lambda, nbw, nbh) = refparams_vecgsm(&y.data, y.w, y.h);
@@ -2003,8 +2005,30 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
         // Crop `offset` entries on every side of the block maps
         // (reference: `g(offset+1:end-offset, …)`).
         let (iw, ih) = (nbw - 2 * offset, nbh - 2 * offset);
-        for &lam in &lambda {
-            let (t1, t2) = pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam);
+        lambda
+            .iter()
+            .map(|&lam| pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam))
+            .collect()
+    };
+    let subs_terms: Vec<Vec<(f64, f64)>> = {
+        #[cfg(feature = "parallel")]
+        {
+            use rayon::prelude::*;
+            if rayon::current_num_threads() > 1 {
+                (0..SUBS.len()).into_par_iter().map(sub_terms).collect()
+            } else {
+                (0..SUBS.len()).map(sub_terms).collect()
+            }
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            (0..SUBS.len()).map(sub_terms).collect()
+        }
+    };
+    let mut num = 0.0f64;
+    let mut den = 0.0f64;
+    for terms in &subs_terms {
+        for &(t1, t2) in terms {
             num += t1;
             den += t2;
         }
