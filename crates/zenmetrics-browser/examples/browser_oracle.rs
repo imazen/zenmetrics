@@ -86,6 +86,59 @@ fn main() {
         "psnr".into(),
         serde_json::json!({"width":w,"height":h,"similarity":false,"values":psnr}),
     );
+    let (_, fs) = fsim::fsim_rgb8_with_diffmap(
+        bytemuck::cast_slice(&reference),
+        bytemuck::cast_slice(&distorted),
+        w,
+        h,
+        w * 3,
+    )
+    .unwrap();
+    let (_, ha) = haarpsi::haarpsi_rgb8_with_diffmap(
+        bytemuck::cast_slice(&reference),
+        bytemuck::cast_slice(&distorted),
+        w,
+        h,
+        w * 3,
+    )
+    .unwrap();
+    let (_, vs) = vsi::vsi_rgb8_with_diffmap(
+        bytemuck::cast_slice(&reference),
+        bytemuck::cast_slice(&distorted),
+        w,
+        h,
+        w * 3,
+    )
+    .unwrap();
+    let (_, ms) = msssim::msssim_rgb8_with_diffmap(
+        bytemuck::cast_slice(&reference),
+        bytemuck::cast_slice(&distorted),
+        w,
+        h,
+        w * 3,
+    )
+    .unwrap();
+    for (name, eval) in [
+        ("fsim", &fs as &dyn zenmetrics_abstractions::Evaluation),
+        ("fsimc", &fs),
+        ("haarpsi", &ha),
+        ("vsi", &vs),
+        ("msssim", &ms),
+    ] {
+        let map = eval.map().unwrap();
+        let g = map.geometry;
+        maps.insert(name.into(),serde_json::json!({"width":map.width(),"height":map.height(),"similarity":true,"values":map.values(),"geometry":{
+            "inputWidth":g.input_width,"inputHeight":g.input_height,"originX":g.origin_x,"originY":g.origin_y,
+            "cellWidth":g.cell_width,"cellHeight":g.cell_height,"cellsX":g.cells_x,"cellsY":g.cells_y
+        }}));
+    }
+    let (ow, oh) = (257, 253);
+    let odd: Vec<u8> = (0..ow * oh * 4)
+        .filter(|i| i % 4 != 3)
+        .map(|i| ((i * 17 + (i / (ow * 4)) * 13) % 256) as u8)
+        .collect();
+    let (_, identity_vsi) = vsi::vsi_rgb8_with_diffmap(&odd, &odd, ow, oh, ow * 3).unwrap();
+    let odd_vsi = identity_vsi.map().to_vec();
     let mut profiles = serde_json::Map::new();
     #[allow(deprecated)]
     let named = [
@@ -126,6 +179,6 @@ fn main() {
     }
     println!(
         "{}",
-        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps,"profiles":profiles})
+        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps,"profiles":profiles,"odd_vsi_identity":odd_vsi})
     );
 }

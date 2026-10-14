@@ -1489,3 +1489,14 @@ Preview v0.1. The local native oracle and browser fixture matched exactly.
 The assertion now reports both scalar values and maximum map delta so CI can
 identify the difference. The cause remains unverified; numeric expectations
 and benchmark acceptance are unchanged.
+
+### Browser native map rendering (2026-10-14)
+
+The viewer now consumes native cell geometry for FSIM/FSIMc, HaarPSI, VSI,
+MS-SSIM and GMSD instead of stretching reduced or cropped maps. MS-SSIM's
+five-pixel border has no native samples. HaarPSI's zero-weight windows yield
+NaN local similarity; the browser preserves raw values and marks those cells
+explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
+quality contribution is displayed directly. Regression coverage lives in
+`scripts/checkpoint/check-pages.py`; details and limits in
+[the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).

@@ -2,12 +2,6 @@
 //! Opaque sRGB8 rows, a cached reference and raw spatial error maps.
 use wasm_bindgen::prelude::*;
 
-/// Whether an evaluation's primary map is similarity-direction.
-#[allow(dead_code)]
-fn map_is_similarity(e: &dyn zenmetrics_abstractions::Evaluation) -> bool {
-    e.map()
-        .is_some_and(|m| m.polarity == zenmetrics_abstractions::MapPolarity::Similarity)
-}
 // These are the native CLI adapters themselves, so browser variants preserve
 // each metric's ingress and implementation identity.
 #[path = "../../zenmetrics-cli/src/decode.rs"]
@@ -484,6 +478,7 @@ pub struct SpatialMap {
     width: u32,
     height: u32,
     similarity: bool,
+    geometry: Option<zenmetrics_abstractions::MapGeometry>,
     values: Vec<f32>,
 }
 #[wasm_bindgen]
@@ -503,11 +498,97 @@ impl SpatialMap {
     pub fn similarity(&self) -> bool {
         self.similarity
     }
+    /// Native cell ownership; null for legacy exports without this metadata.
+    #[wasm_bindgen(getter)]
+    pub fn geometry(&self) -> String {
+        self.geometry.map_or_else(
+            || "null".into(),
+            |g| {
+                serde_json::json!({
+                    "inputWidth":g.input_width,"inputHeight":g.input_height,
+                    "originX":g.origin_x,"originY":g.origin_y,
+                    "cellWidth":g.cell_width,"cellHeight":g.cell_height,
+                    "cellsX":g.cells_x,"cellsY":g.cells_y,
+                })
+                .to_string()
+            },
+        )
+    }
     /// Unnormalized row-major native samples.
     #[wasm_bindgen(getter)]
     pub fn values(&self) -> Vec<f32> {
         self.values.clone()
     }
+}
+
+fn export_evaluation_map(
+    e: &dyn zenmetrics_abstractions::Evaluation,
+    out: &mut SpatialMap,
+) -> Result<(), JsError> {
+    let map = e
+        .map()
+        .ok_or_else(|| JsError::new("Native evaluation returned no spatial map"))?;
+    out.width = map.width();
+    out.height = map.height();
+    out.similarity = map.polarity == zenmetrics_abstractions::MapPolarity::Similarity;
+    out.geometry = Some(map.geometry);
+    out.values = map.values().into_owned();
+    Ok(())
+}
+
+fn evaluate_spatial_map(
+    metric: &mut dyn zenmetrics_abstractions::Metric,
+    r: &[[u8; 3]],
+    d: &[[u8; 3]],
+    width: u32,
+    height: u32,
+    out: &mut SpatialMap,
+) -> Result<(), JsError> {
+    use za::zenpixels::{PixelDescriptor, PixelSlice};
+    use zenmetrics_abstractions as za;
+    let image = |pixels| {
+        PixelSlice::new(
+            pixels,
+            width,
+            height,
+            width as usize * 3,
+            PixelDescriptor::RGB8_SRGB,
+        )
+        .map(za::Image::from)
+        .map_err(|e| JsError::new(&e.to_string()))
+    };
+    let pulse = how_far::StopOnly::new(control());
+    let opts = za::EvalOpts::SCORE_ONLY
+        .with_native_map()
+        .with_pulse(&pulse);
+    let evaluation = metric
+        .evaluate(
+            image(bytemuck::cast_slice(r))?,
+            image(bytemuck::cast_slice(d))?,
+            opts,
+        )
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    opts.checkpoint()
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    export_evaluation_map(evaluation.as_ref(), out)
+}
+
+/// Spatial exports compiled in this browser build. No alternate metric is substituted.
+#[wasm_bindgen]
+pub fn available_spatial_maps() -> String {
+    let mut names = vec!["zensim", "butteraugli", "dssim", "gmsd", "psnr"];
+    #[cfg(feature = "cpu-cvvdp")]
+    names.push("cvvdp");
+    #[cfg(feature = "cpu-fsim")]
+    names.extend(["fsim", "fsimc"]);
+    #[cfg(feature = "cpu-haarpsi")]
+    names.push("haarpsi");
+    #[cfg(feature = "cpu-vsi")]
+    names.push("vsi");
+    #[cfg(feature = "cpu-msssim")]
+    names.push("msssim");
+    names.sort_unstable();
+    serde_json::json!(names).to_string()
 }
 
 /// Compute a metric's native spatial output. Unsupported map requests fail
@@ -531,6 +612,7 @@ pub fn spatial_map(
         width,
         height,
         similarity: false,
+        geometry: None,
         values: Vec::new(),
     };
     match metric {
@@ -575,64 +657,16 @@ pub fn spatial_map(
         }
         #[cfg(feature = "cpu-fsim")]
         "fsim" | "fsimc" => {
-            let (_, dm) = fsim::fsim_rgb8_with_diffmap(
-                bytemuck::cast_slice(&r),
-                bytemuck::cast_slice(&d),
-                w,
-                h,
-                w * 3,
-            )
-            .map_err(|e| fail(e.to_string()))?;
-            result.width = dm.width;
-            result.height = dm.height;
-            result.similarity = map_is_similarity(&dm);
-            result.values = dm.map().to_vec();
+            evaluate_spatial_map(&mut fsim::Fsim, &r, &d, width, height, &mut result)?
         }
         #[cfg(feature = "cpu-haarpsi")]
         "haarpsi" => {
-            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(
-                bytemuck::cast_slice(&r),
-                bytemuck::cast_slice(&d),
-                w,
-                h,
-                w * 3,
-            )
-            .map_err(|e| fail(e.to_string()))?;
-            result.width = dm.width;
-            result.height = dm.height;
-            result.similarity = map_is_similarity(&dm);
-            result.values = dm.map().to_vec();
+            evaluate_spatial_map(&mut haarpsi::Haarpsi, &r, &d, width, height, &mut result)?
         }
         #[cfg(feature = "cpu-vsi")]
-        "vsi" => {
-            let (_, dm) = vsi::vsi_rgb8_with_diffmap(
-                bytemuck::cast_slice(&r),
-                bytemuck::cast_slice(&d),
-                w,
-                h,
-                w * 3,
-            )
-            .map_err(|e| fail(e.to_string()))?;
-            result.width = dm.width;
-            result.height = dm.height;
-            result.similarity = map_is_similarity(&dm);
-            result.values = dm.map().to_vec();
-        }
+        "vsi" => evaluate_spatial_map(&mut vsi::Vsi, &r, &d, width, height, &mut result)?,
         #[cfg(feature = "cpu-msssim")]
-        "msssim" => {
-            let (_, dm) = msssim::msssim_rgb8_with_diffmap(
-                bytemuck::cast_slice(&r),
-                bytemuck::cast_slice(&d),
-                w,
-                h,
-                w * 3,
-            )
-            .map_err(|e| fail(e.to_string()))?;
-            result.width = dm.width;
-            result.height = dm.height;
-            result.similarity = map_is_similarity(&dm);
-            result.values = dm.map().to_vec();
-        }
+        "msssim" => evaluate_spatial_map(&mut msssim::Msssim, &r, &d, width, height, &mut result)?,
         #[cfg(feature = "cpu-cvvdp")]
         "cvvdp" => {
             let display = metrics::display::parse_display(display).map_err(fail)?;
@@ -654,26 +688,7 @@ pub fn spatial_map(
                 )
                 .map_err(|e| fail(e.to_string()))?;
         }
-        "gmsd" => {
-            let mut rg = vec![0.; w * h];
-            let mut dg = vec![0.; w * h];
-            gmsd::rgb8_to_gray(bytemuck::cast_slice(&r), w, h, w * 3, &mut rg)
-                .map_err(|e| fail(e.to_string()))?;
-            gmsd::rgb8_to_gray(bytemuck::cast_slice(&d), w, h, w * 3, &mut dg)
-                .map_err(|e| fail(e.to_string()))?;
-            let (mw, mh) = gmsd::map_dims(w, h);
-            result.width = mw as u32;
-            result.height = mh as u32;
-            // The GMS map is a similarity map (higher = more similar).
-            result.similarity = true;
-            result.values = vec![0.; mw * mh];
-            gmsd::gmsd_with_map(
-                gmsd::GrayImage::packed(&rg, w, h).map_err(|e| fail(e.to_string()))?,
-                gmsd::GrayImage::packed(&dg, w, h).map_err(|e| fail(e.to_string()))?,
-                &mut result.values,
-            )
-            .map_err(|e| fail(e.to_string()))?;
-        }
+        "gmsd" => evaluate_spatial_map(&mut gmsd::Gmsd, &r, &d, width, height, &mut result)?,
         "psnr" => {
             // Per-pixel mean squared sRGB code-value error, in normalized units.
             result.values = r
@@ -698,7 +713,10 @@ pub fn spatial_map(
         }
     }
     if result.values.len() != result.width as usize * result.height as usize
-        || result.values.iter().any(|v| !v.is_finite())
+        || result
+            .values
+            .iter()
+            .any(|v| v.is_infinite() || (v.is_nan() && metric != "haarpsi"))
     {
         return Err(fail(
             "Native spatial map has invalid dimensions or non-finite samples".into(),

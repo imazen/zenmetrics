@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 let worker;
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0}};
+const mapLabels={zensim:'Zensim error',butteraugli:'Butteraugli error',dssim:'DSSIM scale-0 SSIM',cvvdp:'CVVDP masked error',gmsd:'GMSD similarity',psnr:'PSNR squared error',fsim:'FSIM luminance similarity',fsimc:'FSIMc luminance similarity',haarpsi:'HaarPSI similarity',vsi:'VSI saliency-weighted contribution',msssim:'MS-SSIM level-0 SSIM'};
 const requests = new Map();
 function status(message, error=false) { $('status').textContent=message; $('status').className=error?'error':'status'; }
 const phases={1:'Decoding',2:'Encoding JPEG',3:'Preparing reference',4:'Scoring',5:'Building spatial map'};
@@ -47,6 +48,9 @@ function startWorker() {
       $('startup-timing').textContent=`Worker startup ${startupMilliseconds.toFixed(1)} ms · WASM load/init ${data.startup.wasmMilliseconds.toFixed(1)} ms · Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;
       S.ready=true;const selected=$('metric').value;
       $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;return o;}));
+      const selectedMap=$('map-metric').value;
+      $('map-metric').replaceChildren(...data.maps.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=mapLabels[name]||name;return o;}));
+      $('map-metric').value=data.maps.includes(selectedMap)?selectedMap:'zensim';
       $('metric').value=data.metrics.includes(selected)?selected:'zensim';snippet();$('compare').disabled=false;
       status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`);return;
     }
@@ -107,7 +111,7 @@ async function compare() {
   try {
     const result=await rpc({type:'compare',metric:$('metric').value,mapMetric:$('map-metric').value,zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value});
     if(revision!==S.revision)return;
-    S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;
+    S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;S.geometry=result.geometry;
     showScore(result);
     $('elapsed').textContent=`${result.milliseconds.toFixed(1)} ms total`;
     $('compute-timing').textContent=`Reference ${result.referenceMilliseconds.toFixed(1)} ms (${result.referencePrepared?'prepared':'cache check'}) · Score ${result.scoreMilliseconds.toFixed(1)} ms · Map ${result.mapMilliseconds.toFixed(1)} ms · Request wall ${result.requestMilliseconds.toFixed(1)} ms`;
@@ -153,8 +157,12 @@ $('demo').onclick=async()=>{
   S.reference={width:768,height:512,data:g.getImageData(0,0,768,512).data};$('name-reference').textContent='Demo scene · 768×512';fit();paint();await generate();
 };
 const palettes={viridis:[[0,[68,1,84]],[.25,[59,82,139]],[.5,[33,145,140]],[.75,[94,201,98]],[1,[253,231,37]]],turbo:[[0,[48,18,59]],[.2,[62,155,254]],[.4,[70,248,132]],[.6,[225,220,55]],[.8,[240,92,18]],[1,[122,4,3]]]};
-function errorValue(v){return S.similarity?Math.max(0,1-v):Math.max(0,v);}
-function mapIndex(x,y){return Math.min(S.mapHeight-1,Math.floor(y*S.mapHeight/S.reference.height))*S.mapWidth+Math.min(S.mapWidth-1,Math.floor(x*S.mapWidth/S.reference.width));}
+function errorValue(v){if(!Number.isFinite(v))return 0;return S.mapMetric==='vsi'?Math.max(0,v):S.similarity?Math.max(0,1-v):Math.max(0,v);}
+function mapIndex(x,y){
+  const g=S.geometry;
+  if(g){const col=Math.floor((x-g.originX)/g.cellWidth),row=Math.floor((y-g.originY)/g.cellHeight);return col<0||row<0||col>=g.cellsX||row>=g.cellsY?-1:row*g.cellsX+col;}
+  return Math.min(S.mapHeight-1,Math.floor(y*S.mapHeight/S.reference.height))*S.mapWidth+Math.min(S.mapWidth-1,Math.floor(x*S.mapWidth/S.reference.width));
+}
 const ramp=new Uint8ClampedArray(768);
 function updatePalette(){const stops=palettes[$('palette').value];
 for(let i=0;i<256;i++){let k=1;const x=i/255;while(k<stops.length-1&&x>stops[k][0])k++;const [x0,a]=stops[k-1],[x1,b]=stops[k];for(let c=0;c<3;c++)ramp[i*3+c]=a[c]+(b[c]-a[c])*(x-x0)/(x1-x0);}
@@ -172,8 +180,11 @@ function paint(){
     if(compatible&&(S.mode==='distorted'||(S.mode==='split'&&x>=r.width*Number($('split').value))||(S.mode==='blink'&&S.blink)))source=d;
     if(S.mode==='overlay')source=background;
     for(let c=0;c<3;c++)output.data[j+c]=source.data[j+c];
-    if((S.mode==='overlay'||S.mode==='map')&&S.map){
-      let t=top>0?Math.min(1,Math.max(0,errorValue(S.map[mapIndex(x,Math.floor(i/r.width))])/top)):0;if($('norm').value==='sqrt')t=Math.sqrt(t);const k=Math.round(t*255);
+    const index=S.map?mapIndex(x,Math.floor(i/r.width)):-1;
+    const sample=index>=0&&Number.isFinite(S.map[index])?index:-1;
+    if(S.mode==='map'&&S.map&&sample<0){const grey=(Math.floor(x/4)+Math.floor(i/r.width/4))%2?165:190;for(let c=0;c<3;c++)output.data[j+c]=grey;}
+    if((S.mode==='overlay'||S.mode==='map')&&S.map&&sample>=0){
+      let t=top>0?Math.min(1,Math.max(0,errorValue(S.map[sample])/top)):0;if($('norm').value==='sqrt')t=Math.sqrt(t);const k=Math.round(t*255);
       const weight=S.mode==='map'?1:alpha*Math.sqrt(t),grey=.2126*source.data[j]+.7152*source.data[j+1]+.0722*source.data[j+2];
       for(let c=0;c<3;c++)output.data[j+c]=($('grey').checked?grey:source.data[j+c])*(1-weight)+ramp[k*3+c]*weight;
     }
@@ -182,8 +193,9 @@ function paint(){
   canvas.getContext('2d').putImageData(output,0,0);canvas.style.width=`${r.width*S.zoom}px`;canvas.style.height=`${r.height*S.zoom}px`;
   $('zoom').textContent=`${Math.round(S.zoom*100)}%`;$('dimensions').textContent=`${r.width}×${r.height}`;
   $('scale').disabled=$('norm').value!=='fixed';
-  const units=S.mapMetric==='cvvdp'?'masked error':S.mapMetric==='butteraugli'?'Butteraugli error':'error';
-  $('map-info').textContent=S.map?`${S.mapMetric} · ${S.mapProfile?`model ${S.mapProfile} · `:''}0–${top.toPrecision(4)} ${units}${$('norm').value==='fixed'?' · fixed':' · per-image scale'}`:'No map yet';
+  const units=S.mapMetric==='vsi'?'quality contribution':S.mapMetric==='cvvdp'?'masked error':S.mapMetric==='butteraugli'?'Butteraugli error':'error';
+  $('legend-high').textContent=S.mapMetric==='vsi'?'High quality contribution':'High error';
+  $('map-info').textContent=S.map?`${S.mapMetric} · ${S.mapProfile?`model ${S.mapProfile} · `:''}${S.mapWidth}×${S.mapHeight} native samples · 0–${top.toPrecision(4)} ${units}${$('norm').value==='fixed'?' · fixed':' · per-image scale'}`:'No map yet';
 }
 function fit(){if(S.reference)S.zoom=Math.min(1,Math.max(.05,($('viewport').clientWidth||768)/S.reference.width));paint();}
 for(const id of ['opacity','scale','norm','background','grey','split'])$(id).oninput=paint;
@@ -193,7 +205,7 @@ setInterval(()=>{if(S.mode==='blink'){S.blink=!S.blink;paint();}},500);
 $('fit').onclick=fit;$('actual').onclick=()=>{S.zoom=1;paint();};
 $('zoom-in').onclick=()=>{S.zoom=Math.min(8,S.zoom*1.25);paint();};$('zoom-out').onclick=()=>{S.zoom=Math.max(.05,S.zoom/1.25);paint();};
 $('view').onpointermove=event=>{if(!S.reference)return;const box=$('view').getBoundingClientRect(),x=Math.floor((event.clientX-box.left)/S.zoom),y=Math.floor((event.clientY-box.top)/S.zoom),i=y*S.reference.width+x;
-  if(x<0||y<0||x>=S.reference.width||y>=S.reference.height)return;const v=S.map?.[mapIndex(x,y)];$('pixel').textContent=`${x}, ${y} · RGB ${Array.from(S.reference.data.subarray(i*4,i*4+3)).join(', ')}${v===undefined?'':` · ${S.mapMetric} ${v.toPrecision(6)}`}`;};
+  if(x<0||y<0||x>=S.reference.width||y>=S.reference.height)return;const v=S.map?.[mapIndex(x,y)];$('pixel').textContent=`${x}, ${y} · RGB ${Array.from(S.reference.data.subarray(i*4,i*4+3)).join(', ')}${v===undefined?(S.map?' · no native map sample':''):!Number.isFinite(v)?' · undefined native map value':` · ${S.mapMetric} ${v.toPrecision(6)}`}`;};
 let drag;
 $('viewport').onpointerdown=event=>{drag={x:event.clientX,y:event.clientY,left:$('viewport').scrollLeft,top:$('viewport').scrollTop};$('viewport').setPointerCapture(event.pointerId);};
 $('viewport').addEventListener('pointermove',event=>{if(drag){$('viewport').scrollLeft=drag.left+drag.x-event.clientX;$('viewport').scrollTop=drag.top+drag.y-event.clientY;}});

@@ -277,3 +277,38 @@ for legacy Preview v0.1, despite the local fixture matching. Timing changes
 keep that assertion intact and report the scalar values and maximum map delta
 on failure. The cause and cross-host envelope are not established by the local
 checks; no parity tolerance has been broadened.
+
+## Unified map exports, 2026-10-14
+
+The browser map selector reads the compiled module's supported-map catalog.
+FSIM/FSIMc luminance similarity, HaarPSI similarity, VSI quality contribution
+and MS-SSIM level-0 SSIM are exposed alongside the existing maps. The common
+`Metric::evaluate()` / `Evaluation::map()` surface supplies raw samples, polarity and cell geometry
+for these metrics and GMSD. Samples retain their native dimensions and values.
+FSIMc's native map is the luminance quantity shared with FSIM; it does not
+include the scalar's chroma factors.
+
+Rendering follows each cell's declared origin and step. MS-SSIM's valid-window
+map starts at (5,5), leaving a five-pixel border without samples; map view marks
+that region, overlay preserves its image pixels, and hover reports no sample.
+Subsampled maps keep their native ownership grid, including odd image edges.
+Legacy exports without unified geometry retain their existing placement.
+
+VSI's native `qualitymap` includes saliency weights. The 257×253 native identity
+fixture spans exactly 0 to 1 across 65,021 samples. Visualization shows weighted
+quality contribution directly and labels higher values accordingly. Inverting
+it as `1 - similarity` would incorrectly paint low-saliency identity regions as
+errors. Raw downloads and metric scalar calculations remain unchanged.
+
+HaarPSI's local map divides by its native window weights. Zero-weight windows
+produce NaN even when the pooled scalar is valid. Those samples remain NaN in
+raw downloads; map view hatches them, overlay preserves source pixels, and hover
+reports an undefined native map value. Infinities and other metrics' NaNs still
+refuse the map.
+
+The Pages check exercises all five new selector choices on the real demo,
+odd-size cell geometry, the cropped MS-SSIM border and mixed flat/textured
+HaarPSI windows. FSIM, FSIMc, GMSD, HaarPSI, MS-SSIM and VSI maps match the native
+oracle exactly on the 64×64 fixture; existing score/model, cancellation,
+worker isolation and timing checks also pass. This validates CPU browser
+scoring, independently of benchmark resource admission and GPU acceptance.

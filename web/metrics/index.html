@@ -130,8 +130,8 @@ details summary { cursor: pointer; color: var(--muted); }
 <button id="fit">Fit</button><button id="actual">1:1</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" aria-label="Zoom in">+</button><span id="zoom">100%</span>
 <button id="download">Download raw map</button></div>
 <div class="viewer" id="viewport"><canvas id="view" width="768" height="512"></canvas></div>
-<div class="legend"><span>Low</span><span class="ramp"></span><span>High error</span><span id="map-info"></span></div>
+<div class="legend"><span>Low</span><span class="ramp"></span><span id="legend-high">High error</span><span id="map-info"></span></div>
 <div class="row viewer-tools"><span id="dimensions" class="note">Load a pair or try the demo scene</span><span id="pixel">Move over the image to inspect a pixel</span></div>
-<p class="note">Map scaling changes only the visualization. Scores and downloaded raw values retain their metric definitions. DSSIM and GMSD retain their native similarity grids; visualization uses 1−similarity. SSIMULACRA2 currently exports a scalar only. Browser timings are interactive feedback, not accepted fleet benchmark observations.</p>
+<p class="note">Map scaling changes only the visualization. Scores and downloaded raw values retain their metric definitions. Native similarity maps retain their metric sampling grids; visualization uses 1−similarity. VSI displays saliency-weighted quality contributions. FSIM/FSIMc maps show luminance similarity; MS-SSIM shows level-0 SSIM. Hatched cells mark uncovered borders or undefined native values; HaarPSI has undefined local similarity in zero-weight windows. SSIMULACRA2 currently exports a scalar only. Browser timings are interactive feedback, not accepted fleet benchmark observations.</p>
 </section>
 </div></div></div><script type="module" src="app.js"></script></body></html>

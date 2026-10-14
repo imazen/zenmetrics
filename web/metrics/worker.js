@@ -1,4 +1,4 @@
-import init, { initThreadPool, Reference, thread_count, available_metrics, score_rgba, decode_image, encode_jpeg, spatial_map, JobControl } from './pkg/zenmetrics_browser.js';
+import init, { initThreadPool, Reference, thread_count, available_metrics, available_spatial_maps, score_rgba, decode_image, encode_jpeg, spatial_map, JobControl } from './pkg/zenmetrics_browser.js';
 let ready = false, cached, previousReference, wasm, control;
 self.onmessage = async ({data}) => {
   try {
@@ -23,7 +23,7 @@ self.onmessage = async ({data}) => {
       const poolMilliseconds=performance.now()-poolStart;
       ready = true;
       if (thread_count() !== data.threads) throw new Error('Rayon pool size differs from the request');
-      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics()), startup:{wasmMilliseconds,poolMilliseconds}});
+      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics()), maps:JSON.parse(available_spatial_maps()), startup:{wasmMilliseconds,poolMilliseconds}});
       return;
     }
     if (!ready) throw new Error('WASM worker has not initialized');
@@ -65,14 +65,14 @@ self.onmessage = async ({data}) => {
     const scoreMilliseconds=performance.now()-scoreStart;
     postMessage({type:'score',id,score,scoreMilliseconds,referenceMilliseconds,referencePrepared});
     const mapStart=performance.now();phase(5);
-    let map, mapWidth=width, mapHeight=height, similarity=false;
+    let map, mapWidth=width, mapHeight=height, similarity=false, geometry=null;
     if(mapMetric==='zensim') {
       const compared=cached.compare(distorted,width*4);map=compared.map;compared.free();
     } else {
       const spatial=spatial_map(mapMetric,reference,distorted,width,height,width*4,data.display||'standard_4k');
-      map=spatial.values;mapWidth=spatial.width;mapHeight=spatial.height;similarity=spatial.similarity;spatial.free();
+      map=spatial.values;mapWidth=spatial.width;mapHeight=spatial.height;similarity=spatial.similarity;geometry=JSON.parse(spatial.geometry);spatial.free();
     }
-    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,referenceMilliseconds,referencePrepared,scoreMilliseconds,mapMilliseconds:performance.now()-mapStart,milliseconds:performance.now()-start},[map.buffer]);
+    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,geometry,referenceMilliseconds,referencePrepared,scoreMilliseconds,mapMilliseconds:performance.now()-mapStart,milliseconds:performance.now()-start},[map.buffer]);
   } catch (error) {
     postMessage({type: 'error', id: data.id, message: String(error), fatal: error instanceof WebAssembly.RuntimeError});
   }

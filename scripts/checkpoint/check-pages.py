@@ -110,10 +110,10 @@ try:
           if(second.type!=='result'||JSON.stringify(first.score)!==JSON.stringify(second.score)||
              JSON.stringify(Array.from(first.map))!==JSON.stringify(Array.from(second.map))) throw new Error('Repeat differs');
           const spatial={};
-          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd']) {
+          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd','fsim','fsimc','haarpsi','vsi','msssim']) {
             response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric,reference,distorted,width,height,display:'standard_4k'});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
-            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,values:Array.from(got.map)};
+            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
           }
           const profiles = {};
           for(const zensimProfile of ['b','d','a','preview-v0.1','preview-v0.2','b']) {
@@ -129,6 +129,25 @@ try:
           const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
           if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
+          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
+          const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
+          for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
+          const oddMaps={};
+          for(const mapMetric of ['fsim','haarpsi','vsi','msssim','gmsd']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+            const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
+            if(!got.similarity||!got.map.every(Number.isFinite))throw new Error('Invalid identity map '+mapMetric);
+            if(mapMetric==='vsi'){
+              if(Math.min(...got.map)!==0||Math.max(...got.map)!==1)throw new Error('VSI identity map lost native saliency weighting');
+            } else if(!got.map.every(v=>Math.abs(v-1)<.00001))throw new Error('Identity similarity map differs '+mapMetric);
+            if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry');
+            oddMaps[mapMetric]=got.geometry;
+          }
+          const mixed=new Uint8Array(128*128*4);
+          for(let y=0;y<128;y++)for(let x=0;x<128;x++)for(let c=0;c<4;c++)mixed[(y*128+x)*4+c]=c===3?255:(x<64&&y<64?50:(x*17+y*13+c*41)%256);
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'haarpsi',reference:mixed,distorted:mixed,width:128,height:128});
+          const undefinedMap=await response;
+          if(undefinedMap.type!=='result'||!undefinedMap.map.some(Number.isNaN)||!undefinedMap.map.some(Number.isFinite))throw new Error('HaarPSI native undefined regions were lost');
           response=wait();worker.postMessage({type:'generate',reference,width,height,quality:40});
           const jpeg=await response;if(jpeg.type!=='decoded'||!jpeg.encoded||jpeg.encoded[0]!==255||jpeg.encoded[1]!==216)throw new Error('JPEG generation failed');
           // The independent browser decoder validates the Zen encoder's bytes.
@@ -176,7 +195,7 @@ try:
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
           const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
           if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
-          worker.terminate();return {startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          worker.terminate();return {oddMaps,startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
@@ -271,6 +290,17 @@ try:
         assert 'Map ' in page.locator('#compute-timing').inner_text()
         assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
         result['ui_separate_timings']=True
+        for map_metric in ('fsim','fsimc','haarpsi','vsi','msssim'):
+            page.locator('#map-metric').select_option(map_metric)
+            page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
+            assert 'native samples' in page.locator('#map-info').inner_text()
+            assert page.locator('#score').inner_text()!='–'
+        page.locator('[data-mode="map"]').click()
+        border=page.evaluate("Array.from(document.getElementById('view').getContext('2d').getImageData(0,0,1,1).data)")
+        assert border == [190,190,190,255], border
+        page.locator('#view').dispatch_event('pointermove',{'clientX':page.locator('#view').bounding_box()['x']+1,'clientY':page.locator('#view').bounding_box()['y']+1})
+        assert 'no native map sample' in page.locator('#pixel').inner_text()
+        result['new_map_ui_and_cropped_border']=True
         result['demo_completion']=True
         result['ui_cancel_recovery']=True
         result['capability_report']=page.locator('#capabilities').inner_text()
@@ -288,10 +318,11 @@ try:
                 got=result['spatial'][name]
                 assert (got['width'],got['height'],got['similarity'])==(expected['width'],expected['height'],expected['similarity'])
                 assert len(got['values'])==len(expected['values'])
+                if 'geometry' in expected: assert got['geometry']==expected['geometry'],name
                 assert all(math.isfinite(v) for v in got['values'])
                 delta=max(abs(a-b) for a,b in zip(got['values'],expected['values']))
                 result['native_map_max_abs_delta'][name]=delta
-                if name=='psnr': assert delta==0
+                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi'): assert delta==0, (name,delta)
         if args.report:
             source_file=args.site/'site-source.json'
             asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''
