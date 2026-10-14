@@ -215,7 +215,7 @@ fn imresize_shape() {
 
 /// Every SIMD tier must produce the *identical* score — the pool stage
 /// is fixed-order f64 accumulation over per-lane scalar expressions.
-#[cfg(all(feature = "_dev", target_arch = "x86_64"))]
+#[cfg(all(feature = "_dev", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[test]
 fn tier_parity() {
     use archmage::SimdToken;
@@ -227,12 +227,46 @@ fn tier_parity() {
     // full pipeline for both tiers (prepare is shared, so only the
     // pool differs per tier anyway).
     let p = kernel::prepare(&ri, &di, w, h, &mut scratch);
-    let Some(token) = archmage::X64V3Token::summon() else {
-        return;
-    };
     let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p, None);
-    let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p, None);
-    assert_eq!(s_scalar, s_v3);
+    #[cfg(target_arch = "x86_64")]
+    {
+        let Some(token) = archmage::X64V3Token::summon() else {
+            return;
+        };
+        let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p, None);
+        assert_eq!(s_scalar, s_v3);
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        let Some(token) = archmage::NeonToken::summon() else {
+            return;
+        };
+        let s_neon = crate::dev::vsi_core_tier_neon_t(token, p, None);
+        assert_eq!(s_scalar.to_bits(), s_neon.to_bits());
+    }
+}
+
+/// The dispatched (SIMD) Lab fill is bit-identical to the scalar one:
+/// every 8-bit level on each channel, mixed so all three planes vary,
+/// with a non-multiple-of-4 length to cover the scalar tail.
+#[test]
+fn srgb_to_lab_dispatch_matches_scalar_bitwise() {
+    let n = 256 * 257 + 3;
+    let dr: alloc::vec::Vec<f32> = (0..n).map(|i| (i % 256) as f32).collect();
+    let dg: alloc::vec::Vec<f32> = (0..n).map(|i| ((i * 7 + i / 256) % 256) as f32).collect();
+    let db: alloc::vec::Vec<f32> = (0..n)
+        .map(|i| (255 - (i * 13 + i / 97) % 256) as f32)
+        .collect();
+    let z = || alloc::vec![0f32; n];
+    let (mut l0, mut a0, mut b0) = (z(), z(), z());
+    let (mut l1, mut a1, mut b1) = (z(), z(), z());
+    kernel::srgb_to_lab_all_scalar(&dr, &dg, &db, &mut l0, &mut a0, &mut b0);
+    kernel::srgb_to_lab_all(&dr, &dg, &db, &mut l1, &mut a1, &mut b1);
+    for i in 0..n {
+        assert_eq!(l0[i].to_bits(), l1[i].to_bits(), "L at {i}");
+        assert_eq!(a0[i].to_bits(), a1[i].to_bits(), "a at {i}");
+        assert_eq!(b0[i].to_bits(), b1[i].to_bits(), "b at {i}");
+    }
 }
 
 /// `vsi_rgb8_with_diffmap` returns the identical score and a similarity

@@ -21,6 +21,8 @@ pub use {
 };
 /// Bit-exact lane ports of `libm` functions (opt-in; not a [`MathPolicy`]).
 pub mod fdlibm;
+/// Bit-exact `f64x4` lane ports of `libm` functions (opt-in).
+pub mod fdlibm64;
 pub mod par;
 #[macro_use]
 mod kernels;
@@ -270,6 +272,23 @@ pub(crate) fn vpowf_libm_pairs_into_scalar_t(
     out: &mut [f32],
 ) {
     fdlibm::vpowf_libm_pairs_kernel_8(token, xs, ys, out);
+}
+
+pub(crate) fn vpow64_libm_into_scalar_t(token: ScalarToken, xs: &[f64], out: &mut [f64], p: f64) {
+    fdlibm64::vpow64_libm_kernel_4(token, xs, out, p);
+}
+
+pub(crate) fn vpow64_libm_pairs_into_scalar_t(
+    token: ScalarToken,
+    xs: &[f64],
+    ys: &[f64],
+    out: &mut [f64],
+) {
+    fdlibm64::vpow64_libm_pairs_kernel_4(token, xs, ys, out);
+}
+
+pub(crate) fn vexpf_libm_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
+    fdlibm::vexpf_libm_kernel_8(token, xs, out);
 }
 
 pub(crate) fn vaxpy_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
@@ -526,6 +545,42 @@ pub fn vpowf_libm_pairs_into(xs: &[f32], ys: &[f32], out: &mut [f32]) {
     assert_eq!(ys.len(), out.len());
     archmage::attuned!(
         vpowf_libm_pairs_into(xs, ys, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::pow(xs[i], p)`, bit-identical to the scalar call on
+/// every input. The vector path covers positive finite normal `xs` with a
+/// moderate `p`; any other lane falls back to scalar `libm::pow`.
+#[inline]
+pub fn vpow64_libm_into(xs: &[f64], out: &mut [f64], p: f64) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vpow64_libm_into(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::pow(xs[i], ys[i])`, bit-identical to the scalar call on
+/// every input.
+#[inline]
+pub fn vpow64_libm_pairs_into(xs: &[f64], ys: &[f64], out: &mut [f64]) {
+    assert_eq!(xs.len(), out.len());
+    assert_eq!(ys.len(), out.len());
+    archmage::attuned!(
+        vpow64_libm_pairs_into(xs, ys, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::expf(xs[i])`, bit-identical to the scalar call on every
+/// input — the e_expf port handles all branches in lanes (`force_eval`
+/// produces no value bits), so there is no scalar fallback.
+#[inline]
+pub fn vexpf_libm_into(xs: &[f32], out: &mut [f32]) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vexpf_libm_into(xs, out),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -1041,6 +1096,8 @@ pub(crate) fn gather_lerp_exp3_apply_scalar_t(
 
 #[cfg(test)]
 mod fdlibm_tests;
+#[cfg(test)]
+mod fdlibm64_tests;
 #[cfg(test)]
 mod tier_tests;
 

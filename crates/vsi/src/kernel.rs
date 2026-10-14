@@ -788,7 +788,7 @@ pub(crate) fn rgb8_planes(
 // own XYZ matrix, **D50** reference white (Xr 0.9642, Yr 1.0,
 // Zr 0.8251 — not the usual D65), ε = 0.008856, κ = 903.3.
 
-fn srgb_to_lab_all_scalar(
+pub(crate) fn srgb_to_lab_all_scalar(
     dr: &[f32],
     dg: &[f32],
     db: &[f32],
@@ -804,11 +804,92 @@ fn srgb_to_lab_all_scalar(
     }
 }
 
-/// `srgb_to_lab` at `f32x4` — the per-pixel f64 `pow(x, 2.4)` and
-/// `pow(t, 1/3)` calls are the bottleneck of `sdsp`; `pow_midp`/
-/// `cbrt_midp` keep ~1e-5 relative error (score tolerance is 1e-4).
-/// The branch thresholds become `blend` selects — same piecewise
-/// semantics, no per-lane divergence.
+/// `srgb_to_lab` at `f64x4` — **bit-identical** to the scalar conversion
+/// on every pixel: the two `pow` calls run through `zenmetrics-math`'s
+/// lane-exact fdlibm `e_pow` port and every other op is the same `f64`
+/// arithmetic in the same order, so x86 tiers agree with the scalar path
+/// bitwise — x86 and aarch64 NEON alike. Branch
+/// thresholds become `blend` selects — same piecewise semantics. The
+/// `f(t)` pow input is blended to `1.0` on `t <= ε` lanes so edge lanes
+/// never take the port's scalar fallback.
+///
+/// Written as a macro so the whole body — `pow64_libm_4x` included —
+/// lands inside the caller's attuned target-feature context and the lane
+/// ops inline (a generic fn or closure body would make each
+/// `__simd_inner` op a call).
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+macro_rules! srgb_to_lab_exact_body {
+    ($token:ident, $F64:ident, $dr:ident, $dg:ident, $db:ident, $ll:ident, $la:ident, $lb:ident) => {{
+        use magetypes::simd::generic::f64x4;
+        let n = $dr.len();
+        let n4 = n & !3;
+        for i in (0..n4).step_by(4) {
+            macro_rules! lin {
+                ($p:ident) => {{
+                    let v = $F64::from_array_t(
+                        $token,
+                        core::array::from_fn(|k| $p[i + k] as f64 / 255.0),
+                    );
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                        $token,
+                        (v + $F64::splat_t($token, 0.055)) / $F64::splat_t($token, 1.055),
+                        $F64::splat_t($token, 2.4),
+                    );
+                    $F64::blend(
+                        v.simd_le($F64::splat_t($token, 0.04045)),
+                        v / $F64::splat_t($token, 12.92),
+                        hi,
+                    )
+                }};
+            }
+            let (r, g, b) = (lin!($dr), lin!($dg), lin!($db));
+            let x = r * $F64::splat_t($token, 0.4124564)
+                + g * $F64::splat_t($token, 0.3575761)
+                + b * $F64::splat_t($token, 0.1804375);
+            let y = r * $F64::splat_t($token, 0.2126729)
+                + g * $F64::splat_t($token, 0.7151522)
+                + b * $F64::splat_t($token, 0.0721750);
+            let z = r * $F64::splat_t($token, 0.0193339)
+                + g * $F64::splat_t($token, 0.1191920)
+                + b * $F64::splat_t($token, 0.9503041);
+            macro_rules! cbrt_or_linear {
+                ($t:expr) => {{
+                    let t = $t;
+                    let sel = t.simd_gt($F64::splat_t($token, 0.008856));
+                    let arg = $F64::blend(sel, t, $F64::splat_t($token, 1.0));
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                        $token,
+                        arg,
+                        $F64::splat_t($token, 1.0 / 3.0),
+                    );
+                    let lo = (t * $F64::splat_t($token, 903.3) + $F64::splat_t($token, 16.0))
+                        / $F64::splat_t($token, 116.0);
+                    $F64::blend(sel, hi, lo)
+                }};
+            }
+            let fx = cbrt_or_linear!(x / $F64::splat_t($token, 0.9642));
+            let fy = cbrt_or_linear!(y);
+            let fz = cbrt_or_linear!(z / $F64::splat_t($token, 0.8251));
+            let va = ($F64::splat_t($token, 116.0) * fy - $F64::splat_t($token, 16.0)).to_array();
+            let vb = ($F64::splat_t($token, 500.0) * (fx - fy)).to_array();
+            let vc = ($F64::splat_t($token, 200.0) * (fy - fz)).to_array();
+            for k in 0..4 {
+                $ll[i + k] = va[k] as f32;
+                $la[i + k] = vb[k] as f32;
+                $lb[i + k] = vc[k] as f32;
+            }
+        }
+        srgb_to_lab_all_scalar(
+            &$dr[n4..],
+            &$dg[n4..],
+            &$db[n4..],
+            &mut $ll[n4..],
+            &mut $la[n4..],
+            &mut $lb[n4..],
+        );
+    }};
+}
+
 #[cfg(target_arch = "aarch64")]
 #[archmage::attune]
 fn srgb_to_lab_tier_neon_t(
@@ -820,42 +901,35 @@ fn srgb_to_lab_tier_neon_t(
     la: &mut [f32],
     lb: &mut [f32],
 ) {
-    use magetypes::simd::generic::f32x4;
-    type V = f32x4<archmage::NeonToken>;
-    let s = |x: f32| V::splat_t(token, x);
-    let n = dr.len();
-    let n4 = n & !3;
-    for i in (0..n4).step_by(4) {
-        let lin = |p: &[f32]| {
-            let v = V::load_t(token, p[i..][..4].first_chunk().unwrap()) * s(1.0 / 255.0);
-            let lo = v * s(1.0 / 12.92);
-            let hi = ((v + s(0.055)) * s(1.0 / 1.055)).pow_midp(2.4);
-            V::blend(v.simd_le(s(0.04045)), lo, hi)
-        };
-        let (r, g, b) = (lin(dr), lin(dg), lin(db));
-        let x = r * s(0.4124564) + g * s(0.3575761) + b * s(0.1804375);
-        let y = r * s(0.2126729) + g * s(0.7151522) + b * s(0.0721750);
-        let z = r * s(0.0193339) + g * s(0.1191920) + b * s(0.9503041);
-        let f = |t: V| {
-            let hi = t.cbrt_midp();
-            let lo = (t * s(903.3) + s(16.0)) * s(1.0 / 116.0);
-            V::blend(t.simd_gt(s(0.008856)), hi, lo)
-        };
-        let fx = f(x * s(1.0 / 0.9642));
-        let fy = f(y);
-        let fz = f(z * s(1.0 / 0.8251));
-        (s(116.0) * fy - s(16.0)).store(ll[i..][..4].first_chunk_mut().unwrap());
-        (s(500.0) * (fx - fy)).store(la[i..][..4].first_chunk_mut().unwrap());
-        (s(200.0) * (fy - fz)).store(lb[i..][..4].first_chunk_mut().unwrap());
-    }
-    srgb_to_lab_all_scalar(
-        &dr[n4..],
-        &dg[n4..],
-        &db[n4..],
-        &mut ll[n4..],
-        &mut la[n4..],
-        &mut lb[n4..],
-    );
+    srgb_to_lab_exact_body!(token, f64x4, dr, dg, db, ll, la, lb);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn srgb_to_lab_tier_v3_t(
+    token: archmage::X64V3Token,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    srgb_to_lab_exact_body!(token, f64x4, dr, dg, db, ll, la, lb);
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn srgb_to_lab_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    srgb_to_lab_exact_body!(token, f64x4, dr, dg, db, ll, la, lb);
 }
 
 /// Scalar-tier entry for `attuned!` — same signature shape as the NEON
@@ -874,7 +948,7 @@ fn srgb_to_lab_tier_scalar_t(
 }
 
 /// Runtime-dispatched Lab fill — `attuned!` expands to the best tier.
-fn srgb_to_lab_all(
+pub(crate) fn srgb_to_lab_all(
     dr: &[f32],
     dg: &[f32],
     db: &[f32],
@@ -884,7 +958,12 @@ fn srgb_to_lab_all(
 ) {
     #[cfg(target_arch = "aarch64")]
     archmage::attuned!(srgb_to_lab_tier(dr, dg, db, ll, la, lb), [_neon, _scalar]);
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    archmage::attuned!(
+        srgb_to_lab_tier(dr, dg, db, ll, la, lb),
+        [_v4x(cfg(avx512)), _v3, _scalar]
+    );
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     srgb_to_lab_all_scalar(dr, dg, db, ll, la, lb);
 }
 
@@ -927,7 +1006,7 @@ fn srgb_to_lab(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 // `([1:256]-129)/256`, mask `u1²+u2² ≤ 0.25`, `ifftshift`, radius with
 // DC=1 fudge, `LG = exp(−(log(r/ω0))²/(2σf²))`, `LG(1,1) = 0`.
 
-fn loggabor_256() -> Vec<f32> {
+fn loggabor_256_build() -> Vec<f32> {
     let n = SDSP_N;
     let mut lg = vec![0.0f32; n * n];
     for i in 0..n {
@@ -954,6 +1033,20 @@ fn loggabor_256() -> Vec<f32> {
         }
     }
     lg
+}
+
+/// The log-Gabor grid is a pure function of the crate constants — a
+/// per-process constant. `std` builds compute it once and reuse it;
+/// `no_std` rebuilds it per call. Either way the stored bits are the
+/// same `libm` results.
+#[cfg(feature = "std")]
+fn loggabor_256() -> &'static [f32] {
+    static LG: std::sync::LazyLock<Vec<f32>> = std::sync::LazyLock::new(loggabor_256_build);
+    &LG
+}
+#[cfg(not(feature = "std"))]
+fn loggabor_256() -> Vec<f32> {
+    loggabor_256_build()
 }
 
 // ================================ SDSP ===================================
@@ -1017,8 +1110,29 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
     for s in &mut sf {
         *s = libm::sqrtf(*s);
     }
-    // 4. centre prior: coords 1..=256, centre rows/2 = 128.
+    // 4. centre prior: coords 1..=256, centre rows/2 = 128. The
+    // Gaussian window is constant per process (see `loggabor_256`) —
+    // under `std` the 65k `expf`s run once for the whole process.
     let mut vs = vec![0.0f32; n * n];
+    #[cfg(feature = "std")]
+    {
+        static GW: std::sync::LazyLock<Vec<f32>> = std::sync::LazyLock::new(|| {
+            let n = SDSP_N;
+            let mut gw = vec![0.0f32; n * n];
+            for i in 0..n {
+                let dy = (i + 1) as f32 - (n / 2) as f32;
+                for j in 0..n {
+                    let dx = (j + 1) as f32 - (n / 2) as f32;
+                    gw[i * n + j] = libm::expf(-(dx * dx + dy * dy) / (SIGMA_D * SIGMA_D));
+                }
+            }
+            gw
+        });
+        for i in 0..n * n {
+            vs[i] = sf[i] * GW[i];
+        }
+    }
+    #[cfg(not(feature = "std"))]
     for i in 0..n {
         let dy = (i + 1) as f32 - (n / 2) as f32;
         for j in 0..n {
@@ -1036,11 +1150,18 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
         bmax = bmax.max(b);
     }
     let (arange, brange) = (amax - amin, bmax - bmin);
+    let mut arg = vec![0.0f32; n * n];
     for i in 0..n * n {
         let na = (lab[1][i] - amin) / arange;
         let nb = (lab[2][i] - bmin) / brange;
         let d2 = na * na + nb * nb;
-        vs[i] *= 1.0 - libm::expf(-d2 / (SIGMA_C * SIGMA_C));
+        arg[i] = -d2 / (SIGMA_C * SIGMA_C);
+    }
+    // expf on lanes — bit-identical to scalar `libm::expf` per element.
+    let mut e = vec![0.0f32; n * n];
+    zenmetrics_math::vexpf_libm_into(&arg, &mut e);
+    for i in 0..n * n {
+        vs[i] *= 1.0 - e[i];
     }
     // 6. resize back to the input size, then mat2gray.
     let mut out = imresize(&vs, n, n, w, h);

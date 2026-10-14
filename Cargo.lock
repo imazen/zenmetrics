@@ -2089,6 +2089,7 @@ dependencies = [
  "magetypes 0.9.31-beta.1",
  "rayon",
  "zenmetrics-abstractions",
+ "zenmetrics-math",
  "zenpixels",
 ]
 
@@ -3330,6 +3331,7 @@ dependencies = [
  "magetypes 0.9.31-beta.1",
  "rayon",
  "zenmetrics-abstractions",
+ "zenmetrics-math",
 ]
 
 [[package]]
