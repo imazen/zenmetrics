@@ -103,7 +103,7 @@ pub(crate) fn visual_pathway(
     par: &TaskPar,
     viewing: &super::params::ViewingConditions,
     img_e: &[Vec<f64>],
-    pad: &dyn Fn(usize) -> Pad,
+    pad: &(dyn Fn(usize) -> Pad + Sync),
     relaxed: bool,
 ) -> Result<PathwayOut> {
     let npix = width * height;
@@ -147,23 +147,66 @@ pub(crate) fn visual_pathway(
             let rho2 = cycdeg_image(width * 2, height * 2, ppd);
             mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b, relaxed)
         });
-        for k in 0..channels {
-            let ch: Vec<f64> =
-                crate::par::collect_indexed(npix, |i| img[i * channels + k]);
-            super::fft64::conv_fft_pad_into(
-                &ch,
-                width,
-                height,
-                mtf,
-                width * 2,
-                height * 2,
-                pad(k),
-                relaxed,
-                &mut l_o,
-                channels,
-                k,
-                Some((1e-5, 1e10)),
-            );
+        // Per-channel convs are independent — run them as parallel tasks
+        // into channel-local planes (xstride=1 keeps the arithmetic
+        // identical), then interleave into `l_o` in one pass.
+        // Deinterleave all channels in one pass into a planar buffer, then
+        // run the independent channel convs as parallel tasks into
+        // channel-local planes (xstride=1 keeps the arithmetic identical);
+        // one interleave pass lands them in `l_o`. Serial builds keep the
+        // fused direct-interleave conv (no extra plane sweeps).
+        let par_convs = crate::par::threads() > 1;
+        if par_convs {
+            let mut all_ch = vec![0.0; npix * channels];
+            let cb = crate::par::chunk8(npix);
+            crate::par::for_each_dst_chunk(&mut all_ch, cb * channels, |o, d| {
+                for (i, v) in d.iter_mut().enumerate() {
+                    let idx = o + i;
+                    *v = img[(idx % npix) * channels + idx / npix];
+                }
+            });
+            let ch_outs: Vec<Vec<f64>> = crate::par::collect_indexed(channels, |k| {
+                let mut buf = vec![0.0; npix];
+                super::fft64::conv_fft_pad_into(
+                    &all_ch[k * npix..(k + 1) * npix],
+                    width,
+                    height,
+                    mtf,
+                    width * 2,
+                    height * 2,
+                    pad(k),
+                    relaxed,
+                    &mut buf,
+                    1,
+                    0,
+                    Some((1e-5, 1e10)),
+                );
+                buf
+            });
+            crate::par::for_each_dst_chunk(&mut l_o, cb, |o, d| {
+                for (i, v) in d.iter_mut().enumerate() {
+                    *v = ch_outs[(o + i) % channels][(o + i) / channels];
+                }
+            });
+        } else {
+            for k in 0..channels {
+                let ch: Vec<f64> =
+                    crate::par::collect_indexed(npix, |i| img[i * channels + k]);
+                super::fft64::conv_fft_pad_into(
+                    &ch,
+                    width,
+                    height,
+                    mtf,
+                    width * 2,
+                    height * 2,
+                    pad(k),
+                    relaxed,
+                    &mut l_o,
+                    channels,
+                    k,
+                    Some((1e-5, 1e10)),
+                );
+            }
         }
     });
 

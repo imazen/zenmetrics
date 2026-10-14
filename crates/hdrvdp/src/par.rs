@@ -67,6 +67,19 @@ pub(crate) fn for_each_dst_chunk(
     }
 }
 
+/// Worker count of the pool (1 in sequential builds) — for gating paths
+/// whose scratch copies only pay when there are spare threads.
+pub(crate) fn threads() -> usize {
+    #[cfg(feature = "parallel")]
+    {
+        rayon::current_num_threads()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        1
+    }
+}
+
 /// 8-aligned chunk length for [`for_each_dst_chunk`] — ~256 tasks so the
 /// pool balances, sized so small inputs get one chunk.
 pub(crate) fn chunk8(len: usize) -> usize {
