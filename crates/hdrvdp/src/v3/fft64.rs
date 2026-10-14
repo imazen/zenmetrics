@@ -834,16 +834,32 @@ impl Plan2 {
         let perm = self.columns.gather_perm();
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
-            for y in 0..h {
-                let (d, s) = (
-                    match perm {
-                        Some(r) => r[y] as usize,
-                        None => y,
-                    } * 8,
-                    y * w + x0,
-                );
-                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
-                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+            if cols == 8 {
+                // Fixed-8 copies inline to vector moves — a runtime-length
+                // `copy_from_slice` defers to `memmove` per row.
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
+                    self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                    self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+                }
             }
             {
                 let m = self.columns.work_len(h);
@@ -993,16 +1009,32 @@ impl Plan2 {
         let perm = self.columns.gather_perm();
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
-            for y in 0..h {
-                let (d, s) = (
-                    match perm {
-                        Some(r) => r[y] as usize,
-                        None => y,
-                    } * 8,
-                    y * w + x0,
-                );
-                self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
-                self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+            if cols == 8 {
+                // Fixed-8 copies inline to vector moves — a runtime-length
+                // `copy_from_slice` defers to `memmove` per row.
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
+                    self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                    self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+                }
             }
             {
                 let m = self.columns.work_len(h);
@@ -1015,10 +1047,18 @@ impl Plan2 {
                 self.columns
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
-            for y in 0..h {
-                let (d, s) = (y * 8, y * w + x0);
-                re[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
-                im[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+            if cols == 8 {
+                for y in 0..h {
+                    let (d, s) = (y * 8, y * w + x0);
+                    re[s..s + 8].copy_from_slice(&self.re8[d..d + 8]);
+                    im[s..s + 8].copy_from_slice(&self.im8[d..d + 8]);
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (y * 8, y * w + x0);
+                    re[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
+                    im[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
+                }
             }
         }
     }
@@ -1039,26 +1079,54 @@ impl Plan2 {
         let sc = 1.0 / h as f64;
         for x0 in (0..w).step_by(8) {
             let cols = (w - x0).min(8);
-            for y in 0..h {
-                let (d, s) = (
-                    match perm {
-                        Some(r) => r[y] as usize,
-                        None => y,
-                    } * 8,
-                    y * w + x0,
-                );
-                match filt {
-                    Some(f) => {
-                        for j in 0..cols {
-                            self.re8[d + j] = re[s + j] * f[s + j];
-                            self.im8[d + j] = -(im[s + j] * f[s + j]);
+            if cols == 8 {
+                // Fixed-8 loops auto-vectorise; the runtime-length tail
+                // below stays scalar.
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    match filt {
+                        Some(f) => {
+                            for j in 0..8 {
+                                self.re8[d + j] = re[s + j] * f[s + j];
+                                self.im8[d + j] = -(im[s + j] * f[s + j]);
+                            }
+                        }
+                        None => {
+                            self.re8[d..d + 8].copy_from_slice(&re[s..s + 8]);
+                            for j in 0..8 {
+                                self.im8[d + j] = -im[s + j];
+                            }
                         }
                     }
-                    None => {
-                        self.re8[d..d + cols].copy_from_slice(&re[s..s + cols]);
-                        // Negated copy — contiguous, vectorises cleanly.
-                        for j in 0..cols {
-                            self.im8[d + j] = -im[s + j];
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    match filt {
+                        Some(f) => {
+                            for j in 0..cols {
+                                self.re8[d + j] = re[s + j] * f[s + j];
+                                self.im8[d + j] = -(im[s + j] * f[s + j]);
+                            }
+                        }
+                        None => {
+                            self.re8[d..d + cols].copy_from_slice(&re[s..s + cols]);
+                            // Negated copy — contiguous, vectorises cleanly.
+                            for j in 0..cols {
+                                self.im8[d + j] = -im[s + j];
+                            }
                         }
                     }
                 }
@@ -1074,11 +1142,21 @@ impl Plan2 {
                 self.columns
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
-            for y in 0..h {
-                let (d, s) = (y * 8, y * w + x0);
-                for j in 0..cols {
-                    self.pre[s + j] = self.re8[d + j] * sc;
-                    self.pim[s + j] = -self.im8[d + j] * sc;
+            if cols == 8 {
+                for y in 0..h {
+                    let (d, s) = (y * 8, y * w + x0);
+                    for j in 0..8 {
+                        self.pre[s + j] = self.re8[d + j] * sc;
+                        self.pim[s + j] = -self.im8[d + j] * sc;
+                    }
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (y * 8, y * w + x0);
+                    for j in 0..cols {
+                        self.pre[s + j] = self.re8[d + j] * sc;
+                        self.pim[s + j] = -self.im8[d + j] * sc;
+                    }
                 }
             }
         }
@@ -1145,6 +1223,32 @@ std::thread_local! {
     static PLAN2_CACHE: core::cell::RefCell<
         std::collections::HashMap<(usize, usize), Plan2>,
     > = core::cell::RefCell::new(std::collections::HashMap::new());
+
+    /// Per-thread pooled `re`/`im` planes for [`conv_fft_pad`] — two fresh
+    /// `pad_w·pad_h` zeroed allocations per call cost real page-fault time
+    /// at convolution-lattice sizes.
+    static CONV_PLANES: core::cell::RefCell<
+        std::collections::HashMap<(usize, usize), (Vec<f64>, Vec<f64>)>,
+    > = core::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Run `f` on the pooled `re`/`im` planes for `pad_w × pad_h`, allocating on
+/// first use. Same bounded-shape discipline as [`with_plan2`].
+fn with_conv_planes<R>(
+    pad_w: usize,
+    pad_h: usize,
+    f: impl FnOnce(&mut Vec<f64>, &mut Vec<f64>) -> R,
+) -> R {
+    CONV_PLANES.with(|c| {
+        let mut map = c.borrow_mut();
+        if map.len() >= 8 && !map.contains_key(&(pad_w, pad_h)) {
+            map.clear();
+        }
+        let (re, im) = map
+            .entry((pad_w, pad_h))
+            .or_insert_with(|| (Vec::new(), Vec::new()));
+        f(re, im)
+    })
 }
 
 /// Run `f` on the cached plan for `width × height`, constructing it on
@@ -1203,15 +1307,17 @@ pub(super) enum Pad {
 /// Symmetric reflection of `padded[py]` for `py >= height` maps to image row
 /// `2·height − 1 − py`; replicate clamps to `height − 1`. Both are applied
 /// componentwise on each axis, which reproduces the corner block too.
-#[must_use]
-pub(super) fn pad_image(
+/// Extend `x` into a `pad_w × pad_h` plane — every element is overwritten,
+/// so a pooled buffer needs no clearing.
+pub(super) fn pad_image_into(
     x: &[f64],
     width: usize,
     height: usize,
     pad_w: usize,
     pad_h: usize,
     pad: Pad,
-) -> Vec<f64> {
+    out: &mut Vec<f64>,
+) {
     assert_eq!(x.len(), width * height, "pad_image: size mismatch");
     assert!(pad_w >= width && pad_h >= height);
     let map = |i: usize, n: usize| -> usize {
@@ -1228,7 +1334,8 @@ pub(super) fn pad_image(
             }
         }
     };
-    let mut out = vec![0.0; pad_w * pad_h];
+    out.resize(pad_w * pad_h, 0.0);
+    let out = &mut out[..pad_w * pad_h];
     // Column map hoisted once; interior columns map to themselves, so each
     // output row is `srow` followed by the reflected/clamped pad run.
     let xmap: Vec<usize> = (0..pad_w).map(|px| map(px, width)).collect();
@@ -1256,7 +1363,6 @@ pub(super) fn pad_image(
             };
         }
     }
-    out
 }
 
 /// Convolve `x` (row-major `height × width`) with the zero-phase filter
@@ -1279,19 +1385,22 @@ pub(super) fn conv_fft_pad(
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
     // Split real/imaginary planes end to end: the pointwise multiply is
     // contiguous and vectorizable, and no C64 (de)interleave is needed.
-    let mut re = pad_image(x, width, height, pad_w, pad_h, pad);
-    let mut im = vec![0.0; pad_w * pad_h];
-    with_plan2(pad_w, pad_h, |plan| {
-        plan.forward_p(&mut re, &mut im, relaxed);
-        // The pointwise filter multiply folds into the inverse column
-        // gather — same products, same order, no extra plane sweep.
-        plan.inverse_p_filtered(&mut re, &mut im, Some(filter), relaxed);
-    });
-    let mut out = Vec::with_capacity(width * height);
-    for y in 0..height {
-        out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
-    }
-    out
+    with_conv_planes(pad_w, pad_h, |re, im| {
+        pad_image_into(x, width, height, pad_w, pad_h, pad, re);
+        im.clear();
+        im.resize(pad_w * pad_h, 0.0);
+        with_plan2(pad_w, pad_h, |plan| {
+            plan.forward_p(re, im, relaxed);
+            // The pointwise filter multiply folds into the inverse column
+            // gather — same products, same order, no extra plane sweep.
+            plan.inverse_p_filtered(re, im, Some(filter), relaxed);
+        });
+        let mut out = Vec::with_capacity(width * height);
+        for y in 0..height {
+            out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
+        }
+        out
+    })
 }
 
 #[cfg(test)]
