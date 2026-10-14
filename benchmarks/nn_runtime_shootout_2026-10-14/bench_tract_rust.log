@@ -1,0 +1,13 @@
+# tract-onnx 0.23.8 rust, multithread-mm executor, into_optimized, iters=10 after 2 warm
+models/vgg16lpips_256.onnx	threads=1	min=358.0ms	med=364.0ms
+models/vgg16lpips_512.onnx	threads=1	min=1527.5ms	med=1547.0ms
+models/resnet50_224.onnx	threads=1	min=74.9ms	med=75.6ms
+models/resnet50_384.onnx	threads=1	min=217.4ms	med=218.5ms
+models/vgg16lpips_256.onnx	threads=8	min=99.1ms	med=102.8ms
+models/vgg16lpips_512.onnx	threads=8	min=367.8ms	med=372.9ms
+models/resnet50_224.onnx	threads=8	min=30.2ms	med=33.1ms
+models/resnet50_384.onnx	threads=8	min=66.3ms	med=71.1ms
+models/vgg16lpips_256.onnx	threads=16	min=61.7ms	med=64.7ms
+models/vgg16lpips_512.onnx	threads=16	min=269.5ms	med=281.4ms
+models/resnet50_224.onnx	threads=16	min=18.9ms	med=24.5ms
+models/resnet50_384.onnx	threads=16	min=47.7ms	med=51.1ms

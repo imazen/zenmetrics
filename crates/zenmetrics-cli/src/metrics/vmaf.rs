@@ -63,7 +63,7 @@ pub fn score(
     }
 }
 
-fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Error>> {
     if r.width != d.width
         || r.height != d.height
         || r.width < 32
@@ -95,7 +95,9 @@ pub fn write_yuv420(
 
 /// Convert `image` to 8-bit BT.709 limited-range YUV420 planes (Y, Cb, Cr).
 #[allow(clippy::type_complexity)]
-fn to_yuv420(image: &Rgb8Image) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+pub(crate) fn to_yuv420(
+    image: &Rgb8Image,
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
     let w = image.width as usize;
     let h = image.height as usize;
     if image.pixels.len() != w * h * 3 {

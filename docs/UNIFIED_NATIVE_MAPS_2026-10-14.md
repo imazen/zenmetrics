@@ -283,3 +283,11 @@ Validation:
   SSIMULACRA2 score bits unchanged on seven fixtures (64×48 to 1024×768 with
   rayon, sub-8, the tank pair). Browser native tests pass (44, 2 ignored, as
   before), and the zenmetrics-api CPU suite passes (22).
+
+## Browser viewer
+
+The WASM viewer serves each metric's primary map through the same call
+(`feaafabd`): `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`, `vifvec`
+and `vmaf-v1`, and `ssim2` serves `ssim_y_0` through the adapter above. The
+other maps stay available to native callers through `Evaluation::maps()`.
+Routes and browser parity: [browser viewer](BROWSER_VIEWER_2026-10-13.md).
