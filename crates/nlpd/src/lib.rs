@@ -771,10 +771,14 @@ impl zenmetrics_abstractions::Metric for Nlpd {
         &mut self,
         r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
         d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        _opts: zenmetrics_abstractions::EvalOpts,
+        opts: zenmetrics_abstractions::EvalOpts,
     ) -> zenmetrics_abstractions::MetricResult<
         std::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
     > {
+        if opts.map.is_some() {
+            return Err(std::boxed::Box::new(zenmetrics_abstractions::NoMap)
+                as std::boxed::Box<dyn core::error::Error + Send + Sync>);
+        }
         let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
             std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;

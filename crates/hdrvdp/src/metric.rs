@@ -682,7 +682,7 @@ impl zenmetrics_abstractions::Metric for HdrVdp {
         &mut self,
         r: zenpixels::PixelSlice<'_>,
         d: zenpixels::PixelSlice<'_>,
-        _opts: zenmetrics_abstractions::EvalOpts,
+        opts: zenmetrics_abstractions::EvalOpts,
     ) -> zenmetrics_abstractions::MetricResult<
         std::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
     > {
@@ -708,6 +708,11 @@ impl zenmetrics_abstractions::Metric for HdrVdp {
         let rv = widen(r).map_err(|e| e)?;
         let dv = widen(d).map_err(|e| e)?;
         let res = hdrvdp(&dv, &rv, w, h, self.encoding, &self.par).map_err(box_err)?;
+        // Subsampled request → wrap in HdrVdpEval with coarse copies;
+        // `res.width/height` stay image dims (the struct's contract).
+        if let Some(zenmetrics_abstractions::MapRequest::Subsampled { factor }) = opts.map {
+            return Ok(std::boxed::Box::new(HdrVdpEval::subsampled(res, factor)));
+        }
         Ok(std::boxed::Box::new(res))
     }
 }
@@ -748,5 +753,94 @@ mod metric_trait_tests {
         // p_map exists even on the "score-only" path — v2 always
         // produces it; EvalOpts::map gates *exposure cost*, not compute.
         assert!(ev.map().is_some());
+    }
+}
+
+/// A [`HdrVdpResult`] plus `factor`-coarsened map copies — the
+/// `Evaluation` returned for `MapRequest::Subsampled`. Keeps
+/// `HdrVdpResult`'s image-dims contract clean: the coarse maps live on
+/// the wrapper.
+#[derive(Debug)]
+pub struct HdrVdpEval {
+    /// The native-resolution result (intact).
+    pub res: HdrVdpResult,
+    /// `p_map` box-mean subsampled — `map()` returns this when present.
+    pub p_map_sub: Vec<f32>,
+    /// `c_map` box-mean subsampled.
+    pub c_map_sub: Vec<f32>,
+    /// Subsampled map dims.
+    pub sub_width: u32,
+    /// Subsampled map dims.
+    pub sub_height: u32,
+}
+
+impl HdrVdpEval {
+    fn subsampled(res: HdrVdpResult, factor: u32) -> Self {
+        let (p_map_sub, w, h) = zenmetrics_abstractions::map_subsample_f32(
+            &res.p_map,
+            res.width as u32,
+            res.height as u32,
+            factor,
+        );
+        let (c_map_sub, _, _) = zenmetrics_abstractions::map_subsample_f32(
+            &res.c_map,
+            res.width as u32,
+            res.height as u32,
+            factor,
+        );
+        Self {
+            res,
+            p_map_sub,
+            c_map_sub,
+            sub_width: w,
+            sub_height: h,
+        }
+    }
+}
+
+impl zenmetrics_abstractions::Evaluation for HdrVdpEval {
+    fn score(&self) -> f64 {
+        self.res.score()
+    }
+
+    fn scores(
+        &self,
+    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
+        zenmetrics_abstractions::Evaluation::scores(&self.res)
+    }
+
+    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
+        Some(zenpixels::PixelCow::Borrowed(
+            zenmetrics_abstractions::gray_f32_slice(
+                &self.p_map_sub,
+                self.sub_width,
+                self.sub_height,
+            ),
+        ))
+    }
+
+    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
+        zenmetrics_abstractions::Evaluation::map_polarity(&self.res)
+    }
+
+    fn map_score(&self, fold: zenmetrics_abstractions::MapFold<'_>) -> Option<f64> {
+        zenmetrics_abstractions::Evaluation::map_score(&self.res, fold)
+    }
+
+    fn extras(
+        &self,
+    ) -> std::boxed::Box<
+        dyn Iterator<
+                Item = (
+                    std::borrow::Cow<'static, str>,
+                    std::borrow::Cow<'static, str>,
+                ),
+            > + '_,
+    > {
+        zenmetrics_abstractions::Evaluation::extras(&self.res)
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }

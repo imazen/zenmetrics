@@ -465,7 +465,25 @@ pub fn rgb8_pair<'a>(
 /// [`Evaluation::map_score`].
 #[must_use]
 pub fn map_fold(map: PixelCow<'_, ()>, fold: MapFold<'_>) -> Option<f64> {
-    let vals = map_f32s(&map)?;
+    // Tight maps borrow directly; strided maps repack once so the fold
+    // never silently drops a valid map.
+    let owned: Vec<f32>;
+    let vals: &[f32] = match map_f32s(&map) {
+        Some(v) => v,
+        None => {
+            let sl = map.as_slice();
+            let (w, h) = (sl.width() as usize, sl.rows() as usize);
+            owned = (0..h)
+                .flat_map(|y| {
+                    let row: &[f32] = bytemuck::cast_slice(
+                        &sl.as_strided_bytes()[y * sl.stride()..y * sl.stride() + w * 4],
+                    );
+                    row.to_vec()
+                })
+                .collect();
+            &owned
+        }
+    };
     if vals.is_empty() {
         return None;
     }

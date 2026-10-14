@@ -674,10 +674,14 @@ impl zenmetrics_abstractions::Metric for Iwssim {
         &mut self,
         r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
         d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        _opts: zenmetrics_abstractions::EvalOpts,
+        opts: zenmetrics_abstractions::EvalOpts,
     ) -> zenmetrics_abstractions::MetricResult<
         alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
     > {
+        if opts.map.is_some() {
+            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
+                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        }
         let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
             alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
         })?;
