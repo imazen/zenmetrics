@@ -72,7 +72,32 @@ pub fn score_rgb_u8(
     // intermediate full-size f32 copies of the interleaved inputs.
     let ref_planes = deinterleave_u8(reference, width * height);
     let dis_planes = deinterleave_u8(distorted, width * height);
-    Ok(score_planes(ref_planes, dis_planes, width, height))
+    Ok(score_planes(ref_planes, dis_planes, width, height, None))
+}
+
+/// [`score_rgb_u8`] plus each level's squared normalized-Laplacian
+/// difference summed over R, G and B (`levels[l]` is `⌈w/2^l⌉ × ⌈h/2^l⌉`).
+/// The score is computed exactly as [`score_rgb_u8`] computes it.
+fn score_rgb_u8_maps(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+) -> Result<(f64, Vec<Vec<f32>>), Error> {
+    let expected = validate_dimensions(width, height)?;
+    for buf in [reference, distorted] {
+        if buf.len() != expected {
+            return Err(Error::InvalidLength {
+                expected,
+                actual: buf.len(),
+            });
+        }
+    }
+    let ref_planes = deinterleave_u8(reference, width * height);
+    let dis_planes = deinterleave_u8(distorted, width * height);
+    let mut levels = Vec::with_capacity(LEVELS);
+    let score = score_planes(ref_planes, dis_planes, width, height, Some(&mut levels));
+    Ok((score, levels))
 }
 
 /// Score interleaved RGB images in `[0, 1]`, matching the PyTorch reference.
@@ -101,14 +126,21 @@ pub fn score_rgb_f32(
 
     let ref_planes = deinterleave_f32(reference, width * height);
     let dis_planes = deinterleave_f32(distorted, width * height);
-    Ok(score_planes(ref_planes, dis_planes, width, height))
+    Ok(score_planes(ref_planes, dis_planes, width, height, None))
 }
 
+/// Pyramid levels of the authors' configuration.
+const LEVELS: usize = 6;
+
+/// The six-level score. With `maps`, each level's per-pixel
+/// `Σ_c (N_ref − N_dist)²` is pushed as well — computed from the same
+/// normalized planes after the score's own reduction has read them.
 fn score_planes(
     mut ref_planes: Vec<Vec<f32>>,
     mut dis_planes: Vec<Vec<f32>>,
     width: usize,
     height: usize,
+    mut maps: Option<&mut Vec<Vec<f32>>>,
 ) -> f64 {
     let mut w = width;
     let mut h = height;
@@ -119,10 +151,11 @@ fn score_planes(
     let mut ref_scratch = Scratch::new(w * h);
     let mut dis_scratch = Scratch::new(w * h);
 
-    for level in 0..6 {
+    for level in 0..LEVELS {
         let mut squared_sum = 0.0_f64;
         let mut next_ref = Vec::with_capacity(3);
         let mut next_dis = Vec::with_capacity(3);
+        let mut level_map = maps.is_some().then(|| vec![0.0_f32; w * h]);
         for channel in 0..3 {
             let (ref_low, low_w, low_h) =
                 level_transform(&ref_planes[channel], w, h, level, &mut ref_scratch);
@@ -132,6 +165,15 @@ fn score_planes(
                 &ref_scratch.normalized[..w * h],
                 &dis_scratch.normalized[..w * h],
             );
+            if let Some(m) = level_map.as_mut() {
+                let pairs = ref_scratch.normalized[..w * h]
+                    .iter()
+                    .zip(&dis_scratch.normalized[..w * h]);
+                for (acc, (&a, &b)) in m.iter_mut().zip(pairs) {
+                    let d = a - b;
+                    *acc += d * d;
+                }
+            }
             next_ref.push(ref_low);
             next_dis.push(dis_low);
             debug_assert_eq!(low_w, w.div_ceil(2));
@@ -139,6 +181,9 @@ fn score_planes(
         }
         let rms = (squared_sum / (w * h * 3) as f64).sqrt();
         weighted_sum += rms.powf(0.6);
+        if let (Some(sink), Some(m)) = (maps.as_deref_mut(), level_map) {
+            sink.push(m);
+        }
         for v in core::mem::take(&mut ref_planes)
             .into_iter()
             .chain(core::mem::take(&mut dis_planes))
@@ -730,6 +775,109 @@ mod tests {
         }
     }
 
+    /// Every level map, rebuilt from the materialized reference path
+    /// (`downsample` → `upsample_bilinear` → `blur5` → subtract →
+    /// `normalize_band`, which the fused kernel is pinned to above), equals
+    /// the map the scorer returns bit for bit.
+    #[test]
+    fn level_maps_match_the_materialized_bands() {
+        for (w, h) in [(97usize, 99usize), (112, 96)] {
+            let a: Vec<u8> = (0..w * h * 3)
+                .map(|i| ((i * 37 + i / 97) % 256) as u8)
+                .collect();
+            let b: Vec<u8> = a
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| if i % 23 == 0 { v.wrapping_add(31) } else { v })
+                .collect();
+            let (_, maps) = score_rgb_u8_maps(&a, &b, w, h).unwrap();
+            let mut planes = [deinterleave_u8(&a, w * h), deinterleave_u8(&b, w * h)];
+            let (mut lw, mut lh) = (w, h);
+            for (level, got) in maps.iter().enumerate() {
+                let mut want = vec![0.0f32; lw * lh];
+                let mut next: [Vec<Vec<f32>>; 2] = [Vec::new(), Vec::new()];
+                let mut bands: [Vec<Vec<f32>>; 2] = [Vec::new(), Vec::new()];
+                for side in 0..2 {
+                    for c in 0..3 {
+                        let src = &planes[side][c];
+                        let mut tmp = vec![0.0; lw * lh];
+                        let (low, sw, sh) = downsample(src, lw, lh, &mut tmp);
+                        let mut up = vec![0.0; lw * lh];
+                        upsample_bilinear(&low, sw, sh, lw, lh, &mut up);
+                        let (mut hb, mut lap) = (vec![0.0; lw * lh], vec![0.0; lw * lh]);
+                        blur5(&up, lw, lh, &mut hb, &mut lap);
+                        for (v, &x) in lap.iter_mut().zip(src) {
+                            *v = x - *v;
+                        }
+                        let mut norm = vec![0.0; lw * lh];
+                        normalize_band(&lap, lw, lh, level, &mut norm);
+                        bands[side].push(norm);
+                        next[side].push(low);
+                    }
+                }
+                for c in 0..3 {
+                    for (acc, (&x, &y)) in want.iter_mut().zip(bands[0][c].iter().zip(&bands[1][c]))
+                    {
+                        let d = x - y;
+                        *acc += d * d;
+                    }
+                }
+                assert_eq!(got.len(), want.len());
+                for (i, (g, e)) in got.iter().zip(&want).enumerate() {
+                    assert_eq!(g.to_bits(), e.to_bits(), "{w}x{h} level {level} pixel {i}");
+                }
+                planes = next;
+                (lw, lh) = (lw.div_ceil(2), lh.div_ceil(2));
+            }
+        }
+    }
+
+    /// The downsample's symmetric unit-sum taps reproduce a linear ramp at
+    /// each output's centre, so a ramp pyramid reads back every level's
+    /// sample positions: they must be the geometry's cell centres.
+    #[test]
+    fn level_geometry_matches_the_downsample_phase() {
+        for (w, h) in [(96usize, 97usize), (97, 96), (130, 101), (100, 128)] {
+            let geometry = level_geometry(w, h);
+            let ramp_x: Vec<f32> = (0..w * h).map(|i| (i % w) as f32).collect();
+            let ramp_y: Vec<f32> = (0..w * h).map(|i| (i / w) as f32).collect();
+            let (mut px, mut py, mut lw, mut lh) = (ramp_x, ramp_y, w, h);
+            for (l, g) in geometry.iter().enumerate() {
+                assert_eq!(
+                    (g.cells_x as usize, g.cells_y as usize),
+                    (lw, lh),
+                    "level {l}"
+                );
+                let centre = |origin: i64, cell: u32, k: usize| {
+                    origin as f32 + (cell / 2) as f32 + (k * cell as usize) as f32
+                };
+                // Interior samples only: the reflected border taps bend the ramp.
+                let margin = 3;
+                for y in margin..lh.saturating_sub(margin) {
+                    for x in margin..lw.saturating_sub(margin) {
+                        let (vx, vy) = (px[y * lw + x], py[y * lw + x]);
+                        if l > 0 {
+                            assert!(
+                                (vx - centre(g.origin_x, g.cell_width, x)).abs() < 1e-3,
+                                "{w}x{h} l{l} x{x}: {vx}"
+                            );
+                            assert!(
+                                (vy - centre(g.origin_y, g.cell_height, y)).abs() < 1e-3,
+                                "{w}x{h} l{l} y{y}: {vy}"
+                            );
+                        } else {
+                            assert_eq!((vx, vy), (x as f32, y as f32));
+                        }
+                    }
+                }
+                let mut tmp = vec![0.0; lw * lh];
+                let (nx, nw, nh) = downsample(&px, lw, lh, &mut tmp);
+                let (ny, _, _) = downsample(&py, lw, lh, &mut tmp);
+                (px, py, lw, lh) = (nx, ny, nw, nh);
+            }
+        }
+    }
+
     #[test]
     fn identity_and_asymmetry() {
         let w = 97;
@@ -752,9 +900,103 @@ mod tests {
 
 /// The NLPD metric as a generic scorer — accepts `RGB8_SRGB`
 /// `PixelSlice` inputs (packed or strided — strided is repacked).
-/// No canonical upstream map.
+///
+/// Maps, on request: one per pyramid level, `level_0` (full resolution,
+/// primary) … `level_5`. Each value is the squared difference of the two
+/// images' normalized Laplacian responses at that level, summed over R, G
+/// and B — the per-pixel term whose level mean feeds the score
+/// (`rms_l = sqrt(mean/3)`, `NLPD = (Σ_l rms_l^0.6)^(1/0.6)`). These are
+/// per-level components, not a per-pixel NLPD; `0` = identical, higher =
+/// more different ([`za::MapPolarity::Difference`]).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Nlpd;
+
+/// Map names, finest level first.
+const LEVEL_NAMES: [&str; LEVELS] = [
+    "level_0", "level_1", "level_2", "level_3", "level_4", "level_5",
+];
+
+/// Level-`l` geometry for a `w × h` input. Sample `k` of a level sits at
+/// input coordinate `a_l + 2^l·k`: the stride-2 5-tap downsample centres
+/// its output `k` on parent sample `2k + 1` when the parent extent is
+/// even (pad 1) and `2k` when odd (pad 2), so `a_l = a_{l-1} + 2^{l-1}`
+/// exactly when that parent extent is even. Each cell is the `2^l`-wide
+/// block centred on its sample. A value depends on the level image within
+/// eight level samples (blur 2, the align-corners upsample and the 5-tap
+/// downsample behind it, the divisive normalization's neighbour), and a
+/// level sample on its input within `2^{l+1} − 2` pixels: the halo
+/// `10·2^l − 2` bounds both.
+fn level_geometry(width: usize, height: usize) -> [za::MapGeometry; LEVELS] {
+    let (mut w, mut h) = (width, height);
+    let (mut ax, mut ay) = (0i64, 0i64);
+    core::array::from_fn(|l| {
+        if l > 0 {
+            let half = 1i64 << (l - 1);
+            if w % 2 == 0 {
+                ax += half;
+            }
+            if h % 2 == 0 {
+                ay += half;
+            }
+            (w, h) = (w.div_ceil(2), h.div_ceil(2));
+        }
+        let cell = 1u32 << l;
+        let halo = 10 * cell - 2;
+        za::MapGeometry::grid(
+            width as u32,
+            height as u32,
+            ax - i64::from(cell / 2),
+            ay - i64::from(cell / 2),
+            cell,
+            cell,
+            w as u32,
+            h as u32,
+        )
+        .with_halo(halo, halo)
+    })
+}
+
+/// A scored pair with its per-level maps.
+struct NlpdMaps {
+    nlpd: f64,
+    levels: Vec<Vec<f32>>,
+    geometry: [za::MapGeometry; LEVELS],
+}
+
+impl NlpdMaps {
+    fn view(&self, l: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry[l];
+        let px = za::gray_f32_slice(&self.levels[l], g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(LEVEL_NAMES[l], px, za::MapPolarity::Difference, g).ok()
+    }
+}
+
+impl za::Evaluation for NlpdMaps {
+    fn score(&self) -> f64 {
+        self.nlpd
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        Box::new(core::iter::once((
+            std::borrow::Cow::Borrowed("nlpd"),
+            self.nlpd,
+        )))
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..self.levels.len())
+            .filter_map(|l| self.view(l))
+            .collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 
 impl Error {
     fn kind(&self) -> za::ErrorKind {
@@ -792,9 +1034,19 @@ impl za::Metric for Nlpd {
     ) -> za::MetricResult<std::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("nlpd")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        if let Some(req) = opts.map {
+            let (nlpd, levels) = score_rgb_u8_maps(&rp, &dp, r.width, r.height)
+                .metric_err_with("nlpd", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = NlpdMaps {
+                nlpd,
+                levels,
+                geometry: level_geometry(r.width, r.height),
+            };
+            return za::apply_map_request(Box::new(eval), req);
+        }
         let s = score_rgb_u8(&rp, &dp, r.width, r.height).metric_err_with("nlpd", Error::kind)?;
         Ok(std::boxed::Box::new(za::ScalarEval::single("nlpd", s)))
     }
