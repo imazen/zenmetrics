@@ -929,43 +929,6 @@ impl Plan2 {
     /// Plane variants of the four passes: identical arithmetic, but the
     /// gathers/scatters touch contiguous `f64` runs instead of `C64`
     /// pairs — the hot `conv_fft_pad` path uses these.
-    fn rows_fwd_p(&mut self, re: &[f64], im: &[f64], relaxed: bool) {
-        let (w, h) = (self.width, self.height);
-        let perm = self.rows.gather_perm();
-        for y0 in (0..h).step_by(8) {
-            let rws = (h - y0).min(8);
-            for j in 0..rws {
-                let row = (y0 + j) * w;
-                for k in 0..w {
-                    let d = match perm {
-                        Some(r) => r[k] as usize,
-                        None => k,
-                    } * 8;
-                    self.re8[d + j] = re[row + k];
-                    self.im8[d + j] = im[row + k];
-                }
-            }
-            {
-                let m = self.rows.work_len(w);
-                let re8 = &mut self.re8[..w * 8];
-                let im8 = &mut self.im8[..w * 8];
-                let sre8 = &mut self.sre8[..m * 8];
-                let sim8 = &mut self.sim8[..m * 8];
-                let s2re8 = &mut self.s2re8[..m * 8];
-                let s2im8 = &mut self.s2im8[..m * 8];
-                self.rows
-                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
-            }
-            for j in 0..rws {
-                let row = (y0 + j) * w;
-                for k in 0..w {
-                    self.pre[row + k] = self.re8[k * 8 + j];
-                    self.pim[row + k] = self.im8[k * 8 + j];
-                }
-            }
-        }
-    }
-
     /// Inverse row pass, writing only the `out_h × out_w` top-left output
     /// region — `conv_fft_pad` crops to it, so the rest is dead work. The
     /// gather still reads all `w` columns (every output needs the full
@@ -1177,15 +1140,95 @@ impl Plan2 {
         }
     }
 
-    /// Forward transform on split real/imaginary planes — same results as
-    /// [`forward`] on the equivalent `C64` buffer.
-    fn forward_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
-        assert_eq!(
-            (re.len(), im.len()),
-            (self.width * self.height, self.width * self.height),
-            "fft2: plane size mismatch"
-        );
-        self.rows_fwd_p(re, im, relaxed);
+    /// Pad-index map: `i` → source coordinate, or `usize::MAX` for
+    /// [`Pad::Constant`] positions. Interior maps to itself.
+    fn pad_index(i: usize, n: usize, pad: Pad) -> usize {
+        if i < n {
+            i
+        } else {
+            match pad {
+                Pad::Symmetric => (2 * n - 1).saturating_sub(i).min(n - 1),
+                Pad::Replicate => n - 1,
+                Pad::Constant(_) => usize::MAX,
+            }
+        }
+    }
+
+    /// Forward transform of a *real* image given unpadded: the row gather
+    /// applies the pad map straight from `x` (skipping the padded-plane
+    /// round trip), and the imaginary lanes are all +0. `re`/`im` are the
+    /// output planes — both fully written by the column pass, so their
+    /// incoming contents never matter.
+    fn forward_p_pad(
+        &mut self,
+        x: &[f64],
+        src_w: usize,
+        src_h: usize,
+        pad: Pad,
+        re: &mut [f64],
+        im: &mut [f64],
+        relaxed: bool,
+    ) {
+        let (w, h) = (self.width, self.height);
+        let perm = self.rows.gather_perm();
+        let xmap: Vec<usize> = (0..w).map(|px| Self::pad_index(px, src_w, pad)).collect();
+        let ymap: Vec<usize> = (0..h).map(|py| Self::pad_index(py, src_h, pad)).collect();
+        for y0 in (0..h).step_by(8) {
+            let rws = (h - y0).min(8);
+            for j in 0..rws {
+                let d_row = y0 + j;
+                let sy = ymap[d_row];
+                if sy == usize::MAX {
+                    let Pad::Constant(v) = pad else {
+                        unreachable!()
+                    };
+                    for k in 0..w {
+                        let d = match perm {
+                            Some(r) => r[k] as usize,
+                            None => k,
+                        } * 8;
+                        self.re8[d + j] = v;
+                        self.im8[d + j] = 0.0;
+                    }
+                    continue;
+                }
+                let srow = &x[sy * src_w..sy * src_w + src_w];
+                for k in 0..w {
+                    let d = match perm {
+                        Some(r) => r[k] as usize,
+                        None => k,
+                    } * 8;
+                    self.re8[d + j] = match xmap[k] {
+                        usize::MAX => {
+                            let Pad::Constant(v) = pad else {
+                                unreachable!()
+                            };
+                            v
+                        }
+                        sx => srow[sx],
+                    };
+                    self.im8[d + j] = 0.0;
+                }
+            }
+            {
+                let m = self.rows.work_len(w);
+                let re8 = &mut self.re8[..w * 8];
+                let im8 = &mut self.im8[..w * 8];
+                let sre8 = &mut self.sre8[..m * 8];
+                let sim8 = &mut self.sim8[..m * 8];
+                let s2re8 = &mut self.s2re8[..m * 8];
+                let s2im8 = &mut self.s2im8[..m * 8];
+                self.rows
+                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+            }
+            for j in 0..rws {
+                let row = (y0 + j) * w;
+                for k in 0..w {
+                    self.pre[row + k] = self.re8[k * 8 + j];
+                    self.pim[row + k] = self.im8[k * 8 + j];
+                }
+            }
+        }
         self.columns_fwd_p(re, im, relaxed);
     }
 
@@ -1319,70 +1362,6 @@ pub(super) enum Pad {
     Constant(f64),
 }
 
-/// Extend `x` (row-major `width × height`) to `pad_w × pad_h`, where the
-/// image occupies the top-left corner and the rest follows `pad`.
-///
-/// Symmetric reflection of `padded[py]` for `py >= height` maps to image row
-/// `2·height − 1 − py`; replicate clamps to `height − 1`. Both are applied
-/// componentwise on each axis, which reproduces the corner block too.
-/// Extend `x` into a `pad_w × pad_h` plane — every element is overwritten,
-/// so a pooled buffer needs no clearing.
-pub(super) fn pad_image_into(
-    x: &[f64],
-    width: usize,
-    height: usize,
-    pad_w: usize,
-    pad_h: usize,
-    pad: Pad,
-    out: &mut Vec<f64>,
-) {
-    assert_eq!(x.len(), width * height, "pad_image: size mismatch");
-    assert!(pad_w >= width && pad_h >= height);
-    let map = |i: usize, n: usize| -> usize {
-        if i < n {
-            i
-        } else {
-            match pad {
-                Pad::Symmetric => {
-                    // index n+k → n−1−k (edge duplicated).
-                    (2 * n - 1).saturating_sub(i).min(n - 1)
-                }
-                Pad::Replicate => n - 1,
-                Pad::Constant(_) => usize::MAX,
-            }
-        }
-    };
-    out.resize(pad_w * pad_h, 0.0);
-    let out = &mut out[..pad_w * pad_h];
-    // Column map hoisted once; interior columns map to themselves, so each
-    // output row is `srow` followed by the reflected/clamped pad run.
-    let xmap: Vec<usize> = (0..pad_w).map(|px| map(px, width)).collect();
-    for py in 0..pad_h {
-        let sy = map(py, height);
-        let orow = &mut out[py * pad_w..py * pad_w + pad_w];
-        if sy == usize::MAX {
-            let Pad::Constant(v) = pad else {
-                unreachable!()
-            };
-            orow.fill(v);
-            continue;
-        }
-        let srow = &x[sy * width..sy * width + width];
-        orow[..width].copy_from_slice(srow);
-        for (o, &sx) in orow[width..].iter_mut().zip(&xmap[width..]) {
-            *o = match sx {
-                usize::MAX => {
-                    let Pad::Constant(v) = pad else {
-                        unreachable!()
-                    };
-                    v
-                }
-                sx => srow[sx],
-            };
-        }
-    }
-}
-
 /// Convolve `x` (row-major `height × width`) with the zero-phase filter
 /// `filter` given as its real Fourier-domain response on a
 /// `pad_h × pad_w` lattice; `x` is extended per `pad`, transformed,
@@ -1404,11 +1383,13 @@ pub(super) fn conv_fft_pad(
     // Split real/imaginary planes end to end: the pointwise multiply is
     // contiguous and vectorizable, and no C64 (de)interleave is needed.
     with_conv_planes(pad_w, pad_h, |re, im| {
-        pad_image_into(x, width, height, pad_w, pad_h, pad, re);
-        im.clear();
+        // `re`/`im` need the right lengths but not content — the real-input
+        // row gather writes zero lanes and the column pass overwrites both
+        // wholesale.
+        re.resize(pad_w * pad_h, 0.0);
         im.resize(pad_w * pad_h, 0.0);
         with_plan2(pad_w, pad_h, |plan| {
-            plan.forward_p(re, im, relaxed);
+            plan.forward_p_pad(x, width, height, pad, re, im, relaxed);
             // The pointwise filter multiply folds into the inverse column
             // gather — same products, same order, no extra plane sweep.
             plan.inverse_p_filtered(re, im, Some(filter), relaxed, (width, height));
