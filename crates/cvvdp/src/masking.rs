@@ -60,19 +60,41 @@ pub(crate) fn mult_mutual_band_into(
     pu_scratch: &mut Vec<f32>,
 ) {
     let n = bw * bh;
-    debug_assert_eq!(t_p_per_ch[0].len(), n);
+    // Inputs are grow-only scratch — may carry a longer tail slice.
+    debug_assert!(t_p_per_ch[0].len() >= n);
 
-    // `resize` alone (no `clear()` first): a no-op once the buffer
-    // holds `n` — every element is overwritten by the kernels below.
-    d_a.resize(n, 0.0);
-    d_rg.resize(n, 0.0);
-    d_vy.resize(n, 0.0);
-    m_mm_a.resize(n, 0.0);
-    m_mm_rg.resize(n, 0.0);
-    m_mm_vy.resize(n, 0.0);
-    term_a.resize(n, 0.0);
-    term_rg.resize(n, 0.0);
-    term_vy.resize(n, 0.0);
+    // Grow-only (matching `mult_mutual_band_4ch_into`): the shared
+    // Vecs keep their high-water length across levels, so a plain
+    // `resize` would truncate on the smaller levels then memset on
+    // every regrow — all buffers are fully rewritten over `[..n]`
+    // each call anyway.
+    if d_a.len() < n {
+        d_a.resize(n, 0.0);
+    }
+    if d_rg.len() < n {
+        d_rg.resize(n, 0.0);
+    }
+    if d_vy.len() < n {
+        d_vy.resize(n, 0.0);
+    }
+    if m_mm_a.len() < n {
+        m_mm_a.resize(n, 0.0);
+    }
+    if m_mm_rg.len() < n {
+        m_mm_rg.resize(n, 0.0);
+    }
+    if m_mm_vy.len() < n {
+        m_mm_vy.resize(n, 0.0);
+    }
+    if term_a.len() < n {
+        term_a.resize(n, 0.0);
+    }
+    if term_rg.len() < n {
+        term_rg.resize(n, 0.0);
+    }
+    if term_vy.len() < n {
+        term_vy.resize(n, 0.0);
+    }
 
     // Steps 1+2 fused for blur-sized bands:
     // `gaussian_blur_sigma3_minabs_scaled` computes

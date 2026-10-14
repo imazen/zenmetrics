@@ -1516,26 +1516,39 @@ impl Cvvdp {
 
             let ws = &mut self.scratch.band_ws[0];
 
-            // `resize` alone (no `clear()` first): a no-op once the
-            // buffer holds `n_px` — every element is overwritten by
-            // the apply_csf_* / mult_mutual kernels below.
-            ws.t_p_a.resize(n_px, 0.0);
-            ws.t_p_rg.resize(n_px, 0.0);
-            ws.t_p_vy.resize(n_px, 0.0);
-            ws.r_p_a.resize(n_px, 0.0);
-            ws.r_p_rg.resize(n_px, 0.0);
-            ws.r_p_vy.resize(n_px, 0.0);
+            // Grow-only sizing: keep the high-water length across
+            // levels so plain `resize` can't truncate on the smaller
+            // levels then memset on every regrow — the apply_csf_* /
+            // mult_mutual kernels overwrite `[..n_px]` fully.
+            for v in [
+                &mut ws.t_p_a,
+                &mut ws.t_p_rg,
+                &mut ws.t_p_vy,
+                &mut ws.r_p_a,
+                &mut ws.r_p_rg,
+                &mut ws.r_p_vy,
+            ] {
+                if v.len() < n_px {
+                    v.resize(n_px, 0.0);
+                }
+            }
 
             if is_baseband {
-                ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.resize(n_px, 0.0);
+                for v in [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy] {
+                    if v.len() < n_px {
+                        v.resize(n_px, 0.0);
+                    }
+                }
                 apply_csf_diffs(
                     log_l_bkg_band,
                     [&logs_row_a, &logs_row_rg, &logs_row_vy],
                     [ref_a_band, ref_rg_band, ref_vy_band],
                     [dis_a_band, dis_rg_band, dis_vy_band],
-                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                    [
+                        &mut ws.d_a[..n_px],
+                        &mut ws.d_rg[..n_px],
+                        &mut ws.d_vy[..n_px],
+                    ],
                 );
             } else {
                 apply_csf_pairs(
@@ -1543,8 +1556,16 @@ impl Cvvdp {
                     [&logs_row_a, &logs_row_rg, &logs_row_vy],
                     [ref_a_band, ref_rg_band, ref_vy_band],
                     [dis_a_band, dis_rg_band, dis_vy_band],
-                    [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
-                    [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                    [
+                        &mut ws.r_p_a[..n_px],
+                        &mut ws.r_p_rg[..n_px],
+                        &mut ws.r_p_vy[..n_px],
+                    ],
+                    [
+                        &mut ws.t_p_a[..n_px],
+                        &mut ws.t_p_rg[..n_px],
+                        &mut ws.t_p_vy[..n_px],
+                    ],
                     band_mul,
                 );
                 let t_p_taken: [Vec<f32>; 3] = [
@@ -1590,9 +1611,9 @@ impl Cvvdp {
             // bit-identical to the single-pass `lp_norm_mean`.
             let h_body_now = self.strip_h_body.get();
             let q_band = pool_band_3ch(
-                &ws.d_a,
-                &ws.d_rg,
-                &ws.d_vy,
+                &ws.d_a[..n_px],
+                &ws.d_rg[..n_px],
+                &ws.d_vy[..n_px],
                 bw,
                 bh,
                 k,
@@ -1800,35 +1821,57 @@ impl Cvvdp {
             let ws = &mut self.scratch.band_ws[0];
 
             // Compute T_p + R_p per channel into recycled workspace.
-            // `resize` alone: a no-op at steady state; the kernels
-            // overwrite every element.
-            ws.t_p_a.resize(n_px, 0.0);
-            ws.t_p_rg.resize(n_px, 0.0);
-            ws.t_p_vy.resize(n_px, 0.0);
-            ws.r_p_a.resize(n_px, 0.0);
-            ws.r_p_rg.resize(n_px, 0.0);
-            ws.r_p_vy.resize(n_px, 0.0);
+            // Grow-only sizing: keep the high-water length across
+            // levels so `resize` can't truncate on smaller levels then
+            // memset on every regrow — the kernels overwrite `[..n_px]`
+            // fully.
+            for v in [
+                &mut ws.t_p_a,
+                &mut ws.t_p_rg,
+                &mut ws.t_p_vy,
+                &mut ws.r_p_a,
+                &mut ws.r_p_rg,
+                &mut ws.r_p_vy,
+            ] {
+                if v.len() < n_px {
+                    v.resize(n_px, 0.0);
+                }
+            }
 
             apply_csf_pairs(
                 log_l_bkg_band,
                 [&logs_row_a, &logs_row_rg, &logs_row_vy],
                 [ref_a_band, ref_rg_band, ref_vy_band],
                 [dis_a_band, dis_rg_band, dis_vy_band],
-                [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
-                [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                [
+                    &mut ws.r_p_a[..n_px],
+                    &mut ws.r_p_rg[..n_px],
+                    &mut ws.r_p_vy[..n_px],
+                ],
+                [
+                    &mut ws.t_p_a[..n_px],
+                    &mut ws.t_p_rg[..n_px],
+                    &mut ws.t_p_vy[..n_px],
+                ],
                 band_mul,
             );
 
             if is_baseband {
-                ws.d_a.resize(n_px, 0.0);
-                ws.d_rg.resize(n_px, 0.0);
-                ws.d_vy.resize(n_px, 0.0);
+                for v in [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy] {
+                    if v.len() < n_px {
+                        v.resize(n_px, 0.0);
+                    }
+                }
                 apply_csf_diffs(
                     log_l_bkg_band,
                     [&logs_row_a, &logs_row_rg, &logs_row_vy],
                     [ref_a_band, ref_rg_band, ref_vy_band],
                     [dis_a_band, dis_rg_band, dis_vy_band],
-                    [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                    [
+                        &mut ws.d_a[..n_px],
+                        &mut ws.d_rg[..n_px],
+                        &mut ws.d_vy[..n_px],
+                    ],
                 );
             } else {
                 // mult_mutual_band_into wants `&[Vec<f32>; 3]`. Move
@@ -1875,9 +1918,9 @@ impl Cvvdp {
             // bit-identical to lp_norm_mean(..) because the spatial
             // pool is associative under row-order dispatch.
             let q_band = pool_band_3ch(
-                &ws.d_a,
-                &ws.d_rg,
-                &ws.d_vy,
+                &ws.d_a[..n_px],
+                &ws.d_rg[..n_px],
+                &ws.d_vy[..n_px],
                 bw,
                 bh,
                 k,
@@ -1888,7 +1931,9 @@ impl Cvvdp {
 
             // Accumulate diffmap. accumulate_band_diffmap takes
             // `&[Vec<f32>; 3]` — move the workspace planes out and back
-            // (no clone; capacities persist across calls).
+            // (no clone; capacities persist across calls). `upsample_add`
+            // reads only the `[..bw*bh]` band window, so the grow-only
+            // tail is never observed.
             if let Some(acc) = accum.as_mut() {
                 let d_per_ch: [Vec<f32>; 3] = [
                     core::mem::take(&mut ws.d_a),
@@ -2010,31 +2055,54 @@ impl Cvvdp {
                 let dis_rg_band = &dist_weber[1].bands[k].data;
                 let dis_vy_band = &dist_weber[2].bands[k].data;
 
+                // Grow-only sizing: keep the high-water length across
+                // bands so `resize` can't truncate then memset on
+                // every regrow — the kernels overwrite `[..n_px]`.
                 if is_baseband {
-                    ws.d_a.resize(n_px, 0.0);
-                    ws.d_rg.resize(n_px, 0.0);
-                    ws.d_vy.resize(n_px, 0.0);
+                    for v in [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy] {
+                        if v.len() < n_px {
+                            v.resize(n_px, 0.0);
+                        }
+                    }
                     apply_csf_diffs(
                         log_l_bkg_band,
                         [&logs_row_a, &logs_row_rg, &logs_row_vy],
                         [ref_a_band, ref_rg_band, ref_vy_band],
                         [dis_a_band, dis_rg_band, dis_vy_band],
-                        [&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy],
+                        [
+                            &mut ws.d_a[..n_px],
+                            &mut ws.d_rg[..n_px],
+                            &mut ws.d_vy[..n_px],
+                        ],
                     );
                 } else {
-                    ws.t_p_a.resize(n_px, 0.0);
-                    ws.t_p_rg.resize(n_px, 0.0);
-                    ws.t_p_vy.resize(n_px, 0.0);
-                    ws.r_p_a.resize(n_px, 0.0);
-                    ws.r_p_rg.resize(n_px, 0.0);
-                    ws.r_p_vy.resize(n_px, 0.0);
+                    for v in [
+                        &mut ws.t_p_a,
+                        &mut ws.t_p_rg,
+                        &mut ws.t_p_vy,
+                        &mut ws.r_p_a,
+                        &mut ws.r_p_rg,
+                        &mut ws.r_p_vy,
+                    ] {
+                        if v.len() < n_px {
+                            v.resize(n_px, 0.0);
+                        }
+                    }
                     apply_csf_pairs(
                         log_l_bkg_band,
                         [&logs_row_a, &logs_row_rg, &logs_row_vy],
                         [ref_a_band, ref_rg_band, ref_vy_band],
                         [dis_a_band, dis_rg_band, dis_vy_band],
-                        [&mut ws.r_p_a, &mut ws.r_p_rg, &mut ws.r_p_vy],
-                        [&mut ws.t_p_a, &mut ws.t_p_rg, &mut ws.t_p_vy],
+                        [
+                            &mut ws.r_p_a[..n_px],
+                            &mut ws.r_p_rg[..n_px],
+                            &mut ws.r_p_vy[..n_px],
+                        ],
+                        [
+                            &mut ws.t_p_a[..n_px],
+                            &mut ws.t_p_rg[..n_px],
+                            &mut ws.t_p_vy[..n_px],
+                        ],
                         band_mul,
                     );
                     let t_p_taken: [Vec<f32>; 3] = [
@@ -2074,9 +2142,9 @@ impl Cvvdp {
                 }
 
                 let q_band = pool_band_3ch(
-                    &ws.d_a,
-                    &ws.d_rg,
-                    &ws.d_vy,
+                    &ws.d_a[..n_px],
+                    &ws.d_rg[..n_px],
+                    &ws.d_vy[..n_px],
                     bw,
                     bh,
                     k,
