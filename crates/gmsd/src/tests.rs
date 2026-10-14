@@ -548,9 +548,15 @@ fn gmsd_diffmap_matches_score() {
     assert_eq!((dm.width as usize, dm.height as usize), (mw, mh));
     assert_eq!(dm.map().len(), mw * mh);
     let view = Evaluation::map(&dm).expect("map");
-    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
+    assert_eq!(
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
     assert_eq!((view.width() as usize, view.height() as usize), (mw, mh));
-    assert_eq!(view.geometry.cell_rect(1, 1).map(|r| (r.x, r.y, r.width)), Some((2, 2, 2)));
+    assert_eq!(
+        view.geometry.cell_rect(1, 1).map(|r| (r.x, r.y, r.width)),
+        Some((2, 2, 2))
+    );
     assert_eq!(dm.score(), score.gmsd);
     // scores() carries the map mean as mean_gms; std-of-map == headline.
     let kv: alloc::vec::Vec<_> = dm.scores().collect();

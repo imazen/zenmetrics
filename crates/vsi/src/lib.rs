@@ -190,8 +190,17 @@ impl VsiDiffmap {
     pub fn geometry(&self) -> za::MapGeometry {
         let f = self.factor;
         let origin = i64::from(f / 2) + 1 - i64::from(f);
-        za::MapGeometry::grid(self.input.0, self.input.1, origin, origin, f, f, self.width, self.height)
-            .with_support(za::Support::Global)
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            origin,
+            origin,
+            f,
+            f,
+            self.width,
+            self.height,
+        )
+        .with_support(za::Support::Global)
     }
 }
 
@@ -201,7 +210,10 @@ impl za::Evaluation for VsiDiffmap {
     }
 
     fn scores(&self) -> za::Scores<'_> {
-        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("vsi"), self.vsi)))
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("vsi"),
+            self.vsi,
+        )))
     }
 
     fn map(&self) -> Option<za::MapView<'_>> {
@@ -299,11 +311,12 @@ impl za::Metric for Vsi {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) =
-                vsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vsi", Error::kind)?;
+            let (_, dm) = vsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("vsi", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vsi", Error::kind)?;
+        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("vsi", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vsi", s)))
     }
 }

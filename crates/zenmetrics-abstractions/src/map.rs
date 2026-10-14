@@ -25,7 +25,10 @@ pub enum MapPolarity {
 impl MapPolarity {
     /// `true` when larger values mean a worse match.
     pub const fn higher_is_worse(self) -> bool {
-        matches!(self, MapPolarity::Difference | MapPolarity::DetectionProbability)
+        matches!(
+            self,
+            MapPolarity::Difference | MapPolarity::DetectionProbability
+        )
     }
 }
 
@@ -187,7 +190,10 @@ impl MapGeometry {
             cell_height,
             cells_x,
             cells_y,
-            support: Support::Local { halo_x: 0, halo_y: 0 },
+            support: Support::Local {
+                halo_x: 0,
+                halo_y: 0,
+            },
         }
     }
 
@@ -219,7 +225,10 @@ impl MapGeometry {
     }
 
     fn clip(&self, x0: i64, y0: i64, x1: i64, y1: i64) -> Option<PixelRect> {
-        let (x1, y1) = (x1.min(i64::from(self.input_width)), y1.min(i64::from(self.input_height)));
+        let (x1, y1) = (
+            x1.min(i64::from(self.input_width)),
+            y1.min(i64::from(self.input_height)),
+        );
         let (x0, y0) = (x0.max(0), y0.max(0));
         (x1 > x0 && y1 > y0).then(|| PixelRect {
             x: x0 as u32,
@@ -235,7 +244,12 @@ impl MapGeometry {
         }
         let x0 = self.origin_x + i64::from(i) * i64::from(self.cell_width);
         let y0 = self.origin_y + i64::from(j) * i64::from(self.cell_height);
-        Some((x0, y0, x0 + i64::from(self.cell_width), y0 + i64::from(self.cell_height)))
+        Some((
+            x0,
+            y0,
+            x0 + i64::from(self.cell_width),
+            y0 + i64::from(self.cell_height),
+        ))
     }
 
     /// The input pixels cell `(i, j)` owns, clipped; `None` when out of
@@ -255,7 +269,12 @@ impl MapGeometry {
                 let (hx, hy) = (i64::from(halo_x), i64::from(halo_y));
                 self.clip(x0 - hx, y0 - hy, x1 + hx, y1 + hy)
             }
-            Support::Global => self.clip(0, 0, i64::from(self.input_width), i64::from(self.input_height)),
+            Support::Global => self.clip(
+                0,
+                0,
+                i64::from(self.input_width),
+                i64::from(self.input_height),
+            ),
         }
     }
 
@@ -371,7 +390,10 @@ fn f32_values<'s>(sl: &PixelSlice<'s>) -> alloc::borrow::Cow<'s, [f32]> {
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h {
         let row = &all[y * sl.stride()..y * sl.stride() + w * 4];
-        out.extend(row.chunks_exact(4).map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]])));
+        out.extend(
+            row.chunks_exact(4)
+                .map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]])),
+        );
     }
     alloc::borrow::Cow::Owned(out)
 }
@@ -400,13 +422,16 @@ pub fn fold_values(vals: &[f32], fold: MapFold<'_>) -> MetricResult<f64> {
     }
     if let MapFold::Custom(name) = fold {
         return fail(
-            MetricError::new(ErrorKind::UnsupportedRequest).with_message(format!("custom map fold {name:?}")),
+            MetricError::new(ErrorKind::UnsupportedRequest)
+                .with_message(format!("custom map fold {name:?}")),
         );
     }
     if let MapFold::PNorm { p } = fold
         && !(p > 0.0)
     {
-        return fail(MetricError::new(ErrorKind::InvalidConfig).with_message(format!("p-norm exponent {p}")));
+        return fail(
+            MetricError::new(ErrorKind::InvalidConfig).with_message(format!("p-norm exponent {p}")),
+        );
     }
     if vals.iter().any(|v| v.is_nan()) {
         return Ok(f64::NAN);
@@ -415,7 +440,11 @@ pub fn fold_values(vals: &[f32], fold: MapFold<'_>) -> MetricResult<f64> {
     let mean = || vals.iter().map(|&v| f64::from(v)).sum::<f64>() / n;
     Ok(match fold {
         MapFold::Mean => mean(),
-        MapFold::Max => vals.iter().copied().fold(f32::NEG_INFINITY, f32::max).into(),
+        MapFold::Max => vals
+            .iter()
+            .copied()
+            .fold(f32::NEG_INFINITY, f32::max)
+            .into(),
         MapFold::Min => vals.iter().copied().fold(f32::INFINITY, f32::min).into(),
         MapFold::Std => {
             let m = mean();
@@ -429,12 +458,16 @@ pub fn fold_values(vals: &[f32], fold: MapFold<'_>) -> MetricResult<f64> {
                 / n;
             libm::sqrt(var)
         }
-        MapFold::PNorm { p } if p.is_infinite() => vals.iter().map(|v| f64::from(v.abs())).fold(0.0, f64::max),
+        MapFold::PNorm { p } if p.is_infinite() => {
+            vals.iter().map(|v| f64::from(v.abs())).fold(0.0, f64::max)
+        }
         MapFold::PNorm { p } => {
             let sum: f64 = vals.iter().map(|&v| libm::pow(f64::from(v).abs(), p)).sum();
             libm::pow(sum / n, p.recip())
         }
-        MapFold::FractionAbove { threshold } => vals.iter().filter(|&&v| f64::from(v) >= threshold).count() as f64 / n,
+        MapFold::FractionAbove { threshold } => {
+            vals.iter().filter(|&&v| f64::from(v) >= threshold).count() as f64 / n
+        }
         MapFold::Custom(_) => unreachable!("handled above"),
     })
 }
@@ -447,12 +480,19 @@ pub fn fold_values(vals: &[f32], fold: MapFold<'_>) -> MetricResult<f64> {
 /// # Errors
 /// [`ErrorKind::Internal`] when `map.len() != w·h`.
 #[track_caller]
-pub fn map_subsample_f32(map: &[f32], w: u32, h: u32, factor: u32, reduce: MapReduce) -> MetricResult<(Vec<f32>, u32, u32)> {
+pub fn map_subsample_f32(
+    map: &[f32],
+    w: u32,
+    h: u32,
+    factor: u32,
+    reduce: MapReduce,
+) -> MetricResult<(Vec<f32>, u32, u32)> {
     let f = factor.max(1) as usize;
     let (w, h) = (w as usize, h as usize);
     if map.len() != w * h {
         return fail(
-            MetricError::new(ErrorKind::Internal).with_message(format!("map len {} != {w}x{h}", map.len())),
+            MetricError::new(ErrorKind::Internal)
+                .with_message(format!("map len {} != {w}x{h}", map.len())),
         );
     }
     let (wo, ho) = (w.div_ceil(f), h.div_ceil(f));
@@ -484,11 +524,18 @@ pub fn map_subsample_f32(map: &[f32], w: u32, h: u32, factor: u32, reduce: MapRe
 pub fn gray_f32_slice(data: &[f32], w: u32, h: u32) -> MetricResult<PixelSlice<'_>> {
     if data.len() != w as usize * h as usize {
         return fail(
-            MetricError::new(ErrorKind::Internal).with_message(format!("map len {} != {w}x{h}", data.len())),
+            MetricError::new(ErrorKind::Internal)
+                .with_message(format!("map len {} != {w}x{h}", data.len())),
         );
     }
-    PixelSlice::new(bytemuck::cast_slice(data), w, h, w as usize * 4, PixelDescriptor::GRAYF32_LINEAR)
-        .map_err(|e| e.map_error(|b| MetricError::from_detail(ErrorKind::Internal, b)))
+    PixelSlice::new(
+        bytemuck::cast_slice(data),
+        w,
+        h,
+        w as usize * 4,
+        PixelDescriptor::GRAYF32_LINEAR,
+    )
+    .map_err(|e| e.map_error(|b| MetricError::from_detail(ErrorKind::Internal, b)))
 }
 
 /// Move packed `w × h` values into an owned `GRAYF32_LINEAR` buffer
@@ -501,7 +548,8 @@ pub fn gray_f32_slice(data: &[f32], w: u32, h: u32) -> MetricResult<PixelSlice<'
 pub fn gray_f32_buffer(data: &[f32], w: u32, h: u32) -> MetricResult<PixelBuffer> {
     if data.len() != w as usize * h as usize {
         return fail(
-            MetricError::new(ErrorKind::Internal).with_message(format!("map len {} != {w}x{h}", data.len())),
+            MetricError::new(ErrorKind::Internal)
+                .with_message(format!("map len {} != {w}x{h}", data.len())),
         );
     }
     let mut buf = PixelBuffer::try_new(w, h, PixelDescriptor::GRAYF32_LINEAR)
@@ -537,9 +585,15 @@ mod tests {
         assert_eq!(map_fold(&m, MapFold::Mean).unwrap(), 2.5);
         assert_eq!(map_fold(&m, MapFold::Max).unwrap(), 4.0);
         assert_eq!(map_fold(&m, MapFold::Min).unwrap(), 1.0);
-        assert_eq!(map_fold(&m, MapFold::PNorm { p: f64::INFINITY }).unwrap(), 4.0);
+        assert_eq!(
+            map_fold(&m, MapFold::PNorm { p: f64::INFINITY }).unwrap(),
+            4.0
+        );
         assert!((map_fold(&m, MapFold::PNorm { p: 1.0 }).unwrap() - 2.5).abs() < 1e-12);
-        assert_eq!(map_fold(&m, MapFold::FractionAbove { threshold: 3.0 }).unwrap(), 0.5);
+        assert_eq!(
+            map_fold(&m, MapFold::FractionAbove { threshold: 3.0 }).unwrap(),
+            0.5
+        );
         assert!((map_fold(&m, MapFold::Std).unwrap() - 1.25f64.sqrt()).abs() < 1e-12);
     }
 
@@ -551,15 +605,31 @@ mod tests {
         assert_eq!(k(MapFold::PNorm { p: 0.0 }), ErrorKind::InvalidConfig);
         assert_eq!(k(MapFold::PNorm { p: f64::NAN }), ErrorKind::InvalidConfig);
         assert_eq!(k(MapFold::Custom("c_max")), ErrorKind::UnsupportedRequest);
-        assert_eq!(fold_values(&[], MapFold::Mean).unwrap_err().error().kind(), ErrorKind::InvalidInput);
+        assert_eq!(
+            fold_values(&[], MapFold::Mean).unwrap_err().error().kind(),
+            ErrorKind::InvalidInput
+        );
     }
 
     #[test]
     fn strided_map_folds_every_row() {
         // 2x2 map in rows of 3 floats (one padding float per row).
         let backing = [1.0f32, 2.0, 99.0, 3.0, 4.0, 99.0];
-        let sl = PixelSlice::new(bytemuck::cast_slice(&backing), 2, 2, 12, PixelDescriptor::GRAYF32_LINEAR).unwrap();
-        let m = MapView::new("m", sl, MapPolarity::Difference, MapGeometry::identity(2, 2)).unwrap();
+        let sl = PixelSlice::new(
+            bytemuck::cast_slice(&backing),
+            2,
+            2,
+            12,
+            PixelDescriptor::GRAYF32_LINEAR,
+        )
+        .unwrap();
+        let m = MapView::new(
+            "m",
+            sl,
+            MapPolarity::Difference,
+            MapGeometry::identity(2, 2),
+        )
+        .unwrap();
         assert_eq!(&*m.values(), &[1.0, 2.0, 3.0, 4.0]);
         assert_eq!(map_fold(&m, MapFold::Max).unwrap(), 4.0);
     }
@@ -567,7 +637,8 @@ mod tests {
     #[test]
     fn view_rejects_geometry_mismatch() {
         let b = gray_f32_buffer(&[0.0; 6], 3, 2).unwrap();
-        let e = MapView::new("m", b, MapPolarity::Similarity, MapGeometry::identity(2, 3)).unwrap_err();
+        let e =
+            MapView::new("m", b, MapPolarity::Similarity, MapGeometry::identity(2, 3)).unwrap_err();
         assert_eq!(e.error().kind(), ErrorKind::Internal);
     }
 
@@ -587,19 +658,62 @@ mod tests {
         // GMSD-like: 2x2 cells from pixel 0, 3 cells across a 7-wide image,
         // a 3x3 filter on the half-res grid (halo 2 input pixels).
         let g = MapGeometry::grid(7, 4, 0, 0, 2, 2, 3, 2).with_halo(2, 2);
-        assert_eq!(g.cell_rect(2, 1), Some(PixelRect { x: 4, y: 2, width: 2, height: 2 }));
-        assert_eq!(g.support_rect(0, 0), Some(PixelRect { x: 0, y: 0, width: 4, height: 4 }));
+        assert_eq!(
+            g.cell_rect(2, 1),
+            Some(PixelRect {
+                x: 4,
+                y: 2,
+                width: 2,
+                height: 2
+            })
+        );
+        assert_eq!(
+            g.support_rect(0, 0),
+            Some(PixelRect {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4
+            })
+        );
         assert_eq!(g.cell_at(6, 0), None);
         assert_eq!(g.cell_at(5, 3), Some((2, 1)));
         let s = g.subsampled(2);
         assert_eq!((s.cells_x, s.cells_y, s.cell_width), (2, 1, 4));
-        assert_eq!(s.cell_rect(1, 0), Some(PixelRect { x: 4, y: 0, width: 3, height: 4 }));
+        assert_eq!(
+            s.cell_rect(1, 0),
+            Some(PixelRect {
+                x: 4,
+                y: 0,
+                width: 3,
+                height: 4
+            })
+        );
         assert_eq!(s.support, g.support);
         // Negative origin clips at the image edge.
         let c = MapGeometry::grid(10, 10, -1, -1, 3, 3, 4, 4);
-        assert_eq!(c.cell_rect(0, 0), Some(PixelRect { x: 0, y: 0, width: 2, height: 2 }));
+        assert_eq!(
+            c.cell_rect(0, 0),
+            Some(PixelRect {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2
+            })
+        );
         let gl = c.with_support(Support::Global);
-        assert_eq!(gl.support_rect(3, 3), Some(PixelRect { x: 0, y: 0, width: 10, height: 10 }));
-        assert_eq!(MapGeometry::identity(4, 4).subsampled(0), MapGeometry::identity(4, 4));
+        assert_eq!(
+            gl.support_rect(3, 3),
+            Some(PixelRect {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10
+            })
+        );
+        assert_eq!(
+            MapGeometry::identity(4, 4).subsampled(0),
+            MapGeometry::identity(4, 4)
+        );
     }
 }

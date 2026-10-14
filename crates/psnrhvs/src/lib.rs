@@ -560,7 +560,8 @@ impl za::Metric for Psnrhvs {
         opts.checkpoint()?;
         opts.refuse_map("psnrhvs")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("psnrhvs", Error::kind)?;
+        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("psnrhvs", Error::kind)?;
         Ok(alloc::boxed::Box::new(
             za::ScalarEval::single("psnrhvs", s.psnr_hvs)
                 .with("psnrhvs_m", s.psnr_hvs_m)

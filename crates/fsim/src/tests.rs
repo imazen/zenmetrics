@@ -308,7 +308,10 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
     assert!(damaged < clean, "{damaged} !< {clean}");
     // Trait surface.
     let view = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
-    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
+    assert_eq!(
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
     assert_eq!(dm.score(), map_score);
     let slice = view.pixels.as_slice();
     assert_eq!((slice.width(), slice.rows()), (dm.width, dm.height));
@@ -333,10 +336,18 @@ fn metric_trait_object_scores_and_maps() {
     assert!(m.accepts(&mk(&r).format()));
     let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY).unwrap();
     let named = za::conformance::scores(&*ev);
-    assert_eq!(named.iter().map(|(k, _)| k.as_ref()).collect::<alloc::vec::Vec<_>>(), ["fsimc", "fsim"]);
+    assert_eq!(
+        named
+            .iter()
+            .map(|(k, _)| k.as_ref())
+            .collect::<alloc::vec::Vec<_>>(),
+        ["fsimc", "fsim"]
+    );
     assert_eq!(ev.score(), named[0].1);
     assert!(ev.map().is_none());
-    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY.with_native_map()).unwrap();
+    let ev = m
+        .evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY.with_native_map())
+        .unwrap();
     assert_eq!(za::conformance::scores(&*ev), named);
     let dm = ev.map().unwrap();
     assert!(dm.pixels.is_borrowed());
@@ -345,9 +356,18 @@ fn metric_trait_object_scores_and_maps() {
     assert!(ev.map_score(za::MapFold::PNorm { p: 4.0 }).is_ok());
     assert!(ev.as_any().is::<crate::FsimDiffmap>());
     // F=1 at this size (min dim < 384): native is w×h, /4 → ⌈w/4⌉ × ⌈h/4⌉.
-    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY.with_map(MapRequest::subsampled(4))).unwrap();
+    let ev = m
+        .evaluate(
+            mk(&r),
+            mk(&d),
+            EvalOpts::SCORE_ONLY.with_map(MapRequest::subsampled(4)),
+        )
+        .unwrap();
     let dm = ev.map().unwrap();
-    assert_eq!((dm.width(), dm.height()), (w.div_ceil(4) as u32, h.div_ceil(4) as u32));
+    assert_eq!(
+        (dm.width(), dm.height()),
+        (w.div_ceil(4) as u32, h.div_ceil(4) as u32)
+    );
     assert!(ev.as_any().is::<crate::FsimDiffmap>());
 }
 

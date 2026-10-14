@@ -50,21 +50,24 @@ pub use whereat;
 pub use zenpixels;
 
 pub use error::{
-    ErrorKind, MetricError, MetricResult, ResultMetricExt, fail, find_metric_error, is_stopped, stop_reason,
+    ErrorKind, MetricError, MetricResult, ResultMetricExt, fail, find_metric_error, is_stopped,
+    stop_reason,
 };
-pub use eval::{Evaluation, Extras, Resampled, ScalarEval, ScoreKind, ScoreSpec, Scores, apply_map_request};
+pub use eval::{
+    Evaluation, Extras, Resampled, ScalarEval, ScoreKind, ScoreSpec, Scores, apply_map_request,
+};
 pub use identity::{Backend, Implementation, MetricId, is_sanitized_column};
 pub use input::{
-    Image, InputFormat, OwnedImage, PlanarFormat, Planes, Rgb8In, check_same_size, contiguous_rgb8, is_rgb8_srgb,
-    rgb8_pair, rgb8_view, unsupported,
+    Image, InputFormat, OwnedImage, PlanarFormat, Planes, Rgb8In, check_same_size, contiguous_rgb8,
+    is_rgb8_srgb, rgb8_pair, rgb8_view, unsupported,
 };
 pub use map::{
-    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, Support, fold_values, gray_f32_buffer,
-    gray_f32_slice, map_fold, map_subsample_f32,
+    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, Support,
+    fold_values, gray_f32_buffer, gray_f32_slice, map_fold, map_subsample_f32,
 };
 pub use metric::{
-    AlwaysStop, ColdReplay, EvalOpts, FrameEvaluation, FrameRate, Metric, Sequence, SequenceInfo, SequenceSummary,
-    Temporal, ViewingConditions, WarmReference,
+    AlwaysStop, ColdReplay, EvalOpts, FrameEvaluation, FrameRate, Metric, Sequence, SequenceInfo,
+    SequenceSummary, Temporal, ViewingConditions, WarmReference,
 };
 
 #[cfg(test)]

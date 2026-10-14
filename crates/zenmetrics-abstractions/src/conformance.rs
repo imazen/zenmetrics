@@ -27,9 +27,9 @@ use how_far::{StopOnly, StopReason};
 use crate::error::ErrorKind;
 use crate::eval::Evaluation;
 use crate::identity::is_sanitized_column;
+use crate::input::Image;
 use crate::map::{MapFold, MapRequest};
 use crate::metric::{AlwaysStop, EvalOpts, Metric, SequenceInfo, Temporal};
-use crate::input::Image;
 
 /// One failed check.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,7 +49,10 @@ fn scores_of(e: &dyn Evaluation) -> Vec<(Cow<'static, str>, f64)> {
 }
 
 fn same_scores(a: &[(Cow<'static, str>, f64)], b: &[(Cow<'static, str>, f64)]) -> bool {
-    a.len() == b.len() && a.iter().zip(b).all(|((ka, va), (kb, vb))| ka == kb && bits_eq(*va, *vb))
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|((ka, va), (kb, vb))| ka == kb && bits_eq(*va, *vb))
 }
 
 /// Run every check; an empty result means the metric conforms.
@@ -74,20 +77,29 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
     }
     for s in outputs.iter() {
         if !is_sanitized_column(&s.key) {
-            v("outputs", format!("output key {:?} is not [a-z0-9_]+", s.key));
+            v(
+                "outputs",
+                format!("output key {:?} is not [a-z0-9_]+", s.key),
+            );
         }
     }
     if id.family().is_empty() {
         v("id", "empty family".into());
     }
     if metric.score_kind() != outputs.first().map_or(metric.score_kind(), |s| s.kind) {
-        v("score_kind", "score_kind() differs from the first output's kind".into());
+        v(
+            "score_kind",
+            "score_kind() differs from the first output's kind".into(),
+        );
     }
 
     // Formats.
     for (name, img) in [("reference", r), ("distorted", d)] {
         if !metric.accepts(&img.format()) {
-            v("accepts", format!("{name} format {:?} not accepted", img.format()));
+            v(
+                "accepts",
+                format!("{name} format {:?} not accepted", img.format()),
+            );
         }
     }
 
@@ -104,10 +116,16 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
         None => v("scores", "scores() is empty".into()),
         Some((k, val)) => {
             if !bits_eq(*val, cold.score()) {
-                v("scores", format!("score() {} != first scores() value {val}", cold.score()));
+                v(
+                    "scores",
+                    format!("score() {} != first scores() value {val}", cold.score()),
+                );
             }
             if outputs.first().is_some_and(|s| s.key != *k) {
-                v("scores", format!("headline key {k:?} is not the first declared output"));
+                v(
+                    "scores",
+                    format!("headline key {k:?} is not the first declared output"),
+                );
             }
         }
     }
@@ -135,38 +153,76 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
             for m in &maps {
                 let g = m.geometry;
                 if (g.input_width, g.input_height) != (r.width(), r.height()) {
-                    v("geometry", format!("map {}: geometry input {}x{} != image", m.name, g.input_width, g.input_height));
+                    v(
+                        "geometry",
+                        format!(
+                            "map {}: geometry input {}x{} != image",
+                            m.name, g.input_width, g.input_height
+                        ),
+                    );
                 }
                 let sl = m.pixels.as_slice();
                 if (sl.width(), sl.rows()) != (g.cells_x, g.cells_y) {
-                    v("geometry", format!("map {}: {}x{} values, geometry {}x{}", m.name, sl.width(), sl.rows(), g.cells_x, g.cells_y));
+                    v(
+                        "geometry",
+                        format!(
+                            "map {}: {}x{} values, geometry {}x{}",
+                            m.name,
+                            sl.width(),
+                            sl.rows(),
+                            g.cells_x,
+                            g.cells_y
+                        ),
+                    );
                 }
                 if m.served != MapRequest::Native {
-                    v("map", format!("map {}: served {:?} for a native request", m.name, m.served));
+                    v(
+                        "map",
+                        format!("map {}: served {:?} for a native request", m.name, m.served),
+                    );
                 }
             }
             let native_mean = native.map_score(MapFold::Mean);
 
             // Subsampled maps.
-            match metric.evaluate(r.clone(), d.clone(), EvalOpts::SCORE_ONLY.with_map(MapRequest::subsampled(2))) {
+            match metric.evaluate(
+                r.clone(),
+                d.clone(),
+                EvalOpts::SCORE_ONLY.with_map(MapRequest::subsampled(2)),
+            ) {
                 Err(e) => v("subsampled", format!("subsampled evaluate failed: {e}")),
                 Ok(sub) => {
                     if !same_scores(&cold_scores, &scores_of(&*sub)) {
-                        v("subsampled", "subsampled map request changed the scores".into());
+                        v(
+                            "subsampled",
+                            "subsampled map request changed the scores".into(),
+                        );
                     }
                     for (s, n) in sub.maps().iter().zip(&maps) {
                         if s.geometry != n.geometry.subsampled(2) {
-                            v("subsampled", format!("map {}: geometry {:?} != native.subsampled(2)", s.name, s.geometry));
+                            v(
+                                "subsampled",
+                                format!(
+                                    "map {}: geometry {:?} != native.subsampled(2)",
+                                    s.name, s.geometry
+                                ),
+                            );
                         }
                         let sl = s.pixels.as_slice();
                         if (sl.width(), sl.rows()) != (s.geometry.cells_x, s.geometry.cells_y) {
-                            v("subsampled", format!("map {}: size disagrees with geometry", s.name));
+                            v(
+                                "subsampled",
+                                format!("map {}: size disagrees with geometry", s.name),
+                            );
                         }
                     }
                     let sub_mean = sub.map_score(MapFold::Mean);
                     match (&native_mean, &sub_mean) {
                         (Ok(a), Ok(b)) if bits_eq(*a, *b) => {}
-                        (a, b) => v("subsampled", format!("map_score(Mean) native {a:?} vs subsampled {b:?}")),
+                        (a, b) => v(
+                            "subsampled",
+                            format!("map_score(Mean) native {a:?} vs subsampled {b:?}"),
+                        ),
                     }
                 }
             }
@@ -180,7 +236,10 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
             for round in 0..2 {
                 match warm.evaluate(d.clone(), EvalOpts::SCORE_ONLY) {
                     Ok(e) if same_scores(&cold_scores, &scores_of(&*e)) => {}
-                    Ok(_) => v("warm", format!("warm candidate {round} differs from cold evaluate")),
+                    Ok(_) => v(
+                        "warm",
+                        format!("warm candidate {round} differs from cold evaluate"),
+                    ),
                     Err(e) => v("warm", format!("warm candidate {round} failed: {e}")),
                 }
             }
@@ -204,7 +263,14 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
                     }
                     match seq.finish(EvalOpts::SCORE_ONLY) {
                         Ok(s) if s.frame_count == 1 && s.frames.is_empty() => {}
-                        Ok(s) => v("sequence", format!("finish: {} frames held, count {}", s.frames.len(), s.frame_count)),
+                        Ok(s) => v(
+                            "sequence",
+                            format!(
+                                "finish: {} frames held, count {}",
+                                s.frames.len(),
+                                s.frame_count
+                            ),
+                        ),
                         Err(e) => v("sequence", format!("finish failed: {e}")),
                     }
                 }
@@ -214,9 +280,19 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
 
     // Cancellation.
     let stopped = StopOnly::new(AlwaysStop(StopReason::Cancelled));
-    match metric.evaluate(r.clone(), d.clone(), EvalOpts::SCORE_ONLY.with_pulse(&stopped)) {
+    match metric.evaluate(
+        r.clone(),
+        d.clone(),
+        EvalOpts::SCORE_ONLY.with_pulse(&stopped),
+    ) {
         Err(e) if e.error().kind() == ErrorKind::Stopped(StopReason::Cancelled) => {}
-        Err(e) => v("stop", format!("stopped pulse gave {:?}, not Stopped(Cancelled)", e.error().kind())),
+        Err(e) => v(
+            "stop",
+            format!(
+                "stopped pulse gave {:?}, not Stopped(Cancelled)",
+                e.error().kind()
+            ),
+        ),
         Ok(_) => v("stop", "stopped pulse still produced a result".into()),
     }
 
@@ -249,25 +325,43 @@ pub fn check_sequence(metric: &mut dyn Metric, pairs: &[(Image<'_>, Image<'_>)])
     let mut seq = match metric.sequence(SequenceInfo::new().with_frame_count(pairs.len() as u64)) {
         Ok(s) => s,
         Err(e) => {
-            rep.violations.push(Violation { check: "sequence", detail: format!("sequence failed: {e}") });
+            rep.violations.push(Violation {
+                check: "sequence",
+                detail: format!("sequence failed: {e}"),
+            });
             return rep;
         }
     };
-    let accept = |rep: &mut SequenceReport, pushed: u64, frames: Vec<crate::metric::FrameEvaluation>, finishing: bool| {
+    let accept = |rep: &mut SequenceReport,
+                  pushed: u64,
+                  frames: Vec<crate::metric::FrameEvaluation>,
+                  finishing: bool| {
         for f in frames {
             let expected = rep.frames.len() as u64;
             if f.index != expected {
-                rep.violations.push(Violation { check: "sequence", detail: format!("got frame {} where {expected} was due", f.index) });
+                rep.violations.push(Violation {
+                    check: "sequence",
+                    detail: format!("got frame {} where {expected} was due", f.index),
+                });
             }
             if !finishing && pushed.saturating_sub(1).saturating_sub(f.index) > latency {
                 rep.violations.push(Violation {
                     check: "sequence",
-                    detail: format!("frame {} arrived after push {} (latency {latency})", f.index, pushed - 1),
+                    detail: format!(
+                        "frame {} arrived after push {} (latency {latency})",
+                        f.index,
+                        pushed - 1
+                    ),
                 });
             }
             let s = scores_of(&*f.evaluation);
-            if s.first().is_none_or(|(_, v)| !bits_eq(*v, f.evaluation.score())) {
-                rep.violations.push(Violation { check: "sequence", detail: format!("frame {}: score() is not the first scores() value", f.index) });
+            if s.first()
+                .is_none_or(|(_, v)| !bits_eq(*v, f.evaluation.score()))
+            {
+                rep.violations.push(Violation {
+                    check: "sequence",
+                    detail: format!("frame {}: score() is not the first scores() value", f.index),
+                });
             }
             rep.frames.push((f.index, s));
         }
@@ -276,26 +370,49 @@ pub fn check_sequence(metric: &mut dyn Metric, pairs: &[(Image<'_>, Image<'_>)])
         match seq.push(r.clone(), d.clone(), EvalOpts::SCORE_ONLY) {
             Ok(frames) => accept(&mut rep, i as u64 + 1, frames, false),
             Err(e) => {
-                rep.violations.push(Violation { check: "sequence", detail: format!("push {i} failed: {e}") });
+                rep.violations.push(Violation {
+                    check: "sequence",
+                    detail: format!("push {i} failed: {e}"),
+                });
                 return rep;
             }
         }
         if seq.frames_pushed() != i as u64 + 1 {
-            rep.violations.push(Violation { check: "sequence", detail: format!("frames_pushed {} after {} pushes", seq.frames_pushed(), i + 1) });
+            rep.violations.push(Violation {
+                check: "sequence",
+                detail: format!(
+                    "frames_pushed {} after {} pushes",
+                    seq.frames_pushed(),
+                    i + 1
+                ),
+            });
         }
     }
     match seq.finish(EvalOpts::SCORE_ONLY) {
         Ok(summary) => {
             if summary.frame_count != pairs.len() as u64 {
-                rep.violations.push(Violation { check: "sequence", detail: format!("frame_count {} for {} pushes", summary.frame_count, pairs.len()) });
+                rep.violations.push(Violation {
+                    check: "sequence",
+                    detail: format!(
+                        "frame_count {} for {} pushes",
+                        summary.frame_count,
+                        pairs.len()
+                    ),
+                });
             }
             accept(&mut rep, pairs.len() as u64, summary.frames, true);
             rep.pooled = summary.pooled.as_deref().map(scores_of);
         }
-        Err(e) => rep.violations.push(Violation { check: "sequence", detail: format!("finish failed: {e}") }),
+        Err(e) => rep.violations.push(Violation {
+            check: "sequence",
+            detail: format!("finish failed: {e}"),
+        }),
     }
     if rep.frames.len() != pairs.len() {
-        rep.violations.push(Violation { check: "sequence", detail: format!("{} results for {} frames", rep.frames.len(), pairs.len()) });
+        rep.violations.push(Violation {
+            check: "sequence",
+            detail: format!("{} results for {} frames", rep.frames.len(), pairs.len()),
+        });
     }
     rep
 }
@@ -355,9 +472,15 @@ pub fn distort_rgb8(src: &[u8], w: usize, h: usize) -> Vec<u8> {
 /// # Panics
 /// When `data` is shorter than `w·h·3`.
 pub fn rgb8_image(data: &[u8], w: usize, h: usize) -> Image<'_> {
-    zenpixels::PixelSlice::new(data, w as u32, h as u32, w * 3, zenpixels::PixelDescriptor::RGB8_SRGB)
-        .expect("packed rgb8 test image")
-        .into()
+    zenpixels::PixelSlice::new(
+        data,
+        w as u32,
+        h as u32,
+        w * 3,
+        zenpixels::PixelDescriptor::RGB8_SRGB,
+    )
+    .expect("packed rgb8 test image")
+    .into()
 }
 
 /// [`assert_conforms`] on a [`textured_rgb8`] / [`distort_rgb8`] pair of
@@ -380,11 +503,11 @@ pub fn scores(e: &dyn Evaluation) -> Vec<(Cow<'static, str>, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::MetricResult;
     use crate::eval::{ScalarEval, ScoreKind, ScoreSpec};
     use crate::identity::{Implementation, MetricId};
     use crate::input::{InputFormat, is_rgb8_srgb, rgb8_pair};
     use crate::metric::EvalOpts;
-    use crate::error::MetricResult;
     use alloc::boxed::Box;
     use alloc::vec;
     use zenpixels::{PixelDescriptor, PixelSlice};
@@ -405,24 +528,50 @@ mod tests {
         fn accepts(&self, f: &InputFormat) -> bool {
             is_rgb8_srgb(f)
         }
-        fn evaluate(&mut self, r: Image<'_>, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>> {
+        fn evaluate(
+            &mut self,
+            r: Image<'_>,
+            d: Image<'_>,
+            opts: EvalOpts<'_>,
+        ) -> MetricResult<Box<dyn Evaluation>> {
             if !self.forget_checkpoint {
                 opts.checkpoint()?;
             }
             opts.refuse_map("mad8")?;
             let (a, b) = rgb8_pair(&r, &d)?;
-            let s: f64 = a.pixels.iter().zip(b.pixels).map(|(x, y)| f64::from(x.abs_diff(*y))).sum();
-            Ok(Box::new(ScalarEval::single("mad", s / a.pixels.len() as f64)))
+            let s: f64 = a
+                .pixels
+                .iter()
+                .zip(b.pixels)
+                .map(|(x, y)| f64::from(x.abs_diff(*y)))
+                .sum();
+            Ok(Box::new(ScalarEval::single(
+                "mad",
+                s / a.pixels.len() as f64,
+            )))
         }
     }
 
     #[test]
     fn stateless_sequence_conforms() {
-        let imgs: Vec<_> = (0..3).map(|k| (textured_rgb8(8, 6, k), textured_rgb8(8, 6, k + 9))).collect();
-        let pairs: Vec<_> = imgs.iter().map(|(a, b)| (rgb8_image(a, 8, 6), rgb8_image(b, 8, 6))).collect();
-        let rep = check_sequence(&mut Mad8 { forget_checkpoint: false }, &pairs);
+        let imgs: Vec<_> = (0..3)
+            .map(|k| (textured_rgb8(8, 6, k), textured_rgb8(8, 6, k + 9)))
+            .collect();
+        let pairs: Vec<_> = imgs
+            .iter()
+            .map(|(a, b)| (rgb8_image(a, 8, 6), rgb8_image(b, 8, 6)))
+            .collect();
+        let rep = check_sequence(
+            &mut Mad8 {
+                forget_checkpoint: false,
+            },
+            &pairs,
+        );
         assert!(rep.violations.is_empty(), "{:?}", rep.violations);
-        assert_eq!(rep.frames.iter().map(|f| f.0).collect::<Vec<_>>(), [0, 1, 2]);
+        assert_eq!(
+            rep.frames.iter().map(|f| f.0).collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
         assert!(rep.pooled.is_none());
     }
 
@@ -431,8 +580,20 @@ mod tests {
         let (a, b) = (vec![10u8; 12], vec![12u8; 12]);
         let r = Image::from(PixelSlice::new(&a, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap());
         let d = Image::from(PixelSlice::new(&b, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap());
-        assert_conforms(&mut Mad8 { forget_checkpoint: false }, &r, &d);
-        let v = check(&mut Mad8 { forget_checkpoint: true }, &r, &d);
+        assert_conforms(
+            &mut Mad8 {
+                forget_checkpoint: false,
+            },
+            &r,
+            &d,
+        );
+        let v = check(
+            &mut Mad8 {
+                forget_checkpoint: true,
+            },
+            &r,
+            &d,
+        );
         assert_eq!(v.len(), 1, "{v:?}");
         assert_eq!(v[0].check, "stop");
     }

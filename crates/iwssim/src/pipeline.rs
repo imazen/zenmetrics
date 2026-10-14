@@ -693,7 +693,8 @@ impl Iwssim {
     fn za_fit(&mut self, w: usize, h: usize) -> za::MetricResult<()> {
         use za::ResultMetricExt as _;
         if (self.width as usize, self.height as usize) != (w, h) {
-            *self = Iwssim::with_params(w as u32, h as u32, self.params).metric_err_with("iwssim", Error::kind)?;
+            *self = Iwssim::with_params(w as u32, h as u32, self.params)
+                .metric_err_with("iwssim", Error::kind)?;
         }
         Ok(())
     }
@@ -736,7 +737,9 @@ impl za::Metric for Iwssim {
         let (r, d) = za::rgb8_pair(&r, &d)?;
         self.za_fit(r.width, r.height)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
-        let s = self.score(&rp, &dp).metric_err_with("iwssim", Error::kind)?;
+        let s = self
+            .score(&rp, &dp)
+            .metric_err_with("iwssim", Error::kind)?;
         Ok(za_evaluation(s))
     }
 
@@ -749,7 +752,8 @@ impl za::Metric for Iwssim {
         opts.checkpoint()?;
         let r = za::rgb8_view(&r)?;
         self.za_fit(r.width, r.height)?;
-        self.warm_reference(&za::contiguous_rgb8(&r)).metric_err_with("iwssim", Error::kind)?;
+        self.warm_reference(&za::contiguous_rgb8(&r))
+            .metric_err_with("iwssim", Error::kind)?;
         Ok(alloc::boxed::Box::new(IwssimWarm { metric: self }))
     }
 }
@@ -782,7 +786,10 @@ impl za::WarmReference for IwssimWarm<'_> {
                     )),
             );
         }
-        let s = self.metric.score_with_warm_ref(&za::contiguous_rgb8(&d)).metric_err_with("iwssim", Error::kind)?;
+        let s = self
+            .metric
+            .score_with_warm_ref(&za::contiguous_rgb8(&d))
+            .metric_err_with("iwssim", Error::kind)?;
         Ok(za_evaluation(s))
     }
 
@@ -799,11 +806,19 @@ mod za_tests {
     fn generic_surface_conforms_and_warm_reuses() {
         // allow_small lets the conformance pair stay cheap; the warm path
         // must still be bit-identical to cold scoring.
-        let params = IwssimParams { allow_small: true, ..IwssimParams::default() };
+        let params = IwssimParams {
+            allow_small: true,
+            ..IwssimParams::default()
+        };
         let mut m = Iwssim::with_params(8, 8, params).unwrap();
         za::conformance::assert_conforms_rgb8(&mut m, 64, 48);
         let a = za::conformance::textured_rgb8(64, 48, 9);
-        let warm = za::Metric::warm_reference(&mut m, za::conformance::rgb8_image(&a, 64, 48), za::EvalOpts::SCORE_ONLY).unwrap();
+        let warm = za::Metric::warm_reference(
+            &mut m,
+            za::conformance::rgb8_image(&a, 64, 48),
+            za::EvalOpts::SCORE_ONLY,
+        )
+        .unwrap();
         assert!(warm.reuses_reference_work());
     }
 }

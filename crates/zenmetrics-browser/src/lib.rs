@@ -5,7 +5,8 @@ use wasm_bindgen::prelude::*;
 /// Whether an evaluation's primary map is similarity-direction.
 #[allow(dead_code)]
 fn map_is_similarity(e: &dyn zenmetrics_abstractions::Evaluation) -> bool {
-    e.map().is_some_and(|m| m.polarity == zenmetrics_abstractions::MapPolarity::Similarity)
+    e.map()
+        .is_some_and(|m| m.polarity == zenmetrics_abstractions::MapPolarity::Similarity)
 }
 // These are the native CLI adapters themselves, so browser variants preserve
 // each metric's ingress and implementation identity.
@@ -574,8 +575,14 @@ pub fn spatial_map(
         }
         #[cfg(feature = "cpu-fsim")]
         "fsim" | "fsimc" => {
-            let (_, dm) = fsim::fsim_rgb8_with_diffmap(bytemuck::cast_slice(&r), bytemuck::cast_slice(&d), w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = fsim::fsim_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = map_is_similarity(&dm);
@@ -583,8 +590,14 @@ pub fn spatial_map(
         }
         #[cfg(feature = "cpu-haarpsi")]
         "haarpsi" => {
-            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(bytemuck::cast_slice(&r), bytemuck::cast_slice(&d), w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = haarpsi::haarpsi_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = map_is_similarity(&dm);
@@ -592,8 +605,14 @@ pub fn spatial_map(
         }
         #[cfg(feature = "cpu-vsi")]
         "vsi" => {
-            let (_, dm) =
-                vsi::vsi_rgb8_with_diffmap(bytemuck::cast_slice(&r), bytemuck::cast_slice(&d), w, h, w * 3).map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = vsi::vsi_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = map_is_similarity(&dm);
@@ -601,8 +620,14 @@ pub fn spatial_map(
         }
         #[cfg(feature = "cpu-msssim")]
         "msssim" => {
-            let (_, dm) = msssim::msssim_rgb8_with_diffmap(bytemuck::cast_slice(&r), bytemuck::cast_slice(&d), w, h, w * 3)
-                .map_err(|e| fail(e.to_string()))?;
+            let (_, dm) = msssim::msssim_rgb8_with_diffmap(
+                bytemuck::cast_slice(&r),
+                bytemuck::cast_slice(&d),
+                w,
+                h,
+                w * 3,
+            )
+            .map_err(|e| fail(e.to_string()))?;
             result.width = dm.width;
             result.height = dm.height;
             result.similarity = map_is_similarity(&dm);

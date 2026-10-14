@@ -345,8 +345,14 @@ fn haarpsi_diffmap_matches_score() {
     assert_eq!(map.len(), dm.width as usize * dm.height as usize);
     assert!(map.iter().all(|v| v.is_finite()));
     let view = Evaluation::map(&dm).expect("map");
-    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
-    assert_eq!(view.geometry.cell_rect(1, 0).map(|r| (r.x, r.width)), Some((2, 2)));
+    assert_eq!(
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
+    assert_eq!(
+        view.geometry.cell_rect(1, 0).map(|r| (r.x, r.width)),
+        Some((2, 2))
+    );
     assert_eq!(dm.score(), score);
 }
 

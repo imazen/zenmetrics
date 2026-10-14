@@ -211,8 +211,13 @@ impl za::Metric for Mad {
         opts.checkpoint()?;
         opts.refuse_map("mad")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = mad_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("mad", Error::kind)?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single("mad", s.mad).with("hi", s.hi).with("lo", s.lo)))
+        let s = mad_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("mad", Error::kind)?;
+        Ok(alloc::boxed::Box::new(
+            za::ScalarEval::single("mad", s.mad)
+                .with("hi", s.hi)
+                .with("lo", s.lo),
+        ))
     }
 }
 

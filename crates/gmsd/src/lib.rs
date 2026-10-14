@@ -208,7 +208,9 @@ impl Error {
     /// The generic-surface classification.
     fn kind(&self) -> za::ErrorKind {
         match self {
-            Error::StrideTooSmall { .. } | Error::BufferTooSmall { .. } => za::ErrorKind::InvalidInput,
+            Error::StrideTooSmall { .. } | Error::BufferTooSmall { .. } => {
+                za::ErrorKind::InvalidInput
+            }
             Error::DimensionMismatch { .. } => za::ErrorKind::DimensionMismatch,
             Error::TooSmall { .. } => za::ErrorKind::TooSmall,
             #[cfg(feature = "pixels")]
@@ -259,7 +261,8 @@ impl za::Metric for Gmsd {
                 .metric_err_with("gmsd", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("gmsd", Error::kind)?;
+        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("gmsd", Error::kind)?;
         Ok(alloc::boxed::Box::new(
             za::ScalarEval::single("gmsd", s.gmsd).with("mean_gms", s.mean_gms),
         ))
@@ -317,7 +320,17 @@ impl GmsdDiffmap {
     /// Prewitt on the half-resolution grid reaches one more sample, two
     /// input pixels, each way.
     pub fn geometry(&self) -> za::MapGeometry {
-        za::MapGeometry::grid(self.input.0, self.input.1, 0, 0, 2, 2, self.width, self.height).with_halo(2, 2)
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            0,
+            0,
+            2,
+            2,
+            self.width,
+            self.height,
+        )
+        .with_halo(2, 2)
     }
 }
 
@@ -330,7 +343,10 @@ impl za::Evaluation for GmsdDiffmap {
         alloc::boxed::Box::new(
             [
                 (alloc::borrow::Cow::Borrowed("gmsd"), self.score.gmsd),
-                (alloc::borrow::Cow::Borrowed("mean_gms"), self.score.mean_gms),
+                (
+                    alloc::borrow::Cow::Borrowed("mean_gms"),
+                    self.score.mean_gms,
+                ),
             ]
             .into_iter(),
         )

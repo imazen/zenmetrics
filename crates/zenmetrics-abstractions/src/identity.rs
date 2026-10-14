@@ -92,7 +92,11 @@ pub struct Implementation {
 
 impl Implementation {
     /// A CPU implementation with no build id.
-    pub const fn new(crate_name: &'static str, crate_version: &'static str, score_revision: u32) -> Self {
+    pub const fn new(
+        crate_name: &'static str,
+        crate_version: &'static str,
+        score_revision: u32,
+    ) -> Self {
         Self {
             crate_name,
             crate_version,
@@ -190,10 +194,17 @@ impl MetricId {
     /// stays `0.5`). Setting a key twice keeps the last value. Keys stay
     /// sorted, so insertion order never changes the fingerprint.
     #[must_use]
-    pub fn with_config(mut self, key: impl Into<Cow<'static, str>>, value: impl fmt::Display) -> Self {
+    pub fn with_config(
+        mut self,
+        key: impl Into<Cow<'static, str>>,
+        value: impl fmt::Display,
+    ) -> Self {
         let key = key.into();
         let value: Cow<'static, str> = Cow::Owned(value.to_string());
-        match self.config.binary_search_by(|(k, _)| k.as_ref().cmp(key.as_ref())) {
+        match self
+            .config
+            .binary_search_by(|(k, _)| k.as_ref().cmp(key.as_ref()))
+        {
             Ok(i) => self.config[i].1 = value,
             Err(i) => self.config.insert(i, (key, value)),
         }
@@ -358,8 +369,7 @@ fn push_sanitized(out: &mut String, s: &str) {
 /// non-empty, `[a-z0-9_]` only.
 pub fn is_sanitized_column(s: &str) -> bool {
     !s.is_empty()
-        && s
-            .bytes()
+        && s.bytes()
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
@@ -447,7 +457,10 @@ mod tests {
     #[test]
     fn config_order_does_not_matter_and_last_write_wins() {
         let a = base().with_config("b", 2).with_config("a", 1);
-        let b = base().with_config("a", 9).with_config("b", 2).with_config("a", 1);
+        let b = base()
+            .with_config("a", 9)
+            .with_config("b", 2)
+            .with_config("a", 1);
         assert_eq!(a.fingerprint(), b.fingerprint());
         assert_eq!(a.config_value("a"), Some("1"));
         assert_eq!(a.config()[0].0, "a");
@@ -462,8 +475,8 @@ mod tests {
 
     #[test]
     fn column_shapes() {
-        let m = MetricId::new("mad-iqa", Implementation::new("mad-iqa", "0.1.0", 1))
-            .with_variant("V3");
+        let m =
+            MetricId::new("mad-iqa", Implementation::new("mad-iqa", "0.1.0", 1)).with_variant("V3");
         assert_eq!(m.semantic_column("Hi Index"), "mad_iqa_v3_hi_index");
         let col = m.column("hi");
         assert!(col.starts_with("mad_iqa_v3_hi__mad_iqa_r1_cpu_"), "{col}");

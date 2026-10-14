@@ -140,13 +140,16 @@ impl<'a> Planes<'a> {
     /// [`ErrorKind::InvalidInput`] naming the first violated requirement.
     #[track_caller]
     pub fn new(layout: PlaneLayout, planes: Vec<PixelSlice<'a>>) -> MetricResult<Self> {
-        let invalid = |m: Cow<'static, str>| fail(MetricError::new(ErrorKind::InvalidInput).with_message(m));
+        let invalid =
+            |m: Cow<'static, str>| fail(MetricError::new(ErrorKind::InvalidInput).with_message(m));
         if !layout.is_planar() {
             return invalid("plane layout is interleaved".into());
         }
         let descs = layout.planes();
         if descs.len() != planes.len() {
-            return invalid(format!("layout has {} planes, got {}", descs.len(), planes.len()).into());
+            return invalid(
+                format!("layout has {} planes, got {}", descs.len(), planes.len()).into(),
+            );
         }
         let Some(full) = descs.iter().position(|d| !d.is_subsampled()) else {
             return invalid("no full-resolution plane".into());
@@ -156,7 +159,13 @@ impl<'a> Planes<'a> {
         for (i, (d, s)) in descs.iter().zip(&planes).enumerate() {
             let sd = s.descriptor();
             if sd.layout() != ChannelLayout::Gray || sd.channel_type() != d.channel_type {
-                return invalid(format!("plane {i}: expected single-channel {:?}, got {:?}", d.channel_type, sd).into());
+                return invalid(
+                    format!(
+                        "plane {i}: expected single-channel {:?}, got {:?}",
+                        d.channel_type, sd
+                    )
+                    .into(),
+                );
             }
             if (s.width(), s.rows()) != (d.plane_width(width), d.plane_height(height)) {
                 return invalid(
@@ -170,7 +179,9 @@ impl<'a> Planes<'a> {
                     .into(),
                 );
             }
-            if (sd.transfer, sd.signal_range, sd.primaries) != (first.transfer, first.signal_range, first.primaries) {
+            if (sd.transfer, sd.signal_range, sd.primaries)
+                != (first.transfer, first.signal_range, first.primaries)
+            {
                 return invalid(format!("plane {i}: color signaling differs from plane 0").into());
             }
         }
@@ -196,8 +207,9 @@ impl<'a> Planes<'a> {
         let container = (self.planes[0].descriptor().channel_type().byte_size() * 8) as u8;
         if bits == 0 || bits > container {
             return fail(
-                MetricError::new(ErrorKind::InvalidInput)
-                    .with_message(format!("{bits} significant bits in a {container}-bit sample")),
+                MetricError::new(ErrorKind::InvalidInput).with_message(format!(
+                    "{bits} significant bits in a {container}-bit sample"
+                )),
             );
         }
         self.significant_bits = bits;
@@ -358,7 +370,8 @@ pub fn rgb8_view<'a>(img: &Image<'a>) -> MetricResult<Rgb8In<'a>> {
 /// The [`ErrorKind::UnsupportedInput`] error for `format`, naming what the
 /// metric wanted.
 pub fn unsupported(format: &InputFormat, wanted: &'static str) -> MetricError {
-    MetricError::new(ErrorKind::UnsupportedInput).with_message(format!("wanted {wanted}, got {format:?}"))
+    MetricError::new(ErrorKind::UnsupportedInput)
+        .with_message(format!("wanted {wanted}, got {format:?}"))
 }
 
 /// [`ErrorKind::DimensionMismatch`] unless both images have one size.
@@ -368,13 +381,15 @@ pub fn unsupported(format: &InputFormat, wanted: &'static str) -> MetricError {
 #[track_caller]
 pub fn check_same_size(r: &Image<'_>, d: &Image<'_>) -> MetricResult<()> {
     if (r.width(), r.height()) != (d.width(), d.height()) {
-        return fail(MetricError::new(ErrorKind::DimensionMismatch).with_message(format!(
-            "reference {}x{}, distorted {}x{}",
-            r.width(),
-            r.height(),
-            d.width(),
-            d.height()
-        )));
+        return fail(
+            MetricError::new(ErrorKind::DimensionMismatch).with_message(format!(
+                "reference {}x{}, distorted {}x{}",
+                r.width(),
+                r.height(),
+                d.width(),
+                d.height()
+            )),
+        );
     }
     Ok(())
 }
@@ -447,10 +462,16 @@ mod tests {
         let b = vec![0u8; 3 * 2 * 3];
         let ra = Image::from(PixelSlice::new(&a, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap());
         let rb = Image::from(PixelSlice::new(&b, 3, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap());
-        assert_eq!(rgb8_pair(&ra, &rb).unwrap_err().error().kind(), ErrorKind::DimensionMismatch);
+        assert_eq!(
+            rgb8_pair(&ra, &rb).unwrap_err().error().kind(),
+            ErrorKind::DimensionMismatch
+        );
         let g = vec![0u8; 4];
         let rg = Image::from(gray8(&g, 2, 2));
-        assert_eq!(rgb8_pair(&ra, &rg).unwrap_err().error().kind(), ErrorKind::UnsupportedInput);
+        assert_eq!(
+            rgb8_pair(&ra, &rg).unwrap_err().error().kind(),
+            ErrorKind::UnsupportedInput
+        );
         assert!(rgb8_pair(&ra, &ra).is_ok());
     }
 

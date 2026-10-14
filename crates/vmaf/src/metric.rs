@@ -15,8 +15,8 @@ use std::borrow::Cow;
 use std::boxed::Box;
 use std::vec::Vec;
 
-use zenmetrics_abstractions as za;
 use za::zenpixels::{ChannelType, PixelSlice, PlaneSemantic};
+use zenmetrics_abstractions as za;
 
 use crate::{Error, ModelVariant, PoolingMethod, VmafFrameResult, VmafV1Stream, Yuv420Frame};
 
@@ -36,7 +36,9 @@ impl Error {
         match self {
             Error::InvalidModel(_) => za::ErrorKind::InvalidConfig,
             // The scorers' size floors (SPEED's operating size, CAMBI, ADM).
-            Error::InvalidInput(m) if m.contains("too small") || m.contains("below") => za::ErrorKind::TooSmall,
+            Error::InvalidInput(m) if m.contains("too small") || m.contains("below") => {
+                za::ErrorKind::TooSmall
+            }
             Error::NonFiniteInput(_) | Error::InvalidInput(_) => za::ErrorKind::InvalidInput,
         }
     }
@@ -106,7 +108,9 @@ fn accepts_format(format: &za::InputFormat) -> bool {
             .iter()
             .zip(shape)
             .all(|(d, (s, h, v))| d.semantic == s && d.h_subsample == h && d.v_subsample == v)
-        && planes.iter().all(|d| d.channel_type == planes[0].channel_type)
+        && planes
+            .iter()
+            .all(|d| d.channel_type == planes[0].channel_type)
         && matches!(
             (planes[0].channel_type, p.significant_bits),
             (ChannelType::U8, 8) | (ChannelType::U16, 10)
@@ -121,7 +125,11 @@ fn plane_u16(s: &PixelSlice<'_>) -> Vec<u16> {
         let row = s.row(y);
         match s.descriptor().channel_type() {
             ChannelType::U8 => out.extend(row[..w].iter().map(|&v| u16::from(v))),
-            _ => out.extend(row[..w * 2].chunks_exact(2).map(|c| u16::from_ne_bytes([c[0], c[1]]))),
+            _ => out.extend(
+                row[..w * 2]
+                    .chunks_exact(2)
+                    .map(|c| u16::from_ne_bytes([c[0], c[1]])),
+            ),
         }
     }
     out
@@ -148,7 +156,11 @@ impl Frame {
 fn frame(img: &za::Image<'_>) -> za::MetricResult<(Frame, (u32, u32, u8))> {
     if !accepts_format(&img.format()) {
         return za::fail(
-            za::unsupported(&img.format(), "planar YCbCr 4:2:0, U8 (8-bit) or U16 (10-bit)").with_metric("vmaf"),
+            za::unsupported(
+                &img.format(),
+                "planar YCbCr 4:2:0, U8 (8-bit) or U16 (10-bit)",
+            )
+            .with_metric("vmaf"),
         );
     }
     let Some(p) = img.as_planar() else {
@@ -218,7 +230,10 @@ impl za::Metric for Vmaf {
         }
     }
 
-    fn sequence<'m>(&'m mut self, _info: za::SequenceInfo) -> za::MetricResult<Box<dyn za::Sequence + 'm>> {
+    fn sequence<'m>(
+        &'m mut self,
+        _info: za::SequenceInfo,
+    ) -> za::MetricResult<Box<dyn za::Sequence + 'm>> {
         Ok(Box::new(VmafSequence {
             vmaf: *self,
             stream: None,
@@ -267,15 +282,24 @@ impl VmafSequence {
         let (rf, shape) = frame(&r)?;
         let (df, dshape) = frame(&d)?;
         if dshape != shape {
-            return za::fail(za::MetricError::new(za::ErrorKind::DimensionMismatch).with_metric("vmaf").with_message(
-                format!("reference {shape:?}, distorted {dshape:?} (width, height, bits)"),
-            ));
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                    .with_metric("vmaf")
+                    .with_message(format!(
+                        "reference {shape:?}, distorted {dshape:?} (width, height, bits)"
+                    )),
+            );
         }
         match self.shape {
             Some(s) if s != shape => {
-                return za::fail(za::MetricError::new(za::ErrorKind::DimensionMismatch).with_metric("vmaf").with_message(
-                    format!("frame {} is {shape:?}, the sequence started {s:?}", self.pushed),
-                ));
+                return za::fail(
+                    za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                        .with_metric("vmaf")
+                        .with_message(format!(
+                            "frame {} is {shape:?}, the sequence started {s:?}",
+                            self.pushed
+                        )),
+                );
             }
             Some(_) => {}
             None => {
@@ -283,16 +307,22 @@ impl VmafSequence {
                 let (wu, hu) = (w as usize, h as usize);
                 if wu < crate::adm::ADM_MIN_DIM
                     || hu < crate::adm::ADM_MIN_DIM
-                    || (wu < crate::cambi::CAMBI_MIN_WIDTH_HEIGHT && hu < crate::cambi::CAMBI_MIN_WIDTH_HEIGHT)
+                    || (wu < crate::cambi::CAMBI_MIN_WIDTH_HEIGHT
+                        && hu < crate::cambi::CAMBI_MIN_WIDTH_HEIGHT)
                 {
-                    return za::fail(za::MetricError::new(za::ErrorKind::TooSmall).with_metric("vmaf").with_message(format!(
-                        "{w}x{h}: VMAF needs both sides >= {} and one side >= {}",
-                        crate::adm::ADM_MIN_DIM,
-                        crate::cambi::CAMBI_MIN_WIDTH_HEIGHT
-                    )));
+                    return za::fail(
+                        za::MetricError::new(za::ErrorKind::TooSmall)
+                            .with_metric("vmaf")
+                            .with_message(format!(
+                                "{w}x{h}: VMAF needs both sides >= {} and one side >= {}",
+                                crate::adm::ADM_MIN_DIM,
+                                crate::cambi::CAMBI_MIN_WIDTH_HEIGHT
+                            )),
+                    );
                 }
                 self.stream = Some(
-                    VmafV1Stream::new(w as usize, h as usize, bits, self.vmaf.variant).metric_err_with("vmaf", Error::kind)?,
+                    VmafV1Stream::new(w as usize, h as usize, bits, self.vmaf.variant)
+                        .metric_err_with("vmaf", Error::kind)?,
                 );
                 self.shape = Some(shape);
             }
@@ -300,7 +330,9 @@ impl VmafSequence {
         let Some(stream) = self.stream.as_mut() else {
             return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("vmaf"));
         };
-        let results = stream.push(rf.as_yuv(), df.as_yuv()).metric_err_with("vmaf", Error::kind)?;
+        let results = stream
+            .push(rf.as_yuv(), df.as_yuv())
+            .metric_err_with("vmaf", Error::kind)?;
         self.pushed += 1;
         Ok(self.ready(results))
     }
@@ -325,7 +357,10 @@ impl za::Sequence for VmafSequence {
         out
     }
 
-    fn finish(mut self: Box<Self>, opts: za::EvalOpts<'_>) -> za::MetricResult<za::SequenceSummary> {
+    fn finish(
+        mut self: Box<Self>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<za::SequenceSummary> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         if self.failed {
@@ -337,12 +372,15 @@ impl za::Sequence for VmafSequence {
         }
         let Some(stream) = self.stream.take() else {
             return za::fail(
-                za::MetricError::new(za::ErrorKind::SequenceOrder).with_metric("vmaf").with_message("finish with no frames"),
+                za::MetricError::new(za::ErrorKind::SequenceOrder)
+                    .with_metric("vmaf")
+                    .with_message("finish with no frames"),
             );
         };
         let rest = stream.finish().metric_err_with("vmaf", Error::kind)?;
         let frames = self.ready(rest);
-        let pooled = crate::pool_v1_scores(&self.scores, self.vmaf.pooling).metric_err_with("vmaf", Error::kind)?;
+        let pooled = crate::pool_v1_scores(&self.scores, self.vmaf.pooling)
+            .metric_err_with("vmaf", Error::kind)?;
         Ok(za::SequenceSummary::new(
             frames,
             Some(Box::new(za::ScalarEval::single("vmaf", pooled))),
@@ -374,7 +412,11 @@ mod tests {
     }
 
     fn yuv(p: &[Vec<u16>; 3]) -> Yuv420Frame<'_> {
-        Yuv420Frame { y: &p[0], u: &p[1], v: &p[2] }
+        Yuv420Frame {
+            y: &p[0],
+            u: &p[1],
+            v: &p[2],
+        }
     }
 
     /// One synthetic 8-bit 4:2:0 frame: a moving gradient plus texture.
@@ -382,17 +424,28 @@ mod tests {
         let y = (0..W * H)
             .map(|i| {
                 let (x, yy) = (i % W, i / W);
-                (((x + 3 * t) * 3 + yy * 2) % 220 + (i * 7) % 11 + usize::from(i % 5 == 0) * usize::from(noise)).min(255) as u8
+                (((x + 3 * t) * 3 + yy * 2) % 220
+                    + (i * 7) % 11
+                    + usize::from(i % 5 == 0) * usize::from(noise))
+                .min(255) as u8
             })
             .collect();
-        let c = |k: usize| (0..(W / 2) * (H / 2)).map(|i| (100 + (i * k + t) % 50) as u8).collect();
+        let c = |k: usize| {
+            (0..(W / 2) * (H / 2))
+                .map(|i| (100 + (i * k + t) % 50) as u8)
+                .collect()
+        };
         [y, c(3), c(5)]
     }
 
     fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
         za::Planes::new(
             PlaneLayout::ycbcr_420(ChannelType::U8),
-            vec![gray8(&p[0], W, H), gray8(&p[1], W / 2, H / 2), gray8(&p[2], W / 2, H / 2)],
+            vec![
+                gray8(&p[0], W, H),
+                gray8(&p[1], W / 2, H / 2),
+                gray8(&p[2], W / 2, H / 2),
+            ],
         )
         .unwrap()
         .into()
@@ -405,7 +458,11 @@ mod tests {
     #[test]
     fn single_pair_conforms() {
         let (r, d) = (yuv8(0, 0), yuv8(0, 40));
-        za::conformance::assert_conforms(&mut Vmaf::new(ModelVariant::Standard1080p), &image(&r), &image(&d));
+        za::conformance::assert_conforms(
+            &mut Vmaf::new(ModelVariant::Standard1080p),
+            &image(&r),
+            &image(&d),
+        );
     }
 
     /// Every pushed frame comes back once, in order, within the declared
@@ -414,7 +471,9 @@ mod tests {
     #[test]
     fn sequence_matches_the_stream_and_respects_latency() {
         for variant in [ModelVariant::Standard1080p, ModelVariant::HfrStandard1080p] {
-            let frames: Vec<_> = (0..6).map(|t| (yuv8(t, 0), yuv8(t, 30 + t as u8))).collect();
+            let frames: Vec<_> = (0..6)
+                .map(|t| (yuv8(t, 0), yuv8(t, 30 + t as u8)))
+                .collect();
             let images: Vec<_> = frames.iter().map(|(r, d)| (image(r), image(d))).collect();
             let mut m = Vmaf::new(variant);
             let report = za::conformance::check_sequence(&mut m, &images);
@@ -424,11 +483,20 @@ mod tests {
             let mut want = Vec::new();
             for (r, d) in &frames {
                 let (r, d) = (to_u16(r), to_u16(d));
-                want.extend(stream.push(yuv(&r), yuv(&d)).unwrap().into_iter().map(|x| x.score));
+                want.extend(
+                    stream
+                        .push(yuv(&r), yuv(&d))
+                        .unwrap()
+                        .into_iter()
+                        .map(|x| x.score),
+                );
             }
             want.extend(stream.finish().unwrap().into_iter().map(|x| x.score));
             let got: Vec<f64> = report.frames.iter().map(|(_, s)| s[0].1).collect();
-            assert_eq!(got.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), want.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
+            assert_eq!(
+                got.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                want.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
             let pooled = crate::pool_v1_scores(&want, PoolingMethod::Mean).unwrap();
             assert_eq!(report.pooled.unwrap()[0].1.to_bits(), pooled.to_bits());
         }
@@ -439,21 +507,33 @@ mod tests {
     #[test]
     fn ten_bit_planes_are_accepted_sixteen_refused() {
         let p = to_u16(&yuv8(0, 0)).map(|v| v.into_iter().map(|s| s * 4).collect::<Vec<u16>>());
-        let bytes: Vec<Vec<u8>> = p.iter().map(|v| v.iter().flat_map(|s| s.to_ne_bytes()).collect()).collect();
+        let bytes: Vec<Vec<u8>> = p
+            .iter()
+            .map(|v| v.iter().flat_map(|s| s.to_ne_bytes()).collect())
+            .collect();
         let planes = || {
             za::Planes::new(
                 PlaneLayout::ycbcr_420(ChannelType::U16),
-                vec![gray16(&bytes[0], W, H), gray16(&bytes[1], W / 2, H / 2), gray16(&bytes[2], W / 2, H / 2)],
+                vec![
+                    gray16(&bytes[0], W, H),
+                    gray16(&bytes[1], W / 2, H / 2),
+                    gray16(&bytes[2], W / 2, H / 2),
+                ],
             )
             .unwrap()
         };
         let mut m = Vmaf::new(ModelVariant::Standard1080p);
         let ten: za::Image<'_> = planes().with_significant_bits(10).unwrap().into();
         assert!(m.accepts(&ten.format()));
-        let e = m.evaluate(ten.clone(), ten, za::EvalOpts::SCORE_ONLY).unwrap();
+        let e = m
+            .evaluate(ten.clone(), ten, za::EvalOpts::SCORE_ONLY)
+            .unwrap();
         assert!(e.score().is_finite());
         let sixteen: za::Image<'_> = planes().into();
-        let err = m.evaluate(sixteen.clone(), sixteen, za::EvalOpts::SCORE_ONLY).err().unwrap();
+        let err = m
+            .evaluate(sixteen.clone(), sixteen, za::EvalOpts::SCORE_ONLY)
+            .err()
+            .unwrap();
         assert_eq!(err.error().kind(), za::ErrorKind::UnsupportedInput);
     }
 
@@ -462,19 +542,30 @@ mod tests {
         let mut m = Vmaf::new(ModelVariant::Standard1080p);
         let mut seq = m.sequence(za::SequenceInfo::new()).unwrap();
         let (r, d) = (yuv8(0, 0), yuv8(0, 9));
-        seq.push(image(&r), image(&d), za::EvalOpts::SCORE_ONLY).unwrap();
+        seq.push(image(&r), image(&d), za::EvalOpts::SCORE_ONLY)
+            .unwrap();
         fn small(p: &[Vec<u8>; 3]) -> za::Image<'_> {
             za::Image::from(
                 za::Planes::new(
                     PlaneLayout::ycbcr_420(ChannelType::U8),
-                    vec![gray8(&p[0], W, H - 2), gray8(&p[1], W / 2, H / 2 - 1), gray8(&p[2], W / 2, H / 2 - 1)],
+                    vec![
+                        gray8(&p[0], W, H - 2),
+                        gray8(&p[1], W / 2, H / 2 - 1),
+                        gray8(&p[2], W / 2, H / 2 - 1),
+                    ],
                 )
                 .unwrap(),
             )
         }
-        let e = seq.push(small(&r), small(&d), za::EvalOpts::SCORE_ONLY).err().unwrap();
+        let e = seq
+            .push(small(&r), small(&d), za::EvalOpts::SCORE_ONLY)
+            .err()
+            .unwrap();
         assert_eq!(e.error().kind(), za::ErrorKind::DimensionMismatch);
-        let e = seq.push(image(&r), image(&d), za::EvalOpts::SCORE_ONLY).err().unwrap();
+        let e = seq
+            .push(image(&r), image(&d), za::EvalOpts::SCORE_ONLY)
+            .err()
+            .unwrap();
         assert_eq!(e.error().kind(), za::ErrorKind::SequenceOrder);
     }
 }
@@ -492,11 +583,16 @@ mod size_tests {
         fn g(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
             PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
         }
-        let img: za::Image<'_> =
-            za::Planes::new(PlaneLayout::ycbcr_420(ChannelType::U8), vec![g(&y, w, h), g(&c, w / 2, h / 2), g(&c, w / 2, h / 2)])
-                .unwrap()
-                .into();
-        let e = Vmaf::new(ModelVariant::Standard1080p).evaluate(img.clone(), img, za::EvalOpts::SCORE_ONLY).err().unwrap();
+        let img: za::Image<'_> = za::Planes::new(
+            PlaneLayout::ycbcr_420(ChannelType::U8),
+            vec![g(&y, w, h), g(&c, w / 2, h / 2), g(&c, w / 2, h / 2)],
+        )
+        .unwrap()
+        .into();
+        let e = Vmaf::new(ModelVariant::Standard1080p)
+            .evaluate(img.clone(), img, za::EvalOpts::SCORE_ONLY)
+            .err()
+            .unwrap();
         assert_eq!(e.error().kind(), za::ErrorKind::TooSmall);
     }
 }

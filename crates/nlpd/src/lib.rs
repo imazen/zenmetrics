@@ -776,9 +776,7 @@ impl za::Metric for Nlpd {
     }
 
     fn outputs(&self) -> std::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[
-            za::ScoreSpec::new("nlpd", za::ScoreKind::Difference),
-        ];
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("nlpd", za::ScoreKind::Difference)];
         std::borrow::Cow::Borrowed(OUTPUTS)
     }
 

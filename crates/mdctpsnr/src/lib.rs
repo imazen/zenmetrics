@@ -2644,9 +2644,8 @@ impl za::Metric for MdctPsnr {
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[
-            za::ScoreSpec::new("mdctpsnr", za::ScoreKind::Decibels),
-        ];
+        const OUTPUTS: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("mdctpsnr", za::ScoreKind::Decibels)];
         alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
@@ -2665,7 +2664,11 @@ impl za::Metric for MdctPsnr {
         opts.refuse_map("mdctpsnr")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
-        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height).metric_err_with("mdctpsnr", Error::kind)?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single("mdctpsnr", f64::from(s))))
+        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height)
+            .metric_err_with("mdctpsnr", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
+            "mdctpsnr",
+            f64::from(s),
+        )))
     }
 }

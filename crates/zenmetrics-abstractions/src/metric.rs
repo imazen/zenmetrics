@@ -35,7 +35,9 @@ impl Default for EvalOpts<'_> {
 
 impl fmt::Debug for EvalOpts<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EvalOpts").field("map", &self.map).finish_non_exhaustive()
+        f.debug_struct("EvalOpts")
+            .field("map", &self.map)
+            .finish_non_exhaustive()
     }
 }
 
@@ -74,7 +76,10 @@ impl<'a> EvalOpts<'a> {
     /// Observe and stop through `pulse`.
     #[must_use]
     pub fn with_pulse<'b>(self, pulse: &'b dyn Pulse) -> EvalOpts<'b> {
-        EvalOpts { map: self.map, pulse }
+        EvalOpts {
+            map: self.map,
+            pulse,
+        }
     }
 
     /// The pulse as a [`Stop`], for metric internals that take one.
@@ -124,7 +129,10 @@ pub struct ViewingConditions {
 impl ViewingConditions {
     /// `ppd` and an optional peak; extend with the `with_*` builders.
     pub const fn new(ppd: f32, display_peak_nits: Option<f32>) -> Self {
-        Self { ppd, display_peak_nits }
+        Self {
+            ppd,
+            display_peak_nits,
+        }
     }
 
     /// Set the display peak.
@@ -234,7 +242,11 @@ pub struct SequenceSummary {
 
 impl SequenceSummary {
     /// A summary.
-    pub fn new(frames: Vec<FrameEvaluation>, pooled: Option<Box<dyn Evaluation>>, frame_count: u64) -> Self {
+    pub fn new(
+        frames: Vec<FrameEvaluation>,
+        pooled: Option<Box<dyn Evaluation>>,
+        frame_count: u64,
+    ) -> Self {
         Self {
             frames,
             pooled,
@@ -256,7 +268,9 @@ pub trait Metric: Send {
 
     /// The headline's meaning. Default: the first output's kind.
     fn score_kind(&self) -> ScoreKind {
-        self.outputs().first().map_or(ScoreKind::Feature, |s| s.kind)
+        self.outputs()
+            .first()
+            .map_or(ScoreKind::Feature, |s| s.kind)
     }
 
     /// Fully qualified column names for [`Self::outputs`], in order.
@@ -279,7 +293,12 @@ pub trait Metric: Send {
     /// # Errors
     /// Classified by [`ErrorKind`]; a stopped pulse is
     /// [`ErrorKind::Stopped`].
-    fn evaluate(&mut self, r: Image<'_>, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>>;
+    fn evaluate(
+        &mut self,
+        r: Image<'_>,
+        d: Image<'_>,
+        opts: EvalOpts<'_>,
+    ) -> MetricResult<Box<dyn Evaluation>>;
 
     /// Prepare `r` once to score many candidates against it.
     ///
@@ -291,7 +310,11 @@ pub trait Metric: Send {
     ///
     /// # Errors
     /// As [`Self::evaluate`] for the reference alone.
-    fn warm_reference<'m>(&'m mut self, r: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn WarmReference + 'm>> {
+    fn warm_reference<'m>(
+        &'m mut self,
+        r: Image<'_>,
+        opts: EvalOpts<'_>,
+    ) -> MetricResult<Box<dyn WarmReference + 'm>> {
         opts.checkpoint()?;
         if !self.accepts(&r.format()) {
             return fail(crate::input::unsupported(&r.format(), "an accepted format"));
@@ -375,7 +398,12 @@ pub trait Sequence: Send {
     /// [`ErrorKind::DimensionMismatch`] when the size changes mid-sequence;
     /// otherwise as [`Metric::evaluate`]. After an error the session is
     /// unusable: later pushes fail with [`ErrorKind::SequenceOrder`].
-    fn push(&mut self, r: Image<'_>, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Vec<FrameEvaluation>>;
+    fn push(
+        &mut self,
+        r: Image<'_>,
+        d: Image<'_>,
+        opts: EvalOpts<'_>,
+    ) -> MetricResult<Vec<FrameEvaluation>>;
 
     /// Flush held-back frames and pool.
     ///
@@ -395,7 +423,12 @@ struct StatelessSequence<'m, M: ?Sized + Metric> {
 }
 
 impl<M: ?Sized + Metric> Sequence for StatelessSequence<'_, M> {
-    fn push(&mut self, r: Image<'_>, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Vec<FrameEvaluation>> {
+    fn push(
+        &mut self,
+        r: Image<'_>,
+        d: Image<'_>,
+        opts: EvalOpts<'_>,
+    ) -> MetricResult<Vec<FrameEvaluation>> {
         let e = self.metric.evaluate(r, d, opts)?;
         let index = self.pushed;
         self.pushed += 1;

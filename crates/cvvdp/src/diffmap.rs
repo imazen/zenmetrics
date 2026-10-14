@@ -227,12 +227,16 @@ impl zenmetrics_abstractions::Evaluation for CvvdpDiffmap {
     }
 
     fn scores(&self) -> zenmetrics_abstractions::Scores<'_> {
-        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("jod"), f64::from(self.jod))))
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("jod"),
+            f64::from(self.jod),
+        )))
     }
 
     /// Masked error is error-direction: higher = more visible.
     fn map(&self) -> Option<zenmetrics_abstractions::MapView<'_>> {
-        let px = zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        let px =
+            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height).ok()?;
         zenmetrics_abstractions::MapView::new(
             "masked_error",
             px,

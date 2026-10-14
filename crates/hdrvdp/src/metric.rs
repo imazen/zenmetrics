@@ -83,10 +83,16 @@ impl HdrVdpResult {
     /// decomposition is FFT-based and the surround defaults to the
     /// reference's geometric mean).
     pub fn geometry(&self) -> za::MapGeometry {
-        za::MapGeometry::identity(self.width as u32, self.height as u32).with_support(za::Support::Global)
+        za::MapGeometry::identity(self.width as u32, self.height as u32)
+            .with_support(za::Support::Global)
     }
 
-    fn view<'s>(&'s self, name: &'static str, map: &'s [f32], polarity: za::MapPolarity) -> Option<za::MapView<'s>> {
+    fn view<'s>(
+        &'s self,
+        name: &'static str,
+        map: &'s [f32],
+        polarity: za::MapPolarity,
+    ) -> Option<za::MapView<'s>> {
         let px = za::gray_f32_slice(map, self.width as u32, self.height as u32).ok()?;
         za::MapView::new(name, px, polarity, self.geometry()).ok()
     }
@@ -107,7 +113,10 @@ impl za::Evaluation for HdrVdpResult {
                 (std::borrow::Cow::Borrowed("q_mos"), self.q_mos),
                 (std::borrow::Cow::Borrowed("p_det"), self.p_det),
                 (std::borrow::Cow::Borrowed("c_max"), self.c_max),
-                (std::borrow::Cow::Borrowed("visible_fraction"), self.visible_fraction()),
+                (
+                    std::borrow::Cow::Borrowed("visible_fraction"),
+                    self.visible_fraction(),
+                ),
             ]
             .into_iter(),
         )
@@ -596,10 +605,14 @@ mod tests {
 impl Error {
     fn kind(&self) -> za::ErrorKind {
         match self {
-            Error::ChannelMismatch { .. } | Error::ImpossibleValues(_) => za::ErrorKind::InvalidInput,
+            Error::ChannelMismatch { .. } | Error::ImpossibleValues(_) => {
+                za::ErrorKind::InvalidInput
+            }
             Error::DimensionOverflow => za::ErrorKind::Resource,
             Error::SizeMismatch { .. } => za::ErrorKind::DimensionMismatch,
-            Error::InvalidResolution(_) | Error::MissingEmission | Error::SpectralData(_) => za::ErrorKind::InvalidConfig,
+            Error::InvalidResolution(_) | Error::MissingEmission | Error::SpectralData(_) => {
+                za::ErrorKind::InvalidConfig
+            }
             Error::ImageTooSmall { .. } => za::ErrorKind::TooSmall,
         }
     }
@@ -636,7 +649,13 @@ impl HdrVdp {
         Self { par, encoding }
     }
 
-    fn expects(&self) -> Option<(zenpixels::ChannelLayout, zenpixels::TransferFunction, Option<zenpixels::ColorPrimaries>)> {
+    fn expects(
+        &self,
+    ) -> Option<(
+        zenpixels::ChannelLayout,
+        zenpixels::TransferFunction,
+        Option<zenpixels::ColorPrimaries>,
+    )> {
         use zenpixels::{ChannelLayout as L, ColorPrimaries as P, TransferFunction as T};
         Some(match self.encoding {
             ColorEncoding::Luminance => (L::Gray, T::Linear, None),
@@ -656,7 +675,10 @@ fn widen_f32(s: &zenpixels::PixelSlice<'_>) -> Vec<f64> {
     let mut out = Vec::with_capacity(w * h * ch);
     for y in 0..h {
         let row = &bytes[y * s.stride()..y * s.stride() + w * ch * 4];
-        out.extend(row.chunks_exact(4).map(|c| f64::from(f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))));
+        out.extend(
+            row.chunks_exact(4)
+                .map(|c| f64::from(f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))),
+        );
     }
     out
 }
@@ -688,7 +710,8 @@ impl za::Metric for HdrVdp {
     }
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
-        let (Some(d), Some((layout, transfer, primaries))) = (format.packed(), self.expects()) else {
+        let (Some(d), Some((layout, transfer, primaries))) = (format.packed(), self.expects())
+        else {
             return false;
         };
         d.channel_type() == zenpixels::ChannelType::F32
@@ -700,7 +723,10 @@ impl za::Metric for HdrVdp {
     }
 
     fn viewing_conditions(&self) -> Option<za::ViewingConditions> {
-        Some(za::ViewingConditions::new(self.par.pix_per_deg as f32, None))
+        Some(za::ViewingConditions::new(
+            self.par.pix_per_deg as f32,
+            None,
+        ))
     }
 
     fn evaluate(
@@ -713,7 +739,13 @@ impl za::Metric for HdrVdp {
         opts.checkpoint()?;
         for img in [&r, &d] {
             if !za::Metric::accepts(self, &img.format()) {
-                return za::fail(za::unsupported(&img.format(), "the f32 layout/transfer/primaries the encoding declares").with_metric("hdrvdp"));
+                return za::fail(
+                    za::unsupported(
+                        &img.format(),
+                        "the f32 layout/transfer/primaries the encoding declares",
+                    )
+                    .with_metric("hdrvdp"),
+                );
             }
         }
         za::check_same_size(&r, &d)?;
@@ -721,8 +753,19 @@ impl za::Metric for HdrVdp {
             return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("hdrvdp"));
         };
         let (w, h) = (rs.width() as usize, rs.rows() as usize);
-        let res = hdrvdp(&widen_f32(ds), &widen_f32(rs), w, h, self.encoding, &self.par).metric_err_with("hdrvdp", Error::kind)?;
-        let eval = std::boxed::Box::new(HdrVdpEval { res, maps: opts.map.is_some() });
+        let res = hdrvdp(
+            &widen_f32(ds),
+            &widen_f32(rs),
+            w,
+            h,
+            self.encoding,
+            &self.par,
+        )
+        .metric_err_with("hdrvdp", Error::kind)?;
+        let eval = std::boxed::Box::new(HdrVdpEval {
+            res,
+            maps: opts.map.is_some(),
+        });
         match opts.map {
             None => Ok(eval),
             Some(req) => za::apply_map_request(eval, req),
@@ -748,11 +791,19 @@ impl za::Evaluation for HdrVdpEval {
     }
 
     fn map(&self) -> Option<za::MapView<'_>> {
-        if self.maps { za::Evaluation::map(&self.res) } else { None }
+        if self.maps {
+            za::Evaluation::map(&self.res)
+        } else {
+            None
+        }
     }
 
     fn maps(&self) -> Vec<za::MapView<'_>> {
-        if self.maps { za::Evaluation::maps(&self.res) } else { Vec::new() }
+        if self.maps {
+            za::Evaluation::maps(&self.res)
+        } else {
+            Vec::new()
+        }
     }
 
     fn map_score(&self, fold: za::MapFold<'_>) -> za::MetricResult<f64> {
@@ -774,7 +825,9 @@ mod metric_trait_tests {
     use za::Metric as _;
 
     fn gray(px: &[f32], w: usize, h: usize, d: zenpixels::PixelDescriptor) -> za::Image<'_> {
-        zenpixels::PixelSlice::new(za::bytemuck::cast_slice(px), w as u32, h as u32, w * 4, d).unwrap().into()
+        zenpixels::PixelSlice::new(za::bytemuck::cast_slice(px), w as u32, h as u32, w * 4, d)
+            .unwrap()
+            .into()
     }
 
     fn pair(w: usize, h: usize) -> (Vec<f32>, Vec<f32>) {
@@ -796,7 +849,13 @@ mod metric_trait_tests {
         let (r, d) = pair(32, 32);
         let pd = zenpixels::PixelDescriptor::GRAYF32_LINEAR;
         za::conformance::assert_conforms(&mut m, &gray(&r, 32, 32, pd), &gray(&d, 32, 32, pd));
-        let ev = m.evaluate(gray(&r, 32, 32, pd), gray(&d, 32, 32, pd), za::EvalOpts::SCORE_ONLY.with_native_map()).unwrap();
+        let ev = m
+            .evaluate(
+                gray(&r, 32, 32, pd),
+                gray(&d, 32, 32, pd),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .unwrap();
         assert_eq!(ev.maps().len(), 2);
         assert!(ev.as_any().is::<HdrVdpResult>());
     }
@@ -806,16 +865,27 @@ mod metric_trait_tests {
     fn hdrvdp_refuses_mislabeled_input() {
         let mut m = HdrVdp::new(Params::new(30.0), ColorEncoding::Luminance);
         let (r, d) = pair(16, 16);
-        let srgb_gray = zenpixels::PixelDescriptor::GRAYF32_LINEAR.with_transfer(zenpixels::TransferFunction::Srgb);
+        let srgb_gray = zenpixels::PixelDescriptor::GRAYF32_LINEAR
+            .with_transfer(zenpixels::TransferFunction::Srgb);
         let err = m
-            .evaluate(gray(&r, 16, 16, srgb_gray), gray(&d, 16, 16, srgb_gray), za::EvalOpts::SCORE_ONLY)
+            .evaluate(
+                gray(&r, 16, 16, srgb_gray),
+                gray(&d, 16, 16, srgb_gray),
+                za::EvalOpts::SCORE_ONLY,
+            )
             .err()
             .unwrap();
         assert_eq!(err.error().kind(), za::ErrorKind::UnsupportedInput);
         let rgb = HdrVdp::new(Params::new(30.0), ColorEncoding::RgbBt709);
-        assert!(!rgb.accepts(&za::InputFormat::Packed(zenpixels::PixelDescriptor::GRAYF32_LINEAR)));
-        assert!(rgb.accepts(&za::InputFormat::Packed(zenpixels::PixelDescriptor::RGBF32_LINEAR)));
+        assert!(!rgb.accepts(&za::InputFormat::Packed(
+            zenpixels::PixelDescriptor::GRAYF32_LINEAR
+        )));
+        assert!(rgb.accepts(&za::InputFormat::Packed(
+            zenpixels::PixelDescriptor::RGBF32_LINEAR
+        )));
         let xyz = HdrVdp::new(Params::new(30.0), ColorEncoding::Xyz);
-        assert!(!xyz.accepts(&za::InputFormat::Packed(zenpixels::PixelDescriptor::RGBF32_LINEAR)));
+        assert!(!xyz.accepts(&za::InputFormat::Packed(
+            zenpixels::PixelDescriptor::RGBF32_LINEAR
+        )));
     }
 }

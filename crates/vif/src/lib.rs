@@ -376,9 +376,7 @@ impl za::Metric for Vif {
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[
-            za::ScoreSpec::new("vif", za::ScoreKind::Similarity),
-        ];
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("vif", za::ScoreKind::Similarity)];
         alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
@@ -396,7 +394,8 @@ impl za::Metric for Vif {
         opts.checkpoint()?;
         opts.refuse_map("vif")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vif", Error::kind)?;
+        let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("vif", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
     }
 }
@@ -414,9 +413,7 @@ impl za::Metric for Vifvec {
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[
-            za::ScoreSpec::new("vif", za::ScoreKind::Similarity),
-        ];
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("vif", za::ScoreKind::Similarity)];
         alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
@@ -434,7 +431,8 @@ impl za::Metric for Vifvec {
         opts.checkpoint()?;
         opts.refuse_map("vif")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vif", Error::kind)?;
+        let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("vif", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
     }
 }

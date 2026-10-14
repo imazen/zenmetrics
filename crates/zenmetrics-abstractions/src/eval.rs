@@ -7,7 +7,10 @@ use alloc::vec::Vec;
 use zenpixels::PixelCow;
 
 use crate::error::{ErrorKind, MetricError, MetricResult, fail};
-use crate::map::{MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, map_fold, map_subsample_f32, gray_f32_buffer};
+use crate::map::{
+    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, gray_f32_buffer, map_fold,
+    map_subsample_f32,
+};
 
 /// What a scalar output means: direction and scale.
 #[non_exhaustive]
@@ -37,7 +40,10 @@ impl ScoreKind {
     /// [`ScoreKind::Feature`].
     pub const fn higher_is_better(self) -> Option<bool> {
         match self {
-            ScoreKind::Similarity | ScoreKind::Jod | ScoreKind::Quality100 | ScoreKind::Decibels => Some(true),
+            ScoreKind::Similarity
+            | ScoreKind::Jod
+            | ScoreKind::Quality100
+            | ScoreKind::Decibels => Some(true),
             ScoreKind::Difference | ScoreKind::Probability => Some(false),
             ScoreKind::Feature => None,
         }
@@ -191,13 +197,18 @@ impl Evaluation for ScalarEval {
 /// [`ErrorKind::NoMap`] when the evaluation has no map;
 /// [`ErrorKind::InvalidConfig`] for a zero factor.
 #[track_caller]
-pub fn apply_map_request(eval: Box<dyn Evaluation>, request: MapRequest) -> MetricResult<Box<dyn Evaluation>> {
+pub fn apply_map_request(
+    eval: Box<dyn Evaluation>,
+    request: MapRequest,
+) -> MetricResult<Box<dyn Evaluation>> {
     let (factor, reduce) = match request {
         MapRequest::Native => (1, MapReduce::Mean),
         MapRequest::Subsampled { factor, reduce } => (factor, reduce),
     };
     if factor == 0 {
-        return fail(MetricError::new(ErrorKind::InvalidConfig).with_message("map subsample factor 0"));
+        return fail(
+            MetricError::new(ErrorKind::InvalidConfig).with_message("map subsample factor 0"),
+        );
     }
     let mut maps = Vec::new();
     {
@@ -210,7 +221,8 @@ pub fn apply_map_request(eval: Box<dyn Evaluation>, request: MapRequest) -> Metr
             return Ok(eval);
         }
         for m in native {
-            let (vals, w, h) = map_subsample_f32(&m.values(), m.width(), m.height(), factor, reduce)?;
+            let (vals, w, h) =
+                map_subsample_f32(&m.values(), m.width(), m.height(), factor, reduce)?;
             maps.push(OwnedMap {
                 name: m.name,
                 pixels: gray_f32_buffer(&vals, w, h)?,
@@ -219,7 +231,11 @@ pub fn apply_map_request(eval: Box<dyn Evaluation>, request: MapRequest) -> Metr
             });
         }
     }
-    Ok(Box::new(Resampled { inner: eval, maps, served: request }))
+    Ok(Box::new(Resampled {
+        inner: eval,
+        maps,
+        served: request,
+    }))
 }
 
 struct OwnedMap {
@@ -298,7 +314,13 @@ mod tests {
             7.0
         }
         fn map(&self) -> Option<MapView<'_>> {
-            MapView::new("diff", self.0.as_slice(), MapPolarity::Difference, MapGeometry::identity(4, 2)).ok()
+            MapView::new(
+                "diff",
+                self.0.as_slice(),
+                MapPolarity::Difference,
+                MapGeometry::identity(4, 2),
+            )
+            .ok()
         }
         fn as_any(&self) -> &dyn core::any::Any {
             self
@@ -326,9 +348,20 @@ mod tests {
     #[test]
     fn requests_fail_loudly() {
         let k = |e: Box<dyn Evaluation>, r| apply_map_request(e, r).err().unwrap().error().kind();
-        assert_eq!(k(Box::new(ScalarEval::single("x", 1.0)), MapRequest::Native), ErrorKind::NoMap);
-        assert_eq!(k(eval(), MapRequest::subsampled(0)), ErrorKind::InvalidConfig);
-        assert!(apply_map_request(eval(), MapRequest::subsampled(1)).unwrap().as_any().is::<WithMap>());
+        assert_eq!(
+            k(Box::new(ScalarEval::single("x", 1.0)), MapRequest::Native),
+            ErrorKind::NoMap
+        );
+        assert_eq!(
+            k(eval(), MapRequest::subsampled(0)),
+            ErrorKind::InvalidConfig
+        );
+        assert!(
+            apply_map_request(eval(), MapRequest::subsampled(1))
+                .unwrap()
+                .as_any()
+                .is::<WithMap>()
+        );
     }
 
     #[test]

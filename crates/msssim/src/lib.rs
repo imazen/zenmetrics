@@ -174,7 +174,17 @@ impl MsssimDiffmap {
     /// `(i + 5, j + 5)` (the level-0 `'valid'` correlation), so the
     /// border 5 pixels own no cell.
     pub fn geometry(&self) -> za::MapGeometry {
-        za::MapGeometry::grid(self.input.0, self.input.1, 5, 5, 1, 1, self.width, self.height).with_halo(5, 5)
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            5,
+            5,
+            1,
+            1,
+            self.width,
+            self.height,
+        )
+        .with_halo(5, 5)
     }
 }
 
@@ -184,7 +194,10 @@ impl za::Evaluation for MsssimDiffmap {
     }
 
     fn scores(&self) -> za::Scores<'_> {
-        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("msssim"), self.msssim)))
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("msssim"),
+            self.msssim,
+        )))
     }
 
     fn map(&self) -> Option<za::MapView<'_>> {
@@ -264,7 +277,8 @@ impl za::Metric for Msssim {
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("msssim", za::ScoreKind::Similarity)];
+        const OUTPUTS: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("msssim", za::ScoreKind::Similarity)];
         alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
@@ -286,7 +300,8 @@ impl za::Metric for Msssim {
                 .metric_err_with("msssim", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("msssim", Error::kind)?;
+        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("msssim", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("msssim", s)))
     }
 }

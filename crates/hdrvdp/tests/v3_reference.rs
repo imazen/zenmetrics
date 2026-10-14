@@ -321,7 +321,10 @@ fn v3_result_is_a_diffmap() {
     let view = res.map().unwrap();
     let sl = view.pixels.as_slice();
     assert_eq!((sl.width(), sl.rows()), (w as u32, h as u32));
-    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::DetectionProbability);
+    assert_eq!(
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::DetectionProbability
+    );
     assert_eq!(res.maps().len(), 2);
     assert_eq!(res.score(), res.q_jod);
     let kv: Vec<_> = res.scores().collect();

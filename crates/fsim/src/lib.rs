@@ -275,8 +275,17 @@ impl FsimDiffmap {
     pub fn geometry(&self) -> za::MapGeometry {
         let f = self.factor;
         let origin = i64::from(f / 2) + 1 - i64::from(f);
-        za::MapGeometry::grid(self.input.0, self.input.1, origin, origin, f, f, self.width, self.height)
-            .with_support(za::Support::Global)
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            origin,
+            origin,
+            f,
+            f,
+            self.width,
+            self.height,
+        )
+        .with_support(za::Support::Global)
     }
 }
 
@@ -286,14 +295,25 @@ impl za::Evaluation for FsimDiffmap {
     }
 
     fn scores(&self) -> za::Scores<'_> {
-        let fsimc = self.fsimc.map(|v| (alloc::borrow::Cow::Borrowed("fsimc"), v));
-        alloc::boxed::Box::new(fsimc.into_iter().chain(core::iter::once((alloc::borrow::Cow::Borrowed("fsim"), self.fsim))))
+        let fsimc = self
+            .fsimc
+            .map(|v| (alloc::borrow::Cow::Borrowed("fsimc"), v));
+        alloc::boxed::Box::new(fsimc.into_iter().chain(core::iter::once((
+            alloc::borrow::Cow::Borrowed("fsim"),
+            self.fsim,
+        ))))
     }
 
     /// `FSIMmap` (`GSim · PCSim`, luma only).
     fn map(&self) -> Option<za::MapView<'_>> {
         let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
-        za::MapView::new("similarity", px, za::MapPolarity::Similarity, self.geometry()).ok()
+        za::MapView::new(
+            "similarity",
+            px,
+            za::MapPolarity::Similarity,
+            self.geometry(),
+        )
+        .ok()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -417,12 +437,15 @@ impl za::Metric for Fsim {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) =
-                fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("fsim", Error::kind)?;
+            let (_, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("fsim", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("fsim", Error::kind)?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single("fsimc", s.fsimc).with("fsim", s.fsim)))
+        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("fsim", Error::kind)?;
+        Ok(alloc::boxed::Box::new(
+            za::ScalarEval::single("fsimc", s.fsimc).with("fsim", s.fsim),
+        ))
     }
 }
 

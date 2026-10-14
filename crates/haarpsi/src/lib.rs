@@ -365,7 +365,17 @@ impl HaarpsiDiffmap {
     /// each way.
     pub fn geometry(&self) -> za::MapGeometry {
         let (c, halo) = if self.subsampled { (2, 8) } else { (1, 4) };
-        za::MapGeometry::grid(self.input.0, self.input.1, 0, 0, c, c, self.width, self.height).with_halo(halo, halo)
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            0,
+            0,
+            c,
+            c,
+            self.width,
+            self.height,
+        )
+        .with_halo(halo, halo)
     }
 }
 
@@ -375,12 +385,21 @@ impl za::Evaluation for HaarpsiDiffmap {
     }
 
     fn scores(&self) -> za::Scores<'_> {
-        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("haarpsi"), self.haarpsi)))
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("haarpsi"),
+            self.haarpsi,
+        )))
     }
 
     fn map(&self) -> Option<za::MapView<'_>> {
         let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
-        za::MapView::new("similarity", px, za::MapPolarity::Similarity, self.geometry()).ok()
+        za::MapView::new(
+            "similarity",
+            px,
+            za::MapPolarity::Similarity,
+            self.geometry(),
+        )
+        .ok()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -443,7 +462,8 @@ impl za::Metric for Haarpsi {
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("haarpsi", za::ScoreKind::Similarity)];
+        const OUTPUTS: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("haarpsi", za::ScoreKind::Similarity)];
         alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
@@ -461,11 +481,13 @@ impl za::Metric for Haarpsi {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) = haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
-                .metric_err_with("haarpsi", Error::kind)?;
+            let (_, dm) =
+                haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                    .metric_err_with("haarpsi", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("haarpsi", Error::kind)?;
+        let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("haarpsi", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("haarpsi", s)))
     }
 }

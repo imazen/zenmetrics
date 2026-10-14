@@ -4322,9 +4322,13 @@ use zenmetrics_abstractions as za;
 impl Error {
     fn kind(&self) -> za::ErrorKind {
         match self {
-            Error::DimensionMismatch { .. } | Error::PlaneShapeMismatch { .. } => za::ErrorKind::DimensionMismatch,
+            Error::DimensionMismatch { .. } | Error::PlaneShapeMismatch { .. } => {
+                za::ErrorKind::DimensionMismatch
+            }
             Error::NoWarmReference => za::ErrorKind::Internal,
-            Error::InvalidImageSize { .. } | Error::TooShortForFilter { .. } | Error::NoFrames => za::ErrorKind::TooSmall,
+            Error::InvalidImageSize { .. } | Error::TooShortForFilter { .. } | Error::NoFrames => {
+                za::ErrorKind::TooSmall
+            }
             Error::InvalidFps => za::ErrorKind::InvalidConfig,
             Error::MixedSampleTypes => za::ErrorKind::UnsupportedInput,
         }
@@ -4375,7 +4379,10 @@ impl za::Metric for Cvvdp {
         let d = &self.params.display;
         let g = &self.geometry;
         za::MetricId::new("cvvdp", za::implementation!(SCORE_REVISION))
-            .with_reference(alloc::format!("pycvvdp {}", crate::PYCVVDP_REFERENCE_VERSION))
+            .with_reference(alloc::format!(
+                "pycvvdp {}",
+                crate::PYCVVDP_REFERENCE_VERSION
+            ))
             .with_config("y_peak", d.y_peak)
             .with_config("y_black", d.y_black)
             .with_config("y_refl", d.y_refl)
@@ -4385,7 +4392,13 @@ impl za::Metric for Cvvdp {
             .with_config("k_refl", d.k_refl)
             .with_config(
                 "geometry",
-                alloc::format!("{}x{}@{}m/{}in", g.resolution_w, g.resolution_h, g.distance_m, g.diagonal_inches),
+                alloc::format!(
+                    "{}x{}@{}m/{}in",
+                    g.resolution_w,
+                    g.resolution_h,
+                    g.distance_m,
+                    g.diagonal_inches
+                ),
             )
             .with_config("ppd", self.ppd)
             .with_config("perf_mode", alloc::format!("{:?}", self.params.perf_mode))
@@ -4401,7 +4414,10 @@ impl za::Metric for Cvvdp {
     }
 
     fn viewing_conditions(&self) -> Option<za::ViewingConditions> {
-        Some(za::ViewingConditions::new(self.ppd, Some(self.params.display.y_peak)))
+        Some(za::ViewingConditions::new(
+            self.ppd,
+            Some(self.params.display.y_peak),
+        ))
     }
 
     fn evaluate(
@@ -4416,11 +4432,16 @@ impl za::Metric for Cvvdp {
         self.za_fit(r.width, r.height)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
         if let Some(req) = opts.map {
-            let (_, dm) = self.score_and_diffmap(&rp, &dp).metric_err_with("cvvdp", Error::kind)?;
+            let (_, dm) = self
+                .score_and_diffmap(&rp, &dp)
+                .metric_err_with("cvvdp", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
         let jod = self.score(&rp, &dp).metric_err_with("cvvdp", Error::kind)?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single("jod", f64::from(jod))))
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
+            "jod",
+            f64::from(jod),
+        )))
     }
 
     fn warm_reference<'m>(
@@ -4432,7 +4453,8 @@ impl za::Metric for Cvvdp {
         opts.checkpoint()?;
         let r = za::rgb8_view(&r)?;
         self.za_fit(r.width, r.height)?;
-        self.warm_reference(&za::contiguous_rgb8(&r)).metric_err_with("cvvdp", Error::kind)?;
+        self.warm_reference(&za::contiguous_rgb8(&r))
+            .metric_err_with("cvvdp", Error::kind)?;
         Ok(alloc::boxed::Box::new(CvvdpWarm { metric: self }))
     }
 }
@@ -4468,11 +4490,23 @@ impl za::WarmReference for CvvdpWarm<'_> {
         let dp = za::contiguous_rgb8(&d);
         if let Some(req) = opts.map {
             let mut map = Vec::new();
-            let jod = self.metric.score_with_warm_ref_diffmap(&dp, &mut map).metric_err_with("cvvdp", Error::kind)?;
-            return za::apply_map_request(alloc::boxed::Box::new(self.metric.za_diffmap(map, jod)), req);
+            let jod = self
+                .metric
+                .score_with_warm_ref_diffmap(&dp, &mut map)
+                .metric_err_with("cvvdp", Error::kind)?;
+            return za::apply_map_request(
+                alloc::boxed::Box::new(self.metric.za_diffmap(map, jod)),
+                req,
+            );
         }
-        let jod = self.metric.score_with_warm_ref(&dp).metric_err_with("cvvdp", Error::kind)?;
-        Ok(alloc::boxed::Box::new(za::ScalarEval::single("jod", f64::from(jod))))
+        let jod = self
+            .metric
+            .score_with_warm_ref(&dp)
+            .metric_err_with("cvvdp", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
+            "jod",
+            f64::from(jod),
+        )))
     }
 
     fn reuses_reference_work(&self) -> bool {

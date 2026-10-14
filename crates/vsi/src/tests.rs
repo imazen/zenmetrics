@@ -251,8 +251,15 @@ fn vsi_diffmap_matches_score() {
     assert_eq!(plain, score);
     assert_eq!(dm.map().len(), w * h);
     let view = Evaluation::map(&dm).expect("map");
-    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
-    assert_eq!(view.geometry, zenmetrics_abstractions::MapGeometry::identity(48, 40).with_support(zenmetrics_abstractions::Support::Global));
+    assert_eq!(
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
+    assert_eq!(
+        view.geometry,
+        zenmetrics_abstractions::MapGeometry::identity(48, 40)
+            .with_support(zenmetrics_abstractions::Support::Global)
+    );
 }
 
 /// Regression: at min-dim ≥ 384 the reference decimates by `F ≥ 2`. The map
@@ -269,7 +276,10 @@ fn vsi_diffmap_is_decimated_at_large_sizes() {
     assert_eq!((dm.width, dm.height), (201, 195));
     assert_eq!(dm.map().len(), 201 * 195);
     let last_row = &dm.map()[194 * 201..];
-    assert!(last_row.iter().all(|v| v.is_finite() && *v > 0.0), "tail written");
+    assert!(
+        last_row.iter().all(|v| v.is_finite() && *v > 0.0),
+        "tail written"
+    );
     let g = Evaluation::map(&dm).unwrap().geometry;
     // F = 2, s = 1: sample k averages input 2k, 2k+1.
     assert_eq!(g.cell_rect(3, 0).map(|r| (r.x, r.width)), Some((6, 2)));
