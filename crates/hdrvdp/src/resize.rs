@@ -120,14 +120,29 @@ pub fn imresize(
 
     // Horizontal pass: width → out_width. Slicing the per-output weight/index
     // rows keeps the tap loop bounds-check-free; the accumulation order per
-    // output is unchanged (taps ascending).
+    // output is unchanged (taps ascending). Four outputs at a time hides
+    // the tap-loop latency — each lane keeps its own ascending order.
     let hc = contributions(width, out_width);
     let mut tmp = vec![0.0; out_width * height];
     for (row, src) in tmp
         .chunks_exact_mut(out_width)
         .zip(image.chunks_exact(width))
     {
-        for (x, o) in row.iter_mut().enumerate() {
+        let mut x = 0usize;
+        while x + 4 <= out_width {
+            let mut acc = [0.0f64; 4];
+            for t in 0..hc.taps {
+                for j in 0..4 {
+                    let base = (x + j) * hc.taps;
+                    acc[j] += hc.weights[base + t] * src[hc.indices[base + t]];
+                }
+            }
+            for j in 0..4 {
+                row[x + j] = acc[j];
+            }
+            x += 4;
+        }
+        while x < out_width {
             let base = x * hc.taps;
             let wr = &hc.weights[base..base + hc.taps];
             let ir = &hc.indices[base..base + hc.taps];
@@ -135,7 +150,8 @@ pub fn imresize(
             for (w, &i) in wr.iter().zip(ir) {
                 acc += w * src[i];
             }
-            *o = acc;
+            row[x] = acc;
+            x += 1;
         }
     }
 

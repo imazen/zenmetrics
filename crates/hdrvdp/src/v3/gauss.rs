@@ -20,6 +20,18 @@
 
 use super::fft64::{self, Pad};
 
+type GaussKKey = (usize, usize, u64, bool, bool);
+
+thread_local! {
+    /// Per-thread Gaussian transfer planes for the FFT path, keyed on
+    /// `(pw, ph, σ, do_norm, relaxed)`. Each `fast_gauss` call otherwise
+    /// rebuilds `pw·ph` `exp` evaluations (4 MP at 1024² input); the metric
+    /// runs the same σ against reference and test.
+    static GAUSS_K_CACHE: core::cell::RefCell<
+        std::collections::HashMap<GaussKKey, Vec<f64>>,
+    > = core::cell::RefCell::new(std::collections::HashMap::new());
+}
+
 /// `matlab_style_gauss2D` — `fspecial('gaussian', k, sigma)`: an odd square
 /// kernel, taps below `eps·max` zeroed, normalised to sum 1 (before the
 /// `do_norm` adjustment the caller applies).
@@ -104,28 +116,43 @@ pub(super) fn fast_gauss(
     assert_eq!(x.len(), w * h, "fast_gauss: size");
     if sigma >= 4.3 {
         // Fourier path: K = exp(−0.5·(KX²+KY²)·σ²) on the 2× lattice.
+        // The transfer plane is a pure function of (dims, σ, do_norm,
+        // relaxed) — `local_adapt` + masking rebuild the same `pw·ph`
+        // lattice every call, so cache it per thread.
         let (pw, ph) = (2 * w, 2 * h);
-        let mut k = if relaxed {
-            super::trans64::gauss_kern(pw, ph, sigma)
-        } else {
-            vec![0.0; pw * ph]
-        };
-        if !relaxed {
-            for y in 0..ph {
-                let ky = ((0.5 + y as f64 / ph as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
-                for xx in 0..pw {
-                    let kx = ((0.5 + xx as f64 / pw as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
-                    k[y * pw + xx] = (-0.5 * (kx * kx + ky * ky) * sigma * sigma).exp();
+        let key = (pw, ph, sigma.to_bits(), do_norm, relaxed);
+        GAUSS_K_CACHE.with(|c| {
+            let mut map = c.borrow_mut();
+            if map.len() >= 8 && !map.contains_key(&key) {
+                map.clear();
+            }
+            let k = map.entry(key).or_insert_with(|| {
+                let mut k = if relaxed {
+                    super::trans64::gauss_kern(pw, ph, sigma)
+                } else {
+                    vec![0.0; pw * ph]
+                };
+                if !relaxed {
+                    for y in 0..ph {
+                        let ky =
+                            ((0.5 + y as f64 / ph as f64) % 1.0 - 0.5) * core::f64::consts::TAU;
+                        for xx in 0..pw {
+                            let kx = ((0.5 + xx as f64 / pw as f64) % 1.0 - 0.5)
+                                * core::f64::consts::TAU;
+                            k[y * pw + xx] = (-0.5 * (kx * kx + ky * ky) * sigma * sigma).exp();
+                        }
+                    }
                 }
-            }
-        }
-        if !do_norm {
-            let mean = k.iter().sum::<f64>() / k.len() as f64;
-            for v in k.iter_mut() {
-                *v /= mean;
-            }
-        }
-        fft64::conv_fft_pad(x, w, h, &k, pw, ph, pad, relaxed)
+                if !do_norm {
+                    let mean = k.iter().sum::<f64>() / k.len() as f64;
+                    for v in k.iter_mut() {
+                        *v /= mean;
+                    }
+                }
+                k
+            });
+            fft64::conv_fft_pad(x, w, h, k, pw, ph, pad, relaxed)
+        })
     } else {
         // Direct path: matlab-style kernel, conv 'same'.
         let ksize = (sigma * 6.0).round() as usize;
