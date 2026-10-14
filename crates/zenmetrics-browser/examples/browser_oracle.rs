@@ -1,4 +1,5 @@
 //! Native library oracle, independent of the browser binding and worker ingress.
+use zenmetrics_abstractions::zenpixels;
 use zensim::{DiffmapWeighting, RgbSlice, Zensim, ZensimProfile};
 fn main() {
     let (w, h) = (64, 64);
@@ -132,6 +133,134 @@ fn main() {
             "cellWidth":g.cell_width,"cellHeight":g.cell_height,"cellsX":g.cells_x,"cellsY":g.cells_y
         }}));
     }
+    // Maps served through the unified metric interface itself.
+    fn packed(px: &[u8], w: usize, h: usize) -> zenmetrics_abstractions::Image<'_> {
+        zenmetrics_abstractions::Image::from(
+            zenpixels::PixelSlice::new(
+                px,
+                w as u32,
+                h as u32,
+                w * 3,
+                zenpixels::PixelDescriptor::RGB8_SRGB,
+            )
+            .unwrap(),
+        )
+    }
+    let mut native = |name: &str,
+                      metric: &mut dyn zenmetrics_abstractions::Metric,
+                      r: zenmetrics_abstractions::Image<'_>,
+                      d: zenmetrics_abstractions::Image<'_>| {
+        let opts = zenmetrics_abstractions::EvalOpts::SCORE_ONLY.with_native_map();
+        let eval = metric.evaluate(r, d, opts).unwrap();
+        let map = eval.map().unwrap();
+        let g = map.geometry;
+        let similarity = map.polarity == zenmetrics_abstractions::MapPolarity::Similarity;
+        maps.insert(name.into(),serde_json::json!({"width":map.width(),"height":map.height(),"similarity":similarity,"values":map.values(),"geometry":{
+            "inputWidth":g.input_width,"inputHeight":g.input_height,"originX":g.origin_x,"originY":g.origin_y,
+            "cellWidth":g.cell_width,"cellHeight":g.cell_height,"cellsX":g.cells_x,"cellsY":g.cells_y
+        }}));
+    };
+    // One larger pair for all of them: NLPD needs both sides >= 96, vifvec 72,
+    // IW-SSIM 176, and VMAF one side >= 216. Horizontal bands lose contrast
+    // (MAD's high-quality strategy ignores masked errors); elsewhere SPEED's
+    // chroma sees the blue channel halved in vertical stripes.
+    let (lw, lh) = (480, 352);
+    let large: Vec<u8> = (0..lh)
+        .flat_map(|y| {
+            (0..lw).flat_map(move |x| {
+                (0..3).map(move |c| ((x * 7 + y * 5 + c * 61 + (x * y) % 23) % 256) as u8)
+            })
+        })
+        .collect();
+    let striped: Vec<u8> = large
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| {
+            let (x, y, c) = ((i / 3) % lw, i / 3 / lw, i % 3);
+            if (y / 24) % 3 == 0 {
+                v / 4 * 3 + 32
+            } else if c == 2 && (x / 32) % 3 == 0 {
+                v >> 1
+            } else {
+                v
+            }
+        })
+        .collect();
+    let mut iw = iwssim::Iwssim::new(lw as u32, lh as u32).unwrap();
+    let rgb: [(&str, &mut dyn zenmetrics_abstractions::Metric); 7] = [
+        ("nlpd", &mut nlpd::Nlpd),
+        ("psnrhvs", &mut psnrhvs::Psnrhvs),
+        ("mdctpsnr", &mut mdctpsnr::MdctPsnr),
+        ("mad", &mut mad_iqa::Mad),
+        ("iwssim", &mut iw),
+        ("vif", &mut vif::Vif),
+        ("vifvec", &mut vif::Vifvec),
+    ];
+    for (name, metric) in rgb {
+        native(
+            name,
+            metric,
+            packed(&large, lw, lh),
+            packed(&striped, lw, lh),
+        );
+    }
+    // BT.709 limited-range 8-bit 4:2:0 with 2×2 box-averaged chroma, the
+    // `vmaf-v1` ingress contract, restated here independently of the CLI.
+    let yuv420 = |rgb: &[u8]| {
+        let (mut y, mut cb, mut cr) = (
+            vec![0u8; lw * lh],
+            vec![0u8; lw * lh / 4],
+            vec![0u8; lw * lh / 4],
+        );
+        for by in 0..lh / 2 {
+            for bx in 0..lw / 2 {
+                let (mut u, mut v) = (0.0f64, 0.0f64);
+                for p in [0, 1]
+                    .into_iter()
+                    .flat_map(|dy| [0, 1].map(|dx| (2 * by + dy) * lw + 2 * bx + dx))
+                {
+                    let [r, g, b] = [0, 1, 2].map(|c| f64::from(rgb[3 * p + c]) / 255.0);
+                    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    y[p] = (16.0_f64 + 219.0 * lum).round().clamp(16.0, 235.0) as u8;
+                    u += -0.114572 * r - 0.385428 * g + 0.5 * b;
+                    v += 0.5 * r - 0.454153 * g - 0.045847 * b;
+                }
+                cb[by * (lw / 2) + bx] =
+                    (128.0_f64 + 224.0 * u / 4.0).round().clamp(16.0, 240.0) as u8;
+                cr[by * (lw / 2) + bx] =
+                    (128.0_f64 + 224.0 * v / 4.0).round().clamp(16.0, 240.0) as u8;
+            }
+        }
+        [y, cb, cr]
+    };
+    fn planes(
+        [y, cb, cr]: &[Vec<u8>; 3],
+        w: usize,
+        h: usize,
+    ) -> zenmetrics_abstractions::Image<'_> {
+        let plane = |p, w: usize, h: usize| {
+            zenpixels::PixelSlice::new(p, w as u32, h as u32, w, zenpixels::PixelDescriptor::GRAY8)
+                .unwrap()
+        };
+        zenmetrics_abstractions::Image::from(
+            zenmetrics_abstractions::Planes::new(
+                zenpixels::PlaneLayout::ycbcr_420(zenpixels::ChannelType::U8),
+                vec![
+                    plane(y, w, h),
+                    plane(cb, w / 2, h / 2),
+                    plane(cr, w / 2, h / 2),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+    let (ly, sy) = (yuv420(&large), yuv420(&striped));
+    native(
+        "vmaf-v1",
+        &mut vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p),
+        planes(&ly, lw, lh),
+        planes(&sy, lw, lh),
+    );
     let (ow, oh) = (257, 253);
     let odd: Vec<u8> = (0..ow * oh * 4)
         .filter(|i| i % 4 != 3)

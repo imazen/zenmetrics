@@ -1,0 +1,13 @@
+[package]
+name = "burnbench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+burn = { version = "0.22.0", features = ["flex", "cuda", "vulkan", "fusion", "autotune"] }
+burn-store = "0.22.0"
+[build-dependencies]
+burn-onnx = "0.22.0"
+[profile.release]
+lto = "thin"

@@ -1,0 +1,7 @@
+run-heavy: mem-cap=12G (cgroup, hard) jobs=16/20 avail=23559MiB :: venv/bin/python -I scripts/bench.py models 8 10
+# torch 2.14.1+cpu ort 1.31.0 tract 0.23.8 threads=8 rounds=10
+vgg16lpips_256	torch min=45.9 med=47.1ms	ort min=46.2 med=47.5ms
+vgg16lpips_512	torch min=188.6 med=190.6ms	ort min=145.7 med=146.9ms
+resnet50_224	torch min=16.2 med=16.4ms	ort min=12.3 med=12.8ms
+resnet50_384	torch min=33.3 med=33.4ms	ort min=33.6 med=35.8ms
+run-heavy: done rc=0 10s | peak-RSS 1.34GiB | min-avail 22218MiB | peak-load 10.74

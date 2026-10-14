@@ -312,3 +312,51 @@ HaarPSI windows. FSIM, FSIMc, GMSD, HaarPSI, MS-SSIM and VSI maps match the nati
 oracle exactly on the 64×64 fixture; existing score/model, cancellation,
 worker isolation and timing checks also pass. This validates CPU browser
 scoring, independently of benchmark resource admission and GPU acceptance.
+
+## Unified-interface maps for eight more metrics, 2026-10-14
+
+The selector adds NLPD, PSNR-HVS, mDCT-PSNR, MAD, IW-SSIM, VIF, vifvec and
+VMAF v1 (`feaafabd`). Each route calls the metric's own `Metric::evaluate`
+with a native-map request and shows its primary map. All maps and their
+semantics: [native maps](UNIFIED_NATIVE_MAPS_2026-10-14.md).
+
+| Route | Map | Shows |
+| --- | --- | --- |
+| `nlpd` | `level_0` | level-0 squared normalized-Laplacian difference (a score component) |
+| `psnrhvs` | `csf_error` | per-8×8-block CSF-weighted coefficient error, channel mean |
+| `mdctpsnr` | `detection` | per-window detection probability |
+| `mad` | `hi` | high-quality strategy: contrast-masked local MSE over MAD's interior |
+| `iwssim` | `cs_0` | scale-0 contrast-structure similarity |
+| `vif` | `info_loss_0` | scale-0 information loss `den − num` (a contribution) |
+| `vifvec` | `info_loss_l1_b1` | level-1 band-1 information loss per 3×3 block |
+| `vmaf-v1` | `speed_u` | SPEED chroma-U block difference, 160-pixel cells |
+
+`vmaf` (v0.6.1) has no map route; the maps belong to the v1.0.16 model. The
+VMAF route converts RGB to 8-bit BT.709 limited-range 4:2:0 with the same
+function as the `vmaf-v1` score. Size limits are the metrics' own and fail
+explicitly: NLPD needs both sides ≥ 96, vifvec ≥ 72 and IW-SSIM ≥ 176; VMAF
+needs even dimensions, both sides ≥ 33 and one ≥ 216. VIF losses can be
+negative where the distorted image carries more information than the
+reference; the visualization clamps them at zero and raw values keep the sign.
+
+Validation:
+
+- Native `cargo test -p zenmetrics-browser`: each route returns the direct
+  `Metric::evaluate` map bit for bit through strided RGBA ingress, VMAF on a
+  480×352 chroma-distorted pair (3×2 cells). Identical 257×253 inputs give
+  exact zeros for NLPD, PSNR-HVS, mDCT-PSNR and MAD, IW-SSIM `cs` within one
+  f32 ulp of 1, and VIF losses in (0, 1e-9): 2.2e-11 for VIFp and 4.3e-14 for
+  vifvec, from the reference's `σ12/(σ1² + 1e-10)` gain and `σv²` floor.
+- `check-pages.py` in headless Chromium 153 against `browser_oracle` on a
+  480×352 pair: NLPD, PSNR-HVS, MAD, VIF, vifvec and VMAF v1 match the native
+  oracle exactly, and the check asserts it. IW-SSIM differs by at most 1.8e-7
+  (29,634 of 160,740 samples) and mDCT-PSNR by at most 4.5e-6 (21,596 of
+  158,780); the check records both, as it does for Butteraugli, DSSIM and
+  CVVDP. mDCT-PSNR calls the platform libm (glibc natively, Rust's own on
+  wasm32), which its source names as its one intentional cross-platform drift;
+  IW-SSIM claims bit-identical scores across thread counts, not SIMD tiers.
+  Neither cause was isolated. The oracle restates the 4:2:0 conversion
+  independently, so VMAF's exact match also checks the browser's conversion.
+- The same check refuses undersized NLPD, vifvec, IW-SSIM and VMAF requests
+  and an odd-sized VMAF request, repeats the identity results in WASM, and
+  selects all eight routes on the 768×512 demo.
