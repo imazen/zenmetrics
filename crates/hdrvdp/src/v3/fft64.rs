@@ -1059,8 +1059,22 @@ impl Plan2 {
         let perm = self.rows.gather_perm();
         let xmap: Vec<usize> = (0..w).map(|px| Self::pad_index(px, src_w, pad)).collect();
         let ymap: Vec<usize> = (0..h).map(|py| Self::pad_index(py, src_h, pad)).collect();
+        // `Replicate`/`Constant` give every pad row (y ≥ src_h) the same
+        // input, hence the same transform — copy the canonical row instead
+        // of re-running the FFT per block. `Symmetric` rows differ.
+        let dedup_pad = !matches!(pad, Pad::Symmetric) && h > src_h;
+        let mut pad_row_ready = false;
         for y0 in (0..h).step_by(8) {
             let rws = (h - y0).min(8);
+            if dedup_pad && y0 >= src_h && pad_row_ready {
+                for j in 0..rws {
+                    self.pre
+                        .copy_within(src_h * stride..src_h * stride + w, (y0 + j) * stride);
+                    self.pim
+                        .copy_within(src_h * stride..src_h * stride + w, (y0 + j) * stride);
+                }
+                continue;
+            }
             // Imaginary lanes are all +0 for real input — one memset per
             // row block instead of an interleaved store per lane.
             self.im8[..w * 8].fill(0.0);
@@ -1202,6 +1216,9 @@ impl Plan2 {
                     }
                 }
             }
+            // The block covering `src_h` has now written the canonical pad
+            // row — all later all-pad blocks can copy it.
+            pad_row_ready |= dedup_pad && y0 <= src_h && src_h < y0 + rws;
         }
     }
 
