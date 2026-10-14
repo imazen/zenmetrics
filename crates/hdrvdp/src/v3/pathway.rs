@@ -124,6 +124,7 @@ pub(crate) fn visual_pathway(
 
     let ppd = viewing.pixels_per_degree;
 
+    let t0 = std::time::Instant::now();
     // ---- optical MTF (Fourier domain on the 2× lattice) ----
     // The filter plane is a pure function of (dims, ppd, a, b) — cache it
     // so the reference/test calls don't each rebuild a 4 MP grid + 4 M
@@ -147,7 +148,8 @@ pub(crate) fn visual_pathway(
             mtf_filter(&rho2, &par.mtf_params_a, &par.mtf_params_b, relaxed)
         });
         for k in 0..channels {
-            let ch: Vec<f64> = img.iter().skip(k).step_by(channels).copied().collect();
+            let ch: Vec<f64> =
+                crate::par::collect_indexed(npix, |i| img[i * channels + k]);
             super::fft64::conv_fft_pad_into(
                 &ch,
                 width,
@@ -165,6 +167,7 @@ pub(crate) fn visual_pathway(
         }
     });
 
+    eprintln!("  mtf: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     // ---- aging optical density (spectral, on the emission table) ----
     let mut img_e = img_e.to_vec();
     if par.do_aod {
@@ -194,8 +197,10 @@ pub(crate) fn visual_pathway(
             *v /= norm;
         }
     }
-    let mut r_lmsr = Vec::with_capacity(npix * 4);
-    for px in 0..npix {
+    // Element-wise per pixel — each row4[k] is the same l-ascending dot
+    // product the serial loop computed; `into_flattened` reinterprets the
+    // `[[f64; 4]]` buffer without a copy.
+    let mut r_lmsr: Vec<f64> = crate::par::collect_indexed(npix, |px| {
         let mut row4 = [0.0f64; 4];
         for k in 0..4 {
             let mut acc = 0.0;
@@ -204,17 +209,19 @@ pub(crate) fn visual_pathway(
             }
             row4[k] = acc.clamp(1e-8, 1e10);
         }
-        r_lmsr.extend_from_slice(&row4);
-    }
+        row4
+    })
+    .into_flattened();
 
+    eprintln!("  lmsr: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     // ---- local adaptation ----
     let l_adapt = {
-        let lum: Vec<f64> = (0..npix)
-            .map(|i| r_lmsr[i * 4] + r_lmsr[i * 4 + 1])
-            .collect();
+        let lum: Vec<f64> =
+            crate::par::collect_indexed(npix, |i| r_lmsr[i * 4] + r_lmsr[i * 4 + 1]);
         local_adapt(&lum, width, height, ppd, relaxed)
     };
 
+    eprintln!("  ladapt: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     // ---- senile miosis ----
     if par.do_slum {
         let l_a = geomean(&l_adapt, relaxed);
@@ -261,25 +268,28 @@ pub(crate) fn visual_pathway(
     let y0 = 10f64.powf(y_lut[0]);
     let y1 = 10f64.powf(y_lut[y_lut.len() - 1]);
 
+    eprintln!("    jnd_lut: {:?}", t0.elapsed()); let t1 = std::time::Instant::now();
     // `y_lut` is log10 of a log-spaced grid — uniform to ulp precision, so
     // the interval probe lands in ~1 step instead of a 11-level search.
     let dx = (y_lut[y_lut.len() - 1] - y_lut[0]) / (y_lut.len() - 1) as f64;
-    let mut p = Vec::with_capacity(npix);
-    for i in 0..npix {
+    let p: Vec<f64> = crate::par::collect_indexed(npix, |i| {
         let mut acc = 0.0f64;
         for (k, lut) in [(0usize, &jnd_cone), (1, &jnd_cone), (3, &jnd_rod)] {
             let v = r_lmsr[i * 4 + k].clamp(y0, y1).log10();
             acc += interp1_linear_dx(&y_lut, lut, v, dx);
         }
-        p.push(acc);
-    }
+        acc
+    });
 
+    eprintln!("  jnd: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    eprintln!("    jnd_ploop: {:?}", t1.elapsed());
     // ---- sp0 decomposition + baseband DC removal ----
     let mut bands =
         Spyr0::decompose(&p, width, height, ppd, relaxed).ok_or(crate::Error::ImageTooSmall {
             size: (width, height),
             min: 13,
         })?;
+    eprintln!("  decompose: {:?}", t0.elapsed());
     let last = bands.band_count() - 1;
     let bb = bands.band(last);
     let mean = bb.iter().sum::<f64>() / bb.len() as f64;

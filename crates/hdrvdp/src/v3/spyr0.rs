@@ -634,9 +634,14 @@ fn corr_dn64(
     }
     let mut out = vec![0.0; out_w * out_h];
     let full = out_w & !7;
-    for oy in 0..out_h {
+    // Output rows are disjoint — parallel row-ranges under `parallel`.
+    let rb = out_h.div_ceil(256).max(1);
+    crate::par::for_each_dst_chunk(&mut out, rb * out_w, |o, out_c| {
+        let oy0 = o / out_w;
+        for ly in 0..out_c.len() / out_w {
+        let oy = oy0 + ly;
         let yt = &yoff[oy * fs..oy * fs + fs];
-        let out_row = &mut out[oy * out_w..oy * out_w + out_w];
+        let out_row = &mut out_c[ly * out_w..ly * out_w + out_w];
         // 32-output groups chain four accumulators for FMA latency; blocks
         // covered by a `corr32` call are skipped via `skip_until`.
         let mut skip_until = 0usize;
@@ -696,7 +701,8 @@ fn corr_dn64(
             }
             out_row[ox] = acc;
         }
-    }
+        }
+    });
     Band3 {
         width: out_w,
         height: out_h,
@@ -881,10 +887,15 @@ fn up_conv64(
             uncovered.push(r + m * step);
         }
     }
-    for py in 0..out_height {
+    // Output rows are disjoint — parallel row-ranges under `parallel`.
+    let rb = out_height.div_ceil(256).max(1);
+    crate::par::for_each_dst_chunk(res, rb * out_width, |o, res_c| {
+        let py0 = o / out_width;
+        for ly in 0..res_c.len() / out_width {
+        let py = py0 + ly;
         let rr = &rrow[py * fs..py * fs + fs];
         let rn = &ron[py * fs..py * fs + fs];
-        let res_row = &mut res[py * out_width..py * out_width + out_width];
+        let res_row = &mut res_c[ly * out_width..ly * out_width + out_width];
         for &(r, kx0, ntaps, m_lo, m_vec, _) in &phases {
             let off = (r as isize + kx0 as isize - c) / step as isize;
             for m0 in (m_lo..m_vec).step_by(8) {
@@ -964,7 +975,8 @@ fn up_conv64(
             }
             res_row[px] += acc;
         }
-    }
+        }
+    });
 }
 
 /// A single pyramid plane.
@@ -1052,7 +1064,8 @@ impl Spyr0 {
     #[must_use]
     pub(super) fn band(&self, b: usize) -> Vec<f64> {
         let norm = 2f64.powi(b as i32);
-        self.bands[b].data.iter().map(|&v| v / norm).collect()
+        let d = &self.bands[b].data;
+        crate::par::collect_indexed(d.len(), |i| d[i] / norm)
     }
 
     /// Write `data` (already in the normalised domain) into band `b`,
@@ -1060,9 +1073,14 @@ impl Spyr0 {
     pub(super) fn set_band(&mut self, b: usize, data: &[f64]) {
         assert_eq!(data.len(), self.bands[b].data.len(), "set_band size");
         let norm = 2f64.powi(b as i32);
-        for (d, &v) in self.bands[b].data.iter_mut().zip(data) {
-            *d = v * norm;
-        }
+        let d = &mut self.bands[b].data;
+        let cb = crate::par::chunk8(d.len());
+        crate::par::for_each_dst_chunk(d, cb, |o, dc| {
+            let n = dc.len();
+            for (dv, &v) in dc.iter_mut().zip(&data[o..o + n]) {
+                *dv = v * norm;
+            }
+        });
     }
 
     /// `reconSpyr(pyr, pind, 'sp0Filters', 'reflect1', levs, 'all')`.

@@ -124,10 +124,13 @@ pub fn imresize(
     // the tap-loop latency — each lane keeps its own ascending order.
     let hc = contributions(width, out_width);
     let mut tmp = vec![0.0; out_width * height];
-    for (row, src) in tmp
-        .chunks_exact_mut(out_width)
-        .zip(image.chunks_exact(width))
-    {
+    // Rows are disjoint — parallel row-ranges under `parallel`.
+    let rb = height.div_ceil(64).max(1);
+    crate::par::for_each_dst_chunk(&mut tmp, rb * out_width, |o, tmp_c| {
+        let y0 = o / out_width;
+        for (ly, row) in tmp_c.chunks_exact_mut(out_width).enumerate() {
+        let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
+        {
         let mut x = 0usize;
         while x + 4 <= out_width {
             let mut acc = [0.0f64; 4];
@@ -153,7 +156,9 @@ pub fn imresize(
             row[x] = acc;
             x += 1;
         }
-    }
+        }
+        }
+    });
 
     // Vertical pass: height → out_height. Blocked 8 outputs wide so the tap
     // loop reads 8 adjacent columns per source row (whole cache lines) and
@@ -162,7 +167,11 @@ pub fn imresize(
     let vc = contributions(height, out_height);
     let mut out = vec![0.0; out_width * out_height];
     const BLK: usize = 8;
-    for (y, orow) in out.chunks_exact_mut(out_width).enumerate() {
+    let rb2 = out_height.div_ceil(64).max(1);
+    crate::par::for_each_dst_chunk(&mut out, rb2 * out_width, |o, out_c| {
+        let yy0 = o / out_width;
+        for (ly, orow) in out_c.chunks_exact_mut(out_width).enumerate() {
+        let y = yy0 + ly;
         let base = y * vc.taps;
         let wr = &vc.weights[base..base + vc.taps];
         let ir = &vc.indices[base..base + vc.taps];
@@ -188,7 +197,8 @@ pub fn imresize(
             orow[x] = acc;
             x += 1;
         }
-    }
+        }
+    });
     out
 }
 

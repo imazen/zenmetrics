@@ -42,3 +42,33 @@ pub(crate) fn collect_indexed<T: Send>(n: usize, f: impl Fn(usize) -> T + Send +
         (0..n).map(f).collect()
     }
 }
+
+/// `f(offset, dst_chunk)` over `n`-element disjoint chunks of `dst` —
+/// parallel under `parallel`, sequential otherwise. For element-wise
+/// kernels where `dst[i]` depends only on `src[i]`: each chunk is
+/// independent, so the result cannot depend on scheduling. The
+/// sequential build calls `f` once on the whole slice — same code path
+/// as an unchunked call.
+pub(crate) fn for_each_dst_chunk(
+    dst: &mut [f64],
+    n: usize,
+    f: impl Fn(usize, &mut [f64]) + Send + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        dst.par_chunks_mut(n)
+            .enumerate()
+            .for_each(|(i, d)| f(i * n, d));
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        f(0, dst);
+    }
+}
+
+/// 8-aligned chunk length for [`for_each_dst_chunk`] — ~256 tasks so the
+/// pool balances, sized so small inputs get one chunk.
+pub(crate) fn chunk8(len: usize) -> usize {
+    (len / 8).div_ceil(256).max(1) * 8
+}

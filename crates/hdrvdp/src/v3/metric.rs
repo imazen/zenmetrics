@@ -218,6 +218,7 @@ pub fn hdrvdp3(
         PadKind::PerChannel(v) => Pad::Constant(v[k]),
     };
 
+    let t0 = std::time::Instant::now();
     // ---- both images through the visual pathway ----
     // Independent pipelines → `join2` (parallel under `parallel`,
     // sequential in order otherwise; results are returned, not merged).
@@ -250,6 +251,7 @@ pub fn hdrvdp3(
         },
     );
     let (pr, pt) = (pr?, pt?);
+    eprintln!("pathways: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let had_nan = pr.had_nan || pt.had_nan;
     let b_t = &pt.bands;
     let b_r = &pr.bands;
@@ -270,21 +272,15 @@ pub fn hdrvdp3(
         })
         .collect();
 
-    let l_mean_adapt: Vec<f64> = pr
-        .l_adapt
-        .iter()
-        .zip(&pt.l_adapt)
-        .map(|(&r, &t)| (r + t) / 2.0)
-        .collect();
-    let log_la: Vec<f64> = l_mean_adapt
-        .iter()
-        .map(|&v| v.clamp(csf_la[0], csf_la[255]).log10())
-        .collect();
+    let l_mean_adapt: Vec<f64> =
+        crate::par::collect_indexed(width * height, |i| (pr.l_adapt[i] + pt.l_adapt[i]) / 2.0);
+    let log_la: Vec<f64> = crate::par::collect_indexed(width * height, |i| {
+        l_mean_adapt[i].clamp(csf_la[0], csf_la[255]).log10()
+    });
 
     // ---- per-pixel difference mask (native units, >0.1% rel. change) ----
     let npix = width * height;
-    let mut diff_mask = vec![0.0f64; npix];
-    for i in 0..npix {
+    let diff_mask: Vec<f64> = crate::par::collect_indexed(npix, |i| {
         let mut any = false;
         for c in 0..channels {
             let t = test_n[i * channels + c];
@@ -294,10 +290,13 @@ pub fn hdrvdp3(
             }
         }
         if any {
-            diff_mask[i] = 1.0;
+            1.0
+        } else {
+            0.0
         }
-    }
+    });
 
+    eprintln!("csf/diff: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let mut d_bands = b_t.clone();
     let mut q_err = 0.0f64;
 
@@ -336,6 +335,7 @@ pub fn hdrvdp3(
     });
     // Band bodies are independent planes — parallel under `parallel`,
     // sequential otherwise; (d_norm, q_err contribution) return in order.
+    eprintln!("masks: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let results: Vec<(Vec<f64>, f64)> = crate::par::collect_indexed(b_count, |b| {
         let p = 10f64.powf(mp.mask_p);
         let q = 10f64.powf(mp.mask_q);
@@ -360,12 +360,9 @@ pub fn hdrvdp3(
             .map(|&l| crate::interp::interp1_linear_dx(&csf_log_la, &csf[b], l, csf_dx))
             .collect();
 
-        let band_diff: Vec<f64> = b_t
-            .band(b)
-            .iter()
-            .zip(b_r.band(b).iter())
-            .map(|(&t, &r)| t - r)
-            .collect();
+        let (tb, rb) = (b_t.band(b), b_r.band(b));
+        let band_diff: Vec<f64> =
+            crate::par::collect_indexed(tb.len(), |i| tb[i] - rb[i]);
 
         let n_ncsf: Vec<f64> = if b == b_count - 1 {
             // Base band: dominant-frequency sensitivity, scalar.
@@ -404,11 +401,9 @@ pub fn hdrvdp3(
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
-    let s_map: Vec<f64> = d_bands
-        .reconstruct(&levs, relaxed)
-        .iter()
-        .map(|v| v.abs())
-        .collect();
+    eprintln!("bands: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    let rec = d_bands.reconstruct(&levs, relaxed);
+    let s_map: Vec<f64> = crate::par::collect_indexed(rec.len(), |i| rec[i].abs());
     let mut p_map: Vec<f64> = if relaxed {
         trans64::one_mexp_scale(&s_map, 0.5f64.ln())
     } else {
@@ -459,6 +454,7 @@ pub fn hdrvdp3(
 
     let quality_floor = -4.0f64;
     let max_q = 10.0f64;
+    eprintln!("smap: {:?}", t0.elapsed());
     let q_score = max_q + quality_floor - (quality_floor.exp() + q_err).ln();
     let q_jod = 10.0 - 0.52 * (10.0 - q_score).max(0.0).powf(1.2812);
 
@@ -515,16 +511,24 @@ fn apply_band(
         if b > 0 && do_mask_xn {
             let prev = masks[b - 1].as_deref().unwrap();
             let resized = imresize(prev, b_t.band_dims(b - 1).0, b_t.band_dims(b - 1).1, bw, bh);
-            for (m, &v) in mask_xn.iter_mut().zip(&resized) {
-                *m = v.max(0.0);
-            }
+            let cb = crate::par::chunk8(mask_xn.len());
+            crate::par::for_each_dst_chunk(&mut mask_xn, cb, |o, d| {
+                let n = d.len();
+                for (m, &v) in d.iter_mut().zip(&resized[o..o + n]) {
+                    *m = v.max(0.0);
+                }
+            });
         }
         if b < b_count - 2 && do_mask_xn {
             let next = masks[b + 1].as_deref().unwrap();
             let resized = imresize(next, b_t.band_dims(b + 1).0, b_t.band_dims(b + 1).1, bw, bh);
-            for (m, &v) in mask_xn.iter_mut().zip(&resized) {
-                *m += v.max(0.0);
-            }
+            let cb = crate::par::chunk8(mask_xn.len());
+            crate::par::for_each_dst_chunk(&mut mask_xn, cb, |o, d| {
+                let n = d.len();
+                for (m, &v) in d.iter_mut().zip(&resized[o..o + n]) {
+                    *m += v.max(0.0);
+                }
+            });
         }
         // `k_xo·0^q` is a per-call constant (upstream's cross-orientation
         // term — sp0 has a single orientation); hoisted out of the map.

@@ -190,10 +190,13 @@ macro_rules! vec_map {
         pub(super) fn $fn_(x: &[f64], q: f64) -> Vec<f64> {
             let full = x.len() & !7;
             let mut out = vec![0.0; x.len()];
-            archmage::attuned!(
-                $inner(&x[..full], q, &mut out[..full]),
-                [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-            );
+            let cb = crate::par::chunk8(full);
+            crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+                archmage::attuned!(
+                    $inner(&x[o..o + d.len()], q, d),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                );
+            });
             for (o, &v) in out[full..].iter_mut().zip(&x[full..]) {
                 *o = $tail(v, q);
             }
@@ -247,10 +250,13 @@ fn one_mexp_scale_inner(token: Token, x: &[f64], scale: f64, out: &mut [f64]) {
 pub(super) fn one_mexp_scale(x: &[f64], scale: f64) -> Vec<f64> {
     let full = x.len() & !7;
     let mut out = vec![0.0; x.len()];
-    archmage::attuned!(
-        one_mexp_scale_inner(&x[..full], scale, &mut out[..full]),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        archmage::attuned!(
+            one_mexp_scale_inner(&x[o..o + d.len()], scale, d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for (o, &v) in out[full..].iter_mut().zip(&x[full..]) {
         *o = 1.0 - (scale * v).exp();
     }
@@ -273,10 +279,13 @@ fn ln_1mx_inner(token: Token, x: &[f64], out: &mut [f64]) {
 pub(super) fn ln_1mx(x: &[f64]) -> Vec<f64> {
     let full = x.len() & !7;
     let mut out = vec![0.0; x.len()];
-    archmage::attuned!(
-        ln_1mx_inner(&x[..full], &mut out[..full]),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        archmage::attuned!(
+            ln_1mx_inner(&x[o..o + d.len()], d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for (o, &v) in out[full..].iter_mut().zip(&x[full..]) {
         *o = (1.0 - v + 1e-4).ln();
     }
@@ -339,21 +348,25 @@ pub(super) fn masked_e_vec(
 ) -> Vec<f64> {
     let full = e.len() & !7;
     let mut out = vec![0.0; e.len()];
-    archmage::attuned!(
-        masked_e_inner(
-            &e[..full],
-            &n[..full],
-            &sm[..full],
-            &xn[..full],
-            k_self,
-            kxo0,
-            k_xn,
-            q,
-            p2,
-            &mut out[..full]
-        ),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        let l = d.len();
+        archmage::attuned!(
+            masked_e_inner(
+                &e[o..o + l],
+                &n[o..o + l],
+                &sm[o..o + l],
+                &xn[o..o + l],
+                k_self,
+                kxo0,
+                k_xn,
+                q,
+                p2,
+                d
+            ),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for i in full..e.len() {
         let n_mask = k_self * sm[i].abs().powf(q) + kxo0 + k_xn * xn[i].abs().powf(q);
         out[i] = e[i] / (n[i].powf(p2) + n_mask.powi(2)).sqrt();
@@ -379,10 +392,14 @@ fn e_div_np_inner(token: Token, e: &[f64], n: &[f64], p: f64, out: &mut [f64]) {
 pub(super) fn e_div_np_vec(e: &[f64], n: &[f64], p: f64) -> Vec<f64> {
     let full = e.len() & !7;
     let mut out = vec![0.0; e.len()];
-    archmage::attuned!(
-        e_div_np_inner(&e[..full], &n[..full], p, &mut out[..full]),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        let l = d.len();
+        archmage::attuned!(
+            e_div_np_inner(&e[o..o + l], &n[o..o + l], p, d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for i in full..e.len() {
         out[i] = e[i] / n[i].powf(p);
     }
@@ -436,10 +453,13 @@ fn pow_scale_inner(token: Token, a: &[f64], inv: f64, inv_norm: f64, out: &mut [
 pub(super) fn pow_scale_vec(a: &[f64], inv: f64, inv_norm: f64) -> Vec<f64> {
     let full = a.len() & !7;
     let mut out = vec![0.0; a.len()];
-    archmage::attuned!(
-        pow_scale_inner(&a[..full], inv, inv_norm, &mut out[..full]),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        archmage::attuned!(
+            pow_scale_inner(&a[o..o + d.len()], inv, inv_norm, d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for (o, &v) in out[full..].iter_mut().zip(&a[full..]) {
         *o = (v * inv).powf(inv_norm);
     }
@@ -462,10 +482,13 @@ fn ln_max_inner(token: Token, x: &[f64], floor: f64, out: &mut [f64]) {
 pub(super) fn ln_max_vec(x: &[f64], floor: f64) -> Vec<f64> {
     let full = x.len() & !7;
     let mut out = vec![0.0; x.len()];
-    archmage::attuned!(
-        ln_max_inner(&x[..full], floor, &mut out[..full]),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(&mut out[..full], cb, |o, d| {
+        archmage::attuned!(
+            ln_max_inner(&x[o..o + d.len()], floor, d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for (o, &v) in out[full..].iter_mut().zip(&x[full..]) {
         *o = v.max(floor).ln();
     }
@@ -637,10 +660,14 @@ fn thresh_inner(token: Token, pr: &[f64], pt: &[f64], m_thr: f64, pm: &mut [f64]
 pub(super) fn thresh_mul(pm: &mut [f64], pr: &[f64], pt: &[f64], m_thr: f64) {
     let full = pm.len() & !7;
     let (pm_full, pm_tail) = pm.split_at_mut(full);
-    archmage::attuned!(
-        thresh_inner(&pr[..full], &pt[..full], m_thr, pm_full),
-        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
-    );
+    let cb = crate::par::chunk8(full);
+    crate::par::for_each_dst_chunk(pm_full, cb, |o, d| {
+        let l = d.len();
+        archmage::attuned!(
+            thresh_inner(&pr[o..o + l], &pt[o..o + l], m_thr, d),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    });
     for (i, pmv) in pm_tail.iter_mut().enumerate() {
         let i = full + i;
         let is_diff = 1.0 - (0.5f64.ln() * ((pr[i] - pt[i]).abs() / pr[i] / m_thr).powf(3.5)).exp();
