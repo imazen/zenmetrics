@@ -785,15 +785,226 @@ fn median_f32(v: &mut [f32]) -> f64 {
     }
 }
 
-/// `real(z^λ)` for the FSIMc chroma product, exactly as MATLAB's `.^`
-/// complex power: `z^λ` for `z ≥ 0`, `|z|^λ·cos(πλ)` for `z < 0`.
-fn real_pow_lambda(z: f32) -> f64 {
-    let z64 = z as f64;
-    if z64 >= 0.0 {
-        libm::pow(z64, LAMBDA)
-    } else {
-        libm::pow(-z64, LAMBDA) * COS_PI_LAMBDA
+// ------------------------------------------------------------------
+// `real(z^λ)` for the FSIMc chroma product, computed as
+// `pow(|z|,λ)·(z<0 ? cos(πλ) : 1)` — MATLAB's `.^` complex power — with
+// the f64 `pow` batched four lanes wide by `pow64_x4` in the pooling
+// fold (the tail runs scalar `libm::pow`, same bits per lane).
+// ------------------------------------------------------------------
+// `libm::pow` (fdlibm `e_pow.c`) lane-vectorized at `f64x4`.
+//
+// Every lane is bit-identical to `libm::pow`: the input decode, the
+// early-out set, the subnormal/interval select, the `[z+0.5]` integer
+// extraction (per-lane variable shifts — native scalar ops) and the
+// `2**n` reconstruction are verbatim transcriptions run per lane; only
+// the pure-f64 polynomial/multiply/divide bodies run lane-parallel with
+// separate `*`/`+` (never fused). `with_set_low_word(v,0)` is a bitwise
+// clear on the lane pattern — `v & CLRLO`. Lanes that would take any
+// early-out or edge path (y ∈ {0,±1,2,+0.5,±inf,NaN}, x ≤ 0 or x NaN,
+// |y| > 2³¹, |z| ≥ 1024 or ≤ −1075, subnormal output) are flagged and
+// resolved by the scalar routine, which is bit-exact by definition.
+// ------------------------------------------------------------------
+
+const EPOW_BP: [f64; 2] = [1.0, 1.5];
+const EPOW_DP_H: [f64; 2] = [0.0, 5.84962487220764160156e-01];
+const EPOW_DP_L: [f64; 2] = [0.0, 1.35003920212974897128e-08];
+const EPOW_TWO53: f64 = 9007199254740992.0;
+const EPOW_L1: f64 = 5.99999999999994648725e-01;
+const EPOW_L2: f64 = 4.28571428578550184252e-01;
+const EPOW_L3: f64 = 3.33333329818377432918e-01;
+const EPOW_L4: f64 = 2.72728123808534006489e-01;
+const EPOW_L5: f64 = 2.30660745775561754067e-01;
+const EPOW_L6: f64 = 2.06975017800338417784e-01;
+const EPOW_P1: f64 = 1.66666666666666019037e-01;
+const EPOW_P2: f64 = -2.77777777770155933842e-03;
+const EPOW_P3: f64 = 6.61375632143793436117e-05;
+const EPOW_P4: f64 = -1.65339022054652515390e-06;
+const EPOW_P5: f64 = 4.13813679705723846039e-08;
+const EPOW_LG2: f64 = 6.93147180559945286227e-01;
+const EPOW_LG2_H: f64 = 6.93147182464599609375e-01;
+const EPOW_LG2_L: f64 = -1.90465429995776804525e-09;
+const EPOW_CP: f64 = 9.61796693925975554329e-01;
+const EPOW_CP_H: f64 = 9.61796700954437255859e-01;
+const EPOW_CP_L: f64 = -7.02846165095275826516e-09;
+
+/// `pow(xa[i], ya[i])` for four lanes, bit-identical to `libm::pow`.
+/// See the block comment above for the scalar/vector split.
+#[inline(always)]
+fn pow64_x4<T: magetypes::simd::backends::F64x4Backend>(
+    token: T,
+    xa: &[f64; 4],
+    ya: &[f64; 4],
+) -> [f64; 4] {
+    use magetypes::simd::generic::f64x4;
+    let s = |c: f64| f64x4::<T>::splat_t(token, c);
+    let clr = |v: f64x4<T>| v & s(f64::from_bits(0xffff_ffff_0000_0000));
+
+    // Per-lane: decode, early-out set, normalize, interval select —
+    // verbatim e_pow scalar ops.
+    let mut fix = [false; 4];
+    let mut ax_a = [0f64; 4];
+    let mut bp_a = [0f64; 4];
+    let mut dph_a = [0f64; 4];
+    let mut dpl_a = [0f64; 4];
+    let mut th_a = [0f64; 4];
+    let mut nf_a = [0f64; 4];
+    for i in 0..4 {
+        let (x, y) = (xa[i], ya[i]);
+        let hx = ((x.to_bits() >> 32) as u32) as i32;
+        let lx = x.to_bits() as u32;
+        let hy = ((y.to_bits() >> 32) as u32) as i32;
+        let ly = y.to_bits() as u32;
+        let ix = hx & 0x7fffffff;
+        let iy = hy & 0x7fffffff;
+        if (iy as u32 | ly) == 0
+            || (hx == 0x3ff00000 && lx == 0)
+            || ix > 0x7ff00000
+            || (ix == 0x7ff00000 && lx != 0)
+            || iy > 0x7ff00000
+            || (iy == 0x7ff00000 && ly != 0)
+            || hx < 0
+            || (ly == 0
+                && (iy == 0x7ff00000 || iy == 0x3ff00000 || hy == 0x40000000 || hy == 0x3fe00000))
+            || (lx == 0 && (ix == 0x7ff00000 || ix == 0 || ix == 0x3ff00000))
+            || iy > 0x41e00000
+        {
+            fix[i] = true;
+            continue;
+        }
+        let mut n = 0i32;
+        let mut ix = ix;
+        let mut ax = x; // hx > 0 → fabs(x) = x
+        if ix < 0x00100000 {
+            ax *= EPOW_TWO53;
+            n -= 53;
+            ix = ((ax.to_bits() >> 32) as u32) as i32;
+        }
+        n += (ix >> 20) - 0x3ff;
+        let j = ix & 0x000fffff;
+        let k: i32;
+        ix = j | 0x3ff00000;
+        if j <= 0x3988e {
+            k = 0;
+        } else if j < 0xbb67a {
+            k = 1;
+        } else {
+            k = 0;
+            n += 1;
+            ix -= 0x00100000;
+        }
+        ax_a[i] =
+            f64::from_bits(((ix as u32 as u64) << 32) | (ax.to_bits() & 0xffff_ffff));
+        bp_a[i] = EPOW_BP[k as usize];
+        dph_a[i] = EPOW_DP_H[k as usize];
+        dpl_a[i] = EPOW_DP_L[k as usize];
+        // t_h = ax+bp[k] High — the integer word build stays per-lane.
+        th_a[i] = f64::from_bits(
+            (((((ix as u32) >> 1) | 0x20000000) + 0x00080000 + ((k as u32) << 18)) as u64) << 32,
+        );
+        nf_a[i] = n as f64;
     }
+
+    // Lane-parallel polynomial/division body (separate ops, RN).
+    let axv = f64x4::<T>::from_array_t(token, ax_a);
+    let bpv = f64x4::<T>::from_array_t(token, bp_a);
+    let dphv = f64x4::<T>::from_array_t(token, dph_a);
+    let dplv = f64x4::<T>::from_array_t(token, dpl_a);
+    let thv = f64x4::<T>::from_array_t(token, th_a);
+    let nfv = f64x4::<T>::from_array_t(token, nf_a);
+    let yv = f64x4::<T>::from_array_t(token, *ya);
+
+    let u = axv - bpv;
+    let v = s(1.0) / (axv + bpv);
+    let ss = u * v;
+    let s_h = clr(ss);
+    let t_l = axv - (thv - bpv);
+    let s_l = v * ((u - s_h * thv) - s_h * t_l);
+    let s2 = ss * ss;
+    let r = s2
+        * s2
+        * (s(EPOW_L1)
+            + s2 * (s(EPOW_L2)
+                + s2 * (s(EPOW_L3) + s2 * (s(EPOW_L4) + s2 * (s(EPOW_L5) + s2 * s(EPOW_L6))))))
+        + s_l * (s_h + ss);
+    let s2b = s_h * s_h;
+    let t_h2 = clr(s(3.0) + s2b + r);
+    let t_l2 = r - ((t_h2 - s(3.0)) - s2b);
+    let u2 = s_h * t_h2;
+    let v2 = s_l * t_h2 + t_l2 * ss;
+    let p_h = clr(u2 + v2);
+    let p_l = v2 - (p_h - u2);
+    let z_h = s(EPOW_CP_H) * p_h;
+    let z_l = s(EPOW_CP_L) * p_h + p_l * s(EPOW_CP) + dplv;
+    let t1 = clr(((z_h + z_l) + dphv) + nfv);
+    let t2 = z_l - (((t1 - nfv) - dphv) - z_h);
+    let y1 = clr(yv);
+    let p_l2 = (yv - y1) * t1 + yv * t2;
+    let p_h2 = y1 * t1;
+    let zz = p_l2 + p_h2;
+
+    // Per-lane: range checks and the `[z+0.5]` integer extraction.
+    let zza = zz.to_array();
+    let mut n_i = [0i32; 4];
+    let mut tad = [0f64; 4];
+    for i in 0..4 {
+        if fix[i] {
+            continue;
+        }
+        let zb = zza[i].to_bits();
+        let j = ((zb >> 32) as u32) as i32;
+        if j >= 0x40900000 || (j & 0x7fffffff) >= 0x4090cc00 {
+            fix[i] = true;
+            continue;
+        }
+        let ii = j & 0x7fffffff;
+        let mut k = (ii >> 20) - 0x3ff;
+        let mut n = 0i32;
+        let mut t = 0f64;
+        if ii > 0x3fe00000 {
+            let nn = j + (0x00100000 >> (k + 1));
+            k = ((nn & 0x7fffffff) >> 20) - 0x3ff;
+            t = f64::from_bits(((nn & !(0x000fffff >> k)) as u32 as u64) << 32);
+            n = ((nn & 0x000fffff) | 0x00100000) >> (20 - k);
+            if j < 0 {
+                n = -n;
+            }
+        }
+        n_i[i] = n;
+        tad[i] = t;
+    }
+    let p_h3 = p_h2 - f64x4::<T>::from_array_t(token, tad);
+
+    // Lane-parallel `2**(p_h+p_l)` polynomial body.
+    let t3 = clr(p_l2 + p_h3);
+    let u3 = t3 * s(EPOW_LG2_H);
+    let v3 = (p_l2 - (t3 - p_h3)) * s(EPOW_LG2) + t3 * s(EPOW_LG2_L);
+    let z2 = u3 + v3;
+    let w = v3 - (z2 - u3);
+    let tt = z2 * z2;
+    let t1p = z2
+        - tt * (s(EPOW_P1)
+            + tt * (s(EPOW_P2)
+                + tt * (s(EPOW_P3) + tt * (s(EPOW_P4) + tt * s(EPOW_P5)))));
+    let r2 = (z2 * t1p) / (t1p - s(2.0)) - (w + z2 * w);
+    let zf = s(1.0) - (r2 - z2);
+
+    // Per-lane: `j += n<<20` reconstruction (+scalbn → scalar fallback).
+    let zfa = zf.to_array();
+    let mut res = [0f64; 4];
+    for i in 0..4 {
+        if fix[i] {
+            res[i] = libm::pow(xa[i], ya[i]);
+            continue;
+        }
+        let j2 = (((zfa[i].to_bits() >> 32) as u32) as i32).wrapping_add(n_i[i] << 20);
+        if (j2 >> 20) <= 0 {
+            res[i] = libm::pow(xa[i], ya[i]);
+            continue;
+        }
+        res[i] =
+            f64::from_bits(((j2 as u32 as u64) << 32) | (zfa[i].to_bits() & 0xffff_ffff));
+    }
+    res
 }
 
 /// Everything in the phase-congruency pipeline that is a pure function of
@@ -1008,6 +1219,14 @@ macro_rules! score_body {
         let mut num = 0.0f64;
         let mut numc = 0.0f64;
         let mut den = 0.0f64;
+        // FSIMc chroma `pow` batched per f64x4 block: `real_pow_lambda(z)`
+        // ≡ `pow(|z|,λ)·(z<0 ? cos(πλ) : 1)` — for `z = −0`, `|z| = +0`
+        // and `pow(+0,λ) = pow(−0,λ) = +0`. `numc` still accumulates in
+        // fixed raster order, one `+=` per element.
+        let mut zq = [0.0f64; 4];
+        let mut bs = [0.0f64; 4];
+        let mut sg = [0.0f64; 4];
+        let mut fill = 0usize;
         for i in 0..n {
             let (a, b) = (pc1[i], pc2[i]);
             let pcsim = (2.0 * a * b + T1) / (a * a + b * b + T1);
@@ -1033,9 +1252,23 @@ macro_rules! score_body {
                 let isim = (2.0 * ia * ib + T3) / (ia * ia + ib * ib + T3);
                 let (qa, qb) = (q1[i], q2[i]);
                 let qsim = (2.0 * qa * qb + T4) / (qa * qa + qb * qb + T4);
-                numc += base * real_pow_lambda(isim * qsim);
+                let z = (isim * qsim) as f64;
+                zq[fill] = z.abs();
+                sg[fill] = if z < 0.0 { COS_PI_LAMBDA } else { 1.0 };
+                bs[fill] = base;
+                fill += 1;
+                if fill == 4 {
+                    let pr = pow64_x4($token, &zq, &[LAMBDA; 4]);
+                    for k in 0..4 {
+                        numc += bs[k] * (pr[k] * sg[k]);
+                    }
+                    fill = 0;
+                }
             }
             den += pcm as f64;
+        }
+        for k in 0..fill {
+            numc += bs[k] * (libm::pow(zq[k], LAMBDA) * sg[k]);
         }
         (
             num / den,
@@ -1221,4 +1454,157 @@ pub(crate) fn fsim_luma8_planes(
         map,
     );
     (s, w2, h2)
+}
+
+#[cfg(test)]
+mod pow_tests {
+    use super::pow64_x4;
+    use archmage::{ScalarToken, SimdToken};
+
+    fn corpus_x() -> alloc::vec::Vec<f64> {
+        let mut xs = alloc::vec::Vec::new();
+        // FSIMc operating range + dense log-space sweep.
+        for i in -1000..=1000 {
+            xs.push(f64::exp(i as f64 / 100.0 * 6.0)); // 1e-13..1e13
+        }
+        for k in -60..=60 {
+            xs.push(f64::powi(2.0, k));
+            xs.push(f64::powi(2.0, k) * (1.0 + f64::EPSILON));
+            xs.push(f64::powi(2.0, k) * (1.0 - f64::EPSILON / 2.0));
+        }
+        // interval boundaries: j == 0x3988E / 0xBB67A in 1+f mantissa.
+        for jw in [0x3988Eu32, 0xbb67au32] {
+            for delta in -2i64..=2 {
+                let hi = (0x3ff00000u64 + (jw as u64).wrapping_add_signed(delta)) << 32;
+                xs.push(f64::from_bits(hi | 0x5a5a5a5a));
+                xs.push(f64::from_bits(hi));
+            }
+        }
+        // near-1 (the huge-|y| log-series path region) and edges.
+        for k in 20..=24 {
+            xs.push(1.0 - f64::powi(2.0, -k));
+            xs.push(1.0 + f64::powi(2.0, -k));
+        }
+        xs.extend([
+            0.0,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1), // smallest subnormal
+            f64::from_bits(0x000fffffffffffff), // largest subnormal
+            f64::MAX,
+            f64::INFINITY,
+            f64::NAN,
+            1.0,
+            2.0,
+            0.5,
+            1.5,
+            -1.0,
+            -0.0,
+            -2.5,
+            f64::NEG_INFINITY,
+            f64::MIN,
+        ]);
+        xs
+    }
+
+    fn corpus_y() -> alloc::vec::Vec<f64> {
+        let ys: alloc::vec::Vec<f64> = alloc::vec::Vec::from([
+            0.03, // LAMBDA
+            0.4,
+            2.4,
+            1.0 / 3.0,
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            2.0,
+            -2.0,
+            0.5,
+            -0.5,
+            3.0,
+            -3.0,
+            100.0,
+            -100.0,
+            1074.9,
+            1075.0,
+            1075.19,
+            1075.2,
+            -1074.9,
+            -1075.0,
+            -1075.19,
+            1024.0,
+            -1024.0,
+            f64::powi(2.0, 31) - 1.0,
+            f64::powi(2.0, 31),
+            f64::powi(2.0, 31) + 1.0,
+            -f64::powi(2.0, 31),
+            f64::powi(2.0, 63) - 1e15,
+            f64::powi(2.0, 64),
+            f64::powi(2.0, 64) * 2.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            1e-300,
+            -1e-300,
+            f64::MIN_POSITIVE,
+            f64::EPSILON,
+        ]);
+        ys
+    }
+
+    #[test]
+    fn pow64_x4_matches_libm_bitwise() {
+        let token = ScalarToken::summon().unwrap();
+        let xs = corpus_x();
+        let ys = corpus_y();
+        let mut checked = 0usize;
+        // Batch every (x, y) pair through 4-lane groups.
+        let mut quad: alloc::vec::Vec<(f64, f64)> = alloc::vec::Vec::new();
+        for &x in &xs {
+            for &y in &ys {
+                quad.push((x, y));
+                if quad.len() == 4 {
+                    let xa = [quad[0].0, quad[1].0, quad[2].0, quad[3].0];
+                    let ya = [quad[0].1, quad[1].1, quad[2].1, quad[3].1];
+                    let got = pow64_x4(token, &xa, &ya);
+                    for k in 0..4 {
+                        let want = libm::pow(xa[k], ya[k]);
+                        assert_eq!(
+                            got[k].to_bits(),
+                            want.to_bits(),
+                            "pow({:e}, {:e}): got {:e} ({:#x}) want {:e} ({:#x})",
+                            xa[k],
+                            ya[k],
+                            got[k],
+                            got[k].to_bits(),
+                            want,
+                            want.to_bits()
+                        );
+                        checked += 1;
+                    }
+                    quad.clear();
+                }
+            }
+        }
+        // Tail: pad the partial group with ordinary lanes.
+        if !quad.is_empty() {
+            while quad.len() < 4 {
+                quad.push((2.0, 0.03));
+            }
+            let xa = [quad[0].0, quad[1].0, quad[2].0, quad[3].0];
+            let ya = [quad[0].1, quad[1].1, quad[2].1, quad[3].1];
+            let got = pow64_x4(token, &xa, &ya);
+            for k in 0..4 {
+                let want = libm::pow(xa[k], ya[k]);
+                assert_eq!(
+                    got[k].to_bits(),
+                    want.to_bits(),
+                    "pow({:e}, {:e}) tail mismatch",
+                    xa[k],
+                    ya[k]
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 50_000);
+    }
 }
