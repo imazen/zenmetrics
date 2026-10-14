@@ -134,3 +134,38 @@ Validation (`crates/mad-iqa`):
   packed maps. Subsampled, stopped and too-small requests behave as
   specified. Tests pass with default, `parallel`, `_dev,avx512` and no-std
   builds.
+
+## IW-SSIM (`iwssim`)
+
+| Map | Values | Polarity | Grid |
+| --- | --- | --- | --- |
+| `cs_0` (primary), `cs_1`, `cs_2`, `cs_3` | contrast-structure `(2σ₁₂+C₂)/(σ₁²+σ₂²+C₂)` of the Laplacian band at scale `s` | Similarity (`1` = identical) | `(w_s−10) × (h_s−10)` cells of `2^s` pixels |
+| `csl_4` | `cs·l` at the coarsest scale (luminance included) | Similarity | same at scale 4 |
+
+Scales 0–3 pool their map with the information-content weights, the top
+scale by its plain mean, and the score is `Π wmcs_s^β_s`. These maps are
+per-scale components, not a per-pixel IW-SSIM. The weights need a
+non-quality map polarity, which the abstractions do not define yet; they are
+not exposed here.
+
+Geometry. The binom5 `corr_dn` keeps even samples, so scale-`s` sample `k`
+sits at input `2^s·k`. Cell `i` of the valid 11×11-window map is centred on
+scale sample `i + 5`, and each cell is the `2^s` block around that centre.
+The halo is `11·2^s − 2` (window 5 samples, Laplacian band `6·2^s − 2`) and
+`7·2^s − 2` at the residual top scale. When `allow_small` tiles a small
+input up to 176, values also read the wrapped copies, so support is global.
+
+Validation (`crates/iwssim`):
+
+- With `iw_flag` off, every map's mean reproduces `wmcs_s` bit for bit; with
+  weighting on, `csl_4`'s does.
+- Warm candidates return the cold maps and scores bit for bit, repeatedly,
+  and still score without maps afterwards.
+- Cells whose declared support misses a changed patch are bit-identical to
+  the unchanged pair's. A single changed pixel dips `cs_0` at the cell that
+  owns it, within one pixel.
+- Map-on and map-off scores are bit-identical (textured, identical, flat and
+  patched pairs at 176×176, 200×183, 256×192 and tiled 64×48). Strided input
+  gives the packed maps, and stopped requests fail as specified. Tests pass
+  with default, `parallel`, no-std and `_dev,avx512` builds; the Python parity
+  and strip goldens are unchanged.

@@ -15,6 +15,7 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Unified native maps, IW-SSIM (`b29b2385`): per-scale contrast-structure maps `cs_0` (primary) … `cs_3` and `csl_4` (Similarity; per-scale components). Unweighted folds reproduce `wmcs_s` bit for bit; warm candidates serve the cold maps; support bounds verified with patch tests. Information-content weights are not exposed yet (no non-quality map polarity). Scores are unchanged with maps.
 - Unified native maps, MAD (`af49f0f4`): the reference's strategy maps over the pooled interior, `hi` (primary; contrast mask × local MSE, per pixel) and `lo` (log-Gabor statistical difference, 4×4 tiles). Difference polarity, global support; strategy components, not a per-pixel MAD. Both fold to the HI/LO indices bit for bit. Scores are unchanged with maps.
 - Unified native maps, mDCT-PSNR (`bbdc77e3`): `detection`, the per-window-position detection probability `1 − Π exp(−p)` the score sums (DetectionProbability polarity; cell `(i, j)` reads pixels `[i, i+12) × [j+1, j+13)`). Folding the map in the reference order reproduces the score bits; a patch test pins the window on both axes. Scores are unchanged with maps.
 - Unified native maps, PSNR-HVS (`07a7d273`): per-8×8-block mean coefficient energies, `csf_error_{r,g,b}` (PSNR-HVS) and `masked_error_{r,g,b}` (PSNR-HVS-M), plus their channel means `csf_error` (primary) and `masked_error`. Per-channel maps fold to the channel scores bit for bit; an f64 block oracle agrees to 2.0e-6. Scores are unchanged with maps.
