@@ -67,6 +67,17 @@ pub(crate) fn for_each_dst_chunk(
     }
 }
 
+/// Phase timing diagnostics — silent unless `HDRVDP_TIMING` is set.
+/// Perf-probe instrumentation; zero cost for consumers by default.
+macro_rules! timed_eprintln {
+    ($($a:tt)*) => {
+        if std::env::var_os("HDRVDP_TIMING").is_some() {
+            eprintln!($($a)*);
+        }
+    };
+}
+pub(crate) use timed_eprintln;
+
 /// Worker count of the pool (1 in sequential builds) — for gating paths
 /// whose scratch copies only pay when there are spare threads.
 pub(crate) fn threads() -> usize {

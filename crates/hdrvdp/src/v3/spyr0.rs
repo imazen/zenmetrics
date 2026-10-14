@@ -1253,7 +1253,7 @@ mod tests {
                 up_conv64(&band, &filter, fs, step, ow, oh, &mut res, relaxed);
                 for (i, (&a, &e)) in res.iter().zip(&expect).enumerate() {
                     if a.to_bits() != e.to_bits() {
-                        eprintln!(
+                        crate::par::timed_eprintln!(
                             "DIFF fs={fs} step={step} relaxed={relaxed} px=({},{}) got {a:024.17e} {:016x} want {e:024.17e} {:016x}",
                             i / ow,
                             i % ow,

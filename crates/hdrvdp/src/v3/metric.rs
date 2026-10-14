@@ -251,7 +251,7 @@ pub fn hdrvdp3(
         },
     );
     let (pr, pt) = (pr?, pt?);
-    eprintln!("pathways: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("pathways: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let had_nan = pr.had_nan || pt.had_nan;
     let b_t = &pt.bands;
     let b_r = &pr.bands;
@@ -296,7 +296,7 @@ pub fn hdrvdp3(
         }
     });
 
-    eprintln!("csf/diff: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("csf/diff: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let mut d_bands = b_t.clone();
     let mut q_err = 0.0f64;
 
@@ -335,7 +335,7 @@ pub fn hdrvdp3(
     });
     // Band bodies are independent planes — parallel under `parallel`,
     // sequential otherwise; (d_norm, q_err contribution) return in order.
-    eprintln!("masks: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("masks: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let results: Vec<(Vec<f64>, f64)> = crate::par::collect_indexed(b_count, |b| {
         let p = 10f64.powf(mp.mask_p);
         let q = 10f64.powf(mp.mask_q);
@@ -401,7 +401,7 @@ pub fn hdrvdp3(
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
-    eprintln!("bands: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
+    crate::par::timed_eprintln!("bands: {:?}", t0.elapsed()); let t0 = std::time::Instant::now();
     let rec = d_bands.reconstruct(&levs, relaxed);
     let s_map: Vec<f64> = crate::par::collect_indexed(rec.len(), |i| rec[i].abs());
     let mut p_map: Vec<f64> = if relaxed {
@@ -454,7 +454,7 @@ pub fn hdrvdp3(
 
     let quality_floor = -4.0f64;
     let max_q = 10.0f64;
-    eprintln!("smap: {:?}", t0.elapsed());
+    crate::par::timed_eprintln!("smap: {:?}", t0.elapsed());
     let q_score = max_q + quality_floor - (quality_floor.exp() + q_err).ln();
     let q_jod = 10.0 - 0.52 * (10.0 - q_score).max(0.0).powf(1.2812);
 
