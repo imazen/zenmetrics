@@ -704,67 +704,62 @@ fn corr_dn64(
     }
 }
 
-/// [`up_conv64`] block kernel: eight output columns at once — lane `j` is
-/// output `px0 + j`. Unaligned taps load `0.0` into `wint`, which can only
-/// change the sign of an all-zero accumulator; the caller recomputes any
-/// `acc[j] == 0.0` lane with [`up_pixel`] so results stay bit-identical.
-/// Returns the eight accumulator lanes.
+/// Interior `up_conv64` phase kernel: output phase `r` writes
+/// `res_row[r + m·step]`; its aligned taps are the sub-filter
+/// `filter[ky·fs + kx0 + t·step]` applied to the contiguous band window
+/// `brow[m + off + t]` — one vector load per tap, same per-lane tap order as
+/// the scalar loop (bit-identical). Lane `i` covers `m0 + i`.
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 #[allow(clippy::too_many_arguments)]
-fn up8_inner<const RELAXED: bool>(
+fn up8_phase_inner<const RELAXED: bool>(
     token: Token,
     band: &[f64],
     bw: usize,
     rrow: &[usize],
     ron: &[bool],
-    rcol: &[usize],
-    rcon: &[bool],
     filter: &[f64],
     fs: usize,
+    kx0: usize,
+    ntaps: usize,
+    base: usize,
+    step: usize,
 ) -> [f64; 8] {
-    let mut wint = [0.0f64; 8 * 16];
     let mut acc = f64x8::zero_t(token);
     for ky in 0..fs {
         if !ron[ky] {
             continue;
         }
         let brow = &band[rrow[ky]..rrow[ky] + bw];
-        let w = &mut wint[..fs * 8];
-        for j in 0..8 {
-            let cn = &rcon[j * fs..j * fs + fs];
-            let rc = &rcol[j * fs..j * fs + fs];
-            for kx in 0..fs {
-                w[kx * 8 + j] = if cn[kx] { brow[rc[kx]] } else { 0.0 };
-            }
-        }
         let frow = &filter[ky * fs..ky * fs + fs];
-        for kx in 0..fs {
-            let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
-            let c = f64x8::splat_t(token, frow[kx]);
+        for t in 0..ntaps {
+            let c = f64x8::splat_t(token, frow[kx0 + t * step]);
+            let w = f64x8::load_t(token, (&brow[base + t..base + t + 8]).try_into().unwrap());
             acc = if RELAXED {
-                c.mul_add(t, acc)
+                c.mul_add(w, acc)
             } else {
-                acc + c * t
+                acc + c * w
             };
         }
     }
     acc.to_array()
 }
 
-/// [`up8_inner`] with runtime tier dispatch.
+/// [`up8_phase_inner`] with runtime tier dispatch.
 #[allow(clippy::too_many_arguments)]
-fn up8<const RELAXED: bool>(
+fn up8_phase<const RELAXED: bool>(
     band: &[f64],
     bw: usize,
     rrow: &[usize],
     ron: &[bool],
-    rcol: &[usize],
-    rcon: &[bool],
     filter: &[f64],
     fs: usize,
+    kx0: usize,
+    ntaps: usize,
+    base: usize,
+    step: usize,
 ) -> [f64; 8] {
     archmage::attuned!(
-        up8_inner::<RELAXED>(band, bw, rrow, ron, rcol, rcon, filter, fs),
+        up8_phase_inner::<RELAXED>(band, bw, rrow, ron, filter, fs, kx0, ntaps, base, step),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -852,63 +847,110 @@ fn up_conv64(
             }
         }
     }
-    let full = out_width & !7;
+    // Interior outputs have every tap window inside the lattice:
+    // `px ∈ [c, out_w − fs + c + 1)`. There the aligned taps of phase `r`
+    // form the contiguous sub-filter window `brow[m + off + t]`, handled by
+    // [`up8_phase`] vector blocks; `cov_hi[r]` records how far they covered.
+    let c_us = c as usize;
+    let px_lo = c_us.min(out_width);
+    let px_hi = out_width
+        .saturating_sub(fs - 1)
+        .saturating_add(c_us)
+        .min(out_width);
+    // Per phase `r`: `(r, kx0, ntaps, m_lo, m_vec_end, m_hi)`. Py-invariant.
+    let mut phases: Vec<(usize, usize, usize, usize, usize, usize)> = Vec::with_capacity(step);
+    // Interior outputs of a phase with no aligned tap still get their ±0
+    // accumulation — send them through the scalar path.
+    let mut uncovered: Vec<usize> = (0..px_lo).chain(px_hi..out_width).collect();
+    for r in 0..step {
+        let kx0 = (c - r as isize).rem_euclid(step as isize) as usize;
+        let m_lo = px_lo.saturating_sub(r).div_ceil(step);
+        let m_hi = px_hi.saturating_sub(r).div_ceil(step);
+        if kx0 >= fs {
+            for m in m_lo..m_hi {
+                uncovered.push(r + m * step);
+            }
+            continue;
+        }
+        let ntaps = (fs - 1 - kx0) / step + 1;
+        let m_vec = m_lo + m_hi.saturating_sub(m_lo) / 8 * 8;
+        phases.push((r, kx0, ntaps, m_lo, m_vec, m_hi));
+    }
+    for &(r, _, _, _, vec_end, hi) in &phases {
+        for m in vec_end..hi {
+            uncovered.push(r + m * step);
+        }
+    }
     for py in 0..out_height {
         let rr = &rrow[py * fs..py * fs + fs];
         let rn = &ron[py * fs..py * fs + fs];
         let res_row = &mut res[py * out_width..py * out_width + out_width];
-        for px0 in (0..full).step_by(8) {
-            let acc = if relaxed {
-                up8::<true>(
-                    &band.data,
-                    band.width,
-                    rr,
-                    rn,
-                    &rcol[px0 * fs..px0 * fs + 8 * fs],
-                    &rcon[px0 * fs..px0 * fs + 8 * fs],
-                    filter,
-                    fs,
-                )
-            } else {
-                up8::<false>(
-                    &band.data,
-                    band.width,
-                    rr,
-                    rn,
-                    &rcol[px0 * fs..px0 * fs + 8 * fs],
-                    &rcon[px0 * fs..px0 * fs + 8 * fs],
-                    filter,
-                    fs,
-                )
-            };
-            for (j, a) in acc.iter().enumerate() {
-                // Skipped taps contributed f·(±0.0). Adding −0.0 is always
-                // the identity and adding +0.0 is too — unless every other
-                // contribution was −0.0, in which case the full-order sum
-                // is +0.0 where the subset sum is −0.0. Recompute that one
-                // lane the original way so the result is bit-identical.
-                let a = if *a == 0.0 {
-                    up_pixel(band, filter, fs, step, out_width, out_height, py, px0 + j)
+        for &(r, kx0, ntaps, m_lo, m_vec, _) in &phases {
+            let off = (r as isize + kx0 as isize - c) / step as isize;
+            for m0 in (m_lo..m_vec).step_by(8) {
+                let base = (m0 as isize + off) as usize;
+                let acc = if relaxed {
+                    up8_phase::<true>(
+                        &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
+                    )
                 } else {
-                    *a
+                    up8_phase::<false>(
+                        &band.data, band.width, rr, rn, filter, fs, kx0, ntaps, base, step,
+                    )
                 };
-                res_row[px0 + j] += a;
+                for (j, a) in acc.iter().enumerate() {
+                    // A ±0 lane can differ from the full-order sum only in
+                    // the sign of zero — recompute it like the scalar path.
+                    let a = if *a == 0.0 {
+                        up_pixel(
+                            band,
+                            filter,
+                            fs,
+                            step,
+                            out_width,
+                            out_height,
+                            py,
+                            r + (m0 + j) * step,
+                        )
+                    } else {
+                        *a
+                    };
+                    res_row[r + (m0 + j) * step] += a;
+                }
             }
         }
-        for px in full..out_width {
+        // `px < out_w & !7` historically ran the vector kernel: relaxed mode
+        // therefore needs the FMA chain over every tap (unaligned taps add
+        // f·(±0.0)), while all other outputs sum aligned taps in plain
+        // mul+add order. Zero accumulators recompute full-order either way.
+        let full8 = out_width & !7;
+        for &px in &uncovered {
             let rc = &rcol[px * fs..px * fs + fs];
             let cn = &rcon[px * fs..px * fs + fs];
             let mut acc = 0.0;
-            for ky in 0..fs {
-                if !rn[ky] {
-                    continue;
-                }
-                let brow = &band.data[rr[ky]..rr[ky] + band.width];
-                for kx in 0..fs {
-                    if !cn[kx] {
+            if relaxed && px < full8 {
+                for ky in 0..fs {
+                    if !rn[ky] {
                         continue;
                     }
-                    acc += filter[ky * fs + kx] * brow[rc[kx]];
+                    let brow = &band.data[rr[ky]..rr[ky] + band.width];
+                    for kx in 0..fs {
+                        let v = if cn[kx] { brow[rc[kx]] } else { 0.0 };
+                        acc = filter[ky * fs + kx].mul_add(v, acc);
+                    }
+                }
+            } else {
+                for ky in 0..fs {
+                    if !rn[ky] {
+                        continue;
+                    }
+                    let brow = &band.data[rr[ky]..rr[ky] + band.width];
+                    for kx in 0..fs {
+                        if !cn[kx] {
+                            continue;
+                        }
+                        acc += filter[ky * fs + kx] * brow[rc[kx]];
+                    }
                 }
             }
             if acc == 0.0 {
@@ -1120,6 +1162,91 @@ mod tests {
             }
         }
         assert!(worst < 2.0, "interior reconstruction error {worst}");
+    }
+
+    #[test]
+    fn up_conv64_matches_up_pixel_bits() {
+        // The phase-decomposed driver must reproduce the historical
+        // contract bit-for-bit: vector-block outputs (px < out_w & !7) sum
+        // via FMA over every tap in relaxed mode, everything else sums the
+        // aligned taps in mul+add order; zero accumulators recompute
+        // full-order via `up_pixel`.
+        for &(fs, step) in &[(7usize, 1usize), (9, 1), (13, 2), (9, 2)] {
+            let (bw, bh) = (17, 13);
+            // `up_conv64` requires `bw == ow.div_ceil(step)`.
+            let (ow, oh) = (bw * step - (step - 1), bh * step - (step - 1));
+            let band = Band3 {
+                width: bw,
+                height: bh,
+                data: (0..bw * bh)
+                    .map(|i| ((i * 2654435761usize) % 1000) as f64 * 0.01 - 5.0)
+                    .collect(),
+            };
+            let filter: Vec<f64> = (0..fs * fs)
+                .map(|i| ((i * 40503usize) % 97) as f64 * 0.01 - 0.5)
+                .collect();
+            for relaxed in [false, true] {
+                let mut res = (0..ow * oh)
+                    .map(|i| ((i * 97usize) % 23) as f64 - 11.0)
+                    .collect::<Vec<_>>();
+                let c = (fs / 2) as isize;
+                let full8 = ow & !7;
+                let expect: Vec<f64> = res
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &r)| {
+                        let (py, px) = (i / ow, i % ow);
+                        let mut acc = 0.0f64;
+                        if relaxed && px < full8 {
+                            for ky in 0..fs {
+                                let y = reflect1(py as isize + ky as isize - c, oh);
+                                for kx in 0..fs {
+                                    let x = reflect1(px as isize + kx as isize - c, ow);
+                                    let v = if y.is_multiple_of(step) && x.is_multiple_of(step) {
+                                        band.data[(y / step) * bw + (x / step)]
+                                    } else {
+                                        0.0
+                                    };
+                                    acc = filter[ky * fs + kx].mul_add(v, acc);
+                                }
+                            }
+                        } else {
+                            for ky in 0..fs {
+                                let y = reflect1(py as isize + ky as isize - c, oh);
+                                if !y.is_multiple_of(step) {
+                                    continue;
+                                }
+                                for kx in 0..fs {
+                                    let x = reflect1(px as isize + kx as isize - c, ow);
+                                    if x.is_multiple_of(step) {
+                                        acc += filter[ky * fs + kx]
+                                            * band.data[(y / step) * bw + (x / step)];
+                                    }
+                                }
+                            }
+                        }
+                        r + if acc == 0.0 {
+                            up_pixel(&band, &filter, fs, step, ow, oh, py, px)
+                        } else {
+                            acc
+                        }
+                    })
+                    .collect();
+                up_conv64(&band, &filter, fs, step, ow, oh, &mut res, relaxed);
+                for (i, (&a, &e)) in res.iter().zip(&expect).enumerate() {
+                    if a.to_bits() != e.to_bits() {
+                        eprintln!(
+                            "DIFF fs={fs} step={step} relaxed={relaxed} px=({},{}) got {a:024.17e} {:016x} want {e:024.17e} {:016x}",
+                            i / ow,
+                            i % ow,
+                            a.to_bits(),
+                            e.to_bits(),
+                        );
+                    }
+                    assert_eq!(a.to_bits(), e.to_bits(), "px {i}");
+                }
+            }
+        }
     }
 
     #[test]
