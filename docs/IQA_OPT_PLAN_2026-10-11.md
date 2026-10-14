@@ -288,3 +288,49 @@ Second optimisation pass; all scores bit-identical unless noted.
   bandwidth, and the fused version trades a warm read for a cold `yf`
   read; reverted. vifvec parallel-mean regrouping (9 scans → 3 grouped
   tasks) regressed under nested parallelism; kept 9-scan.
+
+### 2026-10-14 pm addendum — coverage-gated pow lanes + f64 log/log2
+
+- **`fdlibm::coverage` const-generic bitmask** (`G: u8`) on the lane pow
+  ports: `EDGE` (early-outs incl. x≤0/specials/y∈{1,2,0.5}), `SUBN`
+  (subnormal-x handling — f32 normalizes in-vector, f64 routes to scalar),
+  `RANGE` (result overflow/underflow), `TAIL` (sub-ulp correction terms).
+  Every public driver has a `*_gated::<G>` twin; `vpow*_libm_into` =
+  `EXACT` and is bitwise-unchanged. Cleared bits are caller domain
+  promises; the scalar-fallback path stays reachable whenever any live
+  gate feeds `need` (EDGE-off still repairs RANGE lanes bitwise).
+- **Measured cost** (Zen 5 v4x, 1M positive-finite elems, p=2.4;
+  `examples/powf_coverage_bench`): f32 EXACT 2.41 → POSITIVE_FINITE 2.33
+  → POSITIVE_NORMAL 2.22 → BULK 2.17 → bare 2.00 ns/elem; f64 EXACT 9.43
+  → BULK 8.74. Hostile-domain probe: −EDGE 12–50% lanes wrong, −RANGE
+  8% wrong, −TAIL wrong even on friendly input (~5e3 ulp f32, ~2e11 ulp
+  f64 — TAIL is accuracy, not coverage; the honest approximate tier is
+  `pow_midp`). **Design rule**: coverage knobs pay ~3–7% per gate on the
+  kernel, more in-context — there is no cheap middle precision tier.
+- **vsi `srgb_to_lab` at `BULK`** (`lin` arg∈[0.0521,1], result
+  ∈[8e-4,1]; `cbrt` arg∈{1}∪(0.008856,~1.17], `pow(1,y)≡1.0` verified
+  bitwise through the raw vector path): serial 1024² wall
+  **65.4→51.8 ms (−21%)**, bits `3fefb77a83788424` — the f64 coverage
+  overhead is bigger in-context (freed the per-iter to_array
+  materializations for the never-taken `scalar_lanes` branch).
+- **fdlibm64 `e_log`/`e_log2` lanes** (`vlog_libm_into`,
+  `vlog2_libm_into`, all tiers; shared reduce+poly macro, reconstruction
+  differs): bitwise differential suites incl. subnormal inputs —
+  `hx < 0x00100000` exponent-field detection scales by 2^54 then
+  normalizes (a `hx == 0` check misses subnormals with nonzero high
+  mantissa bits — first test round caught 404/2048 lanes).
+- **vif dedup**: `vifvec`'s local lane log2 (~40 lines of LG*/IVLN2*
+  constants + kernel) replaced by shared `log2_libm_4x`; v4x's `f64x8`
+  runs two `f64x4` chunks (no `I64x8Bitcast` in magetypes yet).
+- **fsim `radial_filters` vectorized**: `pow(r/LP_CUTOFF, 2·LP_ORDER)`
+  once via `vpow64_libm_into`, per-scale `log(r/fo)` via `vlog_libm_into`
+  (Arc-cached bank → runs once per size). 19/19 tests.
+- **mad-iqa `gabor_grids`**: radius-grid `log` lanes + `Mutex`-guarded
+  single-slot `Arc` cache on (m,n) under std, direct build under no_std.
+- **Not adopted** (domain not airtight or already optimal): mdsi's
+  `powf(0.25)` — std-oracle path (glibc vs fdlibm differ 1ulp on 9.6% of
+  inputs — measured, would change std-build bits); VSI pooling powf —
+  `gsim`/`iq` can legitimately be 0 or negative; mad-iqa lum pow — NaN
+  propagation on hostile input must be preserved; `expf` left ungated —
+  its edges are pure-vector blends and callers feed near-zero args where
+  the `tiny` path is required for bit-exactness.
