@@ -929,19 +929,14 @@ impl Plan2 {
     /// Plane variants of the four passes: identical arithmetic, but the
     /// gathers/scatters touch contiguous `f64` runs instead of `C64`
     /// pairs — the hot `conv_fft_pad` path uses these.
-    /// Inverse row pass, writing only the `out_h × out_w` top-left output
-    /// region — `conv_fft_pad` crops to it, so the rest is dead work. The
-    /// gather still reads all `w` columns (every output needs the full
-    /// transform); only the scatter trims to `out_w`.
-    fn rows_inv_p(
-        &mut self,
-        re: &mut [f64],
-        im: &mut [f64],
-        relaxed: bool,
-        out_w: usize,
-        out_h: usize,
-    ) {
+    /// Inverse row pass writing straight into the cropped output — `out`
+    /// is `out_h` rows of `out_w` (its stride too), so the scatter is fully
+    /// contiguous. The imaginary output lanes are dead in the conv path and
+    /// not stored; the gather still reads all `w` columns and negates `pim`
+    /// (every output needs the full conjugated input).
+    fn rows_inv_out(&mut self, out: &mut [f64], relaxed: bool, out_w: usize, out_h: usize) {
         let (w, _h) = (self.width, self.height);
+        debug_assert!(out.len() >= out_h * out_w);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
         for y0 in (0..out_h).step_by(8) {
@@ -969,172 +964,9 @@ impl Plan2 {
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
             for j in 0..rws {
-                let row = (y0 + j) * w;
+                let row = (y0 + j) * out_w;
                 for k in 0..out_w {
-                    re[row + k] = self.re8[k * 8 + j] * s;
-                    im[row + k] = -self.im8[k * 8 + j] * s;
-                }
-            }
-        }
-    }
-
-    fn columns_fwd_p(&mut self, re: &mut [f64], im: &mut [f64], relaxed: bool) {
-        let (w, h) = (self.width, self.height);
-        let perm = self.columns.gather_perm();
-        for x0 in (0..w).step_by(8) {
-            let cols = (w - x0).min(8);
-            if cols == 8 {
-                // Fixed-8 copies inline to vector moves — a runtime-length
-                // `copy_from_slice` defers to `memmove` per row.
-                for y in 0..h {
-                    let (d, s) = (
-                        match perm {
-                            Some(r) => r[y] as usize,
-                            None => y,
-                        } * 8,
-                        y * w + x0,
-                    );
-                    self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
-                    self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
-                }
-            } else {
-                for y in 0..h {
-                    let (d, s) = (
-                        match perm {
-                            Some(r) => r[y] as usize,
-                            None => y,
-                        } * 8,
-                        y * w + x0,
-                    );
-                    self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
-                    self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
-                }
-            }
-            {
-                let m = self.columns.work_len(h);
-                let re8 = &mut self.re8[..h * 8];
-                let im8 = &mut self.im8[..h * 8];
-                let sre8 = &mut self.sre8[..m * 8];
-                let sim8 = &mut self.sim8[..m * 8];
-                let s2re8 = &mut self.s2re8[..m * 8];
-                let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns
-                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
-            }
-            if cols == 8 {
-                for y in 0..h {
-                    let (d, s) = (y * 8, y * w + x0);
-                    re[s..s + 8].copy_from_slice(&self.re8[d..d + 8]);
-                    im[s..s + 8].copy_from_slice(&self.im8[d..d + 8]);
-                }
-            } else {
-                for y in 0..h {
-                    let (d, s) = (y * 8, y * w + x0);
-                    re[s..s + cols].copy_from_slice(&self.re8[d..d + cols]);
-                    im[s..s + cols].copy_from_slice(&self.im8[d..d + cols]);
-                }
-            }
-        }
-    }
-
-    /// Inverse column stage with an optional pointwise plane multiply folded
-    /// into the gather — `conv_fft_pad` uses this to skip a full plane
-    /// sweep. The products are computed in the same order as a separate
-    /// multiply pass, so results are bit-identical.
-    /// `keep_rows` bounds the scatter — output rows past it are dead once
-    /// the caller crops (the gather still reads the full `h`, since every
-    /// column output needs all its inputs).
-    fn columns_inv_p_filtered(
-        &mut self,
-        re: &[f64],
-        im: &mut [f64],
-        filt: Option<&[f64]>,
-        relaxed: bool,
-        keep_rows: usize,
-    ) {
-        let (w, h) = (self.width, self.height);
-        let perm = self.columns.gather_perm();
-        let sc = 1.0 / h as f64;
-        for x0 in (0..w).step_by(8) {
-            let cols = (w - x0).min(8);
-            if cols == 8 {
-                // Fixed-8 loops auto-vectorise; the runtime-length tail
-                // below stays scalar.
-                for y in 0..h {
-                    let (d, s) = (
-                        match perm {
-                            Some(r) => r[y] as usize,
-                            None => y,
-                        } * 8,
-                        y * w + x0,
-                    );
-                    match filt {
-                        Some(f) => {
-                            for j in 0..8 {
-                                self.re8[d + j] = re[s + j] * f[s + j];
-                                self.im8[d + j] = -(im[s + j] * f[s + j]);
-                            }
-                        }
-                        None => {
-                            self.re8[d..d + 8].copy_from_slice(&re[s..s + 8]);
-                            for j in 0..8 {
-                                self.im8[d + j] = -im[s + j];
-                            }
-                        }
-                    }
-                }
-            } else {
-                for y in 0..h {
-                    let (d, s) = (
-                        match perm {
-                            Some(r) => r[y] as usize,
-                            None => y,
-                        } * 8,
-                        y * w + x0,
-                    );
-                    match filt {
-                        Some(f) => {
-                            for j in 0..cols {
-                                self.re8[d + j] = re[s + j] * f[s + j];
-                                self.im8[d + j] = -(im[s + j] * f[s + j]);
-                            }
-                        }
-                        None => {
-                            self.re8[d..d + cols].copy_from_slice(&re[s..s + cols]);
-                            // Negated copy — contiguous, vectorises cleanly.
-                            for j in 0..cols {
-                                self.im8[d + j] = -im[s + j];
-                            }
-                        }
-                    }
-                }
-            }
-            {
-                let m = self.columns.work_len(h);
-                let re8 = &mut self.re8[..h * 8];
-                let im8 = &mut self.im8[..h * 8];
-                let sre8 = &mut self.sre8[..m * 8];
-                let sim8 = &mut self.sim8[..m * 8];
-                let s2re8 = &mut self.s2re8[..m * 8];
-                let s2im8 = &mut self.s2im8[..m * 8];
-                self.columns
-                    .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
-            }
-            if cols == 8 {
-                for y in 0..keep_rows {
-                    let (d, s) = (y * 8, y * w + x0);
-                    for j in 0..8 {
-                        self.pre[s + j] = self.re8[d + j] * sc;
-                        self.pim[s + j] = -self.im8[d + j] * sc;
-                    }
-                }
-            } else {
-                for y in 0..keep_rows {
-                    let (d, s) = (y * 8, y * w + x0);
-                    for j in 0..cols {
-                        self.pre[s + j] = self.re8[d + j] * sc;
-                        self.pim[s + j] = -self.im8[d + j] * sc;
-                    }
+                    out[row + k] = self.re8[k * 8 + j] * s;
                 }
             }
         }
@@ -1154,21 +986,11 @@ impl Plan2 {
         }
     }
 
-    /// Forward transform of a *real* image given unpadded: the row gather
+    /// Forward row transforms of a *real* image given unpadded: the gather
     /// applies the pad map straight from `x` (skipping the padded-plane
-    /// round trip), and the imaginary lanes are all +0. `re`/`im` are the
-    /// output planes — both fully written by the column pass, so their
-    /// incoming contents never matter.
-    fn forward_p_pad(
-        &mut self,
-        x: &[f64],
-        src_w: usize,
-        src_h: usize,
-        pad: Pad,
-        re: &mut [f64],
-        im: &mut [f64],
-        relaxed: bool,
-    ) {
+    /// round trip), the imaginary lanes are all +0, and results scatter
+    /// into `pre`/`pim` for the column stage.
+    fn rows_fwd_p_pad(&mut self, x: &[f64], src_w: usize, src_h: usize, pad: Pad, relaxed: bool) {
         let (w, h) = (self.width, self.height);
         let perm = self.rows.gather_perm();
         let xmap: Vec<usize> = (0..w).map(|px| Self::pad_index(px, src_w, pad)).collect();
@@ -1229,29 +1051,154 @@ impl Plan2 {
                 }
             }
         }
-        self.columns_fwd_p(re, im, relaxed);
     }
 
-    /// Inverse transform on split real/imaginary planes, with `filt`
-    /// multiplied into the planes during the column gather — identical
-    /// results to multiplying first when `filt` is `Some`. `crop` bounds the
-    /// useful output region: only `crop.0 × crop.1` (w×h order) is written;
-    /// the rest of `re`/`im` is left unmodified.
-    fn inverse_p_filtered(
-        &mut self,
-        re: &mut [f64],
-        im: &mut [f64],
-        filt: Option<&[f64]>,
-        relaxed: bool,
-        crop: (usize, usize),
-    ) {
-        assert_eq!(
-            (re.len(), im.len()),
-            (self.width * self.height, self.width * self.height),
-            "ifft2: plane size mismatch"
-        );
-        self.columns_inv_p_filtered(re, im, filt, relaxed, crop.1);
-        self.rows_inv_p(re, im, relaxed, crop.0, crop.1);
+    /// Filtered column round-trip: forward column FFT of `pre`/`pim`,
+    /// multiply by the real filter, inverse (conj∘fwd∘conj·1/h) — all on
+    /// the same 8-column tiles, so the transform output never leaves the
+    /// lane planes. Writes only rows `< keep_rows` of `pre`/`pim` (the
+    /// crop region the following row pass consumes). Every multiply and
+    /// negation lands in the same order as the unfused gather/scatter
+    /// sequence, so results are bit-identical.
+    fn columns_filt_rt_p(&mut self, filt: &[f64], relaxed: bool, keep_rows: usize) {
+        let (w, h) = (self.width, self.height);
+        let perm = self.columns.gather_perm();
+        let sc = 1.0 / h as f64;
+        for x0 in (0..w).step_by(8) {
+            let cols = (w - x0).min(8);
+            if cols == 8 {
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + 8].copy_from_slice(&self.pre[s..s + 8]);
+                    self.im8[d..d + 8].copy_from_slice(&self.pim[s..s + 8]);
+                }
+                {
+                    let m = self.columns.work_len(h);
+                    let re8 = &mut self.re8[..h * 8];
+                    let im8 = &mut self.im8[..h * 8];
+                    let sre8 = &mut self.sre8[..m * 8];
+                    let sim8 = &mut self.sim8[..m * 8];
+                    let s2re8 = &mut self.s2re8[..m * 8];
+                    let s2im8 = &mut self.s2im8[..m * 8];
+                    self.columns
+                        .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                }
+                // Filter + input-conjugate of the inverse, fused per lane:
+                // `re·f`, `−(im·f)` — landed at the permuted input slots the
+                // second transform reads (identity when `perm` is None).
+                match perm {
+                    None => {
+                        for y in 0..h {
+                            let s = y * w + x0;
+                            for j in 0..8 {
+                                self.re8[y * 8 + j] *= filt[s + j];
+                                self.im8[y * 8 + j] = -(self.im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                    }
+                    Some(r) => {
+                        for y in 0..h {
+                            let (d, s) = (r[y] as usize * 8, y * w + x0);
+                            for j in 0..8 {
+                                self.s2re8[d + j] = self.re8[y * 8 + j] * filt[s + j];
+                                self.s2im8[d + j] = -(self.im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                        let n = h * 8;
+                        self.re8[..n].copy_from_slice(&self.s2re8[..n]);
+                        self.im8[..n].copy_from_slice(&self.s2im8[..n]);
+                    }
+                }
+                {
+                    let m = self.columns.work_len(h);
+                    let re8 = &mut self.re8[..h * 8];
+                    let im8 = &mut self.im8[..h * 8];
+                    let sre8 = &mut self.sre8[..m * 8];
+                    let sim8 = &mut self.sim8[..m * 8];
+                    let s2re8 = &mut self.s2re8[..m * 8];
+                    let s2im8 = &mut self.s2im8[..m * 8];
+                    self.columns
+                        .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                }
+                for y in 0..keep_rows {
+                    let (d, s) = (y * 8, y * w + x0);
+                    for j in 0..8 {
+                        self.pre[s + j] = self.re8[d + j] * sc;
+                        self.pim[s + j] = -self.im8[d + j] * sc;
+                    }
+                }
+            } else {
+                for y in 0..h {
+                    let (d, s) = (
+                        match perm {
+                            Some(r) => r[y] as usize,
+                            None => y,
+                        } * 8,
+                        y * w + x0,
+                    );
+                    self.re8[d..d + cols].copy_from_slice(&self.pre[s..s + cols]);
+                    self.im8[d..d + cols].copy_from_slice(&self.pim[s..s + cols]);
+                }
+                {
+                    let m = self.columns.work_len(h);
+                    let re8 = &mut self.re8[..h * 8];
+                    let im8 = &mut self.im8[..h * 8];
+                    let sre8 = &mut self.sre8[..m * 8];
+                    let sim8 = &mut self.sim8[..m * 8];
+                    let s2re8 = &mut self.s2re8[..m * 8];
+                    let s2im8 = &mut self.s2im8[..m * 8];
+                    self.columns
+                        .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                }
+                match perm {
+                    None => {
+                        for y in 0..h {
+                            let s = y * w + x0;
+                            for j in 0..cols {
+                                self.re8[y * 8 + j] *= filt[s + j];
+                                self.im8[y * 8 + j] = -(self.im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                    }
+                    Some(r) => {
+                        for y in 0..h {
+                            let (d, s) = (r[y] as usize * 8, y * w + x0);
+                            for j in 0..cols {
+                                self.s2re8[d + j] = self.re8[y * 8 + j] * filt[s + j];
+                                self.s2im8[d + j] = -(self.im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                        let n = h * 8;
+                        self.re8[..n].copy_from_slice(&self.s2re8[..n]);
+                        self.im8[..n].copy_from_slice(&self.s2im8[..n]);
+                    }
+                }
+                {
+                    let m = self.columns.work_len(h);
+                    let re8 = &mut self.re8[..h * 8];
+                    let im8 = &mut self.im8[..h * 8];
+                    let sre8 = &mut self.sre8[..m * 8];
+                    let sim8 = &mut self.sim8[..m * 8];
+                    let s2re8 = &mut self.s2re8[..m * 8];
+                    let s2im8 = &mut self.s2im8[..m * 8];
+                    self.columns
+                        .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
+                }
+                for y in 0..keep_rows {
+                    let (d, s) = (y * 8, y * w + x0);
+                    for j in 0..cols {
+                        self.pre[s + j] = self.re8[d + j] * sc;
+                        self.pim[s + j] = -self.im8[d + j] * sc;
+                    }
+                }
+            }
+        }
     }
 
     fn forward(&mut self, buf: &mut [C64], relaxed: bool) {
@@ -1285,33 +1232,7 @@ std::thread_local! {
         std::collections::HashMap<(usize, usize), Plan2>,
     > = core::cell::RefCell::new(std::collections::HashMap::new());
 
-    /// Per-thread pooled `re`/`im` planes for [`conv_fft_pad`] — two fresh
-    /// `pad_w·pad_h` zeroed allocations per call cost real page-fault time
-    /// at convolution-lattice sizes.
-    static CONV_PLANES: core::cell::RefCell<
-        std::collections::HashMap<(usize, usize), (Vec<f64>, Vec<f64>)>,
-    > = core::cell::RefCell::new(std::collections::HashMap::new());
 }
-
-/// Run `f` on the pooled `re`/`im` planes for `pad_w × pad_h`, allocating on
-/// first use. Same bounded-shape discipline as [`with_plan2`].
-fn with_conv_planes<R>(
-    pad_w: usize,
-    pad_h: usize,
-    f: impl FnOnce(&mut Vec<f64>, &mut Vec<f64>) -> R,
-) -> R {
-    CONV_PLANES.with(|c| {
-        let mut map = c.borrow_mut();
-        if map.len() >= 8 && !map.contains_key(&(pad_w, pad_h)) {
-            map.clear();
-        }
-        let (re, im) = map
-            .entry((pad_w, pad_h))
-            .or_insert_with(|| (Vec::new(), Vec::new()));
-        f(re, im)
-    })
-}
-
 /// Run `f` on the cached plan for `width × height`, constructing it on
 /// first use. Bounded to a handful of resident shapes — the metric works a
 /// fixed lattice set per call.
@@ -1380,26 +1301,17 @@ pub(super) fn conv_fft_pad(
     relaxed: bool,
 ) -> Vec<f64> {
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
-    // Split real/imaginary planes end to end: the pointwise multiply is
-    // contiguous and vectorizable, and no C64 (de)interleave is needed.
-    with_conv_planes(pad_w, pad_h, |re, im| {
-        // `re`/`im` need the right lengths but not content — the real-input
-        // row gather writes zero lanes and the column pass overwrites both
-        // wholesale.
-        re.resize(pad_w * pad_h, 0.0);
-        im.resize(pad_w * pad_h, 0.0);
-        with_plan2(pad_w, pad_h, |plan| {
-            plan.forward_p_pad(x, width, height, pad, re, im, relaxed);
-            // The pointwise filter multiply folds into the inverse column
-            // gather — same products, same order, no extra plane sweep.
-            plan.inverse_p_filtered(re, im, Some(filter), relaxed, (width, height));
-        });
-        let mut out = Vec::with_capacity(width * height);
-        for y in 0..height {
-            out.extend_from_slice(&re[y * pad_w..y * pad_w + width]);
-        }
-        out
-    })
+    // Fully fused: rows gather straight from the unpadded `x` (imag lanes
+    // are constants), the column round-trip keeps its transform output in
+    // the lane planes while folding in the real filter multiply, and the
+    // inverse row pass scatters only the kept crop straight into `out`.
+    let mut out = vec![0.0; width * height];
+    with_plan2(pad_w, pad_h, |plan| {
+        plan.rows_fwd_p_pad(x, width, height, pad, relaxed);
+        plan.columns_filt_rt_p(filter, relaxed, height);
+        plan.rows_inv_out(&mut out, relaxed, width, height);
+    });
+    out
 }
 
 #[cfg(test)]
