@@ -21,7 +21,7 @@ use crate::kernels::masking::{
     D_MAX, MASK_C, MASK_P, MASK_Q, MASK_Q_4, PU_PADSIZE, XCM_3X3, XCM_4X4,
 };
 
-use crate::simd_pyramid::gaussian_blur_sigma3_scaled_simd;
+use crate::simd_pyramid::gaussian_blur_sigma3_minabs_scaled;
 use zenmetrics_math::{
     safe_pow_with_offset_into, vabs_diff_pow_into, vmin_abs_into,
     vxcm_pool_clamp_4ch_sqsum_partial, xcm4_finish,
@@ -74,47 +74,77 @@ pub(crate) fn mult_mutual_band_into(
     term_rg.resize(n, 0.0);
     term_vy.resize(n, 0.0);
 
-    // Step 1: M_mm_raw = min(|T|, |R|) — row-banded elementwise.
-    crate::par::map1_2(
-        &mut m_mm_a[..n],
-        &t_p_per_ch[0][..n],
-        &r_p_per_ch[0][..n],
-        vmin_abs_into,
-    );
-    crate::par::map1_2(
-        &mut m_mm_rg[..n],
-        &t_p_per_ch[1][..n],
-        &r_p_per_ch[1][..n],
-        vmin_abs_into,
-    );
-    crate::par::map1_2(
-        &mut m_mm_vy[..n],
-        &t_p_per_ch[2][..n],
-        &r_p_per_ch[2][..n],
-        vmin_abs_into,
-    );
-
-    // Step 2: phase_uncertainty per channel.
+    // Steps 1+2 fused for blur-sized bands:
+    // `gaussian_blur_sigma3_minabs_scaled` computes
+    // `min(|T|,|R|)` inline during its horizontal pass (identical
+    // `a.abs().min(b.abs())` op order to `vmin_abs_into`), so the
+    // `m_mm` intermediate is never materialized — one elementwise
+    // pass and one plane write+read less than the split chain.
+    // Small bands fall back to the elementwise `min` + scale.
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         // SIMD σ=3 13-tap separable Gaussian (Chunk 1 of the SIMD
         // optimization plan, replacing the upstream
         // `gaussian_blur_sigma3` which allocated its h-pass buffer
-        // internally). We thread `pu_scratch` as the h-pass scratch
-        // (shared across the 3 channels — resized to n inside the
-        // SIMD entry) and write the SCALED blur into the free `term_*`
-        // buffers — `gaussian_blur_sigma3_scaled_simd` folds the
-        // `mask_c_lin` multiply into the vertical pass's final store,
-        // bit-identical to a separate `vscale` pass (removed).
-        gaussian_blur_sigma3_scaled_simd(m_mm_a, bw, bh, pu_scratch, term_a, mask_c_lin);
-        gaussian_blur_sigma3_scaled_simd(m_mm_rg, bw, bh, pu_scratch, term_rg, mask_c_lin);
-        gaussian_blur_sigma3_scaled_simd(m_mm_vy, bw, bh, pu_scratch, term_vy, mask_c_lin);
+        // internally). We thread `pu_scratch` as the h-pass ring
+        // scratch (shared across the 3 channels — sized to `13*bw`
+        // inside the SIMD entry) and write the SCALED blur into the
+        // free `term_*` buffers — `gaussian_blur_sigma3_minabs_scaled`
+        // folds both the `min(|T|,|R|)` read and the `mask_c_lin`
+        // multiply into the kernel, bit-identical to the
+        // `vmin_abs` + blur + `vscale` chain (removed).
+        gaussian_blur_sigma3_minabs_scaled(
+            &t_p_per_ch[0][..n],
+            &r_p_per_ch[0][..n],
+            bw,
+            bh,
+            pu_scratch,
+            term_a,
+            mask_c_lin,
+        );
+        gaussian_blur_sigma3_minabs_scaled(
+            &t_p_per_ch[1][..n],
+            &r_p_per_ch[1][..n],
+            bw,
+            bh,
+            pu_scratch,
+            term_rg,
+            mask_c_lin,
+        );
+        gaussian_blur_sigma3_minabs_scaled(
+            &t_p_per_ch[2][..n],
+            &r_p_per_ch[2][..n],
+            bw,
+            bh,
+            pu_scratch,
+            term_vy,
+            mask_c_lin,
+        );
         // term_* now hold min(|T|,|R|) blurred × mask_c_lin; m_mm_* are
-        // free and become step 3's pow outputs (pass 3 reads them).
+        // free and become the fused fold's pow/scratch targets.
         core::mem::swap(&mut *term_a, &mut *m_mm_a);
         core::mem::swap(&mut *term_rg, &mut *m_mm_rg);
         core::mem::swap(&mut *term_vy, &mut *m_mm_vy);
     } else {
+        // Step 1: M_mm_raw = min(|T|, |R|) — row-banded elementwise.
+        crate::par::map1_2(
+            &mut m_mm_a[..n],
+            &t_p_per_ch[0][..n],
+            &r_p_per_ch[0][..n],
+            vmin_abs_into,
+        );
+        crate::par::map1_2(
+            &mut m_mm_rg[..n],
+            &t_p_per_ch[1][..n],
+            &r_p_per_ch[1][..n],
+            vmin_abs_into,
+        );
+        crate::par::map1_2(
+            &mut m_mm_vy[..n],
+            &t_p_per_ch[2][..n],
+            &r_p_per_ch[2][..n],
+            vmin_abs_into,
+        );
         for i in 0..n {
             m_mm_a[i] *= mask_c_lin;
             m_mm_rg[i] *= mask_c_lin;
@@ -224,24 +254,17 @@ pub(crate) fn mult_mutual_band_4ch_into(
         }
     }
 
-    // Step 1: M_mm_raw = min(|T|, |R|) — row-banded elementwise.
-    for c in 0..4 {
-        crate::par::map1_2(
-            &mut m_mm[c][..n],
-            &t_p_per_ch[c][..n],
-            &r_p_per_ch[c][..n],
-            vmin_abs_into,
-        );
-    }
-
-    // Step 2: phase_uncertainty per channel (σ=3 blur above
-    // PU_PADSIZE, then × mask_c_lin) — same as the 3-channel path.
-    // The blur's two passes are row-banded internally.
+    // Steps 1+2 fused for blur-sized bands (same as the 3-channel
+    // path): `gaussian_blur_sigma3_minabs_scaled` computes
+    // `min(|T|,|R|)` inline during the blur's horizontal pass, so
+    // the `m_mm` intermediate is never materialized. Small bands
+    // fall back to the elementwise `min` + scale.
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         for c in 0..4 {
-            gaussian_blur_sigma3_scaled_simd(
-                &m_mm[c][..n],
+            gaussian_blur_sigma3_minabs_scaled(
+                &t_p_per_ch[c][..n],
+                &r_p_per_ch[c][..n],
                 bw,
                 bh,
                 pu_scratch,
@@ -254,6 +277,12 @@ pub(crate) fn mult_mutual_band_4ch_into(
         }
     } else {
         for c in 0..4 {
+            crate::par::map1_2(
+                &mut m_mm[c][..n],
+                &t_p_per_ch[c][..n],
+                &r_p_per_ch[c][..n],
+                vmin_abs_into,
+            );
             for v in m_mm[c][..n].iter_mut() {
                 *v *= mask_c_lin;
             }

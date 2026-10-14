@@ -2018,10 +2018,16 @@ fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [
 ///
 /// `ring_scratch` (len >= 13*w) is the serial-path ring; parallel
 /// bands get private rings via `map_rows_scratch`.
+/// When `src_b` is `Some`, the h-filtered ring rows hold
+/// `min(|src_a|, |src_b|)` (identical op order to `vmin_abs_into`)
+/// computed inline — the masking path's `min(|T|,|R|)` intermediate
+/// never materializes as a plane, saving a full write+read per
+/// channel. When `None`, rows are the plain h-filtered `src_a`.
 #[archmage::attune(_v4x_t(cfg(avx512)), define(f32x16))]
 fn pu_blur_fused_inner(
     token: Token,
     src: &[f32],
+    src_b: Option<&[f32]>,
     w: usize,
     h: usize,
     ring_scratch: &mut Vec<f32>,
@@ -2068,13 +2074,18 @@ fn pu_blur_fused_inner(
             let need_hi = (y + 6).min(h - 1);
             while next_row <= need_hi {
                 let srow = &src[next_row * w..next_row * w + w];
+                let brow = src_b.map(|b| &b[next_row * w..next_row * w + w]);
                 let slot = (next_row % RING) * w;
                 let out = &mut ring[slot..slot + w];
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        s += k[t] * srow[sx];
+                        let v = match brow {
+                            Some(b) => srow[sx].abs().min(b[sx].abs()),
+                            None => srow[sx],
+                        };
+                        s += k[t] * v;
                     }
                     out[x] = s;
                 }
@@ -2083,7 +2094,14 @@ fn pu_blur_fused_inner(
                     let load = |off: usize| -> f32x16 {
                         let base = x_base - 6 + off;
                         let arr: [f32; 16] = srow[base..base + 16].try_into().unwrap();
-                        f32x16::from_array_t(token, arr)
+                        let av = f32x16::from_array_t(token, arr);
+                        match brow {
+                            Some(b) => {
+                                let barr: [f32; 16] = b[base..base + 16].try_into().unwrap();
+                                av.abs().min(f32x16::from_array_t(token, barr).abs())
+                            }
+                            None => av,
+                        }
                     };
                     let v0 = load(0);
                     let v1 = load(1);
@@ -2118,7 +2136,11 @@ fn pu_blur_fused_inner(
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        s += k[t] * srow[sx];
+                        let v = match brow {
+                            Some(b) => srow[sx].abs().min(b[sx].abs()),
+                            None => srow[sx],
+                        };
+                        s += k[t] * v;
                     }
                     out[x] = s;
                 }
@@ -2195,11 +2217,13 @@ fn pu_blur_fused_inner(
 }
 
 /// 8-wide twin of the 16-wide `pu_blur_fused_inner` — see its
-/// doc comment for the ring-window invariant.
+/// doc comment for the ring-window invariant and the `src_b`
+/// inline `min(|a|,|b|)` contract.
 #[archmage::attune(_*_t, define(f32x8))]
 fn pu_blur_fused_inner(
     token: Token,
     src: &[f32],
+    src_b: Option<&[f32]>,
     w: usize,
     h: usize,
     ring_scratch: &mut Vec<f32>,
@@ -2244,13 +2268,18 @@ fn pu_blur_fused_inner(
             let need_hi = (y + 6).min(h - 1);
             while next_row <= need_hi {
                 let srow = &src[next_row * w..next_row * w + w];
+                let brow = src_b.map(|b| &b[next_row * w..next_row * w + w]);
                 let slot = (next_row % RING) * w;
                 let out = &mut ring[slot..slot + w];
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        s += k[t] * srow[sx];
+                        let v = match brow {
+                            Some(b) => srow[sx].abs().min(b[sx].abs()),
+                            None => srow[sx],
+                        };
+                        s += k[t] * v;
                     }
                     out[x] = s;
                 }
@@ -2259,7 +2288,14 @@ fn pu_blur_fused_inner(
                     let load = |off: usize| -> f32x8 {
                         let base = x_base - 6 + off;
                         let arr: [f32; 8] = srow[base..base + 8].try_into().unwrap();
-                        f32x8::from_array_t(token, arr)
+                        let av = f32x8::from_array_t(token, arr);
+                        match brow {
+                            Some(b) => {
+                                let barr: [f32; 8] = b[base..base + 8].try_into().unwrap();
+                                av.abs().min(f32x8::from_array_t(token, barr).abs())
+                            }
+                            None => av,
+                        }
                     };
                     let v0 = load(0);
                     let v1 = load(1);
@@ -2294,7 +2330,11 @@ fn pu_blur_fused_inner(
                     let mut s = 0.0f32;
                     for t in 0..13 {
                         let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
-                        s += k[t] * srow[sx];
+                        let v = match brow {
+                            Some(b) => srow[sx].abs().min(b[sx].abs()),
+                            None => srow[sx],
+                        };
+                        s += k[t] * v;
                     }
                     out[x] = s;
                 }
@@ -2413,10 +2453,29 @@ pub(crate) fn pu_blur_fused_scaled(
     dst: &mut [f32],
     scale: f32,
 ) {
-    debug_assert_eq!(src.len(), w * h);
+    pu_blur_fused_minabs_scaled(src, None, w, h, ring_scratch, dst, scale);
+}
+
+/// [`pu_blur_fused_scaled`] variant whose h-pass reads
+/// `min(|src_a[i]|, |src_b[i]|)` (identical op order to
+/// `zenmetrics_math::vmin_abs_into`) instead of a materialized
+/// plane — the mutual-masking path's `m_mm` intermediate is never
+/// written or read back. Bit-identical to `vmin_abs_into` +
+/// `pu_blur_horizontal_pass` + `pu_blur_vertical_pass_scaled`.
+pub(crate) fn pu_blur_fused_minabs_scaled(
+    src_a: &[f32],
+    src_b: Option<&[f32]>,
+    w: usize,
+    h: usize,
+    ring_scratch: &mut Vec<f32>,
+    dst: &mut [f32],
+    scale: f32,
+) {
+    debug_assert_eq!(src_a.len(), w * h);
     debug_assert_eq!(dst.len(), w * h);
+    debug_assert_eq!(src_b.map_or(w * h, |b| b.len()), w * h);
     archmage::attuned!(
-        pu_blur_fused_inner(src, w, h, ring_scratch, dst, scale),
+        pu_blur_fused_inner(src_a, src_b, w, h, ring_scratch, dst, scale),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -2451,18 +2510,24 @@ pub(crate) fn gaussian_blur_sigma3_simd(
     pu_blur_fused_scaled(src, w, h, h_pass, &mut dst[..n], 1.0);
 }
 
-/// [`gaussian_blur_sigma3_simd`] with the output scale folded into
-/// the vertical pass's store — `dst[i] = blur(src)[i] * scale`,
-/// bit-identical to a separate `vscale` pass.
-pub(crate) fn gaussian_blur_sigma3_scaled_simd(
-    src: &[f32],
+/// [`gaussian_blur_sigma3_simd`] with `min(|src_a|, |src_b|)`
+/// fused into the horizontal pass and an output scale folded into
+/// the vertical store — the mutual-masking path's `min(|T|,|R|)`
+/// plane is never materialized. Bit-identical to `vmin_abs_into` +
+/// `gaussian_blur_sigma3_simd` + a separate `vscale` pass.
+///
+/// Caller invariants: `src_a.len() == src_b.len() == w * h`.
+pub(crate) fn gaussian_blur_sigma3_minabs_scaled(
+    src_a: &[f32],
+    src_b: &[f32],
     w: usize,
     h: usize,
     h_pass: &mut Vec<f32>,
     dst: &mut Vec<f32>,
     scale: f32,
 ) {
-    debug_assert_eq!(src.len(), w * h);
+    debug_assert_eq!(src_a.len(), w * h);
+    debug_assert_eq!(src_b.len(), w * h);
     let n = w * h;
     if h_pass.len() < 13 * w {
         h_pass.resize(13 * w, 0.0);
@@ -2470,7 +2535,7 @@ pub(crate) fn gaussian_blur_sigma3_scaled_simd(
     if dst.len() < n {
         dst.resize(n, 0.0);
     }
-    pu_blur_fused_scaled(src, w, h, h_pass, &mut dst[..n], scale);
+    pu_blur_fused_minabs_scaled(src_a, Some(src_b), w, h, h_pass, &mut dst[..n], scale);
 }
 
 // ============================================================================
@@ -2921,6 +2986,58 @@ mod tests {
                 let mut ring: Vec<f32> = Vec::new();
                 let mut got = alloc::vec![0.0f32; w * h];
                 pu_blur_fused_scaled(&src, w, h, &mut ring, &mut got, scale);
+                for i in 0..w * h {
+                    assert_eq!(
+                        want[i].to_bits(),
+                        got[i].to_bits(),
+                        "case {w}x{h} scale={scale} idx {i}: want={}, got={}",
+                        want[i],
+                        got[i]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_fused_minabs_matches_split_bitexact() {
+        // The `src_b` variant must reproduce `vmin_abs` (materialized
+        // `min(|a|,|b|)` plane) + split blur + scale bit-for-bit — the
+        // inline `a.abs().min(b.abs())` is the same op order the
+        // `vmin_abs` kernel uses, applied at the same element indices
+        // (before the h-filter's reflected taps read them).
+        let cases: &[(usize, usize)] = &[
+            (7, 7),
+            (8, 8),
+            (13, 13),
+            (16, 16),
+            (17, 19),
+            (24, 32),
+            (33, 35),
+            (5, 9),
+            (3, 64),
+            (64, 3),
+            (100, 101),
+            (128, 128),
+            (400, 340),
+        ];
+        for &(w, h) in cases {
+            for &scale in &[1.0f32, 2.5] {
+                let seed = 0xFACE ^ ((w as u32) << 16) ^ (h as u32);
+                let a = rng_seq(seed, w * h);
+                let b = rng_seq(seed ^ 0x1111, w * h);
+                // Reference: materialize min plane, h-pass, scaled v-pass.
+                let mut mm = alloc::vec![0.0f32; w * h];
+                for i in 0..w * h {
+                    mm[i] = a[i].abs().min(b[i].abs());
+                }
+                let mut hp = alloc::vec![0.0f32; w * h];
+                let mut want = alloc::vec![0.0f32; w * h];
+                pu_blur_horizontal_pass(&mm, w, h, &mut hp);
+                pu_blur_vertical_pass_scaled(&hp, w, h, &mut want, scale);
+                let mut ring: Vec<f32> = Vec::new();
+                let mut got = alloc::vec![0.0f32; w * h];
+                pu_blur_fused_minabs_scaled(&a, Some(&b), w, h, &mut ring, &mut got, scale);
                 for i in 0..w * h {
                     assert_eq!(
                         want[i].to_bits(),
