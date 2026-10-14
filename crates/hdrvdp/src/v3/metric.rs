@@ -347,18 +347,17 @@ pub fn hdrvdp3(
         }
         // CSF_b: nCSF at this band's frequency, per-pixel on the band's
         // lattice via the resized log adaptation map.
-        let log_la_rs: Vec<f64> = imresize(&log_la, width, height, bw, bh)
-            .iter()
-            .map(|&v| v.clamp(csf_log_la[0], csf_log_la[255]))
-            .collect();
+        let lrs = imresize(&log_la, width, height, bw, bh);
+        let log_la_rs: Vec<f64> = crate::par::collect_indexed(lrs.len(), |i| {
+            lrs[i].clamp(csf_log_la[0], csf_log_la[255])
+        });
         // `csf_log_la` is log10 of a log-spaced grid — uniform to ulp
         // precision, so the direct-index probe lands on the identical
         // interval the binary search would (same lerp, same bits).
         let csf_dx = (csf_log_la[255] - csf_log_la[0]) / 255.0;
-        let csf_b: Vec<f64> = log_la_rs
-            .iter()
-            .map(|&l| crate::interp::interp1_linear_dx(&csf_log_la, &csf[b], l, csf_dx))
-            .collect();
+        let csf_b: Vec<f64> = crate::par::collect_indexed(log_la_rs.len(), |i| {
+            crate::interp::interp1_linear_dx(&csf_log_la, &csf[b], log_la_rs[i], csf_dx)
+        });
 
         let (tb, rb) = (b_t.band(b), b_r.band(b));
         let band_diff: Vec<f64> =

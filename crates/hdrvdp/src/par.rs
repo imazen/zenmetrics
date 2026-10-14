@@ -63,6 +63,7 @@ pub(crate) fn for_each_dst_chunk(
     }
     #[cfg(not(feature = "parallel"))]
     {
+        let _ = n;
         f(0, dst);
     }
 }
