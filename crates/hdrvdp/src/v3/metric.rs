@@ -300,14 +300,51 @@ pub fn hdrvdp3(
 
     let mut d_bands = b_t.clone();
     let mut q_err = 0.0f64;
-    let mut mask_memo: Vec<Option<Vec<f64>>> = vec![None; b_count];
 
-    for b in 0..b_count {
+    // Band b is applied unless its (b−1) frequency is gated off.
+    let applied = |b: usize| -> bool {
+        match mp.ignore_freqs_lower_than {
+            Some(thr) => band_freq[b.wrapping_sub(1).min(b_count - 1)] >= thr,
+            None => true,
+        }
+    };
+    // Mask set = union of {b−1, b, b+1} over applied bands when masking
+    // is on — the same computes the lazy memo would run, each once.
+    let do_mask_xn = mp.mask_xn > -10.0;
+    let mut need_mask = vec![false; b_count];
+    if mp.do_masking {
+        for b in 0..b_count {
+            if applied(b) {
+                need_mask[b] = true;
+                if do_mask_xn {
+                    if b > 0 {
+                        need_mask[b - 1] = true;
+                    }
+                    if b < b_count - 2 {
+                        need_mask[b + 1] = true;
+                    }
+                }
+            }
+        }
+    }
+    let masks: Vec<Option<Vec<f64>>> = crate::par::collect_indexed(b_count, |b| {
+        if need_mask[b] {
+            Some(mutual_masking(b_t, b_r, b, &mp, relaxed))
+        } else {
+            None
+        }
+    });
+    // Band bodies are independent planes — parallel under `parallel`,
+    // sequential otherwise; (d_norm, q_err contribution) return in order.
+    let results: Vec<(Vec<f64>, f64)> = crate::par::collect_indexed(b_count, |b| {
         let p = 10f64.powf(mp.mask_p);
         let q = 10f64.powf(mp.mask_q);
         let pf = 10f64.powf(mp.psych_func_slope) / p;
 
         let (bw, bh) = b_t.band_dims(b);
+        if !applied(b) {
+            return (vec![0.0; bw * bh], 0.0);
+        }
         // CSF_b: nCSF at this band's frequency, per-pixel on the band's
         // lattice via the resized log adaptation map.
         let log_la_rs: Vec<f64> = imresize(&log_la, width, height, bw, bh)
@@ -356,58 +393,14 @@ pub fn hdrvdp3(
             band_diff.iter().map(|&v| sign_pow(v, p)).collect()
         };
 
-        if let Some(thr) = mp.ignore_freqs_lower_than {
-            // Upstream quirk: reads the PREVIOUS band's frequency
-            // (b−1 wraps to the last row at b=0).
-            let fb = band_freq[b.wrapping_sub(1).min(b_count - 1)];
-            if fb < thr {
-                d_bands.set_band(b, &vec![0.0; bw * bh]);
-            } else {
-                apply_band(
-                    &mut d_bands,
-                    b,
-                    &ex_diff,
-                    &n_ncsf,
-                    b_t,
-                    b_r,
-                    &diff_mask,
-                    width,
-                    height,
-                    bw,
-                    bh,
-                    p,
-                    q,
-                    pf,
-                    &mp,
-                    &mut q_err,
-                    b_count,
-                    relaxed,
-                    &mut mask_memo,
-                );
-            }
-        } else {
-            apply_band(
-                &mut d_bands,
-                b,
-                &ex_diff,
-                &n_ncsf,
-                b_t,
-                b_r,
-                &diff_mask,
-                width,
-                height,
-                bw,
-                bh,
-                p,
-                q,
-                pf,
-                &mp,
-                &mut q_err,
-                b_count,
-                relaxed,
-                &mut mask_memo,
-            );
-        }
+        apply_band(
+            b, &ex_diff, &n_ncsf, &masks, b_t, &diff_mask, width, height, bw, bh, p, q, pf, &mp,
+            b_count, relaxed,
+        )
+    });
+    for (b, (d_norm, qe)) in results.iter().enumerate() {
+        d_bands.set_band(b, d_norm);
+        q_err += qe;
     }
 
     let levs: Vec<usize> = (0..b_count).collect();
@@ -489,14 +482,16 @@ fn ppd_of(v: &ViewingConditions) -> f64 {
 /// The per-band masking + difference block from `hdrvdp3.py` — extracted
 /// for readability; identical arithmetic, `o` fixed at 0 (sp0 has a single
 /// orientation per level).
+/// Per-band masking + normalization body — pure: reads shared inputs and
+/// the precomputed `masks`, returns the band's `d_norm` plane and its
+/// `q_err` contribution so callers can apply them in band order.
 #[allow(clippy::too_many_arguments)]
 fn apply_band(
-    d_bands: &mut Spyr0,
     b: usize,
     ex_diff: &[f64],
     n_ncsf: &[f64],
+    masks: &[Option<Vec<f64>>],
     b_t: &Spyr0,
-    b_r: &Spyr0,
     diff_mask: &[f64],
     img_w: usize,
     img_h: usize,
@@ -506,57 +501,27 @@ fn apply_band(
     q: f64,
     pf: f64,
     mp: &TaskPar,
-    q_err: &mut f64,
     b_count: usize,
     relaxed: bool,
-    mask_memo: &mut Vec<Option<Vec<f64>>>,
-) {
+) -> (Vec<f64>, f64) {
     let d: Vec<f64> = if mp.do_masking {
         let k_self = 10f64.powf(mp.mask_self);
         let k_xo = 10f64.powf(mp.mask_xo); // multiplies 0 for sp0
         let k_xn = 10f64.powf(mp.mask_xn);
         let do_mask_xn = mp.mask_xn > -10.0;
 
-        // A band's mask is a pure function of it — computed up to 3× as
-        // self/prev/next across the band loop without the memo.
-        let mask_at = |memo: &mut Vec<Option<Vec<f64>>>, bb: usize| {
-            if memo[bb].is_none() {
-                memo[bb] = Some(mutual_masking(b_t, b_r, bb, mp, relaxed));
-            }
-        };
-        mask_at(mask_memo, b);
-        if do_mask_xn {
-            if b > 0 {
-                mask_at(mask_memo, b - 1);
-            }
-            if b < b_count - 2 {
-                mask_at(mask_memo, b + 1);
-            }
-        }
-        let self_mask = mask_memo[b].as_deref().unwrap();
+        let self_mask = masks[b].as_deref().unwrap();
         let mut mask_xn = vec![0.0; bw * bh];
         if b > 0 && do_mask_xn {
-            let prev = mask_memo[b - 1].as_deref().unwrap();
-            let resized = imresize(
-                prev,
-                b_t.band_dims(b - 1).0,
-                b_t.band_dims(b - 1).1,
-                bw,
-                bh,
-            );
+            let prev = masks[b - 1].as_deref().unwrap();
+            let resized = imresize(prev, b_t.band_dims(b - 1).0, b_t.band_dims(b - 1).1, bw, bh);
             for (m, &v) in mask_xn.iter_mut().zip(&resized) {
                 *m = v.max(0.0);
             }
         }
         if b < b_count - 2 && do_mask_xn {
-            let next = mask_memo[b + 1].as_deref().unwrap();
-            let resized = imresize(
-                next,
-                b_t.band_dims(b + 1).0,
-                b_t.band_dims(b + 1).1,
-                bw,
-                bh,
-            );
+            let next = masks[b + 1].as_deref().unwrap();
+            let resized = imresize(next, b_t.band_dims(b + 1).0, b_t.band_dims(b + 1).1, bw, bh);
             for (m, &v) in mask_xn.iter_mut().zip(&resized) {
                 *m += v.max(0.0);
             }
@@ -602,9 +567,7 @@ fn apply_band(
     } else {
         d.iter().map(|&v| sign_pow(v, pf)).collect()
     };
-    d_bands.set_band(b, &d_norm);
-
-    // Per-band error → Q accumulator.
+    // Per-band error → Q contribution (summed in band order by caller).
     let diff_mask_b = if (bw, bh) == (img_w, img_h) {
         diff_mask.to_vec()
     } else {
@@ -619,7 +582,10 @@ fn apply_band(
         }
         acc
     };
-    *q_err += (acc / (bw * bh) as f64).powf(1.0 / 0.8) / b_count as f64;
+    (
+        d_norm,
+        (acc / (bw * bh) as f64).powf(1.0 / 0.8) / b_count as f64,
+    )
 }
 
 /// One output row of the masking pool for the eight outputs `x0..x0+8` —
