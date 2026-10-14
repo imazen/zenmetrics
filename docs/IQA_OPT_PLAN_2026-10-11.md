@@ -254,9 +254,34 @@ Second optimisation pass; all scores bit-identical unless noted.
   pow arg 1.0 so they never take the scalar fallback. 1024² wall
   **76→~53ms serial (−30%), ~19.7ms @24T** (avx512 build; v3-only build
   also ~53ms — v4x delegates f64x4 to 256-bit ops); score bits
-  `3fefb77a83788424` identical on default/avx512/parallel builds. The
-  aarch64 twin keeps its midp-approximate path (different bits there
-  already).
+  `3fefb77a83788424` identical on default/avx512/parallel builds.
+  The aarch64 twin subsequently switched to the same exact-f64 body
+  (`41f47c9f`, mac lane) — ARM scores now bit-match x86, ~1.22× slower
+  than the old midp build on M4 @1024²; landed with
+  `srgb_to_lab_dispatch_matches_scalar_bitwise` + an aarch64
+  `tier_parity` arm.
+- **zenmetrics-math `vexpf_libm`** (`82f2beeb`): fdlibm `e_expf` onto
+  `f32x8`/`f32x16` lanes — fully vectorized, no scalar fallback lanes
+  (`force_eval` raises flags only). `vpow64`-style dispatch:
+  `vexpf_libm_into` slice driver across all five tiers; 4 bitwise
+  differential tests vs `libm::expf` green (branch-boundary matrix
+  ±3ulp, dense [-105,90] domain, 64×2048 seeded random, tails).
+- **vsi warm-colour prior on `vexpf_libm`** (`cfab9ced`): the last
+  per-pixel scalar transcendental in `sdsp` — args stay scalar f32
+  (identical ops), expf runs on lanes. Bits identical, ~51–53ms.
+- **vsi sdsp constant grids cached** (`3cf7757b`, std): `LazyLock` for
+  the 256² log-Gabor + Gaussian-center-prior planes — same libm values
+  computed once per process (~130K transcendentals skipped per call
+  after the first); no_std keeps the per-call build.
+- **mad-iqa adopts both ports** (`7b23f775`): the 9 `m×n` log-Gabor /
+  spread-filter `expf` sweeps run through `vexpf_libm_into`; the
+  luminance `x^(2.2/3)` path now uses `vpow64_libm_into` for
+  non-integral inputs (u8-derived inputs keep the 256-entry LUT, same
+  expression). The swap also **fixed a latent bug**: `_dev`'s
+  `mad_core_tier_scalar` re-export was stale (never compiled, so
+  `tier_parity` had never run); once repaired it exposed a real
+  scalar-vs-v3 divergence from `pow_midp` — now bitwise-equal via the
+  lane port. 12/12 tests green.
 - **Failed/kept-out experiments this pass**: fsim filtered-ifft fusion
   (src→dst `yf·filter` fold into the row transpose-in) measured
   net-neutral-to-negative — the collect pass's cost was already
