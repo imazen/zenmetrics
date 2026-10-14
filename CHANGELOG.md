@@ -15,6 +15,7 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- Unified native maps, VMAF (`48e1a216`): SPEED chroma block maps `speed_u` (primary) and `speed_v` for single pairs (Difference, global support; 1 of 4 v1 features). They fold to `speed_chroma_uv` bit for bit. CAMBI, ADM3 and motion3 are not exposed; phone models (0.6 prescale) and sequences refuse map requests. Scores are unchanged with maps.
 - Unified native maps, VIF (`1a02bce1`): VIFp `info_loss_0` … `info_loss_3` and vifvec per-subband block maps `info_loss_l1_b1` … `info_loss_l4_b4`, the per-position information loss `den − num` whose total over `Σden` is `1 − VIF` (Difference polarity; contributions, not a local VIF). VIFp terms fold to the score bit for bit; support verified with patch tests. Scores are unchanged with maps.
 - Unified native maps, IW-SSIM (`b29b2385`): per-scale contrast-structure maps `cs_0` (primary) … `cs_3` and `csl_4` (Similarity; per-scale components). Unweighted folds reproduce `wmcs_s` bit for bit; warm candidates serve the cold maps; support bounds verified with patch tests. Information-content weights are not exposed yet (no non-quality map polarity). Scores are unchanged with maps.
 - Unified native maps, MAD (`af49f0f4`): the reference's strategy maps over the pooled interior, `hi` (primary; contrast mask × local MSE, per pixel) and `lo` (log-Gabor statistical difference, 4×4 tiles). Difference polarity, global support; strategy components, not a per-pixel MAD. Both fold to the HI/LO indices bit for bit. Scores are unchanged with maps.

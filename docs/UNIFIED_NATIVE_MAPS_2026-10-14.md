@@ -209,3 +209,42 @@ Validation (`crates/vif`):
   packed maps. Subsampled and stopped requests behave as specified. Tests
   pass with default, `parallel`, no-std and `_dev,avx512` builds; the Octave
   goldens are unchanged.
+
+## VMAF (`vmaf`, v1.0.16 models)
+
+| Map | Values | Polarity | Grid |
+| --- | --- | --- | --- |
+| `speed_u` (primary), `speed_v` | SPEED's per-block `|S_ref − S_dist|`, the entropy-weighted local difference of one chroma plane | Difference | 5×5 operating-sample blocks |
+
+Coverage: 1 of the model's 4 elementary features. VMAF has no per-pixel
+score; it is an SVM over pooled features. Among the v1 features, SPEED
+chroma has per-block terms whose f32 mean is the channel score (before the
+U/V combine and the 45 clamp). CAMBI has per-scale c-value maps, which
+libvmaf can dump, but they measure banding in the distorted frame alone, so
+they are not a Difference against the reference. They need a non-quality
+polarity and are not exposed yet. ADM3's terms live inside the fixed-point
+fused kernels that hold libvmaf parity and are not exposed. `motion3` is
+temporal and reference-only.
+
+Geometry. An operating sample is every 16th sample of the antialiased,
+prescaled chroma plane, and a block is 5×5 of them. A block is therefore 160
+luma pixels at prescale 1 (origin −15) and 320 at prescale 0.5 (origin −30),
+in continuous luma coordinates. The phone models' 0.6 prescale has no
+whole-pixel grid, so their map requests fail with `NoMap` rather than
+serving an approximated grid. Support is global: the block entropies use
+frame-wide covariance eigenvalues. Map requests are served for single pairs
+(`Metric::evaluate`); sequences refuse them.
+
+Validation (`crates/vmaf`):
+
+- Map requests leave all five outputs bit-identical, and the maps fold to
+  `speed_chroma_uv` bit for bit (Standard1080p and Consumer4k; distinct,
+  identical and chroma-shifted pairs). That feature is pinned to libvmaf by
+  the existing FFI suite.
+- A chroma change confined to one block peaks in that block's cell.
+- Identical frames leave per-block terms up to 3.05e-5 at prescale 1, from
+  `log2(1 + σ²)` taken in f32 for the reference and f64 for the distorted
+  side, as libvmaf computes it; they are 0 at prescale 0.5.
+- Phone-model, sequence and stopped requests refuse. Tests pass with default,
+  `simd`, `simd,parallel` and `avx512,parallel` features, libvmaf parity
+  included.
