@@ -3298,25 +3298,28 @@ macro_rules! vif_statistic_finalize_v4x {
 /// it expands inside the caller's `#[attune]` body (see `gather_log_u16_v4x`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 macro_rules! vif_stat_fsq_v4x {
-    ($w:expr, $fqv:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
+    ($w:expr, $fqv:expr, $fwidth:expr, $rounder16:expr, $mask2e:expr) => {{
         let w: &[u32; 33] = $w;
         let fqv: &[__m512i; 17] = $fqv;
         let fwidth: usize = $fwidth;
         let rounder16 = $rounder16;
-        let mask2 = $mask2;
-        let mut acc_lo = _mm512_set1_epi64(0x8000);
-        let mut acc_hi = acc_lo;
+        let mask2e = $mask2e;
+        let mut acc_ev = _mm512_set1_epi64(0x8000);
+        let mut acc_od = acc_ev;
         let _ = rounder16;
         for k in 0..fwidth.min(17) {
             let fq = fqv[k];
-            let s0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k..k + 8])));
-            let s1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k + 8..k + 16])));
-            acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(s0, fq));
-            acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(s1, fq));
+            let v = _mm512_loadu_si512(a8::<u32, 16>(&w[k..k + 16]));
+            // mul_epu32 uses each i64 lane's low u32: `v` multiplies the
+            // even-indexed elements, `v >> 32` the odd — same products the
+            // cvtepu32 widening produced, in an interleaved lane order that
+            // mask2e re-sorts at the merge.
+            acc_ev = _mm512_add_epi64(acc_ev, _mm512_mul_epu32(v, fq));
+            acc_od = _mm512_add_epi64(acc_od, _mm512_mul_epu32(_mm512_srli_epi64(v, 32), fq));
         }
-        let acc_lo = _mm512_srli_epi64(acc_lo, 16);
-        let acc_hi = _mm512_srli_epi64(acc_hi, 16);
-        _mm512_permutex2var_epi32(acc_lo, mask2, acc_hi)
+        let acc_ev = _mm512_srli_epi64(acc_ev, 16);
+        let acc_od = _mm512_srli_epi64(acc_od, 16);
+        _mm512_permutex2var_epi32(acc_ev, mask2e, acc_od)
     }};
 }
 
@@ -3350,7 +3353,7 @@ fn vif_stat_horizontal_v4x_t(
     let round32 = _mm512_set1_epi64(0x80000000);
     let rounder16 = _mm512_set1_epi64(0x8000);
     let mask5 = _mm512_set_epi32(30, 28, 14, 12, 26, 24, 10, 8, 22, 20, 6, 4, 18, 16, 2, 0);
-    let mask2 = _mm512_set_epi32(30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0);
+    let mask2e = _mm512_set_epi32(30, 14, 28, 12, 26, 10, 24, 8, 22, 6, 20, 4, 18, 2, 16, 0);
     let mut m_num_log = _mm512_setzero_si512();
     let mut m_den_log = _mm512_setzero_si512();
     let mut m_num_non_log = _mm512_setzero_si512();
@@ -3384,8 +3387,8 @@ fn vif_stat_horizontal_v4x_t(
 
         // mu1/mu2 horizontal sums — i32 products accumulate pairwise inside
         // the i64 lanes, identical to the AVX2 path (sums stay < 2^32 per
-        // half). The filter is symmetric, so the straight convolution over
-        // k ∈ [0,fwidth) is bit-identical to the paired l/r form.
+        // half). The filter is symmetric: (w[k]+w[r])·f[k] in u32 is the same
+        // wrap-around sum the scalar paired form computes.
         let fq = fqv32[half];
         let mut mu1 = _mm512_mullo_epi32(
             _mm512_loadu_si512(a8::<u32, 16>(&w_mu1[half..half + 16])),
@@ -3395,19 +3398,19 @@ fn vif_stat_horizontal_v4x_t(
             _mm512_loadu_si512(a8::<u32, 16>(&w_mu2[half..half + 16])),
             fq,
         );
-        for k in 0..fwidth.min(17) {
-            if k == half {
-                continue;
-            }
+        for k in 0..half.min(17) {
+            let r = fwidth - 1 - k;
             let fq = fqv32[k];
-            mu1 = _mm512_add_epi64(
-                mu1,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&w_mu1[k..k + 16])), fq),
+            let s1 = _mm512_add_epi32(
+                _mm512_loadu_si512(a8::<u32, 16>(&w_mu1[k..k + 16])),
+                _mm512_loadu_si512(a8::<u32, 16>(&w_mu1[r..r + 16])),
             );
-            mu2 = _mm512_add_epi64(
-                mu2,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&w_mu2[k..k + 16])), fq),
+            let s2 = _mm512_add_epi32(
+                _mm512_loadu_si512(a8::<u32, 16>(&w_mu2[k..k + 16])),
+                _mm512_loadu_si512(a8::<u32, 16>(&w_mu2[r..r + 16])),
             );
+            mu1 = _mm512_add_epi64(mu1, _mm512_mullo_epi32(s1, fq));
+            mu2 = _mm512_add_epi64(mu2, _mm512_mullo_epi32(s2, fq));
         }
 
         // mu1sq / mu2sq / mu1mu2: widen each i32 pair to i64, square/multiply,
@@ -3453,18 +3456,18 @@ fn vif_stat_horizontal_v4x_t(
         // filtered ref²/dis²/ref·dis (u32 lanes widened to i64 accumulators,
         // srli 16, even-lane merge via mask2), minus the matching mu term.
         let xx = _mm512_sub_epi32(
-            vif_stat_fsq_v4x!(w_ref, &fqv64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4x!(w_ref, &fqv64, fwidth, rounder16, mask2e),
             mu1sq,
         );
         let yy = _mm512_max_epi32(
             _mm512_sub_epi32(
-                vif_stat_fsq_v4x!(w_dis, &fqv64, fwidth, rounder16, mask2),
+                vif_stat_fsq_v4x!(w_dis, &fqv64, fwidth, rounder16, mask2e),
                 mu2sq,
             ),
             zero,
         );
         let xy = _mm512_sub_epi32(
-            vif_stat_fsq_v4x!(w_rd, &fqv64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4x!(w_rd, &fqv64, fwidth, rounder16, mask2e),
             mu1mu2,
         );
         vif_statistic_finalize_v4x!(
@@ -3950,10 +3953,8 @@ pub fn vif_v0_from_luma(
         return Err(Error::InvalidInput("plane length mismatch"));
     }
     let max_sample = (1u16 << bit_depth) - 1;
-    if reference_y
-        .iter()
-        .chain(distorted_y.iter())
-        .any(|&value| value > max_sample)
+    if reference_y.iter().max().unwrap_or(&0) > &max_sample
+        || distorted_y.iter().max().unwrap_or(&0) > &max_sample
     {
         return Err(Error::InvalidInput("sample exceeds bit depth"));
     }
