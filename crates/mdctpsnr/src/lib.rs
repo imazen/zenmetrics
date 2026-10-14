@@ -1993,6 +1993,20 @@ pub fn mdct_psnr_srgb8(
     width: usize,
     height: usize,
 ) -> Result<f32, Error> {
+    score_impl(reference, distorted, width, height, None)
+}
+
+/// [`mdct_psnr_srgb8`]; with `map`, also appends each measured line's
+/// per-position detection probability `1 − errorline[i]` — exactly the
+/// terms the score sums — after that line's sums are taken: `W−13` values
+/// per line, `H−12` lines, row-major.
+fn score_impl(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    mut map: Option<&mut Vec<f32>>,
+) -> Result<f32, Error> {
     if reference.len() != width * height * 3 || distorted.len() != width * height * 3 {
         return Err(Error::LengthMismatch);
     }
@@ -2311,6 +2325,9 @@ pub fn mdct_psnr_srgb8(
                     }
                 }
             }
+            if let Some(m) = map.as_deref_mut() {
+                m.extend(errorline.iter().map(|&e| 1.0 - e));
+            }
             #[cfg(feature = "std")]
             if std::env::var_os("DUMPEL").is_some() {
                 eprintln!("ELL {}", y - 12);
@@ -2453,6 +2470,68 @@ pub fn mdct_psnr_jnd(score_db: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The reference's per-line `error += 1 − errorline[i]` fold (the
+    /// vectorized order `score_impl` reproduces), run over the map's rows.
+    fn fold_rows(map: &[f32], w13: usize) -> f32 {
+        let mut error = 0.0f32;
+        for row in map.chunks_exact(w13) {
+            let (n8, rem) = (w13 & !7, w13 & 7);
+            let mut vacc = [0.0f32; 8];
+            for c in row[..n8].as_chunks::<8>().0 {
+                for j in 0..8 {
+                    vacc[j] += c[j];
+                }
+            }
+            let mut x5 = [
+                vacc[0] + vacc[4],
+                vacc[1] + vacc[5],
+                vacc[2] + vacc[6],
+                vacc[3] + vacc[7],
+            ];
+            if rem >= 4 {
+                for j in 0..4 {
+                    x5[j] += row[n8 + j];
+                }
+            }
+            error += (x5[0] + x5[2]) + (x5[1] + x5[3]);
+            for &t in &row[if rem >= 4 { n8 + 4 } else { n8 }..] {
+                error += t;
+            }
+        }
+        error
+    }
+
+    /// The detection map holds exactly the terms the score sums: folding
+    /// its rows in the reference order reproduces the score's bits, and
+    /// requesting it leaves the score unchanged.
+    #[test]
+    fn detection_map_folds_to_the_score_exactly() {
+        for (w, h) in [(64usize, 48usize), (37, 29), (14, 14), (100, 23), (45, 61)] {
+            let a: Vec<u8> = (0..w * h * 3)
+                .map(|i| ((i * 37 + i / (3 * w) * 11) % 256) as u8)
+                .collect();
+            let b: Vec<u8> = a
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| if i % 7 == 0 { v.wrapping_add(23) } else { v })
+                .collect();
+            let plain = mdct_psnr_srgb8(&a, &b, w, h).unwrap();
+            let mut map = Vec::new();
+            let mapped = score_impl(&a, &b, w, h, Some(&mut map)).unwrap();
+            assert_eq!(mapped.to_bits(), plain.to_bits(), "{w}x{h}");
+            assert_eq!(map.len(), (w - 13) * (h - 12));
+            assert!(map.iter().all(|&p| (0.0..=1.0).contains(&p)));
+            let error = fold_rows(&map, w - 13);
+            let (fw, fh) = ((w - 13) as f32, (h - 13) as f32);
+            let folded = -20.0 * lf(error / (fw * fh * 3.0)) / lf(10.0);
+            assert_eq!(
+                folded.to_bits(),
+                plain.to_bits(),
+                "{w}x{h}: {folded} vs {plain}"
+            );
+        }
+    }
 
     /// Identical images → detection error 0 → `−20·log10(0)` = +inf, as
     /// the reference computes it.
@@ -2618,8 +2697,49 @@ mod tests {
 /// The mDCT-PSNR metric as a generic scorer — accepts `RGB8_SRGB`
 /// `PixelSlice` inputs (strided repacked). Headline is dB PSNR — `+inf`
 /// on identical inputs, matching `dctpsnr` default output.
+///
+/// Map, on request: `detection`, the probability that the difference at
+/// each measured window position is detected —
+/// `1 − Π exp(−(|Δc|·vis·mask)^3.5)` over the 195 band/component terms —
+/// one value per sliding-window position: `W−13` per line, `H−12` lines
+/// ([`za::MapPolarity::DetectionProbability`]; `0` = identical). These are
+/// exactly the terms the score sums: `score = −20·log10(Σ/((W−13)(H−13)·3))`.
+/// Cell `(i, j)` scores the 8×8 block at `(i+2, j+3)` with masking from
+/// the 5×5 block positions around it, i.e. input pixels
+/// `[i, i+12) × [j+1, j+13)`; it owns pixel `(i+5, j+6)` (the block's
+/// upper-left centre pixel) and reaches 6 pixels around it.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MdctPsnr;
+
+/// A scored pair with its detection map.
+struct MdctPsnrMap {
+    score: f32,
+    detection: alloc::vec::Vec<f32>,
+    geometry: za::MapGeometry,
+}
+
+impl za::Evaluation for MdctPsnrMap {
+    fn score(&self) -> f64 {
+        f64::from(self.score)
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("mdctpsnr"),
+            f64::from(self.score),
+        )))
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let g = self.geometry;
+        let px = za::gray_f32_slice(&self.detection, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new("detection", px, za::MapPolarity::DetectionProbability, g).ok()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
 
 impl Error {
     fn kind(&self) -> za::ErrorKind {
@@ -2659,9 +2779,22 @@ impl za::Metric for MdctPsnr {
     ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
-        opts.refuse_map("mdctpsnr")?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        if let Some(req) = opts.map {
+            let mut detection = alloc::vec::Vec::new();
+            let score = score_impl(&rp, &dp, r.width, r.height, Some(&mut detection))
+                .metric_err_with("mdctpsnr", Error::kind)?;
+            opts.checkpoint()?;
+            let (w, h) = (r.width as u32, r.height as u32);
+            let geometry = za::MapGeometry::grid(w, h, 5, 6, 1, 1, w - 13, h - 12).with_halo(6, 6);
+            let eval = MdctPsnrMap {
+                score,
+                detection,
+                geometry,
+            };
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
+        }
         let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height)
             .metric_err_with("mdctpsnr", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single(
