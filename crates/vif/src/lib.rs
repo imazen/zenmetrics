@@ -145,7 +145,6 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
 impl core::error::Error for Error {}
 
 /// MATLAB `rgb2gray` luma coefficients (`0.2989 0.5870 0.1140`) — the

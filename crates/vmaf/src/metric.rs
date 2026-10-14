@@ -127,8 +127,10 @@ fn plane_u16(s: &PixelSlice<'_>) -> Vec<u16> {
             ChannelType::U8 => out.extend(row[..w].iter().map(|&v| u16::from(v))),
             _ => out.extend(
                 row[..w * 2]
-                    .chunks_exact(2)
-                    .map(|c| u16::from_ne_bytes([c[0], c[1]])),
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| u16::from_ne_bytes(*c)),
             ),
         }
     }
@@ -476,7 +478,7 @@ mod tests {
                 .collect();
             let images: Vec<_> = frames.iter().map(|(r, d)| (image(r), image(d))).collect();
             let mut m = Vmaf::new(variant);
-            let report = za::conformance::check_sequence(&mut m, &images);
+            let report = za::conformance::check_sequence(&mut m, za::SequenceInfo::new(), &images);
             assert!(report.violations.is_empty(), "{:?}", report.violations);
 
             let mut stream = VmafV1Stream::new(W, H, 8, variant).unwrap();

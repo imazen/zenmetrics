@@ -299,30 +299,42 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
     out
 }
 
+/// `(key, value)` scores collected from one evaluation.
+pub type NamedScores = Vec<(Cow<'static, str>, f64)>;
+
 /// What [`check_sequence`] observed.
 #[derive(Debug, Default)]
 pub struct SequenceReport {
     /// Failed checks; empty when the session conforms.
     pub violations: Vec<Violation>,
     /// Every frame result in arrival order: `(index, scores)`.
-    pub frames: Vec<(u64, Vec<(Cow<'static, str>, f64)>)>,
+    pub frames: Vec<(u64, NamedScores)>,
     /// The pooled result's scores, when the metric pools.
-    pub pooled: Option<Vec<(Cow<'static, str>, f64)>>,
+    pub pooled: Option<NamedScores>,
 }
 
 /// Drive a full sequence over `pairs` and check the [`crate::Sequence`]
 /// contract: every pushed frame's result arrives exactly once, in index
 /// order, no later than [`Temporal::Stateful`]'s `latency` pushes after
-/// its own (immediately for [`Temporal::Stateless`]); `frames_pushed` and
-/// the summary's `frame_count` agree; each result's `score()` is its first
-/// `scores()` value.
-pub fn check_sequence(metric: &mut dyn Metric, pairs: &[(Image<'_>, Image<'_>)]) -> SequenceReport {
+/// its own (immediately for [`Temporal::Stateless`]); a
+/// [`Temporal::Pooled`] metric returns no frame results and a pooled one;
+/// `frames_pushed` and the summary's `frame_count` agree; each result's
+/// `score()` is its first `scores()` value. `info`'s frame count is set to
+/// `pairs.len()`.
+pub fn check_sequence(
+    metric: &mut dyn Metric,
+    info: SequenceInfo,
+    pairs: &[(Image<'_>, Image<'_>)],
+) -> SequenceReport {
     let mut rep = SequenceReport::default();
-    let latency = match metric.temporal() {
+    let temporal = metric.temporal();
+    let latency = match temporal {
         Temporal::Stateless => 0,
         Temporal::Stateful { latency, .. } => u64::from(latency),
+        Temporal::Pooled => 0,
     };
-    let mut seq = match metric.sequence(SequenceInfo::new().with_frame_count(pairs.len() as u64)) {
+    let per_frame = temporal != Temporal::Pooled;
+    let mut seq = match metric.sequence(info.with_frame_count(pairs.len() as u64)) {
         Ok(s) => s,
         Err(e) => {
             rep.violations.push(Violation {
@@ -408,7 +420,20 @@ pub fn check_sequence(metric: &mut dyn Metric, pairs: &[(Image<'_>, Image<'_>)])
             detail: format!("finish failed: {e}"),
         }),
     }
-    if rep.frames.len() != pairs.len() {
+    if !per_frame {
+        if !rep.frames.is_empty() {
+            rep.violations.push(Violation {
+                check: "sequence",
+                detail: format!("pooled metric returned {} frame results", rep.frames.len()),
+            });
+        }
+        if rep.pooled.is_none() {
+            rep.violations.push(Violation {
+                check: "sequence",
+                detail: "pooled metric returned no pooled result".into(),
+            });
+        }
+    } else if rep.frames.len() != pairs.len() {
         rep.violations.push(Violation {
             check: "sequence",
             detail: format!("{} results for {} frames", rep.frames.len(), pairs.len()),
@@ -565,6 +590,7 @@ mod tests {
             &mut Mad8 {
                 forget_checkpoint: false,
             },
+            SequenceInfo::new(),
             &pairs,
         );
         assert!(rep.violations.is_empty(), "{:?}", rep.violations);

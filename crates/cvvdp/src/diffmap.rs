@@ -157,42 +157,6 @@ pub(crate) fn finalize_diffmap(accum: DiffmapAccum) -> Vec<f32> {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn upsample_add_constant_doubles() {
-        let src = vec![2.0_f32; 4 * 4];
-        let mut dst = vec![1.0_f32; 8 * 8];
-        upsample_add(&src, 4, 4, &mut dst, 8, 8, 1.0);
-        // Each dst pixel was 1.0, accumulator added 2.0 → 3.0.
-        for &v in &dst {
-            assert!((v - 3.0).abs() < 1e-5);
-        }
-    }
-
-    #[test]
-    fn upsample_add_same_size_is_passthrough() {
-        let src: Vec<f32> = (0..16).map(|i| i as f32).collect();
-        let mut dst = vec![0.0_f32; 16];
-        upsample_add(&src, 4, 4, &mut dst, 4, 4, 1.0);
-        for i in 0..16 {
-            assert_eq!(dst[i], src[i]);
-        }
-    }
-
-    #[test]
-    fn finalize_zero_accum_yields_zero() {
-        let accum = DiffmapAccum::new(8, 8);
-        let dm = finalize_diffmap(accum);
-        assert_eq!(dm.len(), 64);
-        for v in &dm {
-            assert_eq!(*v, 0.0);
-        }
-    }
-}
-
 /// Owned diffmap — the masked per-pixel error at base resolution
 /// (`w×h`, higher = more visible error), as a
 /// [`zenmetrics_abstractions::Evaluation`].
@@ -248,5 +212,41 @@ impl zenmetrics_abstractions::Evaluation for CvvdpDiffmap {
 
     fn as_any(&self) -> &dyn core::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upsample_add_constant_doubles() {
+        let src = vec![2.0_f32; 4 * 4];
+        let mut dst = vec![1.0_f32; 8 * 8];
+        upsample_add(&src, 4, 4, &mut dst, 8, 8, 1.0);
+        // Each dst pixel was 1.0, accumulator added 2.0 → 3.0.
+        for &v in &dst {
+            assert!((v - 3.0).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn upsample_add_same_size_is_passthrough() {
+        let src: Vec<f32> = (0..16).map(|i| i as f32).collect();
+        let mut dst = vec![0.0_f32; 16];
+        upsample_add(&src, 4, 4, &mut dst, 4, 4, 1.0);
+        for i in 0..16 {
+            assert_eq!(dst[i], src[i]);
+        }
+    }
+
+    #[test]
+    fn finalize_zero_accum_yields_zero() {
+        let accum = DiffmapAccum::new(8, 8);
+        let dm = finalize_diffmap(accum);
+        assert_eq!(dm.len(), 64);
+        for v in &dm {
+            assert_eq!(*v, 0.0);
+        }
     }
 }

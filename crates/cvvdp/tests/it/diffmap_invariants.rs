@@ -320,3 +320,72 @@ fn generic_surface_conforms_with_real_warm_reference() {
         "warm diffmap == cold diffmap"
     );
 }
+
+/// cvvdp's video path through the generic surface: one pooled JOD, no
+/// per-frame results; a one-frame clip equals the still score bit for bit;
+/// a missing frame rate is a configuration error.
+#[test]
+fn generic_video_sequence_pools_one_jod() {
+    use zenmetrics_abstractions as za;
+    let (w, h) = (64usize, 48usize);
+    let frames: Vec<(Vec<u8>, Vec<u8>)> = (0..4)
+        .map(|t| {
+            let a = za::conformance::textured_rgb8(w, h, 20 + t);
+            let b = za::conformance::distort_rgb8(&a, w, h);
+            (a, b)
+        })
+        .collect();
+    let images: Vec<_> = frames
+        .iter()
+        .map(|(a, b)| {
+            (
+                za::conformance::rgb8_image(a, w, h),
+                za::conformance::rgb8_image(b, w, h),
+            )
+        })
+        .collect();
+    let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
+    assert_eq!(za::Metric::temporal(&cv), za::Temporal::Pooled);
+    let rep = za::conformance::check_sequence(
+        &mut cv,
+        za::SequenceInfo::new().with_frame_rate(30, 1),
+        &images,
+    );
+    assert!(rep.violations.is_empty(), "{:?}", rep.violations);
+    let pooled = rep.pooled.unwrap()[0].1;
+    let mut direct = cvvdp::VideoScorer::new(
+        w as u32,
+        h as u32,
+        30.0,
+        CvvdpParams::default(),
+        cvvdp::DisplayGeometry::STANDARD_4K,
+    )
+    .unwrap();
+    for (a, b) in &frames {
+        direct.push_frame(a, b).unwrap();
+    }
+    assert_eq!(
+        pooled.to_bits(),
+        f64::from(direct.finish().unwrap()).to_bits()
+    );
+
+    let one = za::conformance::check_sequence(
+        &mut cv,
+        za::SequenceInfo::new().with_frame_rate(30, 1),
+        &images[..1],
+    );
+    assert!(one.violations.is_empty(), "{:?}", one.violations);
+    let still = za::Metric::evaluate(
+        &mut cv,
+        images[0].0.clone(),
+        images[0].1.clone(),
+        za::EvalOpts::SCORE_ONLY,
+    )
+    .unwrap();
+    assert_eq!(one.pooled.unwrap()[0].1.to_bits(), still.score().to_bits());
+
+    let err = za::Metric::sequence(&mut cv, za::SequenceInfo::new())
+        .err()
+        .unwrap();
+    assert_eq!(err.error().kind(), za::ErrorKind::InvalidConfig);
+}

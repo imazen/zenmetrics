@@ -144,7 +144,6 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
 impl core::error::Error for Error {}
 
 /// MAD of a pair: the HI and LO strategy indices and the blended

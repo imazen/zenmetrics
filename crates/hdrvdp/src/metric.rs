@@ -676,8 +676,10 @@ fn widen_f32(s: &zenpixels::PixelSlice<'_>) -> Vec<f64> {
     for y in 0..h {
         let row = &bytes[y * s.stride()..y * s.stride() + w * ch * 4];
         out.extend(
-            row.chunks_exact(4)
-                .map(|c| f64::from(f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))),
+            row.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f64::from(f32::from_ne_bytes(*c))),
         );
     }
     out

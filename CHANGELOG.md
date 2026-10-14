@@ -15,6 +15,9 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- zenmetrics-abstractions v2 (`8143292f`, `c9248347`, `3f146a2d`; PR, review required): errors are `whereat::At<MetricError>` with an `ErrorKind`, the metric family and the boxed original error, interoperating with enough/how-far (`From<StopReason>`, `AsStopReason`, `is_stopped`). `MetricId` records family, variant, reproduced reference, implementing crate, `score_revision`, backend and configuration; `MetricId::column` names a fully qualified column (`cvvdp_jod__cvvdp_r1_cpu_<fp8>`) whose fingerprint excludes crate version and build id. Inputs are packed or planar (`Image`, `Planes`); maps carry polarity and `MapGeometry`; `Metric: Send`, `Evaluation: Send + Sync`; `EvalOpts` carries a how-far pulse. New `Metric::warm_reference` (real sessions for cvvdp and iwssim, copy-and-replay elsewhere) and `Metric::sequence`: VMAF v1.0.16's lagged per-frame stream (`Temporal::Stateful`) and cvvdp's video scorer (`Temporal::Pooled`, one JOD per clip). `conformance::assert_conforms` / `check_sequence` check every implementor. The existing `*_COLUMN_NAME` sidecar names are unchanged.
+- Fixes found while migrating (`c9248347`, `3f146a2d`): VSI diffmap size/geometry at min(w,h) ≥ 384 (see Known Bugs in CLAUDE.md); FSIM's headline was `fsim` with a map and `fsimc` without; NLPD's score kind is `Difference`; cvvdp no longer infers an "hdr" variant from `y_peak`; HDR-VDP-2 refuses inputs whose descriptor does not match the configured encoding instead of relabeling them; the browser crate builds again (unbound `dm` in the dssim/gmsd arms, `&Vec<[u8; 3]>` passed as `&[u8]`).
+
 - Browser timing (`614994a5`): separate worker/WASM/Rayon startup from reference/cache verification, scalar scoring, map work and comparison request wall time. Interactive timings remain separate from fleet benchmark acceptance.
 
 - Browser Zensim models (`9e45737c`): explicit B/D/A/legacy-preview score and map selection, scalar-only C with explicit map refusal, profile-aware reference caching, and matching CLI profile commands. B remains the default.
@@ -2700,6 +2703,7 @@ All five are the Nomad-migration ADR's stated preconditions
 
 ### QUEUED BREAKING CHANGES
 
+- zenmetrics-abstractions (`8143292f`): the generic surface is redesigned (v2). `Metric::name`/`variant`/`config` become `Metric::id()`; `evaluate` takes `Image`s and `EvalOpts<'_>`; `accepts` takes `&InputFormat`; `Evaluation::map` returns `MapView`; `map_score` returns `MetricResult`; `MetricResult` is `Result<T, At<MetricError>>`; `NoMap`, `UnsupportedInput`, `map_f32s` and `bytemuck_vec` are gone; `MapRequest::Subsampled` gains `reduce`; hdrvdp's `HdrVdpEval` is private. All in-tree implementors and consumers are migrated.
 - zenfleet-core (`e3359640`): `JobKind::Benchmark` adds an enum variant; downstream exhaustive matches must handle benchmark observations.
 
 ## Workspace

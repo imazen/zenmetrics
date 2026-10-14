@@ -420,8 +420,8 @@ impl Cvvdp {
     }
 
     /// One-shot score returning the diffmap as an owned
-    /// [`crate::diffmap::CvvdpDiffmap`] (implements
-    /// [`zenmetrics_abstractions::Diffmap`]). Prefer this over
+    /// [`crate::diffmap::CvvdpDiffmap`] (a
+    /// [`zenmetrics_abstractions::Evaluation`]). Prefer this over
     /// [`Self::score_with_diffmap`] when the caller wants the
     /// polymorphic map type.
     pub fn score_and_diffmap(
@@ -4456,6 +4456,200 @@ impl za::Metric for Cvvdp {
         self.warm_reference(&za::contiguous_rgb8(&r))
             .metric_err_with("cvvdp", Error::kind)?;
         Ok(alloc::boxed::Box::new(CvvdpWarm { metric: self }))
+    }
+
+    /// cvvdp's video path pools the whole clip into one JOD.
+    fn temporal(&self) -> za::Temporal {
+        za::Temporal::Pooled
+    }
+
+    /// A [`crate::VideoScorer`] session with this instance's display model
+    /// and geometry. Requires `info.frame_rate`; the pooled result's
+    /// extras record the rate and frame count, since they change the JOD
+    /// but are not part of [`za::Metric::id`]. A one-frame clip scores as
+    /// the still image (bit-identical to [`za::Metric::evaluate`]).
+    fn sequence<'m>(
+        &'m mut self,
+        info: za::SequenceInfo,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Sequence + 'm>> {
+        let Some(rate) = info.frame_rate.filter(|r| r.num > 0 && r.den > 0) else {
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::InvalidConfig)
+                    .with_metric("cvvdp")
+                    .with_message("cvvdp video needs a positive SequenceInfo::frame_rate"),
+            );
+        };
+        Ok(alloc::boxed::Box::new(CvvdpVideo {
+            params: self.params,
+            geometry: self.geometry,
+            rate,
+            scorer: None,
+            size: None,
+            pushed: 0,
+            failed: false,
+        }))
+    }
+}
+
+/// A cvvdp video session over [`crate::VideoScorer`].
+struct CvvdpVideo {
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+    rate: za::FrameRate,
+    scorer: Option<crate::VideoScorer>,
+    size: Option<(usize, usize)>,
+    pushed: u64,
+    failed: bool,
+}
+
+impl CvvdpVideo {
+    fn push_inner(
+        &mut self,
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<()> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("cvvdp")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        match self.size {
+            Some(s) if s != (r.width, r.height) => {
+                return za::fail(
+                    za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                        .with_metric("cvvdp")
+                        .with_message(alloc::format!(
+                            "frame {} is {}x{}, the clip started {}x{}",
+                            self.pushed,
+                            r.width,
+                            r.height,
+                            s.0,
+                            s.1
+                        )),
+                );
+            }
+            Some(_) => {}
+            None => {
+                let fps = (f64::from(self.rate.num) / f64::from(self.rate.den)) as f32;
+                self.scorer = Some(
+                    crate::VideoScorer::new(
+                        r.width as u32,
+                        r.height as u32,
+                        fps,
+                        self.params,
+                        self.geometry,
+                    )
+                    .metric_err_with("cvvdp", Error::kind)?,
+                );
+                self.size = Some((r.width, r.height));
+            }
+        }
+        let Some(scorer) = self.scorer.as_mut() else {
+            return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("cvvdp"));
+        };
+        scorer
+            .push_frame(&za::contiguous_rgb8(&r), &za::contiguous_rgb8(&d))
+            .metric_err_with("cvvdp", Error::kind)?;
+        self.pushed += 1;
+        Ok(())
+    }
+}
+
+impl za::Sequence for CvvdpVideo {
+    fn push(
+        &mut self,
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<Vec<za::FrameEvaluation>> {
+        if self.failed {
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::SequenceOrder)
+                    .with_metric("cvvdp")
+                    .with_message("push after a failed push"),
+            );
+        }
+        let out = self.push_inner(r, d, opts);
+        self.failed = out.is_err();
+        out.map(|()| Vec::new())
+    }
+
+    fn finish(
+        mut self: alloc::boxed::Box<Self>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<za::SequenceSummary> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let scorer = match (self.failed, self.scorer.take()) {
+            (false, Some(s)) => s,
+            _ => {
+                return za::fail(
+                    za::MetricError::new(za::ErrorKind::SequenceOrder)
+                        .with_metric("cvvdp")
+                        .with_message("finish after a failed push or with no frames"),
+                );
+            }
+        };
+        let jod = scorer.finish().metric_err_with("cvvdp", Error::kind)?;
+        let pooled = CvvdpVideoResult {
+            jod,
+            rate: self.rate,
+            frames: self.pushed,
+        };
+        Ok(za::SequenceSummary::new(
+            Vec::new(),
+            Some(alloc::boxed::Box::new(pooled)),
+            self.pushed,
+        ))
+    }
+
+    fn frames_pushed(&self) -> u64 {
+        self.pushed
+    }
+}
+
+/// The pooled result of a cvvdp video sequence.
+#[derive(Debug, Clone, Copy)]
+struct CvvdpVideoResult {
+    jod: f32,
+    rate: za::FrameRate,
+    frames: u64,
+}
+
+impl za::Evaluation for CvvdpVideoResult {
+    fn score(&self) -> f64 {
+        f64::from(self.jod)
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("jod"),
+            f64::from(self.jod),
+        )))
+    }
+
+    fn extras(&self) -> za::Extras<'_> {
+        alloc::boxed::Box::new(
+            [
+                (
+                    alloc::borrow::Cow::Borrowed("frame_rate"),
+                    alloc::borrow::Cow::Owned(alloc::format!(
+                        "{}/{}",
+                        self.rate.num,
+                        self.rate.den
+                    )),
+                ),
+                (
+                    alloc::borrow::Cow::Borrowed("frames"),
+                    alloc::borrow::Cow::Owned(alloc::format!("{}", self.frames)),
+                ),
+            ]
+            .into_iter(),
+        )
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 

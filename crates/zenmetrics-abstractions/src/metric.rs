@@ -150,13 +150,17 @@ pub enum Temporal {
     /// Each frame scores alone; a sequence is a loop over
     /// [`Metric::evaluate`].
     Stateless,
-    /// Frame scores depend on neighboring frames.
+    /// Each frame gets its own result, which depends on neighboring
+    /// frames.
     Stateful {
         /// Past frames each score depends on.
         history: u32,
         /// Most frames a result can trail its [`Sequence::push`].
         latency: u32,
     },
+    /// The sequence has one result, from [`Sequence::finish`]; pushes
+    /// return no per-frame results (cvvdp's video path).
+    Pooled,
 }
 
 /// A frame rate as a rational.
@@ -388,9 +392,11 @@ impl<M: ?Sized + Metric> WarmReference for ColdReplay<'_, M> {
 
 /// A sequence session. See [`Metric::sequence`].
 ///
-/// Results may trail their push by up to the metric's
-/// [`Temporal::Stateful`] latency; every pushed frame's result appears
-/// exactly once, from a `push` or from [`Self::finish`], in index order.
+/// For [`Temporal::Stateless`] and [`Temporal::Stateful`] metrics every
+/// pushed frame's result appears exactly once, from a `push` or from
+/// [`Self::finish`], in index order, trailing its push by at most the
+/// declared latency. A [`Temporal::Pooled`] metric returns no per-frame
+/// results and puts its one result in [`SequenceSummary::pooled`].
 pub trait Sequence: Send {
     /// Push the next frame pair; returns the results that became ready.
     ///

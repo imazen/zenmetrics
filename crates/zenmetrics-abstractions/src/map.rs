@@ -391,8 +391,10 @@ fn f32_values<'s>(sl: &PixelSlice<'s>) -> alloc::borrow::Cow<'s, [f32]> {
     for y in 0..h {
         let row = &all[y * sl.stride()..y * sl.stride() + w * 4];
         out.extend(
-            row.chunks_exact(4)
-                .map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]])),
+            row.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_ne_bytes(*c)),
         );
     }
     alloc::borrow::Cow::Owned(out)
@@ -427,7 +429,7 @@ pub fn fold_values(vals: &[f32], fold: MapFold<'_>) -> MetricResult<f64> {
         );
     }
     if let MapFold::PNorm { p } = fold
-        && !(p > 0.0)
+        && (p.is_nan() || p <= 0.0)
     {
         return fail(
             MetricError::new(ErrorKind::InvalidConfig).with_message(format!("p-norm exponent {p}")),
@@ -557,7 +559,7 @@ pub fn gray_f32_buffer(data: &[f32], w: u32, h: u32) -> MetricResult<PixelBuffer
     let mut dst = buf.as_slice_mut();
     for y in 0..h {
         let src = &data[y as usize * w as usize..(y as usize + 1) * w as usize];
-        for (o, &v) in dst.row_mut(y).chunks_exact_mut(4).zip(src) {
+        for (o, &v) in dst.row_mut(y).as_chunks_mut::<4>().0.iter_mut().zip(src) {
             o.copy_from_slice(&v.to_ne_bytes());
         }
     }
