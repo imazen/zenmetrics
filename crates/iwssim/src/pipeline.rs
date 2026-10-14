@@ -571,6 +571,10 @@ pub(crate) struct CsMap {
     pub(crate) w: usize,
     pub(crate) h: usize,
     pub(crate) cs: Vec<f32>,
+    /// The information-content weights this scale's pooling multiplies
+    /// `cs` by, cropped to the same grid (`None` at the top scale and
+    /// without IW pooling).
+    pub(crate) iw: Option<Vec<f32>>,
 }
 
 fn score_with_split(
@@ -640,12 +644,22 @@ fn score_with_split(
         }
     }
 
-    for s in cs_per_scale {
+    for (scale, s) in cs_per_scale.into_iter().enumerate() {
         if let Some(sink) = maps.as_deref_mut() {
+            // The pooling reads `iw` through the `bound1` crop window.
+            let iw = iw_maps.get(scale).map(|iw| {
+                let mut crop = Vec::with_capacity(s.cs_w * s.cs_h);
+                for r in 0..s.cs_h {
+                    let row = (r + bound1) * iw.w + bound1;
+                    crop.extend_from_slice(&iw.infow[row..row + s.cs_w]);
+                }
+                crop
+            });
             sink.push(CsMap {
                 w: s.cs_w,
                 h: s.cs_h,
                 cs: s.cs.clone(),
+                iw,
             });
         }
         s.release();
@@ -716,6 +730,8 @@ fn za_evaluation(s: IwssimScore) -> alloc::boxed::Box<dyn za::Evaluation> {
 
 /// Map names, finest scale first; the coarsest map includes luminance.
 const CS_NAMES: [&str; NUM_SCALES] = ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4"];
+/// Information-content weight map names, scales 0–3.
+const IW_NAMES: [&str; NUM_SCALES - 1] = ["iw_0", "iw_1", "iw_2", "iw_3"];
 
 /// A scored pair with its per-scale contrast-structure maps.
 struct IwssimMaps {
@@ -768,6 +784,15 @@ impl IwssimMaps {
         let px = za::gray_f32_slice(&self.maps[s].cs, g.cells_x, g.cells_y).ok()?;
         za::MapView::new(CS_NAMES[s], px, za::MapPolarity::Similarity, g).ok()
     }
+
+    /// Scale `s`'s weights on the `cs_s` grid. The weights come from the
+    /// whole band's covariance eigendecomposition, so support is global.
+    fn weight_view(&self, s: usize) -> Option<za::MapView<'_>> {
+        let iw = self.maps[s].iw.as_ref()?;
+        let g = self.geometry[s].with_support(za::Support::Global);
+        let px = za::gray_f32_slice(iw, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(IW_NAMES[s], px, za::MapPolarity::Feature, g).ok()
+    }
 }
 
 impl za::Evaluation for IwssimMaps {
@@ -784,7 +809,9 @@ impl za::Evaluation for IwssimMaps {
     }
 
     fn maps(&self) -> Vec<za::MapView<'_>> {
-        (0..self.maps.len()).filter_map(|s| self.view(s)).collect()
+        let cs = (0..self.maps.len()).filter_map(|s| self.view(s));
+        let iw = (0..self.maps.len()).filter_map(|s| self.weight_view(s));
+        cs.chain(iw).collect()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -834,7 +861,10 @@ impl Iwssim {
 /// ([`za::MapPolarity::Similarity`], `1` = identical). Scales 0–3 pool their
 /// map with the information-content weights, the top scale by its plain
 /// mean, and the score is `Π wmcs_s^β_s`: these are per-scale components,
-/// not a per-pixel IW-SSIM.
+/// not a per-pixel IW-SSIM. With IW pooling on, `iw_0` … `iw_3` follow: the
+/// weights on the same grids (`wmcs_s = Σ cs·iw / Σ iw`), mutual-information
+/// pooling weights with no match direction ([`za::MapPolarity::Feature`],
+/// global support).
 impl za::Metric for Iwssim {
     fn id(&self) -> za::MetricId {
         let p = &self.params;

@@ -10,13 +10,17 @@
 //! refuse map requests): SPEED's chroma block maps `speed_u` (primary) and
 //! `speed_v`, each block's `|S_ref − S_dist|` entropy-weighted difference,
 //! the terms whose block mean is that channel's SPEED score before the U/V
-//! combine and the 45 clamp ([`za::MapPolarity::Difference`]). They are one
-//! feature's components, not a per-pixel VMAF; the other features (ADM3,
-//! CAMBI, motion) are not exposed as maps. A block is 5×5 operating samples
-//! (every 16th sample of the prescaled chroma plane): 160 luma pixels at
-//! prescale 1, 320 at 0.5. The phone models' 0.6 prescale has no
-//! whole-pixel grid, so their map requests fail with `NoMap`. Support is
-//! global (the block entropies use frame-wide covariance eigenvalues).
+//! combine and the 45 clamp ([`za::MapPolarity::Difference`]). A block is
+//! 5×5 operating samples (every 16th sample of the prescaled chroma plane):
+//! 160 luma pixels at prescale 1, 320 at 0.5; the phone models' 0.6
+//! prescale has no whole-pixel grid, so they serve no SPEED maps. Support
+//! is global (the block entropies use frame-wide covariance eigenvalues).
+//! Then `cambi_0` … `cambi_4`: CAMBI's per-scale c-values of the distorted
+//! frame, the values its top-k pooling reads and libvmaf's `heatmaps_path`
+//! dumps. CAMBI scores banding in the distorted frame alone, so these carry
+//! no reference comparison ([`za::MapPolarity::Feature`]; higher = more
+//! visible banding). They are features' components, not a per-pixel VMAF;
+//! ADM3 and motion3 are not exposed as maps.
 //!
 //! Input is planar YCbCr 4:2:0 (`PlaneLayout::ycbcr_420`) with U8 samples,
 //! or U16 samples carrying 10 significant bits. VMAF is defined on code
@@ -207,21 +211,17 @@ fn evaluation(r: &VmafFrameResult) -> Box<dyn za::Evaluation> {
 /// A single scored pair with SPEED's chroma block maps.
 struct VmafMaps {
     scalars: za::ScalarEval,
-    maps: [Vec<f32>; 2],
-    geometry: za::MapGeometry,
+    maps: Vec<(&'static str, Vec<f32>, za::MapGeometry, za::MapPolarity)>,
 }
+
+/// CAMBI c-value map names, one per scale.
+const CAMBI_NAMES: [&str; 5] = ["cambi_0", "cambi_1", "cambi_2", "cambi_3", "cambi_4"];
 
 impl VmafMaps {
     fn view(&self, i: usize) -> Option<za::MapView<'_>> {
-        let g = self.geometry;
-        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
-        za::MapView::new(
-            ["speed_u", "speed_v"][i],
-            px,
-            za::MapPolarity::Difference,
-            g,
-        )
-        .ok()
+        let (name, data, g, polarity) = &self.maps[i];
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(name, px, *polarity, *g).ok()
     }
 }
 
@@ -239,7 +239,7 @@ impl za::Evaluation for VmafMaps {
     }
 
     fn maps(&self) -> Vec<za::MapView<'_>> {
-        (0..2).filter_map(|i| self.view(i)).collect()
+        (0..self.maps.len()).filter_map(|i| self.view(i)).collect()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -304,30 +304,54 @@ impl za::Metric for Vmaf {
         )
         .metric_err_with("vmaf", Error::kind)?;
         opts.checkpoint()?;
-        let Some((cell, origin)) = speed.luma_grid else {
-            // The phone models' 0.6 prescale puts SPEED's blocks on a
-            // fractional pixel grid; there is no exact geometry to serve.
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::NoMap)
-                    .with_metric("vmaf")
-                    .with_message("SPEED blocks of a 0.6-prescale model are not whole pixels"),
-            );
-        };
-        let geometry = za::MapGeometry::grid(
-            w,
-            h,
-            origin,
-            origin,
-            cell,
-            cell,
-            speed.blocks.0 as u32,
-            speed.blocks.1 as u32,
-        )
-        .with_support(za::Support::Global);
+        let (_, cambi) = crate::cambi::cambi_v1_maps(&df.y, w as usize, h as usize, bits)
+            .metric_err_with("vmaf", Error::kind)?;
+        opts.checkpoint()?;
+        let mut maps = Vec::new();
+        // The phone models' 0.6 prescale puts SPEED's blocks on a fractional
+        // pixel grid; there is no exact geometry to serve, so they get none.
+        if let Some((cell, origin)) = speed.luma_grid {
+            let g = za::MapGeometry::grid(
+                w,
+                h,
+                origin,
+                origin,
+                cell,
+                cell,
+                speed.blocks.0 as u32,
+                speed.blocks.1 as u32,
+            )
+            .with_support(za::Support::Global);
+            let [u, v] = speed.maps;
+            maps.push(("speed_u", u, g, za::MapPolarity::Difference));
+            maps.push(("speed_v", v, g, za::MapPolarity::Difference));
+        }
+        // CAMBI point-samples even positions per scale (`decimate`), so
+        // scale sample k is input pixel `factor·k`; cells are centred on it.
+        // A value reads its scale's window (`window_size/2` samples) of the
+        // mode-filtered image and spatial mask: the mode-filter chain adds
+        // under `2·factor`, the full-resolution mask and anti-dithering 5
+        // pixels.
+        let pad = (cambi.window_size / 2) as u32;
+        for (s, scale) in cambi.scales.into_iter().enumerate() {
+            let f = scale.factor as u32;
+            let halo = (pad + 2) * f + 5;
+            let g = za::MapGeometry::grid(
+                w,
+                h,
+                -i64::from(f / 2),
+                -i64::from(f / 2),
+                f,
+                f,
+                scale.w as u32,
+                scale.h as u32,
+            )
+            .with_halo(halo, halo);
+            maps.push((CAMBI_NAMES[s], scale.c, g, za::MapPolarity::Feature));
+        }
         let eval = VmafMaps {
             scalars: scalars.clone(),
-            maps: speed.maps,
-            geometry,
+            maps,
         };
         za::apply_map_request(Box::new(eval), req)
     }
@@ -750,11 +774,14 @@ mod map_tests {
                     )
                     .unwrap();
                 assert_eq!(bits(&*mapped), bits(&*plain), "{variant:?}");
-                let maps = mapped.maps();
+                let all = mapped.maps();
                 assert_eq!(
-                    maps.iter().map(|m| m.name).collect::<Vec<_>>(),
-                    ["speed_u", "speed_v"]
+                    all.iter().map(|m| m.name).collect::<Vec<_>>(),
+                    [
+                        "speed_u", "speed_v", "cambi_0", "cambi_1", "cambi_2", "cambi_3", "cambi_4"
+                    ]
                 );
+                let maps = &all[..2];
                 let (cell, origin) = match variant {
                     ModelVariant::Consumer4k => (320, -30),
                     _ => (160, -15),
@@ -832,7 +859,7 @@ mod map_tests {
     }
 
     #[test]
-    fn phone_models_and_sequences_refuse_maps() {
+    fn phone_models_serve_cambi_only_and_sequences_refuse_maps() {
         let (r, d) = (frame8(0), frame8(1));
         let mut phone = Vmaf::new(ModelVariant::Phone);
         let e = phone
@@ -841,9 +868,12 @@ mod map_tests {
                 image(&d),
                 za::EvalOpts::SCORE_ONLY.with_native_map(),
             )
-            .err()
             .unwrap();
-        assert_eq!(e.error().kind(), za::ErrorKind::NoMap);
+        let names: Vec<_> = e.maps().iter().map(|m| m.name).collect();
+        assert_eq!(
+            names,
+            ["cambi_0", "cambi_1", "cambi_2", "cambi_3", "cambi_4"]
+        );
         let mut m = Vmaf::new(ModelVariant::Standard1080p);
         {
             let mut seq = m.sequence(za::SequenceInfo::new()).unwrap();

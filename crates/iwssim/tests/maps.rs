@@ -61,8 +61,16 @@ fn maps_keep_the_scores_and_describe_each_scale() {
                 )
                 .unwrap();
             assert_eq!(bits(&*mapped), bits(&*plain), "{w}x{h}");
-            let maps = mapped.maps();
-            assert_eq!(maps.iter().map(|m| m.name).collect::<Vec<_>>(), NAMES);
+            let all = mapped.maps();
+            let names: Vec<_> = all.iter().map(|m| m.name).collect();
+            assert_eq!(&names[..5], NAMES);
+            assert_eq!(&names[5..], ["iw_0", "iw_1", "iw_2", "iw_3"]);
+            for (cs, iw) in all[..4].iter().zip(&all[5..]) {
+                assert_eq!(iw.polarity, za::MapPolarity::Feature);
+                assert_eq!(iw.geometry, cs.geometry.with_support(za::Support::Global));
+                assert!(iw.values().iter().all(|v| v.is_finite() && *v >= 0.0));
+            }
+            let maps = &all[..5];
             let tiled = w.min(h) < 176;
             let (mut sw, mut sh) = (w.max(176), h.max(176));
             for (s, m) in maps.iter().enumerate() {
@@ -110,7 +118,7 @@ fn maps_fold_to_the_per_scale_terms() {
             )
             .unwrap();
         let wmcs: Vec<f64> = e.scores().skip(1).map(|(_, v)| v).collect();
-        for (s, map) in e.maps().iter().enumerate() {
+        for (s, map) in e.maps().iter().take(5).enumerate() {
             if iw_flag && s < 4 {
                 continue;
             }
@@ -237,6 +245,52 @@ fn support_bounds_where_a_patch_can_reach() {
             }
         }
     }
+}
+
+/// With IW pooling, each fine scale's term is the `iw`-weighted mean of its
+/// `cs` map: `wmcs_s = Σ cs·iw / Σ iw` (the kernel narrows both f64 sums to
+/// f32 before dividing, so the fold holds to f32 precision).
+#[test]
+fn weights_pool_the_contrast_structure_maps() {
+    let (w, h) = (210usize, 190usize);
+    let a = za::conformance::textured_rgb8(w, h, 31);
+    let b = with_patch(&za::conformance::textured_rgb8(w, h, 32), w, 50, 60, 20);
+    let mut m = metric(IwssimParams::default());
+    let e = m
+        .evaluate(
+            image(&a, w, h, w * 3),
+            image(&b, w, h, w * 3),
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .unwrap();
+    let wmcs: Vec<f64> = e.scores().skip(1).map(|(_, v)| v).collect();
+    let maps = e.maps();
+    for s in 0..4 {
+        let (cs, iw) = (maps[s].values(), maps[5 + s].values());
+        let (mut num, mut den) = (0.0f64, 0.0f64);
+        for (&c, &wgt) in cs.iter().zip(iw.iter()) {
+            num += f64::from(c) * f64::from(wgt);
+            den += f64::from(wgt);
+        }
+        let folded = f64::from(num as f32 / den as f32);
+        assert!(
+            (folded - wmcs[s]).abs() <= 1e-6 * wmcs[s].abs(),
+            "scale {s}: {folded} vs {}",
+            wmcs[s]
+        );
+    }
+    let mut plain = metric(IwssimParams {
+        iw_flag: false,
+        ..IwssimParams::default()
+    });
+    let e = plain
+        .evaluate(
+            image(&a, w, h, w * 3),
+            image(&b, w, h, w * 3),
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .unwrap();
+    assert_eq!(e.maps().len(), 5, "no weights without IW pooling");
 }
 
 /// A single changed pixel dips `cs_0` most in a cell that owns that pixel

@@ -71,7 +71,46 @@ fn vifp_maps_keep_the_score_and_sum_to_the_loss() {
             let plain = eval(&mut Vif, r, d, w, h, false).score();
             let mapped = eval(&mut Vif, r, d, w, h, true);
             assert_eq!(mapped.score().to_bits(), plain.to_bits(), "{w}x{h}");
-            let maps = mapped.maps();
+            let all = mapped.maps();
+            let maps: Vec<_> = all
+                .iter()
+                .filter(|m| m.name.starts_with("info_loss"))
+                .collect();
+            let (num, den): (Vec<_>, Vec<_>) = all
+                .iter()
+                .filter(|m| !m.name.starts_with("info_loss"))
+                .partition(|m| m.name.starts_with("num"));
+            assert_eq!((num.len(), den.len()), (maps.len(), maps.len()));
+            let (mut sn, mut sd) = (0.0f64, 0.0f64);
+            for ((l, n), d) in maps.iter().zip(&num).zip(&den) {
+                assert_eq!(
+                    (n.polarity, d.polarity),
+                    (za::MapPolarity::Feature, za::MapPolarity::Feature)
+                );
+                assert_eq!((n.geometry, d.geometry), (l.geometry, l.geometry));
+                for ((&lv, &nv), &dv) in l
+                    .values()
+                    .iter()
+                    .zip(n.values().iter())
+                    .zip(d.values().iter())
+                {
+                    assert!(
+                        (lv - (dv - nv)).abs() <= 1e-5 * dv.abs().max(1.0),
+                        "{}",
+                        l.name
+                    );
+                    sn += f64::from(nv);
+                    sd += f64::from(dv);
+                }
+            }
+            if sd > 0.0 {
+                let folded = sn / sd;
+                let vif = plain;
+                assert!(
+                    (folded - vif).abs() <= 1e-5 * vif.abs().max(1e-6),
+                    "{w}x{h}: {folded} vs {vif}"
+                );
+            }
             let grids: Vec<_> = maps
                 .iter()
                 .map(|m| (m.width() as usize, m.height() as usize))
@@ -132,8 +171,12 @@ fn vifp_support_bounds_where_a_patch_can_reach() {
             // Declared support is a bound, not a promise of dependence: at
             // coarse scales the 'valid' decimation chain need not reach a
             // corner, so only the interior patch must register everywhere.
-            if px == 70 {
+            if px == 70 && !m.name.starts_with("den") {
                 assert!(changed > 0, "({px},{py}) {}: no response", m.name);
+            }
+            // `den` reads the reference alone, which the patch never touches.
+            if m.name.starts_with("den") {
+                assert_eq!(changed, 0, "{}", m.name);
             }
         }
     }
@@ -240,8 +283,16 @@ fn vifvec_maps_name_their_subbands_and_localize_a_patch() {
     let plain = eval(&mut Vifvec, &a, &b, w, h, false).score();
     let e = eval(&mut Vifvec, &a, &b, w, h, true);
     assert_eq!(e.score().to_bits(), plain.to_bits());
-    let maps = e.maps();
+    let all = e.maps();
+    assert_eq!(all.len(), 24);
+    let maps = &all[..8];
     assert_eq!(maps.iter().map(|m| m.name).collect::<Vec<_>>(), names);
+    for (k, m) in all[8..].iter().enumerate() {
+        let (kind, sub) = if k < 8 { ("num", k) } else { ("den", k - 8) };
+        assert_eq!(m.name, names[sub].replace("info_loss", kind));
+        assert_eq!(m.polarity, za::MapPolarity::Feature);
+        assert_eq!(m.geometry, maps[sub].geometry);
+    }
     for (k, m) in maps.iter().enumerate() {
         let level = k / 2 + 1;
         assert_eq!(m.geometry.cell_width, 3 << (level - 1), "{}", m.name);
