@@ -542,8 +542,10 @@ fn reduce_fused_inner(
             }
 
             // --- deinterleave vrow → pe/po (stride-2 split) ---
-            pe[..dw + 4].fill(0.0);
-            po[..dw + 4].fill(0.0);
+            // No re-zero needed: `pe`/`po` start zeroed per band,
+            // the deinterleave writes every slot the taps later
+            // read (`1..=dw+6`), and slots `0` and `>= dw+7` are
+            // never written — they stay 0 for the band's lifetime.
             for (j, pair) in vrow.chunks(2).enumerate().take(dw + 6) {
                 pe[j + 1] = pair[0];
                 po[j + 1] = *pair.get(1).unwrap_or(&0.0);
@@ -714,8 +716,9 @@ fn reduce_fused_inner(
             }
 
             // --- deinterleave vrow → pe/po (stride-2 split) ---
-            pe[..dw + 4].fill(0.0);
-            po[..dw + 4].fill(0.0);
+            // See the width-16 twin: no re-zero — every tap-read
+            // slot is written by the deinterleave or stays 0 for
+            // the band's lifetime.
             for (j, pair) in vrow.chunks(2).enumerate().take(dw + 6) {
                 pe[j + 1] = pair[0];
                 po[j + 1] = *pair.get(1).unwrap_or(&0.0);
