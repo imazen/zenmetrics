@@ -1150,11 +1150,18 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
         bmax = bmax.max(b);
     }
     let (arange, brange) = (amax - amin, bmax - bmin);
+    let mut arg = vec![0.0f32; n * n];
     for i in 0..n * n {
         let na = (lab[1][i] - amin) / arange;
         let nb = (lab[2][i] - bmin) / brange;
         let d2 = na * na + nb * nb;
-        vs[i] *= 1.0 - libm::expf(-d2 / (SIGMA_C * SIGMA_C));
+        arg[i] = -d2 / (SIGMA_C * SIGMA_C);
+    }
+    // expf on lanes — bit-identical to scalar `libm::expf` per element.
+    let mut e = vec![0.0f32; n * n];
+    zenmetrics_math::vexpf_libm_into(&arg, &mut e);
+    for i in 0..n * n {
+        vs[i] *= 1.0 - e[i];
     }
     // 6. resize back to the input size, then mat2gray.
     let mut out = imresize(&vs, n, n, w, h);
