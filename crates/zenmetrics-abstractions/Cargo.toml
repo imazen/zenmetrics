@@ -2,7 +2,7 @@
 name = "zenmetrics-abstractions"
 version = "0.0.1"
 edition = "2024"
-description = "Shared metric abstractions — the object-safe Diffmap trait, the generic PixelSlice-driven Metric surface, and the ScoreKind/MapPolarity semantics enums"
+description = "Shared metric abstractions: the object-safe Metric/Evaluation surface, metric identity and column naming, map geometry, warm references, temporal sequences, and a whereat-located error type"
 license = "MIT OR Apache-2.0"
 
 [features]
@@ -11,5 +11,8 @@ std = []
 
 [dependencies]
 bytemuck = { version = "1.21", default-features = false, features = ["extern_crate_alloc"] }
-zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
+enough = { version = "0.4.5", default-features = false, features = ["alloc"] }
+how-far = { version = "0.1.0", default-features = false }
 libm = { version = "0.2", default-features = false }
+whereat = { version = "0.1.5", default-features = false }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["planar"] }

@@ -7723,7 +7723,10 @@ name = "zenmetrics-abstractions"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
+ "enough",
+ "how-far",
  "libm",
+ "whereat",
  "zenpixels",
 ]
 
