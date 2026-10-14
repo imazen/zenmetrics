@@ -1215,31 +1215,79 @@ macro_rules! score_body {
         grad_body!($token, $F32, $LANES, ix2, iy2, g2, n);
 
         // Pooling: Σ GSim·PCSim·PCm(·chroma) / Σ PCm — f64 raster
-        // order, identical on every tier.
+        // order, identical on every tier. Per-block the similarity
+        // terms run at $F32 width (per-lane identical to the scalar
+        // expressions); the `+=` accumulation stays scalar in raster
+        // order.
         let mut num = 0.0f64;
         let mut numc = 0.0f64;
         let mut den = 0.0f64;
         // FSIMc chroma `pow` batched per f64x4 block: `real_pow_lambda(z)`
         // ≡ `pow(|z|,λ)·(z<0 ? cos(πλ) : 1)` — for `z = −0`, `|z| = +0`
-        // and `pow(+0,λ) = pow(−0,λ) = +0`. `numc` still accumulates in
-        // fixed raster order, one `+=` per element.
+        // and `pow(+0,λ) = pow(−0,λ) = +0`.
         let mut zq = [0.0f64; 4];
         let mut bs = [0.0f64; 4];
         let mut sg = [0.0f64; 4];
         let mut fill = 0usize;
-        for i in 0..n {
+        let two = $F32::splat_t($token, 2.0);
+        let (t1v, t2v) = ($F32::splat_t($token, T1), $F32::splat_t($token, T2));
+        let (t3v, t4v) = ($F32::splat_t($token, T3), $F32::splat_t($token, T4));
+        let nanv = $F32::splat_t($token, f32::NAN);
+        let mut i = 0usize;
+        while i + $LANES <= n {
+            let av = $F32::from_array_t($token, core::array::from_fn(|k| pc1[i + k]));
+            let bv = $F32::from_array_t($token, core::array::from_fn(|k| pc2[i + k]));
+            let xv = $F32::from_array_t($token, core::array::from_fn(|k| g1[i + k]));
+            let zv = $F32::from_array_t($token, core::array::from_fn(|k| g2[i + k]));
+            let pcsim = (two * av * bv + t1v) / (av * av + bv * bv + t1v);
+            let gsim = (two * xv * zv + t2v) / (xv * xv + zv * zv + t2v);
+            // FSIMmap = GSim·PCsim — a pure store; accumulation unchanged.
+            let gp = gsim * pcsim;
+            if let Some(m) = $map.as_deref_mut() {
+                gp.store((&mut m[i..i + $LANES]).try_into().unwrap());
+            }
+            // MATLAB `max` propagates NaN; `max()` under the not-NaN mask
+            // is operand-order-insensitive for non-NaN lanes.
+            let nanm = av.simd_ne(av) | bv.simd_ne(bv);
+            let pcm = $F32::blend(nanm, nanv, av.max(bv));
+            let ba = (gp * pcm).to_array(); // base = gsim·pcsim·pcm per lane
+            let pa = pcm.to_array();
+            for k in 0..$LANES {
+                num += ba[k] as f64;
+                den += pa[k] as f64;
+            }
+            if let Some((i1, i2, q1, q2)) = $iq {
+                let iav = $F32::from_array_t($token, core::array::from_fn(|k| i1[i + k]));
+                let ibv = $F32::from_array_t($token, core::array::from_fn(|k| i2[i + k]));
+                let isim = (two * iav * ibv + t3v) / (iav * iav + ibv * ibv + t3v);
+                let qav = $F32::from_array_t($token, core::array::from_fn(|k| q1[i + k]));
+                let qbv = $F32::from_array_t($token, core::array::from_fn(|k| q2[i + k]));
+                let qsim = (two * qav * qbv + t4v) / (qav * qav + qbv * qbv + t4v);
+                for (k, zf) in (isim * qsim).to_array().into_iter().enumerate() {
+                    let z = zf as f64;
+                    zq[fill] = z.abs();
+                    sg[fill] = if z < 0.0 { COS_PI_LAMBDA } else { 1.0 };
+                    bs[fill] = ba[k] as f64;
+                    fill += 1;
+                    if fill == 4 {
+                        let pr = pow64_x4($token, &zq, &[LAMBDA; 4]);
+                        for j in 0..4 {
+                            numc += bs[j] * (pr[j] * sg[j]);
+                        }
+                        fill = 0;
+                    }
+                }
+            }
+            i += $LANES;
+        }
+        while i < n {
             let (a, b) = (pc1[i], pc2[i]);
             let pcsim = (2.0 * a * b + T1) / (a * a + b * b + T1);
             let (x, z) = (g1[i], g2[i]);
             let gsim = (2.0 * x * z + T2) / (x * x + z * z + T2);
-            // FSIMmap = GSim·PCsim — the canonical per-pixel similarity.
-            // A pure store; score accumulation is unchanged.
             if let Some(m) = $map.as_deref_mut() {
                 m[i] = gsim * pcsim;
             }
-            // MATLAB `max(PC1,PC2)` propagates NaN; `f32::max` would
-            // swallow it. Constant inputs produce NaN PC maps — the
-            // reference's NaN FSIM depends on this.
             let pcm = if a.is_nan() || b.is_nan() {
                 f32::NAN
             } else {
@@ -1266,6 +1314,7 @@ macro_rules! score_body {
                 }
             }
             den += pcm as f64;
+            i += 1;
         }
         for k in 0..fill {
             numc += bs[k] * (libm::pow(zq[k], LAMBDA) * sg[k]);
