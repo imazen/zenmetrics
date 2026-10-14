@@ -194,15 +194,17 @@ pub(crate) fn visual_pathway(
             *v /= norm;
         }
     }
-    let mut r_lmsr = vec![0.0f64; npix * 4];
+    let mut r_lmsr = Vec::with_capacity(npix * 4);
     for px in 0..npix {
+        let mut row4 = [0.0f64; 4];
         for k in 0..4 {
             let mut acc = 0.0;
             for l in 0..channels {
                 acc += l_o[px * channels + l] * m_img_lmsr[l][k];
             }
-            r_lmsr[px * 4 + k] = acc.clamp(1e-8, 1e10);
+            row4[k] = acc.clamp(1e-8, 1e10);
         }
+        r_lmsr.extend_from_slice(&row4);
     }
 
     // ---- local adaptation ----
@@ -262,12 +264,14 @@ pub(crate) fn visual_pathway(
     // `y_lut` is log10 of a log-spaced grid — uniform to ulp precision, so
     // the interval probe lands in ~1 step instead of a 11-level search.
     let dx = (y_lut[y_lut.len() - 1] - y_lut[0]) / (y_lut.len() - 1) as f64;
-    let mut p = vec![0.0; npix];
+    let mut p = Vec::with_capacity(npix);
     for i in 0..npix {
+        let mut acc = 0.0f64;
         for (k, lut) in [(0usize, &jnd_cone), (1, &jnd_cone), (3, &jnd_rod)] {
             let v = r_lmsr[i * 4 + k].clamp(y0, y1).log10();
-            p[i] += interp1_linear_dx(&y_lut, lut, v, dx);
+            acc += interp1_linear_dx(&y_lut, lut, v, dx);
         }
+        p.push(acc);
     }
 
     // ---- sp0 decomposition + baseband DC removal ----
