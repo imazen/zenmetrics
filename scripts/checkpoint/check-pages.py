@@ -115,6 +115,22 @@ try:
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
           }
+          // The unified-interface maps need a larger pair (NLPD >= 96, vifvec 72, IW-SSIM 176, VMAF one side >= 216).
+          const lw=480,lh=352,unified=new Uint8Array(lw*lh*4),striped=new Uint8Array(unified.length);
+          for(let y=0;y<lh;y++)for(let x=0;x<lw;x++)for(let c=0;c<4;c++){
+            const i=(y*lw+x)*4+c;if(c===3){unified[i]=striped[i]=255;continue;}
+            const v=(x*7+y*5+c*61+(x*y)%23)%256;unified[i]=v;
+            striped[i]=Math.floor(y/24)%3===0?Math.floor(v/4)*3+32:(c===2&&Math.floor(x/32)%3===0?v>>1:v);
+          }
+          for(const mapMetric of ['nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:unified,distorted:striped,width:lw,height:lh});
+            const got=await response;if(got.type!=='result')throw new Error(mapMetric+': '+JSON.stringify(got));
+            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
+          }
+          for(const mapMetric of ['nlpd','vifvec','iwssim','vmaf-v1']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference,distorted,width,height});
+            const got=await response;if(got.type!=='error')throw new Error('Undersized '+mapMetric+' map was not refused');
+          }
           const profiles = {};
           for(const zensimProfile of ['b','d','a','preview-v0.1','preview-v0.2','b']) {
             response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile,reference,distorted,width,height});
@@ -129,11 +145,11 @@ try:
           const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
           if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
-          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
+          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
           const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
           for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
           const oddMaps={};
-          for(const mapMetric of ['fsim','haarpsi','vsi','msssim','gmsd']) {
+          for(const mapMetric of ['fsim','haarpsi','vsi','msssim','gmsd','iwssim']) {
             response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             if(!got.similarity||!got.map.every(Number.isFinite))throw new Error('Invalid identity map '+mapMetric);
@@ -143,6 +159,17 @@ try:
             if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry');
             oddMaps[mapMetric]=got.geometry;
           }
+          // Identical inputs: these components vanish exactly; VIF keeps the reference's 1e-10 regularization.
+          for(const mapMetric of ['nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+            const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
+            const regularized=mapMetric.startsWith('vif');
+            if(got.similarity||!got.map.every(v=>regularized?v>0&&v<1e-9:v===0))throw new Error('Identity component map differs '+mapMetric);
+            if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry '+mapMetric);
+            oddMaps[mapMetric]=got.geometry;
+          }
+          response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:'vmaf-v1',reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+          if((await response).type!=='error')throw new Error('Odd-sized 4:2:0 VMAF map was not refused');
           const mixed=new Uint8Array(128*128*4);
           for(let y=0;y<128;y++)for(let x=0;x<128;x++)for(let c=0;c<4;c++)mixed[(y*128+x)*4+c]=c===3?255:(x<64&&y<64?50:(x*17+y*13+c*41)%256);
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'haarpsi',reference:mixed,distorted:mixed,width:128,height:128});
@@ -290,7 +317,8 @@ try:
         assert 'Map ' in page.locator('#compute-timing').inner_text()
         assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
         result['ui_separate_timings']=True
-        for map_metric in ('fsim','fsimc','haarpsi','vsi','msssim'):
+        # MS-SSIM stays last: the border check below reads its cropped origin.
+        for map_metric in ('nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','fsimc','haarpsi','vsi','msssim'):
             page.locator('#map-metric').select_option(map_metric)
             page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
             assert 'native samples' in page.locator('#map-info').inner_text()
@@ -322,7 +350,9 @@ try:
                 assert all(math.isfinite(v) for v in got['values'])
                 delta=max(abs(a-b) for a,b in zip(got['values'],expected['values']))
                 result['native_map_max_abs_delta'][name]=delta
-                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi'): assert delta==0, (name,delta)
+                # IW-SSIM and mDCT-PSNR record their delta: neither claims cross-tier bits, and
+                # mDCT-PSNR calls platform libm (glibc natively, not on wasm32).
+                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi','nlpd','psnrhvs','mad','vif','vifvec','vmaf-v1'): assert delta==0, (name,delta)
         if args.report:
             source_file=args.site/'site-source.json'
             asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''

@@ -297,6 +297,176 @@ mod tests {
         assert!(rgb(&packed, 1, 0, 4).is_err());
         assert!(rgb(&packed, u32::MAX, u32::MAX, usize::MAX).is_err());
     }
+
+    /// Opaque RGBA rows `pad` bytes wider than the packed RGB pixels.
+    #[cfg(feature = "cpu-metrics")]
+    fn rgba(px: &[u8], w: u32, pad: usize) -> (Vec<u8>, usize) {
+        let stride = w as usize * 4 + pad;
+        let mut out = vec![7u8; stride * (px.len() / (w as usize * 3))];
+        for (y, row) in px.chunks_exact(w as usize * 3).enumerate() {
+            for (x, p) in row.as_chunks::<3>().0.iter().enumerate() {
+                out[y * stride + x * 4..][..4].copy_from_slice(&[p[0], p[1], p[2], 255]);
+            }
+        }
+        (out, stride)
+    }
+
+    #[cfg(feature = "cpu-metrics")]
+    fn direct(
+        metric: &mut dyn zenmetrics_abstractions::Metric,
+        r: zenmetrics_abstractions::Image<'_>,
+        d: zenmetrics_abstractions::Image<'_>,
+    ) -> (zenmetrics_abstractions::MapGeometry, bool, Vec<f32>) {
+        use zenmetrics_abstractions as za;
+        let e = metric
+            .evaluate(r, d, za::EvalOpts::SCORE_ONLY.with_native_map())
+            .unwrap();
+        let m = e.map().unwrap();
+        (
+            m.geometry,
+            m.polarity == za::MapPolarity::Similarity,
+            m.values().into_owned(),
+        )
+    }
+
+    /// Each newly routed name serves its own metric's primary native map,
+    /// sample for sample, through strided RGBA ingress.
+    #[cfg(all(
+        feature = "cpu-metrics",
+        feature = "cpu-psnrhvs",
+        feature = "cpu-mdctpsnr",
+        feature = "cpu-mad",
+        feature = "cpu-iwssim",
+        feature = "cpu-vif",
+        feature = "cpu-vifvec",
+        feature = "cpu-vmaf"
+    ))]
+    #[test]
+    fn native_map_routes_serve_their_own_metric() {
+        use zenmetrics_abstractions::{self as za, zenpixels};
+        let (w, h) = (224u32, 180u32);
+        let (a, b) = (
+            za::conformance::textured_rgb8(w as usize, h as usize, 5),
+            za::conformance::textured_rgb8(w as usize, h as usize, 6),
+        );
+        let ((ra, stride), (rb, _)) = (rgba(&a, w, 12), rgba(&b, w, 12));
+        let packed = |px| {
+            za::Image::from(
+                zenpixels::PixelSlice::new(
+                    px,
+                    w,
+                    h,
+                    w as usize * 3,
+                    zenpixels::PixelDescriptor::RGB8_SRGB,
+                )
+                .unwrap(),
+            )
+        };
+        let mut iw = iwssim::Iwssim::new(w, h).unwrap();
+        let routes: [(&str, &mut dyn za::Metric); 7] = [
+            ("nlpd", &mut nlpd::Nlpd),
+            ("psnrhvs", &mut psnrhvs::Psnrhvs),
+            ("mdctpsnr", &mut mdctpsnr::MdctPsnr),
+            ("mad", &mut mad_iqa::Mad),
+            ("iwssim", &mut iw),
+            ("vif", &mut vif::Vif),
+            ("vifvec", &mut vif::Vifvec),
+        ];
+        let catalog: Vec<String> = serde_json::from_str(&super::available_spatial_maps()).unwrap();
+        for (name, metric) in routes {
+            assert!(
+                catalog.iter().any(|c| c == name),
+                "{name} missing from catalog"
+            );
+            let (geometry, similarity, values) = direct(metric, packed(&a), packed(&b));
+            let got = super::spatial_map(name, &ra, &rb, w, h, stride, "").unwrap();
+            assert_eq!(got.geometry, Some(geometry), "{name}");
+            assert_eq!(
+                (got.width, got.height),
+                (geometry.cells_x, geometry.cells_y)
+            );
+            assert_eq!(got.similarity, similarity, "{name}");
+            assert_eq!(got.similarity, name == "iwssim", "{name}");
+            assert_eq!(
+                got.values.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                values.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "{name}"
+            );
+        }
+        // VMAF v1 sees the 4:2:0 frames its score converts to. SPEED cells
+        // are 160 pixels, so this pair is larger and differs in chroma.
+        assert!(catalog.iter().any(|c| c == "vmaf-v1"));
+        let (w, h) = (480u32, 352u32);
+        let a = za::conformance::textured_rgb8(w as usize, h as usize, 9);
+        let b: Vec<u8> = a
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .enumerate()
+            .flat_map(|(i, p)| [p[0], p[1], if (i / 37) % 3 == 0 { p[2] / 2 } else { p[2] }])
+            .collect();
+        let yuv = |px: &[u8]| {
+            super::metrics::vmaf::to_yuv420(&super::decode::Rgb8Image {
+                pixels: px.to_vec(),
+                width: w,
+                height: h,
+            })
+            .unwrap()
+        };
+        let (ya, yb) = (yuv(&a), yuv(&b));
+        let (geometry, similarity, values) = direct(
+            &mut vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p),
+            super::yuv420_image(&ya, w, h).unwrap(),
+            super::yuv420_image(&yb, w, h).unwrap(),
+        );
+        let ((ra, stride), (rb, _)) = (rgba(&a, w, 8), rgba(&b, w, 8));
+        let got = super::spatial_map("vmaf-v1", &ra, &rb, w, h, stride, "").unwrap();
+        assert_eq!(got.geometry, Some(geometry));
+        assert_eq!((geometry.cells_x, geometry.cells_y), (3, 2));
+        assert!(!similarity && !got.similarity);
+        assert_eq!(got.values, values);
+        assert!(got.values.iter().any(|&v| v > 0.0));
+    }
+
+    /// Identical odd-sized inputs: NLPD, PSNR-HVS, mDCT-PSNR and MAD vanish
+    /// exactly and IW-SSIM's contrast-structure is one to f32 rounding. VIF
+    /// keeps a tiny positive loss, because the reference regularizes the gain
+    /// `σ12/(σ1² + 1e-10)` and floors `σv²` at 1e-10 (measured: 2.2e-11 for
+    /// VIFp, 4.3e-14 for vifvec).
+    #[cfg(all(
+        feature = "cpu-metrics",
+        feature = "cpu-psnrhvs",
+        feature = "cpu-mdctpsnr",
+        feature = "cpu-mad",
+        feature = "cpu-iwssim",
+        feature = "cpu-vif",
+        feature = "cpu-vifvec"
+    ))]
+    #[test]
+    fn native_map_routes_on_identical_inputs() {
+        let (w, h) = (257u32, 253u32);
+        let px = zenmetrics_abstractions::conformance::textured_rgb8(w as usize, h as usize, 3);
+        let (px, stride) = rgba(&px, w, 4);
+        for name in [
+            "nlpd", "psnrhvs", "mdctpsnr", "mad", "iwssim", "vif", "vifvec",
+        ] {
+            let got = super::spatial_map(name, &px, &px, w, h, stride, "").unwrap();
+            let g = got.geometry.unwrap();
+            assert_eq!((g.input_width, g.input_height), (w, h), "{name}");
+            let (lo, hi) = got
+                .values
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+            match name {
+                "iwssim" => assert!(
+                    got.similarity && 1.0 - lo <= f32::EPSILON && hi == 1.0,
+                    "{lo} {hi}"
+                ),
+                "vif" | "vifvec" => assert!(lo > 0.0 && hi < 1e-9, "{name}: {lo:e} {hi:e}"),
+                _ => assert_eq!((lo, hi), (0.0, 0.0), "{name}"),
+            }
+        }
+    }
 }
 
 /// The SDR CPU metrics accepted by this browser module; HDR and GPU names are
@@ -557,20 +727,88 @@ fn evaluate_spatial_map(
         .map(za::Image::from)
         .map_err(|e| JsError::new(&e.to_string()))
     };
+    evaluate_native_map(
+        metric,
+        image(bytemuck::cast_slice(r))?,
+        image(bytemuck::cast_slice(d))?,
+        out,
+    )
+}
+
+/// The metric's own primary map for an already shaped input pair.
+fn evaluate_native_map(
+    metric: &mut dyn zenmetrics_abstractions::Metric,
+    r: zenmetrics_abstractions::Image<'_>,
+    d: zenmetrics_abstractions::Image<'_>,
+    out: &mut SpatialMap,
+) -> Result<(), JsError> {
+    use zenmetrics_abstractions as za;
     let pulse = how_far::StopOnly::new(control());
     let opts = za::EvalOpts::SCORE_ONLY
         .with_native_map()
         .with_pulse(&pulse);
     let evaluation = metric
-        .evaluate(
-            image(bytemuck::cast_slice(r))?,
-            image(bytemuck::cast_slice(d))?,
-            opts,
-        )
+        .evaluate(r, d, opts)
         .map_err(|e| JsError::new(&e.to_string()))?;
     opts.checkpoint()
         .map_err(|e| JsError::new(&e.to_string()))?;
     export_evaluation_map(evaluation.as_ref(), out)
+}
+
+/// VMAF v1.0.16 reads 8-bit BT.709 limited-range 4:2:0, converted exactly as
+/// the `vmaf-v1` score converts it.
+#[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+fn vmaf_v1_map(
+    r: &[[u8; 3]],
+    d: &[[u8; 3]],
+    width: u32,
+    height: u32,
+    out: &mut SpatialMap,
+) -> Result<(), JsError> {
+    let fail = |e: Box<dyn std::error::Error>| JsError::new(&e.to_string());
+    let rgb8 = |p: &[[u8; 3]]| decode::Rgb8Image {
+        pixels: p.as_flattened().to_vec(),
+        width,
+        height,
+    };
+    let (r, d) = (rgb8(r), rgb8(d));
+    metrics::vmaf::check_dims(&r, &d).map_err(fail)?;
+    let (r, d) = (
+        metrics::vmaf::to_yuv420(&r).map_err(fail)?,
+        metrics::vmaf::to_yuv420(&d).map_err(fail)?,
+    );
+    let r = yuv420_image(&r, width, height).map_err(|e| JsError::new(&e))?;
+    let d = yuv420_image(&d, width, height).map_err(|e| JsError::new(&e))?;
+    evaluate_native_map(
+        &mut vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p),
+        r,
+        d,
+        out,
+    )
+}
+
+/// 8-bit 4:2:0 planes (Y, Cb, Cr) as a planar metric input.
+#[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+fn yuv420_image(
+    (y, u, v): &(Vec<u8>, Vec<u8>, Vec<u8>),
+    width: u32,
+    height: u32,
+) -> Result<zenmetrics_abstractions::Image<'_>, String> {
+    use za::zenpixels::{ChannelType, PixelDescriptor, PixelSlice, PlaneLayout};
+    use zenmetrics_abstractions as za;
+    let plane = |p, w: u32, h: u32| {
+        PixelSlice::new(p, w, h, w as usize, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
+    };
+    za::Planes::new(
+        PlaneLayout::ycbcr_420(ChannelType::U8),
+        vec![
+            plane(y, width, height)?,
+            plane(u, width / 2, height / 2)?,
+            plane(v, width / 2, height / 2)?,
+        ],
+    )
+    .map(za::Image::from)
+    .map_err(|e| e.to_string())
 }
 
 /// Spatial exports compiled in this browser build. No alternate metric is substituted.
@@ -587,6 +825,22 @@ pub fn available_spatial_maps() -> String {
     names.push("vsi");
     #[cfg(feature = "cpu-msssim")]
     names.push("msssim");
+    #[cfg(feature = "cpu-metrics")]
+    names.push("nlpd");
+    #[cfg(feature = "cpu-psnrhvs")]
+    names.push("psnrhvs");
+    #[cfg(feature = "cpu-mdctpsnr")]
+    names.push("mdctpsnr");
+    #[cfg(feature = "cpu-mad")]
+    names.push("mad");
+    #[cfg(feature = "cpu-iwssim")]
+    names.push("iwssim");
+    #[cfg(feature = "cpu-vif")]
+    names.push("vif");
+    #[cfg(feature = "cpu-vifvec")]
+    names.push("vifvec");
+    #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+    names.push("vmaf-v1");
     names.sort_unstable();
     serde_json::json!(names).to_string()
 }
@@ -667,6 +921,29 @@ pub fn spatial_map(
         "vsi" => evaluate_spatial_map(&mut vsi::Vsi, &r, &d, width, height, &mut result)?,
         #[cfg(feature = "cpu-msssim")]
         "msssim" => evaluate_spatial_map(&mut msssim::Msssim, &r, &d, width, height, &mut result)?,
+        #[cfg(feature = "cpu-metrics")]
+        "nlpd" => evaluate_spatial_map(&mut nlpd::Nlpd, &r, &d, width, height, &mut result)?,
+        #[cfg(feature = "cpu-psnrhvs")]
+        "psnrhvs" => {
+            evaluate_spatial_map(&mut psnrhvs::Psnrhvs, &r, &d, width, height, &mut result)?
+        }
+        #[cfg(feature = "cpu-mdctpsnr")]
+        "mdctpsnr" => {
+            evaluate_spatial_map(&mut mdctpsnr::MdctPsnr, &r, &d, width, height, &mut result)?
+        }
+        #[cfg(feature = "cpu-mad")]
+        "mad" => evaluate_spatial_map(&mut mad_iqa::Mad, &r, &d, width, height, &mut result)?,
+        #[cfg(feature = "cpu-iwssim")]
+        "iwssim" => {
+            let mut metric = iwssim::Iwssim::new(width, height).map_err(|e| fail(e.to_string()))?;
+            evaluate_spatial_map(&mut metric, &r, &d, width, height, &mut result)?
+        }
+        #[cfg(feature = "cpu-vif")]
+        "vif" => evaluate_spatial_map(&mut vif::Vif, &r, &d, width, height, &mut result)?,
+        #[cfg(feature = "cpu-vifvec")]
+        "vifvec" => evaluate_spatial_map(&mut vif::Vifvec, &r, &d, width, height, &mut result)?,
+        #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+        "vmaf-v1" => vmaf_v1_map(&r, &d, width, height, &mut result)?,
         #[cfg(feature = "cpu-cvvdp")]
         "cvvdp" => {
             let display = metrics::display::parse_display(display).map_err(fail)?;
