@@ -942,12 +942,26 @@ impl Plan2 {
     /// contiguous. The imaginary output lanes are dead in the conv path and
     /// not stored; the gather still reads all `w` columns and negates `pim`
     /// (every output needs the full conjugated input).
-    fn rows_inv_out(&mut self, out: &mut [f64], relaxed: bool, out_w: usize, out_h: usize) {
+    /// `post` applied per output element *after* the `1/w` scale — the
+    /// caller's own post-pass fused in (same expression, same bits). The
+    /// store lands at `out[(row·out_w + col)·xstride + xoff]` — strided
+    /// interleaves (e.g. per-channel planes) go through the scalar arm.
+    fn rows_inv_out(
+        &mut self,
+        out: &mut [f64],
+        relaxed: bool,
+        out_w: usize,
+        out_h: usize,
+        xstride: usize,
+        xoff: usize,
+        clamp: Option<(f64, f64)>,
+    ) {
         let (w, _h) = (self.width, self.height);
         let stride = w + 8;
-        debug_assert!(out.len() >= out_h * out_w);
+        debug_assert!(out.len() >= (out_h * out_w - 1) * xstride + xoff + 1);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
+        let clamp = clamp.unwrap_or((f64::NEG_INFINITY, f64::INFINITY));
         for y0 in (0..out_h).step_by(8) {
             let rws = (out_h - y0).min(8);
             if perm.is_none() && rws == 8 {
@@ -994,26 +1008,27 @@ impl Plan2 {
                 self.rows
                     .run8_mode(relaxed, re8, im8, sre8, sim8, s2re8, s2im8);
             }
-            if perm.is_none() && rws == 8 {
+            if perm.is_none() && rws == 8 && xstride == 1 {
                 for k0 in (0..out_w).step_by(8) {
                     let kn = (k0 + 8).min(out_w) - k0;
                     let mut tre = [[0.0f64; 8]; 8];
                     for t in 0..kn {
                         let lane = (k0 + t) * 8;
                         for j in 0..8 {
-                            tre[j][t] = self.re8[lane + j] * s;
+                            tre[j][t] = (self.re8[lane + j] * s).clamp(clamp.0, clamp.1);
                         }
                     }
                     for j in 0..8 {
                         let row = (y0 + j) * out_w + k0;
-                        out[row..row + kn].copy_from_slice(&tre[j][..kn]);
+                        out[row + xoff..row + xoff + kn].copy_from_slice(&tre[j][..kn]);
                     }
                 }
             } else {
                 for j in 0..rws {
                     let row = (y0 + j) * out_w;
                     for k in 0..out_w {
-                        out[row + k] = self.re8[k * 8 + j] * s;
+                        out[(row + k) * xstride + xoff] =
+                            (self.re8[k * 8 + j] * s).clamp(clamp.0, clamp.1);
                     }
                 }
             }
@@ -1441,17 +1456,51 @@ pub(super) fn conv_fft_pad(
     relaxed: bool,
 ) -> Vec<f64> {
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
+    let mut out = vec![0.0; width * height];
+    conv_fft_pad_into(
+        x,
+        width,
+        height,
+        filter,
+        pad_w,
+        pad_h,
+        pad,
+        relaxed,
+        &mut out,
+        1,
+        0,
+        None,
+    );
+    out
+}
+
+/// [`conv_fft_pad`] writing into a caller slice: element `(y,x)` lands at
+/// `out[(y·width + x)·xstride + xoff]` with `clamp` applied after the
+/// `1/w` scale — the caller's post-pass fused in, bit-identical.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn conv_fft_pad_into(
+    x: &[f64],
+    width: usize,
+    height: usize,
+    filter: &[f64],
+    pad_w: usize,
+    pad_h: usize,
+    pad: Pad,
+    relaxed: bool,
+    out: &mut [f64],
+    xstride: usize,
+    xoff: usize,
+    clamp: Option<(f64, f64)>,
+) {
     // Fully fused: rows gather straight from the unpadded `x` (imag lanes
     // are constants), the column round-trip keeps its transform output in
     // the lane planes while folding in the real filter multiply, and the
     // inverse row pass scatters only the kept crop straight into `out`.
-    let mut out = vec![0.0; width * height];
     with_plan2(pad_w, pad_h, |plan| {
         plan.rows_fwd_p_pad(x, width, height, pad, relaxed);
         plan.columns_filt_rt_p(filter, relaxed, height);
-        plan.rows_inv_out(&mut out, relaxed, width, height);
+        plan.rows_inv_out(out, relaxed, width, height, xstride, xoff, clamp);
     });
-    out
 }
 
 #[cfg(test)]
