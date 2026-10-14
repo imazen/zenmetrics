@@ -13,37 +13,32 @@ const DEFAULT_RANDOM_PAIRS: usize = 10_000_000;
 fn tiers() -> Vec<(&'static str, fn(&[f32], &[f32], &mut [f32]))> {
     let mut t: Vec<(&'static str, fn(&[f32], &[f32], &mut [f32]))> = vec![
         ("scalar", |x, y, o| {
-            fdlibm::vpowf_libm_pairs_kernel_8(ScalarToken, x, y, o)
+            fdlibm::vpowf_libm_pairs_kernel_8::<{ fdlibm::coverage::EXACT }, _>(ScalarToken, x, y, o)
         }),
         ("dispatch", |x, y, o| vpowf_libm_pairs_into(x, y, o)),
     ];
     #[cfg(target_arch = "x86_64")]
     if archmage::X64V3Token::summon().is_some() {
         t.push(("v3", |x, y, o| {
-            v3::vpowf_libm_pairs_into_v3_t(archmage::X64V3Token::summon().unwrap(), x, y, o)
+            v3::vpowf_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V3Token::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     if archmage::X64V4xToken::summon().is_some() {
         t.push(("v4x", |x, y, o| {
-            v4x::vpowf_libm_pairs_into_v4x_t(archmage::X64V4xToken::summon().unwrap(), x, y, o)
+            v4x::vpowf_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V4xToken::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(target_arch = "aarch64")]
     if archmage::NeonToken::summon().is_some() {
         t.push(("neon", |x, y, o| {
-            neon::vpowf_libm_pairs_into_neon_t(archmage::NeonToken::summon().unwrap(), x, y, o)
+            neon::vpowf_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(archmage::NeonToken::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(target_arch = "wasm32")]
     if archmage::Wasm128Token::summon().is_some() {
         t.push(("wasm128", |x, y, o| {
-            wasm128::vpowf_libm_pairs_into_wasm128_t(
-                archmage::Wasm128Token::summon().unwrap(),
-                x,
-                y,
-                o,
-            )
+            wasm128::vpowf_libm_pairs_into_gated_wasm128_t::<{ fdlibm::coverage::EXACT }>(archmage::Wasm128Token::summon().unwrap(), x, y, o)
         }));
     }
     t
@@ -516,7 +511,7 @@ fn expf_libm_dense_domain_bit_exact() {
 fn expf_libm_random_sweep_bit_exact() {
     let mut rng = Rng(0x5eed_e1);
     let mut xs = vec![0.0f32; 4096];
-    for rep in 0..64 {
+    for _rep in 0..64 {
         for v in xs.iter_mut() {
             *v = match rng.next() % 6 {
                 0 => rng.range(-110.0, 100.0),
@@ -545,6 +540,53 @@ fn vexpf_libm_into_matches_scalar() {
                 "n={n} i={i} x={:e}",
                 xs[i]
             );
+        }
+    }
+}
+
+/// The `coverage` gates must be bit-identical to scalar on their promised
+/// domain — including the scalar-fallback lanes that RANGE still services.
+#[test]
+fn powf_libm_gated_tiers_bit_exact_on_domain() {
+    use fdlibm::coverage::*;
+    let mut rng = Rng(0xC0FFEE);
+    // Domain: x positive-normal OR subnormal (POSITIVE_FINITE covers both),
+    // p moderate — x^p ranges over normal + underflow lanes.
+    for gate_name in ["EXACT", "POSITIVE_FINITE"] {
+        for &p in &[2.4f32, 0.4, -0.02, 6.0, -3.5] {
+            let xs: Vec<f32> = (0..4096)
+                .map(|i| match i % 4 {
+                    0 => f32::from_bits(0x0000_0001 + (rng.bits() & 0x007f_fffe)), // subnormal
+                    1 => rng.range(1e-37, 1.0),  // small normal → underflow result
+                    2 => rng.range(1.0, 16.0),   // mid
+                    _ => rng.range(1e-30, 1e30), // wide normal
+                })
+                .collect();
+            let mut out = vec![0.0; xs.len()];
+            match gate_name {
+                "EXACT" => vpow_libm_into_gated::<{ EXACT }>(&xs, &mut out, p),
+                _ => vpow_libm_into_gated::<{ POSITIVE_FINITE }>(&xs, &mut out, p),
+            }
+            for (i, (&x, &o)) in xs.iter().zip(&out).enumerate() {
+                assert_eq!(
+                    o.to_bits(),
+                    libm::powf(x, p).to_bits(),
+                    "{gate_name} p={p} i={i} x={x:e}"
+                );
+            }
+        }
+    }
+    // POSITIVE_NORMAL / BULK: x normal, results normal.
+    for &p in &[2.4f32, 0.02, 1.3] {
+        let xs: Vec<f32> = (0..2048).map(|_| rng.range(0.25, 4.0)).collect();
+        let mut a = vec![0.0; xs.len()];
+        let mut b = vec![0.0; xs.len()];
+        vpow_libm_into_gated::<{ POSITIVE_NORMAL }>(&xs, &mut a, p);
+        vpow_libm_into_gated::<{ BULK }>(&xs, &mut b, p);
+        for (i, &x) in xs.iter().enumerate() {
+            let want = libm::powf(x, p).to_bits();
+            assert_eq!(a[i].to_bits(), want, "POSITIVE_NORMAL p={p} i={i} x={x:e}");
+            assert_eq!(b[i].to_bits(), want, "BULK p={p} i={i} x={x:e}");
         }
     }
 }

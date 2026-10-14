@@ -13,32 +13,32 @@ const DEFAULT_RANDOM_PAIRS: usize = 2_000_000;
 fn tiers() -> Vec<(&'static str, fn(&[f64], &[f64], &mut [f64]))> {
     let mut t: Vec<(&'static str, fn(&[f64], &[f64], &mut [f64]))> = vec![
         ("scalar", |x, y, o| {
-            fdlibm64::vpow64_libm_pairs_kernel_4(ScalarToken, x, y, o)
+            fdlibm64::vpow64_libm_pairs_kernel_4::<{ fdlibm::coverage::EXACT }, _>(ScalarToken, x, y, o)
         }),
         ("dispatch", |x, y, o| vpow64_libm_pairs_into(x, y, o)),
     ];
     #[cfg(target_arch = "x86_64")]
     if archmage::X64V3Token::summon().is_some() {
         t.push(("v3", |x, y, o| {
-            v3::vpow64_libm_pairs_into_v3_t(archmage::X64V3Token::summon().unwrap(), x, y, o)
+            v3::vpow64_libm_pairs_into_gated_v3_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V3Token::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
     if archmage::X64V4xToken::summon().is_some() {
         t.push(("v4x", |x, y, o| {
-            v4x::vpow64_libm_pairs_into_v4x_t(archmage::X64V4xToken::summon().unwrap(), x, y, o)
+            v4x::vpow64_libm_pairs_into_gated_v4x_t::<{ fdlibm::coverage::EXACT }>(archmage::X64V4xToken::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(target_arch = "aarch64")]
     if archmage::NeonToken::summon().is_some() {
         t.push(("neon", |x, y, o| {
-            neon::vpow64_libm_pairs_into_neon_t(archmage::NeonToken::summon().unwrap(), x, y, o)
+            neon::vpow64_libm_pairs_into_gated_neon_t::<{ fdlibm::coverage::EXACT }>(archmage::NeonToken::summon().unwrap(), x, y, o)
         }));
     }
     #[cfg(target_arch = "wasm32")]
     if archmage::Wasm128Token::summon().is_some() {
         t.push(("wasm128", |x, y, o| {
-            wasm128::vpow64_libm_pairs_into_wasm128_t(
+            wasm128::vpow64_libm_pairs_into_gated_wasm128_t::<{ fdlibm::coverage::EXACT }>(
                 archmage::Wasm128Token::summon().unwrap(),
                 x,
                 y,
@@ -377,6 +377,256 @@ fn vpow64_libm_into_matches_scalar() {
                     "n={n} p={p}"
                 );
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// log_libm / log2_libm (e_log.c / e_log2.c ports) — same rigor vs the
+// scalar `libm::log`/`libm::log2` oracles.
+// ---------------------------------------------------------------------------
+
+/// Every tier available on this host, as `(name, unary-f64 fn)`. `LOG2`
+/// selects the e_log2 oracles; `LOG2 = false` the e_log ones.
+fn tiers_log<const LOG2: bool>() -> Vec<(&'static str, fn(&[f64], &mut [f64]))> {
+    let mut t: Vec<(&'static str, fn(&[f64], &mut [f64]))> = vec![
+        ("scalar", |x, o| {
+            if LOG2 {
+                fdlibm64::vlog2_libm_kernel_4(ScalarToken, x, o)
+            } else {
+                fdlibm64::vlog_libm_kernel_4(ScalarToken, x, o)
+            }
+        }),
+        ("dispatch", |x, o| {
+            if LOG2 {
+                vlog2_libm_into(x, o)
+            } else {
+                vlog_libm_into(x, o)
+            }
+        }),
+    ];
+    #[cfg(target_arch = "x86_64")]
+    if archmage::X64V3Token::summon().is_some() {
+        t.push(("v3", |x, o| {
+            if LOG2 {
+                v3::vlog2_libm_into_v3_t(archmage::X64V3Token::summon().unwrap(), x, o)
+            } else {
+                v3::vlog_libm_into_v3_t(archmage::X64V3Token::summon().unwrap(), x, o)
+            }
+        }));
+    }
+    #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+    if archmage::X64V4xToken::summon().is_some() {
+        t.push(("v4x", |x, o| {
+            if LOG2 {
+                v4x::vlog2_libm_into_v4x_t(archmage::X64V4xToken::summon().unwrap(), x, o)
+            } else {
+                v4x::vlog_libm_into_v4x_t(archmage::X64V4xToken::summon().unwrap(), x, o)
+            }
+        }));
+    }
+    #[cfg(target_arch = "aarch64")]
+    if archmage::NeonToken::summon().is_some() {
+        t.push(("neon", |x, o| {
+            if LOG2 {
+                neon::vlog2_libm_into_neon_t(archmage::NeonToken::summon().unwrap(), x, o)
+            } else {
+                neon::vlog_libm_into_neon_t(archmage::NeonToken::summon().unwrap(), x, o)
+            }
+        }));
+    }
+    #[cfg(target_arch = "wasm32")]
+    if archmage::Wasm128Token::summon().is_some() {
+        t.push(("wasm128", |x, o| {
+            if LOG2 {
+                wasm128::vlog2_libm_into_wasm128_t(
+                    archmage::Wasm128Token::summon().unwrap(),
+                    x,
+                    o,
+                )
+            } else {
+                wasm128::vlog_libm_into_wasm128_t(
+                    archmage::Wasm128Token::summon().unwrap(),
+                    x,
+                    o,
+                )
+            }
+        }));
+    }
+    t
+}
+
+fn check_log<const LOG2: bool>(label: &str, xs: &[f64]) -> usize {
+    let want: Vec<u64> = xs
+        .iter()
+        .map(|&x| {
+            if LOG2 {
+                libm::log2(x).to_bits()
+            } else {
+                libm::log(x).to_bits()
+            }
+        })
+        .collect();
+    let mut got = vec![0.0f64; xs.len()];
+    for (name, f) in tiers_log::<LOG2>() {
+        got.fill(f64::from_bits(0x7ff8_dead_beef_f00d));
+        f(xs, &mut got);
+        let mut bad = 0usize;
+        let mut first = String::new();
+        for i in 0..xs.len() {
+            if got[i].to_bits() != want[i] {
+                if bad < 8 {
+                    first += &alloc::format!(
+                        "\n  x={:#018x} ({:e}) libm={:#018x} lane={:#018x}",
+                        xs[i].to_bits(),
+                        xs[i],
+                        want[i],
+                        got[i].to_bits()
+                    );
+                }
+                bad += 1;
+            }
+        }
+        assert_eq!(
+            bad,
+            0,
+            "{label}/{name}: {bad} of {} lanes differ:{first}",
+            xs.len()
+        );
+    }
+    xs.len()
+}
+
+/// Edge matrix for both e_log and e_log2: every branch boundary — the
+/// subnormal gate (hx < 0x00100000), the x==1 early-out, the
+/// inf/NaN gate, the reduce pivots around 0x3fe6a09e, ±ulp each.
+#[test]
+fn log64_libm_edge_matrix_bit_exact() {
+    let mut xs: Vec<f64> = Vec::new();
+    for bits in [
+        0x0000_0000_0000_0000u64, // +0
+        0x0000_0000_0000_0001,      // smallest subnormal
+        0x000f_ffff_ffff_ffff,      // largest subnormal
+        0x0010_0000_0000_0000,      // smallest normal
+        0x3fe6_a09d_ffff_ffff,      // just below the reduce pivot
+        0x3fe6_a09e_0000_0000,      // ~sqrt(2)/2 — reduce pivot
+        0x3fe6_a09e_667f_3bcd,      // sqrt(2)/2 exactly
+        0x3ff0_0000_0000_0000,      // 1.0
+        0x3ff0_0000_0000_0001,      // 1+ulp
+        0x3fef_ffff_ffff_ffff,      // 1-ulp
+        0x4000_0000_0000_0000,      // 2.0
+        0x3fe0_0000_0000_0000,      // 0.5
+        0x7fe0_0000_0000_0000,      // huge normal
+        0x7fef_ffff_ffff_ffff,      // max finite
+        0x7ff0_0000_0000_0000,      // +inf
+        0x7ff8_0000_0000_0000,      // +NaN
+    ] {
+        for d in -2i64..=2 {
+            let b = (bits as i64).wrapping_add(d);
+            if b > 0 {
+                xs.push(f64::from_bits(b as u64));
+            }
+        }
+    }
+    // Negatives, -0, -inf, -NaN — all take the scalar fallback.
+    xs.extend_from_slice(&[
+        -0.0f64,
+        -1.0,
+        -f64::MIN_POSITIVE,
+        f64::NEG_INFINITY,
+        f64::from_bits(0xfff8_0000_0000_0001),
+        f64::NAN,
+        f64::INFINITY,
+        f64::from_bits(0x7ff0_0000_0000_0001), // sNaN-ish positive
+    ]);
+    check_log::<false>("log edges", &xs);
+    check_log::<true>("log2 edges", &xs);
+}
+
+/// Dense sweep across the full positive domain: subnormals through
+/// max-finite (ulp-strided bit patterns), plus the live [1e-300, 1e300]
+/// value range.
+#[test]
+fn log64_libm_dense_domain_bit_exact() {
+    let mut xs: Vec<f64> = (0..2_000_000u64)
+        .map(|i| f64::from_bits(0x0010_0000_0000_0000 + i * 0x10_0000_0001))
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .collect();
+    let mut rng = Rng(0x10c6);
+    xs.extend((0..500_000).map(|_| rng.range(1e-300, 1e300)));
+    xs.extend((0..300_000).map(|_| rng.range(0.5, 1.5))); // k≈0 band
+    check_log::<false>("log dense", &xs);
+    check_log::<true>("log2 dense", &xs);
+}
+
+#[test]
+fn log64_libm_random_sweep_bit_exact() {
+    let mut rng = Rng(0x10c);
+    let mut xs = vec![0.0f64; 4096];
+    for _ in 0..32 {
+        for v in xs.iter_mut() {
+            *v = match rng.next() % 5 {
+                0 => rng.range(0.0, 4.0),
+                1 => rng.range(1e-320, 1e-280), // subnormal-heavy
+                2 => f64::from_bits(rng.next() & 0x000f_ffff_ffff_ffff), // subnormal
+                3 => -rng.range(0.0, 1e300),  // negatives → fallback
+                _ => f64::from_bits(rng.next()), // anything incl NaN/inf
+            };
+        }
+        check_log::<false>("log random", &xs[..2048]);
+        check_log::<true>("log2 random", &xs[..2048]);
+    }
+}
+
+/// Slice drivers at every length class.
+#[test]
+fn vlog64_libm_into_matches_scalar() {
+    let mut rng = Rng(11);
+    for n in [0usize, 1, 3, 4, 5, 7, 8, 9, 15, 31, 257, 1000] {
+        let xs: Vec<f64> = (0..n).map(|_| rng.range(1e-8, 1e8)).collect();
+        let (mut a, mut b) = (vec![0.0; n], vec![0.0; n]);
+        vlog_libm_into(&xs, &mut a);
+        vlog2_libm_into(&xs, &mut b);
+        for i in 0..n {
+            assert_eq!(a[i].to_bits(), libm::log(xs[i]).to_bits(), "n={n}");
+            assert_eq!(b[i].to_bits(), libm::log2(xs[i]).to_bits(), "n={n}");
+        }
+    }
+}
+
+/// f64 coverage gates must be bit-identical to scalar on their promised
+/// domain. `SUBN` is folded into EDGE for this port.
+#[test]
+fn pow64_libm_gated_tiers_bit_exact_on_domain() {
+    use fdlibm::coverage::*;
+    let mut rng = Rng(0xBEEF);
+    for &p in &[2.4f64, 0.4, -0.02, 6.0, -3.5] {
+        let xs: Vec<f64> = (0..2048)
+            .map(|i| match i % 4 {
+                0 => f64::from_bits(1 + (rng.next() & 0x000f_ffff_ffff_fffe)), // subnormal
+                1 => rng.range(1e-307, 1.0), // small normal → underflow result
+                2 => rng.range(1.0, 16.0),
+                _ => rng.range(1e-150, 1e150),
+            })
+            .collect();
+        let (mut a, mut b) = (vec![0.0; xs.len()], vec![0.0; xs.len()]);
+        vpow64_libm_into_gated::<{ EXACT }>(&xs, &mut a, p);
+        vpow64_libm_into_gated::<{ POSITIVE_FINITE }>(&xs, &mut b, p);
+        for (i, &x) in xs.iter().enumerate() {
+            let want = libm::pow(x, p).to_bits();
+            assert_eq!(a[i].to_bits(), want, "EXACT p={p} i={i} x={x:e}");
+            assert_eq!(b[i].to_bits(), want, "POSITIVE_FINITE p={p} i={i} x={x:e}");
+        }
+    }
+    for &p in &[2.4f64, 0.02, 1.3] {
+        let xs: Vec<f64> = (0..1024).map(|_| rng.range(0.25, 4.0)).collect();
+        let (mut a, mut b) = (vec![0.0; xs.len()], vec![0.0; xs.len()]);
+        vpow64_libm_into_gated::<{ POSITIVE_NORMAL }>(&xs, &mut a, p);
+        vpow64_libm_into_gated::<{ BULK }>(&xs, &mut b, p);
+        for (i, &x) in xs.iter().enumerate() {
+            let want = libm::pow(x, p).to_bits();
+            assert_eq!(a[i].to_bits(), want, "POSITIVE_NORMAL p={p} i={i}");
+            assert_eq!(b[i].to_bits(), want, "BULK p={p} i={i}");
         }
     }
 }

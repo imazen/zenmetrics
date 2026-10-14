@@ -31,37 +31,37 @@ use magetypes::simd::generic::{f32x8, i32x8};
 #[cfg(feature = "avx512")]
 use magetypes::simd::generic::{f32x16, i32x16};
 
-const BP: [f32; 2] = [1.0, 1.5];
-const DP_H: [f32; 2] = [0.0, 5.84960938e-01]; /* 0x3f15c000 */
-const DP_L: [f32; 2] = [0.0, 1.56322085e-06]; /* 0x35d1cfdc */
-const TWO24: f32 = 16777216.0; /* 0x4b800000 */
-const L1: f32 = 6.0000002384e-01; /* 0x3f19999a */
-const L2: f32 = 4.2857143283e-01; /* 0x3edb6db7 */
-const L3: f32 = 3.3333334327e-01; /* 0x3eaaaaab */
-const L4: f32 = 2.7272811532e-01; /* 0x3e8ba305 */
-const L5: f32 = 2.3066075146e-01; /* 0x3e6c3255 */
-const L6: f32 = 2.0697501302e-01; /* 0x3e53f142 */
-const P1: f32 = 1.6666667163e-01; /* 0x3e2aaaab */
-const P2: f32 = -2.7777778450e-03; /* 0xbb360b61 */
-const P3: f32 = 6.6137559770e-05; /* 0x388ab355 */
-const P4: f32 = -1.6533901999e-06; /* 0xb5ddea0e */
-const P5: f32 = 4.1381369442e-08; /* 0x3331bb4c */
-const LG2: f32 = 6.9314718246e-01; /* 0x3f317218 */
-const LG2_H: f32 = 6.93145752e-01; /* 0x3f317200 */
-const LG2_L: f32 = 1.42860654e-06; /* 0x35bfbe8c */
-const CP: f32 = 9.6179670095e-01; /* 0x3f76384f =2/(3ln2) */
-const CP_H: f32 = 9.6191406250e-01; /* 0x3f764000 =12b cp */
-const CP_L: f32 = -1.1736857402e-04; /* 0xb8f623c6 =tail of cp_h */
+pub const BP: [f32; 2] = [1.0, 1.5];
+pub const DP_H: [f32; 2] = [0.0, 5.84960938e-01]; /* 0x3f15c000 */
+pub const DP_L: [f32; 2] = [0.0, 1.56322085e-06]; /* 0x35d1cfdc */
+pub const TWO24: f32 = 16777216.0; /* 0x4b800000 */
+pub const L1: f32 = 6.0000002384e-01; /* 0x3f19999a */
+pub const L2: f32 = 4.2857143283e-01; /* 0x3edb6db7 */
+pub const L3: f32 = 3.3333334327e-01; /* 0x3eaaaaab */
+pub const L4: f32 = 2.7272811532e-01; /* 0x3e8ba305 */
+pub const L5: f32 = 2.3066075146e-01; /* 0x3e6c3255 */
+pub const L6: f32 = 2.0697501302e-01; /* 0x3e53f142 */
+pub const P1: f32 = 1.6666667163e-01; /* 0x3e2aaaab */
+pub const P2: f32 = -2.7777778450e-03; /* 0xbb360b61 */
+pub const P3: f32 = 6.6137559770e-05; /* 0x388ab355 */
+pub const P4: f32 = -1.6533901999e-06; /* 0xb5ddea0e */
+pub const P5: f32 = 4.1381369442e-08; /* 0x3331bb4c */
+pub const LG2: f32 = 6.9314718246e-01; /* 0x3f317218 */
+pub const LG2_H: f32 = 6.93145752e-01; /* 0x3f317200 */
+pub const LG2_L: f32 = 1.42860654e-06; /* 0x35bfbe8c */
+pub const CP: f32 = 9.6179670095e-01; /* 0x3f76384f =2/(3ln2) */
+pub const CP_H: f32 = 9.6191406250e-01; /* 0x3f764000 =12b cp */
+pub const CP_L: f32 = -1.1736857402e-04; /* 0xb8f623c6 =tail of cp_h */
 
 /// `0xfffff000` / `0xffff8000` as the `i32` lane masks e_powf applies to
 /// `u32` bit patterns.
-const HI12: i32 = 0xffff_f000_u32 as i32;
-const HI15: i32 = 0xffff_8000_u32 as i32;
+pub const HI12: i32 = 0xffff_f000_u32 as i32;
+pub const HI15: i32 = 0xffff_8000_u32 as i32;
 
 /// Recompute the flagged lanes with scalar `libm::powf`.
 #[cold]
 #[inline(never)]
-fn scalar_lanes<const N: usize>(x: &[f32; N], y: &[f32; N], need: &[i32; N], out: &mut [f32; N]) {
+pub fn scalar_lanes<const N: usize>(x: &[f32; N], y: &[f32; N], need: &[i32; N], out: &mut [f32; N]) {
     for i in 0..N {
         if need[i] != 0 {
             out[i] = libm::powf(x[i], y[i]);
@@ -127,14 +127,83 @@ macro_rules! shr_var {
     }};
 }
 
+/// Coverage gates for the lane `powf`/`pow` ports: a `u8` bitmask consumed
+/// as a `const G` generic by the `*_gated` drivers. Each bit is a class of
+/// off-domain work compiled out at monomorphization; cleared bits are
+/// *caller promises*, not fallback removals that would corrupt in-domain
+/// lanes.
+///
+/// Measured (Zen 5, 1M-elem sweep, `powf_coverage_bench` example;
+/// ns/elem, ulp error vs scalar `libm`):
+///
+/// | gate set          | f32x16  | f64x4  | max-ulp |
+/// |-------------------|---------|--------|---------|
+/// | `EXACT`           |  2.41   |  9.43  |    0    |
+/// | `POSITIVE_FINITE` |  2.33   |  8.95  |    0*   |
+/// | `POSITIVE_NORMAL` |  2.22   |  8.96  |    0*   |
+/// | `BULK`            |  2.17   |  8.74  |    0*   |
+/// | no TAIL           |  2.23   |  7.71  | ~5e3–2e11 — not exact |
+/// | bare (0)          |  2.00   |  7.34  |   broken |
+///
+/// `*` = 0 on the promised domain; cleared gates corrupt out-of-domain
+/// lanes by contract. In-context wins exceed these kernel deltas: VSI's
+/// `srgb_to_lab` (six `pow64` calls/pixel) runs ~21% faster serial under
+/// `BULK` — the eliminated scalar-fallback machinery releases registers
+/// and branch bookkeeping around the whole loop body.
+pub mod coverage {
+    /// Early-out bookkeeping: `y == ±0`, `x == 1`, `x <= 0`, `x`/`y`
+    /// inf/NaN, `|y| > 2^27`, `y ∈ {1, 2, 0.5}` — all routed to scalar
+    /// `libm` for the exact IEEE answer. Clear when inputs are
+    /// positive-finite `x` with non-special `y`.
+    pub const EDGE: u8 = 0b0001;
+    /// Subnormal-input normalization (`x` in (0, MIN_POSITIVE)).
+    /// Clear when `x` is a normal float — including the smallest normal.
+    pub const SUBN: u8 = 0b0010;
+    /// Result-range gates: overflow/underflow lanes (incl. subnormal or
+    /// infinite results) routed to scalar. Clear when `x^y` is provably a
+    /// normal float.
+    pub const RANGE: u8 = 0b0100;
+    /// Sub-ulp precision machinery (hi/lo splits feeding the scalar-grade
+    /// result). NOT edge coverage: dropping it produced up to ~4.8e3 ulp
+    /// error on ordinary positive-finite input. The honest approximate tier
+    /// is `pow_midp`/`powf_midp`, not this.
+    pub const TAIL: u8 = 0b1000;
+    /// Bit-identical to scalar `libm` on every input.
+    pub const EXACT: u8 = EDGE | SUBN | RANGE | TAIL;
+    /// Caller promises `x` is positive and finite (subnormal OK) and `y`
+    /// is finite/non-special. Overflow/underflow lanes still get the
+    /// scalar-exact result.
+    pub const POSITIVE_FINITE: u8 = SUBN | RANGE | TAIL;
+    /// Caller additionally promises `x >= MIN_POSITIVE` (no subnormal
+    /// inputs).
+    pub const POSITIVE_NORMAL: u8 = RANGE | TAIL;
+    /// Caller additionally promises every result is a normal float.
+    /// Only TAIL remains — no scalar fallback is reachable.
+    pub const BULK: u8 = TAIL;
+}
+
 macro_rules! powf_libm_lanes {
     (
         $(#[$doc:meta])*
-        $name:ident, $kernel:ident, $pairs:ident, $F:ident, $I:ident, $Convert:ident, $lanes:literal
+        $name:ident, $gname:ident, $kernel:ident, $pairs:ident, $F:ident, $I:ident, $Convert:ident, $lanes:literal
     ) => {
         $(#[$doc])*
         #[inline(always)]
         pub fn $name<T: $Convert>(token: T, x: $F<T>, y: $F<T>) -> $F<T> {
+            $gname::<{ coverage::EXACT }, _>(token, x, y)
+        }
+
+        /// Coverage-gated lane fn: `G` is a [`coverage`] bitmask. Identical
+        /// to [`$name`] at `EXACT`; narrower gates are caller domain
+        /// promises (see `coverage` for the measured cost table).
+        #[inline(always)]
+        pub fn $gname<const G: u8, T: $Convert>(token: T, x: $F<T>, y: $F<T>) -> $F<T> {
+            // `let` not `const`: items can't capture the const generic;
+            // monomorphization + const propagation eliminates the branches.
+            let edge = G & coverage::EDGE != 0;
+            let subn = G & coverage::SUBN != 0;
+            let range = G & coverage::RANGE != 0;
+            let tail = G & coverage::TAIL != 0;
             type F<T> = $F<T>;
             type I<T> = $I<T>;
             let zero_i = I::<T>::splat_t(token, 0);
@@ -144,25 +213,39 @@ macro_rules! powf_libm_lanes {
             let iy = hy & ci!(token, I, 0x7fff_ffff);
 
             // x**0 = 1 and 1**y = 1, even if the other argument is NaN.
-            let one_out = iy.simd_eq(zero_i) | hx.simd_eq(ci!(token, I, 0x3f80_0000));
+            // `one_out`/`need` are dead unless their gates are compiled in;
+            // the `_` names silence unused warnings in the bare variant.
+            let _one_out = if edge {
+                iy.simd_eq(zero_i) | hx.simd_eq(ci!(token, I, 0x3f80_0000))
+            } else {
+                zero_i
+            };
             // Every other early-out: x <= 0, x inf/NaN, |y| > 2^27 (incl.
             // inf/NaN), y = ±1, y = 2, y = 0.5.
-            let mut need = hx.simd_le(zero_i)
-                | ix0.simd_ge(ci!(token, I, 0x7f80_0000))
-                | iy.simd_gt(ci!(token, I, 0x4d00_0000))
-                | iy.simd_eq(ci!(token, I, 0x3f80_0000))
-                | hy.simd_eq(ci!(token, I, 0x4000_0000))
-                | hy.simd_eq(ci!(token, I, 0x3f00_0000));
+            let mut _need = if edge {
+                hx.simd_le(zero_i)
+                    | ix0.simd_ge(ci!(token, I, 0x7f80_0000))
+                    | iy.simd_gt(ci!(token, I, 0x4d00_0000))
+                    | iy.simd_eq(ci!(token, I, 0x3f80_0000))
+                    | hy.simd_eq(ci!(token, I, 0x4000_0000))
+                    | hy.simd_eq(ci!(token, I, 0x3f00_0000))
+            } else {
+                zero_i
+            };
 
             // ax = fabsf(x)
             let ax = F::<T>::from_i32_bitcast_t(token, ix0);
             let mut ix = ix0;
             // take care subnormal number (ax *= TWO24 only feeds ix)
-            let sub = ix.simd_lt(ci!(token, I, 0x0080_0000));
-            let ax_s = ax * cf!(token, F, TWO24);
-            let mut n = sub & ci!(token, I, -24);
-            ix = I::<T>::blend(sub, ax_s.bitcast_to_i32(), ix);
-            n += ix.shr_arithmetic_const::<23>() - ci!(token, I, 0x7f);
+            let mut n = if subn {
+                let sub = ix.simd_lt(ci!(token, I, 0x0080_0000));
+                let ax_s = ax * cf!(token, F, TWO24);
+                let n = sub & ci!(token, I, -24);
+                ix = I::<T>::blend(sub, ax_s.bitcast_to_i32(), ix);
+                n + ix.shr_arithmetic_const::<23>() - ci!(token, I, 0x7f)
+            } else {
+                ix.shr_arithmetic_const::<23>() - ci!(token, I, 0x7f)
+            };
             let j = ix & ci!(token, I, 0x007f_ffff);
             // determine interval
             ix = j | ci!(token, I, 0x3f80_0000); /* normalize ix */
@@ -189,19 +272,30 @@ macro_rules! powf_libm_lanes {
                 token,
                 is + ci!(token, I, 0x0040_0000) + (k1 & ci!(token, I, 1 << 21)),
             );
-            let mut t_l = ax - (t_h - bp);
-            let s_l = v * ((u - s_h * t_h) - s_h * t_l);
+            // TAIL pieces: `s_l`/`t_l`/`v`/`p_l`/`t2` are the sub-ulp
+            // corrections; the gate keeps the same expression tree with
+            // zeroed correction terms.
+            let (mut t_l, s_l) = if tail {
+                let tl = ax - (t_h - bp);
+                (tl, v * ((u - s_h * t_h) - s_h * tl))
+            } else {
+                (cf!(token, F, 0.0), cf!(token, F, 0.0))
+            };
             /* compute log(ax) */
             let mut s2 = s * s;
             let mut r = s2
                 * s2
                 * (cf!(token, F, L1)
                     + s2 * (cf!(token, F, L2) + s2 * (cf!(token, F, L3) + s2 * (cf!(token, F, L4) + s2 * (cf!(token, F, L5) + s2 * cf!(token, F, L6))))));
-            r += s_l * (s_h + s);
+            if tail {
+                r += s_l * (s_h + s);
+            }
             s2 = s_h * s_h;
             t_h = cf!(token, F, 3.0) + s2 + r;
             t_h = trunc!(token, F, I, t_h, HI12);
-            t_l = r - ((t_h - cf!(token, F, 3.0)) - s2);
+            if tail {
+                t_l = r - ((t_h - cf!(token, F, 3.0)) - s2);
+            }
             /* u+v = s*(1+...) */
             u = s_h * t_h;
             v = s_l * t_h + t_l * s;
@@ -222,7 +316,10 @@ macro_rules! powf_libm_lanes {
             let z = p_l + p_h;
             let j = z.bitcast_to_i32();
             // Overflow (z >= 128) and underflow (z <= -150) branches.
-            need |= j.simd_ge(ci!(token, I, 0x4300_0000)) | (j & ci!(token, I, 0x7fff_ffff)).simd_ge(ci!(token, I, 0x4316_0000));
+            if range {
+                _need |= j.simd_ge(ci!(token, I, 0x4300_0000))
+                    | (j & ci!(token, I, 0x7fff_ffff)).simd_ge(ci!(token, I, 0x4316_0000));
+            }
 
             /* compute 2**(p_h+p_l) */
             let i = j & ci!(token, I, 0x7fff_ffff);
@@ -247,46 +344,58 @@ macro_rules! powf_libm_lanes {
             let z = cf!(token, F, 1.0) - (r - z);
             let j = z.bitcast_to_i32() + n.shl_const::<23>();
             // Subnormal output: e_powf's scalbnf branch.
-            need |= j.shr_arithmetic_const::<23>().simd_le(zero_i);
+            if range {
+                _need |= j.shr_arithmetic_const::<23>().simd_le(zero_i);
+            }
             // `sn * z` with `sn = 1.0` (x > 0) is the identity on these
             // finite lanes.
             let res = F::<T>::from_i32_bitcast_t(token, j);
-            let res = F::<T>::blend(one_out.bitcast_to_f32(), cf!(token, F, 1.0), res);
-            let need = need & one_out.not();
-            if need.any_true() {
-                let mut out = res.to_array();
-                scalar_lanes::<$lanes>(&x.to_array(), &y.to_array(), &need.to_array(), &mut out);
-                F::<T>::from_array_t(token, out)
+            let res = if edge {
+                F::<T>::blend(_one_out.bitcast_to_f32(), cf!(token, F, 1.0), res)
             } else {
                 res
+            };
+            // The scalar fallback exists whenever *any* gate feeds `need`:
+            // EDGE-off callers still get RANGE lanes repaired bitwise.
+            if edge || range {
+                let need = if edge { _need & _one_out.not() } else { _need };
+                if need.any_true() {
+                    let mut out = res.to_array();
+                    scalar_lanes::<$lanes>(&x.to_array(), &y.to_array(), &need.to_array(), &mut out);
+                    return F::<T>::from_array_t(token, out);
+                }
             }
+            res
         }
 
-        /// `out[i] = libm::powf(xs[i], p)`, bit-identical to the scalar call.
+        /// `out[i] = libm::powf(xs[i], p)` under coverage gate `G`.
+        ///
+        /// `G = coverage::EXACT` is bit-identical to the scalar call on all
+        /// inputs; narrower gates assert caller domain promises.
         #[inline(always)]
-        pub fn $kernel<T: $Convert>(token: T, xs: &[f32], out: &mut [f32], p: f32) {
+        pub fn $kernel<const G: u8, T: $Convert>(token: T, xs: &[f32], out: &mut [f32], p: f32) {
             assert_eq!(xs.len(), out.len());
             let pv = $F::<T>::splat_t(token, p);
             let (in_chunks, in_tail) = $F::<T>::partition_slice_t(token, xs);
             let (out_chunks, out_tail) = $F::<T>::partition_slice_mut_t(token, out);
             for (x, o) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-                $name(token, $F::<T>::load_t(token, x), pv).store(o);
+                $gname::<G, _>(token, $F::<T>::load_t(token, x), pv).store(o);
             }
             for (x, o) in in_tail.iter().zip(out_tail.iter_mut()) {
                 *o = libm::powf(*x, p);
             }
         }
 
-        /// `out[i] = libm::powf(xs[i], ys[i])`, bit-identical to the scalar call.
+        /// `out[i] = libm::powf(xs[i], ys[i])` under coverage gate `G`.
         #[inline(always)]
-        pub fn $pairs<T: $Convert>(token: T, xs: &[f32], ys: &[f32], out: &mut [f32]) {
+        pub fn $pairs<const G: u8, T: $Convert>(token: T, xs: &[f32], ys: &[f32], out: &mut [f32]) {
             assert_eq!(xs.len(), out.len());
             assert_eq!(ys.len(), out.len());
             let (x_chunks, x_tail) = $F::<T>::partition_slice_t(token, xs);
             let (y_chunks, y_tail) = $F::<T>::partition_slice_t(token, ys);
             let (out_chunks, out_tail) = $F::<T>::partition_slice_mut_t(token, out);
             for ((x, y), o) in x_chunks.iter().zip(y_chunks).zip(out_chunks.iter_mut()) {
-                $name(token, $F::<T>::load_t(token, x), $F::<T>::load_t(token, y)).store(o);
+                $gname::<G, _>(token, $F::<T>::load_t(token, x), $F::<T>::load_t(token, y)).store(o);
             }
             for ((x, y), o) in x_tail.iter().zip(y_tail).zip(out_tail.iter_mut()) {
                 *o = libm::powf(*x, *y);
@@ -300,13 +409,13 @@ powf_libm_lanes!(
     ///
     /// Positive finite `x` with `|y| <= 2^27` and an in-range result runs in
     /// vector; any other lane is recomputed by scalar `libm::powf`.
-    powf_libm_8x, vpow_libm_kernel_8, vpowf_libm_pairs_kernel_8, f32x8, i32x8, F32x8Convert, 8
+    powf_libm_8x, powf_libm_8x_gated, vpow_libm_kernel_8, vpowf_libm_pairs_kernel_8, f32x8, i32x8, F32x8Convert, 8
 );
 
 #[cfg(feature = "avx512")]
 powf_libm_lanes!(
     /// Sixteen-lane [`powf_libm_8x`]: bit-identical per lane to `libm::powf`.
-    powf_libm_16x, vpow_libm_kernel_16, vpowf_libm_pairs_kernel_16, f32x16, i32x16, F32x16Convert, 16
+    powf_libm_16x, powf_libm_16x_gated, vpow_libm_kernel_16, vpowf_libm_pairs_kernel_16, f32x16, i32x16, F32x16Convert, 16
 );
 
 const INV_LN2: f32 = 1.4426950216e+00; /* 0x3fb8aa3b */
