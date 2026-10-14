@@ -1316,7 +1316,7 @@ impl Scratch {
 /// (NaN-propagating, MATLAB `max` semantics). Fixed-order f64
 /// accumulation — identical on every tier.
 macro_rules! pool_body {
-    ($token:ident, $F32:ty, $LANES:expr, $p:ident, $map:ident) => {{
+    ($token:ident, $F32:ty, $LANES:expr, $pow:path, $p:ident, $map:ident) => {{
         let mut $map = $map;
         let n = $p.w * $p.h;
         let (sm1, sm2) = $p.sm;
@@ -1325,6 +1325,12 @@ macro_rules! pool_body {
         let (n1, n2) = $p.n;
         let mut num = 0.0f64;
         let mut den = 0.0f64;
+        let cos_lambda_pi = libm::cosf(LAMBDA * core::f32::consts::PI);
+        let alpha_v = <$F32>::splat_t($token, ALPHA);
+        let lambda_v = <$F32>::splat_t($token, LAMBDA);
+        let cos_v = <$F32>::splat_t($token, cos_lambda_pi);
+        let zero_v = <$F32>::zero_t($token);
+        let sign_bit = <$F32>::splat_t($token, -0.0).bitcast_to_i32();
         let mut i = 0usize;
         while i + $LANES <= n {
             let a = <$F32>::from_array_t($token, core::array::from_fn(|k| sm1[i + k]));
@@ -1343,23 +1349,33 @@ macro_rules! pool_body {
             let gsim = (two * x * z + cgm) / (x * x + z * z + cgm);
             let isim = (two * mi * mj + cch) / (mi * mi + mj * mj + cch);
             let qsim = (two * qi * qj + cch) / (qi * qi + qj * qj + cch);
-            // Per-lane scalar for powf/max (fixed lane order — the same
-            // scalar expression as the tail loop, so tiers agree
-            // bitwise).
+            // Lane-exact `libm::powf` (zenmetrics-math `fdlibm`): every
+            // lane is bit-identical to the scalar call, so the powers run
+            // in vector. `real_pow_lambda` is transcribed per lane: for
+            // `z >= 0` it is `powf(z, λ)`, otherwise (negative or NaN `z`)
+            // `powf(-z, λ) * cosf(λπ)`, with `-z` a sign-bit flip like
+            // Rust's `-z`.
+            let gpow = $pow($token, gsim, alpha_v);
+            let iq = isim * qsim;
+            let nonneg = iq.simd_ge(zero_v);
+            let neg_iq = <$F32>::from_i32_bitcast_t($token, iq.bitcast_to_i32() ^ sign_bit);
+            let lam = $pow($token, <$F32>::blend(nonneg, iq, neg_iq), lambda_v);
+            let iqreal = <$F32>::blend(nonneg, lam, lam * cos_v);
+            // Per-lane scalar for max and the accumulation (fixed lane
+            // order — the same scalar expression as the tail loop, so
+            // tiers agree bitwise).
             let va = a.to_array();
             let vb = b.to_array();
-            let vg = gsim.to_array();
+            let vg = gpow.to_array();
             let vv = vssim.to_array();
-            let vi = isim.to_array();
-            let vq = qsim.to_array();
+            let vr = iqreal.to_array();
             for k in 0..$LANES {
                 let w = if va[k].is_nan() || vb[k].is_nan() {
                     f32::NAN
                 } else {
                     va[k].max(vb[k])
                 };
-                let iqreal = real_pow_lambda(vi[k] * vq[k]);
-                let contrib = libm::powf(vg[k], ALPHA) * vv[k] * iqreal * w;
+                let contrib = vg[k] * vv[k] * vr[k] * w;
                 num += contrib as f64;
                 den += w as f64;
                 // Canonical `qualitymap` = SimMatrixC (score = Σcontrib/Σw).
@@ -1404,7 +1420,7 @@ pub fn vsi_core_tier_scalar_t(
     map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
-    pool_body!(token, V, 8, p, map)
+    pool_body!(token, V, 8, zenmetrics_math::fdlibm::powf_libm_8x, p, map)
 }
 
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
@@ -1416,7 +1432,7 @@ pub fn vsi_core_tier_v3_t(
     map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
-    pool_body!(token, V, 8, p, map)
+    pool_body!(token, V, 8, zenmetrics_math::fdlibm::powf_libm_8x, p, map)
 }
 
 /// The `v4x` tier (AVX-512, 16-wide f32 — crate feature `avx512`).
@@ -1428,7 +1444,7 @@ pub fn vsi_core_tier_v4x_t(
     map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
-    pool_body!(token, V, 16, p, map)
+    pool_body!(token, V, 16, zenmetrics_math::fdlibm::powf_libm_16x, p, map)
 }
 
 /// The `neon` tier (8-wide f32).
@@ -1440,7 +1456,7 @@ pub fn vsi_core_tier_neon_t(
     map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
-    pool_body!(token, V, 8, p, map)
+    pool_body!(token, V, 8, zenmetrics_math::fdlibm::powf_libm_8x, p, map)
 }
 
 /// The `wasm128` tier (8-wide f32).
@@ -1452,7 +1468,7 @@ pub fn vsi_core_tier_wasm(
     map: Option<&mut [f32]>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
-    pool_body!(token, V, 8, p, map)
+    pool_body!(token, V, 8, zenmetrics_math::fdlibm::powf_libm_8x, p, map)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1530,6 +1546,323 @@ mod resize_block_tests {
                 }
             }
             eprintln!("in {in_w} -> out {out_w}: worst {worst:e}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod pool_exact_tests {
+    use super::*;
+
+    /// The original per-element pool: scalar `libm::powf` and
+    /// `real_pow_lambda` on every element (the tail-loop expression).
+    fn pool_reference(p: Planes<'_>, mut map: Option<&mut [f32]>) -> f64 {
+        let n = p.w * p.h;
+        let (mut num, mut den) = (0.0f64, 0.0f64);
+        for i in 0..n {
+            let (a, b) = (p.sm.0[i], p.sm.1[i]);
+            let vssim = (2.0 * a * b + C_VS) / (a * a + b * b + C_VS);
+            let (x, z) = (p.g.0[i], p.g.1[i]);
+            let gsim = (2.0 * x * z + C_GM) / (x * x + z * z + C_GM);
+            let (ia, ib) = (p.m.0[i], p.m.1[i]);
+            let isim = (2.0 * ia * ib + C_CHROM) / (ia * ia + ib * ib + C_CHROM);
+            let (qa, qb) = (p.n.0[i], p.n.1[i]);
+            let qsim = (2.0 * qa * qb + C_CHROM) / (qa * qa + qb * qb + C_CHROM);
+            let w = if a.is_nan() || b.is_nan() {
+                f32::NAN
+            } else {
+                a.max(b)
+            };
+            let iqreal = real_pow_lambda(isim * qsim);
+            let contrib = libm::powf(gsim, ALPHA) * vssim * iqreal * w;
+            num += contrib as f64;
+            den += w as f64;
+            if let Some(m) = map.as_deref_mut() {
+                m[i] = contrib;
+            }
+        }
+        num / den
+    }
+
+    /// The pool as it was before the lane `powf` (a4d0b8fc): per-lane
+    /// scalar `libm::powf` / `real_pow_lambda` inside the vector loop.
+    macro_rules! pool_body_before {
+        ($token:ident, $F32:ty, $LANES:expr, $p:ident, $map:ident) => {{
+            let mut $map = $map;
+            let n = $p.w * $p.h;
+            let (sm1, sm2) = $p.sm;
+            let (g1, g2) = $p.g;
+            let (m1, m2) = $p.m;
+            let (n1, n2) = $p.n;
+            let mut num = 0.0f64;
+            let mut den = 0.0f64;
+            let mut i = 0usize;
+            while i + $LANES <= n {
+                let a = <$F32>::from_array_t($token, core::array::from_fn(|k| sm1[i + k]));
+                let b = <$F32>::from_array_t($token, core::array::from_fn(|k| sm2[i + k]));
+                let x = <$F32>::from_array_t($token, core::array::from_fn(|k| g1[i + k]));
+                let z = <$F32>::from_array_t($token, core::array::from_fn(|k| g2[i + k]));
+                let mi = <$F32>::from_array_t($token, core::array::from_fn(|k| m1[i + k]));
+                let mj = <$F32>::from_array_t($token, core::array::from_fn(|k| m2[i + k]));
+                let qi = <$F32>::from_array_t($token, core::array::from_fn(|k| n1[i + k]));
+                let qj = <$F32>::from_array_t($token, core::array::from_fn(|k| n2[i + k]));
+                let cvs = <$F32>::splat_t($token, C_VS);
+                let cgm = <$F32>::splat_t($token, C_GM);
+                let cch = <$F32>::splat_t($token, C_CHROM);
+                let two = <$F32>::splat_t($token, 2.0);
+                let vssim = (two * a * b + cvs) / (a * a + b * b + cvs);
+                let gsim = (two * x * z + cgm) / (x * x + z * z + cgm);
+                let isim = (two * mi * mj + cch) / (mi * mi + mj * mj + cch);
+                let qsim = (two * qi * qj + cch) / (qi * qi + qj * qj + cch);
+                // Per-lane scalar for powf/max (fixed lane order — the same
+                // scalar expression as the tail loop, so tiers agree
+                // bitwise).
+                let va = a.to_array();
+                let vb = b.to_array();
+                let vg = gsim.to_array();
+                let vv = vssim.to_array();
+                let vi = isim.to_array();
+                let vq = qsim.to_array();
+                for k in 0..$LANES {
+                    let w = if va[k].is_nan() || vb[k].is_nan() {
+                        f32::NAN
+                    } else {
+                        va[k].max(vb[k])
+                    };
+                    let iqreal = real_pow_lambda(vi[k] * vq[k]);
+                    let contrib = libm::powf(vg[k], ALPHA) * vv[k] * iqreal * w;
+                    num += contrib as f64;
+                    den += w as f64;
+                    // Canonical `qualitymap` = SimMatrixC (score = Σcontrib/Σw).
+                    if let Some(m) = $map.as_deref_mut() {
+                        m[i + k] = contrib;
+                    }
+                }
+                i += $LANES;
+            }
+            while i < n {
+                let (a, b) = (sm1[i], sm2[i]);
+                let vssim = (2.0 * a * b + C_VS) / (a * a + b * b + C_VS);
+                let (x, z) = (g1[i], g2[i]);
+                let gsim = (2.0 * x * z + C_GM) / (x * x + z * z + C_GM);
+                let (ia, ib) = (m1[i], m2[i]);
+                let isim = (2.0 * ia * ib + C_CHROM) / (ia * ia + ib * ib + C_CHROM);
+                let (qa, qb) = (n1[i], n2[i]);
+                let qsim = (2.0 * qa * qb + C_CHROM) / (qa * qa + qb * qb + C_CHROM);
+                let w = if a.is_nan() || b.is_nan() {
+                    f32::NAN
+                } else {
+                    a.max(b)
+                };
+                let iqreal = real_pow_lambda(isim * qsim);
+                let contrib = libm::powf(gsim, ALPHA) * vssim * iqreal * w;
+                num += contrib as f64;
+                den += w as f64;
+                if let Some(m) = $map.as_deref_mut() {
+                    m[i] = contrib;
+                }
+                i += 1;
+            }
+            num / den
+        }};
+    }
+
+    fn before_scalar(p: Planes<'_>, map: Option<&mut [f32]>) -> f64 {
+        let token = archmage::ScalarToken;
+        type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
+        pool_body_before!(token, V, 8, p, map)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[archmage::arcane]
+    fn before_v3(token: archmage::X64V3Token, p: Planes<'_>, map: Option<&mut [f32]>) -> f64 {
+        type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
+        pool_body_before!(token, V, 8, p, map)
+    }
+
+    #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+    #[archmage::arcane]
+    fn before_v4x(token: archmage::X64V4xToken, p: Planes<'_>, map: Option<&mut [f32]>) -> f64 {
+        type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
+        pool_body_before!(token, V, 16, p, map)
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[archmage::arcane]
+    fn before_neon(token: archmage::NeonToken, p: Planes<'_>, map: Option<&mut [f32]>) -> f64 {
+        type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
+        pool_body_before!(token, V, 8, p, map)
+    }
+
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u32 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (self.0 >> 32) as u32
+        }
+        fn unit(&mut self) -> f32 {
+            (self.next() >> 8) as f32 / (1u32 << 24) as f32
+        }
+    }
+
+    /// Plane sets: metric-range values (positive saliency/gradients, signed
+    /// opponent channels), identical reference/distorted planes (every
+    /// similarity exactly 1, the `x = 1` powf path), opponent channels of
+    /// opposite sign (`ISim·QSim < 0`, the `cos(λπ)` branch), and IEEE
+    /// specials (±0, ±inf, NaN, subnormals) in every plane.
+    fn plane_sets(w: usize, h: usize) -> Vec<[Vec<f32>; 8]> {
+        let n = w * h;
+        let mut rng = Rng(0x7651_0b1e);
+        let mut sets = Vec::new();
+        let mut metric = || -> [Vec<f32>; 8] {
+            core::array::from_fn(|c| {
+                (0..n)
+                    .map(|_| match c {
+                        0 | 1 => rng.unit(),
+                        2 | 3 => rng.unit() * 600.0,
+                        _ => (rng.unit() - 0.5) * 200.0,
+                    })
+                    .collect()
+            })
+        };
+        let base = metric();
+        sets.push(base.clone());
+        let mut same = base.clone();
+        for c in [1, 3, 5, 7] {
+            same[c] = same[c - 1].clone();
+        }
+        sets.push(same);
+        let mut flip = base.clone();
+        for c in [5, 7] {
+            flip[c] = flip[c - 1].iter().map(|v| -v * 1.7).collect();
+        }
+        sets.push(flip);
+        let specials = [
+            0.0f32,
+            -0.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+            f32::from_bits(1),
+            f32::MIN_POSITIVE,
+            1.0,
+            -1.0,
+            1e30,
+        ];
+        let mut special = base;
+        for (c, plane) in special.iter_mut().enumerate() {
+            for (i, v) in plane.iter_mut().enumerate() {
+                if (i * 7 + c * 3) % 5 == 0 {
+                    *v = specials[(i + c) % specials.len()];
+                }
+            }
+        }
+        sets.push(special);
+        sets
+    }
+
+    type Pool = dyn Fn(Planes<'_>, Option<&mut [f32]>) -> f64;
+
+    /// `after` (the shipped tier) must equal `before` (the same tier before
+    /// the lane `powf`): every qualitymap element bit for bit, NaN payloads
+    /// included, and the score bit for bit unless it is NaN. Against the
+    /// per-element scalar reference, every non-NaN value is bit-identical
+    /// and NaN falls on the same elements (Rust leaves the NaN sign/payload
+    /// of arithmetic unspecified; the vector similarity terms predate this
+    /// change).
+    fn check_tier(name: &str, after: &Pool, before: &Pool) {
+        let same = |x: f32, y: f32| x.to_bits() == y.to_bits() || (x.is_nan() && y.is_nan());
+        // Widths cover whole vectors only, a tail, and a tail-only plane.
+        for (w, h) in [(5usize, 1usize), (16, 4), (37, 9), (64, 33)] {
+            for (s, planes) in plane_sets(w, h).iter().enumerate() {
+                let p = Planes {
+                    sm: (&planes[0], &planes[1]),
+                    g: (&planes[2], &planes[3]),
+                    m: (&planes[4], &planes[5]),
+                    n: (&planes[6], &planes[7]),
+                    w,
+                    h,
+                };
+                let mut ref_map = vec![0.0f32; w * h];
+                let mut old_map = vec![0.0f32; w * h];
+                let mut new_map = vec![0.0f32; w * h];
+                let want = pool_reference(p, Some(&mut ref_map));
+                let old = before(p, Some(&mut old_map));
+                let got = after(p, Some(&mut new_map));
+                for i in 0..w * h {
+                    assert_eq!(
+                        new_map[i].to_bits(),
+                        old_map[i].to_bits(),
+                        "{name} {w}x{h} set {s} map[{i}]: {:#x} vs before {:#x}; planes {:?}",
+                        new_map[i].to_bits(),
+                        old_map[i].to_bits(),
+                        planes.iter().map(|pl| pl[i]).collect::<Vec<_>>()
+                    );
+                    assert!(
+                        same(new_map[i], ref_map[i]),
+                        "{name} {w}x{h} set {s} map[{i}]: {} vs reference {}",
+                        new_map[i],
+                        ref_map[i]
+                    );
+                }
+                // The score's NaN sign is not pinned even with every
+                // contribution bit-identical: LLVM may commute the f64
+                // `num += contrib` operands, and x86 propagates the first
+                // operand's NaN. Measured on v3 for the specials set.
+                assert!(
+                    got.to_bits() == old.to_bits() || (got.is_nan() && old.is_nan()),
+                    "{name} {w}x{h} set {s}: score {got} vs before {old}"
+                );
+                assert!(
+                    got.to_bits() == want.to_bits() || (got.is_nan() && want.is_nan()),
+                    "{name} {w}x{h} set {s}: score {got} vs reference {want}"
+                );
+                assert_eq!(after(p, None).to_bits(), got.to_bits());
+            }
+        }
+    }
+
+    /// Every tier's pool equals the per-element scalar `libm` pool bit for
+    /// bit: the score and every qualitymap element.
+    #[test]
+    fn pool_matches_scalar_libm_reference_bitwise() {
+        check_tier(
+            "scalar",
+            &move |p, m| vsi_core_tier_scalar_t(archmage::ScalarToken, p, m),
+            &before_scalar,
+        );
+        #[cfg(target_arch = "x86_64")]
+        {
+            use archmage::SimdToken;
+            if let Some(t) = archmage::X64V3Token::summon() {
+                check_tier(
+                    "v3",
+                    &move |p, m| vsi_core_tier_v3_t(t, p, m),
+                    &move |p, m| before_v3(t, p, m),
+                );
+            }
+            #[cfg(feature = "avx512")]
+            if let Some(t) = archmage::X64V4xToken::summon() {
+                check_tier(
+                    "v4x",
+                    &move |p, m| vsi_core_tier_v4x_t(t, p, m),
+                    &move |p, m| before_v4x(t, p, m),
+                );
+            }
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            use archmage::SimdToken;
+            if let Some(t) = archmage::NeonToken::summon() {
+                check_tier(
+                    "neon",
+                    &move |p, m| vsi_core_tier_neon_t(t, p, m),
+                    &move |p, m| before_neon(t, p, m),
+                );
+            }
         }
     }
 }

@@ -19,7 +19,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = ["zenmetrics-abstractions/std"]
+std = ["zenmetrics-abstractions/std", "zenmetrics-math/std"]
 # Rayon parallelism across the reference/distorted work pairs (two SDSP
 # calls, the decimate pairs, the two Scharr passes). Results are
 # bit-identical at every thread count: each branch writes its own output
@@ -29,7 +29,7 @@ parallel = ["std", "dep:rayon"]
 # compared against the scalar tier in tests and disassembled. Not API.
 _dev = ["archmage/testable_dispatch"]
 # Opt-in AVX-512 `v4` tier (16-wide f32), like crates/gmsd and crates/psnrhvs.
-avx512 = ["archmage/avx512", "magetypes/avx512"]
+avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512"]
 
 [dependencies]
 archmage = { workspace = true }
@@ -37,4 +37,6 @@ zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-feature
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
 libm = "0.2.16"
 magetypes = { workspace = true }
+# Bit-exact lane `libm::powf` for the pooling stage.
+zenmetrics-math = { path = "../zenmetrics-math", default-features = false }
 rayon = { version = "1.10", optional = true }
