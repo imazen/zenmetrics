@@ -1127,7 +1127,9 @@ fn with_plan2<R>(width: usize, height: usize, f: impl FnOnce(&mut Plan2) -> R) -
         if map.len() >= 8 && !map.contains_key(&(width, height)) {
             map.clear();
         }
-        let plan = map.entry((width, height)).or_insert_with(|| Plan2::new(width, height));
+        let plan = map
+            .entry((width, height))
+            .or_insert_with(|| Plan2::new(width, height));
         f(plan)
     })
 }

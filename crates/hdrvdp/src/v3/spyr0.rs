@@ -37,14 +37,36 @@ fn corr8_inner<const RELAXED: bool>(
     width: usize,
     xtab: &[usize],
     contig: &[bool],
+    unit: bool,
     yt: &[usize],
     filter: &[f64],
     fs: usize,
     ox0: usize,
     out_row: &mut [f64],
 ) {
-    let mut wint = [0.0f64; 8 * 16];
     let mut acc = f64x8::zero_t(token);
+    if unit {
+        // Whole block interior at step 1: lane `j`'s window is the
+        // contiguous run `x0 + j + kx`, so each tap is one vector load —
+        // `w[kx*8 + j] = row[x0 + kx + j]` exactly, bit-identical per lane.
+        let x0 = xtab[0];
+        for ky in 0..fs {
+            let row = &image[yt[ky]..yt[ky] + width];
+            let frow = &filter[ky * fs..ky * fs + fs];
+            for kx in 0..fs {
+                let t = f64x8::load_t(token, (&row[x0 + kx..x0 + kx + 8]).try_into().unwrap());
+                let c = f64x8::splat_t(token, frow[kx]);
+                acc = if RELAXED {
+                    c.mul_add(t, acc)
+                } else {
+                    acc + c * t
+                };
+            }
+        }
+        acc.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
+        return;
+    }
+    let mut wint = [0.0f64; 8 * 16];
     for ky in 0..fs {
         let row = &image[yt[ky]..yt[ky] + width];
         let w = &mut wint[..fs * 8];
@@ -75,6 +97,81 @@ fn corr8_inner<const RELAXED: bool>(
     acc.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
 }
 
+/// [`corr8_inner`] covering 32 unit-stride outputs: four independent
+/// accumulator chains hide the FMA latency, each lane still summing its taps
+/// in the scalar order (bit-identical to `corr8_inner` on the same block).
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
+#[allow(clippy::too_many_arguments)]
+fn corr32_inner<const RELAXED: bool>(
+    token: Token,
+    image: &[f64],
+    width: usize,
+    x0: usize,
+    yt: &[usize],
+    filter: &[f64],
+    fs: usize,
+    ox0: usize,
+    out_row: &mut [f64],
+) {
+    let (mut a0, mut a1, mut a2, mut a3) = (
+        f64x8::zero_t(token),
+        f64x8::zero_t(token),
+        f64x8::zero_t(token),
+        f64x8::zero_t(token),
+    );
+    for ky in 0..fs {
+        let row = &image[yt[ky]..yt[ky] + width];
+        let frow = &filter[ky * fs..ky * fs + fs];
+        for kx in 0..fs {
+            let c = f64x8::splat_t(token, frow[kx]);
+            let t0 = f64x8::load_t(token, (&row[x0 + kx..x0 + kx + 8]).try_into().unwrap());
+            let t1 = f64x8::load_t(token, (&row[x0 + kx + 8..x0 + kx + 16]).try_into().unwrap());
+            let t2 = f64x8::load_t(
+                token,
+                (&row[x0 + kx + 16..x0 + kx + 24]).try_into().unwrap(),
+            );
+            let t3 = f64x8::load_t(
+                token,
+                (&row[x0 + kx + 24..x0 + kx + 32]).try_into().unwrap(),
+            );
+            if RELAXED {
+                a0 = c.mul_add(t0, a0);
+                a1 = c.mul_add(t1, a1);
+                a2 = c.mul_add(t2, a2);
+                a3 = c.mul_add(t3, a3);
+            } else {
+                a0 = a0 + c * t0;
+                a1 = a1 + c * t1;
+                a2 = a2 + c * t2;
+                a3 = a3 + c * t3;
+            }
+        }
+    }
+    a0.store((&mut out_row[ox0..ox0 + 8]).try_into().unwrap());
+    a1.store((&mut out_row[ox0 + 8..ox0 + 16]).try_into().unwrap());
+    a2.store((&mut out_row[ox0 + 16..ox0 + 24]).try_into().unwrap());
+    a3.store((&mut out_row[ox0 + 24..ox0 + 32]).try_into().unwrap());
+}
+
+/// [`corr32_inner`] with runtime tier dispatch; all 32 outputs must be
+/// unit-stride contiguous, i.e. `xtab` starts at the lane-0 window base.
+#[allow(clippy::too_many_arguments)]
+fn corr32<const RELAXED: bool>(
+    image: &[f64],
+    width: usize,
+    x0: usize,
+    yt: &[usize],
+    filter: &[f64],
+    fs: usize,
+    ox0: usize,
+    out_row: &mut [f64],
+) {
+    archmage::attuned!(
+        corr32_inner::<RELAXED>(image, width, x0, yt, filter, fs, ox0, out_row),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
+}
+
 /// [`corr8_inner`] with runtime tier dispatch; `xtab` holds one `fs`-tap
 /// window per lane (8 of them), `contig` flags lanes whose window is a
 /// contiguous run starting at `xtab[j*fs]`.
@@ -84,6 +181,7 @@ fn corr8<const RELAXED: bool>(
     width: usize,
     xtab: &[usize],
     contig: &[bool],
+    unit: bool,
     yt: &[usize],
     filter: &[f64],
     fs: usize,
@@ -93,7 +191,9 @@ fn corr8<const RELAXED: bool>(
     debug_assert_eq!(xtab.len(), 8 * fs);
     debug_assert_eq!(contig.len(), 8);
     archmage::attuned!(
-        corr8_inner::<RELAXED>(image, width, xtab, contig, yt, filter, fs, ox0, out_row),
+        corr8_inner::<RELAXED>(
+            image, width, xtab, contig, unit, yt, filter, fs, ox0, out_row
+        ),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
 }
@@ -537,13 +637,33 @@ fn corr_dn64(
     for oy in 0..out_h {
         let yt = &yoff[oy * fs..oy * fs + fs];
         let out_row = &mut out[oy * out_w..oy * out_w + out_w];
+        // 32-output groups chain four accumulators for FMA latency; blocks
+        // covered by a `corr32` call are skipped via `skip_until`.
+        let mut skip_until = 0usize;
         for ox0 in (0..full).step_by(8) {
+            if ox0 < skip_until {
+                continue;
+            }
+            // `unit` ⇔ lane `j`'s window start is `xtab[ox0*fs] + j`, i.e.
+            // every lane contiguous and the block at step 1 — the kernel
+            // then reads each tap as one vector load instead of gathering.
+            let unit = step == 1 && contig[ox0..ox0 + 8].iter().all(|&c| c);
+            if unit && ox0 + 32 <= full && contig[ox0 + 8..ox0 + 32].iter().all(|&c| c) {
+                if relaxed {
+                    corr32::<true>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
+                } else {
+                    corr32::<false>(image, width, xtab[ox0 * fs], yt, filter, fs, ox0, out_row);
+                }
+                skip_until = ox0 + 32;
+                continue;
+            }
             if relaxed {
                 corr8::<true>(
                     image,
                     width,
                     &xtab[ox0 * fs..ox0 * fs + 8 * fs],
                     &contig[ox0..ox0 + 8],
+                    unit,
                     yt,
                     filter,
                     fs,
@@ -556,6 +676,7 @@ fn corr_dn64(
                     width,
                     &xtab[ox0 * fs..ox0 * fs + 8 * fs],
                     &contig[ox0..ox0 + 8],
+                    unit,
                     yt,
                     filter,
                     fs,
