@@ -59,7 +59,7 @@ pub use input::{
     rgb8_pair, rgb8_view, unsupported,
 };
 pub use map::{
-    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, fold_values, gray_f32_buffer,
+    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, Support, fold_values, gray_f32_buffer,
     gray_f32_slice, map_fold, map_subsample_f32,
 };
 pub use metric::{

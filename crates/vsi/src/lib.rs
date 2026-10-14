@@ -44,6 +44,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use zenmetrics_abstractions as za;
 
 mod fft;
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
@@ -152,20 +153,21 @@ pub fn vsi_rgb8(
     ))
 }
 
-/// VSI's per-pixel quality map — the reference's `qualitymap` output
-/// (`SimMatrixC`: grad-sim^α · VS-sim · real((I-sim·Q-sim)^λ) · weight),
-/// full input resolution. Higher = more similar.
-///
-/// Implements [`zenmetrics_abstractions::Diffmap`].
+/// VSI's quality map — the reference's `qualitymap` output (`SimMatrixC`:
+/// grad-sim^α · VS-sim · real((I-sim·Q-sim)^λ)), at the decimated
+/// resolution the reference computes it: `⌈w/F⌉ × ⌈h/F⌉`,
+/// `F = max(1, round(min(w,h)/256))`. Higher = more similar.
 #[non_exhaustive]
 pub struct VsiDiffmap {
     map: alloc::vec::Vec<f32>,
-    /// Map width (input width — VSI's map is full-resolution).
+    /// Map width, `⌈w/F⌉`.
     pub width: u32,
-    /// Map height (input height).
+    /// Map height, `⌈h/F⌉`.
     pub height: u32,
     /// The VSI score computed alongside the map.
     pub vsi: f64,
+    input: (u32, u32),
+    factor: u32,
 }
 
 impl VsiDiffmap {
@@ -175,28 +177,36 @@ impl VsiDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Evaluation for VsiDiffmap {
+impl VsiDiffmap {
+    /// The decimation factor `F`.
+    pub fn factor(&self) -> u32 {
+        self.factor
+    }
+
+    /// Sample `k` averages input `[k·F + s + 1 − F, k·F + s]`, `s = ⌊F/2⌋`
+    /// (`conv2(fspecial('average',F),'same')` then every `F`th sample).
+    /// Support is global: the saliency maps come from an FFT log-Gabor
+    /// filter and a whole-image `mat2gray` normalization.
+    pub fn geometry(&self) -> za::MapGeometry {
+        let f = self.factor;
+        let origin = i64::from(f / 2) + 1 - i64::from(f);
+        za::MapGeometry::grid(self.input.0, self.input.1, origin, origin, f, f, self.width, self.height)
+            .with_support(za::Support::Global)
+    }
+}
+
+impl za::Evaluation for VsiDiffmap {
     fn score(&self) -> f64 {
         self.vsi
     }
 
-    fn scores(
-        &self,
-    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
-        alloc::boxed::Box::new(core::iter::once((
-            alloc::borrow::Cow::Borrowed("vsi"),
-            self.vsi,
-        )))
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("vsi"), self.vsi)))
     }
 
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
-    }
-
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        za::MapView::new("quality", px, za::MapPolarity::Similarity, self.geometry()).ok()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -219,7 +229,9 @@ pub fn vsi_rgb8_with_diffmap(
     check_len(reference, width, height, stride)?;
     check_len(distorted, width, height, stride)?;
     let (w, h) = (width, height);
-    let mut map = alloc::vec![0.0f32; w * h];
+    let f = kernel::decimation_factor(w, h);
+    let (mw, mh) = (w.div_ceil(f), h.div_ceil(f));
+    let mut map = alloc::vec![0.0f32; mw * mh];
     let score = kernel::vsi_planes(
         &Input::from_rgb8(reference, w, h, stride),
         &Input::from_rgb8(distorted, w, h, stride),
@@ -231,9 +243,11 @@ pub fn vsi_rgb8_with_diffmap(
         score,
         VsiDiffmap {
             map,
-            width: w as u32,
-            height: h as u32,
+            width: mw as u32,
+            height: mh as u32,
             vsi: score,
+            input: (w as u32, h as u32),
+            factor: f as u32,
         },
     ))
 }
@@ -245,56 +259,52 @@ impl Input {
     }
 }
 
-/// The VSI metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs.
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+        }
+    }
+}
+
+/// Output revision of [`Vsi`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+/// The VSI metric as a generic scorer — packed `RGB8_SRGB`.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vsi;
 
-impl zenmetrics_abstractions::Metric for Vsi {
-    fn name(&self) -> &'static str {
-        "vsi"
+impl za::Metric for Vsi {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("vsi", za::implementation!(SCORE_REVISION))
+            .with_reference("VSI.m (Zhang, Shen & Li 2014)")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("vsi", za::ScoreKind::Similarity)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_s, mut dm) = vsi_rgb8_with_diffmap(
-                r.pixels, d.pixels, r.width, r.height, r.stride,
-            )
-            .map_err(|e| {
-                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-            })?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) =
+                vsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vsi", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let out = za::ScalarEval::single("vsi", s);
-        Ok(alloc::boxed::Box::new(out))
+        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("vsi", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("vsi", s)))
     }
 }
 

@@ -49,6 +49,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use zenmetrics_abstractions as za;
 
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
 #[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
@@ -146,7 +147,7 @@ pub(crate) fn auto_level(w: usize, h: usize) -> Result<usize, Error> {
 /// scale (the `ssimmap` MATLAB `ssim` returns), `(w−10)×(h−10)` after
 /// the level-0 valid Gaussian window. Higher = more similar.
 ///
-/// Implements [`zenmetrics_abstractions::Diffmap`].
+/// A [`zenmetrics_abstractions::Evaluation`].
 #[non_exhaustive]
 pub struct MsssimDiffmap {
     map: alloc::vec::Vec<f32>,
@@ -158,6 +159,7 @@ pub struct MsssimDiffmap {
     pub msssim: f64,
     /// Level count the score used.
     pub level: u32,
+    input: (u32, u32),
 }
 
 impl MsssimDiffmap {
@@ -167,40 +169,30 @@ impl MsssimDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Evaluation for MsssimDiffmap {
+impl MsssimDiffmap {
+    /// Cell `(i, j)` is the 11×11 window centered on input pixel
+    /// `(i + 5, j + 5)` (the level-0 `'valid'` correlation), so the
+    /// border 5 pixels own no cell.
+    pub fn geometry(&self) -> za::MapGeometry {
+        za::MapGeometry::grid(self.input.0, self.input.1, 5, 5, 1, 1, self.width, self.height).with_halo(5, 5)
+    }
+}
+
+impl za::Evaluation for MsssimDiffmap {
     fn score(&self) -> f64 {
         self.msssim
     }
 
-    fn scores(
-        &self,
-    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
-        alloc::boxed::Box::new(core::iter::once((
-            alloc::borrow::Cow::Borrowed("msssim"),
-            self.msssim,
-        )))
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("msssim"), self.msssim)))
     }
 
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        za::MapView::new("ssim", px, za::MapPolarity::Similarity, self.geometry()).ok()
     }
 
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
-    }
-
-    fn extras(
-        &self,
-    ) -> alloc::boxed::Box<
-        dyn Iterator<
-                Item = (
-                    alloc::borrow::Cow<'static, str>,
-                    alloc::borrow::Cow<'static, str>,
-                ),
-            > + '_,
-    > {
+    fn extras(&self) -> za::Extras<'_> {
         alloc::boxed::Box::new(core::iter::once((
             alloc::borrow::Cow::Borrowed("level"),
             alloc::format!("{}", self.level).into(),
@@ -241,60 +233,61 @@ pub fn msssim_plane_f32_with_diffmap(
             height: mh as u32,
             msssim: score,
             level: level as u32,
+            input: (width as u32, height as u32),
         },
     ))
 }
 
-/// The MS-SSIM metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs.
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::TooSmall => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of [`Msssim`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+/// The MS-SSIM metric as a generic scorer — packed `RGB8_SRGB`, scored on
+/// MATLAB `rgb2gray` luma with auto-selected levels (reported in extras).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Msssim;
 
-impl zenmetrics_abstractions::Metric for Msssim {
-    fn name(&self) -> &'static str {
-        "msssim"
+impl za::Metric for Msssim {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("msssim", za::implementation!(SCORE_REVISION))
+            .with_reference("msssim.m + ssim_index_new.m (Wang, Simoncelli & Bovik 2003)")
+            .with_config("luma", "rgb2gray")
+            .with_config("levels", "auto")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("msssim", za::ScoreKind::Similarity)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_s, mut dm) = msssim_rgb8_with_diffmap(
-                r.pixels, d.pixels, r.width, r.height, r.stride,
-            )
-            .map_err(|e| {
-                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-            })?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) = msssim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("msssim", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let out = za::ScalarEval::single("msssim", s);
-        Ok(alloc::boxed::Box::new(out))
+        let s = msssim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("msssim", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("msssim", s)))
     }
 }
 
@@ -390,6 +383,7 @@ pub fn msssim_rgb8_with_diffmap(
             height: mh as u32,
             msssim: score,
             level: level as u32,
+            input: (width as u32, height as u32),
         },
     ))
 }

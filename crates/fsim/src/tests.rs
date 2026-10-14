@@ -307,79 +307,52 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
     let clean = map[2 * w2 + (w2 - 4)];
     assert!(damaged < clean, "{damaged} !< {clean}");
     // Trait surface.
-    assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
-    );
+    let view = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
+    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
     assert_eq!(dm.score(), map_score);
-    let px = zenmetrics_abstractions::Evaluation::map(&dm).unwrap();
-    let slice = px.as_slice();
+    let slice = view.pixels.as_slice();
     assert_eq!((slice.width(), slice.rows()), (dm.width, dm.height));
     // Identical inputs → map saturates to 1.
     let (_, dm_id) = crate::fsim_plane_f32_with_diffmap(&r, &r, w, h, w).unwrap();
     assert!(dm_id.map().iter().all(|&v| (v - 1.0).abs() < 1e-4));
 }
 
-/// The generic surface: `Box<dyn Metric>` scores + maps a pair.
+/// The generic surface: `Box<dyn Metric>` scores + maps a pair, and the
+/// headline is the same (`fsimc`) with or without a map.
 #[test]
 fn metric_trait_object_scores_and_maps() {
-    use zenmetrics_abstractions::{EvalOpts, Metric, ScoreKind};
+    use zenmetrics_abstractions::{self as za, EvalOpts, MapRequest, Metric, ScoreKind};
 
-    fn ev_score(named: &[(alloc::borrow::Cow<'static, str>, f64)], key: &str) -> f64 {
-        named.iter().find(|(k, _)| *k == key).unwrap().1
-    }
     let (w, h) = (64usize, 48usize);
-    let r: alloc::vec::Vec<u8> = (0..w * h * 3)
-        .map(|i| ((i * 17 + 11) % 251) as u8)
-        .collect();
-    let mut d = r.clone();
-    for i in (0..w * h).step_by(7) {
-        d[i * 3] = 200 - d[i * 3] / 2;
-    }
-    fn mk(px: &[u8]) -> zenpixels::PixelSlice<'_> {
-        zenpixels::PixelSlice::new(px, 64, 48, 64 * 3, zenpixels::PixelDescriptor::RGB8_SRGB)
-            .unwrap()
-    }
+    let r = za::conformance::textured_rgb8(w, h, 5);
+    let d = za::conformance::distort_rgb8(&r, w, h);
+    let mk = |px| za::conformance::rgb8_image(px, w, h);
     let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim);
-    assert_eq!(m.name(), "fsim");
+    assert_eq!(m.id().family(), "fsim");
     assert_eq!(m.score_kind(), ScoreKind::Similarity);
-    assert!(m.accepts(zenpixels::PixelDescriptor::RGB8_SRGB));
-    // Score-only evaluation: ScalarEval with both named scores.
+    assert!(m.accepts(&mk(&r).format()));
     let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY).unwrap();
-    let named: alloc::vec::Vec<_> = ev.scores().collect();
-    assert_eq!(
-        ev.score(),
-        named.iter().find(|(k, _)| *k == "fsimc").unwrap().1
-    );
-    assert_eq!(named.len(), 2);
+    let named = za::conformance::scores(&*ev);
+    assert_eq!(named.iter().map(|(k, _)| k.as_ref()).collect::<alloc::vec::Vec<_>>(), ["fsimc", "fsim"]);
+    assert_eq!(ev.score(), named[0].1);
     assert!(ev.map().is_none());
-    // With map: the FsimDiffmap Evaluation — scores + borrowed map +
-    // on-demand folds.
-    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::WITH_MAP).unwrap();
-    assert_eq!(ev.score(), ev_score(&named, "fsim"));
+    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY.with_native_map()).unwrap();
+    assert_eq!(za::conformance::scores(&*ev), named);
     let dm = ev.map().unwrap();
-    assert!(matches!(dm, zenpixels::PixelCow::Borrowed(_)));
-    assert_eq!(
-        ev.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
-    );
-    // Named map folds — mean is the default grammar.
-    assert!(
-        ev.map_score(zenmetrics_abstractions::MapFold::Mean)
-            .is_some()
-    );
-    assert!(
-        ev.map_score(zenmetrics_abstractions::MapFold::PNorm { p: 4.0 })
-            .is_some()
-    );
-    // Downcast to the concrete result.
+    assert!(dm.pixels.is_borrowed());
+    assert_eq!(dm.polarity, za::MapPolarity::Similarity);
+    assert!(ev.map_score(za::MapFold::Mean).is_ok());
+    assert!(ev.map_score(za::MapFold::PNorm { p: 4.0 }).is_ok());
     assert!(ev.as_any().is::<crate::FsimDiffmap>());
-    // Subsampled map request: 4× coarser → ~(w/4) × (h/4).
-    let ev = m
-        .evaluate(mk(&r), mk(&d), EvalOpts::map_subsampled(4))
-        .unwrap();
+    // F=1 at this size (min dim < 384): native is w×h, /4 → ⌈w/4⌉ × ⌈h/4⌉.
+    let ev = m.evaluate(mk(&r), mk(&d), EvalOpts::SCORE_ONLY.with_map(MapRequest::subsampled(4))).unwrap();
     let dm = ev.map().unwrap();
-    let sl = dm.as_slice();
-    // F=1 at this size (min dim <256) — native is w×h, /4 → w/4 × h/4.
-    assert_eq!((sl.width(), sl.rows()), ((w / 4) as u32, (h / 4) as u32));
+    assert_eq!((dm.width(), dm.height()), (w.div_ceil(4) as u32, h.div_ceil(4) as u32));
+    assert!(ev.as_any().is::<crate::FsimDiffmap>());
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Fsim, 45, 37);
 }

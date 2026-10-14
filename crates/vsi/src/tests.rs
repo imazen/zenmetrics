@@ -235,8 +235,8 @@ fn tier_parity() {
     assert_eq!(s_scalar, s_v3);
 }
 
-/// `vsi_rgb8_with_diffmap` returns the identical score and a full-res
-/// similarity map.
+/// `vsi_rgb8_with_diffmap` returns the identical score and a similarity
+/// map at the decimated resolution (full resolution below min-dim 384).
 #[test]
 fn vsi_diffmap_matches_score() {
     use zenmetrics_abstractions::Evaluation;
@@ -250,8 +250,33 @@ fn vsi_diffmap_matches_score() {
     let (score, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
     assert_eq!(plain, score);
     assert_eq!(dm.map().len(), w * h);
-    assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
-    );
+    let view = Evaluation::map(&dm).expect("map");
+    assert_eq!(view.polarity, zenmetrics_abstractions::MapPolarity::Similarity);
+    assert_eq!(view.geometry, zenmetrics_abstractions::MapGeometry::identity(48, 40).with_support(zenmetrics_abstractions::Support::Global));
+}
+
+/// Regression: at min-dim ≥ 384 the reference decimates by `F ≥ 2`. The map
+/// used to be reported as `w × h` with only the first `⌈w/F⌉·⌈h/F⌉`
+/// entries written (the rest zero).
+#[test]
+fn vsi_diffmap_is_decimated_at_large_sizes() {
+    use zenmetrics_abstractions::Evaluation;
+    let (w, h) = (401usize, 390usize);
+    let r = zenmetrics_abstractions::conformance::textured_rgb8(w, h, 3);
+    let d = zenmetrics_abstractions::conformance::distort_rgb8(&r, w, h);
+    let (_, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
+    assert_eq!(dm.factor(), 2);
+    assert_eq!((dm.width, dm.height), (201, 195));
+    assert_eq!(dm.map().len(), 201 * 195);
+    let last_row = &dm.map()[194 * 201..];
+    assert!(last_row.iter().all(|v| v.is_finite() && *v > 0.0), "tail written");
+    let g = Evaluation::map(&dm).unwrap().geometry;
+    // F = 2, s = 1: sample k averages input 2k, 2k+1.
+    assert_eq!(g.cell_rect(3, 0).map(|r| (r.x, r.width)), Some((6, 2)));
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Vsi, 41, 33);
 }

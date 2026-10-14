@@ -12,6 +12,8 @@ mod simd;
 
 use std::fmt;
 
+use zenmetrics_abstractions as za;
+
 const LOWPASS: [f32; 5] = [0.05, 0.25, 0.4, 0.25, 0.05];
 const SIGMAS: [f32; 6] = [0.0248, 0.0185, 0.0179, 0.0191, 0.0220, 0.2782];
 // Neighbour weights are top, left, right, bottom. The original filters
@@ -754,43 +756,48 @@ mod tests {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Nlpd;
 
-impl zenmetrics_abstractions::Metric for Nlpd {
-    fn name(&self) -> &'static str {
-        "nlpd"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::InvalidDimensions => za::ErrorKind::TooSmall,
+            Error::InvalidLength { .. } => za::ErrorKind::InvalidInput,
+            Error::NonFiniteInput => za::ErrorKind::InvalidInput,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for Nlpd {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("nlpd", za::implementation!(SCORE_REVISION))
+            .with_reference("Laparra et al. NLPD, authors' PyTorch six-level RGB configuration")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> std::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("nlpd", za::ScoreKind::Difference),
+        ];
+        std::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        std::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(std::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as std::boxed::Box<dyn core::error::Error + Send + Sync>);
-        }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (
-            zenmetrics_abstractions::contiguous_rgb8(&r),
-            zenmetrics_abstractions::contiguous_rgb8(&d),
-        );
-        let s = score_rgb_u8(&rp, &dp, r.width, r.height).map_err(|e| {
-            std::boxed::Box::new(e) as std::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(std::boxed::Box::new(
-            zenmetrics_abstractions::ScalarEval::single("nlpd", s),
-        ))
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<std::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("nlpd")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        let s = score_rgb_u8(&rp, &dp, r.width, r.height).metric_err_with("nlpd", Error::kind)?;
+        Ok(std::boxed::Box::new(za::ScalarEval::single("nlpd", s)))
     }
 }

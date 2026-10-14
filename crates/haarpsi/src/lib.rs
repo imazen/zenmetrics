@@ -51,6 +51,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
 #[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
 mod kernel;
@@ -272,6 +274,8 @@ pub fn haarpsi_rgb8_with_diffmap(
             width: yr.w as u32,
             height: yr.h as u32,
             haarpsi: score,
+            input: (width as u32, height as u32),
+            subsampled: true,
         },
     ))
 }
@@ -333,7 +337,7 @@ pub(crate) const Q_COEF: [f64; 3] = [0.211, -0.523, 0.312];
 /// chroma similarity planes, at the preprocessed resolution — `w×h`
 /// after the default 2× subsample). Higher = more similar.
 ///
-/// Implements [`zenmetrics_abstractions::Diffmap`].
+/// A [`zenmetrics_abstractions::Evaluation`].
 #[non_exhaustive]
 pub struct HaarpsiDiffmap {
     map: alloc::vec::Vec<f32>,
@@ -343,6 +347,8 @@ pub struct HaarpsiDiffmap {
     pub height: u32,
     /// The HaarPSI score computed alongside the map.
     pub haarpsi: f64,
+    input: (u32, u32),
+    subsampled: bool,
 }
 
 impl HaarpsiDiffmap {
@@ -352,28 +358,29 @@ impl HaarpsiDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Evaluation for HaarpsiDiffmap {
+impl HaarpsiDiffmap {
+    /// With the 2× preprocessing subsample, cell `k` owns input pixels
+    /// `2k, 2k+1` (the forward-looking 2×2 box); otherwise one pixel. The
+    /// coarsest Haar filter (8 taps, `conv2 'same'`) reaches 4 samples
+    /// each way.
+    pub fn geometry(&self) -> za::MapGeometry {
+        let (c, halo) = if self.subsampled { (2, 8) } else { (1, 4) };
+        za::MapGeometry::grid(self.input.0, self.input.1, 0, 0, c, c, self.width, self.height).with_halo(halo, halo)
+    }
+}
+
+impl za::Evaluation for HaarpsiDiffmap {
     fn score(&self) -> f64 {
         self.haarpsi
     }
 
-    fn scores(
-        &self,
-    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
-        alloc::boxed::Box::new(core::iter::once((
-            alloc::borrow::Cow::Borrowed("haarpsi"),
-            self.haarpsi,
-        )))
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((alloc::borrow::Cow::Borrowed("haarpsi"), self.haarpsi)))
     }
 
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
-    }
-
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        za::MapView::new("similarity", px, za::MapPolarity::Similarity, self.geometry()).ok()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -405,60 +412,61 @@ pub fn haarpsi_plane_f32_with_diffmap(
             width: pr.w as u32,
             height: pr.h as u32,
             haarpsi: score,
+            input: (width as u32, height as u32),
+            subsampled: true,
         },
     ))
 }
 
-/// The HaarPSI metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs via the color path.
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::Empty => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of [`Haarpsi`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+/// The HaarPSI metric as a generic scorer — packed `RGB8_SRGB` through the
+/// reference's color path with its default 2× preprocessing subsample.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Haarpsi;
 
-impl zenmetrics_abstractions::Metric for Haarpsi {
-    fn name(&self) -> &'static str {
-        "haarpsi"
+impl za::Metric for Haarpsi {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("haarpsi", za::implementation!(SCORE_REVISION))
+            .with_reference("HaarPSI.m (Reisenhofer et al. 2018), color path")
+            .with_config("preprocess_subsample", true)
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("haarpsi", za::ScoreKind::Similarity)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_s, mut dm) =
-                haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
-                    .map_err(|e| {
-                        alloc::boxed::Box::new(e)
-                            as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-                    })?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) = haarpsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("haarpsi", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let out = za::ScalarEval::single("haarpsi", s);
-        Ok(alloc::boxed::Box::new(out))
+        let s = haarpsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("haarpsi", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("haarpsi", s)))
     }
 }
 

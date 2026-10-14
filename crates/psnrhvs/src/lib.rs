@@ -58,6 +58,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 pub mod daala;
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
 #[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
@@ -507,48 +509,64 @@ fn gray_px(r: u8, g: u8, b: u8) -> f32 {
 }
 
 /// The psnrhvs metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs. No canonical upstream map —
-/// `Evaluation::map()` is `None`.
+/// inputs. Outputs the RGB-mean PSNR-HVS (headline) and PSNR-HVS-M, then
+/// per-channel PSNR-HVS. No map.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Psnrhvs;
 
-impl zenmetrics_abstractions::Metric for Psnrhvs {
-    fn name(&self) -> &'static str {
-        "psnrhvs"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::TooSmall { .. } => za::ErrorKind::TooSmall,
+            Error::InvalidStride { .. } | Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::InvalidStep => za::ErrorKind::InvalidConfig,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for Psnrhvs {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("psnrhvs", za::implementation!(SCORE_REVISION))
+            .with_reference("Egiazarian et al. VPQM-06 / Ponomarenko et al. VPQM-07 psnrhvsm.m")
+            .with_config("wstep", 8)
+            .with_config("channels", "rgb_mean")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Decibels
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("psnrhvs", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_m", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_r", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_g", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_b", za::ScoreKind::Decibels),
+        ];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        let box_err = |e: Error| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        };
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
-        }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
-        let s = s; // RgbScore
-        let mut out = zenmetrics_abstractions::ScalarEval::single("psnrhvs", s.psnr_hvs);
-        out.push("psnrhvs_r", s.red.psnr_hvs);
-        out.push("psnrhvs_g", s.green.psnr_hvs);
-        out.push("psnrhvs_b", s.blue.psnr_hvs);
-        Ok(alloc::boxed::Box::new(out))
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("psnrhvs")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("psnrhvs", Error::kind)?;
+        Ok(alloc::boxed::Box::new(
+            za::ScalarEval::single("psnrhvs", s.psnr_hvs)
+                .with("psnrhvs_m", s.psnr_hvs_m)
+                .with("psnrhvs_r", s.red.psnr_hvs)
+                .with("psnrhvs_g", s.green.psnr_hvs)
+                .with("psnrhvs_b", s.blue.psnr_hvs),
+        ))
     }
 }

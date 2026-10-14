@@ -49,6 +49,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 use alloc::vec::Vec;
 
 pub mod fft;
@@ -143,7 +145,7 @@ impl core::fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// MAD of a pair: the HI and LO strategy indices and the blended
 /// score. All are distances — `0` = identical, higher = more
@@ -168,42 +170,49 @@ const LUMA_COEF: [f32; 3] = [0.2989, 0.5870, 0.1140];
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Mad;
 
-impl zenmetrics_abstractions::Metric for Mad {
-    fn name(&self) -> &'static str {
-        "mad-iqa"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for Mad {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("mad", za::implementation!(SCORE_REVISION))
+            .with_reference("STMAD_2011 hi_index.m + lo_index.m (Larson & Chandler 2010)")
+            .with_config("luma", "rgb2gray")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Difference
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("mad", za::ScoreKind::Difference),
+            za::ScoreSpec::new("hi", za::ScoreKind::Difference),
+            za::ScoreSpec::new("lo", za::ScoreKind::Difference),
+        ];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        let box_err = |e: Error| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        };
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
-        }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = mad_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
-        let mut out = zenmetrics_abstractions::ScalarEval::single("mad", s.mad);
-        out.push("hi", s.hi);
-        out.push("lo", s.lo);
-        Ok(alloc::boxed::Box::new(out))
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map("mad")?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        let s = mad_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).metric_err_with("mad", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("mad", s.mad).with("hi", s.hi).with("lo", s.lo)))
     }
 }
 

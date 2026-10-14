@@ -239,6 +239,62 @@ pub fn assert_conforms(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) {
     }
 }
 
+/// Deterministic textured sRGB8 test content (`w·h·3` bytes): gradients,
+/// a checker of hard edges and LCG noise, so filters see structure at
+/// every scale.
+pub fn textured_rgb8(w: usize, h: usize, seed: u32) -> Vec<u8> {
+    let mut s = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+    let mut out = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3usize {
+                s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let noise = (s >> 27) as usize;
+                let grad = (x * 255 / w.max(1) + y * 128 / h.max(1) + c * 40) % 200;
+                let edge = if (x / 7 + y / 5) % 2 == 0 { 45 } else { 0 };
+                out.push((grad + edge + noise).min(255) as u8);
+            }
+        }
+    }
+    out
+}
+
+/// A distorted copy of [`textured_rgb8`] content: quantized, with a
+/// bright block, so every metric sees a non-identical pair.
+pub fn distort_rgb8(src: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let mut out: Vec<u8> = src.iter().map(|&v| (v / 12) * 12).collect();
+    for y in h / 4..h / 2 {
+        for x in w / 4..w / 2 {
+            for c in 0..3 {
+                out[(y * w + x) * 3 + c] = 250;
+            }
+        }
+    }
+    out
+}
+
+/// Wrap packed sRGB8 bytes as an [`Image`].
+///
+/// # Panics
+/// When `data` is shorter than `w·h·3`.
+pub fn rgb8_image(data: &[u8], w: usize, h: usize) -> Image<'_> {
+    zenpixels::PixelSlice::new(data, w as u32, h as u32, w * 3, zenpixels::PixelDescriptor::RGB8_SRGB)
+        .expect("packed rgb8 test image")
+        .into()
+}
+
+/// [`assert_conforms`] on a [`textured_rgb8`] / [`distort_rgb8`] pair of
+/// size `w × h`.
+///
+/// # Panics
+/// As [`assert_conforms`].
+#[track_caller]
+pub fn assert_conforms_rgb8(metric: &mut dyn Metric, w: usize, h: usize) {
+    let a = textured_rgb8(w, h, 1);
+    let b = distort_rgb8(&a, w, h);
+    assert_conforms(metric, &rgb8_image(&a, w, h), &rgb8_image(&b, w, h));
+}
+
 /// A boxed-result helper for metric tests: the scores of one evaluation.
 pub fn scores(e: &dyn Evaluation) -> Vec<(Cow<'static, str>, f64)> {
     scores_of(e)

@@ -99,13 +99,32 @@ impl MapRequest {
     }
 }
 
+/// How far beyond its own cell a map value's inputs reach.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Support {
+    /// The value depends on its own cell plus `halo_*` pixels on each
+    /// side (filter radii, pyramid footprints).
+    Local {
+        /// Extra pixels left and right.
+        halo_x: u32,
+        /// Extra pixels above and below.
+        halo_y: u32,
+    },
+    /// The value can depend on any pixel (FFT-domain filters, global
+    /// normalization).
+    Global,
+}
+
 /// Which input pixels each map cell describes.
 ///
-/// Cell `(i, j)` attributes to the input rectangle starting at
-/// `(origin_x + i·cell_width, origin_y + j·cell_height)` with size
-/// `extent_width × extent_height`, clipped to the image. Cells step by
-/// `cell_*`; `extent_*` may be larger when footprints overlap. The origin
-/// may be negative when the first cell is centered before pixel 0.
+/// Cell `(i, j)` *owns* the input rectangle starting at
+/// `(origin_x + i·cell_width, origin_y + j·cell_height)` of size
+/// `cell_width × cell_height`, clipped to the image: the pixels to paint
+/// when overlaying the map. [`Support`] says which further pixels its value
+/// depends on. The origin may be negative when cell 0 is centered before
+/// pixel 0, and cells may not cover the whole image (MS-SSIM's valid
+/// interior).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct MapGeometry {
     /// Input image width.
@@ -116,18 +135,16 @@ pub struct MapGeometry {
     pub origin_x: i64,
     /// Top edge of cell row 0, in input pixels.
     pub origin_y: i64,
-    /// Horizontal step between cells, `≥ 1`.
+    /// Cell width and horizontal step, `≥ 1`.
     pub cell_width: u32,
-    /// Vertical step between cells, `≥ 1`.
+    /// Cell height and vertical step, `≥ 1`.
     pub cell_height: u32,
-    /// Footprint width of one cell.
-    pub extent_width: u32,
-    /// Footprint height of one cell.
-    pub extent_height: u32,
     /// Map width in cells.
     pub cells_x: u32,
     /// Map height in cells.
     pub cells_y: u32,
+    /// Dependence beyond the owned cell.
+    pub support: Support,
 }
 
 /// A clipped input rectangle.
@@ -144,12 +161,12 @@ pub struct PixelRect {
 }
 
 impl MapGeometry {
-    /// One cell per input pixel.
+    /// One cell per input pixel, depending on that pixel alone.
     pub const fn identity(width: u32, height: u32) -> Self {
         Self::grid(width, height, 0, 0, 1, 1, width, height)
     }
 
-    /// A regular grid whose footprints equal their step.
+    /// A regular grid with no halo; add one with [`Self::with_support`].
     #[allow(clippy::too_many_arguments)]
     pub const fn grid(
         input_width: u32,
@@ -168,57 +185,43 @@ impl MapGeometry {
             origin_y,
             cell_width,
             cell_height,
-            extent_width: cell_width,
-            extent_height: cell_height,
             cells_x,
             cells_y,
+            support: Support::Local { halo_x: 0, halo_y: 0 },
         }
     }
 
-    /// Set the footprint size.
+    /// Set the support.
     #[must_use]
-    pub const fn with_extent(mut self, width: u32, height: u32) -> Self {
-        self.extent_width = width;
-        self.extent_height = height;
+    pub const fn with_support(mut self, support: Support) -> Self {
+        self.support = support;
         self
     }
 
-    /// The geometry of this map after [`MapRequest::Subsampled`] by
-    /// `factor`: cells step `factor×` farther, footprints grow to cover
-    /// the block, counts round up. `factor` 0 is treated as 1.
+    /// Shorthand for a local halo.
+    #[must_use]
+    pub const fn with_halo(self, halo_x: u32, halo_y: u32) -> Self {
+        self.with_support(Support::Local { halo_x, halo_y })
+    }
+
+    /// The geometry after [`MapRequest::Subsampled`] by `factor`: each cell
+    /// owns the `factor × factor` block of native cells it reduces, counts
+    /// round up, support is unchanged. `factor` 0 is treated as 1.
     pub const fn subsampled(self, factor: u32) -> Self {
         let f = if factor == 0 { 1 } else { factor };
         Self {
             cell_width: self.cell_width.saturating_mul(f),
             cell_height: self.cell_height.saturating_mul(f),
-            extent_width: self
-                .extent_width
-                .saturating_add((f - 1).saturating_mul(self.cell_width)),
-            extent_height: self
-                .extent_height
-                .saturating_add((f - 1).saturating_mul(self.cell_height)),
             cells_x: self.cells_x.div_ceil(f),
             cells_y: self.cells_y.div_ceil(f),
             ..self
         }
     }
 
-    /// The input rectangle cell `(i, j)` describes, clipped to the image;
-    /// `None` when the cell is out of range or its footprint falls wholly
-    /// outside the image.
-    pub fn cell_rect(&self, i: u32, j: u32) -> Option<PixelRect> {
-        if i >= self.cells_x || j >= self.cells_y {
-            return None;
-        }
-        let x0 = self.origin_x + i64::from(i) * i64::from(self.cell_width);
-        let y0 = self.origin_y + i64::from(j) * i64::from(self.cell_height);
-        let x1 = (x0 + i64::from(self.extent_width)).min(i64::from(self.input_width));
-        let y1 = (y0 + i64::from(self.extent_height)).min(i64::from(self.input_height));
+    fn clip(&self, x0: i64, y0: i64, x1: i64, y1: i64) -> Option<PixelRect> {
+        let (x1, y1) = (x1.min(i64::from(self.input_width)), y1.min(i64::from(self.input_height)));
         let (x0, y0) = (x0.max(0), y0.max(0));
-        if x1 <= x0 || y1 <= y0 {
-            return None;
-        }
-        Some(PixelRect {
+        (x1 > x0 && y1 > y0).then(|| PixelRect {
             x: x0 as u32,
             y: y0 as u32,
             width: (x1 - x0) as u32,
@@ -226,7 +229,37 @@ impl MapGeometry {
         })
     }
 
-    /// The cell whose step window contains input pixel `(x, y)`.
+    fn own(&self, i: u32, j: u32) -> Option<(i64, i64, i64, i64)> {
+        if i >= self.cells_x || j >= self.cells_y {
+            return None;
+        }
+        let x0 = self.origin_x + i64::from(i) * i64::from(self.cell_width);
+        let y0 = self.origin_y + i64::from(j) * i64::from(self.cell_height);
+        Some((x0, y0, x0 + i64::from(self.cell_width), y0 + i64::from(self.cell_height)))
+    }
+
+    /// The input pixels cell `(i, j)` owns, clipped; `None` when out of
+    /// range or wholly outside the image.
+    pub fn cell_rect(&self, i: u32, j: u32) -> Option<PixelRect> {
+        let (x0, y0, x1, y1) = self.own(i, j)?;
+        self.clip(x0, y0, x1, y1)
+    }
+
+    /// The input pixels cell `(i, j)`'s value depends on, clipped: the
+    /// owned cell grown by the halo, or the whole image for
+    /// [`Support::Global`].
+    pub fn support_rect(&self, i: u32, j: u32) -> Option<PixelRect> {
+        let (x0, y0, x1, y1) = self.own(i, j)?;
+        match self.support {
+            Support::Local { halo_x, halo_y } => {
+                let (hx, hy) = (i64::from(halo_x), i64::from(halo_y));
+                self.clip(x0 - hx, y0 - hy, x1 + hx, y1 + hy)
+            }
+            Support::Global => self.clip(0, 0, i64::from(self.input_width), i64::from(self.input_height)),
+        }
+    }
+
+    /// The cell that owns input pixel `(x, y)`, if any.
     pub fn cell_at(&self, x: u32, y: u32) -> Option<(u32, u32)> {
         if self.cell_width == 0 || self.cell_height == 0 {
             return None;
@@ -550,18 +583,23 @@ mod tests {
     }
 
     #[test]
-    fn geometry_cells_and_subsampling() {
-        // GMSD-like: 2x2 cells from pixel 0, 3 cells across a 7-wide image.
-        let g = MapGeometry::grid(7, 4, 0, 0, 2, 2, 3, 2);
+    fn geometry_cells_support_and_subsampling() {
+        // GMSD-like: 2x2 cells from pixel 0, 3 cells across a 7-wide image,
+        // a 3x3 filter on the half-res grid (halo 2 input pixels).
+        let g = MapGeometry::grid(7, 4, 0, 0, 2, 2, 3, 2).with_halo(2, 2);
         assert_eq!(g.cell_rect(2, 1), Some(PixelRect { x: 4, y: 2, width: 2, height: 2 }));
+        assert_eq!(g.support_rect(0, 0), Some(PixelRect { x: 0, y: 0, width: 4, height: 4 }));
         assert_eq!(g.cell_at(6, 0), None);
         assert_eq!(g.cell_at(5, 3), Some((2, 1)));
         let s = g.subsampled(2);
-        assert_eq!((s.cells_x, s.cells_y, s.cell_width, s.extent_width), (2, 1, 4, 4));
+        assert_eq!((s.cells_x, s.cells_y, s.cell_width), (2, 1, 4));
         assert_eq!(s.cell_rect(1, 0), Some(PixelRect { x: 4, y: 0, width: 3, height: 4 }));
+        assert_eq!(s.support, g.support);
         // Negative origin clips at the image edge.
         let c = MapGeometry::grid(10, 10, -1, -1, 3, 3, 4, 4);
         assert_eq!(c.cell_rect(0, 0), Some(PixelRect { x: 0, y: 0, width: 2, height: 2 }));
+        let gl = c.with_support(Support::Global);
+        assert_eq!(gl.support_rect(3, 3), Some(PixelRect { x: 0, y: 0, width: 10, height: 10 }));
         assert_eq!(MapGeometry::identity(4, 4).subsampled(0), MapGeometry::identity(4, 4));
     }
 }
