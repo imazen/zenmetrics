@@ -30,6 +30,21 @@ mod wasm128 {
     }
 
     #[archmage::attune]
+    pub(crate) fn vpow_libm_into_wasm128_t(token: Wasm128Token, xs: &[f32], out: &mut [f32], p: f32) {
+        fdlibm::vpow_libm_kernel_8(token, xs, out, p);
+    }
+
+    #[archmage::attune]
+    pub(crate) fn vpowf_libm_pairs_into_wasm128_t(
+        token: Wasm128Token,
+        xs: &[f32],
+        ys: &[f32],
+        out: &mut [f32],
+    ) {
+        fdlibm::vpowf_libm_pairs_kernel_8(token, xs, ys, out);
+    }
+
+    #[archmage::attune]
     pub(crate) fn vaxpy_into_wasm128_t(token: Wasm128Token, dst: &mut [f32], src: &[f32], a: f32) {
         width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
     }

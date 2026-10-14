@@ -18,6 +18,8 @@ parallel = ["std", "dep:rayon"]
 [dependencies]
 archmage.workspace = true
 magetypes.workspace = true
+# Scalar reference and edge-lane fallback for the bit-exact `fdlibm` powf.
+libm = "0.2.16"
 rayon = { version = "1.10", optional = true }
 
 [lints]

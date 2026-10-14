@@ -19,6 +19,8 @@ pub use policy::{MathPolicy, Midp};
 pub use {
     vexp_into as vexp_into_slice, vlog_into as vlog_into_slice, vpow_into as vpow_into_slice,
 };
+/// Bit-exact lane ports of `libm` functions (opt-in; not a [`MathPolicy`]).
+pub mod fdlibm;
 pub mod par;
 #[macro_use]
 mod kernels;
@@ -257,6 +259,19 @@ pub(crate) fn vpow_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]
     width8::vpow_kernel::<_, Midp>(token, xs, out, p);
 }
 
+pub(crate) fn vpow_libm_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32], p: f32) {
+    fdlibm::vpow_libm_kernel_8(token, xs, out, p);
+}
+
+pub(crate) fn vpowf_libm_pairs_into_scalar_t(
+    token: ScalarToken,
+    xs: &[f32],
+    ys: &[f32],
+    out: &mut [f32],
+) {
+    fdlibm::vpowf_libm_pairs_kernel_8(token, xs, ys, out);
+}
+
 pub(crate) fn vaxpy_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
     width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
 }
@@ -487,6 +502,30 @@ pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
     debug_assert_eq!(xs.len(), out.len());
     archmage::attuned!(
         vpow_into(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::powf(xs[i], p)`, bit-identical to the scalar call on
+/// every input. The vector path covers positive finite `xs` with a moderate
+/// `p`; any other lane falls back to scalar `libm::powf`.
+#[inline]
+pub fn vpow_libm_into(xs: &[f32], out: &mut [f32], p: f32) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vpow_libm_into(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::powf(xs[i], ys[i])`, bit-identical to the scalar call on
+/// every input.
+#[inline]
+pub fn vpowf_libm_pairs_into(xs: &[f32], ys: &[f32], out: &mut [f32]) {
+    assert_eq!(xs.len(), out.len());
+    assert_eq!(ys.len(), out.len());
+    archmage::attuned!(
+        vpowf_libm_pairs_into(xs, ys, out),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -1000,6 +1039,8 @@ pub(crate) fn gather_lerp_exp3_apply_scalar_t(
     )
 }
 
+#[cfg(test)]
+mod fdlibm_tests;
 #[cfg(test)]
 mod tier_tests;
 

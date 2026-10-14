@@ -7889,6 +7889,7 @@ name = "zenmetrics-math"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.31-beta.1",
+ "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
 ]

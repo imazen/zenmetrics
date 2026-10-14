@@ -30,6 +30,21 @@ mod v4x {
     }
 
     #[archmage::attune]
+    pub(crate) fn vpow_libm_into_v4x_t(token: X64V4xToken, xs: &[f32], out: &mut [f32], p: f32) {
+        fdlibm::vpow_libm_kernel_16(token, xs, out, p);
+    }
+
+    #[archmage::attune]
+    pub(crate) fn vpowf_libm_pairs_into_v4x_t(
+        token: X64V4xToken,
+        xs: &[f32],
+        ys: &[f32],
+        out: &mut [f32],
+    ) {
+        fdlibm::vpowf_libm_pairs_kernel_16(token, xs, ys, out);
+    }
+
+    #[archmage::attune]
     pub(crate) fn vaxpy_into_v4x_t(token: X64V4xToken, dst: &mut [f32], src: &[f32], a: f32) {
         width16::vaxpy_kernel::<_, Midp>(token, dst, src, a);
     }
