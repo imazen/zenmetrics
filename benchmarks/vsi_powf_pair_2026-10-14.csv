@@ -1,0 +1,5 @@
+case,arm,complete_blocks,planned_blocks,latency_change_pct,log_ratio_sd,inference,control_present,correctness_checked,lower_pct,upper_pct,verdict,ratio_median,ratio_min,ratio_mad
+"3355x2516","after",4,4,-0.6718832617041876,0.03031257195170457,"exploratory",true,true,null,null,"exploratory",0.989652847863167,0.9609402491378704,0.0145208664220558
+"3355x2516","__aa",4,4,-0.27161748643912914,0.015696797295112492,"exploratory",true,true,null,null,"exploratory",1.001009146881906,0.975860370187909,0.007433530536612276
+"256x256","after",4,4,-4.604564378045883,0.0021520642462652144,"exploratory",true,true,null,null,"exploratory",0.9538425094607794,0.9518730489073881,0.0015915654339463958
+"256x256","__aa",4,4,0.2423209056812746,0.004558189139129374,"exploratory",true,true,null,null,"exploratory",1.0006504319149592,0.9992160961588712,0.0009122432837277428

@@ -15,6 +15,10 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- vsi (`a4add208`, `2f98686e`): the pooling fold computes `gradSim^α` and `real((ISim·QSim)^λ)` with the bit-exact lane `powf` instead of per-lane scalar `libm::powf`. Qualitymaps are bit-identical to the previous pool (NaN payloads included) and scores bit-identical when not NaN; paired wall A/B: 256² −4.60%, 3355×2516 −0.67% (within A/A noise). The wall example prints score bits. Record: `benchmarks/vsi_powf_pair_2026-10-14.meta`.
+
+- zenmetrics-math (`d747a7b6`): `fdlibm::powf_libm_8x` / `powf_libm_16x` and the `vpow_libm_into` / `vpowf_libm_pairs_into` slice drivers: a lane transcription of libm 0.2.16 `e_powf`, bit-identical to `libm::powf` on every input (edge lanes recompute with scalar libm). Differential tests cover an edge matrix, range thresholds, exact ties, a dense sweep and 10M seeded pairs; 5.1–6.6× (v3) and 8.9–11.3× (v4x) faster than scalar `libm::powf` on Zen 4 (`benchmarks/powf_libm_microbench_2026-10-14.txt`).
+
 - Browser timing (`614994a5`): separate worker/WASM/Rayon startup from reference/cache verification, scalar scoring, map work and comparison request wall time. Interactive timings remain separate from fleet benchmark acceptance.
 
 - Browser Zensim models (`9e45737c`): explicit B/D/A/legacy-preview score and map selection, scalar-only C with explicit map refusal, profile-aware reference caching, and matching CLI profile commands. B remains the default.
@@ -900,6 +904,8 @@ Workspace conventions per the global rules:
   `:0.5.7`. `05ad070e`.
 
 ### Fixed
+
+- Cargo.lock (`f1627bb4`): restore the pinned-sibling resolution after `40493c9c` committed a dev-tree re-resolution (`scripts/ci/lock.sh --check` failed on it).
 - Job-worker and dashboard images build again: `Cargo.deploy.toml` mirrors the workspace `[lints]` tables the member crates inherit (fb235d0b)
 
 - `build_goldens.py` / `bench_12mp_cuda.py` hard-coded the pycvvdp version they

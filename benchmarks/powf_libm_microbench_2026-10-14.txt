@@ -1,0 +1,15 @@
+# powf_libm microbench — crates/zenmetrics-math/examples/powf_libm_bench.rs at d747a7b6
+# host r7900x (Zen 4), taskset -c 4, load avg 1.75; cargo build --release -p zenmetrics-math [--features avx512] --example powf_libm_bench; default args n=2^20 reps=31
+# v3 = default build (dispatch picks v3); v4x = --features avx512 (dispatch picks v4x)
+== v3
+n=1048576 reps=31 (median / min ns per element)
+p=  0.4: lane 4.160 / 4.088 ns  scalar 25.646 / 25.426 ns  speedup 6.16x (median)
+p= 0.02: lane 4.157 / 4.073 ns  scalar 21.309 / 21.028 ns  speedup 5.13x (median)
+p=  2.4: lane 4.157 / 4.090 ns  scalar 26.093 / 25.679 ns  speedup 6.28x (median)
+p= -1.5: lane 4.157 / 4.072 ns  scalar 27.210 / 26.911 ns  speedup 6.55x (median)
+== v4x
+n=1048576 reps=31 (median / min ns per element)
+p=  0.4: lane 2.399 / 2.344 ns  scalar 25.541 / 25.221 ns  speedup 10.65x (median)
+p= 0.02: lane 2.401 / 2.343 ns  scalar 21.295 / 20.998 ns  speedup 8.87x (median)
+p=  2.4: lane 2.404 / 2.351 ns  scalar 25.965 / 25.576 ns  speedup 10.80x (median)
+p= -1.5: lane 2.400 / 2.348 ns  scalar 27.174 / 26.791 ns  speedup 11.32x (median)
