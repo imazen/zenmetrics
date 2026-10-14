@@ -858,6 +858,119 @@ fn srgb_to_lab_tier_neon_t(
     );
 }
 
+/// `srgb_to_lab` at `f64x4` — **bit-identical** to the scalar conversion
+/// on every pixel: the two `pow` calls run through `zenmetrics-math`'s
+/// lane-exact fdlibm `e_pow` port and every other op is the same `f64`
+/// arithmetic in the same order, so x86 tiers agree with the scalar path
+/// bitwise (unlike the NEON twin, which is midp-approximate). Branch
+/// thresholds become `blend` selects — same piecewise semantics. The
+/// `f(t)` pow input is blended to `1.0` on `t <= ε` lanes so edge lanes
+/// never take the port's scalar fallback.
+///
+/// Written as a macro so the whole body — `pow64_libm_4x` included —
+/// lands inside the caller's attuned target-feature context and the lane
+/// ops inline (a generic fn or closure body would make each
+/// `__simd_inner` op a call).
+#[cfg(target_arch = "x86_64")]
+macro_rules! srgb_to_lab_x86_body {
+    ($token:ident, $F64:ident, $dr:ident, $dg:ident, $db:ident, $ll:ident, $la:ident, $lb:ident) => {{
+        use magetypes::simd::generic::f64x4;
+        let n = $dr.len();
+        let n4 = n & !3;
+        for i in (0..n4).step_by(4) {
+            macro_rules! lin {
+                ($p:ident) => {{
+                    let v = $F64::from_array_t($token, core::array::from_fn(|k| {
+                        $p[i + k] as f64 / 255.0
+                    }));
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                        $token,
+                        (v + $F64::splat_t($token, 0.055)) / $F64::splat_t($token, 1.055),
+                        $F64::splat_t($token, 2.4),
+                    );
+                    $F64::blend(
+                        v.simd_le($F64::splat_t($token, 0.04045)),
+                        v / $F64::splat_t($token, 12.92),
+                        hi,
+                    )
+                }};
+            }
+            let (r, g, b) = (lin!($dr), lin!($dg), lin!($db));
+            let x = r * $F64::splat_t($token, 0.4124564)
+                + g * $F64::splat_t($token, 0.3575761)
+                + b * $F64::splat_t($token, 0.1804375);
+            let y = r * $F64::splat_t($token, 0.2126729)
+                + g * $F64::splat_t($token, 0.7151522)
+                + b * $F64::splat_t($token, 0.0721750);
+            let z = r * $F64::splat_t($token, 0.0193339)
+                + g * $F64::splat_t($token, 0.1191920)
+                + b * $F64::splat_t($token, 0.9503041);
+            macro_rules! cbrt_or_linear {
+                ($t:expr) => {{
+                    let t = $t;
+                    let sel = t.simd_gt($F64::splat_t($token, 0.008856));
+                    let arg = $F64::blend(sel, t, $F64::splat_t($token, 1.0));
+                    let hi = zenmetrics_math::fdlibm64::pow64_libm_4x(
+                        $token,
+                        arg,
+                        $F64::splat_t($token, 1.0 / 3.0),
+                    );
+                    let lo = (t * $F64::splat_t($token, 903.3) + $F64::splat_t($token, 16.0))
+                        / $F64::splat_t($token, 116.0);
+                    $F64::blend(sel, hi, lo)
+                }};
+            }
+            let fx = cbrt_or_linear!(x / $F64::splat_t($token, 0.9642));
+            let fy = cbrt_or_linear!(y);
+            let fz = cbrt_or_linear!(z / $F64::splat_t($token, 0.8251));
+            let va = ($F64::splat_t($token, 116.0) * fy - $F64::splat_t($token, 16.0)).to_array();
+            let vb = ($F64::splat_t($token, 500.0) * (fx - fy)).to_array();
+            let vc = ($F64::splat_t($token, 200.0) * (fy - fz)).to_array();
+            for k in 0..4 {
+                $ll[i + k] = va[k] as f32;
+                $la[i + k] = vb[k] as f32;
+                $lb[i + k] = vc[k] as f32;
+            }
+        }
+        srgb_to_lab_all_scalar(
+            &$dr[n4..],
+            &$dg[n4..],
+            &$db[n4..],
+            &mut $ll[n4..],
+            &mut $la[n4..],
+            &mut $lb[n4..],
+        );
+    }};
+}
+
+#[cfg(target_arch = "x86_64")]
+#[archmage::attune]
+fn srgb_to_lab_tier_v3_t(
+    token: archmage::X64V3Token,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    srgb_to_lab_x86_body!(token, f64x4, dr, dg, db, ll, la, lb);
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::attune]
+fn srgb_to_lab_tier_v4x_t(
+    token: archmage::X64V4xToken,
+    dr: &[f32],
+    dg: &[f32],
+    db: &[f32],
+    ll: &mut [f32],
+    la: &mut [f32],
+    lb: &mut [f32],
+) {
+    srgb_to_lab_x86_body!(token, f64x4, dr, dg, db, ll, la, lb);
+}
+
 /// Scalar-tier entry for `attuned!` — same signature shape as the NEON
 /// twin; the actual conversion is `srgb_to_lab_all_scalar`.
 #[allow(dead_code)]
@@ -884,7 +997,12 @@ fn srgb_to_lab_all(
 ) {
     #[cfg(target_arch = "aarch64")]
     archmage::attuned!(srgb_to_lab_tier(dr, dg, db, ll, la, lb), [_neon, _scalar]);
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    archmage::attuned!(
+        srgb_to_lab_tier(dr, dg, db, ll, la, lb),
+        [_v4x(cfg(avx512)), _v3, _scalar]
+    );
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     srgb_to_lab_all_scalar(dr, dg, db, ll, la, lb);
 }
 
