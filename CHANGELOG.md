@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-stats
+
+### Added
+
+- Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
+- Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
+
+### QUEUED BREAKING CHANGES
+
+- Adding `Interval::p_nonpositive` requires downstream struct literals to initialize the new field (737dc977). Existing bootstrap calls retain their behavior.
+
+## Workspace
+
 ### Added
 
 - zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
@@ -22,6 +35,12 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- zenmetrics-cli JPEG AIC-4 columns: `psnr-ycbcr611` (6:1:1 MSE-weighted studio-601 YCbCr PSNR; 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target), `ciede2000` (mean ΔE00, sRGB → CIELAB D65; median 3.0e-5, max 3.0e-4) and `ssimc` (per-RGB SSIM, valid window, contrast-structure clipped at 0; max 7.5e-7 at the CLI's print precision).
+- zenmetrics-cli VMAF ingress (`vmaf-studio601`, `vmaf-neg-studio601`): VMAF v0.6.1 / v0.6.1neg on studio-swing BT.601 YUV (the `psnr-y-studio601` luma), which reproduces the JPEG AIC-4 dataset `VMAF` / `VMAF-neg` columns on the 61-pair subset (median 0.0068 / 0.0034, max 0.075 / 0.12) where the BT.709 `vmaf` is off by up to 2.7. All `vmaf*` metrics now crop odd widths or heights to the largest even size instead of failing the batch (on the AIC-4 odd-size pairs cropping and edge padding agree within 0.003). Existing even-size `vmaf*` scores are unchanged.
+- Viewer metric bar and live loop frames (`17141836`): the metric and map menus sit in a sticky top bar; the Map menu and the loop's Steer menu list every metric's maps grouped by metric, and choosing another metric's map switches the metric. The loop streams each scored iteration as the map over the reconstruction (new default layer, the palette's middle at the target) for both metric and built-in butteraugli steering; built-in scoring goes through the external interface with butteraugli's CPU parameters and keeps the built-in bytes. Repeated frames are marked: from iteration 2 jxl-encoder only refines blocks above the target, so with none above it the last iterations repeat. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md#why-the-last-frames-repeat).
+- Viewer live encoder loop (`f16b22ed`, `94253764`, `be338560`): the loop player encodes the reference in the page with jxl-encoder's perceptual loop, steered by its own butteraugli or by the selected metric's map through `loop_map` (read as error, resampled to pixels, `scale · e^exponent`; jxl-encoder `EncodeRequest::with_external_metric`, its #130, merged; codec modules pin its main `a8c11520`), and plays and saves the trace; `.ltrace` files still open. Fitted scale/exponent defaults for 124 maps put each map's block distances on butteraugli's scale (held-out log r 0.76–0.90 for 12 of 19 default maps): [calibration](benchmarks/loop_norm_calibration_2026-10-15.tsv), [loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md). The demo scene and its loop load at startup.
+- Viewer encoders (`94253764`, `be338560`): WebP (zenwebp), AVIF (zenavif) and JPEG XL (jxl-encoder) join JPEG, as wasm modules from `web/codecs` (a workspace of its own) loaded on first use; a new quality or encoder re-encodes.
+- Viewer map selection (`f16b22ed`, `be338560`): one metric menu drives the score, the map and the loop's steering; the Map menu lists every map the metric publishes, served from one evaluation (`spatial_map(metric, map, …)`, `cached_spatial_map`). DSSIM gains a fused `diffmap` (mean `1 − SSIM`) and selectable per-scale `ssim_0` … `ssim_4`; its default weights are set explicitly and pinned to the score's bits.
 - Fused maps (`ec50e4f4`): NLPD, VIF/vifvec, MS-SSIM and IW-SSIM serve `diffmap`, the metric's own score broken down at input resolution over every scale it pools, cropped to covered pixels. Its mean is NLPD, `1 − VIF`, `−ln MS-SSIM` or `−ln IW-SSIM` (NLPD and VIF exact per-sample shares; MS-SSIM and IW-SSIM split each scale's log term in proportion to `(iw·)(1 − x)`). Primary for NLPD and VIF; MS-SSIM and IW-SSIM keep their primaries. The browser shows a metric's `diffmap` when it has one (also SSIMULACRA2's). Scores unchanged. [Native maps](docs/UNIFIED_NATIVE_MAPS_2026-10-14.md#fused-maps-diffmap-2026-10-15).
 - Viewer encoder loop player (`64b43892`): plays and steps through a jxl-encoder `.ltrace` (jxl-encoder PR #129): reconstruction, metric diffmap, block distance against target, quant field and its per-iteration change. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).
 - `MapPolarity::Feature` and the maps that need it (`b5fa70cf`, `78ac87da`; PR, review required): a polarity for native intermediates with no similarity/difference reading (pooling weights, one information term, no-reference measurements); `higher_is_worse()` is false. IW-SSIM serves `iw_0` … `iw_3`, the information-content weights on the `cs_s` grids (global support). VIF serves `num_s`/`den_s` and vifvec `num_lL_bB`/`den_lL_bB`, the two information terms behind the `info_loss` maps. VMAF serves `cambi_0` … `cambi_4`, CAMBI's per-scale c-values of the distorted frame, and `adm_num_*`/`adm_den_*`, ADM3's detail-loss terms on the AIM grids (they fold to each scale's numerator and denominator bit for bit); phone models now serve CAMBI and all ADM maps. CAMBI maps, quantized as libvmaf quantizes its heatmaps, match libvmaf's `heatmaps_path` dump exactly (0 samples differ, 91,133 nonzero) and fold to the CAMBI score bit for bit; IW weights pool the cs maps to `wmcs_s` within f32 division precision. Scores are unchanged with maps.

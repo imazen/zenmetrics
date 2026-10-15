@@ -34,13 +34,24 @@ fn main() {
         "butteraugli".into(),
         serde_json::json!({"width":w,"height":h,"similarity":false,"values":butter.buf()}),
     );
-    let mut dssim = dssim_core::Dssim::new();
-    dssim.set_save_ssim_maps(1);
-    let dr = dssim.create_image_rgb(r, w, h).unwrap();
-    let dd = dssim.create_image_rgb(d, w, h).unwrap();
-    let (_, ssim) = dssim.compare(&dr, dd);
-    let ssim = &ssim[0].map;
-    maps.insert("dssim".into(),serde_json::json!({"width":ssim.width(),"height":ssim.height(),"similarity":true,"values":ssim.buf()}));
+    // DSSIM's fused map, from the same function natively.
+    let rgba = |px: &[[u8; 3]]| {
+        px.iter()
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect::<Vec<u8>>()
+    };
+    let dssim = zenmetrics_browser::spatial_map(
+        "dssim",
+        "",
+        &rgba(&reference),
+        &rgba(&distorted),
+        w as u32,
+        h as u32,
+        w * 4,
+        "",
+    )
+    .unwrap();
+    maps.insert("dssim".into(),serde_json::json!({"width":dssim.width(),"height":dssim.height(),"similarity":false,"values":dssim.values()}));
     let mut cv = cvvdp::Cvvdp::new(w as u32, h as u32, Default::default()).unwrap();
     let mut cvmap = Vec::new();
     cv.score_with_diffmap(

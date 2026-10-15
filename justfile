@@ -296,6 +296,10 @@ worker-clippy:
 lock-check *args:
     bash scripts/ci/lock.sh --check {{args}}
 
+# Every remote branch and open PR with a verdict (merged/stale/conflict/...); read-only.
+branch-status *args:
+    python3 scripts/ci/branch_status.py {{args}}
+
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
 
@@ -586,3 +590,11 @@ nn-export-deepdc python ladder out sizes="64,128,256,512,1024":
 nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
+
+# Crate-scoped statistical API validation in the pinned dependency snapshot.
+stats-helpers-check:
+    just snap-cargo @ test -p zenmetrics-stats
+    just snap-cargo @ clippy -p zenmetrics-stats --all-targets -- -D warnings
+
+stats-helpers-serial-check:
+    just snap-cargo @ test -p zenmetrics-stats --no-default-features

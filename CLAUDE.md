@@ -606,6 +606,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 - The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
 - Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
 
+- **2026-10-15 — `just snap-cargo <older-rev>` could return the previous
+  revision's binary. FIXED.** `git archive` stamps exported files with the
+  commit time, so after a build of a newer tree an older revision's sources
+  looked older than cargo's dep-info and cargo skipped the rebuild (found by
+  the nn-opt lane while A/B-benchmarking revisions). `export-snapshot.py` now
+  keeps `<tree>.mtimes.json` (sha256, mode, mtime per file): byte-identical
+  files keep their previous mtime, changed files get one newer than any
+  earlier stamp. Regression: `just lock-snapshot-tests`
+  (`test_revision_switch_restamps_only_changed_files`; fails on the old
+  exporter). Benchmarks taken with `snap-cargo --rev` before this fix may
+  have measured the wrong revision.
+
 - **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
   directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
   marked `target*` directories even when accidentally tracked, plus repository

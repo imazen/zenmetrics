@@ -1,0 +1,26 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=20663MiB :: ./target/release/convprobe
+cuda	f32	3->64@256	conv2d 0.320 ms (707 GFLOP/s)	im2col+mm 0.330 ms (687 GFLOP/s)	sum 2.8519e7 vs 2.8519e7
+cuda	f32	64->64@256	conv2d 0.517 ms (9343 GFLOP/s)	im2col+mm 3.958 ms (1221 GFLOP/s)	sum 6.0241e8 vs 6.0241e8
+cuda	f32	128->128@128	conv2d 0.324 ms (14933 GFLOP/s)	im2col+mm 5.217 ms (926 GFLOP/s)	sum 5.9720e8 vs 5.9720e8
+cuda	f32	256->256@64	conv2d 0.323 ms (14978 GFLOP/s)	im2col+mm 8.492 ms (569 GFLOP/s)	sum 5.9091e8 vs 5.9091e8
+cuda	f32	512->512@32	conv2d 0.497 ms (9728 GFLOP/s)	im2col+mm 42.638 ms (113 GFLOP/s)	sum 5.7944e8 vs 5.7944e8
+cuda	f32	512->512@16	conv2d 0.513 ms (2352 GFLOP/s)	im2col+mm 41.400 ms (29 GFLOP/s)	sum 1.3900e8 vs 1.3900e8
+cuda	f16	3->64@256	conv2d 0.497 ms (456 GFLOP/s)	im2col+mm 0.362 ms (626 GFLOP/s)	sum inf vs inf
+cuda	f16	64->64@256	conv2d 0.585 ms (8256 GFLOP/s)	im2col+mm 2.679 ms (1804 GFLOP/s)	sum inf vs inf
+cuda	f16	128->128@128	conv2d 0.517 ms (9353 GFLOP/s)	im2col+mm 4.565 ms (1059 GFLOP/s)	sum inf vs inf
+cuda	f16	256->256@64	conv2d 0.537 ms (9001 GFLOP/s)	im2col+mm 13.439 ms (360 GFLOP/s)	sum inf vs inf
+cuda	f16	512->512@32	conv2d 0.442 ms (10919 GFLOP/s)	im2col+mm 186.598 ms (26 GFLOP/s)	sum inf vs inf
+cuda	f16	512->512@16	conv2d 0.569 ms (2122 GFLOP/s)	im2col+mm 186.670 ms (6 GFLOP/s)	sum inf vs inf
+vulkan	f32	3->64@256	conv2d 0.988 ms (229 GFLOP/s)	im2col+mm 1.029 ms (220 GFLOP/s)	sum 2.7536e7 vs 2.7536e7
+vulkan	f32	64->64@256	conv2d 4.136 ms (1168 GFLOP/s)	im2col+mm 74.142 ms (65 GFLOP/s)	sum 6.0196e8 vs 6.0196e8
+vulkan	f32	128->128@128	conv2d 7.739 ms (624 GFLOP/s)	im2col+mm 140.931 ms (34 GFLOP/s)	sum 5.9627e8 vs 5.9627e8
+vulkan	f32	256->256@64	conv2d 20.129 ms (240 GFLOP/s)	im2col+mm 243.528 ms (20 GFLOP/s)	sum 5.9173e8 vs 5.9173e8
+vulkan	f32	512->512@32	conv2d 28.921 ms (167 GFLOP/s)	im2col+mm 314.008 ms (15 GFLOP/s)	sum 5.7872e8 vs 5.7872e8
+vulkan	f32	512->512@16	conv2d 7.413 ms (163 GFLOP/s)	im2col+mm 101.426 ms (12 GFLOP/s)	sum 1.3870e8 vs 1.3870e8
+vulkan	f16	3->64@256	conv2d 0.783 ms (289 GFLOP/s)	im2col+mm 0.838 ms (270 GFLOP/s)	sum inf vs inf
+vulkan	f16	64->64@256	conv2d 0.663 ms (7290 GFLOP/s)	im2col+mm 3.324 ms (1454 GFLOP/s)	sum inf vs inf
+vulkan	f16	128->128@128	conv2d 0.820 ms (5894 GFLOP/s)	im2col+mm 3.578 ms (1351 GFLOP/s)	sum inf vs inf
+vulkan	f16	256->256@64	conv2d 0.738 ms (6551 GFLOP/s)	im2col+mm 10.398 ms (465 GFLOP/s)	sum inf vs inf
+vulkan	f16	512->512@32	conv2d 0.557 ms (8670 GFLOP/s)	im2col+mm 171.452 ms (28 GFLOP/s)	sum inf vs inf
+vulkan	f16	512->512@16	conv2d 1.018 ms (1187 GFLOP/s)	im2col+mm 165.427 ms (7 GFLOP/s)	sum inf vs inf
+run-heavy: done rc=0 82s | peak-RSS 0.91GiB | min-avail 20269MiB | peak-load 9.99

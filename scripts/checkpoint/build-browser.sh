@@ -13,6 +13,8 @@ mkdir -p "$CHECKPOINT_OUT/pkg"
 wasm-bindgen --target web --out-dir "$CHECKPOINT_OUT/pkg" \
   "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/zenmetrics_browser.wasm"
 cp web/metrics/*.html web/metrics/*.js "$CHECKPOINT_OUT/"
+# The encoder modules: a separate, single-threaded build (web/codecs).
+bash scripts/checkpoint/build-codecs.sh
 cp Cargo.lock ci/sibling-pins.tsv LICENSE-AGPL3 "$CHECKPOINT_OUT/"
 printf '%s\n' "$RUSTFLAGS" > "$CHECKPOINT_OUT/rustflags.txt"
 cp scripts/checkpoint/build-browser.sh "$CHECKPOINT_OUT/build-browser.sh"

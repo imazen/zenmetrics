@@ -86,22 +86,29 @@ details summary { cursor: pointer; color: var(--muted); }
 #viewport:active{cursor:grabbing}#view{max-height:none;max-width:none;width:auto;height:auto;border-radius:0}
 .file.drag{border-color:var(--accent);background:var(--chip)}button:disabled{opacity:.45;cursor:default}
 #status{white-space:pre-wrap}.error{color:var(--accent)}#score{font:600 23px var(--mono)}
-#metric{width:100%}.viewer-tools{justify-content:space-between}#pixel{font:12px var(--mono)}
+.metricbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.metricbar label{display:flex;gap:6px;align-items:center;font-weight:600}.metricbar select{max-width:min(70vw,360px)}
+.metricbar .barscore{font:600 15px var(--mono);margin-left:auto}.viewer-tools{justify-content:space-between}#pixel{font:12px var(--mono)}
 </style></head>
 <body><div class="wrap">
 <header><h1>Zenmetrics</h1><p>Compare image quality and explore spatial error. Images stay on your device.</p>
 <a href="https://github.com/imazen/zenmetrics">Source</a><a href="https://github.com/imazen/zenmetrics/releases">Downloads</a>
 <button id="theme" aria-label="Switch color theme">◐</button></header>
+<div class="metricbar" role="toolbar" aria-label="Metric and map"><label>Metric <select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select></label>
+<label>Map <select id="map-name" aria-label="Map; choosing another metric's map switches the metric"><option value="">Compare to list the maps</option></select></label>
+<span class="barscore"><span id="bar-label">Score</span> <b id="bar-score">–</b></span></div>
 <div class="grid"><div>
 <section class="panel"><h2>Images</h2>
 <label class="file" id="drop-reference"><input id="reference" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Reference</b><span id="name-reference">Choose or drop a file</span></label>
-<label class="file" id="drop-distorted"><input id="distorted" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Distorted</b><span id="name-distorted">Choose a file, or generate a JPEG below</span></label>
+<label class="file" id="drop-distorted"><input id="distorted" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Distorted</b><span id="name-distorted">Choose a file, or encode the reference below</span></label>
 <div class="row"><button id="demo">Demo scene</button><button id="swap">Swap images</button></div>
-<div class="row"><label for="quality">JPEG quality</label><input id="quality" type="range" min="5" max="100" value="40"><span id="quality-value">40</span></div>
-<button id="generate">Generate with zenjpeg</button> <button id="download-jpeg" disabled>Save JPEG</button>
-<p class="note">JPEG, PNG, WebP and JPEG XL use Zen decoders. SDR RGB8 ingress matches the CLI: transparency is preserved and scoring refuses non-opaque pixels. ICC metadata is not applied. Use already composited sRGB images for color-managed comparison.</p>
+<div class="row"><label>Encoder <select id="codec"><option value="jpeg">JPEG · zenjpeg</option><option value="webp">WebP · zenwebp</option><option value="avif">AVIF · zenavif</option><option value="jxl">JPEG XL · jxl-encoder</option></select></label></div>
+<div class="row"><label for="quality">Quality</label><input id="quality" type="range" min="5" max="100" value="40"><span id="quality-value">40</span></div>
+<button id="generate">Encode with zenjpeg</button> <button id="download-jpeg" disabled>Save encoded file</button>
+<p class="note">The encoded reference becomes the distorted image, and a new quality or encoder encodes it again. Each encoder uses its own scale: JPEG and WebP quality, AVIF quality at speed 6, JPEG XL quality mapped to a distance at effort 7. WebP, AVIF and JPEG XL load their modules the first time they are used. JPEG, PNG, WebP and JPEG XL use Zen decoders. SDR RGB8 ingress matches the CLI: transparency is preserved and scoring refuses non-opaque pixels. ICC metadata is not applied. Use already composited sRGB images for color-managed comparison.</p>
 </section>
-<section class="panel"><h2>Metric</h2><select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select>
+<section class="panel"><h2>Metric</h2>
+<p class="note">The bar at the top stays in view: its metric sets the score, the map and the encoder loop's steering, and choosing another metric's map there or in the loop panel switches the metric. Metrics marked score only have no spatial map in this build.</p>
 <label id="zensim-model-row">Zensim model <select id="zensim-model"><option value="b">B · codec target (default)</option><option value="c">C · candidate, scalar only</option><option value="d">D · fast</option><option value="a">A · legacy</option><option value="preview-v0.2">Preview v0.2 · legacy linear</option><option value="preview-v0.1">Preview v0.1 · legacy linear</option></select></label>
 <p id="zensim-model-note" class="note" hidden>C has no spatial map in the pinned library. Choose another map metric explicitly; no model is substituted.</p>
 <div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
@@ -119,8 +126,7 @@ details summary { cursor: pointer; color: var(--muted); }
 <section class="panel"><h2>Image comparison</h2>
 <div class="row"><div class="seg" id="views" role="group" aria-label="View mode">
 <button data-mode="reference">Reference</button><button data-mode="distorted">Distorted</button><button data-mode="split">Split</button><button data-mode="blink">Blink</button><button data-mode="overlay" class="on">Overlay</button><button data-mode="map">Map</button></div></div>
-<div class="row"><label>Map <select id="map-metric"><option value="zensim">Zensim error</option><option value="butteraugli">Butteraugli error</option><option value="dssim">DSSIM scale-0 SSIM</option><option value="cvvdp">CVVDP masked error</option><option value="gmsd">GMSD similarity</option><option value="psnr">PSNR squared error</option></select></label>
-<label>Palette <select id="palette"><option value="viridis">Viridis</option><option value="turbo">Turbo</option></select></label>
+<div class="row"><label>Palette <select id="palette"><option value="viridis">Viridis</option><option value="turbo">Turbo</option></select></label>
 <label>Background <select id="background"><option value="reference">Reference</option><option value="distorted">Distorted</option></select></label>
 <label><input id="grey" type="checkbox"> Grey</label></div>
 <div class="row"><label>Overlay <input id="opacity" type="range" min="0" max="1" step=".01" value=".7"></label>
@@ -132,15 +138,22 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="viewer" id="viewport"><canvas id="view" width="768" height="512"></canvas></div>
 <div class="legend"><span>Low</span><span class="ramp"></span><span id="legend-high">High error</span><span id="map-info"></span></div>
 <div class="row viewer-tools"><span id="dimensions" class="note">Load a pair or try the demo scene</span><span id="pixel">Move over the image to inspect a pixel</span></div>
-<p class="note">Map scaling changes only the visualization. Scores and downloaded raw values retain their metric definitions. Native similarity maps retain their metric sampling grids; visualization uses 1−similarity. VSI displays saliency-weighted quality contributions. FSIM/FSIMc maps show luminance similarity. Hatched cells mark uncovered borders or undefined native values; HaarPSI has undefined local similarity in zero-weight windows. NLPD, VIF, MS-SSIM, IW-SSIM and SSIMULACRA2 show their fused maps: the score broken down over every scale with the metric's own weights (mean NLPD, 1 − VIF, −ln MS-SSIM, −ln IW-SSIM, or SSIMULACRA2's weighted sum). PSNR-HVS, MAD and VMAF show one native component (per-block CSF error, MAD's high-quality strategy, VMAF's SPEED chroma-U blocks), and mDCT-PSNR each window's detection probability. IW-SSIM maps need both sides of at least 176 pixels; VMAF v1 needs even dimensions, both sides of at least 33 and one of at least 216. SSIMULACRA2 shows its per-pixel terms fused with the score's own weights; the map's mean is the weighted sum the score transforms. Browser timings are interactive feedback, not accepted fleet benchmark observations.</p>
+<p class="note">Map scaling changes only the visualization. Scores and downloaded raw values retain their metric definitions. Native similarity maps retain their metric sampling grids; visualization uses 1−similarity. VSI displays saliency-weighted quality contributions. FSIM/FSIMc maps show luminance similarity. Hatched cells mark uncovered borders or undefined native values; HaarPSI has undefined local similarity in zero-weight windows. The Map menu lists every map the metric publishes; the first is its default. NLPD, VIF, MS-SSIM, IW-SSIM, DSSIM and SSIMULACRA2 default to their fused maps: the score broken down over every scale with the metric's own weights (mean NLPD, 1 − VIF, −ln MS-SSIM, −ln IW-SSIM, DSSIM's 1 − SSIM, or SSIMULACRA2's weighted sum), and also list their per-scale maps. PSNR-HVS, MAD and VMAF show one native component (per-block CSF error, MAD's high-quality strategy, VMAF's SPEED chroma-U blocks), and mDCT-PSNR each window's detection probability. IW-SSIM maps need both sides of at least 176 pixels; VMAF v1 needs even dimensions, both sides of at least 33 and one of at least 216. SSIMULACRA2 shows its per-pixel terms fused with the score's own weights; the map's mean is the weighted sum the score transforms. Browser timings are interactive feedback, not accepted fleet benchmark observations.</p>
 </section>
 <section class="panel" id="loop-panel"><h2>Encoder loop player</h2>
-<label class="file" id="drop-trace"><input id="trace" type="file" accept=".ltrace"><b>Loop trace</b><span id="name-trace">Choose or drop a jxl-encoder .ltrace file</span></label>
+<div class="row"><label>Steer with <select id="loop-steer" aria-label="Steering map; choosing a metric's map switches the metric"><option value="builtin">jxl-encoder's own butteraugli</option></select></label>
+<label>Scale <input id="loop-scale" type="number" step="any" min="0" value="1" aria-label="Map scale"></label><label>Exponent <input id="loop-exponent" type="number" step="any" min="0" value="1" aria-label="Map exponent"></label><button id="loop-default">Fitted default</button></div>
+<p id="loop-steer-note" class="note"></p>
+<div class="row"><label>Distance <input id="loop-distance" type="number" min="0.1" max="25" step="0.1" value="1"></label>
+<label>Effort <select id="loop-effort"><option>5</option><option>6</option><option selected>7</option><option>8</option><option>9</option></select></label>
+<label>Iterations <input id="loop-iters" type="number" min="1" max="8" value="4"></label>
+<button id="loop-run" class="primary" disabled>Encode and trace</button><button id="loop-save" disabled>Save trace</button></div>
+<label class="file" id="drop-trace"><input id="trace" type="file" accept=".ltrace"><b>Saved trace</b><span id="name-trace">Or open a .ltrace file</span></label>
 <div class="row"><button id="loop-prev" disabled>◀ Back</button><button id="loop-play" disabled>▶ Play</button><button id="loop-next" disabled>Step ▶</button>
 <input id="loop-frame" type="range" min="0" max="0" value="0" disabled aria-label="Iteration">
-<label>Layer <select id="loop-layer"><option value="recon">Reconstruction</option><option value="diffmap">Metric diffmap</option><option value="tile">Block distance vs target</option><option value="qf">Quant field</option><option value="dqf">Quant field change</option><option value="source">Source</option></select></label></div>
-<p id="loop-info" class="note">No trace loaded.</p>
+<label>Layer <select id="loop-layer"><option value="overlay" selected>Reconstruction + map</option><option value="recon">Reconstruction</option><option value="diffmap">Metric diffmap</option><option value="tile">Block distance vs target</option><option value="qf">Quant field</option><option value="dqf">Quant field change</option><option value="source">Source</option></select></label></div>
+<p id="loop-info" class="note">The demo scene's loop encodes once the worker starts.</p>
 <div class="viewer"><canvas id="loop-view" width="768" height="512"></canvas></div>
-<p class="note">Each frame is one iteration of jxl-encoder's perceptual quantization loop: the reconstruction it scored, the metric's per-pixel diffmap (one square-root scale for all frames), each 8×8 block's distance against the target (half the scale is the target; blocks above it get finer quantization next), the quant field that iteration encoded with, and how the loop changed it for the next one (red finer, blue coarser). Write a trace with <code>cargo run --release --example loop_trace_dump -- in.png out.ltrace [distance] [effort] [iterations]</code> in jxl-encoder.</p>
+<p class="note">The reference image is encoded with jxl-encoder's perceptual quantization loop in this page, and each iteration appears as it is scored: the map over the reconstruction, with the palette's middle at the target distance. The loop's constants were calibrated on butteraugli: each 8×8 block's 16-norm (×1.2) is compared with the target distance, and the map's maximum is the score. Another metric steers it through its map read as error (1 − similarity for similarity maps), resampled to pixels, then scale · error^exponent; the fitted defaults put each map's block distances on butteraugli's scale over a corpus of encodes. Each frame is one iteration, and from iteration 2 the loop only refines blocks above the target, so once none are, later iterations repeat the same image: the reconstruction it scored, the metric's per-pixel diffmap (one square-root scale for all frames), each 8×8 block's distance against the target (half the scale is the target; blocks above it get finer quantization next), the quant field that iteration encoded with, and how the loop changed it for the next one (red finer, blue coarser). Save a trace to reopen it later, or write one natively with <code>cargo run --release --example loop_trace_dump -- in.png out.ltrace [distance] [effort] [iterations]</code> in jxl-encoder.</p>
 </section>
 </div></div></div><script type="module" src="app.js"></script></body></html>
