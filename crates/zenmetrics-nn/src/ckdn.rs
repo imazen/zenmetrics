@@ -21,11 +21,12 @@
 //!
 //! Before the graphs, each image goes through the eval transform upstream's
 //! `predict_score.py` applies via its timm loader (`img_size=288`,
-//! `crop_pct=0.875`): resize so the short side is 329, centre-crop 288. The
-//! AIC-4 published column — which pyiqa's wrapper produces — uses an
-//! antialiased bicubic resize for the distorted image but **nearest** for
-//! the reference (verified by bit-exact input capture); this port follows
-//! that convention, since it is what the scored data was generated with.
+//! `crop_pct=0.875`): resize so the short side is 329, centre-crop 288.
+//! Upstream's `timm/data/paired_transforms_tv04.py` resizes the image with
+//! `interpolation` (bicubic per `resolve_data_config`) but the target —
+//! the reference — with `interpolation_tg=Image.NEAREST`; this port
+//! follows that asymmetric convention, which is also what the AIC-4
+//! published column was scored with (matched to median |d| 4e-5).
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -44,6 +45,9 @@ const COLUMN: &str = "ckdn";
 /// aspect) then `CenterCrop(288)` — upstream's `img_size=288, crop_pct=0.875`.
 const RESIZE_SHORT: usize = 329;
 const CROP: usize = 288;
+/// Bound on the resized long side: the transform's buffer is
+/// `3·RESIZE_SHORT·long` f32, so this caps it at ~129 MB (≈100:1 aspect).
+const MAX_RESIZED_LONG: usize = 32_768;
 
 /// CKDN. Higher is closer (a sigmoid quality score in `(0, 1)`). Input:
 /// packed sRGB8 (any stride).
@@ -130,21 +134,33 @@ impl Ckdn {
     /// centre-crop [`CROP`]. `nearest` selects the reference side's kernel —
     /// the published convention resizes the distorted image with antialiased
     /// bicubic but the reference with nearest. Returns planar f32 `0..255`,
-    /// `[3, CROP, CROP]`.
-    fn prep(img: &za::Rgb8In<'_>, nearest: bool) -> Vec<f32> {
+    /// `[3, CROP, CROP]`. Refuses empty inputs and any input whose resized
+    /// long side would exceed [`MAX_RESIZED_LONG`] (the buffer is
+    /// `3·RESIZE_SHORT·long` — an extreme aspect ratio would allocate
+    /// unbounded memory).
+    fn prep(img: &za::Rgb8In<'_>, nearest: bool) -> Result<Vec<f32>, Error> {
         let (h, w) = (img.height, img.width);
+        if h == 0 || w == 0 {
+            return Err(Error::TooSmall { min: 1 });
+        }
+        let (h64, w64) = (h as u64, w as u64);
         let (nh, nw) = if w <= h {
-            (RESIZE_SHORT * h / w, RESIZE_SHORT)
+            ((RESIZE_SHORT as u64 * h64 / w64) as usize, RESIZE_SHORT)
         } else {
-            (RESIZE_SHORT, RESIZE_SHORT * w / h)
+            (RESIZE_SHORT, (RESIZE_SHORT as u64 * w64 / h64) as usize)
         };
+        if nh.max(nw) > MAX_RESIZED_LONG {
+            return Err(Error::TooLarge {
+                limit: MAX_RESIZED_LONG,
+            });
+        }
         let planar = rgb8_to_planar_255(img);
         let resized = if nearest {
             resize_nearest(&planar, 3, h, w, nh, nw)
         } else {
             resize_bicubic_aa(&planar, 3, h, w, nh, nw)
         };
-        center_crop(&resized, 3, nh, nw, CROP)
+        Ok(center_crop(&resized, 3, nh, nw, CROP))
     }
 
     /// A single-tap run's `[c, h, w]` output, checked against `channels`.
@@ -168,7 +184,7 @@ impl Ckdn {
         let Backend::Trunk(qse) = &self.backend else {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
-        Self::take(qse.run(Self::prep(img, false), CROP, CROP)?, self.channels)
+        Self::take(qse.run(Self::prep(img, false)?, CROP, CROP)?, self.channels)
     }
 
     /// `dte(img)` on a trunk engine — the reference-side encoder, fed the
@@ -178,7 +194,7 @@ impl Ckdn {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
         Self::take(
-            parts.dte.run(Self::prep(img, true), CROP, CROP)?,
+            parts.dte.run(Self::prep(img, true)?, CROP, CROP)?,
             self.channels,
         )
     }
@@ -209,7 +225,7 @@ impl Ckdn {
         match &self.backend {
             Backend::Trunk(qse) => {
                 let parts = self.parts.as_ref().expect("trunk parts");
-                let (xr, xd) = (Self::prep(r, true), Self::prep(d, false));
+                let (xr, xd) = (Self::prep(r, true)?, Self::prep(d, false)?);
                 let (qd, rr) = std::thread::scope(|s| {
                     let hj = s.spawn(|| qse.run(xd, CROP, CROP));
                     let rr = parts.dte.run(xr, CROP, CROP);
@@ -225,7 +241,7 @@ impl Ckdn {
                     &Self::take(rr?, self.channels)?,
                 )
             }
-            Backend::Pair(p) => p.score(Self::prep(r, true), Self::prep(d, false), CROP, CROP),
+            Backend::Pair(p) => p.score(Self::prep(r, true)?, Self::prep(d, false)?, CROP, CROP),
         }
     }
 }
@@ -276,7 +292,9 @@ impl za::Metric for Ckdn {
                 self.encode_dte(&view)
                     .metric_err_with(COLUMN, Error::kind)?,
             ),
-            Backend::Pair(_) => WarmState::Pixels(Self::prep(&view, true)),
+            Backend::Pair(_) => {
+                WarmState::Pixels(Self::prep(&view, true).metric_err_with(COLUMN, Error::kind)?)
+            }
         };
         Ok(Box::new(WarmCkdn {
             metric: self,
@@ -318,7 +336,9 @@ impl za::WarmReference for WarmCkdn<'_> {
                 .encode_qse(&d)
                 .and_then(|qd| self.metric.dr(&qd, dte_r)),
             WarmState::Pixels(px) => match &self.metric.backend {
-                Backend::Pair(p) => p.score(px.clone(), Ckdn::prep(&d, false), CROP, CROP),
+                Backend::Pair(p) => {
+                    Ckdn::prep(&d, false).and_then(|dd| p.score(px.clone(), dd, CROP, CROP))
+                }
                 Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
             },
         }
@@ -328,5 +348,58 @@ impl za::WarmReference for WarmCkdn<'_> {
 
     fn reuses_reference_work(&self) -> bool {
         matches!(self.reference, WarmState::Tap(_))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn view<'a>(px: &'a [u8], w: usize, h: usize) -> za::Rgb8In<'a> {
+        za::Rgb8In {
+            pixels: px,
+            width: w,
+            height: h,
+            stride: w * 3,
+        }
+    }
+
+    #[test]
+    fn prep_refuses_empty() {
+        for (w, h) in [(0, 0), (0, 10), (10, 0)] {
+            let px = vec![0u8; w * h * 3];
+            assert!(matches!(
+                Ckdn::prep(&view(&px, w, h), false),
+                Err(Error::TooSmall { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn prep_refuses_extreme_aspect() {
+        // 1x40000 -> resized 329 x 13_160_000, far over MAX_RESIZED_LONG.
+        let px = vec![0u8; 40_000 * 3];
+        assert!(matches!(
+            Ckdn::prep(&view(&px, 40_000, 1), false),
+            Err(Error::TooLarge { .. })
+        ));
+        // The bound applies to the reference (nearest) side equally.
+        assert!(matches!(
+            Ckdn::prep(&view(&px, 40_000, 1), true),
+            Err(Error::TooLarge { .. })
+        ));
+        // Just inside the bound stays scoreable: 1x99 -> 329 x 32_571.
+        let px2 = vec![0u8; 99 * 3];
+        assert_eq!(
+            Ckdn::prep(&view(&px2, 99, 1), false).unwrap().len(),
+            3 * CROP * CROP
+        );
+    }
+
+    #[test]
+    fn prep_normal_input() {
+        let px = vec![0u8; 512 * 384 * 3];
+        let out = Ckdn::prep(&view(&px, 512, 384), false).unwrap();
+        assert_eq!(out.len(), 3 * CROP * CROP);
     }
 }
