@@ -212,8 +212,10 @@ fn similarity(a: &[Complex], b: &[Complex], w: usize, h: usize) -> f64 {
             let yy = y as f64 - (nh - 1) as f64 / 2.0;
             let weight = (-(xx * xx + yy * yy) / (2.0 * sigma * sigma)).exp();
             let i = y * nw + x;
-            // K=0: define two exactly zero-energy windows as identical.
-            let q = if en[i] == 0.0 {
+            // K=0: zero-energy windows count as identical, as in the reference
+            // (`where=en > 0`). The running-sum box can leave a tiny negative
+            // energy after a high-energy run, so test `<= 0`, not `== 0`.
+            let q = if en[i] <= 0.0 {
                 1.0
             } else {
                 2.0 * (re[i] * re[i] + im[i] * im[i]).sqrt() / en[i]

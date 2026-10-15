@@ -290,6 +290,7 @@ pub fn rekey_orchestrator_columns(
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
         CliMetricKind::CwSsim
         | CliMetricKind::Flip
+        | CliMetricKind::FlipV17
         | CliMetricKind::Gmsd
         | CliMetricKind::Mdsi
         | CliMetricKind::MsGmsd
@@ -475,6 +476,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
         kind,
         CliMetricKind::CwSsim
             | CliMetricKind::Flip
+            | CliMetricKind::FlipV17
             | CliMetricKind::Gmsd
             | CliMetricKind::Mdsi
             | CliMetricKind::MsGmsd

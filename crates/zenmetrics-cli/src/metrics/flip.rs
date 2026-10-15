@@ -241,9 +241,17 @@ pub(super) fn error_map(
         .collect())
 }
 
-// flip-evaluator 1.7 and the AIC column accumulate row-major in f32.
-// Later NVlabs revisions use f64; changing the reduction changes the column.
+/// Mean of the error map, summed row-major in f64 as NVlabs FLIP.h does at
+/// the pinned revision (`flip` column).
 pub(super) fn mean(map: &[f32]) -> f64 {
+    map.iter().fold(0.0f64, |s, &v| s + f64::from(v)) / map.len() as f64
+}
+
+/// Mean as flip-evaluator 1.7 computes it, and as the JPEG AIC-4 `FLIP`
+/// column was produced: a row-major f32 running sum (`flip-v17` column).
+/// The f32 sum loses precision as the map grows: on a uniform 0.075 map it
+/// reads 1.0e-3 (2048²) and 1.7e-2 (4096²) low, relative to [`mean`].
+pub(super) fn mean_v17(map: &[f32]) -> f64 {
     f64::from(map.iter().fold(0.0f32, |s, &v| s + v) / map.len() as f32)
 }
 
