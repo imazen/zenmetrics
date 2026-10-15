@@ -17,9 +17,9 @@
 //! - vertical pass before horizontal (the op's process-rows order); each
 //!   output accumulates `Σ w·in` sequentially in f32.
 //!
-//! Verified against `tf.image.resize(.., GAUSSIAN)` (tensorflow 2.15 CPU):
-//! bitwise-equal at 8→4, ≤ 4e-7 absolute at 256→224/512→384 (the op's own
-//! vectorised accumulation order differs in the last ulp).
+//! Scalar coefficients use an f64 exponential followed by an f32 cast;
+//! output accumulation is f32. Framework vectorized accumulation can differ
+//! in its final bits. Model-level parity is recorded in the MUSIQ card.
 //!
 //! TEMPORARY: this is a local port of TensorFlow's gaussian kernel until
 //! zenresize gains a `gaussian` mode; it then moves there (standing rule:

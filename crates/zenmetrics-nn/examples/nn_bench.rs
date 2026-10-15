@@ -1,6 +1,6 @@
 //! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
 //! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc | ckdn | afine | dreamsim |
-//!  default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! arniqa | maniqa | liqe | musiq | hyperiqa; default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)

@@ -2,10 +2,10 @@
 # that generates the target scoring network's weights per image, then a
 # 5-layer FC target net produces a quality score. The `hyperiqa` column
 # is upstream demo.py's output convention (mean over crops), MOS-scale
-# 0-100, higher is better.
+# trained on 0-100 MOS, higher is better; the linear output is unbounded.
 name = "hyperiqa"
 kind = "no-reference"                # pair tools run it through PairedNoReference: `hyperiqa` on dist, `hyperiqa_ref` on ref
-direction = "higher-is-better"       # koniq10k MOS-scale score; ladder goldens span ~17-75
+direction = "higher-is-better"       # koniq10k MOS-scale score; ladder goldens span 26.3–77.8
 columns = ["hyperiqa", "hyperiqa_ref"]
 paper = "Su, Yan, Zhu, Zhang, Ge, Sun, Zhang. Blindly Assess Image Quality in the Wild Guided by a Self-Adaptive Hyper Network. CVPR 2020"
 
@@ -28,13 +28,14 @@ format = "packed sRGB8"
 normalisation = "torchvision ToTensor (u8 -> f32 /255) then ImageNet mean/std (0.485,0.456,0.406)/(0.229,0.224,0.225)"
 resize = "PIL bilinear u8 to (W,H)=(384,512) — torchvision Resize((512,384)) — bit-exact port resize_bilinear_pil_u8 (LICENSE-pillow)"
 crop = "DEVIATION FROM UPSTREAM: upstream's test transform is RandomCrop(224) scored test_patch_num=25 times and averaged (demo.py uses 10) — nondeterministic. This port crops a deterministic 5x5 grid instead: x-origins round(i*160/4)={0,40,80,120,160}, y-origins round(j*288/4)={0,72,144,216,288} — 25 crops, the same count as test_patch_num, then the batch mean. The model graph and weights are upstream's; only crop placement differs. The goldens were produced by oracle.py running upstream's own network on this grid."
+crop_grid_measurement = "Independent upstream-network check: 8 seeds × 4 images; upstream random 25-crop means have run-to-run SD 0.35–0.85 score units (0.08–0.19 JND). The deterministic grid differs from their random-crop mean by 0.16–0.49 score units (≤0.11 JND), within that protocol noise. Upstream random crops cannot be reproduced to the 1e-3 JND gate; parity below qualifies the documented deterministic grid."
 min_size = 1                         # every input resizes to 384x512 first
 
 [export]
 script = "export.py"
-outputs = "hyperiqa_{onnx, meta, goldens.tsv, export.meta}"
+outputs = "hyperiqa.{onnx,meta} + hyperiqa_export.meta (hyperiqa_goldens.tsv is written by oracle.py)"
 opset = 17
-notes = "x[b,3,224,224] -> hyperiqa[1] (batch mean), batch axis dynamic — the Rust side always sends the 25 grid crops. HyperNet (ResNet-50 + LDA + hyper convs emitting the target FC weights) + TargetNet as batched matmuls: upstream realises TargetFC as grouped 1x1 convs with groups=batch, which cannot export a dynamic batch; bmm is identical math. Self-check upstream-TargetNet-vs-export |d| = 0.0; ONNX-CPU vs the upstream-model goldens worst 1.5e-5."
+notes = "x[25,3,224,224] -> hyperiqa[1] (batch mean), fixed batch 25. The exported HyperNet reshape operations require 25 crops even though the legacy graph labels the input axis dynamic; batches 1 and 2 fail at /hyper/Reshape_10. The Rust side always sends the 25 grid crops. HyperNet (ResNet-50 + LDA + hyper convs emitting the target FC weights) + TargetNet as batched matmuls: upstream realises TargetFC as grouped 1x1 convs with groups=batch, which cannot export a dynamic batch; bmm is identical math. Self-check upstream-TargetNet-vs-export |d| = 0.0; ONNX-CPU vs the upstream-model goldens worst 1.5e-5."
 
 [parity]
 oracle = "SSL92/hyperIQA @c42e7279, HyperNet+TargetNet on the deterministic 5x5 grid (models.py imported verbatim), CPU fp32, koniq_pretrained.pkl"

@@ -5,13 +5,13 @@ Self-Adaptive Hyper Network", CVPR 2020).
 usage: oracle.py UPSTREAM_DIR CKPT_PKL OUT_TSV IMG...
 
 UPSTREAM_DIR is a checkout of https://github.com/SSL92/hyperIQA (pin:
-c42e7279, 2023-12-14); `models.py` and `demo.py` are imported verbatim.
+c42e7279, 2023-12-14); `models.py` is imported verbatim; `demo.py` is not imported.
 CKPT_PKL is `pretrained/koniq_pretrained.pkl` (Google Drive, README
 "pre-trained model on the koniq-10k dataset"; no stated licence).
 
-OUT_TSV gets one `image<TAB>score` line per IMG (basename, no dir), in
-argument order — the goldens `export.py` checks against and
-`tests/parity.rs` replays.
+OUT_TSV has columns `image<TAB>size<TAB>hyperiqa<TAB>hyperiqa_ref`.
+Each row groups the matching STEM_SIZE_dist.png and STEM_SIZE_ref.png inputs;
+these are the goldens `export.py` checks and `tests/parity.rs` replays.
 
 DEVIATION FROM UPSTREAM, intentional: upstream's eval transform is
 `Resize((512,384))` + `RandomCrop(224)` scored `test_patch_num=25` (demo:

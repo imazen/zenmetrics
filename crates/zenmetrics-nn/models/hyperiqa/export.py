@@ -14,13 +14,14 @@ The export is ONE graph: upstream's HyperNet (ResNet-50 + LDA head +
 hyper convs producing the target network's weights) followed by the
 TargetNet expressed as batched matmuls — upstream realises it as
 grouped 1x1 convs with `groups = batch`, which cannot export with a
-dynamic batch; `bmm` is the same math. Input `x [b,3,224,224]` (each row
+dynamic batch; `bmm` is the same math. The exported HyperNet requires fixed batch 25. Input `x [25,3,224,224]` (each row
 one normalised crop), output `hyperiqa [1]` = the batch mean, as upstream
 averages the per-crop scores.
 
 Files written (all prefixed `hyperiqa`):
-  hyperiqa.onnx        x[b,3,224,224] -> score `hyperiqa`[1]; batch axis
-                       `b` dynamic (the Rust side always sends 25).
+  hyperiqa.onnx        x[25,3,224,224] -> score `hyperiqa`[1]; fixed batch
+                       25 (the legacy dynamic input label does not make
+                       HyperNet's traced reshape operations dynamic).
   hyperiqa.meta        `channels 1` and `min_size 1` (every input resizes
                        to 512x384 first, so any nonzero input is legal).
   hyperiqa_export.meta versions and sha256 of every output.

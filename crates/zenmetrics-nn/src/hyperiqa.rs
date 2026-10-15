@@ -49,7 +49,8 @@ const MEAN: [f32; 3] = [0.485, 0.456, 0.406];
 const STD: [f32; 3] = [0.229, 0.224, 0.225];
 
 /// HyperIQA, KonIQ checkpoint. Higher is better — upstream's 0–100
-/// MOS-scale score. Input: packed sRGB8 (any stride); every nonzero
+/// MOS-scale training target; the final layer is linear, so scores are
+/// unbounded rather than clamped to [0,100]. Input: packed sRGB8 (any stride); every nonzero
 /// size is accepted — the frame always resizes to 384×512.
 pub struct Hyperiqa {
     backend: Backend,
