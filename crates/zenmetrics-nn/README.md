@@ -64,3 +64,6 @@ HyperIQA exports have a fixed batch of 25 and score the documented deterministic
 crop grid; its linear output is unbounded. MUSIQ errors distinguish the 8192
 patch-row limit (`Error::TooManyPatches`) from a degenerate aspect ratio
 (`Error::DegenerateAspectRatio`). These are additive public error variants.
+
+[Review qualification receipt](../../benchmarks/nr_learned_review_2026-10-15.meta)
+records the complete exports, rejection controls and both engine parity runs.
