@@ -18,6 +18,18 @@
 //! `resize_bicubic_cv2_u8` reproduces OpenCV `resize.cpp` conventions —
 //! OpenCV's Apache-2.0 licence is in ../LICENSE-opencv.
 
+use crate::par;
+
+// A scoped launch is worthwhile only for sufficiently large passes. The
+// estimate counts actual scalar MACs (or copied elements for crop/nearest).
+fn resize_threads(work: usize) -> usize {
+    if work < 2 * 1024 * 1024 {
+        1
+    } else {
+        par::threads_for(work)
+    }
+}
+
 /// One 1-D resampling entry: the source index a kernel window starts at and its
 /// normalised weights.
 struct Tap1D {
@@ -148,37 +160,40 @@ fn resample_u8_axis(
     wts: &[Tap1DFix],
     axis: u8,
 ) -> Vec<u8> {
+    if c == 0 || h == 0 || w == 0 || wts.is_empty() {
+        return Vec::new();
+    }
     let (oh, ow) = if axis == 0 {
         (wts.len(), w)
     } else {
         (h, wts.len())
     };
     let mut out = vec![0u8; c * oh * ow];
-    for ch in 0..c {
-        let (inp, outp) = (&img[ch * h * w..(ch + 1) * h * w], &mut out[ch * oh * ow..]);
+    let macs =
+        c * if axis == 0 { ow } else { oh } * wts.iter().map(|t| t.weights.len()).sum::<usize>();
+    par::for_each_row(&mut out, ow, resize_threads(macs), |i, drow| {
+        let (ch, r) = (i / oh, i % oh);
+        let inp = &img[ch * h * w..(ch + 1) * h * w];
         if axis == 1 {
-            for (i, t) in wts.iter().enumerate() {
-                for y in 0..h {
-                    let row = &inp[y * w..];
-                    let mut ss = 1i64 << 21;
-                    for (j, &k) in t.weights.iter().enumerate() {
-                        ss += row[t.first + j] as i64 * k as i64;
-                    }
-                    outp[y * ow + i] = (ss >> 22).clamp(0, 255) as u8;
+            let row = &inp[r * w..];
+            for (x, t) in wts.iter().enumerate() {
+                let mut ss = 1i64 << 21;
+                for (j, &k) in t.weights.iter().enumerate() {
+                    ss += row[t.first + j] as i64 * k as i64;
                 }
+                drow[x] = (ss >> 22).clamp(0, 255) as u8;
             }
         } else {
-            for (i, t) in wts.iter().enumerate() {
-                for x in 0..w {
-                    let mut ss = 1i64 << 21;
-                    for (j, &k) in t.weights.iter().enumerate() {
-                        ss += inp[(t.first + j) * w + x] as i64 * k as i64;
-                    }
-                    outp[i * ow + x] = (ss >> 22).clamp(0, 255) as u8;
+            let t = &wts[r];
+            for x in 0..w {
+                let mut ss = 1i64 << 21;
+                for (j, &k) in t.weights.iter().enumerate() {
+                    ss += inp[(t.first + j) * w + x] as i64 * k as i64;
                 }
+                drow[x] = (ss >> 22).clamp(0, 255) as u8;
             }
         }
-    }
+    });
     out
 }
 
@@ -195,6 +210,9 @@ pub(crate) fn resize_bicubic_pil_u8(
     oh: usize,
     ow: usize,
 ) -> Vec<u8> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     let wx = bicubic_pil_1d(w, ow);
     let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
     let wy = bicubic_pil_1d(h, oh);
@@ -213,6 +231,9 @@ pub(crate) fn resize_bilinear_pil_u8(
     oh: usize,
     ow: usize,
 ) -> Vec<u8> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     let wx = bilinear_pil_1d(w, ow);
     let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
     let wy = bilinear_pil_1d(h, oh);
@@ -254,6 +275,9 @@ pub(crate) fn resize_bicubic_cv2_u8(
     oh: usize,
     ow: usize,
 ) -> Vec<u8> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     /// Per-axis taps: border-clamped indices + quantised i16 coeffs.
     fn cv2_cubic_1d(n_in: usize, n_out: usize) -> Vec<([usize; 4], [i16; 4])> {
         let scale = n_in as f64 / n_out as f64;
@@ -277,37 +301,33 @@ pub(crate) fn resize_bicubic_cv2_u8(
     let wx = cv2_cubic_1d(w, ow);
     // Horizontal pass: integer accumulation, mid = value × 2¹¹.
     let mut tmp = vec![0i32; c * h * ow];
-    for ch in 0..c {
-        let inp = &img[ch * h * w..(ch + 1) * h * w];
-        let outp = &mut tmp[ch * h * ow..];
-        for y in 0..h {
-            let row = &inp[y * w..];
-            for (dx, (idx, coef)) in wx.iter().enumerate() {
-                let mut v = 0i32;
-                for (&i, &k) in idx.iter().zip(coef) {
-                    v += i32::from(row[i]) * i32::from(k);
-                }
-                outp[y * ow + dx] = v;
+    par::for_each_row(&mut tmp, ow, resize_threads(c * h * ow * 4), |i, drow| {
+        let (ch, y) = (i / h, i % h);
+        let row = &img[ch * h * w + y * w..];
+        for (dx, (idx, coef)) in wx.iter().enumerate() {
+            let mut v = 0i32;
+            for (&i, &k) in idx.iter().zip(coef) {
+                v += i32::from(row[i]) * i32::from(k);
             }
+            drow[dx] = v;
         }
-    }
+    });
     let wy = cv2_cubic_1d(h, oh);
     let inv = 1.0f32 / (2048.0 * 2048.0);
     let mut out = vec![0u8; c * oh * ow];
-    for ch in 0..c {
+    par::for_each_row(&mut out, ow, resize_threads(c * oh * ow * 4), |i, drow| {
+        let (ch, dy) = (i / oh, i % oh);
         let inp = &tmp[ch * h * ow..];
-        let outp = &mut out[ch * oh * ow..];
-        for (dy, (idx, coef)) in wy.iter().enumerate() {
-            let beta = coef.map(|k| f32::from(k) * inv);
-            for x in 0..ow {
-                let m = |k: usize| inp[idx[k] * ow + x] as f32;
-                // Unfused: the pinned cv2 5.0 build has baseline SSE only (no
-                // FMA3), so `v_muladd` rounds the product and the sum apart.
-                let s = m(0) * beta[0] + (m(1) * beta[1] + (m(2) * beta[2] + m(3) * beta[3]));
-                outp[dy * ow + x] = (s.round_ties_even() as i32).clamp(0, 255) as u8;
-            }
+        let (idx, coef) = &wy[dy];
+        let beta = coef.map(|k| f32::from(k) * inv);
+        for x in 0..ow {
+            let m = |k: usize| inp[idx[k] * ow + x] as f32;
+            // Unfused: the pinned cv2 5.0 build has baseline SSE only (no
+            // FMA3), so `v_muladd` rounds the product and the sum apart.
+            let s = m(0) * beta[0] + (m(1) * beta[1] + (m(2) * beta[2] + m(3) * beta[3]));
+            drow[x] = (s.round_ties_even() as i32).clamp(0, 255) as u8;
         }
-    }
+    });
     out
 }
 
@@ -320,6 +340,9 @@ pub(crate) fn resize_bicubic_aa(
     oh: usize,
     ow: usize,
 ) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     let wx = bicubic_aa_1d(w, ow);
     let tmp = resample_w(img, c, h, w, &wx);
     let wy = bicubic_aa_1d(h, oh);
@@ -336,6 +359,9 @@ pub(crate) fn resize_nearest(
     oh: usize,
     ow: usize,
 ) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     let idx = |n_in: usize, n_out: usize| {
         (0..n_out)
             .map(|i| (i * n_in / n_out).min(n_in - 1))
@@ -344,17 +370,13 @@ pub(crate) fn resize_nearest(
     let ys = idx(h, oh);
     let xs = idx(w, ow);
     let mut out = vec![0.0f32; c * oh * ow];
-    for ch in 0..c {
-        let src = &img[ch * h * w..(ch + 1) * h * w];
-        let dst = &mut out[ch * oh * ow..(ch + 1) * oh * ow];
-        for (y, &sy) in ys.iter().enumerate() {
-            let srow = &src[sy * w..sy * w + w];
-            let drow = &mut dst[y * ow..(y + 1) * ow];
-            for (x, &sx) in xs.iter().enumerate() {
-                drow[x] = srow[sx];
-            }
+    par::for_each_row(&mut out, ow, resize_threads(c * oh * ow), |i, drow| {
+        let (ch, y) = (i / oh, i % oh);
+        let srow = &img[ch * h * w + ys[y] * w..ch * h * w + ys[y] * w + w];
+        for (x, &sx) in xs.iter().enumerate() {
+            drow[x] = srow[sx];
         }
-    }
+    });
     out
 }
 
@@ -411,100 +433,197 @@ pub(crate) fn resize_bicubic(
     oh: usize,
     ow: usize,
 ) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
     if h == oh && w == ow {
         return img.to_vec();
     }
     let wx = bicubic_1d(w, ow);
     let mut tmp = vec![0.0f32; c * h * ow];
-    for ch in 0..c {
-        let src = &img[ch * h * w..(ch + 1) * h * w];
-        let dst = &mut tmp[ch * h * ow..(ch + 1) * h * ow];
-        for y in 0..h {
-            let srow = &src[y * w..(y + 1) * w];
-            for (x, t) in wx.iter().enumerate() {
-                dst[y * ow + x] = (0..4).map(|k| t.w[k] * srow[t.idx[k]]).sum();
-            }
+    par::for_each_row(&mut tmp, ow, resize_threads(c * h * ow * 4), |i, drow| {
+        let (ch, y) = (i / h, i % h);
+        let srow = &img[ch * h * w + y * w..ch * h * w + (y + 1) * w];
+        for (x, t) in wx.iter().enumerate() {
+            drow[x] = (0..4).map(|k| t.w[k] * srow[t.idx[k]]).sum();
         }
-    }
+    });
     let wy = bicubic_1d(h, oh);
     let mut out = vec![0.0f32; c * oh * ow];
-    for ch in 0..c {
+    par::for_each_row(&mut out, ow, resize_threads(c * oh * ow * 4), |i, drow| {
+        let (ch, y) = (i / oh, i % oh);
         let src = &tmp[ch * h * ow..(ch + 1) * h * ow];
-        let dst = &mut out[ch * oh * ow..(ch + 1) * oh * ow];
-        for (y, t) in wy.iter().enumerate() {
-            for x in 0..ow {
-                dst[y * ow + x] = (0..4).map(|k| t.w[k] * src[t.idx[k] * ow + x]).sum();
-            }
+        let t = &wy[y];
+        for x in 0..ow {
+            drow[x] = (0..4).map(|k| t.w[k] * src[t.idx[k] * ow + x]).sum();
         }
-    }
+    });
     out
 }
 
 /// Centre-crop planar `[c, h, w]` → `[c, k, k]` (torch `CenterCrop` semantics:
 /// `(in − k) / 2` floor, so an odd margin's extra pixel goes bottom/right).
 pub(crate) fn center_crop(img: &[f32], c: usize, h: usize, w: usize, k: usize) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || k == 0 {
+        return Vec::new();
+    }
     if (h, w) == (k, k) {
         return img.to_vec();
     }
     let y0 = (h - k) / 2;
     let x0 = (w - k) / 2;
     let mut out = vec![0.0f32; c * k * k];
-    for ch in 0..c {
-        let src = &img[ch * h * w..(ch + 1) * h * w];
-        let dst = &mut out[ch * k * k..(ch + 1) * k * k];
-        for y in 0..k {
-            dst[y * k..(y + 1) * k].copy_from_slice(&src[(y0 + y) * w + x0..(y0 + y) * w + x0 + k]);
-        }
-    }
+    par::for_each_row(&mut out, k, resize_threads(c * k * k), |i, drow| {
+        let (ch, y) = (i / k, i % k);
+        drow.copy_from_slice(
+            &img[ch * h * w + (y0 + y) * w + x0..ch * h * w + (y0 + y) * w + x0 + k],
+        );
+    });
     out
 }
 
 /// Horizontal pass of a 1-D tap table: `[c, h, w]` → `[c, h, taps.len()]`.
 fn resample_w(img: &[f32], c: usize, h: usize, w: usize, taps: &[Tap1D]) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || taps.is_empty() {
+        return Vec::new();
+    }
     let ow = taps.len();
     let mut out = vec![0.0f32; c * h * ow];
-    for ch in 0..c {
-        let src = &img[ch * h * w..(ch + 1) * h * w];
-        let dst = &mut out[ch * h * ow..(ch + 1) * h * ow];
-        for y in 0..h {
-            let srow = &src[y * w..(y + 1) * w];
-            let drow = &mut dst[y * ow..(y + 1) * ow];
-            for (x, tap) in taps.iter().enumerate() {
-                drow[x] = tap
-                    .weights
-                    .iter()
-                    .zip(&srow[tap.first..tap.first + tap.weights.len()])
-                    .map(|(&k, &v)| k * v)
-                    .sum();
-            }
+    let macs = c * h * taps.iter().map(|t| t.weights.len()).sum::<usize>();
+    par::for_each_row(&mut out, ow, resize_threads(macs), |i, drow| {
+        let (ch, y) = (i / h, i % h);
+        let srow = &img[ch * h * w + y * w..ch * h * w + (y + 1) * w];
+        for (x, tap) in taps.iter().enumerate() {
+            drow[x] = tap
+                .weights
+                .iter()
+                .zip(&srow[tap.first..tap.first + tap.weights.len()])
+                .map(|(&k, &v)| k * v)
+                .sum();
         }
-    }
+    });
     out
 }
 
 /// Vertical pass of a 1-D tap table: `[c, h, w]` → `[c, taps.len(), w]`.
 fn resample_h(img: &[f32], c: usize, h: usize, w: usize, taps: &[Tap1D]) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || taps.is_empty() {
+        return Vec::new();
+    }
     let oh = taps.len();
     let mut out = vec![0.0f32; c * oh * w];
-    for ch in 0..c {
+    let macs = c * w * taps.iter().map(|t| t.weights.len()).sum::<usize>();
+    par::for_each_row(&mut out, w, resize_threads(macs), |i, drow| {
+        let (ch, y) = (i / oh, i % oh);
         let src = &img[ch * h * w..(ch + 1) * h * w];
-        let dst = &mut out[ch * oh * w..(ch + 1) * oh * w];
-        for (y, tap) in taps.iter().enumerate() {
-            let drow = &mut dst[y * w..(y + 1) * w];
-            for (k, &wt) in tap.weights.iter().enumerate() {
-                let srow = &src[(tap.first + k) * w..(tap.first + k + 1) * w];
-                for (d, &s) in drow.iter_mut().zip(srow) {
-                    *d += wt * s;
-                }
+        let tap = &taps[y];
+        for (k, &wt) in tap.weights.iter().enumerate() {
+            let srow = &src[(tap.first + k) * w..(tap.first + k + 1) * w];
+            for (d, &s) in drow.iter_mut().zip(srow) {
+                *d += wt * s;
             }
         }
-    }
+    });
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_resize_paths_are_thread_bit_identical_and_empty_safe() {
+        type FloatResize = fn(&[f32], usize, usize, usize, usize, usize) -> Vec<f32>;
+        type ByteResize = fn(&[u8], usize, usize, usize, usize, usize) -> Vec<u8>;
+        let (h, w, oh, ow) = (385, 513, 769, 1027);
+        let bytes: Vec<u8> = (0..3 * h * w)
+            .map(|i| ((i * 73 + i / 7 * 19) % 256) as u8)
+            .collect();
+        let floats: Vec<f32> = bytes
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                if i % 13 == 0 {
+                    -0.0
+                } else {
+                    f32::from(v) / 113.0 - 1.0
+                }
+            })
+            .collect();
+        for resize in [resize_nearest, resize_bicubic, resize_bicubic_aa] as [FloatResize; 3] {
+            let (a, spawned) = par::observe_workers(Some(1), || resize(&floats, 3, h, w, oh, ow));
+            assert_eq!(spawned, 0);
+            let (b, parallel_spawns) =
+                par::observe_workers(Some(16), || resize(&floats, 3, h, w, oh, ow));
+            assert!(parallel_spawns > 0);
+            assert_eq!(
+                a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+            for (c, h, w, oh, ow) in [
+                (0, 2, 2, 3, 3),
+                (3, 0, 2, 3, 3),
+                (3, 2, 0, 3, 3),
+                (3, 2, 2, 0, 3),
+                (3, 2, 2, 3, 0),
+            ] {
+                assert!(resize(&[], c, h, w, oh, ow).is_empty());
+            }
+        }
+        for resize in [
+            resize_bicubic_pil_u8,
+            resize_bilinear_pil_u8,
+            resize_bicubic_cv2_u8,
+        ] as [ByteResize; 3]
+        {
+            let (a, spawned) = par::observe_workers(Some(1), || resize(&bytes, 3, h, w, oh, ow));
+            assert_eq!(spawned, 0);
+            let (b, parallel_spawns) =
+                par::observe_workers(Some(16), || resize(&bytes, 3, h, w, oh, ow));
+            assert!(parallel_spawns > 0);
+            assert_eq!(a, b);
+            for (c, h, w, oh, ow) in [
+                (0, 2, 2, 3, 3),
+                (3, 0, 2, 3, 3),
+                (3, 2, 0, 3, 3),
+                (3, 2, 2, 0, 3),
+                (3, 2, 2, 3, 0),
+            ] {
+                assert!(resize(&[], c, h, w, oh, ow).is_empty());
+            }
+        }
+        let crop_input: Vec<f32> = (0..3 * 1025 * 1027)
+            .map(|i| (i % 257) as f32 / 113.0)
+            .collect();
+        let (a, spawns) =
+            par::observe_workers(Some(1), || center_crop(&crop_input, 3, 1025, 1027, 1001));
+        assert_eq!(spawns, 0);
+        let (b, spawns) =
+            par::observe_workers(Some(16), || center_crop(&crop_input, 3, 1025, 1027, 1001));
+        assert!(spawns > 0);
+        assert_eq!(
+            a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
+        assert!(center_crop(&[], 3, 0, 2, 0).is_empty());
+    }
+
+    #[test]
+    fn small_resize_passes_stay_on_the_calling_thread() {
+        for n in [64, 256] {
+            let x = vec![0.125; 3 * n * n];
+            let bytes = vec![31; 3 * n * n];
+            let (_, spawns) = par::observe_workers(Some(16), || {
+                let _ = resize_bicubic_aa(&x, 3, n, n, 329, 329);
+                let _ = resize_bicubic(&x, 3, n, n, 329, 329);
+                let _ = resize_nearest(&x, 3, n, n, 329, 329);
+                let _ = resize_bicubic_pil_u8(&bytes, 3, n, n, 224, 224);
+                let _ = resize_bilinear_pil_u8(&bytes, 3, n, n, 224, 224);
+                let _ = resize_bicubic_cv2_u8(&bytes, 3, n, n, 224, 224);
+            });
+            assert_eq!(spawns, 0, "{n} pixel input launched helper threads");
+        }
+    }
 
     /// torch `NEAREST` floor(i·in/out), verified against cv2/torch output.
     #[test]

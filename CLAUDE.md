@@ -1570,3 +1570,14 @@ the score revision. A 400,000-case GGD/AGGD ratio-and-argmin sweep and disjoint
 KonJND images supplement the existing 170 goldens; the fixed argmin case is
 pinned in the Rust unit tests. Measurement details live in
 `benchmarks/brisque_review_2026-10-15/`.
+
+### Known Bugs: NN preprocessing worker caps and empty rows (2026-10-16)
+
+A-FINE's pixel paths previously requested three helpers even with
+RTEN_NUM_THREADS=1. They now use the configured work-scaled cap; a child-process
+regression records zero helper launches at a cap of one. Planar conversion
+visits all three channels in one packed-row pass. Resize work counts scalar
+MACs without an extra output-axis multiplier, and sequential rows avoid a
+row-descriptor allocation. Empty preprocessing/resizing inputs return empty
+buffers, while DreamSim refuses zero dimensions before resize/inference.
+Review measurements live in benchmarks/nn_opt2_2026-10-15.md and its linked TSVs.

@@ -24,7 +24,7 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use crate::common::{Backend, read_f32, read_meta};
-use crate::engine::{self, NamedInput, Trunk};
+use crate::engine::{self, NamedInput, Tap};
 use crate::preprocess::rgb8_to_planar_u8;
 use crate::resize::resize_bilinear_pil_u8;
 use crate::{Engine, Error, WeightsLicence, WeightsTerms, za};
@@ -155,8 +155,7 @@ impl Arniqa {
     }
 
     /// A trunk run's single `[channels, 1, 1]` tap as a 2048-d embedding.
-    fn embed(trunk: &dyn Trunk, crop: &[f32]) -> Result<Vec<f32>, Error> {
-        let taps = trunk.run(crop.to_vec(), CROP, CROP)?;
+    fn embed_tap(taps: Vec<Tap>) -> Result<Vec<f32>, Error> {
         let mut it = taps.into_iter();
         let (Some(t), None) = (it.next(), it.next()) else {
             return Err(Error::BadModel("expected exactly one tap".into()));
@@ -196,8 +195,13 @@ impl Arniqa {
                 let mut scores = Vec::with_capacity(5);
                 for i in 0..5 {
                     let span = i * 3 * CROP * CROP..(i + 1) * 3 * CROP * CROP;
-                    let f = Self::embed(&**t, &x[span.clone()])?;
-                    let f_ds = Self::embed(&**t, &x_ds[span])?;
+                    // The full- and half-scale crop runs are independent:
+                    // pair them so each pool half covers one — same taps,
+                    // same head, same accumulation order.
+                    let (ft, ft_ds) =
+                        t.run_pair(x[span.clone()].to_vec(), x_ds[span].to_vec(), CROP, CROP)?;
+                    let f = Self::embed_tap(ft)?;
+                    let f_ds = Self::embed_tap(ft_ds)?;
                     scores.push(Self::head(&self.head, &f, &f_ds));
                 }
                 Ok(f64::from(scores.iter().sum::<f32>() / 5.0))

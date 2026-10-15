@@ -740,3 +740,17 @@ nn-review-format:
 
 nn-review-lint:
     just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
+
+# Round-10 review: caller serializes these through run-heavy/flock.
+nn-opt2-review-build rev out:
+    bash benchmarks/nn_opt2_2026-10-15/review_build.sh '{{rev}}' '{{out}}'
+
+nn-opt2-review-tests:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ test --release -p zenmetrics-nn
+
+nn-opt2-review-run stage binaries models ladder out:
+    python3 benchmarks/nn_opt2_2026-10-15/review_run.py '{{stage}}' '{{binaries}}' '{{models}}' '{{ladder}}' '{{out}}'
+
+nn-opt2-review-ci:
+    bash benchmarks/nn_opt2_2026-10-15/review_ci.sh

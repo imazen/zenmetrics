@@ -216,11 +216,16 @@ fn main() {
             ),
         ];
         for (mode, mut run) in modes {
+            if let Ok(selected) = std::env::var("ZENMETRICS_NN_BENCH_MODES")
+                && !selected.split(',').any(|name| name == mode)
+            {
+                continue;
+            }
             let (mut ts, value) = run(&mut m);
             ts.sort_by(f64::total_cmp);
             let med = ts[ts.len() / 2];
             let row = format!(
-                "{host}\t{engine_name}\t{threads}\t{col}\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{value:.7}",
+                "{host}\t{engine_name}\t{threads}\t{col}\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{value:.17e}",
                 ts.len(),
                 ts[0]
             );

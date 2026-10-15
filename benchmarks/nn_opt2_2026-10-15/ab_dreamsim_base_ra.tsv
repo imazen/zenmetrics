@@ -1,0 +1,7 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	dreamsim	compute	1024	14	226.123	221.452	0.0083775
+i265	rten	16	dreamsim	warm	1024	23	130.154	127.272	0.0083775
+i265	rten	16	dreamsim	e2e	1024	11	250.309	235.158	0.0083775
+i265	rten	16	dreamsim	compute	2048	11	277.039	271.749	0.0006786
+i265	rten	16	dreamsim	warm	2048	20	155.771	152.533	0.0006786
+i265	rten	16	dreamsim	e2e	2048	10	320.405	312.483	0.0006786

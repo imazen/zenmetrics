@@ -378,16 +378,31 @@ impl Afine {
     fn prep(&self, img: &za::Rgb8In<'_>) -> (Vec<f32>, usize, usize, Vec<f32>) {
         let (h, w) = (img.height, img.width);
         let (nh, nw) = (h + (32 - h % 32) % 32, w + (32 - w % 32) % 32);
-        let mut planar = rgb8_to_planar_01(img);
-        for ch in 0..3 {
-            for v in &mut planar[ch * h * w..(ch + 1) * h * w] {
-                *v = (*v - MEAN[ch]) / STD[ch];
-            }
-        }
+        let planar = Self::normalize(img);
         let norm = resize_bicubic(&planar, 3, h, w, nh, nw);
         let n_tok = (nh / 32) * (nw / 32) + 1;
         let pe = resize_bicubic(&self.heads.pos_emb, 1, 50, TAP_C, n_tok, TAP_C);
         (norm, nh, nw, pe)
+    }
+
+    fn normalize(img: &za::Rgb8In<'_>) -> Vec<f32> {
+        let plane = img.width * img.height;
+        if plane == 0 {
+            return Vec::new();
+        }
+        let mut planar = rgb8_to_planar_01(img);
+        let mut chans: Vec<(usize, &mut [f32])> = planar.chunks_mut(plane).enumerate().collect();
+        crate::par::par_each_mut(
+            &mut chans,
+            crate::par::threads_for(3 * plane).min(3),
+            |it| {
+                let (ch, plane) = it;
+                for v in plane.iter_mut() {
+                    *v = (*v - MEAN[*ch]) / STD[*ch];
+                }
+            },
+        );
+        planar
     }
 
     /// The trunk graph's `pe` aux input for a prepped `(nh, nw)` image.
@@ -400,65 +415,48 @@ impl Afine {
     }
 
     /// Pixel-plane stats of a normalized `[3, h, w]` tensor, de-normalized
-    /// (as the heads' `x * std + mean` does).
+    /// (as the heads' `x * std + mean` does). Channels are independent, so
+    /// each reduction keeps its exact accumulation order on its own worker.
     fn pix_stats(norm: &[f32], plane: usize) -> [Stats; 3] {
-        let mut out = [Stats {
-            mean: 0.0,
-            var: 0.0,
-        }; 3];
-        for (c, s) in out.iter_mut().enumerate() {
+        let v = crate::par::par_map(3, crate::par::threads_for(3 * plane).min(3), |c| {
             let (m, sd) = (f64::from(MEAN[c]), f64::from(STD[c]));
-            *s = Stats::of(
+            Stats::of(
                 norm[c * plane..(c + 1) * plane]
                     .iter()
                     .map(|&v| f64::from(v) * sd + m),
-            );
-        }
-        out
+            )
+        });
+        [v[0], v[1], v[2]]
     }
 
     /// Per-channel `E[x·y]` of two normalized planes, de-normalized.
     fn pix_cov(x: &[f32], y: &[f32], plane: usize) -> Vec<f64> {
-        (0..3)
-            .map(|c| {
-                let (m, sd) = (f64::from(MEAN[c]), f64::from(STD[c]));
-                x[c * plane..(c + 1) * plane]
-                    .iter()
-                    .zip(&y[c * plane..(c + 1) * plane])
-                    .map(|(&a, &b)| (f64::from(a) * sd + m) * (f64::from(b) * sd + m))
-                    .sum::<f64>()
-                    / plane as f64
-            })
-            .collect()
+        crate::par::par_map(3, crate::par::threads_for(3 * plane).min(3), |c| {
+            let (m, sd) = (f64::from(MEAN[c]), f64::from(STD[c]));
+            x[c * plane..(c + 1) * plane]
+                .iter()
+                .zip(&y[c * plane..(c + 1) * plane])
+                .map(|(&a, &b)| (f64::from(a) * sd + m) * (f64::from(b) * sd + m))
+                .sum::<f64>()
+                / plane as f64
+        })
     }
 
-    /// Per-channel stats of one tap, relu'd — `[768]` over `N` tokens.
-    fn tap_stats(t: &Tap) -> Vec<Stats> {
-        let n = t.plane();
-        (0..t.c)
-            .map(|c| {
-                Stats::of(
-                    t.data[c * n..(c + 1) * n]
-                        .iter()
-                        .map(|&v| f64::from(v.max(0.0))),
-                )
-            })
-            .collect()
-    }
-
-    /// Per-channel `E[relu(x)·relu(y)]` over a tap's tokens.
-    fn tap_cov(x: &Tap, y: &Tap) -> Vec<f64> {
-        let n = x.plane();
-        (0..x.c)
-            .map(|c| {
-                x.data[c * n..(c + 1) * n]
+    /// `taps.iter().map(tap_stats)` flattened over `(tap, channel)` items —
+    /// one worker pool round instead of twelve, index order preserved.
+    fn taps_stats(taps: &[Tap]) -> Vec<Vec<Stats>> {
+        let work: usize = taps.iter().map(|t| t.data.len()).sum();
+        let all = crate::par::par_map(taps.len() * TAP_C, crate::par::threads_for(work), |i| {
+            let t = &taps[i / TAP_C];
+            let n = t.plane();
+            let c = i % TAP_C;
+            Stats::of(
+                t.data[c * n..(c + 1) * n]
                     .iter()
-                    .zip(&y.data[c * n..(c + 1) * n])
-                    .map(|(&a, &b)| f64::from(a.max(0.0)) * f64::from(b.max(0.0)))
-                    .sum::<f64>()
-                    / n as f64
-            })
-            .collect()
+                    .map(|&v| f64::from(v.max(0.0))),
+            )
+        });
+        all.chunks(TAP_C).map(<[Stats]>::to_vec).collect()
     }
 
     /// Feature taps of a prepped (normalized) image on the trunk engine.
@@ -493,7 +491,7 @@ impl Afine {
     fn img_stats(norm: &[f32], plane: usize, taps: &[Tap]) -> ImgStats {
         ImgStats {
             pix: Self::pix_stats(norm, plane),
-            taps: taps.iter().map(Self::tap_stats).collect(),
+            taps: Self::taps_stats(taps),
         }
     }
 
@@ -511,19 +509,26 @@ impl Afine {
         (softplus(self.heads.k) * (s_r - s_d)).exp() * s_d + s_f
     }
 
-    /// Pixel+tap cross-moments, `[13][ch]` — `cov[0]` pixels, then taps.
-    fn cross_covs(
-        d_norm: &[f32],
-        r_norm: &[f32],
-        plane: usize,
-        f_d: &[Tap],
-        f_r: &[Tap],
-    ) -> Vec<Vec<f64>> {
+    /// Pixel+tap cross-moments, `[13][ch]` — `cov[0]` is the pixel
+    /// covariance (computed before the trunk consumed the input), then the
+    /// per-tap `E[relu(x)·relu(y)]` flattened over `(tap, channel)` like
+    /// [`Self::taps_stats`].
+    fn cross_covs(cov0: Vec<f64>, f_d: &[Tap], f_r: &[Tap]) -> Vec<Vec<f64>> {
+        let work: usize = f_d.iter().map(|t| t.data.len()).sum();
+        let all = crate::par::par_map(f_d.len() * TAP_C, crate::par::threads_for(work), |i| {
+            let (x, y) = (&f_d[i / TAP_C], &f_r[i / TAP_C]);
+            let n = x.plane();
+            let c = i % TAP_C;
+            x.data[c * n..(c + 1) * n]
+                .iter()
+                .zip(&y.data[c * n..(c + 1) * n])
+                .map(|(&a, &b)| f64::from(a.max(0.0)) * f64::from(b.max(0.0)))
+                .sum::<f64>()
+                / n as f64
+        });
         let mut v = Vec::with_capacity(TAPS + 1);
-        v.push(Self::pix_cov(d_norm, r_norm, plane));
-        for (x, y) in f_d.iter().zip(f_r) {
-            v.push(Self::tap_cov(x, y));
-        }
+        v.push(cov0);
+        v.extend(all.chunks(TAP_C).map(<[f64]>::to_vec));
         v
     }
 
@@ -535,9 +540,18 @@ impl Afine {
         let (dn, dh, dw, dpe) = self.prep(d);
         match &self.backend {
             Backend::Trunk(t) => {
+                let plane = rh * rw;
+                // The pixel statistics need `norm` only — compute them
+                // before the trunk consumes the inputs, then move `rn`/`dn`
+                // in without cloning (they're ~3·nh·nw f32 each).
+                let (pix_r, pix_d, cov0) = (
+                    Self::pix_stats(&rn, plane),
+                    Self::pix_stats(&dn, plane),
+                    Self::pix_cov(&dn, &rn, plane),
+                );
                 let (ft_r, ft_d) = t.run_pair_aux(
-                    rn.clone(),
-                    dn.clone(),
+                    rn,
+                    dn,
                     rh,
                     rw,
                     &[Self::pe_aux(rpe, rh, rw)],
@@ -545,12 +559,17 @@ impl Afine {
                 )?;
                 Self::check_taps(&ft_r)?;
                 Self::check_taps(&ft_d)?;
-                let plane = rh * rw;
                 let (s_r, s_d) = (
-                    Self::img_stats(&rn, plane, &ft_r),
-                    Self::img_stats(&dn, plane, &ft_d),
+                    ImgStats {
+                        pix: pix_r,
+                        taps: Self::taps_stats(&ft_r),
+                    },
+                    ImgStats {
+                        pix: pix_d,
+                        taps: Self::taps_stats(&ft_d),
+                    },
                 );
-                let cov = Self::cross_covs(&dn, &rn, plane, &ft_d, &ft_r);
+                let cov = Self::cross_covs(cov0, &ft_d, &ft_r);
                 Ok(self.score_stats(&s_d, &s_r, &cov))
             }
             // equal input sizes ⇒ equal padded sizes; the dims here apply
@@ -677,13 +696,23 @@ impl za::WarmReference for WarmAfine<'_> {
         let (dn, dh, dw, dpe) = self.metric.prep(&d);
         let s = match &self.reference {
             WarmState::Trunk { stats, norm, taps } => {
+                let plane = dh * dw;
+                // Same hoist as `score_pair`: pixel stats and covariance
+                // before `taps` consumes `dn` — one less full-frame clone
+                // per warm evaluation.
+                let (pix_d, cov0) = (
+                    Afine::pix_stats(&dn, plane),
+                    Afine::pix_cov(&dn, norm, plane),
+                );
                 let ft_d = self
                     .metric
-                    .taps(dn.clone(), dh, dw, dpe)
+                    .taps(dn, dh, dw, dpe)
                     .metric_err_with(COLUMN, Error::kind)?;
-                let plane = dh * dw;
-                let s_d = Afine::img_stats(&dn, plane, &ft_d);
-                let cov = Afine::cross_covs(&dn, norm, plane, &ft_d, taps);
+                let s_d = ImgStats {
+                    pix: pix_d,
+                    taps: Afine::taps_stats(&ft_d),
+                };
+                let cov = Afine::cross_covs(cov0, &ft_d, taps);
                 self.metric.score_stats(&s_d, stats, &cov)
             }
             WarmState::Pixels(px) => match &self.metric.backend {
@@ -707,6 +736,37 @@ impl za::WarmReference for WarmAfine<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_thread_cap_never_spawns_for_pixel_paths() {
+        if std::env::var_os("ZEN_NN_CAP_CHILD").is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "afine::tests::one_thread_cap_never_spawns_for_pixel_paths",
+                ])
+                .env("RTEN_NUM_THREADS", "1")
+                .env("ZEN_NN_CAP_CHILD", "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        assert_eq!(engine::workers(), 1);
+        let px = vec![123; 512 * 512 * 3];
+        let view = za::Rgb8In {
+            pixels: &px,
+            width: 512,
+            height: 512,
+            stride: 512 * 3,
+        };
+        let (_, spawned) = crate::par::observe_workers(None, || {
+            let normalized = Afine::normalize(&view);
+            let _ = Afine::pix_stats(&normalized, 512 * 512);
+            let _ = Afine::pix_cov(&normalized, &normalized, 512 * 512);
+        });
+        assert_eq!(spawned, 0, "a capped pixel path started helper threads");
+    }
 
     #[test]
     fn erf_gelu_sign_and_values() {
