@@ -11,10 +11,12 @@
 //! The port's eval protocol scores an image as the mean over nine
 //! deterministic 224×224 crops (`five_point_crop` idx 0–8) — a deliberate
 //! deterministic deviation: upstream `test.py`'s default is `n_ensemble=20`
-//! *seeded random* crops (`options/test_options.py`, seed 1919), and its
-//! `n_ensemble <= 9` branch is this nine-crop protocol. No resizing
-//! anywhere, so inputs below 224 are refused. `ahiq_trunk.onnx` emits the
-//! two taps, `ahiq_head.onnx` takes `(vit_d, vit_r, cnn_d, cnn_r)` → score
+//! *seeded random* crops (`options/base_options.py:29`, seed 1919), and its
+//! `n_ensemble <= 9` branch is this protocol — `n=1` scores the whole
+//! image, `n=2..8` means the first `n` of the nine crops, `n=9` all nine.
+//! No resizing anywhere, so inputs below 224 are refused. `ahiq_trunk.onnx`
+//! emits the two taps, `ahiq_head.onnx` takes `(vit_d, vit_r, cnn_d, cnn_r)`
+//! → score
 //! on a trunk engine, and `ahiq_full.onnx` is the whole pair graph on
 //! ort-cuda. Only the nine crop windows are ever read — the input is never
 //! materialised as a whole-image f32 plane.

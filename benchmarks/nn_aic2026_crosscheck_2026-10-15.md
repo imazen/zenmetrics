@@ -48,10 +48,13 @@ engine ort-cuda (CPU parity of every model is in
 
 ## Port-vs-upstream parity (fix round, 2026-10-15)
 
-`just nn-parity` on i265, ladder goldens (`~/tmp/nn-phase0/`), worst |Δ| and the
+`just nn-parity` on i265, ladder goldens (`~/tmp/nn-phase0/`; non-square
+pairs under `ladder-nonsquare/` after fix round 2), worst |Δ| and the
 same expressed as a fraction of each model's KonJND JND. Full logs:
 `~/tmp/nn-port-scratch/parity_ckdn-afine-dreamsim_{rten,ortcuda}.log`,
-`~/tmp/nn-port-scratch/ahiq_parity_{rten2,ort2}.log`, all on i265.
+`~/tmp/nn-port-scratch/ahiq_parity_{rten2,ort2}.log` (first run) and
+`ahiq_parity_{rten3,ort3}.log` (fix-round-2 rerun, identical worsts),
+all on i265.
 
 | model | engine | pairs | worst \|Δ\| | worst JND |
 |---|---|---|---|---|
@@ -68,9 +71,9 @@ The ahiq rows are the fix-round re-export: goldens from upstream's own
 `test.py` inference path (SaveOutput hooks + `deform_fusion`/`Pixel_Prediction`
 with real `torchvision::DeformConv2d`) under the timm-0.5.4-resolved backbones
 (`vit_base_patch8_224.augreg_in21k_ft_in1k`, `resnet50.a1_in1k`), 15 square
-ladder pairs + `2207_320x240`/`2207_240x320` non-square rows that also exercise
-the warm-reference path. JND denominators use the re-measured KonJND scale
-(ahiq 0.024882).
+ladder pairs + `2207_320x240`/`2207_240x320` non-square rows (under
+`ladder-nonsquare/`) that also exercise the warm-reference path. JND
+denominators use the re-measured KonJND scale (ahiq 0.024882).
 
 Identical ref/dist pairs score exactly 0 on DreamSim on both engines (the
 assertion the ort clamp restored).

@@ -704,7 +704,8 @@ mod tests {
 
     #[test]
     fn erf_gelu_sign_and_values() {
-        // torch.special.erf / F.gelu references (fp64).
+        // exact fp64 references from Python math.erf (erf values) and
+        // 0.5·x·(1+erf(x/√2)) on those (gelu).
         let erf_cases = [
             (-2.0, -0.9953222650189527),
             (-0.5, -0.5204998778130465),

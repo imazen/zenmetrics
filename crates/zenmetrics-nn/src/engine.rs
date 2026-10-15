@@ -20,7 +20,10 @@ impl Tap {
 }
 
 /// An extra trunk input, addressed by position in the graph's input list
-/// (index 0 is the image input `run` feeds).
+/// (index 0 is the image input `run` feeds). Heads with more than one
+/// tensor input take their other taps through these — e.g. ahiq's head
+/// consumes `vit_d` as the primary input with `vit_r`, `cnn_d`, `cnn_r`
+/// as aux.
 #[cfg_attr(not(any(feature = "rten", feature = "ort")), expect(dead_code))]
 pub(crate) struct AuxInput {
     /// Position in `model.input_ids()`.
@@ -410,5 +413,4 @@ pub(crate) mod ort_engine {
             Ok(f64::from(s))
         }
     }
-
 }
