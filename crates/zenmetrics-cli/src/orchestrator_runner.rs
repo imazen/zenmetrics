@@ -288,7 +288,8 @@ pub fn rekey_orchestrator_columns(
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
-        CliMetricKind::Flip
+        CliMetricKind::CwSsim
+        | CliMetricKind::Flip
         | CliMetricKind::Gmsd
         | CliMetricKind::Mdsi
         | CliMetricKind::MsGmsd
@@ -472,7 +473,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // one-shot only.
     !matches!(
         kind,
-        CliMetricKind::Flip
+        CliMetricKind::CwSsim
+            | CliMetricKind::Flip
             | CliMetricKind::Gmsd
             | CliMetricKind::Mdsi
             | CliMetricKind::MsGmsd

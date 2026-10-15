@@ -1,0 +1,612 @@
+[
+  {
+    "key": "S01_AVIF_01.png",
+    "ours": 0.9999085630556295,
+    "oracle": 0.9999085630556155,
+    "published": 0.9999085566055941,
+    "oracle_delta": 1.3988810110276972e-14,
+    "published_delta": 6.450035394678366e-09,
+    "blas_luma_different_ref": 278,
+    "blas_luma_different_dist": 39
+  },
+  {
+    "key": "S02_CCM_01.png",
+    "ours": 0.9998144263885551,
+    "oracle": 0.9998144263885554,
+    "published": 0.9998143765806407,
+    "oracle_delta": 3.3306690738754696e-16,
+    "published_delta": 4.980791445952093e-08,
+    "blas_luma_different_ref": 21,
+    "blas_luma_different_dist": 41
+  },
+  {
+    "key": "S03_JAIB_01.png",
+    "ours": 0.998904729243267,
+    "oracle": 0.9989047292432756,
+    "published": 0.9989064120019309,
+    "oracle_delta": 8.548717289613705e-15,
+    "published_delta": 1.6827586638568093e-06,
+    "blas_luma_different_ref": 181,
+    "blas_luma_different_dist": 195
+  },
+  {
+    "key": "S04_JAI_01.png",
+    "ours": 0.9997109975610082,
+    "oracle": 0.9997109975610133,
+    "published": 0.999710772301096,
+    "oracle_delta": 5.10702591327572e-15,
+    "published_delta": 2.252599122787302e-07,
+    "blas_luma_different_ref": 292,
+    "blas_luma_different_dist": 301
+  },
+  {
+    "key": "S05_JAI_01.png",
+    "ours": 0.9996849427326965,
+    "oracle": 0.9996849427326979,
+    "published": 0.9996849222124177,
+    "oracle_delta": 1.4432899320127035e-15,
+    "published_delta": 2.052027880949936e-08,
+    "blas_luma_different_ref": 161,
+    "blas_luma_different_dist": 176
+  },
+  {
+    "key": "S06_JXL_01.png",
+    "ours": 0.998641378815289,
+    "oracle": 0.9986413788152927,
+    "published": 0.9986423281569896,
+    "oracle_delta": 3.6637359812630166e-15,
+    "published_delta": 9.493417005845828e-07,
+    "blas_luma_different_ref": 73,
+    "blas_luma_different_dist": 86
+  },
+  {
+    "key": "S07_JXL_01.png",
+    "ours": 0.9995857875201071,
+    "oracle": 0.9995857875201073,
+    "published": 0.9995848096115363,
+    "oracle_delta": 2.220446049250313e-16,
+    "published_delta": 9.779085707872781e-07,
+    "blas_luma_different_ref": 44,
+    "blas_luma_different_dist": 39
+  },
+  {
+    "key": "S09_AVIF_01.png",
+    "ours": 0.9993009682577361,
+    "oracle": 0.999300968257747,
+    "published": 0.9993009212825384,
+    "oracle_delta": 1.0880185641326534e-14,
+    "published_delta": 4.6975197620646725e-08,
+    "blas_luma_different_ref": 86,
+    "blas_luma_different_dist": 19
+  },
+  {
+    "key": "S10_CCW_01.png",
+    "ours": 0.9988737151529322,
+    "oracle": 0.9988737151529392,
+    "published": 0.9988734485255444,
+    "oracle_delta": 6.994405055138486e-15,
+    "published_delta": 2.666273878348946e-07,
+    "blas_luma_different_ref": 8,
+    "blas_luma_different_dist": 10
+  },
+  {
+    "key": "S11_J2K_01.png",
+    "ours": 0.9998546119779381,
+    "oracle": 0.9998546119779362,
+    "published": 0.9998543299196461,
+    "oracle_delta": 1.887379141862766e-15,
+    "published_delta": 2.8205829205596444e-07,
+    "blas_luma_different_ref": 42,
+    "blas_luma_different_dist": 34
+  },
+  {
+    "key": "S12_JAI_15.png",
+    "ours": 0.9607434425759223,
+    "oracle": 0.9607434425759345,
+    "published": 0.9607443835962017,
+    "oracle_delta": 1.2212453270876722e-14,
+    "published_delta": 9.410202794768452e-07,
+    "blas_luma_different_ref": 66,
+    "blas_luma_different_dist": 154
+  },
+  {
+    "key": "S13_JPG_15.png",
+    "ours": 0.9274454648483962,
+    "oracle": 0.9274454648483931,
+    "published": 0.927442329368444,
+    "oracle_delta": 3.1086244689504383e-15,
+    "published_delta": 3.1354799522320675e-06,
+    "blas_luma_different_ref": 22,
+    "blas_luma_different_dist": 1
+  },
+  {
+    "key": "S14_VVC_15.png",
+    "ours": 0.9902933734823618,
+    "oracle": 0.9902933734823607,
+    "published": 0.9902906174185306,
+    "oracle_delta": 1.1102230246251565e-15,
+    "published_delta": 2.756063831155231e-06,
+    "blas_luma_different_ref": 33,
+    "blas_luma_different_dist": 68
+  },
+  {
+    "key": "S15_PNG_15.png",
+    "ours": 0.9973064104990885,
+    "oracle": 0.9973064104990808,
+    "published": 0.9973064077858874,
+    "oracle_delta": 7.771561172376096e-15,
+    "published_delta": 2.713201108228702e-09,
+    "blas_luma_different_ref": 100,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S17_AVIFQ_15.png",
+    "ours": 0.9893954616422596,
+    "oracle": 0.9893954616422679,
+    "published": 0.9893966368904994,
+    "oracle_delta": 8.326672684688674e-15,
+    "published_delta": 1.1752482398375008e-06,
+    "blas_luma_different_ref": 570,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S18_CCM_15.png",
+    "ours": 0.9888902257475338,
+    "oracle": 0.988890225747534,
+    "published": 0.988885295167634,
+    "oracle_delta": 2.220446049250313e-16,
+    "published_delta": 4.93057989980894e-06,
+    "blas_luma_different_ref": 148,
+    "blas_luma_different_dist": 159
+  },
+  {
+    "key": "S19_J2K_15.png",
+    "ours": 0.9679284616689576,
+    "oracle": 0.9679284616689555,
+    "published": 0.9679284763181513,
+    "oracle_delta": 2.1094237467877974e-15,
+    "published_delta": 1.4649193635918323e-08,
+    "blas_luma_different_ref": 0,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S20_JPG_15.png",
+    "ours": 0.9244648798307324,
+    "oracle": 0.9244648798307327,
+    "published": 0.9244648878751748,
+    "oracle_delta": 2.220446049250313e-16,
+    "published_delta": 8.0444423344872e-09,
+    "blas_luma_different_ref": 69,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S21_JXLM_09.png",
+    "ours": 0.9365788347024733,
+    "oracle": 0.9365788347024677,
+    "published": 0.9366894616312716,
+    "oracle_delta": 5.551115123125783e-15,
+    "published_delta": 0.0001106269287983741,
+    "blas_luma_different_ref": 38,
+    "blas_luma_different_dist": 28
+  },
+  {
+    "key": "S22_JXL_09.png",
+    "ours": 0.9926911430303711,
+    "oracle": 0.9926911430303739,
+    "published": 0.9926911373158727,
+    "oracle_delta": 2.7755575615628914e-15,
+    "published_delta": 5.714498430009485e-09,
+    "blas_luma_different_ref": 35,
+    "blas_luma_different_dist": 40
+  },
+  {
+    "key": "S24_AVIF_09.png",
+    "ours": 0.9886291200196998,
+    "oracle": 0.9886291200197003,
+    "published": 0.9886297092878016,
+    "oracle_delta": 4.440892098500626e-16,
+    "published_delta": 5.892681017583001e-07,
+    "blas_luma_different_ref": 39,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S25_J2K_17.png",
+    "ours": 0.972316857742845,
+    "oracle": 0.9723168577428546,
+    "published": 0.9723153401397884,
+    "oracle_delta": 9.547918011776346e-15,
+    "published_delta": 1.5176030566665943e-06,
+    "blas_luma_different_ref": 122,
+    "blas_luma_different_dist": 162
+  },
+  {
+    "key": "S26_JPGL_17.png",
+    "ours": 0.9758178096029161,
+    "oracle": 0.9758178096029124,
+    "published": 0.9758178902701452,
+    "oracle_delta": 3.6637359812630166e-15,
+    "published_delta": 8.066722911870272e-08,
+    "blas_luma_different_ref": 122,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S27_JPG_17.png",
+    "ours": 0.9964942243978082,
+    "oracle": 0.9964942243978092,
+    "published": 0.9964940914823514,
+    "oracle_delta": 9.992007221626409e-16,
+    "published_delta": 1.329154568630031e-07,
+    "blas_luma_different_ref": 45,
+    "blas_luma_different_dist": 7
+  },
+  {
+    "key": "S28_JXLM_17.png",
+    "ours": 0.9990652003034504,
+    "oracle": 0.9990652003034493,
+    "published": 0.9990642900150338,
+    "oracle_delta": 1.1102230246251565e-15,
+    "published_delta": 9.102884165335112e-07,
+    "blas_luma_different_ref": 53,
+    "blas_luma_different_dist": 64
+  },
+  {
+    "key": "S29_WEBP_17.png",
+    "ours": 0.9939095001932585,
+    "oracle": 0.9939095001932596,
+    "published": 0.9939094224197018,
+    "oracle_delta": 1.1102230246251565e-15,
+    "published_delta": 7.77735567059068e-08,
+    "blas_luma_different_ref": 33,
+    "blas_luma_different_dist": 5
+  },
+  {
+    "key": "S31_AVIF_17.png",
+    "ours": 0.9969599358940432,
+    "oracle": 0.9969599358940384,
+    "published": 0.9969598844894614,
+    "oracle_delta": 4.773959005888173e-15,
+    "published_delta": 5.14045818134079e-08,
+    "blas_luma_different_ref": 13,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S32_J2K_17.png",
+    "ours": 0.9752210811736928,
+    "oracle": 0.9752210811736928,
+    "published": 0.9752211270837958,
+    "oracle_delta": 0.0,
+    "published_delta": 4.5910103052548834e-08,
+    "blas_luma_different_ref": 18,
+    "blas_luma_different_dist": 24
+  },
+  {
+    "key": "S33_J2K_17.png",
+    "ours": 0.9836400323751152,
+    "oracle": 0.9836400323751138,
+    "published": 0.9836338282766854,
+    "oracle_delta": 1.4432899320127035e-15,
+    "published_delta": 6.204098429773985e-06,
+    "blas_luma_different_ref": 54,
+    "blas_luma_different_dist": 68
+  },
+  {
+    "key": "S34_J2K_17.png",
+    "ours": 0.9923130496107432,
+    "oracle": 0.9923130496107416,
+    "published": 0.9923112690130937,
+    "oracle_delta": 1.5543122344752192e-15,
+    "published_delta": 1.7805976494367215e-06,
+    "blas_luma_different_ref": 26,
+    "blas_luma_different_dist": 26
+  },
+  {
+    "key": "S35_JPG_17.png",
+    "ours": 0.9995143171112593,
+    "oracle": 0.9995143171112573,
+    "published": 0.9995142335338139,
+    "oracle_delta": 1.9984014443252818e-15,
+    "published_delta": 8.357744540887779e-08,
+    "blas_luma_different_ref": 67,
+    "blas_luma_different_dist": 4
+  },
+  {
+    "key": "S36_JXL_17.png",
+    "ours": 0.9980850855304179,
+    "oracle": 0.9980850855304156,
+    "published": 0.9980853794371098,
+    "oracle_delta": 2.220446049250313e-15,
+    "published_delta": 2.9390669198381403e-07,
+    "blas_luma_different_ref": 27,
+    "blas_luma_different_dist": 24
+  },
+  {
+    "key": "S38_AVIF_11.png",
+    "ours": 0.9867133578219256,
+    "oracle": 0.9867133578219253,
+    "published": 0.9867134777126377,
+    "oracle_delta": 3.3306690738754696e-16,
+    "published_delta": 1.1989071213580615e-07,
+    "blas_luma_different_ref": 68,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S39_AVIF_11.png",
+    "ours": 0.9955201275227498,
+    "oracle": 0.995520127522749,
+    "published": 0.9955224346913271,
+    "oracle_delta": 7.771561172376096e-16,
+    "published_delta": 2.3071685772979578e-06,
+    "blas_luma_different_ref": 12,
+    "blas_luma_different_dist": 1
+  },
+  {
+    "key": "S40_JAIB_05.png",
+    "ours": 0.9977638028113147,
+    "oracle": 0.9977638028113188,
+    "published": 0.9977637230559563,
+    "oracle_delta": 4.107825191113079e-15,
+    "published_delta": 7.975535842863479e-08,
+    "blas_luma_different_ref": 80,
+    "blas_luma_different_dist": 91
+  },
+  {
+    "key": "S41_JPG_19.png",
+    "ours": 0.9921856619456144,
+    "oracle": 0.9921856619456114,
+    "published": 0.9921855937107475,
+    "oracle_delta": 2.9976021664879227e-15,
+    "published_delta": 6.823486686791114e-08,
+    "blas_luma_different_ref": 40,
+    "blas_luma_different_dist": 3
+  },
+  {
+    "key": "S42_JPG_19.png",
+    "ours": 0.9688443608986536,
+    "oracle": 0.9688443608986503,
+    "published": 0.9688410864976355,
+    "oracle_delta": 3.219646771412954e-15,
+    "published_delta": 3.2744010181051664e-06,
+    "blas_luma_different_ref": 12,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S43_JXL_19.png",
+    "ours": 0.9769639357536525,
+    "oracle": 0.9769639357536488,
+    "published": 0.9769700130420559,
+    "oracle_delta": 3.6637359812630166e-15,
+    "published_delta": 6.07728840340549e-06,
+    "blas_luma_different_ref": 25,
+    "blas_luma_different_dist": 29
+  },
+  {
+    "key": "S45_AVIF_19.png",
+    "ours": 0.8188578282079999,
+    "oracle": 0.8188578282080095,
+    "published": 0.8188496619937995,
+    "oracle_delta": 9.547918011776346e-15,
+    "published_delta": 8.166214200411304e-06,
+    "blas_luma_different_ref": 192,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S46_AVIF_19.png",
+    "ours": 0.9425961810482767,
+    "oracle": 0.9425961810482755,
+    "published": 0.9425979391513278,
+    "oracle_delta": 1.2212453270876722e-15,
+    "published_delta": 1.7581030511415463e-06,
+    "blas_luma_different_ref": 167,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S47_J2K_19.png",
+    "ours": 0.9441712249987187,
+    "oracle": 0.9441712249987222,
+    "published": 0.9441486175145103,
+    "oracle_delta": 3.4416913763379853e-15,
+    "published_delta": 2.2607484208458928e-05,
+    "blas_luma_different_ref": 79,
+    "blas_luma_different_dist": 130
+  },
+  {
+    "key": "S48_JAI_13.png",
+    "ours": 0.9835005147340377,
+    "oracle": 0.9835005147340424,
+    "published": 0.9834998070696874,
+    "oracle_delta": 4.773959005888173e-15,
+    "published_delta": 7.076643502301749e-07,
+    "blas_luma_different_ref": 119,
+    "blas_luma_different_dist": 80
+  },
+  {
+    "key": "S49_JXL_07.png",
+    "ours": 0.9973611871701662,
+    "oracle": 0.9973611871701857,
+    "published": 0.9973613300114689,
+    "oracle_delta": 1.9539925233402755e-14,
+    "published_delta": 1.4284130267494533e-07,
+    "blas_luma_different_ref": 10,
+    "blas_luma_different_dist": 11
+  },
+  {
+    "key": "S51_AVIF_07.png",
+    "ours": 0.9915459673132817,
+    "oracle": 0.9915459673132809,
+    "published": 0.9915451799016932,
+    "oracle_delta": 7.771561172376096e-16,
+    "published_delta": 7.874115884876076e-07,
+    "blas_luma_different_ref": 7,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S52_HEVC_07.png",
+    "ours": 0.9947956134116703,
+    "oracle": 0.9947956134116701,
+    "published": 0.9947959152766116,
+    "oracle_delta": 2.220446049250313e-16,
+    "published_delta": 3.0186494126560603e-07,
+    "blas_luma_different_ref": 33,
+    "blas_luma_different_dist": 39
+  },
+  {
+    "key": "S53_JAIB_07.png",
+    "ours": 0.9571411214901503,
+    "oracle": 0.9571411214901487,
+    "published": 0.9571336532054985,
+    "oracle_delta": 1.5543122344752192e-15,
+    "published_delta": 7.468284651812596e-06,
+    "blas_luma_different_ref": 55,
+    "blas_luma_different_dist": 73
+  },
+  {
+    "key": "S54_JPG_07.png",
+    "ours": 0.7844435963179177,
+    "oracle": 0.7844435963179301,
+    "published": 0.7844435555462139,
+    "oracle_delta": 1.2434497875801753e-14,
+    "published_delta": 4.077170379090944e-08,
+    "blas_luma_different_ref": 7,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S55_JPG_07.png",
+    "ours": 0.863619098967395,
+    "oracle": 0.8636190989675052,
+    "published": 0.8636193426715351,
+    "oracle_delta": 1.1024514634527804e-13,
+    "published_delta": 2.437041400904505e-07,
+    "blas_luma_different_ref": 2,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S56_JXL_01.png",
+    "ours": 0.9995335921436249,
+    "oracle": 0.9995335921436262,
+    "published": 0.9995347765313958,
+    "oracle_delta": 1.3322676295501878e-15,
+    "published_delta": 1.184387770858386e-06,
+    "blas_luma_different_ref": 4634,
+    "blas_luma_different_dist": 437
+  },
+  {
+    "key": "S58_AVIF_01.png",
+    "ours": 0.9997523260546145,
+    "oracle": 0.9997523260546197,
+    "published": 0.9997523815386209,
+    "oracle_delta": 5.218048215738236e-15,
+    "published_delta": 5.5484006389328044e-08,
+    "blas_luma_different_ref": 284,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S59_HEVC_01.png",
+    "ours": 0.9998093727609629,
+    "oracle": 0.9998093727609745,
+    "published": 0.9998093897009849,
+    "oracle_delta": 1.1546319456101628e-14,
+    "published_delta": 1.694002194074784e-08,
+    "blas_luma_different_ref": 126,
+    "blas_luma_different_dist": 106
+  },
+  {
+    "key": "S60_FTIC_01.png",
+    "ours": 0.9958251648807965,
+    "oracle": 0.9958251648807955,
+    "published": 0.9957939999463953,
+    "oracle_delta": 9.992007221626409e-16,
+    "published_delta": 3.116493440125101e-05,
+    "blas_luma_different_ref": 0,
+    "blas_luma_different_dist": 0
+  },
+  {
+    "key": "S61_JAIB_15.png",
+    "ours": 0.9863491840359204,
+    "oracle": 0.9863491840359149,
+    "published": 0.9863495848686964,
+    "oracle_delta": 5.551115123125783e-15,
+    "published_delta": 4.0083277597080524e-07,
+    "blas_luma_different_ref": 30,
+    "blas_luma_different_dist": 22
+  },
+  {
+    "key": "S62_JPGL_15.png",
+    "ours": 0.9980703555783946,
+    "oracle": 0.9980703555783921,
+    "published": 0.9980704855551581,
+    "oracle_delta": 2.55351295663786e-15,
+    "published_delta": 1.299767634632687e-07,
+    "blas_luma_different_ref": 7,
+    "blas_luma_different_dist": 1
+  },
+  {
+    "key": "S63_JPG_15.png",
+    "ours": 0.9932360204883126,
+    "oracle": 0.9932360204883104,
+    "published": 0.99323597834608,
+    "oracle_delta": 2.220446049250313e-15,
+    "published_delta": 4.2142232592468076e-08,
+    "blas_luma_different_ref": 54,
+    "blas_luma_different_dist": 8
+  },
+  {
+    "key": "S64_VVC_15.png",
+    "ours": 0.7350538622383145,
+    "oracle": 0.7350538622382099,
+    "published": 0.7350565213181551,
+    "oracle_delta": 1.0458300891968975e-13,
+    "published_delta": 2.659079840650058e-06,
+    "blas_luma_different_ref": 19,
+    "blas_luma_different_dist": 32
+  },
+  {
+    "key": "S66_AVIF_15.png",
+    "ours": 0.8714160244509894,
+    "oracle": 0.8714160244510163,
+    "published": 0.8714136264096768,
+    "oracle_delta": 2.6867397195928788e-14,
+    "published_delta": 2.3980413126345468e-06,
+    "blas_luma_different_ref": 206,
+    "blas_luma_different_dist": 5
+  },
+  {
+    "key": "S67_CCM_15.png",
+    "ours": 0.9191577975690034,
+    "oracle": 0.9191577975690174,
+    "published": 0.919157400285136,
+    "oracle_delta": 1.3988810110276972e-14,
+    "published_delta": 3.9728386735937704e-07,
+    "blas_luma_different_ref": 71,
+    "blas_luma_different_dist": 64
+  },
+  {
+    "key": "S68_JAIB_15.png",
+    "ours": 0.9990260090045374,
+    "oracle": 0.999026009004536,
+    "published": 0.9990260007431926,
+    "oracle_delta": 1.4432899320127035e-15,
+    "published_delta": 8.261344830451378e-09,
+    "blas_luma_different_ref": 59,
+    "blas_luma_different_dist": 42
+  },
+  {
+    "key": "S69_JAI_09.png",
+    "ours": 0.9774875805251594,
+    "oracle": 0.9774875805251552,
+    "published": 0.9774876379213833,
+    "oracle_delta": 4.218847493575595e-15,
+    "published_delta": 5.7396223884786934e-08,
+    "blas_luma_different_ref": 41,
+    "blas_luma_different_dist": 101
+  },
+  {
+    "key": "S70_VVC_03.png",
+    "ours": 0.9981471853371585,
+    "oracle": 0.9981471853360471,
+    "published": 0.9981471717500452,
+    "oracle_delta": 1.1114442699522442e-12,
+    "published_delta": 1.358711332333229e-08,
+    "blas_luma_different_ref": 1,
+    "blas_luma_different_dist": 4
+  }
+]

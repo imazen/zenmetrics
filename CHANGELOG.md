@@ -33,7 +33,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
-- zenmetrics-cli `flip`: LDR-FLIP with reference viewing conditions and v1.7 pooling; all 61 AIC values match exactly, and 21 ladder maps differ by at most 2.98e-8.
+- zenmetrics-cli `cw-ssim`: four-level/eight-orientation complex-wavelet similarity with valid 7x7 pooling; 61-pair independent-oracle max error 1.12e-12, published AIC median/max error 2.94e-7/1.11e-4 (exact AIC pyramid remains unconfirmed).
+- zenmetrics-cli `flip` (`4f0dac38`): LDR-FLIP with reference viewing conditions and v1.7 pooling; all 61 AIC values match exactly, and 21 ladder maps differ by at most 2.98e-8.
 
 - Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
 - Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).

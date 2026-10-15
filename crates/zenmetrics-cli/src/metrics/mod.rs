@@ -41,6 +41,8 @@
 use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
+mod cw_fft;
+mod cw_ssim;
 pub mod display;
 mod flip;
 mod ssim_pyiqa;
@@ -158,6 +160,9 @@ pub enum MetricKind {
     /// NVIDIA LDR-FLIP with default viewing conditions (lower is better).
     #[value(name = "flip")]
     Flip,
+    /// Complex-wavelet SSIM: four levels, eight orientations, coarse 7x7 windows.
+    #[value(name = "cw-ssim")]
+    CwSsim,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -567,6 +572,7 @@ impl MetricKind {
             MetricKind::Ciede2000,
             MetricKind::SsimC,
             MetricKind::Flip,
+            MetricKind::CwSsim,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
@@ -653,6 +659,7 @@ impl MetricKind {
             MetricKind::PsnrCr => "psnr-cr",
             MetricKind::Ciede2000 => "ciede2000",
             MetricKind::Flip => "flip",
+            MetricKind::CwSsim => "cw-ssim",
             MetricKind::SsimC => "ssimc",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
@@ -802,6 +809,7 @@ impl MetricKind {
             MetricKind::PsnrCr => &["psnr_cr"],
             MetricKind::Ciede2000 => &["ciede2000"],
             MetricKind::Flip => &["flip"],
+            MetricKind::CwSsim => &["cw_ssim"],
             MetricKind::SsimC => &["ssimc"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
@@ -2309,6 +2317,15 @@ pub fn run_metric(
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
 
         // SSIM-pyiqa family: f64 valid-window scoring with explicit convention flags.
+        MetricKind::CwSsim => {
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err("CW-SSIM: dimension mismatch".into());
+            }
+            let w = reference.width as usize;
+            let h = reference.height as usize;
+            let value = cw_ssim::score(&reference.pixels, &distorted.pixels, w, h, w * 3, w * 3)?;
+            Ok(vec![("cw_ssim", value)])
+        }
         MetricKind::Flip => {
             if (reference.width, reference.height) != (distorted.width, distorted.height) {
                 return Err("FLIP: dimension mismatch".into());
@@ -3295,6 +3312,48 @@ mod tests {
             pixels: vec![fill; (w as usize) * (h as usize) * 3],
             width: w,
             height: h,
+        }
+    }
+
+    #[test]
+    fn flip_and_cw_ssim_dispatch_and_column_contract() {
+        let r = Rgb8Image {
+            pixels: (0..64 * 64 * 3)
+                .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let mut d = Rgb8Image {
+            pixels: r.pixels.clone(),
+            width: 64,
+            height: 64,
+        };
+        for pixel in d.pixels.iter_mut().step_by(17) {
+            *pixel ^= 63;
+        }
+        for (name, kind, column, identity) in [
+            ("flip", MetricKind::Flip, "flip", 0.0),
+            ("cw-ssim", MetricKind::CwSsim, "cw_ssim", 1.0),
+        ] {
+            assert_eq!(MetricKind::from_str(name, false).unwrap(), kind);
+            assert!(MetricKind::all().contains(&kind));
+            assert_eq!(kind.name(), name);
+            assert_eq!(kind.column_names(), &[column]);
+            let same = run_metric(kind, &r, &r, GpuRuntime::Auto).unwrap();
+            assert_eq!(same[0].0, column);
+            assert!((same[0].1 - identity).abs() < 1e-12);
+            let changed = run_metric(kind, &r, &d, GpuRuntime::Auto).unwrap()[0].1;
+            assert!(changed.is_finite());
+            assert!(if kind == MetricKind::Flip {
+                changed > identity
+            } else {
+                changed < identity
+            });
+        }
+        d.width = 63;
+        for kind in [MetricKind::Flip, MetricKind::CwSsim] {
+            assert!(run_metric(kind, &r, &d, GpuRuntime::Auto).is_err());
         }
     }
 
