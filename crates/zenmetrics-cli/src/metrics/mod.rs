@@ -212,6 +212,13 @@ pub enum MetricKind {
     /// licence, so `ZENMETRICS_NN_ACCEPT_WEIGHTS=afine` as for `ckdn`.
     #[value(name = "afine")]
     Afine,
+    /// DreamSim ensemble — learned perceptual similarity distance
+    /// (upstream `ssundaram21/dreamsim`, MIT; DINO + CLIP + OpenCLIP
+    /// ViT-B/16 ensemble, `1 - cosine`, **lower** is better). Needs
+    /// feature `nn`; its weights state no licence, so
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=dreamsim`.
+    #[value(name = "dreamsim")]
+    Dreamsim,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -500,6 +507,7 @@ impl MetricKind {
             MetricKind::Deepdc,
             MetricKind::Ckdn,
             MetricKind::Afine,
+            MetricKind::Dreamsim,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -567,6 +575,7 @@ impl MetricKind {
             MetricKind::Deepdc => "deepdc",
             MetricKind::Ckdn => "ckdn",
             MetricKind::Afine => "afine",
+            MetricKind::Dreamsim => "dreamsim",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -693,6 +702,7 @@ impl MetricKind {
             MetricKind::Deepdc => &["deepdc"],
             MetricKind::Ckdn => &["ckdn"],
             MetricKind::Afine => &["afine"],
+            MetricKind::Dreamsim => &["dreamsim"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1940,7 +1950,8 @@ pub fn run_metric(
         | MetricKind::StlpipsVgg
         | MetricKind::Deepdc
         | MetricKind::Ckdn
-        | MetricKind::Afine => nn::score(kind, reference, distorted),
+        | MetricKind::Afine
+        | MetricKind::Dreamsim => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -1950,7 +1961,8 @@ pub fn run_metric(
         | MetricKind::StlpipsVgg
         | MetricKind::Deepdc
         | MetricKind::Ckdn
-        | MetricKind::Afine => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Afine
+        | MetricKind::Dreamsim => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

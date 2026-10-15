@@ -18,7 +18,9 @@ use std::time::Instant;
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Afine, Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
+use zenmetrics_nn::{
+    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+};
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -97,6 +99,7 @@ fn main() {
         Ok("deepdc") => "deepdc",
         Ok("ckdn") => "ckdn",
         Ok("afine") => "afine",
+        Ok("dreamsim") => "dreamsim",
         Ok("stlpips_alex") => "stlpips_alex",
         Ok("stlpips_vgg") => "stlpips_vgg",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
@@ -111,6 +114,9 @@ fn main() {
     } else if col == "afine" {
         let consent = WeightsConsent::new().accept(Afine::WEIGHTS);
         Box::new(Afine::from_dir(model, engine, &consent).expect("load model"))
+    } else if col == "dreamsim" {
+        let consent = WeightsConsent::new().accept(Dreamsim::WEIGHTS);
+        Box::new(Dreamsim::from_dir(model, engine, &consent).expect("load model"))
     } else {
         let net = LpipsNet::ALL
             .into_iter()

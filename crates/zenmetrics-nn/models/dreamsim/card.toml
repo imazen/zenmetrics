@@ -1,0 +1,42 @@
+# DreamSim: learned perceptual similarity, FR ensemble distance for
+# AI-generated (mid-/high-level distortion) images. The `dreamsim` column is
+# upstream `PerceptualModel.forward` — `1 - cosine` on the concatenated,
+# centred, unit-normed embeddings — not the 0..1 `base_model` variants.
+name = "dreamsim"
+kind = "full-reference"
+direction = "lower-is-better"        # cosine distance, ~0..2 (typically 0..0.3)
+columns = ["dreamsim"]
+paper = "Steiner, Sundaram et al. DreamSim: Learning New Dimensions of Human Visual Similarity using Synthetic Data. NeurIPS 2023"
+
+[code]
+source = "upstream-port"             # PerceptualModel + three ViT-B/16 extractors from the package
+upstream = "https://github.com/ssundaram21/dreamsim"
+upstream_package = "pip `dreamsim` 0.21.2 (identical to the repo's dreamsim/ tree)"
+licence = "MIT"
+
+[weights]
+# MIT covers the repository code. The ensemble checkpoint
+# `dreamsim_ensemble.zip` is downloaded at init from upstream's bucket
+# (https://storage.googleapis.com/dreamsim/dreamsim_ensemble.zip,
+# ~1.26 GB): dino_vitb16_pretrain.pth, clip_vitb16_pretrain.pth.tar,
+# open_clip_vitb16_pretrain.pth.tar and ensemble_lora/ (rank-16, alpha-1.0
+# qkv adapters). The archive states no licence, so loading needs an
+# explicit WeightsConsent. The DINO backbone itself is the official
+# fbaipublicfiles ViT-B/16 checkpoint fetched via torch.hub.
+licence_class = "unknown"
+checkpoint = "https://storage.googleapis.com/dreamsim/dreamsim_ensemble.zip; plus https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth"
+
+[input]
+format = "packed sRGB8"
+normalisation = "0..1, then per-extractor stats inside the graph (ImageNet 0.485/0.456/0.406, 0.229/0.224/0.225 for DINO; CLIP 0.48145466/0.4578275/0.40821073, 0.26862954/0.26130258/0.27577711 for both CLIP nets)"
+resize = "upstream preprocess: PIL/torchvision antialiased bicubic Resize to EXACTLY 224x224 on both axes (anamorphic, aspect ignored — resize.rs::resize_bicubic_aa), then ToTensor"
+min_size = 1                         # everything is resampled to 224x224
+
+[export]
+script = "export.py"
+outputs = "dreamsim_{trunk.onnx, full.onnx, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "LoRA folded with peft merge_and_unload (verified ~6e-8 on the model's own output). dreamsim_trunk.onnx: [1,3,224,224] -> taps [1,768,1,1] (dino last-block CLS, pre final LN), [1,512,1,1] (clip), [1,512,1,1] (open_clip). dreamsim_full.onnx: (r,d) -> distance scalar. Concat -> mean-centre -> L2-norm -> 1-cosine runs in Rust."
+
+[parity]
+oracle = "pip dreamsim 0.21.2 ensemble, CPU, fp32, upstream preprocess"
