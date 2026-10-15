@@ -207,39 +207,68 @@ mod tests {
         assert!(Hyperiqa::prep(&view(&[0u8; 3], 1, 1), 1).is_ok());
     }
 
-    /// The crop grid: 25 crops at the documented origins, first crop
-    /// is the top-left of the resized frame.
-    #[test]
-    fn prep_crop_grid() {
-        let px = vec![128u8; 64 * 64 * 3];
-        let x = Hyperiqa::prep(&view(&px, 64, 64), 1).unwrap();
-        assert_eq!(x.len(), 25 * 3 * CROP * CROP);
-        // Uniform grey 128 -> (128/255 - 0.485)/0.229 for channel R.
-        let want = (128.0f32 / 255.0 - 0.485) / 0.229;
-        assert!((x[0] - want).abs() < 1e-6, "{}", x[0]);
-        // Crop 6 (x=40,y=0) starts at 6 * 3 * CROP^2.
-        let off = 6 * 3 * CROP * CROP;
-        assert!((x[off] - want).abs() < 1e-6, "{}", x[off]);
+    fn texture(w: usize, h: usize) -> Vec<u8> {
+        (0..w * h * 3)
+            .map(|i| ((i * 73 + i / 7 * 19 + i / (w * 3) * 31) % 256) as u8)
+            .collect()
     }
 
-    /// Strided input rows are honoured.
     #[test]
-    fn prep_strided_rows() {
-        let (w, h, stride) = (8, 8, 8 * 3 + 4);
-        let mut px = vec![0u8; stride * h];
-        for y in 0..h {
-            for x in 0..w {
-                px[y * stride + x * 3] = 200;
+    fn refuses_without_weights_consent() {
+        let err = Hyperiqa::from_dir(
+            "/nonexistent-zenmetrics-hyperiqa",
+            Engine::Rten,
+            &WeightsConsent::new(),
+        )
+        .err()
+        .expect("must refuse before reading model files");
+        assert!(matches!(err, Error::WeightsNotAccepted(_)), "{err}");
+    }
+
+    /// No resize is needed: each crop's full contents identify its source origin.
+    #[test]
+    fn prep_crop_grid() {
+        let px = texture(384, 512);
+        let actual = Hyperiqa::prep(&view(&px, 384, 512), 1).unwrap();
+        assert_eq!(actual.len(), 25 * 3 * CROP * CROP);
+        for crop in 0..25 {
+            let x = (crop % 5) * 40;
+            let y = (crop / 5) * 72; // crop 6 starts at (40,72).
+            for c in 0..3 {
+                for yy in 0..224 {
+                    for xx in 0..224 {
+                        let v = px[((y + yy) * 384 + x + xx) * 3 + c];
+                        let expected = (f32::from(v) / 255.0 - MEAN[c]) / STD[c];
+                        assert_eq!(
+                            actual[((crop * 3 + c) * 224 + yy) * 224 + xx],
+                            expected,
+                            "crop {crop} origin ({x},{y})"
+                        );
+                    }
+                }
             }
         }
-        let img = za::Rgb8In {
-            pixels: &px,
+    }
+
+    /// Compare the entire prepared tensor, with padding deliberately unrelated to pixels.
+    #[test]
+    fn prep_strided_rows() {
+        let (w, h, stride) = (37, 29, 37 * 3 + 17);
+        let packed = texture(w, h);
+        let mut strided = vec![251; stride * h];
+        for y in 0..h {
+            strided[y * stride..y * stride + w * 3]
+                .copy_from_slice(&packed[y * w * 3..(y + 1) * w * 3]);
+        }
+        let image = za::Rgb8In {
+            pixels: &strided,
             width: w,
             height: h,
             stride,
         };
-        let x = Hyperiqa::prep(&img, 1).unwrap();
-        let want = (200.0f32 / 255.0 - 0.485) / 0.229;
-        assert!((x[0] - want).abs() < 1e-6, "{}", x[0]);
+        assert_eq!(
+            Hyperiqa::prep(&image, 1).unwrap(),
+            Hyperiqa::prep(&view(&packed, w, h), 1).unwrap()
+        );
     }
 }
