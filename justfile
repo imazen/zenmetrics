@@ -296,6 +296,10 @@ worker-clippy:
 lock-check *args:
     bash scripts/ci/lock.sh --check {{args}}
 
+# Every remote branch and open PR with a verdict (merged/stale/conflict/...); read-only.
+branch-status *args:
+    python3 scripts/ci/branch_status.py {{args}}
+
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
 
