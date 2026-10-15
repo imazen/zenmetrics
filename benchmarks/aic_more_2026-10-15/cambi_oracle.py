@@ -1,8 +1,9 @@
 """Pinned libvmaf 3.2.1 CAMBI default and v1-setting control, AIC + ladder."""
-import csv,json,pathlib,subprocess,statistics
+import csv,json,pathlib,subprocess,statistics,os
 import numpy as np
 from PIL import Image
 home=pathlib.Path.home();s=home/'tmp/aic-variants-scratch/round4';binary=s/'oracles/vmaf-3.2.1/libvmaf/build-aic/tools/vmaf';cfg=json.load(open(home/'tmp/aic-site/config.json'))['mappings']['CAMBI'];pub={r['distorted']:r for r in csv.DictReader(open(home/'tmp/aic-site/site_fullres_subset61.csv'))}
+results=pathlib.Path(os.environ.get('AIC_RESULTS_DIR',str(s)));results.mkdir(exist_ok=True)
 def jnd(x):return cfg['a']*max(0,x-cfg['b'])**cfg['c']
 for dataset in ['aic','ladder']:
  pairs=list(csv.DictReader(open(home/'tmp/aic-audit/pairs.tsv'),delimiter='\t')) if dataset=='aic' else [dict(distorted=p.stem,ref_path=str(p),dist_path=str(p).replace('_ref.png','_dist.png')) for p in sorted((home/'tmp/nn-phase0/ladder').glob('*_ref.png'))]
@@ -20,5 +21,5 @@ for dataset in ['aic','ladder']:
    row[name]=val
    if dataset=='aic':targetval=float(pub[pair['distorted']]['CAMBI']);row['published']=targetval;row[name+'_published_error']=abs(val-targetval);row[name+'_published_jnd_error']=abs(jnd(val)-jnd(targetval))
   rows.append(row);print(dataset,json.dumps(row),flush=True)
- with (s/f'cambi-precise-settings-{dataset}.json').open('x') as f:json.dump(rows,f,indent=2)
+ with (results/f'cambi-precise-settings-{dataset}.json').open('x') as f:json.dump(rows,f,indent=2)
  if dataset=='aic':print('SUMMARY',json.dumps({k:{'median':statistics.median(r[k] for r in rows if k in r),'max':max(r[k] for r in rows if k in r)} for k in rows[0] if k.endswith('_error')}),flush=True)

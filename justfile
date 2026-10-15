@@ -643,3 +643,6 @@ aic-review-ci:
 
 aic-review-pin-sensitivity:
     python3 benchmarks/aic_review_2026-10-15/check_pin_sensitivity.py
+
+aic-review-cambi-reference python:
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
