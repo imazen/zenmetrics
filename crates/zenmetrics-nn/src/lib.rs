@@ -11,6 +11,8 @@
 //! - [`Lpips`]: LPIPS v0.1 with the AlexNet, VGG16 or SqueezeNet trunk
 //!   ([`LpipsNet`]; Zhang et al., CVPR 2018), parity target the upstream
 //!   `lpips` 0.1.4 package.
+//! - [`Dists`]: DISTS (Ding, Ma, Wang, Simoncelli, TPAMI 2020), parity target
+//!   the upstream `DISTS_pytorch` 0.1 package.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -18,11 +20,14 @@
 
 #![forbid(unsafe_code)]
 
+mod common;
+mod dists;
 mod engine;
 mod error;
 mod lpips;
 mod preprocess;
 
+pub use dists::Dists;
 pub use error::Error;
 pub use lpips::{Lpips, LpipsNet};
 

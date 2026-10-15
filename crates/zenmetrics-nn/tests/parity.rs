@@ -1,9 +1,10 @@
-//! LPIPS parity against upstream `lpips` 0.1.4 goldens, per network.
+//! Parity of every zenmetrics-nn model against its upstream package's goldens.
 //!
 //! Inputs (set by `just nn-parity`, never defaulted here):
-//! - `ZENMETRICS_NN_MODEL_DIR`: a `models/lpips/export.py` output directory
-//!   (`lpips_<net>_{trunk.onnx,full.onnx,lin.f32,goldens.tsv}`, `lpips_<net>.meta`).
-//! - `ZENMETRICS_NN_NETS`: comma-separated networks to check (`alex,vgg,squeeze`).
+//! - `ZENMETRICS_NN_MODEL_DIR`: the `models/*/export.py` output directory
+//!   (`<model>_goldens.tsv` next to each model's files).
+//! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
+//!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `dists`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{Dists, Engine, Lpips, LpipsNet};
 
 /// Absolute LPIPS tolerance against the upstream CPU fp32 score. Proposed,
 /// pending sign-off: the trunk runs in a different engine (rten vs PyTorch
@@ -36,15 +37,28 @@ fn engine() -> Engine {
     }
 }
 
-fn nets() -> Vec<LpipsNet> {
-    let list = std::env::var("ZENMETRICS_NN_NETS")
-        .expect("ZENMETRICS_NN_NETS must be set (run via `just nn-parity`)");
+/// The models named in `ZENMETRICS_NN_MODELS`, loaded, with their columns.
+fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
+    let dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
+    let list = std::env::var("ZENMETRICS_NN_MODELS")
+        .expect("ZENMETRICS_NN_MODELS must be set (run via `just nn-parity`)");
     list.split(',')
-        .map(|n| {
-            *LpipsNet::ALL
+        .map(|name| -> (Box<dyn Metric>, &'static str) {
+            let name = name.trim();
+            if name == "dists" {
+                return (
+                    Box::new(Dists::from_dir(&dir, engine()).expect("load dists")),
+                    "dists",
+                );
+            }
+            let net = *LpipsNet::ALL
                 .iter()
-                .find(|x| x.name() == n.trim())
-                .unwrap_or_else(|| panic!("unknown LPIPS net {n:?}"))
+                .find(|n| n.column() == name)
+                .unwrap_or_else(|| panic!("unknown model {name:?}"));
+            (
+                Box::new(Lpips::from_dir(&dir, net, engine()).expect("load lpips")),
+                net.column(),
+            )
         })
         .collect()
 }
@@ -82,13 +96,11 @@ fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
 }
 
 #[test]
-fn lpips_matches_upstream() {
+fn matches_upstream() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
-    for net in nets() {
-        let mut m = Lpips::from_dir(&model_dir, net, engine()).expect("load model");
-        let col = net.column();
-        let path = model_dir.join(format!("lpips_{}_goldens.tsv", net.name()));
+    for (mut m, col) in models() {
+        let path = model_dir.join(format!("{col}_goldens.tsv"));
         let goldens =
             std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let mut checked = 0;
@@ -120,22 +132,23 @@ fn lpips_matches_upstream() {
 
 #[test]
 fn warm_reference_equals_cold() {
-    let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
     let (rp, w, h) = load_rgb8(&ladder.join("1415_256_ref.png"));
     let (dp, _, _) = load_rgb8(&ladder.join("1415_256_dist.png"));
-    for net in nets() {
-        let col = net.column();
-        let mut m = Lpips::from_dir(&model_dir, net, engine()).expect("load model");
+    for (mut m, col) in models() {
         let cold = score(
             &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .unwrap(),
             col,
         );
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
-        // The trunk engine caches the reference's taps; a whole-graph engine
-        // (ort-cuda) recomputes them on every candidate.
-        assert_eq!(warm.reuses_reference_work(), engine() == Engine::Rten);
+        // A trunk engine caches the reference's features; a whole-graph
+        // engine (ort-cuda) recomputes them on every candidate.
+        assert_eq!(
+            warm.reuses_reference_work(),
+            engine() == Engine::Rten,
+            "{col}"
+        );
         for _ in 0..2 {
             let s = score(
                 &*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap(),
@@ -147,6 +160,14 @@ fn warm_reference_equals_cold() {
             &*warm.evaluate(image(&rp, w, h), EvalOpts::new()).unwrap(),
             col,
         );
-        assert_eq!(same, 0.0, "{col}");
+        if engine() == Engine::Rten || col != "dists" {
+            assert_eq!(same, 0.0, "{col}");
+        } else {
+            // On ort-cuda the whole DISTS graph, including 1 - (dist1 + dist2),
+            // runs in ONNX Runtime's f32 reduction order: measured 1.19e-7
+            // (one f32 step at 1.0) for an identical pair. Bounded by the
+            // parity tolerance.
+            assert!(same.abs() <= TOL, "{col}: identical pair scored {same}");
+        }
     }
 }

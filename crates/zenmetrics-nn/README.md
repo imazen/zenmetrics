@@ -7,6 +7,7 @@ each model's upstream reference implementation. Plan and licensing:
 | model | columns | engines | parity target | worst \|Δ\| (18 pairs, 64–2048 px) |
 |---|---|---|---|---|
 | LPIPS v0.1 (`Lpips`, `LpipsNet`) | `lpips_alex`, `lpips_vgg`, `lpips_squeeze` | rten, ort-cuda | `lpips` 0.1.4, CPU fp32 | rten ≤ 1.1e-7, ort-cuda ≤ 9.0e-8 |
+| DISTS (`Dists`) | `dists` | rten, ort-cuda | `DISTS_pytorch` 0.1, CPU fp32, no resize | rten 1.8e-7, ort-cuda 1.8e-7 |
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,
@@ -17,6 +18,7 @@ Weights are not bundled. Export a model directory, then load it:
 
 ```sh
 just nn-export-lpips <python-with-lpips> <ladder-dir> <out-dir> vgg
+just nn-export-dists <python-with-DISTS_pytorch> <ladder-dir> <out-dir>
 ```
 
 ```rust

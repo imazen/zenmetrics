@@ -1,0 +1,38 @@
+# DISTS: Deep Image Structure and Texture Similarity.
+name = "dists"
+kind = "full-reference"
+direction = "lower-is-closer"
+columns = ["dists"]
+paper = "Ding, Ma, Wang, Simoncelli. Image Quality Assessment: Unifying Structure and Texture Similarity. IEEE TPAMI 2020. arXiv:2004.07728"
+
+[code]
+source = "upstream-port"             # head reimplemented from DISTS.forward()
+upstream = "https://github.com/dingkeyan93/DISTS"
+upstream_package = "DISTS_pytorch==0.1"
+licence = "MIT"
+
+[weights]
+licence_class = "permissive"
+# alpha / beta ship in DISTS_pytorch (MIT, weights.pt). The trunk is
+# torchvision's VGG16 ImageNet checkpoint; ImageNet terms may apply to the
+# weights (counsel item, docs/PYIQA_PORT_PLAN.md section 9).
+alpha_beta = "DISTS_pytorch 0.1: weights.pt"
+trunk = "https://download.pytorch.org/models/vgg16-397923af.pth"
+
+[input]
+format = "packed sRGB8"
+normalisation = "v / 255 (ToTensor); ImageNet mean/std inside the graph"
+resize = "none (the package's prepare_image default; its resize=True mode is not ported)"
+min_size = 1
+
+[export]
+script = "export.py"
+outputs = "dists_{trunk.onnx, full.onnx, alpha.f32, beta.f32, goldens.tsv, export.meta}, dists.meta"
+opset = 17
+
+[parity]
+oracle = "DISTS_pytorch 0.1, CPU, fp32"
+tolerance_abs = 1e-6                 # proposed, pending sign-off
+# Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
+#   rten 1.8e-7, ort-cuda 1.8e-7. Identical pair: rten 0.0 (as upstream),
+#   ort-cuda 1.19e-7 (one f32 step at 1.0).
