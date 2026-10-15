@@ -231,12 +231,52 @@ fn vif_rgb8_terms(
 /// Information-loss map names, one per VIFp scale.
 const VIFP_NAMES: [&str; 4] = ["info_loss_0", "info_loss_1", "info_loss_2", "info_loss_3"];
 
-/// A scored pair with its per-scale information-loss maps.
+/// VIFp numerator / denominator map names, one per scale.
+const VIFP_NUM: [&str; 4] = ["num_0", "num_1", "num_2", "num_3"];
+const VIFP_DEN: [&str; 4] = ["den_0", "den_1", "den_2", "den_3"];
+
+/// A scored pair with its information maps: the losses (Difference)
+/// first, then the raw numerator and denominator information
+/// (Feature), each on the same grids.
 struct VifMaps {
     vif: f64,
     names: Vec<&'static str>,
     maps: Vec<Vec<f32>>,
     geometry: Vec<za::MapGeometry>,
+    polarity: Vec<za::MapPolarity>,
+}
+
+impl VifMaps {
+    fn empty(vif: f64) -> Self {
+        Self {
+            vif,
+            names: Vec::new(),
+            maps: Vec::new(),
+            geometry: Vec::new(),
+            polarity: Vec::new(),
+        }
+    }
+
+    /// Append `loss`, then all numerators, then all denominators.
+    fn push_all(
+        &mut self,
+        loss: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+        num: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+        den: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+    ) {
+        for (group, polarity) in [
+            (loss, za::MapPolarity::Difference),
+            (num, za::MapPolarity::Feature),
+            (den, za::MapPolarity::Feature),
+        ] {
+            for (name, map, g) in group {
+                self.names.push(name);
+                self.maps.push(map);
+                self.geometry.push(g);
+                self.polarity.push(polarity);
+            }
+        }
+    }
 }
 
 impl VifMaps {
@@ -247,38 +287,35 @@ impl VifMaps {
     /// 'valid' output. Cells are `2^s` blocks around those centres. A value
     /// reads the input within `8 + 4s` pixels of its centre.
     fn vifp(vif: f64, terms: Vec<kernel::ScaleTerms>, w: usize, h: usize) -> Self {
-        let mut out = Self {
-            vif,
-            names: Vec::new(),
-            maps: Vec::new(),
-            geometry: Vec::new(),
-        };
+        let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
         for t in terms {
             let cell = 1u32 << t.scale;
             let centre = 8 + 4 * t.scale as i64;
             let halo = 8 + 4 * t.scale as u32;
-            out.names.push(VIFP_NAMES[t.scale]);
-            out.maps.push(
-                t.den
-                    .iter()
-                    .zip(&t.num)
-                    .map(|(&d, &n)| (d - n) as f32)
-                    .collect(),
-            );
-            out.geometry.push(
-                za::MapGeometry::grid(
-                    w as u32,
-                    h as u32,
-                    centre - i64::from(cell / 2),
-                    centre - i64::from(cell / 2),
-                    cell,
-                    cell,
-                    t.w as u32,
-                    t.h as u32,
-                )
-                .with_halo(halo, halo),
-            );
+            let g = za::MapGeometry::grid(
+                w as u32,
+                h as u32,
+                centre - i64::from(cell / 2),
+                centre - i64::from(cell / 2),
+                cell,
+                cell,
+                t.w as u32,
+                t.h as u32,
+            )
+            .with_halo(halo, halo);
+            let narrow = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
+            let l = t
+                .den
+                .iter()
+                .zip(&t.num)
+                .map(|(&d, &n)| (d - n) as f32)
+                .collect();
+            loss.push((VIFP_NAMES[t.scale], l, g));
+            num.push((VIFP_NUM[t.scale], narrow(&t.num), g));
+            den.push((VIFP_DEN[t.scale], narrow(&t.den), g));
         }
+        let mut out = Self::empty(vif);
+        out.push_all(loss, num, den);
         out
     }
 
@@ -289,42 +326,61 @@ impl VifMaps {
     /// first sample's position. The S-field and eigenvalues come from the
     /// whole subband's covariance, so support is global.
     fn vifvec(vif: f64, subs: Vec<vifvec::SubTerms>, w: usize, h: usize) -> Self {
-        let mut out = Self {
-            vif,
-            names: Vec::new(),
-            maps: Vec::new(),
-            geometry: Vec::new(),
-        };
+        let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
         // `SUBS` runs coarse to fine; serve the finest first.
         for t in subs.into_iter().rev() {
             let step = 1u32 << (t.level - 1);
             let cell = 3 * step;
             let origin = i64::from(cell) * t.offset as i64 - i64::from(step / 2);
-            out.names
-                .push(VIFVEC_NAMES[(t.level - 1) * 2 + usize::from(t.band == 4)]);
-            out.maps.push(
-                t.den
-                    .iter()
-                    .zip(&t.num)
-                    .map(|(&d, &n)| (d - n) as f32)
-                    .collect(),
-            );
-            out.geometry.push(
-                za::MapGeometry::grid(
-                    w as u32, h as u32, origin, origin, cell, cell, t.w as u32, t.h as u32,
-                )
-                .with_support(za::Support::Global),
-            );
+            let g = za::MapGeometry::grid(
+                w as u32, h as u32, origin, origin, cell, cell, t.w as u32, t.h as u32,
+            )
+            .with_support(za::Support::Global);
+            let k = (t.level - 1) * 2 + usize::from(t.band == 4);
+            let narrow = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
+            let l = t
+                .den
+                .iter()
+                .zip(&t.num)
+                .map(|(&d, &n)| (d - n) as f32)
+                .collect();
+            loss.push((VIFVEC_NAMES[k], l, g));
+            num.push((VIFVEC_NUM[k], narrow(&t.num), g));
+            den.push((VIFVEC_DEN[k], narrow(&t.den), g));
         }
+        let mut out = Self::empty(vif);
+        out.push_all(loss, num, den);
         out
     }
 
     fn view(&self, i: usize) -> Option<za::MapView<'_>> {
         let g = self.geometry[i];
         let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
-        za::MapView::new(self.names[i], px, za::MapPolarity::Difference, g).ok()
+        za::MapView::new(self.names[i], px, self.polarity[i], g).ok()
     }
 }
+
+/// `vifvec` numerator / denominator map names, in [`VIFVEC_NAMES`] order.
+const VIFVEC_NUM: [&str; 8] = [
+    "num_l1_b1",
+    "num_l1_b4",
+    "num_l2_b1",
+    "num_l2_b4",
+    "num_l3_b1",
+    "num_l3_b4",
+    "num_l4_b1",
+    "num_l4_b4",
+];
+const VIFVEC_DEN: [&str; 8] = [
+    "den_l1_b1",
+    "den_l1_b4",
+    "den_l2_b1",
+    "den_l2_b4",
+    "den_l3_b1",
+    "den_l3_b4",
+    "den_l4_b1",
+    "den_l4_b4",
+];
 
 /// `vifvec` map names by `(level, band)`, finest level first.
 const VIFVEC_NAMES: [&str; 8] = [
@@ -534,7 +590,9 @@ impl Inputs {
 /// scales, divided by `Σden`, give `1 − VIF`. They are per-position
 /// contributions, not a local VIF ratio: `0` = no loss, higher = more
 /// lost, negative where the distortion adds information (VIF > 1)
-/// ([`za::MapPolarity::Difference`]).
+/// ([`za::MapPolarity::Difference`]). After them, `num_0` … and `den_0` …
+/// carry the two information terms themselves on the same grids
+/// ([`za::MapPolarity::Feature`]: `den` depends on the reference alone).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vif;
 
@@ -600,7 +658,8 @@ impl za::Metric for Vif {
 /// total reference information they give `1 − VIF`. Per-block
 /// contributions, not a local VIF ([`za::MapPolarity::Difference`]),
 /// with global support (the S-field and eigenvalues use whole-subband
-/// statistics).
+/// statistics). After them, `num_l1_b1` … and `den_l1_b1` … carry the two
+/// information terms per block ([`za::MapPolarity::Feature`]).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vifvec;
 

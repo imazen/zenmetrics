@@ -20,10 +20,18 @@ pub enum MapPolarity {
     Difference,
     /// Probability the difference is detected (HDR-VDP `P_map`), `[0, 1]`.
     DetectionProbability,
+    /// A native intermediate with no similarity/difference reading against
+    /// the reference: pooling weights (IW-SSIM information content),
+    /// information carried by one channel (VIF's numerator or denominator),
+    /// a no-reference measurement of one image (CAMBI banding visibility).
+    /// The map's name and its metric's docs give its meaning and direction;
+    /// identity does not fix its value.
+    Feature,
 }
 
 impl MapPolarity {
-    /// `true` when larger values mean a worse match.
+    /// `true` when larger values mean a worse match. `false` for
+    /// [`MapPolarity::Feature`], which has no match direction.
     pub const fn higher_is_worse(self) -> bool {
         matches!(
             self,
@@ -579,6 +587,14 @@ mod tests {
             MapGeometry::identity(w, h),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn polarity_directions() {
+        assert!(MapPolarity::Difference.higher_is_worse());
+        assert!(MapPolarity::DetectionProbability.higher_is_worse());
+        assert!(!MapPolarity::Similarity.higher_is_worse());
+        assert!(!MapPolarity::Feature.higher_is_worse());
     }
 
     #[test]

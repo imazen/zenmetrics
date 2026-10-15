@@ -4520,51 +4520,71 @@ fn adm_cm_i32(
         + powf_add
 }
 
-/// AIM's per-position terms at one scale: for each band, the integer cube
-/// contributions `adm_cm_*` sums over the pooled region when it measures the
-/// additive impairment masked by the restored signal (`noise_weight` 0).
-pub(crate) struct AimTerms {
+/// One ADM accumulator's per-position terms at one scale: for each band
+/// (horizontal, vertical, diagonal), the integer values it sums over the
+/// pooled region, before its per-row rounding shift.
+pub(crate) struct BandTerms {
     /// Pooled band region `[left, left + cols) × [top, top + rows)`, in band
     /// samples.
     pub(crate) left: usize,
     pub(crate) top: usize,
     pub(crate) cols: usize,
     pub(crate) rows: usize,
-    /// Row-major `[h, v, d]` terms, before the per-row rounding shift.
+    /// Row-major `[h, v, d]` terms.
     pub(crate) vals: [Vec<i64>; 3],
     /// Band `t`'s cube-root argument is
-    /// `Σ_rows((Σ_row vals + half) >> row_shift) / divisor[t]`.
+    /// `(Σ_rows((Σ_row vals + half) >> row_shift) / divisor[t]) · factor[t]`.
     pub(crate) row_shift: u32,
     pub(crate) divisor: [f64; 3],
-    /// The score path's AIM numerator for this scale.
-    pub(crate) aim_num: f32,
+    pub(crate) factor: [f64; 3],
+    /// `(pooled area · noise_weight)^(1/3)`, added after each band's root.
+    pub(crate) noise: f32,
+    /// The score path's value for this scale.
+    pub(crate) score_path: f32,
 }
 
-impl AimTerms {
-    /// The scale's AIM numerator rebuilt from the terms in the reference's
-    /// operation order; equals [`Self::aim_num`] bit for bit.
-    #[cfg(test)]
+impl BandTerms {
+    /// The scale's value rebuilt from the terms in the reference's operation
+    /// order; equals [`Self::score_path`] bit for bit.
     pub(crate) fn fold(&self) -> f32 {
-        let add = 1i64 << (self.row_shift - 1);
-        let arg = |t: usize| {
-            let accum: i64 = self.vals[t]
-                .chunks_exact(self.cols.max(1))
-                .map(|row| (row.iter().sum::<i64>() + add) >> self.row_shift)
-                .sum();
-            ((accum as f64 / self.divisor[t]) as f32).powf(1.0 / 3.0)
+        let arg = |t: usize| (self.argument(t) as f32).powf(1.0 / 3.0);
+        arg(0) + self.noise + arg(1) + self.noise + arg(2) + self.noise
+    }
+
+    /// Band `t`'s cube-root argument, from the terms as the reference rounds
+    /// them.
+    pub(crate) fn argument(&self, t: usize) -> f64 {
+        let add = if self.row_shift > 0 {
+            1i64 << (self.row_shift - 1)
+        } else {
+            0
         };
-        let powf_add = (((self.rows * self.cols) as f64 * 0.0) as f32).powf(1.0 / 3.0);
-        arg(0) + powf_add + arg(1) + powf_add + arg(2) + powf_add
+        let accum: i64 = self.vals[t]
+            .chunks_exact(self.cols.max(1))
+            .map(|row| (row.iter().sum::<i64>() + add) >> self.row_shift)
+            .sum();
+        accum as f64 / self.divisor[t] * self.factor[t]
     }
 
     /// Band `t`'s terms in the units of its cube-root argument.
     pub(crate) fn map(&self, t: usize) -> Vec<f32> {
-        let unit = self.divisor[t] * 2f64.powi(self.row_shift as i32);
+        let unit = self.factor[t] / (self.divisor[t] * 2f64.powi(self.row_shift as i32));
         self.vals[t]
             .iter()
-            .map(|&v| (v as f64 / unit) as f32)
+            .map(|&v| (v as f64 * unit) as f32)
             .collect()
     }
+}
+
+/// ADM3's per-position terms at one scale: the detail-loss numerator (the
+/// restored signal left visible after masking by the additive impairment)
+/// and denominator (the reference's CSF-weighted detail), and AIM's
+/// numerator (the additive impairment left visible after masking by the
+/// restored signal). `adm3 = 0.7 · Σnum/Σden + 0.3 · (1 − Σaim/Σden)`.
+pub(crate) struct AdmScaleTerms {
+    pub(crate) num: BandTerms,
+    pub(crate) den: BandTerms,
+    pub(crate) aim: BandTerms,
 }
 
 /// The region `adm_cm_*` pools in a `w × h` band, as `(left, top, cols, rows)`.
@@ -4575,7 +4595,15 @@ fn cm_region(w: usize, h: usize) -> (usize, usize, usize, usize) {
     (j0, i0, j1.saturating_sub(j0), i1.saturating_sub(i0))
 }
 
-/// [`AimTerms`] for scale 0 (`i16` bands): the per-position values
+/// `(pooled area · noise_weight)^(1/3)` as `adm_cm_*` and `adm_csf_den_*`
+/// compute it.
+fn noise_floor(w: usize, h: usize, noise_weight: f64) -> f32 {
+    let (left, top, right, bottom) = border_region_inner(w, h);
+    let powf_add = (((bottom - top) * (right - left)) as f64 * noise_weight) as f32;
+    powf_add.powf(1.0 / 3.0)
+}
+
+/// [`BandTerms`] for scale 0 (`i16` bands): the per-position values
 /// [`adm_cm_i16`] accumulates, with the same arguments.
 #[allow(clippy::too_many_arguments)]
 fn adm_cm_terms_i16(
@@ -4586,8 +4614,9 @@ fn adm_cm_terms_i16(
     h: usize,
     stride: usize,
     rf: [f32; 3],
+    noise_weight: f64,
     watson_fixed: bool,
-) -> AimTerms {
+) -> BandTerms {
     let i_rfactor = if watson_fixed {
         [36453, 36453, 49417]
     } else {
@@ -4643,7 +4672,7 @@ fn adm_cm_terms_i16(
         2f64.powi(52 - shift_xcub[1] as i32 - shift_inner_accum as i32),
         2f64.powi(57 - shift_xcub[2] as i32 - shift_inner_accum as i32),
     ];
-    AimTerms {
+    BandTerms {
         left,
         top,
         cols,
@@ -4651,11 +4680,13 @@ fn adm_cm_terms_i16(
         vals,
         row_shift: shift_inner_accum,
         divisor,
-        aim_num: f32::NAN,
+        factor: [1.0; 3],
+        noise: noise_floor(w, h, noise_weight),
+        score_path: f32::NAN,
     }
 }
 
-/// [`AimTerms`] for scales 1–3 (`i32` bands): the per-position values
+/// [`BandTerms`] for scales 1–3 (`i32` bands): the per-position values
 /// [`adm_cm_i32`] accumulates, with the same arguments.
 #[allow(clippy::too_many_arguments)]
 fn adm_cm_terms_i32(
@@ -4667,7 +4698,8 @@ fn adm_cm_terms_i32(
     h: usize,
     stride: usize,
     rf: [f32; 3],
-) -> AimTerms {
+    noise_weight: f64,
+) -> BandTerms {
     let rfactor = [
         (rf[0] as f64 * 2f64.powi(32)) as u64 as u32,
         (rf[1] as f64 * 2f64.powi(32)) as u64 as u32,
@@ -4719,7 +4751,7 @@ fn adm_cm_terms_i32(
             }
         }
     }
-    AimTerms {
+    BandTerms {
         left,
         top,
         cols,
@@ -4727,7 +4759,102 @@ fn adm_cm_terms_i32(
         vals,
         row_shift: shift_inner_accum,
         divisor: [final_shift; 3],
-        aim_num: f32::NAN,
+        factor: [1.0; 3],
+        noise: noise_floor(w, h, noise_weight),
+        score_path: f32::NAN,
+    }
+}
+
+/// [`BandTerms`] for scale 0's denominator: the per-position cubes
+/// [`adm_csf_den_scale`] accumulates, with the same arguments.
+fn adm_csf_den_terms_scale(
+    src: &BandI16,
+    w: usize,
+    h: usize,
+    stride: usize,
+    rf: [f32; 3],
+    noise_weight: f64,
+) -> BandTerms {
+    let (left, top, right, bottom) = border_region_inner(w, h);
+    let npix = ((bottom - top) * (right - left)) as f64;
+    let shift_accum = ((npix.log2() - 20.0).ceil() as i32).max(0);
+    let bands = [&src.h, &src.v, &src.d];
+    let (left, top, cols, rows) = (
+        left as usize,
+        top as usize,
+        (right - left) as usize,
+        (bottom - top) as usize,
+    );
+    let vals: [Vec<i64>; 3] = std::array::from_fn(|t| {
+        (top..top + rows)
+            .flat_map(|i| bands[t][i * stride + left..i * stride + left + cols].iter())
+            .map(|&px| {
+                let v = px.unsigned_abs() as u64;
+                (v * v * v) as i64
+            })
+            .collect()
+    });
+    let shift_csf = 2f64.powi(18 - shift_accum);
+    BandTerms {
+        left,
+        top,
+        cols,
+        rows,
+        vals,
+        row_shift: shift_accum as u32,
+        divisor: [shift_csf; 3],
+        factor: rf.map(|r| (r as f64).powi(3)),
+        noise: noise_floor(w, h, noise_weight),
+        score_path: f32::NAN,
+    }
+}
+
+/// [`BandTerms`] for the denominator at scales 1–3: the per-position values
+/// [`adm_csf_den_s123`] accumulates, with the same arguments.
+fn adm_csf_den_terms_s123(
+    src: &BandI32,
+    scale: usize,
+    w: usize,
+    h: usize,
+    stride: usize,
+    rf: [f32; 3],
+    noise_weight: f64,
+) -> BandTerms {
+    let shift_sq = [31u32, 30, 31][scale - 1];
+    let accum_convert_float = [32i32, 27, 23][scale - 1];
+    let add_shift_sq = [1u64 << 31, 1u64 << 30, 1u64 << 31][scale - 1];
+    let (left, top, right, bottom) = border_region_inner(w, h);
+    let shift_cub = ((right - left) as f64).log2().ceil() as u32;
+    let add_shift_cub = 1u64 << (shift_cub - 1);
+    let shift_accum = ((bottom - top) as f64).log2().ceil() as u32;
+    let bands = [&src.h, &src.v, &src.d];
+    let (left, top, cols, rows) = (
+        left as usize,
+        top as usize,
+        (right - left) as usize,
+        (bottom - top) as usize,
+    );
+    let vals: [Vec<i64>; 3] = std::array::from_fn(|t| {
+        (top..top + rows)
+            .flat_map(|i| bands[t][i * stride + left..i * stride + left + cols].iter())
+            .map(|&px| {
+                let v = px.unsigned_abs() as u64;
+                ((((v * v + add_shift_sq) >> shift_sq) * v + add_shift_cub) >> shift_cub) as i64
+            })
+            .collect()
+    });
+    let shift_csf = 2f64.powi(accum_convert_float - shift_accum as i32 - shift_cub as i32);
+    BandTerms {
+        left,
+        top,
+        cols,
+        rows,
+        vals,
+        row_shift: shift_accum,
+        divisor: [shift_csf; 3],
+        factor: rf.map(|r| (r as f64).powi(3)),
+        noise: noise_floor(w, h, noise_weight),
+        score_path: f32::NAN,
     }
 }
 
@@ -5470,7 +5597,7 @@ fn compute_adm(
     height: usize,
     bit_depth: u8,
     settings: &AdmSettings,
-    mut aim_terms: Option<&mut Vec<AimTerms>>,
+    mut terms: Option<&mut Vec<AdmScaleTerms>>,
 ) -> Result<(f64, f64), Error> {
     if !matches!(bit_depth, 8 | 10) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -5621,6 +5748,21 @@ fn compute_adm(
                 settings.noise_weight,
                 settings.watson_fixed,
             );
+            // The numerator's masking bands are overwritten below.
+            let num_terms = terms.is_some().then(|| BandTerms {
+                score_path: num_scale,
+                ..adm_cm_terms_i16(
+                    &r,
+                    &csf_f,
+                    &csf_a,
+                    w,
+                    h,
+                    buf_stride,
+                    rf,
+                    settings.noise_weight,
+                    settings.watson_fixed,
+                )
+            });
             adm_csf_i16(
                 &r,
                 &mut csf_f,
@@ -5642,19 +5784,35 @@ fn compute_adm(
                 0.0,
                 settings.watson_fixed,
             );
-            if let Some(terms) = aim_terms.as_deref_mut() {
-                let mut t = adm_cm_terms_i16(
-                    &a,
-                    &csf_a,
-                    &csf_f,
-                    w,
-                    h,
-                    buf_stride,
-                    rf,
-                    settings.watson_fixed,
-                );
-                t.aim_num = aim_num_scale;
-                terms.push(t);
+            if let (Some(terms), Some(num)) = (terms.as_deref_mut(), num_terms) {
+                terms.push(AdmScaleTerms {
+                    num,
+                    den: BandTerms {
+                        score_path: den_scale,
+                        ..adm_csf_den_terms_scale(
+                            &ref_b,
+                            w,
+                            h,
+                            buf_stride,
+                            rf,
+                            settings.noise_weight,
+                        )
+                    },
+                    aim: BandTerms {
+                        score_path: aim_num_scale,
+                        ..adm_cm_terms_i16(
+                            &a,
+                            &csf_a,
+                            &csf_f,
+                            w,
+                            h,
+                            buf_stride,
+                            rf,
+                            0.0,
+                            settings.watson_fixed,
+                        )
+                    },
+                });
             }
         } else {
             adm_dwt2_s123_combined(
@@ -5702,12 +5860,45 @@ fn compute_adm(
                 rf,
                 settings.noise_weight,
             );
+            // The numerator's masking bands are overwritten below.
+            let num_terms = terms.is_some().then(|| BandTerms {
+                score_path: num_scale,
+                ..adm_cm_terms_i32(
+                    &r32,
+                    &csf_f32,
+                    &csf_a32,
+                    scale,
+                    w,
+                    h,
+                    buf_stride,
+                    rf,
+                    settings.noise_weight,
+                )
+            });
             adm_csf_i32(&r32, &mut csf_f32, &mut csf_a32, w, h, buf_stride, rf);
             aim_num_scale = adm_cm_i32(&a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf, 0.0);
-            if let Some(terms) = aim_terms.as_deref_mut() {
-                let mut t = adm_cm_terms_i32(&a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf);
-                t.aim_num = aim_num_scale;
-                terms.push(t);
+            if let (Some(terms), Some(num)) = (terms.as_deref_mut(), num_terms) {
+                terms.push(AdmScaleTerms {
+                    num,
+                    den: BandTerms {
+                        score_path: den_scale,
+                        ..adm_csf_den_terms_s123(
+                            &ref_b32,
+                            scale,
+                            w,
+                            h,
+                            buf_stride,
+                            rf,
+                            settings.noise_weight,
+                        )
+                    },
+                    aim: BandTerms {
+                        score_path: aim_num_scale,
+                        ..adm_cm_terms_i32(
+                            &a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf, 0.0,
+                        )
+                    },
+                });
             }
         }
         num += num_scale as f64;
@@ -5766,16 +5957,16 @@ pub fn adm3_v1_from_luma(
     Ok((score * DLM_WEIGHT + (1.0 - aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL))
 }
 
-/// ADM3's AIM terms per scale (finest first), from the same computation as
-/// [`adm3_v1_from_luma`], whose value is returned with them.
-pub(crate) fn adm3_v1_aim_terms(
+/// ADM3's per-position terms per scale (finest first), from the same
+/// computation as [`adm3_v1_from_luma`], whose value is returned with them.
+pub(crate) fn adm3_v1_terms(
     reference_y: &[u16],
     distorted_y: &[u16],
     width: usize,
     height: usize,
     bit_depth: u8,
     variant: ModelVariant,
-) -> Result<(f64, Vec<AimTerms>), Error> {
+) -> Result<(f64, Vec<AdmScaleTerms>), Error> {
     let mut terms = Vec::with_capacity(4);
     let (score, aim) = compute_adm(
         reference_y,
@@ -5787,6 +5978,13 @@ pub(crate) fn adm3_v1_aim_terms(
         Some(&mut terms),
     )?;
     let adm3 = (score * DLM_WEIGHT + (1.0 - aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL);
+    debug_assert!(
+        terms
+            .iter()
+            .flat_map(|t| [&t.num, &t.den, &t.aim])
+            .all(|b| b.fold().to_bits() == b.score_path.to_bits()),
+        "ADM terms no longer fold to the score path"
+    );
     Ok((adm3, terms))
 }
 
@@ -6476,7 +6674,7 @@ fn adm_decouple_s123_row_timing() {
 }
 
 #[cfg(test)]
-mod aim_terms_tests {
+mod adm_terms_tests {
     use super::*;
 
     /// A textured `bits`-deep plane: a gradient, a checker edge and noise.
@@ -6502,40 +6700,74 @@ mod aim_terms_tests {
         (321, 183, 10, ModelVariant::Default4k),
     ];
 
+    /// The terms rebuild each scale's numerator, denominator and AIM
+    /// numerator from the score path bit for bit, and the f32 maps sum to each
+    /// band's cube-root argument within the reference's per-row rounding
+    /// (at most half a unit per row) and f32 storage.
     #[test]
-    fn aim_terms_fold_to_the_score_path() {
+    fn adm_terms_fold_to_the_score_path() {
         for (w, h, bits, variant) in CASES {
             let r = plane(w, h, 1, bits);
             let d = plane(w, h, 2, bits);
-            let (adm3, terms) = adm3_v1_aim_terms(&r, &d, w, h, bits, variant).unwrap();
+            let (adm3, terms) = adm3_v1_terms(&r, &d, w, h, bits, variant).unwrap();
             let plain = adm3_v1_from_luma(&r, &d, w, h, bits, variant).unwrap();
             assert_eq!(adm3.to_bits(), plain.to_bits(), "{w}x{h}");
             assert_eq!(terms.len(), 4);
-            for (s, t) in terms.iter().enumerate() {
-                assert_eq!(t.fold().to_bits(), t.aim_num.to_bits(), "{w}x{h} scale {s}");
-                for b in 0..3 {
-                    assert_eq!(t.vals[b].len(), t.cols * t.rows);
-                    let add = 1i64 << (t.row_shift - 1);
-                    let accum: i64 = t.vals[b]
-                        .chunks_exact(t.cols)
-                        .map(|row| (row.iter().sum::<i64>() + add) >> t.row_shift)
-                        .sum();
-                    let arg = accum as f64 / t.divisor[b];
-                    // The map skips only the reference's per-row rounding
-                    // (at most half a unit per row) and f32 storage.
-                    let summed: f64 = t.map(b).iter().map(|&v| f64::from(v)).sum();
-                    let bound = (t.rows as f64 * 0.5) / t.divisor[b] + arg * 1e-6;
-                    assert!(
-                        (summed - arg).abs() <= bound,
-                        "{w}x{h} scale {s} band {b}: {summed:e} vs {arg:e}"
-                    );
+            for (s, scale) in terms.iter().enumerate() {
+                for (kind, t) in [
+                    ("num", &scale.num),
+                    ("den", &scale.den),
+                    ("aim", &scale.aim),
+                ] {
+                    let at = format!("{w}x{h} scale {s} {kind}");
+                    assert_eq!(t.fold().to_bits(), t.score_path.to_bits(), "{at}");
+                    for b in 0..3 {
+                        assert_eq!(t.vals[b].len(), t.cols * t.rows, "{at}");
+                        let arg = t.argument(b);
+                        let summed: f64 = t.map(b).iter().map(|&v| f64::from(v)).sum();
+                        let half_unit = 0.5 * t.factor[b] / t.divisor[b];
+                        let bound = t.rows as f64 * half_unit + arg * 1e-6;
+                        assert!(
+                            (summed - arg).abs() <= bound,
+                            "{at} band {b}: {summed:e} vs {arg:e}"
+                        );
+                    }
                 }
+                assert_eq!(
+                    (
+                        scale.num.left,
+                        scale.num.top,
+                        scale.num.cols,
+                        scale.num.rows
+                    ),
+                    (
+                        scale.aim.left,
+                        scale.aim.top,
+                        scale.aim.cols,
+                        scale.aim.rows
+                    )
+                );
+                assert_eq!(
+                    (
+                        scale.den.left,
+                        scale.den.top,
+                        scale.den.cols,
+                        scale.den.rows
+                    ),
+                    (
+                        scale.aim.left,
+                        scale.aim.top,
+                        scale.aim.cols,
+                        scale.aim.rows
+                    )
+                );
             }
-            assert!(
+            let any = |f: fn(&AdmScaleTerms) -> &BandTerms| {
                 terms
                     .iter()
-                    .any(|t| t.vals.iter().flatten().any(|&v| v > 0))
-            );
+                    .any(|t| f(t).vals.iter().flatten().any(|&v| v > 0))
+            };
+            assert!(any(|t| &t.num) && any(|t| &t.den) && any(|t| &t.aim));
         }
     }
 
@@ -6543,10 +6775,10 @@ mod aim_terms_tests {
     fn identical_frames_have_no_additive_impairment() {
         for (w, h, bits, variant) in CASES {
             let r = plane(w, h, 3, bits);
-            let (_, terms) = adm3_v1_aim_terms(&r, &r, w, h, bits, variant).unwrap();
+            let (_, terms) = adm3_v1_terms(&r, &r, w, h, bits, variant).unwrap();
             for t in &terms {
-                assert!(t.vals.iter().flatten().all(|&v| v == 0), "{w}x{h}");
-                assert_eq!(t.fold().to_bits(), t.aim_num.to_bits());
+                assert!(t.aim.vals.iter().flatten().all(|&v| v == 0), "{w}x{h}");
+                assert_eq!(t.aim.fold().to_bits(), t.aim.score_path.to_bits());
             }
         }
     }
