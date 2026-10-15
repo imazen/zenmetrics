@@ -45,3 +45,21 @@ engine ort-cuda (CPU parity of every model is in
 - Full-resolution AIC-4 images (~8 MP) do not fit the 16 GB RTX 4080 on ort-cuda for the
   VGG-based models (lpips_vgg, dists, stlpips_vgg, deepdc: allocator failure); lpips_alex
   and stlpips_alex ran. The CLI reports the error instead of switching engines.
+
+## Port-vs-upstream parity (fix round, 2026-10-15)
+
+`just nn-parity` on i265, ladder goldens (`~/tmp/nn-phase0/`), worst |Δ| and the
+same expressed as a fraction of each model's KonJND JND. Full logs:
+`~/tmp/nn-port-scratch/parity_ckdn-afine-dreamsim_{rten,ortcuda}.log` on dev.
+
+| model | engine | pairs | worst \|Δ\| | worst JND |
+|---|---|---|---|---|
+| ckdn | rten | 15 | 2.981e-07 | 5.65e-05 |
+| ckdn | ort-cuda | 15 | 2.683e-07 | 5.09e-05 |
+| afine | rten | 15 | 7.228e-06 | 1.42e-05 |
+| afine | ort-cuda | 15 | 9.865e-06 | 1.94e-05 |
+| dreamsim | rten | 21 | 2.064e-07 | 1.17e-05 |
+| dreamsim | ort-cuda | 21 | 3.577e-07 | 2.03e-05 |
+
+Identical ref/dist pairs score exactly 0 on DreamSim on both engines (the
+assertion the ort clamp restored).
