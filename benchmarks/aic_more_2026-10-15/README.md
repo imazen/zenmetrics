@@ -117,3 +117,8 @@ tests passing and the expected 87 != 88 failure on this stacked base; no asserti
 was relaxed. `inventory_union.json` verifies master has 84, only `flip-v17` is
 missing here, and the union with these four names is exactly 88. The coordinator
 merges this branch and retains master’s reviewed FLIP/CW-SSIM changes.
+
+Pair tables: [CAMBI](cambi_aic.tsv), [Butteraugli-original](butter_aic.tsv),
+[SSIMULACRA1](ssim1_aic.tsv), [WS-HV](ws_aic.tsv). Full numeric summaries are in
+[summary.json](summary.json); source/log/binary hashes are in
+[validation.meta](validation.meta).
