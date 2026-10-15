@@ -8,7 +8,8 @@
 //!   (a = −0.5), centre `(i + 0.5)·in/out − 0.5`, support `2·max(1, in/out)`,
 //!   weights renormalised over the clamped window. Verified bit-exact against
 //!   `F.interpolate` impulse responses (a = −0.5 reproduces torch's weights to
-//!   0.0; a = −0.75, the OpenCV/PIL convention, does not).
+//!   0.0; a = −0.75 — torch's own non-antialiased bicubic — does not.
+//!   Pillow's `bicubic_filter` in `libImaging/Resample.c` is also a = −0.5).
 
 /// One 1-D resampling entry: the source index a kernel window starts at and its
 /// normalised weights.

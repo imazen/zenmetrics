@@ -1,5 +1,5 @@
 //! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC,
-//! CKDN).
+//! CKDN, A-FINE, DreamSim).
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the

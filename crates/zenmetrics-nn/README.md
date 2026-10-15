@@ -4,20 +4,23 @@ Learned full-reference image-quality metrics, run from ONNX graphs exported from
 each model's upstream reference implementation. Plan and licensing:
 [`docs/PYIQA_PORT_PLAN.md`](../../docs/PYIQA_PORT_PLAN.md).
 
-| model | columns | engines | parity target | 1 JND | worst \|Δ\| in JND (18 pairs, 64–2048 px) |
+| model | columns | engines | parity target | 1 JND | worst \|Δ\| in JND (15–21 pairs, 64–4096 px) |
 |---|---|---|---|---|---|
 | LPIPS v0.1 (`Lpips`, `LpipsNet`) | `lpips_alex`, `lpips_vgg`, `lpips_squeeze` | rten, ort-cuda | `lpips` 0.1.4, CPU fp32 | 0.065 / 0.194 / 0.080 | rten ≤ 1.4e-6, ort-cuda ≤ 1.2e-6 |
 | DISTS (`Dists`) | `dists` | rten, ort-cuda | `DISTS_pytorch` 0.1, CPU fp32, no resize | 0.094 | rten 1.9e-6, ort-cuda 1.9e-6 |
 | ST-LPIPS (`Lpips`, `LpipsNet::{AlexShiftTolerant,VggShiftTolerant}`) | `stlpips_alex`, `stlpips_vgg` | rten, ort-cuda | `stlpips_pytorch` 0.0.2 | 0.023 / 0.066 | rten ≤ 1.8e-6, ort-cuda ≤ 2.6e-6 |
 | DeepDC (`DeepDc`) | `deepdc` | rten, ort-cuda | `DeepDC_PyTorch` 0.2, ImageNet input norm, no resize | 0.064 | rten 1.9e-6, ort-cuda 1.9e-6 |
 | CKDN (`Ckdn`) | `ckdn` | rten, ort-cuda | `researchmm/CKDN` epoch-14 checkpoint, `cat(dist, ref, dist, ref)` → `dr`, eval transform: short side →329 then cc288 (dist bicubic-aa, ref nearest) | 0.0053¹ | rten 5.7e-5, ort-cuda 5.1e-5 |
+| A-FINE (`Afine`) | `afine` | rten, ort-cuda | `ChrisDud0257/AFINE` afine.pth + OpenAI ViT-B-32, raw `afine_all` (lower is better) | 0.507¹ | rten 1.4e-5, ort-cuda 1.9e-5 |
+| DreamSim (`Dreamsim`) | `dreamsim` | rten, ort-cuda | `dreamsim` 0.21.2 ensemble, LoRA folded, `1 − cosine` on centred unit concat, PIL-bicubic 224×224 | 0.0176 | rten 1.2e-5, ort-cuda 2.1e-5 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold
 (`models/jnd_scale.tsv`; method:
 [`benchmarks/nn_konjnd_scale_2026-10-15.md`](../../benchmarks/nn_konjnd_scale_2026-10-15.md)).
-¹ CKDN is a quality score whose identical-pair value is image-dependent, so its JND is the
-median |score − score(same reference vs itself)| rather than the median raw score.
+¹ CKDN and A-FINE have image-dependent identical-pair scores, so their JND is the pooled
+median over score(pair) − score(reference vs itself): |delta| for CKDN, signed for
+A-FINE.
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,
