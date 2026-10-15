@@ -6,7 +6,8 @@
 # (SaveOutput hooks + get_resnet_feature/get_vit_feature + deform_fusion
 # with torchvision DeformConv2d + Pixel_Prediction, epoch-32 checkpoint)
 # under each named convention and writes <out_tsv>:
-#   distorted, source, published, <conv>..., delta columns, jitter std.
+#   distorted, source, published, <conv>..., delta columns (published units
+#   and JND units, AHIQ's KonJND scale = 0.024882), jitter std.
 #
 # Conventions:
 #   s9           native [-1,1], the port's deterministic nine-crop mean
@@ -15,14 +16,10 @@
 #   s9_imnet     ImageNet mean/std normalisation, nine-crop
 #   stream20_imnet  ImageNet norm, continuing-stream 20 crops
 #   s20          native [-1,1], 20 random crops, np.seed(1919) per image
-#   grid20       native [-1,1], pyiqa uniform_crop(crop_num=20): a 5x5 grid
-#                (i*(h-224)//4, j*(w-224)//4), first 20 positions (bottom
-#                row dropped) — deterministic, no seed
-#   grid20_imnet ImageNet norm, same grid — pyiqa's actual AHIQ pipeline
 #
 # AHIQ_VIT_TAG overrides the ViT backbone tag (default
 # vit_base_patch8_224.augreg_in21k_ft_in1k, upstream's timm 0.5.4
-# resolution; pyiqa under timm 1.x gets .augreg2_in21k_ft_in1k).
+# resolution).
 #
 # Backbones are the timm==0.5.4 default_cfg resolutions upstream loads,
 # named explicitly: vit_base_patch8_224.augreg_in21k_ft_in1k + resnet50.a1_in1k.
@@ -42,6 +39,9 @@ CKPT = os.environ.get(
     '/home/lilith/tmp/nn-port-scratch/ahiq-ckpt/1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W.pth')
 IMG, CSV, OUT = sys.argv[1:4]
 CONVS = sys.argv[4:] or ['s9', 'stream20']
+# AHIQ's KonJND-1k pooled median |d| scale (crates/zenmetrics-nn/models/
+# jnd_scale.tsv); overridable for reruns.
+JND = float(os.environ.get('AHIQ_JND', '0.024882'))
 
 def load_mod(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -56,8 +56,8 @@ class Opt:
     patch_size = 8
 
 torch.set_grad_enabled(False)
-# Upstream's timm 0.5.4 resolves the bare name to augreg; timm 1.x (pyiqa's
-# env) resolves it to augreg2. AHIQ_VIT_TAG overrides to probe either.
+# Upstream's timm 0.5.4 resolves the bare name to augreg; AHIQ_VIT_TAG
+# overrides the tag when probing other timm resolutions.
 VIT_TAG = os.environ.get(
     'AHIQ_VIT_TAG', 'vit_base_patch8_224.augreg_in21k_ft_in1k')
 vit = timm.create_model(VIT_TAG, pretrained=True).eval()
@@ -138,13 +138,6 @@ def conv_score(conv, r, d):
         return sum(score_crop(d[:, :, t:t + 224, l:l + 224],
                               r[:, :, t:t + 224, l:l + 224])
                    for t, l in crops9(h, w)) / 9
-    if base == 'grid20':
-        # pyiqa arch_util.uniform_crop(x, 224, 20): 5x5 uniform grid, first 20.
-        sh, sw = (h - 224) // 4, (w - 224) // 4
-        pos = [(i * sh, j * sw) for i in range(5) for j in range(5)][:20]
-        return sum(score_crop(d[:, :, t:t + 224, l:l + 224],
-                              r[:, :, t:t + 224, l:l + 224])
-                   for t, l in pos) / 20
     n = int(base[1:])
     s = 0.0
     for _ in range(n):
@@ -194,6 +187,7 @@ for row in rows:
             got = conv_score(conv, r, d)
         rec[conv] = got
         rec[f'{conv}_delta'] = got - pub
+        rec[f'{conv}_delta_jnd'] = (got - pub) / JND
     out_rows.append(rec)
     print(dn, ' '.join(f'{c}={rec[c]:.4f} d={rec[c+"_delta"]:+.4f}'
                        for c in CONVS), flush=True)
@@ -203,7 +197,7 @@ for row in rows:
 K = 5
 for conv in CONVS:
     if 'stream' not in conv and conv != 's20':
-        continue  # grid20 is deterministic; jitter applies to seeded draws only
+        continue  # jitter applies to seeded draws only
     imnet = conv.endswith('_imnet')
     stds = []
     for row in rows[:10]:
@@ -227,7 +221,7 @@ for conv in CONVS:
 
 fields = ['distorted', 'source', 'published']
 for c in CONVS:
-    fields += [c, f'{c}_delta']
+    fields += [c, f'{c}_delta', f'{c}_delta_jnd']
 with open(OUT, 'w', newline='') as f:
     wcsv = csv.DictWriter(f, fieldnames=fields)
     wcsv.writeheader()
