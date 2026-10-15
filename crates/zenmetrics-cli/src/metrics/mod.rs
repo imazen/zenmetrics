@@ -47,6 +47,8 @@ pub use display::CvvdpDisplay;
 mod classical;
 #[cfg(feature = "nn")]
 mod nn;
+#[cfg(feature = "nr")]
+mod nr;
 #[cfg(feature = "cpu-metrics")]
 pub mod vmaf;
 
@@ -477,6 +479,12 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "mdctpsnr")]
     Mdctpsnr,
+    /// PIQE — no-reference perception-based block distortion (in-tree
+    /// `piqe` crate, port of pypiqe 1.2 / MATLAB `piqe`). Score in
+    /// `[0, 100]`; higher is worse. Scored through `PairedNoReference`:
+    /// emits `piqe` (distorted) and `piqe_ref` (reference). Needs `nr`.
+    #[value(name = "piqe")]
+    Piqe,
 }
 
 impl MetricKind {
@@ -545,6 +553,7 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf,
             MetricKind::PsnrhvsDaala,
             MetricKind::Mdctpsnr,
+            MetricKind::Piqe,
         ]
     }
 
@@ -613,6 +622,7 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf => "msssim-libvmaf",
             MetricKind::PsnrhvsDaala => "psnrhvs-daala",
             MetricKind::Mdctpsnr => "mdctpsnr",
+            MetricKind::Piqe => "piqe",
         }
     }
 
@@ -740,6 +750,7 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf => MSSSIM_LIBVMAF_CPU_COLUMNS,
             MetricKind::PsnrhvsDaala => PSNRHVS_DAALA_CPU_COLUMNS,
             MetricKind::Mdctpsnr => MDCTPSNR_CPU_COLUMNS,
+            MetricKind::Piqe => &["piqe", "piqe_ref"],
         }
     }
 
@@ -2247,6 +2258,14 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-mdctpsnr"))]
         MetricKind::Mdctpsnr => Err(disabled_msg("mdctpsnr", "cpu-mdctpsnr")),
+
+        // No-reference metrics: in-tree ports scored through
+        // `PairedNoReference` — `piqe` on the distorted image plus
+        // `piqe_ref` on the reference (see metrics/nr.rs).
+        #[cfg(feature = "nr")]
+        MetricKind::Piqe => nr::score(kind, reference, distorted),
+        #[cfg(not(feature = "nr"))]
+        MetricKind::Piqe => Err(disabled_msg("piqe", "nr")),
     }
 }
 

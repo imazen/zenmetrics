@@ -21,6 +21,7 @@ members = [
     "crates/iwssim-gpu",
     "crates/psnrhvs",
     "crates/nlpd",
+    "crates/piqe",
     "crates/ssim2-gpu",
 
     "crates/vmaf",
@@ -88,6 +89,7 @@ haarpsi = { version = "0.1.0", path = "crates/haarpsi", default-features = false
 hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
+piqe = { version = "0.1.0", path = "crates/piqe", default-features = false }
 psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }

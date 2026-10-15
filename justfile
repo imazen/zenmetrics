@@ -615,3 +615,19 @@ stats-helpers-check:
 
 stats-helpers-serial-check:
     just snap-cargo @ test -p zenmetrics-stats --no-default-features
+
+# --- no-reference classical metrics (piqe, niqe, brisque) ---------------------
+# Regenerate a crate's goldens TSV with the oracle venv
+# (~/tmp/nr-classic-scratch/venv, built per the nr-classic lane brief).
+nr-golden crate python="$HOME/tmp/nr-classic-scratch/venv/bin/python":
+    {{python}} -I crates/{{crate}}/tests/golden_{{crate}}.py > crates/{{crate}}/tests/goldens_{{crate}}.tsv
+
+# Score all 1,008 KonJND pairs for one NR metric (PairedNoReference: `<m>` on
+# the distorted image, `<m>_ref` on the reference) into a TSV for the JND
+# estimate. `bin` is a zenmetrics-cli binary built with `--features nr`.
+nr-konjnd bin metric out pairs="$HOME/tmp/konjnd-pairs/pairs_abs.tsv":
+    {{bin}} batch --metric {{metric}} --pairs '{{pairs}}' --output '{{out}}' --use-legacy-scheduler
+
+# Crate tests (behaviour + oracle parity) in the pinned lock snapshot.
+nr-test crate:
+    {{just_executable()}} snap-cargo @ test -p {{crate}}
