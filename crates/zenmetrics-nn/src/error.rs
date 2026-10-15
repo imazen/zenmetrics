@@ -29,6 +29,13 @@ pub enum Error {
         /// The bound that would be exceeded, in pixels.
         limit: usize,
     },
+    /// The metric's patch sequence exceeds its attention-memory bound.
+    TooManyPatches {
+        /// Maximum number of patch rows, including padded scale groups.
+        limit: usize,
+    },
+    /// A positive input side rounds to zero in an aspect-preserving resize.
+    DegenerateAspectRatio,
     /// Reference and distorted images differ in size.
     SizeMismatch,
     /// The model's weights are not permissively licensed and the caller's
@@ -48,6 +55,13 @@ impl fmt::Display for Error {
                     f,
                     "image exceeds the metric's {limit}-pixel intermediate bound"
                 )
+            }
+            Self::TooManyPatches { limit } => write!(
+                f,
+                "image exceeds the metric's {limit}-patch-row intermediate bound"
+            ),
+            Self::DegenerateAspectRatio => {
+                f.write_str("degenerate aspect ratio: a rescaled image side rounds to zero")
             }
             Self::SizeMismatch => f.write_str("reference and distorted sizes differ"),
             Self::WeightsNotAccepted(t) => write!(
@@ -72,7 +86,9 @@ impl Error {
     pub(crate) fn kind(&self) -> za::ErrorKind {
         match self {
             Self::TooSmall { .. } => za::ErrorKind::TooSmall,
-            Self::TooLarge { .. } => za::ErrorKind::InvalidInput,
+            Self::TooLarge { .. } | Self::TooManyPatches { .. } | Self::DegenerateAspectRatio => {
+                za::ErrorKind::InvalidInput
+            }
             Self::SizeMismatch => za::ErrorKind::DimensionMismatch,
             Self::Io { .. } | Self::BadModel(_) | Self::WeightsNotAccepted(_) => {
                 za::ErrorKind::InvalidConfig

@@ -129,7 +129,7 @@ impl Maniqa {
             }
             Backend::Image(g) => g.score(&[NamedInput {
                 name: "x",
-                shape: [1, 3, SIDE, SIDE],
+                shape: vec![1, 3, SIDE, SIDE],
                 data: x,
             }]),
             Backend::Pair(_) => Err(Error::Engine("pair graph on an NR model".into())),

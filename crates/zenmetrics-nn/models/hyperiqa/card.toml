@@ -1,0 +1,44 @@
+# HyperIQA: no-reference IQA — a ResNet-50 backbone plus a hypernetwork
+# that generates the target scoring network's weights per image, then a
+# 5-layer FC target net produces a quality score. The `hyperiqa` column
+# is upstream demo.py's output convention (mean over crops), MOS-scale
+# trained on 0-100 MOS, higher is better; the linear output is unbounded.
+name = "hyperiqa"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `hyperiqa` on dist, `hyperiqa_ref` on ref
+direction = "higher-is-better"       # koniq10k MOS-scale score; ladder goldens span 26.3–77.8
+columns = ["hyperiqa", "hyperiqa_ref"]
+paper = "Su, Yan, Zhu, Zhang, Ge, Sun, Zhang. Blindly Assess Image Quality in the Wild Guided by a Self-Adaptive Hyper Network. CVPR 2020"
+
+[code]
+source = "upstream-port"             # models.py imported verbatim in oracle.py/export.py; the net runs as one exported ONNX graph
+upstream = "https://github.com/SSL92/hyperIQA"
+upstream_package = "git clone of SSL92/hyperIQA, pinned c42e7279717e7dcb693a24b891fc14a4189a45ee (the paper's official repo — NOT 'SSL-Group/hyperIQA', which 404s)"
+licence = "MIT"                      # LICENSE added upstream 2023-12-14, copyright line 'SSL92'
+
+[weights]
+# The MIT LICENSE covers the repository code. The README's "pre-trained
+# model" links koniq_pretrained.pkl via Google Drive / Baidu with no
+# licence stated for the weights themselves, so loading needs an
+# explicit WeightsConsent (ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa).
+licence_class = "unknown"
+checkpoint = "https://drive.google.com/file/d/1OOUmnbvpGea0LIGpIWEbOyxfWx6UCiiE/view (README 'pre-trained model', koniq-10k; koniq_pretrained.pkl, ~110 MiB; sha256 recorded in hyperiqa_export.meta)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "torchvision ToTensor (u8 -> f32 /255) then ImageNet mean/std (0.485,0.456,0.406)/(0.229,0.224,0.225)"
+resize = "PIL bilinear u8 to (W,H)=(384,512) — torchvision Resize((512,384)) — bit-exact port resize_bilinear_pil_u8 (LICENSE-pillow)"
+crop = "DEVIATION FROM UPSTREAM: upstream's test transform is RandomCrop(224) scored test_patch_num=25 times and averaged (demo.py uses 10) — nondeterministic. This port crops a deterministic 5x5 grid instead: x-origins round(i*160/4)={0,40,80,120,160}, y-origins round(j*288/4)={0,72,144,216,288} — 25 crops, the same count as test_patch_num, then the batch mean. The model graph and weights are upstream's; only crop placement differs. The goldens were produced by oracle.py running upstream's own network on this grid."
+crop_grid_measurement = "Independent upstream-network check: 8 seeds × 4 images; upstream random 25-crop means have run-to-run SD 0.35–0.85 score units (0.08–0.19 JND). The deterministic grid differs from their random-crop mean by 0.16–0.49 score units (≤0.11 JND), within that protocol noise. Upstream random crops cannot be reproduced to the 1e-3 JND gate; parity below qualifies the documented deterministic grid."
+min_size = 1                         # every input resizes to 384x512 first
+
+[export]
+script = "export.py"
+outputs = "hyperiqa.{onnx,meta} + hyperiqa_export.meta (hyperiqa_goldens.tsv is written by oracle.py)"
+opset = 17
+notes = "x[25,3,224,224] -> hyperiqa[1] (batch mean), fixed batch 25. The exported HyperNet reshape operations require 25 crops even though the legacy graph labels the input axis dynamic; batches 1 and 2 fail at /hyper/Reshape_10. The Rust side always sends the 25 grid crops. HyperNet (ResNet-50 + LDA + hyper convs emitting the target FC weights) + TargetNet as batched matmuls: upstream realises TargetFC as grouped 1x1 convs with groups=batch, which cannot export a dynamic batch; bmm is identical math. Self-check upstream-TargetNet-vs-export |d| = 0.0; ONNX-CPU vs the upstream-model goldens worst 1.5e-5."
+
+[parity]
+oracle = "SSL92/hyperIQA @c42e7279, HyperNet+TargetNet on the deterministic 5x5 grid (models.py imported verbatim), CPU fp32, koniq_pretrained.pkl"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 4.461776                       # pooled median |hyperiqa - hyperiqa_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 6.226422, BPG 2.913934
+results = "rten: worst |d| 1.526e-5 (3.42e-6 JND) on 27 ladder goldens; ort-cuda: worst |d| 1.526e-5 (3.42e-6 JND). ONNX-CPU vs upstream-model goldens (the deterministic grid) worst 1.5e-5; upstream-TargetNet vs exported graph |d| = 0.0. rten smoke 1415_256: 32.6361008 vs golden 32.636105."

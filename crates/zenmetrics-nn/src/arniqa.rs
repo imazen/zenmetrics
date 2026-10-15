@@ -205,12 +205,12 @@ impl Arniqa {
             Backend::Image(g) => g.score(&[
                 NamedInput {
                     name: "x",
-                    shape: [5, 3, CROP, CROP],
+                    shape: vec![5, 3, CROP, CROP],
                     data: x,
                 },
                 NamedInput {
                     name: "x_ds",
-                    shape: [5, 3, CROP, CROP],
+                    shape: vec![5, 3, CROP, CROP],
                     data: x_ds,
                 },
             ]),

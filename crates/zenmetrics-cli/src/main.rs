@@ -1572,6 +1572,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // LIQE: expected value of the 5-quality-bucket softmax — a
         // strict convex combination of 1..5.
         MetricKind::Liqe => Some((1.0, 5.0, 3.0)),
+        // MUSIQ: koniq10k-trained transformer score on the MOS 1..100
+        // scale; the head extrapolates a little past the range.
+        MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
+        MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
     }
 }
 

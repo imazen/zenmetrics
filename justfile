@@ -615,11 +615,31 @@ nn-export-maniqa python ladder out upstream weights sizes="64,128,256,512,1024":
 nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
     {{python}} -I crates/zenmetrics-nn/models/liqe/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{ckpt}}' '{{sizes}}'
 
+# Export HyperIQA from the official KonIQ checkpoint (koniq_pretrained.pkl);
+# upstream checkout + pkl paths, goldens from oracle.py.
+nn-export-hyperiqa python upstream ckpt out goldens ladder:
+    {{python}} -u -I crates/zenmetrics-nn/models/hyperiqa/export.py '{{upstream}}' '{{ckpt}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+
+# HyperIQA goldens via upstream models.py on the deterministic 5x5 grid
+# (upstream's eval crops at random — see models/hyperiqa/card.toml).
+nn-goldens-hyperiqa python upstream ckpt out ladder:
+    {{python}} -I crates/zenmetrics-nn/models/hyperiqa/oracle.py '{{upstream}}' '{{ckpt}}' '{{out}}' {{ladder}}/*.png
+
+# Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
+# Goldens come from oracle.py under the legacy JAX env, not this recipe.
+nn-export-musiq python npz out goldens ladder:
+    {{python}} -u -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+
+# MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
+# see models/musiq/card.toml; tensorflow CPU, eager mode).
+nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/musiq/oracle.py '{{ladder}}' '{{upstream}}' '{{npz}}' '{{out}}' '{{sizes}}'
+
 # Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
@@ -704,3 +724,19 @@ brisque-review-params python:
 brisque-review-computed-build:
     just brisque-review-build
     python3 benchmarks/brisque_review_2026-10-15/build_computed.py
+
+# Export qualification gates without loading model weights.
+nn-export-checks:
+    python3 -I crates/zenmetrics-nn/models/test_export_checks.py
+
+# Review gates in the CI-pinned sibling snapshot (caller uses run-heavy).
+nn-review-tests:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ test --release -p zenmetrics-nn
+
+nn-review-format:
+    bash scripts/ci/lock.sh --check
+    cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
+
+nn-review-lint:
+    just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items

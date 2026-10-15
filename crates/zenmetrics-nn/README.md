@@ -4,7 +4,7 @@ Learned full-reference image-quality metrics, run from ONNX graphs exported from
 each model's upstream reference implementation. Plan and licensing:
 [`docs/PYIQA_PORT_PLAN.md`](../../docs/PYIQA_PORT_PLAN.md).
 
-| model | columns | engines | parity target | 1 JND | worst \|Δ\| in JND (15–21 pairs, 64–4096 px) |
+| model | columns | engines | parity target | 1 JND | worst \|Δ\| in JND (model-specific golden sets) |
 |---|---|---|---|---|---|
 | LPIPS v0.1 (`Lpips`, `LpipsNet`) | `lpips_alex`, `lpips_vgg`, `lpips_squeeze` | rten, ort-cuda | `lpips` 0.1.4, CPU fp32 | 0.065 / 0.194 / 0.080 | rten ≤ 1.4e-6, ort-cuda ≤ 1.2e-6 |
 | DISTS (`Dists`) | `dists` | rten, ort-cuda | `DISTS_pytorch` 0.1, CPU fp32, no resize | 0.094 | rten 1.9e-6, ort-cuda 1.9e-6 |
@@ -16,6 +16,8 @@ each model's upstream reference implementation. Plan and licensing:
 | ARNIQA (`Arniqa`, no-reference) | `arniqa`, `arniqa_ref` | rten, ort-cuda | `miccunifi/ARNIQA` `single_image_inference.py`, kadid10k regressor, 5-crop full + PIL-bilinear half | 0.0538 | rten 6.65e-6 (= 3.58e-7 score), ort-cuda same |
 | MANIQA (`Maniqa`, no-reference) | `maniqa`, `maniqa_ref` | rten, ort-cuda | `IIGROUP/MANIQA` koniq10k eval path, cv2-INTER_CUBIC 224 single forward, score [0,1] | 0.0214 | rten 1.70e-4 (= 3.6e-6 score), ort-cuda (see card) |
 | LIQE (`Liqe`, no-reference, consent-gated) | `liqe`, `liqe_ref` | rten, ort-cuda | `zwx8981/LIQE` `LIQE.forward`, 495-prompt text bank, top-left-224-patch×15 quirk | 0.3938 | rten 1.25e-5, ort-cuda 4.96e-5 |
+| MUSIQ (`Musiq`, no-reference) | `musiq`, `musiq_ref` | rten, ort-cuda | `google-research/musiq` `run_predict_image.py`, koniq_ckpt.npz, 3-scale TF-gaussian 32² patches → transformer, MOS-scale | 1.969 | rten 1.20e-4, ort-cuda 6.98e-5 |
+| HyperIQA (`Hyperiqa`, no-reference) | `hyperiqa`, `hyperiqa_ref` | rten, ort-cuda | `SSL92/hyperIQA` `demo.py` model on a documented deterministic 5x5 crop grid (upstream crops at random), koniq_pretrained.pkl, ResNet-50 hypernetwork, trained on 0–100 MOS with an unbounded linear output | 4.462 | rten 3.42e-6, ort-cuda 3.42e-6 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold
@@ -51,3 +53,17 @@ of 2N. On ort-cuda it does not yet (the whole graph runs per call).
 Tests: `cargo test -p zenmetrics-nn` runs the head and preprocessing unit tests.
 `just nn-parity <model-dir> <ladder-dir> [rten|ort-cuda] [features] [nets]`
 checks scores against the exported upstream goldens.
+
+### MUSIQ and HyperIQA export qualification
+
+Both export recipes require a goldens TSV and its complete image directory.
+They fail for missing image pairs, nonfinite scores or differences above
+`1e-3 * JND` in score units, with scales read from `models/jnd_scale.tsv`.
+`just nn-export-checks` exercises rejection controls without loading models.
+HyperIQA exports have a fixed batch of 25 and score the documented deterministic
+crop grid; its linear output is unbounded. MUSIQ errors distinguish the 8192
+patch-row limit (`Error::TooManyPatches`) from a degenerate aspect ratio
+(`Error::DegenerateAspectRatio`). These are additive public error variants.
+
+[Review qualification receipt](../../benchmarks/nr_learned_review_2026-10-15.meta)
+records the complete exports, rejection controls and both engine parity runs.

@@ -14,8 +14,8 @@ use std::sync::{Mutex, OnceLock};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa,
-    WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
+    Musiq, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -53,6 +53,7 @@ fn consent() -> WeightsConsent {
                 "afine" => Afine::WEIGHTS,
                 "dreamsim" => Dreamsim::WEIGHTS,
                 "liqe" => Liqe::WEIGHTS,
+                "hyperiqa" => Hyperiqa::WEIGHTS,
                 _ => continue,
             };
             consent = consent.accept(terms);
@@ -95,6 +96,18 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "liqe" {
         return Ok(Box::new(PairedNoReference::new(Liqe::from_dir(
+            &dir,
+            engine,
+            &consent(),
+        )?)));
+    }
+    if column == "musiq" {
+        return Ok(Box::new(PairedNoReference::new(Musiq::from_dir(
+            &dir, engine,
+        )?)));
+    }
+    if column == "hyperiqa" {
+        return Ok(Box::new(PairedNoReference::new(Hyperiqa::from_dir(
             &dir,
             engine,
             &consent(),

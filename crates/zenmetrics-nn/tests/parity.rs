@@ -5,7 +5,8 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`.
+//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
+//!   `musiq`, `hyperiqa`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -15,8 +16,8 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa,
-    WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
+    Musiq, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -129,6 +130,23 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     "liqe",
                 );
             }
+            if name == "musiq" {
+                return (
+                    Box::new(PairedNoReference::new(
+                        Musiq::from_dir(&dir, engine()).expect("load musiq"),
+                    )),
+                    "musiq",
+                );
+            }
+            if name == "hyperiqa" {
+                let consent = WeightsConsent::new().accept(Hyperiqa::WEIGHTS);
+                return (
+                    Box::new(PairedNoReference::new(
+                        Hyperiqa::from_dir(&dir, engine(), &consent).expect("load hyperiqa"),
+                    )),
+                    "hyperiqa",
+                );
+            }
             let net = *LpipsNet::ALL
                 .iter()
                 .find(|n| n.column() == name)
@@ -193,8 +211,7 @@ fn matches_upstream() {
         let mut worst = 0.0f64;
         for line in goldens.lines().skip(1) {
             let f: Vec<&str> = line.split('\t').collect();
-            let (stem, size, want): (&str, usize, f64) =
-                (f[0], f[1].parse().unwrap(), f[2].parse().unwrap());
+            let (stem, size, want): (&str, &str, f64) = (f[0], f[1], f[2].parse().unwrap());
             let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
             let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
             let eval = m

@@ -1,0 +1,65 @@
+MUSIQ / HyperIQA review qualification — 2026-10-15
+Source: 0bd87eca5e124135f815bd533cb55bf82bbc3274 (nr-learned-fix)
+Base: bf3361df (nr-learned); x86_64 Linux, i265.
+No model weights, golden values, JND scales or numerical thresholds changed.
+
+Environment:
+  LOCK_SNAP_DIR=$HOME/tmp/zenmetrics-lock-snap-aicvariants
+  TMPDIR=$HOME/tmp/aic-variants-scratch
+  original models=$HOME/tmp/nr-learned-scratch/models
+  ladder=$HOME/tmp/nn-phase0/ladder
+  export python=$HOME/tmp/nr-learned-scratch/venv/bin/python
+Heavy commands serialized with flock and run-heavy --mem 16G. Export and
+model-parity runs used --jobs 4; CPU parity used RTEN_NUM_THREADS=4.
+
+Commands / outcomes:
+  just nn-review-tests
+    Debug and release cargo test -p zenmetrics-nn: PASS (including doctests).
+    run-heavy: done rc=0 23s | peak-RSS 1.39GiB | min-avail 21739MiB | peak-load 10.38
+  just nn-review-lint
+    Exact CI workspace clippy flags (wgpu,all-metrics): PASS.
+    run-heavy: done rc=0 18s | peak-RSS 0.83GiB | min-avail 21110MiB | peak-load 7.74
+  just nn-export-checks
+    Missing image / empty goldens and nonfinite / out-of-gate controls: PASS.
+    Export recipes refuse omitted goldens/image directory arguments.
+
+Fresh complete exports into $TMPDIR/round9-export/{hyperiqa,musiq}, leaving
+original model files intact:
+  just nn-export-hyperiqa <python> <upstream> <checkpoint> <out> <goldens> <ladder>
+    27 golden pairs; worst |delta| = 1.526e-5 score units.
+    Upstream TargetNet versus wrapper self-check: exactly 0.0, asserted.
+    run-heavy: done rc=0 67s | peak-RSS 1.42GiB | min-avail 21989MiB | peak-load 4.84
+  just nn-export-musiq <python> <checkpoint> <out> <goldens> <ladder>
+    24 golden pairs; worst |delta| = 2.022e-4 score units.
+    Torch versus ORT-CPU self-check: 1.526e-5 (existing 1e-4 bound retained).
+    run-heavy: done rc=0 37s | peak-RSS 2.93GiB | min-avail 20564MiB | peak-load 4.59
+Both exporters assert the canonical 1e-3 JND gate, reading jnd_scale.tsv:
+  MUSIQ 0.001968925 score units; HyperIQA 0.004461776 score units.
+HyperIQA remains fixed batch 25; fresh exports omit the dynamic-axis label.
+
+  just nn-review-format
+  just nn-parity <models> <ladder> rten model-tests musiq,hyperiqa
+    Complete workspace fmt check: PASS.
+    MUSIQ: 24 pairs, worst 2.366e-4 = 1.20e-4 JND.
+    HyperIQA: 27 pairs, worst 1.526e-5 = 3.42e-6 JND.
+    Warm/cold parity control: PASS.
+    run-heavy: done rc=0 142s | peak-RSS 1.62GiB | min-avail 21395MiB | peak-load 8.69
+  just nn-parity <models> <ladder> ort-cuda model-tests,ort musiq,hyperiqa
+    MUSIQ: 24 pairs, worst 1.374e-4 = 6.98e-5 JND.
+    HyperIQA: 27 pairs, worst 1.526e-5 = 3.42e-6 JND.
+    Warm/cold parity control: PASS. No out-of-gate cases.
+    run-heavy: done rc=0 11s | peak-RSS 1.21GiB | min-avail 21269MiB | peak-load 18.60
+CUDA runtime resolving path:
+  $HOME/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime.so.1.31.0
+CUDA/cuDNN libraries:
+  $HOME/tmp/nr-learned-scratch/venv/lib/python3.12/site-packages/nvidia/{cu13,cudnn}/lib
+An earlier attempt used the export environment's CPU-only runtime and failed
+before scoring (CUDA provider unavailable). The complete failed log is retained;
+the successful CUDA rerun above uses the CUDA-enabled runtime.
+
+The crop-grid variability numbers in the card are supplied by the independent
+Round 9 review (8 seeds x 4 images), not remeasured in this run. Scripts/terms:
+https://github.com/SSL92/hyperIQA
+https://github.com/google-research/google-research/tree/master/musiq
+Full logs: $TMPDIR/round9-*.log; fresh export metadata: $TMPDIR/round9-export/.
+Existing snapshot profile/unused-patch warnings remain; no new clippy warnings.
