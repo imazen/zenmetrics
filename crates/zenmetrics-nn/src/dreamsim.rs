@@ -149,7 +149,12 @@ impl Dreamsim {
             let n = e.len() as f64;
             let mean = e.iter().map(|&v| f64::from(v)).sum::<f64>() / n;
             let v: Vec<f64> = e.iter().map(|&x| f64::from(x) - mean).collect();
-            let norm = v.iter().map(|x| x * x).sum::<f64>().sqrt().max(f64::MIN);
+            let norm = v
+                .iter()
+                .map(|x| x * x)
+                .sum::<f64>()
+                .sqrt()
+                .max(f64::MIN_POSITIVE);
             v.into_iter().map(|x| x / norm).collect()
         }
         let (ua, ub) = (unit(a), unit(b));
@@ -176,7 +181,12 @@ impl Dreamsim {
                 });
                 Ok(Self::distance(&self.embed_of(tr?)?, &self.embed_of(td?)?))
             }
-            Backend::Pair(p) => p.score(Self::prep(r), Self::prep(d), IMG, IMG),
+            Backend::Pair(p) => {
+                // The graph emits unclamped 1-cos; mirror distance()'s
+                // cosine clamp so identical pairs score exactly 0.
+                Ok(p.score(Self::prep(r), Self::prep(d), IMG, IMG)?
+                    .clamp(0.0, 2.0))
+            }
         }
     }
 }
@@ -270,9 +280,9 @@ impl za::WarmReference for WarmDreamsim<'_> {
                     .metric_err_with(COLUMN, Error::kind)?;
                 Ok(Dreamsim::distance(er, &ed))
             }
-            (Backend::Pair(p), WarmState::Pixels(pr)) => {
-                p.score(pr.clone(), Dreamsim::prep(&view), IMG, IMG)
-            }
+            (Backend::Pair(p), WarmState::Pixels(pr)) => p
+                .score(pr.clone(), Dreamsim::prep(&view), IMG, IMG)
+                .map(|s| s.clamp(0.0, 2.0)),
             _ => Err(Error::Engine("warm state does not match engine".into())),
         }
         .metric_err_with(COLUMN, Error::kind)?;

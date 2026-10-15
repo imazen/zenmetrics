@@ -5,7 +5,7 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`, `ckdn`.
+//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -198,8 +198,10 @@ fn warm_reference_equals_cold() {
         );
         // CKDN is a quality score, not a distance: an identical pair's dr is
         // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
-        // differ. For it the identical-pair check below is warm == cold.
-        let cold_same = matches!(col, "ckdn" | "afine" | "dreamsim").then(|| {
+        // differ. A-FINE's raw afine_all is likewise signed and
+        // image-dependent on identical pairs. For both, the identical-pair
+        // check below is warm == cold.
+        let cold_same = matches!(col, "ckdn" | "afine").then(|| {
             score(
                 &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
                     .unwrap(),
