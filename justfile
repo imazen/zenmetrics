@@ -559,3 +559,8 @@ viewer-check site oracle report:
 # Assemble the matching current-source viewer (not an old checkpoint frontend).
 viewer-site build source out:
     python3 scripts/checkpoint/prepare-pages.py --build '{{build}}' --source '{{source}}' --out '{{out}}'
+
+# Crate-scoped statistical API validation in the pinned dependency snapshot.
+stats-helpers-check:
+    just snap-cargo @ test -p zenmetrics-stats
+    just snap-cargo @ clippy -p zenmetrics-stats --all-targets -- -D warnings
