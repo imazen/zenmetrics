@@ -1550,3 +1550,14 @@ explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
 quality contribution is displayed directly. Regression coverage lives in
 `scripts/checkpoint/check-pages.py`; details and limits in
 [the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).
+
+### Known Bugs: learned NR export qualification (2026-10-15)
+
+HyperIQA's traced HyperNet supports a fixed batch of 25, despite the original
+ONNX input's dynamic-axis label. The model card and exporter now state the fixed
+contract; fresh exports omit the misleading axis label. Its linear head is
+unbounded; parity qualifies the documented deterministic grid, distinct from
+upstream random-crop sampling. MUSIQ and HyperIQA exports require complete
+goldens and image pairs and fail above the canonical 1e-3 JND gate. Run
+`just nn-export-checks` for the rejection controls. MUSIQ reports patch-row
+limits and degenerate aspect ratios through distinct public error variants.
