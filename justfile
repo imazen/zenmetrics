@@ -568,6 +568,8 @@ nn-export-lpips-vgg python ladder out sizes="64,128,256,512,1024":
 
 # Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
 # the pinned lock snapshot, so the paths are made absolute first.
-nn-parity model_dir ladder:
-    ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" \
-        {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests --test parity -- --nocapture
+# engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
+# on the library path).
+nn-parity model_dir ladder engine="rten" features="model-tests":
+    ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' \
+        {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1

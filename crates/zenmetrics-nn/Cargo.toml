@@ -14,6 +14,9 @@ workspace = true
 default = ["rten"]
 # Pure-Rust CPU engine (also builds for wasm).
 rten = ["dep:rten", "dep:rten-tensor"]
+# ONNX Runtime (C++), loaded at run time from ORT_DYLIB_PATH. CUDA execution
+# provider with TF32 off. Fleet throughput engine; off by default.
+ort = ["dep:ort"]
 # Parity tests against upstream goldens. They need exported models in
 # ZENMETRICS_NN_MODEL_DIR; run them through `just nn-parity`.
 model-tests = []
@@ -22,6 +25,7 @@ model-tests = []
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 rten = { version = "0.27.0", optional = true, default-features = false, features = ["onnx_format"] }
 rten-tensor = { version = "0.27.0", optional = true }
+ort = { version = "=2.0.0-rc.14", optional = true, default-features = false, features = ["std", "load-dynamic", "cuda", "api-31"] }
 
 [dev-dependencies]
 zenpng = { path = "../../../zenpng" }

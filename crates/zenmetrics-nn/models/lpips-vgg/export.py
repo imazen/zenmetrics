@@ -4,6 +4,9 @@ Writes, into OUT_DIR:
   lpips_vgg_trunk.onnx  input x[1,3,H,W] in [-1,1]; ScalingLayer + VGG16 features
                         through relu5_3; outputs the five LPIPS taps
                         (relu1_2, relu2_2, relu3_3, relu4_3, relu5_3). Dynamic H, W.
+  lpips_vgg_full.onnx   inputs r, d [1,3,H,W] in [-1,1] -> scalar: the whole
+                        upstream forward in one graph, for engines that keep
+                        everything on the device (ort CUDA).
   lpips_vgg_lin.f32     the five NetLinLayer 1x1-conv weight vectors, little-endian
                         f32, concatenated (64+128+256+512+512 = 1472 values).
   goldens.tsv           upstream LPIPS scores (CPU, fp32, TF32 n/a) on the ladder,
@@ -44,6 +47,16 @@ onnx_path = os.path.join(OUT, 'lpips_vgg_trunk.onnx')
 torch.onnx.export(trunk, (x,), onnx_path, opset_version=17, dynamo=False, do_constant_folding=True,
                   input_names=['x'], output_names=[f'tap{i}' for i in range(5)],
                   dynamic_axes={'x': {2: 'h', 3: 'w'}, **{f'tap{i}': {2: f'h{i}', 3: f'w{i}'} for i in range(5)}})
+class Full(torch.nn.Module):
+    def __init__(self, m):
+        super().__init__()
+        self.m = m
+    def forward(self, r, d):
+        return self.m(r, d).reshape(())
+
+torch.onnx.export(Full(m).eval(), (x, x.clone()), os.path.join(OUT, 'lpips_vgg_full.onnx'), opset_version=17,
+                  dynamo=False, do_constant_folding=True, input_names=['r', 'd'], output_names=['lpips'],
+                  dynamic_axes={'r': {2: 'h', 3: 'w'}, 'd': {2: 'h', 3: 'w'}})
 lin = np.concatenate([l.model[-1].weight.detach().numpy().reshape(-1) for l in m.lins]).astype('<f4')
 assert lin.size == 1472, lin.size
 lin.tofile(os.path.join(OUT, 'lpips_vgg_lin.f32'))
@@ -80,6 +93,6 @@ def sha(p):
 with open(os.path.join(OUT, 'export.meta'), 'w') as f:
     f.write(f'torch {torch.__version__}\nlpips {lpips.__version__ if hasattr(lpips, "__version__") else "0.1.4"}\n')
     f.write(f'python {platform.python_version()}\nhost {platform.node()}\n')
-    for fn in ('lpips_vgg_trunk.onnx', 'lpips_vgg_lin.f32', 'goldens.tsv'):
+    for fn in ('lpips_vgg_trunk.onnx', 'lpips_vgg_full.onnx', 'lpips_vgg_lin.f32', 'goldens.tsv'):
         f.write(f'sha256 {sha(os.path.join(OUT, fn))} {fn}\n')
 print('done')

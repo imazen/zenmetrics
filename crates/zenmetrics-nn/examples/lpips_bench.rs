@@ -8,7 +8,8 @@
 //! cargo run --release -p zenmetrics-nn --example lpips_bench -- \
 //!     <model_dir> <ladder_dir> <out.tsv> [image=1415] [sizes=64,...,2048] [budget_s=4]
 //! ```
-//! Thread count: rten's pool (`RTEN_NUM_THREADS`, default physical cores).
+//! Engine: `ZENMETRICS_NN_ENGINE` = `rten` (default) or `ort-cuda` (feature
+//! `ort`, needs `ORT_DYLIB_PATH`). Thread count: rten's pool (`RTEN_NUM_THREADS`).
 
 use std::io::Write as _;
 use std::path::Path;
@@ -16,7 +17,7 @@ use std::time::Instant;
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::LpipsVgg;
+use zenmetrics_nn::{Engine, LpipsVgg};
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -80,7 +81,14 @@ fn main() {
         .to_string();
     let threads = std::env::var("RTEN_NUM_THREADS").unwrap_or_else(|_| "default".into());
 
-    let mut m = LpipsVgg::from_dir(model).expect("load model");
+    let engine_name = std::env::var("ZENMETRICS_NN_ENGINE").unwrap_or_else(|_| "rten".into());
+    let engine = match engine_name.as_str() {
+        "rten" => Engine::Rten,
+        #[cfg(feature = "ort")]
+        "ort-cuda" => Engine::OrtCuda,
+        other => panic!("unknown or unbuilt engine {other}"),
+    };
+    let mut m = LpipsVgg::from_dir_with(model, engine).expect("load model");
     let new = !Path::new(out).exists();
     let mut f = std::fs::OpenOptions::new()
         .create(true)
@@ -139,7 +147,7 @@ fn main() {
             ts.sort_by(f64::total_cmp);
             let med = ts[ts.len() / 2];
             let row = format!(
-                "{host}\trten\t{threads}\tlpips-vgg\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{score:.7}",
+                "{host}\t{engine_name}\t{threads}\tlpips-vgg\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{score:.7}",
                 ts.len(),
                 ts[0]
             );

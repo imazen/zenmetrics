@@ -110,9 +110,30 @@ weights from `scripts/export_raw.py`; `burn_spike/run1.log`,
   1024² / 2048², including the input upload. PyTorch TF32-off compute (no
   upload): 1.44 / 1.66 / 3.19 / 12.4 / 56.0 / 246 ms.
 
+**Through the crate** (`Engine::OrtCuda`, feature `ort`, `ort` 2.0.0-rc.14,
+`ort_cuda_rust_i265.tsv`): parity worst |Δ| 6.0e-8 on the 18 pairs, two runs.
+ONNX Runtime's CUDA kernels are not deterministic by default: identical calls
+returned scores differing in the last bit at 256² and 1024²
+(`ort_determinism.log`, `scripts/ort_determinism.py`); with
+`deterministic compute` on, every call matched, at a cost within noise
+(256² 3.59 → 3.54 ms, 1024² 61.2 → 62.5 ms, exhaustive search). The engine
+sets it.
+
+| size | compute | e2e (zenpng decode) | PyTorch TF32-off e2e (PIL decode) |
+|---|---|---|---|
+| 64 | 1.62 | 1.67 | 1.85 |
+| 128 | 1.74 | 1.90 | 2.44 |
+| 256 | 3.52 | 4.13 | 5.48 |
+| 512 | 13.8 | 19.1 | 20.3 |
+| 1024 | 65.9 | 80.6 | 86.0 |
+| 2048 | 283 | 333 | 387 |
+
+The `warm` rows equal `compute` on this engine: the whole-graph session
+recomputes the reference each call (`reuses_reference_work() == false`).
+
 Conclusion: for parity-grade GPU scores today, the engine is ONNX Runtime CUDA
 (the optional `ort` feature), from 4 % faster to 12 % slower than PyTorch. burn needs a CUDA
 conv path with f32 accuracy before it can serve scores.
 
-Not measured: dev (Zen 5, AVX-512), other images for timing, ORT through the
-Rust `ort` crate, 4096² on the GPU engines.
+Not measured: dev (Zen 5, AVX-512), other images for timing, 4096² on the GPU
+engines, a warm reference that keeps reference features on the GPU.

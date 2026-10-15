@@ -186,3 +186,99 @@ mod rten_engine {
         }
     }
 }
+
+/// A whole-metric graph: reference and distorted in, one score out. For
+/// engines where shipping feature maps back to the host would cost more than
+/// the network (a GPU behind PCIe).
+pub(crate) trait PairGraph: Send + Sync {
+    /// Engine name, recorded in the score's implementation tag.
+    fn engine(&self) -> &'static str;
+    /// Score two planar `[3, h, w]` inputs.
+    fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error>;
+}
+
+#[cfg(feature = "ort")]
+pub(crate) mod ort_engine {
+    use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
+
+    use ort::environment::Environment;
+    use ort::ep;
+    use ort::session::Session;
+    use ort::value::Tensor;
+
+    use super::PairGraph;
+    use crate::Error;
+
+    /// ONNX Runtime is loaded once per process, from `ORT_DYLIB_PATH` when it
+    /// is set, else from the platform's default library search.
+    fn environment() -> Result<&'static Environment, Error> {
+        static ENV: OnceLock<Result<Environment, String>> = OnceLock::new();
+        ENV.get_or_init(|| {
+            let builder = match std::env::var_os("ORT_DYLIB_PATH") {
+                Some(p) => ort::init_from(p).map_err(|e| format!("loading ONNX Runtime: {e}"))?,
+                None => ort::init(),
+            };
+            builder
+                .with_name("zenmetrics-nn")
+                .build()
+                .map_err(|e| format!("ONNX Runtime environment: {e}"))
+        })
+        .as_ref()
+        .map_err(|e| Error::Engine(e.clone()))
+    }
+
+    /// The CUDA execution provider with TF32 off (PyTorch's
+    /// `allow_tf32 = False`), exhaustive cuDNN algorithm search, deterministic
+    /// compute, and no silent fallback to the CPU provider.
+    pub(crate) struct OrtCudaPair {
+        session: Mutex<Session>,
+    }
+
+    impl OrtCudaPair {
+        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            let env = environment()?;
+            let cuda = ep::CUDA::default()
+                .with_tf32(false)
+                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
+                .build()
+                .error_on_failure();
+            // Deterministic compute: without it cuDNN's algorithms return
+            // last-bit-different scores for identical calls (measured;
+            // benchmarks/nn_lpips_phase0_2026-10-15/ort_determinism.log), at
+            // a cost within noise with exhaustive search.
+            let session = Session::builder(env)
+                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+                .and_then(|b| b.with_execution_providers([cuda]).map_err(Into::into))
+                .and_then(|mut b| b.commit_from_file(path))
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            Ok(Self {
+                session: Mutex::new(session),
+            })
+        }
+    }
+
+    impl PairGraph for OrtCudaPair {
+        fn engine(&self) -> &'static str {
+            "ort-cuda"
+        }
+
+        fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error> {
+            let to_value = |v: Vec<f32>| {
+                Tensor::from_array(([1usize, 3, h, w], v)).map_err(|e| Error::Engine(e.to_string()))
+            };
+            let (rv, dv) = (to_value(r)?, to_value(d)?);
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(ort::inputs!["r" => rv, "d" => dv])
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let s = out["lpips"]
+                .try_extract_scalar::<f32>()
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            Ok(f64::from(s))
+        }
+    }
+}

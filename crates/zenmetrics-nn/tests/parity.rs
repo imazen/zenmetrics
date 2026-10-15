@@ -4,12 +4,14 @@
 //! - `ZENMETRICS_NN_MODEL_DIR`: an `export.py` output directory
 //!   (`lpips_vgg_trunk.onnx`, `lpips_vgg_lin.f32`, `goldens.tsv`).
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
+//! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
+//!   and `ORT_DYLIB_PATH`).
 
 use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::LpipsVgg;
+use zenmetrics_nn::{Engine, LpipsVgg};
 
 /// Absolute LPIPS tolerance against the upstream CPU fp32 score. Proposed,
 /// pending sign-off: the trunk runs in a different engine (rten vs PyTorch
@@ -22,6 +24,15 @@ fn env_dir(var: &str) -> PathBuf {
         std::env::var_os(var)
             .unwrap_or_else(|| panic!("{var} must be set (run via `just nn-parity`)")),
     )
+}
+
+fn engine() -> Engine {
+    match std::env::var("ZENMETRICS_NN_ENGINE").as_deref() {
+        Ok("rten") => Engine::Rten,
+        #[cfg(feature = "ort")]
+        Ok("ort-cuda") => Engine::OrtCuda,
+        other => panic!("ZENMETRICS_NN_ENGINE must name a built engine, got {other:?}"),
+    }
 }
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
@@ -63,7 +74,7 @@ fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
 fn lpips_vgg_matches_upstream() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
-    let mut m = LpipsVgg::from_dir(&model_dir).expect("load model");
+    let mut m = LpipsVgg::from_dir_with(&model_dir, engine()).expect("load model");
     let goldens = std::fs::read_to_string(model_dir.join("goldens.tsv")).expect("goldens.tsv");
     let mut checked = 0;
     let mut worst = 0.0f64;
@@ -94,7 +105,7 @@ fn lpips_vgg_matches_upstream() {
 fn warm_reference_equals_cold() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
-    let mut m = LpipsVgg::from_dir(&model_dir).expect("load model");
+    let mut m = LpipsVgg::from_dir_with(&model_dir, engine()).expect("load model");
     let (rp, w, h) = load_rgb8(&ladder.join("1415_256_ref.png"));
     let (dp, _, _) = load_rgb8(&ladder.join("1415_256_dist.png"));
     let cold = lpips(
@@ -102,7 +113,9 @@ fn warm_reference_equals_cold() {
             .unwrap(),
     );
     let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
-    assert!(warm.reuses_reference_work());
+    // The trunk engine caches the reference's taps; a whole-graph engine
+    // (ort-cuda) recomputes them on every candidate.
+    assert_eq!(warm.reuses_reference_work(), engine() == Engine::Rten);
     for _ in 0..2 {
         let s = lpips(&*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap());
         assert_eq!(s.to_bits(), cold.to_bits());

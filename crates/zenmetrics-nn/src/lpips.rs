@@ -12,11 +12,13 @@
 use std::borrow::Cow;
 use std::path::Path;
 
-use crate::engine::{self, Tap, Trunk};
+use crate::engine::{self, PairGraph, Tap, Trunk};
 use crate::preprocess::rgb8_to_planar_pm1;
-use crate::{Error, za};
+use crate::{Engine, Error, za};
 
 const TRUNK_FILE: &str = "lpips_vgg_trunk.onnx";
+#[cfg_attr(not(feature = "ort"), allow(dead_code))]
+const FULL_FILE: &str = "lpips_vgg_full.onnx";
 const LIN_FILE: &str = "lpips_vgg_lin.f32";
 const CHANNELS: [usize; 5] = [64, 128, 256, 512, 512];
 const EPS: f32 = 1e-10;
@@ -29,18 +31,37 @@ const FAMILY: &str = "lpips_vgg";
 /// LPIPS v0.1 with the VGG16 trunk. Lower is closer; `0` for identical
 /// inputs. Input: packed sRGB8 (any stride).
 pub struct LpipsVgg {
-    trunk: Box<dyn Trunk>,
+    backend: Backend,
     lin: [Vec<f32>; 5],
 }
 
+enum Backend {
+    /// Trunk graph on the engine, head here: taps come back to the host.
+    Trunk(Box<dyn Trunk>),
+    /// The whole metric in one graph; only the score comes back.
+    #[cfg_attr(not(feature = "ort"), allow(dead_code))]
+    Pair(Box<dyn PairGraph>),
+}
+
 impl LpipsVgg {
-    /// Load an exported model directory: `lpips_vgg_trunk.onnx` and
-    /// `lpips_vgg_lin.f32`, as written by `models/lpips-vgg/export.py`.
+    /// Load an exported model directory with the default engine
+    /// ([`Engine::Rten`]): `lpips_vgg_trunk.onnx` and `lpips_vgg_lin.f32`, as
+    /// written by `models/lpips-vgg/export.py`.
     ///
     /// # Errors
     /// [`Error::Io`] when a file can't be read, [`Error::BadModel`] when
     /// either file doesn't have the expected shape.
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::from_dir_with(dir, Engine::Rten)
+    }
+
+    /// Load an exported model directory with a chosen engine. The ONNX
+    /// Runtime engines read `lpips_vgg_full.onnx` from the same directory.
+    ///
+    /// # Errors
+    /// As [`Self::from_dir`]; [`Error::Engine`] when the engine can't start
+    /// (for ONNX Runtime: library or CUDA provider not loadable).
+    pub fn from_dir_with(dir: impl AsRef<Path>, engine: Engine) -> Result<Self, Error> {
         let dir = dir.as_ref();
         let lin_path = dir.join(LIN_FILE);
         let raw = std::fs::read(&lin_path).map_err(|source| Error::Io {
@@ -70,14 +91,34 @@ impl LpipsVgg {
             at += c;
             v
         });
-        let trunk = engine::load(&dir.join(TRUNK_FILE), CHANNELS.len())?;
-        Ok(Self { trunk, lin })
+        let backend = match engine {
+            Engine::Rten => Backend::Trunk(engine::load(&dir.join(TRUNK_FILE), CHANNELS.len())?),
+            #[cfg(feature = "ort")]
+            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+                &dir.join(FULL_FILE),
+            )?)),
+        };
+        Ok(Self { backend, lin })
+    }
+
+    fn engine_name(&self) -> &'static str {
+        match &self.backend {
+            Backend::Trunk(t) => t.engine(),
+            Backend::Pair(p) => p.engine(),
+        }
+    }
+
+    fn trunk(&self) -> Result<&dyn Trunk, Error> {
+        match &self.backend {
+            Backend::Trunk(t) => Ok(t.as_ref()),
+            Backend::Pair(_) => Err(Error::Engine("no trunk graph on this engine".into())),
+        }
     }
 
     fn taps(&self, img: &za::Rgb8In<'_>) -> Result<Vec<Tap>, Error> {
         check_size(img)?;
         let taps = self
-            .trunk
+            .trunk()?
             .run(rgb8_to_planar_pm1(img), img.height, img.width)?;
         check_taps(&taps)?;
         Ok(taps)
@@ -93,7 +134,7 @@ impl LpipsVgg {
         if (r.width, r.height) != (d.width, d.height) {
             return Err(Error::SizeMismatch);
         }
-        let (a, b) = self.trunk.run_pair(
+        let (a, b) = self.trunk()?.run_pair(
             rgb8_to_planar_pm1(r),
             rgb8_to_planar_pm1(d),
             r.height,
@@ -102,6 +143,29 @@ impl LpipsVgg {
         check_taps(&a)?;
         check_taps(&b)?;
         Ok((a, b))
+    }
+
+    /// A cold pair on whichever backend is loaded.
+    fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
+        match &self.backend {
+            Backend::Trunk(_) => {
+                let (mut rt, dt) = self.tap_pair(r, d)?;
+                rt.iter_mut().for_each(normalize);
+                self.score_taps(&rt, &dt)
+            }
+            Backend::Pair(p) => {
+                check_size(r)?;
+                if (r.width, r.height) != (d.width, d.height) {
+                    return Err(Error::SizeMismatch);
+                }
+                p.score(
+                    rgb8_to_planar_pm1(r),
+                    rgb8_to_planar_pm1(d),
+                    r.height,
+                    r.width,
+                )
+            }
+        }
     }
 
     /// The score of `dist` against reference taps already normalised.
@@ -124,7 +188,7 @@ impl LpipsVgg {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(FAMILY, za::implementation!(SCORE_REVISION)).with_reference(format!(
             "lpips 0.1.4 (net=vgg, version=0.1); engine {}",
-            self.trunk.engine()
+            self.engine_name()
         ))
     }
 }
@@ -226,11 +290,8 @@ impl za::Metric for LpipsVgg {
         opts.checkpoint()?;
         opts.refuse_map(FAMILY)?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let (mut rt, dt) = self.tap_pair(&r, &d).metric_err_with(FAMILY, Error::kind)?;
-        rt.iter_mut().for_each(normalize);
-        opts.checkpoint()?;
         let s = self
-            .score_taps(&rt, &dt)
+            .score_pair(&r, &d)
             .metric_err_with(FAMILY, Error::kind)?;
         Ok(Box::new(za::ScalarEval::single(FAMILY, s)))
     }
@@ -243,21 +304,36 @@ impl za::Metric for LpipsVgg {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         let view = za::rgb8_view(&r)?;
-        let mut taps = self.taps(&view).metric_err_with(FAMILY, Error::kind)?;
-        taps.iter_mut().for_each(normalize);
+        let reference = match &self.backend {
+            Backend::Trunk(_) => {
+                let mut taps = self.taps(&view).metric_err_with(FAMILY, Error::kind)?;
+                taps.iter_mut().for_each(normalize);
+                WarmState::Taps(taps)
+            }
+            Backend::Pair(_) => {
+                check_size(&view).metric_err_with(FAMILY, Error::kind)?;
+                WarmState::Pixels(rgb8_to_planar_pm1(&view))
+            }
+        };
         Ok(Box::new(WarmLpips {
             metric: self,
-            taps,
+            reference,
             size: (view.width, view.height),
         }))
     }
 }
 
-/// A reference whose normalised taps are computed once.
+/// A reference prepared once: normalised taps on a trunk engine, the
+/// converted input on a whole-graph engine (which recomputes its features).
 struct WarmLpips<'m> {
     metric: &'m LpipsVgg,
-    taps: Vec<Tap>,
+    reference: WarmState,
     size: (usize, usize),
+}
+
+enum WarmState {
+    Taps(Vec<Tap>),
+    Pixels(Vec<f32>),
 }
 
 impl za::WarmReference for WarmLpips<'_> {
@@ -273,15 +349,19 @@ impl za::WarmReference for WarmLpips<'_> {
         if (d.width, d.height) != self.size {
             return Err(Error::SizeMismatch).metric_err_with(FAMILY, Error::kind);
         }
-        let s = self
-            .metric
-            .score_against(&self.taps, &d)
-            .metric_err_with(FAMILY, Error::kind)?;
+        let s = match &self.reference {
+            WarmState::Taps(taps) => self.metric.score_against(taps, &d),
+            WarmState::Pixels(px) => match &self.metric.backend {
+                Backend::Pair(p) => p.score(px.clone(), rgb8_to_planar_pm1(&d), d.height, d.width),
+                Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
+            },
+        }
+        .metric_err_with(FAMILY, Error::kind)?;
         Ok(Box::new(za::ScalarEval::single(FAMILY, s)))
     }
 
     fn reuses_reference_work(&self) -> bool {
-        true
+        matches!(self.reference, WarmState::Taps(_))
     }
 }
 

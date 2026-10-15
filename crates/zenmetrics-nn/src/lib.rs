@@ -11,9 +11,10 @@
 //! - [`LpipsVgg`]: LPIPS v0.1 with the VGG16 trunk (Zhang et al., CVPR
 //!   2018), parity target the upstream `lpips` 0.1.4 package.
 //!
-//! Engines: `rten` (pure-Rust CPU, default feature). Weights are never
-//! bundled in the crate; load an exported model directory with
-//! [`LpipsVgg::from_dir`].
+//! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
+//! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
+//! crate; load an exported model directory with [`LpipsVgg::from_dir`] or
+//! [`LpipsVgg::from_dir_with`].
 
 #![forbid(unsafe_code)]
 
@@ -24,5 +25,17 @@ mod preprocess;
 
 pub use error::Error;
 pub use lpips::LpipsVgg;
+
+/// Which engine runs a model's network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Engine {
+    /// rten, pure-Rust CPU (feature `rten`, default).
+    Rten,
+    /// ONNX Runtime with its CUDA execution provider, TF32 off (feature
+    /// `ort`). The library is loaded at run time from `ORT_DYLIB_PATH`.
+    #[cfg(feature = "ort")]
+    OrtCuda,
+}
 
 use zenmetrics_abstractions as za;
