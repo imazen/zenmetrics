@@ -108,6 +108,15 @@ fn down(a: &[f32], w: usize, h: usize, f: usize) -> (Vec<f32>, usize, usize) {
     for y in 0..nh {
         for x in 0..nw {
             let mut sum = 0.0f32;
+            // OpenCV's complete 4x4 area blocks: four row partial sums.
+            if f == 4 && (x + 1) * f <= w && (y + 1) * f <= h {
+                for yy in y * f..(y + 1) * f {
+                    let row = &a[yy * w + x * f..][..4];
+                    sum += row[0] + row[1] + row[2] + row[3];
+                }
+                out.push(sum * (1.0 / 16.0));
+                continue;
+            }
             let mut n = 0;
             for yy in y * f..((y + 1) * f).min(h) {
                 for xx in x * f..((x + 1) * f).min(w) {
