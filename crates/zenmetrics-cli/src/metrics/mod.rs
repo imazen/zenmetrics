@@ -45,6 +45,8 @@ pub mod display;
 pub use display::CvvdpDisplay;
 #[cfg(feature = "cpu-metrics")]
 mod classical;
+#[cfg(feature = "nn")]
+mod nn;
 #[cfg(feature = "cpu-metrics")]
 pub mod vmaf;
 
@@ -136,6 +138,21 @@ pub enum MetricKind {
     /// CPU-only.
     #[value(name = "nlpd-iqa")]
     NlpdIqa,
+    /// LPIPS v0.1, AlexNet trunk (upstream `lpips` 0.1.4); lower is
+    /// better. Needs the `nn` feature and an exported model directory in
+    /// `ZENMETRICS_NN_MODEL_DIR` (see `crates/zenmetrics-nn`).
+    #[value(name = "lpips-alex")]
+    LpipsAlex,
+    /// LPIPS v0.1, VGG16 trunk; as `lpips-alex`.
+    #[value(name = "lpips-vgg")]
+    LpipsVgg,
+    /// LPIPS v0.1, SqueezeNet 1.1 trunk; as `lpips-alex`.
+    #[value(name = "lpips-squeeze")]
+    LpipsSqueeze,
+    /// DISTS (upstream `DISTS_pytorch` 0.1, no resize); lower is better.
+    /// As `lpips-alex`.
+    #[value(name = "dists")]
+    Dists,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -408,6 +425,10 @@ impl MetricKind {
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
+            MetricKind::LpipsAlex,
+            MetricKind::LpipsVgg,
+            MetricKind::LpipsSqueeze,
+            MetricKind::Dists,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -459,6 +480,10 @@ impl MetricKind {
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
             MetricKind::NlpdIqa => "nlpd-iqa",
+            MetricKind::LpipsAlex => "lpips-alex",
+            MetricKind::LpipsVgg => "lpips-vgg",
+            MetricKind::LpipsSqueeze => "lpips-squeeze",
+            MetricKind::Dists => "dists",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -569,6 +594,10 @@ impl MetricKind {
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
             MetricKind::NlpdIqa => &["nlpd_iqa"],
+            MetricKind::LpipsAlex => &["lpips_alex"],
+            MetricKind::LpipsVgg => &["lpips_vgg"],
+            MetricKind::LpipsSqueeze => &["lpips_squeeze"],
+            MetricKind::Dists => &["dists"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1600,6 +1629,7 @@ pub fn run_metric(
     #[cfg_attr(
         not(any(
             feature = "cpu-metrics",
+            feature = "nn",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
             feature = "gpu-dssim",
@@ -1613,6 +1643,7 @@ pub fn run_metric(
     #[cfg_attr(
         not(any(
             feature = "cpu-metrics",
+            feature = "nn",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
             feature = "gpu-dssim",
@@ -1731,6 +1762,16 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::NlpdIqa => Err(disabled_msg("nlpd-iqa", "cpu-metrics")),
+        #[cfg(feature = "nn")]
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::Dists => nn::score(kind, reference, distorted),
+        #[cfg(not(feature = "nn"))]
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::Dists => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
