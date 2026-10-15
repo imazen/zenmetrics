@@ -25,6 +25,9 @@ pub enum Error {
     },
     /// Reference and distorted images differ in size.
     SizeMismatch,
+    /// The model's weights are not permissively licensed and the caller's
+    /// [`crate::WeightsConsent`] does not accept their terms.
+    WeightsNotAccepted(crate::WeightsTerms),
 }
 
 impl fmt::Display for Error {
@@ -35,6 +38,11 @@ impl fmt::Display for Error {
             Self::Engine(m) => write!(f, "engine: {m}"),
             Self::TooSmall { min } => write!(f, "image smaller than {min}x{min}"),
             Self::SizeMismatch => f.write_str("reference and distorted sizes differ"),
+            Self::WeightsNotAccepted(t) => write!(
+                f,
+                "{} weights are {} ({}); loading them needs an explicit WeightsConsent",
+                t.model, t.licence, t.terms_url
+            ),
         }
     }
 }
@@ -53,7 +61,9 @@ impl Error {
         match self {
             Self::TooSmall { .. } => za::ErrorKind::TooSmall,
             Self::SizeMismatch => za::ErrorKind::DimensionMismatch,
-            Self::Io { .. } | Self::BadModel(_) => za::ErrorKind::InvalidConfig,
+            Self::Io { .. } | Self::BadModel(_) | Self::WeightsNotAccepted(_) => {
+                za::ErrorKind::InvalidConfig
+            }
             Self::Engine(_) => za::ErrorKind::Backend,
         }
     }

@@ -37,6 +37,13 @@ several variants; DISTS has an extra input tap and per-channel statistics.
   `from_dir(dir, [variant,] Engine)`. Use `common::{Backend, read_meta, read_f32}`:
   `Backend::Trunk` (rten: taps come back, head here) and `Backend::Pair` (ort-cuda: the
   whole graph, score only).
+- Weights terms: give the struct `pub const WEIGHTS: WeightsTerms` (column name, the
+  card's licence class, the URL where the terms, or their absence, can be read). If the
+  class is `Permissive`, the constructor is `from_dir(dir, [variant,] Engine)`. Otherwise
+  it is `from_dir(dir, [variant,] Engine, &WeightsConsent)` and calls
+  `consent.check(&Self::WEIGHTS)?` before reading any file, so loading such weights is
+  always the caller's explicit choice. In the CLI, the user opts in with
+  `ZENMETRICS_NN_ACCEPT_WEIGHTS=<col>[,<col>...]`, and a refusal prints the terms URL.
 - Preprocess with `preprocess.rs` (add a function when the model's input scaling is new),
   matching upstream's float operation order exactly.
 - The head reproduces upstream's formula. Accumulate spatial sums in f64; where

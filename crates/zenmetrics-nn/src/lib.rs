@@ -19,6 +19,9 @@
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
 //! crate; load an exported model directory with [`Lpips::from_dir`].
+//!
+//! Models whose weights are not permissively licensed ([`WeightsLicence`])
+//! load only with a [`WeightsConsent`] naming their `WEIGHTS` terms.
 
 #![forbid(unsafe_code)]
 
@@ -29,11 +32,13 @@ mod engine;
 mod error;
 mod lpips;
 mod preprocess;
+mod weights;
 
 pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use error::Error;
 pub use lpips::{Lpips, LpipsNet};
+pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
