@@ -21,6 +21,8 @@ impl Tap {
 
 /// An extra trunk input, addressed by position in the graph's input list
 /// (index 0 is the image input `run` feeds).
+// Read only by the engine backends; a build with neither engine never reads it.
+#[cfg_attr(not(any(feature = "rten", feature = "ort")), expect(dead_code))]
 pub(crate) struct AuxInput {
     /// Position in `model.input_ids()`.
     pub(crate) index: usize,
@@ -52,7 +54,13 @@ pub(crate) trait Trunk: Send + Sync {
     /// part of the host-side preprocessing feeds the middle of the graph —
     /// e.g. afine's positional embedding is bicubic-resampled on the host
     /// because rten's `Resize` has no cubic mode.
-    fn run_aux(&self, input: Vec<f32>, h: usize, w: usize, aux: &[AuxInput]) -> Result<Vec<Tap>, Error> {
+    fn run_aux(
+        &self,
+        input: Vec<f32>,
+        h: usize,
+        w: usize,
+        aux: &[AuxInput],
+    ) -> Result<Vec<Tap>, Error> {
         if aux.is_empty() {
             return self.run(input, h, w);
         }
@@ -84,10 +92,7 @@ pub(crate) trait Trunk: Send + Sync {
         aux_a: &[AuxInput],
         aux_b: &[AuxInput],
     ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
-        Ok((
-            self.run_aux(a, h, w, aux_a)?,
-            self.run_aux(b, h, w, aux_b)?,
-        ))
+        Ok((self.run_aux(a, h, w, aux_a)?, self.run_aux(b, h, w, aux_b)?))
     }
 }
 
@@ -182,9 +187,10 @@ mod rten_engine {
             let x = NdTensor::from_data([1, c, h, w], input);
             let mut feeds = vec![(self.inputs[0], x.into())];
             for a in aux {
-                let id = *self.inputs.get(a.index).ok_or_else(|| {
-                    Error::BadModel(format!("graph has no input {}", a.index))
-                })?;
+                let id = *self
+                    .inputs
+                    .get(a.index)
+                    .ok_or_else(|| Error::BadModel(format!("graph has no input {}", a.index)))?;
                 feeds.push((id, NdTensor::from_data(a.shape, a.data.clone()).into()));
             }
             let opts = pool.map(|p| {
@@ -262,10 +268,7 @@ mod rten_engine {
             aux_b: &[super::AuxInput],
         ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
             let Some([pa, pb]) = &self.halves else {
-                return Ok((
-                    self.run_aux(a, h, w, aux_a)?,
-                    self.run_aux(b, h, w, aux_b)?,
-                ));
+                return Ok((self.run_aux(a, h, w, aux_a)?, self.run_aux(b, h, w, aux_b)?));
             };
             std::thread::scope(|s| {
                 let ha = s.spawn(|| self.run_with(a, 3, h, w, aux_a, Some(Arc::clone(pa))));

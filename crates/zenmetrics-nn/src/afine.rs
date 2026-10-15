@@ -704,7 +704,8 @@ mod tests {
 
     #[test]
     fn erf_gelu_sign_and_values() {
-        // torch.special.erf / F.gelu references (fp64).
+        // Exact fp64 references from Python `math.erf` (GELU = x·Φ(x)). The
+        // earlier values were float32 torch outputs, 1.5e-7 off at x = 4.
         let erf_cases = [
             (-2.0, -0.9953222650189527),
             (-0.5, -0.5204998778130465),
@@ -718,12 +719,12 @@ mod tests {
         }
         let gelu_cases = [
             (-0.9704703041139714, -0.16100690451172137),
-            (-1.0, -0.15865525693163705),
-            (-0.40589515, -0.13898247432738543),
+            (-1.0, -0.15865525393145707),
+            (-0.40589515, -0.1389824856144608),
             (0.0, 0.0),
-            (0.5, 0.34573123062451056),
+            (0.5, 0.34573123063700656),
             (1.0, 0.8413447460685429),
-            (4.0, 3.99987316105496),
+            (4.0, 3.9998733150326675),
         ];
         for (x, want) in gelu_cases {
             assert!((gelu(x) - want).abs() <= 1e-7, "gelu({x}) = {}", gelu(x));
