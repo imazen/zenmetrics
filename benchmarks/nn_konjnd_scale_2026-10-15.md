@@ -185,7 +185,7 @@ pairs, scored with `zenmetrics-cli batch` on ort-cuda, model dir
 
 | column | pooled JND | JPEG | BPG |
 |---|---|---|---|
-| `arniqa` / `arniqa_ref` | 0.053838 | — | — |
+| `arniqa` / `arniqa_ref` | 0.053838 | 0.072958 | 0.037216 |
 | `maniqa` / `maniqa_ref` | 0.021396 | 0.028907 | 0.013109 |
 | `liqe` / `liqe_ref` | 0.393781 | 0.394682 | 0.390329 |
 

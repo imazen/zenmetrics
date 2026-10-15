@@ -5,7 +5,7 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`.
+//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -22,8 +22,9 @@ use zenmetrics_nn::{
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
 /// model may differ from upstream by 1/1000 of its estimated just-noticeable
-/// difference. The engines differ from PyTorch only in summation order;
-/// measured worst on the 64²–2048² ladder is ~1e-4 JND across models.
+/// difference. The engines differ from PyTorch in summation order, and
+/// MANIQA also in its OpenCV-convention resize (a few ±1 u8 pixels);
+/// measured worst on the 64²–2048² ladder is under 2e-4 JND across models.
 const TOL_JND: f64 = 1e-3;
 
 /// One estimated JND per score column, from `models/jnd_scale.tsv`

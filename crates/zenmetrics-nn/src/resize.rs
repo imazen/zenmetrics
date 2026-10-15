@@ -234,8 +234,9 @@ pub(crate) fn resize_bilinear_pil_u8(
 ///   `c3 = 1 − c0 − c1 − c2`), quantised `rint(c·2048)` → i16;
 /// - taps `sx−1 .. sx+2`, border-replicate clamped;
 /// - horizontal pass `mid[y][x] = Σ_k u8·alpha_k` in i32 (frac 11);
-/// - vertical pass is the x86 SIMD `VResizeCubicVec_32s8u` f32 FMA
-///   chain `rint_even(m0·b0 ⊕ fma(m1,b1, fma(m2,b2, m3·b3)))` with
+/// - vertical pass is the x86 SIMD `VResizeCubicVec_32s8u` f32 chain,
+///   unfused at the pinned build's SSE baseline:
+///   `rint_even(m0·b0 + (m1·b1 + (m2·b2 + m3·b3)))` with
 ///   `b_k = f32(beta_k)·2⁻²²`, packed with u8 saturation. (At
 ///   `ow = 224` every lane width divides it, so no integer
 ///   `FixedPtCast` tail ever runs.)
@@ -300,10 +301,9 @@ pub(crate) fn resize_bicubic_cv2_u8(
             let beta = coef.map(|k| f32::from(k) * inv);
             for x in 0..ow {
                 let m = |k: usize| inp[idx[k] * ow + x] as f32;
-                let s = m(0).mul_add(
-                    beta[0],
-                    m(1).mul_add(beta[1], m(2).mul_add(beta[2], m(3) * beta[3])),
-                );
+                // Unfused: the pinned cv2 5.0 build has baseline SSE only (no
+                // FMA3), so `v_muladd` rounds the product and the sum apart.
+                let s = m(0) * beta[0] + (m(1) * beta[1] + (m(2) * beta[2] + m(3) * beta[3]));
                 outp[dy * ow + x] = (s.round_ties_even() as i32).clamp(0, 255) as u8;
             }
         }

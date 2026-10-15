@@ -8,7 +8,7 @@ name = "liqe"
 kind = "no-reference"                # pair tools run it through PairedNoReference: `liqe` on dist, `liqe_ref` on ref
 direction = "higher-is-better"       # expected-value MOS in [1, 5]
 columns = ["liqe", "liqe_ref"]
-paper = "Zhang, Ding, Ma, Zhai, Yang, He. LIQE: Blind Image Quality Assessment via Vision-Language Correspondence. CVPR 2023"
+paper = "Zhang, Zhai, Wei, Yang, Ma. Blind Image Quality Assessment via Vision-Language Correspondence: A Multitask Learning Perspective. CVPR 2023, pp. 14071–14081"
 
 [code]
 source = "upstream-port"             # unfold/normalise/head re-implemented; the CLIP image tower runs as exported graphs, text features as data

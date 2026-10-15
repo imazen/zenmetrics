@@ -1,5 +1,6 @@
-//! LIQE (Zhang, Ding, Ma, Zhai et al., "LIQE: Blind Image Quality
-//! Assessment via Vision-Language Correspondence", CVPR 2023; upstream
+//! LIQE (Zhang, Zhai, Wei, Yang, Ma, "Blind Image Quality Assessment via
+//! Vision-Language Correspondence: A Multitask Learning Perspective",
+//! CVPR 2023, pp. 14071–14081; upstream
 //! `zwx8981/LIQE` at `a64655f`, MIT code — **weights carry no stated
 //! licence**: `WeightsLicence::Unknown`, consent-gated). Parity target:
 //! upstream `LIQE.forward` (the module `demo2.py` drives) on CPU fp32,
@@ -26,7 +27,6 @@ use std::path::Path;
 
 use crate::common::{Backend, read_f32, read_meta};
 use crate::engine::{self, NamedInput, Trunk};
-use crate::preprocess::rgb8_to_planar_u8;
 use crate::{Engine, Error, WeightsConsent, WeightsLicence, WeightsTerms, za};
 
 /// Bump whenever any output can change.
@@ -106,25 +106,20 @@ impl Liqe {
         }
     }
 
-    /// The selected patches: `unfold(224, 32)` then `sel = [0; 15]` for
-    /// a single-image batch — the top-left 224×224 crop, 15 copies, as
-    /// f32 0..1 `[15, 3, 224, 224]`.
+    /// The selected patch: `unfold(224, 32)` then `sel = [0; 15]` for a
+    /// single-image batch picks the top-left 224×224 crop 15 times. Returns
+    /// that crop once as planar f32 0..1 `[3, 224, 224]`, read straight from
+    /// the strided rows (no full-image copy).
     fn prep(img: &za::Rgb8In<'_>) -> Result<Vec<f32>, Error> {
-        let (h, w) = (img.height, img.width);
-        if h < CROP || w < CROP {
+        if img.height < CROP || img.width < CROP {
             return Err(Error::TooSmall { min: CROP });
         }
-        let planar = rgb8_to_planar_u8(img);
-        let mut out = Vec::with_capacity(NUM_PATCH * 3 * CROP * CROP);
-        for _ in 0..NUM_PATCH {
-            for c in 0..3 {
-                let src = &planar[c * h * w..c * h * w + CROP * w]; // rows 0..224
-                for y in 0..CROP {
-                    out.extend(
-                        src[y * w..y * w + CROP]
-                            .iter()
-                            .map(|&v| f32::from(v) / 255.0),
-                    );
+        let mut out = vec![0.0f32; 3 * CROP * CROP];
+        for y in 0..CROP {
+            let row = &img.pixels[y * img.stride..y * img.stride + 3 * CROP];
+            for (x, px) in row.as_chunks::<3>().0.iter().enumerate() {
+                for c in 0..3 {
+                    out[c * CROP * CROP + y * CROP + x] = f32::from(px[c]) / 255.0;
                 }
             }
         }
@@ -187,17 +182,16 @@ impl Liqe {
         let x = Self::prep(img)?;
         match &self.backend {
             Backend::Trunk(t) => {
-                let span = 3 * CROP * CROP;
-                let mut embs = Vec::with_capacity(NUM_PATCH);
-                for i in 0..NUM_PATCH {
-                    embs.push(Self::embed(&**t, &x[i * span..(i + 1) * span])?);
-                }
-                Ok(Self::head(&self.head, &embs))
+                // All 15 selected patches are the same crop: run the trunk once
+                // and give the head 15 copies, so its arithmetic is unchanged.
+                let emb = Self::embed(&**t, &x)?;
+                Ok(Self::head(&self.head, &vec![emb; NUM_PATCH]))
             }
             Backend::Image(g) => g.score(&[NamedInput {
                 name: "x",
                 shape: [NUM_PATCH, 3, CROP, CROP],
-                data: x,
+                // The full graph takes the 15 selected patches explicitly.
+                data: x.repeat(NUM_PATCH),
             }]),
             Backend::Pair(_) => Err(Error::Engine("pair graph on an NR model".into())),
         }
@@ -250,6 +244,20 @@ mod tests {
         }
     }
 
+    /// Without consent to its `Unknown`-licence weights, loading fails before
+    /// any file is read (the directory does not exist).
+    #[test]
+    fn refuses_without_weights_consent() {
+        let err = Liqe::from_dir(
+            "/nonexistent-zenmetrics-liqe",
+            Engine::Rten,
+            &WeightsConsent::new(),
+        )
+        .err()
+        .expect("must refuse");
+        assert!(matches!(err, Error::WeightsNotAccepted(_)), "{err}");
+    }
+
     /// Images under the 224 patch size are refused.
     #[test]
     fn prep_refuses_small() {
@@ -263,24 +271,30 @@ mod tests {
         assert!(Liqe::prep(&view(&vec![7u8; 3 * 224 * 224], 224, 224)).is_ok());
     }
 
-    /// `sel = [0; 15]` for B=1 → the 15 patches are 15 copies of the
-    /// top-left 224 crop.
+    /// `sel = [0; 15]` for B=1 → all 15 patches are the top-left 224 crop;
+    /// `prep` returns that crop once, planar and scaled to 0..1, and every
+    /// element equals the image pixel it came from.
     #[test]
-    fn prep_is_top_left_x15() {
+    fn prep_is_top_left_crop() {
         let (w, h) = (300, 300);
         let mut px = vec![0u8; w * h * 3];
         for y in 0..h {
             for x in 0..w {
-                px[(y * w + x) * 3] = (x + y) as u8; // varies per pixel
+                for c in 0..3 {
+                    px[(y * w + x) * 3 + c] = (x * 3 + y * 5 + c * 7) as u8;
+                }
             }
         }
         let x = Liqe::prep(&view(&px, w, h)).unwrap();
-        let span = 3 * CROP * CROP;
-        for i in 1..NUM_PATCH {
-            assert_eq!(&x[..span], &x[i * span..(i + 1) * span]);
+        assert_eq!(x.len(), 3 * CROP * CROP);
+        for c in 0..3 {
+            for y in 0..CROP {
+                for xx in 0..CROP {
+                    let want = f32::from(px[(y * w + xx) * 3 + c]) / 255.0;
+                    assert_eq!(x[c * CROP * CROP + y * CROP + xx], want, "c{c} y{y} x{xx}");
+                }
+            }
         }
-        // top-left pixel of patch 0 = image (0,0) -> 0/255; (0,1) -> 1/255
-        assert_eq!(x[1], 1.0 / 255.0);
     }
 
     /// Prep is stride-agnostic: a strided view of a wider buffer equals

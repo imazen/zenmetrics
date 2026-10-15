@@ -24,7 +24,7 @@ checkpoint = "https://github.com/IIGROUP/MANIQA/releases/tag/Koniq10k — ckpt_k
 [input]
 format = "packed sRGB8"
 normalisation = "u8/255 then (x-0.5)/0.5 — utils/inference_process.py Normalize(0.5,0.5)+ToTensor on the cv2-decoded /255 image"
-resize = "data/koniq10k.py eval loader: cv2.resize((224,224), INTER_CUBIC) on the u8 image — resize.rs::resize_bicubic_cv2_u8. Convention: OpenCV's own scalar u8 path (export pins OPENCV_IPP=disabled; the wheels' IPP differs on ~4% of pixels, and cv2 4.12 ≡ 5.0 bitwise with it off): f32 Horner coeffs quantised rint(c*2048) -> i16, i32 horizontal mid, f32-FMA vertical chain (VResizeCubicVec_32s8u), A=-0.75, BORDER_REPLICATE. Measured bitwise vs cv2-noIPP on probes; ~0 diffs on ladder images. OpenCV Apache-2.0 in ../../LICENSE-opencv"
+resize = "data/koniq10k.py eval loader: cv2.resize((224,224), INTER_CUBIC) on the u8 image — resize.rs::resize_bicubic_cv2_u8. Convention: OpenCV's own scalar u8 path (export pins OPENCV_IPP=disabled; the wheels' IPP differs on ~4% of pixels, and cv2 4.12 ≡ 5.0 bitwise with it off): f32 Horner coeffs quantised rint(c*2048) -> i16, i32 horizontal mid, unfused f32 vertical chain (VResizeCubicVec_32s8u at the SSE baseline; no FMA3 in the pinned build), A=-0.75, BORDER_REPLICATE. Measured bitwise vs cv2-noIPP on probes; ~0 diffs on ladder images. OpenCV Apache-2.0 in ../../LICENSE-opencv"
 crop = "five_point_crop(0) on the 224x224 image = the image itself (num_avg_val=1)"
 min_size = 1                         # every input resizes to 224x224
 
