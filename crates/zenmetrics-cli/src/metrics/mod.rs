@@ -132,6 +132,11 @@ pub enum MetricKind {
     /// Cr=round(128+(112R-93.786G-18.214B)/255).
     #[value(name = "psnr-ycbcr611")]
     PsnrYCbCr611,
+    /// Mean CIEDE2000 colour difference (ΔE00) — sRGB → linear → XYZ D65
+    /// → CIELAB → ΔE00 per pixel → mean. Matches JPEG AIC-4 `CIEDE2000`
+    /// column. 61-pair median|Δ|=3.0e-5, max|Δ|=2.96e-4 (target ≤ 1e-3).
+    #[value(name = "ciede2000")]
+    Ciede2000,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -423,6 +428,7 @@ impl MetricKind {
             MetricKind::PsnrYStudio601,
             MetricKind::PsnrYLibvmaf,
             MetricKind::PsnrYCbCr611,
+            MetricKind::Ciede2000,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
@@ -477,6 +483,7 @@ impl MetricKind {
             MetricKind::PsnrYStudio601 => "psnr-y-studio601",
             MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
             MetricKind::PsnrYCbCr611 => "psnr-ycbcr611",
+            MetricKind::Ciede2000 => "ciede2000",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
             MetricKind::NlpdIqa => "nlpd-iqa",
@@ -590,6 +597,7 @@ impl MetricKind {
             MetricKind::PsnrYStudio601 => &["psnr_y_studio601"],
             MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
             MetricKind::PsnrYCbCr611 => &["psnr_ycbcr611"],
+            MetricKind::Ciede2000 => &["ciede2000"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
             MetricKind::NlpdIqa => &["nlpd_iqa"],
@@ -1770,6 +1778,13 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::PsnrYCbCr611 => Err(disabled_msg("psnr-ycbcr611", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::Ciede2000 => Ok(vec![(
+            "ciede2000",
+            classical::score(classical::Kind::Ciede2000, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::Ciede2000 => Err(disabled_msg("ciede2000", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim => Ok(vec![(
             "ssim",

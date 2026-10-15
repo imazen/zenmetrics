@@ -15,6 +15,7 @@ pub(crate) enum Kind {
     PsnrYLibvmaf,
     PsnrYCbCr611,
     Ssim,
+    Ciede2000,
 }
 
 /// MSE between the per-pixel luma of `r` and `d` under luma function
@@ -113,6 +114,12 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
+        Kind::Ciede2000 => {
+            // Mean CIEDE2000 colour difference (ΔE00).
+            // Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
+            // Matches JPEG AIC-4 `CIEDE2000` column.
+            Ok(ciede2000_mean(r, d))
+        }
     }
 }
 
@@ -177,6 +184,191 @@ fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
 
     let n_f = n as f64;
     (sum_y / n_f, sum_cb / n_f, sum_cr / n_f)
+}
+
+/// Mean CIEDE2000 (ΔE00) between two RGB8 images.
+/// Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
+fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let mut sum_de = 0.0_f64;
+
+    // sRGB to XYZ D65 matrix
+    const M: [[f64; 3]; 3] = [
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041],
+    ];
+
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        // sRGB to linear
+        let r1_lin = srgb_to_linear(a[0]);
+        let g1_lin = srgb_to_linear(a[1]);
+        let b1_lin = srgb_to_linear(a[2]);
+        let r2_lin = srgb_to_linear(b[0]);
+        let g2_lin = srgb_to_linear(b[1]);
+        let b2_lin = srgb_to_linear(b[2]);
+
+        // Linear RGB to XYZ
+        let x1 = M[0][0] * r1_lin + M[0][1] * g1_lin + M[0][2] * b1_lin;
+        let y1 = M[1][0] * r1_lin + M[1][1] * g1_lin + M[1][2] * b1_lin;
+        let z1 = M[2][0] * r1_lin + M[2][1] * g1_lin + M[2][2] * b1_lin;
+
+        let x2 = M[0][0] * r2_lin + M[0][1] * g2_lin + M[0][2] * b2_lin;
+        let y2 = M[1][0] * r2_lin + M[1][1] * g2_lin + M[1][2] * b2_lin;
+        let z2 = M[2][0] * r2_lin + M[2][1] * g2_lin + M[2][2] * b2_lin;
+
+        // XYZ to CIELAB
+        let (l1, a1, b1) = xyz_to_lab(x1, y1, z1);
+        let (l2, a2, b2) = xyz_to_lab(x2, y2, z2);
+
+        // CIEDE2000
+        let de = ciede2000(l1, a1, b1, l2, a2, b2);
+        sum_de += de;
+    }
+
+    sum_de / n as f64
+}
+
+/// Convert sRGB component [0, 255] to linear [0, 1].
+fn srgb_to_linear(c: u8) -> f64 {
+    let srgb = c as f64 / 255.0;
+    if srgb <= 0.04045 {
+        srgb / 12.92
+    } else {
+        ((srgb + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Convert XYZ to CIELAB (D65 white point).
+fn xyz_to_lab(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+    const XN: f64 = 0.95047;
+    const YN: f64 = 1.00000;
+    const ZN: f64 = 1.08883;
+
+    let fx = f_lab(x / XN);
+    let fy = f_lab(y / YN);
+    let fz = f_lab(z / ZN);
+
+    let l = 116.0 * fy - 16.0;
+    let a = 500.0 * (fx - fy);
+    let b = 200.0 * (fy - fz);
+    (l, a, b)
+}
+
+fn f_lab(t: f64) -> f64 {
+    const DELTA: f64 = 6.0 / 29.0;
+    if t > DELTA * DELTA * DELTA {
+        t.cbrt()
+    } else {
+        t / (3.0 * DELTA * DELTA) + 4.0 / 29.0
+    }
+}
+
+/// CIEDE2000 colour difference between two CIELAB points.
+fn ciede2000(l1: f64, a1: f64, b1: f64, l2: f64, a2: f64, b2: f64) -> f64 {
+    // Parametric factors (standard: kL = kC = kH = 1)
+    const KL: f64 = 1.0;
+    const KC: f64 = 1.0;
+    const KH: f64 = 1.0;
+
+    // Step 1: C1, C2
+    let c1 = (a1 * a1 + b1 * b1).sqrt();
+    let c2 = (a2 * a2 + b2 * b2).sqrt();
+
+    // Step 2: C_bar
+    let c_bar = (c1 + c2) * 0.5;
+
+    // Step 3: G
+    let c_bar7 = c_bar.powi(7);
+    let g = 0.5 * (1.0 - (c_bar7 / (c_bar7 + 25.0_f64.powi(7))).sqrt());
+
+    // Step 4: a_prime
+    let a1p = a1 * (1.0 + g);
+    let a2p = a2 * (1.0 + g);
+
+    // Step 5: C_prime
+    let c1p = (a1p * a1p + b1 * b1).sqrt();
+    let c2p = (a2p * a2p + b2 * b2).sqrt();
+
+    // Step 6: h_prime
+    let h1p = b1.atan2(a1p);
+    let h2p = b2.atan2(a2p);
+
+    // Normalize to [0, 2π)
+    let h1p = if h1p < 0.0 {
+        h1p + 2.0 * std::f64::consts::PI
+    } else {
+        h1p
+    };
+    let h2p = if h2p < 0.0 {
+        h2p + 2.0 * std::f64::consts::PI
+    } else {
+        h2p
+    };
+
+    // Step 7: delta L', C', H'
+    let dl_p = l2 - l1;
+    let dc_p = c2p - c1p;
+
+    let dh_p = h2p - h1p;
+    let dh_p = if c1p * c2p == 0.0 {
+        0.0
+    } else if dh_p > std::f64::consts::PI {
+        dh_p - 2.0 * std::f64::consts::PI
+    } else if dh_p < -std::f64::consts::PI {
+        dh_p + 2.0 * std::f64::consts::PI
+    } else {
+        dh_p
+    };
+    let dh_p = 2.0 * (c1p * c2p).sqrt() * (dh_p * 0.5).sin();
+
+    // Step 8: L_bar_prime, C_bar_prime, h_bar_prime
+    let l_bar_p = (l1 + l2) * 0.5;
+    let c_bar_p = (c1p + c2p) * 0.5;
+
+    let h_bar_p = if c1p * c2p == 0.0 {
+        h1p + h2p
+    } else if (h1p - h2p).abs() <= std::f64::consts::PI {
+        (h1p + h2p) * 0.5
+    } else if h1p + h2p < 2.0 * std::f64::consts::PI {
+        (h1p + h2p + 2.0 * std::f64::consts::PI) * 0.5
+    } else {
+        (h1p + h2p - 2.0 * std::f64::consts::PI) * 0.5
+    };
+
+    // Step 9: T
+    let h_bar_p_deg = h_bar_p * 180.0 / std::f64::consts::PI;
+    let t = 1.0 - 0.17 * (h_bar_p - std::f64::consts::PI / 6.0).cos()
+        + 0.24 * (2.0 * h_bar_p).cos()
+        + 0.32 * (3.0 * h_bar_p + std::f64::consts::PI / 30.0).cos()
+        - 0.20 * (4.0 * h_bar_p - 63.0 * std::f64::consts::PI / 180.0).cos();
+
+    // Step 10: SL, SC, SH
+    let dl_bar_p = l_bar_p - 50.0;
+    let sl = 1.0 + (0.015 * dl_bar_p * dl_bar_p) / (20.0 + dl_bar_p * dl_bar_p).sqrt();
+    let sc = 1.0 + 0.045 * c_bar_p;
+    let sh = 1.0 + 0.015 * c_bar_p * t;
+
+    // Step 11: RT
+    let delta_theta = std::f64::consts::PI / 6.0 * (-((h_bar_p_deg - 275.0) / 25.0).powi(2)).exp();
+    let rc = 2.0 * (c_bar_p.powi(7) / (c_bar_p.powi(7) + 25.0_f64.powi(7))).sqrt();
+    let rt = -rc * (2.0 * delta_theta).sin();
+
+    // Step 12: dE00
+    let term1 = (dl_p / (KL * sl)).powi(2);
+    let term2 = (dc_p / (KC * sc)).powi(2);
+    let term3 = (dh_p / (KH * sh)).powi(2);
+    let term4 = rt * (dc_p / (KC * sc)) * (dh_p / (KH * sh));
+
+    (term1 + term2 + term3 + term4).sqrt()
 }
 
 fn reflect(x: isize, n: usize) -> usize {
