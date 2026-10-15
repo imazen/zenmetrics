@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-stats
+
+### Added
+
+- Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
+- Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
+
+### QUEUED BREAKING CHANGES
+
+- Adding `Interval::p_nonpositive` requires downstream struct literals to initialize the new field (737dc977). Existing bootstrap calls retain their behavior.
+
+## Workspace
+
 ### Changed
 
 - Viewer live encoder loop (`f16b22ed`, `94253764`, `be338560`): the loop player encodes the reference in the page with jxl-encoder's perceptual loop, steered by its own butteraugli or by the selected metric's map through `loop_map` (read as error, resampled to pixels, `scale · e^exponent`; jxl-encoder `EncodeRequest::with_external_metric`, its PR #130), and plays and saves the trace; `.ltrace` files still open. Fitted scale/exponent defaults for 124 maps put each map's block distances on butteraugli's scale (held-out log r 0.76–0.90 for 12 of 19 default maps): [calibration](benchmarks/loop_norm_calibration_2026-10-15.tsv), [loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md). The demo scene and its loop load at startup.

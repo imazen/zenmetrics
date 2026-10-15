@@ -564,3 +564,6 @@ viewer-site build source out:
 stats-helpers-check:
     just snap-cargo @ test -p zenmetrics-stats
     just snap-cargo @ clippy -p zenmetrics-stats --all-targets -- -D warnings
+
+stats-helpers-serial-check:
+    just snap-cargo @ test -p zenmetrics-stats --no-default-features
