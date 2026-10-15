@@ -1,5 +1,21 @@
-import init, { initThreadPool, Reference, thread_count, available_metrics, available_spatial_maps, score_rgba, decode_image, encode_jpeg, spatial_map, JobControl } from './pkg/zenmetrics_browser.js';
+import init, { initThreadPool, Reference, thread_count, available_metrics, available_spatial_maps, score_rgba, decode_image, encode_jpeg, spatial_map, cached_spatial_map, loop_map, loop_map_defaults, JobControl } from './pkg/zenmetrics_browser.js';
 let ready = false, cached, previousReference, wasm, control;
+// Encoder modules (web/codecs), imported the first time each is used.
+const codecs = {};
+async function codec(name) {
+  if (!codecs[name]) {
+    const module = await import(new URL(`./codecs/${name}/zenmetrics_codec_${name}.js`, import.meta.url));
+    await module.default();
+    codecs[name] = module;
+  }
+  return codecs[name];
+}
+function mapMessage(spatial) {
+  const out = {map:spatial.values,mapWidth:spatial.width,mapHeight:spatial.height,similarity:spatial.similarity,geometry:JSON.parse(spatial.geometry),
+    mapName:spatial.name,mapNames:JSON.parse(spatial.names),mapPolarity:spatial.polarity};
+  spatial.free();
+  return out;
+}
 self.onmessage = async ({data}) => {
   try {
     if (data.type === 'init') {
@@ -23,7 +39,7 @@ self.onmessage = async ({data}) => {
       const poolMilliseconds=performance.now()-poolStart;
       ready = true;
       if (thread_count() !== data.threads) throw new Error('Rayon pool size differs from the request');
-      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics()), maps:JSON.parse(available_spatial_maps()), startup:{wasmMilliseconds,poolMilliseconds}});
+      postMessage({type: 'ready', threads: thread_count(), metrics: JSON.parse(available_metrics()), maps:JSON.parse(available_spatial_maps()), loopDefaults:JSON.parse(loop_map_defaults()), startup:{wasmMilliseconds,poolMilliseconds}});
       return;
     }
     if (!ready) throw new Error('WASM worker has not initialized');
@@ -40,16 +56,59 @@ self.onmessage = async ({data}) => {
       postMessage({type:'decoded',id:data.id,...image},[image.rgba.buffer]);return;
     }
     if(data.type==='generate') {
-      phase(2);const encoded=encode_jpeg(data.reference,data.width,data.height,data.width*4,data.quality);
-      phase(1);const image=unpack(decode_image(encoded,'generated.jpg'));
-      postMessage({type:'decoded',id:data.id,bytes:encoded.length,encoded,...image},[image.rgba.buffer,encoded.buffer]);return;
+      const {width,height,quality}=data,name=data.codec||'jpeg';
+      phase(2);
+      if(name==='jpeg') {
+        const encoded=encode_jpeg(data.reference,data.width,data.height,data.width*4,quality);
+        phase(1);const image=unpack(decode_image(encoded,'generated.jpg'));
+        postMessage({type:'decoded',id:data.id,bytes:encoded.length,encoded,...image},[image.rgba.buffer,encoded.buffer]);return;
+      }
+      postMessage({type:'progress',message:`Loading the ${name} encoder module…`});
+      const module=await codec(name);
+      const coded=name==='avif'?module.roundtrip(data.reference,width,height,quality,data.speed||6)
+        :name==='jxl'?module.roundtrip(data.reference,width,height,quality,data.effort||7)
+        :module.roundtrip(data.reference,width,height,quality);
+      const encoded=coded.file,rgba=coded.rgba;coded.free();
+      postMessage({type:'decoded',id:data.id,bytes:encoded.length,encoded,width,height,rgba},[rgba.buffer,encoded.buffer]);return;
+    }
+    if(data.type==='loop') {
+      // jxl-encoder's perceptual loop, scored by its own butteraugli or by a
+      // viewer metric's map put on butteraugli's scale (loop_map).
+      const {reference,width,height,steer,id}=data;
+      postMessage({type:'loop-progress',id,message:'Loading the JPEG XL encoder module…'});
+      const module=await codec('jxl');
+      postMessage({type:'loop-progress',id,message:`Encoding ${width}×${height}, steered by ${data.steering}…`});
+      if(steer&&!(steer.scale>0&&Number.isFinite(steer.scale)&&steer.exponent>0&&Number.isFinite(steer.exponent)))
+        throw new Error('scale and exponent must be finite and positive');
+      // A failed scorer ends the loop's seed early inside the encoder; report
+      // it instead of returning that encode as if it were steered.
+      let scored=0,failure=null;
+      const scorer=steer?recon=>{
+        try{
+          const m=loop_map(steer.metric,steer.map,reference,recon,width,height,width*4,steer.display||'standard_4k',steer.scale,steer.exponent);
+          const out={values:m.values,score:m.score};m.free();
+          postMessage({type:'loop-progress',id,scored:++scored,score:out.score});
+          return out;
+        }catch(error){failure??=String(error);throw error;}
+      }:undefined;
+      const start=performance.now();
+      const run=module.loop_encode(reference,width,height,data.distance,data.effort,data.iters,scorer,data.steering);
+      if(failure){run.free();throw new Error(`The steering metric failed: ${failure}`);}
+      const trace=run.trace,file=run.file,rgba=run.rgba;run.free();
+      postMessage({type:'loop',id,trace,file,rgba,milliseconds:performance.now()-start},[trace.buffer,file.buffer,rgba.buffer]);return;
+    }
+    if(data.type==='map') {
+      // Another map of the last evaluation, without evaluating again.
+      phase(5);const mapStart=performance.now();
+      postMessage({type:'result',id:data.id,...mapMessage(cached_spatial_map(data.mapName)),mapMetric:data.mapMetric,mapMilliseconds:performance.now()-mapStart},[]);return;
     }
     const profile = data.zensimProfile || 'b';
     const start = performance.now();
     const {reference, distorted, width, height, metric, id} = data;
+    const mapMetric = data.mapMetric === undefined ? 'zensim' : data.mapMetric;
 
     let referencePrepared=false;
-    if ((metric==='zensim'||!metric||data.mapMetric==='zensim'||!data.mapMetric) && (!previousReference || previousReference.profile !== profile || previousReference.width !== width || previousReference.height !== height ||
+    if ((metric==='zensim'||!metric||mapMetric==='zensim') && (!previousReference || previousReference.profile !== profile || previousReference.width !== width || previousReference.height !== height ||
         previousReference.bytes.length !== reference.length || !reference.every((v,i) => v === previousReference.bytes[i]))) {
       referencePrepared=true;phase(3);const prepared = Reference.with_profile(reference, width, height, width * 4, profile);
       if (cached) cached.free();
@@ -58,21 +117,20 @@ self.onmessage = async ({data}) => {
     }
     const referenceMilliseconds=performance.now()-start;
     const selected = metric || 'zensim';
-    const mapMetric = data.mapMetric || 'zensim';
     let score;const scoreStart=performance.now();phase(4);
     if(selected==='zensim') score={metric:'zensim',profile,backend:'native-cpu-wasm',score:cached.score(distorted,width*4)};
     else score=JSON.parse(score_rgba(selected,reference,distorted,width,height,width*4,data.display||''));
     const scoreMilliseconds=performance.now()-scoreStart;
     postMessage({type:'score',id,score,scoreMilliseconds,referenceMilliseconds,referencePrepared});
     const mapStart=performance.now();phase(5);
-    let map, mapWidth=width, mapHeight=height, similarity=false, geometry=null;
+    let maps={map:null,mapWidth:0,mapHeight:0,similarity:false,geometry:null,mapName:null,mapNames:[],mapPolarity:null};
     if(mapMetric==='zensim') {
-      const compared=cached.compare(distorted,width*4);map=compared.map;compared.free();
-    } else {
-      const spatial=spatial_map(mapMetric,reference,distorted,width,height,width*4,data.display||'standard_4k');
-      map=spatial.values;mapWidth=spatial.width;mapHeight=spatial.height;similarity=spatial.similarity;geometry=JSON.parse(spatial.geometry);spatial.free();
+      const compared=cached.compare(distorted,width*4);
+      maps={...maps,map:compared.map,mapWidth:width,mapHeight:height,mapName:'diffmap',mapNames:['diffmap'],mapPolarity:'difference'};compared.free();
+    } else if(mapMetric) {
+      maps=mapMessage(spatial_map(mapMetric,data.mapName||'',reference,distorted,width,height,width*4,data.display||'standard_4k'));
     }
-    postMessage({type:'result',id,score,map,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,mapWidth,mapHeight,similarity,geometry,referenceMilliseconds,referencePrepared,scoreMilliseconds,mapMilliseconds:performance.now()-mapStart,milliseconds:performance.now()-start},[map.buffer]);
+    postMessage({type:'result',id,score,...maps,mapMetric,mapProfile:mapMetric==='zensim'?profile:null,referenceMilliseconds,referencePrepared,scoreMilliseconds,mapMilliseconds:performance.now()-mapStart,milliseconds:performance.now()-start},maps.map?[maps.map.buffer]:[]);
   } catch (error) {
     postMessage({type: 'error', id: data.id, message: String(error), fatal: error instanceof WebAssembly.RuntimeError});
   }
