@@ -4,8 +4,11 @@
 //! resize in its demo's `prepare_image`.
 //!
 //! The exported trunk (`models/deepdc/export.py`) runs VGG19 to the five taps
-//! (conv1_2, conv2_2, conv3_4, conv4_4, conv5_4, before ReLU, no input
-//! normalisation) and the upstream `_DCDM` on each, so it returns one
+//! (conv1_2, conv2_2, conv3_4, conv4_4, conv5_4, before ReLU) with upstream's
+//! ImageNet input normalisation switched on (`use_input_norm=True`: the
+//! package default is off, but its source says correlation wants it and the
+//! JPEG AIC-4 `DeepDC` column matches only with it), and the upstream `_DCDM`
+//! on each, so it returns one
 //! double-centred C × C distance matrix per tap (as a `[1, C, C, 1]` map).
 //! The head is the rest of `DeepDC.forward`: per tap, the distance
 //! correlation `r = (Σ A∘B + c) / (√(Σ A∘A · Σ B∘B) + c)` with `c = 1e-6`, and
@@ -22,8 +25,9 @@ use crate::preprocess::rgb8_to_planar_01;
 use crate::{Engine, Error, za};
 
 const C: f64 = 1e-6;
-/// Bump whenever any output can change.
-const SCORE_REVISION: u32 = 1;
+/// Bump whenever any output can change. 2: ImageNet input normalisation
+/// switched on (revision 1, pushed briefly on 2026-10-15, had it off).
+const SCORE_REVISION: u32 = 2;
 const COLUMN: &str = "deepdc";
 
 /// DeepDC. Lower is closer; `0` for identical inputs. Input: packed sRGB8
@@ -152,7 +156,7 @@ impl DeepDc {
 impl za::Metric for DeepDc {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(
-            "DeepDC_PyTorch 0.2, no resize; engine {}",
+            "DeepDC_PyTorch 0.2, use_input_norm=True, no resize; engine {}",
             self.engine_name()
         ))
     }

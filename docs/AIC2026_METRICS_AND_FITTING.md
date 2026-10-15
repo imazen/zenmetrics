@@ -265,7 +265,8 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
 | `NLPD` | `IQA_pytorch` `NLPD(channels=1)` — the **dingkeyan93 IQA-optimization** package (not pyiqa): BT.709 Y plane in [0,1] on the 8-bit grid, reflect-pad downsample, `bilinear(×2, align_corners)` upsample, unrotated DN kernels, 6 loop-levels (no residual band), **mean of per-level RMS** | `nlpd-iqa` (`crates/nlpd/src/iqa.rs`) | ✅ implemented — med 2.6e-3 / max 6.7e-3, med-rel 2.63% (n=53; residual = f32 op-order vs torch + bilinear edge detail). `nlpd` stays the Laparra-official RGB variant (≈20.5× the column — ≈`6^(1/0.6)`=19.8 pooling factor + RGB energy) |
 | `CW-SSIM`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
-| `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |
+| `LPIPS-alex`, `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC` | upstream packages (`lpips` 0.1.4, `DISTS_pytorch` 0.1, `stlpips_pytorch` 0.0.2, `DeepDC_PyTorch` 0.2 **with ImageNet input normalisation**), native resolution | `zenmetrics-nn` (`--features nn`): `lpips-alex`, `lpips-vgg`, `dists`, `stlpips-alex`, `stlpips-vgg`, `deepdc` | ✅ implemented — vs the cropped-set columns (n=61) max \|Δ\| 4.9e-7 / 1.0e-4 / 2.5e-5 / 9.3e-5 / 6.0e-5 / 3.0e-5 ([`nn_aic2026_crosscheck_2026-10-15.md`](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
+| `PieAPP`, `WaDIQaM`, `DreamSim`, `TOPIQ`, `TOPIQ-PIPAL`, `AHIQ`, `CKDN`, `A-FINE`, `DMM`, `MSSWD`, `AIMOS` | deep metrics | — | queued in [`PYIQA_PORT_PLAN.md`](PYIQA_PORT_PLAN.md) (priority table) |
 
 ## Method / reproduction
 

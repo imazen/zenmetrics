@@ -10,8 +10,9 @@ can be cached. Output shape per tap is [1, C, C, 1] (C x C as a 4-D map).
 
 Writes, into OUT_DIR:
   deepdc_trunk.onnx    x[1,3,H,W] in [0,1] -> 5 DCDM matrices (conv1_2,
-                       conv2_2, conv3_4, conv4_4, conv5_4 of VGG19, no input
-                       normalisation, as upstream).
+                       conv2_2, conv3_4, conv4_4, conv5_4 of VGG19), with
+                       upstream's ImageNet input normalisation switched on
+                       (see with_input_norm).
   deepdc_full.onnx     r, d [1,3,H,W] in [0,1] -> scalar: upstream forward
                        DeepDC()(r, d).
   deepdc.meta          `channels 64,128,256,512,512` and `min_size n`.
@@ -32,8 +33,21 @@ LADDER, OUT = sys.argv[1], sys.argv[2]
 GOLDEN_SIZES = [int(s) for s in (sys.argv[3] if len(sys.argv) > 3 else '64,128,256,512,1024').split(',')]
 os.makedirs(OUT, exist_ok=True)
 torch.set_grad_enabled(False)
-ref_model = DeepDC().eval()   # untouched upstream model: computes the goldens
-m = DeepDC().eval()           # same weights, patched for export below
+
+def with_input_norm(model):
+    """Turn on upstream's own `use_input_norm` (ImageNet mean/std), the way
+    its `MultiVGGFeaturesExtractor.__init__` sets it up. The package default
+    is off, but its source comments "Correlation: use_norm = True", pyiqa's
+    author-contributed `deepdc` normalises, and the JPEG AIC-4 `DeepDC`
+    column matches only with it on (8 cropped pairs, |d| <= 3e-6)."""
+    fe = model.features_extractor
+    fe.use_input_norm = True
+    fe.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+    fe.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+    return model
+
+ref_model = with_input_norm(DeepDC()).eval()   # upstream model: computes the goldens
+m = with_input_norm(DeepDC()).eval()           # same, patched for export below
 
 def dcdm_dynamic(self, x):
     """Upstream `DeepDC._DCDM`, operation for operation, except that the
@@ -117,7 +131,7 @@ with open(os.path.join(OUT, 'deepdc_goldens.tsv'), 'w') as g:
 def sha(p):
     return hashlib.sha256(open(p, 'rb').read()).hexdigest()
 with open(os.path.join(OUT, 'deepdc_export.meta'), 'w') as f:
-    f.write(f'torch {torch.__version__}\nDeepDC_PyTorch 0.2\npython {platform.python_version()}\nhost {platform.node()}\n')
+    f.write(f'torch {torch.__version__}\nDeepDC_PyTorch 0.2 (use_input_norm=True)\npython {platform.python_version()}\nhost {platform.node()}\n')
     for fn in ('deepdc_trunk.onnx', 'deepdc_full.onnx', 'deepdc.meta', 'deepdc_goldens.tsv'):
         f.write(f'sha256 {sha(os.path.join(OUT, fn))} {fn}\n')
 print('done deepdc min_size', min_size, 'channels', chns)

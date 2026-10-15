@@ -9,7 +9,7 @@ each model's upstream reference implementation. Plan and licensing:
 | LPIPS v0.1 (`Lpips`, `LpipsNet`) | `lpips_alex`, `lpips_vgg`, `lpips_squeeze` | rten, ort-cuda | `lpips` 0.1.4, CPU fp32 | rten ≤ 1.1e-7, ort-cuda ≤ 9.0e-8 |
 | DISTS (`Dists`) | `dists` | rten, ort-cuda | `DISTS_pytorch` 0.1, CPU fp32, no resize | rten 1.8e-7, ort-cuda 1.8e-7 |
 | ST-LPIPS (`Lpips`, `LpipsNet::{AlexShiftTolerant,VggShiftTolerant}`) | `stlpips_alex`, `stlpips_vgg` | rten, ort-cuda | `stlpips_pytorch` 0.0.2 | rten ≤ 4.2e-8, ort-cuda ≤ 6.0e-8 |
-| DeepDC (`DeepDc`) | `deepdc` | rten, ort-cuda | `DeepDC_PyTorch` 0.2, no resize | rten 1.2e-7, ort-cuda 1.2e-7 |
+| DeepDC (`DeepDc`) | `deepdc` | rten, ort-cuda | `DeepDC_PyTorch` 0.2, ImageNet input norm, no resize | rten 1.2e-7, ort-cuda 1.2e-7 |
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,

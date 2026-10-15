@@ -160,8 +160,9 @@ pub enum MetricKind {
     /// ST-LPIPS, VGG16; as `stlpips-alex`.
     #[value(name = "stlpips-vgg")]
     StlpipsVgg,
-    /// DeepDC (upstream `DeepDC_PyTorch` 0.2, no resize); lower is better.
-    /// As `lpips-alex`.
+    /// DeepDC (upstream `DeepDC_PyTorch` 0.2 with its ImageNet input
+    /// normalisation on, as the JPEG AIC-4 `DeepDC` column; no resize); lower
+    /// is better. As `lpips-alex`.
     #[value(name = "deepdc")]
     Deepdc,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.

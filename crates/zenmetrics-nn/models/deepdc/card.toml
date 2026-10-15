@@ -19,7 +19,7 @@ trunk = "https://download.pytorch.org/models/vgg19-dcbb9e9d.pth"
 
 [input]
 format = "packed sRGB8"
-normalisation = "v / 255 (no ImageNet normalisation, as upstream)"
+normalisation = "v / 255, then ImageNet mean/std inside the graph: upstream's use_input_norm=True (its source: \"Correlation: use_norm = True\"; the package default is off; the JPEG AIC-4 DeepDC column needs it)"
 resize = "none (upstream's demo prepare_image resizes the short side to 224; the model takes any size)"
 min_size = 16
 
@@ -28,6 +28,7 @@ script = "export.py"
 notes = "the trunk graph ends at each tap's double-centred distance matrix; export uses upstream _DCDM with reshape(-1) so the graph takes any size (checked equal to upstream); stubs `imp` for Python 3.12"
 
 [parity]
-oracle = "DeepDC_PyTorch 0.2, CPU, fp32"
+oracle = "DeepDC_PyTorch 0.2 with use_input_norm=True, CPU, fp32"
 tolerance_abs = 1e-6
-# Measured 2026-10-15, 18 pairs: rten 1.2e-7, ort-cuda 1.2e-7.
+# Measured 2026-10-15, 18 pairs: rten 1.2e-7, ort-cuda 1.2e-7. Against the
+# JPEG AIC-4 cropped-set DeepDC column, 61 pairs: max 3.0e-5.
