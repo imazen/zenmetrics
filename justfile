@@ -596,3 +596,17 @@ aic-cw-search python out:
 aic-cw-verify python out:
     TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
     {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq
+
+# Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
+aic-more-verify python:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
+    {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-more-ci:
+    bash benchmarks/aic_more_2026-10-15/check_ci.sh
