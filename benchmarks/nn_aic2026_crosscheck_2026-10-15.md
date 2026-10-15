@@ -19,11 +19,14 @@ engine ort-cuda (CPU parity of every model is in
 | `deepdc` | `DeepDC` | 61 | 1.2e-06 | 3.0e-05 |
 | `ckdn` | `CKDN` | 61 | 4.0e-05 | 1.4e-04 |
 | `afine` (native `afine_all`) | `A-FINE` | 61 | 7.5e-01 | 1.4e+00 |
+| `dreamsim` | `DreamSim` | 61 | 2.9e-07 | 6.1e-07 |
 
-- The first seven reproduce the published columns: AIC-4 computed them as the upstream packages
+- Eight of nine reproduce the published columns: AIC-4 computed them as the upstream packages
   do, at native resolution (CKDN: upstream's own eval transform — bicubic+antialias
   resize shorter→329 + centre-crop 288 on the distorted side, nearest-neighbour on
-  the reference — verified identical to its `predict_score.py` output).
+  the reference — verified identical to its `predict_score.py` output. DreamSim: the
+  upstream package's default preprocess — Pillow `Image.resize(BICUBIC)` to 224×224
+  anamorphic, reproduced bit-exact by the port's fixed-point PIL path in `resize.rs`).
 - **DeepDC needs ImageNet input normalisation.** With `DeepDC_PyTorch`'s default (no
   normalisation) our values were ~0.63× the column (median |Δ| 1.1e-2); with upstream's
   own `use_input_norm=True` they match (8-pair probe: `deepdc_variants2.py`; resizing

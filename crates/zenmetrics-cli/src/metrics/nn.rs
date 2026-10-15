@@ -13,7 +13,9 @@ use std::sync::{Mutex, OnceLock};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
-use zenmetrics_nn::{Afine, Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
+use zenmetrics_nn::{
+    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+};
 
 use super::MetricKind;
 use crate::decode::Rgb8Image;
@@ -48,6 +50,7 @@ fn consent() -> WeightsConsent {
             let terms = match name {
                 "ckdn" => Ckdn::WEIGHTS,
                 "afine" => Afine::WEIGHTS,
+                "dreamsim" => Dreamsim::WEIGHTS,
                 _ => continue,
             };
             consent = consent.accept(terms);
@@ -72,6 +75,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "afine" {
         return Ok(Box::new(Afine::from_dir(&dir, engine, &consent())?));
+    }
+    if column == "dreamsim" {
+        return Ok(Box::new(Dreamsim::from_dir(&dir, engine, &consent())?));
     }
     let net = LpipsNet::ALL
         .into_iter()
