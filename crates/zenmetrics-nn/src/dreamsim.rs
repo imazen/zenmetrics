@@ -101,6 +101,7 @@ impl Dreamsim {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
@@ -187,6 +188,7 @@ impl Dreamsim {
                 Ok(p.score(Self::prep(r), Self::prep(d), IMG, IMG)?
                     .clamp(0.0, 2.0))
             }
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -237,6 +239,10 @@ impl za::Metric for Dreamsim {
                 WarmState::Embed(self.embed(&view).metric_err_with(COLUMN, Error::kind)?)
             }
             Backend::Pair(_) => WarmState::Pixels(Self::prep(&view)),
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmDreamsim {
             metric: self,

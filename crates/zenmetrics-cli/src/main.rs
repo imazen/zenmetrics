@@ -1561,6 +1561,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // on the KonJND corpus. The 0.0 identity is inert (scores never
         // land exactly on it) — it only satisfies the tuple shape.
         MetricKind::Brisque => Some((-60.0, 150.0, 0.0)),
+        // ARNIQA: learned NR quality on [0, 1] (scaled kadid10k MOS);
+        // no meaningful identity value — 0.0 flags a default-fail
+        // constant only.
+        MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
     }
 }
 

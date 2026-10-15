@@ -13,9 +13,9 @@
 use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
-use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
+use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -102,6 +102,14 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     "dreamsim",
                 );
             }
+            if name == "arniqa" {
+                return (
+                    Box::new(PairedNoReference::new(
+                        Arniqa::from_dir(&dir, engine()).expect("load arniqa"),
+                    )),
+                    "arniqa",
+                );
+            }
             let net = *LpipsNet::ALL
                 .iter()
                 .find(|n| n.column() == name)
@@ -146,6 +154,13 @@ fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
     Image::from(PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap())
 }
 
+/// Whether `m` is a paired no-reference metric — its outputs carry the
+/// distorted score under `col` and the reference's under `col_ref`, and the
+/// goldens row gives both.
+fn is_nr(m: &dyn Metric, col: &str) -> bool {
+    m.outputs().iter().any(|s| *s.key == *format!("{col}_ref"))
+}
+
 #[test]
 fn matches_upstream() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
@@ -154,6 +169,7 @@ fn matches_upstream() {
         let path = model_dir.join(format!("{col}_goldens.tsv"));
         let goldens =
             std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let nr = is_nr(&*m, col);
         let mut checked = 0;
         let mut worst = 0.0f64;
         for line in goldens.lines().skip(1) {
@@ -162,11 +178,10 @@ fn matches_upstream() {
                 (f[0], f[1].parse().unwrap(), f[2].parse().unwrap());
             let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
             let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
-            let got = score(
-                &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
-                    .expect("evaluate"),
-                col,
-            );
+            let eval = m
+                .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                .expect("evaluate");
+            let got = score(&*eval, col);
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
@@ -175,6 +190,21 @@ fn matches_upstream() {
                 "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
                 tol(col)
             );
+            if nr {
+                // The reference column: golden field 3 under `<col>_ref`.
+                let want_ref: f64 = f[3].parse().unwrap();
+                let got_ref = score(&*eval, &format!("{col}_ref"));
+                let err_ref = (got_ref - want_ref).abs();
+                worst = worst.max(err_ref);
+                eprintln!(
+                    "{col}_ref {stem} {size}: got {got_ref:.9} want {want_ref:.9} |d| {err_ref:.3e}"
+                );
+                assert!(
+                    err_ref <= tol(col),
+                    "{col}_ref {stem} {size}: |{got_ref} - {want_ref}| = {err_ref:e} > {:e}",
+                    tol(col)
+                );
+            }
             checked += 1;
         }
         assert!(checked > 0, "{} had no rows", path.display());
@@ -191,6 +221,7 @@ fn warm_reference_equals_cold() {
     let (rp, w, h) = load_rgb8(&ladder.join("1415_256_ref.png"));
     let (dp, _, _) = load_rgb8(&ladder.join("1415_256_dist.png"));
     for (mut m, col) in models() {
+        let nr = is_nr(&*m, col);
         let cold = score(
             &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .unwrap(),
@@ -199,9 +230,10 @@ fn warm_reference_equals_cold() {
         // CKDN is a quality score, not a distance: an identical pair's dr is
         // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
         // differ. A-FINE's raw afine_all is likewise signed and
-        // image-dependent on identical pairs. For both, the identical-pair
-        // check below is warm == cold.
-        let cold_same = matches!(col, "ckdn" | "afine").then(|| {
+        // image-dependent on identical pairs, and an NR model's headline on
+        // (r, r) is the reference's own quality score. For all of them the
+        // identical-pair check below is warm == cold.
+        let cold_same = (nr || matches!(col, "ckdn" | "afine")).then(|| {
             score(
                 &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
                     .unwrap(),
@@ -210,10 +242,11 @@ fn warm_reference_equals_cold() {
         });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
         // A trunk engine caches the reference's features; a whole-graph
-        // engine (ort-cuda) recomputes them on every candidate.
+        // engine (ort-cuda) recomputes them on every candidate. A paired
+        // no-reference metric always scores its reference once.
         assert_eq!(
             warm.reuses_reference_work(),
-            engine() == Engine::Rten,
+            nr || engine() == Engine::Rten,
             "{col}"
         );
         for _ in 0..2 {
