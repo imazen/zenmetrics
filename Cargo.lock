@@ -7775,6 +7775,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "enough",
+ "fast-ssim2 0.9.0",
  "fsim",
  "gmsd",
  "haarpsi",

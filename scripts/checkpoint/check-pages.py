@@ -110,7 +110,7 @@ try:
           if(second.type!=='result'||JSON.stringify(first.score)!==JSON.stringify(second.score)||
              JSON.stringify(Array.from(first.map))!==JSON.stringify(Array.from(second.map))) throw new Error('Repeat differs');
           const spatial={};
-          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd','fsim','fsimc','haarpsi','vsi','msssim']) {
+          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd','fsim','fsimc','haarpsi','vsi','msssim','ssim2']) {
             response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric,reference,distorted,width,height,display:'standard_4k'});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
@@ -145,7 +145,7 @@ try:
           const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
           if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
-          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
+          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
           const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
           for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
           const oddMaps={};
@@ -160,7 +160,7 @@ try:
             oddMaps[mapMetric]=got.geometry;
           }
           // Identical inputs: these components vanish exactly; VIF keeps the reference's 1e-10 regularization.
-          for(const mapMetric of ['nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
+          for(const mapMetric of ['ssim2','nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
             response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             const regularized=mapMetric.startsWith('vif');
@@ -318,7 +318,7 @@ try:
         assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
         result['ui_separate_timings']=True
         # MS-SSIM stays last: the border check below reads its cropped origin.
-        for map_metric in ('nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','fsimc','haarpsi','vsi','msssim'):
+        for map_metric in ('ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','fsimc','haarpsi','vsi','msssim'):
             page.locator('#map-metric').select_option(map_metric)
             page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
             assert 'native samples' in page.locator('#map-info').inner_text()
@@ -352,7 +352,7 @@ try:
                 result['native_map_max_abs_delta'][name]=delta
                 # IW-SSIM and mDCT-PSNR record their delta: neither claims cross-tier bits, and
                 # mDCT-PSNR calls platform libm (glibc natively, not on wasm32).
-                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi','nlpd','psnrhvs','mad','vif','vifvec','vmaf-v1'): assert delta==0, (name,delta)
+                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi','ssim2','nlpd','psnrhvs','mad','vif','vifvec','vmaf-v1'): assert delta==0, (name,delta)
         if args.report:
             source_file=args.site/'site-source.json'
             asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''

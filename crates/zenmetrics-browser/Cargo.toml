@@ -23,6 +23,10 @@ gmsd = { workspace = true, features = ["std", "parallel"] }
 psnrhvs = { workspace = true, features = ["std", "parallel"] }
 haarpsi = { workspace = true, features = ["std", "parallel"] }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+# SSIMULACRA2's native spatial terms (`compute_ssimulacra2_maps`) for the
+# unified-surface adapter in `src/ssim2_map.rs`; the scalar route stays on
+# zenmetrics-api's `cpu-ssim2`.
+fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", default-features = false }
 fsim = { workspace = true, features = ["std", "parallel"] }
 vsi = { workspace = true, features = ["std", "parallel"] }
 msssim = { workspace = true, features = ["std", "parallel"] }

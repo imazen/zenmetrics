@@ -53,9 +53,16 @@ opaque-only scoring.
 
 ## Remaining acceptance work
 
-SSIMULACRA2 has no native spatial-map API in the current pinned fast-ssim2 port.
-It remains available as a scalar metric; the viewer explicitly names a separate
-map metric. No other map is labeled as SSIMULACRA2.
+SSIMULACRA2's native spatial terms come from fast-ssim2's
+`compute_ssimulacra2_maps` (fast-ssim2 PR #12, pinned at its branch head until it
+merges). The `ssim2` map choice shows fast-ssim2's fused `diffmap`: the 54
+per-pixel terms (6 scales × X/Y/B × SSIM error, edge artifact, detail lost)
+split into per-pixel shares of the score's weighted L1/4-norm sum, coarse
+scales spread over the pixels they cover. Its mean is the weighted sum the
+score transforms, so it is the score's own spatial breakdown rather than one
+component. The browser keeps scoring SSIMULACRA2 through zenmetrics-api. The
+Pages check compares the map with fast-ssim2's own diffmap (`browser_oracle`):
+exact on the 64×64 fixture, and exact zeros for identical 257×253 inputs.
 
 The native CLI does not currently expose issue 70's alpha-policy flag. The viewer
 preserves alpha and refuses non-opaque scoring. Noise/minimum-white-black alpha

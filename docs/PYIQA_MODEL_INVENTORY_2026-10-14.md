@@ -7,6 +7,12 @@ reading of the repos' licence files, not legal advice.
 
 ## 1. Licensing
 
+**Superseded 2026-10-15 for per-model terms** by
+[`PYIQA_UPSTREAM_LICENSES_2026-10-15.md`](PYIQA_UPSTREAM_LICENSES_2026-10-15.md), which
+reads every upstream licence and weight host as text. Changes from this section: WaDIQaM
+has official MIT weights (dmaniry/deepIQA); MUSIQ's weights are Apache-2.0; ST-LPIPS's
+BlurPool files are CC BY-NC-SA 4.0 (Adobe); TReS's agreement forbids distribution.
+
 **pyiqa itself**
 
 | What | License | Evidence |
