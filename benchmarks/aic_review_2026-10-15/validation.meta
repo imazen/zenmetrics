@@ -1,0 +1,291 @@
+{
+  "date": "2026-10-15T17:42:03.749601+00:00",
+  "host": "i265",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "base": "c07da3683d0beb91602157575b78351bc91047d0",
+  "retained": "/home/lilith/tmp/aic-variants-scratch/retained-round5",
+  "files": [
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/bogus-fixed.log",
+      "bytes": 1021829,
+      "sha256": "bcebd0d9cef15ef2bd458ad920a7d502470da56e436758a262a57b614fe1fa0a"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/bogus-sweep.log",
+      "bytes": 1031992,
+      "sha256": "7eb1b1fcae82a7518c88b6908389908c88cbbb6596fcc8b0ff8533a449b339dc"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/bogus.log",
+      "bytes": 972228,
+      "sha256": "b0a9b04cc4cfddde147a5b237d6f656fc707c3d28109ec4a39161f645be4749e"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/cambi-pin-test.rs",
+      "bytes": 795,
+      "sha256": "a17d853c6479d1641926b710b52185742dc9b6d961671a60dbd2c9f75fe94531"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/cambi-pin.json",
+      "bytes": 381,
+      "sha256": "bfab2d61770259e6e160908237530e38c31d40055819d9968a097c31565fe73d"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/cambi-ref-refresh.log",
+      "bytes": 31340,
+      "sha256": "ea7c20a9e155faa1add376352ec4dc3dc9e32856b843f505a7e835f80a5a4f36"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ci.log",
+      "bytes": 3705897,
+      "sha256": "3e4e28cdd495a3a7de7a64f1c6c766ded5ca6609f40cba401bf808aecd5d489a"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-cambi-reference/cambi-precise-settings-aic.json",
+      "bytes": 30307,
+      "sha256": "4ee252dd9bdcc6a5178b90ccc6d101d2cbdbc27d6c01a230937cdea676bb5576"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-cambi-reference/cambi-precise-settings-ladder.json",
+      "bytes": 3257,
+      "sha256": "7e0e51d63df7c3fe2b36993501510f9aef6fd2a3fddc367731cdce2eb2f9fdc6"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/butter-aic-verified.json",
+      "bytes": 18633,
+      "sha256": "730b22bbf81b00be522fa7ce8ea7cb8c87cdafb72915a201bc21603482698df8"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/butter-ladder-verified.json",
+      "bytes": 3807,
+      "sha256": "8ea2999f8c0b9d76ce1f35de95432cdf925191f4eae20df4b3c5a1d8beb17486"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/cambi-precise-aic-verified.json",
+      "bytes": 17688,
+      "sha256": "cbbfb4be9afef81a032908aaa0428471675812a32dad2841b4a4c48a23e5dfaa"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/cambi-precise-ladder-verified.json",
+      "bytes": 5435,
+      "sha256": "674d0192b363430d5ea467d9d4e997ef6d2c468b844d137df6866cc5ab7b9aed"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/ssim1-opencv-order-aic-verified.json",
+      "bytes": 19002,
+      "sha256": "1a577ee07f41c755cdb5e17b6e2b074b689f27f42aa1a1094955c1a2107cae3e"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/ssim1-opencv-order-ladder-verified.json",
+      "bytes": 3876,
+      "sha256": "1c4463df051d8987a6e39af3e0e6d7171ecbc207bd6f30c0f17106c5a2c64870"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/ws-aic-verified.json",
+      "bytes": 37208,
+      "sha256": "49fef3106b04a72232e361cc5669318ec8a8ed178953f94a07bfe4a0ac7b164f"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-oracles/ws-ladder-verified.json",
+      "bytes": 7669,
+      "sha256": "2db5a84ac35dc78afb7fc97251b6bb692ed6efbdaff8c3a9830ab57efb7c0f25"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-pins/cambi-pin.json",
+      "bytes": 375,
+      "sha256": "82505b18c9ae4ae5d7643be8a0aca9f46e9a26f54173d082025da589583c1f29"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-pins/oracle-pins-banded.json",
+      "bytes": 428,
+      "sha256": "26079d858d4b330ac2d9557c142da17c82a033acddc00f02995b46b814e3fdb4"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-pins/ssimulacra_precise.cpp",
+      "bytes": 16604,
+      "sha256": "8531461c6b40d5d5f63582d3996f37dff7c1df0d7c686f7942287e9d362d628a"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/clean-rerun.log",
+      "bytes": 105337,
+      "sha256": "4c7953ba66fa48cfb1af55171f14255a38cee3c3edd5d99eaff4de6d59a55390"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/final/butter-ladder-verified.json",
+      "bytes": 3807,
+      "sha256": "8ea2999f8c0b9d76ce1f35de95432cdf925191f4eae20df4b3c5a1d8beb17486"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/final-oracles.log",
+      "bytes": 16492,
+      "sha256": "f851818484dd0615effce0ff40ece4f9d731369263dad1a4d65fdabe584aa733"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/gating-pins-retry.log",
+      "bytes": 5960,
+      "sha256": "6a8c419ccaa439e1f05d2b135da30a92fcec03a9050216a2b2e5c498eb33e496"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/gating-pins.log",
+      "bytes": 4220,
+      "sha256": "475abaf317d1f620cf4d834b1f0f28cfd85f4a1ad590a425b81530a8b0b64465"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/libs.log",
+      "bytes": 975781,
+      "sha256": "b99d7e0950e3966b512d9da567718bea1817ed9aaabc8de1b6abd76f7870a857"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/oracle-pins-banded.json",
+      "bytes": 428,
+      "sha256": "26079d858d4b330ac2d9557c142da17c82a033acddc00f02995b46b814e3fdb4"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/oracle-pins.json",
+      "bytes": 308,
+      "sha256": "e747637d7d5b6a213b710900cb416515bc0072a5cf0cc5f06c93390d4c4e5201"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/butteraugli_original.log",
+      "bytes": 655,
+      "sha256": "a1fa1395e196d7adffaeed70de91c0d5eb2b8a12505bbe5465a9a080c3db6231"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/butteraugli_original.rs",
+      "bytes": 21794,
+      "sha256": "f7b308c9b9ae03d7a434d69c24fb6b6e100f2817914a7f6a0cb00ca5f235d01a"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/butteraugli_original_test.rs",
+      "bytes": 106,
+      "sha256": "c6fdecfcaa716a4bc3d1c61487551956c276530d086fc9d03649287040e5d3a0"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ssimulacra1.log",
+      "bytes": 678,
+      "sha256": "f99dbfb4420c8a3e676ad78fd57fd1ea8d871cc1840efe081dda6d6bb19fc576"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ssimulacra1.rs",
+      "bytes": 9996,
+      "sha256": "d0ee26a2c2fe8e29f5e0ff644e7478d3993a5f68b53db4299fe901b5a32d2d46"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ssimulacra1_test.rs",
+      "bytes": 97,
+      "sha256": "128b1f32825bf1a2c82f8d7cacc8bde71bd3e8c95db1d14203b3657f4a68e9c4"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/summary.json",
+      "bytes": 384,
+      "sha256": "fba779ad58f84d238915f7424c846ffb1aefb293eb7e884ca5aa28a1c35a01dd"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ws_hv.log",
+      "bytes": 671,
+      "sha256": "918c803f03fdbfa42b0d3872d0cd8405995d4df9cafd995af6da31989a3ef15f"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ws_hv.rs",
+      "bytes": 9127,
+      "sha256": "41dc7dde47cad948d9411b55c32d6c637eab11a833af1e17a0927ce9b1e50bd2"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-controls/ws_hv_test.rs",
+      "bytes": 91,
+      "sha256": "eb20aab1389f8ae9298565f19f392ebb175ca8f2a734cbcac7a8fbe8b28dbafd"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pin-sensitivity.log",
+      "bytes": 631,
+      "sha256": "4ca5b10f0c9af068db32043fedd3b8ee70aa46e5eb0e8371dc32619d51c9a7eb"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/pins.log",
+      "bytes": 565,
+      "sha256": "cc4483e45f7c87aa93913a740a0cc90edb0bd6761dc009a1317131a3e3bee711"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ramp-search.json",
+      "bytes": 381,
+      "sha256": "8302de8df67edd4e28af51af23e7388dee7616d7683864af96d0f7965684bcd0"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/rust-pins-before.log",
+      "bytes": 915,
+      "sha256": "305f700ec7d49c28e51f0297c6736a9ac11160e81e5902212da79cbc9d9f356d"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/rust-pins.log",
+      "bytes": 511,
+      "sha256": "4cbf964f1bb24f1a726549dc4ff3e9d3a19022b0eaf02499619829179e7fe682"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssim-order-retry.log",
+      "bytes": 21475,
+      "sha256": "64fe8f3ce361a964b83f0f514e3552185ce908f1b120b1666e3ebef093494214"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssim-order.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssim-pin-test.rs",
+      "bytes": 912,
+      "sha256": "e7cf08c9429d153cd60f8f78e8136e56baec9f3d5e08aba4ff290cf16f6dc3e9"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssim1-opencv-order-aic-verified.json",
+      "bytes": 19002,
+      "sha256": "1a577ee07f41c755cdb5e17b6e2b074b689f27f42aa1a1094955c1a2107cae3e"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssim1-opencv-order-ladder-verified.json",
+      "bytes": 3876,
+      "sha256": "1c4463df051d8987a6e39af3e0e6d7171ecbc207bd6f30c0f17106c5a2c64870"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/ssimulacra_precise.cpp",
+      "bytes": 16604,
+      "sha256": "8531461c6b40d5d5f63582d3996f37dff7c1df0d7c686f7942287e9d362d628a"
+    },
+    {
+      "path": "/home/lilith/tmp/aic-variants-scratch/retained-round5/stride-build.log",
+      "bytes": 962560,
+      "sha256": "5f28fa8bc42272746ce00abe21242f8bdbce9a376bb64cfb114858ec36464a09"
+    }
+  ],
+  "source_sha256": {
+    "crates/vmaf/src/cambi.rs": "b11f5359f495576a71313051bc3f0ab0db4aa444cfa17fac778a966f8d07f702",
+    "crates/zenmetrics-cli/src/main.rs": "8964d669277725d28fd1cd0f35937b6b56a49a00d74f58413eb84b4585c77d1c",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "8518622bc800d68c7c0d618d7b7fb897abcf15ce8fe4c45a2b8b467516f429a0",
+    "crates/zenmetrics-cli/src/metrics/ssimulacra1.rs": "eae06237e54c0954026cb562cbd6813fdf2090d029ef421c9cd922816cec5e3d",
+    "crates/zenmetrics-cli/src/metrics/ws_hv.rs": "1411c7c03773fb581660bc4f4b27ce5f2a7f7a26e635f031169eee5c634ce16b"
+  },
+  "verified_logs": {
+    "ci.log": [
+      "test result: ok. 81 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.39s",
+      "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.64s",
+      "test result: ok. 38 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.49s",
+      "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 152 filtered out; finished in 0.00s",
+      "run-heavy: done rc=0 61s | peak-RSS 3.19GiB | min-avail 20298MiB | peak-load 6.74"
+    ],
+    "pin-sensitivity.log": [
+      "run-heavy: done rc=0 1s | peak-RSS 0.14GiB | min-avail 22975MiB | peak-load 6.74"
+    ],
+    "clean-rerun.log": [
+      "run-heavy: done rc=0 567s | peak-RSS 2.97GiB | min-avail 20362MiB | peak-load 8.23"
+    ],
+    "cambi-ref-refresh.log": [
+      "run-heavy: done rc=0 11s | peak-RSS 0.67GiB | min-avail 22452MiB | peak-load 12.23"
+    ]
+  },
+  "oracle_pins.json": "26079d858d4b330ac2d9557c142da17c82a033acddc00f02995b46b814e3fdb4",
+  "pin_residuals.json": "10838b9d88f40d40f277a2e12756da3ed52e97d5469a22500642dbc4701ea636",
+  "pin_sensitivity.json": "197a53f7dafe71ec89fe50407964807b380b93cc04ecc39b5cc1feb5c52a2658",
+  "cambi_reference_invariance.json": "f37993b9f586b8bee0447bde31c1db9f9c1ed9055940388a2fdca20cd1173ba2",
+  "panel_invariance.json": "78842a02cedfb5eabc6fbea89b829c92d62acd8938a573c927ccf609abad8345",
+  "summary.json": "c9bedd946a427edd702456792f20bc35af5f7fd5ecd69ca2ea01343047e74a44",
+  "ssim_order_summary.json": "31d593ddd79d4f1ced1367517c46e45656801d1dcfbf96c99320eeabe8aad208"
+}
