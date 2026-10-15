@@ -593,6 +593,29 @@ pub(crate) fn extract_features_regime_with_ctx(
     Ok(features)
 }
 
+/// PU-linear integrated feature extraction (Profile B v3 regime): absolute
+/// nits → `Zensim::compute_pu_linear_extended_features` — no u8 shell, no
+/// display-peak anchor. Score is the integrated-PU score (the validated
+/// zensim HDR feeding); features share the sRGB extraction layout.
+#[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
+pub(crate) fn score_with_features_pu_linear(
+    ref_nits: &[f32],
+    dist_nits: &[f32],
+    width: usize,
+    height: usize,
+) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
+    use zensim::Zensim;
+    let z = Zensim::new(selected_profile()?);
+    let stride = width * 3;
+    let result = z
+        .compute_pu_linear_extended_features(ref_nits, dist_nits, width, height, stride, stride)
+        .map_err(|e| format!("zensim pu-linear: {e:?}"))?;
+    let score = result.score();
+    let features = result.into_features();
+    Ok((score, features))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1085,7 +1108,9 @@ mod tests {
         let reference = synth(1, w as u32, h as u32);
         let r3: Vec<[u8; 3]> = reference
             .pixels
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| [c[0], c[1], c[2]])
             .collect();
         let mut cfg = ZensimConfig::default();
@@ -1096,7 +1121,9 @@ mod tests {
             let dist = synth(200 + d, w as u32, h as u32);
             let d3: Vec<[u8; 3]> = dist
                 .pixels
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|c| [c[0], c[1], c[2]])
                 .collect();
             let per_call = compute_zensim_with_config(&r3, &d3, w, h, cfg)
@@ -1197,27 +1224,4 @@ mod tests {
             );
         }
     }
-}
-
-/// PU-linear integrated feature extraction (Profile B v3 regime): absolute
-/// nits → `Zensim::compute_pu_linear_extended_features` — no u8 shell, no
-/// display-peak anchor. Score is the integrated-PU score (the validated
-/// zensim HDR feeding); features share the sRGB extraction layout.
-#[cfg(feature = "cpu-metrics")]
-#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
-pub(crate) fn score_with_features_pu_linear(
-    ref_nits: &[f32],
-    dist_nits: &[f32],
-    width: usize,
-    height: usize,
-) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
-    use zensim::Zensim;
-    let z = Zensim::new(selected_profile()?);
-    let stride = width * 3;
-    let result = z
-        .compute_pu_linear_extended_features(ref_nits, dist_nits, width, height, stride, stride)
-        .map_err(|e| format!("zensim pu-linear: {e:?}"))?;
-    let score = result.score();
-    let features = result.into_features();
-    Ok((score, features))
 }

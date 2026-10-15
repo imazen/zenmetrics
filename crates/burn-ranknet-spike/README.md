@@ -1,6 +1,6 @@
 # burn-ranknet-spike
 
-**Question:** Can [`burn`](https://burn.dev) (0.21) train a RankNet-style
+**Question:** Can [`burn`](https://burn.dev) (0.21; 0.22 since 2026-10-15) train a RankNet-style
 perceptual-metric / picker MLP — the kind `zensim-train-core` currently trains
 with **hand-rolled backprop** — using autodiff and a *custom* multi-term loss?
 
@@ -41,10 +41,19 @@ is too error-prone). This spike confirms the training half of the
 - Custom RankNet (pairwise-logistic) + monotonicity loss = plain tensor ops.
 - Adam + the train loop = `optim.step(lr, model, grads)`; the whole `adam.rs`
   and the manual chain rules go away.
-- burn is generic over `Backend`, so the same `Mlp<B>` swaps from the
-  `ndarray` CPU backend used here to the **cubecl** CUDA/wgpu backend (the same
-  cubecl 0.10 line zenmetrics already pins) by changing one type alias —
-  giving GPU training that `zensim-train-gpu` declares but doesn't implement.
+- Since burn 0.22 the backend is a runtime `Device`: the same `Mlp` runs on
+  the pure-Rust `Device::flex()` CPU backend used here or on CUDA/wgpu
+  (`Device::cuda(0)`, features `cuda`/`wgpu`), with `.autodiff()` for
+  gradients — giving GPU training that `zensim-train-gpu` declares but
+  doesn't implement. (Under 0.21 this was a `Backend` type parameter and the
+  deprecated `ndarray` backend.)
+
+**Re-run on burn 0.22.0 (2026-10-15, i265, Flex CPU backend):** final
+pair-ranking accuracy **0.9990** (0.9970 at epoch 200); `gbdt-teacher-compare`
+held-out accuracy A 0.8460 / B 0.8613 / C 0.8467 (the student numbers wobble
+run to run: weight init is unseeded). Port notes: modules lose the `<B>`
+parameter, `Tensor<B, D>` becomes `Tensor<D>`, `optim` is a feature, and
+`TensorData::to_vec` is `try_to_vec`.
 
 ## Architecture decision (2026-06-09): separate binaries, NO shared cargo graph
 

@@ -120,6 +120,10 @@ registry `zenjpeg ^0.9.0`, now redirected by the root `zenjpeg` patch), run carg
 snapshot: `just snap-cargo @ test -p <crate>`. A plain `cargo` in a dev tree rewrites
 `Cargo.lock` to match the local siblings: never commit that; `jj restore Cargo.lock`.
 
+`snap-cargo` runs in a snapshot copy, so `snap-cargo @ fmt` would format the copy and leave
+the tree unformatted (2026-10-15: that is how 48e768ed reached master unformatted). The recipe
+refuses `fmt` without `--check`; format the tree with `just fmt`.
+
 `scripts/safe_push.sh` refuses (exit 8) any push that changes `Cargo.lock` or `ci/sibling-pins.tsv`
 unless `lock.sh --check` passes on the outgoing commit. If a pin must move, edit
 `ci/sibling-pins.tsv`, run `--regen`, and commit both together.
@@ -1529,6 +1533,12 @@ Preview v0.1. The local native oracle and browser fixture matched exactly.
 The assertion now reports both scalar values and maximum map delta so CI can
 identify the difference. The cause remains unverified; numeric expectations
 and benchmark acceptance are unchanged.
+
+Recurred 2026-10-15 on website run 38729760597 (`dc9b8c32`), attempt 1:
+browser 91.21909967783705, native 91.21909967392351 (difference 3.9e-9),
+maximum map delta 0.0. Attempt 2 of the same commit passed and deployed, so
+the browser or the native oracle scalar varies between runs (not measured
+which); the maps matched exactly both times.
 
 ### Browser native map rendering (2026-10-14)
 

@@ -140,10 +140,10 @@ fn corr32_inner<const RELAXED: bool>(
                 a2 = c.mul_add(t2, a2);
                 a3 = c.mul_add(t3, a3);
             } else {
-                a0 = a0 + c * t0;
-                a1 = a1 + c * t1;
-                a2 = a2 + c * t2;
-                a3 = a3 + c * t3;
+                a0 += c * t0;
+                a1 += c * t1;
+                a2 += c * t2;
+                a3 += c * t3;
             }
         }
     }

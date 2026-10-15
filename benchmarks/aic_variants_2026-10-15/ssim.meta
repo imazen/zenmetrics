@@ -1,0 +1,32 @@
+Host: i265, 2026-10-15. Parent: e7e1ca5a498a; source: SSIM change containing this receipt.
+Numerical source SHA256 (ssim_pyiqa.rs): 9116a60b035ce8b90544f62350e2efc292df8bdbd2933493c4ffe7eff9cf1615
+Binary SHA256: cc2968e5b9713e14b9f464842627a341ef92f3e143237668748525cebdefce97
+Build/test snapshot tree: fc9d8363478d. CI-pinned Cargo.lock check passed unchanged.
+Site config SHA256: fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447
+Published 61-row CSV SHA256: 094a5d77ea72ddd744301f4ce2f55dd2d207d12c6311c019cea7cac65e897e8d
+
+Command: python3 benchmarks/aic_variants_2026-10-15/panel.py ~/tmp/zenmetrics-lock-snap-aicvariants/target/release/zenmetrics ~/tmp/aic-variants-scratch/ssim-panel <all 20 SSIM-pyiqa family metric names> --expect-small-ms-errors
+Names: ssim-pyiqa, ssim-pyiqa-f32[-k2..-k6], ssimc-pyiqa-f32[-k2..-k6], ms-ssim-pyiqa, ms-ssim-pyiqa-f32[-k2..-k6].
+Verification: python3 benchmarks/aic_variants_2026-10-15/verify.py ~/tmp/aic-variants-scratch/ssim-panel ~/tmp/aic-site/site_fullres_subset61.csv ~/tmp/aic-audit/raw/py_probe.tsv
+All commands serialized through flock ~/tmp/i265-heavy.lock and run-heavy --mem 16G.
+run-heavy: done rc=0 75s | peak-RSS 0.36GiB | min-avail 22458MiB | peak-load 7.68
+Raw TSVs and logs: i265:~/tmp/aic-variants-scratch/ssim-panel/
+
+Published gates (61/61): SSIM max absolute delta 3.7769233379725264e-6;
+MS-SSIM 1.8827927489306617e-6. Odd S53_JAIB_07: 2.3450634845101348e-7.
+The ten SSIM/SSIMc fixed-factor variants agree with the independently written
+numpy/scipy audit probe to at most 4.97567819945921e-7 (CLI writes six decimals).
+All 20 names executed. Nineteen score 61/61 pairs; MS-SSIM f32 k6 scores 27/61
+and explicitly rejects 34/61 geometries. Every rejected pair was executed through
+CLI score and required a nonzero exit with an 11x11 geometry error. No silent skip.
+
+ssim_summary.tsv retains the named JND maps and the published SSIMc baseline.
+No maps exist in the supplied config for the three unscaled f32 names or any
+MS-SSIM f32 k2..k6; those fields remain unavailable, with no substitute map.
+
+58 CLI library tests pass (2 existing ignored); release build and scoped rustfmt
+check pass. Six new tests cover direct 2D SSIM oracle parity, odd zero pooling,
+stride/rounding/decimation, negative-CS clipping, complete box blocks and explicit
+MS geometry refusal. No test expectations/tolerances were relaxed.
+Strict CLI clippy: 12 errors in untouched hdr.rs / metrics/zensim.rs. No findings
+in touched files or the new module. Strict fsim/vsi clippy passes in the prior gate.

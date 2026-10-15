@@ -259,7 +259,7 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
     }
     // Vertical box sums at the decimated positions only, normalised.
     let mut out = vec![0.0f32; w2 * h2];
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     for oi in 0..h2 {
         let i = oi * f;
         let lo = (i + s).saturating_sub(f - 1);
@@ -439,7 +439,7 @@ fn decimate_rgb8<const N: usize>(
         let pixels = &data[y * stride..y * stride + w * 3];
         decimate_hwin_rgb8(pixels, w, f, &coefficients, row);
     });
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     let mut compact = vec![[0.0f32; N]; w2 * h2];
     for_each_compact_row(&mut compact, w2, |oi, row| {
         let i = oi * f;
@@ -535,7 +535,7 @@ mod decimation_tests {
                             }
                             expected += row;
                         }
-                        expected *= 1.0 / (f * f) as f32;
+                        expected *= 1.0 / (f as u64 * f as u64) as f32;
                         assert_eq!(
                             actual[oy * dw + ox].to_bits(),
                             expected.to_bits(),
@@ -1283,8 +1283,9 @@ pub(crate) fn fsim_rgb8_planes(
     h: usize,
     stride: usize,
     map: Option<&mut [f32]>,
+    downscale: crate::Downscale,
 ) -> ((f64, f64), usize, usize) {
-    let f = downsample_factor(w, h);
+    let f = downscale.factor(w, h);
     let (w2, h2, [yr, ir, qr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     let (_, _, [yd, id, qd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));

@@ -14,6 +14,8 @@ pub(crate) enum Kind {
     PsnrYStudio601,
     PsnrYLibvmaf,
     PsnrYCbCr611,
+    PsnrCb,
+    PsnrCr,
     Ssim,
     SsimC,
     Ciede2000,
@@ -112,6 +114,11 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
             let mse = (6.0 * mse_y + mse_cb + mse_cr) / 8.0;
             Ok(psnr(mse))
         }
+        // PSNR of one full-resolution studio-swing BT.601 chroma plane, the
+        // same per-pixel conversion as `PsnrYCbCr611`. JPEG AIC-4 `PSNR-Cb`
+        // and `PSNR-Cr`.
+        Kind::PsnrCb => Ok(psnr(yuv444_studio601_mse(r, d).1)),
+        Kind::PsnrCr => Ok(psnr(yuv444_studio601_mse(r, d).2)),
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
@@ -1073,6 +1080,60 @@ mod tests {
         // The four conventions should not all collapse to one number.
         let scores: Vec<f64> = kinds.iter().map(|&k| score(k, &r, &d).unwrap()).collect();
         assert!(scores.iter().any(|&s| s != scores[0]));
+    }
+
+    /// `psnr-cb` / `psnr-cr` equal PSNR over the directly computed
+    /// `round(128 + (…)/255)` studio-601 chroma planes, and
+    /// `psnr-ycbcr611` is their 6:1:1 MSE combination with
+    /// `psnr-y-studio601`.
+    #[test]
+    fn chroma_psnr_matches_direct_planes_and_611() {
+        let (r, d) = ssimc_pair(48, 40, false);
+        let plane = |img: &Rgb8Image, k: [f64; 3]| -> Vec<f64> {
+            img.pixels
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|p| {
+                    (128.0
+                        + (k[0] * f64::from(p[0])
+                            + k[1] * f64::from(p[1])
+                            + k[2] * f64::from(p[2]))
+                            / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0)
+                })
+                .collect()
+        };
+        let direct = |k: [f64; 3]| {
+            let (a, b) = (plane(&r, k), plane(&d, k));
+            let mse = a
+                .iter()
+                .zip(&b)
+                .map(|(x, y)| (x - y) * (x - y))
+                .sum::<f64>()
+                / a.len() as f64;
+            10.0 * (255.0 * 255.0 / mse).log10()
+        };
+        let cb = score(Kind::PsnrCb, &r, &d).unwrap();
+        let cr = score(Kind::PsnrCr, &r, &d).unwrap();
+        assert!(
+            (cb - direct([-37.797, -74.203, 112.0])).abs() < 1e-9,
+            "cb {cb}"
+        );
+        assert!(
+            (cr - direct([112.0, -93.786, -18.214])).abs() < 1e-9,
+            "cr {cr}"
+        );
+        assert_ne!(cb, cr);
+        assert!(score(Kind::PsnrCb, &r, &r).unwrap().is_infinite());
+        assert!(score(Kind::PsnrCr, &r, &r).unwrap().is_infinite());
+
+        let mse = |p: f64| 255.0 * 255.0 / 10f64.powf(p / 10.0);
+        let y = score(Kind::PsnrYStudio601, &r, &d).unwrap();
+        let combined = 10.0 * (255.0 * 255.0 / ((6.0 * mse(y) + mse(cb) + mse(cr)) / 8.0)).log10();
+        let p611 = score(Kind::PsnrYCbCr611, &r, &d).unwrap();
+        assert!((p611 - combined).abs() < 1e-9, "611 {p611} vs {combined}");
     }
 
     /// `psnr-y-studio601` must equal `psnr-y` scored on the

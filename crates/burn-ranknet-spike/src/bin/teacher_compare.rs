@@ -23,14 +23,11 @@
 
 use burn::module::Module;
 use burn::nn::{Linear, LinearConfig, Relu};
-use burn::optim::{AdamConfig, GradientsParams, Optimizer};
-use burn::tensor::backend::Backend;
-use burn::tensor::{Int, Tensor, TensorData};
+use burn::optim::{AdamConfig, GradientsParams};
+use burn::tensor::{Device, Int, Tensor, TensorData};
 
 use forust_ml::objective::ObjectiveType;
 use forust_ml::{GradientBooster, Matrix};
-
-type B = burn::backend::Autodiff<burn::backend::NdArray>;
 
 const D_IN: usize = 10;
 const D_HID: usize = 16;
@@ -44,20 +41,20 @@ const LR: f64 = 5e-3;
 
 // ---------------------------------------------------------------------------
 #[derive(Module, Debug)]
-struct Mlp<B: Backend> {
-    l1: Linear<B>,
-    l2: Linear<B>,
+struct Mlp {
+    l1: Linear,
+    l2: Linear,
     act: Relu,
 }
-impl<B: Backend> Mlp<B> {
-    fn new(device: &B::Device) -> Self {
+impl Mlp {
+    fn new(device: &Device) -> Self {
         Self {
             l1: LinearConfig::new(D_IN, D_HID).init(device),
             l2: LinearConfig::new(D_HID, 1).init(device),
             act: Relu::new(),
         }
     }
-    fn forward(&self, x: Tensor<B, 2>) -> Tensor<B, 2> {
+    fn forward(&self, x: Tensor<2>) -> Tensor<2> {
         self.l2.forward(self.act.forward(self.l1.forward(x)))
     }
 }
@@ -66,7 +63,10 @@ impl<B: Backend> Mlp<B> {
 struct Lcg(u64);
 impl Lcg {
     fn next_f32(&mut self) -> f32 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((self.0 >> 40) as f32) / ((1u64 << 24) as f32)
     }
     fn unit(&mut self) -> f32 {
@@ -112,7 +112,12 @@ fn synth() -> (Vec<f32>, Vec<f32>, Vec<f32>) {
 
 /// Sample ordered pairs (hi, lo) within `range`, ordered by `score` (hi = bigger).
 /// Returned indices are GLOBAL (into the full feats/score arrays).
-fn pairs_by(score: &[f32], range: std::ops::Range<usize>, n_pairs: usize, seed: u64) -> (Vec<i64>, Vec<i64>) {
+fn pairs_by(
+    score: &[f32],
+    range: std::ops::Range<usize>,
+    n_pairs: usize,
+    seed: u64,
+) -> (Vec<i64>, Vec<i64>) {
     let mut rng = Lcg(seed);
     let span = range.len();
     let base = range.start;
@@ -133,18 +138,17 @@ fn pairs_by(score: &[f32], range: std::ops::Range<usize>, n_pairs: usize, seed: 
 }
 
 /// Train a RankNet MLP on `feats` using the given (global-indexed) ordered pairs.
-/// Self-creates the (inferred) backend device — see main.rs for the same pattern;
-/// naming `B::Device` is ambiguous since the autodiff backend satisfies two traits.
-fn train_ranknet(feats: &[f32], hi: &[i64], lo: &[i64]) -> Mlp<B> {
-    let device = Default::default();
+/// Pure-Rust CPU (Flex) device with gradients, as in main.rs.
+fn train_ranknet(feats: &[f32], hi: &[i64], lo: &[i64]) -> Mlp {
+    let device = Device::flex().autodiff();
     // NOTE: burn weight-init is unseeded here, so the student numbers wobble ~±0.003
     // run-to-run. The teacher edge is small vs that variance — use multi-seed
     // averaging (workspace 5-seed-CI protocol) for a real recovered-% on real data.
-    let x = Tensor::<B, 2>::from_data(TensorData::new(feats.to_vec(), [N, D_IN]), &device);
-    let hi_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(hi.to_vec(), [hi.len()]), &device);
-    let lo_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(lo.to_vec(), [lo.len()]), &device);
+    let x = Tensor::<2>::from_data(TensorData::new(feats.to_vec(), [N, D_IN]), &device);
+    let hi_idx = Tensor::<1, Int>::from_data(TensorData::new(hi.to_vec(), [hi.len()]), &device);
+    let lo_idx = Tensor::<1, Int>::from_data(TensorData::new(lo.to_vec(), [lo.len()]), &device);
 
-    let mut model = Mlp::<B>::new(&device);
+    let mut model = Mlp::new(&device);
     let mut optim = AdamConfig::new().init();
     for _ in 0..EPOCHS {
         let s = model.forward(x.clone());
@@ -162,10 +166,10 @@ fn train_ranknet(feats: &[f32], hi: &[i64], lo: &[i64]) -> Mlp<B> {
     model
 }
 
-fn mlp_scores(model: &Mlp<B>, feats: &[f32]) -> Vec<f32> {
-    let device = Default::default();
-    let x = Tensor::<B, 2>::from_data(TensorData::new(feats.to_vec(), [N, D_IN]), &device);
-    model.forward(x).to_data().to_vec::<f32>().unwrap()
+fn mlp_scores(model: &Mlp, feats: &[f32]) -> Vec<f32> {
+    let device = Device::flex().autodiff();
+    let x = Tensor::<2>::from_data(TensorData::new(feats.to_vec(), [N, D_IN]), &device);
+    model.forward(x).to_data().try_to_vec::<f32>().unwrap()
 }
 
 /// Fraction of test pairs the `score` orders the same way as ground truth.
@@ -181,8 +185,12 @@ fn pair_acc(score: &[f32], hi: &[i64], lo: &[i64]) -> f32 {
 
 fn main() {
     println!("=== gbdt-teacher-compare: GBDT teacher vs GD-MLP student (+distillation) ===");
-    println!("data: {N} samples, {D_IN} feats (3 pure noise), interaction-heavy target + label noise");
-    println!("split: {N_TRAIN} train / {N_TEST} test   students: {D_IN}->{D_HID}->1 RankNet, {EPOCHS} ep");
+    println!(
+        "data: {N} samples, {D_IN} feats (3 pure noise), interaction-heavy target + label noise"
+    );
+    println!(
+        "split: {N_TRAIN} train / {N_TEST} test   students: {D_IN}->{D_HID}->1 RankNet, {EPOCHS} ep"
+    );
     println!("teacher: forust GBDT (SquaredLoss, 100 trees, depth 5)");
     println!();
 
@@ -212,18 +220,39 @@ fn main() {
         .set_learning_rate(0.3)
         .set_max_depth(5)
         .set_seed(1);
-    teacher.fit_unweighted(&m_train, &y_train_f64, None).expect("forust fit");
+    teacher
+        .fit_unweighted(&m_train, &y_train_f64, None)
+        .expect("forust fit");
     // Measure the serialized teacher. forust serializes to JSON only (no binary
     // format) — this is the "how big is the GBDT model file" answer.
-    teacher.save_booster("/tmp/gbdt_teacher_model.json").expect("save booster");
+    // Written next to the build output (never /tmp); GBDT_TEACHER_OUT overrides.
+    let out = std::env::var_os("GBDT_TEACHER_OUT").map_or_else(
+        || {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("target")
+                .join("gbdt_teacher_model.json")
+        },
+        std::path::PathBuf::from,
+    );
+    if let Some(dir) = out.parent() {
+        std::fs::create_dir_all(dir).expect("create output dir");
+    }
+    teacher
+        .save_booster(out.to_str().expect("utf-8 path"))
+        .expect("save booster");
     let model_json_bytes = teacher.json_dump().expect("json dump").len();
     println!(
-        "GBDT teacher model file: 100 trees x depth 5 -> JSON {} bytes ({:.1} KB), at /tmp/gbdt_teacher_model.json",
+        "GBDT teacher model file: 100 trees x depth 5 -> JSON {} bytes ({:.1} KB), at {}",
         model_json_bytes,
-        model_json_bytes as f64 / 1024.0
+        model_json_bytes as f64 / 1024.0,
+        out.display()
     );
     println!();
-    let teacher_all: Vec<f32> = teacher.predict(&m_all, true).iter().map(|&v| v as f32).collect();
+    let teacher_all: Vec<f32> = teacher
+        .predict(&m_all, true)
+        .iter()
+        .map(|&v| v as f32)
+        .collect();
 
     // --- held-out test pairs, ordered by CLEAN ground truth ---
     let (test_hi, test_lo) = pairs_by(&y_clean, N_TRAIN..N, TEST_PAIRS, 0xFEED);

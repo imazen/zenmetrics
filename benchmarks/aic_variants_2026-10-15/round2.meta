@@ -1,0 +1,42 @@
+Host: i265, 2026-10-15. Review base: 765a2f9cae50a1247e16f5e2173501df60395275.
+Round 2: identity, scorer construction, enum extensibility, versioned columns,
+factor bounds, independent tests, measured luma rounding and convention comments.
+Commands use LOCK_SNAP_DIR=~/tmp/zenmetrics-lock-snap-aicvariants, CI-pinned
+just snap-cargo @ builds and the shared flock/run-heavy --mem 16G wrapper.
+
+Tests: just snap-cargo @ test -p fsim -p vsi; just snap-cargo @ test -p zenmetrics-cli --lib.
+FSIM: 22 passed. VSI: 21 passed. Final CLI library: 63 passed, 2 existing ignored.
+Tests cover unchanged Auto fingerprints f2de67b03bafb14e / 57ad6b5bda41d80a,
+distinct fixed identities, invalid factors including u32::MAX, non-Auto scores
+and map geometry, all 20 CLI configurations, and a materialized per-scale
+MS-SSIM product with independent 2D Gaussian moments and padded pooling.
+Full native metric/CLI test run:
+run-heavy: done rc=0 297s | peak-RSS 2.29GiB | min-avail 19696MiB | peak-load 7.67
+
+Strict clippy passes: fsim/vsi --all-targets; default zenmetrics-browser
+--all-targets; zenmetrics-cli --lib (each --no-deps -- -D warnings).
+Checks pass: fsim/vsi --target i686-unknown-linux-gnu and wasm32-unknown-unknown.
+These are compile checks, not numerical execution on those targets.
+Portability/lint wrapper:
+run-heavy: done rc=0 13s | peak-RSS 0.32GiB | min-avail 22307MiB | peak-load 28.00
+Final CLI/browser wrapper:
+run-heavy: done rc=0 20s | peak-RSS 2.29GiB | min-avail 21207MiB | peak-load 21.03
+CLI all-target strict clippy still fails on existing binary visibility/dead-code
+findings (46 diagnostics for bin, 44 for bin test), recorded on i265 in
+~/tmp/aic-variants-scratch/r2-clippy2b.log. No suppressions were added.
+
+Scoring: panel.py <snapshot-release-binary> ~/tmp/aic-variants-scratch/r2-final-panel
+fsim vsi <all 20 SSIM family names> --expect-small-ms-errors.
+Verify: verify.py <panel-root> ~/tmp/aic-site/site_fullres_subset61.csv
+~/tmp/aic-audit/raw/py_probe.tsv --baseline-root ~/tmp/aic-audit/raw
+--output <panel-root>/round2_gates.tsv.
+Both base FSIM/VSI TSV files are byte-identical to the earlier 61-row baselines.
+Published maxima: SSIM 3.7769233379725264e-6; MS-SSIM 1.8827927489306617e-6;
+odd S53_JAIB_07 2.3450634845101348e-7. All existing gates remain unchanged.
+Ten fixed SSIM/SSIMc variants match the independent audit probe within
+4.97567819945921e-7. MS-SSIM k6 scores 27 pairs and rejects 34; other names score 61.
+Final build/scoring/verification wrapper:
+run-heavy: done rc=0 119s | peak-RSS 1.40GiB | min-avail 21229MiB | peak-load 29.52
+Raw panels/logs remain on i265 at ~/tmp/aic-variants-scratch/r2-final-panel/.
+Round2_gates.tsv and round2_rounding.tsv/json retain the numerical receipts.
+The coordinator-owned scripts/jobsys/test_benchmark_study.py is unchanged from base.

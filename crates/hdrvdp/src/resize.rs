@@ -140,9 +140,7 @@ pub fn imresize(
                             acc[j] += hc.weights[base + t] * src[hc.indices[base + t]];
                         }
                     }
-                    for j in 0..4 {
-                        row[x + j] = acc[j];
-                    }
+                    row[x..x + 4].copy_from_slice(&acc[..4]);
                     x += 4;
                 }
                 while x < out_width {

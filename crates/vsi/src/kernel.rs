@@ -263,7 +263,7 @@ macro_rules! resize_h_body {
                         $ax.wt8[off as usize + k * 8..][..8].first_chunk().unwrap(),
                     );
                     let xv = <$V8>::splat_t($token, $srow[j0b as usize + k]);
-                    av = av + wv * xv;
+                    av += wv * xv;
                 }
                 av.store($drow[o0..][..8].first_chunk_mut().unwrap());
                 continue;
@@ -295,7 +295,7 @@ macro_rules! per_output {
             while k + $N <= len {
                 let wv = <$V>::load_t($token, wt[k..][..$N].first_chunk().unwrap());
                 let xv = <$V>::load_t($token, sv[k..][..$N].first_chunk().unwrap());
-                av = av + wv * xv;
+                av += wv * xv;
                 k += $N;
             }
             let mut lanes = [0.0f32; $N];
@@ -390,7 +390,7 @@ fn resize_v(src: &[f32], w: usize, _in_h: usize, ax: &Axis) -> Vec<f32> {
     let mut out = vec![0.0f32; out_h * w];
     for_each_row(&mut out, w, |o, orow| {
         let (st, len) = ax.spans[o];
-        resize_v_row(&src[..], st as usize, len as usize, &ax.taps, w, orow);
+        resize_v_row(src, st as usize, len as usize, &ax.taps, w, orow);
     });
     out
 }
@@ -422,7 +422,7 @@ macro_rules! resize_v_body {
             for &(idx, wt) in taps {
                 let base = idx as usize * $w + x;
                 let xv = <$V>::load_t($token, $src[base..][..$N].first_chunk().unwrap());
-                av = av + <$V>::splat_t($token, wt) * xv;
+                av += <$V>::splat_t($token, wt) * xv;
             }
             av.store($orow[x..][..$N].first_chunk_mut().unwrap());
             x += $N;
@@ -1219,7 +1219,7 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
         }
     });
     let mut out = vec![0.0f32; w2 * h2];
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     let tmp_ref = &tmp;
     for_each_row(&mut out, w2, |oi, orow| {
         let i = oi * f;
@@ -1266,7 +1266,7 @@ mod decimation_tests {
                             }
                             expected += row;
                         }
-                        expected *= 1.0 / (f * f) as f32;
+                        expected *= 1.0 / (f as u64 * f as u64) as f32;
                         assert_eq!(
                             actual[oy * dw + ox].to_bits(),
                             expected.to_bits(),
@@ -1378,16 +1378,17 @@ where
 /// Shared scalar preprocessing: SDSP both images, opponent decimation,
 /// gradients — everything up to (but not including) the elementwise
 /// similarity+pool stage.
-pub(crate) fn prepare<'a>(
+pub(crate) fn prepare_with_downscale<'a>(
     r: &'a crate::Input,
     d: &'a crate::Input,
     w: usize,
     h: usize,
+    downscale: crate::Downscale,
     scratch: &'a mut Scratch,
 ) -> Planes<'a> {
     let lg = loggabor_256();
-    let (sm_r, sm_d) = maybe_join(|| sdsp(&r.rgb, w, h, &lg), || sdsp(&d.rgb, w, h, &lg));
-    let f = decimation_factor(w, h);
+    let (sm_r, sm_d) = maybe_join(|| sdsp(&r.rgb, w, h, lg), || sdsp(&d.rgb, w, h, lg));
+    let f = downscale.factor(w, h);
     let ((w2, h2, l_r), (_, _, l_d)) = maybe_join(
         || downsample_decimate(&r.l, w, h, f),
         || downsample_decimate(&d.l, w, h, f),
@@ -1630,8 +1631,19 @@ pub(crate) fn vsi_planes(
     h: usize,
     map: Option<&mut [f32]>,
 ) -> f64 {
+    vsi_planes_with_downscale(r, d, w, h, map, crate::Downscale::Auto)
+}
+
+pub(crate) fn vsi_planes_with_downscale(
+    r: &crate::Input,
+    d: &crate::Input,
+    w: usize,
+    h: usize,
+    map: Option<&mut [f32]>,
+    downscale: crate::Downscale,
+) -> f64 {
     let mut scratch = Scratch::new();
-    let p = prepare(r, d, w, h, &mut scratch);
+    let p = prepare_with_downscale(r, d, w, h, downscale, &mut scratch);
     vsi_core(p, map)
 }
 

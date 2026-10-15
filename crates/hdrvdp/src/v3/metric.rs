@@ -584,7 +584,7 @@ fn apply_band(
             trans64::masked_e_vec(
                 ex_diff,
                 n_ncsf,
-                &self_mask,
+                self_mask,
                 &mask_xn,
                 k_self,
                 kxo0,
@@ -664,7 +664,7 @@ fn pool8_inner(
                 token,
                 (&srow[x0 + kx - c..x0 + kx - c + 8]).try_into().unwrap(),
             );
-            acc = acc + t;
+            acc += t;
         }
     }
     acc.store((&mut out[x0..x0 + 8]).try_into().unwrap());
