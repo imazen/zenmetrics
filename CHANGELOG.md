@@ -33,6 +33,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- zenmetrics-cli `flip`: LDR-FLIP with reference viewing conditions and v1.7 pooling; all 61 AIC values match exactly, and 21 ladder maps differ by at most 2.98e-8.
+
 - Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
 - Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
 

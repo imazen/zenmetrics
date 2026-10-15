@@ -42,6 +42,7 @@ use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
 pub mod display;
+mod flip;
 mod ssim_pyiqa;
 pub use display::CvvdpDisplay;
 #[cfg(feature = "cpu-metrics")]
@@ -154,6 +155,9 @@ pub enum MetricKind {
     /// no clipping).
     #[value(name = "ssimc")]
     SsimC,
+    /// NVIDIA LDR-FLIP with default viewing conditions (lower is better).
+    #[value(name = "flip")]
+    Flip,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -562,6 +566,7 @@ impl MetricKind {
             MetricKind::PsnrCr,
             MetricKind::Ciede2000,
             MetricKind::SsimC,
+            MetricKind::Flip,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
@@ -647,6 +652,7 @@ impl MetricKind {
             MetricKind::PsnrCb => "psnr-cb",
             MetricKind::PsnrCr => "psnr-cr",
             MetricKind::Ciede2000 => "ciede2000",
+            MetricKind::Flip => "flip",
             MetricKind::SsimC => "ssimc",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
@@ -795,6 +801,7 @@ impl MetricKind {
             MetricKind::PsnrCb => &["psnr_cb"],
             MetricKind::PsnrCr => &["psnr_cr"],
             MetricKind::Ciede2000 => &["ciede2000"],
+            MetricKind::Flip => &["flip"],
             MetricKind::SsimC => &["ssimc"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
@@ -2302,6 +2309,15 @@ pub fn run_metric(
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
 
         // SSIM-pyiqa family: f64 valid-window scoring with explicit convention flags.
+        MetricKind::Flip => {
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err("FLIP: dimension mismatch".into());
+            }
+            let w = reference.width as usize;
+            let h = reference.height as usize;
+            let map = flip::error_map(&reference.pixels, &distorted.pixels, w, h, w * 3, w * 3)?;
+            Ok(vec![("flip", flip::mean(&map))])
+        }
         MetricKind::SsimPyiqa
         | MetricKind::SsimPyiqaF32
         | MetricKind::SsimPyiqaF32K2

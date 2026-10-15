@@ -574,3 +574,10 @@ stats-helpers-check:
 
 stats-helpers-serial-check:
     just snap-cargo @ test -p zenmetrics-stats --no-default-features
+
+# AIC LDR-FLIP raw-map gate. Run under run-heavy with the shared heavy lock.
+# python is the isolated venv containing flip-evaluator==1.7, numpy and Pillow.
+aic-flip-verify python out:
+    rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/flip_probe.rs -o "$HOME/tmp/aic-variants-scratch/flip-probe"
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py aic {{out}}/flip-aic.json
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py ladder {{out}}/flip-ladder.json

@@ -1,0 +1,212 @@
+[
+  {
+    "key": "1415_1024_ref",
+    "ours": 0.07583475857973099,
+    "oracle": 0.07583475857973099,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_128_ref",
+    "ours": 0.0905844122171402,
+    "oracle": 0.0905844122171402,
+    "map_max": 1.4901161193847656e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_2048_ref",
+    "ours": 0.07384457439184189,
+    "oracle": 0.07384457439184189,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_256_ref",
+    "ours": 0.0852854773402214,
+    "oracle": 0.0852854773402214,
+    "map_max": 1.4901161193847656e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_4096_ref",
+    "ours": 0.0722554549574852,
+    "oracle": 0.0722554549574852,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_512_ref",
+    "ours": 0.0799684002995491,
+    "oracle": 0.0799684002995491,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "1415_64_ref",
+    "ours": 0.0995754823088646,
+    "oracle": 0.0995754823088646,
+    "map_max": 0.0,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_1024_ref",
+    "ours": 0.11238467693328857,
+    "oracle": 0.11238467693328857,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_128_ref",
+    "ours": 0.08759241551160812,
+    "oracle": 0.08759241551160812,
+    "map_max": 0.0,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_2048_ref",
+    "ours": 0.09351037442684174,
+    "oracle": 0.09351037442684174,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_256_ref",
+    "ours": 0.10636396706104279,
+    "oracle": 0.10636396706104279,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_4096_ref",
+    "ours": 0.07580647617578506,
+    "oracle": 0.07580647617578506,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_512_ref",
+    "ours": 0.11937472969293594,
+    "oracle": 0.11937472969293594,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2207_64_ref",
+    "ours": 0.0935196578502655,
+    "oracle": 0.0935196578502655,
+    "map_max": 7.450580596923828e-09,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_1024_ref",
+    "ours": 0.06996051222085953,
+    "oracle": 0.06996051222085953,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_128_ref",
+    "ours": 0.11760300397872925,
+    "oracle": 0.11760300397872925,
+    "map_max": 1.4901161193847656e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_2048_ref",
+    "ours": 0.05735180526971817,
+    "oracle": 0.05735180526971817,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_256_ref",
+    "ours": 0.10052353143692017,
+    "oracle": 0.10052353143692017,
+    "map_max": 2.2351741790771484e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_4096_ref",
+    "ours": 0.0529756098985672,
+    "oracle": 0.0529756098985672,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_512_ref",
+    "ours": 0.0860387310385704,
+    "oracle": 0.0860387310385704,
+    "map_max": 2.9802322387695312e-08,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  },
+  {
+    "key": "2406_64_ref",
+    "ours": 0.14194487035274506,
+    "oracle": 0.14194487035274506,
+    "map_max": 0.0,
+    "mean_delta": 0.0,
+    "published": null,
+    "published_delta": null,
+    "oracle_published_delta": null
+  }
+]
