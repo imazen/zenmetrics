@@ -21,6 +21,7 @@ Writes, into OUT_DIR:
                        model itself takes any size).
   deepdc_export.meta   versions and sha256 of every output.
 """
+import re
 import hashlib, os, sys, platform, types
 import numpy as np, torch
 # DeepDC_PyTorch 0.2 starts with `import imp` (never used); `imp` was removed in
@@ -118,7 +119,9 @@ def load(p):
 with open(os.path.join(OUT, 'deepdc_goldens.tsv'), 'w') as g:
     g.write('image\tsize\tdeepdc\n')
     for name in sorted(os.listdir(LADDER)):
-        if not name.endswith('_ref.png'):
+        # Square ladder pairs only (`<src>_<size>_ref.png`); other models keep
+        # non-square goldens (`<src>_<w>x<h>_*`) in the same directory.
+        if not re.fullmatch(r'\d+_\d+_ref\.png', name):
             continue
         stem, size = name.split('_')[0], int(name.split('_')[1])
         if size not in GOLDEN_SIZES:

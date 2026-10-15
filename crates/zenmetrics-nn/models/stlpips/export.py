@@ -19,6 +19,7 @@ The tap reductions (unit-normalise over channels, squared difference, 1x1 lin,
 spatial mean, sum over taps) stay outside the trunk graph so a reference's
 normalised taps can be cached and reused across candidates.
 """
+import re
 import hashlib, os, sys, platform
 import types
 import numpy as np, torch
@@ -89,7 +90,9 @@ def contribs(r, d):
 with open(os.path.join(OUT, f'{P}_goldens.tsv'), 'w') as g:
     g.write('image\tsize\tlpips\t' + '\t'.join(f'tap{i}' for i in range(N)) + '\n')
     for name in sorted(os.listdir(LADDER)):
-        if not name.endswith('_ref.png'):
+        # Square ladder pairs only (`<src>_<size>_ref.png`); other models keep
+        # non-square goldens (`<src>_<w>x<h>_*`) in the same directory.
+        if not re.fullmatch(r'\d+_\d+_ref\.png', name):
             continue
         stem, size = name.split('_')[0], int(name.split('_')[1])
         if size not in GOLDEN_SIZES:
