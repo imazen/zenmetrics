@@ -7,7 +7,15 @@
 # (vit_base_patch8_224 blocks 0-4, CLS dropped, concat 3840 @28x28), then a
 # pixel-score regressor pools f . w / sum(w). The eval protocol crops the
 # image nine ways (five_point_crop idx 0-8: corners, edge centres, centre)
-# and averages — crops are deterministic, no resizing anywhere.
+# and averages — crops are deterministic, no resizing anywhere. (Upstream's
+# default is `n_ensemble=20` seeded random crops; the port deliberately uses
+# the deterministic nine-crop branch, upstream's `<=9` protocol.)
+#
+# Upstream pins timm==0.5.4, whose bare names resolve to
+#   resnet50                -> resnet50_a1_0-14fe96d1.pth   (tag a1_in1k)
+#   vit_base_patch8_224     -> B_8-i21k augreg res_224.npz   (tag augreg_in21k_ft_in1k)
+# Under timm 1.x the bare ViT name resolves to augreg2_in21k_ft_in1k — a
+# different checkpoint — so the tags are named explicitly.
 #
 # torchvision's DeformConv2d has no ONNX op: it is decomposed in-graph as
 # nine bilinear grid_sample taps + a 1x1 conv (weight[c',c,ky,kx] folded to
@@ -20,7 +28,12 @@
 #                    [1,768,56,56]) -> score [1,1,1,1]
 #  ahiq_full.onnx    (r, d) -> score
 #  ahiq.meta         `channels 3840,768`, `min_size 224`
-#  ahiq_goldens.tsv  upstream 9-crop ensemble score on the ladder
+#  ahiq_goldens.tsv  upstream 9-crop ensemble score on the ladder, computed by
+#                    upstream's own inference path (SaveOutput hooks +
+#                    get_resnet_feature/get_vit_feature + deform_fusion with
+#                    torchvision DeformConv2d + Pixel_Prediction), plus two
+#                    non-square pairs (2207_320x240, 2207_240x320, centre
+#                    crops of 2207_1024 written into the ladder dir)
 #  ahiq_export.meta  versions + sha256 of outputs
 import hashlib, os, sys, platform
 import numpy as np, torch
@@ -28,6 +41,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import timm
 from PIL import Image
+from timm.models.resnet import Bottleneck
+from timm.models.vision_transformer import Block
 
 LADDER, OUT, CKPT, PATCH = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 os.makedirs(OUT, exist_ok=True)
@@ -42,14 +57,16 @@ def load_mod(name, path):
 
 AHQ_SRC = os.environ['AHIQ_SRC']
 dr = load_mod('deform_regressor', os.path.join(AHQ_SRC, 'model/deform_regressor.py'))
+xf = load_mod('extract_feature', os.path.join(AHQ_SRC, 'script/extract_feature.py'))
 
 class Opt:  # deform_fusion only reads patch_size
     patch_size = PATCH
 
-vit = timm.create_model(
-    'vit_base_patch8_224' if PATCH == 8 else 'vit_base_patch16_224',
-    pretrained=True).eval()
-res = timm.create_model('resnet50', pretrained=True).eval()
+# timm==0.5.4 default_cfg resolutions, named explicitly (see header).
+VIT_TAG = ('vit_base_patch8_224.augreg_in21k_ft_in1k' if PATCH == 8
+           else 'vit_base_patch16_224.augreg_in21k_ft_in1k')
+vit = timm.create_model(VIT_TAG, pretrained=True).eval()
+res = timm.create_model('resnet50.a1_in1k', pretrained=True).eval()
 deform_net = dr.deform_fusion(Opt()).eval()
 regressor = dr.Pixel_Prediction().eval()
 ck = torch.load(CKPT, map_location='cpu', weights_only=False)
@@ -60,6 +77,53 @@ for m in (vit, res, deform_net, regressor):
 
 TOK = 784 if PATCH == 8 else 196
 G = 28 if PATCH == 8 else 14
+
+
+# --- upstream inference path (test.py): hooks + real DeformConv2d ---------
+class SaveOutput:  # upstream utils/util.py verbatim
+    def __init__(self):
+        self.outputs = []
+
+    def __call__(self, module, module_in, module_out):
+        self.outputs.append(module_out)
+
+    def clear(self):
+        self.outputs = []
+
+
+save = SaveOutput()
+for layer in res.modules():
+    if isinstance(layer, Bottleneck):
+        layer.register_forward_hook(save)
+for layer in vit.modules():
+    if isinstance(layer, Block):
+        layer.register_forward_hook(save)
+
+
+def upstream_score_crop(d_img, r_img):
+    """test.py's per-crop branch verbatim (batch 1, CPU). The feature
+    extractors read the first N hook outputs, so `save` must be empty going
+    into every forward."""
+    save.clear()
+    _ = vit(d_img)
+    vit_dis = xf.get_vit_feature(save)
+    save.clear()
+    _ = vit(r_img)
+    vit_ref = xf.get_vit_feature(save)
+    save.clear()
+    B, N, C = vit_ref.shape
+    assert G * G == N
+    vit_ref = vit_ref.transpose(1, 2).view(B, C, G, G)
+    vit_dis = vit_dis.transpose(1, 2).view(B, C, G, G)
+    _ = res(d_img)
+    cnn_dis = xf.get_resnet_feature(save)
+    save.clear()
+    cnn_dis = deform_net(cnn_dis, vit_ref)
+    _ = res(r_img)
+    cnn_ref = xf.get_resnet_feature(save)
+    save.clear()
+    cnn_ref = deform_net(cnn_ref, vit_ref)
+    return regressor(vit_dis, vit_ref, cnn_dis, cnn_ref)
 
 
 def vit_taps(x):
@@ -138,19 +202,28 @@ x = torch.rand(1, 3, 224, 224) * 2 - 1
 vt, ct = Trunk()(x)
 assert vt.shape == (1, 3840, G, G) and ct.shape == (1, 768, 56, 56)
 
+# trunk taps == upstream hook-extracted features
+save.clear()
+_ = vit(x)
+hv = xf.get_vit_feature(save).transpose(1, 2).reshape(1, 3840, G, G)
+save.clear()
+assert float((hv - vt).abs().max()) < 1e-6
+_ = res(x)
+hc = xf.get_resnet_feature(save)
+save.clear()
+assert float((hc - ct).abs().max()) < 1e-6
+
 # deform_gs vs torchvision DeformConv2d (random data, offset from conv_offset)
 ref_off = deform_net.conv_offset(F.interpolate(vt, size=(56, 56), mode='nearest'))
 ref = deform_net.deform(ct, ref_off)
 got = deform_gs(ct, ref_off, deform_net.deform.weight, deform_net.deform.bias)
 assert float((ref - got).abs().max()) < 1e-5, float((ref - got).abs().max())
 
-# Head == literal upstream composition (deform_net interpolates vit internally)
+# Head/Full == upstream's literal per-crop score (real DeformConv2d)
 a, b = torch.rand(1, 3, 224, 224) * 2 - 1, torch.rand(1, 3, 224, 224) * 2 - 1
-vd, cd_, vr, cr = vit_taps(b), cnn_taps(b), vit_taps(a), cnn_taps(a)
-ref_score = regressor(vd, vr, deform_net(cd_, vr), deform_net(cr, vr))
-got_score = float(Head()(vd, vr, cd_, cr))
-assert abs(got_score - float(ref_score)) < 1e-6, (got_score, float(ref_score))
-assert abs(float(Full()(a, b)) - got_score) < 1e-6
+ref_score = float(upstream_score_crop(b, a))
+got_score = float(Full()(a, b))
+assert abs(got_score - ref_score) < 1e-5, (got_score, ref_score)
 
 # --- export ----------------------------------------------------------------
 for name, mod, args, inputs, outs in (
@@ -165,6 +238,16 @@ for name, mod, args, inputs, outs in (
                       opset_version=17, dynamo=False, do_constant_folding=True,
                       input_names=inputs, output_names=outs)
 
+# --- non-square ladder pairs: centre crops of 2207_1024 ---------------------
+for dims in ('320x240', '240x320'):
+    nw, nh = (int(v) for v in dims.split('x'))
+    for side in ('ref', 'dist'):
+        dst = os.path.join(LADDER, f'2207_{dims}_{side}.png')
+        if not os.path.exists(dst):
+            src = Image.open(os.path.join(LADDER, f'2207_1024_{side}.png'))
+            l, t = (1024 - nw) // 2, (1024 - nh) // 2
+            src.crop((l, t, l + nw, t + nh)).save(dst)
+
 # --- goldens: upstream 9-crop ensemble --------------------------------------
 def crops(h, w):
     """five_point_crop idx 0..8, top/left pairs (needs h,w >= 224)."""
@@ -175,6 +258,7 @@ def crops(h, w):
 
 
 def prep(pil):
+    """upstream PIPAL __getitem__: /255 then (x-0.5)/0.5, CHW f32."""
     a = np.asarray(pil.convert('RGB'), dtype=np.float32) / 255.0
     a = (a - 0.5) / 0.5
     return torch.from_numpy(a.transpose(2, 0, 1)).unsqueeze(0)
@@ -185,8 +269,8 @@ def score_pair(r_img, d_img):
     h, w = a.shape[2], a.shape[3]
     s = 0.0
     for (t, l) in crops(h, w):
-        s += float(Full()(a[:, :, t:t + 224, l:l + 224],
-                          b[:, :, t:t + 224, l:l + 224]))
+        s += float(upstream_score_crop(b[:, :, t:t + 224, l:l + 224],
+                                       a[:, :, t:t + 224, l:l + 224]))
     return s / 9.0
 
 
@@ -196,7 +280,8 @@ for f in sorted(os.listdir(LADDER)):
         continue
     stem = f[:-9]
     size = stem.rsplit('_', 1)[1]
-    if int(size) < 224:
+    dims = [int(v) for v in size.split('x')]
+    if min(dims) < 224:
         continue                      # upstream cannot score <224 crops
     r = Image.open(os.path.join(LADDER, stem + '_ref.png'))
     d = Image.open(os.path.join(LADDER, stem + '_dist.png'))
@@ -212,6 +297,7 @@ with open(os.path.join(OUT, 'ahiq.meta'), 'w') as f:
 
 meta = {'python': platform.python_version(), 'torch': torch.__version__,
         'timm': timm.__version__, 'patch_size': PATCH,
+        'vit_tag': VIT_TAG, 'resnet_tag': 'resnet50.a1_in1k',
         'ckpt_epoch': int(ck['epoch'])}
 with open(os.path.join(OUT, 'ahiq_export.meta'), 'w') as f:
     f.write(f'# ahiq export {meta}\n')
