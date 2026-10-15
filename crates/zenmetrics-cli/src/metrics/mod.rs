@@ -166,14 +166,17 @@ pub enum MetricKind {
     #[value(name = "deepdc")]
     Deepdc,
     /// CKDN (upstream `researchmm/CKDN` checkpoint, fed as
-    /// `cat(dist, ref, dist, ref)` → `dr`, no resize); **higher** is better —
+    /// `cat(dist, ref, dist, ref)` → `dr`; upstream eval transform:
+    /// short side →329 then centre-crop 288, bicubic for the distorted
+    /// image, nearest for the reference); **higher** is better —
     /// it is a sigmoid quality score, not a distance. As `lpips-alex`.
     #[value(name = "ckdn")]
     Ckdn,
     /// A-FINE — learned FR metric (upstream `ChrisDud0257/AFINE`, Apache-2.0;
     /// CLIP ViT-B/32 taps + naturalness/fidelity heads, raw `afine_all`,
-    /// **lower** is better). Needs feature `nn`; its weights state no
-    /// licence, so `ZENMETRICS_NN_ACCEPT_WEIGHTS=afine` as for `ckdn`.
+    /// **lower** is better). Needs feature `nn`; its weights carry
+    /// noncommercial terms (trained on DiffIQA data), so
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=afine` as for `ckdn`.
     #[value(name = "afine")]
     Afine,
     /// DreamSim ensemble — learned perceptual similarity distance

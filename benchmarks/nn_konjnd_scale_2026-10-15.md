@@ -92,9 +92,9 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | afine | JPEG | 504 | 0.256606 | 0.498062 | 0.756067 | 0.364956 | 2.946 |
 | afine | BPG | 504 | 0.241244 | 0.512932 | 0.754651 | 0.480715 | 3.128 |
 | afine | pooled | 1008 | 0.247775 | **0.507388** | 0.755332 | 0.422836 | 3.048 |
-| dreamsim | JPEG | 504 | 0.017586 | 0.026361 | 0.034738 | 0.027194 | 5.277 |
-| dreamsim | BPG | 504 | 0.007528 | 0.012349 | 0.017801 | 0.013551 | 4.028 |
-| dreamsim | pooled | 1008 | 0.010763 | **0.017641** | 0.028215 | 0.020373 | 5.277 |
+| dreamsim | JPEG | 504 | 0.017586 | 0.026361 | 0.034738 | 0.027194 | 1.975 |
+| dreamsim | BPG | 504 | 0.007528 | 0.012349 | 0.017801 | 0.013551 | 2.371 |
+| dreamsim | pooled | 1008 | 0.010763 | **0.017641** | 0.028215 | 0.020373 | 2.618 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
 ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053,
