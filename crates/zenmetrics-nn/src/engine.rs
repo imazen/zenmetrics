@@ -145,11 +145,13 @@ mod rten_engine {
                     if n != 1 {
                         return Err(Error::Engine(format!("batch {n} output")));
                     }
+                    // Move the buffer out (rten's outputs are contiguous);
+                    // a non-contiguous output would fall back to a copy.
                     Ok(Tap {
                         c,
                         h: th,
                         w: tw,
-                        data: t.to_vec(),
+                        data: t.into_data(),
                     })
                 })
                 .collect()

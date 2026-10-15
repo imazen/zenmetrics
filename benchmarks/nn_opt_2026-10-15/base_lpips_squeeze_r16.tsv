@@ -1,0 +1,13 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	lpips_squeeze	compute	64	50	0.842	0.679	0.2050516
+i265	rten	16	lpips_squeeze	warm	64	50	0.833	0.690	0.2050516
+i265	rten	16	lpips_squeeze	e2e	64	50	0.871	0.782	0.2050516
+i265	rten	16	lpips_squeeze	compute	256	50	14.063	11.817	0.2657544
+i265	rten	16	lpips_squeeze	warm	256	50	10.959	10.128	0.2657544
+i265	rten	16	lpips_squeeze	e2e	256	50	14.980	13.588	0.2657544
+i265	rten	16	lpips_squeeze	compute	1024	15	203.408	196.950	0.2589289
+i265	rten	16	lpips_squeeze	warm	1024	22	142.903	139.530	0.2589289
+i265	rten	16	lpips_squeeze	e2e	1024	15	213.747	208.141	0.2589289
+i265	rten	16	lpips_squeeze	compute	2048	4	834.783	825.593	0.2046854
+i265	rten	16	lpips_squeeze	warm	2048	6	583.602	576.756	0.2046854
+i265	rten	16	lpips_squeeze	e2e	2048	4	882.634	874.891	0.2046854
