@@ -802,17 +802,17 @@ impl MetricKind {
             MetricKind::MsSsimPyiqaF32K5 => &["ms_ssim_pyiqa_f32_k5"],
             MetricKind::MsSsimPyiqaF32K6 => &["ms_ssim_pyiqa_f32_k6"],
 
-            MetricKind::FsimK2 => &["fsim_k2", "fsimc_k2"],
-            MetricKind::FsimK3 => &["fsim_k3", "fsimc_k3"],
-            MetricKind::FsimK4 => &["fsim_k4", "fsimc_k4"],
-            MetricKind::FsimNodownscale => &["fsim_nodownscale", "fsimc_nodownscale"],
+            MetricKind::FsimK2 => intern_variant_columns(FSIM_CPU_COLUMNS, "k2"),
+            MetricKind::FsimK3 => intern_variant_columns(FSIM_CPU_COLUMNS, "k3"),
+            MetricKind::FsimK4 => intern_variant_columns(FSIM_CPU_COLUMNS, "k4"),
+            MetricKind::FsimNodownscale => intern_variant_columns(FSIM_CPU_COLUMNS, "nodownscale"),
 
             MetricKind::FsimY => FSIMY_CPU_COLUMNS,
             MetricKind::Vsi => VSI_CPU_COLUMNS,
-            MetricKind::VsiK2 => &["vsi_k2"],
-            MetricKind::VsiK3 => &["vsi_k3"],
-            MetricKind::VsiK4 => &["vsi_k4"],
-            MetricKind::VsiNodownscale => &["vsi_nodownscale"],
+            MetricKind::VsiK2 => intern_variant_columns(VSI_CPU_COLUMNS, "k2"),
+            MetricKind::VsiK3 => intern_variant_columns(VSI_CPU_COLUMNS, "k3"),
+            MetricKind::VsiK4 => intern_variant_columns(VSI_CPU_COLUMNS, "k4"),
+            MetricKind::VsiNodownscale => intern_variant_columns(VSI_CPU_COLUMNS, "nodownscale"),
 
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
             MetricKind::Vif => VIF_CPU_COLUMNS,
@@ -1038,6 +1038,32 @@ fn intern_display_column(base: &'static str, display: &str) -> &'static [&'stati
     table.entry((base, display.to_string())).or_insert_with(|| {
         let col: &'static str = Box::leak(format!("{base}_{display}").into_boxed_str());
         Box::leak(Box::new([col]))
+    })
+}
+
+// The bounded CLI variant list interns each base-column/suffix tuple once.
+fn intern_variant_columns(
+    bases: &'static [&'static str],
+    suffix: &'static str,
+) -> &'static [&'static str] {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    type Key = (&'static [&'static str], &'static str);
+    type Columns = &'static [&'static str];
+    static TABLE: OnceLock<Mutex<HashMap<Key, Columns>>> = OnceLock::new();
+    let mut table = TABLE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    table.entry((bases, suffix)).or_insert_with(|| {
+        let columns: Vec<&'static str> = bases
+            .iter()
+            .map(|base| {
+                let name: &'static str = Box::leak(format!("{base}_{suffix}").into_boxed_str());
+                name
+            })
+            .collect();
+        Box::leak(columns.into_boxed_slice())
     })
 }
 
@@ -2981,6 +3007,32 @@ fn run_cpu_vsi_fixed(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fixed_factor_columns_follow_versioned_base_and_overrides() {
+        use super::*;
+        for (kind, base, suffix) in [
+            (MetricKind::FsimK2, MetricKind::Fsim, "k2"),
+            (MetricKind::FsimK3, MetricKind::Fsim, "k3"),
+            (MetricKind::FsimK4, MetricKind::Fsim, "k4"),
+            (MetricKind::FsimNodownscale, MetricKind::Fsim, "nodownscale"),
+            (MetricKind::VsiK2, MetricKind::Vsi, "k2"),
+            (MetricKind::VsiK3, MetricKind::Vsi, "k3"),
+            (MetricKind::VsiK4, MetricKind::Vsi, "k4"),
+            (MetricKind::VsiNodownscale, MetricKind::Vsi, "nodownscale"),
+        ] {
+            let expected: Vec<String> = base
+                .column_names()
+                .iter()
+                .map(|base| format!("{base}_{suffix}"))
+                .collect();
+            assert_eq!(kind.column_names(), expected);
+        }
+        assert_eq!(
+            MetricKind::SsimPyiqaF32K2.column_names(),
+            &["ssim_pyiqa_f32_k2"]
+        );
+    }
+
     use super::*;
 
     /// `ZENMETRICS_REQUIRE_GPU` value parsing. Unset MUST stay false so the

@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Fixed-factor FSIM/FSIMc/VSI columns inherit versioned base names and implementation-tag overrides; orchestration uses canonical column names.
+
 - Mark both independent downscale-policy enums non-exhaustive for future extension.
 
 - Remove same-name FSIM/VSI scorer constants; callers construct default scorers explicitly, including browser map evaluation.
