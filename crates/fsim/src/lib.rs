@@ -504,8 +504,12 @@ impl Fsim {
 
 impl za::Metric for Fsim {
     fn id(&self) -> za::MetricId {
-        za::MetricId::new("fsim", za::implementation!(SCORE_REVISION))
-            .with_reference("FR_FSIMc.m v1.0 (Zhang, Zhang, Mou & Zhang 2011)")
+        let id = za::MetricId::new("fsim", za::implementation!(SCORE_REVISION))
+            .with_reference("FR_FSIMc.m v1.0 (Zhang, Zhang, Mou & Zhang 2011)");
+        match self.downscale {
+            Downscale::Auto => id,
+            Downscale::Factor(n) => id.with_config("downscale", n.get()),
+        }
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {

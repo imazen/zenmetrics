@@ -411,3 +411,18 @@ fn fixed_factor_matches_auto_and_strided() {
         assert_eq!(dm.fsimc, Some(fixed.fsimc));
     }
 }
+
+#[test]
+fn downscale_identity_preserves_auto_and_distinguishes_factors() {
+    use zenmetrics_abstractions::Metric as _;
+    // Auto fingerprint from base 765a2f9c's identity fields and FNV-1a encoding.
+    let auto = Fsim::default().id().fingerprint();
+    assert_eq!(auto, 0xf2de67b03bafb14e);
+    let fixed = |n| {
+        Fsim::with_downscale(Downscale::Factor(core::num::NonZeroU32::new(n).unwrap()))
+            .id()
+            .fingerprint()
+    };
+    assert_ne!(auto, fixed(2));
+    assert_ne!(fixed(2), fixed(3));
+}

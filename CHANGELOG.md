@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- FSIM/VSI fixed-factor metric identities now include their downscale configuration while preserving Auto fingerprints.
+
 ## zenmetrics-stats
 
 ### Added

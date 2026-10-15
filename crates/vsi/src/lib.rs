@@ -373,8 +373,12 @@ impl Vsi {
 
 impl za::Metric for Vsi {
     fn id(&self) -> za::MetricId {
-        za::MetricId::new("vsi", za::implementation!(SCORE_REVISION))
-            .with_reference("VSI.m (Zhang, Shen & Li 2014)")
+        let id = za::MetricId::new("vsi", za::implementation!(SCORE_REVISION))
+            .with_reference("VSI.m (Zhang, Shen & Li 2014)");
+        match self.downscale {
+            Downscale::Auto => id,
+            Downscale::Factor(n) => id.with_config("downscale", n.get()),
+        }
     }
 
     fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
