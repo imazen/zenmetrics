@@ -578,6 +578,21 @@ stats-helpers-serial-check:
 # AIC LDR-FLIP raw-map gate. Run under run-heavy with the shared heavy lock.
 # python is the isolated venv containing flip-evaluator==1.7, numpy and Pillow.
 aic-flip-verify python out:
-    rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/flip_probe.rs -o "$HOME/tmp/aic-variants-scratch/flip-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/flip_probe.rs -o "$HOME/tmp/aic-variants-scratch/flip-probe"
     {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py aic {{out}}/flip-aic.json
     {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py ladder {{out}}/flip-ladder.json
+
+# Round 3 library, complete workspace fmt, CI lint flags, and CLI inventory.
+aic-flip-ci:
+    bash benchmarks/aic_flip_2026-10-15/check_ci.sh
+
+# Independent complex steerable-pyramid convention search; pyrtools==1.0.11.
+aic-cw-search python out:
+    {{python}} benchmarks/aic_flip_2026-10-15/search_cw.py {{out}}/cw-search.json
+    {{python}} benchmarks/aic_flip_2026-10-15/cw_variants.py {{out}}/cw-variants.json S01_AVIF_01.png S15_PNG_15.png S53_JAIB_07.png S66_AVIF_15.png
+    {{python}} benchmarks/aic_flip_2026-10-15/cw_grid_panel.py {{out}}/cw-grid-panel.json
+
+# Selected CW-SSIM raw RGB / independent Python gate (true DFT-bin grid).
+aic-cw-verify python out:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq

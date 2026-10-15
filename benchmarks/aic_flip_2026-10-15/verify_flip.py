@@ -28,7 +28,7 @@ else:
     ladder=pathlib.Path.home()/'tmp/nn-phase0/ladder'
     for ref in sorted(ladder.glob('*_ref.png')):
         compare(ref,str(ref).replace('_ref.png','_dist.png'),ref.stem)
-out=pathlib.Path(sys.argv[2]); out.write_text(json.dumps(rows,indent=2)+'\n')
+out=pathlib.Path(sys.argv[2]); out.open('x').write(json.dumps(rows,indent=2)+'\n')
 print('SUMMARY',json.dumps({k:dict(median=float(np.median([r[k] for r in rows])),max=max(r[k] for r in rows)) for k in ['map_max','mean_delta']+(['published_delta','oracle_published_delta'] if sys.argv[1]=='aic' else [])}),flush=True)
 assert max(r['map_max'] for r in rows)<=1e-6
 assert max(r['mean_delta'] for r in rows)<=1e-6
