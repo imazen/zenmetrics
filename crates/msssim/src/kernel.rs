@@ -258,18 +258,20 @@ macro_rules! score_body {
             #[cfg(not(feature = "parallel"))]
             band(0, &mut smap, &mut cmap);
             // Preserve the original raster-order f64 fold exactly.
-            // Canonical map = level-0's SSIM map (finest scale) — the
-            // `ssimmap` MATLAB `ssim` returns. Packed `out_w×out_h`.
-            if l == 0
-                && let Some(m) = $map.as_deref_mut()
-            {
-                debug_assert_eq!(m.len(), n);
-                m.copy_from_slice(&smap);
-            }
             let (mut sum_s, mut sum_c) = (0.0f64, 0.0f64);
             for (&s, &c) in smap.iter().zip(&cmap) {
                 sum_s += s as f64;
                 sum_c += c as f64;
+            }
+            // A map request keeps every level's SSIM and contrast-structure
+            // maps (packed `out_w×out_h`), after the score has read them.
+            if let Some(m) = $map.as_deref_mut() {
+                m.levels.push(Level {
+                    w: out_w,
+                    h: out_h,
+                    ssim: smap,
+                    cs: cmap,
+                });
             }
             let npix = n as f64;
             mcs[l] = sum_c / npix;
@@ -305,13 +307,38 @@ macro_rules! score_body {
     }};
 }
 
+/// One level's valid-window maps, `w × h` packed.
+pub struct Level {
+    /// Map width at this level (`level width − 10`).
+    pub w: usize,
+    /// Map height at this level.
+    pub h: usize,
+    /// Per-window SSIM (luminance × contrast-structure).
+    pub ssim: Vec<f32>,
+    /// Per-window contrast-structure term.
+    pub cs: Vec<f32>,
+}
+
+/// Every level's maps, finest first, collected by a map request.
+#[derive(Default)]
+pub struct LevelMaps {
+    /// One entry per evaluated level.
+    pub levels: Vec<Level>,
+}
+
+/// The MS-SSIM weight of level `l` (`WEIGHTS[l]`, unrenormalized when
+/// fewer than five levels fit, as the reference applies `w(1:L)`).
+pub(crate) fn level_weight(l: usize) -> f64 {
+    WEIGHTS[l]
+}
+
 /// The `v3` tier (AVX2/FMA, 8-wide f32).
 #[cfg(target_arch = "x86_64")]
 #[archmage::attune]
 pub fn msssim_core_tier_v3_t(
     token: archmage::X64V3Token,
     a: Args<'_>,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::X64V3Token>;
     score_body!(token, V, 8, a, map)
@@ -323,7 +350,7 @@ pub fn msssim_core_tier_v3_t(
 pub fn msssim_core_tier_v4x_t(
     token: archmage::X64V4xToken,
     a: Args<'_>,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x16<archmage::X64V4xToken>;
     score_body!(token, V, 16, a, map)
@@ -335,7 +362,7 @@ pub fn msssim_core_tier_v4x_t(
 pub fn msssim_core_tier_neon_t(
     token: archmage::NeonToken,
     a: Args<'_>,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::NeonToken>;
     score_body!(token, V, 8, a, map)
@@ -347,7 +374,7 @@ pub fn msssim_core_tier_neon_t(
 pub fn msssim_core_tier_wasm128_t(
     token: archmage::Wasm128Token,
     a: Args<'_>,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::Wasm128Token>;
     score_body!(token, V, 8, a, map)
@@ -357,7 +384,7 @@ pub fn msssim_core_tier_wasm128_t(
 pub fn msssim_core_tier_scalar_t(
     token: archmage::ScalarToken,
     a: Args<'_>,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     type V = magetypes::simd::generic::f32x8<archmage::ScalarToken>;
     score_body!(token, V, 8, a, map)
@@ -369,7 +396,7 @@ pub(crate) fn msssim_core(
     w: usize,
     h: usize,
     level: usize,
-    map: Option<&mut [f32]>,
+    map: Option<&mut LevelMaps>,
 ) -> f64 {
     let a = Args {
         im1: &inputs.r,

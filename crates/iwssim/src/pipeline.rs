@@ -733,11 +733,65 @@ const CS_NAMES: [&str; NUM_SCALES] = ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4"];
 /// Information-content weight map names, scales 0–3.
 const IW_NAMES: [&str; NUM_SCALES - 1] = ["iw_0", "iw_1", "iw_2", "iw_3"];
 
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(
+    parts: &[(alloc::vec::Vec<f64>, za::MapGeometry)],
+    w: u32,
+    h: u32,
+) -> (alloc::vec::Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (alloc::vec![0f64; n], alloc::vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = alloc::vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = alloc::vec::Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
 /// A scored pair with its per-scale contrast-structure maps.
 struct IwssimMaps {
     score: IwssimScore,
     maps: Vec<CsMap>,
     geometry: Vec<za::MapGeometry>,
+    /// The fused map: see [`IwssimMaps::fused`].
+    diffmap: (Vec<f32>, za::MapGeometry),
 }
 
 impl IwssimMaps {
@@ -771,12 +825,62 @@ impl IwssimMaps {
                     g.with_halo(halo, halo)
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let diffmap = Self::fused(&maps, &geometry, input);
         Self {
             score,
             maps,
             geometry,
+            diffmap,
         }
+    }
+
+    /// IW-SSIM's own breakdown: `−ln IW-SSIM = Σ_s β_s·(−ln wmcs_s)`, each
+    /// scale's term allocated to its windows in proportion to their
+    /// weighted dissimilarity `w·(1 − cs)` (`w` the information-content
+    /// weight, `1` at the top scale), spread over the input pixels each
+    /// window's block covers and cropped to the covered pixels ([`fuse`]).
+    /// Its mean is `−ln IW-SSIM` while every `wmcs_s` lies in `(0, 1)`; a
+    /// scale outside allocates `β_s·w·(1 − cs)/Σw` instead.
+    fn fused(
+        maps: &[CsMap],
+        geometry: &[za::MapGeometry],
+        input: (u32, u32),
+    ) -> (Vec<f32>, za::MapGeometry) {
+        let parts: Vec<_> = maps
+            .iter()
+            .zip(geometry)
+            .enumerate()
+            .map(|(s, (m, g))| {
+                let weight = |i: usize| m.iw.as_ref().map_or(1.0, |w| f64::from(w[i]));
+                let total: f64 = (0..m.cs.len()).map(weight).sum();
+                let mean = (0..m.cs.len())
+                    .map(|i| weight(i) * f64::from(m.cs[i]))
+                    .sum::<f64>()
+                    / total;
+                let factor = if mean > 0.0 && mean < 1.0 {
+                    -mean.ln() / (1.0 - mean)
+                } else {
+                    1.0
+                };
+                let unit = if total > 0.0 {
+                    SCALE_WEIGHTS[s] as f64 * factor / total
+                } else {
+                    0.0
+                };
+                let shares = (0..m.cs.len())
+                    .map(|i| unit * weight(i) * (1.0 - f64::from(m.cs[i])))
+                    .collect();
+                (shares, g.with_support(za::Support::Global))
+            })
+            .collect();
+        fuse(&parts, input.0, input.1)
+    }
+
+    fn diffmap_view(&self) -> Option<za::MapView<'_>> {
+        let (data, g) = &self.diffmap;
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new("diffmap", px, za::MapPolarity::Difference, *g).ok()
     }
 
     fn view(&self, s: usize) -> Option<za::MapView<'_>> {
@@ -811,7 +915,7 @@ impl za::Evaluation for IwssimMaps {
     fn maps(&self) -> Vec<za::MapView<'_>> {
         let cs = (0..self.maps.len()).filter_map(|s| self.view(s));
         let iw = (0..self.maps.len()).filter_map(|s| self.weight_view(s));
-        cs.chain(iw).collect()
+        cs.chain(iw).chain(self.diffmap_view()).collect()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -864,7 +968,11 @@ impl Iwssim {
 /// not a per-pixel IW-SSIM. With IW pooling on, `iw_0` … `iw_3` follow: the
 /// weights on the same grids (`wmcs_s = Σ cs·iw / Σ iw`), mutual-information
 /// pooling weights with no match direction ([`za::MapPolarity::Feature`],
-/// global support).
+/// global support). Last, `diffmap`: IW-SSIM's own breakdown at input
+/// resolution, `−ln IW-SSIM = Σ_s β_s·(−ln wmcs_s)` with each scale's term
+/// allocated to its windows in proportion to `iw·(1 − cs)` (see
+/// `IwssimMaps::fused`; [`za::MapPolarity::Difference`], global support,
+/// mean `−ln IW-SSIM` while every `wmcs_s` is in `(0, 1)`).
 impl za::Metric for Iwssim {
     fn id(&self) -> za::MetricId {
         let p = &self.params;

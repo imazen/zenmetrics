@@ -74,7 +74,7 @@ pub mod dev {
     pub use crate::kernel::msssim_core_tier_v4x_t;
     #[cfg(target_arch = "wasm32")]
     pub use crate::kernel::msssim_core_tier_wasm;
-    pub use crate::kernel::{Args, msssim_core_tier_scalar_t};
+    pub use crate::kernel::{Args, Level, LevelMaps, msssim_core_tier_scalar_t};
 }
 
 #[cfg(test)]
@@ -147,10 +147,21 @@ pub(crate) fn auto_level(w: usize, h: usize) -> Result<usize, Error> {
 /// scale (the `ssimmap` MATLAB `ssim` returns), `(w−10)×(h−10)` after
 /// the level-0 valid Gaussian window. Higher = more similar.
 ///
-/// A [`zenmetrics_abstractions::Evaluation`].
+/// A [`zenmetrics_abstractions::Evaluation`]. Its maps are `ssim` (primary,
+/// this level-0 map) and `diffmap`. `diffmap` is MS-SSIM's own
+/// spatial breakdown on the level-0 grid: `−ln MS-SSIM = Σ_l w_l·(−ln m_l)`
+/// over the levels' mean contrast-structure (SSIM at the last level), and
+/// each level's term is allocated to its windows in proportion to their
+/// dissimilarity `1 − x`, then spread evenly over the input pixels each
+/// window's block covers. Its mean is `−ln MS-SSIM` while every level mean
+/// lies in `(0, 1)`; a level whose mean is outside allocates `w_l·(1 − x)/N`
+/// instead. [`za::MapPolarity::Difference`], global support (through the
+/// level means).
 #[non_exhaustive]
 pub struct MsssimDiffmap {
     map: alloc::vec::Vec<f32>,
+    fused: alloc::vec::Vec<f32>,
+    fused_geometry: za::MapGeometry,
     /// Map width — `width−10` (valid convolution interior).
     pub width: u32,
     /// Map height — `height−10`.
@@ -162,7 +173,111 @@ pub struct MsssimDiffmap {
     input: (u32, u32),
 }
 
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(
+    parts: &[(alloc::vec::Vec<f64>, za::MapGeometry)],
+    w: u32,
+    h: u32,
+) -> (alloc::vec::Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (alloc::vec![0f64; n], alloc::vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = alloc::vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = alloc::vec::Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
 impl MsssimDiffmap {
+    fn new(
+        score: f64,
+        level: usize,
+        levels: kernel::LevelMaps,
+        width: usize,
+        height: usize,
+    ) -> Self {
+        let (w, h) = (width as u32, height as u32);
+        let last = levels.levels.len().saturating_sub(1);
+        let parts: alloc::vec::Vec<_> = levels
+            .levels
+            .iter()
+            .enumerate()
+            .map(|(l, lv)| {
+                let x = if l == last { &lv.ssim } else { &lv.cs };
+                let n = x.len() as f64;
+                let m = x.iter().map(|&v| f64::from(v)).sum::<f64>() / n;
+                let factor = if m > 0.0 && m < 1.0 {
+                    -libm::log(m) / (1.0 - m)
+                } else {
+                    1.0
+                };
+                let unit = kernel::level_weight(l) * factor / n;
+                let cell = 1u32 << l;
+                let g = za::MapGeometry::grid(
+                    w,
+                    h,
+                    5 * i64::from(cell),
+                    5 * i64::from(cell),
+                    cell,
+                    cell,
+                    lv.w as u32,
+                    lv.h as u32,
+                );
+                (x.iter().map(|&v| unit * (1.0 - f64::from(v))).collect(), g)
+            })
+            .collect();
+        let (fused, fused_geometry) = fuse(&parts, w, h);
+        let mut levels = levels.levels;
+        let first = levels.swap_remove(0);
+        Self {
+            map: first.ssim,
+            fused,
+            fused_geometry,
+            width: first.w as u32,
+            height: first.h as u32,
+            msssim: score,
+            level: level as u32,
+            input: (w, h),
+        }
+    }
+
     /// The packed `width·height` SSIM map.
     pub fn map(&self) -> &[f32] {
         &self.map
@@ -205,6 +320,14 @@ impl za::Evaluation for MsssimDiffmap {
         za::MapView::new("ssim", px, za::MapPolarity::Similarity, self.geometry()).ok()
     }
 
+    fn maps(&self) -> alloc::vec::Vec<za::MapView<'_>> {
+        let g = self.fused_geometry;
+        let fused = za::gray_f32_slice(&self.fused, g.cells_x, g.cells_y)
+            .ok()
+            .and_then(|px| za::MapView::new("diffmap", px, za::MapPolarity::Difference, g).ok());
+        za::Evaluation::map(self).into_iter().chain(fused).collect()
+    }
+
     fn extras(&self) -> za::Extras<'_> {
         alloc::boxed::Box::new(core::iter::once((
             alloc::borrow::Cow::Borrowed("level"),
@@ -234,20 +357,11 @@ pub fn msssim_plane_f32_with_diffmap(
     let level = auto_level(width, height)?;
     let r = gather_plane(reference, width, height, stride);
     let d = gather_plane(distorted, width, height, stride);
-    let mw = width - 10;
-    let mh = height - 10;
-    let mut map = alloc::vec![0.0f32; mw * mh];
-    let score = kernel::msssim_core(&Inputs { r, d }, width, height, level, Some(&mut map));
+    let mut levels = kernel::LevelMaps::default();
+    let score = kernel::msssim_core(&Inputs { r, d }, width, height, level, Some(&mut levels));
     Ok((
         score,
-        MsssimDiffmap {
-            map,
-            width: mw as u32,
-            height: mh as u32,
-            msssim: score,
-            level: level as u32,
-            input: (width as u32, height as u32),
-        },
+        MsssimDiffmap::new(score, level, levels, width, height),
     ))
 }
 
@@ -386,20 +500,11 @@ pub fn msssim_rgb8_with_diffmap(
     check_rgb(distorted, width, height, stride)?;
     let level = auto_level(width, height)?;
     let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
-    let mw = width - 10;
-    let mh = height - 10;
-    let mut map = alloc::vec![0.0f32; mw * mh];
-    let score = kernel::msssim_core(&inputs, width, height, level, Some(&mut map));
+    let mut levels = kernel::LevelMaps::default();
+    let score = kernel::msssim_core(&inputs, width, height, level, Some(&mut levels));
     Ok((
         score,
-        MsssimDiffmap {
-            map,
-            width: mw as u32,
-            height: mh as u32,
-            msssim: score,
-            level: level as u32,
-            input: (width as u32, height as u32),
-        },
+        MsssimDiffmap::new(score, level, levels, width, height),
     ))
 }
 

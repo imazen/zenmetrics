@@ -149,7 +149,7 @@ try:
           const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
           for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
           const oddMaps={};
-          for(const mapMetric of ['fsim','haarpsi','vsi','msssim','gmsd','iwssim']) {
+          for(const mapMetric of ['fsim','haarpsi','vsi','gmsd']) {
             response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             if(!got.similarity||!got.map.every(Number.isFinite))throw new Error('Invalid identity map '+mapMetric);
@@ -159,12 +159,12 @@ try:
             if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry');
             oddMaps[mapMetric]=got.geometry;
           }
-          // Identical inputs: these components vanish exactly; VIF keeps the reference's 1e-10 regularization.
-          for(const mapMetric of ['ssim2','nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
+          // Identical inputs: these components vanish exactly; VIF keeps the reference's 1e-10 regularization and IW-SSIM cs its f32 rounding.
+          for(const mapMetric of ['ssim2','msssim','iwssim','nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
             response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
             const regularized=mapMetric.startsWith('vif');
-            if(got.similarity||!got.map.every(v=>regularized?v>0&&v<1e-9:v===0))throw new Error('Identity component map differs '+mapMetric);
+            if(got.similarity||!got.map.every(v=>regularized?v>0&&v<1e-9:mapMetric==='iwssim'?v>=0&&v<=1e-6:v===0))throw new Error('Identity component map differs '+mapMetric);
             if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry '+mapMetric);
             oddMaps[mapMetric]=got.geometry;
           }

@@ -238,6 +238,58 @@ const VIFP_DEN: [&str; 4] = ["den_0", "den_1", "den_2", "den_3"];
 /// A scored pair with its information maps: the losses (Difference)
 /// first, then the raw numerator and denominator information
 /// (Feature), each on the same grids.
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(
+    parts: &[(alloc::vec::Vec<f64>, za::MapGeometry)],
+    w: u32,
+    h: u32,
+) -> (alloc::vec::Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (alloc::vec![0f64; n], alloc::vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = alloc::vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = alloc::vec::Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
 struct VifMaps {
     vif: f64,
     names: Vec<&'static str>,
@@ -257,14 +309,21 @@ impl VifMaps {
         }
     }
 
-    /// Append `loss`, then all numerators, then all denominators.
+    /// Append the fused `diffmap`, then `loss`, then all numerators, then
+    /// all denominators.
     fn push_all(
         &mut self,
+        fused: (Vec<f32>, za::MapGeometry),
         loss: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
         num: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
         den: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
     ) {
+        let (diffmap, g) = fused;
         for (group, polarity) in [
+            (
+                alloc::vec![("diffmap", diffmap, g)],
+                za::MapPolarity::Difference,
+            ),
             (loss, za::MapPolarity::Difference),
             (num, za::MapPolarity::Feature),
             (den, za::MapPolarity::Feature),
@@ -277,6 +336,22 @@ impl VifMaps {
             }
         }
     }
+
+    /// Each element's share of `1 − VIF`, `(den − num) / Σden` over every
+    /// pooled element ([`fuse`] spreads them: the map's mean is `1 − VIF`);
+    /// zero when `Σden = 0`.
+    fn shares(num: &[f64], den: &[f64], total_den: f64) -> Vec<f64> {
+        den.iter()
+            .zip(num)
+            .map(|(&d, &n)| {
+                if total_den > 0.0 {
+                    (d - n) / total_den
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    }
 }
 
 impl VifMaps {
@@ -288,6 +363,8 @@ impl VifMaps {
     /// reads the input within `8 + 4s` pixels of its centre.
     fn vifp(vif: f64, terms: Vec<kernel::ScaleTerms>, w: usize, h: usize) -> Self {
         let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
+        let total_den: f64 = terms.iter().flat_map(|t| &t.den).sum();
+        let mut parts = Vec::new();
         for t in terms {
             let cell = 1u32 << t.scale;
             let centre = 8 + 4 * t.scale as i64;
@@ -310,12 +387,13 @@ impl VifMaps {
                 .zip(&t.num)
                 .map(|(&d, &n)| (d - n) as f32)
                 .collect();
+            parts.push((Self::shares(&t.num, &t.den, total_den), g));
             loss.push((VIFP_NAMES[t.scale], l, g));
             num.push((VIFP_NUM[t.scale], narrow(&t.num), g));
             den.push((VIFP_DEN[t.scale], narrow(&t.den), g));
         }
         let mut out = Self::empty(vif);
-        out.push_all(loss, num, den);
+        out.push_all(fuse(&parts, w as u32, h as u32), loss, num, den);
         out
     }
 
@@ -327,6 +405,8 @@ impl VifMaps {
     /// whole subband's covariance, so support is global.
     fn vifvec(vif: f64, subs: Vec<vifvec::SubTerms>, w: usize, h: usize) -> Self {
         let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
+        let total_den: f64 = subs.iter().flat_map(|t| &t.den).sum();
+        let mut parts = Vec::new();
         // `SUBS` runs coarse to fine; serve the finest first.
         for t in subs.into_iter().rev() {
             let step = 1u32 << (t.level - 1);
@@ -344,12 +424,13 @@ impl VifMaps {
                 .zip(&t.num)
                 .map(|(&d, &n)| (d - n) as f32)
                 .collect();
+            parts.push((Self::shares(&t.num, &t.den, total_den), g));
             loss.push((VIFVEC_NAMES[k], l, g));
             num.push((VIFVEC_NUM[k], narrow(&t.num), g));
             den.push((VIFVEC_DEN[k], narrow(&t.den), g));
         }
         let mut out = Self::empty(vif);
-        out.push_all(loss, num, den);
+        out.push_all(fuse(&parts, w as u32, h as u32), loss, num, den);
         out
     }
 
@@ -582,8 +663,13 @@ impl Inputs {
 /// The pixel-domain VIF metric as a generic scorer — packed `RGB8_SRGB`.
 /// The vector-GSM variant is [`Vifvec`].
 ///
-/// Maps, on request: `info_loss_0` (primary) … `info_loss_3`, one per
-/// scale with a non-empty statistics grid. Each value is
+/// Maps, on request. `diffmap` (primary) is the fused map: each element's
+/// share `(den − num)/Σden` of `1 − VIF`, spread evenly over the input
+/// pixels its cell covers, cropped to the pixels some cell covers, and
+/// scaled so the map's mean is `1 − VIF` (global support, through `Σden`;
+/// all zero when `Σden = 0`, a reference with no information, where VIF is
+/// undefined). Then `info_loss_0` … `info_loss_3`, one per scale with a
+/// non-empty statistics grid. Each value is
 /// `log10(1 + σ₁²/σₙ²) − log10(1 + g²σ₁²/(σᵥ² + σₙ²))`: the information
 /// the reference channel carries at that position minus what survives the
 /// distortion channel. `VIF = Σnum/Σden`, so the maps summed over all
@@ -648,8 +734,10 @@ impl za::Metric for Vif {
 
 /// The vector-GSM VIF variant (`vifvec`) as a generic scorer.
 ///
-/// Maps, on request: one per pooled subband, finest first —
-/// `info_loss_l1_b1` (primary), `info_loss_l1_b4`, … `info_loss_l4_b4`
+/// Maps, on request: `diffmap` (primary), every subband element's share
+/// `(den − num)/Σden` of `1 − VIF` spread to input resolution (mean
+/// `1 − VIF`, global support), then one per pooled subband, finest first —
+/// `info_loss_l1_b1`, `info_loss_l1_b4`, … `info_loss_l4_b4`
 /// (pyramid level, MATLAB band). Each cell is one 3×3 block of the
 /// cropped block grid the score pools, valued
 /// `Σ_λ [log2(1 + s·λ/σₙ²) − log2(1 + g²·s·λ/(σᵥ² + σₙ²))]`: the bits the

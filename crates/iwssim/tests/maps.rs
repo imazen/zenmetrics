@@ -64,7 +64,8 @@ fn maps_keep_the_scores_and_describe_each_scale() {
             let all = mapped.maps();
             let names: Vec<_> = all.iter().map(|m| m.name).collect();
             assert_eq!(&names[..5], NAMES);
-            assert_eq!(&names[5..], ["iw_0", "iw_1", "iw_2", "iw_3"]);
+            assert_eq!(&names[5..9], ["iw_0", "iw_1", "iw_2", "iw_3"]);
+            assert_eq!(&names[9..], ["diffmap"]);
             for (cs, iw) in all[..4].iter().zip(&all[5..]) {
                 assert_eq!(iw.polarity, za::MapPolarity::Feature);
                 assert_eq!(iw.geometry, cs.geometry.with_support(za::Support::Global));
@@ -216,7 +217,13 @@ fn support_bounds_where_a_patch_can_reach() {
                     za::EvalOpts::SCORE_ONLY.with_native_map(),
                 )
                 .unwrap();
-            for (mm, mb) in e.maps().iter().zip(base.maps()) {
+            // The fused map's support is global (the scale means).
+            for (mm, mb) in e
+                .maps()
+                .iter()
+                .zip(base.maps())
+                .filter(|(m, _)| m.name != "diffmap")
+            {
                 let g = mm.geometry;
                 let (v, vb) = (mm.values(), mb.values());
                 let mut changed = 0;
@@ -290,7 +297,12 @@ fn weights_pool_the_contrast_structure_maps() {
             za::EvalOpts::SCORE_ONLY.with_native_map(),
         )
         .unwrap();
-    assert_eq!(e.maps().len(), 5, "no weights without IW pooling");
+    let names: Vec<_> = e.maps().iter().map(|m| m.name).collect();
+    assert_eq!(names.len(), 6);
+    assert!(
+        names.iter().all(|n| !n.starts_with("iw_")),
+        "no weights without IW pooling"
+    );
 }
 
 /// A single changed pixel dips `cs_0` most in a cell that owns that pixel
@@ -362,4 +374,52 @@ fn stopped_requests_and_strided_input() {
         .err()
         .unwrap();
     assert!(za::is_stopped(&err));
+}
+
+/// The fused `diffmap` breaks down `−ln IW-SSIM` at input resolution,
+/// vanishes for identical inputs and peaks at a local change.
+#[test]
+fn fused_diffmap_breaks_down_minus_log_iwssim() {
+    let (w, h) = (192usize, 176usize);
+    let a = za::conformance::textured_rgb8(w, h, 13);
+    let (px, py, size) = (100usize, 80usize, 10usize);
+    let b = with_patch(&a, w, px, py, size);
+    let e = metric(IwssimParams::default())
+        .evaluate(
+            image(&a, w, h, w * 3),
+            image(&b, w, h, w * 3),
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .unwrap();
+    let maps = e.maps();
+    let d = maps.iter().find(|m| m.name == "diffmap").unwrap();
+    assert_eq!(d.polarity, za::MapPolarity::Difference);
+    assert_eq!(d.geometry.support, za::Support::Global);
+    let v = d.values();
+    let mean = v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len() as f64;
+    let want = -e.score().ln();
+    assert!((mean - want).abs() <= 1e-5 * want, "{mean} vs {want}");
+    let k = (0..v.len()).max_by(|&i, &j| v[i].total_cmp(&v[j])).unwrap() as u32;
+    let g = d.geometry;
+    let (x, y) = (
+        (g.origin_x + i64::from(k % g.cells_x)) as usize,
+        (g.origin_y + i64::from(k / g.cells_x)) as usize,
+    );
+    assert!(
+        (px.saturating_sub(12)..px + size + 12).contains(&x)
+            && (py.saturating_sub(12)..py + size + 12).contains(&y),
+        "peak at ({x}, {y})"
+    );
+    let same = metric(IwssimParams::default())
+        .evaluate(
+            image(&a, w, h, w * 3),
+            image(&a, w, h, w * 3),
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .unwrap();
+    let maps = same.maps();
+    let d = maps.iter().find(|m| m.name == "diffmap").unwrap();
+    let worst = d.values().iter().fold(0f32, |m, &x| m.max(x.abs()));
+    eprintln!("identity diffmap max |v| {worst:e}");
+    assert!(worst <= 1e-6, "{worst}");
 }

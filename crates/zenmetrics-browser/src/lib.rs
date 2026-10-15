@@ -322,7 +322,11 @@ mod tests {
         let e = metric
             .evaluate(r, d, za::EvalOpts::SCORE_ONLY.with_native_map())
             .unwrap();
-        let m = e.map().unwrap();
+        let maps = e.maps();
+        let m = maps
+            .iter()
+            .find(|m| m.name == "diffmap")
+            .unwrap_or(&maps[0]);
         (
             m.geometry,
             m.polarity == za::MapPolarity::Similarity,
@@ -387,7 +391,8 @@ mod tests {
                 (geometry.cells_x, geometry.cells_y)
             );
             assert_eq!(got.similarity, similarity, "{name}");
-            assert_eq!(got.similarity, name == "iwssim", "{name}");
+            // Every route serves a fused or difference map.
+            assert!(!got.similarity, "{name}");
             assert_eq!(
                 got.values.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                 values.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
@@ -459,10 +464,8 @@ mod tests {
                 .iter()
                 .fold((f32::MAX, f32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
             match name {
-                "iwssim" => assert!(
-                    got.similarity && 1.0 - lo <= f32::EPSILON && hi == 1.0,
-                    "{lo} {hi}"
-                ),
+                // Identical inputs leave cs within f32 rounding of 1.
+                "iwssim" => assert!(!got.similarity && lo >= 0.0 && hi <= 1e-6, "{lo:e} {hi:e}"),
                 "vif" | "vifvec" => assert!(lo > 0.0 && hi < 1e-9, "{name}: {lo:e} {hi:e}"),
                 _ => assert_eq!((lo, hi), (0.0, 0.0), "{name}"),
             }
@@ -696,8 +699,13 @@ fn export_evaluation_map(
     e: &dyn zenmetrics_abstractions::Evaluation,
     out: &mut SpatialMap,
 ) -> Result<(), JsError> {
-    let map = e
-        .map()
+    // A metric's fused `diffmap` (its whole score broken down per pixel)
+    // when it publishes one, else its primary map.
+    let maps = e.maps();
+    let map = maps
+        .into_iter()
+        .find(|m| m.name == "diffmap")
+        .or_else(|| e.map())
         .ok_or_else(|| JsError::new("Native evaluation returned no spatial map"))?;
     out.width = map.width();
     out.height = map.height();

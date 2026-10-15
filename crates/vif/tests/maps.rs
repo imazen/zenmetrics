@@ -72,6 +72,8 @@ fn vifp_maps_keep_the_score_and_sum_to_the_loss() {
             let mapped = eval(&mut Vif, r, d, w, h, true);
             assert_eq!(mapped.score().to_bits(), plain.to_bits(), "{w}x{h}");
             let all = mapped.maps();
+            check_diffmap(&all[0], w, h, plain);
+            let all = &all[1..];
             let maps: Vec<_> = all
                 .iter()
                 .filter(|m| m.name.starts_with("info_loss"))
@@ -143,7 +145,8 @@ fn vifp_support_bounds_where_a_patch_can_reach() {
     for (px, py, size) in [(70usize, 60usize, 4usize), (0, 0, 3), (w - 4, h - 3, 3)] {
         let b = with_patch(&a, w, px, py, size);
         let e = eval(&mut Vif, &a, &b, w, h, true);
-        for (m, mb) in e.maps().iter().zip(base.maps()) {
+        // The fused map's support is global (through Σden).
+        for (m, mb) in e.maps().iter().zip(base.maps()).skip(1) {
             let g = m.geometry;
             let (v, vb) = (m.values(), mb.values());
             let mut changed = 0;
@@ -191,7 +194,8 @@ fn vifp_finest_loss_peaks_at_the_changed_pixel() {
     for (px, py) in [(50usize, 40usize), (33, 71)] {
         let b = with_patch(&a, w, px, py, 1);
         let e = eval(&mut Vif, &a, &b, w, h, true);
-        let m = e.map().unwrap();
+        let maps = e.maps();
+        let m = maps.iter().find(|m| m.name == "info_loss_0").unwrap();
         let v = m.values();
         let k = (0..v.len()).max_by(|&x, &y| v[x].total_cmp(&v[y])).unwrap();
         let r = m
@@ -284,6 +288,8 @@ fn vifvec_maps_name_their_subbands_and_localize_a_patch() {
     let e = eval(&mut Vifvec, &a, &b, w, h, true);
     assert_eq!(e.score().to_bits(), plain.to_bits());
     let all = e.maps();
+    check_diffmap(&all[0], w, h, plain);
+    let all = &all[1..];
     assert_eq!(all.len(), 24);
     let maps = &all[..8];
     assert_eq!(maps.iter().map(|m| m.name).collect::<Vec<_>>(), names);
@@ -316,6 +322,66 @@ fn vifvec_maps_name_their_subbands_and_localize_a_patch() {
                 && py < y0 + r.height as usize + 8,
             "{}: peak block at ({x0},{y0}) away from the patch",
             m.name
+        );
+    }
+}
+
+/// The fused map is input-sized, global, and its mean is `1 − VIF`.
+fn check_diffmap(d: &za::MapView<'_>, w: usize, h: usize, vif: f64) {
+    assert_eq!(d.name, "diffmap");
+    assert_eq!(d.polarity, za::MapPolarity::Difference);
+    let g = d.geometry;
+    assert_eq!((g.input_width as usize, g.input_height as usize), (w, h));
+    assert_eq!((g.cell_width, g.cell_height), (1, 1));
+    assert!(g.origin_x >= 0 && g.origin_x as u32 + g.cells_x <= w as u32);
+    assert!(g.origin_y >= 0 && g.origin_y as u32 + g.cells_y <= h as u32);
+    assert_eq!(g.support, za::Support::Global);
+    let v = d.values();
+    assert!(v.iter().all(|x| x.is_finite()));
+    if vif.is_nan() {
+        // A flat reference carries no information (Σden = 0): VIF is
+        // undefined and nothing can be lost.
+        assert!(v.iter().all(|&x| x == 0.0), "{w}x{h}");
+        return;
+    }
+    let mean = v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len() as f64;
+    eprintln!("{w}x{h}: diffmap mean {mean:e} vs 1 - VIF {:e}", 1.0 - vif);
+    assert!(
+        (mean - (1.0 - vif)).abs() <= 1e-6,
+        "{w}x{h}: {mean} vs {}",
+        1.0 - vif
+    );
+}
+
+/// A local change peaks in both fused maps near it.
+#[test]
+fn the_fused_maps_peak_at_a_local_change() {
+    let (w, h) = (160usize, 144usize);
+    let a = za::conformance::textured_rgb8(w, h, 23);
+    let (px, py, size) = (90usize, 60usize, 8usize);
+    let b = with_patch(&a, w, px, py, size);
+    for (metric, reach) in [
+        (&mut Vif as &mut dyn za::Metric, 10usize),
+        (&mut Vifvec, 16),
+    ] {
+        let e = metric
+            .evaluate(
+                image(&a, w, h, w * 3),
+                image(&b, w, h, w * 3),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .unwrap();
+        let d = e.map().unwrap();
+        assert_eq!(d.name, "diffmap");
+        let v = d.values();
+        let k = (0..v.len()).max_by(|&i, &j| v[i].total_cmp(&v[j])).unwrap() as u32;
+        let g = d.geometry;
+        let x = (g.origin_x + i64::from(k % g.cells_x)) as usize;
+        let y = (g.origin_y + i64::from(k / g.cells_x)) as usize;
+        assert!(
+            (px.saturating_sub(reach)..px + size + reach).contains(&x)
+                && (py.saturating_sub(reach)..py + size + reach).contains(&y),
+            "peak at ({x}, {y})"
         );
     }
 }

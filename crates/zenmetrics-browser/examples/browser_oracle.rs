@@ -126,9 +126,12 @@ fn main() {
         ("vsi", &vs),
         ("msssim", &ms),
     ] {
-        let map = eval.map().unwrap();
+        // The fused `diffmap` when a metric publishes one, as the viewer does.
+        let all = eval.maps();
+        let map = all.iter().find(|m| m.name == "diffmap").unwrap_or(&all[0]);
         let g = map.geometry;
-        maps.insert(name.into(),serde_json::json!({"width":map.width(),"height":map.height(),"similarity":true,"values":map.values(),"geometry":{
+        let similarity = map.polarity == zenmetrics_abstractions::MapPolarity::Similarity;
+        maps.insert(name.into(),serde_json::json!({"width":map.width(),"height":map.height(),"similarity":similarity,"values":map.values(),"geometry":{
             "inputWidth":g.input_width,"inputHeight":g.input_height,"originX":g.origin_x,"originY":g.origin_y,
             "cellWidth":g.cell_width,"cellHeight":g.cell_height,"cellsX":g.cells_x,"cellsY":g.cells_y
         }}));
@@ -176,7 +179,8 @@ fn main() {
                       d: zenmetrics_abstractions::Image<'_>| {
         let opts = zenmetrics_abstractions::EvalOpts::SCORE_ONLY.with_native_map();
         let eval = metric.evaluate(r, d, opts).unwrap();
-        let map = eval.map().unwrap();
+        let all = eval.maps();
+        let map = all.iter().find(|m| m.name == "diffmap").unwrap_or(&all[0]);
         let g = map.geometry;
         let similarity = map.polarity == zenmetrics_abstractions::MapPolarity::Similarity;
         maps.insert(name.into(),serde_json::json!({"width":map.width(),"height":map.height(),"similarity":similarity,"values":map.values(),"geometry":{

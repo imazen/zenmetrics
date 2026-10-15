@@ -51,8 +51,22 @@ fn maps_never_change_the_score_and_fold_back_to_it() {
             let plain = eval(&r, &d, false).score();
             let mapped = eval(&r, &d, true);
             assert_eq!(mapped.score().to_bits(), plain.to_bits(), "{w}x{h}");
-            let maps = mapped.maps();
-            assert_eq!(maps.len(), 6);
+            let all = mapped.maps();
+            assert_eq!(all.len(), 7);
+            // The fused map is input-sized and its mean is NLPD.
+            let d = &all[0];
+            assert_eq!(d.name, "diffmap");
+            assert_eq!(d.polarity, za::MapPolarity::Difference);
+            assert_eq!((d.width(), d.height()), (w as u32, h as u32));
+            assert_eq!(d.geometry.support, za::Support::Global);
+            let dv = d.values();
+            assert!(dv.iter().all(|&x| x.is_finite() && x >= 0.0));
+            let dmean = dv.iter().map(|&x| f64::from(x)).sum::<f64>() / dv.len() as f64;
+            assert!(
+                (dmean - plain).abs() <= 1e-6 * plain.abs().max(1e-9),
+                "{w}x{h}: diffmap mean {dmean} vs score {plain}"
+            );
+            let maps = &all[1..];
             // NLPD = (Σ_l rms_l^0.6)^(1/0.6), rms_l = sqrt(mean_l / 3).
             let mut sum = 0.0f64;
             for (l, m) in maps.iter().enumerate() {
@@ -123,7 +137,8 @@ fn support_bounds_where_a_patch_can_reach() {
         for (px, py, size) in [(70usize, 50usize, 3usize), (0, 0, 4), (w - 5, h - 6, 5)] {
             let b = with_patch(&a, w, px, py, size);
             let e = eval(&image(&a, w, h, w * 3), &image(&b, w, h, w * 3), true);
-            for m in e.maps() {
+            // The fused map's support is global (the rms normalization).
+            for m in e.maps().into_iter().filter(|m| m.name != "diffmap") {
                 let g = m.geometry;
                 let v = m.values();
                 let mut touched = 0;
@@ -194,4 +209,24 @@ fn a_stopped_pulse_refuses_map_requests_too() {
         .err()
         .unwrap();
     assert!(za::is_stopped(&err));
+}
+
+/// A local change peaks in the fused map over it.
+#[test]
+fn the_fused_map_peaks_at_a_local_change() {
+    let (w, h) = (160usize, 128usize);
+    let a = textured(w, h, 9);
+    let (px, py, size) = (100usize, 40usize, 8usize);
+    let b = with_patch(&a, w, px, py, size);
+    let e = eval(&image(&a, w, h, w * 3), &image(&b, w, h, w * 3), true);
+    let d = e.map().unwrap();
+    assert_eq!(d.name, "diffmap");
+    let v = d.values();
+    let k = (0..v.len()).max_by(|&i, &j| v[i].total_cmp(&v[j])).unwrap();
+    let (x, y) = (k % w, k / w);
+    assert!(
+        (px.saturating_sub(4)..px + size + 4).contains(&x)
+            && (py.saturating_sub(4)..py + size + 4).contains(&y),
+        "peak at ({x}, {y})"
+    );
 }

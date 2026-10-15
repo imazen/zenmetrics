@@ -901,13 +901,21 @@ mod tests {
 /// The NLPD metric as a generic scorer — accepts `RGB8_SRGB`
 /// `PixelSlice` inputs (packed or strided — strided is repacked).
 ///
-/// Maps, on request: one per pyramid level, `level_0` (full resolution,
-/// primary) … `level_5`. Each value is the squared difference of the two
-/// images' normalized Laplacian responses at that level, summed over R, G
-/// and B — the per-pixel term whose level mean feeds the score
-/// (`rms_l = sqrt(mean/3)`, `NLPD = (Σ_l rms_l^0.6)^(1/0.6)`). These are
-/// per-level components, not a per-pixel NLPD; `0` = identical, higher =
-/// more different ([`za::MapPolarity::Difference`]).
+/// Maps, on request, all [`za::MapPolarity::Difference`] (`0` = identical):
+///
+/// - `diffmap` (primary): NLPD's own spatial breakdown at input resolution.
+///   NLPD is homogeneous of degree ½ in the level maps, so twice each
+///   sample's `x·∂NLPD/∂x` is an exact share,
+///   `NLPD^0.4 · rms_l^-1.4 · x/(3·N_l)`; each level's shares spread evenly
+///   over the input pixels their cells cover, scaled by the pixel count, so
+///   **the map's mean is NLPD** (computed from the stored `f32` levels).
+///   The `rms_l` normalization makes its support global.
+/// - One map per pyramid level, `level_0` (full resolution) … `level_5`.
+///   Each value is the squared difference of the two images' normalized
+///   Laplacian responses at that level, summed over R, G and B — the
+///   per-pixel term whose level mean feeds the score
+///   (`rms_l = sqrt(mean/3)`, `NLPD = (Σ_l rms_l^0.6)^(1/0.6)`). These are
+///   per-level components, not a per-pixel NLPD.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Nlpd;
 
@@ -956,18 +964,105 @@ fn level_geometry(width: usize, height: usize) -> [za::MapGeometry; LEVELS] {
     })
 }
 
-/// A scored pair with its per-level maps.
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(parts: &[(Vec<f64>, za::MapGeometry)], w: u32, h: u32) -> (Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (vec![0f64; n], vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
+/// The `diffmap` described on [`Nlpd`]: per-sample shares of NLPD at input
+/// resolution, mean = NLPD of the stored levels.
+fn nlpd_diffmap(
+    levels: &[Vec<f32>],
+    geometry: &[za::MapGeometry; LEVELS],
+) -> (Vec<f32>, za::MapGeometry) {
+    let rms: Vec<f64> = levels
+        .iter()
+        .map(|l| (l.iter().map(|&v| f64::from(v)).sum::<f64>() / (l.len() * 3) as f64).sqrt())
+        .collect();
+    let nlpd = rms.iter().map(|r| r.powf(0.6)).sum::<f64>().powf(1.0 / 0.6);
+    let parts: Vec<_> = levels
+        .iter()
+        .enumerate()
+        .map(|(l, level)| {
+            let unit = if rms[l] > 0.0 {
+                nlpd.powf(0.4) * rms[l].powf(-1.4) / (3 * level.len()) as f64
+            } else {
+                0.0
+            };
+            (
+                level.iter().map(|&v| unit * f64::from(v)).collect(),
+                geometry[l],
+            )
+        })
+        .collect();
+    let g0 = geometry[0];
+    fuse(&parts, g0.input_width, g0.input_height)
+}
+
+/// A scored pair with its fused map and per-level maps.
 struct NlpdMaps {
     nlpd: f64,
+    diffmap: (Vec<f32>, za::MapGeometry),
     levels: Vec<Vec<f32>>,
     geometry: [za::MapGeometry; LEVELS],
 }
 
 impl NlpdMaps {
-    fn view(&self, l: usize) -> Option<za::MapView<'_>> {
-        let g = self.geometry[l];
-        let px = za::gray_f32_slice(&self.levels[l], g.cells_x, g.cells_y).ok()?;
-        za::MapView::new(LEVEL_NAMES[l], px, za::MapPolarity::Difference, g).ok()
+    /// `0` is the fused map, `1 + l` level `l`.
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let (name, data, g) = match i {
+            0 => ("diffmap", &self.diffmap.0, self.diffmap.1),
+            l => (
+                LEVEL_NAMES[l - 1],
+                &self.levels[l - 1],
+                self.geometry[l - 1],
+            ),
+        };
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(name, px, za::MapPolarity::Difference, g).ok()
     }
 }
 
@@ -988,8 +1083,8 @@ impl za::Evaluation for NlpdMaps {
     }
 
     fn maps(&self) -> Vec<za::MapView<'_>> {
-        (0..self.levels.len())
-            .filter_map(|l| self.view(l))
+        (0..=self.levels.len())
+            .filter_map(|i| self.view(i))
             .collect()
     }
 
@@ -1040,10 +1135,12 @@ impl za::Metric for Nlpd {
             let (nlpd, levels) = score_rgb_u8_maps(&rp, &dp, r.width, r.height)
                 .metric_err_with("nlpd", Error::kind)?;
             opts.checkpoint()?;
+            let geometry = level_geometry(r.width, r.height);
             let eval = NlpdMaps {
                 nlpd,
+                diffmap: nlpd_diffmap(&levels, &geometry),
                 levels,
-                geometry: level_geometry(r.width, r.height),
+                geometry,
             };
             return za::apply_map_request(Box::new(eval), req);
         }

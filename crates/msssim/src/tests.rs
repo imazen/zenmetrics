@@ -318,3 +318,42 @@ fn msssim_diffmap_matches_score() {
 fn generic_surface_conforms() {
     zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Msssim, 48, 40);
 }
+
+/// The fused `diffmap` sits on the level-0 grid, its mean is
+/// `−ln MS-SSIM` (every level mean is inside `(0, 1)` here), identical
+/// inputs give zeros, and a local change peaks over it.
+#[test]
+fn fused_diffmap_breaks_down_minus_log_msssim() {
+    use zenmetrics_abstractions::Evaluation;
+    let (w, h) = (176usize, 144usize);
+    let r: alloc::vec::Vec<f32> = (0..w * h)
+        .map(|i| (((i % w) * 3 + (i / w) * 5 + (i * 23) % 17) % 241) as f32)
+        .collect();
+    let mut d = r.clone();
+    for y in 60..70 {
+        for x in 100..110 {
+            d[y * w + x] = 255.0 - d[y * w + x];
+        }
+    }
+    let (score, dm) = crate::msssim_plane_f32_with_diffmap(&r, &d, w, h, w).unwrap();
+    let maps = dm.maps();
+    let names: alloc::vec::Vec<_> = maps.iter().map(|m| m.name).collect();
+    assert_eq!(names, ["ssim", "diffmap"]);
+    let f = &maps[1];
+    assert_eq!(f.polarity, zenmetrics_abstractions::MapPolarity::Difference);
+    assert_eq!(f.geometry.support, zenmetrics_abstractions::Support::Global);
+    assert_eq!((f.geometry.origin_x, f.geometry.origin_y), (5, 5));
+    assert_eq!((f.width() as usize, f.height() as usize), (w - 10, h - 10));
+    let v = f.values();
+    let mean = v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len() as f64;
+    let want = -libm::log(score);
+    assert!((mean - want).abs() <= 1e-6 * want, "{mean} vs {want}");
+    let k = (0..v.len()).max_by(|&i, &j| v[i].total_cmp(&v[j])).unwrap();
+    let (x, y) = (k % (w - 10) + 5, k / (w - 10) + 5);
+    assert!(
+        (96..114).contains(&x) && (56..74).contains(&y),
+        "peak at ({x}, {y})"
+    );
+    let (_, same) = crate::msssim_plane_f32_with_diffmap(&r, &r, w, h, w).unwrap();
+    assert!(same.maps()[1].values().iter().all(|&x| x == 0.0));
+}
