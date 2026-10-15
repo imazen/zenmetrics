@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Added
+
+- zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
+- zenmetrics-cli `nn` / `nn-ort` features (`3f937da6`, `cfa8a95f`): metrics `lpips-alex`, `lpips-vgg`, `lpips-squeeze`, `stlpips-alex`, `stlpips-vgg`, `dists`, `deepdc`, reading `ZENMETRICS_NN_MODEL_DIR` and `ZENMETRICS_NN_ENGINE`.
+
 ### Changed
 
 - Fused maps (`ec50e4f4`): NLPD, VIF/vifvec, MS-SSIM and IW-SSIM serve `diffmap`, the metric's own score broken down at input resolution over every scale it pools, cropped to covered pixels. Its mean is NLPD, `1 − VIF`, `−ln MS-SSIM` or `−ln IW-SSIM` (NLPD and VIF exact per-sample shares; MS-SSIM and IW-SSIM split each scale's log term in proportion to `(iw·)(1 − x)`). Primary for NLPD and VIF; MS-SSIM and IW-SSIM keep their primaries. The browser shows a metric's `diffmap` when it has one (also SSIMULACRA2's). Scores unchanged. [Native maps](docs/UNIFIED_NATIVE_MAPS_2026-10-14.md#fused-maps-diffmap-2026-10-15).

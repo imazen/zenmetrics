@@ -228,8 +228,6 @@ i265 before drawing CPU conclusions.
 
 ## 6. Model order
 
-| wave | crate | models | backbone work |
-|---|---|---|---|
 All waves live in `zenmetrics-nn`; the weights column is the card's `weights_licence`.
 
 | wave | models | weights | backbone work |
@@ -254,12 +252,11 @@ writing:
 
 | tier | metrics | where | status |
 |---|---|---|---|
-| AIC-4 deep FR | LPIPS-alex, LPIPS-VGG, DISTS | zenmetrics-nn | done |
-| AIC-4 deep FR | STLPIPS, STLPIPS-VGG, DeepDC | zenmetrics-nn | in progress |
-| AIC-4 deep FR | A-FINE, DreamSim, CKDN, AHIQ, DMM | zenmetrics-nn | next (permissive or unstated weights) |
+| AIC-4 deep FR | LPIPS-alex, LPIPS-VGG, DISTS, STLPIPS, STLPIPS-VGG, DeepDC | zenmetrics-nn | done (PR #81; AIC-4 crop columns matched, `benchmarks/nn_aic2026_crosscheck_2026-10-15.md`) |
+| AIC-4 deep FR | CKDN, A-FINE, DreamSim, AHIQ, DMM | zenmetrics-nn | devin lane `nn-port`, in that order |
 | AIC-4 deep FR | TOPIQ, TOPIQ-PIPAL, PieAPP, WaDIQaM (pyiqa weights) | zenmetrics-nn | NC weights: opt-in |
 | AIC-4 deep FR | MSSWD, proposal-IDFIQA | zenmetrics-nn | no upstream licence: from the papers |
-| AIC-4 classical | PSNR-YCbCr611, SSIMc, CIEDE2000, FLIP | zenmetrics-cli | opencode lane `aic-classic` |
+| AIC-4 classical | PSNR-YCbCr611, SSIMc, CIEDE2000, FLIP | zenmetrics-cli | opencode lane `aic-classic`; SSIMc convention found (per-RGB SSIM over the valid window, negative map values clipped to 0: 61 pairs max \|Δ\| 4.4e-7) |
 | AIC-4 classical | CW-SSIM, SSIM-pyiqa | zenmetrics-cli | after that |
 | AIC-4 unidentified | AIMOS, WD_s1–WD_s5 | — | identify first |
 | NR | PIQE (used before, via PU21, `benchmarks/pu_integrated_upiq_2026-06-09.md`), NIQE, BRISQUE | Rust ports, LIVE data with notice | after AIC-4 |
