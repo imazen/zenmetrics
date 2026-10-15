@@ -485,6 +485,13 @@ pub enum MetricKind {
     /// emits `piqe` (distorted) and `piqe_ref` (reference). Needs `nr`.
     #[value(name = "piqe")]
     Piqe,
+    /// NIQE — no-reference natural-image-quality evaluator (in-tree `niqe`
+    /// crate, port of BasicSR `niqe.py` with LIVE's pristine-model params).
+    /// Mahalanobis distance to the pristine MVG; higher is worse. Scored
+    /// through `PairedNoReference`: emits `niqe` (distorted) and `niqe_ref`
+    /// (reference). Needs `nr`.
+    #[value(name = "niqe")]
+    Niqe,
 }
 
 impl MetricKind {
@@ -554,6 +561,7 @@ impl MetricKind {
             MetricKind::PsnrhvsDaala,
             MetricKind::Mdctpsnr,
             MetricKind::Piqe,
+            MetricKind::Niqe,
         ]
     }
 
@@ -623,6 +631,7 @@ impl MetricKind {
             MetricKind::PsnrhvsDaala => "psnrhvs-daala",
             MetricKind::Mdctpsnr => "mdctpsnr",
             MetricKind::Piqe => "piqe",
+            MetricKind::Niqe => "niqe",
         }
     }
 
@@ -751,6 +760,7 @@ impl MetricKind {
             MetricKind::PsnrhvsDaala => PSNRHVS_DAALA_CPU_COLUMNS,
             MetricKind::Mdctpsnr => MDCTPSNR_CPU_COLUMNS,
             MetricKind::Piqe => &["piqe", "piqe_ref"],
+            MetricKind::Niqe => &["niqe", "niqe_ref"],
         }
     }
 
@@ -2263,9 +2273,9 @@ pub fn run_metric(
         // `PairedNoReference` — `piqe` on the distorted image plus
         // `piqe_ref` on the reference (see metrics/nr.rs).
         #[cfg(feature = "nr")]
-        MetricKind::Piqe => nr::score(kind, reference, distorted),
+        MetricKind::Piqe | MetricKind::Niqe => nr::score(kind, reference, distorted),
         #[cfg(not(feature = "nr"))]
-        MetricKind::Piqe => Err(disabled_msg("piqe", "nr")),
+        MetricKind::Piqe | MetricKind::Niqe => Err(disabled_msg("niqe/piqe", "nr")),
     }
 }
 
@@ -2930,6 +2940,7 @@ mod tests {
         assert_eq!(y_of(2), 145); // G: 16 + 128.553
         assert_eq!(y_of(3), 41); // B: 16 + 24.966
         // Broadcast: every channel carries the same Y.
+        #[allow(clippy::chunks_exact_to_as_chunks)]
         for px in g.pixels.chunks_exact(3) {
             assert!(px[0] == px[1] && px[1] == px[2]);
         }

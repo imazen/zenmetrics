@@ -25,7 +25,20 @@ i265).
 
 ## niqe
 
-pending
+|Δ| distribution over the 1,008 pairs (score units, NIQE typical range
+~0–10):
+
+| set  | n    | p25       | median    | p75       | min      | max      | mean     |
+|------|------|-----------|-----------|-----------|----------|----------|----------|
+| all  | 1008 | 0.286027  | **0.602329** | 1.025230 | 0.003430 | 5.264905 | 0.750610 |
+| JPEG | 504  | 0.222284  | 0.506864  | 0.847026  | 0.003430 | 4.585708 | 0.645474 |
+| BPG  | 504  | 0.370550  | 0.710947  | 1.180932  | 0.004041 | 5.264905 | 0.855745 |
+
+`niqe::JND = 0.602329`. Parity gate: |Δ_oracle| ≤ 0.000602329.
+
+Output table: `niqe_konjnd.tsv` (~120 KB, not committed — regenerable
+with the command above; copy at `~/tmp/nr-classic-scratch/niqe_konjnd.tsv`
+on i265).
 
 ## brisque
 

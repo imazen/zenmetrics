@@ -27,6 +27,7 @@ pub(super) fn score(
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
     let metric: Box<dyn Metric> = match kind {
         MetricKind::Piqe => Box::new(PairedNoReference::new(piqe::Piqe::new())),
+        MetricKind::Niqe => Box::new(PairedNoReference::new(niqe::Niqe::new())),
         _ => return Err(format!("nr: {} is not a no-reference metric", kind.name()).into()),
     };
     let mut metric = metric;
