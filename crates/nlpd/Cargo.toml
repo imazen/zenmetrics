@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Normalized Laplacian Pyramid Distance for full-reference image quality"
 edition.workspace = true
 rust-version.workspace = true
+# `src/iqa.rs` follows IQA_pytorch's NLPD.py (MIT, Copyright (c) 2020
+# dingkeyan93); that notice is in `LICENSE-IQA-optimization`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 

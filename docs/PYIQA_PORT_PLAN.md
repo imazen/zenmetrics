@@ -1,4 +1,4 @@
-# Porting pyiqa deep metrics to Rust — plan (2026-10-14)
+# Porting pyiqa deep metrics to Rust — plan (2026-10-14, rev 2)
 
 Goal: make it cheap to add learned IQA models from
 [IQA-PyTorch (pyiqa)](https://github.com/chaofengc/IQA-PyTorch) to zenmetrics, at equal or
@@ -11,11 +11,19 @@ Evidence:
   learned model, its backbone, licence, preprocessing traps, ONNX exportability, and
   pyiqa's published speed table.
 - [`../benchmarks/nn_runtime_shootout_2026-10-14.md`](../benchmarks/nn_runtime_shootout_2026-10-14.md):
-  rten / tract / burn / ORT / PyTorch on VGG16 and ResNet50, CPU and RTX 4080, on i265.
+  rten / tract / burn / ORT / PyTorch on VGG16 and ResNet50, CPU and RTX 4080, on i265,
+  plus the burn + zenforks-cubecl coexistence probe.
 
-Owner decision (2026-10-14): models whose code or weights are noncommercial go in a
-separately licensed crate, **`zenmetrics-pyiqa-ports`**. Reusing zentract / zensr /
-zensally is optional; improving them with what we learn here is welcome.
+Owner decisions (2026-10-14):
+- Models whose code or weights are noncommercial go in a separately licensed crate,
+  **`zenmetrics-pyiqa-ports`**.
+- **All the new crates live in this repo and workspace.**
+- An **optional C++ backend (ONNX Runtime) is fine** as long as pure-Rust engines exist
+  for the same models.
+- Reusing zentract / zensr / zensally is optional; improving them with what we learn is
+  welcome.
+- **i265's GPU flips a bit every few minutes**: a mismatching GPU run there is rerun
+  before it counts (§5).
 
 ## 1. What the evidence says
 
@@ -26,63 +34,85 @@ zensally is optional; improving them with what we learn here is welcome.
    exist only as pyiqa trainings; PieAPP's official weights are NC; CLIP-IQA, QualiCLIP,
    TReS are NC upstream. Those go in `zenmetrics-pyiqa-ports`.
 2. **Four backbones cover most of the list.** VGG16/19 + AlexNet → LPIPS ×4, DISTS,
-   DeepDC, ST-LPIPS ×2 (8 of the AIC deep-metric columns). ResNet50 → TOPIQ ×10, HyperIQA, AHIQ,
-   ARNIQA ×8, TReS, CKDN. ViT-B/8,16,32 and CLIP RN50 → MANIQA, AHIQ, DreamSim, LIQE,
-   A-FINE, CLIP-IQA, QualiCLIP.
+   DeepDC, ST-LPIPS ×2 (8 of the AIC deep-metric columns). ResNet50 → TOPIQ ×10,
+   HyperIQA, AHIQ, ARNIQA ×8, TReS, CKDN. ViT-B/8,16,32 and CLIP RN50 → MANIQA, AHIQ,
+   DreamSim, LIQE, A-FINE, CLIP-IQA, QualiCLIP.
 3. **No single pure-Rust runtime matches PyTorch on both CPU and GPU** (measured on
    i265, two sizes per model):
    - CPU: **rten 0.27** is at parity single-threaded (0.97–1.00×) and on multithreaded
      VGG (0.91–1.04×); ResNet50 multithreaded trails 1.28–1.45×. tract 1.14–2.2×,
-     burn-flex 1.4–3.6×. ORT is faster than PyTorch but is C++ (oracle only).
+     burn-flex 1.4–3.6×. **ONNX Runtime beats PyTorch** (0.78–0.85× single-threaded).
    - GPU: **burn-cuda** trails PyTorch fp32 by 1.2–2.1× at batch 1; PyTorch fp16 is a
-     further ~1.7× faster. **burn-vulkan is 100–120× slower on VGG** (5–11× on ResNet50);
-     not root-caused, and it is the closest native proxy we have for WebGPU.
+     further ~1.7× faster. ORT's CUDA EP ran ResNet50 in 1.24 / 1.78 ms vs PyTorch fp32
+     2.26 / 2.61 (ORT with its default TF32, so not like for like). **burn-vulkan is
+     100–120× slower on VGG** (5–11× on ResNet50); not root-caused, and it is the
+     closest native proxy we have for WebGPU.
 4. **The PyTorch-kernel bar and the pyiqa-as-used bar are different bars.** pyiqa's own
    table times decode + host→device copy + Python per call: DISTS 0.125 s and LPIPS-vgg
    0.143 s per ~1 MP image on a V100, where the network itself is single-digit ms on a
-   4080 (not measured at 1 MP on V100; the gap is an inference, to be measured in phase
-   0). Beating pyiqa end-to-end is mostly I/O, batching and reference reuse; matching raw
+   4080 (the network-only V100 time at 1 MP was not measured; phase 0 measures it).
+   Beating pyiqa end-to-end is mostly I/O, batching and reference reuse; matching raw
    PyTorch kernels is the harder target.
-5. **burn cannot join the zenmetrics cargo graph** (it needs upstream `cubecl` 0.11
-   under its real name; zenmetrics pins the renamed `zenforks-cubecl` 0.10.2 by git rev,
-   see `CLAUDE.md` "burn"). Anything built on zenforks-cubecl also cannot be published
-   to crates.io while the fork is a git pin, so the separately licensed crate could not
-   depend on it.
+5. **burn and zenforks-cubecl coexist in one binary** (measured, `coexist-probe/`). burn
+   pulls upstream cubecl 0.11 and wgpu 30; our GPU crates pull zenforks-cubecl 0.10.2 and
+   wgpu 29. Cargo keeps both generations because they differ in version and source, and
+   the `[lib] name = "cubecl_*"` shims don't collide because rlib file names carry a
+   hash. The probe interleaved burn matmuls with `ssim2-gpu` on the same RTX 4080 on
+   CUDA and on wgpu; ssim2 scores were bit-identical across all rounds and both runs.
+   The rename only stops burn from *using* the fork: no tensor, handle or client crosses
+   between them, only host data. Costs and couplings:
+   - two GPU runtimes, memory pools and kernel caches per process (VRAM budgeting must
+     count both);
+   - both sides share **one `cudarc` 0.19.10** with the same feature set with or
+     without burn; recheck `cargo tree -i cudarc -f '{p} [{f}]'` when either side bumps;
+   - burn's tree is all crates.io, so burn-based crates stay publishable; anything that
+     depends on the git-pinned fork does not.
 6. **The `burn-conv-spike` "4.32× slower" verdict does not apply.** It timed a
    1-channel separable blur; these networks have 64–2048 channels, which is what
    implicit-GEMM conv on tensor cores is for.
 
 ## 2. Architecture
 
-### Repos and crates
+### Crates (all in this workspace)
 
-| repo | crate(s) | licence | depends on |
+| crate | licence | contents | GPU deps |
 |---|---|---|---|
-| `imazen/zenmetrics-nn` (new, name open) | `zenmetrics-nn` (engines, preprocessing, weight store, backbones, permissive metric heads as feature-gated modules), `zenmetrics-nn-cli`, `zenmetrics-nn-plugin` (cdylib) | AGPL-3 + commercial, like the rest | rten, burn, burn-onnx, burn-store (crates.io) |
-| `imazen/zenmetrics-pyiqa-ports` (new) | `zenmetrics-pyiqa-ports` | noncommercial (proposed: PolyForm Noncommercial 1.0.0, matching pyiqa) | `zenmetrics-nn` from crates.io |
-| `imazen/zenmetrics` (this repo) | `zenmetrics-cli` gains NN metric kinds via plugin or subprocess | unchanged | nothing new in the graph |
+| `crates/zenmetrics-nn` (name open) | AGPL-3 + commercial | engine trait + engines, preprocessing, weight store, model cards, backbones, permissive metric heads (feature-gated modules) | burn (crates.io) only; **never zenforks-cubecl**, so it stays publishable |
+| `crates/zenmetrics-pyiqa-ports` | noncommercial (proposed: PolyForm Noncommercial 1.0.0, matching pyiqa), own `license` field and LICENSE file | NC models (§6) on top of `zenmetrics-nn` | via `zenmetrics-nn` |
+| `zenmetrics-cli`, `zenmetrics-api`, `zenmetrics-py` | unchanged | `nn` feature links `zenmetrics-nn` directly; `pyiqa-ports` feature links the NC crate | both cubecls in one binary (§1.5) |
 
-Why a separate repo rather than an excluded crate here: it keeps upstream cubecl out of
-this repo's lockfile and CI sibling pins, and both downstream users (this repo and the
-NC crate) consume it the same way, as a published crate or binary. An excluded
-workspace inside this repo (the `crates/margarine` pattern) also works if one repo is
-preferred.
+Linking directly replaces the plugin/subprocess boundary the first draft proposed:
+no copy across an ABI, one CLI, and `zenmetrics-py` gets the metrics for free. A
+build with the `pyiqa-ports` feature is a noncommercial build; it stays off by
+default, the CLI prints that when it is on, and fleet images that need those
+metrics are internal-only.
+
+Workspace hygiene that comes with it: `Cargo.lock` gains burn's tree (the probe's lock
+is ~8,900 lines), so regenerate with `scripts/ci/lock.sh --regen`, never a plain cargo
+run in a dev tree. CI builds the `nn` crates in their own jobs so the existing metric
+jobs don't pay burn's compile time.
 
 Metric heads for other people's metrics stay modules inside `zenmetrics-nn`, not
 bare-name crates: the bare-name rule in `CLAUDE.md` is for metrics we publish first.
 
 ### Engines
 
-| engine | role | why |
+| engine | build | role |
 |---|---|---|
-| rten (`.onnx` loaded at runtime) | default CPU, wasm-SIMD | only pure-Rust engine at PyTorch CPU parity |
-| burn via `burn-onnx` codegen (same `.onnx`) | CUDA, Vulkan/Metal, WebGPU, wasm | one generated source for every GPU backend |
-| ORT, PyTorch | oracles in `tools/`, never shipped | C++ |
+| rten (`.onnx` loaded at runtime) | pure Rust, default | CPU and wasm-SIMD; PyTorch parity on CPU |
+| burn via `burn-onnx` codegen (same `.onnx`) | pure Rust, default for GPU | CUDA, Vulkan/Metal, WebGPU, wasm |
+| ONNX Runtime via `ort` | **optional C++ feature `ort`**, off by default | fastest CPU (0.78–0.85× PyTorch), CUDA EP for fleet throughput; also the export oracle |
+| PyTorch | `tools/` only | oracle |
 
-Both shipped engines consume the **same exported `.onnx`**, so one golden set checks
-both. Ops that ONNX handles badly (AHIQ's DeformConv2d, MUSIQ's hash position embedding
-and multiscale patching, crop schedules, LPIPS/DISTS tap reductions) live in Rust
-around the graph, not in it.
+All engines consume the **same exported `.onnx`**, so one golden set checks every
+engine, and any model available on `ort` is also available on rten and burn (the
+owner's condition for a C++ backend). Each engine reports its name in the score's
+impl tag so a sweep can stay on one backend. Ops that ONNX handles badly (AHIQ's
+DeformConv2d, MUSIQ's hash position embedding and multiscale patching, crop schedules,
+LPIPS/DISTS tap reductions) live in Rust around the graph, not in it.
+
+ORT's own WebGPU execution provider belongs to onnxruntime-web (JavaScript), not to the
+Rust crate on wasm, so it is not a browser route for us.
 
 ### Adding a model
 
@@ -96,14 +126,14 @@ A model is a directory `models/<name>/`:
   goldens: per-tap tensor hashes and stats, plus final scores on the golden corpus.
 - Rust glue: preprocessing, crop schedule, and any head ops outside the graph.
 
-Once its backbone exists, a model that reuses it should be mostly card + export
-script + head glue. That is the "easy" target; it is an estimate until phase 1 has
-shipped two or three models.
+Once its backbone exists, a model that reuses it should be mostly card + export script +
+head glue. That is the "easy" target; it is an estimate until phase 1 has shipped two
+or three models.
 
 ### Weights
 
 - Never inside the crate package (crates.io 10 MB limit; VGG16 features alone are
-  ~58 MB). Fetched on first use or by `zenmetrics-nn fetch <model>` into a cache dir,
+  ~58 MB). Fetched on first use or by an explicit fetch command into a cache dir,
   sha256-verified against the card.
 - Permissive weights: upstream URLs, with an imazen R2 mirror for reliability where the
   licence allows redistribution (BSD/MIT/Apache).
@@ -111,19 +141,13 @@ shipped two or three models.
   so we never redistribute an adapted CC BY-NC-SA file. Loading NC models needs an
   explicit opt-in. Whether burn-store can read the `.pth` pickles directly is unverified.
 
-### Integration with this repo
+### Integration
 
-- **Fleet:** `zenmetrics-nn-cli score-pairs` writes the same parquet sidecar schema as
-  `zenmetrics score-pairs`. zenfleet jobexec runs it as a separate binary, which is the
-  data-not-tensors architecture already chosen on 2026-06-09. The worker image bakes the
-  binary; weights come from R2 at boot like other per-sweep data.
-- **CLI and Python:** a plugin loader in `zenmetrics-cli` (zentract's pattern: a small
-  versioned C ABI taking strided f32 planes plus a model id and returning a score). The
-  cost is one copy per image and no GPU buffer sharing with zenmetrics' own kernels.
-  `zenmetrics-py` links zenmetrics-api, so it needs the plugin too. Subprocess is the
-  first step; the plugin follows.
-- `CliMetricKind` gains `lpips`, `lpips-vgg`, `dists`, …; `METRIC_PROVENANCE.md` and
-  `AIC2026_METRICS_AND_FITTING.md` rows move from "out of scope" as each lands.
+- `CliMetricKind` gains `lpips`, `lpips-vgg`, `dists`, …; `score-pairs` writes them into
+  the normal parquet sidecars, so zenfleet jobexec needs nothing new beyond baking
+  weights into or fetching them alongside the worker image.
+- `METRIC_PROVENANCE.md` and `AIC2026_METRICS_AND_FITTING.md` rows move from "out of
+  scope" as each lands.
 
 ## 3. Performance plan
 
@@ -134,16 +158,16 @@ Two bars, reported separately, both swept over 64²–4096² per the sweep rules
   uploads, batching pairs on GPU, and a **warm reference** for FR metrics (run the
   backbone on the reference once per N candidates, the same pattern as
   `ButteraugliReference`; for N ≥ 2 it removes up to half the backbone work).
-- **Bar B, raw PyTorch fp32 kernels:** CPU is already at parity on VGG with rten. To
-  close the rest:
+- **Bar B, raw PyTorch fp32 kernels:** CPU is already at parity on VGG with rten and
+  ahead with `ort`. To close the rest on the pure-Rust engines:
   1. Fuse tap reductions (LPIPS unit-normalise → diff → 1×1 → spatial mean; DISTS
      moments) so taps are never written out.
   2. Multithreaded ResNet50 on rten (1.28–1.45× gap): profile first; upstream fix or a
      zensr-style hand conv for the hot shapes.
   3. GPU f16, gated on score parity, not assumed.
-  4. Only if fleet GPU throughput demands it: port cubek's implicit-GEMM conv/matmul
-     into zenforks-cubecl. That needs the fork resynced to cubecl 0.11 and published
-     first. It is also the GPU conv zensr's spike said it lacked.
+  4. Only if fleet GPU throughput demands it and `ort` CUDA is not acceptable there:
+     port cubek's implicit-GEMM conv/matmul into zenforks-cubecl (needs the fork resynced
+     to cubecl 0.11). It is also the GPU conv zensr's spike said it lacked.
 
 Report peak RSS and VRAM with every number. Measure on dev (Zen 5, AVX-512) as well as
 i265 before drawing CPU conclusions.
@@ -165,10 +189,14 @@ i265 before drawing CPU conclusions.
   target (the NC crate, AIC columns produced with pyiqa). Its variants differ from
   upstream in places: MUSIQ uses bicubic where Google's code uses TF gaussian resize, up
   to 1.09 MOS apart.
-- **Three gates:** export (ONNX under ORT vs PyTorch), engine (rten and burn vs ORT, per
-  tap), end-to-end (score vs oracle on the golden corpus at CPU fp32 with TF32 off).
-  Tolerances are proposed per metric in `PARITY_TOLERANCES.md` style and need sign-off;
-  never widened silently.
+- **Three gates:** export (ONNX under ORT vs PyTorch), engine (rten, burn and `ort` vs
+  the reference, per tap), end-to-end (score vs oracle on the golden corpus at CPU fp32
+  with TF32 off). Tolerances are proposed per metric in `PARITY_TOLERANCES.md` style and
+  need sign-off; never widened silently.
+- **Goldens are CPU-generated.** i265's RTX 4080 flips a bit every few minutes (owner
+  report; `CLAUDE.md` Known Bugs), so the parity harness reruns every mismatching GPU
+  case automatically, records both runs, and calls a mismatch real only if it
+  reproduces. No single GPU run on that box becomes a golden.
 - **Golden corpus:** CID22 validation subset + KADID/TID pairs + a size ladder
   (32²–4096²). Pooling depth sets a minimum input size per backbone (VGG pools four or
   five times); record it on each card.
@@ -201,9 +229,10 @@ permissive crate. That is a separate project and is not planned here.
    `benchmarks/`.
 2. **Root-cause burn-vulkan's VGG slowness.** It decides whether WebGPU route 1 is
    viable.
-3. **Vertical slice:** LPIPS-vgg end-to-end in Rust (card, export script, rten CPU,
-   burn-cuda, warm reference, parquet sidecar), gated on parity with upstream `lpips`.
-   This sets the template every later model copies.
+3. **Vertical slice:** `crates/zenmetrics-nn` with LPIPS-vgg end to end (card, export
+   script, rten CPU, burn-cuda, `ort` behind its feature, warm reference, `score-pairs`
+   column), gated on parity with upstream `lpips`. This sets the template every later
+   model copies.
 
 ## 8. Spillover to zentract, zensally, zensr
 
@@ -211,6 +240,8 @@ permissive crate. That is a separate project and is not planned here.
   an rten engine behind the same ABI would be 1.14–1.26× faster single-threaded and
   1.3–2.2× multithreaded on these CNNs, and drops tract's assembly build, which needed a
   git pin for Windows-ARM64. Enabling tract's `multithread-mm` is a free interim step.
+  If `zenmetrics-nn`'s engine layer turns out general, it could replace zentract's
+  engine outright.
 - **zensally** (UltraFace, MicroSalNet via tract): tiny nets, so native GPU gains little
   at batch 1. rten would remove the Windows-ARM64 pin and is probably faster
   (extrapolated from these CNNs, not measured on its models). The real gain is
@@ -222,6 +253,7 @@ permissive crate. That is a separate project and is not planned here.
 ## 9. Decisions needed
 
 1. Licence text for `zenmetrics-pyiqa-ports` (proposed: PolyForm Noncommercial 1.0.0).
-2. A new `imazen/zenmetrics-nn` repo, or an excluded workspace inside this repo; and
-   the core crate's name (avoid `zeniqa`-like names).
-3. Counsel: running pyiqa as an internal oracle; ImageNet-trained backbone weights.
+2. The core crate's name (avoid `zeniqa`-like names).
+3. Counsel: running pyiqa as an internal oracle; ImageNet-trained backbone weights;
+   whether an AGPL binary built with the NC crate may be distributed at all, or stays
+   internal.
