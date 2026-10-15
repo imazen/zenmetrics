@@ -5748,6 +5748,25 @@ mod standalone_tests {
     use super::*;
 
     #[test]
+    fn original_author_banded_pins() {
+        // Netflix f85a8536, 17-digit JSON output. Fixture generator:
+        // benchmarks/aic_review_2026-10-15/pin_oracles.py.
+        // 1e-12 covers final f64 rounding; it is far below f32 pool drift.
+        let (w, h) = (256, 256);
+        for (block, step, expected) in [(8, 1, 0.824363696451263), (16, 4, 15.471107781777791)] {
+            let y: Vec<u16> = (0..h)
+                .flat_map(|_| (0..w).map(move |x| (256 + (x / block) * step) as u16))
+                .collect();
+            let actual = cambi_from_luma(&y, w, h, w, 10).unwrap();
+            assert!(actual > 0.0);
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "{actual:.17} != {expected:.17}"
+            );
+        }
+    }
+
+    #[test]
     fn standalone_stride_and_input_validation() {
         let (w, h, stride) = (216, 218, 223);
         let y: Vec<u16> = (0..w * h)

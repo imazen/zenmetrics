@@ -249,3 +249,28 @@ mod tests {
         assert_eq!(value, score(&sr, &sd, w, h, w * 3 + 7, w * 3 + 7).unwrap());
     }
 }
+
+#[cfg(test)]
+mod oracle_tests {
+    use super::*;
+    // Fixture and original-author values: benchmarks/aic_review_2026-10-15/pin_oracles.py.
+    #[test]
+    fn original_author_synthetic_pin() {
+        let (w, h) = (64, 64);
+        let r: Vec<u8> = (0..h)
+            .flat_map(|y| {
+                (0..w).flat_map(move |x| {
+                    (0..3).map(move |c| ((x * 13 + y * 17 + c * 71 + (x * y) % 29) % 256) as u8)
+                })
+            })
+            .collect();
+        let mut d = r.clone();
+        for p in d.iter_mut().step_by(17) {
+            *p ^= 63;
+        }
+        // IVP-Lab notebook e31cb50f, RGB ingress, cv2 5.0 / pywt 1.10.
+        // 1e-15 allows a few f64 Haar/pool rounding ULPs; f32 pooling
+        // or a changed similarity constant exceeds this allowance.
+        assert!((score(&r, &d, w, h, w * 3, w * 3).unwrap() - 0.7486863524749465).abs() < 1e-15);
+    }
+}

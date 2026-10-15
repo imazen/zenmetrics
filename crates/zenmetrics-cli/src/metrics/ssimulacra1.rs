@@ -240,3 +240,28 @@ mod tests {
         assert!(score(&r, &d, 7, h, w * 3, w * 3).is_err());
     }
 }
+
+#[cfg(test)]
+mod oracle_tests {
+    use super::*;
+    // Fixture and original-author values: benchmarks/aic_review_2026-10-15/pin_oracles.py.
+    #[test]
+    fn original_author_synthetic_pin() {
+        let (w, h) = (64, 64);
+        let r: Vec<u8> = (0..h)
+            .flat_map(|y| {
+                (0..w).flat_map(move |x| {
+                    (0..3).map(move |c| ((x * 13 + y * 17 + c * 71 + (x * y) % 29) % 256) as u8)
+                })
+            })
+            .collect();
+        let mut d = r.clone();
+        for p in d.iter_mut().step_by(17) {
+            *p ^= 63;
+        }
+        // Cloudinary 1fa99a46 + OpenCV 4.10, full-precision printf.
+        // This complete-block fixture has no SIMD/area tails. The 1e-12
+        // allowance covers final f64 rounding, not f32 reassociation.
+        assert!((score(&r, &d, w, h, w * 3, w * 3).unwrap() - 0.01399088125957948).abs() < 1e-12);
+    }
+}

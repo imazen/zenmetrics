@@ -708,3 +708,31 @@ mod tests {
         assert!(error_map(&[], &[], 0, 1, 0, 0).is_err());
     }
 }
+
+#[cfg(test)]
+mod oracle_tests {
+    use super::*;
+    // Fixture and original-author values: benchmarks/aic_review_2026-10-15/pin_oracles.py.
+    #[test]
+    fn original_author_synthetic_pin() {
+        let (w, h) = (64, 64);
+        let r: Vec<u8> = (0..h)
+            .flat_map(|y| {
+                (0..w).flat_map(move |x| {
+                    (0..3).map(move |c| ((x * 13 + y * 17 + c * 71 + (x * y) % 29) % 256) as u8)
+                })
+            })
+            .collect();
+        let mut d = r.clone();
+        for p in d.iter_mut().step_by(17) {
+            *p ^= 63;
+        }
+        let actual = error_map(&r, &d, w, h, w * 3, w * 3)
+            .unwrap()
+            .into_iter()
+            .fold(0.0_f32, f32::max);
+        // C++ Google 71b18b63, printf increased to 17 significant digits.
+        // 1e-7 is below one f32 ULP at 2.20: a one-ULP drift fails.
+        assert!((f64::from(actual) - 2.201789379119873).abs() < 1e-7);
+    }
+}
