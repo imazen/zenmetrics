@@ -241,7 +241,7 @@ enhanced_clustering — so we don't wrongly bury a knob that only pays off at e9
 Every /loop tick: re-read the doc's "Current state / next action" and advance the next phase
 (P0 main-effects → P1 crosses → P2 code-the-settled → P3 picker+oracle-gap) rather than drifting.
 
-## burn: GPU-metric kernels ABANDONED ≠ training (separate binary, NOT a graph conflict)
+## burn: GPU-metric kernels ABANDONED ≠ training ≠ NN metrics (one graph is fine; no shared types)
 
 Two *different* questions about burn live in this repo; don't conflate them:
 
@@ -257,15 +257,24 @@ Two *different* questions about burn live in this repo; don't conflate them:
 **Architecture (decided 2026-06-09):** run metric scoring as separate binaries
 that emit **parquet** sidecars; run training as a **separate standalone binary**
 (burn + its own cubecl) that consumes those parquets and bakes ZNPR. They hand
-off **data, not tensors** — so burn and the published **`zenforks-cubecl`** fork
-**never share one cargo graph.** That coexistence problem is sidestepped by
-construction. Do **NOT** add `burn` to this workspace's (zenforks-cubecl) member
-graph: the rename `cubecl = { package = "zenforks-cubecl" }` can't reach burn's
-own `cubecl-core` dep, `[patch]` can re-source but not rename, and the rename
-exists precisely so our GPU crates can be *published* (patch is build-local). The
-only thing that would force one graph is **differentiable metrics** (autodiff
-*through* a zenforks kernel) — not on the table; revisit per
-`crates/burn-ranknet-spike/README.md` if it ever is.
+off **data, not tensors**.
+
+**Coexistence — MEASURED 2026-10-14; replaces the earlier "never share one cargo
+graph / do NOT add burn to this workspace" rule.** burn 0.22 (upstream cubecl
+0.11, wgpu 30) and the zenforks-cubecl crates (0.10.2, wgpu 29) build, link and
+run in ONE binary: `benchmarks/nn_runtime_shootout_2026-10-14/coexist-probe/`
+interleaves burn matmuls with `ssim2-gpu` on CUDA and on wgpu against the same
+RTX 4080, and the ssim2 score was bit-identical across rounds and runs. The
+rename only means burn cannot *use* the fork: no tensors, handles or clients
+cross between them, only host data. Costs: two GPU runtimes, memory pools and
+kernel caches per process (VRAM budgeting must count both), two wgpu versions,
+longer builds. Both sides resolve to ONE `cudarc` (0.19.10, same feature set
+with or without burn as of the probe): re-check
+`cargo tree -i cudarc -f '{p} [{f}]'` whenever either side bumps. burn's deps
+are crates.io, so burn-based crates stay publishable; anything depending on the
+git-pinned fork does not. Autodiff *through* a zenforks kernel (differentiable
+metrics) is still impossible in this arrangement. Owner direction 2026-10-14:
+the NN metric crates live in this workspace — `docs/PYIQA_PORT_PLAN.md`.
 
 **Full ML-strategy write-up:** [`docs/ML_FRAMEWORK_AND_PICKER_ABLATION_2026-06-09.md`](docs/ML_FRAMEWORK_AND_PICKER_ABLATION_2026-06-09.md)
 — the candle/burn/linfa 3-layer verdict, the GBDT teacher/GD-MLP-student framing +
@@ -542,6 +551,29 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
+  `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
+  fixed.** `zenmetrics-gpu-core::Backend` gates its `Wgpu` and `Cpu` variants on
+  gpu-core's own `wgpu`/`cpu` features. When a sibling crate in the same build turns
+  those on, feature unification adds the variants, and `cvvdp-gpu`'s exhaustive matches
+  (`src/memory_mode.rs:131`, `src/opaque.rs:376`, `src/session.rs:70`) fail with
+  E0004 "`Backend::Wgpu` and `Backend::Cpu` not covered". Each crate builds on its own,
+  and `-p zenmetrics-api -p cvvdp-conformance` builds. Repro:
+  `just snap-cargo @ check -p cvvdp-conformance -p dssim-gpu`. Fix direction: give
+  those matches arms for variants cvvdp-gpu was not built for (an error return), as
+  the other `*-gpu` crates already compile under the same unification.
+
+- **i265's RTX 4080 flips a bit every few minutes (owner report, 2026-10-14).**
+  Any GPU result on i265 that disagrees with a reference, a previous run, or
+  another backend must be rerun before it counts as a finding; a mismatch is
+  real only if it reproduces. Parity harnesses run on that box must rerun
+  mismatching cases automatically and report both runs. Do not use a single
+  i265 GPU run as a golden. Timing numbers are unaffected.
+
+- **2026-10-14 — VSI diffmaps were mislabeled at min(w,h) ≥ 384. FIXED (`c9248347`).** VSI.m decimates by `F = round(min(w,h)/256)`. The kernel wrote `⌈w/F⌉ × ⌈h/F⌉` cells into a `w × h` buffer and `VsiDiffmap` reported `w × h`, so every map with `F ≥ 2` was scrambled with a zero tail. The fleet diffmap executor (`jobexec.rs`, `"vsi"` arm, wired in `c110edaf` on 2026-10-13) persisted those maps as `w × h` PFMs. `JobKind::Diffmap` carries no metric revision, so any VSI diffmap blob written between `c110edaf` and the fix for an image with min(w,h) ≥ 384 is wrong and must be deleted and regenerated by hand; re-declaring will not replace it. Regression: `vsi::tests::vsi_diffmap_is_decimated_at_large_sizes`.
+
+- **2026-10-14 — VMAF v1 `speed_chroma_uv` disagrees with libvmaf v3.2.1 on aarch64 macOS. NOT root-caused.** `cargo test -p vmaf --test ffi_fusion full_v1_pixel_scores_match_v321` (default features, so the scalar path) fails on master `a4d0b8fc`: Standard1080p, 8-bit, distorted, frame 0, ours 0.5156307220458984 vs libvmaf 0.2641477584838867 (tolerance 1e-3); cambi, adm3 and motion3 agree. The other 25 FFI parity tests pass. x86 not checked. The tolerance must not be widened; the SPEED chroma port needs fixing.
+
 - **2026-10-13 — cached browser glue/WASM generation mismatch.** An older loader's 25-page shared memory failed against a module requiring 42 pages. Pages assembly now versions the app, coordinator, generated glue, WASM and nested Rayon helpers together (`e05d1c91`). Entry-page/source/compatibility-worker cache rules are disjoint from immutable asset rules (`dee64105`). Browser checks block historical package URLs, exercise an undersized-memory LinkError control, and retain demo/scalar/map/cancellation assertions. WebGPU readiness is a separate compute/readback diagnostic; the selectable browser metrics remain CPU routes.
 
 
@@ -573,6 +605,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 - The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
 - Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
+
+- **2026-10-15 — `just snap-cargo <older-rev>` could return the previous
+  revision's binary. FIXED.** `git archive` stamps exported files with the
+  commit time, so after a build of a newer tree an older revision's sources
+  looked older than cargo's dep-info and cargo skipped the rebuild (found by
+  the nn-opt lane while A/B-benchmarking revisions). `export-snapshot.py` now
+  keeps `<tree>.mtimes.json` (sha256, mode, mtime per file): byte-identical
+  files keep their previous mtime, changed files get one newer than any
+  earlier stamp. Regression: `just lock-snapshot-tests`
+  (`test_revision_switch_restamps_only_changed_files`; fails on the old
+  exporter). Benchmarks taken with `snap-cargo --rev` before this fix may
+  have measured the wrong revision.
 
 - **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
   directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
@@ -1485,3 +1529,14 @@ Preview v0.1. The local native oracle and browser fixture matched exactly.
 The assertion now reports both scalar values and maximum map delta so CI can
 identify the difference. The cause remains unverified; numeric expectations
 and benchmark acceptance are unchanged.
+
+### Browser native map rendering (2026-10-14)
+
+The viewer now consumes native cell geometry for FSIM/FSIMc, HaarPSI, VSI,
+MS-SSIM and GMSD instead of stretching reduced or cropped maps. MS-SSIM's
+five-pixel border has no native samples. HaarPSI's zero-weight windows yield
+NaN local similarity; the browser preserves raw values and marks those cells
+explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
+quality contribution is displayed directly. Regression coverage lives in
+`scripts/checkpoint/check-pages.py`; details and limits in
+[the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).

@@ -1,0 +1,12 @@
+[package]
+name = "coexist-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+burn = { version = "0.22.0", features = ["flex", "cuda", "vulkan", "fusion", "autotune"] }
+ssim2-gpu = { path = "../../../crates/ssim2-gpu", default-features = false, features = ["cuda", "wgpu"] }
+cubecl = { package = "zenforks-cubecl", git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false, features = ["std", "cuda", "wgpu"] }
+[profile.release]
+lto = "thin"

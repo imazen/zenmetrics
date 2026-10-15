@@ -66,6 +66,9 @@ pub struct Iwssim {
     scratch: Scratch,
     /// Cached state from `warm_reference`, if any.
     pub(crate) warm: Option<WarmState>,
+    /// When `Some`, the next full-image score also collects its per-scale
+    /// contrast-structure maps here (the generic surface's map requests).
+    map_sink: Option<Vec<CsMap>>,
 }
 
 /// State cached by `warm_reference`. Holds the per-scale Laplacian
@@ -109,6 +112,7 @@ impl Iwssim {
             work_h,
             scratch,
             warm: None,
+            map_sink: None,
         })
     }
 
@@ -206,6 +210,7 @@ impl Iwssim {
             self.work_w,
             self.work_h,
             &self.params,
+            self.map_sink.as_mut(),
         )
     }
 
@@ -487,6 +492,7 @@ impl Iwssim {
             self.work_w,
             self.work_h,
             &self.params,
+            self.map_sink.as_mut(),
         );
         for v in lp_dis {
             crate::pool::buf_give(v);
@@ -543,12 +549,13 @@ fn score_from_gray(
     work_w: usize,
     work_h: usize,
     params: &IwssimParams,
+    maps: Option<&mut Vec<CsMap>>,
 ) -> Result<IwssimScore> {
     let ref_levels = build_laplacian_pyramid(ref_gray, work_w, work_h, NUM_SCALES);
     let dis_levels = build_laplacian_pyramid(dis_gray, work_w, work_h, NUM_SCALES);
     let lp_ref = split_levels(ref_levels);
     let lp_dis = split_levels(dis_levels);
-    let r = score_with_split(&lp_ref, &lp_dis, work_w, work_h, params);
+    let r = score_with_split(&lp_ref, &lp_dis, work_w, work_h, params, maps);
     for v in lp_ref.into_iter().chain(lp_dis) {
         crate::pool::buf_give(v);
     }
@@ -558,12 +565,25 @@ fn score_from_gray(
 /// Shared back-end that consumes already-split pyramid bands and
 /// produces the final score. Used by both the one-shot and warm-ref
 /// paths.
+/// One scale's contrast-structure map (`cs·l` at the coarsest scale), the
+/// valid-mode `(w_s − 10) × (h_s − 10)` plane the scale's pooling reads.
+pub(crate) struct CsMap {
+    pub(crate) w: usize,
+    pub(crate) h: usize,
+    pub(crate) cs: Vec<f32>,
+    /// The information-content weights this scale's pooling multiplies
+    /// `cs` by, cropped to the same grid (`None` at the top scale and
+    /// without IW pooling).
+    pub(crate) iw: Option<Vec<f32>>,
+}
+
 fn score_with_split(
     lp_ref: &[Vec<f32>],
     lp_dis: &[Vec<f32>],
     work_w: usize,
     work_h: usize,
     params: &IwssimParams,
+    mut maps: Option<&mut Vec<CsMap>>,
 ) -> Result<IwssimScore> {
     let dims = pyramid_dims(work_w, work_h, NUM_SCALES);
 
@@ -624,7 +644,24 @@ fn score_with_split(
         }
     }
 
-    for s in cs_per_scale {
+    for (scale, s) in cs_per_scale.into_iter().enumerate() {
+        if let Some(sink) = maps.as_deref_mut() {
+            // The pooling reads `iw` through the `bound1` crop window.
+            let iw = iw_maps.get(scale).map(|iw| {
+                let mut crop = Vec::with_capacity(s.cs_w * s.cs_h);
+                for r in 0..s.cs_h {
+                    let row = (r + bound1) * iw.w + bound1;
+                    crop.extend_from_slice(&iw.infow[row..row + s.cs_w]);
+                }
+                crop
+            });
+            sink.push(CsMap {
+                w: s.cs_w,
+                h: s.cs_h,
+                cs: s.cs.clone(),
+                iw,
+            });
+        }
         s.release();
     }
     for m in iw_maps {
@@ -654,48 +691,410 @@ const _: () = {
 // Generic Metric surface.
 // ---------------------------------------------------------------------------
 
-/// `Iwssim` implements the generic surface — `RGB8_SRGB` inputs score
-/// via [`Self::score`]; `per_scale` values ride `scores()`. No canonical
-/// upstream map.
-impl zenmetrics_abstractions::Metric for Iwssim {
-    fn name(&self) -> &'static str {
-        "iwssim"
+use zenmetrics_abstractions as za;
+
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::DimensionMismatch { .. } => za::ErrorKind::DimensionMismatch,
+            Error::NoWarmReference => za::ErrorKind::Internal,
+            Error::InvalidImageSize { .. } => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of [`Iwssim`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+const OUTPUTS: &[za::ScoreSpec] = &[
+    za::ScoreSpec::new("iwssim", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_0", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_1", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_2", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_3", za::ScoreKind::Similarity),
+    za::ScoreSpec::new("wmcs_4", za::ScoreKind::Similarity),
+];
+const _: () = assert!(OUTPUTS.len() == NUM_SCALES + 1);
+
+fn za_scalars(s: &IwssimScore) -> za::ScalarEval {
+    let mut out = za::ScalarEval::single("iwssim", s.score);
+    for (spec, &v) in OUTPUTS[1..].iter().zip(&s.per_scale) {
+        out.push(spec.key.clone(), v);
+    }
+    out
+}
+
+fn za_evaluation(s: IwssimScore) -> alloc::boxed::Box<dyn za::Evaluation> {
+    alloc::boxed::Box::new(za_scalars(&s))
+}
+
+/// Map names, finest scale first; the coarsest map includes luminance.
+const CS_NAMES: [&str; NUM_SCALES] = ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4"];
+/// Information-content weight map names, scales 0–3.
+const IW_NAMES: [&str; NUM_SCALES - 1] = ["iw_0", "iw_1", "iw_2", "iw_3"];
+
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(
+    parts: &[(alloc::vec::Vec<f64>, za::MapGeometry)],
+    w: u32,
+    h: u32,
+) -> (alloc::vec::Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (alloc::vec![0f64; n], alloc::vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = alloc::vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = alloc::vec::Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
+/// A scored pair with its per-scale contrast-structure maps.
+struct IwssimMaps {
+    score: IwssimScore,
+    maps: Vec<CsMap>,
+    geometry: Vec<za::MapGeometry>,
+    /// The fused map: see [`IwssimMaps::fused`].
+    diffmap: (Vec<f32>, za::MapGeometry),
+}
+
+impl IwssimMaps {
+    /// Scale `s` samples the input at `2^s·k` (the binom5 `corr_dn` keeps
+    /// even positions), and cell `i` of its valid 11×11 window map is
+    /// centred on scale sample `i + 5`; cells are `2^s`-wide blocks around
+    /// that centre. The value reads the scale's Laplacian band within 5
+    /// samples, and a band sample reads the input within `6·2^s − 2`
+    /// pixels (`2^{s+1} − 2` for the residual lowpass at the top scale):
+    /// halo `11·2^s − 2`, `7·2^s − 2` at the top. When `allow_small`
+    /// tiled a small input up to the working size, values also read the
+    /// wrapped copies, so support is global.
+    fn new(score: IwssimScore, maps: Vec<CsMap>, input: (u32, u32), tiled: bool) -> Self {
+        let geometry = maps
+            .iter()
+            .enumerate()
+            .map(|(s, m)| {
+                let cell = 1u32 << s;
+                let origin = 5 * i64::from(cell) - i64::from(cell / 2);
+                let g = za::MapGeometry::grid(
+                    input.0, input.1, origin, origin, cell, cell, m.w as u32, m.h as u32,
+                );
+                if tiled {
+                    g.with_support(za::Support::Global)
+                } else {
+                    let halo = if s + 1 == NUM_SCALES {
+                        7 * cell - 2
+                    } else {
+                        11 * cell - 2
+                    };
+                    g.with_halo(halo, halo)
+                }
+            })
+            .collect::<Vec<_>>();
+        let diffmap = Self::fused(&maps, &geometry, input);
+        Self {
+            score,
+            maps,
+            geometry,
+            diffmap,
+        }
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    /// IW-SSIM's own breakdown: `−ln IW-SSIM = Σ_s β_s·(−ln wmcs_s)`, each
+    /// scale's term allocated to its windows in proportion to their
+    /// weighted dissimilarity `w·(1 − cs)` (`w` the information-content
+    /// weight, `1` at the top scale), spread over the input pixels each
+    /// window's block covers and cropped to the covered pixels ([`fuse`]).
+    /// Its mean is `−ln IW-SSIM` while every `wmcs_s` lies in `(0, 1)`; a
+    /// scale outside allocates `β_s·w·(1 − cs)/Σw` instead.
+    fn fused(
+        maps: &[CsMap],
+        geometry: &[za::MapGeometry],
+        input: (u32, u32),
+    ) -> (Vec<f32>, za::MapGeometry) {
+        let parts: Vec<_> = maps
+            .iter()
+            .zip(geometry)
+            .enumerate()
+            .map(|(s, (m, g))| {
+                let weight = |i: usize| m.iw.as_ref().map_or(1.0, |w| f64::from(w[i]));
+                let total: f64 = (0..m.cs.len()).map(weight).sum();
+                let mean = (0..m.cs.len())
+                    .map(|i| weight(i) * f64::from(m.cs[i]))
+                    .sum::<f64>()
+                    / total;
+                let factor = if mean > 0.0 && mean < 1.0 {
+                    -mean.ln() / (1.0 - mean)
+                } else {
+                    1.0
+                };
+                let unit = if total > 0.0 {
+                    SCALE_WEIGHTS[s] as f64 * factor / total
+                } else {
+                    0.0
+                };
+                let shares = (0..m.cs.len())
+                    .map(|i| unit * weight(i) * (1.0 - f64::from(m.cs[i])))
+                    .collect();
+                (shares, g.with_support(za::Support::Global))
+            })
+            .collect();
+        fuse(&parts, input.0, input.1)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn diffmap_view(&self) -> Option<za::MapView<'_>> {
+        let (data, g) = &self.diffmap;
+        let px = za::gray_f32_slice(data, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new("diffmap", px, za::MapPolarity::Difference, *g).ok()
+    }
+
+    fn view(&self, s: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry[s];
+        let px = za::gray_f32_slice(&self.maps[s].cs, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(CS_NAMES[s], px, za::MapPolarity::Similarity, g).ok()
+    }
+
+    /// Scale `s`'s weights on the `cs_s` grid. The weights come from the
+    /// whole band's covariance eigendecomposition, so support is global.
+    fn weight_view(&self, s: usize) -> Option<za::MapView<'_>> {
+        let iw = self.maps[s].iw.as_ref()?;
+        let g = self.geometry[s].with_support(za::Support::Global);
+        let px = za::gray_f32_slice(iw, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(IW_NAMES[s], px, za::MapPolarity::Feature, g).ok()
+    }
+}
+
+impl za::Evaluation for IwssimMaps {
+    fn score(&self) -> f64 {
+        self.score.score
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(za_scalars(&self.score).named.into_iter())
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        let cs = (0..self.maps.len()).filter_map(|s| self.view(s));
+        let iw = (0..self.maps.len()).filter_map(|s| self.weight_view(s));
+        cs.chain(iw).chain(self.diffmap_view()).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
+
+impl Iwssim {
+    /// Run `score` with the map sink armed; the sink is always disarmed
+    /// again, whatever `score` returns.
+    fn za_with_maps(
+        &mut self,
+        req: za::MapRequest,
+        score: impl FnOnce(&mut Self) -> Result<IwssimScore>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        self.map_sink = Some(Vec::new());
+        let scored = score(self);
+        let maps = self.map_sink.take().unwrap_or_default();
+        let s = scored.metric_err_with("iwssim", Error::kind)?;
+        let tiled = (self.work_w, self.work_h) != (self.width as usize, self.height as usize);
+        let eval = IwssimMaps::new(s, maps, (self.width, self.height), tiled);
+        za::apply_map_request(alloc::boxed::Box::new(eval), req)
+    }
+
+    /// Re-plan for a `w × h` input when it differs from the configured
+    /// size (keeping the params), so the generic surface takes any size.
+    fn za_fit(&mut self, w: usize, h: usize) -> za::MetricResult<()> {
+        use za::ResultMetricExt as _;
+        if (self.width as usize, self.height as usize) != (w, h) {
+            *self = Iwssim::with_params(w as u32, h as u32, self.params)
+                .metric_err_with("iwssim", Error::kind)?;
+        }
+        Ok(())
+    }
+}
+
+/// `Iwssim` implements the generic surface on packed `RGB8_SRGB`, re-planning
+/// when the input size differs from the constructed one. `per_scale` values
+/// ride `scores()` as `wmcs_0..4`. [`za::Metric::warm_reference`] reuses the
+/// reference pyramid ([`Iwssim::warm_reference`]); warm candidates serve maps
+/// too, bit-identical to cold ones.
+///
+/// Maps, on request: the per-scale contrast-structure maps the scales pool,
+/// `cs_0` (finest, primary) … `cs_3` and `csl_4` (coarsest, `cs·l`), each the
+/// valid 11×11-window `(w_s − 10) × (h_s − 10)` plane at scale `s`
+/// ([`za::MapPolarity::Similarity`], `1` = identical). Scales 0–3 pool their
+/// map with the information-content weights, the top scale by its plain
+/// mean, and the score is `Π wmcs_s^β_s`: these are per-scale components,
+/// not a per-pixel IW-SSIM. With IW pooling on, `iw_0` … `iw_3` follow: the
+/// weights on the same grids (`wmcs_s = Σ cs·iw / Σ iw`), mutual-information
+/// pooling weights with no match direction ([`za::MapPolarity::Feature`],
+/// global support). Last, `diffmap`: IW-SSIM's own breakdown at input
+/// resolution, `−ln IW-SSIM = Σ_s β_s·(−ln wmcs_s)` with each scale's term
+/// allocated to its windows in proportion to `iw·(1 − cs)` (see
+/// `IwssimMaps::fused`; [`za::MapPolarity::Difference`], global support,
+/// mean `−ln IW-SSIM` while every `wmcs_s` is in `(0, 1)`).
+impl za::Metric for Iwssim {
+    fn id(&self) -> za::MetricId {
+        let p = &self.params;
+        za::MetricId::new("iwssim", za::implementation!(SCORE_REVISION))
+            .with_reference("Python-IW-SSIM f9de37cd (Wang & Li 2011)")
+            .with_config("iw_flag", p.iw_flag)
+            .with_config("bl_sz", alloc::format!("{}x{}", p.bl_sz_x, p.bl_sz_y))
+            .with_config("parent", p.parent)
+            .with_config("sigma_nsq", p.sigma_nsq)
+            .with_config("allow_small", p.allow_small)
+            .with_config("luma", alloc::format!("{:?}", p.luma))
+    }
+
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
+    }
+
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        self.za_fit(r.width, r.height)?;
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        if let Some(req) = opts.map {
+            return self.za_with_maps(req, |m| m.score(&rp, &dp));
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (
-            zenmetrics_abstractions::contiguous_rgb8(&r),
-            zenmetrics_abstractions::contiguous_rgb8(&d),
-        );
-        let s = self.score(&rp, &dp).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let mut out = zenmetrics_abstractions::ScalarEval::single("iwssim", s.score);
-        for (i, &v) in s.per_scale.iter().enumerate() {
-            out.push(alloc::format!("wmcs_{i}"), v);
+        let s = self
+            .score(&rp, &dp)
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(za_evaluation(s))
+    }
+
+    fn warm_reference<'m>(
+        &'m mut self,
+        r: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::WarmReference + 'm>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let r = za::rgb8_view(&r)?;
+        self.za_fit(r.width, r.height)?;
+        self.warm_reference(&za::contiguous_rgb8(&r))
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(alloc::boxed::Box::new(IwssimWarm { metric: self }))
+    }
+}
+
+/// A warmed [`Iwssim`]: candidates reuse the reference pyramid.
+struct IwssimWarm<'m> {
+    metric: &'m mut Iwssim,
+}
+
+impl za::WarmReference for IwssimWarm<'_> {
+    fn evaluate(
+        &mut self,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let d = za::rgb8_view(&d)?;
+        if (d.width, d.height) != (self.metric.width as usize, self.metric.height as usize) {
+            return za::fail(
+                za::MetricError::new(za::ErrorKind::DimensionMismatch)
+                    .with_metric("iwssim")
+                    .with_message(alloc::format!(
+                        "warm reference {}x{}, candidate {}x{}",
+                        self.metric.width,
+                        self.metric.height,
+                        d.width,
+                        d.height
+                    )),
+            );
         }
-        Ok(alloc::boxed::Box::new(out))
+        let dp = za::contiguous_rgb8(&d);
+        if let Some(req) = opts.map {
+            return self
+                .metric
+                .za_with_maps(req, |m| m.score_with_warm_ref(&dp));
+        }
+        let s = self
+            .metric
+            .score_with_warm_ref(&dp)
+            .metric_err_with("iwssim", Error::kind)?;
+        Ok(za_evaluation(s))
+    }
+
+    fn reuses_reference_work(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(test)]
+mod za_tests {
+    use super::*;
+
+    #[test]
+    fn generic_surface_conforms_and_warm_reuses() {
+        // allow_small lets the conformance pair stay cheap; the warm path
+        // must still be bit-identical to cold scoring.
+        let params = IwssimParams {
+            allow_small: true,
+            ..IwssimParams::default()
+        };
+        let mut m = Iwssim::with_params(8, 8, params).unwrap();
+        za::conformance::assert_conforms_rgb8(&mut m, 64, 48);
+        let a = za::conformance::textured_rgb8(64, 48, 9);
+        let warm = za::Metric::warm_reference(
+            &mut m,
+            za::conformance::rgb8_image(&a, 64, 48),
+            za::EvalOpts::SCORE_ONLY,
+        )
+        .unwrap();
+        assert!(warm.reuses_reference_work());
     }
 }

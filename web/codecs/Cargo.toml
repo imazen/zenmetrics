@@ -1,0 +1,38 @@
+# Encoder modules for the browser viewer (web/metrics), fetched by its worker
+# only when an encoder is chosen. A workspace of its own, apart from the
+# zenmetrics workspace and its sibling pins: the JPEG XL module needs
+# jxl-encoder's external loop metric, which the CLI's pinned jxl-encoder
+# predates, and moving that pin would change benchmark encodes. Every zen
+# crate comes from git at the revision below; Cargo.lock records the rest.
+# Build: scripts/checkpoint/build-codecs.sh.
+[workspace]
+resolver = "3"
+members = ["jxl", "avif", "webp"]
+
+[workspace.package]
+edition = "2024"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[workspace.dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "0.3.79"
+console_error_panic_hook = "0.1.7"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+panic = "abort"
+
+[patch.crates-io]
+# jxl-encoder main with the loop trace and external loop metric
+# (imazen/jxl-encoder#129, #130), which the CLI's pinned revision predates.
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "a8c11520127ae2567cfd45f81ba0a0418f06c612" }
+# jxl-encoder's own pins (its .github/sibling-revisions.tsv and root patch).
+butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "d2466a4eaad67f8008838c0caa452484300214ca" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "b6948915e2d4e74dfb86b06bc42a997353c1fed6" }
+# The CLI's pins (ci/sibling-pins.tsv), so browser WebP and AVIF encode with
+# the revisions the sweeps use.
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "8aa8a7858b97da88f0ba7d9027f8b6108d999196" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "4d9990374e5eb4abe59bf330827150ff32375597" }

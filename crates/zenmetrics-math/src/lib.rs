@@ -19,6 +19,10 @@ pub use policy::{MathPolicy, Midp};
 pub use {
     vexp_into as vexp_into_slice, vlog_into as vlog_into_slice, vpow_into as vpow_into_slice,
 };
+/// Bit-exact lane ports of `libm` functions (opt-in; not a [`MathPolicy`]).
+pub mod fdlibm;
+/// Bit-exact `f64x4` lane ports of `libm` functions (opt-in).
+pub mod fdlibm64;
 pub mod par;
 #[macro_use]
 mod kernels;
@@ -257,6 +261,54 @@ pub(crate) fn vpow_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]
     width8::vpow_kernel::<_, Midp>(token, xs, out, p);
 }
 
+pub(crate) fn vpow_libm_into_gated_scalar_t<const G: u8>(
+    token: ScalarToken,
+    xs: &[f32],
+    out: &mut [f32],
+    p: f32,
+) {
+    fdlibm::vpow_libm_kernel_8::<G, _>(token, xs, out, p);
+}
+
+pub(crate) fn vpowf_libm_pairs_into_gated_scalar_t<const G: u8>(
+    token: ScalarToken,
+    xs: &[f32],
+    ys: &[f32],
+    out: &mut [f32],
+) {
+    fdlibm::vpowf_libm_pairs_kernel_8::<G, _>(token, xs, ys, out);
+}
+
+pub(crate) fn vpow64_libm_into_gated_scalar_t<const G: u8>(
+    token: ScalarToken,
+    xs: &[f64],
+    out: &mut [f64],
+    p: f64,
+) {
+    fdlibm64::vpow64_libm_kernel_4::<G, _>(token, xs, out, p);
+}
+
+pub(crate) fn vpow64_libm_pairs_into_gated_scalar_t<const G: u8>(
+    token: ScalarToken,
+    xs: &[f64],
+    ys: &[f64],
+    out: &mut [f64],
+) {
+    fdlibm64::vpow64_libm_pairs_kernel_4::<G, _>(token, xs, ys, out);
+}
+
+pub(crate) fn vexpf_libm_into_scalar_t(token: ScalarToken, xs: &[f32], out: &mut [f32]) {
+    fdlibm::vexpf_libm_kernel_8(token, xs, out);
+}
+
+pub(crate) fn vlog_libm_into_scalar_t(token: ScalarToken, xs: &[f64], out: &mut [f64]) {
+    fdlibm64::vlog_libm_kernel_4(token, xs, out);
+}
+
+pub(crate) fn vlog2_libm_into_scalar_t(token: ScalarToken, xs: &[f64], out: &mut [f64]) {
+    fdlibm64::vlog2_libm_kernel_4(token, xs, out);
+}
+
 pub(crate) fn vaxpy_into_scalar_t(token: ScalarToken, dst: &mut [f32], src: &[f32], a: f32) {
     width8::vaxpy_kernel::<_, Midp>(token, dst, src, a);
 }
@@ -487,6 +539,118 @@ pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
     debug_assert_eq!(xs.len(), out.len());
     archmage::attuned!(
         vpow_into(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::powf(xs[i], p)`, bit-identical to the scalar call on
+/// every input. The vector path covers positive finite `xs` with a moderate
+/// `p`; any other lane falls back to scalar `libm::powf`.
+#[inline]
+pub fn vpow_libm_into(xs: &[f32], out: &mut [f32], p: f32) {
+    vpow_libm_into_gated::<{ fdlibm::coverage::EXACT }>(xs, out, p)
+}
+
+/// `out[i] = libm::powf(xs[i], p)` under coverage gate `G`
+/// ([`fdlibm::coverage`] named tiers). `EXACT` is bit-identical to the
+/// scalar call on every input; narrower gates are caller domain promises
+/// — e.g. `POSITIVE_FINITE` when `x > 0` and finite is known at the call
+/// site. Each cleared bit compiles out that class of bookkeeping; measured
+/// cost table in `fdlibm::coverage` and the `powf_coverage_bench` example.
+#[inline]
+pub fn vpow_libm_into_gated<const G: u8>(xs: &[f32], out: &mut [f32], p: f32) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vpow_libm_into_gated::<G>(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::powf(xs[i], ys[i])`, bit-identical to the scalar call on
+/// every input.
+#[inline]
+pub fn vpowf_libm_pairs_into(xs: &[f32], ys: &[f32], out: &mut [f32]) {
+    vpowf_libm_pairs_into_gated::<{ fdlibm::coverage::EXACT }>(xs, ys, out)
+}
+
+/// `out[i] = libm::powf(xs[i], ys[i])` under coverage gate `G`.
+#[inline]
+pub fn vpowf_libm_pairs_into_gated<const G: u8>(xs: &[f32], ys: &[f32], out: &mut [f32]) {
+    assert_eq!(xs.len(), out.len());
+    assert_eq!(ys.len(), out.len());
+    archmage::attuned!(
+        vpowf_libm_pairs_into_gated::<G>(xs, ys, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::pow(xs[i], p)`, bit-identical to the scalar call on
+/// every input. The vector path covers positive finite normal `xs` with a
+/// moderate `p`; any other lane falls back to scalar `libm::pow`.
+#[inline]
+pub fn vpow64_libm_into(xs: &[f64], out: &mut [f64], p: f64) {
+    vpow64_libm_into_gated::<{ fdlibm::coverage::EXACT }>(xs, out, p)
+}
+
+/// `out[i] = libm::pow(xs[i], p)` under coverage gate `G`.
+#[inline]
+pub fn vpow64_libm_into_gated<const G: u8>(xs: &[f64], out: &mut [f64], p: f64) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vpow64_libm_into_gated::<G>(xs, out, p),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::pow(xs[i], ys[i])`, bit-identical to the scalar call on
+/// every input.
+#[inline]
+pub fn vpow64_libm_pairs_into(xs: &[f64], ys: &[f64], out: &mut [f64]) {
+    vpow64_libm_pairs_into_gated::<{ fdlibm::coverage::EXACT }>(xs, ys, out)
+}
+
+/// `out[i] = libm::pow(xs[i], ys[i])` under coverage gate `G`.
+#[inline]
+pub fn vpow64_libm_pairs_into_gated<const G: u8>(xs: &[f64], ys: &[f64], out: &mut [f64]) {
+    assert_eq!(xs.len(), out.len());
+    assert_eq!(ys.len(), out.len());
+    archmage::attuned!(
+        vpow64_libm_pairs_into_gated::<G>(xs, ys, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::expf(xs[i])`, bit-identical to the scalar call on every
+/// input — the e_expf port handles all branches in lanes (`force_eval`
+/// produces no value bits), so there is no scalar fallback.
+#[inline]
+pub fn vexpf_libm_into(xs: &[f32], out: &mut [f32]) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vexpf_libm_into(xs, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::log(xs[i])`, bit-identical to the scalar call on every
+/// input. Positive finite `x` (subnormals included) runs in vector; `x <= 0`
+/// lanes fall back to scalar `libm::log`.
+#[inline]
+pub fn vlog_libm_into(xs: &[f64], out: &mut [f64]) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vlog_libm_into(xs, out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    )
+}
+
+/// `out[i] = libm::log2(xs[i])`, bit-identical to the scalar call on every
+/// input.
+#[inline]
+pub fn vlog2_libm_into(xs: &[f64], out: &mut [f64]) {
+    assert_eq!(xs.len(), out.len());
+    archmage::attuned!(
+        vlog2_libm_into(xs, out),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
@@ -1000,6 +1164,10 @@ pub(crate) fn gather_lerp_exp3_apply_scalar_t(
     )
 }
 
+#[cfg(test)]
+mod fdlibm64_tests;
+#[cfg(test)]
+mod fdlibm_tests;
 #[cfg(test)]
 mod tier_tests;
 

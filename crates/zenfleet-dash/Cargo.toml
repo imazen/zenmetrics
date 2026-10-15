@@ -7,6 +7,8 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description = "Railway-deployable dashboard + control API for the zen job system. Reads the Parquet ledger / blob index / heartbeats; never runs workers."
+# web/src/components/ui/ started from shadcn/ui templates (MIT):
+# `web/src/components/ui/LICENSE-shadcn`.
 license = "MIT OR Apache-2.0"
 
 [lib]

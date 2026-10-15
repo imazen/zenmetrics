@@ -56,6 +56,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 use alloc::vec::Vec;
 
 #[cfg(feature = "parallel")]
@@ -81,8 +83,7 @@ pub enum Error {
     ImageTooSmall,
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// Stable column-name identifier for sweep sidecars:
 /// `mdctpsnr_imazen_v<MAJOR>_<MINOR>_<PATCH>` (overridable at build time
@@ -1517,9 +1518,11 @@ fn aan_1d(b: &[f32; 8]) -> [f32; 8] {
 
 /// `aan_1d` with 8 consecutive window positions in the `f32x8` lanes —
 /// identical arithmetic per lane, so each position's coefficients are
-/// bit-identical to the scalar butterfly.
+/// bit-identical to the scalar butterfly. `#[inline(always)]`: called
+/// 16× per `run_dct_soa8` — a dispatch boundary would materialize the
+/// 256 B `&[V; 8]` argument per call.
 #[cfg(target_arch = "x86_64")]
-#[attune(v3)]
+#[inline(always)]
 fn aan_1d_x8(token: X64V3Token, b: &[f32x8<X64V3Token>; 8]) -> [f32x8<X64V3Token>; 8] {
     type V = f32x8<X64V3Token>;
     let s22 = V::splat_t(token, SQRT2_2);
@@ -1579,8 +1582,9 @@ fn run_dct_soa_v3_t(token: X64V3Token, comp: &mut Component) {
 /// `[float32x4_t; 2]` pair, so the butterfly runs the identical per-lane
 /// op order at half the per-instruction width. `mul_add` lowers to
 /// `vfmaq` (single-rounded), same contract as the v3 `fm`.
+/// `#[inline(always)]` — see `aan_1d_x8`.
 #[cfg(all(feature = "std", target_arch = "aarch64"))]
-#[attune]
+#[inline(always)]
 fn aan_1d_x8_neon(token: NeonToken, b: &[f32x8<NeonToken>; 8]) -> [f32x8<NeonToken>; 8] {
     type V = f32x8<NeonToken>;
     let s22 = V::splat_t(token, SQRT2_2);
@@ -1648,22 +1652,19 @@ fn run_dct_soa8_neon(token: NeonToken, comp: &mut Component, i0: usize) {
             b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
-    let mut v = [[V::zero_t(token); 8]; 8];
-    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
-        [
-            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
-        ]
-    })
-    .into_iter()
-    .enumerate()
-    {
-        let cv = aan_1d_x8_neon(token, &col);
-        for (k, &c) in cv.iter().enumerate() {
-            v[k][x] = c;
-        }
-    }
-    for (vix, row) in v.iter().enumerate() {
-        let hv = aan_1d_x8_neon(token, row);
+    // Pass 1 (vertical): `vx[x][k]` — built by `from_fn`, see the x86
+    // twin for the rationale (a zero-init pass preceded every block).
+    let vx: [[V; 8]; 8] = core::array::from_fn(|x| {
+        aan_1d_x8_neon(
+            token,
+            &[
+                b[0][x], b[1][x], b[2][x], b[3][x], b[4][x], b[5][x], b[6][x], b[7][x],
+            ],
+        )
+    });
+    for vix in 0..8 {
+        let row: [V; 8] = core::array::from_fn(|x| vx[x][vix]);
+        let hv = aan_1d_x8_neon(token, &row);
         for (u, &c) in hv.iter().enumerate() {
             c.store(
                 comp.bands[u][vix].next_row[i0..][..8]
@@ -1716,26 +1717,23 @@ fn run_dct_soa8(token: X64V3Token, comp: &mut Component, i0: usize) {
             b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
-    // Pass 1 (vertical): `aan_1d` per column — `v[k][x]` lane `j` is
-    // vertical frequency `k` of column `x` at position `i0+j`.
-    let mut v = [[V::zero_t(token); 8]; 8];
-    for (x, col) in core::array::from_fn::<_, 8, _>(|y| {
-        [
-            b[0][y], b[1][y], b[2][y], b[3][y], b[4][y], b[5][y], b[6][y], b[7][y],
-        ]
-    })
-    .into_iter()
-    .enumerate()
-    {
-        let cv = aan_1d_x8(token, &col);
-        for (k, &c) in cv.iter().enumerate() {
-            v[k][x] = c;
-        }
-    }
+    // Pass 1 (vertical): `aan_1d` per column — `vx[x][k]` lane `j` is
+    // vertical frequency `k` of column `x` at position `i0+j`. Built by
+    // `from_fn` so no zero-init pass precedes it (a 2 KB memset per
+    // position block was ~10 % of this kernel's time).
+    let vx: [[V; 8]; 8] = core::array::from_fn(|x| {
+        aan_1d_x8(
+            token,
+            &[
+                b[0][x], b[1][x], b[2][x], b[3][x], b[4][x], b[5][x], b[6][x], b[7][x],
+            ],
+        )
+    });
     // Pass 2 (horizontal): `aan_1d` per vertical-frequency row —
     // `hv[u]` is horizontal frequency `u`, stored contiguously.
-    for (vix, row) in v.iter().enumerate() {
-        let hv = aan_1d_x8(token, row);
+    for vix in 0..8 {
+        let row: [V; 8] = core::array::from_fn(|x| vx[x][vix]);
+        let hv = aan_1d_x8(token, &row);
         for (u, &c) in hv.iter().enumerate() {
             c.store(
                 comp.bands[u][vix].next_row[i0..][..8]
@@ -1995,6 +1993,20 @@ pub fn mdct_psnr_srgb8(
     width: usize,
     height: usize,
 ) -> Result<f32, Error> {
+    score_impl(reference, distorted, width, height, None)
+}
+
+/// [`mdct_psnr_srgb8`]; with `map`, also appends each measured line's
+/// per-position detection probability `1 − errorline[i]` — exactly the
+/// terms the score sums — after that line's sums are taken: `W−13` values
+/// per line, `H−12` lines, row-major.
+fn score_impl(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    mut map: Option<&mut Vec<f32>>,
+) -> Result<f32, Error> {
     if reference.len() != width * height * 3 || distorted.len() != width * height * 3 {
         return Err(Error::LengthMismatch);
     }
@@ -2234,7 +2246,10 @@ pub fn mdct_psnr_srgb8(
                 // every element's `*=` sequence in the serial (c,yy,x)
                 // band order — bit-identical to the serial loop.
                 let w = errorline.len();
-                let stripes = (rayon::current_num_threads() * 2).min(w.max(1));
+                // Each stripe re-iterates all 384 band planes, so keep
+                // spans ≥128 elems for the v3 kernel's 8-lane runs to
+                // amortize per-band prologue/tail work.
+                let stripes = (w / 128).max(1).min(rayon::current_num_threads() * 2);
                 let stripe_len = w.div_ceil(stripes);
                 let (cr, cd) = (&img_r.comps, &img_d.comps);
                 errorline
@@ -2309,6 +2324,9 @@ pub fn mdct_psnr_srgb8(
                         error64 += (1.0 - e) as f64;
                     }
                 }
+            }
+            if let Some(m) = map.as_deref_mut() {
+                m.extend(errorline.iter().map(|&e| 1.0 - e));
             }
             #[cfg(feature = "std")]
             if std::env::var_os("DUMPEL").is_some() {
@@ -2452,6 +2470,68 @@ pub fn mdct_psnr_jnd(score_db: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The reference's per-line `error += 1 − errorline[i]` fold (the
+    /// vectorized order `score_impl` reproduces), run over the map's rows.
+    fn fold_rows(map: &[f32], w13: usize) -> f32 {
+        let mut error = 0.0f32;
+        for row in map.chunks_exact(w13) {
+            let (n8, rem) = (w13 & !7, w13 & 7);
+            let mut vacc = [0.0f32; 8];
+            for c in row[..n8].as_chunks::<8>().0 {
+                for j in 0..8 {
+                    vacc[j] += c[j];
+                }
+            }
+            let mut x5 = [
+                vacc[0] + vacc[4],
+                vacc[1] + vacc[5],
+                vacc[2] + vacc[6],
+                vacc[3] + vacc[7],
+            ];
+            if rem >= 4 {
+                for j in 0..4 {
+                    x5[j] += row[n8 + j];
+                }
+            }
+            error += (x5[0] + x5[2]) + (x5[1] + x5[3]);
+            for &t in &row[if rem >= 4 { n8 + 4 } else { n8 }..] {
+                error += t;
+            }
+        }
+        error
+    }
+
+    /// The detection map holds exactly the terms the score sums: folding
+    /// its rows in the reference order reproduces the score's bits, and
+    /// requesting it leaves the score unchanged.
+    #[test]
+    fn detection_map_folds_to_the_score_exactly() {
+        for (w, h) in [(64usize, 48usize), (37, 29), (14, 14), (100, 23), (45, 61)] {
+            let a: Vec<u8> = (0..w * h * 3)
+                .map(|i| ((i * 37 + i / (3 * w) * 11) % 256) as u8)
+                .collect();
+            let b: Vec<u8> = a
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| if i % 7 == 0 { v.wrapping_add(23) } else { v })
+                .collect();
+            let plain = mdct_psnr_srgb8(&a, &b, w, h).unwrap();
+            let mut map = Vec::new();
+            let mapped = score_impl(&a, &b, w, h, Some(&mut map)).unwrap();
+            assert_eq!(mapped.to_bits(), plain.to_bits(), "{w}x{h}");
+            assert_eq!(map.len(), (w - 13) * (h - 12));
+            assert!(map.iter().all(|&p| (0.0..=1.0).contains(&p)));
+            let error = fold_rows(&map, w - 13);
+            let (fw, fh) = ((w - 13) as f32, (h - 13) as f32);
+            let folded = -20.0 * lf(error / (fw * fh * 3.0)) / lf(10.0);
+            assert_eq!(
+                folded.to_bits(),
+                plain.to_bits(),
+                "{w}x{h}: {folded} vs {plain}"
+            );
+        }
+    }
 
     /// Identical images → detection error 0 → `−20·log10(0)` = +inf, as
     /// the reference computes it.
@@ -2617,46 +2697,109 @@ mod tests {
 /// The mDCT-PSNR metric as a generic scorer — accepts `RGB8_SRGB`
 /// `PixelSlice` inputs (strided repacked). Headline is dB PSNR — `+inf`
 /// on identical inputs, matching `dctpsnr` default output.
+///
+/// Map, on request: `detection`, the probability that the difference at
+/// each measured window position is detected —
+/// `1 − Π exp(−(|Δc|·vis·mask)^3.5)` over the 195 band/component terms —
+/// one value per sliding-window position: `W−13` per line, `H−12` lines
+/// ([`za::MapPolarity::DetectionProbability`]; `0` = identical). These are
+/// exactly the terms the score sums: `score = −20·log10(Σ/((W−13)(H−13)·3))`.
+/// Cell `(i, j)` scores the 8×8 block at `(i+2, j+3)` with masking from
+/// the 5×5 block positions around it, i.e. input pixels
+/// `[i, i+12) × [j+1, j+13)`; it owns pixel `(i+5, j+6)` (the block's
+/// upper-left centre pixel) and reaches 6 pixels around it.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MdctPsnr;
 
-impl zenmetrics_abstractions::Metric for MdctPsnr {
-    fn name(&self) -> &'static str {
-        "mdctpsnr"
+/// A scored pair with its detection map.
+struct MdctPsnrMap {
+    score: f32,
+    detection: alloc::vec::Vec<f32>,
+    geometry: za::MapGeometry,
+}
+
+impl za::Evaluation for MdctPsnrMap {
+    fn score(&self) -> f64 {
+        f64::from(self.score)
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Decibels
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("mdctpsnr"),
+            f64::from(self.score),
+        )))
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let g = self.geometry;
+        let px = za::gray_f32_slice(&self.detection, g.cells_x, g.cells_y).ok()?;
+        za::MapView::new("detection", px, za::MapPolarity::DetectionProbability, g).ok()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
+
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::LengthMismatch => za::ErrorKind::InvalidInput,
+            Error::ImageTooSmall => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for MdctPsnr {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("mdctpsnr", za::implementation!(SCORE_REVISION))
+            .with_reference("mDCTpsnr dctpsnr (Richter 2009), default build")
+            .with_config("color", "linear")
+            .with_config("detection", "ahumada")
+    }
+
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("mdctpsnr", za::ScoreKind::Decibels)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
+    }
+
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        let (rp, dp) = (za::contiguous_rgb8(&r), za::contiguous_rgb8(&d));
+        if let Some(req) = opts.map {
+            let mut detection = alloc::vec::Vec::new();
+            let score = score_impl(&rp, &dp, r.width, r.height, Some(&mut detection))
+                .metric_err_with("mdctpsnr", Error::kind)?;
+            opts.checkpoint()?;
+            let (w, h) = (r.width as u32, r.height as u32);
+            let geometry = za::MapGeometry::grid(w, h, 5, 6, 1, 1, w - 13, h - 12).with_halo(6, 6);
+            let eval = MdctPsnrMap {
+                score,
+                detection,
+                geometry,
+            };
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let (rp, dp) = (
-            zenmetrics_abstractions::contiguous_rgb8(&r),
-            zenmetrics_abstractions::contiguous_rgb8(&d),
-        );
-        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(alloc::boxed::Box::new(
-            zenmetrics_abstractions::ScalarEval::single("mdctpsnr", s as f64),
-        ))
+        let s = mdct_psnr_srgb8(&rp, &dp, r.width, r.height)
+            .metric_err_with("mdctpsnr", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single(
+            "mdctpsnr",
+            f64::from(s),
+        )))
     }
 }

@@ -296,6 +296,10 @@ worker-clippy:
 lock-check *args:
     bash scripts/ci/lock.sh --check {{args}}
 
+# Every remote branch and open PR with a verdict (merged/stale/conflict/...); read-only.
+branch-status *args:
+    python3 scripts/ci/branch_status.py {{args}}
+
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
 
@@ -559,3 +563,11 @@ viewer-check site oracle report:
 # Assemble the matching current-source viewer (not an old checkpoint frontend).
 viewer-site build source out:
     python3 scripts/checkpoint/prepare-pages.py --build '{{build}}' --source '{{source}}' --out '{{out}}'
+
+# Crate-scoped statistical API validation in the pinned dependency snapshot.
+stats-helpers-check:
+    just snap-cargo @ test -p zenmetrics-stats
+    just snap-cargo @ clippy -p zenmetrics-stats --all-targets -- -D warnings
+
+stats-helpers-serial-check:
+    just snap-cargo @ test -p zenmetrics-stats --no-default-features

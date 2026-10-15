@@ -84,3 +84,5 @@ pub use panel::{
     pwrc_sa_st_auc, ranks, rescale_logistic, sa_st_curve, spearman, two_sided_p, z_rmse,
     z_rmse_per_sample,
 };
+
+pub use special::{student_t_quantile, student_t_upper_tail};

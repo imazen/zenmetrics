@@ -547,9 +547,15 @@ fn gmsd_diffmap_matches_score() {
     let (mw, mh) = crate::map_dims(w, h);
     assert_eq!((dm.width as usize, dm.height as usize), (mw, mh));
     assert_eq!(dm.map().len(), mw * mh);
+    let view = Evaluation::map(&dm).expect("map");
     assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
+    assert_eq!((view.width() as usize, view.height() as usize), (mw, mh));
+    assert_eq!(
+        view.geometry.cell_rect(1, 1).map(|r| (r.x, r.y, r.width)),
+        Some((2, 2, 2))
     );
     assert_eq!(dm.score(), score.gmsd);
     // scores() carries the map mean as mean_gms; std-of-map == headline.
@@ -562,4 +568,10 @@ fn gmsd_diffmap_matches_score() {
         "std(map)={folded} vs gmsd={}",
         score.gmsd
     );
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut Gmsd, 40, 30);
 }

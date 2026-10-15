@@ -197,7 +197,7 @@ impl MPlan {
         // that's [2,2] + (2,3)⁴: five passes instead of seven.
         let mut radices = Vec::with_capacity(a + b);
         let (mut aa, mut bb) = (a, b);
-        radices.extend(std::iter::repeat_n(2, aa.min(2)));
+        radices.extend(core::iter::repeat_n(2, aa.min(2)));
         aa = aa.saturating_sub(2);
         while bb > 0 && aa > 0 {
             radices.push(2);

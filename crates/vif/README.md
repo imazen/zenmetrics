@@ -78,3 +78,9 @@ SIMD tiers (scalar / AVX2 / AVX-512 / NEON / wasm128), dispatched on
 first call.
 
 Optimization measurements and profiles: [2026-10-12 report](benchmarks/vif_2026-10-12.md).
+
+## Third-party notices
+
+This crate ports the LIVE/UT Austin VIF releases, whose copyright notice must
+appear in all copies: [`LICENSE-live-vif`](LICENSE-live-vif). `vifvec` reproduces
+matlabPyrTools' `sp5Filters` taps (MIT): [`LICENSE-matlabPyrTools`](LICENSE-matlabPyrTools).

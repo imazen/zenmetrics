@@ -6,6 +6,8 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+# Follows SSIMULACRA2 (cloudinary BSD-3, rust-av BSD-2, libjxl BSD-3):
+# `LICENSE-ssimulacra2`; PU21 parameters (BSD-3): `LICENSE-pu21`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false

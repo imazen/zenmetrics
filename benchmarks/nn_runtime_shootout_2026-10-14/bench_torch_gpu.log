@@ -1,0 +1,7 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=25077MiB :: venv-cu/bin/python -I scripts/bench_gpu.py models 30
+# torch 2.11.0+cu128 cudnn 91900 ort 1.31.0 gpu NVIDIA GeForce RTX 4080 iters=30
+vgg16lpips_256	torch_fp32 min=1.44 med=1.45ms	torch_tf32 min=1.46 med=1.48ms	torch_fp16_cl min=0.86 med=0.87ms	ort_cuda_fp32(full readback) min=5.65 med=5.79ms
+vgg16lpips_512	torch_fp32 min=4.84 med=4.87ms	torch_tf32 min=5.21 med=5.46ms	torch_fp16_cl min=2.83 med=2.83ms	ort_cuda_fp32(full readback) min=26.14 med=26.85ms
+resnet50_224	torch_fp32 min=2.25 med=2.26ms	torch_tf32 min=1.26 med=1.27ms	torch_fp16_cl min=1.24 med=1.26ms	ort_cuda_fp32(full readback) min=1.23 med=1.24ms
+resnet50_384	torch_fp32 min=2.60 med=2.61ms	torch_tf32 min=1.66 med=1.66ms	torch_fp16_cl min=1.29 med=1.30ms	ort_cuda_fp32(full readback) min=1.77 med=1.78ms
+run-heavy: done rc=0 39s | peak-RSS 2.46GiB | min-avail 22530MiB | peak-load 4.27

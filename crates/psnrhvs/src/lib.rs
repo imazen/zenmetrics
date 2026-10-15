@@ -58,6 +58,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 pub mod daala;
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
 #[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
@@ -288,6 +290,29 @@ pub fn psnrhvs_plane_f32_step(
     stride: usize,
     step: usize,
 ) -> Result<PlaneScore, Error> {
+    plane_step_impl(reference, distorted, width, height, stride, step, false).map(|(s, _)| s)
+}
+
+/// Per-block maps of one plane, raster order over the
+/// `⌊(w−8)/step⌋+1 × ⌊(h−8)/step⌋+1` block grid: each block's mean
+/// coefficient energy with masking (`masked`, PSNR-HVS-M) and without
+/// (`unmasked`, PSNR-HVS). Their means are the scores' `S/Num`.
+struct PlaneMaps {
+    masked: alloc::vec::Vec<f32>,
+    unmasked: alloc::vec::Vec<f32>,
+}
+
+/// The block-grid score, optionally with its [`PlaneMaps`]. The band
+/// split and every sum are the same with and without maps.
+fn plane_step_impl(
+    reference: &[f32],
+    distorted: &[f32],
+    width: usize,
+    height: usize,
+    stride: usize,
+    step: usize,
+    with_maps: bool,
+) -> Result<(PlaneScore, Option<PlaneMaps>), Error> {
     if step == 0 {
         return Err(Error::InvalidStep);
     }
@@ -300,17 +325,42 @@ pub fn psnrhvs_plane_f32_step(
         let lo = b * sz;
         let hi = (lo + sz).min(nb_y);
         if lo >= hi {
-            return (0.0, 0.0);
+            return (0.0, 0.0, None);
         }
-        kernel::psnrhvs_band(reference, distorted, stride, lo, hi, nb_x, step)
+        if !with_maps {
+            let (a, b) =
+                kernel::psnrhvs_band(reference, distorted, stride, lo, hi, nb_x, step, None);
+            return (a, b, None);
+        }
+        let n = (hi - lo) * nb_x;
+        let (mut masked, mut unmasked) = (alloc::vec![0.0f32; n], alloc::vec![0.0f32; n]);
+        let (a, b) = kernel::psnrhvs_band(
+            reference,
+            distorted,
+            stride,
+            lo,
+            hi,
+            nb_x,
+            step,
+            Some((&mut masked, &mut unmasked)),
+        );
+        (a, b, Some(PlaneMaps { masked, unmasked }))
     });
     let mut s1 = 0.0f64;
     let mut s2 = 0.0f64;
-    for (a, b) in parts {
+    let mut maps = with_maps.then(|| PlaneMaps {
+        masked: alloc::vec::Vec::with_capacity(nb_x * nb_y),
+        unmasked: alloc::vec::Vec::with_capacity(nb_x * nb_y),
+    });
+    for (a, b, band) in parts {
         s1 += a;
         s2 += b;
+        if let (Some(all), Some(band)) = (maps.as_mut(), band) {
+            all.masked.extend_from_slice(&band.masked);
+            all.unmasked.extend_from_slice(&band.unmasked);
+        }
     }
-    Ok(finalize(s1, s2, nb_x * nb_y))
+    Ok((finalize(s1, s2, nb_x * nb_y), maps))
 }
 
 /// PSNR-HVS / PSNR-HVS-M of two interleaved sRGB RGB8 pairs — each
@@ -323,6 +373,19 @@ pub fn psnrhvs_rgb8(
     height: usize,
     stride: usize,
 ) -> Result<RgbScore, Error> {
+    psnrhvs_rgb8_impl(reference, distorted, width, height, stride, false).map(|(s, _)| s)
+}
+
+/// [`psnrhvs_rgb8`], optionally with each channel's [`PlaneMaps`]
+/// (`[R, G, B]`).
+fn psnrhvs_rgb8_impl(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    with_maps: bool,
+) -> Result<(RgbScore, Option<[PlaneMaps; 3]>), Error> {
     if width < 8 || height < 8 {
         return Err(Error::TooSmall { width, height });
     }
@@ -365,23 +428,34 @@ pub fn psnrhvs_rgb8(
             kernel::deinterleave_u8_ch(dd, 2, d2);
         },
     );
+    let plane = |c: usize| {
+        plane_step_impl(
+            &planes_r[c],
+            &planes_d[c],
+            width,
+            height,
+            width,
+            8,
+            with_maps,
+        )
+    };
     let ((red, green), blue) = crate::kernel::join2(
-        || {
-            crate::kernel::join2(
-                || psnrhvs_plane_f32(&planes_r[0], &planes_d[0], width, height, width),
-                || psnrhvs_plane_f32(&planes_r[1], &planes_d[1], width, height, width),
-            )
-        },
-        || psnrhvs_plane_f32(&planes_r[2], &planes_d[2], width, height, width),
+        || crate::kernel::join2(|| plane(0), || plane(1)),
+        || plane(2),
     );
-    let (red, green, blue) = (red?, green?, blue?);
-    Ok(RgbScore {
+    let ((red, mr), (green, mg), (blue, mb)) = (red?, green?, blue?);
+    let score = RgbScore {
         psnr_hvs: (red.psnr_hvs + green.psnr_hvs + blue.psnr_hvs) / 3.0,
         psnr_hvs_m: (red.psnr_hvs_m + green.psnr_hvs_m + blue.psnr_hvs_m) / 3.0,
         red,
         green,
         blue,
-    })
+    };
+    let maps = match (mr, mg, mb) {
+        (Some(r), Some(g), Some(b)) => Some([r, g, b]),
+        _ => None,
+    };
+    Ok((score, maps))
 }
 
 /// PSNR-HVS / PSNR-HVS-M of two interleaved sRGB RGB8 pairs on BT.601
@@ -507,48 +581,170 @@ fn gray_px(r: u8, g: u8, b: u8) -> f32 {
 }
 
 /// The psnrhvs metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs. No canonical upstream map —
-/// `Evaluation::map()` is `None`.
+/// inputs. Outputs the RGB-mean PSNR-HVS (headline) and PSNR-HVS-M, then
+/// per-channel PSNR-HVS.
+///
+/// Maps, on request, on the score's own grid of complete 8×8 blocks
+/// (partial edge strips are not scored, so they have no cells): each cell
+/// is one block's mean per-coefficient energy, `S_block / 64`.
+/// `csf_error_{r,g,b}` is the CSF-weighted squared DCT error (PSNR-HVS) and
+/// `masked_error_{r,g,b}` the error left after contrast masking
+/// (PSNR-HVS-M); a channel's score is `10·log10(255² / mean(map))`.
+/// `csf_error` (primary) and `masked_error` average the three channels'
+/// energies. The headline averages per-channel decibels, so no map folds
+/// to it directly. Energies are [`za::MapPolarity::Difference`] (`0` =
+/// identical) and depend only on their own block.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Psnrhvs;
 
-impl zenmetrics_abstractions::Metric for Psnrhvs {
-    fn name(&self) -> &'static str {
-        "psnrhvs"
+/// Map names: the two channel means first (primary first), then per
+/// channel.
+const MAP_NAMES: [&str; 8] = [
+    "csf_error",
+    "masked_error",
+    "csf_error_r",
+    "csf_error_g",
+    "csf_error_b",
+    "masked_error_r",
+    "masked_error_g",
+    "masked_error_b",
+];
+
+/// A scored pair with its block maps, in [`MAP_NAMES`] order.
+struct PsnrhvsMaps {
+    score: RgbScore,
+    maps: [alloc::vec::Vec<f32>; 8],
+    geometry: za::MapGeometry,
+}
+
+impl PsnrhvsMaps {
+    fn new(score: RgbScore, planes: [PlaneMaps; 3], width: usize, height: usize) -> Self {
+        let mean3 = |a: &[f32], b: &[f32], c: &[f32]| -> alloc::vec::Vec<f32> {
+            a.iter()
+                .zip(b)
+                .zip(c)
+                .map(|((&x, &y), &z)| ((f64::from(x) + f64::from(y) + f64::from(z)) / 3.0) as f32)
+                .collect()
+        };
+        let [r, g, b] = planes;
+        let csf = mean3(&r.unmasked, &g.unmasked, &b.unmasked);
+        let masked = mean3(&r.masked, &g.masked, &b.masked);
+        let (nb_x, nb_y) = ((width - 8) / 8 + 1, (height - 8) / 8 + 1);
+        Self {
+            score,
+            maps: [
+                csf, masked, r.unmasked, g.unmasked, b.unmasked, r.masked, g.masked, b.masked,
+            ],
+            geometry: za::MapGeometry::grid(
+                width as u32,
+                height as u32,
+                0,
+                0,
+                8,
+                8,
+                nb_x as u32,
+                nb_y as u32,
+            ),
+        }
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Decibels
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry;
+        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(MAP_NAMES[i], px, za::MapPolarity::Difference, g).ok()
+    }
+}
+
+fn score_eval(s: &RgbScore) -> za::ScalarEval {
+    za::ScalarEval::single("psnrhvs", s.psnr_hvs)
+        .with("psnrhvs_m", s.psnr_hvs_m)
+        .with("psnrhvs_r", s.red.psnr_hvs)
+        .with("psnrhvs_g", s.green.psnr_hvs)
+        .with("psnrhvs_b", s.blue.psnr_hvs)
+}
+
+impl za::Evaluation for PsnrhvsMaps {
+    fn score(&self) -> f64 {
+        self.score.psnr_hvs
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(score_eval(&self.score).named.into_iter())
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> alloc::vec::Vec<za::MapView<'_>> {
+        (0..MAP_NAMES.len()).filter_map(|i| self.view(i)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
+
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::TooSmall { .. } => za::ErrorKind::TooSmall,
+            Error::InvalidStride { .. } | Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::InvalidStep => za::ErrorKind::InvalidConfig,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for Psnrhvs {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("psnrhvs", za::implementation!(SCORE_REVISION))
+            .with_reference("Egiazarian et al. VPQM-06 / Ponomarenko et al. VPQM-07 psnrhvsm.m")
+            .with_config("wstep", 8)
+            .with_config("channels", "rgb_mean")
+    }
+
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("psnrhvs", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_m", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_r", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_g", za::ScoreKind::Decibels),
+            za::ScoreSpec::new("psnrhvs_b", za::ScoreKind::Decibels),
+        ];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
+    }
+
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        let box_err = |e: Error| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        };
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (s, planes) =
+                psnrhvs_rgb8_impl(r.pixels, d.pixels, r.width, r.height, r.stride, true)
+                    .metric_err_with("psnrhvs", Error::kind)?;
+            opts.checkpoint()?;
+            let Some(planes) = planes else {
+                return za::fail(
+                    za::MetricError::new(za::ErrorKind::Internal).with_metric("psnrhvs"),
+                );
+            };
+            let eval = PsnrhvsMaps::new(s, planes, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
-        let s = s; // RgbScore
-        let mut out = zenmetrics_abstractions::ScalarEval::single("psnrhvs", s.psnr_hvs);
-        out.push("psnrhvs_r", s.red.psnr_hvs);
-        out.push("psnrhvs_g", s.green.psnr_hvs);
-        out.push("psnrhvs_b", s.blue.psnr_hvs);
-        Ok(alloc::boxed::Box::new(out))
+        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("psnrhvs", Error::kind)?;
+        Ok(alloc::boxed::Box::new(score_eval(&s)))
     }
 }

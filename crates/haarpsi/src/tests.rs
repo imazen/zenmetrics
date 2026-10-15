@@ -344,9 +344,20 @@ fn haarpsi_diffmap_matches_score() {
     let map = dm.map();
     assert_eq!(map.len(), dm.width as usize * dm.height as usize);
     assert!(map.iter().all(|v| v.is_finite()));
+    let view = Evaluation::map(&dm).expect("map");
     assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
+    );
+    assert_eq!(
+        view.geometry.cell_rect(1, 0).map(|r| (r.x, r.width)),
+        Some((2, 2))
     );
     assert_eq!(dm.score(), score);
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut Haarpsi, 37, 29);
 }

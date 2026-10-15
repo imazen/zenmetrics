@@ -65,6 +65,8 @@
 
 extern crate alloc;
 
+use zenmetrics_abstractions as za;
+
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -236,8 +238,8 @@ pub fn fsim_luma8(
 /// (`GSim · PCsim` at the decimated `w2×h2` resolution; `F` downsampling
 /// applies). `map[i]` ∈ \[0,1\], higher = more similar.
 ///
-/// Implements [`zenmetrics_abstractions::Diffmap`] — `Box<dyn Diffmap>` works
-/// directly for heterogeneous consumers.
+/// A [`zenmetrics_abstractions::Evaluation`]: the headline is FSIMc when
+/// chroma was compared, else FSIM.
 #[non_exhaustive]
 pub struct FsimDiffmap {
     map: Vec<f32>,
@@ -249,6 +251,8 @@ pub struct FsimDiffmap {
     pub fsim: f64,
     /// FSIMc when chroma was compared (`fsim_rgb8_with_diffmap`).
     pub fsimc: Option<f64>,
+    input: (u32, u32),
+    factor: u32,
 }
 
 impl FsimDiffmap {
@@ -258,40 +262,58 @@ impl FsimDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Evaluation for FsimDiffmap {
-    fn score(&self) -> f64 {
-        self.fsim
+impl FsimDiffmap {
+    /// The decimation factor `F`.
+    pub fn factor(&self) -> u32 {
+        self.factor
     }
 
-    fn scores(
-        &self,
-    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
-        alloc::boxed::Box::new(
-            self.fsimc
-                .map(|v| {
-                    [
-                        (alloc::borrow::Cow::Borrowed("fsim"), self.fsim),
-                        (alloc::borrow::Cow::Borrowed("fsimc"), v),
-                    ]
-                })
-                .unwrap_or_else(|| {
-                    [
-                        (alloc::borrow::Cow::Borrowed("fsim"), self.fsim),
-                        (alloc::borrow::Cow::Borrowed("fsimc"), f64::NAN),
-                    ]
-                })
-                .into_iter(),
+    /// Sample `k` averages input `[k·F + s + 1 − F, k·F + s]`, `s = ⌊F/2⌋`
+    /// (`conv2(ones(F)/F², 'same')` then every `F`th sample). Support is
+    /// global: phase congruency is an FFT-domain filterbank with
+    /// whole-image noise statistics.
+    pub fn geometry(&self) -> za::MapGeometry {
+        let f = self.factor;
+        let origin = i64::from(f / 2) + 1 - i64::from(f);
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            origin,
+            origin,
+            f,
+            f,
+            self.width,
+            self.height,
         )
+        .with_support(za::Support::Global)
+    }
+}
+
+impl za::Evaluation for FsimDiffmap {
+    fn score(&self) -> f64 {
+        self.fsimc.unwrap_or(self.fsim)
     }
 
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
+    fn scores(&self) -> za::Scores<'_> {
+        let fsimc = self
+            .fsimc
+            .map(|v| (alloc::borrow::Cow::Borrowed("fsimc"), v));
+        alloc::boxed::Box::new(fsimc.into_iter().chain(core::iter::once((
+            alloc::borrow::Cow::Borrowed("fsim"),
+            self.fsim,
+        ))))
     }
 
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+    /// `FSIMmap` (`GSim · PCSim`, luma only).
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        za::MapView::new(
+            "similarity",
+            px,
+            za::MapPolarity::Similarity,
+            self.geometry(),
+        )
+        .ok()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -330,6 +352,8 @@ pub fn fsim_plane_f32_with_diffmap(
             height: h2 as u32,
             fsim,
             fsimc: None,
+            input: (width as u32, height as u32),
+            factor: f as u32,
         },
     ))
 }
@@ -363,60 +387,65 @@ pub fn fsim_rgb8_with_diffmap(
             height: h2 as u32,
             fsim,
             fsimc: Some(fsimc),
+            input: (width as u32, height as u32),
+            factor: f as u32,
         },
     ))
 }
 
-/// The FSIM/FSIMc metric as a generic scorer — the
-/// [`zenmetrics_abstractions::Metric`] impl takes `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs (strided views welcome).
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+        }
+    }
+}
+
+/// Output revision of [`Fsim`] on the generic surface.
+const SCORE_REVISION: u32 = 1;
+
+/// The FSIM/FSIMc metric as a generic scorer — packed `RGB8_SRGB`
+/// (strided views welcome). Outputs `fsimc` (headline) and `fsim`.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Fsim;
 
-impl zenmetrics_abstractions::Metric for Fsim {
-    fn name(&self) -> &'static str {
-        "fsim"
+impl za::Metric for Fsim {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("fsim", za::implementation!(SCORE_REVISION))
+            .with_reference("FR_FSIMc.m v1.0 (Zhang, Zhang, Mou & Zhang 2011)")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("fsimc", za::ScoreKind::Similarity),
+            za::ScoreSpec::new("fsim", za::ScoreKind::Similarity),
+        ];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let box_err = |e: Error| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        };
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_s, mut dm) =
-                fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
-                    .map_err(box_err)?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("fsim", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(box_err)?;
-        let mut out = za::ScalarEval::single("fsimc", s.fsimc);
-        out.push("fsim", s.fsim);
-        Ok(alloc::boxed::Box::new(out))
+        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("fsim", Error::kind)?;
+        Ok(alloc::boxed::Box::new(
+            za::ScalarEval::single("fsimc", s.fsimc).with("fsim", s.fsim),
+        ))
     }
 }
 

@@ -157,6 +157,64 @@ pub(crate) fn finalize_diffmap(accum: DiffmapAccum) -> Vec<f32> {
     out
 }
 
+/// Owned diffmap — the masked per-pixel error at base resolution
+/// (`w×h`, higher = more visible error), as a
+/// [`zenmetrics_abstractions::Evaluation`].
+#[non_exhaustive]
+pub struct CvvdpDiffmap {
+    pub(crate) map: Vec<f32>,
+    /// Map width (= image width).
+    pub width: u32,
+    /// Map height (= image height).
+    pub height: u32,
+    /// The JOD score computed alongside the map.
+    pub jod: f32,
+}
+
+impl CvvdpDiffmap {
+    /// The packed `width·height` masked-error map.
+    pub fn map(&self) -> &[f32] {
+        &self.map
+    }
+
+    /// One cell per pixel. Support is global: the coarse pyramid bands
+    /// and the baseband span the image.
+    pub fn geometry(&self) -> zenmetrics_abstractions::MapGeometry {
+        zenmetrics_abstractions::MapGeometry::identity(self.width, self.height)
+            .with_support(zenmetrics_abstractions::Support::Global)
+    }
+}
+
+impl zenmetrics_abstractions::Evaluation for CvvdpDiffmap {
+    fn score(&self) -> f64 {
+        f64::from(self.jod)
+    }
+
+    fn scores(&self) -> zenmetrics_abstractions::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("jod"),
+            f64::from(self.jod),
+        )))
+    }
+
+    /// Masked error is error-direction: higher = more visible.
+    fn map(&self) -> Option<zenmetrics_abstractions::MapView<'_>> {
+        let px =
+            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        zenmetrics_abstractions::MapView::new(
+            "masked_error",
+            px,
+            zenmetrics_abstractions::MapPolarity::Difference,
+            self.geometry(),
+        )
+        .ok()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,56 +248,5 @@ mod tests {
         for v in &dm {
             assert_eq!(*v, 0.0);
         }
-    }
-}
-
-/// Owned diffmap — the masked per-pixel error at base resolution
-/// (`w×h`, higher = more visible error). Implements
-/// [`zenmetrics_abstractions::Diffmap`].
-#[non_exhaustive]
-pub struct CvvdpDiffmap {
-    pub(crate) map: Vec<f32>,
-    /// Map width (= image width).
-    pub width: u32,
-    /// Map height (= image height).
-    pub height: u32,
-    /// The JOD score computed alongside the map.
-    pub jod: f32,
-}
-
-impl CvvdpDiffmap {
-    /// The packed `width·height` masked-error map.
-    pub fn map(&self) -> &[f32] {
-        &self.map
-    }
-}
-
-impl zenmetrics_abstractions::Evaluation for CvvdpDiffmap {
-    fn score(&self) -> f64 {
-        self.jod as f64
-    }
-
-    fn scores(
-        &self,
-    ) -> std::boxed::Box<dyn Iterator<Item = (std::borrow::Cow<'static, str>, f64)> + '_> {
-        std::boxed::Box::new(core::iter::once((
-            std::borrow::Cow::Borrowed("jod"),
-            self.jod as f64,
-        )))
-    }
-
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
-    }
-
-    /// Masked error is error-direction: higher = more visible.
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Difference)
-    }
-
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
     }
 }

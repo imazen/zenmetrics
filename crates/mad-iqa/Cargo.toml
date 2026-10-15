@@ -7,6 +7,7 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+# Kovesi log-Gabor bank (MIT-style): `LICENSE-kovesi`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false
@@ -19,7 +20,7 @@ workspace = true
 [features]
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
-std = ["zenmetrics-abstractions/std"]
+std = ["zenmetrics-abstractions/std", "zenmetrics-math/std"]
 # Rayon parallelism across the reference/distorted work pairs (the CSF
 # filters, the per-image Gabor banks, the block-stat maps). Results are
 # bit-identical at every thread count: each branch writes its own output
@@ -29,11 +30,12 @@ parallel = ["std", "dep:rayon"]
 # compared against the scalar tier in tests and disassembled. Not API.
 _dev = ["archmage/testable_dispatch"]
 # Opt-in AVX-512 `v4` tier (8-wide f64), like crates/vif.
-avx512 = ["archmage/avx512", "magetypes/avx512"]
+avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512"]
 
 [dependencies]
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 archmage = { workspace = true }
 libm = "0.2.16"
+zenmetrics-math = { path = "../zenmetrics-math", default-features = false }
 magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }

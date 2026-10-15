@@ -6,6 +6,8 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+# data/hdr10_sky_192x108 derives from JonaNorman/HDRSample (Apache-2.0):
+# `data/hdr10_sky_192x108/LICENSE-HDRSample`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false

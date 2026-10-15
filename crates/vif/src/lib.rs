@@ -4,6 +4,11 @@
 //! scalar-GSM release `vifp_mscale.m`, validated against it under GNU
 //! Octave (`validation/`).
 //!
+//! The UT Austin copyright notice that the LIVE releases require in all
+//! copies is in `LICENSE-live-vif` next to this crate's manifest;
+//! the matlabPyrTools (MIT) notice for `vifvec`'s filter taps is in
+//! `LICENSE-matlabPyrTools`.
+//!
 //! Pipeline, matching the reference: four scales; at each scale an
 //! N-tap Gaussian (`N = 2^(5−scale)+1` → 17, 9, 5, 3, `σ = N/5`,
 //! rank-1 separable) produces `filter2 'valid'` mean/variance/
@@ -48,6 +53,8 @@
 #![allow(clippy::assign_op_pattern)]
 
 extern crate alloc;
+
+use zenmetrics_abstractions as za;
 
 use alloc::vec::Vec;
 
@@ -143,8 +150,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// MATLAB `rgb2gray` luma coefficients (`0.2989 0.5870 0.1140`) — the
 /// conversion the reference pipeline applies to colour input.
@@ -188,7 +194,7 @@ pub fn vif_plane_f32(
     check_plane(distorted, width, height, stride)?;
     let r = gather_plane(reference, width, height, stride);
     let d = gather_plane(distorted, width, height, stride);
-    Ok(kernel::vifp_core(&Inputs { r, d }, width, height))
+    Ok(kernel::vifp_core(&Inputs { r, d }, width, height, None))
 }
 
 /// VIFp of two interleaved sRGB RGB8 pairs, on the MATLAB `rgb2gray`
@@ -203,7 +209,295 @@ pub fn vif_rgb8(
     check_rgb(reference, width, height, stride)?;
     check_rgb(distorted, width, height, stride)?;
     let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
-    Ok(kernel::vifp_core(&inputs, width, height))
+    Ok(kernel::vifp_core(&inputs, width, height, None))
+}
+
+/// [`vif_rgb8`] plus every non-empty scale's per-element information terms.
+fn vif_rgb8_terms(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, Vec<kernel::ScaleTerms>), Error> {
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8(reference, distorted, width, height, stride);
+    let mut terms = Vec::new();
+    let score = kernel::vifp_core(&inputs, width, height, Some(&mut terms));
+    Ok((score, terms))
+}
+
+/// Information-loss map names, one per VIFp scale.
+const VIFP_NAMES: [&str; 4] = ["info_loss_0", "info_loss_1", "info_loss_2", "info_loss_3"];
+
+/// VIFp numerator / denominator map names, one per scale.
+const VIFP_NUM: [&str; 4] = ["num_0", "num_1", "num_2", "num_3"];
+const VIFP_DEN: [&str; 4] = ["den_0", "den_1", "den_2", "den_3"];
+
+/// A scored pair with its information maps: the losses (Difference)
+/// first, then the raw numerator and denominator information
+/// (Feature), each on the same grids.
+/// Fuses per-cell shares from several grids into one map: each share
+/// spreads evenly over the input pixels its cell covers, the map is cropped
+/// to the pixels some cell covers, and scaled so its mean is the sum of all
+/// shares.
+fn fuse(
+    parts: &[(alloc::vec::Vec<f64>, za::MapGeometry)],
+    w: u32,
+    h: u32,
+) -> (alloc::vec::Vec<f32>, za::MapGeometry) {
+    let n = (w * h) as usize;
+    let (mut acc, mut covered) = (alloc::vec![0f64; n], alloc::vec![false; n]);
+    for (shares, g) in parts {
+        let cell = |x, y| g.cell_at(x, y).map(|(i, j)| (j * g.cells_x + i) as usize);
+        let mut count = alloc::vec![0u32; shares.len()];
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    count[k] += 1;
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                if let Some(k) = cell(x, y) {
+                    acc[(y * w + x) as usize] += shares[k] / f64::from(count[k]);
+                    covered[(y * w + x) as usize] = true;
+                }
+            }
+        }
+    }
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if covered[(y * w + x) as usize] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+            }
+        }
+    }
+    if x0 >= x1 {
+        (x0, y0, x1, y1) = (0, 0, w, h);
+    }
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let scale = f64::from(bw) * f64::from(bh);
+    let mut out = alloc::vec::Vec::with_capacity((bw * bh) as usize);
+    for y in y0..y1 {
+        out.extend((x0..x1).map(|x| (acc[(y * w + x) as usize] * scale) as f32));
+    }
+    let g = za::MapGeometry::grid(w, h, i64::from(x0), i64::from(y0), 1, 1, bw, bh)
+        .with_support(za::Support::Global);
+    (out, g)
+}
+
+struct VifMaps {
+    vif: f64,
+    names: Vec<&'static str>,
+    maps: Vec<Vec<f32>>,
+    geometry: Vec<za::MapGeometry>,
+    polarity: Vec<za::MapPolarity>,
+}
+
+impl VifMaps {
+    fn empty(vif: f64) -> Self {
+        Self {
+            vif,
+            names: Vec::new(),
+            maps: Vec::new(),
+            geometry: Vec::new(),
+            polarity: Vec::new(),
+        }
+    }
+
+    /// Append the fused `diffmap`, then `loss`, then all numerators, then
+    /// all denominators.
+    fn push_all(
+        &mut self,
+        fused: (Vec<f32>, za::MapGeometry),
+        loss: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+        num: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+        den: Vec<(&'static str, Vec<f32>, za::MapGeometry)>,
+    ) {
+        let (diffmap, g) = fused;
+        for (group, polarity) in [
+            (
+                alloc::vec![("diffmap", diffmap, g)],
+                za::MapPolarity::Difference,
+            ),
+            (loss, za::MapPolarity::Difference),
+            (num, za::MapPolarity::Feature),
+            (den, za::MapPolarity::Feature),
+        ] {
+            for (name, map, g) in group {
+                self.names.push(name);
+                self.maps.push(map);
+                self.geometry.push(g);
+                self.polarity.push(polarity);
+            }
+        }
+    }
+
+    /// Each element's share of `1 − VIF`, `(den − num) / Σden` over every
+    /// pooled element ([`fuse`] spreads them: the map's mean is `1 − VIF`);
+    /// zero when `Σden = 0`.
+    fn shares(num: &[f64], den: &[f64], total_den: f64) -> Vec<f64> {
+        den.iter()
+            .zip(num)
+            .map(|(&d, &n)| {
+                if total_den > 0.0 {
+                    (d - n) / total_den
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    }
+}
+
+impl VifMaps {
+    /// VIFp scale `s` samples the input at `c_s + 2^s·i` with
+    /// `c_s = 8 + 4s`: scale `s > 0` is the previous plane filtered
+    /// 'valid' by this scale's own `N = 2^(4−s)+1`-tap window and
+    /// decimated `1:2:end`, and the statistics grid is that window's
+    /// 'valid' output. Cells are `2^s` blocks around those centres. A value
+    /// reads the input within `8 + 4s` pixels of its centre.
+    fn vifp(vif: f64, terms: Vec<kernel::ScaleTerms>, w: usize, h: usize) -> Self {
+        let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
+        let total_den: f64 = terms.iter().flat_map(|t| &t.den).sum();
+        let mut parts = Vec::new();
+        for t in terms {
+            let cell = 1u32 << t.scale;
+            let centre = 8 + 4 * t.scale as i64;
+            let halo = 8 + 4 * t.scale as u32;
+            let g = za::MapGeometry::grid(
+                w as u32,
+                h as u32,
+                centre - i64::from(cell / 2),
+                centre - i64::from(cell / 2),
+                cell,
+                cell,
+                t.w as u32,
+                t.h as u32,
+            )
+            .with_halo(halo, halo);
+            let narrow = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
+            let l = t
+                .den
+                .iter()
+                .zip(&t.num)
+                .map(|(&d, &n)| (d - n) as f32)
+                .collect();
+            parts.push((Self::shares(&t.num, &t.den, total_den), g));
+            loss.push((VIFP_NAMES[t.scale], l, g));
+            num.push((VIFP_NUM[t.scale], narrow(&t.num), g));
+            den.push((VIFP_DEN[t.scale], narrow(&t.den), g));
+        }
+        let mut out = Self::empty(vif);
+        out.push_all(fuse(&parts, w as u32, h as u32), loss, num, den);
+        out
+    }
+
+    /// `vifvec`'s level `L` (1-based) samples the input at `2^(L−1)·k`
+    /// (`corrDn` start 0, the inter-level lowpass at stride 2), and each
+    /// block is 3×3 subband samples, so cell `i` is block `i + offset` of
+    /// the cropped grid: `3·2^(L−1)` pixels starting `2^(L−2)` before its
+    /// first sample's position. The S-field and eigenvalues come from the
+    /// whole subband's covariance, so support is global.
+    fn vifvec(vif: f64, subs: Vec<vifvec::SubTerms>, w: usize, h: usize) -> Self {
+        let (mut loss, mut num, mut den) = (Vec::new(), Vec::new(), Vec::new());
+        let total_den: f64 = subs.iter().flat_map(|t| &t.den).sum();
+        let mut parts = Vec::new();
+        // `SUBS` runs coarse to fine; serve the finest first.
+        for t in subs.into_iter().rev() {
+            let step = 1u32 << (t.level - 1);
+            let cell = 3 * step;
+            let origin = i64::from(cell) * t.offset as i64 - i64::from(step / 2);
+            let g = za::MapGeometry::grid(
+                w as u32, h as u32, origin, origin, cell, cell, t.w as u32, t.h as u32,
+            )
+            .with_support(za::Support::Global);
+            let k = (t.level - 1) * 2 + usize::from(t.band == 4);
+            let narrow = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
+            let l = t
+                .den
+                .iter()
+                .zip(&t.num)
+                .map(|(&d, &n)| (d - n) as f32)
+                .collect();
+            parts.push((Self::shares(&t.num, &t.den, total_den), g));
+            loss.push((VIFVEC_NAMES[k], l, g));
+            num.push((VIFVEC_NUM[k], narrow(&t.num), g));
+            den.push((VIFVEC_DEN[k], narrow(&t.den), g));
+        }
+        let mut out = Self::empty(vif);
+        out.push_all(fuse(&parts, w as u32, h as u32), loss, num, den);
+        out
+    }
+
+    fn view(&self, i: usize) -> Option<za::MapView<'_>> {
+        let g = self.geometry[i];
+        let px = za::gray_f32_slice(&self.maps[i], g.cells_x, g.cells_y).ok()?;
+        za::MapView::new(self.names[i], px, self.polarity[i], g).ok()
+    }
+}
+
+/// `vifvec` numerator / denominator map names, in [`VIFVEC_NAMES`] order.
+const VIFVEC_NUM: [&str; 8] = [
+    "num_l1_b1",
+    "num_l1_b4",
+    "num_l2_b1",
+    "num_l2_b4",
+    "num_l3_b1",
+    "num_l3_b4",
+    "num_l4_b1",
+    "num_l4_b4",
+];
+const VIFVEC_DEN: [&str; 8] = [
+    "den_l1_b1",
+    "den_l1_b4",
+    "den_l2_b1",
+    "den_l2_b4",
+    "den_l3_b1",
+    "den_l3_b4",
+    "den_l4_b1",
+    "den_l4_b4",
+];
+
+/// `vifvec` map names by `(level, band)`, finest level first.
+const VIFVEC_NAMES: [&str; 8] = [
+    "info_loss_l1_b1",
+    "info_loss_l1_b4",
+    "info_loss_l2_b1",
+    "info_loss_l2_b4",
+    "info_loss_l3_b1",
+    "info_loss_l3_b4",
+    "info_loss_l4_b1",
+    "info_loss_l4_b4",
+];
+
+impl za::Evaluation for VifMaps {
+    fn score(&self) -> f64 {
+        self.vif
+    }
+
+    fn scores(&self) -> za::Scores<'_> {
+        alloc::boxed::Box::new(core::iter::once((
+            alloc::borrow::Cow::Borrowed("vif"),
+            self.vif,
+        )))
+    }
+
+    fn map(&self) -> Option<za::MapView<'_>> {
+        self.view(0)
+    }
+
+    fn maps(&self) -> Vec<za::MapView<'_>> {
+        (0..self.maps.len()).filter_map(|i| self.view(i)).collect()
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 /// `vifvec` (vector-GSM steerable-pyramid VIF — the original release)
@@ -245,6 +539,23 @@ pub fn vifvec_rgb8(
     check_rgb(distorted, width, height, stride)?;
     let inputs = Inputs::from_rgb8_rounded(reference, distorted, width, height, stride);
     Ok(vifvec::vifvec_core(&inputs.r, &inputs.d, width, height))
+}
+
+/// [`vifvec_rgb8`] plus every selected subband's per-block terms.
+fn vifvec_rgb8_terms(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(f64, Vec<vifvec::SubTerms>), Error> {
+    check_vifvec_size(width, height)?;
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8_rounded(reference, distorted, width, height, stride);
+    let mut subs = Vec::new();
+    let score = vifvec::vifvec_core_impl(&inputs.r, &inputs.d, width, height, Some(&mut subs));
+    Ok((score, subs))
 }
 
 /// Gathered level-0 input planes (`f64` — see the crate docs).
@@ -349,88 +660,132 @@ impl Inputs {
     }
 }
 
-/// The VIF metric as a generic scorer — accepts `RGB8_SRGB`
-/// `PixelSlice` inputs. Headline = `vif` (the reference VIF); `vifvec`
-/// (the vector-GSM pyramid variant) rides as a named secondary only
-/// when [`Self::VIFVEC`] scoring is selected — construct [`Vifvec`] for
-/// that surface.
+/// The pixel-domain VIF metric as a generic scorer — packed `RGB8_SRGB`.
+/// The vector-GSM variant is [`Vifvec`].
+///
+/// Maps, on request. `diffmap` (primary) is the fused map: each element's
+/// share `(den − num)/Σden` of `1 − VIF`, spread evenly over the input
+/// pixels its cell covers, cropped to the pixels some cell covers, and
+/// scaled so the map's mean is `1 − VIF` (global support, through `Σden`;
+/// all zero when `Σden = 0`, a reference with no information, where VIF is
+/// undefined). Then `info_loss_0` … `info_loss_3`, one per scale with a
+/// non-empty statistics grid. Each value is
+/// `log10(1 + σ₁²/σₙ²) − log10(1 + g²σ₁²/(σᵥ² + σₙ²))`: the information
+/// the reference channel carries at that position minus what survives the
+/// distortion channel. `VIF = Σnum/Σden`, so the maps summed over all
+/// scales, divided by `Σden`, give `1 − VIF`. They are per-position
+/// contributions, not a local VIF ratio: `0` = no loss, higher = more
+/// lost, negative where the distortion adds information (VIF > 1)
+/// ([`za::MapPolarity::Difference`]). After them, `num_0` … and `den_0` …
+/// carry the two information terms themselves on the same grids
+/// ([`za::MapPolarity::Feature`]: `den` depends on the reference alone).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vif;
 
-impl zenmetrics_abstractions::Metric for Vif {
-    fn name(&self) -> &'static str {
-        "vif"
+impl Error {
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::TooSmall { .. } => za::ErrorKind::TooSmall,
+        }
+    }
+}
+
+/// Output revision of the generic-surface scorer(s) in this crate.
+const SCORE_REVISION: u32 = 1;
+
+impl za::Metric for Vif {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("vif", za::implementation!(SCORE_REVISION))
+            .with_reference("vifp_mscale.m (Sheikh & Bovik 2006)")
+            .with_config("luma", "rgb2gray")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("vif", za::ScoreKind::Similarity)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (vif, terms) = vif_rgb8_terms(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("vif", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = VifMaps::vifp(vif, terms, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(alloc::boxed::Box::new(
-            zenmetrics_abstractions::ScalarEval::single("vif", s),
-        ))
+        let s = vif_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("vif", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
     }
 }
 
 /// The vector-GSM VIF variant (`vifvec`) as a generic scorer.
+///
+/// Maps, on request: `diffmap` (primary), every subband element's share
+/// `(den − num)/Σden` of `1 − VIF` spread to input resolution (mean
+/// `1 − VIF`, global support), then one per pooled subband, finest first —
+/// `info_loss_l1_b1`, `info_loss_l1_b4`, … `info_loss_l4_b4`
+/// (pyramid level, MATLAB band). Each cell is one 3×3 block of the
+/// cropped block grid the score pools, valued
+/// `Σ_λ [log2(1 + s·λ/σₙ²) − log2(1 + g²·s·λ/(σᵥ² + σₙ²))]`: the bits the
+/// reference channel carries in that block minus those the distorted
+/// channel keeps. Summed over all blocks and subbands and divided by the
+/// total reference information they give `1 − VIF`. Per-block
+/// contributions, not a local VIF ([`za::MapPolarity::Difference`]),
+/// with global support (the S-field and eigenvalues use whole-subband
+/// statistics). After them, `num_l1_b1` … and `den_l1_b1` … carry the two
+/// information terms per block ([`za::MapPolarity::Feature`]).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Vifvec;
 
-impl zenmetrics_abstractions::Metric for Vifvec {
-    fn name(&self) -> &'static str {
-        "vifvec"
+impl za::Metric for Vifvec {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("vif", za::implementation!(SCORE_REVISION))
+            .with_variant("vec")
+            .with_reference("vifvec.m (Sheikh & Bovik 2006), vector GSM on a steerable pyramid")
+            .with_config("luma", "rgb2gray")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Similarity
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new("vif", za::ScoreKind::Similarity)];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenmetrics_abstractions::zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenmetrics_abstractions::zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        d: zenmetrics_abstractions::zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        if opts.map.is_some() {
-            return Err(alloc::boxed::Box::new(zenmetrics_abstractions::NoMap)
-                as alloc::boxed::Box<dyn core::error::Error + Send + Sync>);
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        if let Some(req) = opts.map {
+            let (vif, subs) = vifvec_rgb8_terms(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("vif", Error::kind)?;
+            opts.checkpoint()?;
+            let eval = VifMaps::vifvec(vif, subs, r.width, r.height);
+            return za::apply_map_request(alloc::boxed::Box::new(eval), req);
         }
-        let (r, d) = zenmetrics_abstractions::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        Ok(alloc::boxed::Box::new(
-            zenmetrics_abstractions::ScalarEval::single("vifvec", s),
-        ))
+        let s = vifvec_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("vif", Error::kind)?;
+        Ok(alloc::boxed::Box::new(za::ScalarEval::single("vif", s)))
     }
 }

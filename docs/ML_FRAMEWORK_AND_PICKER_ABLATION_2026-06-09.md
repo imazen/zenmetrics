@@ -33,6 +33,12 @@ re-sources but can't rename; the rename exists so GPU crates can be *published*)
 Only **differentiable metrics** would force one graph. Full mechanics + 3 reconciliation
 options in `crates/burn-ranknet-spike/README.md` + the CLAUDE.md burn section.
 
+**CORRECTION 2026-10-14:** the "never share a cargo graph" premise was never
+tested and is wrong. burn (cubecl 0.11) and zenforks-cubecl (0.10.2) coexist in
+one binary as long as no types cross:
+`benchmarks/nn_runtime_shootout_2026-10-14/coexist-probe/` (measured on CUDA and
+wgpu). Training can still run as a separate binary by choice; it no longer has to.
+
 ## 3. GBDT teacher / GD-MLP student (measured, synthetic methodology demo)
 
 Framing: GBDT (incl. LambdaMART for ranking) is the better **learner** on tabular

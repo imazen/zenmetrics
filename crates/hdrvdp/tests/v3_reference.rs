@@ -329,8 +329,8 @@ fn invalid_inputs_err_not_panic() {
     );
 }
 
-/// `HdrVdp3Result` implements `Diffmap` — `pixels()` narrows `p_map` to
-/// f32; extras carry `q` and the gamut fraction.
+/// `HdrVdp3Result` is an `Evaluation` — `map()` narrows `p_map` to f32;
+/// scores carry `q_jod` then `q`, extras the gamut fraction.
 #[test]
 fn v3_result_is_a_diffmap() {
     use zenmetrics_abstractions::Evaluation;
@@ -349,14 +349,17 @@ fn v3_result_is_a_diffmap() {
         refr[i] = 80.0;
     }
     let res = hdrvdp3(&test, &refr, w, h, &par).unwrap();
-    let px = res.map().unwrap();
-    let sl = px.as_slice();
+    let view = res.map().unwrap();
+    let sl = view.pixels.as_slice();
     assert_eq!((sl.width(), sl.rows()), (w as u32, h as u32));
     assert_eq!(
-        res.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::DetectionProbability)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::DetectionProbability
     );
+    assert_eq!(res.maps().len(), 2);
     assert_eq!(res.score(), res.q_jod);
-    let kv: Vec<_> = res.extras().collect();
+    let kv: Vec<_> = res.scores().collect();
     assert!(kv.iter().any(|(k, _)| k == "q"));
+    let ex: Vec<_> = res.extras().collect();
+    assert!(ex.iter().any(|(k, _)| k == "gamut_clamped_fraction"));
 }

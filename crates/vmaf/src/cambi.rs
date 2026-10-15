@@ -61,7 +61,7 @@ const TVI_THRESHOLD: f64 = 0.019;
 const VIS_LUM_THRESHOLD: f64 = 0.06;
 const MAX_LOG_CONTRAST: u32 = 2;
 const CAMBI_MAX_VAL: f64 = 17.0;
-const CAMBI_MIN_WIDTH_HEIGHT: usize = 216;
+pub(crate) const CAMBI_MIN_WIDTH_HEIGHT: usize = 216;
 const SPEEDUP_THRESHOLD_1080P: usize = 1920 * 1080;
 
 static RECIPROCAL_LUT: [f32; 4226] = [
@@ -5516,11 +5516,57 @@ fn spatial_pooling(c_values: &mut [f32], topk: f64, width: usize, height: usize)
     sum / topk_num as f64
 }
 
+/// One CAMBI scale's per-pixel c-values, `w × h`, as the scale's top-k
+/// spatial pooling reads them.
+#[derive(Debug)]
+pub(crate) struct CambiScale {
+    pub(crate) w: usize,
+    pub(crate) h: usize,
+    /// Input pixels per sample along each axis (`2^s`, doubled under the
+    /// high-resolution speedup).
+    pub(crate) factor: usize,
+    pub(crate) c: Vec<f32>,
+}
+
+/// CAMBI's c-value maps and the window they were computed with.
+#[derive(Debug)]
+pub(crate) struct CambiMaps {
+    pub(crate) scales: Vec<CambiScale>,
+    /// The (odd) histogram window, in scale samples.
+    pub(crate) window_size: usize,
+}
+
 pub fn cambi_v1_from_luma(
     dist_y: &[u16],
     width: usize,
     height: usize,
     bit_depth: u8,
+) -> Result<f64, Error> {
+    cambi_impl(dist_y, width, height, bit_depth, None)
+}
+
+/// [`cambi_v1_from_luma`] plus every scale's c-values, copied before the
+/// top-k pooling reorders them.
+pub(crate) fn cambi_v1_maps(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+) -> Result<(f64, CambiMaps), Error> {
+    let mut maps = CambiMaps {
+        scales: Vec::new(),
+        window_size: 0,
+    };
+    let score = cambi_impl(dist_y, width, height, bit_depth, Some(&mut maps))?;
+    Ok((score, maps))
+}
+
+fn cambi_impl(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    mut maps: Option<&mut CambiMaps>,
 ) -> Result<f64, Error> {
     if !(8..=16).contains(&bit_depth) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -5595,6 +5641,9 @@ pub fn cambi_v1_from_luma(
 
     let mut scaled_width = width;
     let mut scaled_height = height;
+    if let Some(m) = maps.as_deref_mut() {
+        m.window_size = window_size;
+    }
     for (scale, slot) in scores_per_scale.iter_mut().enumerate() {
         if scale > 0 || speedup {
             scaled_width = (scaled_width + 1) >> 1;
@@ -5624,6 +5673,14 @@ pub fn cambi_v1_from_luma(
             v_band_size,
             &CONTRAST_WEIGHTS,
         )?;
+        if let Some(m) = maps.as_deref_mut() {
+            m.scales.push(CambiScale {
+                w: scaled_width,
+                h: scaled_height,
+                factor: 1 << (scale + usize::from(speedup)),
+                c: c_values[..scaled_width * scaled_height].to_vec(),
+            });
+        }
         *slot = spatial_pooling(&mut c_values, TOPK, scaled_width, scaled_height);
     }
 
@@ -5804,6 +5861,57 @@ mod tests {
             let mut mask = vec![0u16; w * h];
             get_spatial_mask(&image, &mut mask, w, h).unwrap();
             assert_eq!(mask, expected, "spatial mask {w}x{h}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+
+    fn banded(w: usize, h: usize, seed: usize) -> Vec<u16> {
+        (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                if x < w / 3 {
+                    (64 + x * 420 / w) as u16 & !3
+                } else {
+                    (64 + ((x * 3 + y * 5 + seed) % 220) * 4) as u16
+                }
+            })
+            .collect()
+    }
+
+    /// The captured c-values are what the pooling reads: re-running the
+    /// same top-k selection over them and the same scale weighting
+    /// reproduces the CAMBI score bit for bit.
+    #[test]
+    fn cambi_maps_fold_to_the_score() {
+        for (w, h, bits) in [(640usize, 360usize, 10u8), (321, 217, 10), (400, 300, 8)] {
+            let y = if bits == 10 {
+                banded(w, h, 3)
+            } else {
+                banded(w, h, 3).into_iter().map(|v| v >> 2).collect()
+            };
+            let plain = cambi_v1_from_luma(&y, w, h, bits).unwrap();
+            let (score, maps) = cambi_v1_maps(&y, w, h, bits).unwrap();
+            assert_eq!(score.to_bits(), plain.to_bits(), "{w}x{h}");
+            assert_eq!(maps.scales.len(), NUM_SCALES);
+            let mut folded = 0.0;
+            for (s, m) in maps.scales.iter().enumerate() {
+                assert_eq!(m.c.len(), m.w * m.h);
+                assert_eq!(m.factor, 1 << s);
+                let mut c = m.c.clone();
+                folded += spatial_pooling(&mut c, TOPK, m.w, m.h) * SCALE_WEIGHTS[s] as f64;
+            }
+            let odd = 2 * (maps.window_size >> 1) + 1;
+            folded /= (odd * odd) as f64;
+            let folded = folded.min(CAMBI_MAX_VAL);
+            assert_eq!(
+                folded.to_bits(),
+                plain.to_bits(),
+                "{w}x{h}: {folded} vs {plain}"
+            );
         }
     }
 }

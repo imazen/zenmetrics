@@ -187,6 +187,26 @@ pub struct Args<'a> {
     pub w: usize,
     /// Height.
     pub h: usize,
+    /// When `Some`, receives each non-empty scale's per-element
+    /// information terms after they are summed.
+    pub maps: Option<&'a mut Vec<ScaleTerms>>,
+}
+
+/// One scale's per-element information terms, as the score sums them:
+/// `num[i] = log10(1 + g²σ₁²/(σᵥ² + σₙ²))`, `den[i] = log10(1 + σ₁²/σₙ²)`
+/// over the scale's `w × h` 'valid' statistics grid.
+#[derive(Debug)]
+pub struct ScaleTerms {
+    /// Scale index, 0 = full resolution.
+    pub scale: usize,
+    /// Grid width.
+    pub w: usize,
+    /// Grid height.
+    pub h: usize,
+    /// Distorted-channel information per element.
+    pub num: Vec<f64>,
+    /// Reference-channel information per element.
+    pub den: Vec<f64>,
 }
 
 // ============================ tiered core ================================
@@ -201,6 +221,7 @@ macro_rules! score_body {
         let (mut w, mut h) = ($a.w, $a.h);
         let (mut im1, mut im2) = ($a.im1.to_vec(), $a.im2.to_vec());
         let (mut num, mut den) = (0.0f64, 0.0f64);
+        let mut maps = $a.maps;
         let (zero, epsv, snv) = (
             <$V>::splat_t($token, 0.0),
             <$V>::splat_t($token, EPS),
@@ -520,6 +541,34 @@ macro_rules! score_body {
                 den += libm::log10(terms_d[i]);
                 i += 1;
             }
+            if let Some(sink) = maps.as_deref_mut() {
+                // The same lane-exact `log10`s the sums above added, in
+                // element order (`log10_lanes!` is bit-identical to
+                // `libm::log10` per element).
+                let (mut ln, mut ld) = (terms_n, terms_d);
+                let mut i = 0usize;
+                while i + $LANES <= n_terms {
+                    let na =
+                        log10_lanes!($token, $V, $LANES, ln[i..i + $LANES].try_into().unwrap());
+                    let da =
+                        log10_lanes!($token, $V, $LANES, ld[i..i + $LANES].try_into().unwrap());
+                    ln[i..i + $LANES].copy_from_slice(&na);
+                    ld[i..i + $LANES].copy_from_slice(&da);
+                    i += $LANES;
+                }
+                while i < n_terms {
+                    ln[i] = libm::log10(ln[i]);
+                    ld[i] = libm::log10(ld[i]);
+                    i += 1;
+                }
+                sink.push(ScaleTerms {
+                    scale: s,
+                    w: out_w,
+                    h: out_h,
+                    num: ln,
+                    den: ld,
+                });
+            }
         }
 
         num / den
@@ -565,12 +614,18 @@ pub fn vifp_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> f64
 }
 
 /// Runtime-dispatched score: the best tier this CPU supports.
-pub(crate) fn vifp_core(inputs: &crate::Inputs, w: usize, h: usize) -> f64 {
+pub(crate) fn vifp_core(
+    inputs: &crate::Inputs,
+    w: usize,
+    h: usize,
+    maps: Option<&mut Vec<ScaleTerms>>,
+) -> f64 {
     let a = Args {
         im1: &inputs.r,
         im2: &inputs.d,
         w,
         h,
+        maps,
     };
     archmage::attuned!(
         vifp_core_tier(a),

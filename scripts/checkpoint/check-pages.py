@@ -54,13 +54,44 @@ try:
             context.route('**/pkg/**', lambda route: route.abort() if urlparse(route.request.url).path.startswith('/pkg/') else route.continue_())
         page = context.new_page()
         page.goto(url)
-        page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')", timeout=30000)
+        # The demo scene starts encoding as soon as the worker is ready, so
+        # the "Ready:" status is transient; the startup line stays.
+        page.wait_for_function("document.getElementById('startup-timing').textContent.includes('Rayon pool')", timeout=30000)
         assert page.evaluate('crossOriginIsolated && typeof SharedArrayBuffer !== "undefined"')
         assert 'Shields off' in page.locator('details').filter(has_text='Brave:').text_content()
         page.wait_for_function("!document.getElementById('capabilities').textContent.startsWith('Checking')",timeout=10000)
         assert 'WebGPU' in page.locator('#capabilities').inner_text()
         if asset_prefix:
             assert asset_prefix in page.locator('script[type=module]').get_attribute('src')
+        # The demo scene loads by default: encoded, scored and mapped, and its
+        # loop encodes live in the worker, steered by the default metric.
+        page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=60000)
+        assert page.locator('#name-reference').inner_text() == 'Demo scene · 768×512'
+        assert page.locator('#name-distorted').inner_text().startswith('zenjpeg · quality 40')
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of')",timeout=300000)
+        default_loop = page.locator('#loop-info').inner_text()
+        assert 'steered by zensim · ' in default_loop and 'live encode' in default_loop and 'external' in default_loop, default_loop
+        assert page.locator('#loop-save').is_enabled()
+        # From iteration 2 the loop only refines blocks above the target; on
+        # the demo none are, so the last frames repeat and say so.
+        frames = int(default_loop.split(' of ')[1].split(' ')[0])
+        for _ in range(frames - 1):
+            page.locator('#loop-next').click()
+        assert 'same quant field and image as the previous iteration' in page.locator('#loop-info').inner_text()
+        # The top bar's Map menu and the loop's Steer menu both switch metric.
+        page.locator('#map-name').select_option('msssim|diffmap')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('msssim · diffmap ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'msssim'
+        assert page.locator('#loop-steer').input_value() == 'msssim|diffmap'
+        page.locator('#loop-steer').select_option('gmsd|gms')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd · gms ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'gmsd' and page.locator('#map-name').input_value() == 'gmsd|gms'
+        page.locator('#loop-steer').select_option('builtin')
+        page.locator('#loop-run').click()
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of') && document.getElementById('loop-info').textContent.includes('steered by butteraugli (built-in)')",timeout=300000)
+        assert page.locator('#metric').input_value() == 'gmsd'
+        ui_linked_menus = True
+        page.locator('#metric').select_option('zensim')
         # Negative control for the reported old-glue/new-module memory mismatch.
         import re
         glue=(args.site/asset_prefix/'pkg/zenmetrics_browser.js').read_text()
@@ -110,10 +141,26 @@ try:
           if(second.type!=='result'||JSON.stringify(first.score)!==JSON.stringify(second.score)||
              JSON.stringify(Array.from(first.map))!==JSON.stringify(Array.from(second.map))) throw new Error('Repeat differs');
           const spatial={};
-          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd']) {
+          for(const mapMetric of ['butteraugli','dssim','cvvdp','psnr','gmsd','fsim','fsimc','haarpsi','vsi','msssim','ssim2']) {
             response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric,reference,distorted,width,height,display:'standard_4k'});
             const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
-            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,values:Array.from(got.map)};
+            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
+          }
+          // The unified-interface maps need a larger pair (NLPD >= 96, vifvec 72, IW-SSIM 176, VMAF one side >= 216).
+          const lw=480,lh=352,unified=new Uint8Array(lw*lh*4),striped=new Uint8Array(unified.length);
+          for(let y=0;y<lh;y++)for(let x=0;x<lw;x++)for(let c=0;c<4;c++){
+            const i=(y*lw+x)*4+c;if(c===3){unified[i]=striped[i]=255;continue;}
+            const v=(x*7+y*5+c*61+(x*y)%23)%256;unified[i]=v;
+            striped[i]=Math.floor(y/24)%3===0?Math.floor(v/4)*3+32:(c===2&&Math.floor(x/32)%3===0?v>>1:v);
+          }
+          for(const mapMetric of ['nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:unified,distorted:striped,width:lw,height:lh});
+            const got=await response;if(got.type!=='result')throw new Error(mapMetric+': '+JSON.stringify(got));
+            spatial[mapMetric]={width:got.mapWidth,height:got.mapHeight,similarity:got.similarity,geometry:got.geometry,values:Array.from(got.map)};
+          }
+          for(const mapMetric of ['nlpd','vifvec','iwssim','vmaf-v1']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference,distorted,width,height});
+            const got=await response;if(got.type!=='error')throw new Error('Undersized '+mapMetric+' map was not refused');
           }
           const profiles = {};
           for(const zensimProfile of ['b','d','a','preview-v0.1','preview-v0.2','b']) {
@@ -129,6 +176,36 @@ try:
           const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
           if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
+          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
+          const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
+          for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
+          const oddMaps={};
+          for(const mapMetric of ['fsim','haarpsi','vsi','gmsd']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+            const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
+            if(!got.similarity||!got.map.every(Number.isFinite))throw new Error('Invalid identity map '+mapMetric);
+            if(mapMetric==='vsi'){
+              if(Math.min(...got.map)!==0||Math.max(...got.map)!==1)throw new Error('VSI identity map lost native saliency weighting');
+            } else if(!got.map.every(v=>Math.abs(v-1)<.00001))throw new Error('Identity similarity map differs '+mapMetric);
+            if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry');
+            oddMaps[mapMetric]=got.geometry;
+          }
+          // Identical inputs: these components vanish exactly; VIF keeps the reference's 1e-10 regularization and IW-SSIM cs its f32 rounding.
+          for(const mapMetric of ['ssim2','msssim','iwssim','nlpd','psnrhvs','mdctpsnr','mad','vif','vifvec']) {
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric,reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+            const got=await response;if(got.type!=='result')throw new Error(JSON.stringify(got));
+            const regularized=mapMetric.startsWith('vif');
+            if(got.similarity||!got.map.every(v=>regularized?v>0&&v<1e-9:mapMetric==='iwssim'?v>=0&&v<=1e-6:v===0))throw new Error('Identity component map differs '+mapMetric);
+            if(got.geometry.inputWidth!==oddWidth||got.geometry.inputHeight!==oddHeight||got.geometry.cellsX!==got.mapWidth||got.geometry.cellsY!==got.mapHeight)throw new Error('Invalid native geometry '+mapMetric);
+            oddMaps[mapMetric]=got.geometry;
+          }
+          response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:'vmaf-v1',reference:odd,distorted:odd,width:oddWidth,height:oddHeight});
+          if((await response).type!=='error')throw new Error('Odd-sized 4:2:0 VMAF map was not refused');
+          const mixed=new Uint8Array(128*128*4);
+          for(let y=0;y<128;y++)for(let x=0;x<128;x++)for(let c=0;c<4;c++)mixed[(y*128+x)*4+c]=c===3?255:(x<64&&y<64?50:(x*17+y*13+c*41)%256);
+          response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'haarpsi',reference:mixed,distorted:mixed,width:128,height:128});
+          const undefinedMap=await response;
+          if(undefinedMap.type!=='result'||!undefinedMap.map.some(Number.isNaN)||!undefinedMap.map.some(Number.isFinite))throw new Error('HaarPSI native undefined regions were lost');
           response=wait();worker.postMessage({type:'generate',reference,width,height,quality:40});
           const jpeg=await response;if(jpeg.type!=='decoded'||!jpeg.encoded||jpeg.encoded[0]!==255||jpeg.encoded[1]!==216)throw new Error('JPEG generation failed');
           // The independent browser decoder validates the Zen encoder's bytes.
@@ -176,10 +253,76 @@ try:
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
           const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
           if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
-          worker.terminate();return {startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          worker.terminate();return {oddMaps,startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
+        # Map selection, the encoder modules and the live loop, through the
+        # worker protocol.
+        result['ui_linked_menus'] = ui_linked_menus
+        result['default_loop'] = default_loop
+        result['worker_maps_codecs_loop'] = page.evaluate('''async () => {
+          const worker = new Worker(new URL('./worker.js', location.href), {type:'module'});
+          let progress=0,frames=0;
+          const wait = () => new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Worker deadline expired')), 120000);
+            worker.onmessage = ({data}) => {
+              if(['control','score','progress'].includes(data.type))return;
+              if(data.type==='loop-progress'){if(!data.message)progress++;return;}
+              if(data.type==='loop-frame'){if(data.recon.length!==data.width*data.height*4||data.map.length!==data.width*data.height)throw new Error('loop frame size');frames++;return;}
+              clearTimeout(timer);data.type==='error'?reject(new Error(data.message)):resolve(data);
+            };
+          });
+          let response=wait();worker.postMessage({type:'init',threads:2});
+          const ready=await response;
+          if(!Array.isArray(ready.loopDefaults))throw new Error('No loop defaults');
+          const width=240,height=200,reference=new Uint8Array(width*height*4),distorted=new Uint8Array(reference.length);
+          for(let y=0;y<height;y++) for(let x=0;x<width;x++) for(let c=0;c<4;c++) {
+            const i=(y*width+x)*4+c; reference[i]=c===3?255:((x>>3)*37+(y>>2)*11+c*53+((x*y)&15))%256;
+            distorted[i]=c===3?255:Math.max(0,reference[i]-((x+y)%7));
+          }
+          const out={};
+          for(const metric of ['msssim','dssim']){
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:metric,mapName:'',reference,distorted,width,height});
+            const first=await response;
+            // The fused diffmap is the default; the list keeps the metric's order.
+            if(first.mapName!=='diffmap'||first.mapNames.length<2||!first.mapNames.includes('diffmap'))throw new Error(metric+' maps '+JSON.stringify(first.mapNames));
+            const name=first.mapNames.find(n=>n!=='diffmap');
+            response=wait();worker.postMessage({type:'map',mapMetric:metric,mapName:name});
+            const cached=await response;
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:metric,mapName:name,reference,distorted,width,height});
+            const fresh=await response;
+            if(cached.mapName!==name||fresh.mapName!==name||cached.map.length!==cached.mapWidth*cached.mapHeight)throw new Error(metric+' map '+name);
+            if(JSON.stringify(Array.from(cached.map))!==JSON.stringify(Array.from(fresh.map)))throw new Error(metric+' cached map differs');
+            out[metric]={names:first.mapNames,second:name,polarity:cached.mapPolarity};
+          }
+          response=wait();worker.postMessage({type:'compare',metric:'psnr-y',mapMetric:null,reference,distorted,width,height});
+          const scoreOnly=await response;
+          if(scoreOnly.map!==null)throw new Error('A score-only metric returned a map');
+          const magic={webp:[82,73,70,70],avif:[0,0,0],jxl:[255,10]};
+          out.codecs={};
+          for(const codec of ['jpeg','webp','avif','jxl']){
+            response=wait();worker.postMessage({type:'generate',codec,reference,width,height,quality:50});
+            const got=await response;
+            if(got.rgba.length!==width*height*4||!(got.bytes>0))throw new Error(codec+' roundtrip');
+            if(magic[codec]&&!magic[codec].every((v,i)=>got.encoded[i]===v))throw new Error(codec+' magic '+Array.from(got.encoded.slice(0,4)));
+            out.codecs[codec]=got.bytes;
+          }
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:{metric:'msssim',map:'',scale:1,exponent:1},steering:'msssim test'});
+          const run=await response;
+          const head=new TextDecoder().decode(run.trace.subarray(0,10));
+          if(head!=='JXLTRACE1\\n'||!(progress>0)||run.file.length<2||run.file[0]!==255)throw new Error('loop '+head+' '+progress);
+          if(frames!==progress)throw new Error('live frames '+frames+' vs scored '+progress);
+          out.loop={scored:progress,frames,bytes:run.file.length,trace:run.trace.byteLength};
+          frames=0;
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:null,steering:'butteraugli (built-in)'});
+          const builtin=await response;
+          if(!(frames>0)||builtin.file[0]!==255)throw new Error('built-in loop frames '+frames);
+          out.builtin_loop={frames,bytes:builtin.file.length};
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:{metric:'gmsd',map:'',scale:0,exponent:1},steering:'bad'});
+          try{await response;throw new Error('A zero scale was accepted');}catch(error){if(!String(error.message).includes('scale and exponent'))throw error;}
+          worker.terminate();return out;
+        }''')
         # Both file controls exercise the UI's independent upload revisions.
         jpeg=bytes(result.pop('jpeg_bytes'))
         observed=[]
@@ -191,15 +334,14 @@ try:
         assert '64×64' in page.locator('#dimensions').inner_text()
         assert page.locator('#score').inner_text()!='–'
         page.locator('#metric').select_option('ssim2')
-        page.wait_for_function("document.getElementById('score-label').textContent==='ssim2'",timeout=30000)
-        page.locator('#map-metric').select_option('gmsd')
-        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd')",timeout=30000)
+        page.wait_for_function("document.getElementById('score-label').textContent==='ssim2' && document.getElementById('map-info').textContent.startsWith('ssim2 · diffmap ·')",timeout=30000)
+        page.locator('#metric').select_option('gmsd')
+        page.wait_for_function("document.getElementById('score-label').textContent==='gmsd' && document.getElementById('map-info').textContent.startsWith('gmsd ·')",timeout=30000)
         assert not observed,observed
         result['offline_upload_ui_and_scoring']=True
         context.set_offline(False)
         context.set_offline(False)
         page.locator('#metric').select_option('zensim')
-        page.locator('#map-metric').select_option('zensim')
         page.locator('#demo').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
         assert page.locator('#score').inner_text()!='–'
@@ -209,7 +351,7 @@ try:
         assert page.locator('#norm').input_value() == 'sqrt'
         rendered = {}
         for map_metric in ('zensim', 'butteraugli', 'cvvdp'):
-            page.locator('#map-metric').select_option(map_metric)
+            page.locator('#metric').select_option(map_metric)
             page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·') && document.getElementById('map-info').textContent.includes('per-image scale')",arg=map_metric,timeout=30000)
             page.locator('[data-mode="map"]').click()
             colors = page.evaluate("""() => {
@@ -229,7 +371,7 @@ try:
         assert page.locator('#scale').is_enabled()
         assert 'fixed' in page.locator('#map-info').inner_text()
         page.locator('#norm').select_option('sqrt')
-        page.locator('#map-metric').select_option('zensim')
+        page.locator('#metric').select_option('zensim')
         page.wait_for_function("document.getElementById('map-info').textContent.startsWith('zensim ·')",timeout=30000)
         result['rendered_demo_maps'] = rendered
         # Invoke both UI handlers in one browser turn: a fast comparison must
@@ -253,12 +395,9 @@ try:
             page.wait_for_function("model => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model '+model+' ·')",arg=model,timeout=30000)
             assert '--zensim-profile '+model in page.locator('#cli-snippet').inner_text()
             assert 'model '+model in page.locator('#score-info').inner_text()
-        page.locator('#map-metric').select_option('psnr')
         page.locator('#zensim-model').select_option('c')
-        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('score-info').textContent.includes('model c') && document.getElementById('status').textContent.includes('psnr map')",timeout=30000)
+        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
         assert page.locator('#zensim-model-note').is_visible()
-        page.locator('#map-metric').select_option('zensim')
-        page.wait_for_function("document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
         assert page.locator('#map-info').inner_text() == 'No map yet'
         assert 'Map unavailable' in page.locator('#compute-timing').inner_text()
         assert 'model c' in page.locator('#score-info').inner_text()
@@ -271,10 +410,52 @@ try:
         assert 'Map ' in page.locator('#compute-timing').inner_text()
         assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
         result['ui_separate_timings']=True
+        # MS-SSIM stays last: the border check below reads its cropped origin.
+        for map_metric in ('ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','haarpsi','vsi','dssim','msssim'):
+            page.locator('#metric').select_option(map_metric)
+            page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
+            assert 'native samples' in page.locator('#map-info').inner_text()
+            assert page.locator('#score').inner_text()!='–'
+        page.locator('[data-mode="map"]').click()
+        border=page.evaluate("Array.from(document.getElementById('view').getContext('2d').getImageData(0,0,1,1).data)")
+        assert border == [190,190,190,255], border
+        page.locator('#view').dispatch_event('pointermove',{'clientX':page.locator('#view').bounding_box()['x']+1,'clientY':page.locator('#view').bounding_box()['y']+1})
+        assert 'no native map sample' in page.locator('#pixel').inner_text()
+        result['new_map_ui_and_cropped_border']=True
         result['demo_completion']=True
         result['ui_cancel_recovery']=True
         result['capability_report']=page.locator('#capabilities').inner_text()
         result['incompatible_memory_refused']=mismatch
+        # Encoder loop player: a synthetic two-frame trace, 16x8 pixels in two
+        # 8x8 blocks, in the format jxl-encoder's loop_trace_dump writes.
+        import struct
+        lw, lh = 16, 8
+        head = {'width': lw, 'height': lh, 'distance': 1.0, 'effort': 7, 'iters': 1, 'bytes': 123,
+                'xsize_blocks': 2, 'ysize_blocks': 1,
+                'frames': [{'seed': 0.6, 'iter': 0, 'metric': 'butteraugli', 'score': 1.5, 'target': 1.0, 'has_next': True},
+                           {'seed': 0.6, 'iter': 1, 'metric': 'butteraugli', 'score': 1.2, 'target': 1.0, 'has_next': False}]}
+        hb = json.dumps(head).encode()
+        f32 = lambda v: struct.pack('<%df' % len(v), *v)
+        trace = b'JXLTRACE1\n' + struct.pack('<I', len(hb)) + hb + bytes([10, 20, 30] * (lw * lh))
+        trace += f32([1, 1]) + f32([2, 0.5]) + f32([1.5, 0.5]) + f32([i / (lw * lh) for i in range(lw * lh)]) + bytes([200, 100, 50] * (lw * lh))
+        trace += f32([2, 0.5]) + f32([1.1, 0.9]) + f32([0.1] * (lw * lh)) + bytes([210, 110, 60] * (lw * lh))
+        page.locator('#trace').set_input_files({'name': 'synthetic.ltrace', 'mimeType': 'application/octet-stream', 'buffer': trace})
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of 2')", timeout=10000)
+        info = page.locator('#loop-info').inner_text()
+        assert 'iteration 0 of 1' in info and '1 of 2 blocks above target' in info and 'next: 1 blocks finer, 1 coarser' in info, info
+        loop_px = lambda x, y: page.evaluate(f"Array.from(document.getElementById('loop-view').getContext('2d').getImageData({x},{y},1,1).data)")
+        assert loop_px(0, 0) == [200, 100, 50, 255]
+        page.locator('#loop-layer').select_option('dqf')
+        assert loop_px(1, 1) == [255, 0, 0, 255], loop_px(1, 1)  # left block finer: red
+        assert loop_px(9, 1) == [0, 0, 255, 255], loop_px(9, 1)  # right block coarser: blue
+        page.locator('#loop-next').click()
+        info = page.locator('#loop-info').inner_text()
+        assert 'Frame 2 of 2' in info and 'score-only final pass' in info, info
+        page.locator('#loop-layer').select_option('recon')
+        assert loop_px(3, 3) == [210, 110, 60, 255]
+        page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})
+        page.wait_for_function("document.getElementById('loop-info').textContent.includes('Not a jxl-encoder loop trace')", timeout=10000)
+        result['loop_player'] = True
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']
@@ -288,10 +469,13 @@ try:
                 got=result['spatial'][name]
                 assert (got['width'],got['height'],got['similarity'])==(expected['width'],expected['height'],expected['similarity'])
                 assert len(got['values'])==len(expected['values'])
+                if 'geometry' in expected: assert got['geometry']==expected['geometry'],name
                 assert all(math.isfinite(v) for v in got['values'])
                 delta=max(abs(a-b) for a,b in zip(got['values'],expected['values']))
                 result['native_map_max_abs_delta'][name]=delta
-                if name=='psnr': assert delta==0
+                # IW-SSIM and mDCT-PSNR record their delta: neither claims cross-tier bits, and
+                # mDCT-PSNR calls platform libm (glibc natively, not on wasm32).
+                if name in ('psnr','fsim','fsimc','gmsd','haarpsi','msssim','vsi','ssim2','nlpd','psnrhvs','mad','vif','vifvec','vmaf-v1'): assert delta==0, (name,delta)
         if args.report:
             source_file=args.site/'site-source.json'
             asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''

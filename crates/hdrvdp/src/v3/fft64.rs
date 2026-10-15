@@ -1124,13 +1124,7 @@ impl Plan2 {
                         }
                     }
                     rows.run8_mode(
-                        relaxed,
-                        &mut re8,
-                        &mut im8,
-                        &mut sre8,
-                        &mut sim8,
-                        &mut s2re8,
-                        &mut s2im8,
+                        relaxed, &mut re8, &mut im8, &mut sre8, &mut sim8, &mut s2re8, &mut s2im8,
                     );
                     let yl = y0 - c * rw;
                     for j in 0..rws {
@@ -1240,8 +1234,7 @@ impl Plan2 {
                                     }
                                     let srow = &x[sy * src_w..sy * src_w + src_w];
                                     if id_end > k0 {
-                                        tile[j][..id_end - k0]
-                                            .copy_from_slice(&srow[k0..id_end]);
+                                        tile[j][..id_end - k0].copy_from_slice(&srow[k0..id_end]);
                                     }
                                     for t in id_end..kend {
                                         tile[j][t - k0] = match pad {
@@ -1295,13 +1288,7 @@ impl Plan2 {
                         }
                     }
                     rows.run8_mode(
-                        relaxed,
-                        &mut re8,
-                        &mut im8,
-                        &mut sre8,
-                        &mut sim8,
-                        &mut s2re8,
-                        &mut s2im8,
+                        relaxed, &mut re8, &mut im8, &mut sre8, &mut sim8, &mut s2re8, &mut s2im8,
                     );
                     let yl = y0 - c * rw;
                     if perm.is_none() && rws == 8 {
@@ -1648,10 +1635,8 @@ impl Plan2 {
                     let (d, s) = (y * 8, y * stride + x0);
                     let re: &[f64; 8] = (&self.re8[d..d + 8]).try_into().unwrap();
                     let im: &[f64; 8] = (&self.im8[d..d + 8]).try_into().unwrap();
-                    let pr: &mut [f64; 8] =
-                        (&mut self.pre[s..s + 8]).try_into().unwrap();
-                    let pi: &mut [f64; 8] =
-                        (&mut self.pim[s..s + 8]).try_into().unwrap();
+                    let pr: &mut [f64; 8] = (&mut self.pre[s..s + 8]).try_into().unwrap();
+                    let pi: &mut [f64; 8] = (&mut self.pim[s..s + 8]).try_into().unwrap();
                     for j in 0..8 {
                         pr[j] = re[j] * sc;
                         pi[j] = -im[j] * sc;
@@ -1749,95 +1734,80 @@ impl Plan2 {
         // `[tile][y][8]` for re and im.
         let nchunks = ntiles.min(rayon::current_num_threads());
         let chunk_len = ntiles.div_ceil(nchunks);
-        let strips: Vec<(usize, Vec<f64>, Vec<f64>)> =
-            crate::par::collect_indexed(nchunks, |c| {
-                let t0 = c * chunk_len;
-                let tn = ntiles.saturating_sub(t0).min(chunk_len);
-                let mut re8 = vec![0.0; h8];
-                let mut im8 = vec![0.0; h8];
-                let mut sre8 = vec![0.0; m8];
-                let mut sim8 = vec![0.0; m8];
-                let mut s2re8 = vec![0.0; m8];
-                let mut s2im8 = vec![0.0; m8];
-                let mut sre = Vec::with_capacity(tn * keep_rows * 8);
-                let mut sim = Vec::with_capacity(tn * keep_rows * 8);
-                for t in t0..t0 + tn {
-                    let x0 = t * 8;
-                    let cols = (w - x0).min(8);
-                    match perm {
-                        None => {
-                            for y in 0..h {
-                                let s = y * stride + x0;
-                                re8[y * 8..y * 8 + cols]
-                                    .copy_from_slice(&pre[s..s + cols]);
-                                im8[y * 8..y * 8 + cols]
-                                    .copy_from_slice(&pim[s..s + cols]);
-                            }
-                        }
-                        Some(r) => {
-                            for y in 0..h {
-                                let (d, s) = (r[y] as usize * 8, y * stride + x0);
-                                re8[d..d + cols].copy_from_slice(&pre[s..s + cols]);
-                                im8[d..d + cols].copy_from_slice(&pim[s..s + cols]);
-                            }
+        let strips: Vec<(usize, Vec<f64>, Vec<f64>)> = crate::par::collect_indexed(nchunks, |c| {
+            let t0 = c * chunk_len;
+            let tn = ntiles.saturating_sub(t0).min(chunk_len);
+            let mut re8 = vec![0.0; h8];
+            let mut im8 = vec![0.0; h8];
+            let mut sre8 = vec![0.0; m8];
+            let mut sim8 = vec![0.0; m8];
+            let mut s2re8 = vec![0.0; m8];
+            let mut s2im8 = vec![0.0; m8];
+            let mut sre = Vec::with_capacity(tn * keep_rows * 8);
+            let mut sim = Vec::with_capacity(tn * keep_rows * 8);
+            for t in t0..t0 + tn {
+                let x0 = t * 8;
+                let cols = (w - x0).min(8);
+                match perm {
+                    None => {
+                        for y in 0..h {
+                            let s = y * stride + x0;
+                            re8[y * 8..y * 8 + cols].copy_from_slice(&pre[s..s + cols]);
+                            im8[y * 8..y * 8 + cols].copy_from_slice(&pim[s..s + cols]);
                         }
                     }
-                    columns.run8_mode(
-                        relaxed,
-                        &mut re8,
-                        &mut im8,
-                        &mut sre8,
-                        &mut sim8,
-                        &mut s2re8,
-                        &mut s2im8,
-                    );
-                    // Filter + input-conjugate of the inverse; `perm`
-                    // lands products at the input slots the second
-                    // transform reads.
-                    match perm {
-                        None => {
-                            for y in 0..h {
-                                let s = y * w + x0;
-                                for j in 0..cols {
-                                    re8[y * 8 + j] *= filt[s + j];
-                                    im8[y * 8 + j] = -(im8[y * 8 + j] * filt[s + j]);
-                                }
-                            }
+                    Some(r) => {
+                        for y in 0..h {
+                            let (d, s) = (r[y] as usize * 8, y * stride + x0);
+                            re8[d..d + cols].copy_from_slice(&pre[s..s + cols]);
+                            im8[d..d + cols].copy_from_slice(&pim[s..s + cols]);
                         }
-                        Some(r) => {
-                            for y in 0..h {
-                                let (d, s) = (r[y] as usize * 8, y * w + x0);
-                                for j in 0..cols {
-                                    s2re8[d + j] = re8[y * 8 + j] * filt[s + j];
-                                    s2im8[d + j] = -(im8[y * 8 + j] * filt[s + j]);
-                                }
-                            }
-                            re8[..h8].copy_from_slice(&s2re8[..h8]);
-                            im8[..h8].copy_from_slice(&s2im8[..h8]);
-                        }
-                    }
-                    columns.run8_mode(
-                        relaxed,
-                        &mut re8,
-                        &mut im8,
-                        &mut sre8,
-                        &mut sim8,
-                        &mut s2re8,
-                        &mut s2im8,
-                    );
-                    for y in 0..keep_rows {
-                        let mut r8 = [0.0f64; 8];
-                        let mut i8 = [0.0f64; 8];
-                        for j in 0..cols {
-                            r8[j] = re8[y * 8 + j] * sc;
-                            i8[j] = -im8[y * 8 + j] * sc;
-                        }
-                        sre.extend_from_slice(&r8[..cols]);
-                        sim.extend_from_slice(&i8[..cols]);
                     }
                 }
-                (t0, sre, sim)
-            });
+                columns.run8_mode(
+                    relaxed, &mut re8, &mut im8, &mut sre8, &mut sim8, &mut s2re8, &mut s2im8,
+                );
+                // Filter + input-conjugate of the inverse; `perm`
+                // lands products at the input slots the second
+                // transform reads.
+                match perm {
+                    None => {
+                        for y in 0..h {
+                            let s = y * w + x0;
+                            for j in 0..cols {
+                                re8[y * 8 + j] *= filt[s + j];
+                                im8[y * 8 + j] = -(im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                    }
+                    Some(r) => {
+                        for y in 0..h {
+                            let (d, s) = (r[y] as usize * 8, y * w + x0);
+                            for j in 0..cols {
+                                s2re8[d + j] = re8[y * 8 + j] * filt[s + j];
+                                s2im8[d + j] = -(im8[y * 8 + j] * filt[s + j]);
+                            }
+                        }
+                        re8[..h8].copy_from_slice(&s2re8[..h8]);
+                        im8[..h8].copy_from_slice(&s2im8[..h8]);
+                    }
+                }
+                columns.run8_mode(
+                    relaxed, &mut re8, &mut im8, &mut sre8, &mut sim8, &mut s2re8, &mut s2im8,
+                );
+                for y in 0..keep_rows {
+                    let mut r8 = [0.0f64; 8];
+                    let mut i8 = [0.0f64; 8];
+                    for j in 0..cols {
+                        r8[j] = re8[y * 8 + j] * sc;
+                        i8[j] = -im8[y * 8 + j] * sc;
+                    }
+                    sre.extend_from_slice(&r8[..cols]);
+                    sim.extend_from_slice(&i8[..cols]);
+                }
+            }
+            (t0, sre, sim)
+        });
         // Scatter-back, parallel over `keep_rows` row-ranges: each task
         // copies its rows' tile-columns out of every chunk strip (strips
         // are read-only here; the row ranges are disjoint writes).
@@ -1900,9 +1870,7 @@ impl Plan2 {
 /// reuse is bit-identical (`reused_2d_plans_*` tests).
 static PLAN2_POOL: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<(usize, usize), Vec<Plan2>>>,
-> = std::sync::LazyLock::new(|| {
-    std::sync::Mutex::new(std::collections::HashMap::new())
-});
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 /// Run `f` on a pooled plan for `width × height`, constructing it on
 /// first use.
@@ -1981,18 +1949,7 @@ pub(super) fn conv_fft_pad(
     assert_eq!(filter.len(), pad_w * pad_h, "conv_fft_pad: filter size");
     let mut out = vec![0.0; width * height];
     conv_fft_pad_into(
-        x,
-        width,
-        height,
-        filter,
-        pad_w,
-        pad_h,
-        pad,
-        relaxed,
-        &mut out,
-        1,
-        0,
-        None,
+        x, width, height, filter, pad_w, pad_h, pad, relaxed, &mut out, 1, 0, None,
     );
     out
 }

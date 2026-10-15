@@ -48,6 +48,7 @@ extern crate alloc;
 extern crate std;
 
 use alloc::vec::Vec;
+use zenmetrics_abstractions as za;
 
 // Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
 #[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
@@ -203,58 +204,68 @@ impl core::fmt::Display for Error {
 
 impl core::error::Error for Error {}
 
-/// The GMSD metric as a generic scorer — accepts `RGB8_SRGB`
-/// [`zenpixels::PixelSlice`] inputs. Headline = `gmsd` (the std of the
-/// GMS map — error-direction).
+impl Error {
+    /// The generic-surface classification.
+    fn kind(&self) -> za::ErrorKind {
+        match self {
+            Error::StrideTooSmall { .. } | Error::BufferTooSmall { .. } => {
+                za::ErrorKind::InvalidInput
+            }
+            Error::DimensionMismatch { .. } => za::ErrorKind::DimensionMismatch,
+            Error::TooSmall { .. } => za::ErrorKind::TooSmall,
+            #[cfg(feature = "pixels")]
+            Error::Convert(_) => za::ErrorKind::UnsupportedInput,
+        }
+    }
+}
+
+/// Output revision of [`Gmsd`] on the generic surface; bump when any
+/// output can change.
+const SCORE_REVISION: u32 = 1;
+
+/// The GMSD metric as a generic scorer — accepts packed `RGB8_SRGB`.
+/// Headline = `gmsd` (the deviation of the GMS map; error-direction),
+/// then `mean_gms`. Map: the half-resolution GMS similarity map.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Gmsd;
 
-impl zenmetrics_abstractions::Metric for Gmsd {
-    fn name(&self) -> &'static str {
-        "gmsd"
+impl za::Metric for Gmsd {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new("gmsd", za::implementation!(SCORE_REVISION))
+            .with_reference("libgmsd de646c9a (GMSD.m, Xue et al. 2014)")
     }
 
-    fn score_kind(&self) -> zenmetrics_abstractions::ScoreKind {
-        zenmetrics_abstractions::ScoreKind::Difference
+    fn outputs(&self) -> alloc::borrow::Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[
+            za::ScoreSpec::new("gmsd", za::ScoreKind::Difference),
+            za::ScoreSpec::new("mean_gms", za::ScoreKind::Similarity),
+        ];
+        alloc::borrow::Cow::Borrowed(OUTPUTS)
     }
 
-    fn accepts(&self, descriptor: zenpixels::PixelDescriptor) -> bool {
-        descriptor == zenpixels::PixelDescriptor::RGB8_SRGB
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
     }
 
     fn evaluate(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-        opts: zenmetrics_abstractions::EvalOpts,
-    ) -> zenmetrics_abstractions::MetricResult<
-        alloc::boxed::Box<dyn zenmetrics_abstractions::Evaluation>,
-    > {
-        use zenmetrics_abstractions as za;
-        let (r, d) = za::rgb8_pair(r, d).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<alloc::boxed::Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_s, mut dm) = gmsd_rgb8_with_diffmap(
-                r.pixels, d.pixels, r.width, r.height, r.stride,
-            )
-            .map_err(|e| {
-                alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-            })?;
-            if let za::MapRequest::Subsampled { factor } = req {
-                let (m, w, h) = za::map_subsample_f32(&dm.map, dm.width, dm.height, factor);
-                dm.map = m;
-                dm.width = w;
-                dm.height = h;
-            }
-            return Ok(alloc::boxed::Box::new(dm));
+            let (_, dm) = gmsd_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .metric_err_with("gmsd", Error::kind)?;
+            return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride).map_err(|e| {
-            alloc::boxed::Box::new(e) as alloc::boxed::Box<dyn core::error::Error + Send + Sync>
-        })?;
-        let mut out = za::ScalarEval::single("gmsd", s.gmsd);
-        out.push("mean_gms", s.mean_gms);
-        Ok(alloc::boxed::Box::new(out))
+        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .metric_err_with("gmsd", Error::kind)?;
+        Ok(alloc::boxed::Box::new(
+            za::ScalarEval::single("gmsd", s.gmsd).with("mean_gms", s.mean_gms),
+        ))
     }
 }
 
@@ -282,9 +293,9 @@ pub fn gmsd_with_map(
     run(reference, distorted, Some(map))
 }
 
-/// GMSD's per-pixel GMS map, owned — the canonical `gmsd_map` output of
-/// the reference (`gmsd.m` returns `[gmsd, gmsd_map]`). Implements
-/// [`zenmetrics_abstractions::Diffmap`].
+/// GMSD's GMS map, owned — the canonical `gmsd_map` output of the
+/// reference (`GMSD.m` returns `[gmsd, gmsd_map]`), as a
+/// [`zenmetrics_abstractions::Evaluation`].
 #[non_exhaustive]
 pub struct GmsdDiffmap {
     map: Vec<f32>,
@@ -294,6 +305,7 @@ pub struct GmsdDiffmap {
     pub height: u32,
     /// The score computed alongside the map.
     pub score: GmsdScore,
+    input: (u32, u32),
 }
 
 impl GmsdDiffmap {
@@ -303,14 +315,31 @@ impl GmsdDiffmap {
     }
 }
 
-impl zenmetrics_abstractions::Evaluation for GmsdDiffmap {
+impl GmsdDiffmap {
+    /// Cell `k` owns input pixels `2k, 2k+1` (the 2×2 average); the 3×3
+    /// Prewitt on the half-resolution grid reaches one more sample, two
+    /// input pixels, each way.
+    pub fn geometry(&self) -> za::MapGeometry {
+        za::MapGeometry::grid(
+            self.input.0,
+            self.input.1,
+            0,
+            0,
+            2,
+            2,
+            self.width,
+            self.height,
+        )
+        .with_halo(2, 2)
+    }
+}
+
+impl za::Evaluation for GmsdDiffmap {
     fn score(&self) -> f64 {
         self.score.gmsd
     }
 
-    fn scores(
-        &self,
-    ) -> alloc::boxed::Box<dyn Iterator<Item = (alloc::borrow::Cow<'static, str>, f64)> + '_> {
+    fn scores(&self) -> za::Scores<'_> {
         alloc::boxed::Box::new(
             [
                 (alloc::borrow::Cow::Borrowed("gmsd"), self.score.gmsd),
@@ -323,20 +352,13 @@ impl zenmetrics_abstractions::Evaluation for GmsdDiffmap {
         )
     }
 
-    fn map(&self) -> Option<zenpixels::PixelCow<'_>> {
-        Some(zenpixels::PixelCow::Borrowed(
-            zenmetrics_abstractions::gray_f32_slice(&self.map, self.width, self.height),
-        ))
+    /// The GMS map is similarity-direction (higher = more similar); the
+    /// headline score, its deviation, is error-direction.
+    fn map(&self) -> Option<za::MapView<'_>> {
+        let px = za::gray_f32_slice(&self.map, self.width, self.height).ok()?;
+        za::MapView::new("gms", px, za::MapPolarity::Similarity, self.geometry()).ok()
     }
 
-    /// The GMS map is a similarity map (higher = more similar); note the
-    /// *score* is error-direction (its std) — `map_polarity` describes
-    /// the MAP, not the score.
-    fn map_polarity(&self) -> Option<zenmetrics_abstractions::MapPolarity> {
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
-    }
-
-    /// GMSD IS the std of this map — `"std"` folds back to the headline.
     fn as_any(&self) -> &dyn core::any::Any {
         self
     }
@@ -382,6 +404,7 @@ pub fn gmsd_with_diffmap(
             width: mw as u32,
             height: mh as u32,
             score,
+            input: (reference.width() as u32, reference.height() as u32),
         },
     ))
 }

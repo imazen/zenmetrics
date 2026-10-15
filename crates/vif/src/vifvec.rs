@@ -60,21 +60,11 @@ const SUBS: [(usize, usize, usize, usize); 8] = [
     (1, 1, 17, 3),
 ];
 
-// `libm::log2` polynomial constants (fdlibm `e_log2.c`) — the lane-
-// vectorised transcription below uses the same constants, operation
-// order and bit tricks, so every lane is bit-identical to `libm::log2`.
-const IVLN2HI: f64 = 1.44269504072144627571e+00;
-const IVLN2LO: f64 = 1.67517131648865118353e-10;
-const LG1: f64 = 6.666666666666735130e-01;
-const LG2: f64 = 3.999999999940941908e-01;
-const LG3: f64 = 2.857142874366239149e-01;
-const LG4: f64 = 2.222219843214978396e-01;
-const LG5: f64 = 1.818357216161805012e-01;
-const LG6: f64 = 1.531383769920937332e-01;
-const LG7: f64 = 1.479819860511658591e-01;
+// `libm::log2` lanes moved to zenmetrics-math (`fdlibm64::log2_libm_4x`).
 
 // ------------------------------------------------------------------
-// sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim).
+// sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim; MIT,
+// Copyright (c) 2015 LabForComputationalVision, see LICENSE-matlabPyrTools).
 // ------------------------------------------------------------------
 
 /// `lo0filt` — 5×5, applied to the input image before level 1.
@@ -1526,62 +1516,26 @@ fn vifsub_est(
 // Pooled log2 accumulation (vector-GSM pooling).
 // ------------------------------------------------------------------
 
-/// Lane-vectorised `libm::log2` for `x >= 1` (the pooling domain:
-/// `1 + nonneg`). The frexp-style reduce and the `hi` truncation are
-/// per-lane scalar bit ops; the polynomial, divide and the `hi/lo`
-/// reconstruction run lane-parallel with *separate* `mul`/`add`
-/// (never fused), so each lane reproduces `libm::log2` bitwise.
+/// Lane-vectorised `libm::log2` — delegates to zenmetrics-math's
+/// lane-exact fdlibm `e_log2` port (`log2_libm_4x`), bit-identical to
+/// `libm::log2` on every input (this call site only feeds `x >= 1`,
+/// the `1 + nonneg` pooling domain). 8-lane tiers run two 4-lane
+/// calls — the port is `f64x4`-wide on every tier.
 macro_rules! log2_lanes {
     ($token:ident, $V:ty, $lanes:literal, $x:expr) => {{
         let xa: [f64; $lanes] = $x;
-        let mut xr = [0.0f64; $lanes];
-        let mut kk = [0.0f64; $lanes];
-        for i in 0..$lanes {
-            // libm's `hx += 0x3ff00000 - 0x3fe6a09e` reduce:
-            // folds x into m ∈ [√2/2, √2] and counts k.
-            let ui = xa[i].to_bits();
-            let mut hx = (ui >> 32) as u32;
-            hx = hx.wrapping_add(0x3ff0_0000u32.wrapping_sub(0x3fe6_a09e));
-            kk[i] = ((hx >> 20) as i32 - 0x3ff) as f64;
-            hx = (hx & 0x000f_ffff).wrapping_add(0x3fe6_a09e);
-            xr[i] = f64::from_bits(((hx as u64) << 32) | (ui & 0xffff_ffff));
-        }
-        let xv = <$V>::from_array_t($token, xr);
-        let kv = <$V>::from_array_t($token, kk);
-        let f = xv - <$V>::splat_t($token, 1.0);
-        let hfsq = <$V>::splat_t($token, 0.5) * f * f;
-        let s = f / (<$V>::splat_t($token, 2.0) + f);
-        let z = s * s;
-        let w = z * z;
-        let t1 = w
-            * (<$V>::splat_t($token, LG2)
-                + w * (<$V>::splat_t($token, LG4) + w * <$V>::splat_t($token, LG6)));
-        let t2 = z
-            * (<$V>::splat_t($token, LG1)
-                + w * (<$V>::splat_t($token, LG3)
-                    + w * (<$V>::splat_t($token, LG5) + w * <$V>::splat_t($token, LG7))));
-        let r = t2 + t1;
-        // hi = f - hfsq with the low 32 mantissa bits cleared.
-        let mut ha = (f - hfsq).to_array();
-        for v in ha.iter_mut() {
-            *v = f64::from_bits(v.to_bits() & !0xffff_ffffu64);
-        }
-        let hi = <$V>::from_array_t($token, ha);
-        let lo = f - hi - hfsq + s * (hfsq + r);
-        let val_hi = hi * <$V>::splat_t($token, IVLN2HI);
-        let val_lo =
-            (lo + hi) * <$V>::splat_t($token, IVLN2LO) + lo * <$V>::splat_t($token, IVLN2HI);
-        let wv = kv + val_hi;
-        let val_lo = val_lo + ((kv - wv) + val_hi);
-        let mut ra = (val_lo + wv).to_array();
-        for i in 0..$lanes {
-            // libm early-outs: `x == 1 → 0`; `exp == 0x7ff → x`
-            // (inf → inf, NaN → NaN — NaN also propagates anyway).
-            if xa[i] == 1.0 {
-                ra[i] = 0.0;
-            } else if (xa[i].to_bits() >> 52) & 0x7ff == 0x7ff {
-                ra[i] = xa[i];
-            }
+        let mut ra = [0.0f64; $lanes];
+        let mut k = 0;
+        while k < $lanes {
+            let r = zenmetrics_math::fdlibm64::log2_libm_4x(
+                $token,
+                magetypes::simd::generic::f64x4::<_>::from_array_t(
+                    $token,
+                    core::array::from_fn(|j| xa[k + j]),
+                ),
+            );
+            ra[k..k + 4].copy_from_slice(&r.to_array());
+            k += 4;
         }
         ra
     }};
@@ -1985,16 +1939,50 @@ fn pool_log2(
 // Driver.
 // ------------------------------------------------------------------
 
+/// One subband's per-block information terms over the cropped block grid
+/// the score pools: `num[i] = Σ_λ log2(1 + g²·s·λ/(σᵥ² + σₙ²))`,
+/// `den[i] = Σ_λ log2(1 + s·λ/σₙ²)` (λ in eigenvalue order), each block
+/// summed on its own; the score sums the same per-element `log2` terms in
+/// λ-major order.
+#[derive(Debug)]
+pub(crate) struct SubTerms {
+    /// Pyramid level, 1-based (1 = full resolution).
+    pub(crate) level: usize,
+    /// MATLAB band index, 1 or 4.
+    pub(crate) band: usize,
+    /// Blocks cropped from each side of the subband's block grid.
+    pub(crate) offset: usize,
+    /// Cropped grid width in 3×3 blocks.
+    pub(crate) w: usize,
+    /// Cropped grid height in blocks.
+    pub(crate) h: usize,
+    pub(crate) num: Vec<f64>,
+    pub(crate) den: Vec<f64>,
+}
+
 /// Vector-GSM VIF of two `w×h` f64 planes (0–255 signal scale).
 /// Returns `NaN` when the reference would (empty/degenerate fields).
 pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
+    vifvec_core_impl(r, d, w, h, None)
+}
+
+/// [`vifvec_core`]; with `maps`, also collects every selected subband's
+/// [`SubTerms`] in `SUBS` order after its pooling terms are computed.
+pub(crate) fn vifvec_core_impl(
+    r: &[f64],
+    d: &[f64],
+    w: usize,
+    h: usize,
+    maps: Option<&mut Vec<SubTerms>>,
+) -> f64 {
+    let with_maps = maps.is_some();
     // The two pyramid decompositions are independent.
     let (rb, db) = crate::kernel::maybe_join(|| build_bands(r, w, h), || build_bands(d, w, h));
 
     // Per-subband work is independent; collect each band's 9 (t1,t2)
     // pairs in band order and fold serially — the fold visits terms in
     // the original (sub, lam) order, so the sum is bit-identical.
-    let sub_terms = |si: usize| -> Vec<(f64, f64)> {
+    let sub_terms = |si: usize| -> (Vec<(f64, f64)>, Option<SubTerms>) {
         let (level, band, winsize, offset) = SUBS[si];
         let y = &rb[level - 1][usize::from(band == 4)];
         let yn = &db[level - 1][usize::from(band == 4)];
@@ -2005,12 +1993,39 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
         // Crop `offset` entries on every side of the block maps
         // (reference: `g(offset+1:end-offset, …)`).
         let (iw, ih) = (nbw - 2 * offset, nbh - 2 * offset);
-        lambda
+        let terms: Vec<(f64, f64)> = lambda
             .iter()
             .map(|&lam| pool_log2(&g, &vv, &ss, nbw, iw, ih, offset, lam))
-            .collect()
+            .collect();
+        let blocks = with_maps.then(|| {
+            // The same per-element `libm::log2` terms `pool_log2` adds
+            // (its lanes are bit-identical to it), summed per block.
+            let (mut num, mut den) = (alloc::vec![0.0f64; iw * ih], alloc::vec![0.0f64; iw * ih]);
+            for &lam in &lambda {
+                for by in 0..ih {
+                    let row = (by + offset) * nbw + offset;
+                    for bx in 0..iw {
+                        let i = row + bx;
+                        let (gi, vi, si) = (g[i], vv[i], ss[i]);
+                        num[by * iw + bx] +=
+                            libm::log2(1.0 + gi * gi * si * lam / (vi + SIGMA_NSQ));
+                        den[by * iw + bx] += libm::log2(1.0 + si * lam / SIGMA_NSQ);
+                    }
+                }
+            }
+            SubTerms {
+                level,
+                band,
+                offset,
+                w: iw,
+                h: ih,
+                num,
+                den,
+            }
+        });
+        (terms, blocks)
     };
-    let subs_terms: Vec<Vec<(f64, f64)>> = {
+    let subs_terms: Vec<(Vec<(f64, f64)>, Option<SubTerms>)> = {
         #[cfg(feature = "parallel")]
         {
             use rayon::prelude::*;
@@ -2027,11 +2042,14 @@ pub(crate) fn vifvec_core(r: &[f64], d: &[f64], w: usize, h: usize) -> f64 {
     };
     let mut num = 0.0f64;
     let mut den = 0.0f64;
-    for terms in &subs_terms {
+    for (terms, _) in &subs_terms {
         for &(t1, t2) in terms {
             num += t1;
             den += t2;
         }
+    }
+    if let Some(sink) = maps {
+        sink.extend(subs_terms.into_iter().filter_map(|(_, b)| b));
     }
     num / den
 }

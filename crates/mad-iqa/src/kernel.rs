@@ -83,6 +83,22 @@ pub struct Args<'a> {
     pub w: usize,
     /// Height.
     pub h: usize,
+    /// When `Some`, receives the run's strategy maps after the indices
+    /// are computed from them.
+    pub maps: Option<&'a mut MapsOut>,
+}
+
+/// The two strategy maps of one run, before the interior trim.
+#[derive(Debug, Default)]
+pub struct MapsOut {
+    /// `hi_index`'s map: contrast-threshold mask × 16×16 local MSE, full
+    /// resolution, `w·h` row-major.
+    pub hi: Vec<f32>,
+    /// `lo_index`'s map at its native tile resolution: one value per 4×4
+    /// tile at pixel `(4·jt, 4·it)`, `tiles.0 × tiles.1` row-major.
+    pub lo: Vec<f32>,
+    /// `(tile rows, tile cols)`.
+    pub tiles: (usize, usize),
 }
 
 // ============================ shared helpers ============================
@@ -563,24 +579,35 @@ fn sym(mut i: isize, n: usize) -> usize {
 fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
     // round(x/2+1) 1-based → 0-based
     let (rc, cc) = (m.div_ceil(2), n.div_ceil(2));
-    let mut radius = vec![0.0f64; m * n];
     let mut theta = vec![0.0f64; m * n];
+    // x,y ∈ [-1,1] → x²+y² ≤ 2: no overflow, ~1 ulp vs hypot. The
+    // centre lane gets arg 1.0 — `0.5·log(1) = 0`, the reference's
+    // radius fudge — then the f64 `log` runs on lanes (bit-identical
+    // to `libm::log` per element).
+    let mut a64 = vec![0.0f64; m * n];
     for r in 0..m {
         for c in 0..n {
             let x = (c as f64 - n as f64 / 2.0) / (n as f64 / 2.0);
             let y = (r as f64 - m as f64 / 2.0) / (m as f64 / 2.0);
             let i = r * n + c;
-            // x,y ∈ [-1,1] → x²+y² ≤ 2: no overflow, ~1 ulp vs hypot.
-            radius[i] = if r == rc && c == cc {
-                0.0 // log(1) — the reference's radius fudge
+            a64[i] = if r == rc && c == cc {
+                1.0
             } else {
-                0.5 * libm::log(x * x + y * y)
+                x * x + y * y
             };
             theta[i] = libm::atan2(-y, x);
         }
     }
+    let mut radius = vec![0.0f64; m * n];
+    zenmetrics_math::vlog_libm_into(&a64, &mut radius);
+    for v in radius.iter_mut() {
+        *v *= 0.5;
+    }
     let sigma_onf = 0.55f64;
     let theta_sigma = core::f64::consts::PI / 4.0 / 1.5;
+    // expf args are computed in f64 exactly as before; only the expf itself
+    // runs on lanes (bit-identical to scalar `libm::expf` per element).
+    let mut arg = vec![0.0f32; m * n];
     let mut logs = Vec::with_capacity(5);
     for s in 0..5 {
         let rfo = (1.0 / (3.0 * libm::pow(3.0, s as f64))) / 0.5;
@@ -589,8 +616,9 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
         let mut lg = vec![0.0f32; m * n];
         for i in 0..m * n {
             let d = radius[i] - lrfo;
-            lg[i] = libm::expf((d * d / den) as f32);
+            arg[i] = (d * d / den) as f32;
         }
+        zenmetrics_math::vexpf_libm_into(&arg, &mut lg);
         lg[rc * n + cc] = 0.0; // undo the radius fudge
         logs.push(lg);
     }
@@ -607,11 +635,35 @@ fn gabor_grids(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
                 d += 2.0 * core::f64::consts::PI;
             }
             let dth = d.abs();
-            sp[i] = libm::expf((-dth * dth * inv) as f32);
+            arg[i] = (-dth * dth * inv) as f32;
         }
+        zenmetrics_math::vexpf_libm_into(&arg, &mut sp);
         spreads.push(sp);
     }
     (logs, spreads)
+}
+
+/// Single-slot size-keyed bank — video IQA calls repeat one size
+/// (same shape as fsim's `filter_bank` cache).
+#[cfg(feature = "std")]
+fn gabor_grids_cached(m: usize, n: usize) -> std::sync::Arc<(Vec<Vec<f32>>, Vec<Vec<f32>>)> {
+    static CACHE: std::sync::Mutex<
+        Option<(usize, usize, std::sync::Arc<(Vec<Vec<f32>>, Vec<Vec<f32>>)>)>,
+    > = std::sync::Mutex::new(None);
+    let mut g = CACHE.lock().unwrap();
+    match &*g {
+        Some((bm, bn, b)) if *bm == m && *bn == n => b.clone(),
+        _ => {
+            let b = std::sync::Arc::new(gabor_grids(m, n));
+            *g = Some((m, n, b.clone()));
+            b
+        }
+    }
+}
+
+#[cfg(not(feature = "std"))]
+fn gabor_grids_cached(m: usize, n: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
+    gabor_grids(m, n)
 }
 
 /// `|ifft2(imagefft .* fftshift(logGabor·spread))|` — the EO magnitude
@@ -716,27 +768,28 @@ macro_rules! score_body {
         // same `libm::pow` — identical bits, ~100x cheaper per element.
         let lum_lut: [f32; 256] =
             core::array::from_fn(|i| (K_LUM * libm::pow(i as f64, 2.2 / 3.0)) as f32);
-        let lum_px = |v: f32| -> f32 {
-            if (0.0..256.0).contains(&v) && v == v.trunc() {
-                lum_lut[v as usize]
-            } else {
-                (K_LUM * libm::pow(v as f64, 2.2 / 3.0)) as f32
-            }
-        };
-        // Vector path: `pow_midp` (~30 ulp worst on this range — the
-        // exponent·log2 argument stays under 6) vs the scalar `libm::pow`
-        // per pixel; differences ride far inside the score golden.
+        // Vector path: u8-derived chunks (the common case) hit `lum_lut`
+        // directly; anything else takes lane-exact fdlibm `e_pow` on f64
+        // lanes — bit-identical to `libm::pow` for every input
+        // (the LUT memoizes the same expression).
         let lum_chunk = |lc: &mut [f32], ic: &[f32]| {
-            let klum = <$V>::splat_t($token, K_LUM as f32);
-            let mut i = 0usize;
-            while i + $LANES <= ic.len() {
-                let v = <$V>::from_array_t($token, core::array::from_fn(|k| ic[i + k]));
-                lc[i..i + $LANES].copy_from_slice(&(v.pow_midp(2.2 / 3.0) * klum).to_array());
-                i += $LANES;
-            }
-            while i < ic.len() {
-                lc[i] = lum_px(ic[i]);
-                i += 1;
+            if ic
+                .iter()
+                .all(|&v| (0.0..256.0).contains(&v) && v == v.trunc())
+            {
+                for (k, &v) in ic.iter().enumerate() {
+                    lc[k] = lum_lut[v as usize];
+                }
+            } else {
+                let mut a64 = vec![0.0f64; ic.len()];
+                for (k, &v) in ic.iter().enumerate() {
+                    a64[k] = v as f64;
+                }
+                let mut r64 = vec![0.0f64; ic.len()];
+                zenmetrics_math::vpow64_libm_into(&a64, &mut r64, 2.2 / 3.0);
+                for k in 0..ic.len() {
+                    lc[k] = (K_LUM * r64[k]) as f32;
+                }
             }
         };
         #[cfg(feature = "parallel")]
@@ -910,7 +963,8 @@ macro_rules! score_body {
         }
 
         // ---------- lo_index ----------
-        let (logs, spreads) = gabor_grids(m, n);
+        let gb = gabor_grids_cached(m, n);
+        let (logs, spreads) = (&gb.0, &gb.1);
         let (xfft_r, xfft_d) = maybe_join(
             || spectrum(&$a.im1, m, n, &wplan, &hplan),
             || spectrum(&$a.im2, m, n, &wplan, &hplan),
@@ -998,6 +1052,11 @@ macro_rules! score_body {
         // ---------- trim + norms ----------
         let hi = interior_norm(&mp_hi, m, n) * 10.0;
         let lo = interior_norm(&mp_lo, m, n);
+        if let Some(out) = $a.maps {
+            out.hi = mp_hi;
+            out.lo = mp_lo_t;
+            out.tiles = (mt, nt);
+        }
         (hi, lo)
     }};
 }
@@ -1042,12 +1101,18 @@ pub fn mad_core_tier_scalar_t(token: archmage::ScalarToken, a: Args<'_>) -> (f64
 }
 
 /// Runtime-dispatched MAD score → [`crate::MadScore`].
-pub(crate) fn mad_score(inputs: &crate::Inputs, w: usize, h: usize) -> crate::MadScore {
+pub(crate) fn mad_score(
+    inputs: &crate::Inputs,
+    w: usize,
+    h: usize,
+    maps: Option<&mut MapsOut>,
+) -> crate::MadScore {
     let a = Args {
         im1: &inputs.r,
         im2: &inputs.d,
         w,
         h,
+        maps,
     };
     let (hi, lo) = archmage::attuned!(
         mad_core_tier(a),

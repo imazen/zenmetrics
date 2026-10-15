@@ -214,7 +214,8 @@ fn plane_goldens() {
             e_mad
         );
     }
-    eprintln!("worst rel deltas: hi {worst_hi:e} lo {worst_lo:e} mad {worst_mad:e}");
+    #[cfg(feature = "std")]
+    std::eprintln!("worst rel deltas: hi {worst_hi:e} lo {worst_lo:e} mad {worst_mad:e}");
 }
 
 /// MAD is a distance: identical inputs score exactly 0 on both
@@ -286,8 +287,9 @@ fn tier_parity() {
         im2: &d,
         w: 96,
         h: 96,
+        maps: None,
     };
-    let s0 = mad_core_tier_scalar(archmage::ScalarToken, a);
+    let s0 = mad_core_tier_scalar_t(archmage::ScalarToken, a);
     #[cfg(target_arch = "x86_64")]
     {
         let a = Args {
@@ -295,6 +297,7 @@ fn tier_parity() {
             im2: &d,
             w: 96,
             h: 96,
+            maps: None,
         };
         let Some(t3) = archmage::X64V3Token::summon() else {
             return;
@@ -310,6 +313,7 @@ fn tier_parity() {
                     im2: &d,
                     w: 96,
                     h: 96,
+                    maps: None,
                 },
             );
             assert_eq!(s0, s4, "v4x diverged");
@@ -325,8 +329,117 @@ fn tier_parity() {
                 im2: &d,
                 w: 96,
                 h: 96,
+                maps: None,
             },
         );
         assert_eq!(s0, sn, "neon diverged");
+    }
+}
+
+/// `interior_norm`'s accumulation over already-cropped interior rows:
+/// eight lane partials per row, carried across rows, tail into lane 0.
+fn rms_like_interior_norm(rows: &[f32], iw: usize) -> f64 {
+    let mut acc = [0.0f64; 8];
+    let mut count = 0usize;
+    for row in rows.chunks_exact(iw) {
+        let mut c = 0;
+        while c + 8 <= row.len() {
+            for k in 0..8 {
+                let v = row[c + k] as f64;
+                acc[k] += v * v;
+            }
+            c += 8;
+        }
+        while c < row.len() {
+            let v = row[c] as f64;
+            acc[0] += v * v;
+            c += 1;
+        }
+        count += row.len();
+    }
+    libm::sqrt(acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7])
+        / libm::sqrt(count as f64)
+}
+
+fn rgb_from_luma_like(p: &[f32]) -> Vec<u8> {
+    p.iter()
+        .flat_map(|&v| [v as u8, (255.0 - v) as u8, (v * 0.5) as u8])
+        .collect()
+}
+
+/// The interior maps fold back to `hi` and `lo` bit for bit: `HI` is 10×
+/// their RMS, `LO` the RMS of the tile values over interior pixels.
+#[test]
+fn strategy_maps_fold_to_the_indices_exactly() {
+    for (w, h) in [(96usize, 96usize), (77, 61), (34, 40), (130, 70)] {
+        let (a, b) = (
+            rgb_from_luma_like(&gen1(w, h)),
+            rgb_from_luma_like(&gen4(w, h)),
+        );
+        let plain = mad_rgb8(&a, &b, w, h, w * 3).unwrap();
+        let (score, raw) = mad_rgb8_maps(&a, &b, w, h, w * 3).unwrap();
+        assert_eq!(score, plain, "{w}x{h}");
+        let maps = MadMaps::new(score, raw, w, h);
+        let (iw, ih) = interior(w, h).unwrap();
+        assert_eq!(maps.hi.len(), iw * ih);
+        let hi = rms_like_interior_norm(&maps.hi, iw) * 10.0;
+        assert_eq!(hi.to_bits(), plain.hi.to_bits(), "{w}x{h} hi");
+        // Expand the tile map over the interior pixels it covers.
+        let (tx, ty) = (
+            maps.geometry[1].cells_x as usize,
+            maps.geometry[1].cells_y as usize,
+        );
+        let mut px = Vec::with_capacity(iw * ih);
+        for y in 0..ih {
+            for x in 0..iw {
+                let (jt, it) = (y / 4, x / 4);
+                assert!(jt < ty && it < tx, "{w}x{h}: interior pixel without a tile");
+                px.push(maps.lo[jt * tx + it]);
+            }
+        }
+        let lo = rms_like_interior_norm(&px, iw);
+        assert_eq!(lo.to_bits(), plain.lo.to_bits(), "{w}x{h} lo");
+    }
+}
+
+/// `hi` is the contrast mask times a 16×16 local MSE of the raw planes
+/// over `{x−7 … x+8}`, so a changed patch can only light up cells whose
+/// box holds part of it: this pins the map's pixel alignment (cell
+/// `(i, j)` is pixel `(16+i, 16+j)`). A bright patch on a flat field clears
+/// the contrast threshold; a faint change in texture may not, and then the
+/// mask, and the map, are legitimately 0.
+#[test]
+fn hi_map_alignment_matches_the_local_mse_window() {
+    let (w, h) = (96usize, 80usize);
+    let base = alloc::vec![64.0f32; w * h];
+    let size = 3;
+    for (px, py) in [(40usize, 37usize), (20, 20), (73, 60)] {
+        let mut d = base.clone();
+        for y in py..py + size {
+            for x in px..px + size {
+                d[y * w + x] = 250.0;
+            }
+        }
+        let (a, b) = (rgb_from_luma_like(&base), rgb_from_luma_like(&d));
+        let (s, raw) = mad_rgb8_maps(&a, &b, w, h, w * 3).unwrap();
+        let maps = MadMaps::new(s, raw, w, h);
+        let (iw, ih) = interior(w, h).unwrap();
+        let mut lit = 0;
+        for j in 0..ih {
+            for i in 0..iw {
+                if maps.hi[j * iw + i] != 0.0 {
+                    let (x, y) = (16 + i, 16 + j);
+                    assert!(
+                        x + 8 >= px
+                            && x <= px + size - 1 + 7
+                            && y + 8 >= py
+                            && y <= py + size - 1 + 7,
+                        "patch ({px},{py}): cell at ({x},{y}) outside the box window"
+                    );
+                    lit += 1;
+                }
+            }
+        }
+        assert!(lit > 0, "patch ({px},{py}) not visible");
     }
 }

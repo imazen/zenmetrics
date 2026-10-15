@@ -1,7 +1,7 @@
 //! The FSIM/FSIMc pipeline, ported pass-for-pass from the authors'
 //! `FR_FSIMc.m` (the "FSIM Index with automatic downsampling, Version
-//! 1.0" reference — phasecong2 is Kovesi's public-domain code embedded
-//! in that file).
+//! 1.0" reference — phasecong2 and lowpassfilter are Peter Kovesi's code
+//! embedded in that file, MIT-style licensed: notice in `LICENSE-kovesi`).
 //!
 //! Precision layout: f32 planes end-to-end (the vendored FFT is f32),
 //! f64 for every scalar reduction (medians, noise sums, the pooling
@@ -727,12 +727,29 @@ fn radial_filters(w: usize, h: usize, radius: &[f32]) -> [Vec<f32>; NSCALE] {
     let n = w * h;
     let mut lg: [Vec<f32>; NSCALE] = core::array::from_fn(|_| vec![0.0; n]);
     let log_sigma = libm::log(SIGMA_ONF);
+    let mut a64 = vec![0.0f64; n];
+    let mut l64 = vec![0.0f64; n];
+    let mut p64 = vec![0.0f64; n];
+    {
+        let mut pw_in = vec![0.0f64; n];
+        for i in 0..n {
+            pw_in[i] = radius[i] as f64 / LP_CUTOFF;
+        }
+        // lp = 1/(1 + pow(r/LP_CUTOFF, 2·LP_ORDER)) — the pow is
+        // scale-invariant, so it runs on lanes once (bit-identical to
+        // `libm::pow` per element).
+        zenmetrics_math::vpow64_libm_into(&pw_in, &mut p64, 2.0 * LP_ORDER);
+    }
     for (s, lg_s) in lg.iter_mut().enumerate() {
         let fo = 1.0 / (MIN_WAVELENGTH * libm::pow(MULT, s as f64));
         for i in 0..n {
-            let r = radius[i] as f64;
-            let lp = 1.0 / (1.0 + libm::pow(r / LP_CUTOFF, 2.0 * LP_ORDER));
-            let l = libm::log(r / fo);
+            a64[i] = radius[i] as f64 / fo;
+        }
+        // l = log(r / fo) on lanes — bit-identical to `libm::log`.
+        zenmetrics_math::vlog_libm_into(&a64, &mut l64);
+        for i in 0..n {
+            let l = l64[i];
+            let lp = 1.0 / (1.0 + p64[i]);
             lg_s[i] = (libm::exp(-(l * l) / (2.0 * log_sigma * log_sigma)) * lp) as f32;
         }
         lg_s[0] = 0.0; // undo the radius fudge at DC.
@@ -785,15 +802,31 @@ fn median_f32(v: &mut [f32]) -> f64 {
     }
 }
 
-/// `real(z^λ)` for the FSIMc chroma product, exactly as MATLAB's `.^`
-/// complex power: `z^λ` for `z ≥ 0`, `|z|^λ·cos(πλ)` for `z < 0`.
-fn real_pow_lambda(z: f32) -> f64 {
-    let z64 = z as f64;
-    if z64 >= 0.0 {
-        libm::pow(z64, LAMBDA)
-    } else {
-        libm::pow(-z64, LAMBDA) * COS_PI_LAMBDA
-    }
+// ------------------------------------------------------------------
+// `real(z^λ)` for the FSIMc chroma product, computed as
+// `pow(|z|,λ)·(z<0 ? cos(πλ) : 1)` — MATLAB's `.^` complex power — with
+// the f64 `pow` batched four lanes wide by `pow64_x4` in the pooling
+// fold (the tail runs scalar `libm::pow`, same bits per lane). The lane
+// port lives in `zenmetrics-math`'s `fdlibm64` (a full lane-parallel
+// transcription of `libm`'s `e_pow` onto `f64x4`/`i64x4`, bit-identical
+// per lane on every input).
+// ------------------------------------------------------------------
+
+/// `pow(xa[i], ya[i])` for four lanes, bit-identical to `libm::pow` —
+/// wraps `zenmetrics_math::fdlibm64::pow64_libm_4x`.
+#[inline(always)]
+fn pow64_x4<T: magetypes::simd::backends::I64x4Bitcast>(
+    token: T,
+    xa: &[f64; 4],
+    ya: &[f64; 4],
+) -> [f64; 4] {
+    use magetypes::simd::generic::f64x4;
+    zenmetrics_math::fdlibm64::pow64_libm_4x(
+        token,
+        f64x4::<T>::from_array_t(token, *xa),
+        f64x4::<T>::from_array_t(token, *ya),
+    )
+    .to_array()
 }
 
 /// Everything in the phase-congruency pipeline that is a pure function of
@@ -1004,23 +1037,79 @@ macro_rules! score_body {
         grad_body!($token, $F32, $LANES, ix2, iy2, g2, n);
 
         // Pooling: Σ GSim·PCSim·PCm(·chroma) / Σ PCm — f64 raster
-        // order, identical on every tier.
+        // order, identical on every tier. Per-block the similarity
+        // terms run at $F32 width (per-lane identical to the scalar
+        // expressions); the `+=` accumulation stays scalar in raster
+        // order.
         let mut num = 0.0f64;
         let mut numc = 0.0f64;
         let mut den = 0.0f64;
-        for i in 0..n {
+        // FSIMc chroma `pow` batched per f64x4 block: `real_pow_lambda(z)`
+        // ≡ `pow(|z|,λ)·(z<0 ? cos(πλ) : 1)` — for `z = −0`, `|z| = +0`
+        // and `pow(+0,λ) = pow(−0,λ) = +0`.
+        let mut zq = [0.0f64; 4];
+        let mut bs = [0.0f64; 4];
+        let mut sg = [0.0f64; 4];
+        let mut fill = 0usize;
+        let two = $F32::splat_t($token, 2.0);
+        let (t1v, t2v) = ($F32::splat_t($token, T1), $F32::splat_t($token, T2));
+        let (t3v, t4v) = ($F32::splat_t($token, T3), $F32::splat_t($token, T4));
+        let nanv = $F32::splat_t($token, f32::NAN);
+        let mut i = 0usize;
+        while i + $LANES <= n {
+            let av = $F32::from_array_t($token, core::array::from_fn(|k| pc1[i + k]));
+            let bv = $F32::from_array_t($token, core::array::from_fn(|k| pc2[i + k]));
+            let xv = $F32::from_array_t($token, core::array::from_fn(|k| g1[i + k]));
+            let zv = $F32::from_array_t($token, core::array::from_fn(|k| g2[i + k]));
+            let pcsim = (two * av * bv + t1v) / (av * av + bv * bv + t1v);
+            let gsim = (two * xv * zv + t2v) / (xv * xv + zv * zv + t2v);
+            // FSIMmap = GSim·PCsim — a pure store; accumulation unchanged.
+            let gp = gsim * pcsim;
+            if let Some(m) = $map.as_deref_mut() {
+                gp.store((&mut m[i..i + $LANES]).try_into().unwrap());
+            }
+            // MATLAB `max` propagates NaN; `max()` under the not-NaN mask
+            // is operand-order-insensitive for non-NaN lanes.
+            let nanm = av.simd_ne(av) | bv.simd_ne(bv);
+            let pcm = $F32::blend(nanm, nanv, av.max(bv));
+            let ba = (gp * pcm).to_array(); // base = gsim·pcsim·pcm per lane
+            let pa = pcm.to_array();
+            for k in 0..$LANES {
+                num += ba[k] as f64;
+                den += pa[k] as f64;
+            }
+            if let Some((i1, i2, q1, q2)) = $iq {
+                let iav = $F32::from_array_t($token, core::array::from_fn(|k| i1[i + k]));
+                let ibv = $F32::from_array_t($token, core::array::from_fn(|k| i2[i + k]));
+                let isim = (two * iav * ibv + t3v) / (iav * iav + ibv * ibv + t3v);
+                let qav = $F32::from_array_t($token, core::array::from_fn(|k| q1[i + k]));
+                let qbv = $F32::from_array_t($token, core::array::from_fn(|k| q2[i + k]));
+                let qsim = (two * qav * qbv + t4v) / (qav * qav + qbv * qbv + t4v);
+                for (k, zf) in (isim * qsim).to_array().into_iter().enumerate() {
+                    let z = zf as f64;
+                    zq[fill] = z.abs();
+                    sg[fill] = if z < 0.0 { COS_PI_LAMBDA } else { 1.0 };
+                    bs[fill] = ba[k] as f64;
+                    fill += 1;
+                    if fill == 4 {
+                        let pr = pow64_x4($token, &zq, &[LAMBDA; 4]);
+                        for j in 0..4 {
+                            numc += bs[j] * (pr[j] * sg[j]);
+                        }
+                        fill = 0;
+                    }
+                }
+            }
+            i += $LANES;
+        }
+        while i < n {
             let (a, b) = (pc1[i], pc2[i]);
             let pcsim = (2.0 * a * b + T1) / (a * a + b * b + T1);
             let (x, z) = (g1[i], g2[i]);
             let gsim = (2.0 * x * z + T2) / (x * x + z * z + T2);
-            // FSIMmap = GSim·PCsim — the canonical per-pixel similarity.
-            // A pure store; score accumulation is unchanged.
             if let Some(m) = $map.as_deref_mut() {
                 m[i] = gsim * pcsim;
             }
-            // MATLAB `max(PC1,PC2)` propagates NaN; `f32::max` would
-            // swallow it. Constant inputs produce NaN PC maps — the
-            // reference's NaN FSIM depends on this.
             let pcm = if a.is_nan() || b.is_nan() {
                 f32::NAN
             } else {
@@ -1033,9 +1122,24 @@ macro_rules! score_body {
                 let isim = (2.0 * ia * ib + T3) / (ia * ia + ib * ib + T3);
                 let (qa, qb) = (q1[i], q2[i]);
                 let qsim = (2.0 * qa * qb + T4) / (qa * qa + qb * qb + T4);
-                numc += base * real_pow_lambda(isim * qsim);
+                let z = (isim * qsim) as f64;
+                zq[fill] = z.abs();
+                sg[fill] = if z < 0.0 { COS_PI_LAMBDA } else { 1.0 };
+                bs[fill] = base;
+                fill += 1;
+                if fill == 4 {
+                    let pr = pow64_x4($token, &zq, &[LAMBDA; 4]);
+                    for k in 0..4 {
+                        numc += bs[k] * (pr[k] * sg[k]);
+                    }
+                    fill = 0;
+                }
             }
             den += pcm as f64;
+            i += 1;
+        }
+        for k in 0..fill {
+            numc += bs[k] * (libm::pow(zq[k], LAMBDA) * sg[k]);
         }
         (
             num / den,
@@ -1221,4 +1325,157 @@ pub(crate) fn fsim_luma8_planes(
         map,
     );
     (s, w2, h2)
+}
+
+#[cfg(test)]
+mod pow_tests {
+    use super::pow64_x4;
+    use archmage::{ScalarToken, SimdToken};
+
+    fn corpus_x() -> alloc::vec::Vec<f64> {
+        let mut xs = alloc::vec::Vec::new();
+        // FSIMc operating range + dense log-space sweep.
+        for i in -1000..=1000 {
+            xs.push(f64::exp(i as f64 / 100.0 * 6.0)); // 1e-13..1e13
+        }
+        for k in -60..=60 {
+            xs.push(f64::powi(2.0, k));
+            xs.push(f64::powi(2.0, k) * (1.0 + f64::EPSILON));
+            xs.push(f64::powi(2.0, k) * (1.0 - f64::EPSILON / 2.0));
+        }
+        // interval boundaries: j == 0x3988E / 0xBB67A in 1+f mantissa.
+        for jw in [0x3988Eu32, 0xbb67au32] {
+            for delta in -2i64..=2 {
+                let hi = (0x3ff00000u64 + (jw as u64).wrapping_add_signed(delta)) << 32;
+                xs.push(f64::from_bits(hi | 0x5a5a5a5a));
+                xs.push(f64::from_bits(hi));
+            }
+        }
+        // near-1 (the huge-|y| log-series path region) and edges.
+        for k in 20..=24 {
+            xs.push(1.0 - f64::powi(2.0, -k));
+            xs.push(1.0 + f64::powi(2.0, -k));
+        }
+        xs.extend([
+            0.0,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1),                  // smallest subnormal
+            f64::from_bits(0x000fffffffffffff), // largest subnormal
+            f64::MAX,
+            f64::INFINITY,
+            f64::NAN,
+            1.0,
+            2.0,
+            0.5,
+            1.5,
+            -1.0,
+            -0.0,
+            -2.5,
+            f64::NEG_INFINITY,
+            f64::MIN,
+        ]);
+        xs
+    }
+
+    fn corpus_y() -> alloc::vec::Vec<f64> {
+        let ys: alloc::vec::Vec<f64> = alloc::vec::Vec::from([
+            0.03, // LAMBDA
+            0.4,
+            2.4,
+            1.0 / 3.0,
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            2.0,
+            -2.0,
+            0.5,
+            -0.5,
+            3.0,
+            -3.0,
+            100.0,
+            -100.0,
+            1074.9,
+            1075.0,
+            1075.19,
+            1075.2,
+            -1074.9,
+            -1075.0,
+            -1075.19,
+            1024.0,
+            -1024.0,
+            f64::powi(2.0, 31) - 1.0,
+            f64::powi(2.0, 31),
+            f64::powi(2.0, 31) + 1.0,
+            -f64::powi(2.0, 31),
+            f64::powi(2.0, 63) - 1e15,
+            f64::powi(2.0, 64),
+            f64::powi(2.0, 64) * 2.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            1e-300,
+            -1e-300,
+            f64::MIN_POSITIVE,
+            f64::EPSILON,
+        ]);
+        ys
+    }
+
+    #[test]
+    fn pow64_x4_matches_libm_bitwise() {
+        let token = ScalarToken::summon().unwrap();
+        let xs = corpus_x();
+        let ys = corpus_y();
+        let mut checked = 0usize;
+        // Batch every (x, y) pair through 4-lane groups.
+        let mut quad: alloc::vec::Vec<(f64, f64)> = alloc::vec::Vec::new();
+        for &x in &xs {
+            for &y in &ys {
+                quad.push((x, y));
+                if quad.len() == 4 {
+                    let xa = [quad[0].0, quad[1].0, quad[2].0, quad[3].0];
+                    let ya = [quad[0].1, quad[1].1, quad[2].1, quad[3].1];
+                    let got = pow64_x4(token, &xa, &ya);
+                    for k in 0..4 {
+                        let want = libm::pow(xa[k], ya[k]);
+                        assert_eq!(
+                            got[k].to_bits(),
+                            want.to_bits(),
+                            "pow({:e}, {:e}): got {:e} ({:#x}) want {:e} ({:#x})",
+                            xa[k],
+                            ya[k],
+                            got[k],
+                            got[k].to_bits(),
+                            want,
+                            want.to_bits()
+                        );
+                        checked += 1;
+                    }
+                    quad.clear();
+                }
+            }
+        }
+        // Tail: pad the partial group with ordinary lanes.
+        if !quad.is_empty() {
+            while quad.len() < 4 {
+                quad.push((2.0, 0.03));
+            }
+            let xa = [quad[0].0, quad[1].0, quad[2].0, quad[3].0];
+            let ya = [quad[0].1, quad[1].1, quad[2].1, quad[3].1];
+            let got = pow64_x4(token, &xa, &ya);
+            for k in 0..4 {
+                let want = libm::pow(xa[k], ya[k]);
+                assert_eq!(
+                    got[k].to_bits(),
+                    want.to_bits(),
+                    "pow({:e}, {:e}) tail mismatch",
+                    xa[k],
+                    ya[k]
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 50_000);
+    }
 }

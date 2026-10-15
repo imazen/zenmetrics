@@ -1032,13 +1032,23 @@ fn est_params(dim: &Dims, data: &[f32], stride_px: usize, sigma_nn: f32) -> EstR
     }
 }
 
-fn get_speed_score(dim: &Dims, ref_r: &EstResult, dis_r: &EstResult) -> f32 {
+/// The channel score; with `blocks`, also each block's term (`0` for the
+/// blocks the score skips), written beside the sum.
+fn get_speed_score(
+    dim: &Dims,
+    ref_r: &EstResult,
+    dis_r: &EstResult,
+    mut blocks: Option<&mut [f32]>,
+) -> f32 {
     let base_entropy = (dim.elements_in_block as f64
         * ((((1.0f32 + NN_FLOOR) * SIGMA_NN) as f64).log2() + log2_2pi_e()))
         as f32;
     let mut score = 0.0f32;
     for i in 0..dim.num_blocks {
         if ref_r.entropies[i] < base_entropy && dis_r.entropies[i] < base_entropy {
+            if let Some(b) = blocks.as_deref_mut() {
+                b[i] = 0.0;
+            }
             continue;
         }
         let (spatial_ref, spatial_dis) = if WEIGHT_VAR_MODE == 5 {
@@ -1051,7 +1061,11 @@ fn get_speed_score(dim: &Dims, ref_r: &EstResult, dis_r: &EstResult) -> f32 {
         } else {
             return f32::NAN;
         };
-        score += (spatial_ref - spatial_dis).abs();
+        let term = (spatial_ref - spatial_dis).abs();
+        if let Some(b) = blocks.as_deref_mut() {
+            b[i] = term;
+        }
+        score += term;
     }
     score / dim.num_blocks as f32
 }
@@ -1339,7 +1353,12 @@ fn filter_and_downscale(dim: &Dims, prescale: f64, frame_buffer: &mut [f32], str
     pool::give_f32(tmp);
 }
 
-fn channel_score(
+/// One chroma channel's score and whether either side was singular; with
+/// `blocks`, also the per-block terms of a scored channel. A channel whose
+/// singularity differs between the two images scores 0 without block terms,
+/// and its map is all 0 too.
+#[allow(clippy::too_many_arguments)]
+fn channel_score_blocks(
     dim: &Dims,
     prescale: f64,
     ref_plane: &[u16],
@@ -1347,6 +1366,7 @@ fn channel_score(
     cw: usize,
     ch: usize,
     bit_depth: u8,
+    mut blocks: Option<&mut [f32]>,
 ) -> (f32, bool) {
     let stride_px = dim.alloc_width;
     let npix = stride_px * dim.alloc_height;
@@ -1377,9 +1397,12 @@ fn channel_score(
     let dis_r = est_params(dim, &dis_buf, stride_px, SIGMA_NN);
 
     let score = if (ref_r.singular && !dis_r.singular) || (!ref_r.singular && dis_r.singular) {
+        if let Some(b) = blocks.as_deref_mut() {
+            b.fill(0.0);
+        }
         0.0
     } else {
-        get_speed_score(dim, &ref_r, &dis_r)
+        get_speed_score(dim, &ref_r, &dis_r, blocks)
     };
     pool::give_f32(ref_buf);
     pool::give_f32(dis_buf);
@@ -1394,6 +1417,20 @@ fn prescale_for(variant: ModelVariant) -> f64 {
     }
 }
 
+/// SPEED's per-block chroma maps for one frame pair, with the geometry
+/// that places them on the luma grid.
+#[derive(Debug)]
+pub(crate) struct SpeedMaps {
+    /// `[U, V]` per-block terms, `blocks.0 × blocks.1` row-major; a
+    /// channel's SPEED score is their f32 mean.
+    pub(crate) maps: [Vec<f32>; 2],
+    /// Block grid `(columns, rows)`.
+    pub(crate) blocks: (usize, usize),
+    /// A block's width/height in luma pixels and the grid's luma origin,
+    /// when the prescale makes both whole pixels.
+    pub(crate) luma_grid: Option<(u32, i64)>,
+}
+
 pub fn speed_v1_chroma_420(
     reference_u: &[u16],
     reference_v: &[u16],
@@ -1404,6 +1441,59 @@ pub fn speed_v1_chroma_420(
     bit_depth: u8,
     variant: ModelVariant,
 ) -> Result<f64, Error> {
+    speed_impl(
+        reference_u,
+        reference_v,
+        distorted_u,
+        distorted_v,
+        width,
+        height,
+        bit_depth,
+        variant,
+        false,
+    )
+    .map(|(score, _)| score)
+}
+
+/// [`speed_v1_chroma_420`] plus each channel's per-block terms, from the
+/// same computation.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn speed_v1_chroma_420_maps(
+    reference_u: &[u16],
+    reference_v: &[u16],
+    distorted_u: &[u16],
+    distorted_v: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    variant: ModelVariant,
+) -> Result<(f64, SpeedMaps), Error> {
+    let (score, maps) = speed_impl(
+        reference_u,
+        reference_v,
+        distorted_u,
+        distorted_v,
+        width,
+        height,
+        bit_depth,
+        variant,
+        true,
+    )?;
+    Ok((score, maps.ok_or(Error::InvalidInput("speed maps"))?))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn speed_impl(
+    reference_u: &[u16],
+    reference_v: &[u16],
+    distorted_u: &[u16],
+    distorted_v: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    variant: ModelVariant,
+    with_maps: bool,
+) -> Result<(f64, Option<SpeedMaps>), Error> {
     if !matches!(bit_depth, 8 | 10 | 12 | 16) {
         return Err(Error::InvalidInput("unsupported bit depth"));
     }
@@ -1434,10 +1524,28 @@ pub fn speed_v1_chroma_420(
         .checked_mul(dim.alloc_height)
         .ok_or(Error::InvalidInput("dimension overflow"))?;
 
-    let (score_u, err_u) =
-        channel_score(&dim, prescale, reference_u, distorted_u, cw, ch, bit_depth);
-    let (score_v, err_v) =
-        channel_score(&dim, prescale, reference_v, distorted_v, cw, ch, bit_depth);
+    let n = if with_maps { dim.num_blocks } else { 0 };
+    let (mut mu, mut mv) = (vec![0.0f32; n], vec![0.0f32; n]);
+    let (score_u, err_u) = channel_score_blocks(
+        &dim,
+        prescale,
+        reference_u,
+        distorted_u,
+        cw,
+        ch,
+        bit_depth,
+        with_maps.then_some(mu.as_mut_slice()),
+    );
+    let (score_v, err_v) = channel_score_blocks(
+        &dim,
+        prescale,
+        reference_v,
+        distorted_v,
+        cw,
+        ch,
+        bit_depth,
+        with_maps.then_some(mv.as_mut_slice()),
+    );
 
     let score_uv = if err_u && !err_v {
         score_v
@@ -1447,7 +1555,22 @@ pub fn speed_v1_chroma_420(
         (score_u + score_v) / 2.0
     };
 
-    Ok((score_uv.min(SPEED_MAX_VAL)) as f64)
+    // An operating sample is every 16th sample of the antialiased,
+    // prescaled chroma plane, and a block is 5×5 of them. In continuous
+    // luma coordinates (pixel p spans [p, p+1)) chroma sample k is centred
+    // at 2k+1 and prescaled sample x at 2(x+0.5)/prescale; each operating
+    // sample owns the 16 prescaled samples centred on it.
+    let luma_grid = match prescale {
+        p if (p - 1.0).abs() < 1e-3 => Some((160, -15)),
+        p if (p - 0.5).abs() < 1e-3 => Some((320, -30)),
+        _ => None,
+    };
+    let maps = with_maps.then_some(SpeedMaps {
+        maps: [mu, mv],
+        blocks: (dim.num_blocks_horizontal, dim.num_blocks_vertical),
+        luma_grid,
+    });
+    Ok(((score_uv.min(SPEED_MAX_VAL)) as f64, maps))
 }
 
 #[cfg(all(

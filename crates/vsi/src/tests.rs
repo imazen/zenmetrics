@@ -215,7 +215,7 @@ fn imresize_shape() {
 
 /// Every SIMD tier must produce the *identical* score — the pool stage
 /// is fixed-order f64 accumulation over per-lane scalar expressions.
-#[cfg(all(feature = "_dev", target_arch = "x86_64"))]
+#[cfg(all(feature = "_dev", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[test]
 fn tier_parity() {
     use archmage::SimdToken;
@@ -227,16 +227,50 @@ fn tier_parity() {
     // full pipeline for both tiers (prepare is shared, so only the
     // pool differs per tier anyway).
     let p = kernel::prepare(&ri, &di, w, h, &mut scratch);
-    let Some(token) = archmage::X64V3Token::summon() else {
-        return;
-    };
     let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p, None);
-    let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p, None);
-    assert_eq!(s_scalar, s_v3);
+    #[cfg(target_arch = "x86_64")]
+    {
+        let Some(token) = archmage::X64V3Token::summon() else {
+            return;
+        };
+        let s_v3 = crate::dev::vsi_core_tier_v3_t(token, p, None);
+        assert_eq!(s_scalar, s_v3);
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        let Some(token) = archmage::NeonToken::summon() else {
+            return;
+        };
+        let s_neon = crate::dev::vsi_core_tier_neon_t(token, p, None);
+        assert_eq!(s_scalar.to_bits(), s_neon.to_bits());
+    }
 }
 
-/// `vsi_rgb8_with_diffmap` returns the identical score and a full-res
-/// similarity map.
+/// The dispatched (SIMD) Lab fill is bit-identical to the scalar one:
+/// every 8-bit level on each channel, mixed so all three planes vary,
+/// with a non-multiple-of-4 length to cover the scalar tail.
+#[test]
+fn srgb_to_lab_dispatch_matches_scalar_bitwise() {
+    let n = 256 * 257 + 3;
+    let dr: alloc::vec::Vec<f32> = (0..n).map(|i| (i % 256) as f32).collect();
+    let dg: alloc::vec::Vec<f32> = (0..n).map(|i| ((i * 7 + i / 256) % 256) as f32).collect();
+    let db: alloc::vec::Vec<f32> = (0..n)
+        .map(|i| (255 - (i * 13 + i / 97) % 256) as f32)
+        .collect();
+    let z = || alloc::vec![0f32; n];
+    let (mut l0, mut a0, mut b0) = (z(), z(), z());
+    let (mut l1, mut a1, mut b1) = (z(), z(), z());
+    kernel::srgb_to_lab_all_scalar(&dr, &dg, &db, &mut l0, &mut a0, &mut b0);
+    kernel::srgb_to_lab_all(&dr, &dg, &db, &mut l1, &mut a1, &mut b1);
+    for i in 0..n {
+        assert_eq!(l0[i].to_bits(), l1[i].to_bits(), "L at {i}");
+        assert_eq!(a0[i].to_bits(), a1[i].to_bits(), "a at {i}");
+        assert_eq!(b0[i].to_bits(), b1[i].to_bits(), "b at {i}");
+    }
+}
+
+/// `vsi_rgb8_with_diffmap` returns the identical score and a similarity
+/// map at the decimated resolution (full resolution below min-dim 384).
 #[test]
 fn vsi_diffmap_matches_score() {
     use zenmetrics_abstractions::Evaluation;
@@ -250,8 +284,43 @@ fn vsi_diffmap_matches_score() {
     let (score, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
     assert_eq!(plain, score);
     assert_eq!(dm.map().len(), w * h);
+    let view = Evaluation::map(&dm).expect("map");
     assert_eq!(
-        dm.map_polarity(),
-        Some(zenmetrics_abstractions::MapPolarity::Similarity)
+        view.polarity,
+        zenmetrics_abstractions::MapPolarity::Similarity
     );
+    assert_eq!(
+        view.geometry,
+        zenmetrics_abstractions::MapGeometry::identity(48, 40)
+            .with_support(zenmetrics_abstractions::Support::Global)
+    );
+}
+
+/// Regression: at min-dim ≥ 384 the reference decimates by `F ≥ 2`. The map
+/// used to be reported as `w × h` with only the first `⌈w/F⌉·⌈h/F⌉`
+/// entries written (the rest zero).
+#[test]
+fn vsi_diffmap_is_decimated_at_large_sizes() {
+    use zenmetrics_abstractions::Evaluation;
+    let (w, h) = (401usize, 390usize);
+    let r = zenmetrics_abstractions::conformance::textured_rgb8(w, h, 3);
+    let d = zenmetrics_abstractions::conformance::distort_rgb8(&r, w, h);
+    let (_, dm) = crate::vsi_rgb8_with_diffmap(&r, &d, w, h, w * 3).unwrap();
+    assert_eq!(dm.factor(), 2);
+    assert_eq!((dm.width, dm.height), (201, 195));
+    assert_eq!(dm.map().len(), 201 * 195);
+    let last_row = &dm.map()[194 * 201..];
+    assert!(
+        last_row.iter().all(|v| v.is_finite() && *v > 0.0),
+        "tail written"
+    );
+    let g = Evaluation::map(&dm).unwrap().geometry;
+    // F = 2, s = 1: sample k averages input 2k, 2k+1.
+    assert_eq!(g.cell_rect(3, 0).map(|r| (r.x, r.width)), Some((6, 2)));
+}
+
+/// The generic surface honors the abstractions contract.
+#[test]
+fn generic_surface_conforms() {
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Vsi, 41, 33);
 }

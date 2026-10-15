@@ -58,6 +58,18 @@ Architecture for Multi-Scale Derivative Computation"*, ICIP 1995; and
 A. Karasaridis & E. P. Simoncelli, *"A Filter Design Technique for Steerable
 Pyramid Image Transforms"*, ICASSP 1996.
 
+## 3a. Licence texts
+
+The MIT texts for matlabPyrTools (`sp3Filters`) and pyPyrTools (`sp0Filters`, used
+by `src/v3/spyr0.rs`) are in `LICENSE-matlabPyrTools` and `LICENSE-pyPyrTools`.
+
+## 3b. HDR-VDP-3.0.7 (BSD-3) — `src/v3/`, `data/v3/`
+
+`src/v3/` follows HDR-VDP-3.0.7 through jpeg-ai-qaf's `VDP3/` NumPy port, and
+`data/v3/ciexyz31.csv` and the `emission_spectra_*.csv` files are byte-identical to
+the 3.0.7 release's `data/`. The release's BSD-3 notice is in
+`LICENSE-hdrvdp-3.0.7`.
+
 ## 4. Spectral data in `data/`
 
 - `log_cone_smith_pokorny_1975.csv` — Smith & Pokorny (1975) cone fundamentals,

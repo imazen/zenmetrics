@@ -188,3 +188,149 @@ Briefs: `~/tmp/handoff/iqa-math/brief.md`, `~/tmp/handoff/zenbench-affinity/brie
   `cargo check -p zenmetrics-cli --no-default-features --features cpu-metrics`.
 - archmage repo has two other live lanes (codex + opencode) — do not edit
   magetypes from this effort; all work lands in zenmetrics-math.
+
+## Addendum — 2026-10-14 (r7900x, Zen 4)
+
+Second optimisation pass; all scores bit-identical unless noted.
+
+- **fsim e_pow lane port** (`40493c9c`): `pow64_x4` transcribes libm
+  `e_pow` onto `f64x4` for the FSIMc pooling fold — per-lane scalar
+  decode/early-outs/`[z+0.5]` extract/rebuild (verbatim), lane-parallel
+  polynomial/division bodies, `&`-clears for `with_set_low_word`.
+  Early-out/edge lanes (y∈{0,±1,2,0.5,±inf,NaN}, x≤0/NaN, |y|>2³¹,
+  |z|≥1024 or ≤−1075, subnormal output) flagged → scalar `libm::pow`.
+  88k-pair bitwise differential + full suite. `libm::pow` share
+  11.8%→0.8%; wall 20.7→20.0ms serial, ~10.3→9.5ms @24T.
+- **fsim pooling fold vectorised** (`3c88a75d`): pcsim/gsim/isim/qsim/
+  pcm per `$LANES` block on the tier vector; scalar ordered `+=`
+  accumulation unchanged; map store via `.store()`; MATLAB NaN-max →
+  `blend(neq|neq, NaN, max)`. Wall 19.9→18.0ms serial, ~9.4ms @24T.
+- **mdctpsnr** (`a4d0b8fc`): inlined AAN butterfly (removed per-call
+  `&[V;8]` stack copies), dropped a 2 KiB zero-init via direct
+  construction, widened measure stripes — 700→647ms serial,
+  573→503ms @24T.
+- **vif scalar path** (`a2053b19`): lane-vectorised libm-exact `log10`
+  fold — 77→57.5ms serial.
+- **vifvec parallel** (`adcf7e37`): independent subband bodies parallel,
+  ordered serial fold — 45→31ms.
+- **hdrvdp v2** (`513a02d8`): attuned `f32x8` row kernels for the
+  `madd::<true>` paths (`f32::mul_add` had been lowering to libm `fmaf`
+  calls — 44% of runtime) + `up_conv`/`imresize32` row parallelism —
+  1.65s→0.55s serial, 0.157ms→0.157s @24T… i.e. ~0.16s.
+- **hdrvdp3 parallel decompose/elementwise/imresize/channel-parallel
+  MTF** (`3699cf8a`, `c97c09d1`, `689764ec`): 0.73s serial / ~0.21s @24T.
+- **hdrvdp3 score-only entry** — `v3::score` skips the reconstruct +
+  s_map/p_map phase (~17% @24T) with bit-identical `q_jod`; new public
+  API → PR #76 (assigned lilith).
+- **zenmetrics-math `powf_libm`** (`d747a7b6`, powf lane): fdlibm
+  `e_powf` onto `f32x8`/`f32x16` + slice drivers `vpow_libm_into` /
+  `vpowf_libm_pairs_into`; edge-matrix + 10M-pair differentials clean;
+  ~5–11× vs scalar `libm::powf` on Zen 4.
+- **vsi pooling on `powf_libm`** (`a4add208`): both pool powers on the
+  lane `powf`; maps bit-identical, score bits identical on non-NaN.
+  Paired A/B (avx512 build, 1T): 256² −4.60%, 3355×2516 −0.67% (A/A
+  noise). The pool runs on the decimated grid, so it saves ~2–3 ms per
+  call at any size. The remaining `libm::pow` in vsi's serial profile
+  (7.0% of samples, avx512 build, 3355×2516, 1T, after this change) is
+  the **f64** `pow` in `srgb_to_lab` (`lin()` `^2.4`, `f()` `^(1/3)`,
+  its only call sites), not this `powf`; that is the follow-up.
+- **zenmetrics-math `pow64_libm`** (fdlibm f64 port): `e_pow.c` onto
+  `f64x4`/`i64x4` lanes — bit tricks/comparisons/blends in the `i64x4`
+  integer domain, polynomial+divide bodies on `f64x4`, variable shifts
+  as masked const-shift trees, exceptional lanes (x≤0/NaN, special y,
+  |y|>2³¹, subnormal i/o, overflow boundary) → scalar `libm::pow`.
+  `y==±0`/`x==1`→1.0 ahead of the NaN checks, same as fdlibm order.
+  Drivers `vpow64_libm_into`/`vpow64_libm_pairs_into` across all five
+  tiers; six bitwise differential tests vs scalar `libm::pow` green on
+  every tier (edge matrix, range thresholds, exact ties, dense
+  positive+subnormal, seeded random, tails). Lane bench ~10.2 vs 21.7
+  ns/elem (~2.1× scalar). fsim's pooling `pow` now uses the shared port
+  (same bits; local `pow64_x4` is a wrapper).
+- **vsi sRGB→Lab on `pow64_libm`**: the six per-pixel f64 pows run
+  through `pow64_libm_4x` inside `srgb_to_lab_x86_body!`, a macro so
+  every lane op lands inside the attuned tier fns — a prior
+  generic-fn/closure version emitted `__simd_inner_*` calls and
+  regressed 76→280ms. Thresholds are `blend` selects; masked lanes get
+  pow arg 1.0 so they never take the scalar fallback. 1024² wall
+  **76→~53ms serial (−30%), ~19.7ms @24T** (avx512 build; v3-only build
+  also ~53ms — v4x delegates f64x4 to 256-bit ops); score bits
+  `3fefb77a83788424` identical on default/avx512/parallel builds.
+  The aarch64 twin subsequently switched to the same exact-f64 body
+  (`41f47c9f`, mac lane) — ARM scores now bit-match x86, ~1.22× slower
+  than the old midp build on M4 @1024²; landed with
+  `srgb_to_lab_dispatch_matches_scalar_bitwise` + an aarch64
+  `tier_parity` arm.
+- **zenmetrics-math `vexpf_libm`** (`82f2beeb`): fdlibm `e_expf` onto
+  `f32x8`/`f32x16` lanes — fully vectorized, no scalar fallback lanes
+  (`force_eval` raises flags only). `vpow64`-style dispatch:
+  `vexpf_libm_into` slice driver across all five tiers; 4 bitwise
+  differential tests vs `libm::expf` green (branch-boundary matrix
+  ±3ulp, dense [-105,90] domain, 64×2048 seeded random, tails).
+- **vsi warm-colour prior on `vexpf_libm`** (`cfab9ced`): the last
+  per-pixel scalar transcendental in `sdsp` — args stay scalar f32
+  (identical ops), expf runs on lanes. Bits identical, ~51–53ms.
+- **vsi sdsp constant grids cached** (`3cf7757b`, std): `LazyLock` for
+  the 256² log-Gabor + Gaussian-center-prior planes — same libm values
+  computed once per process (~130K transcendentals skipped per call
+  after the first); no_std keeps the per-call build.
+- **mad-iqa adopts both ports** (`7b23f775`): the 9 `m×n` log-Gabor /
+  spread-filter `expf` sweeps run through `vexpf_libm_into`; the
+  luminance `x^(2.2/3)` path now uses `vpow64_libm_into` for
+  non-integral inputs (u8-derived inputs keep the 256-entry LUT, same
+  expression). The swap also **fixed a latent bug**: `_dev`'s
+  `mad_core_tier_scalar` re-export was stale (never compiled, so
+  `tier_parity` had never run); once repaired it exposed a real
+  scalar-vs-v3 divergence from `pow_midp` — now bitwise-equal via the
+  lane port. 12/12 tests green.
+- **Failed/kept-out experiments this pass**: fsim filtered-ifft fusion
+  (src→dst `yf·filter` fold into the row transpose-in) measured
+  net-neutral-to-negative — the collect pass's cost was already
+  bandwidth, and the fused version trades a warm read for a cold `yf`
+  read; reverted. vifvec parallel-mean regrouping (9 scans → 3 grouped
+  tasks) regressed under nested parallelism; kept 9-scan.
+
+### 2026-10-14 pm addendum — coverage-gated pow lanes + f64 log/log2
+
+- **`fdlibm::coverage` const-generic bitmask** (`G: u8`) on the lane pow
+  ports: `EDGE` (early-outs incl. x≤0/specials/y∈{1,2,0.5}), `SUBN`
+  (subnormal-x handling — f32 normalizes in-vector, f64 routes to scalar),
+  `RANGE` (result overflow/underflow), `TAIL` (sub-ulp correction terms).
+  Every public driver has a `*_gated::<G>` twin; `vpow*_libm_into` =
+  `EXACT` and is bitwise-unchanged. Cleared bits are caller domain
+  promises; the scalar-fallback path stays reachable whenever any live
+  gate feeds `need` (EDGE-off still repairs RANGE lanes bitwise).
+- **Measured cost** (Zen 5 v4x, 1M positive-finite elems, p=2.4;
+  `examples/powf_coverage_bench`): f32 EXACT 2.41 → POSITIVE_FINITE 2.33
+  → POSITIVE_NORMAL 2.22 → BULK 2.17 → bare 2.00 ns/elem; f64 EXACT 9.43
+  → BULK 8.74. Hostile-domain probe: −EDGE 12–50% lanes wrong, −RANGE
+  8% wrong, −TAIL wrong even on friendly input (~5e3 ulp f32, ~2e11 ulp
+  f64 — TAIL is accuracy, not coverage; the honest approximate tier is
+  `pow_midp`). **Design rule**: coverage knobs pay ~3–7% per gate on the
+  kernel, more in-context — there is no cheap middle precision tier.
+- **vsi `srgb_to_lab` at `BULK`** (`lin` arg∈[0.0521,1], result
+  ∈[8e-4,1]; `cbrt` arg∈{1}∪(0.008856,~1.17], `pow(1,y)≡1.0` verified
+  bitwise through the raw vector path): serial 1024² wall
+  **65.4→51.8 ms (−21%)**, bits `3fefb77a83788424` — the f64 coverage
+  overhead is bigger in-context (freed the per-iter to_array
+  materializations for the never-taken `scalar_lanes` branch).
+- **fdlibm64 `e_log`/`e_log2` lanes** (`vlog_libm_into`,
+  `vlog2_libm_into`, all tiers; shared reduce+poly macro, reconstruction
+  differs): bitwise differential suites incl. subnormal inputs —
+  `hx < 0x00100000` exponent-field detection scales by 2^54 then
+  normalizes (a `hx == 0` check misses subnormals with nonzero high
+  mantissa bits — first test round caught 404/2048 lanes).
+- **vif dedup**: `vifvec`'s local lane log2 (~40 lines of LG*/IVLN2*
+  constants + kernel) replaced by shared `log2_libm_4x`; v4x's `f64x8`
+  runs two `f64x4` chunks (no `I64x8Bitcast` in magetypes yet).
+- **fsim `radial_filters` vectorized**: `pow(r/LP_CUTOFF, 2·LP_ORDER)`
+  once via `vpow64_libm_into`, per-scale `log(r/fo)` via `vlog_libm_into`
+  (Arc-cached bank → runs once per size). 19/19 tests.
+- **mad-iqa `gabor_grids`**: radius-grid `log` lanes + `Mutex`-guarded
+  single-slot `Arc` cache on (m,n) under std, direct build under no_std.
+- **Not adopted** (domain not airtight or already optimal): mdsi's
+  `powf(0.25)` — std-oracle path (glibc vs fdlibm differ 1ulp on 9.6% of
+  inputs — measured, would change std-build bits); VSI pooling powf —
+  `gsim`/`iq` can legitimately be 0 or negative; mad-iqa lum pow — NaN
+  propagation on hostile input must be preserved; `expf` left ungated —
+  its edges are pure-vector blends and callers feed near-zero args where
+  the `tiny` path is required for bit-exactness.

@@ -15,6 +15,8 @@ on:
       - 'Cargo.lock'
       - 'ci/sibling-pins.tsv'
       - 'scripts/checkpoint/build-browser.sh'
+      - 'scripts/checkpoint/build-codecs.sh'
+      - 'web/codecs/**'
       - 'scripts/checkpoint/*pages.py'
 permissions:
   contents: read
@@ -74,4 +76,20 @@ jobs:
           npx --yes wrangler@4.149.0 pages deploy site --project-name zenmetrics-site --branch master --commit-hash "$GITHUB_SHA"
       - name: Verify deployed browser workers
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: python scripts/checkpoint/check-pages.py site --url https://zenmetrics-site.pages.dev/
+        run: |
+          # `pages deploy` returns before the production URL serves the new
+          # deployment; check-pages.py would then read the previous index.
+          # Wait until the live index and provenance name this commit.
+          url=https://zenmetrics-site.pages.dev/
+          for attempt in $(seq 1 30); do
+            served=$(curl -fsS --max-time 20 "${url}site-source.json?ready=$attempt" | python3 -c 'import json,sys; print(json.load(sys.stdin)["source_commit"])' || true)
+            if [ "$served" = "$GITHUB_SHA" ] && curl -fsS --max-time 20 "${url}?ready=$attempt" | grep -q "assets/$GITHUB_SHA/app.js"; then
+              break
+            fi
+            sleep 10
+          done
+          if [ "$served" != "$GITHUB_SHA" ]; then
+            echo "Production still serves ${served:-no provenance}, not $GITHUB_SHA"
+            exit 1
+          fi
+          python scripts/checkpoint/check-pages.py site --url "$url"

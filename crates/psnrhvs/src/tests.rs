@@ -358,17 +358,17 @@ fn rgb8_luma8_goldens() {
 #[test]
 fn tier_parity() {
     let (r, d) = (gen4(48, 40), off(&gen4(48, 40), 11));
-    let scalar = kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8);
+    let scalar = kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8, None);
     #[cfg(target_arch = "x86_64")]
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::X64V3Token::summon() {
-            let got = kernel::psnrhvs_band_v3_t(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_v3_t(t, &r, &d, 48, 0, 5, 6, 8, None);
             assert_eq!(got, scalar, "v3 vs scalar");
         }
         #[cfg(feature = "avx512")]
         if let Some(t) = archmage::X64V4xToken::summon() {
-            let got = kernel::psnrhvs_band_v4x_t(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_v4x_t(t, &r, &d, 48, 0, 5, 6, 8, None);
             assert_eq!(got, scalar, "v4x vs scalar");
         }
     }
@@ -376,8 +376,233 @@ fn tier_parity() {
     {
         use archmage::SimdToken;
         if let Some(t) = archmage::NeonToken::summon() {
-            let got = kernel::psnrhvs_band_neon_t(t, &r, &d, 48, 0, 5, 6, 8);
+            let got = kernel::psnrhvs_band_neon_t(t, &r, &d, 48, 0, 5, 6, 8, None);
             assert_eq!(got, scalar, "neon vs scalar");
         }
     }
+}
+
+/// Interleave three planes into packed RGB8 (values are 0..=255 integers).
+fn rgb_of(r: &[f32], g: &[f32], b: &[f32]) -> Vec<u8> {
+    r.iter()
+        .zip(g)
+        .zip(b)
+        .flat_map(|((&r, &g), &b)| [r as u8, g as u8, b as u8])
+        .collect()
+}
+
+/// The score's own fold over a channel's block map: the same band split
+/// as `plane_step_impl`, per-band raster f64 sums of `64·v` (exact: `v`
+/// is `S/64`), then `finalize`.
+fn fold_exact(masked: &[f32], unmasked: &[f32], nb_x: usize, nb_y: usize) -> PlaneScore {
+    let nb = kernel::n_bands(nb_y);
+    let sz = nb_y.div_ceil(nb);
+    let (mut s1, mut s2) = (0.0f64, 0.0f64);
+    for b in 0..nb {
+        let (lo, hi) = (b * sz, ((b + 1) * sz).min(nb_y));
+        let (mut a, mut c) = (0.0f64, 0.0f64);
+        for i in lo * nb_x..hi.max(lo) * nb_x {
+            a += masked[i] as f64 * 64.0;
+            c += unmasked[i] as f64 * 64.0;
+        }
+        s1 += a;
+        s2 += c;
+    }
+    finalize(s1, s2, nb_x * nb_y)
+}
+
+/// Each channel's block maps fold back to that channel's scores bit for
+/// bit, and requesting maps changes no score.
+#[test]
+fn block_maps_fold_to_channel_scores_exactly() {
+    for (w, h) in [(64usize, 48usize), (37, 29), (8, 8), (130, 75)] {
+        let (r, g, b) = (gen1(w, h), gen2(w, h), gen4(w, h));
+        let a = rgb_of(&r, &g, &b);
+        let d = rgb_of(&off(&r, 9), &clamp_add(&g, 30), &off(&gen3(w, h), 1));
+        let plain = psnrhvs_rgb8(&a, &d, w, h, w * 3).unwrap();
+        let (score, maps) = psnrhvs_rgb8_impl(&a, &d, w, h, w * 3, true).unwrap();
+        assert_eq!(score, plain, "{w}x{h}");
+        let (nb_x, nb_y) = ((w - 8) / 8 + 1, (h - 8) / 8 + 1);
+        for (m, want) in maps
+            .unwrap()
+            .iter()
+            .zip([plain.red, plain.green, plain.blue])
+        {
+            assert_eq!(
+                (m.masked.len(), m.unmasked.len()),
+                (nb_x * nb_y, nb_x * nb_y)
+            );
+            let got = fold_exact(&m.masked, &m.unmasked, nb_x, nb_y);
+            assert_eq!(got.psnr_hvs.to_bits(), want.psnr_hvs.to_bits(), "{w}x{h}");
+            assert_eq!(
+                got.psnr_hvs_m.to_bits(),
+                want.psnr_hvs_m.to_bits(),
+                "{w}x{h}"
+            );
+        }
+    }
+}
+
+/// An independent f64 transcription of one block of `psnrhvsm.m` (DCT by
+/// definition, `maskeff`, the two energies) agrees with the maps' blocks
+/// to the f32 pipeline's precision.
+#[test]
+fn block_maps_match_an_f64_block_oracle() {
+    fn dct(x: &[f64; 64]) -> [f64; 64] {
+        let c = |k: usize| {
+            if k == 0 {
+                (1.0f64 / 8.0).sqrt()
+            } else {
+                (2.0f64 / 8.0).sqrt()
+            }
+        };
+        let mut out = [0.0; 64];
+        for k in 0..8 {
+            for l in 0..8 {
+                let mut acc = 0.0;
+                for m in 0..8 {
+                    for n in 0..8 {
+                        acc += x[m * 8 + n]
+                            * (core::f64::consts::PI * (2 * m + 1) as f64 * k as f64 / 16.0).cos()
+                            * (core::f64::consts::PI * (2 * n + 1) as f64 * l as f64 / 16.0).cos();
+                    }
+                }
+                out[k * 8 + l] = c(k) * c(l) * acc;
+            }
+        }
+        out
+    }
+    fn var(v: &[f64]) -> f64 {
+        let mu = v.iter().sum::<f64>() / v.len() as f64;
+        v.iter().map(|x| (x - mu) * (x - mu)).sum::<f64>() / (v.len() - 1) as f64
+    }
+    fn maskeff(x: &[f64; 64], d: &[f64; 64]) -> f64 {
+        let e: f64 = (1..64)
+            .map(|c| d[c] * d[c] * kernel::MASK_COF[c] as f64)
+            .sum();
+        let vari = var(x) * 64.0;
+        let q = |r0: usize, c0: usize| {
+            let v: Vec<f64> = (0..16).map(|i| x[(r0 + i / 4) * 8 + c0 + i % 4]).collect();
+            var(&v) * 16.0
+        };
+        let pop = if vari == 0.0 {
+            0.0
+        } else {
+            (q(0, 0) + q(0, 4) + q(4, 4) + q(4, 0)) / vari
+        };
+        (e * pop).sqrt() / 32.0
+    }
+    let (w, h) = (48, 40);
+    let (r, d) = (gen4(w, h), clamp_add(&gen1(w, h), 17));
+    let (_, maps) = plane_step_impl(&r, &d, w, h, w, 8, true).unwrap();
+    let maps = maps.unwrap();
+    let mut worst = 0.0f64;
+    for by in 0..h / 8 {
+        for bx in 0..w / 8 {
+            let blk = |p: &[f32]| {
+                core::array::from_fn(|i| p[(by * 8 + i / 8) * w + bx * 8 + i % 8] as f64)
+            };
+            let (a, b): ([f64; 64], [f64; 64]) = (blk(&r), blk(&d));
+            let (da, db) = (dct(&a), dct(&b));
+            let mask = maskeff(&a, &da).max(maskeff(&b, &db));
+            let (mut s1, mut s2) = (0.0f64, 0.0f64);
+            for c in 0..64 {
+                let u = (da[c] - db[c]).abs();
+                let t = u * kernel::CSF[c] as f64;
+                s2 += t * t;
+                let um = if c == 0 {
+                    u
+                } else {
+                    (u - mask / kernel::MASK_COF[c] as f64).max(0.0)
+                };
+                let t1 = um * kernel::CSF[c] as f64;
+                s1 += t1 * t1;
+            }
+            let i = by * (w / 8) + bx;
+            for (got, want) in [(maps.masked[i], s1 / 64.0), (maps.unmasked[i], s2 / 64.0)] {
+                let rel = (got as f64 - want).abs() / want.abs().max(1e-3);
+                worst = worst.max(rel);
+            }
+        }
+    }
+    #[cfg(feature = "std")]
+    std::eprintln!("worst per-block relative difference vs the f64 oracle: {worst:e}");
+    assert!(worst < 1e-4, "{worst}");
+}
+
+/// Every compiled-in tier writes bit-identical block maps.
+#[test]
+fn tier_parity_of_block_maps() {
+    let (r, d) = (gen4(48, 40), off(&gen4(48, 40), 11));
+    let run = |f: &dyn Fn(Option<(&mut [f32], &mut [f32])>) -> (f64, f64)| {
+        let (mut m, mut u) = (alloc::vec![0.0f32; 30], alloc::vec![0.0f32; 30]);
+        let sums = f(Some((&mut m, &mut u)));
+        (sums, m, u)
+    };
+    let scalar =
+        run(&|b| kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8, b));
+    assert_eq!(
+        scalar.0,
+        kernel::psnrhvs_band_scalar_t(archmage::ScalarToken, &r, &d, 48, 0, 5, 6, 8, None)
+    );
+    #[cfg(target_arch = "x86_64")]
+    {
+        use archmage::SimdToken;
+        if let Some(t) = archmage::X64V3Token::summon() {
+            assert_eq!(
+                run(&|b| kernel::psnrhvs_band_v3_t(t, &r, &d, 48, 0, 5, 6, 8, b)),
+                scalar
+            );
+        }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            assert_eq!(
+                run(&|b| kernel::psnrhvs_band_v4x_t(t, &r, &d, 48, 0, 5, 6, 8, b)),
+                scalar
+            );
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        use archmage::SimdToken;
+        if let Some(t) = archmage::NeonToken::summon() {
+            assert_eq!(
+                run(&|b| kernel::psnrhvs_band_neon_t(t, &r, &d, 48, 0, 5, 6, 8, b)),
+                scalar
+            );
+        }
+    }
+}
+
+/// A change confined to one block moves only that block's cells; a change
+/// in the unscored right/bottom strip moves none.
+#[test]
+fn block_maps_are_block_local() {
+    let (w, h) = (45, 37); // 5×4 blocks plus 5- and 5-pixel strips
+    let base = gen2(w, h);
+    let mut inside = base.clone();
+    for y in 9..14 {
+        for x in 17..23 {
+            inside[y * w + x] = 255.0 - inside[y * w + x];
+        }
+    }
+    let (_, m) = plane_step_impl(&base, &inside, w, h, w, 8, true).unwrap();
+    let m = m.unwrap();
+    for (i, (&a, &b)) in m.masked.iter().zip(&m.unmasked).enumerate() {
+        if i == 5 + 2 {
+            assert!(b > 0.0, "the changed block must respond");
+        } else {
+            assert_eq!((a, b), (0.0, 0.0), "block {i}");
+        }
+    }
+    let mut strip = base.clone();
+    for y in 0..h {
+        for x in 40..w {
+            strip[y * w + x] = 0.0;
+        }
+    }
+    let (s, m) = plane_step_impl(&base, &strip, w, h, w, 8, true).unwrap();
+    let m = m.unwrap();
+    assert!(m.masked.iter().chain(&m.unmasked).all(|&v| v == 0.0));
+    assert_eq!(s.psnr_hvs, 100000.0);
 }

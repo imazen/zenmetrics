@@ -155,10 +155,23 @@ fn student_t_cdf(t: f64, df: f64) -> f64 {
     if t >= 0.0 { 1.0 - tail } else { tail }
 }
 
+/// Student t upper-tail probability `Pr(T > t)` for finite `df > 0`.
+///
+/// Returns NaN for a NaN statistic or invalid degrees of freedom (including
+/// infinity). Infinite statistics have their limiting probabilities: 0 at
+/// positive infinity and 1 at negative infinity. The positive tail is evaluated
+/// directly, without subtracting a CDF close to one.
+pub fn student_t_upper_tail(t: f64, df: f64) -> f64 {
+    if t.is_nan() || !(df > 0.0 && df.is_finite()) {
+        return f64::NAN;
+    }
+    student_t_cdf(-t, df)
+}
+
 /// Student t quantile: the `t` with `Pr(T ≤ t) = p`, for `0 < p < 1` and
 /// `df > 0`, by bracketing and bisection on [`student_t_cdf`]. NaN outside
 /// that domain.
-pub(crate) fn student_t_quantile(p: f64, df: f64) -> f64 {
+pub fn student_t_quantile(p: f64, df: f64) -> f64 {
     if !(p > 0.0 && p < 1.0 && df > 0.0 && df.is_finite()) {
         return f64::NAN;
     }

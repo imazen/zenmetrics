@@ -1,0 +1,19 @@
+Runner: zenbench 0.1.11 CLI (crates.io, cargo install --features cli --locked)
+Baseline: 2f98686e (bench(vsi): wall example prints score bits; built as 6f9f28b5 before a docs-only rebase, same vsi/zenmetrics-math trees)
+Candidate: a4add208 (perf(vsi): lane-exact libm powf in the pooling fold; built as 55805c7e, same trees)
+Binaries: cargo build --release -p vsi --features parallel,avx512 --example wall (the production feature set of zenmetrics-cli's vsi dep), via just snap-cargo <rev>
+Plan: python3 -B scripts/bench/ranked-metric-pair.py plan <baseline> <candidate> 6f9f28b5 55805c7e <plan> --threads 1 --cpus 2, plus a second case 256x256 x 40 reps and deadline 600 s
+Command: just ranked-pair-scope <zenbench> <plan> <output> 2
+Host: r7900x (Ryzen 9 7900X, Zen 4); Rayon threads: 1; outer system scope: CPU 2, MemoryMax 16G, MemorySwapMax 0; load avg 1.19 at start; 3 invocations saw observed CPU load above 5%
+Raw evidence: r7900x:/home/lilith/tmp/powf/vsi-pair-out/packet.json.gz
+Packet SHA-256: b0021e32054ff546ef92570ae81d12d01eec70640376a31ca74fdf39499a9e7f
+Correctness: score bits checked on every arm (ranked-metric-pair.py check); identical bits 3fefed5c92616d6b (3355x2516) and 3fef749e6865387d (256x256)
+Result: 256x256 -4.60% (A/A +0.24%); 3355x2516 -0.67% (A/A -0.27%, within noise). Exploratory 4-block pair, no confirmation run.
+
+Single-run size scan (same binaries, RAYON_NUM_THREADS=1, taskset -c 2, ms/call; score bits identical before/after at every size):
+  size        v3 build before -> after      avx512 build before -> after
+  256x256     38.35 -> 35.36                37.79 -> 36.03
+  512x512     47.57 -> 45.50                46.93 -> 44.89
+  1024x1024   70.44 -> 68.45                70.75 -> 68.13
+  3355x2516   277.65 -> 275.85              281.39 -> 277.39
+The pool runs on the decimated grid (F = round(min(w,h)/256)), about 65-100k pixels at any input size, so the saving is about 2-3 ms per call.

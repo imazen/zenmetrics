@@ -129,34 +129,34 @@ pub fn imresize(
     crate::par::for_each_dst_chunk(&mut tmp, rb * out_width, |o, tmp_c| {
         let y0 = o / out_width;
         for (ly, row) in tmp_c.chunks_exact_mut(out_width).enumerate() {
-        let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
-        {
-        let mut x = 0usize;
-        while x + 4 <= out_width {
-            let mut acc = [0.0f64; 4];
-            for t in 0..hc.taps {
-                for j in 0..4 {
-                    let base = (x + j) * hc.taps;
-                    acc[j] += hc.weights[base + t] * src[hc.indices[base + t]];
+            let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
+            {
+                let mut x = 0usize;
+                while x + 4 <= out_width {
+                    let mut acc = [0.0f64; 4];
+                    for t in 0..hc.taps {
+                        for j in 0..4 {
+                            let base = (x + j) * hc.taps;
+                            acc[j] += hc.weights[base + t] * src[hc.indices[base + t]];
+                        }
+                    }
+                    for j in 0..4 {
+                        row[x + j] = acc[j];
+                    }
+                    x += 4;
+                }
+                while x < out_width {
+                    let base = x * hc.taps;
+                    let wr = &hc.weights[base..base + hc.taps];
+                    let ir = &hc.indices[base..base + hc.taps];
+                    let mut acc = 0.0;
+                    for (w, &i) in wr.iter().zip(ir) {
+                        acc += w * src[i];
+                    }
+                    row[x] = acc;
+                    x += 1;
                 }
             }
-            for j in 0..4 {
-                row[x + j] = acc[j];
-            }
-            x += 4;
-        }
-        while x < out_width {
-            let base = x * hc.taps;
-            let wr = &hc.weights[base..base + hc.taps];
-            let ir = &hc.indices[base..base + hc.taps];
-            let mut acc = 0.0;
-            for (w, &i) in wr.iter().zip(ir) {
-                acc += w * src[i];
-            }
-            row[x] = acc;
-            x += 1;
-        }
-        }
         }
     });
 
@@ -171,32 +171,32 @@ pub fn imresize(
     crate::par::for_each_dst_chunk(&mut out, rb2 * out_width, |o, out_c| {
         let yy0 = o / out_width;
         for (ly, orow) in out_c.chunks_exact_mut(out_width).enumerate() {
-        let y = yy0 + ly;
-        let base = y * vc.taps;
-        let wr = &vc.weights[base..base + vc.taps];
-        let ir = &vc.indices[base..base + vc.taps];
-        let mut x = 0usize;
-        while x + BLK <= out_width {
-            let mut acc = [0.0f64; BLK];
-            for (w, &i) in wr.iter().zip(ir) {
-                let s: &[f64; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
-                    .try_into()
-                    .expect("BLK-sized window");
-                for (a, v) in acc.iter_mut().zip(s) {
-                    *a += w * v;
+            let y = yy0 + ly;
+            let base = y * vc.taps;
+            let wr = &vc.weights[base..base + vc.taps];
+            let ir = &vc.indices[base..base + vc.taps];
+            let mut x = 0usize;
+            while x + BLK <= out_width {
+                let mut acc = [0.0f64; BLK];
+                for (w, &i) in wr.iter().zip(ir) {
+                    let s: &[f64; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
+                        .try_into()
+                        .expect("BLK-sized window");
+                    for (a, v) in acc.iter_mut().zip(s) {
+                        *a += w * v;
+                    }
                 }
+                orow[x..x + BLK].copy_from_slice(&acc);
+                x += BLK;
             }
-            orow[x..x + BLK].copy_from_slice(&acc);
-            x += BLK;
-        }
-        while x < out_width {
-            let mut acc = 0.0;
-            for (w, &i) in wr.iter().zip(ir) {
-                acc += w * tmp[i * out_width + x];
+            while x < out_width {
+                let mut acc = 0.0;
+                for (w, &i) in wr.iter().zip(ir) {
+                    acc += w * tmp[i * out_width + x];
+                }
+                orow[x] = acc;
+                x += 1;
             }
-            orow[x] = acc;
-            x += 1;
-        }
         }
     });
     out
@@ -234,32 +234,32 @@ pub fn imresize32(
     crate::par::for_each_dst_chunk(&mut tmp, rb * out_width, |o, tmp_c| {
         let y0 = o / out_width;
         for (ly, row) in tmp_c.chunks_exact_mut(out_width).enumerate() {
-        let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
-        let mut x = 0usize;
-        while x + 4 <= out_width {
-            let mut acc = [0.0f64; 4];
-            for t in 0..hc.taps {
-                for j in 0..4 {
-                    let base = (x + j) * hc.taps;
-                    acc[j] += hc.weights[base + t] * f64::from(src[hc.indices[base + t]]);
+            let src = &image[(y0 + ly) * width..(y0 + ly) * width + width];
+            let mut x = 0usize;
+            while x + 4 <= out_width {
+                let mut acc = [0.0f64; 4];
+                for t in 0..hc.taps {
+                    for j in 0..4 {
+                        let base = (x + j) * hc.taps;
+                        acc[j] += hc.weights[base + t] * f64::from(src[hc.indices[base + t]]);
+                    }
                 }
+                for j in 0..4 {
+                    row[x + j] = acc[j] as f32;
+                }
+                x += 4;
             }
-            for j in 0..4 {
-                row[x + j] = acc[j] as f32;
+            while x < out_width {
+                let base = x * hc.taps;
+                let wr = &hc.weights[base..base + hc.taps];
+                let ir = &hc.indices[base..base + hc.taps];
+                let mut acc = 0.0f64;
+                for (w, &i) in wr.iter().zip(ir) {
+                    acc += w * f64::from(src[i]);
+                }
+                row[x] = acc as f32;
+                x += 1;
             }
-            x += 4;
-        }
-        while x < out_width {
-            let base = x * hc.taps;
-            let wr = &hc.weights[base..base + hc.taps];
-            let ir = &hc.indices[base..base + hc.taps];
-            let mut acc = 0.0f64;
-            for (w, &i) in wr.iter().zip(ir) {
-                acc += w * f64::from(src[i]);
-            }
-            row[x] = acc as f32;
-            x += 1;
-        }
         }
     });
 
@@ -270,34 +270,34 @@ pub fn imresize32(
     crate::par::for_each_dst_chunk(&mut out, rb2 * out_width, |o, out_c| {
         let yy0 = o / out_width;
         for (ly, orow) in out_c.chunks_exact_mut(out_width).enumerate() {
-        let y = yy0 + ly;
-        let base = y * vc.taps;
-        let wr = &vc.weights[base..base + vc.taps];
-        let ir = &vc.indices[base..base + vc.taps];
-        let mut x = 0usize;
-        while x + BLK <= out_width {
-            let mut acc = [0.0f64; BLK];
-            for (w, &i) in wr.iter().zip(ir) {
-                let s: &[f32; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
-                    .try_into()
-                    .expect("BLK-sized window");
-                for (a, v) in acc.iter_mut().zip(s) {
-                    *a += w * f64::from(*v);
+            let y = yy0 + ly;
+            let base = y * vc.taps;
+            let wr = &vc.weights[base..base + vc.taps];
+            let ir = &vc.indices[base..base + vc.taps];
+            let mut x = 0usize;
+            while x + BLK <= out_width {
+                let mut acc = [0.0f64; BLK];
+                for (w, &i) in wr.iter().zip(ir) {
+                    let s: &[f32; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
+                        .try_into()
+                        .expect("BLK-sized window");
+                    for (a, v) in acc.iter_mut().zip(s) {
+                        *a += w * f64::from(*v);
+                    }
                 }
+                for (o, a) in orow[x..x + BLK].iter_mut().zip(acc) {
+                    *o = a as f32;
+                }
+                x += BLK;
             }
-            for (o, a) in orow[x..x + BLK].iter_mut().zip(acc) {
-                *o = a as f32;
+            while x < out_width {
+                let mut acc = 0.0f64;
+                for (w, &i) in wr.iter().zip(ir) {
+                    acc += w * f64::from(tmp[i * out_width + x]);
+                }
+                orow[x] = acc as f32;
+                x += 1;
             }
-            x += BLK;
-        }
-        while x < out_width {
-            let mut acc = 0.0f64;
-            for (w, &i) in wr.iter().zip(ir) {
-                acc += w * f64::from(tmp[i * out_width + x]);
-            }
-            orow[x] = acc as f32;
-            x += 1;
-        }
         }
     });
     out
