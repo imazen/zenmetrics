@@ -1,11 +1,12 @@
-//! Time LPIPS (`ZENMETRICS_NN_NET` = alex | vgg | squeeze, default vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
+//! lpips_squeeze | dists, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
 //! - `e2e`: read + PNG-decode both files → score
 //!
 //! ```text
-//! cargo run --release -p zenmetrics-nn --example lpips_bench -- \
+//! cargo run --release -p zenmetrics-nn --example nn_bench -- \
 //!     <model_dir> <ladder_dir> <out.tsv> [image=1415] [sizes=64,...,2048] [budget_s=4]
 //! ```
 //! Engine: `ZENMETRICS_NN_ENGINE` = `rten` (default) or `ort-cuda` (feature
@@ -17,7 +18,7 @@ use std::time::Instant;
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{Dists, Engine, Lpips, LpipsNet};
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -88,13 +89,19 @@ fn main() {
         "ort-cuda" => Engine::OrtCuda,
         other => panic!("unknown or unbuilt engine {other}"),
     };
-    let net_name = std::env::var("ZENMETRICS_NN_NET").unwrap_or_else(|_| "vgg".into());
-    let net = *LpipsNet::ALL
-        .iter()
-        .find(|n| n.name() == net_name)
-        .expect("unknown ZENMETRICS_NN_NET");
-    let col = net.column();
-    let mut m = Lpips::from_dir(model, net, engine).expect("load model");
+    let col: &'static str = match std::env::var("ZENMETRICS_NN_MODEL").as_deref() {
+        Err(_) | Ok("lpips_vgg") => "lpips_vgg",
+        Ok("lpips_alex") => "lpips_alex",
+        Ok("lpips_squeeze") => "lpips_squeeze",
+        Ok("dists") => "dists",
+        Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
+    };
+    let mut m: Box<dyn Metric> = if col == "dists" {
+        Box::new(Dists::from_dir(model, engine).expect("load model"))
+    } else {
+        let net = LpipsNet::ALL.into_iter().find(|n| n.column() == col).unwrap();
+        Box::new(Lpips::from_dir(model, net, engine).expect("load model"))
+    };
     let new = !Path::new(out).exists();
     let mut f = std::fs::OpenOptions::new()
         .create(true)
@@ -113,7 +120,7 @@ fn main() {
         let dp_path = ladder.join(format!("{stem}_{n}_dist.png"));
         let (rp, w, h) = load_rgb8(&rp_path);
         let (dp, _, _) = load_rgb8(&dp_path);
-        let modes: [(&str, Box<dyn FnMut(&mut Lpips) -> (Vec<f64>, f64)>); 3] = [
+        let modes: [(&str, Box<dyn FnMut(&mut Box<dyn Metric>) -> (Vec<f64>, f64)>); 3] = [
             (
                 "compute",
                 Box::new(|m| {
