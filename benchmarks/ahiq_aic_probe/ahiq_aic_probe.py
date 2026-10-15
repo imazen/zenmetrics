@@ -223,11 +223,10 @@ fields = ['distorted', 'source', 'published']
 for c in CONVS:
     fields += [c, f'{c}_delta', f'{c}_delta_jnd']
 with open(OUT, 'w', newline='') as f:
-    wcsv = csv.DictWriter(f, fieldnames=fields)
+    wcsv = csv.DictWriter(f, fieldnames=fields, delimiter='\t')
     wcsv.writeheader()
     for rec in out_rows:
         wcsv.writerow(rec)
-    wcsv.writerow({})
     for c, j in jit.items():
         wcsv.writerow({'distorted': f'# seed-jitter std {c}', 'published': j})
 print('wrote', OUT)
