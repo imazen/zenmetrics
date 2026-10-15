@@ -12,21 +12,23 @@ paper = "Ke, Wang, Wang, Milanfar, Yang. MUSIQ: Multi-scale Image Quality Transf
 [code]
 source = "upstream-port"             # npz params mirrored into a PyTorch module in export.py; the net runs as an exported ONNX graph
 upstream = "https://github.com/google-research/google-research/tree/master/musiq"
-upstream_package = "git clone of google-research (sparse musiq/), pinned 3ef5211; legacy stack jax 0.3.25 + flax 0.3.3 (flax.nn) + tensorflow CPU on python 3.9 — the TF-Hub SavedModel is the same weights"
+upstream_package = "git clone of google-research (sparse musiq/), pinned 3ef5211; legacy stack jax 0.3.25 + flax 0.3.3 (flax.nn) + tensorflow CPU on python 3.9 — Kaggle/TF-Hub `google/musiq` instances are conversions of the same npz checkpoints (docs/pyiqa_licenses_2026-10-15/deep_origins.tsv)"
 licence = "Apache-2.0"
 
 [weights]
 # The repo is Apache-2.0 and its README's Model Zoo links the checkpoint
-# on the project's GCS bucket; the npz carries no separate terms.
+# on the project's GCS bucket; the npz carries no separate terms, and the
+# Kaggle Models listing (google/musiq, koniq-10k) states Apache-2.0.
 licence_class = "permissive"
 checkpoint = "gs://gresearch/musiq/koniq_ckpt.npz (163 MB, opt/target/* flax params; sha256 recorded in musiq_export.meta provenance)"
 
 [input]
 format = "packed sRGB8"
 normalisation = "u8/255 then -1 + t*2 (upstream normalize_value_range -> [-1,1])"
-resize = "per scale s in {224,384}: keep aspect, longer side = s via tf.image.resize GAUSSIAN — scale_and_translate kernel_type='gaussian' antialias=False: kernel_scale=1, sigma=0.5, radius 1.5, w=exp(-2 d^2) for |d|<1.5, reciprocal-multiply normalisation, vertical-then-horizontal. LOCAL PORT in src/tfresize.rs (LICENSE-tensorflow), verified <=4e-7 vs tf 2.15 — TEMPORARY: moves to zenresize when its gaussian mode lands (zenresize today has no fixed-sigma/gaussian kernel knob)"
+resize = "per scale s in {224,384}: keep aspect, longer side = s via tf.image.resize GAUSSIAN — scale_and_translate kernel_type='gaussian' antialias=False: kernel_scale=1, sigma=0.5, radius 1.5, w=exp(-2 d^2) for |d|<1.5, reciprocal-multiply normalisation, vertical-then-horizontal. LOCAL PORT in src/tfresize.rs (LICENSE-tensorflow), verified <=4e-7 vs tf 2.15 — TEMPORARY: moves to zenresize when its gaussian mode lands: zenresize PR #18's `gaussian_tf()` + `.with_antialias(false)` is the replacement once merged (kernel_scale=1, sigma=0.5, radius 1.5)"
 patches = "32x32 stride-32 SAME zero-pad per scale; row = [3072 hwc pixels, spatial hash (tf v1 NEAREST of arange(10) over the patch grid), scale id, mask]; rescaled groups pad to ceil(s/32)^2 rows (49+144), full-res group uncapped -> [1, L, 3075], L = 193 + ceil(h/32)*ceil(w/32)"
 min_size = 1                         # every input resizes; a 1x1 still yields 194 rows
+max_rows = 8192                      # L = 193 + ceil(h/32)*ceil(w/32) must stay under this: native-res patches are uncapped upstream and attention is O(L^2) — 8192 rows (~2800px-square input) is ~1.6 GB for one [1,6,L,L] f32 map. Larger inputs -> TooLarge. Extreme aspect ratios whose rescaled side rounds to 0 -> TooSmall (upstream: 'output dimensions must be positive')
 
 [export]
 script = "export.py"

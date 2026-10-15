@@ -79,7 +79,14 @@ def score(m, x):
 
 model = build()
 with open(OUT, 'w') as f:
+    f.write('image\tsize\thyperiqa\thyperiqa_ref\n')
     for p in IMGS:
         name = p.rsplit('/', 1)[-1]
-        f.write(f'{name}\t{score(model, prep(p)):.10f}\n')
-        print(name, flush=True)
+        if not name.endswith('_ref.png'):
+            continue
+        stem, size = name.split('_')[0], name.split('_')[1]
+        sr = score(model, prep(p))
+        sd = score(model, prep(p.replace('_ref.png', '_dist.png')))
+        f.write(f'{stem}\t{size}\t{sd:.10f}\t{sr:.10f}\n')
+        f.flush()
+        print(stem, size, f'{sd:.6f}', f'{sr:.6f}', flush=True)

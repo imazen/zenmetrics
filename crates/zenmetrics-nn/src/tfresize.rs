@@ -10,7 +10,8 @@
 //! - `inv_scale = 1 / (out/in)`, sample centre `(i + 0.5)·inv_scale`;
 //! - span `[⌈sf − 2⌉, ⌊sf + 1⌋]` clamped to `[0, in)`;
 //! - tap `w(src) = exp(−2·(src + 0.5 − sf)²)` when `|src + 0.5 − sf| < 1.5`,
-//!   else 0 (the `x >= radius` cutoff — f32 exp);
+//!   else 0 (the `x >= radius` cutoff; TF's `std::exp` runs in f64 —
+//!   `2.0 * sigma * sigma` promotes — so the exp is f64, cast to f32);
 //! - sequential f32 weight sum, then each weight `*= 1/total` (reciprocal
 //!   multiply, not division);
 //! - vertical pass before horizontal (the op's process-rows order); each
@@ -30,15 +31,15 @@
 struct Span {
     first: usize,
     count: usize,
-    weights: [f32; 7],
+    weights: [f32; 5],
 }
 
 /// `ComputeSpansCore` for the gaussian kernel with `antialias = false`:
 /// `kernel_scale` is 1, so the kernel support is a fixed radius of 1.5 input
-/// pixels and the span window is at most 4 taps (the `span_size` cap of
-/// `min(2·⌈1.5⌉ + 1, in)` = `min(7, in)` never binds since `in >= 1` and the
-/// geometric span is 3 wide).
+/// pixels; the `span_size` cap is `min(2·⌈radius·kernel_scale⌉ + 1, in)` =
+/// `min(5, in)` (the |d| < 1.5 cutoff trims each span to at most 4 taps).
 fn gauss_spans(n_in: usize, n_out: usize) -> Vec<Span> {
+    assert!(n_in >= 1 && n_out >= 1, "tf gaussian resize: empty axis");
     let inv = 1.0f32 / (n_out as f32 / n_in as f32);
     let mut out = Vec::with_capacity(n_out);
     for ox in 0..n_out {
@@ -46,7 +47,7 @@ fn gauss_spans(n_in: usize, n_out: usize) -> Vec<Span> {
         let mut span = Span {
             first: 0,
             count: 0,
-            weights: [0.0; 7],
+            weights: [0.0; 5],
         };
         if !(sf < 0.0 || sf > n_in as f32) {
             let lo = ((sf - 1.5) - 0.5).ceil().clamp(0.0, (n_in - 1) as f32) as usize;
@@ -57,7 +58,9 @@ fn gauss_spans(n_in: usize, n_out: usize) -> Vec<Span> {
                 let w = if kp.abs() >= 1.5 {
                     0.0
                 } else {
-                    (-2.0f32 * kp * kp).exp()
+                    // `std::exp(-x*x / (2.0*sigma*sigma))`: the f32 square
+                    // is promoted by the f64 denominator — f64 exp, f32 out.
+                    (((-(kp * kp) as f64) / (2.0 * 0.5 * 0.5)).exp()) as f32
                 };
                 total += w;
                 span.weights[i] = w;

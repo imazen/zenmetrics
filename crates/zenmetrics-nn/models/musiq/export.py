@@ -40,6 +40,7 @@ import torch.nn.functional as F
 
 NPZ, OUT = sys.argv[1], sys.argv[2]
 GOLDENS = sys.argv[3] if len(sys.argv) > 3 else None
+LADDER = sys.argv[4] if len(sys.argv) > 4 else None
 os.makedirs(OUT, exist_ok=True)
 torch.set_grad_enabled(False)
 
@@ -143,8 +144,9 @@ def preprocess(img_u8):
     outs = []
     for scale_id, longer in enumerate(sorted(LONGER)):
         ratio = f32(longer) / f32(max(h, w))
-        rh = int(np.floor(f32(f32(h) * ratio) + f32(0.5)))  # tf.round half-away
-        rw = int(np.floor(f32(f32(w) * ratio) + f32(0.5)))
+        rh = int(np.rint(f32(h) * ratio))  # tf.round is ties-to-even
+        rw = int(np.rint(f32(w) * ratio))
+        assert rh > 0 and rw > 0, 'output dimensions must be positive'
         r = resize_gaussian(x, rh, rw)
         cap = int(np.ceil(longer / 32)) ** 2
         outs.append(extract(r, cap, scale_id))
@@ -322,13 +324,21 @@ got = float(ort.InferenceSession(onnx_path).run(
 print(f'self-check: torch {want:.9g} ort-cpu {got:.9g} |d| {abs(got - want):.3e}')
 assert abs(got - want) <= 1e-4, (got, want)
 
-if GOLDENS and os.path.exists(GOLDENS):
+if GOLDENS and os.path.exists(GOLDENS) and LADDER:
+    # check the exported ONNX graph against the JAX-oracle goldens on the
+    # ladder images (image, size, musiq, musiq_ref columns)
     worst = 0.0
-    for line in open(GOLDENS).read().splitlines()[1:]:
+    rows = open(GOLDENS).read().splitlines()[1:]
+    for line in rows:
         f = line.split('\t')
-        for v in (f[2], f[3]):
-            worst = max(worst, abs(float(v)))
-    print(f'goldens: {sum(1 for _ in open(GOLDENS)) - 1} pairs')
+        stem, size = f[0], f[1]
+        for col, want_s in (('ref', f[3]), ('dist', f[2])):
+            p = os.path.join(LADDER, f'{stem}_{size}_{col}.png')
+            x = torch.from_numpy(preprocess(load_rgb8(p)))
+            got_s = float(ort.InferenceSession(onnx_path).run(
+                ['musiq'], {'x': x.numpy()})[0][0])
+            worst = max(worst, abs(got_s - float(want_s)))
+    print(f'goldens check: {len(rows)} pairs, worst |d| {worst:.3e}')
 
 with open(os.path.join(OUT, 'musiq.meta'), 'w') as f:
     f.write('channels 1\nmin_size 1\n')
@@ -342,6 +352,7 @@ with open(os.path.join(OUT, 'musiq_export.meta'), 'w') as f:
     f.write(f'torch {torch.__version__}\ngoogle-research/musiq @3ef5211\n'
             f'python {platform.python_version()}\nhost {platform.node()}\n'
             f'numpy {np.__version__}\n')
+    f.write(f'ckpt_sha256 {sha(NPZ)}\n')
     for fn in ('musiq.onnx', 'musiq.meta'):
         f.write(f'sha256 {sha(os.path.join(OUT, fn))} {fn}\n')
 print('done musiq')

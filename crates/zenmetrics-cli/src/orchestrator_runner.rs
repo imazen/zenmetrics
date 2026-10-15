@@ -543,10 +543,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Ssim
             | CliMetricKind::Nlpd
             | CliMetricKind::NlpdIqa
-            // No-reference metrics (PIQE, NIQE, and the learned ARNIQA) are
-            // routed through `nr::score`/`nn::score` +
-            // `PairedNoReference`; the orchestrator's FR leaves have no
-            // shape for them.
+            // No-reference metrics (PIQE, NIQE, and the learned ARNIQA,
+            // MANIQA, LIQE, MUSIQ) are routed through
+            // `nr::score`/`nn::score` + `PairedNoReference`; the
+            // orchestrator's FR leaves have no shape for them.
             | CliMetricKind::Piqe
             | CliMetricKind::Niqe
             | CliMetricKind::Arniqa

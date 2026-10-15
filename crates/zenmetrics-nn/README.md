@@ -16,7 +16,7 @@ each model's upstream reference implementation. Plan and licensing:
 | ARNIQA (`Arniqa`, no-reference) | `arniqa`, `arniqa_ref` | rten, ort-cuda | `miccunifi/ARNIQA` `single_image_inference.py`, kadid10k regressor, 5-crop full + PIL-bilinear half | 0.0538 | rten 6.65e-6 (= 3.58e-7 score), ort-cuda same |
 | MANIQA (`Maniqa`, no-reference) | `maniqa`, `maniqa_ref` | rten, ort-cuda | `IIGROUP/MANIQA` koniq10k eval path, cv2-INTER_CUBIC 224 single forward, score [0,1] | 0.0214 | rten 1.70e-4 (= 3.6e-6 score), ort-cuda (see card) |
 | LIQE (`Liqe`, no-reference, consent-gated) | `liqe`, `liqe_ref` | rten, ort-cuda | `zwx8981/LIQE` `LIQE.forward`, 495-prompt text bank, top-left-224-patch×15 quirk | 0.3938 | rten 1.25e-5, ort-cuda 4.96e-5 |
-| MUSIQ (`Musiq`, no-reference) | `musiq`, `musiq_ref` | rten, ort-cuda | `google-research/musiq` `run_predict_image.py`, koniq_ckpt.npz, 3-scale TF-gaussian 32² patches → transformer, MOS-scale | 1.969 | rten 7.36e-5, ort-cuda 3.68e-5 |
+| MUSIQ (`Musiq`, no-reference) | `musiq`, `musiq_ref` | rten, ort-cuda | `google-research/musiq` `run_predict_image.py`, koniq_ckpt.npz, 3-scale TF-gaussian 32² patches → transformer, MOS-scale | 1.969 | rten 1.20e-4, ort-cuda 6.98e-5 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold

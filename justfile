@@ -617,8 +617,8 @@ nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
 
 # Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
 # Goldens come from oracle.py under the legacy JAX env, not this recipe.
-nn-export-musiq python npz out goldens="":
-    {{python}} -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}'
+nn-export-musiq python npz out goldens="" ladder="":
+    {{python}} -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
 
 # MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
 # see models/musiq/card.toml; tensorflow CPU, eager mode).

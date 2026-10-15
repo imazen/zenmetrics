@@ -32,7 +32,7 @@ use crate::tfresize::resize_gaussian_tf_f32;
 use crate::{Engine, Error, WeightsLicence, WeightsTerms, za};
 
 /// Bump whenever any output can change.
-const SCORE_REVISION: u32 = 1;
+const SCORE_REVISION: u32 = 2;
 const COLUMN: &str = "musiq";
 /// Patch size/stride of `get_multiscale_patches`.
 const PATCH: usize = 32;
@@ -42,10 +42,16 @@ const GRID: usize = 10;
 const LONGER: [usize; 2] = [224, 384];
 /// Row layout: `32·32·3` patch pixels + spatial + scale + mask.
 const ROW: usize = PATCH * PATCH * 3 + 3;
+/// Patch-sequence cap: upstream leaves the native-resolution group
+/// unbounded, but attention over `l` rows is O(l²) — 8192 rows (≈ a
+/// 2800px-square input) already allocates ~1.6 GB for `q·kᵀ` alone.
+const MAX_ROWS: usize = 8192;
 
 /// MUSIQ, KonIQ checkpoint. Higher is better — upstream's MOS-scale
 /// quality score (the ladder spans roughly 5..60). Input: packed sRGB8
-/// (any stride); any nonzero size is accepted — every scale resizes.
+/// (any stride). Extreme aspect ratios whose rescaled side rounds to 0
+/// and inputs whose patch sequence would exceed [`MAX_ROWS`] rows are
+/// refused (`TooSmall` / `TooLarge`).
 pub struct Musiq {
     backend: Backend,
     min_size: usize,
@@ -54,11 +60,13 @@ pub struct Musiq {
 impl Musiq {
     /// This model's weights' published terms: `koniq_ckpt.npz` is
     /// published on the project's GCS bucket and covered by the
-    /// repository's Apache-2.0 licence.
+    /// repository's Apache-2.0 licence; the same checkpoint is on
+    /// Kaggle Models (`google/musiq`, koniq-10k variation, licenseName
+    /// Apache-2.0).
     pub const WEIGHTS: WeightsTerms = WeightsTerms {
         model: COLUMN,
         licence: WeightsLicence::Permissive,
-        terms_url: "https://github.com/google-research/google-research/tree/master/musiq#model-zoo",
+        terms_url: "https://www.kaggle.com/models/google/musiq/tensorFlow2/koniq-10k",
     };
 
     /// Load an exported model directory (`musiq.onnx`, `musiq.meta`, as
@@ -139,8 +147,18 @@ impl Musiq {
     /// sequences plus the full-resolution one — `[1, L, 3075]` flattened.
     fn prep(img: &za::Rgb8In<'_>, min_size: usize) -> Result<Vec<f32>, Error> {
         let (h, w) = (img.height, img.width);
+        if h == 0 || w == 0 {
+            return Err(Error::TooSmall { min: 1 });
+        }
         if h < min_size || w < min_size {
             return Err(Error::TooSmall { min: min_size });
+        }
+        // L^2 attention bound: the full-resolution group is uncapped
+        // (upstream's -1), so the patch sequence is 193 + ceil(h/32)^2ish
+        // rows; refuse before allocating when it would exceed MAX_ROWS
+        // (a [1,6,8192,8192] f32 attention map is ~1.6 GB).
+        if 193 + h.div_ceil(PATCH) * w.div_ceil(PATCH) > MAX_ROWS {
+            return Err(Error::TooLarge { limit: MAX_ROWS });
         }
         let full = rgb8_to_planar_u8(img);
         // (x − 0)/255 then −1 + t·2 — f32 element order as upstream's
@@ -152,10 +170,14 @@ impl Musiq {
         let mut out = Vec::new();
         for (scale_id, longer) in LONGER.iter().enumerate() {
             let ratio = *longer as f32 / h.max(w) as f32;
-            // tf.round is half-away-from-zero; for positive sizes that is
-            // upstream's `floor(x + 0.5)` in f32.
-            let rh = (h as f32 * ratio + 0.5).floor() as usize;
-            let rw = (w as f32 * ratio + 0.5).floor() as usize;
+            // tf.round is ties-to-even (`rint`), not half-away.
+            let rh = (h as f32 * ratio).round_ties_even() as usize;
+            let rw = (w as f32 * ratio).round_ties_even() as usize;
+            // Upstream errors "output dimensions must be positive" here —
+            // an extreme aspect ratio can round a resized side to zero.
+            if rh == 0 || rw == 0 {
+                return Err(Error::TooSmall { min: 1 });
+            }
             let r = resize_gaussian_tf_f32(&norm, 3, h, w, rh, rw);
             let cap = (longer.div_ceil(PATCH) * longer.div_ceil(PATCH)) as i64;
             Self::extract(&r, rh, rw, cap, scale_id as f32, &mut out);
@@ -227,8 +249,10 @@ mod tests {
         }
     }
 
-    /// Every nonzero size is accepted (each scale resizes anyway);
-    /// a zero dimension is refused before the span clamps can panic.
+    /// Zero dimensions are refused before any arithmetic, extreme
+    /// aspect ratios whose rescaled side rounds to zero fail like
+    /// upstream's "output dimensions must be positive", and inputs
+    /// whose patch sequence would exceed MAX_ROWS are refused.
     #[test]
     fn prep_size_bounds() {
         for (w, h) in [(0, 5), (5, 0)] {
@@ -237,6 +261,22 @@ mod tests {
                 Err(Error::TooSmall { min: 1 })
             ));
         }
+        // 1x1000: 224/1000 -> rh 0 (upstream errors identically).
+        assert!(matches!(
+            Musiq::prep(&view(&[0u8; 3000], 1000, 1), 1),
+            Err(Error::TooSmall { min: 1 })
+        ));
+        // 2x1000: 448/1000 -> rh 0 at the second scale as well.
+        assert!(matches!(
+            Musiq::prep(&view(&[0u8; 6000], 1000, 2), 1),
+            Err(Error::TooSmall { min: 1 })
+        ));
+        // 4096x4096: 193 + 128^2 = 16577 rows > MAX_ROWS.
+        let big = vec![0u8; 4096 * 4096 * 3];
+        assert!(matches!(
+            Musiq::prep(&view(&big, 4096, 4096), 1),
+            Err(Error::TooLarge { limit: 8192 })
+        ));
         assert!(Musiq::prep(&view(&[0u8; 3], 1, 1), 1).is_ok());
     }
 
@@ -260,7 +300,7 @@ mod tests {
         let idx = |dy: usize, dx: usize| x[(193 + dy * 8 + dx) * ROW + 3072] as i64;
         // ph for count 8: floor(i·10/8) = 0,1,2,3,5,6,7,8
         assert_eq!(idx(0, 0), 0);
-        assert_eq!(idx(1, 1), 1 * 10 + 1);
+        assert_eq!(idx(1, 1), 11);
         assert_eq!(idx(4, 4), 5 * 10 + 5);
         assert_eq!(idx(7, 7), 8 * 10 + 8);
     }

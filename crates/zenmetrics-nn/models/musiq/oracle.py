@@ -22,8 +22,8 @@ import sys
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 LADDER, UPSTREAM, CKPT, OUT = sys.argv[1:5]
-SIZES = {int(s) for s in (sys.argv[5] if len(sys.argv) > 5
-                         else '64,128,256,512,1024').split(',')}
+SIZES = set((sys.argv[5] if len(sys.argv) > 5
+             else '64,128,256,512,1024').split(','))
 
 sys.path.insert(0, UPSTREAM)
 import jax.numpy as jnp  # noqa: E402
@@ -52,7 +52,7 @@ with open(OUT, 'w') as g:
         if not name.endswith('_ref.png'):
             continue
         stem, size = name.split('_')[0], name.split('_')[1]
-        if not size.isdigit() or int(size) not in SIZES:
+        if size not in SIZES:
             continue
         sr = oracle(os.path.join(LADDER, name))
         sd = oracle(os.path.join(LADDER, name.replace('_ref', '_dist')))

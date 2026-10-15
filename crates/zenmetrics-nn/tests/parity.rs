@@ -202,8 +202,7 @@ fn matches_upstream() {
         let mut worst = 0.0f64;
         for line in goldens.lines().skip(1) {
             let f: Vec<&str> = line.split('\t').collect();
-            let (stem, size, want): (&str, usize, f64) =
-                (f[0], f[1].parse().unwrap(), f[2].parse().unwrap());
+            let (stem, size, want): (&str, &str, f64) = (f[0], f[1], f[2].parse().unwrap());
             let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
             let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
             let eval = m
