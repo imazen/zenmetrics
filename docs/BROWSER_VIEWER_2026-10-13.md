@@ -329,13 +329,13 @@ semantics: [native maps](UNIFIED_NATIVE_MAPS_2026-10-14.md).
 
 | Route | Map | Shows |
 | --- | --- | --- |
-| `nlpd` | `level_0` | level-0 squared normalized-Laplacian difference (a score component) |
+| `nlpd` | `diffmap` | NLPD's breakdown over all six levels (mean = NLPD) |
 | `psnrhvs` | `csf_error` | per-8×8-block CSF-weighted coefficient error, channel mean |
 | `mdctpsnr` | `detection` | per-window detection probability |
 | `mad` | `hi` | high-quality strategy: contrast-masked local MSE over MAD's interior |
-| `iwssim` | `cs_0` | scale-0 contrast-structure similarity |
-| `vif` | `info_loss_0` | scale-0 information loss `den − num` (a contribution) |
-| `vifvec` | `info_loss_l1_b1` | level-1 band-1 information loss per 3×3 block |
+| `iwssim` | `diffmap` | IW-SSIM's breakdown over all scales (mean = −ln IW-SSIM) |
+| `vif` | `diffmap` | information loss over all scales (mean = 1 − VIF) |
+| `vifvec` | `diffmap` | information loss over all subbands (mean = 1 − VIF) |
 | `vmaf-v1` | `speed_u` | SPEED chroma-U block difference, 160-pixel cells |
 
 `vmaf` (v0.6.1) has no map route; the maps belong to the v1.0.16 model. The
@@ -372,3 +372,9 @@ Validation:
 
 The viewer steps through jxl-encoder's perceptual quantization loop from a
 `.ltrace` file: [loop player](BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).
+
+## Fused maps, 2026-10-15
+
+The viewer shows a metric's fused `diffmap` when it publishes one: NLPD,
+VIF, vifvec, MS-SSIM, IW-SSIM and SSIMULACRA2 now map every scale they pool,
+not only the finest. Semantics: [native maps](UNIFIED_NATIVE_MAPS_2026-10-14.md#fused-maps-diffmap-2026-10-15).

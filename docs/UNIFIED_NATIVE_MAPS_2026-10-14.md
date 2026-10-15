@@ -355,9 +355,44 @@ Validation:
   (4,096 samples), identical 257×253 inputs give exact zeros, and the demo UI
   renders it.
 
+## Fused maps (`diffmap`), 2026-10-15
+
+Metrics that pool several scales also serve `diffmap`: the metric's own
+score broken down at input resolution, so one map shows where all of its
+scales find error, not just the finest. Each is built from the metric's
+native terms with its own weights; shares from a scale spread evenly over the
+input pixels each cell covers, the map is cropped to the pixels some cell
+covers, and it is scaled so **its mean is the quantity named below**. All
+are Difference polarity with global support (the pooling normalizes over the
+whole image).
+
+| Metric | Mean of `diffmap` | Allocation |
+| --- | --- | --- |
+| SSIMULACRA2 | the weighted sum the score transforms | exact: `w₁·x/N + w₄·x⁴/(N·L4³)` per term |
+| NLPD | NLPD | exact: NLPD is homogeneous of degree ½ in the level maps, so `2·x·∂NLPD/∂x` per sample |
+| VIF (VIFp, vifvec) | `1 − VIF` | exact: `(den − num)/Σden` per element |
+| MS-SSIM | `−ln MS-SSIM` | each level's `w_l·(−ln m_l)` split in proportion to `1 − x` |
+| IW-SSIM | `−ln IW-SSIM` | each scale's `β_s·(−ln wmcs_s)` split in proportion to `iw·(1 − cs)` |
+
+The MS-SSIM and IW-SSIM splits are a choice (the log of a mean has no unique
+per-sample decomposition); the totals are exact while every level mean lies in
+`(0, 1)`. `diffmap` is the primary map for NLPD and VIF; MS-SSIM keeps `ssim`
+and IW-SSIM `cs_0` as primary, with `diffmap` among their maps. DSSIM is not
+fused: its scale weights are not exposed by `dssim-core`.
+
+Validation: NLPD's mean equals the score within 1e-6 relative; VIF's equals
+`1 − VIF` within 1e-6 absolute (about 4e-8 measured), and a flat reference
+(VIF undefined) gives zeros; MS-SSIM's and IW-SSIM's equal `−ln` of the score
+within 1e-6 and 1e-5 relative; identical inputs give exact zeros (IW-SSIM:
+at most 1.3e-7, cs within f32 rounding of 1), and a local change peaks over
+it, for each metric. In headless Chromium the SSIMULACRA2, NLPD, VIF, vifvec
+and MS-SSIM fused maps equal the native oracle exactly; IW-SSIM's differs by at
+most 1.8e-7, the same cross-SIMD-tier rounding its `cs` maps show.
+
 ## Browser viewer
 
-The WASM viewer serves each metric's primary map through the same call
+The WASM viewer serves each metric's `diffmap` when it has one, else its
+primary map, through the same call
 (`feaafabd`): `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`, `vifvec`
 and `vmaf-v1`, and `ssim2` serves the fused `diffmap` through the adapter
 above. The
