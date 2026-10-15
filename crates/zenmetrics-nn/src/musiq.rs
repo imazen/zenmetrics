@@ -48,10 +48,10 @@ const ROW: usize = PATCH * PATCH * 3 + 3;
 const MAX_ROWS: usize = 8192;
 
 /// MUSIQ, KonIQ checkpoint. Higher is better — upstream's MOS-scale
-/// quality score (the ladder spans roughly 5..60). Input: packed sRGB8
+/// quality score (the ladder goldens span 15.9–76.2). Input: packed sRGB8
 /// (any stride). Extreme aspect ratios whose rescaled side rounds to 0
 /// and inputs whose patch sequence would exceed [`MAX_ROWS`] rows are
-/// refused (`TooSmall` / `TooLarge`).
+/// refused (`TooSmall` / `TooManyPatches` / `DegenerateAspectRatio`).
 pub struct Musiq {
     backend: Backend,
     min_size: usize,
@@ -158,7 +158,7 @@ impl Musiq {
         // rows; refuse before allocating when it would exceed MAX_ROWS
         // (a [1,6,8192,8192] f32 attention map is ~1.6 GB).
         if 193 + h.div_ceil(PATCH) * w.div_ceil(PATCH) > MAX_ROWS {
-            return Err(Error::TooLarge { limit: MAX_ROWS });
+            return Err(Error::TooManyPatches { limit: MAX_ROWS });
         }
         let full = rgb8_to_planar_u8(img);
         // (x − 0)/255 then −1 + t·2 — f32 element order as upstream's
@@ -176,7 +176,7 @@ impl Musiq {
             // Upstream errors "output dimensions must be positive" here —
             // an extreme aspect ratio can round a resized side to zero.
             if rh == 0 || rw == 0 {
-                return Err(Error::TooSmall { min: 1 });
+                return Err(Error::DegenerateAspectRatio);
             }
             let r = resize_gaussian_tf_f32(&norm, 3, h, w, rh, rw);
             let cap = (longer.div_ceil(PATCH) * longer.div_ceil(PATCH)) as i64;
@@ -261,21 +261,30 @@ mod tests {
                 Err(Error::TooSmall { min: 1 })
             ));
         }
+        assert_eq!(
+            Error::TooManyPatches { limit: 8192 }.to_string(),
+            "image exceeds the metric's 8192-patch-row intermediate bound"
+        );
+        assert!(
+            Error::DegenerateAspectRatio
+                .to_string()
+                .contains("degenerate aspect ratio")
+        );
         // 1x1000: 224/1000 -> rh 0 (upstream errors identically).
         assert!(matches!(
             Musiq::prep(&view(&[0u8; 3000], 1000, 1), 1),
-            Err(Error::TooSmall { min: 1 })
+            Err(Error::DegenerateAspectRatio)
         ));
-        // 2x1000: 448/1000 -> rh 0 at the second scale as well.
+        // 2x1000: 448/1000 rounds to 0 at scale 224; scale 384 would give 1.
         assert!(matches!(
             Musiq::prep(&view(&[0u8; 6000], 1000, 2), 1),
-            Err(Error::TooSmall { min: 1 })
+            Err(Error::DegenerateAspectRatio)
         ));
         // 4096x4096: 193 + 128^2 = 16577 rows > MAX_ROWS.
         let big = vec![0u8; 4096 * 4096 * 3];
         assert!(matches!(
             Musiq::prep(&view(&big, 4096, 4096), 1),
-            Err(Error::TooLarge { limit: 8192 })
+            Err(Error::TooManyPatches { limit: 8192 })
         ));
         assert!(Musiq::prep(&view(&[0u8; 3], 1, 1), 1).is_ok());
     }
