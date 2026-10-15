@@ -2,10 +2,10 @@
 Uses the Round 4 pinned sources, never pyiqa. Run with the Round 4 oracle venv.
 Only printf precision differs from the original Butteraugli CLI.
 """
-import json,pathlib,subprocess
+import json,pathlib,subprocess,os
 import cv2,numpy as np,pywt
 from PIL import Image
-home=pathlib.Path.home();s=home/'tmp/aic-variants-scratch';old=s/'round4';out=s/'round5';out.mkdir(exist_ok=True)
+home=pathlib.Path.home();s=home/'tmp/aic-variants-scratch';old=s/'round4';out=pathlib.Path(os.environ.get('AIC_PIN_RESULTS_DIR',str(s/'round5')));out.mkdir(exist_ok=True)
 butter=old/'oracles/butteraugli-71b18b636b9c7d1ae0c1d3730b85b3c127eb4511/butteraugli'
 source=(butter/'butteraugli_main.cc').read_text().replace('printf("%lf\\n", diff_value);','printf("%.17g\\n", diff_value);')
 (out/'butteraugli_main_precise.cc').write_text(source)
