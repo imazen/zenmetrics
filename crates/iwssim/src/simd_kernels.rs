@@ -1100,7 +1100,7 @@ pub(crate) fn imu_interior_row_inner(
     let wx_alt = f32x8::from_array_t(token, [0.25, 0.75, 0.25, 0.75, 0.25, 0.75, 0.25, 0.75]);
     let wyv = f32x8::splat_t(token, wy);
     let mut x = 1usize;
-    while x + 8 <= imu_w - 1 && ((x - 1) >> 1) + 8 <= sw {
+    while x + 8 < imu_w && ((x - 1) >> 1) + 8 <= sw {
         let x0b = (x - 1) >> 1;
         let va = f32x8::load_t(token, (&ra[x0b..x0b + 8]).try_into().unwrap()).to_array();
         let vb = f32x8::load_t(token, (&rb[x0b..x0b + 8]).try_into().unwrap()).to_array();
@@ -1289,7 +1289,7 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
     // order — bit-identical to the unpaired loop.
     while i < band_rows {
         let oy = y0 + i;
-        if i + 1 < band_rows && oy >= 2 && oy.is_multiple_of(2) && oy + 1 <= vec_hi {
+        if i + 1 < band_rows && oy >= 2 && oy.is_multiple_of(2) && oy < vec_hi {
             let m = oy / 2;
             let (ra, rb, rc) = (m - 1, m, m + 1);
             let dst_e = i * w;

@@ -170,15 +170,22 @@ fn sign_pow8<T: F64x8Backend>(token: T, x: f64x8<T>, q: f64x8<T>) -> f64x8<T> {
 /// kernel on all full 8-lane chunks and libm on the tail.
 macro_rules! vec_map {
     ($doc:literal, $fn_:ident, $inner:ident, |$t:ident, $v:ident, $q:ident| $body:expr, $tail:expr) => {
-        #[doc = $doc]
+        // attune's generated per-tier variants are `unsafe fn`s with their own
+        // docs; inside a local `macro_rules!` clippy checks them for `# Safety`.
+        #[allow(clippy::missing_safety_doc)]
         #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
         fn $inner(token: Token, x: &[f64], q: f64, out: &mut [f64]) {
             let qv = f64x8::splat_t(token, q);
-            for (c, o) in x.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
+            for (c, o) in x
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(out.as_chunks_mut::<8>().0.iter_mut())
+            {
                 let $t = token;
-                let $v = f64x8::load_t(token, c.try_into().unwrap());
+                let $v = f64x8::load_t(token, c);
                 let $q = qv;
-                $body.store((&mut o[..8]).try_into().unwrap());
+                $body.store(o);
             }
         }
 
@@ -240,9 +247,14 @@ vec_map!(
 fn one_mexp_scale_inner(token: Token, x: &[f64], scale: f64, out: &mut [f64]) {
     let sv = f64x8::splat_t(token, scale);
     let one = f64x8::splat_t(token, 1.0);
-    for (c, o) in x.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
-        (one - exp8(token, v * sv)).store((&mut o[..8]).try_into().unwrap());
+    for (c, o) in x
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
+        (one - exp8(token, v * sv)).store(o);
     }
 }
 
@@ -269,9 +281,14 @@ pub(super) fn one_mexp_scale(x: &[f64], scale: f64) -> Vec<f64> {
 fn ln_1mx_inner(token: Token, x: &[f64], out: &mut [f64]) {
     let one = f64x8::splat_t(token, 1.0);
     let eps = f64x8::splat_t(token, 1e-4);
-    for (c, o) in x.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
-        ln8(token, (one - v) + eps).store((&mut o[..8]).try_into().unwrap());
+    for (c, o) in x
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
+        ln8(token, (one - v) + eps).store(o);
     }
 }
 
@@ -417,7 +434,7 @@ fn acc_abspow_inner(token: Token, d: &[f64], m: &[f64], q: f64) -> f64 {
         let (a, b) = (8 * i, 8 * i + 8);
         let dv = f64x8::load_t(token, d[a..b].try_into().unwrap());
         let mv = f64x8::load_t(token, m[a..b].try_into().unwrap());
-        acc = acc + abs_pow8(token, dv * mv, qv);
+        acc += abs_pow8(token, dv * mv, qv);
     }
     acc.reduce_add()
 }
@@ -442,9 +459,14 @@ pub(super) fn acc_abspow(d: &[f64], m: &[f64], q: f64) -> f64 {
 fn pow_scale_inner(token: Token, a: &[f64], inv: f64, inv_norm: f64, out: &mut [f64]) {
     let iv = f64x8::splat_t(token, inv);
     let nv = f64x8::splat_t(token, inv_norm);
-    for (c, o) in a.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
-        raw_pow8(token, v * iv, nv).store((&mut o[..8]).try_into().unwrap());
+    for (c, o) in a
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
+        raw_pow8(token, v * iv, nv).store(o);
     }
 }
 
@@ -471,9 +493,14 @@ pub(super) fn pow_scale_vec(a: &[f64], inv: f64, inv_norm: f64) -> Vec<f64> {
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 fn ln_max_inner(token: Token, x: &[f64], floor: f64, out: &mut [f64]) {
     let fv = f64x8::splat_t(token, floor);
-    for (c, o) in x.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
-        ln8(token, v.max(fv)).store(o.try_into().unwrap());
+    for (c, o) in x
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
+        ln8(token, v.max(fv)).store(o);
     }
 }
 
@@ -501,13 +528,18 @@ pub(super) fn ln_max_vec(x: &[f64], floor: f64) -> Vec<f64> {
 fn mtf_inner(token: Token, rho: &[f64], a: &[f64; 4], b: &[f64; 4], out: &mut [f64]) {
     let av: [f64x8; 4] = std::array::from_fn(|k| f64x8::splat_t(token, a[k]));
     let bv: [f64x8; 4] = std::array::from_fn(|k| f64x8::splat_t(token, b[k]));
-    for (c, o) in rho.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let r = f64x8::load_t(token, c.try_into().unwrap());
+    for (c, o) in rho
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let r = f64x8::load_t(token, c);
         let mut acc = f64x8::zero_t(token);
         for k in 0..4 {
-            acc = acc + av[k] * exp8(token, -(bv[k] * r));
+            acc += av[k] * exp8(token, -(bv[k] * r));
         }
-        acc.store(o.try_into().unwrap());
+        acc.store(o);
     }
 }
 
@@ -539,12 +571,12 @@ fn kern_axis_inner(token: Token, n: usize, out: &mut [f64]) {
     let tau = f64x8::splat_t(token, core::f64::consts::TAU);
     let mut xx = f64x8::from_array_t(token, [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
     let step = f64x8::splat_t(token, 8.0);
-    for o in out.chunks_exact_mut(8) {
+    for o in out.as_chunks_mut::<8>().0.iter_mut() {
         let u = half + xx / np;
         let w = f64x8::blend(u.simd_ge(one), u - one, u) - half;
         let kx = w * tau;
-        (kx * kx).store(o.try_into().unwrap());
-        xx = xx + step;
+        (kx * kx).store(o);
+        xx += step;
     }
 }
 
@@ -555,10 +587,15 @@ fn kern_row_inner(token: Token, kx2: &[f64], ky2: f64, sigma: f64, out: &mut [f6
     let ky = f64x8::splat_t(token, ky2);
     let nsm5 = f64x8::splat_t(token, -0.5);
     let sv = f64x8::splat_t(token, sigma);
-    for (c, o) in kx2.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
+    for (c, o) in kx2
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
         let arg = nsm5 * (v + ky) * sv * sv;
-        exp8(token, arg).store(o.try_into().unwrap());
+        exp8(token, arg).store(o);
     }
 }
 
@@ -602,9 +639,14 @@ pub(super) fn gauss_kern(pw: usize, ph: usize, sigma: f64) -> Vec<f64> {
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8))]
 fn cycdeg_row_inner(token: Token, kx2: &[f64], ky2: f64, out: &mut [f64]) {
     let ky = f64x8::splat_t(token, ky2);
-    for (c, o) in kx2.chunks_exact(8).zip(out.chunks_exact_mut(8)) {
-        let v = f64x8::load_t(token, c.try_into().unwrap());
-        (v + ky).sqrt().store(o.try_into().unwrap());
+    for (c, o) in kx2
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(out.as_chunks_mut::<8>().0.iter_mut())
+    {
+        let v = f64x8::load_t(token, c);
+        (v + ky).sqrt().store(o);
     }
 }
 

@@ -958,7 +958,7 @@ impl Plan2 {
     ) {
         let (w, _h) = (self.width, self.height);
         let stride = w + 8;
-        debug_assert!(out.len() >= (out_h * out_w - 1) * xstride + xoff + 1);
+        debug_assert!(out.len() > (out_h * out_w - 1) * xstride + xoff);
         let perm = self.rows.gather_perm();
         let s = 1.0 / w as f64;
         let clamp = clamp.unwrap_or((f64::NEG_INFINITY, f64::INFINITY));
@@ -1560,8 +1560,10 @@ impl Plan2 {
                         // chunks keep bounds checks out of the loop.
                         for (y, (d8, d8i)) in self
                             .re8
-                            .chunks_exact_mut(8)
-                            .zip(self.im8.chunks_exact_mut(8))
+                            .as_chunks_mut::<8>()
+                            .0
+                            .iter_mut()
+                            .zip(self.im8.as_chunks_mut::<8>().0.iter_mut())
                             .enumerate()
                             .take(h)
                         {

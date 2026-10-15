@@ -2256,7 +2256,7 @@ fn pu_blur_fused_inner(
     crate::par::map_rows_scratch(dst, w, ring_scratch, scratch_len, |y0, dst, ring| {
         let h_band = dst.len() / w;
         // First real src row output row y0 can need.
-        let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
+        let mut next_row = y0.saturating_sub(6);
         for yl in 0..h_band {
             let y = y0 + yl;
             let row_off = yl * w;
@@ -2288,7 +2288,7 @@ fn pu_blur_fused_inner(
                     }
                     (&mrow[..], &mut head[slot..slot + w])
                 } else {
-                    (&srow[..], &mut head[slot..slot + w])
+                    (srow, &mut head[slot..slot + w])
                 };
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
@@ -2466,7 +2466,7 @@ fn pu_blur_fused_inner(
 
     crate::par::map_rows_scratch(dst, w, ring_scratch, scratch_len, |y0, dst, ring| {
         let h_band = dst.len() / w;
-        let mut next_row = if y0 < 6 { 0usize } else { y0 - 6 };
+        let mut next_row = y0.saturating_sub(6);
         for yl in 0..h_band {
             let y = y0 + yl;
             let row_off = yl * w;
@@ -2493,7 +2493,7 @@ fn pu_blur_fused_inner(
                     }
                     (&mrow[..], &mut head[slot..slot + w])
                 } else {
-                    (&srow[..], &mut head[slot..slot + w])
+                    (srow, &mut head[slot..slot + w])
                 };
                 for x in 0..h_interior_lo.min(w) {
                     let mut s = 0.0f32;
