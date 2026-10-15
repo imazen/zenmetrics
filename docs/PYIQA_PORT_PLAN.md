@@ -263,8 +263,15 @@ step 1 done on i265 (upstream `lpips`/`DISTS_pytorch`, CPU and 4080, fp32/TF32-o
 64²–4096²; dev not yet measured). Step 3's CPU part is in `crates/zenmetrics-nn`:
 LPIPS-vgg on rten, warm reference, parity 4.5e-8 against upstream on 18 pairs,
 1.13–1.32× faster than PyTorch CPU from 512² up and 9–16 % slower at 64–256².
-Still open in step 3: burn-cuda, the `ort` feature, the `score-pairs` column. Step 2
-not started.
+Later on 2026-10-15: step 2 done (burn's f32 3×3 conv on wgpu falls back to
+`conv_direct`, [`burn_wgpu_conv_2026-10-15.md`](../benchmarks/burn_wgpu_conv_2026-10-15.md));
+burn-cuda measured and rejected for now (deterministic deviation up to 1.3e-4 from
+upstream); the `ort` feature (ONNX Runtime CUDA, TF32 off, deterministic) matches
+upstream to 6e-8 and is the GPU engine. Wave 1 so far: LPIPS alex/vgg/squeeze and DISTS
+on rten and ort-cuda, parity ≤ 1.8e-7; CLI `--metric lpips-alex|lpips-vgg|lpips-squeeze|dists`
+behind the `nn` / `nn-ort` features. Remaining wave 1: DeepDC, ST-LPIPS (BlurPool from the
+paper), LPIPS+. CPU optimisation is running as an overnight SWE-2 lane (branch `nn-opt`).
+Checklist for each new model: `crates/zenmetrics-nn/ADDING_MODELS.md`.
 
 ## 8. Spillover to zentract, zensally, zensr
 

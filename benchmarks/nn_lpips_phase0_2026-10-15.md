@@ -14,7 +14,7 @@ Distortion: Gaussian blur σ 1.0 plus Gaussian noise σ 6 with a fixed seed per
 image and size (`scripts/ladder.py`; `ladder_manifest.tsv` has every sha256).
 Timing uses image 1415; parity uses all three.
 
-Modes, identical in `scripts/bar.py` (PyTorch) and `examples/lpips_bench.rs`
+Modes, identical in `scripts/bar.py` (PyTorch) and `examples/lpips_bench.rs` (now `examples/nn_bench.rs`)
 (rten): `compute` = decoded pixels in memory → score; `e2e` = read and decode
 both PNGs → score; `warm` (rten only) = reference features cached, one candidate
 scored. Even-count medians take the upper middle value in rten and the mean of
