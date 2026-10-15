@@ -28,6 +28,31 @@ pub(crate) fn rgb8_to_planar_pm1(img: &za::Rgb8In<'_>) -> Vec<f32> {
     out
 }
 
+/// Planar `[3, h, w]` f32 in `0..=255` from strided packed sRGB8: `v as f32`,
+/// exact — the way CKDN's upstream `PrefetchLoader` feeds uint8 tensors to the
+/// network (its ImageNet mean/std are then applied inside the graph).
+pub(crate) fn rgb8_to_planar_255(img: &za::Rgb8In<'_>) -> Vec<f32> {
+    let (w, h) = (img.width, img.height);
+    let plane = w * h;
+    let mut out = vec![0.0f32; 3 * plane];
+    let (r, rest) = out.split_at_mut(plane);
+    let (g, b) = rest.split_at_mut(plane);
+    for y in 0..h {
+        let row = &img.pixels[y * img.stride..y * img.stride + 3 * w];
+        let (ro, go, bo) = (
+            &mut r[y * w..(y + 1) * w],
+            &mut g[y * w..(y + 1) * w],
+            &mut b[y * w..(y + 1) * w],
+        );
+        for (((px, ro), go), bo) in row.as_chunks::<3>().0.iter().zip(ro).zip(go).zip(bo) {
+            *ro = f32::from(px[0]);
+            *go = f32::from(px[1]);
+            *bo = f32::from(px[2]);
+        }
+    }
+    out
+}
+
 /// Planar `[3, h, w]` f32 in `[0, 1]` from strided packed sRGB8:
 /// `v as f32 / 255`, as torchvision's `ToTensor` computes it.
 pub(crate) fn rgb8_to_planar_01(img: &za::Rgb8In<'_>) -> Vec<f32> {

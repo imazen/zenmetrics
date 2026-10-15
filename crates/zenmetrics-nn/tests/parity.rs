@@ -5,7 +5,7 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`.
+//!   `dists`, `deepdc`, `ckdn`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
@@ -77,6 +77,13 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                 return (
                     Box::new(DeepDc::from_dir(&dir, engine()).expect("load deepdc")),
                     "deepdc",
+                );
+            }
+            if name == "ckdn" {
+                let consent = WeightsConsent::new().accept(Ckdn::WEIGHTS);
+                return (
+                    Box::new(Ckdn::from_dir(&dir, engine(), &consent).expect("load ckdn")),
+                    "ckdn",
                 );
             }
             let net = *LpipsNet::ALL
@@ -173,6 +180,16 @@ fn warm_reference_equals_cold() {
                 .unwrap(),
             col,
         );
+        // CKDN is a quality score, not a distance: an identical pair's dr is
+        // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
+        // differ. For it the identical-pair check below is warm == cold.
+        let cold_same = (col == "ckdn").then(|| {
+            score(
+                &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+                    .unwrap(),
+                col,
+            )
+        });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
         // A trunk engine caches the reference's features; a whole-graph
         // engine (ort-cuda) recomputes them on every candidate.
@@ -192,7 +209,9 @@ fn warm_reference_equals_cold() {
             &*warm.evaluate(image(&rp, w, h), EvalOpts::new()).unwrap(),
             col,
         );
-        if engine() == Engine::Rten || col != "dists" {
+        if let Some(cold_same) = cold_same {
+            assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
+        } else if engine() == Engine::Rten || col != "dists" {
             assert_eq!(same, 0.0, "{col}");
         } else {
             // On ort-cuda the whole DISTS graph, including 1 - (dist1 + dist2),

@@ -15,6 +15,8 @@
 //!   the upstream `DISTS_pytorch` 0.1 package.
 //! - [`DeepDc`]: DeepDC (Zhu et al., arXiv:2211.04927), parity target the
 //!   upstream `DeepDC_PyTorch` 0.2 package.
+//! - [`Ckdn`]: CKDN (Zheng et al., ICCV 2021), parity target the upstream
+//!   `researchmm/CKDN` checkpoint, `cat(dist, ref, dist, ref)` → `dr`.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -25,6 +27,7 @@
 
 #![forbid(unsafe_code)]
 
+mod ckdn;
 mod common;
 mod deepdc;
 mod dists;
@@ -34,6 +37,7 @@ mod lpips;
 mod preprocess;
 mod weights;
 
+pub use ckdn::Ckdn;
 pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use error::Error;

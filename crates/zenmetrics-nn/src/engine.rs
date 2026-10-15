@@ -26,6 +26,17 @@ pub(crate) trait Trunk: Send + Sync {
     /// Run on a planar `[3, h, w]` input.
     fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<Tap>, Error>;
 
+    /// Run on a planar `[c, h, w]` input. Trunks whose graph takes a fixed
+    /// 3-channel image get the default, which accepts `c == 3` only.
+    fn run_c(&self, input: Vec<f32>, c: usize, h: usize, w: usize) -> Result<Vec<Tap>, Error> {
+        if c != 3 {
+            return Err(Error::Engine(format!(
+                "{c}-channel input on a 3-channel trunk"
+            )));
+        }
+        self.run(input, h, w)
+    }
+
     /// Run two same-size inputs. Engines that can split their threads run
     /// the two concurrently.
     fn run_pair(
@@ -121,11 +132,12 @@ mod rten_engine {
         fn run_with(
             &self,
             input: Vec<f32>,
+            c: usize,
             h: usize,
             w: usize,
             pool: Option<Arc<ThreadPool>>,
         ) -> Result<Vec<Tap>, Error> {
-            let x = NdTensor::from_data([1, 3, h, w], input);
+            let x = NdTensor::from_data([1, c, h, w], input);
             let opts = pool.map(|p| {
                 let mut o = RunOptions::default();
                 o.thread_pool = Some(p);
@@ -164,7 +176,11 @@ mod rten_engine {
         }
 
         fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<Tap>, Error> {
-            self.run_with(input, h, w, None)
+            self.run_with(input, 3, h, w, None)
+        }
+
+        fn run_c(&self, input: Vec<f32>, c: usize, h: usize, w: usize) -> Result<Vec<Tap>, Error> {
+            self.run_with(input, c, h, w, None)
         }
 
         fn run_pair(
@@ -178,8 +194,8 @@ mod rten_engine {
                 return Ok((self.run(a, h, w)?, self.run(b, h, w)?));
             };
             std::thread::scope(|s| {
-                let ha = s.spawn(|| self.run_with(a, h, w, Some(Arc::clone(pa))));
-                let tb = self.run_with(b, h, w, Some(Arc::clone(pb)));
+                let ha = s.spawn(|| self.run_with(a, 3, h, w, Some(Arc::clone(pa))));
+                let tb = self.run_with(b, 3, h, w, Some(Arc::clone(pb)));
                 let ta = ha
                     .join()
                     .map_err(|_| Error::Engine("paired run panicked".into()))?;

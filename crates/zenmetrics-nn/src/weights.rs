@@ -84,10 +84,6 @@ impl WeightsConsent {
     }
 
     /// `Ok` when [`Self::accepts`], else [`Error::WeightsNotAccepted`].
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "first caller is the CKDN port (nn-port lane)")
-    )]
     pub(crate) fn check(&self, terms: &WeightsTerms) -> Result<(), Error> {
         if self.accepts(terms) {
             Ok(())

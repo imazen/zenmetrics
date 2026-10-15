@@ -1,0 +1,44 @@
+# CKDN: conditional knowledge distillation network (degraded-reference IQA),
+# used as a plain FR metric via the degenerate feed cat(dist, ref, dist, ref),
+# score = output[:,0] (`dr`) as in upstream predict_score.py.
+name = "ckdn"
+kind = "full-reference"
+direction = "higher-is-closer"        # sigmoid quality score in (0, 1)
+columns = ["ckdn"]
+paper = "Zheng, Fu, Zeng, Zha, Luo. Learning Conditional Knowledge Distillation for Degraded-Reference Image Quality Assessment. ICCV 2021"
+
+[code]
+source = "upstream-port"             # trunk split reimplemented; tail runs upstream fc_/csp verbatim
+upstream = "https://github.com/researchmm/CKDN"
+upstream_package = "git clone of researchmm/CKDN (no pip package; commit tip 2026-10-15)"
+licence = "MIT"
+
+[weights]
+# The MIT LICENSE covers the repository code; the trained checkpoint is
+# distributed through a Google Drive link in the README with no licence stated
+# for the weights themselves, so loading needs an explicit WeightsConsent.
+licence_class = "unknown"
+checkpoint = "https://drive.google.com/file/d/13HzxPsRWdPC_CAsbvgMgU5IG_TKPVbNe/view"
+
+[input]
+format = "packed sRGB8"
+normalisation = "u8 as f32 (0..255), then (x - mean*255) / (std*255) inside the graph — upstream's PrefetchLoader does exactly this on the 12-channel input (ImageNet mean/std repeated per 3-channel group)"
+resize = "none (upstream's eval script resizes+center-crops to 288 as a demo; the model is fully convolutional and takes any size)"
+min_size = 1                         # measured: fully convolutional + adaptive pool
+
+[export]
+script = "export.py"
+outputs = "ckdn_{qse.onnx, dte.onnx, tail.onnx, full.onnx, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "qse/dte are the two encoder branches (ResNet conv1+layer1 each); tail is csp (layer2) + avgpool + fc_ + sigmoid on the 256-channel difference. Under cat(d,r,d,r) upstream's fr == dr and nr is input-independent, so dr alone is the metric."
+
+[parity]
+oracle = "researchmm/CKDN checkpoint epoch 14, CPU, fp32"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.013521                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, rten
+results = "rten worst |d| 8.971e-8 (6.6e-6 JND); ort-cuda worst |d| 5.966e-8 (4.4e-6 JND); 15 goldens"
+
+[aic4]
+column = "CKDN"
+results = "median |d| 3.483e-02, max |d| 3.720e-01 on the 61-pair crop set — does NOT match"
+finding = "AIC-4's CKDN column is not the researchmm/CKDN epoch-14 model evaluated natively. A black-box probe of pyiqa's 'ckdn' metric reproduces the published column to ~1e-4: its wrapper resizes each image to 288x288 and feeds TWO separate 3-ch tensors into a ResNet (not upstream's 12-ch cat), with a repackaged state-dict-only checkpoint (CKDN_model_best-38b27dc6.pth, ~51 MB vs upstream's ~107 MB full ckpt). Raw, res329+cc288, res288, half-size, BGR, per-image-pair mappings and all output taps were ruled out on the upstream checkpoint. The Rust port stays faithful to the upstream checkpoint; matching the AIC column would need pyiqa's rewritten wrapper/convention, which is out of scope for an upstream port."

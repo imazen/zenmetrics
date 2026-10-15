@@ -201,6 +201,11 @@ pub enum MetricKind {
     /// is better. As `lpips-alex`.
     #[value(name = "deepdc")]
     Deepdc,
+    /// CKDN (upstream `researchmm/CKDN` checkpoint, fed as
+    /// `cat(dist, ref, dist, ref)` → `dr`, no resize); **higher** is better —
+    /// it is a sigmoid quality score, not a distance. As `lpips-alex`.
+    #[value(name = "ckdn")]
+    Ckdn,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -487,6 +492,7 @@ impl MetricKind {
             MetricKind::StlpipsAlex,
             MetricKind::StlpipsVgg,
             MetricKind::Deepdc,
+            MetricKind::Ckdn,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -552,6 +558,7 @@ impl MetricKind {
             MetricKind::StlpipsAlex => "stlpips-alex",
             MetricKind::StlpipsVgg => "stlpips-vgg",
             MetricKind::Deepdc => "deepdc",
+            MetricKind::Ckdn => "ckdn",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -676,6 +683,7 @@ impl MetricKind {
             MetricKind::StlpipsAlex => &["stlpips_alex"],
             MetricKind::StlpipsVgg => &["stlpips_vgg"],
             MetricKind::Deepdc => &["deepdc"],
+            MetricKind::Ckdn => &["ckdn"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1921,7 +1929,8 @@ pub fn run_metric(
         | MetricKind::Dists
         | MetricKind::StlpipsAlex
         | MetricKind::StlpipsVgg
-        | MetricKind::Deepdc => nn::score(kind, reference, distorted),
+        | MetricKind::Deepdc
+        | MetricKind::Ckdn => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -1929,7 +1938,8 @@ pub fn run_metric(
         | MetricKind::Dists
         | MetricKind::StlpipsAlex
         | MetricKind::StlpipsVgg
-        | MetricKind::Deepdc => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Deepdc
+        | MetricKind::Ckdn => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
