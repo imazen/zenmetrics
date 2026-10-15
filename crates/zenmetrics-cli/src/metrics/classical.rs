@@ -15,6 +15,7 @@ pub(crate) enum Kind {
     PsnrYLibvmaf,
     PsnrYCbCr611,
     Ssim,
+    SsimC,
     Ciede2000,
 }
 
@@ -114,6 +115,7 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
+        Kind::SsimC => ssimc(r, d),
         Kind::Ciede2000 => {
             // Mean CIEDE2000 colour difference (ΔE00).
             // Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
@@ -129,6 +131,85 @@ fn psnr(mse: f64) -> f64 {
     } else {
         10.0 * (255.0 * 255.0 / mse).log10()
     }
+}
+
+/// SSIM half-window and Gaussian taps for [`ssimc`]: 11 taps, sigma 1.5,
+/// normalised to sum 1 (MATLAB `fspecial('gaussian', 11, 1.5)` is their
+/// outer product).
+const SSIMC_R: usize = 5;
+fn ssimc_taps() -> [f64; 2 * SSIMC_R + 1] {
+    let mut t = [0.0; 2 * SSIMC_R + 1];
+    for (i, v) in t.iter_mut().enumerate() {
+        let x = i as f64 - SSIMC_R as f64;
+        *v = (-x * x / (2.0 * 1.5 * 1.5)).exp();
+    }
+    let sum: f64 = t.iter().sum();
+    t.map(|v| v / sum)
+}
+
+/// JPEG AIC-4 `SSIMc`: SSIM (Wang et al. 2004) on each of R, G, B at
+/// 0-255, averaged. 11x11 Gaussian (sigma 1.5), K1 = 0.01, K2 = 0.03,
+/// L = 255, **valid** region only (an (H-10) x (W-10) map, no padding), no
+/// downsampling, and the contrast-structure term clipped at 0 before it
+/// multiplies the luminance term (for non-negative pixels the luminance
+/// term is positive, so this equals clipping the SSIM map at 0). Matches
+/// the published column on 61 AIC-4 pairs (see the commit). Streams rows
+/// through an 11-row ring of horizontally filtered moments, f64 throughout.
+fn ssimc(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
+    let (w, h) = (r.width as usize, r.height as usize);
+    let k = 2 * SSIMC_R + 1;
+    if w < k || h < k {
+        return Err(format!("ssimc needs at least {k}x{k} pixels"));
+    }
+    let taps = ssimc_taps();
+    let (c1, c2) = ((0.01f64 * 255.0).powi(2), (0.03f64 * 255.0).powi(2));
+    let ow = w - 2 * SSIMC_R;
+    let oh = h - 2 * SSIMC_R;
+    let mut total = 0.0f64;
+    for ch in 0..3 {
+        // ring[row % k][x] = horizontally filtered (x, y, x², y², xy).
+        let mut ring = vec![[0.0f64; 5]; k * ow];
+        let mut sum = 0.0f64;
+        for row in 0..h {
+            let base = row * w * 3;
+            let slot = &mut ring[(row % k) * ow..(row % k + 1) * ow];
+            for (ox, out) in slot.iter_mut().enumerate() {
+                let mut m = [0.0f64; 5];
+                for (t, &g) in taps.iter().enumerate() {
+                    let i = base + (ox + t) * 3 + ch;
+                    let (a, b) = (f64::from(r.pixels[i]), f64::from(d.pixels[i]));
+                    m[0] += g * a;
+                    m[1] += g * b;
+                    m[2] += g * a * a;
+                    m[3] += g * b * b;
+                    m[4] += g * a * b;
+                }
+                *out = m;
+            }
+            if row + 1 < k {
+                continue;
+            }
+            // Rows row+1-k ..= row are in the ring; filter vertically.
+            for ox in 0..ow {
+                let mut m = [0.0f64; 5];
+                for (t, &g) in taps.iter().enumerate() {
+                    let src = &ring[((row + 1 - k + t) % k) * ow + ox];
+                    for (acc, v) in m.iter_mut().zip(src) {
+                        *acc += g * v;
+                    }
+                }
+                let (mx, my) = (m[0], m[1]);
+                let vx = m[2] - mx * mx;
+                let vy = m[3] - my * my;
+                let cov = m[4] - mx * my;
+                let lum = (2.0 * mx * my + c1) / (mx * mx + my * my + c1);
+                let cs = ((2.0 * cov + c2) / (vx + vy + c2)).max(0.0);
+                sum += lum * cs;
+            }
+        }
+        total += sum / (ow * oh) as f64;
+    }
+    Ok(total / 3.0)
 }
 
 /// Compute MSE for studio-swing BT.601 Y, Cb, Cr planes between two RGB8 images.
@@ -151,8 +232,8 @@ fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
         .iter()
         .zip(d.pixels.as_chunks::<3>().0)
     {
-        let (r1, g1, b1) = (a[0] as f32, a[1] as f32, a[2] as f32);
-        let (r2, g2, b2) = (b[0] as f32, b[1] as f32, b[2] as f32);
+        let (r1, g1, b1) = (f64::from(a[0]), f64::from(a[1]), f64::from(a[2]));
+        let (r2, g2, b2) = (f64::from(b[0]), f64::from(b[1]), f64::from(b[2]));
 
         // Studio-swing BT.601 YCbCr (same as studio601_yuv444 in mod.rs)
         let y1 = (16.0 + (65.481 * r1 + 128.553 * g1 + 24.966 * b1) / 255.0)
@@ -177,9 +258,9 @@ fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
         let dy = y1 - y2;
         let dcb = cb1 - cb2;
         let dcr = cr1 - cr2;
-        sum_y += (dy * dy) as f64;
-        sum_cb += (dcb * dcb) as f64;
-        sum_cr += (dcr * dcr) as f64;
+        sum_y += dy * dy;
+        sum_cb += dcb * dcb;
+        sum_cr += dcr * dcr;
     }
 
     let n_f = n as f64;
@@ -735,6 +816,95 @@ fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
+
+    /// Direct 2-D evaluation of the `ssimc` definition (no ring, no
+    /// separable passes), for checking the streamed implementation.
+    fn ssimc_brute(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+        let (w, h) = (r.width as usize, r.height as usize);
+        let g = ssimc_taps();
+        let (c1, c2) = ((0.01f64 * 255.0).powi(2), (0.03f64 * 255.0).powi(2));
+        let mut total = 0.0;
+        for ch in 0..3 {
+            let mut sum = 0.0;
+            for oy in 0..h - 10 {
+                for ox in 0..w - 10 {
+                    let mut m = [0.0f64; 5];
+                    for ty in 0..11 {
+                        for tx in 0..11 {
+                            let i = ((oy + ty) * w + ox + tx) * 3 + ch;
+                            let (a, b) = (f64::from(r.pixels[i]), f64::from(d.pixels[i]));
+                            let wt = g[ty] * g[tx];
+                            m[0] += wt * a;
+                            m[1] += wt * b;
+                            m[2] += wt * a * a;
+                            m[3] += wt * b * b;
+                            m[4] += wt * a * b;
+                        }
+                    }
+                    let lum = (2.0 * m[0] * m[1] + c1) / (m[0] * m[0] + m[1] * m[1] + c1);
+                    let cs = ((2.0 * (m[4] - m[0] * m[1]) + c2)
+                        / (m[2] - m[0] * m[0] + m[3] - m[1] * m[1] + c2))
+                        .max(0.0);
+                    sum += lum * cs;
+                }
+            }
+            total += sum / ((w - 10) * (h - 10)) as f64;
+        }
+        total / 3.0
+    }
+
+    fn ssimc_pair(w: u32, h: u32, invert: bool) -> (Rgb8Image, Rgb8Image) {
+        let n = (w * h) as usize;
+        let a: Vec<u8> = (0..n * 3)
+            .map(|i| ((i * 37 + (i / 7) * 11) % 251) as u8)
+            .collect();
+        let b: Vec<u8> = a
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                if invert {
+                    255 - v
+                } else {
+                    v.wrapping_add((i % 5) as u8 * 9)
+                }
+            })
+            .collect();
+        (
+            Rgb8Image {
+                pixels: a,
+                width: w,
+                height: h,
+            },
+            Rgb8Image {
+                pixels: b,
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    #[test]
+    fn ssimc_streaming_matches_direct_definition() {
+        for (w, h, invert) in [(11, 11, false), (37, 23, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            let got = score(Kind::SsimC, &r, &d).unwrap();
+            let want = ssimc_brute(&r, &d);
+            assert!((got - want).abs() < 1e-12, "{w}x{h}: {got} vs {want}");
+            if invert {
+                // An inverted pair drives cs negative: the clip must bite.
+                assert!(got >= 0.0);
+            }
+        }
+        let (r, _) = ssimc_pair(29, 17, false);
+        assert_eq!(score(Kind::SsimC, &r, &r).unwrap(), 1.0);
+        let tiny = Rgb8Image {
+            pixels: vec![0; 10 * 10 * 3],
+            width: 10,
+            height: 10,
+        };
+        assert!(score(Kind::SsimC, &tiny, &tiny).is_err());
+    }
+
     use super::*;
 
     #[test]
