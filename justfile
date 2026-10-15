@@ -618,7 +618,7 @@ nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
 # Export HyperIQA from the official KonIQ checkpoint (koniq_pretrained.pkl);
 # upstream checkout + pkl paths, goldens from oracle.py.
 nn-export-hyperiqa python upstream ckpt out goldens ladder:
-    {{python}} -I crates/zenmetrics-nn/models/hyperiqa/export.py '{{upstream}}' '{{ckpt}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+    {{python}} -u -I crates/zenmetrics-nn/models/hyperiqa/export.py '{{upstream}}' '{{ckpt}}' '{{out}}' '{{goldens}}' '{{ladder}}'
 
 # HyperIQA goldens via upstream models.py on the deterministic 5x5 grid
 # (upstream's eval crops at random — see models/hyperiqa/card.toml).
@@ -628,7 +628,7 @@ nn-goldens-hyperiqa python upstream ckpt out ladder:
 # Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
 # Goldens come from oracle.py under the legacy JAX env, not this recipe.
 nn-export-musiq python npz out goldens ladder:
-    {{python}} -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+    {{python}} -u -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
 
 # MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
 # see models/musiq/card.toml; tensorflow CPU, eager mode).
@@ -692,3 +692,15 @@ aic-cw-verify python out:
 # Export qualification gates without loading model weights.
 nn-export-checks:
     python3 -I crates/zenmetrics-nn/models/test_export_checks.py
+
+# Review gates in the CI-pinned sibling snapshot (caller uses run-heavy).
+nn-review-tests:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ test --release -p zenmetrics-nn
+
+nn-review-format:
+    bash scripts/ci/lock.sh --check
+    cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
+
+nn-review-lint:
+    just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items

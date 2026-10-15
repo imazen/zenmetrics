@@ -323,14 +323,17 @@ img = load_rgb8(os.path.join(os.path.dirname(OUT) or '.', 'check.png')) \
 x = torch.from_numpy(preprocess(img))
 with torch.no_grad():
     want = float(model(x).item())
-got = float(ort.InferenceSession(onnx_path).run(
+session_opts = ort.SessionOptions()
+session_opts.intra_op_num_threads = int(os.environ.get('OMP_NUM_THREADS', '1'))
+session_opts.inter_op_num_threads = 1
+sess = ort.InferenceSession(onnx_path, sess_options=session_opts, providers=['CPUExecutionProvider'])
+got = float(sess.run(
     ['musiq'], {'x': x.numpy()})[0][0])
 print(f'self-check: torch {want:.9g} ort-cpu {got:.9g} |d| {abs(got - want):.3e}')
 assert abs(got - want) <= 1e-4, (got, want)
 
 # Required qualification against the upstream goldens; missing files and
 # mismatches are errors rather than an optional printed diagnostic.
-sess = ort.InferenceSession(onnx_path)
 worst = 0.0
 for row in GOLDEN_ROWS:
     for kind, key in (('ref', 'musiq_ref'), ('dist', 'musiq')):

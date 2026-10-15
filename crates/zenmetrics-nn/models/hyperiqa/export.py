@@ -151,7 +151,10 @@ print(f'self-check upstream-vs-export |d| = {abs(want - got):.3e}')
 assert want == got, (want, got)
 
 import onnxruntime as ort
-sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+session_opts = ort.SessionOptions()
+session_opts.intra_op_num_threads = int(os.environ.get('OMP_NUM_THREADS', '1'))
+session_opts.inter_op_num_threads = 1
+sess = ort.InferenceSession(onnx_path, sess_options=session_opts, providers=['CPUExecutionProvider'])
 worst = 0.0
 for row in GOLDEN_ROWS:
     for kind, key in (('dist', 'hyperiqa'), ('ref', 'hyperiqa_ref')):
