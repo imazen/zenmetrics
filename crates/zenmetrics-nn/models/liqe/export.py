@@ -148,8 +148,8 @@ with open(os.path.join(OUT, 'liqe_goldens.tsv'), 'w') as g:
     for name in sorted(os.listdir(LADDER)):
         if not name.endswith('_ref.png'):
             continue
-        stem, size = name.split('_')[0], int(name.split('_')[1])
-        if size not in GOLDEN_SIZES or size < 224:
+        stem, size = name.split('_')[0], name.split('_')[1]
+        if not size.isdigit() or int(size) not in GOLDEN_SIZES or int(size) < 224:
             continue  # upstream unfold yields 0 patches under 224
         sr = upstream_forward(os.path.join(LADDER, name))
         sd = upstream_forward(os.path.join(LADDER, name.replace('_ref', '_dist')))

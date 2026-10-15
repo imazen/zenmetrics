@@ -1,4 +1,5 @@
-"""Export ARNIQA (upstream miccunifi/ARNIQA, Apache-2.0; Agnolon, Galteri,
+"""Export ARNIQA (upstream miccunifi/ARNIQA, Apache-2.0; Agnolucci,
+Galteri,
 Bertini, Del Bimbo, "ARNIQA: Learning Distortion Manifold for No-Reference
 Image Quality Assessment", WACV 2024) for zenmetrics-nn.
 
@@ -170,8 +171,8 @@ with open(os.path.join(OUT, 'arniqa_goldens.tsv'), 'w') as g:
     for name in sorted(os.listdir(LADDER)):
         if not name.endswith('_ref.png'):
             continue
-        stem, size = name.split('_')[0], int(name.split('_')[1])
-        if size not in GOLDEN_SIZES:
+        stem, size = name.split('_')[0], name.split('_')[1]
+        if not size.isdigit() or int(size) not in GOLDEN_SIZES:
             continue
         sr = oracle(os.path.join(LADDER, name))
         sd = oracle(os.path.join(LADDER, name.replace('_ref', '_dist')))
@@ -184,7 +185,8 @@ def sha(p):
 
 
 with open(os.path.join(OUT, 'arniqa_export.meta'), 'w') as f:
-    f.write(f'torch {torch.__version__}\nmiccunifi/ARNIQA @66d16eb0\npython {platform.python_version()}\nhost {platform.node()}\n')
+    f.write(f'torch {torch.__version__}\nmiccunifi/ARNIQA @66d16eb0\npython {platform.python_version()}\nhost {platform.node()}\n'
+            f'numpy {np.__version__}\nPillow {Image.__version__}\n')
     for fn in ('arniqa_trunk.onnx', 'arniqa_full.onnx', 'arniqa_head.f32',
                'arniqa.meta', 'arniqa_goldens.tsv'):
         f.write(f'sha256 {sha(os.path.join(OUT, fn))} {fn}\n')

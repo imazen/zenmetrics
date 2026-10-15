@@ -1,4 +1,5 @@
-//! MANIQA (Yang, Ding, Wang, Dai et al., "MANIQA: Multi-dimension
+//! MANIQA (S. Yang, T. Wu, S. Shi, S. Lao, Y. Gong, M. Cao, J. Wang,
+//! Y. Yang, "MANIQA: Multi-dimension
 //! Attention Network for No-Reference Image Quality Assessment",
 //! CVPRW 2022; upstream `IIGROUP/MANIQA` at `f573d86`, Apache-2.0,
 //! release checkpoint `ckpt_koniq10k.pt`). Parity target: upstream's
@@ -22,9 +23,10 @@
 //! runs it as a one-tap trunk graph; ONNX Runtime engines run it as a
 //! named-input whole-image graph.
 //!
-//! The output is the raw koniq10k checkpoint score — an unbounded
-//! quality number (roughly MOS 1..5 territory, the trained head applies
-//! ReLU), higher is better.
+//! The output is the koniq10k checkpoint score: the upstream loader
+//! (`data/koniq10k/koniq10k.py`) min-max normalizes the dataset MOS
+//! labels to [0, 1], so the trained head emits a normalized quality
+//! score — the ladder goldens span ~0.08–0.86. Higher is better.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -46,6 +48,7 @@ const SIDE: usize = 224;
 /// accepted.
 pub struct Maniqa {
     backend: Backend,
+    min_size: usize,
 }
 
 impl Maniqa {
@@ -55,7 +58,7 @@ impl Maniqa {
     pub const WEIGHTS: WeightsTerms = WeightsTerms {
         model: COLUMN,
         licence: WeightsLicence::Permissive,
-        terms_url: "https://github.com/IIGROUP/MANIQA#model-zoo",
+        terms_url: "https://github.com/IIGROUP/MANIQA#checkpoints",
     };
 
     /// Load an exported model directory (`maniqa_full.onnx`,
@@ -69,7 +72,7 @@ impl Maniqa {
     /// As [`crate::Lpips::from_dir`].
     pub fn from_dir(dir: impl AsRef<Path>, engine: Engine) -> Result<Self, Error> {
         let dir = dir.as_ref();
-        let (_channels, _min_size) = read_meta(&dir.join("maniqa.meta"))?;
+        let (_channels, min_size) = read_meta(&dir.join("maniqa.meta"))?;
         let backend = match engine {
             Engine::Rten => Backend::Trunk(engine::load(&dir.join("maniqa_full.onnx"), 1)?),
             #[cfg(feature = "ort")]
@@ -78,7 +81,7 @@ impl Maniqa {
                 "maniqa",
             )?)),
         };
-        Ok(Self { backend })
+        Ok(Self { backend, min_size })
     }
 
     fn engine_name(&self) -> &'static str {
@@ -91,7 +94,12 @@ impl Maniqa {
 
     /// The dataset-loader transform: cv2 INTER_CUBIC u8 resize to
     /// 224×224, `/255`, `(x − 0.5)/0.5` — `[1, 3, 224, 224]` planar.
-    fn prep(img: &za::Rgb8In<'_>) -> Result<Vec<f32>, Error> {
+    /// A zero-size input has no source row to clamp to
+    /// (`clamp(0, −1)` panics) — refuse it.
+    fn prep(img: &za::Rgb8In<'_>, min_size: usize) -> Result<Vec<f32>, Error> {
+        if img.height < min_size || img.width < min_size {
+            return Err(Error::TooSmall { min: min_size });
+        }
         let full = rgb8_to_planar_u8(img);
         let r = resize_bicubic_cv2_u8(&full, 3, img.height, img.width, SIDE, SIDE);
         Ok(r.iter()
@@ -103,7 +111,7 @@ impl Maniqa {
     /// `score[1,1,1]` — one tap for trunk engines, the scalar for
     /// image-graph engines.
     fn score_image(&self, img: &za::Rgb8In<'_>) -> Result<f64, Error> {
-        let x = Self::prep(img)?;
+        let x = Self::prep(img, self.min_size)?;
         match &self.backend {
             Backend::Trunk(t) => {
                 let taps = t.run(x, SIDE, SIDE)?;
@@ -175,15 +183,23 @@ mod tests {
         }
     }
 
-    /// Every size goes through the 224 resize — even 1×1.
+    /// Every nonzero size goes through the 224 resize — even 1×1 —
+    /// while a zero dimension is refused before the resize taps'
+    /// `clamp(0, −1)` can panic.
     #[test]
-    fn prep_accepts_any_size() {
+    fn prep_size_bounds() {
         for (w, h) in [(1, 1), (7, 3), (2, 2)] {
             let px = vec![0u8; w * h * 3];
             assert_eq!(
-                Maniqa::prep(&view(&px, w, h)).unwrap().len(),
+                Maniqa::prep(&view(&px, w, h), 1).unwrap().len(),
                 3 * SIDE * SIDE
             );
+        }
+        for (w, h) in [(0, 5), (5, 0)] {
+            assert!(matches!(
+                Maniqa::prep(&view(&[], w, h), 1),
+                Err(Error::TooSmall { min: 1 })
+            ));
         }
     }
 
@@ -191,10 +207,35 @@ mod tests {
     #[test]
     fn prep_normalises() {
         let px = vec![0u8; 3 * 4];
-        let x = Maniqa::prep(&view(&px, 2, 2)).unwrap();
+        let x = Maniqa::prep(&view(&px, 2, 2), 1).unwrap();
         assert_eq!(x[0], -1.0);
         let px = vec![255u8; 3 * 4];
-        let x = Maniqa::prep(&view(&px, 2, 2)).unwrap();
+        let x = Maniqa::prep(&view(&px, 2, 2), 1).unwrap();
         assert_eq!(x[0], 1.0);
+    }
+
+    /// A row-stride larger than `w*3` reads the same pixels.
+    #[test]
+    fn prep_strided_rows() {
+        let (w, h, stride) = (5, 4, 5 * 3 + 7);
+        let mut packed = vec![0u8; w * h * 3];
+        let mut buf = vec![0xEEu8; stride * h];
+        for (i, v) in packed.iter_mut().enumerate() {
+            *v = (i * 13 + 7) as u8;
+        }
+        for y in 0..h {
+            buf[y * stride..y * stride + w * 3]
+                .copy_from_slice(&packed[y * w * 3..(y + 1) * w * 3]);
+        }
+        let s = za::Rgb8In {
+            pixels: &buf,
+            width: w,
+            height: h,
+            stride,
+        };
+        assert_eq!(
+            Maniqa::prep(&s, 1).unwrap(),
+            Maniqa::prep(&view(&packed, w, h), 1).unwrap()
+        );
     }
 }

@@ -1,6 +1,7 @@
-"""Export MANIQA (upstream IIGROUP/MANIQA, Apache-2.0; Yang, Ding, Wang et al.,
-"MANIQA: Multi-dimension Attention Network for No-Reference Image Quality
-Assessment", CVPRW 2022) for zenmetrics-nn.
+"""Export MANIQA (upstream IIGROUP/MANIQA, Apache-2.0; S. Yang, T. Wu, S. Shi,
+S. Lao, Y. Gong, M. Cao, J. Wang, Y. Yang, Tsinghua University IIGROUP +
+vivo, "MANIQA: Multi-dimension Attention Network for No-Reference Image
+Quality Assessment", CVPRW 2022) for zenmetrics-nn.
 
 usage: export.py LADDER_DIR OUT_DIR UPSTREAM_DIR WEIGHTS_DIR [GOLDEN_SIZES]
 
@@ -17,6 +18,12 @@ samples np.random crops, so it is not reproducible host-side):
   x   = u8/255 CHW, Normalized (x-0.5)/0.5 -> [1,3,224,224]
   score = net(x)[0]   (five_point_crop(0) on a 224 image is the image itself)
 
+  The cv2.resize call below runs with IPP disabled (set before the cv2
+  import): the wheels' IPP path intercepts u8 resize and differs from
+  OpenCV's own scalar path on ~4% of pixels, while the scalar path is
+  bitwise-identical between cv2 4.12 and 5.0 — that is the convention the
+  Rust port reproduces (see resize_bicubic_cv2_u8).
+
 The model: vit_base_patch8_224 trunk (fine-tuned weights inside the
 checkpoint), blocks 6..9 token features concat [784,3072] -> 2x TABlock(784)
 -> conv 3072->768 -> SwinTransformer stage -> 2x TABlock -> conv 768->384 ->
@@ -30,8 +37,12 @@ Files written (all prefixed `maniqa`):
   maniqa_export.meta  versions and sha256 of every output.
 """
 import hashlib, os, sys, platform
+
+os.environ['OPENCV_IPP'] = 'disabled'  # pin OpenCV's own scalar u8 path
+
 import numpy as np, torch
 import cv2
+import PIL
 
 LADDER, OUT, UPSTREAM, WEIGHTS = sys.argv[1:5]
 GOLDEN_SIZES = [int(s) for s in (sys.argv[5] if len(sys.argv) > 5 else '64,128,256,512,1024').split(',')]
@@ -47,9 +58,15 @@ torch.set_grad_enabled(False)
 net = maniqa_mod.MANIQA(
     embed_dim=768, num_outputs=1, dim_mlp=768, patch_size=8, img_size=224,
     window_size=4, depths=[2, 2], num_heads=[4, 4], num_tab=2, scale=0.8)
-net.load_state_dict(torch.load(os.path.join(WEIGHTS, 'ckpt_koniq10k.pt'),
-                               map_location='cpu', weights_only=True),
-                    strict=False)
+_missing, _unexpected = net.load_state_dict(
+    torch.load(os.path.join(WEIGHTS, 'ckpt_koniq10k.pt'),
+               map_location='cpu', weights_only=True),
+    strict=False)
+# Upstream loads with strict=False (the checkpoint carries a few extra
+# keys) — every *model* parameter must still be filled; never accept a
+# silently-random layer.
+assert not _missing, f'checkpoint missing model keys: {_missing}'
+print(f'checkpoint: {len(_unexpected)} extra keys ignored, 0 missing')
 net.requires_grad_(False).eval()
 
 
@@ -148,9 +165,10 @@ with open(os.path.join(OUT, 'maniqa_goldens.tsv'), 'w') as g:
     for name in sorted(os.listdir(LADDER)):
         if not name.endswith('_ref.png'):
             continue
-        stem, size = name.split('_')[0], int(name.split('_')[1])
-        if size not in GOLDEN_SIZES:
+        stem, size = name.split('_')[0], name.split('_')[1]
+        if not size.isdigit() or int(size) not in GOLDEN_SIZES:
             continue
+        size = int(size)
         sr = oracle(os.path.join(LADDER, name))
         sd = oracle(os.path.join(LADDER, name.replace('_ref', '_dist')))
         g.write(f'{stem}\t{size}\t{sd:.9g}\t{sr:.9g}\n')
@@ -162,7 +180,8 @@ def sha(p):
 
 
 with open(os.path.join(OUT, 'maniqa_export.meta'), 'w') as f:
-    f.write(f'torch {torch.__version__}\nIIGROUP/MANIQA @f573d862\npython {platform.python_version()}\nhost {platform.node()}\n')
+    f.write(f'torch {torch.__version__}\nIIGROUP/MANIQA @f573d862\npython {platform.python_version()}\nhost {platform.node()}\n'
+            f'cv2 {cv2.__version__} (OPENCV_IPP=disabled)\nnumpy {np.__version__}\nPillow {PIL.__version__}\n')
     for fn in ('maniqa_full.onnx', 'maniqa.meta', 'maniqa_goldens.tsv'):
         f.write(f'sha256 {sha(os.path.join(OUT, fn))} {fn}\n')
 print('done maniqa')

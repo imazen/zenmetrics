@@ -1,4 +1,4 @@
-//! ARNIQA (Agnolon, Galteri, Bertini, Del Bimbo, "ARNIQA: Learning
+//! ARNIQA (Agnolucci, Galteri, Bertini, Del Bimbo, "ARNIQA: Learning
 //! Distortion Manifold for No-Reference Image Quality Assessment", WACV
 //! 2024; upstream `miccunifi/ARNIQA` at `66d16eb`, Apache-2.0, release
 //! weights `ARNIQA.pth` + `regressor_kadid10k.pth`). Parity target:
@@ -53,7 +53,9 @@ impl Arniqa {
     pub const WEIGHTS: WeightsTerms = WeightsTerms {
         model: COLUMN,
         licence: WeightsLicence::Permissive,
-        terms_url: "https://github.com/miccunifi/ARNIQA#model-zoo",
+        // The README publishes the encoder/regressor downloads; there is
+        // no dedicated weights section to anchor to.
+        terms_url: "https://github.com/miccunifi/ARNIQA",
     };
 
     /// Load an exported model directory (`arniqa_trunk.onnx`,
@@ -275,6 +277,31 @@ mod tests {
             ));
         }
         assert!(Arniqa::prep(&view(&[0u8; 2 * 2 * 3], 2, 2)).is_ok());
+    }
+
+    /// A row-stride larger than `w*3` reads the same pixels.
+    #[test]
+    fn prep_strided_rows() {
+        let (w, h, stride) = (5, 4, 5 * 3 + 7);
+        let mut packed = vec![0u8; w * h * 3];
+        let mut buf = vec![0xEEu8; stride * h];
+        for (i, v) in packed.iter_mut().enumerate() {
+            *v = (i * 13 + 7) as u8;
+        }
+        for y in 0..h {
+            buf[y * stride..y * stride + w * 3]
+                .copy_from_slice(&packed[y * w * 3..(y + 1) * w * 3]);
+        }
+        let s = za::Rgb8In {
+            pixels: &buf,
+            width: w,
+            height: h,
+            stride,
+        };
+        assert_eq!(
+            Arniqa::prep(&s).unwrap(),
+            Arniqa::prep(&view(&packed, w, h)).unwrap()
+        );
     }
 
     /// The five crops come out in `center_corners_crop` order — centre,

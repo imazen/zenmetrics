@@ -23,7 +23,7 @@ use zenmetrics_nn::{
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
 /// model may differ from upstream by 1/1000 of its estimated just-noticeable
 /// difference. The engines differ from PyTorch only in summation order;
-/// measured worst on the 64²–2048² ladder is ~2e-6 JND.
+/// measured worst on the 64²–2048² ladder is ~1e-4 JND across models.
 const TOL_JND: f64 = 1e-3;
 
 /// One estimated JND per score column, from `models/jnd_scale.tsv`

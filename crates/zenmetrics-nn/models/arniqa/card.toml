@@ -6,7 +6,7 @@ name = "arniqa"
 kind = "no-reference"                # pair tools run it through PairedNoReference: `arniqa` on dist, `arniqa_ref` on ref
 direction = "higher-is-better"       # scaled MOS-quality score in [0, 1]
 columns = ["arniqa", "arniqa_ref"]
-paper = "Agnolon, Galteri, Bertini, Del Bimbo. ARNIQA: Learning Distortion Manifold for No-Reference Image Quality Assessment. WACV 2024"
+paper = "Agnolucci, Galteri, Bertini, Del Bimbo. ARNIQA: Learning Distortion Manifold for No-Reference Image Quality Assessment. WACV 2024"
 
 [code]
 source = "upstream-port"             # encoder/mean/std/crop convention re-implemented; the ResNet trunk and regressor run as exported graphs/data
@@ -40,4 +40,4 @@ notes = "trunk: normalize + ResNet50 (ARNIQA.pth, no fc) + L2-normalize -> emb [
 oracle = "miccunifi/ARNIQA @66d16eb, single_image_inference.py, CPU, fp32 (its autocast is a no-op off CUDA), kadid10k regressor"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = 0.053838                       # pooled median |arniqa - arniqa_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 0.072958, BPG 0.037216
-results = "rten vs upstream: worst |d| 7.81e-7 on 15 ladder goldens (worst ref 5.20e-7). ort-cuda identical to rten at print precision (CLI smoke 1415_256: 0.444375/0.639651)"
+results = "rten vs upstream: worst |d| 3.58e-7 = 6.65e-6 JND on 15 ladder goldens (harness-measured; an earlier hand-sweep rounded 7.81e-7 before the full TOL gate — the harness number is authoritative). ort-cuda identical at print precision (CLI smoke 1415_256: 0.444375/0.639651). Goldens committed at models/arniqa/arniqa_goldens.tsv"
