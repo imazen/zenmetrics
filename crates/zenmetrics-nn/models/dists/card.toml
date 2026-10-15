@@ -32,7 +32,7 @@ opset = 17
 
 [parity]
 oracle = "DISTS_pytorch 0.1, CPU, fp32"
-tolerance_abs = 1e-6                 # proposed, pending sign-off
+tolerance_jnd = 1e-3                 # of the column's JND in models/jnd_scale.tsv (owner, 2026-10-15)
 # Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
 #   rten 1.8e-7, ort-cuda 1.8e-7. Identical pair: rten 0.0 (as upstream),
 #   ort-cuda 1.19e-7 (one f32 step at 1.0).

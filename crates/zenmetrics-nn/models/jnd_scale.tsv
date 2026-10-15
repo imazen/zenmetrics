@@ -1,0 +1,14 @@
+# One estimated just-noticeable difference per score column, in that column's units.
+# Source: KonJND-1k (1,008 pairs, 640x480, 504 JPEG + 504 BPG, distorted level at each
+# image's mean picture-wise JND threshold, round-half-up), scored by the upstream Python
+# packages (CPU fp32); value = pooled median score over the 1,008 pairs.
+# Method, per-codec rows and quartiles: benchmarks/nn_konjnd_scale_2026-10-15.md
+# Used by tests/parity.rs to express engine tolerance in JND units.
+column	jnd
+lpips_alex	0.065220
+lpips_vgg	0.193925
+lpips_squeeze	0.079601
+dists	0.094498
+stlpips_alex	0.023365
+stlpips_vgg	0.065762
+deepdc	0.064153

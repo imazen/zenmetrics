@@ -34,7 +34,7 @@ opset = 17
 
 [parity]
 oracle = "lpips 0.1.4, CPU, fp32"
-tolerance_abs = 1e-6                 # proposed, pending sign-off
+tolerance_jnd = 1e-3                 # of the column's JND in models/jnd_scale.tsv (owner, 2026-10-15)
 # Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
 #   rten:     alex 7.6e-8, vgg 4.5e-8, squeeze 1.1e-7
 #   ort-cuda: alex 6.0e-8, vgg 6.0e-8, squeeze 9.0e-8

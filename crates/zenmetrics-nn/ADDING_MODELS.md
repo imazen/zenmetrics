@@ -56,8 +56,12 @@ just nn-parity <model-dir> <ladder-dir> rten model-tests <col>
 ORT_DYLIB_PATH=... just nn-parity <model-dir> <ladder-dir> ort-cuda model-tests,ort <col>
 ```
 
-- Parity: every golden pair within `TOL` (1e-6, proposed) on both engines; record the
-  worst |Δ| in the card and README.
+- JND scale: measure one JND for each new score column on KonJND-1k with the upstream
+  package (pooled median score at the PJND threshold; method and scripts in
+  `benchmarks/nn_konjnd_scale_2026-10-15.md`) and add it to `models/jnd_scale.tsv`.
+  The parity test fails on a column without an entry.
+- Parity: every golden pair within `TOL_JND` (1e-3 of the column's JND) on both engines;
+  record the worst |Δ| (absolute and in JND) in the card and README.
 - Warm reference: bit-identical to the cold score; identical pair scores 0 where
   upstream does.
 - `cargo clippy -p zenmetrics-nn --all-targets --features model-tests,ort` clean, and

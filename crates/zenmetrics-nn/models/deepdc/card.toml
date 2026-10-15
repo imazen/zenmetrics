@@ -29,6 +29,6 @@ notes = "the trunk graph ends at each tap's double-centred distance matrix; expo
 
 [parity]
 oracle = "DeepDC_PyTorch 0.2 with use_input_norm=True, CPU, fp32"
-tolerance_abs = 1e-6
+tolerance_jnd = 1e-3                 # of the column's JND in models/jnd_scale.tsv (owner, 2026-10-15)
 # Measured 2026-10-15, 18 pairs: rten 1.2e-7, ort-cuda 1.2e-7. Against the
 # JPEG AIC-4 cropped-set DeepDC column, 61 pairs: max 3.0e-5.

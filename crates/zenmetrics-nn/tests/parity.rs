@@ -16,11 +16,32 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
 
-/// Absolute LPIPS tolerance against the upstream CPU fp32 score. Proposed,
-/// pending sign-off: the trunk runs in a different engine (rten vs PyTorch
-/// MKL-DNN), so convolution summation order differs. Measured worst on the
-/// 64²–2048² ladder (3 images, i265): 4.5e-8.
-const TOL: f64 = 1e-6;
+/// Tolerance against the upstream CPU fp32 score, in JND units (owner,
+/// 2026-10-15: "should be in estimated jnd units, could be looser"): each
+/// model may differ from upstream by 1/1000 of its estimated just-noticeable
+/// difference. The engines differ from PyTorch only in summation order;
+/// measured worst on the 64²–2048² ladder is ~2e-6 JND.
+const TOL_JND: f64 = 1e-3;
+
+/// One estimated JND per score column, from `models/jnd_scale.tsv`
+/// (KonJND-1k, pooled median at each image's JND threshold). A column
+/// without an entry fails: every model needs its JND measured.
+fn jnd(col: &str) -> f64 {
+    const TABLE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/models/jnd_scale.tsv"));
+    TABLE
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.starts_with("column\t"))
+        .find_map(|l| {
+            let mut f = l.split('\t');
+            (f.next() == Some(col)).then(|| f.next().unwrap().parse::<f64>().unwrap())
+        })
+        .unwrap_or_else(|| panic!("models/jnd_scale.tsv has no JND for {col}"))
+}
+
+/// Absolute tolerance for `col`: `TOL_JND` JNDs.
+fn tol(col: &str) -> f64 {
+    TOL_JND * jnd(col)
+}
 
 fn env_dir(var: &str) -> PathBuf {
     PathBuf::from(
@@ -127,13 +148,17 @@ fn matches_upstream() {
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
             assert!(
-                err <= TOL,
-                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {TOL:e}"
+                err <= tol(col),
+                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
+                tol(col)
             );
             checked += 1;
         }
         assert!(checked > 0, "{} had no rows", path.display());
-        eprintln!("{col}: {checked} pairs, worst |d| {worst:.3e}");
+        eprintln!(
+            "{col}: {checked} pairs, worst |d| {worst:.3e} = {:.2e} JND",
+            worst / jnd(col)
+        );
     }
 }
 
@@ -174,7 +199,10 @@ fn warm_reference_equals_cold() {
             // runs in ONNX Runtime's f32 reduction order: measured 1.19e-7
             // (one f32 step at 1.0) for an identical pair. Bounded by the
             // parity tolerance.
-            assert!(same.abs() <= TOL, "{col}: identical pair scored {same}");
+            assert!(
+                same.abs() <= tol(col),
+                "{col}: identical pair scored {same}"
+            );
         }
     }
 }

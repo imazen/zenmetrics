@@ -30,7 +30,7 @@ notes = "stubs IPython (the package imports IPython.embed and never calls it)"
 
 [parity]
 oracle = "stlpips_pytorch 0.0.2, CPU, fp32"
-tolerance_abs = 1e-6
+tolerance_jnd = 1e-3                 # of the column's JND in models/jnd_scale.tsv (owner, 2026-10-15)
 # Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
 #   rten:     alex 4.2e-8, vgg 2.7e-8
 #   ort-cuda: alex 6.0e-8, vgg 6.0e-8
