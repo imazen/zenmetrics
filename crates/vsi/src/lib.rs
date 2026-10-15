@@ -290,6 +290,7 @@ pub struct Vsi {
 
 /// Pre-scoring opponent/saliency box-filter decimation policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Downscale {
     /// Reference max(1, round(min(width, height) / 256)) decimation.
     #[default]

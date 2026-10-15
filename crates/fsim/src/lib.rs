@@ -427,6 +427,7 @@ pub struct Fsim {
 
 /// Pre-scoring box-filter decimation policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Downscale {
     /// Reference factor: max(1, round(min(width, height) / 256)).
     #[default]
