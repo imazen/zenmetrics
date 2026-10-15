@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-stats
+
+### Added
+
+- Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
+- Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
+
+### QUEUED BREAKING CHANGES
+
+- Adding `Interval::p_nonpositive` requires downstream struct literals to initialize the new field (737dc977). Existing bootstrap calls retain their behavior.
+
+## Workspace
+
 ### Changed
 
 - zenmetrics-cli JPEG AIC-4 columns: `psnr-ycbcr611` (6:1:1 MSE-weighted studio-601 YCbCr PSNR; 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target), `ciede2000` (mean ΔE00, sRGB → CIELAB D65; median 3.0e-5, max 3.0e-4) and `ssimc` (per-RGB SSIM, valid window, contrast-structure clipped at 0; max 7.5e-7 at the CLI's print precision).

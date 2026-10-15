@@ -94,3 +94,17 @@ The same callers also need `raw_coverage` and `raw_clump` on
 the same 0.5% occupancy rule. Rank mapping can erase smooth output compression;
 these fields retain its density. Absolute range/slope must still be read beside
 them because affine normalization alone cannot detect global compression.
+
+`student_t_quantile(p, df)` and `student_t_upper_tail(t, df)` expose the
+shared Student distribution calculations. Quantiles require `0 < p < 1`;
+both helpers require finite positive degrees of freedom and return NaN for
+invalid arguments. The upper tail accepts infinite statistics with their
+limiting probabilities. Independent scipy fixtures cover df 9 and all nine
+Holm tail levels (`scripts/student_reference.py`, `tests/student.rs`).
+
+Bootstrap `Interval::p_nonpositive` reports `(1 + count(draw <= 0)) / (B + 1)`
+using only finite draws and including ties. Orient a paired difference so
+positive values support the alternative; for a margin test, shift the statistic
+before bootstrapping. `p_zero` retains its two-sided definition. Both probabilities
+are NaN if there are no finite draws. Adding the field requires downstream
+`Interval` struct literals to specify it.
