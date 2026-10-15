@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, Maniqa, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -108,6 +108,14 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                         Arniqa::from_dir(&dir, engine()).expect("load arniqa"),
                     )),
                     "arniqa",
+                );
+            }
+            if name == "maniqa" {
+                return (
+                    Box::new(PairedNoReference::new(
+                        Maniqa::from_dir(&dir, engine()).expect("load maniqa"),
+                    )),
+                    "maniqa",
                 );
             }
             let net = *LpipsNet::ALL

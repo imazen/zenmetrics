@@ -274,7 +274,7 @@ mod tests {
                 Err(Error::TooSmall { .. })
             ));
         }
-        assert!(Arniqa::prep(&view(&vec![0u8; 2 * 2 * 3], 2, 2)).is_ok());
+        assert!(Arniqa::prep(&view(&[0u8; 2 * 2 * 3], 2, 2)).is_ok());
     }
 
     /// The five crops come out in `center_corners_crop` order — centre,

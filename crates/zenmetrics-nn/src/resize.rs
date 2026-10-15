@@ -211,6 +211,79 @@ pub(crate) fn resize_bilinear_pil_u8(
     resample_u8_axis(&tmp, c, h, ow, &wy, 0)
 }
 
+/// OpenCV `cv2.resize((ow, oh), INTER_CUBIC)` on a u8 image, planar
+/// `[c, h, w]` → `[c, oh, ow]`.
+///
+/// Per axis (imgproc `resize.cpp`): `fx = (dx + 0.5)·(in/out) − 0.5`,
+/// `sx = floor(fx)`, frac `fx − sx`, and `interpolateCubic` gives 4 taps
+/// at `sx−1 .. sx+2` with the `A = −0.75` kernel, border positions
+/// clamped (BORDER_REPLICATE). On this host's OpenCV the 8U path keeps
+/// `float` coefficients — the horizontal pass is a `float` Σ px·k, the
+/// vertical pass `saturate_cast<uchar>` (cvRound ties-even + clamp).
+/// Verified: 0 diffs on the isolated 1-D probe, ≤1 u8 on ~0.04% of
+/// pixels vs `cv2.resize` 4.x on ladder images.
+pub(crate) fn resize_bicubic_cv2_u8(
+    img: &[u8],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<u8> {
+    fn cv2_cubic_1d(n_in: usize, n_out: usize) -> Vec<([usize; 4], [f32; 4])> {
+        let scale = n_in as f64 / n_out as f64;
+        (0..n_out)
+            .map(|dx| {
+                let fx = ((dx as f64 + 0.5) * scale - 0.5) as f32;
+                let sx = fx.floor() as i64;
+                let x = fx - sx as f32;
+                let a = -0.75f32;
+                let c0 = ((a * (x + 1.0) - 5.0 * a) * (x + 1.0) + 8.0 * a) * (x + 1.0) - 4.0 * a;
+                let c1 = ((a + 2.0) * x - (a + 3.0)) * x * x + 1.0;
+                let c2 = ((a + 2.0) * (1.0 - x) - (a + 3.0)) * (1.0 - x) * (1.0 - x) + 1.0;
+                let c3 = 1.0 - c0 - c1 - c2;
+                let idx = [-1i64, 0, 1, 2].map(|k| (sx + k).clamp(0, n_in as i64 - 1) as usize);
+                (idx, [c0, c1, c2, c3])
+            })
+            .collect()
+    }
+
+    let wx = cv2_cubic_1d(w, ow);
+    // Horizontal pass: f32 intermediate (OpenCV keeps the row pass float).
+    let mut tmp = vec![0f32; c * h * ow];
+    for ch in 0..c {
+        let inp = &img[ch * h * w..(ch + 1) * h * w];
+        let outp = &mut tmp[ch * h * ow..];
+        for y in 0..h {
+            let row = &inp[y * w..];
+            for (dx, (idx, coef)) in wx.iter().enumerate() {
+                outp[y * ow + dx] = idx
+                    .iter()
+                    .zip(coef)
+                    .map(|(&i, &k)| f32::from(row[i]) * k)
+                    .sum();
+            }
+        }
+    }
+    let wy = cv2_cubic_1d(h, oh);
+    let mut out = vec![0u8; c * oh * ow];
+    for ch in 0..c {
+        let inp = &tmp[ch * h * ow..];
+        let outp = &mut out[ch * oh * ow..];
+        for (dy, (idx, coef)) in wy.iter().enumerate() {
+            for x in 0..ow {
+                let s: f32 = idx
+                    .iter()
+                    .zip(coef)
+                    .map(|(&i, &k)| inp[i * ow + x] * k)
+                    .sum();
+                outp[dy * ow + x] = s.round_ties_even().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+    out
+}
+
 /// Planar `[c, h, w]` → `[c, oh, ow]`, torch `antialias=True` bicubic.
 pub(crate) fn resize_bicubic_aa(
     img: &[f32],

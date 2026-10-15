@@ -248,6 +248,14 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
     #[value(name = "arniqa")]
     Arniqa,
+    /// MANIQA — learned no-reference quality score (upstream
+    /// `IIGROUP/MANIQA`, Apache-2.0; ViT-B/8 + TABlocks + Swin stages,
+    /// `ckpt_koniq10k`); **higher** is better, unbounded (koniq10k MOS
+    /// territory ~1..5). Scored through `PairedNoReference`: emits
+    /// `maniqa` (distorted) and `maniqa_ref` (reference). As `arniqa`
+    /// for `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "maniqa")]
+    Maniqa,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -674,6 +682,7 @@ impl MetricKind {
             MetricKind::Afine,
             MetricKind::Dreamsim,
             MetricKind::Arniqa,
+            MetricKind::Maniqa,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -777,6 +786,7 @@ impl MetricKind {
             MetricKind::Afine => "afine",
             MetricKind::Dreamsim => "dreamsim",
             MetricKind::Arniqa => "arniqa",
+            MetricKind::Maniqa => "maniqa",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -942,6 +952,7 @@ impl MetricKind {
             MetricKind::Afine => &["afine"],
             MetricKind::Dreamsim => &["dreamsim"],
             MetricKind::Arniqa => &["arniqa", "arniqa_ref"],
+            MetricKind::Maniqa => &["maniqa", "maniqa_ref"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -2251,7 +2262,8 @@ pub fn run_metric(
         | MetricKind::Ckdn
         | MetricKind::Afine
         | MetricKind::Dreamsim
-        | MetricKind::Arniqa => nn::score(kind, reference, distorted),
+        | MetricKind::Arniqa
+        | MetricKind::Maniqa => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -2263,7 +2275,8 @@ pub fn run_metric(
         | MetricKind::Ckdn
         | MetricKind::Afine
         | MetricKind::Dreamsim
-        | MetricKind::Arniqa => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Arniqa
+        | MetricKind::Maniqa => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

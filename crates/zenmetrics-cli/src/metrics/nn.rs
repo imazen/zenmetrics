@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, Maniqa, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -83,6 +83,11 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
         // A NoReferenceMetric wrapped for pair scoring: `arniqa` on the
         // distorted image, `arniqa_ref` on the reference.
         return Ok(Box::new(PairedNoReference::new(Arniqa::from_dir(
+            &dir, engine,
+        )?)));
+    }
+    if column == "maniqa" {
+        return Ok(Box::new(PairedNoReference::new(Maniqa::from_dir(
             &dir, engine,
         )?)));
     }
