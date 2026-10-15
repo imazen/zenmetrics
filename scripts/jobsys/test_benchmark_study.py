@@ -61,8 +61,9 @@ class StudyTests(unittest.TestCase):
     def test_source_inventory_and_exact_expansion(self):
         inv, summary, rows = study.expand(self.write())
         # Every `#[value(name)]` in the CLI's MetricKind; bump with each metric added
-        # (51: +vmaf-studio601, vmaf-neg-studio601, psnr-ycbcr611, ciede2000, ssimc).
-        self.assertEqual(len(inv['metrics']), 51)
+        # (51: +vmaf-studio601, vmaf-neg-studio601, psnr-ycbcr611, ciede2000, ssimc;
+        # 53: +psnr-cb, psnr-cr).
+        self.assertEqual(len(inv['metrics']), 53)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
