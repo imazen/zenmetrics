@@ -1,10 +1,11 @@
-//! LPIPS v0.1, VGG16 trunk (Zhang, Isola, Efros, Shechtman, Wang, "The
-//! Unreasonable Effectiveness of Deep Features as a Perceptual Metric",
-//! CVPR 2018). Parity target: the upstream `lpips` 0.1.4 package.
+//! LPIPS v0.1 (Zhang, Isola, Efros, Shechtman, Wang, "The Unreasonable
+//! Effectiveness of Deep Features as a Perceptual Metric", CVPR 2018), with
+//! the AlexNet, VGG16 or SqueezeNet trunk. Parity target: the upstream
+//! `lpips` 0.1.4 package.
 //!
-//! The exported graph (`models/lpips-vgg/export.py`) is LPIPS's
-//! `ScalingLayer` plus VGG16 features through `relu5_3`, returning the five
-//! taps. The head below is the rest of `lpips.LPIPS.forward` with
+//! The exported trunk graph (`models/lpips/export.py`) is LPIPS's
+//! `ScalingLayer` plus every slice of the upstream network, returning one tap
+//! per slice. The head below is the rest of `lpips.LPIPS.forward` with
 //! `spatial=False`: per tap, unit-normalise over channels
 //! (`x / (sqrt(Σc x²) + 1e-10)`), square the difference, weight the channels
 //! by the tap's 1×1 `lin` layer, average over space; sum over taps.
@@ -16,23 +17,52 @@ use crate::engine::{self, PairGraph, Tap, Trunk};
 use crate::preprocess::rgb8_to_planar_pm1;
 use crate::{Engine, Error, za};
 
-const TRUNK_FILE: &str = "lpips_vgg_trunk.onnx";
-#[cfg_attr(not(feature = "ort"), allow(dead_code))]
-const FULL_FILE: &str = "lpips_vgg_full.onnx";
-const LIN_FILE: &str = "lpips_vgg_lin.f32";
-const CHANNELS: [usize; 5] = [64, 128, 256, 512, 512];
 const EPS: f32 = 1e-10;
-/// VGG16 pools four times before `relu5_3`; below 16 px the last tap is empty.
-const MIN_SIZE: usize = 16;
 /// Bump whenever any output can change.
 const SCORE_REVISION: u32 = 1;
-const FAMILY: &str = "lpips_vgg";
 
-/// LPIPS v0.1 with the VGG16 trunk. Lower is closer; `0` for identical
-/// inputs. Input: packed sRGB8 (any stride).
-pub struct LpipsVgg {
+/// Which upstream network an [`Lpips`] uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LpipsNet {
+    /// AlexNet (`net='alex'`, upstream's default and recommended variant).
+    Alex,
+    /// VGG16 (`net='vgg'`).
+    Vgg,
+    /// SqueezeNet 1.1 (`net='squeeze'`).
+    Squeeze,
+}
+
+impl LpipsNet {
+    /// Upstream's `net=` name, also the file prefix `lpips_<name>_*`.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Alex => "alex",
+            Self::Vgg => "vgg",
+            Self::Squeeze => "squeeze",
+        }
+    }
+
+    /// The score column: `lpips_alex`, `lpips_vgg`, `lpips_squeeze`.
+    pub const fn column(self) -> &'static str {
+        match self {
+            Self::Alex => "lpips_alex",
+            Self::Vgg => "lpips_vgg",
+            Self::Squeeze => "lpips_squeeze",
+        }
+    }
+
+    /// Every network, in upstream's order.
+    pub const ALL: [Self; 3] = [Self::Alex, Self::Vgg, Self::Squeeze];
+}
+
+/// LPIPS v0.1. Lower is closer; `0` for identical inputs. Input: packed
+/// sRGB8 (any stride).
+pub struct Lpips {
+    net: LpipsNet,
     backend: Backend,
-    lin: [Vec<f32>; 5],
+    lin: Vec<Vec<f32>>,
+    min_size: usize,
 }
 
 enum Backend {
@@ -43,62 +73,116 @@ enum Backend {
     Pair(Box<dyn PairGraph>),
 }
 
-impl LpipsVgg {
-    /// Load an exported model directory with the default engine
-    /// ([`Engine::Rten`]): `lpips_vgg_trunk.onnx` and `lpips_vgg_lin.f32`, as
-    /// written by `models/lpips-vgg/export.py`.
-    ///
-    /// # Errors
-    /// [`Error::Io`] when a file can't be read, [`Error::BadModel`] when
-    /// either file doesn't have the expected shape.
-    pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self, Error> {
-        Self::from_dir_with(dir, Engine::Rten)
+/// `P.meta`: `channels c0,c1,...` and `min_size n`.
+fn read_meta(path: &Path) -> Result<(Vec<usize>, usize), Error> {
+    let text = std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let bad = |m: &str| Error::BadModel(format!("{}: {m}", path.display()));
+    let (mut channels, mut min_size) = (None, None);
+    for line in text.lines() {
+        match line.split_once(' ') {
+            Some(("channels", v)) => {
+                channels = Some(
+                    v.split(',')
+                        .map(|c| {
+                            c.trim()
+                                .parse::<usize>()
+                                .map_err(|_| bad("bad channel count"))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
+            Some(("min_size", v)) => {
+                min_size = Some(v.trim().parse::<usize>().map_err(|_| bad("bad min_size"))?)
+            }
+            _ => {}
+        }
     }
+    let channels = channels
+        .filter(|c| !c.is_empty())
+        .ok_or_else(|| bad("no channels line"))?;
+    Ok((
+        channels,
+        min_size.ok_or_else(|| bad("no min_size line"))?.max(1),
+    ))
+}
 
-    /// Load an exported model directory with a chosen engine. The ONNX
-    /// Runtime engines read `lpips_vgg_full.onnx` from the same directory.
+fn read_f32(path: &Path, expected: usize) -> Result<Vec<f32>, Error> {
+    let raw = std::fs::read(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if raw.len() != expected * 4 {
+        return Err(Error::BadModel(format!(
+            "{}: {} bytes, expected {}",
+            path.display(),
+            raw.len(),
+            expected * 4
+        )));
+    }
+    let v: Vec<f32> = raw
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
+        .collect();
+    if v.iter().any(|x| !x.is_finite()) {
+        return Err(Error::BadModel(format!(
+            "{}: non-finite weight",
+            path.display()
+        )));
+    }
+    Ok(v)
+}
+
+impl Lpips {
+    /// Load `net` from an exported model directory (`lpips_<net>_trunk.onnx`,
+    /// `lpips_<net>_lin.f32`, `lpips_<net>.meta`, as written by
+    /// `models/lpips/export.py`) on `engine`. The ONNX Runtime engines read
+    /// `lpips_<net>_full.onnx` instead of the trunk.
     ///
     /// # Errors
-    /// As [`Self::from_dir`]; [`Error::Engine`] when the engine can't start
-    /// (for ONNX Runtime: library or CUDA provider not loadable).
-    pub fn from_dir_with(dir: impl AsRef<Path>, engine: Engine) -> Result<Self, Error> {
+    /// [`Error::Io`] when a file can't be read, [`Error::BadModel`] when a
+    /// file doesn't have the expected shape, [`Error::Engine`] when the engine
+    /// can't start (for ONNX Runtime: library or CUDA provider not loadable).
+    pub fn from_dir(dir: impl AsRef<Path>, net: LpipsNet, engine: Engine) -> Result<Self, Error> {
         let dir = dir.as_ref();
-        let lin_path = dir.join(LIN_FILE);
-        let raw = std::fs::read(&lin_path).map_err(|source| Error::Io {
-            path: lin_path.clone(),
-            source,
-        })?;
-        let total: usize = CHANNELS.iter().sum();
-        if raw.len() != total * 4 {
-            return Err(Error::BadModel(format!(
-                "{LIN_FILE}: {} bytes, expected {}",
-                raw.len(),
-                total * 4
-            )));
-        }
-        let all: Vec<f32> = raw
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|b| f32::from_le_bytes(*b))
-            .collect();
-        if all.iter().any(|v| !v.is_finite()) {
-            return Err(Error::BadModel(format!("{LIN_FILE}: non-finite weight")));
-        }
+        let p = format!("lpips_{}", net.name());
+        let (channels, min_size) = read_meta(&dir.join(format!("{p}.meta")))?;
+        let all = read_f32(&dir.join(format!("{p}_lin.f32")), channels.iter().sum())?;
         let mut at = 0;
-        let lin = CHANNELS.map(|c| {
-            let v = all[at..at + c].to_vec();
-            at += c;
-            v
-        });
+        let lin = channels
+            .iter()
+            .map(|&c| {
+                let v = all[at..at + c].to_vec();
+                at += c;
+                v
+            })
+            .collect();
         let backend = match engine {
-            Engine::Rten => Backend::Trunk(engine::load(&dir.join(TRUNK_FILE), CHANNELS.len())?),
+            Engine::Rten => Backend::Trunk(engine::load(
+                &dir.join(format!("{p}_trunk.onnx")),
+                channels.len(),
+            )?),
             #[cfg(feature = "ort")]
             Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
-                &dir.join(FULL_FILE),
+                &dir.join(format!("{p}_full.onnx")),
+                "lpips",
             )?)),
         };
-        Ok(Self { backend, lin })
+        Ok(Self {
+            net,
+            backend,
+            lin,
+            min_size,
+        })
+    }
+
+    /// The network this instance runs.
+    pub fn net(&self) -> LpipsNet {
+        self.net
     }
 
     fn engine_name(&self) -> &'static str {
@@ -115,56 +199,70 @@ impl LpipsVgg {
         }
     }
 
+    fn check_size(&self, img: &za::Rgb8In<'_>) -> Result<(), Error> {
+        if img.width < self.min_size || img.height < self.min_size {
+            return Err(Error::TooSmall { min: self.min_size });
+        }
+        Ok(())
+    }
+
+    fn check_taps(&self, taps: &[Tap]) -> Result<(), Error> {
+        if taps.len() != self.lin.len() {
+            return Err(Error::BadModel(format!(
+                "{} taps, expected {}",
+                taps.len(),
+                self.lin.len()
+            )));
+        }
+        for (t, lin) in taps.iter().zip(&self.lin) {
+            if t.c != lin.len() || t.data.len() != t.c * t.plane() || t.plane() == 0 {
+                return Err(Error::BadModel(format!(
+                    "tap shape [{}, {}, {}], expected {} channels",
+                    t.c,
+                    t.h,
+                    t.w,
+                    lin.len()
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn taps(&self, img: &za::Rgb8In<'_>) -> Result<Vec<Tap>, Error> {
-        check_size(img)?;
+        self.check_size(img)?;
         let taps = self
             .trunk()?
             .run(rgb8_to_planar_pm1(img), img.height, img.width)?;
-        check_taps(&taps)?;
+        self.check_taps(&taps)?;
         Ok(taps)
     }
 
-    /// Reference and distorted taps, the two trunk runs concurrent.
-    fn tap_pair(
-        &self,
-        r: &za::Rgb8In<'_>,
-        d: &za::Rgb8In<'_>,
-    ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
-        check_size(r)?;
+    /// A cold pair on whichever backend is loaded. On a trunk engine the two
+    /// trunk runs are concurrent.
+    fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
+        self.check_size(r)?;
         if (r.width, r.height) != (d.width, d.height) {
             return Err(Error::SizeMismatch);
         }
-        let (a, b) = self.trunk()?.run_pair(
-            rgb8_to_planar_pm1(r),
-            rgb8_to_planar_pm1(d),
-            r.height,
-            r.width,
-        )?;
-        check_taps(&a)?;
-        check_taps(&b)?;
-        Ok((a, b))
-    }
-
-    /// A cold pair on whichever backend is loaded.
-    fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
         match &self.backend {
-            Backend::Trunk(_) => {
-                let (mut rt, dt) = self.tap_pair(r, d)?;
-                rt.iter_mut().for_each(normalize);
-                self.score_taps(&rt, &dt)
-            }
-            Backend::Pair(p) => {
-                check_size(r)?;
-                if (r.width, r.height) != (d.width, d.height) {
-                    return Err(Error::SizeMismatch);
-                }
-                p.score(
+            Backend::Trunk(t) => {
+                let (mut rt, dt) = t.run_pair(
                     rgb8_to_planar_pm1(r),
                     rgb8_to_planar_pm1(d),
                     r.height,
                     r.width,
-                )
+                )?;
+                self.check_taps(&rt)?;
+                self.check_taps(&dt)?;
+                rt.iter_mut().for_each(normalize);
+                self.score_taps(&rt, &dt)
             }
+            Backend::Pair(p) => p.score(
+                rgb8_to_planar_pm1(r),
+                rgb8_to_planar_pm1(d),
+                r.height,
+                r.width,
+            ),
         }
     }
 
@@ -184,39 +282,6 @@ impl LpipsVgg {
         }
         Ok(total)
     }
-
-    fn id(&self) -> za::MetricId {
-        za::MetricId::new(FAMILY, za::implementation!(SCORE_REVISION)).with_reference(format!(
-            "lpips 0.1.4 (net=vgg, version=0.1); engine {}",
-            self.engine_name()
-        ))
-    }
-}
-
-fn check_size(img: &za::Rgb8In<'_>) -> Result<(), Error> {
-    if img.width < MIN_SIZE || img.height < MIN_SIZE {
-        return Err(Error::TooSmall { min: MIN_SIZE });
-    }
-    Ok(())
-}
-
-fn check_taps(taps: &[Tap]) -> Result<(), Error> {
-    if taps.len() != CHANNELS.len() {
-        return Err(Error::BadModel(format!(
-            "{} taps, expected {}",
-            taps.len(),
-            CHANNELS.len()
-        )));
-    }
-    for (t, &c) in taps.iter().zip(&CHANNELS) {
-        if t.c != c || t.data.len() != t.c * t.plane() || t.plane() == 0 {
-            return Err(Error::BadModel(format!(
-                "tap shape [{}, {}, {}], expected {c} channels",
-                t.c, t.h, t.w
-            )));
-        }
-    }
-    Ok(())
 }
 
 /// Unit-normalise a tap over channels, in place (LPIPS `normalize_tensor`).
@@ -266,14 +331,30 @@ fn tap_distance(r: &Tap, d: &Tap, lin: &[f32]) -> f64 {
     acc.iter().map(|&v| f64::from(v)).sum::<f64>() / plane as f64
 }
 
-impl za::Metric for LpipsVgg {
+impl za::Metric for Lpips {
     fn id(&self) -> za::MetricId {
-        LpipsVgg::id(self)
+        za::MetricId::new(self.net.column(), za::implementation!(SCORE_REVISION)).with_reference(
+            format!(
+                "lpips 0.1.4 (net={}, version=0.1); engine {}",
+                self.net.name(),
+                self.engine_name()
+            ),
+        )
     }
 
     fn outputs(&self) -> Cow<'static, [za::ScoreSpec]> {
-        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new(FAMILY, za::ScoreKind::Difference)];
-        Cow::Borrowed(OUTPUTS)
+        const ALEX: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("lpips_alex", za::ScoreKind::Difference)];
+        const VGG: &[za::ScoreSpec] = &[za::ScoreSpec::new("lpips_vgg", za::ScoreKind::Difference)];
+        const SQUEEZE: &[za::ScoreSpec] = &[za::ScoreSpec::new(
+            "lpips_squeeze",
+            za::ScoreKind::Difference,
+        )];
+        Cow::Borrowed(match self.net {
+            LpipsNet::Alex => ALEX,
+            LpipsNet::Vgg => VGG,
+            LpipsNet::Squeeze => SQUEEZE,
+        })
     }
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
@@ -287,13 +368,12 @@ impl za::Metric for LpipsVgg {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
+        let col = self.net.column();
         opts.checkpoint()?;
-        opts.refuse_map(FAMILY)?;
+        opts.refuse_map(col)?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = self
-            .score_pair(&r, &d)
-            .metric_err_with(FAMILY, Error::kind)?;
-        Ok(Box::new(za::ScalarEval::single(FAMILY, s)))
+        let s = self.score_pair(&r, &d).metric_err_with(col, Error::kind)?;
+        Ok(Box::new(za::ScalarEval::single(col, s)))
     }
 
     fn warm_reference<'m>(
@@ -302,16 +382,17 @@ impl za::Metric for LpipsVgg {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::WarmReference + 'm>> {
         use za::ResultMetricExt as _;
+        let col = self.net.column();
         opts.checkpoint()?;
         let view = za::rgb8_view(&r)?;
         let reference = match &self.backend {
             Backend::Trunk(_) => {
-                let mut taps = self.taps(&view).metric_err_with(FAMILY, Error::kind)?;
+                let mut taps = self.taps(&view).metric_err_with(col, Error::kind)?;
                 taps.iter_mut().for_each(normalize);
                 WarmState::Taps(taps)
             }
             Backend::Pair(_) => {
-                check_size(&view).metric_err_with(FAMILY, Error::kind)?;
+                self.check_size(&view).metric_err_with(col, Error::kind)?;
                 WarmState::Pixels(rgb8_to_planar_pm1(&view))
             }
         };
@@ -326,7 +407,7 @@ impl za::Metric for LpipsVgg {
 /// A reference prepared once: normalised taps on a trunk engine, the
 /// converted input on a whole-graph engine (which recomputes its features).
 struct WarmLpips<'m> {
-    metric: &'m LpipsVgg,
+    metric: &'m Lpips,
     reference: WarmState,
     size: (usize, usize),
 }
@@ -343,11 +424,12 @@ impl za::WarmReference for WarmLpips<'_> {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
         use za::ResultMetricExt as _;
+        let col = self.metric.net.column();
         opts.checkpoint()?;
-        opts.refuse_map(FAMILY)?;
+        opts.refuse_map(col)?;
         let d = za::rgb8_view(&d)?;
         if (d.width, d.height) != self.size {
-            return Err(Error::SizeMismatch).metric_err_with(FAMILY, Error::kind);
+            return Err(Error::SizeMismatch).metric_err_with(col, Error::kind);
         }
         let s = match &self.reference {
             WarmState::Taps(taps) => self.metric.score_against(taps, &d),
@@ -356,8 +438,8 @@ impl za::WarmReference for WarmLpips<'_> {
                 Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
             },
         }
-        .metric_err_with(FAMILY, Error::kind)?;
-        Ok(Box::new(za::ScalarEval::single(FAMILY, s)))
+        .metric_err_with(col, Error::kind)?;
+        Ok(Box::new(za::ScalarEval::single(col, s)))
     }
 
     fn reuses_reference_work(&self) -> bool {

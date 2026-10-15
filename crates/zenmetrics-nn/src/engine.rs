@@ -233,10 +233,11 @@ pub(crate) mod ort_engine {
     /// compute, and no silent fallback to the CPU provider.
     pub(crate) struct OrtCudaPair {
         session: Mutex<Session>,
+        output: &'static str,
     }
 
     impl OrtCudaPair {
-        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+        pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
             let env = environment()?;
             let cuda = ep::CUDA::default()
                 .with_tf32(false)
@@ -254,6 +255,7 @@ pub(crate) mod ort_engine {
                 .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
             Ok(Self {
                 session: Mutex::new(session),
+                output,
             })
         }
     }
@@ -275,7 +277,7 @@ pub(crate) mod ort_engine {
             let out = session
                 .run(ort::inputs!["r" => rv, "d" => dv])
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            let s = out["lpips"]
+            let s = out[self.output]
                 .try_extract_scalar::<f32>()
                 .map_err(|e| Error::Engine(e.to_string()))?;
             Ok(f64::from(s))

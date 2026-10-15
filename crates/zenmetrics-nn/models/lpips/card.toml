@@ -1,0 +1,40 @@
+# LPIPS v0.1: AlexNet, VGG16 and SqueezeNet 1.1 trunks.
+name = "lpips"
+kind = "full-reference"
+direction = "lower-is-closer"
+columns = ["lpips_alex", "lpips_vgg", "lpips_squeeze"]
+paper = "Zhang, Isola, Efros, Shechtman, Wang. The Unreasonable Effectiveness of Deep Features as a Perceptual Metric. CVPR 2018. arXiv:1801.03924"
+
+[code]
+source = "upstream-port"             # head reimplemented from the upstream package's forward()
+upstream = "https://github.com/richzhang/PerceptualSimilarity"
+upstream_package = "lpips==0.1.4"
+licence = "BSD-2-Clause"
+
+[weights]
+licence_class = "permissive"
+# The lin layers ship with the lpips package (BSD-2-Clause,
+# lpips/weights/v0.1/<net>.pth). The trunks are torchvision's ImageNet
+# checkpoints (torchvision code BSD-3-Clause); ImageNet terms may apply to the
+# weights (counsel item, docs/PYIQA_PORT_PLAN.md section 9).
+trunk.alex = "https://download.pytorch.org/models/alexnet-owt-7be5be79.pth"
+trunk.vgg = "https://download.pytorch.org/models/vgg16-397923af.pth"
+trunk.squeeze = "https://download.pytorch.org/models/squeezenet1_1-b8a52dc0.pth"
+
+[input]
+format = "packed sRGB8"
+normalisation = "(v / 255) * 2 - 1, then LPIPS ScalingLayer (inside the graph)"
+resize = "none"
+min_size = "per net, written to lpips_<net>.meta by export.py (alex 31, vgg 16, squeeze 17)"
+
+[export]
+script = "export.py"
+outputs = "lpips_<net>_{trunk.onnx, full.onnx, lin.f32, goldens.tsv, export.meta}, lpips_<net>.meta"
+opset = 17
+
+[parity]
+oracle = "lpips 0.1.4, CPU, fp32"
+tolerance_abs = 1e-6                 # proposed, pending sign-off
+# Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
+#   rten:     alex 7.6e-8, vgg 4.5e-8, squeeze 1.1e-7
+#   ort-cuda: alex 6.0e-8, vgg 6.0e-8, squeeze 9.0e-8

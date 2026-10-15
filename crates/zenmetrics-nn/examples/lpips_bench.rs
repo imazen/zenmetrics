@@ -1,4 +1,4 @@
-//! Time LPIPS-vgg on the ladder, in the modes `bar.py` uses for PyTorch:
+//! Time LPIPS (`ZENMETRICS_NN_NET` = alex | vgg | squeeze, default vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
@@ -17,7 +17,7 @@ use std::time::Instant;
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Engine, LpipsVgg};
+use zenmetrics_nn::{Engine, Lpips, LpipsNet};
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -47,8 +47,8 @@ fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
     Image::from(PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap())
 }
 
-fn lpips(e: &dyn Evaluation) -> f64 {
-    e.scores().find(|(k, _)| k == "lpips_vgg").expect("score").1
+fn score(e: &dyn Evaluation, col: &str) -> f64 {
+    e.scores().find(|(k, _)| k == col).expect("score").1
 }
 
 /// One warmup, then at least 3 and at most 50 timed runs within `budget_s`.
@@ -88,7 +88,13 @@ fn main() {
         "ort-cuda" => Engine::OrtCuda,
         other => panic!("unknown or unbuilt engine {other}"),
     };
-    let mut m = LpipsVgg::from_dir_with(model, engine).expect("load model");
+    let net_name = std::env::var("ZENMETRICS_NN_NET").unwrap_or_else(|_| "vgg".into());
+    let net = *LpipsNet::ALL
+        .iter()
+        .find(|n| n.name() == net_name)
+        .expect("unknown ZENMETRICS_NN_NET");
+    let col = net.column();
+    let mut m = Lpips::from_dir(model, net, engine).expect("load model");
     let new = !Path::new(out).exists();
     let mut f = std::fs::OpenOptions::new()
         .create(true)
@@ -107,14 +113,15 @@ fn main() {
         let dp_path = ladder.join(format!("{stem}_{n}_dist.png"));
         let (rp, w, h) = load_rgb8(&rp_path);
         let (dp, _, _) = load_rgb8(&dp_path);
-        let modes: [(&str, Box<dyn FnMut(&mut LpipsVgg) -> (Vec<f64>, f64)>); 3] = [
+        let modes: [(&str, Box<dyn FnMut(&mut Lpips) -> (Vec<f64>, f64)>); 3] = [
             (
                 "compute",
                 Box::new(|m| {
                     timed(budget, || {
-                        lpips(
+                        score(
                             &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                                 .unwrap(),
+                            col,
                         )
                     })
                 }),
@@ -124,7 +131,10 @@ fn main() {
                 Box::new(|m| {
                     let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
                     timed(budget, || {
-                        lpips(&*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap())
+                        score(
+                            &*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap(),
+                            col,
+                        )
                     })
                 }),
             ),
@@ -134,20 +144,21 @@ fn main() {
                     timed(budget, || {
                         let (r, w, h) = load_rgb8(&rp_path);
                         let (d, _, _) = load_rgb8(&dp_path);
-                        lpips(
+                        score(
                             &*m.evaluate(image(&r, w, h), image(&d, w, h), EvalOpts::new())
                                 .unwrap(),
+                            col,
                         )
                     })
                 }),
             ),
         ];
         for (mode, mut run) in modes {
-            let (mut ts, score) = run(&mut m);
+            let (mut ts, value) = run(&mut m);
             ts.sort_by(f64::total_cmp);
             let med = ts[ts.len() / 2];
             let row = format!(
-                "{host}\t{engine_name}\t{threads}\tlpips-vgg\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{score:.7}",
+                "{host}\t{engine_name}\t{threads}\t{col}\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{value:.7}",
                 ts.len(),
                 ts[0]
             );

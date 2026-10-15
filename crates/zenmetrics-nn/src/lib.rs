@@ -8,13 +8,13 @@
 //!
 //! Models so far:
 //!
-//! - [`LpipsVgg`]: LPIPS v0.1 with the VGG16 trunk (Zhang et al., CVPR
-//!   2018), parity target the upstream `lpips` 0.1.4 package.
+//! - [`Lpips`]: LPIPS v0.1 with the AlexNet, VGG16 or SqueezeNet trunk
+//!   ([`LpipsNet`]; Zhang et al., CVPR 2018), parity target the upstream
+//!   `lpips` 0.1.4 package.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
-//! crate; load an exported model directory with [`LpipsVgg::from_dir`] or
-//! [`LpipsVgg::from_dir_with`].
+//! crate; load an exported model directory with [`Lpips::from_dir`].
 
 #![forbid(unsafe_code)]
 
@@ -24,7 +24,7 @@ mod lpips;
 mod preprocess;
 
 pub use error::Error;
-pub use lpips::LpipsVgg;
+pub use lpips::{Lpips, LpipsNet};
 
 /// Which engine runs a model's network.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
