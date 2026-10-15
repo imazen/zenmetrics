@@ -95,13 +95,13 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | dreamsim | JPEG | 504 | 0.017586 | 0.026361 | 0.034738 | 0.027194 | 1.975 |
 | dreamsim | BPG | 504 | 0.007528 | 0.012349 | 0.017801 | 0.013551 | 2.371 |
 | dreamsim | pooled | 1008 | 0.010763 | **0.017641** | 0.028215 | 0.020373 | 2.618 |
-| ahiq | JPEG | 504 | 0.032866 | 0.041770 | 0.052290 | 0.043207 | 1.591 |
-| ahiq | BPG | 504 | 0.041235 | 0.052848 | 0.066457 | 0.055467 | 1.612 |
-| ahiq | pooled | 1008 | 0.035682 | **0.047194** | 0.059711 | 0.049337 | 1.673 |
+| ahiq | JPEG | 504 | 0.015013 | 0.022583 | 0.032845 | 0.024553 | 2.188 |
+| ahiq | BPG | 504 | 0.019683 | 0.026778 | 0.033226 | 0.027219 | 1.688 |
+| ahiq | pooled | 1008 | 0.017611 | **0.024882** | 0.032989 | 0.025886 | 1.873 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
 ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053,
-A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176, AHIQ 0.0472.
+A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176, AHIQ 0.0249.
 
 The `ckdn` rows are not from an upstream package: they were scored by the Rust port
 (`zenmetrics batch --metric ckdn --features nn,nn-ort`, engine ort-cuda, ONNX Runtime

@@ -50,7 +50,8 @@ engine ort-cuda (CPU parity of every model is in
 
 `just nn-parity` on i265, ladder goldens (`~/tmp/nn-phase0/`), worst |Δ| and the
 same expressed as a fraction of each model's KonJND JND. Full logs:
-`~/tmp/nn-port-scratch/parity_ckdn-afine-dreamsim_{rten,ortcuda}.log` on dev.
+`~/tmp/nn-port-scratch/parity_ckdn-afine-dreamsim_{rten,ortcuda}.log`,
+`~/tmp/nn-port-scratch/ahiq_parity_{rten2,ort2}.log`, all on i265.
 
 | model | engine | pairs | worst \|Δ\| | worst JND |
 |---|---|---|---|---|
@@ -60,6 +61,16 @@ same expressed as a fraction of each model's KonJND JND. Full logs:
 | afine | ort-cuda | 15 | 9.865e-06 | 1.94e-05 |
 | dreamsim | rten | 21 | 2.064e-07 | 1.17e-05 |
 | dreamsim | ort-cuda | 21 | 3.577e-07 | 2.03e-05 |
+| ahiq | rten | 17 | 5.295e-08 | 2.13e-06 |
+| ahiq | ort-cuda | 17 | 2.582e-07 | 1.04e-05 |
+
+The ahiq rows are the fix-round re-export: goldens from upstream's own
+`test.py` inference path (SaveOutput hooks + `deform_fusion`/`Pixel_Prediction`
+with real `torchvision::DeformConv2d`) under the timm-0.5.4-resolved backbones
+(`vit_base_patch8_224.augreg_in21k_ft_in1k`, `resnet50.a1_in1k`), 15 square
+ladder pairs + `2207_320x240`/`2207_240x320` non-square rows that also exercise
+the warm-reference path. JND denominators use the re-measured KonJND scale
+(ahiq 0.024882).
 
 Identical ref/dist pairs score exactly 0 on DreamSim on both engines (the
 assertion the ort clamp restored).
