@@ -187,6 +187,27 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Haarpsi => "haarpsi",
         CliMetricKind::HaarpsiY => "haarpsi_y",
         CliMetricKind::Fsim => "fsim",
+        CliMetricKind::SsimPyiqa => "ssim-pyiqa",
+        CliMetricKind::SsimPyiqaF32 => "ssim-pyiqa-f32",
+        CliMetricKind::SsimPyiqaF32K2 => "ssim-pyiqa-f32-k2",
+        CliMetricKind::SsimPyiqaF32K3 => "ssim-pyiqa-f32-k3",
+        CliMetricKind::SsimPyiqaF32K4 => "ssim-pyiqa-f32-k4",
+        CliMetricKind::SsimPyiqaF32K5 => "ssim-pyiqa-f32-k5",
+        CliMetricKind::SsimPyiqaF32K6 => "ssim-pyiqa-f32-k6",
+        CliMetricKind::SsimcPyiqaF32 => "ssimc-pyiqa-f32",
+        CliMetricKind::SsimcPyiqaF32K2 => "ssimc-pyiqa-f32-k2",
+        CliMetricKind::SsimcPyiqaF32K3 => "ssimc-pyiqa-f32-k3",
+        CliMetricKind::SsimcPyiqaF32K4 => "ssimc-pyiqa-f32-k4",
+        CliMetricKind::SsimcPyiqaF32K5 => "ssimc-pyiqa-f32-k5",
+        CliMetricKind::SsimcPyiqaF32K6 => "ssimc-pyiqa-f32-k6",
+        CliMetricKind::MsSsimPyiqa => "ms-ssim-pyiqa",
+        CliMetricKind::MsSsimPyiqaF32 => "ms-ssim-pyiqa-f32",
+        CliMetricKind::MsSsimPyiqaF32K2 => "ms-ssim-pyiqa-f32-k2",
+        CliMetricKind::MsSsimPyiqaF32K3 => "ms-ssim-pyiqa-f32-k3",
+        CliMetricKind::MsSsimPyiqaF32K4 => "ms-ssim-pyiqa-f32-k4",
+        CliMetricKind::MsSsimPyiqaF32K5 => "ms-ssim-pyiqa-f32-k5",
+        CliMetricKind::MsSsimPyiqaF32K6 => "ms-ssim-pyiqa-f32-k6",
+
         CliMetricKind::FsimK2 => "fsim-k2",
         CliMetricKind::FsimK3 => "fsim-k3",
         CliMetricKind::FsimK4 => "fsim-k4",
@@ -307,6 +328,26 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Haarpsi
         | CliMetricKind::HaarpsiY
         | CliMetricKind::Fsim
+        | CliMetricKind::SsimPyiqa
+        | CliMetricKind::SsimPyiqaF32
+        | CliMetricKind::SsimPyiqaF32K2
+        | CliMetricKind::SsimPyiqaF32K3
+        | CliMetricKind::SsimPyiqaF32K4
+        | CliMetricKind::SsimPyiqaF32K5
+        | CliMetricKind::SsimPyiqaF32K6
+        | CliMetricKind::SsimcPyiqaF32
+        | CliMetricKind::SsimcPyiqaF32K2
+        | CliMetricKind::SsimcPyiqaF32K3
+        | CliMetricKind::SsimcPyiqaF32K4
+        | CliMetricKind::SsimcPyiqaF32K5
+        | CliMetricKind::SsimcPyiqaF32K6
+        | CliMetricKind::MsSsimPyiqa
+        | CliMetricKind::MsSsimPyiqaF32
+        | CliMetricKind::MsSsimPyiqaF32K2
+        | CliMetricKind::MsSsimPyiqaF32K3
+        | CliMetricKind::MsSsimPyiqaF32K4
+        | CliMetricKind::MsSsimPyiqaF32K5
+        | CliMetricKind::MsSsimPyiqaF32K6
         | CliMetricKind::FsimK2
         | CliMetricKind::FsimK3
         | CliMetricKind::FsimK4
@@ -470,6 +511,26 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Haarpsi
             | CliMetricKind::HaarpsiY
             | CliMetricKind::Fsim
+            | CliMetricKind::SsimPyiqa
+            | CliMetricKind::SsimPyiqaF32
+            | CliMetricKind::SsimPyiqaF32K2
+            | CliMetricKind::SsimPyiqaF32K3
+            | CliMetricKind::SsimPyiqaF32K4
+            | CliMetricKind::SsimPyiqaF32K5
+            | CliMetricKind::SsimPyiqaF32K6
+            | CliMetricKind::SsimcPyiqaF32
+            | CliMetricKind::SsimcPyiqaF32K2
+            | CliMetricKind::SsimcPyiqaF32K3
+            | CliMetricKind::SsimcPyiqaF32K4
+            | CliMetricKind::SsimcPyiqaF32K5
+            | CliMetricKind::SsimcPyiqaF32K6
+            | CliMetricKind::MsSsimPyiqa
+            | CliMetricKind::MsSsimPyiqaF32
+            | CliMetricKind::MsSsimPyiqaF32K2
+            | CliMetricKind::MsSsimPyiqaF32K3
+            | CliMetricKind::MsSsimPyiqaF32K4
+            | CliMetricKind::MsSsimPyiqaF32K5
+            | CliMetricKind::MsSsimPyiqaF32K6
             | CliMetricKind::FsimK2
             | CliMetricKind::FsimK3
             | CliMetricKind::FsimK4

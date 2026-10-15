@@ -42,6 +42,7 @@ use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
 pub mod display;
+mod ssim_pyiqa;
 pub use display::CvvdpDisplay;
 #[cfg(feature = "cpu-metrics")]
 mod classical;
@@ -304,6 +305,67 @@ pub enum MetricKind {
     /// orchestrator (CPU-only, no GPU twin).
     #[value(name = "fsim")]
     Fsim,
+    /// AIC2026 ssim-pyiqa convention.
+    #[value(name = "ssim-pyiqa")]
+    SsimPyiqa,
+    /// AIC2026 ssim-pyiqa-f32 convention.
+    #[value(name = "ssim-pyiqa-f32")]
+    SsimPyiqaF32,
+    /// AIC2026 ssim-pyiqa-f32-k2 convention.
+    #[value(name = "ssim-pyiqa-f32-k2")]
+    SsimPyiqaF32K2,
+    /// AIC2026 ssim-pyiqa-f32-k3 convention.
+    #[value(name = "ssim-pyiqa-f32-k3")]
+    SsimPyiqaF32K3,
+    /// AIC2026 ssim-pyiqa-f32-k4 convention.
+    #[value(name = "ssim-pyiqa-f32-k4")]
+    SsimPyiqaF32K4,
+    /// AIC2026 ssim-pyiqa-f32-k5 convention.
+    #[value(name = "ssim-pyiqa-f32-k5")]
+    SsimPyiqaF32K5,
+    /// AIC2026 ssim-pyiqa-f32-k6 convention.
+    #[value(name = "ssim-pyiqa-f32-k6")]
+    SsimPyiqaF32K6,
+    /// AIC2026 ssimc-pyiqa-f32 convention.
+    #[value(name = "ssimc-pyiqa-f32")]
+    SsimcPyiqaF32,
+    /// AIC2026 ssimc-pyiqa-f32-k2 convention.
+    #[value(name = "ssimc-pyiqa-f32-k2")]
+    SsimcPyiqaF32K2,
+    /// AIC2026 ssimc-pyiqa-f32-k3 convention.
+    #[value(name = "ssimc-pyiqa-f32-k3")]
+    SsimcPyiqaF32K3,
+    /// AIC2026 ssimc-pyiqa-f32-k4 convention.
+    #[value(name = "ssimc-pyiqa-f32-k4")]
+    SsimcPyiqaF32K4,
+    /// AIC2026 ssimc-pyiqa-f32-k5 convention.
+    #[value(name = "ssimc-pyiqa-f32-k5")]
+    SsimcPyiqaF32K5,
+    /// AIC2026 ssimc-pyiqa-f32-k6 convention.
+    #[value(name = "ssimc-pyiqa-f32-k6")]
+    SsimcPyiqaF32K6,
+    /// AIC2026 ms-ssim-pyiqa convention.
+    #[value(name = "ms-ssim-pyiqa")]
+    MsSsimPyiqa,
+    /// AIC2026 ms-ssim-pyiqa-f32 convention.
+    #[value(name = "ms-ssim-pyiqa-f32")]
+    MsSsimPyiqaF32,
+    /// AIC2026 ms-ssim-pyiqa-f32-k2 convention.
+    #[value(name = "ms-ssim-pyiqa-f32-k2")]
+    MsSsimPyiqaF32K2,
+    /// AIC2026 ms-ssim-pyiqa-f32-k3 convention.
+    #[value(name = "ms-ssim-pyiqa-f32-k3")]
+    MsSsimPyiqaF32K3,
+    /// AIC2026 ms-ssim-pyiqa-f32-k4 convention.
+    #[value(name = "ms-ssim-pyiqa-f32-k4")]
+    MsSsimPyiqaF32K4,
+    /// AIC2026 ms-ssim-pyiqa-f32-k5 convention.
+    #[value(name = "ms-ssim-pyiqa-f32-k5")]
+    MsSsimPyiqaF32K5,
+    /// AIC2026 ms-ssim-pyiqa-f32-k6 convention.
+    #[value(name = "ms-ssim-pyiqa-f32-k6")]
+    MsSsimPyiqaF32K6,
+
     /// FSIM/FSIMc with fixed factor 2.
     #[value(name = "fsim-k2")]
     FsimK2,
@@ -467,6 +529,26 @@ impl MetricKind {
             MetricKind::Haarpsi,
             MetricKind::HaarpsiY,
             MetricKind::Fsim,
+            MetricKind::SsimPyiqa,
+            MetricKind::SsimPyiqaF32,
+            MetricKind::SsimPyiqaF32K2,
+            MetricKind::SsimPyiqaF32K3,
+            MetricKind::SsimPyiqaF32K4,
+            MetricKind::SsimPyiqaF32K5,
+            MetricKind::SsimPyiqaF32K6,
+            MetricKind::SsimcPyiqaF32,
+            MetricKind::SsimcPyiqaF32K2,
+            MetricKind::SsimcPyiqaF32K3,
+            MetricKind::SsimcPyiqaF32K4,
+            MetricKind::SsimcPyiqaF32K5,
+            MetricKind::SsimcPyiqaF32K6,
+            MetricKind::MsSsimPyiqa,
+            MetricKind::MsSsimPyiqaF32,
+            MetricKind::MsSsimPyiqaF32K2,
+            MetricKind::MsSsimPyiqaF32K3,
+            MetricKind::MsSsimPyiqaF32K4,
+            MetricKind::MsSsimPyiqaF32K5,
+            MetricKind::MsSsimPyiqaF32K6,
             MetricKind::FsimK2,
             MetricKind::FsimK3,
             MetricKind::FsimK4,
@@ -528,6 +610,27 @@ impl MetricKind {
             MetricKind::Haarpsi => "haarpsi",
             MetricKind::HaarpsiY => "haarpsi-y",
             MetricKind::Fsim => "fsim",
+            MetricKind::SsimPyiqa => "ssim-pyiqa",
+            MetricKind::SsimPyiqaF32 => "ssim-pyiqa-f32",
+            MetricKind::SsimPyiqaF32K2 => "ssim-pyiqa-f32-k2",
+            MetricKind::SsimPyiqaF32K3 => "ssim-pyiqa-f32-k3",
+            MetricKind::SsimPyiqaF32K4 => "ssim-pyiqa-f32-k4",
+            MetricKind::SsimPyiqaF32K5 => "ssim-pyiqa-f32-k5",
+            MetricKind::SsimPyiqaF32K6 => "ssim-pyiqa-f32-k6",
+            MetricKind::SsimcPyiqaF32 => "ssimc-pyiqa-f32",
+            MetricKind::SsimcPyiqaF32K2 => "ssimc-pyiqa-f32-k2",
+            MetricKind::SsimcPyiqaF32K3 => "ssimc-pyiqa-f32-k3",
+            MetricKind::SsimcPyiqaF32K4 => "ssimc-pyiqa-f32-k4",
+            MetricKind::SsimcPyiqaF32K5 => "ssimc-pyiqa-f32-k5",
+            MetricKind::SsimcPyiqaF32K6 => "ssimc-pyiqa-f32-k6",
+            MetricKind::MsSsimPyiqa => "ms-ssim-pyiqa",
+            MetricKind::MsSsimPyiqaF32 => "ms-ssim-pyiqa-f32",
+            MetricKind::MsSsimPyiqaF32K2 => "ms-ssim-pyiqa-f32-k2",
+            MetricKind::MsSsimPyiqaF32K3 => "ms-ssim-pyiqa-f32-k3",
+            MetricKind::MsSsimPyiqaF32K4 => "ms-ssim-pyiqa-f32-k4",
+            MetricKind::MsSsimPyiqaF32K5 => "ms-ssim-pyiqa-f32-k5",
+            MetricKind::MsSsimPyiqaF32K6 => "ms-ssim-pyiqa-f32-k6",
+
             MetricKind::FsimK2 => "fsim-k2",
             MetricKind::FsimK3 => "fsim-k3",
             MetricKind::FsimK4 => "fsim-k4",
@@ -650,6 +753,27 @@ impl MetricKind {
             MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
             MetricKind::HaarpsiY => HAARPSIY_CPU_COLUMNS,
             MetricKind::Fsim => FSIM_CPU_COLUMNS,
+            MetricKind::SsimPyiqa => &["ssim_pyiqa"],
+            MetricKind::SsimPyiqaF32 => &["ssim_pyiqa_f32"],
+            MetricKind::SsimPyiqaF32K2 => &["ssim_pyiqa_f32_k2"],
+            MetricKind::SsimPyiqaF32K3 => &["ssim_pyiqa_f32_k3"],
+            MetricKind::SsimPyiqaF32K4 => &["ssim_pyiqa_f32_k4"],
+            MetricKind::SsimPyiqaF32K5 => &["ssim_pyiqa_f32_k5"],
+            MetricKind::SsimPyiqaF32K6 => &["ssim_pyiqa_f32_k6"],
+            MetricKind::SsimcPyiqaF32 => &["ssimc_pyiqa_f32"],
+            MetricKind::SsimcPyiqaF32K2 => &["ssimc_pyiqa_f32_k2"],
+            MetricKind::SsimcPyiqaF32K3 => &["ssimc_pyiqa_f32_k3"],
+            MetricKind::SsimcPyiqaF32K4 => &["ssimc_pyiqa_f32_k4"],
+            MetricKind::SsimcPyiqaF32K5 => &["ssimc_pyiqa_f32_k5"],
+            MetricKind::SsimcPyiqaF32K6 => &["ssimc_pyiqa_f32_k6"],
+            MetricKind::MsSsimPyiqa => &["ms_ssim_pyiqa"],
+            MetricKind::MsSsimPyiqaF32 => &["ms_ssim_pyiqa_f32"],
+            MetricKind::MsSsimPyiqaF32K2 => &["ms_ssim_pyiqa_f32_k2"],
+            MetricKind::MsSsimPyiqaF32K3 => &["ms_ssim_pyiqa_f32_k3"],
+            MetricKind::MsSsimPyiqaF32K4 => &["ms_ssim_pyiqa_f32_k4"],
+            MetricKind::MsSsimPyiqaF32K5 => &["ms_ssim_pyiqa_f32_k5"],
+            MetricKind::MsSsimPyiqaF32K6 => &["ms_ssim_pyiqa_f32_k6"],
+
             MetricKind::FsimK2 => &["fsim_k2", "fsimc_k2"],
             MetricKind::FsimK3 => &["fsim_k3", "fsimc_k3"],
             MetricKind::FsimK4 => &["fsim_k4", "fsimc_k4"],
@@ -2050,6 +2174,86 @@ pub fn run_metric(
         // no GPU twin — same shape as GMSD). `fsim` emits both the
         // grayscale and color scores from one pass; `fsim-y` is the
         // luma-only variant.
+        MetricKind::SsimPyiqa => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, true, 1)?,
+        )]),
+        MetricKind::SsimPyiqaF32 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 1)?,
+        )]),
+        MetricKind::SsimPyiqaF32K2 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 2)?,
+        )]),
+        MetricKind::SsimPyiqaF32K3 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 3)?,
+        )]),
+        MetricKind::SsimPyiqaF32K4 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 4)?,
+        )]),
+        MetricKind::SsimPyiqaF32K5 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 5)?,
+        )]),
+        MetricKind::SsimPyiqaF32K6 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, false, false, 6)?,
+        )]),
+        MetricKind::SsimcPyiqaF32 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 1)?,
+        )]),
+        MetricKind::SsimcPyiqaF32K2 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 2)?,
+        )]),
+        MetricKind::SsimcPyiqaF32K3 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 3)?,
+        )]),
+        MetricKind::SsimcPyiqaF32K4 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 4)?,
+        )]),
+        MetricKind::SsimcPyiqaF32K5 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 5)?,
+        )]),
+        MetricKind::SsimcPyiqaF32K6 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, true, false, false, 6)?,
+        )]),
+        MetricKind::MsSsimPyiqa => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, true, 1)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 1)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32K2 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 2)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32K3 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 3)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32K4 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 4)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32K5 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 5)?,
+        )]),
+        MetricKind::MsSsimPyiqaF32K6 => Ok(vec![(
+            kind.column_names()[0],
+            ssim_pyiqa::score(reference, distorted, false, true, false, 6)?,
+        )]),
         #[cfg(feature = "cpu-fsim")]
         MetricKind::Fsim => run_cpu_fsim(reference, distorted),
         #[cfg(feature = "cpu-fsim")]

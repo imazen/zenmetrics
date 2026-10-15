@@ -8,3 +8,6 @@ cargo +args:
 
 panel out +metrics:
     cd {{repo}} && flock "$HOME/tmp/i265-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- python3 benchmarks/aic_variants_2026-10-15/panel.py "$LOCK_SNAP_DIR/target/release/zenmetrics" {{out}} {{metrics}}
+
+verify panel_root site probe:
+    python3 {{justfile_directory()}}/verify.py {{panel_root}} {{site}} {{probe}}

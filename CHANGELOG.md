@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- CLI: add rounded/unrounded AIC SSIM-pyiqa and MS-SSIM-pyiqa plus unrounded RGB SSIMc-pyiqa, with fixed-factor k2–k6 variants and explicit small-geometry refusal.
+
 - VSI: add explicit fixed-factor decimation and CLI k2/k3/k4/nodownscale variants; automatic output is preserved.
 
 - FSIM/FSIMc: add explicit fixed-factor decimation and CLI k2/k3/k4/nodownscale variants; automatic output is preserved.
