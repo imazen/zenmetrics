@@ -30,7 +30,7 @@ updates:
       - dependency-name: "zenforks-cubecl*"
       - dependency-name: "cubecl*"
 
-  # The four standalone lockfiles outside the root workspace. Each has its
+  # Standalone lockfiles outside the root workspace. Each has its
   # own resolution graph, so each needs its own entry -- the root entry does
   # not reach them (that is why #35's quinn-proto bump was filed against
   # crates/burn-ranknet-spike separately).
@@ -52,15 +52,9 @@ updates:
     groups:
       all:
         patterns: ["*"]
-  - package-ecosystem: cargo
-    directory: "/crates/burn-conv-spike"
-    schedule: { interval: monthly }
-    open-pull-requests-limit: 2
-    labels: ["dependencies", "rust"]
-    assignees: ["lilith"]
-    groups:
-      all:
-        patterns: ["*"]
+  # crates/burn-conv-spike is not updated: it is the frozen evidence behind
+  # crates/cvvdp-gpu/docs/BURN_PORT_PLAN.md "ABANDONED", and its lockfile is
+  # what the recorded numbers ran on (cubecl 0.11 would be a port, #84).
   - package-ecosystem: cargo
     directory: "/crates/burn-ranknet-spike"
     schedule: { interval: monthly }
@@ -94,3 +88,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # dtolnay/rust-toolchain refs are Rust versions, and the action repo
+      # carries branches for releases that do not exist yet (1.120.0 while
+      # stable is 1.99.0), so dependabot proposes uninstallable toolchains
+      # (#73). The toolchain pin moves by hand with the house Rust version.
+      - dependency-name: "dtolnay/rust-toolchain"

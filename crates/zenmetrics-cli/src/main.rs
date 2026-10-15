@@ -1511,6 +1511,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // alone reaches ~1e5 on synthetic textures). Sweep means on
         // real corpora land in the tens–hundreds.
         MetricKind::Mad => Some((-0.001, 1_000_000.0, 0.0)),
+        // CIEDE2000: mean ΔE00 >= 0, 0 = identical; sRGB pairs stay below ~120.
+        MetricKind::Ciede2000 => Some((-0.001, 200.0, 0.0)),
         MetricKind::Vmaf
         | MetricKind::VmafNeg
         | MetricKind::Vmaf4k
@@ -1519,7 +1521,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::VmafNegStudio601 => {
             Some((-0.5, 100.5, 100.0))
         }
-        MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
+        MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
             Some((-0.5, 1.5, 1.0))
         }
         MetricKind::Nlpd
@@ -1529,6 +1531,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::PsnrY601
         | MetricKind::PsnrYStudio601
         | MetricKind::PsnrYLibvmaf
+        | MetricKind::PsnrYCbCr611
         // PSNR-HVS (Daala/libvmaf) and mDCT-PSNR are dB-scale, higher =
         // better; mDCT-PSNR reports `+inf` for identical inputs, so no
         // finite identity value / mean bound is characterised yet.

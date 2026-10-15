@@ -155,6 +155,7 @@ fn student_interval_matches_scipy_t_ppf() {
                 se: 1.0,
                 n_finite: 1000,
                 p_zero: 1.0,
+                p_nonpositive: f64::NAN,
             };
             let (lo, hi) = iv.student(g as usize, level).unwrap();
             let want = r::STUDENT_HALF[k];
@@ -172,6 +173,7 @@ fn student_interval_matches_scipy_t_ppf() {
         se: f64::NAN,
         n_finite: 0,
         p_zero: 1.0,
+        p_nonpositive: f64::NAN,
     };
     assert_eq!(iv.student(5, 0.95), None);
     assert_eq!(Interval { se: 1.0, ..iv }.student(1, 0.95), None);
