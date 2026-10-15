@@ -149,9 +149,11 @@ butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	791d08d7
 # 389e9aaa (branch ssim2-spatial-maps, fast-ssim2 PR #12 on main
 # f73500be) adds compute_ssimulacra2_maps + VERSION for the browser's
 # unified SSIMULACRA2 adapter; the lock resolves unchanged and score bits
-# match 96ad1ab0 on textured 64x48..1024x768 and the tank pair. Move to
-# the merged main commit once PR #12 lands.
-fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	389e9aaa2cb0d5e24e8f5ac6a331dd050c27762a	-
+# match 96ad1ab0 on textured 64x48..1024x768 and the tank pair. c91ca7ed
+# adds Ssimulacra2Reference::compare_with_maps and Ssimulacra2Maps::diffmap
+# (score path unchanged; weighted_sum/transform split is the same ops).
+# Move to the merged main commit once PR #12 lands.
+fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	c91ca7edd552243993b9ffeafd474557a85b26b8	-
 dssim	https://github.com/lilith/dssim.git	../../dssim	eec33f556d7ee991c4b906198c3a1b74f6f6063d	-
 # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
 # and `../../../heic`). OFF in every CI build below, but cargo

@@ -4,11 +4,16 @@
 //! SSIMULACRA2 has no per-pixel score map. At each of up to six pyramid
 //! scales and each positive-XYB channel it computes three per-pixel error
 //! terms, takes the mean and 4-norm of each, and turns the 108 aggregates
-//! into the score through a weighted sum and a nonlinear transform. The maps
-//! are those terms ([`fast_ssim2::Ssimulacra2ScaleMaps`]):
-//! `{ssim,artifact,detail_lost}_{x,y,b}_{scale}`, 54 at most, with
-//! `ssim_y_0` (full-resolution luma-like channel) first. All are
-//! [`za::MapPolarity::Difference`] (`0` = identical).
+//! into the score through a weighted sum and a nonlinear transform. All maps
+//! are [`za::MapPolarity::Difference`] (`0` = identical):
+//!
+//! - `diffmap` (primary): [`fast_ssim2::Ssimulacra2Maps::diffmap`], the
+//!   terms fused at input resolution with the score's own weights, the
+//!   per-pixel map encoder quantization loops steer by (as zensim's
+//!   diffmap is). Its mean is the weighted sum the score transforms; the L4
+//!   normalization makes its support global.
+//! - The terms themselves ([`fast_ssim2::Ssimulacra2ScaleMaps`]):
+//!   `{ssim,artifact,detail_lost}_{x,y,b}_{scale}`, 54 at most.
 //!
 //! Scale `s` samples `2^s × 2^s` pixel blocks from the origin; a value reads
 //! the scale within the Gaussian blur's 5-sample radius, so the halo is
@@ -112,7 +117,13 @@ struct Ssim2Maps {
 impl Ssim2Maps {
     fn new(m: fast_ssim2::Ssimulacra2Maps, width: u32, height: u32) -> Self {
         let padded = width < 8 || height < 8;
-        let mut maps = Vec::with_capacity(m.scales.len() * 9);
+        let mut maps = Vec::with_capacity(m.scales.len() * 9 + 1);
+        maps.push((
+            "diffmap",
+            m.diffmap(),
+            za::MapGeometry::grid(width, height, 0, 0, 1, 1, width, height)
+                .with_support(za::Support::Global),
+        ));
         for (s, scale) in m.scales.into_iter().enumerate() {
             let cell = 1u32 << s;
             let mut g = za::MapGeometry::grid(
@@ -142,10 +153,10 @@ impl Ssim2Maps {
                 }
             }
         }
-        // Serve `ssim_y_0` first.
+        // Then `ssim_y_0`, the finest Y-channel term.
         if let Some(i) = maps.iter().position(|(n, ..)| *n == "ssim_y_0") {
-            let primary = maps.remove(i);
-            maps.insert(0, primary);
+            let term = maps.remove(i);
+            maps.insert(1, term);
         }
         Self {
             score: m.score,
@@ -246,19 +257,15 @@ impl za::Metric for Ssimulacra2 {
             Ok(p) => p,
             Err(e) => return fail(e),
         };
-        Ok(Box::new(Ssim2Warm {
-            prepared,
-            reference: r.to_owned_image(),
-        }))
+        Ok(Box::new(Ssim2Warm { prepared }))
     }
 }
 
-/// A prepared reference: score-only candidates reuse its pyramid
-/// ([`fast_ssim2::Ssimulacra2Reference`], bit-identical to one-shot
-/// scoring); map requests rerun the pair from the retained reference copy.
+/// A prepared reference: candidates reuse its pyramid
+/// ([`fast_ssim2::Ssimulacra2Reference`]) for scores and maps alike, both
+/// bit-identical to one-shot evaluation.
 struct Ssim2Warm {
     prepared: fast_ssim2::Ssimulacra2Reference,
-    reference: za::OwnedImage,
 }
 
 impl za::WarmReference for Ssim2Warm {
@@ -268,17 +275,20 @@ impl za::WarmReference for Ssim2Warm {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
         opts.checkpoint()?;
-        let r = self.reference.as_image();
-        za::check_same_size(&r, &d)?;
         let dp = packed(&d)?;
-        if opts.map.is_some() {
-            return evaluate_pair(packed(&r)?, dp, opts);
-        }
         let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
-        match self.prepared.compare_with_config(dp, &config) {
-            Ok(s) => Ok(Box::new(za::ScalarEval::single("ssim2", s))),
-            Err(e) => fail(e),
-        }
+        let Some(req) = opts.map else {
+            return match self.prepared.compare_with_config(dp, &config) {
+                Ok(s) => Ok(Box::new(za::ScalarEval::single("ssim2", s))),
+                Err(e) => fail(e),
+            };
+        };
+        let maps = match self.prepared.compare_with_maps_with_config(dp, &config) {
+            Ok(m) => m,
+            Err(e) => return fail(e),
+        };
+        opts.checkpoint()?;
+        za::apply_map_request(Box::new(Ssim2Maps::new(maps, dp.width(), dp.rows())), req)
     }
 
     fn reuses_reference_work(&self) -> bool {
@@ -327,8 +337,22 @@ mod tests {
                 .unwrap();
             assert_eq!(plain.score().to_bits(), direct.to_bits(), "{w}x{h}");
             assert_eq!(bits(&*mapped), bits(&*plain), "{w}x{h}");
-            let maps = mapped.maps();
-            assert_eq!(maps[0].name, "ssim_y_0");
+            let all = mapped.maps();
+            assert_eq!(all[0].name, "diffmap");
+            assert_eq!(all[1].name, "ssim_y_0");
+            let fused = fast_ssim2::compute_ssimulacra2_maps(
+                image(&a, w, h, w * 3).as_packed().unwrap(),
+                image(&b, w, h, w * 3).as_packed().unwrap(),
+            )
+            .unwrap()
+            .diffmap();
+            assert_eq!(all[0].values().as_ref(), fused.as_slice(), "{w}x{h}");
+            assert_eq!(
+                all[0].geometry,
+                za::MapGeometry::grid(w as u32, h as u32, 0, 0, 1, 1, w as u32, h as u32)
+                    .with_support(za::Support::Global)
+            );
+            let maps = &all[1..];
             assert_eq!(maps.len() % 9, 0);
             let (mut sw, mut sh) = (w.max(8), h.max(8));
             for s in 0..maps.len() / 9 {
@@ -351,8 +375,8 @@ mod tests {
         }
     }
 
-    /// Warm candidates reuse the prepared reference for scores and serve the
-    /// same maps as cold evaluation.
+    /// Warm candidates reuse the prepared reference for scores and maps, and
+    /// serve the same maps as cold evaluation, bit for bit.
     #[test]
     fn warm_candidates_match_cold() {
         let (w, h) = (48usize, 40usize);
@@ -372,7 +396,13 @@ mod tests {
                         za::EvalOpts::SCORE_ONLY.with_native_map(),
                     )
                     .unwrap();
-                (bits(&*e), e.map().unwrap().values().into_owned())
+                (
+                    bits(&*e),
+                    e.maps()
+                        .iter()
+                        .map(|m| (m.name, m.values().into_owned()))
+                        .collect::<Vec<_>>(),
+                )
             })
             .collect();
         let mut warm = m
@@ -391,7 +421,12 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(&bits(&*e), sb);
-            assert_eq!(&e.map().unwrap().values().into_owned(), map);
+            let warm_maps: Vec<_> = e
+                .maps()
+                .iter()
+                .map(|m| (m.name, m.values().into_owned()))
+                .collect();
+            assert_eq!(&warm_maps, map);
         }
     }
 

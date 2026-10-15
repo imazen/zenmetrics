@@ -253,11 +253,22 @@ Validation (`crates/vmaf`):
 
 fast-ssim2 `compute_ssimulacra2_maps` (PR #12) returns, per pyramid scale and
 positive-XYB channel, the three per-pixel terms the score pools:
-`max(0, 1 − SSIM)`, edge artifact and edge detail lost. The adapter serves
-them as `{ssim,artifact,detail_lost}_{x,y,b}_{scale}`, with `ssim_y_0` as the
-primary map; all are Difference polarity. The score takes the mean and the
-4-norm of each term per scale, then a weighted sum of the 108 aggregates and
-a nonlinear transform, so there is no per-pixel SSIMULACRA2.
+`max(0, 1 − SSIM)`, edge artifact and edge detail lost. The score takes the
+mean and the 4-norm of each term per scale, then a weighted sum of the 108
+aggregates and a nonlinear transform, so there is no per-pixel SSIMULACRA2.
+All maps are Difference polarity:
+
+- `diffmap` (primary): `Ssimulacra2Maps::diffmap`, the terms fused at input
+  resolution with the score's own weights. Each L1 and L4 aggregate splits
+  into per-sample shares (`w₁·x/N + w₄·x⁴/(N·L4³)`), and each scale's shares
+  spread over the pixels it covers, so the map's mean is the weighted sum the
+  score transforms. This is the shape encoder quantization loops steer by:
+  jxl-encoder's `PerceptualBackend` takes one `width × height` diffmap per
+  candidate against a cached reference and reduces it to 8×8-block 16-norms
+  (`tile_distmap.rs`), as zensim's `compute_with_ref_and_diffmap` supplies.
+  Support is global (the L4 normalization).
+- The terms themselves, `{ssim,artifact,detail_lost}_{x,y,b}_{scale}`, then
+  `ssim_y_0` first among them.
 
 Geometry. Scale `s` samples `2^s × 2^s` pixel blocks from the origin, and a
 value reads its scale within the blur's 5-sample radius (halo `5·2^s`).
@@ -268,7 +279,8 @@ cells beyond the image clip and their support is global.
 The adapter lives in the browser crate because the CLI does not depend on
 the abstractions. It accepts packed RGB8/RGBA8 sRGB and linear RGBF32
 (strided rows natively), and its warm reference reuses
-`Ssimulacra2Reference` for score-only candidates.
+`Ssimulacra2Reference` for scores and maps (`compare_with_maps`, bit-identical
+to the cold maps).
 
 Validation:
 
@@ -285,15 +297,23 @@ Validation:
   before) and the zenmetrics-api CPU suite passed (22) at the PR head; after
   merging master's eight newer browser routes the browser tests pass (46, 2
   ignored).
-- Chromium (`check-pages.py`): the `ssim2` route matches fast-ssim2's own
-  scale-0 Y term from `browser_oracle` exactly on the 64×64 fixture (4,096
-  samples), identical 257×253 inputs give exact zeros, and the demo UI
+- fast-ssim2 (`c91ca7ed`): cached-reference maps equal the cold maps bit for
+  bit (RGB8, identical, RGBA8, RGBF32, RGBAF32 at four sizes, both kernels);
+  the diffmap's mean matches the weighted sum of the stored terms to 5.8e-10
+  relative and transforms back to the score within 8.3e-8.
+- Adapter: `diffmap` equals `fast_ssim2::compute_ssimulacra2_maps(..).diffmap()`
+  bit for bit; warm candidates serve every cold map bit for bit. Browser
+  native tests pass (46, 2 ignored).
+- Chromium (`check-pages.py`): the `ssim2` route's diffmap matches
+  fast-ssim2's own diffmap from `browser_oracle` exactly on the 64×64 fixture
+  (4,096 samples), identical 257×253 inputs give exact zeros, and the demo UI
   renders it.
 
 ## Browser viewer
 
 The WASM viewer serves each metric's primary map through the same call
 (`feaafabd`): `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`, `vifvec`
-and `vmaf-v1`, and `ssim2` serves `ssim_y_0` through the adapter above. The
+and `vmaf-v1`, and `ssim2` serves the fused `diffmap` through the adapter
+above. The
 other maps stay available to native callers through `Evaluation::maps()`.
 Routes and browser parity: [browser viewer](BROWSER_VIEWER_2026-10-13.md).

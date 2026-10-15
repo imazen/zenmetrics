@@ -134,8 +134,7 @@ fn main() {
         }}));
     }
     // SSIMULACRA2 straight from fast-ssim2, independent of the browser's
-    // adapter: scale 0's `max(0, 1 − SSIM)` term on the Y channel, one cell
-    // per pixel from the origin.
+    // adapter: the fused diffmap, one cell per input pixel.
     let ssim2 = fast_ssim2::compute_ssimulacra2_maps(
         &zenpixels::PixelSlice::new(
             bytemuck::cast_slice(&reference),
@@ -155,9 +154,8 @@ fn main() {
         .unwrap(),
     )
     .unwrap();
-    let s0 = &ssim2.scales[0];
-    maps.insert("ssim2".into(),serde_json::json!({"width":s0.width,"height":s0.height,"similarity":false,"values":s0.ssim[1],"geometry":{
-        "inputWidth":w,"inputHeight":h,"originX":0,"originY":0,"cellWidth":1,"cellHeight":1,"cellsX":s0.width,"cellsY":s0.height
+    maps.insert("ssim2".into(),serde_json::json!({"width":w,"height":h,"similarity":false,"values":ssim2.diffmap(),"geometry":{
+        "inputWidth":w,"inputHeight":h,"originX":0,"originY":0,"cellWidth":1,"cellHeight":1,"cellsX":w,"cellsY":h
     }}));
     // Maps served through the unified metric interface itself.
     fn packed(px: &[u8], w: usize, h: usize) -> zenmetrics_abstractions::Image<'_> {
