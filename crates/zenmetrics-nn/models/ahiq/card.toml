@@ -37,5 +37,5 @@ jnd = 0.047194                       # median |score - score(same-ref identical 
 results = "rten worst |d| 8.613e-8 (1.8e-6 JND); ort-cuda worst |d| 4.868e-7 (1.0e-5 JND); 15 goldens; warm ref == cold on both engines"
 
 [aic4]
-convention = "NOT reproduced — published column does not match the upstream protocol (nine 224x224 crops, [-1,1] input). Closest verified variant: ImageNet-mean/std normalization (still ~1e-2 residual); see report"
-results = "native [-1,1] nine-crop: median |d| 0.0762, max |d| 0.1398, SRCC 0.782 on 61 crop pairs"
+convention = "closest verified: ImageNet mean/std input normalisation (NOT upstream's [-1,1]) + 20 random crops per image from a continuing np.seed(1919) stream in dataset order (upstream default n_ensemble=20). Native protocol does not reproduce the column"
+results = "native [-1,1] nine-crop: median |d| 0.0762 (1.6 JND), max |d| 0.1398, SRCC 0.782 on 61 crop pairs. ImageNet-norm + stream-20 on 5 pairs: |d| 0.0003..0.0115, ~0.2 JND residual — likely draw-order detail; convention inferred, not exact"
