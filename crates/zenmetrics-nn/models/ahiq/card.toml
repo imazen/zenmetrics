@@ -6,36 +6,36 @@ kind = "full-reference quality score (higher is better; it is NOT a distance)"
 source = "upstream-port"
 upstream = "https://github.com/IIGROUP/AHIQ"
 licence = "MIT"
-notes = "Upstream borrows from anse3832/IQT, which states no licence."
+notes = "Upstream borrows from anse3832/IQT, which states no licence. Upstream's eval driver is test.py (pinned env: torch 1.10, torchvision 0.11.1, timm 0.5.4)."
 
 [weights]
 # MIT covers the repository code. The epoch-32 checkpoint (the repo's default:
-# test_ahiq.py's load_epoch=-1 resolves to max epoch) is fetched by the user
+# test.py's load_epoch=-1 resolves to max epoch) is fetched by the user
 # from the Google Drive link in upstream's README
 # (1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W.pth); the file states no licence, so
 # loading needs an explicit WeightsConsent.
 licence_class = "unknown"
-checkpoint = "Google Drive file 1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W (epoch 32, patch_size 8) linked from https://github.com/IIGROUP/AHIQ; timm vit_base_patch8_224 + resnet50 ImageNet backbones via timm pretrained"
-trained_on = "KonIQ-10k (upstream default)"
+checkpoint = "Google Drive file 1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W (epoch 32, patch_size 8) linked from https://github.com/IIGROUP/AHIQ; ImageNet backbones via timm pretrained — vit_base_patch8_224.augreg_in21k_ft_in1k (the augreg B_8-i21k checkpoint timm 0.5.4's bare name resolves; NOT the augreg2 variant timm 1.x defaults to) and resnet50.a1_in1k, both Apache-2.0 via timm"
+trained_on = "PIPAL (upstream default: --name ahiq_pipal, --train_list PIPAL.txt)"
 
 [input]
 format = "packed sRGB8"
-normalisation = "ToTensor (v/255) then Normalize(0.5) -> [-1, 1]; NO resizing anywhere"
-resize = "none — upstream scores nine deterministic 224x224 crops (five_point_crop idx 0-8: four corners, centre, four edge centres) and averages"
+normalisation = "cv2 BGR->RGB, v/255, (x-0.5)/0.5 -> [-1, 1]; NO resizing anywhere"
+resize = "none — the port scores nine deterministic 224x224 crops (five_point_crop idx 0-8: four corners, centre, four edge centres) and averages. Upstream test.py's default is n_ensemble=20 seeded random crops (seed 1919); the <=9 branch is this nine-crop protocol, so the port is a deterministic deviation from upstream's default"
 min_size = 224                        # the ViT consumes 224x224 tokens; smaller images cannot be scored upstream
 
 [export]
 script = "export.py"
 outputs = "ahiq_{trunk.onnx, head.onnx, full.onnx, meta, goldens.tsv, export.meta}"
 opset = 17
-notes = "ahiq_trunk.onnx: [1,3,224,224] -> vit [1,3840,28,28] (blocks 0-4, CLS dropped, concat), cnn [1,768,56,56] (resnet50 layer1's 3x256 Bottleneck outputs concat). ahiq_head.onnx: (vit_d, vit_r, cnn_d, cnn_r) -> score; deformable offsets come from the REFERENCE vit only, applied to both cnn sides. DeformConv2d is decomposed in-graph as nine bilinear grid_sample taps + a 1x1 conv (weight[c',c,ky,kx] folded to [c', k*C+c]); verified <=4e-7 vs torchvision. ahiq_full.onnx: (r,d) -> score for ort-cuda."
+notes = "ahiq_trunk.onnx: [1,3,224,224] -> vit [1,3840,28,28] (blocks 0-4, CLS dropped, concat), cnn [1,768,56,56] (resnet50 layer1's 3x256 Bottleneck outputs concat). ahiq_head.onnx: (vit_d, vit_r, cnn_d, cnn_r) -> score; deformable offsets come from the REFERENCE vit only, applied to both cnn sides. DeformConv2d is decomposed in-graph as nine bilinear grid_sample taps + a 1x1 conv (weight[c',c,ky,kx] folded to [c', k*C+c]); verified <=4e-7 vs torchvision. ahiq_full.onnx: (r,d) -> score for ort-cuda. Goldens are computed by upstream's own inference path (SaveOutput hooks + extract_feature + deform_fusion with torchvision DeformConv2d + Pixel_Prediction), not by the exported ONNX modules."
 
 [parity]
-oracle = "IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, nine-crop ensemble"
+oracle = "IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, upstream-path nine-crop ensemble"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
-jnd = 0.047194                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda)
-results = "rten worst |d| 8.613e-8 (1.8e-6 JND); ort-cuda worst |d| 4.868e-7 (1.0e-5 JND); 15 goldens; warm ref == cold on both engines"
+jnd = 0.024882                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda, corrected augreg backbones)
+results = "rten worst |d| 5.295e-8 (2.1e-6 JND); ort-cuda worst |d| 2.582e-7 (1.0e-5 JND); 17 goldens incl. 320x240+240x320 non-square rows; warm ref == cold on both engines; logs ~/tmp/nn-port-scratch/ahiq_parity_{rten2,ort2}.log on i265"
 
 [aic4]
-convention = "closest verified: ImageNet mean/std input normalisation (NOT upstream's [-1,1]) + 20 random crops per image from a continuing np.seed(1919) stream in dataset order (upstream default n_ensemble=20). Native protocol does not reproduce the column"
-results = "native [-1,1] nine-crop: median |d| 0.0762 (1.6 JND), max |d| 0.1398, SRCC 0.782 on 61 crop pairs. ImageNet-norm + stream-20 on 5 pairs: |d| 0.0003..0.0115, ~0.2 JND residual — likely draw-order detail; convention inferred, not exact"
+convention = "RESOLVED: the published column is pyiqa's AHIQ under timm 1.x — ImageNet mean/std input norm + uniform_crop deterministic 5x5 grid, first 20 positions (bottom row dropped), mean over crops, AND the augreg2 ViT backbone that timm 1.x resolves for the bare name (upstream's timm 0.5.4 resolves augreg — the backbone this port correctly uses). Deterministic convention; seed jitter not applicable (0)."
+results = "PENDING full-61 verification (in flight). Sanity pairs S01/S02 under augreg2+imnet+grid20: |d| <= 5e-5. Under the port's correct augreg backbone the same grid overshoots +0.06..+0.11; native [-1,1] nine-crop on all 61 pairs: median |d| 0.1405 (5.6 JND), max 0.2125, SRCC 0.76. The port implements upstream semantics; the published column is a different convention, documented not chased."
