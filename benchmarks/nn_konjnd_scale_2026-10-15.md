@@ -89,9 +89,13 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | ckdn | JPEG | 504 | 0.003011 | 0.006051 | 0.010098 | 0.006987 | 3.354 |
 | ckdn | BPG | 504 | 0.002156 | 0.004728 | 0.008025 | 0.005915 | 3.723 |
 | ckdn | pooled | 1008 | 0.002575 | **0.005276** | 0.009086 | 0.006451 | 3.528 |
+| afine | JPEG | 504 | 0.256606 | 0.498062 | 0.756067 | 0.364956 | 2.946 |
+| afine | BPG | 504 | 0.241244 | 0.512932 | 0.754651 | 0.480715 | 3.128 |
+| afine | pooled | 1008 | 0.247775 | **0.507388** | 0.755332 | 0.422836 | 3.048 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
-ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053.
+ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053,
+A-FINE (raw `afine_all`) 0.5074.
 
 The `ckdn` rows are not from an upstream package: they were scored by the Rust port
 (`zenmetrics batch --metric ckdn --features nn,nn-ort`, engine ort-cuda, ONNX Runtime
@@ -104,6 +108,17 @@ the distorted image scored above its own reference. Measured with the AIC-4 eval
 transform in place (each image resized short-side→329 — bicubic+antialias for the
 distorted side, nearest for the reference — then centre-cropped to 288), which is
 the convention this column scores with; the earlier native-feed run is superseded.
+
+The `afine` rows are likewise scored by the Rust port (`--metric afine`, same
+engine/host/date, in the commit that adds the `afine` row to `jnd_scale.tsv`).
+A-FINE is lower-is-better and its identical-pair score is image-dependent
+(median −2.996, range −3.888…−2.350 on these references — the naturalness term
+rates even pristine references image-dependently), so each value is
+`score(ref, dist) − score(ref, ref)`, the distance above the per-reference
+perfect score, and the table entries are its quartiles and median. In 123 of
+1,008 pairs the distorted image scored below (better than) its own reference.
+Scored at native resolution with upstream preprocessing (CLIP normalisation,
+bicubic upsample of each side to the next multiple of 32).
 
 ## Caveats
 

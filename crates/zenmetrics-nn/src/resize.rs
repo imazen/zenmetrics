@@ -99,6 +99,88 @@ pub(crate) fn resize_nearest(
     out
 }
 
+/// One 1-D resampling entry with individually clamped source indices — for
+/// torch's non-antialiased bicubic, whose four taps replicate edge pixels
+/// instead of renormalising the window.
+struct Tap4 {
+    idx: [usize; 4],
+    w: [f32; 4],
+}
+
+/// Non-antialiased bicubic weights for one axis: `in_size` → `out_size`.
+/// `F.interpolate(mode='bicubic', align_corners=False)`: centre
+/// `(i + 0.5)·in/out − 0.5`, four taps `⌊c⌋−1 ..= ⌊c⌋+2`, cubic a = −0.75,
+/// source indices clamped to `[0, in−1]`, weights NOT renormalised.
+fn bicubic_1d(in_size: usize, out_size: usize) -> Vec<Tap4> {
+    let scale = in_size as f64 / out_size as f64;
+    let cubic = |x: f64| {
+        let x = x.abs();
+        if x <= 1.0 {
+            1.25 * x * x * x - 2.25 * x * x + 1.0
+        } else if x < 2.0 {
+            -0.75 * (x * x * x - 5.0 * x * x + 8.0 * x - 4.0)
+        } else {
+            0.0
+        }
+    };
+    (0..out_size)
+        .map(|i| {
+            let centre = (i as f64 + 0.5) * scale - 0.5;
+            let base = centre.floor() as i64;
+            let mut tap = Tap4 {
+                idx: [0; 4],
+                w: [0.0; 4],
+            };
+            for k in 0..4 {
+                let j = base - 1 + k as i64;
+                tap.idx[k] = j.clamp(0, in_size as i64 - 1) as usize;
+                tap.w[k] = cubic(j as f64 - centre) as f32;
+            }
+            tap
+        })
+        .collect()
+}
+
+/// Planar `[c, h, w]` → `[c, oh, ow]`, `F.interpolate` bicubic (a = −0.75,
+/// no antialias — the resize A-FINE applies to its normalised input when
+/// padding up to a multiple of 32).
+pub(crate) fn resize_bicubic(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<f32> {
+    if h == oh && w == ow {
+        return img.to_vec();
+    }
+    let wx = bicubic_1d(w, ow);
+    let mut tmp = vec![0.0f32; c * h * ow];
+    for ch in 0..c {
+        let src = &img[ch * h * w..(ch + 1) * h * w];
+        let dst = &mut tmp[ch * h * ow..(ch + 1) * h * ow];
+        for y in 0..h {
+            let srow = &src[y * w..(y + 1) * w];
+            for (x, t) in wx.iter().enumerate() {
+                dst[y * ow + x] = (0..4).map(|k| t.w[k] * srow[t.idx[k]]).sum();
+            }
+        }
+    }
+    let wy = bicubic_1d(h, oh);
+    let mut out = vec![0.0f32; c * oh * ow];
+    for ch in 0..c {
+        let src = &tmp[ch * h * ow..(ch + 1) * h * ow];
+        let dst = &mut out[ch * oh * ow..(ch + 1) * oh * ow];
+        for (y, t) in wy.iter().enumerate() {
+            for x in 0..ow {
+                dst[y * ow + x] = (0..4).map(|k| t.w[k] * src[t.idx[k] * ow + x]).sum();
+            }
+        }
+    }
+    out
+}
+
 /// Centre-crop planar `[c, h, w]` → `[c, k, k]` (torch `CenterCrop` semantics:
 /// `(in − k) / 2` floor, so an odd margin's extra pixel goes bottom/right).
 pub(crate) fn center_crop(img: &[f32], c: usize, h: usize, w: usize, k: usize) -> Vec<f32> {
@@ -198,6 +280,34 @@ mod tests {
             for (g, e) in got.iter().zip(expect) {
                 assert!((g - e).abs() < 2e-5, "out {o}: {got:?} vs {expect:?}");
             }
+        }
+    }
+
+    /// Non-antialiased bicubic upsample: outputs measured against
+    /// `F.interpolate(mode='bicubic', align_corners=False)`, in=8 → out=12
+    /// and in=10 → out=14 (edge taps replicate, weights unnormalised).
+    #[test]
+    fn bicubic_interp_matches_torch() {
+        const TORCH_8_12: [f32; 12] = [
+            -8.680556e-2, 4.062499e-1, 1.2129624, 1.7870368, 2.4999993, 3.2129622,
+            3.7870367, 4.499999, 5.2129617, 5.7870374, 6.5937486, 7.086803,
+        ];
+        let img: Vec<f32> = (0..8).map(|i| i as f32).collect();
+        let got = resize_bicubic(&img, 1, 1, 8, 1, 12);
+        // torch accumulates in f32 in its own tap order; ~ulp differences
+        // (≤ 3e-6 seen) are expected — far below the metric parity budget.
+        for (g, e) in got.iter().zip(TORCH_8_12) {
+            assert!((g - e).abs() < 1e-5, "{got:?} vs {TORCH_8_12:?}");
+        }
+        const TORCH_10_14: [f32; 14] = [
+            -2.0551026, -1.667346, -1.0693876, -0.59999996, -0.13061233, 0.41224435,
+            0.93061334, 1.369387, 1.8877549, 2.4306109, 2.8999996, 3.3693874, 3.9673464,
+            4.3551006,
+        ];
+        let img: Vec<f32> = (0..10).map(|i| i as f32 * 0.7 - 2.0).collect();
+        let got = resize_bicubic(&img, 1, 1, 10, 1, 14);
+        for (g, e) in got.iter().zip(TORCH_10_14) {
+            assert!((g - e).abs() < 1e-5, "{got:?} vs {TORCH_10_14:?}");
         }
     }
 

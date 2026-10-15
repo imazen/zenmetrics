@@ -27,6 +27,7 @@
 
 #![forbid(unsafe_code)]
 
+mod afine;
 mod ckdn;
 mod common;
 mod deepdc;
@@ -38,6 +39,7 @@ mod preprocess;
 mod resize;
 mod weights;
 
+pub use afine::Afine;
 pub use ckdn::Ckdn;
 pub use deepdc::DeepDc;
 pub use dists::Dists;
