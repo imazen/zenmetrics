@@ -12,6 +12,8 @@ p=argparse.ArgumentParser()
 p.add_argument('panel_root',type=Path)
 p.add_argument('site',type=Path)
 p.add_argument('probe',type=Path)
+p.add_argument('--baseline-root',type=Path)
+p.add_argument('--output',type=Path)
 a=p.parse_args()
 def read(path):
     return {r['distorted']:r for r in csv.DictReader(path.open(),delimiter='\t' if path.suffix=='.tsv' else ',')}
@@ -38,6 +40,13 @@ for family,probe_prefix in [('ssim','ssim_y_f32_box'),('ssimc','ssimc_f32_box')]
         worst=max(delta)
         assert worst[0]<=1e-6,(metric,worst)
         rows.append((metric,len(ours),*worst,'independent audit probe',1e-6))
-with (a.panel_root/'gates.tsv').open('w') as out:
+if a.baseline_root is not None:
+    for metric in ['fsim','vsi']:
+        current=a.panel_root/f'{metric}.tsv'
+        baseline=a.baseline_root/f'{metric}.tsv'
+        assert current.read_bytes()==baseline.read_bytes(),f'{metric} serialized baseline differs'
+        assert len(read(current))==61
+        rows.append((metric+' baseline',61,0.0,'all pairs','byte-identical earlier TSV',0.0))
+with (a.output or a.panel_root/'gates.tsv').open('w') as out:
     writer=csv.writer(out,delimiter='\t');writer.writerow(['metric','n','max_abs_delta','worst_pair','oracle','tolerance']);writer.writerows(rows)
 for row in rows:print(*row,sep='\t')

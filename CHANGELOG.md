@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Correct SSIM/VSI dispatch and range comments and describe the sampled top/left padding in odd-size pooling.
+
 - Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
 
 - Add non-Auto factor/map coverage, direct MS-SSIM product verification and all-20-name convention routing coverage; remove redundant box comparison.

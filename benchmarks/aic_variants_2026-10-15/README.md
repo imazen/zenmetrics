@@ -18,8 +18,8 @@ This matches the audit's box hypothesis; the published variant maps do not
 establish the site's exact downscale kernel or boundary convention.
 
 Five-scale MS-SSIM requires every scale to contain an 11×11 valid window.
-Odd-size pooling zero-pads one cell on both ends of the odd axis, starts at the
-padded top/left, and divides each 2×2 sum by four. Inputs whose short side after
+Odd-size pooling adds a leading zero row or column on odd axes and divides
+each 2×2 sum by four. Trailing bottom/right padding is never sampled. Inputs whose short side after
 fixed downscaling is below 161 are rejected explicitly (owner-approved).
 `panel.py --expect-small-ms-errors` tests those refusals, then scores the supported
 subset and reports both counts. It never substitutes fewer scales.

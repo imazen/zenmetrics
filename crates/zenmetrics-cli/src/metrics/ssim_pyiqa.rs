@@ -112,8 +112,8 @@ fn boxdown(a: &[f64], w: usize, h: usize, f: usize) -> (Vec<f64>, usize, usize) 
     (out, nw, nh)
 }
 
-// PyTorch-style symmetric one-cell zero padding on BOTH ends of an odd
-// dimension, with the first 2×2 window starting at the padded top/left.
+// Odd axes start with a zero row/column at the top/left. Each 2×2 window
+// uses divisor four; trailing bottom/right padding is never sampled.
 fn pool2(a: &[f64], w: usize, h: usize) -> (Vec<f64>, usize, usize) {
     let (nw, nh) = (w.div_ceil(2), h.div_ceil(2));
     let mut out = Vec::with_capacity(nw * nh);

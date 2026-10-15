@@ -14,3 +14,6 @@ verify panel_root site probe:
 
 rounding even away site out:
     python3 {{justfile_directory()}}/rounding.py {{even}} {{away}} {{site}} {{out}}
+
+verify-baselines panel_root site probe baseline output:
+    python3 {{justfile_directory()}}/verify.py {{panel_root}} {{site}} {{probe}} --baseline-root {{baseline}} --output {{output}}

@@ -2271,10 +2271,7 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-haarpsi"))]
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
 
-        // FSIM/FSIMc: direct call into the in-tree crate (no umbrella,
-        // no GPU twin — same shape as GMSD). `fsim` emits both the
-        // grayscale and color scores from one pass; `fsim-y` is the
-        // luma-only variant.
+        // SSIM-pyiqa family: f64 valid-window scoring with explicit convention flags.
         MetricKind::SsimPyiqa
         | MetricKind::SsimPyiqaF32
         | MetricKind::SsimPyiqaF32K2
@@ -2303,6 +2300,10 @@ pub fn run_metric(
                 ssim_pyiqa::score(reference, distorted, color, multiscale, rounded, factor)?,
             )])
         }
+        // FSIM/FSIMc: direct call into the in-tree crate (no umbrella,
+        // no GPU twin — same shape as GMSD). `fsim` emits both the
+        // grayscale and color scores from one pass; `fsim-y` is the
+        // luma-only variant.
         #[cfg(feature = "cpu-fsim")]
         MetricKind::Fsim => run_cpu_fsim(reference, distorted),
         #[cfg(feature = "cpu-fsim")]
