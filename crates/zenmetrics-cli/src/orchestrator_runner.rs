@@ -550,6 +550,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Piqe
             | CliMetricKind::Niqe
             | CliMetricKind::Arniqa
+            | CliMetricKind::Maniqa
     )
 }
 

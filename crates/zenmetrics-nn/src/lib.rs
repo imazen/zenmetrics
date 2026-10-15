@@ -20,6 +20,9 @@
 //! - [`Arniqa`]: ARNIQA (Agnolon et al., WACV 2024) — a [`za::NoReferenceMetric`]
 //!   (wrap it in [`za::PairedNoReference`] where a pair metric is expected);
 //!   parity target upstream `single_image_inference.py`, kadid10k regressor.
+//! - [`Maniqa`]: MANIQA (Yang et al., CVPRW 2022) — a [`za::NoReferenceMetric`];
+//!   parity target upstream's koniq10k eval path (224 INTER_CUBIC single
+//!   forward, `ckpt_koniq10k.pt`).
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -40,6 +43,7 @@ mod dreamsim;
 mod engine;
 mod error;
 mod lpips;
+mod maniqa;
 mod preprocess;
 mod resize;
 mod weights;
@@ -52,6 +56,7 @@ pub use dists::Dists;
 pub use dreamsim::Dreamsim;
 pub use error::Error;
 pub use lpips::{Lpips, LpipsNet};
+pub use maniqa::Maniqa;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.

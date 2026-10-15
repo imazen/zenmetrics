@@ -1561,6 +1561,9 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // no meaningful identity value — 0.0 flags a default-fail
         // constant only.
         MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
+        // MANIQA: learned NR quality, koniq10k-MOS-normalized output —
+        // corpus range ~0.28..0.95; ReLU head keeps it >= 0.
+        MetricKind::Maniqa => Some((-0.001, 5.0, 0.0)),
     }
 }
 
