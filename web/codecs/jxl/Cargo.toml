@@ -1,0 +1,18 @@
+[package]
+name = "zenmetrics-codec-jxl"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "JPEG XL module of the zenmetrics browser viewer: jxl-encoder with its perceptual loop steered by any viewer metric"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jxl-encoder = { version = "0.4.0", default-features = false, features = ["std", "butteraugli-loop", "__external_metric"] }
+zenjxl-decoder = "0.4.0"
+serde_json = "1.0.150"
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+console_error_panic_hook.workspace = true
