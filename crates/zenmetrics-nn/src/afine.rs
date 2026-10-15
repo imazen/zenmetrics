@@ -310,13 +310,14 @@ fn erf(x: f64) -> f64 {
 impl Afine {
     /// This model's weights' published terms: `afine.pth` is distributed
     /// through a Google Drive link in upstream's README with no licence
-    /// stated for it (the pyiqa repack is byte-identical at 610,806,721
-    /// bytes), so loading needs a [`WeightsConsent`] accepting these terms.
-    /// The OpenAI CLIP ViT-B/32 it overlays ships a model card, not a
-    /// licence — the consent covers the fine-tuned product as distributed.
+    /// stated for it, but it was trained on DiffIQA data whose terms are
+    /// noncommercial — derived weights inherit them, so loading needs a
+    /// [`WeightsConsent`] accepting these terms. The OpenAI CLIP ViT-B/32
+    /// it overlays ships a model card, not a licence — the consent covers
+    /// the fine-tuned product as distributed.
     pub const WEIGHTS: WeightsTerms = WeightsTerms {
         model: COLUMN,
-        licence: WeightsLicence::Unknown,
+        licence: WeightsLicence::NonCommercial,
         terms_url: "https://github.com/ChrisDud0257/AFINE",
     };
 
@@ -460,13 +461,7 @@ impl Afine {
     }
 
     /// Feature taps of a prepped (normalized) image on the trunk engine.
-    fn taps(
-        &self,
-        norm: Vec<f32>,
-        h: usize,
-        w: usize,
-        pe: Vec<f32>,
-    ) -> Result<Vec<Tap>, Error> {
+    fn taps(&self, norm: Vec<f32>, h: usize, w: usize, pe: Vec<f32>) -> Result<Vec<Tap>, Error> {
         let Backend::Trunk(t) = &self.backend else {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
@@ -609,6 +604,10 @@ impl za::Metric for Afine {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         let view = za::rgb8_view(&r)?;
+        if view.width.min(view.height) < self.min_size {
+            return Err(Error::TooSmall { min: self.min_size })
+                .metric_err_with(COLUMN, Error::kind);
+        }
         let (rn, rh, rw, rpe) = self.prep(&view);
         let reference = match &self.backend {
             Backend::Trunk(_) => {
@@ -662,6 +661,12 @@ impl za::WarmReference for WarmAfine<'_> {
         let d = za::rgb8_view(&d)?;
         if (d.width, d.height) != self.size {
             return Err(Error::SizeMismatch).metric_err_with(COLUMN, Error::kind);
+        }
+        if d.width.min(d.height) < self.metric.min_size {
+            return Err(Error::TooSmall {
+                min: self.metric.min_size,
+            })
+            .metric_err_with(COLUMN, Error::kind);
         }
         let (dn, dh, dw, dpe) = self.metric.prep(&d);
         let s = match &self.reference {

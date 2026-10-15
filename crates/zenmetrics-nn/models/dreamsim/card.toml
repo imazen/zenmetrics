@@ -15,16 +15,18 @@ upstream_package = "pip `dreamsim` 0.21.2 (identical to the repo's dreamsim/ tre
 licence = "MIT"
 
 [weights]
-# MIT covers the repository code. The ensemble checkpoint
-# `dreamsim_ensemble.zip` is downloaded at init from upstream's bucket
-# (https://storage.googleapis.com/dreamsim/dreamsim_ensemble.zip,
-# ~1.26 GB): dino_vitb16_pretrain.pth, clip_vitb16_pretrain.pth.tar,
-# open_clip_vitb16_pretrain.pth.tar and ensemble_lora/ (rank-16, alpha-1.0
-# qkv adapters). The archive states no licence, so loading needs an
-# explicit WeightsConsent. The DINO backbone itself is the official
-# fbaipublicfiles ViT-B/16 checkpoint fetched via torch.hub.
+# MIT covers the repository code. The ensemble checkpoint is downloaded by
+# the upstream package at init from its GitHub release
+# (releases/download/v0.2.0-checkpoints/dreamsim_ensemble_checkpoint.zip,
+# config.py's "ensemble" URL — the local copy is byte-size-identical at
+# 1,261,181,618 bytes): dino_vitb16_pretrain.pth,
+# clip_vitb16_pretrain.pth.tar, open_clip_vitb16_pretrain.pth.tar and
+# ensemble_lora/ (rank-16, alpha-1.0 qkv adapters). The archive states no
+# licence for the weights, so loading needs an explicit WeightsConsent.
+# The DINO backbone itself is the official fbaipublicfiles ViT-B/16
+# checkpoint fetched via torch.hub.
 licence_class = "unknown"
-checkpoint = "https://storage.googleapis.com/dreamsim/dreamsim_ensemble.zip; plus https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth"
+checkpoint = "https://github.com/ssundaram21/dreamsim/releases/download/v0.2.0-checkpoints/dreamsim_ensemble_checkpoint.zip; plus https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth"
 
 [input]
 format = "packed sRGB8"
@@ -40,3 +42,11 @@ notes = "LoRA folded with peft merge_and_unload (verified ~6e-8 on the model's o
 
 [parity]
 oracle = "pip dreamsim 0.21.2 ensemble, CPU, fp32, upstream preprocess"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.017641                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda); identical pairs are exactly 0 (deterministic cosine)
+results = "rten worst |d| 2.064e-7 (1.17e-5 JND); ort-cuda worst |d| 3.577e-7 (2.03e-5 JND); 21 goldens; identical pairs score exactly 0 on both engines"
+
+[aic4]
+column = "DreamSim"
+results = "matches: median |d| 2.9e-07, max |d| 6.1e-07 on all 61 crop pairs (this port, ort-cuda), SRCC 1.0000"
+finding = "The published column is the raw 1-cosine ensemble distance on the anamorphic 224x224 PIL-bicubic resize; no eval transform. The port's fixed-point Pillow resize (resize.rs::resize_bicubic_pil_u8) is byte-exact vs PIL."
