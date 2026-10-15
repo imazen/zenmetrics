@@ -1,4 +1,4 @@
-# Porting pyiqa deep metrics to Rust — plan (2026-10-14, rev 2)
+# Porting pyiqa deep metrics to Rust — plan (2026-10-15, rev 3)
 
 Goal: make it cheap to add learned IQA models from
 [IQA-PyTorch (pyiqa)](https://github.com/chaofengc/IQA-PyTorch) to zenmetrics, at equal or
@@ -10,13 +10,19 @@ Evidence:
 - [`PYIQA_MODEL_INVENTORY_2026-10-14.md`](PYIQA_MODEL_INVENTORY_2026-10-14.md): every
   learned model, its backbone, licence, preprocessing traps, ONNX exportability, and
   pyiqa's published speed table.
+- [`PYIQA_UPSTREAM_LICENSES_2026-10-15.md`](PYIQA_UPSTREAM_LICENSES_2026-10-15.md): the
+  original repository behind every pyiqa model and metric, its code and weight terms read
+  as text, and the verdict for a zenmetrics port. Supersedes the inventory's licence
+  column.
 - [`../benchmarks/nn_runtime_shootout_2026-10-14.md`](../benchmarks/nn_runtime_shootout_2026-10-14.md):
   rten / tract / burn / ORT / PyTorch on VGG16 and ResNet50, CPU and RTX 4080, on i265,
   plus the burn + zenforks-cubecl coexistence probe.
 
-Owner decisions (2026-10-14):
-- Models whose code or weights are noncommercial go in a separately licensed crate,
-  **`zenmetrics-pyiqa-ports`**.
+Owner decisions (2026-10-14, licensing refined 2026-10-15):
+- **Minimise noncommercial licensing.** Don't relicense our code wholesale. Trace each
+  model to its original repository and port from there when its terms are better than
+  pyiqa's. A separately licensed crate exists only for a specific model that requires
+  it (§2).
 - **All the new crates live in this repo and workspace.**
 - An **optional C++ backend (ONNX Runtime) is fine** as long as pure-Rust engines exist
   for the same models.
@@ -27,12 +33,14 @@ Owner decisions (2026-10-14):
 
 ## 1. What the evidence says
 
-1. **Licensing splits the model list in two.** pyiqa's code is PolyForm Noncommercial
-   1.0.0 and its weight mirror is CC BY-NC-SA 4.0. Permissive ports come from each
-   model's upstream repo and weights (LPIPS BSD-2, DISTS MIT, DeepDC MIT, ST-LPIPS BSD-2,
-   DreamSim MIT, MANIQA/ARNIQA Apache, LIQE/AHIQ/CKDN MIT). TOPIQ and WaDIQaM weights
-   exist only as pyiqa trainings; PieAPP's official weights are NC; CLIP-IQA, QualiCLIP,
-   TReS are NC upstream. Those go in `zenmetrics-pyiqa-ports`.
+1. **Licensing is decided by weights, not code.** pyiqa's code is PolyForm Noncommercial
+   1.0.0 and its weight mirror is CC BY-NC-SA 4.0, but 24 of its 40 neural entries have
+   permissive upstream code, and the upstream weights are permissive for LPIPS, DISTS,
+   DeepDC, DMM, ST-LPIPS (BlurPool rewritten), WaDIQaM (official deepIQA, MIT), ARNIQA,
+   MANIQA, MUSIQ, A-FINE, FGResQ and DreamSim. AHIQ, CKDN, HyperIQA, LIQE, NIMA and UNIQUE
+   publish weights with no stated terms. TOPIQ, DBCNN and PaQ-2-PiQ weights are NC;
+   PieAPP, CLIP-IQA, QualiCLIP and URanker are NC upstream; TReS's agreement forbids
+   distribution. Full table: [`PYIQA_UPSTREAM_LICENSES_2026-10-15.md`](PYIQA_UPSTREAM_LICENSES_2026-10-15.md).
 2. **Four backbones cover most of the list.** VGG16/19 + AlexNet → LPIPS ×4, DISTS,
    DeepDC, ST-LPIPS ×2 (8 of the AIC deep-metric columns). ResNet50 → TOPIQ ×10,
    HyperIQA, AHIQ, ARNIQA ×8, TReS, CKDN. ViT-B/8,16,32 and CLIP RN50 → MANIQA, AHIQ,
@@ -78,14 +86,23 @@ Owner decisions (2026-10-14):
 | crate | licence | contents | GPU deps |
 |---|---|---|---|
 | `crates/zenmetrics-nn` (name open) | AGPL-3 + commercial | engine trait + engines, preprocessing, weight store, model cards, backbones, permissive metric heads (feature-gated modules) | burn (crates.io) only; **never zenforks-cubecl**, so it stays publishable |
-| `crates/zenmetrics-pyiqa-ports` | noncommercial (proposed: PolyForm Noncommercial 1.0.0, matching pyiqa), own `license` field and LICENSE file | NC models (§6) on top of `zenmetrics-nn` | via `zenmetrics-nn` |
-| `zenmetrics-cli`, `zenmetrics-api`, `zenmetrics-py` | unchanged | `nn` feature links `zenmetrics-nn` directly; `pyiqa-ports` feature links the NC crate | both cubecls in one binary (§1.5) |
+| `zenmetrics-cli`, `zenmetrics-api`, `zenmetrics-py` | unchanged | `nn` feature links `zenmetrics-nn` directly | both cubecls in one binary (§1.5) |
 
 Linking directly replaces the plugin/subprocess boundary the first draft proposed:
-no copy across an ABI, one CLI, and `zenmetrics-py` gets the metrics for free. A
-build with the `pyiqa-ports` feature is a noncommercial build; it stays off by
-default, the CLI prints that when it is on, and fleet images that need those
-metrics are internal-only.
+no copy across an ABI, one CLI, and `zenmetrics-py` gets the metrics for free.
+
+**Licensing (rev 3).** Every model's code is ours, under the crate's normal licence:
+ported from a permissive upstream (keeping its notice in a `LICENSE-<origin>` file, the
+gmsd convention), or written from the paper when the upstream is NC, has no licence, or
+is pyiqa's own (TOPIQ). We never port from pyiqa's files and never read TReS's code.
+Noncommercial status belongs to **weights**: each card records `weights_licence`
+(`permissive` / `unknown` / `nc`), we redistribute only `permissive` weights, and
+loading `unknown` or `nc` weights fetches them from their origin and requires an
+explicit opt-in that names the terms. So no crate, binary or default build is
+noncommercial; the user who opts in to NC weights takes on their terms. A separately
+licensed crate is made for one model only if its code cannot be written independently;
+none has needed it so far. This replaces rev 2's single `zenmetrics-pyiqa-ports` crate
+(owner, 2026-10-15: "only do specific crates when required").
 
 Workspace hygiene that comes with it: `Cargo.lock` gains burn's tree (the probe's lock
 is ~8,900 lines), so regenerate with `scripts/ci/lock.sh --regen`, never a plain cargo
@@ -118,7 +135,8 @@ Rust crate on wasm, so it is not a browser route for us.
 
 A model is a directory `models/<name>/`:
 
-- `card.toml`: FR/NR, upstream repo + commit, paper, code and weight licences, weight
+- `card.toml`: FR/NR, upstream repo + commit, paper, code source (`upstream-port` or
+  `paper`) and its licence, `weights_licence` class with the terms URL, weight
   URLs + sha256, input normalisation, resize/crop schedule, score range and direction,
   oracle (upstream package or pyiqa), parity tolerance.
 - `export.py`: loads the **upstream** reference implementation, exports backbone + head
@@ -137,9 +155,9 @@ or three models.
   sha256-verified against the card.
 - Permissive weights: upstream URLs, with an imazen R2 mirror for reliability where the
   licence allows redistribution (BSD/MIT/Apache).
-- NC weights: fetched from their original location and converted on the user's machine,
-  so we never redistribute an adapted CC BY-NC-SA file. Loading NC models needs an
-  explicit opt-in. Whether burn-store can read the `.pth` pickles directly is unverified.
+- `unknown` and `nc` weights: fetched from their original location (not pyiqa's mirror
+  when an original exists) and converted on the user's machine, so we never
+  redistribute them. Loading them needs an explicit opt-in. Whether burn-store can read the `.pth` pickles directly is unverified.
 
 ### Integration
 
@@ -186,7 +204,7 @@ i265 before drawing CPU conclusions.
 
 - **Oracle per model is the upstream reference package**: `lpips`, `DISTS_pytorch`,
   `dreamsim`, the upstream repos. pyiqa is the oracle only where pyiqa's variant is the
-  target (the NC crate, AIC columns produced with pyiqa). Its variants differ from
+  target (pyiqa-retrained weights, AIC columns produced with pyiqa). Its variants differ from
   upstream in places: MUSIQ uses bicubic where Google's code uses TF gaussian resize, up
   to 1.09 MOS apart.
 - **Three gates:** export (ONNX under ORT vs PyTorch), engine (rten, burn and `ort` vs
@@ -205,21 +223,27 @@ i265 before drawing CPU conclusions.
   preprocessing parity test before any network parity test.
 - **Licence caveat for oracles:** running pyiqa inside a commercial company's
   development may not count as a noncommercial purpose under PolyForm NC, even if
-  nothing ships. Permissive models avoid pyiqa entirely; get counsel's view for the NC
-  crate's oracle runs.
+  nothing ships. Permissive models avoid pyiqa entirely; get counsel's view before any
+  oracle run that needs pyiqa itself.
 
 ## 6. Model order
 
 | wave | crate | models | backbone work |
 |---|---|---|---|
-| 1 | zenmetrics-nn | LPIPS alex/vgg/squeeze, LPIPS+ (reimplemented from the TOPIQ paper), DISTS, DeepDC, ST-LPIPS alex/vgg | VGG16, VGG19, AlexNet, SqueezeNet, BlurPool (clean-room) |
-| 2 | zenmetrics-nn | ARNIQA, CKDN, PaQ2PiQ, LIQE, A-FINE, MANIQA, DreamSim | ResNet50/18, CLIP ViT-B/32, ViT-B/8 + Swin, ViT-B/16 |
-| 2 | zenmetrics-pyiqa-ports | TOPIQ FR ×2 + NR, WaDIQaM, PieAPP, HyperIQA, DBCNN, NIMA, CLIP-IQA(+), QualiCLIP, TReS | reuses wave-2 backbones |
-| 3 | zenmetrics-nn | MUSIQ (choose oracle first), AHIQ (DeformConv in Rust; pin the timm weights it silently depends on) | MUSIQ transformer, DeformConv |
-| hold | — | Q-Align / Q-ReAlign / Compare2Score (LLMs, 2–19 GB), FID, DMM, TOPIQ face variants (need a face detector) | — |
+All waves live in `zenmetrics-nn`; the weights column is the card's `weights_licence`.
 
-Retraining TOPIQ and WaDIQaM on permissively licensed data would move them to the
-permissive crate. That is a separate project and is not planned here.
+| wave | models | weights | backbone work |
+|---|---|---|---|
+| 1 | LPIPS alex/vgg/squeeze, LPIPS+ (reimplemented from the TOPIQ paper), DISTS, DeepDC, ST-LPIPS alex/vgg | permissive | VGG16, VGG19, AlexNet, SqueezeNet, BlurPool (from the paper) |
+| 2 | ARNIQA, MANIQA, A-FINE, FGResQ, DreamSim, WaDIQaM (deepIQA weights) | permissive | ResNet50/18, CLIP ViT-B/32, ViT-B/8 + Swin, ViT-B/16 |
+| 2 | CKDN, LIQE, HyperIQA, NIMA, UNIQUE | unknown (opt-in) | reuses wave-2 backbones |
+| 2 | TOPIQ FR ×2 + NR, DBCNN, PaQ-2-PiQ, PieAPP, CLIP-IQA(+), QualiCLIP, WaDIQaM (pyiqa retrain) | nc (opt-in); code from papers | reuses wave-2 backbones |
+| 3 | MUSIQ (Apache weights; choose oracle first), AHIQ (from the paper; DeformConv in Rust; pin the timm weights it silently depends on) | permissive / unknown | MUSIQ transformer, DeformConv |
+| hold | Q-Align / Q-ReAlign / Compare2Score (LLMs, 2–19 GB), FID, DMM, TOPIQ face variants (need a face detector) | — | — |
+| no | TReS (agreement forbids distribution and assigns derivatives), CNNIQA, IQT, MA-CLIP, MetaIQA, MS-SWD (no licence; paper-only if ever wanted) | — | — |
+
+Retraining TOPIQ or DBCNN on permissively licensed data would make their weights
+permissive. That is a separate project and is not planned here.
 
 ## 7. Phase 0 (first concrete steps)
 
@@ -252,8 +276,11 @@ permissive crate. That is a separate project and is not planned here.
 
 ## 9. Decisions needed
 
-1. Licence text for `zenmetrics-pyiqa-ports` (proposed: PolyForm Noncommercial 1.0.0).
-2. The core crate's name (avoid `zeniqa`-like names).
-3. Counsel: running pyiqa as an internal oracle; ImageNet-trained backbone weights;
-   whether an AGPL binary built with the NC crate may be distributed at all, or stays
-   internal.
+1. The core crate's name (avoid `zeniqa`-like names).
+2. Counsel: running pyiqa as an internal oracle; ImageNet-trained backbone weights;
+   OpenAI CLIP's model-card scope ("any deployed use case … out of scope"); A-FINE weights
+   trained on the authors' NC DiffIQA; LLaMA-2 terms behind Compare2Score / Q-Align.
+3. `fsim` and `vsi` port research-only MATLAB releases whose headers forbid use "as the
+   basis of a commercial software or hardware product without first obtaining
+   permission" ([licence report](PYIQA_UPSTREAM_LICENSES_2026-10-15.md) §3): ask the
+   authors for permission or get counsel's view.
