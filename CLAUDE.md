@@ -120,6 +120,10 @@ registry `zenjpeg ^0.9.0`, now redirected by the root `zenjpeg` patch), run carg
 snapshot: `just snap-cargo @ test -p <crate>`. A plain `cargo` in a dev tree rewrites
 `Cargo.lock` to match the local siblings: never commit that; `jj restore Cargo.lock`.
 
+`snap-cargo` runs in a snapshot copy, so `snap-cargo @ fmt` would format the copy and leave
+the tree unformatted (2026-10-15: that is how 48e768ed reached master unformatted). The recipe
+refuses `fmt` without `--check`; format the tree with `just fmt`.
+
 `scripts/safe_push.sh` refuses (exit 8) any push that changes `Cargo.lock` or `ci/sibling-pins.tsv`
 unless `lock.sh --check` passes on the outgoing commit. If a pin must move, edit
 `ci/sibling-pins.tsv`, run `--regen`, and commit both together.

@@ -1096,7 +1096,9 @@ mod tests {
                 .iter()
                 .map(|p| {
                     (128.0
-                        + (k[0] * f64::from(p[0]) + k[1] * f64::from(p[1]) + k[2] * f64::from(p[2]))
+                        + (k[0] * f64::from(p[0])
+                            + k[1] * f64::from(p[1])
+                            + k[2] * f64::from(p[2]))
                             / 255.0)
                         .round()
                         .clamp(0.0, 255.0)
@@ -1105,13 +1107,24 @@ mod tests {
         };
         let direct = |k: [f64; 3]| {
             let (a, b) = (plane(&r, k), plane(&d, k));
-            let mse = a.iter().zip(&b).map(|(x, y)| (x - y) * (x - y)).sum::<f64>() / a.len() as f64;
+            let mse = a
+                .iter()
+                .zip(&b)
+                .map(|(x, y)| (x - y) * (x - y))
+                .sum::<f64>()
+                / a.len() as f64;
             10.0 * (255.0 * 255.0 / mse).log10()
         };
         let cb = score(Kind::PsnrCb, &r, &d).unwrap();
         let cr = score(Kind::PsnrCr, &r, &d).unwrap();
-        assert!((cb - direct([-37.797, -74.203, 112.0])).abs() < 1e-9, "cb {cb}");
-        assert!((cr - direct([112.0, -93.786, -18.214])).abs() < 1e-9, "cr {cr}");
+        assert!(
+            (cb - direct([-37.797, -74.203, 112.0])).abs() < 1e-9,
+            "cb {cb}"
+        );
+        assert!(
+            (cr - direct([112.0, -93.786, -18.214])).abs() < 1e-9,
+            "cr {cr}"
+        );
         assert_ne!(cb, cr);
         assert!(score(Kind::PsnrCb, &r, &r).unwrap().is_infinite());
         assert!(score(Kind::PsnrCr, &r, &r).unwrap().is_infinite());
