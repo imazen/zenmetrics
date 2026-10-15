@@ -1,0 +1,36 @@
+# ST-LPIPS: shift-tolerant LPIPS, AlexNet and VGG16 trunks.
+name = "stlpips"
+kind = "full-reference"
+direction = "lower-is-closer"
+columns = ["stlpips_alex", "stlpips_vgg"]
+paper = "Ghildyal, Liu. Shift-tolerant Perceptual Similarity Metric. ECCV 2022. arXiv:2207.13686"
+
+[code]
+source = "upstream-port"             # LPIPS head (crate::lpips), trunk exported from the package
+upstream = "https://github.com/abhijay9/ShiftTolerant-LPIPS"
+upstream_package = "stlpips_pytorch==0.0.2"
+licence = "BSD-2-Clause"
+# The package's BlurPool layers (models_lpf) are Adobe's antialiased-cnns code,
+# CC BY-NC-SA 4.0. No Adobe code is in this crate: the blur is a fixed
+# binomial filter inside the graph the user exports on their own machine.
+
+[weights]
+licence_class = "permissive"
+weights = "stlpips_pytorch 0.0.2: weights/vST0.0/{alex,vgg}_shift_tolerant.pth (BSD-2-Clause)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "(v / 255) * 2 - 1, then LPIPS ScalingLayer (inside the graph)"
+resize = "none"
+min_size = "alex 21, vgg 18 (stlpips_<net>.meta)"
+
+[export]
+script = "export.py"
+notes = "stubs IPython (the package imports IPython.embed and never calls it)"
+
+[parity]
+oracle = "stlpips_pytorch 0.0.2, CPU, fp32"
+tolerance_abs = 1e-6
+# Measured 2026-10-15, 18 pairs (3 images, 64-2048 px), i265:
+#   rten:     alex 4.2e-8, vgg 2.7e-8
+#   ort-cuda: alex 6.0e-8, vgg 6.0e-8

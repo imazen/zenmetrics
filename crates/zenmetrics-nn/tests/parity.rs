@@ -4,7 +4,8 @@
 //! - `ZENMETRICS_NN_MODEL_DIR`: the `models/*/export.py` output directory
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
-//!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `dists`.
+//!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
+//!   `dists`, `deepdc`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -13,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Dists, Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
 
 /// Absolute LPIPS tolerance against the upstream CPU fp32 score. Proposed,
 /// pending sign-off: the trunk runs in a different engine (rten vs PyTorch
@@ -49,6 +50,12 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                 return (
                     Box::new(Dists::from_dir(&dir, engine()).expect("load dists")),
                     "dists",
+                );
+            }
+            if name == "deepdc" {
+                return (
+                    Box::new(DeepDc::from_dir(&dir, engine()).expect("load deepdc")),
+                    "deepdc",
                 );
             }
             let net = *LpipsNet::ALL

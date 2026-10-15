@@ -1,5 +1,5 @@
 //! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
-//! lpips_squeeze | dists, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Dists, Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -94,12 +94,20 @@ fn main() {
         Ok("lpips_alex") => "lpips_alex",
         Ok("lpips_squeeze") => "lpips_squeeze",
         Ok("dists") => "dists",
+        Ok("deepdc") => "deepdc",
+        Ok("stlpips_alex") => "stlpips_alex",
+        Ok("stlpips_vgg") => "stlpips_vgg",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
     };
     let mut m: Box<dyn Metric> = if col == "dists" {
         Box::new(Dists::from_dir(model, engine).expect("load model"))
+    } else if col == "deepdc" {
+        Box::new(DeepDc::from_dir(model, engine).expect("load model"))
     } else {
-        let net = LpipsNet::ALL.into_iter().find(|n| n.column() == col).unwrap();
+        let net = LpipsNet::ALL
+            .into_iter()
+            .find(|n| n.column() == col)
+            .unwrap();
         Box::new(Lpips::from_dir(model, net, engine).expect("load model"))
     };
     let new = !Path::new(out).exists();
@@ -120,7 +128,10 @@ fn main() {
         let dp_path = ladder.join(format!("{stem}_{n}_dist.png"));
         let (rp, w, h) = load_rgb8(&rp_path);
         let (dp, _, _) = load_rgb8(&dp_path);
-        let modes: [(&str, Box<dyn FnMut(&mut Box<dyn Metric>) -> (Vec<f64>, f64)>); 3] = [
+        let modes: [(
+            &str,
+            Box<dyn FnMut(&mut Box<dyn Metric>) -> (Vec<f64>, f64)>,
+        ); 3] = [
             (
                 "compute",
                 Box::new(|m| {

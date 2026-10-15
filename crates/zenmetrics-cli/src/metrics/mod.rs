@@ -153,6 +153,17 @@ pub enum MetricKind {
     /// As `lpips-alex`.
     #[value(name = "dists")]
     Dists,
+    /// ST-LPIPS, AlexNet (upstream `stlpips_pytorch` 0.0.2,
+    /// shift-tolerant); lower is better. As `lpips-alex`.
+    #[value(name = "stlpips-alex")]
+    StlpipsAlex,
+    /// ST-LPIPS, VGG16; as `stlpips-alex`.
+    #[value(name = "stlpips-vgg")]
+    StlpipsVgg,
+    /// DeepDC (upstream `DeepDC_PyTorch` 0.2, no resize); lower is better.
+    /// As `lpips-alex`.
+    #[value(name = "deepdc")]
+    Deepdc,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -429,6 +440,9 @@ impl MetricKind {
             MetricKind::LpipsVgg,
             MetricKind::LpipsSqueeze,
             MetricKind::Dists,
+            MetricKind::StlpipsAlex,
+            MetricKind::StlpipsVgg,
+            MetricKind::Deepdc,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -484,6 +498,9 @@ impl MetricKind {
             MetricKind::LpipsVgg => "lpips-vgg",
             MetricKind::LpipsSqueeze => "lpips-squeeze",
             MetricKind::Dists => "dists",
+            MetricKind::StlpipsAlex => "stlpips-alex",
+            MetricKind::StlpipsVgg => "stlpips-vgg",
+            MetricKind::Deepdc => "deepdc",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -598,6 +615,9 @@ impl MetricKind {
             MetricKind::LpipsVgg => &["lpips_vgg"],
             MetricKind::LpipsSqueeze => &["lpips_squeeze"],
             MetricKind::Dists => &["dists"],
+            MetricKind::StlpipsAlex => &["stlpips_alex"],
+            MetricKind::StlpipsVgg => &["stlpips_vgg"],
+            MetricKind::Deepdc => &["deepdc"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1766,12 +1786,18 @@ pub fn run_metric(
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
         | MetricKind::LpipsSqueeze
-        | MetricKind::Dists => nn::score(kind, reference, distorted),
+        | MetricKind::Dists
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Deepdc => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
         | MetricKind::LpipsSqueeze
-        | MetricKind::Dists => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Dists
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Deepdc => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

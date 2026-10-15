@@ -245,6 +245,27 @@ All waves live in `zenmetrics-nn`; the weights column is the card's `weights_lic
 Retraining TOPIQ or DBCNN on permissively licensed data would make their weights
 permissive. That is a separate project and is not planned here.
 
+### Priority (owner, 2026-10-15)
+
+Most useful first, which for us means the JPEG AIC-4 (2026) metric columns
+(`/mnt/v/datasets/aic2026/metrics_fullres.csv` on dev; a 61-pair parity subset across
+all 16 codecs is in `~/tmp/aic-sub/` on i265), then no-reference metrics. Status as of
+writing:
+
+| tier | metrics | where | status |
+|---|---|---|---|
+| AIC-4 deep FR | LPIPS-alex, LPIPS-VGG, DISTS | zenmetrics-nn | done |
+| AIC-4 deep FR | STLPIPS, STLPIPS-VGG, DeepDC | zenmetrics-nn | in progress |
+| AIC-4 deep FR | A-FINE, DreamSim, CKDN, AHIQ, DMM | zenmetrics-nn | next (permissive or unstated weights) |
+| AIC-4 deep FR | TOPIQ, TOPIQ-PIPAL, PieAPP, WaDIQaM (pyiqa weights) | zenmetrics-nn | NC weights: opt-in |
+| AIC-4 deep FR | MSSWD, proposal-IDFIQA | zenmetrics-nn | no upstream licence: from the papers |
+| AIC-4 classical | PSNR-YCbCr611, SSIMc, CIEDE2000, FLIP | zenmetrics-cli | opencode lane `aic-classic` |
+| AIC-4 classical | CW-SSIM, SSIM-pyiqa | zenmetrics-cli | after that |
+| AIC-4 unidentified | AIMOS, WD_s1–WD_s5 | — | identify first |
+| NR | PIQE (used before, via PU21, `benchmarks/pu_integrated_upiq_2026-06-09.md`), NIQE, BRISQUE | Rust ports, LIVE data with notice | after AIC-4 |
+| NR | MUSIQ, ARNIQA, MANIQA, LIQE | zenmetrics-nn | permissive; needs the NR metric shape first |
+| NR | TOPIQ-NR, CLIP-IQA+, QualiCLIP | zenmetrics-nn | NC weights: opt-in |
+
 ## 7. Phase 0 (first concrete steps)
 
 1. **Bar A baseline:** on i265 (CPU + RTX 4080) and dev (CPU), time upstream `lpips`,

@@ -32,29 +32,55 @@ pub enum LpipsNet {
     Vgg,
     /// SqueezeNet 1.1 (`net='squeeze'`).
     Squeeze,
+    /// ST-LPIPS, AlexNet with blur-pooled downsampling (`stlpips_pytorch`
+    /// 0.0.2, `net='alex', variant='shift_tolerant'`; Ghildyal & Liu, ECCV
+    /// 2022).
+    AlexShiftTolerant,
+    /// ST-LPIPS, VGG16 (`net='vgg', variant='shift_tolerant'`).
+    VggShiftTolerant,
 }
 
 impl LpipsNet {
-    /// Upstream's `net=` name, also the file prefix `lpips_<name>_*`.
+    /// Upstream's `net=` name.
     pub const fn name(self) -> &'static str {
         match self {
-            Self::Alex => "alex",
-            Self::Vgg => "vgg",
+            Self::Alex | Self::AlexShiftTolerant => "alex",
+            Self::Vgg | Self::VggShiftTolerant => "vgg",
             Self::Squeeze => "squeeze",
         }
     }
 
-    /// The score column: `lpips_alex`, `lpips_vgg`, `lpips_squeeze`.
+    /// The score column, also the exported files' prefix `<column>_*`:
+    /// `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`,
+    /// `stlpips_vgg`.
     pub const fn column(self) -> &'static str {
         match self {
             Self::Alex => "lpips_alex",
             Self::Vgg => "lpips_vgg",
             Self::Squeeze => "lpips_squeeze",
+            Self::AlexShiftTolerant => "stlpips_alex",
+            Self::VggShiftTolerant => "stlpips_vgg",
         }
     }
 
-    /// Every network, in upstream's order.
-    pub const ALL: [Self; 3] = [Self::Alex, Self::Vgg, Self::Squeeze];
+    /// The upstream package and options, for the implementation tag.
+    const fn upstream(self) -> &'static str {
+        match self {
+            Self::Alex | Self::Vgg | Self::Squeeze => "lpips 0.1.4, version=0.1",
+            Self::AlexShiftTolerant | Self::VggShiftTolerant => {
+                "stlpips_pytorch 0.0.2, variant=shift_tolerant"
+            }
+        }
+    }
+
+    /// Every network.
+    pub const ALL: [Self; 5] = [
+        Self::Alex,
+        Self::Vgg,
+        Self::Squeeze,
+        Self::AlexShiftTolerant,
+        Self::VggShiftTolerant,
+    ];
 }
 
 /// LPIPS v0.1. Lower is closer; `0` for identical inputs. Input: packed
@@ -78,7 +104,7 @@ impl Lpips {
     /// can't start (for ONNX Runtime: library or CUDA provider not loadable).
     pub fn from_dir(dir: impl AsRef<Path>, net: LpipsNet, engine: Engine) -> Result<Self, Error> {
         let dir = dir.as_ref();
-        let p = format!("lpips_{}", net.name());
+        let p = net.column();
         let (channels, min_size) = read_meta(&dir.join(format!("{p}.meta")))?;
         let all = read_f32(&dir.join(format!("{p}_lin.f32")), channels.iter().sum())?;
         let mut at = 0;
@@ -264,7 +290,8 @@ impl za::Metric for Lpips {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(self.net.column(), za::implementation!(SCORE_REVISION)).with_reference(
             format!(
-                "lpips 0.1.4 (net={}, version=0.1); engine {}",
+                "{} (net={}); engine {}",
+                self.net.upstream(),
                 self.net.name(),
                 self.engine_name()
             ),
@@ -279,10 +306,18 @@ impl za::Metric for Lpips {
             "lpips_squeeze",
             za::ScoreKind::Difference,
         )];
+        const ST_ALEX: &[za::ScoreSpec] = &[za::ScoreSpec::new(
+            "stlpips_alex",
+            za::ScoreKind::Difference,
+        )];
+        const ST_VGG: &[za::ScoreSpec] =
+            &[za::ScoreSpec::new("stlpips_vgg", za::ScoreKind::Difference)];
         Cow::Borrowed(match self.net {
             LpipsNet::Alex => ALEX,
             LpipsNet::Vgg => VGG,
             LpipsNet::Squeeze => SQUEEZE,
+            LpipsNet::AlexShiftTolerant => ST_ALEX,
+            LpipsNet::VggShiftTolerant => ST_VGG,
         })
     }
 

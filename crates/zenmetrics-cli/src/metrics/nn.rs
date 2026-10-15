@@ -1,4 +1,4 @@
-//! Learned metrics from `zenmetrics-nn` (LPIPS ×3, DISTS).
+//! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC).
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the
@@ -10,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
-use zenmetrics_nn::{Dists, Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
 
 use super::MetricKind;
 use crate::decode::Rgb8Image;
@@ -41,6 +41,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     let engine = engine()?;
     if column == "dists" {
         return Ok(Box::new(Dists::from_dir(&dir, engine)?));
+    }
+    if column == "deepdc" {
+        return Ok(Box::new(DeepDc::from_dir(&dir, engine)?));
     }
     let net = LpipsNet::ALL
         .into_iter()

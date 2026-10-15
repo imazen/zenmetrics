@@ -1,0 +1,33 @@
+# DeepDC: deep distance correlation on VGG19 features.
+name = "deepdc"
+kind = "full-reference"
+direction = "lower-is-closer"
+columns = ["deepdc"]
+paper = "Zhu, Chen, Zhu, Wang, Lin. DeepDC: Deep Distance Correlation as a Perceptual Image Quality Evaluator. arXiv:2211.04927"
+
+[code]
+source = "upstream-port"             # distance-correlation head reimplemented
+upstream = "https://github.com/h4nwei/DeepDC"
+upstream_package = "DeepDC_PyTorch==0.2"
+licence = "MIT"
+
+[weights]
+licence_class = "permissive"
+# No learned head; the trunk is torchvision's VGG19 ImageNet checkpoint
+# (ImageNet terms may apply: docs/PYIQA_PORT_PLAN.md section 9).
+trunk = "https://download.pytorch.org/models/vgg19-dcbb9e9d.pth"
+
+[input]
+format = "packed sRGB8"
+normalisation = "v / 255 (no ImageNet normalisation, as upstream)"
+resize = "none (upstream's demo prepare_image resizes the short side to 224; the model takes any size)"
+min_size = 16
+
+[export]
+script = "export.py"
+notes = "the trunk graph ends at each tap's double-centred distance matrix; export uses upstream _DCDM with reshape(-1) so the graph takes any size (checked equal to upstream); stubs `imp` for Python 3.12"
+
+[parity]
+oracle = "DeepDC_PyTorch 0.2, CPU, fp32"
+tolerance_abs = 1e-6
+# Measured 2026-10-15, 18 pairs: rten 1.2e-7, ort-cuda 1.2e-7.

@@ -13,6 +13,8 @@
 //!   `lpips` 0.1.4 package.
 //! - [`Dists`]: DISTS (Ding, Ma, Wang, Simoncelli, TPAMI 2020), parity target
 //!   the upstream `DISTS_pytorch` 0.1 package.
+//! - [`DeepDc`]: DeepDC (Zhu et al., arXiv:2211.04927), parity target the
+//!   upstream `DeepDC_PyTorch` 0.2 package.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -21,12 +23,14 @@
 #![forbid(unsafe_code)]
 
 mod common;
+mod deepdc;
 mod dists;
 mod engine;
 mod error;
 mod lpips;
 mod preprocess;
 
+pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use error::Error;
 pub use lpips::{Lpips, LpipsNet};
