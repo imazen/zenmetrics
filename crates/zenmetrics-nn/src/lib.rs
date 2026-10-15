@@ -28,6 +28,7 @@
 #![forbid(unsafe_code)]
 
 mod afine;
+mod ahiq;
 mod ckdn;
 mod common;
 mod deepdc;
@@ -41,6 +42,7 @@ mod resize;
 mod weights;
 
 pub use afine::Afine;
+pub use ahiq::Ahiq;
 pub use ckdn::Ckdn;
 pub use deepdc::DeepDc;
 pub use dists::Dists;

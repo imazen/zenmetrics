@@ -1,5 +1,5 @@
 //! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC,
-//! CKDN, A-FINE, DreamSim).
+//! CKDN, A-FINE, DreamSim, AHIQ).
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the
@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Ahiq, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -51,6 +51,7 @@ fn consent() -> WeightsConsent {
                 "ckdn" => Ckdn::WEIGHTS,
                 "afine" => Afine::WEIGHTS,
                 "dreamsim" => Dreamsim::WEIGHTS,
+                "ahiq" => Ahiq::WEIGHTS,
                 _ => continue,
             };
             consent = consent.accept(terms);
@@ -78,6 +79,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "dreamsim" {
         return Ok(Box::new(Dreamsim::from_dir(&dir, engine, &consent())?));
+    }
+    if column == "ahiq" {
+        return Ok(Box::new(Ahiq::from_dir(&dir, engine, &consent())?));
     }
     let net = LpipsNet::ALL
         .into_iter()

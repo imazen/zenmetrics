@@ -8,8 +8,9 @@
 # a pooled median over score(pair) - score(ref, ref) per reference, from the
 # Rust port (zenmetrics-cli, ort-cuda) rather than an upstream package:
 # |delta| for ckdn, the SIGNED delta for afine (afine_all is a signed raw
-# score; 12% of its deltas are negative).
-# ckdn is higher-is-better; afine is lower-is-better (raw afine_all).
+# score; 12% of its deltas are negative), |delta| for ahiq (a quality score
+# with image-dependent identical-pair scores, median 0.644).
+# ckdn and ahiq are higher-is-better; afine is lower-is-better (raw afine_all).
 # dreamsim is lower-is-better with identical-pair score exactly 0, so its JND
 # is the plain pooled median, also from the Rust port (same engine/host).
 column	jnd
@@ -23,3 +24,4 @@ deepdc	0.064153
 ckdn	0.005276
 afine	0.507388
 dreamsim	0.017641
+ahiq	0.047194

@@ -5,7 +5,7 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`.
+//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `ahiq`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Ahiq, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -100,6 +100,13 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                 return (
                     Box::new(Dreamsim::from_dir(&dir, engine(), &consent).expect("load dreamsim")),
                     "dreamsim",
+                );
+            }
+            if name == "ahiq" {
+                let consent = WeightsConsent::new().accept(Ahiq::WEIGHTS);
+                return (
+                    Box::new(Ahiq::from_dir(&dir, engine(), &consent).expect("load ahiq")),
+                    "ahiq",
                 );
             }
             let net = *LpipsNet::ALL
@@ -198,10 +205,10 @@ fn warm_reference_equals_cold() {
         );
         // CKDN is a quality score, not a distance: an identical pair's dr is
         // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
-        // differ. A-FINE's raw afine_all is likewise signed and
-        // image-dependent on identical pairs. For both, the identical-pair
-        // check below is warm == cold.
-        let cold_same = matches!(col, "ckdn" | "afine").then(|| {
+        // differ. A-FINE's raw afine_all and AHIQ's quality score are likewise
+        // image-dependent on identical pairs. For all three, the
+        // identical-pair check below is warm == cold.
+        let cold_same = matches!(col, "ckdn" | "afine" | "ahiq").then(|| {
             score(
                 &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
                     .unwrap(),

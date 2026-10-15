@@ -13,6 +13,7 @@ each model's upstream reference implementation. Plan and licensing:
 | CKDN (`Ckdn`) | `ckdn` | rten, ort-cuda | `researchmm/CKDN` epoch-14 checkpoint, `cat(dist, ref, dist, ref)` → `dr`, eval transform: short side →329 then cc288 (dist bicubic-aa, ref nearest) | 0.0053¹ | rten 5.7e-5, ort-cuda 5.1e-5 |
 | A-FINE (`Afine`) | `afine` | rten, ort-cuda | `ChrisDud0257/AFINE` afine.pth + OpenAI ViT-B-32, raw `afine_all` (lower is better) | 0.507¹ | rten 1.4e-5, ort-cuda 1.9e-5 |
 | DreamSim (`Dreamsim`) | `dreamsim` | rten, ort-cuda | `dreamsim` 0.21.2 ensemble, LoRA folded, `1 − cosine` on centred unit concat, PIL-bicubic 224×224 | 0.0176 | rten 1.2e-5, ort-cuda 2.1e-5 |
+| AHIQ (`Ahiq`) | `ahiq` | rten, ort-cuda | `IIGROUP/AHIQ` epoch-32 checkpoint, ViT-B/8 + ResNet-50 taps, deformable fusion, mean of nine 224×224 crops (higher is better) | 0.047194 | rten 8.6e-8, ort-cuda 4.9e-7 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold

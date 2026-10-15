@@ -1,0 +1,41 @@
+# Model card: AHIQ (CVPRW 2022).
+name = "ahiq"
+kind = "full-reference quality score (higher is better; it is NOT a distance)"
+
+[code]
+source = "upstream-port"
+upstream = "https://github.com/IIGROUP/AHIQ"
+licence = "MIT"
+notes = "Upstream borrows from anse3832/IQT, which states no licence."
+
+[weights]
+# MIT covers the repository code. The epoch-32 checkpoint (the repo's default:
+# test_ahiq.py's load_epoch=-1 resolves to max epoch) is fetched by the user
+# from the Google Drive link in upstream's README
+# (1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W.pth); the file states no licence, so
+# loading needs an explicit WeightsConsent.
+licence_class = "unknown"
+checkpoint = "Google Drive file 1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W (epoch 32, patch_size 8) linked from https://github.com/IIGROUP/AHIQ; timm vit_base_patch8_224 + resnet50 ImageNet backbones via timm pretrained"
+trained_on = "KonIQ-10k (upstream default)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "ToTensor (v/255) then Normalize(0.5) -> [-1, 1]; NO resizing anywhere"
+resize = "none — upstream scores nine deterministic 224x224 crops (five_point_crop idx 0-8: four corners, centre, four edge centres) and averages"
+min_size = 224                        # the ViT consumes 224x224 tokens; smaller images cannot be scored upstream
+
+[export]
+script = "export.py"
+outputs = "ahiq_{trunk.onnx, head.onnx, full.onnx, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "ahiq_trunk.onnx: [1,3,224,224] -> vit [1,3840,28,28] (blocks 0-4, CLS dropped, concat), cnn [1,768,56,56] (resnet50 layer1's 3x256 Bottleneck outputs concat). ahiq_head.onnx: (vit_d, vit_r, cnn_d, cnn_r) -> score; deformable offsets come from the REFERENCE vit only, applied to both cnn sides. DeformConv2d is decomposed in-graph as nine bilinear grid_sample taps + a 1x1 conv (weight[c',c,ky,kx] folded to [c', k*C+c]); verified <=4e-7 vs torchvision. ahiq_full.onnx: (r,d) -> score for ort-cuda."
+
+[parity]
+oracle = "IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, nine-crop ensemble"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.047194                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda)
+results = "rten worst |d| 8.613e-8 (1.8e-6 JND); ort-cuda worst |d| 4.868e-7 (1.0e-5 JND); 15 goldens; warm ref == cold on both engines"
+
+[aic4]
+convention = "NOT reproduced — published column does not match the upstream protocol (nine 224x224 crops, [-1,1] input). Closest verified variant: ImageNet-mean/std normalization (still ~1e-2 residual); see report"
+results = "native [-1,1] nine-crop: median |d| 0.0762, max |d| 0.1398, SRCC 0.782 on 61 crop pairs"

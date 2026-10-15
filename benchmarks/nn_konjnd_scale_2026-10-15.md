@@ -95,10 +95,13 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | dreamsim | JPEG | 504 | 0.017586 | 0.026361 | 0.034738 | 0.027194 | 1.975 |
 | dreamsim | BPG | 504 | 0.007528 | 0.012349 | 0.017801 | 0.013551 | 2.371 |
 | dreamsim | pooled | 1008 | 0.010763 | **0.017641** | 0.028215 | 0.020373 | 2.618 |
+| ahiq | JPEG | 504 | 0.032866 | 0.041770 | 0.052290 | 0.043207 | 1.591 |
+| ahiq | BPG | 504 | 0.041235 | 0.052848 | 0.066457 | 0.055467 | 1.612 |
+| ahiq | pooled | 1008 | 0.035682 | **0.047194** | 0.059711 | 0.049337 | 1.673 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
 ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053,
-A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176.
+A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176, AHIQ 0.0472.
 
 The `ckdn` rows are not from an upstream package: they were scored by the Rust port
 (`zenmetrics batch --metric ckdn --features nn,nn-ort`, engine ort-cuda, ONNX Runtime
@@ -132,6 +135,17 @@ quartiles and median. Scored at native resolution with upstream preprocessing
 (Pillow's fixed-point anamorphic bicubic resize to 224×224 — what
 torchvision `Resize(BICUBIC)` on a PIL image runs — then the ensemble's
 per-extractor normalisation inside the graph).
+
+The `ahiq` rows are likewise scored by the Rust port (`--metric ahiq`, same
+engine/host/date, in the commit that adds the `ahiq` row to `jnd_scale.tsv`).
+AHIQ is higher-is-better and its identical-pair score is image-dependent
+(median 0.644, range 0.591–0.718 on these references — the pixel regressor
+rates even pristine references image-dependently), so each value is
+`|score(ref, dist) − score(ref, ref)|`, the distance from the perfect score
+for that reference, and the table entries are its quartiles and median.
+Scored at native resolution with upstream's protocol (no resize; mean over
+the nine deterministic 224×224 `five_point_crop` crops; the 640×480 KonJND
+images are comfortably ≥224).
 
 ## Caveats
 
