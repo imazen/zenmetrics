@@ -1522,6 +1522,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::VmafNegStudio601 => {
             Some((-0.5, 100.5, 100.0))
         }
+        MetricKind::ButteraugliOriginal => Some((-0.001, 1_000_000.0, 0.0)),
+        MetricKind::Ssimulacra1 => Some((-0.001, 1.001, 0.0)),
+        MetricKind::WsHv => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Cambi => Some((-0.001, 1000.001, 0.0)),
         MetricKind::CwSsim => Some((-0.001, 1.001, 1.0)),
         MetricKind::Flip => Some((-0.001, 1.001, 0.0)),
         MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {

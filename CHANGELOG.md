@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv`, with pinned-author oracle and published AIC comparisons in [Round 4 evidence](benchmarks/aic_more_2026-10-15/README.md). Standalone CAMBI defaults preserve the existing VMAF-v1 preset.
+
 - Correct SSIM/VSI dispatch and range comments and describe the sampled top/left padding in odd-size pooling.
 
 - Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
