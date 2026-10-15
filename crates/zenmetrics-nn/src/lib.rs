@@ -23,6 +23,9 @@
 //! - [`Maniqa`]: MANIQA (Yang et al., CVPRW 2022) — a [`za::NoReferenceMetric`];
 //!   parity target upstream's koniq10k eval path (224 INTER_CUBIC single
 //!   forward, `ckpt_koniq10k.pt`).
+//! - [`Liqe`]: LIQE (Zhang et al., CVPR 2023) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `LIQE.forward`, `LIQE.pt` over CLIP ViT-B/32
+//!   (weights licence unknown: consent-gated).
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -42,6 +45,7 @@ mod dists;
 mod dreamsim;
 mod engine;
 mod error;
+mod liqe;
 mod lpips;
 mod maniqa;
 mod par;
@@ -56,6 +60,7 @@ pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use dreamsim::Dreamsim;
 pub use error::Error;
+pub use liqe::Liqe;
 pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
