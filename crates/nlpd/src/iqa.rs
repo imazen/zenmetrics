@@ -4,6 +4,9 @@
 //! NOT the Laparra-author `NLPD_Pytorch` that [`crate::score_rgb_u8`]
 //! mirrors).
 //!
+//! IQA_pytorch is MIT, Copyright (c) 2020 dingkeyan93; its notice is
+//! in `LICENSE-IQA-optimization` next to this crate's manifest.
+//!
 //! Differences vs the crate's default `nlpd` entry:
 //!
 //! - **Luma only.** The harness (`jpeg-ai-qaf` `metrics.py` `NLPD_IQA`)

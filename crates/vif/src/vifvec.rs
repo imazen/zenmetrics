@@ -63,7 +63,8 @@ const SUBS: [(usize, usize, usize, usize); 8] = [
 // `libm::log2` lanes moved to zenmetrics-math (`fdlibm64::log2_libm_4x`).
 
 // ------------------------------------------------------------------
-// sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim).
+// sp5Filters constants (matlabPyrTools `sp5Filters.m`, verbatim; MIT,
+// Copyright (c) 2015 LabForComputationalVision, see LICENSE-matlabPyrTools).
 // ------------------------------------------------------------------
 
 /// `lo0filt` — 5×5, applied to the input image before level 1.

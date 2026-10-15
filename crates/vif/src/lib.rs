@@ -4,6 +4,11 @@
 //! scalar-GSM release `vifp_mscale.m`, validated against it under GNU
 //! Octave (`validation/`).
 //!
+//! The UT Austin copyright notice that the LIVE releases require in all
+//! copies is in `LICENSE-live-vif` next to this crate's manifest;
+//! the matlabPyrTools (MIT) notice for `vifvec`'s filter taps is in
+//! `LICENSE-matlabPyrTools`.
+//!
 //! Pipeline, matching the reference: four scales; at each scale an
 //! N-tap Gaussian (`N = 2^(5−scale)+1` → 17, 9, 5, 3, `σ = N/5`,
 //! rank-1 separable) produces `filter2 'valid'` mean/variance/
