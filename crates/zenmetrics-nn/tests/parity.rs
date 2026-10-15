@@ -165,8 +165,8 @@ fn matches_upstream() {
         let mut worst = 0.0f64;
         for line in goldens.lines().skip(1) {
             let f: Vec<&str> = line.split('\t').collect();
-            let (stem, size, want): (&str, usize, f64) =
-                (f[0], f[1].parse().unwrap(), f[2].parse().unwrap());
+            // `size` is a filename fragment: `1024` or non-square `320x240`.
+            let (stem, size, want): (&str, &str, f64) = (f[0], f[1], f[2].parse().unwrap());
             let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
             let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
             let got = score(
@@ -194,59 +194,77 @@ fn matches_upstream() {
 
 #[test]
 fn warm_reference_equals_cold() {
+    let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
-    let (rp, w, h) = load_rgb8(&ladder.join("1415_256_ref.png"));
-    let (dp, _, _) = load_rgb8(&ladder.join("1415_256_dist.png"));
     for (mut m, col) in models() {
-        let cold = score(
-            &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
-                .unwrap(),
-            col,
+        // First golden row plus every non-square (`WxH` size) row: the
+        // warm path must not care about the aspect ratio (ahiq once swapped
+        // h/w here).
+        let goldens = std::fs::read_to_string(model_dir.join(format!("{col}_goldens.tsv")))
+            .unwrap_or_else(|e| panic!("{col}: {e}"));
+        let rows: Vec<&str> = goldens.lines().skip(1).collect();
+        let mut picks = vec![rows[0]];
+        picks.extend(
+            rows.iter()
+                .filter(|l| l.split('\t').nth(1).unwrap().contains('x')),
         );
-        // CKDN is a quality score, not a distance: an identical pair's dr is
-        // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
-        // differ. A-FINE's raw afine_all and AHIQ's quality score are likewise
-        // image-dependent on identical pairs. For all three, the
-        // identical-pair check below is warm == cold.
-        let cold_same = matches!(col, "ckdn" | "afine" | "ahiq").then(|| {
-            score(
-                &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+        for pick in picks {
+            let f: Vec<&str> = pick.split('\t').collect();
+            let (stem, size) = (f[0], f[1]);
+            let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
+            let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
+            let cold = score(
+                &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                     .unwrap(),
                 col,
-            )
-        });
-        let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
-        // A trunk engine caches the reference's features; a whole-graph
-        // engine (ort-cuda) recomputes them on every candidate.
-        assert_eq!(
-            warm.reuses_reference_work(),
-            engine() == Engine::Rten,
-            "{col}"
-        );
-        for _ in 0..2 {
-            let s = score(
-                &*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap(),
+            );
+            // CKDN is a quality score, not a distance: an identical pair's dr
+            // is sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two
+            // encoders differ. A-FINE's raw afine_all and AHIQ's quality score
+            // are likewise image-dependent on identical pairs. For all three,
+            // the identical-pair check below is warm == cold.
+            let cold_same = matches!(col, "ckdn" | "afine" | "ahiq").then(|| {
+                score(
+                    &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+                        .unwrap(),
+                    col,
+                )
+            });
+            let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
+            // A trunk engine caches the reference's features; a whole-graph
+            // engine (ort-cuda) recomputes them on every candidate (ahiq's
+            // warm keeps the nine converted crops, still a recomputation of
+            // features per evaluate).
+            assert_eq!(
+                warm.reuses_reference_work(),
+                engine() == Engine::Rten,
+                "{col}"
+            );
+            for _ in 0..2 {
+                let s = score(
+                    &*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap(),
+                    col,
+                );
+                assert_eq!(s.to_bits(), cold.to_bits(), "{col}");
+            }
+            let same = score(
+                &*warm.evaluate(image(&rp, w, h), EvalOpts::new()).unwrap(),
                 col,
             );
-            assert_eq!(s.to_bits(), cold.to_bits(), "{col}");
-        }
-        let same = score(
-            &*warm.evaluate(image(&rp, w, h), EvalOpts::new()).unwrap(),
-            col,
-        );
-        if let Some(cold_same) = cold_same {
-            assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
-        } else if engine() == Engine::Rten || col != "dists" {
-            assert_eq!(same, 0.0, "{col}");
-        } else {
-            // On ort-cuda the whole DISTS graph, including 1 - (dist1 + dist2),
-            // runs in ONNX Runtime's f32 reduction order: measured 1.19e-7
-            // (one f32 step at 1.0) for an identical pair. Bounded by the
-            // parity tolerance.
-            assert!(
-                same.abs() <= tol(col),
-                "{col}: identical pair scored {same}"
-            );
+            if let Some(cold_same) = cold_same {
+                assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
+            } else if engine() == Engine::Rten || col != "dists" {
+                assert_eq!(same, 0.0, "{col}");
+            } else {
+                // On ort-cuda the whole DISTS graph, including 1 - (dist1 + dist2),
+                // runs in ONNX Runtime's f32 reduction order: measured 1.19e-7
+                // (one f32 step at 1.0) for an identical pair. Bounded by the
+                // parity tolerance.
+                assert!(
+                    same.abs() <= tol(col),
+                    "{col}: identical pair scored {same}"
+                );
+            }
         }
     }
 }

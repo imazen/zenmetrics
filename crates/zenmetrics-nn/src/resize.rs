@@ -118,6 +118,8 @@ fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
 /// (`libImaging/Resample.c` `bilinear_filter`): triangle kernel
 /// `1 − |x|`, support `1·max(1, in/out)`; same fixed-point window bounds
 /// and 2⁻²² weight quantisation as [`bicubic_pil_1d`].
+// dead until the DMM metric registers (its `prepare_image_adt` resize).
+#[allow(dead_code)]
 fn bilinear_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
     const PRECISION_BITS: u32 = 22;
     let scale = in_size as f64 / out_size as f64;
@@ -160,6 +162,8 @@ fn bilinear_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
 /// `Image.resize((ow, oh), BILINEAR)` — the same fixed-point separable
 /// recipe as [`resize_bicubic_pil_u8`] with the triangle kernel (DMM's
 /// `prepare_image_adt` calls `F.resize(img, tar_size)`, default BILINEAR).
+// dead until the DMM metric registers (its `prepare_image_adt` resize).
+#[allow(dead_code)]
 pub(crate) fn resize_bilinear_pil_u8(
     img: &[u8],
     c: usize,

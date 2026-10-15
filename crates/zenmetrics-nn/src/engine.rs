@@ -414,6 +414,8 @@ pub(crate) mod ort_engine {
     /// A single-image trunk on CUDA: `[1, 3, h, w]` in, the graph's named
     /// feature maps out — for metrics whose head is host-side Rust (DMM's
     /// SVD), where a pair graph cannot express the score.
+    // dead until the DMM metric registers (its only consumer).
+    #[allow(dead_code)]
     pub(crate) struct OrtCudaTrunk {
         session: Mutex<Session>,
         input: &'static str,
@@ -421,6 +423,7 @@ pub(crate) mod ort_engine {
     }
 
     impl OrtCudaTrunk {
+        #[allow(dead_code)] // dead until the DMM metric registers
         pub(crate) fn load(
             path: &Path,
             input: &'static str,
@@ -476,7 +479,7 @@ pub(crate) mod ort_engine {
                     let (shape, data) = out[*name]
                         .try_extract_tensor::<f32>()
                         .map_err(|e| Error::Engine(e.to_string()))?;
-                    let [n, tc, th, tw] = *shape else {
+                    let &[n, tc, th, tw] = &shape[..] else {
                         return Err(Error::BadModel(format!(
                             "tap {name} shape {shape:?}, expected [1, c, h, w]"
                         )));
