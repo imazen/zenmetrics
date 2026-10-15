@@ -133,6 +133,16 @@ pub enum MetricKind {
     /// Cr=round(128+(112R-93.786G-18.214B)/255).
     #[value(name = "psnr-ycbcr611")]
     PsnrYCbCr611,
+    /// PSNR of the studio-swing BT.601 Cb plane at full resolution (4:4:4),
+    /// the `psnr-ycbcr611` conversion. JPEG AIC-4 `PSNR-Cb`: 61 pairs
+    /// median |Δ| 1.9e-3 dB, max 1.7e-2 dB (max 2.0e-3 JND).
+    #[value(name = "psnr-cb")]
+    PsnrCb,
+    /// PSNR of the studio-swing BT.601 Cr plane at full resolution (4:4:4),
+    /// the `psnr-ycbcr611` conversion. JPEG AIC-4 `PSNR-Cr`: 61 pairs
+    /// median |Δ| 2.1e-3 dB, max 5.7e-2 dB (max 8.8e-3 JND).
+    #[value(name = "psnr-cr")]
+    PsnrCr,
     /// Mean CIEDE2000 colour difference (ΔE00) — sRGB → linear → XYZ D65
     /// → CIELAB → ΔE00 per pixel → mean. Matches JPEG AIC-4 `CIEDE2000`
     /// column. 61-pair median|Δ|=3.0e-5, max|Δ|=2.96e-4 (target ≤ 1e-3).
@@ -548,6 +558,8 @@ impl MetricKind {
             MetricKind::PsnrYStudio601,
             MetricKind::PsnrYLibvmaf,
             MetricKind::PsnrYCbCr611,
+            MetricKind::PsnrCb,
+            MetricKind::PsnrCr,
             MetricKind::Ciede2000,
             MetricKind::SsimC,
             MetricKind::Ssim,
@@ -632,6 +644,8 @@ impl MetricKind {
             MetricKind::PsnrYStudio601 => "psnr-y-studio601",
             MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
             MetricKind::PsnrYCbCr611 => "psnr-ycbcr611",
+            MetricKind::PsnrCb => "psnr-cb",
+            MetricKind::PsnrCr => "psnr-cr",
             MetricKind::Ciede2000 => "ciede2000",
             MetricKind::SsimC => "ssimc",
             MetricKind::Ssim => "ssim",
@@ -778,6 +792,8 @@ impl MetricKind {
             MetricKind::PsnrYStudio601 => &["psnr_y_studio601"],
             MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
             MetricKind::PsnrYCbCr611 => &["psnr_ycbcr611"],
+            MetricKind::PsnrCb => &["psnr_cb"],
+            MetricKind::PsnrCr => &["psnr_cr"],
             MetricKind::Ciede2000 => &["ciede2000"],
             MetricKind::SsimC => &["ssimc"],
             MetricKind::Ssim => &["ssim"],
@@ -2017,6 +2033,20 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::PsnrYCbCr611 => Err(disabled_msg("psnr-ycbcr611", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrCb => Ok(vec![(
+            "psnr_cb",
+            classical::score(classical::Kind::PsnrCb, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrCb => Err(disabled_msg("psnr-cb", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrCr => Ok(vec![(
+            "psnr_cr",
+            classical::score(classical::Kind::PsnrCr, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrCr => Err(disabled_msg("psnr-cr", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ciede2000 => Ok(vec![(
             "ciede2000",

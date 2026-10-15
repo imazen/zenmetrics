@@ -1,0 +1,11 @@
+base             Cb: med 1.92e-03 max 1.69e-02  Cr: med 2.11e-03 max 5.73e-02
+exact            Cb: med 1.93e-03 max 1.69e-02  Cr: med 2.11e-03 max 5.73e-02
+3dec             Cb: med 6.28e-03 max 2.79e-02  Cr: med 4.46e-03 max 2.96e-02
+base_f32         Cb: med 1.91e-03 max 1.69e-02  Cr: med 2.11e-03 max 5.73e-02
+base_rint_even   Cb: med 1.92e-03 max 1.69e-02  Cr: med 2.11e-03 max 5.73e-02
+base_trunc       Cb: med 2.51e-02 max 7.74e-01  Cr: med 2.30e-02 max 1.11e+00
+exact_f32        Cb: med 1.92e-03 max 1.69e-02  Cr: med 1.96e-03 max 5.75e-02
+fixed8           Cb: med 3.08e-02 max 6.28e-02  Cr: med 3.32e+01 max 3.68e+01
+fixed14          Cb: med 2.22e-03 max 1.62e-02  Cr: med 6.94e+01 max 7.31e+01
+fixed15          Cb: med 1.97e-03 max 1.69e-02  Cr: med 7.54e+01 max 7.91e+01
+fixed16          Cb: med 1.97e-03 max 1.69e-02  Cr: med 8.14e+01 max 8.51e+01

@@ -1533,6 +1533,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::PsnrYStudio601
         | MetricKind::PsnrYLibvmaf
         | MetricKind::PsnrYCbCr611
+        | MetricKind::PsnrCb
+        | MetricKind::PsnrCr
         // PSNR-HVS (Daala/libvmaf) and mDCT-PSNR are dB-scale, higher =
         // better; mDCT-PSNR reports `+inf` for identical inputs, so no
         // finite identity value / mean bound is characterised yet.

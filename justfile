@@ -309,7 +309,10 @@ lock-snapshot-tests:
 # any other revision is exported as committed), checks the lock,
 # then runs `cargo --locked <args>` in the snapshot with its own target dir.
 # Example: just snap-cargo @ test -p zenstats
+# `fmt` is refused without `--check`: it would format the snapshot copy and
+# never reach the tree (use `just fmt`).
 snap-cargo rev +args:
+    @case " {{args}} " in " fmt "*) case " {{args}} " in *" --check "*) ;; *) echo "snap-cargo: fmt edits the snapshot, not this tree; run 'just fmt' (fmt --check is fine here)" >&2; exit 2 ;; esac ;; esac
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 

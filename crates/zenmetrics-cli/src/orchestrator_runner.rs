@@ -529,6 +529,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::PsnrY601
             | CliMetricKind::PsnrYStudio601
             | CliMetricKind::PsnrYCbCr611
+            | CliMetricKind::PsnrCb
+            | CliMetricKind::PsnrCr
             | CliMetricKind::Ciede2000
             | CliMetricKind::SsimC
             | CliMetricKind::PsnrYLibvmaf

@@ -44,6 +44,7 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- zenmetrics-cli `psnr-cb` and `psnr-cr` (JPEG AIC-4 `PSNR-Cb`, `PSNR-Cr`): PSNR of the full-resolution studio-swing BT.601 chroma planes, the `psnr-ycbcr611` conversion. 61 pairs: max 2.0e-3 / 8.8e-3 JND (1.7e-2 / 5.7e-2 dB); no tested convention gets closer ([search](benchmarks/aic_psnr_chroma_2026-10-15/README.md)).
 - zenmetrics-cli AIC SSIM-pyiqa family (`147b5cca`): rounded and unrounded `ssim-pyiqa` and `ms-ssim-pyiqa`, unrounded RGB `ssimc-pyiqa`, with fixed-factor k2–k6 variants; geometry too small for the 11×11 window is refused. Published 61-pair gates: SSIM-pyiqa max 3.8e-6, MS-SSIM-pyiqa max 1.9e-6.
 - VSI fixed-factor decimation (`e7e1ca5a`): `Vsi::with_downscale(Downscale::Factor(n))` and CLI `vsi-k2/k3/k4/nodownscale`; `Auto` output is unchanged bit for bit.
 - FSIM/FSIMc fixed-factor decimation (`986f68d2`): `Fsim::with_downscale` and CLI `fsim-k2/k3/k4/nodownscale` (each emits `fsim_*` and `fsimc_*`); `Auto` output is unchanged bit for bit.

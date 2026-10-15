@@ -62,8 +62,9 @@ class StudyTests(unittest.TestCase):
         inv, summary, rows = study.expand(self.write())
         # Every `#[value(name)]` in the CLI's MetricKind; bump with each metric added
         # (51: +vmaf-studio601, vmaf-neg-studio601, psnr-ycbcr611, ciede2000, ssimc;
-        # 79: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family).
-        self.assertEqual(len(inv['metrics']), 79)
+        # 53: +psnr-cb, psnr-cr;
+        # 81: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family).
+        self.assertEqual(len(inv['metrics']), 81)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
