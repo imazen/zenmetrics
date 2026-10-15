@@ -711,11 +711,7 @@ mod tests {
         let recorded = Mutex::new(Vec::new());
         let stat = |d: &Draw<'_>| {
             let w = d.row_weights();
-            let mixed = if w[2] == 0.0 {
-                f64::NAN
-            } else {
-                w[0] - w[1]
-            };
+            let mixed = if w[2] == 0.0 { f64::NAN } else { w[0] - w[1] };
             // The first evaluation is the full-data estimate, not a draw.
             if calls.fetch_add(1, Ordering::Relaxed) > 0 {
                 recorded.lock().unwrap().push(mixed);
