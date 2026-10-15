@@ -288,12 +288,6 @@ pub struct Vsi {
     downscale: Downscale,
 }
 
-/// Default automatic scorer, retaining unit-value construction compatibility.
-#[allow(non_upper_case_globals)]
-pub const Vsi: Vsi = Vsi {
-    downscale: Downscale::Auto,
-};
-
 /// Pre-scoring opponent/saliency box-filter decimation policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Downscale {

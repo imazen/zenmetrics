@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Remove same-name FSIM/VSI scorer constants; callers construct default scorers explicitly, including browser map evaluation.
+
 - FSIM/VSI fixed-factor metric identities now include their downscale configuration while preserving Auto fingerprints.
 
 ## zenmetrics-stats

@@ -338,7 +338,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
                 let mut px = [0f32; 4];
-                for (x, sample) in row.chunks_exact(2).enumerate() {
+                for (x, sample) in row.as_chunks::<2>().0.iter().enumerate() {
                     px[x % channels] =
                         f32::from(u16::from_ne_bytes([sample[0], sample[1]])) / 65535.0;
                     if x % channels == channels - 1 {
@@ -365,7 +365,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
                 let mut px = [0f32; 4];
-                for (x, sample) in row.chunks_exact(4).enumerate() {
+                for (x, sample) in row.as_chunks::<4>().0.iter().enumerate() {
                     px[x % channels] =
                         f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]])
                             .clamp(0.0, 1.0);
@@ -509,7 +509,7 @@ fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32),
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
                 let mut px = [0u16; 4];
-                for (x, sample) in row.chunks_exact(2).enumerate() {
+                for (x, sample) in row.as_chunks::<2>().0.iter().enumerate() {
                     px[x % channels] = u16::from_ne_bytes([sample[0], sample[1]]);
                     if x % channels == channels - 1 {
                         push_px(&mut rgb16, &px);
@@ -540,7 +540,6 @@ fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32),
 /// Tight interleaved RGB u16 PQ code values → absolute-luminance nits via
 /// the SMPTE ST 2084 EOTF (`pq_eotf(v / 65535)`, output in cd/m²).
 #[cfg(feature = "png")]
-
 /// Decode interleaved **RGB u16 HLG code values** to absolute display nits
 /// per BT.2100 (ARIB STD-B67): per-channel inverse OETF to scene-linear,
 /// then the peak-dependent OOTF `RGB_d = (peak − black) · Y_s^(γ−1) · RGB_s`
@@ -555,7 +554,7 @@ pub(crate) fn rgb16_hlg_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsI
     let (y_peak, y_black) = (1000.0f32, 0.005f32);
     let gamma = hlg_system_gamma(y_peak, 100.0);
     let mut rgb = Vec::with_capacity(rgb16.len());
-    for px in rgb16.chunks_exact(3) {
+    for px in rgb16.as_chunks::<3>().0.iter() {
         let r = hlg_inverse_oetf_scalar(f32::from(px[0]) / 65535.0);
         let g = hlg_inverse_oetf_scalar(f32::from(px[1]) / 65535.0);
         let b = hlg_inverse_oetf_scalar(f32::from(px[2]) / 65535.0);
@@ -783,7 +782,7 @@ pub fn to_cvvdp_linear_planes(img: &NitsImage, peak_nits: f32) -> (Vec<f32>, Vec
         Vec::with_capacity(n),
         Vec::with_capacity(n),
     );
-    for px in img.rgb.chunks_exact(3) {
+    for px in img.rgb.as_chunks::<3>().0.iter() {
         r.push((px[0] * inv).clamp(0.0, 1.0));
         g.push((px[1] * inv).clamp(0.0, 1.0));
         b.push((px[2] * inv).clamp(0.0, 1.0));
@@ -1563,7 +1562,7 @@ pub fn score_hdr_zensim_with_features_per_score_pairs(
     metric: crate::metrics::MetricKind,
     reference: &HdrImageFeeds,
     distorted: &HdrImageFeeds,
-    scorers: &mut HdrPairScorers,
+    _scorers: &mut HdrPairScorers,
     regime: crate::metrics::ZensimFeatureRegime,
 ) -> Result<(f64, Vec<f64>), Err> {
     use crate::metrics::MetricKind as M;
@@ -1571,9 +1570,9 @@ pub fn score_hdr_zensim_with_features_per_score_pairs(
     match metric {
         #[cfg(feature = "gpu-zensim")]
         M::ZensimGpu => {
-            let cache = scorers
+            let cache = _scorers
                 .zensim_cache
-                .get_or_insert_with(|| crate::metrics::cache::MetricCache::new(scorers.runtime));
+                .get_or_insert_with(|| crate::metrics::cache::MetricCache::new(_scorers.runtime));
             cache.compute_zensim_features(reference.sdr_u8(), distorted.sdr_u8(), regime)
         }
         M::Zensim => {
@@ -1623,7 +1622,12 @@ mod tests {
                     [-0.0196375545903344, -0.0786360455506324, 1.09827360014097],
                 ],
             };
-            for (src, dst) in source.chunks_exact(3).zip(actual.rgb.chunks_exact(3)) {
+            for (src, dst) in source
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .zip(actual.rgb.as_chunks::<3>().0.iter())
+            {
                 for c in 0..3 {
                     let expected: f64 = (0..3).map(|k| matrix[c][k] * f64::from(src[k])).sum();
                     assert!(

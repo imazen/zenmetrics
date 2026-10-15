@@ -322,7 +322,8 @@ fn vsi_diffmap_is_decimated_at_large_sizes() {
 /// The generic surface honors the abstractions contract.
 #[test]
 fn generic_surface_conforms() {
-    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Vsi::default(), 41, 33);
+    let mut scorer = crate::Vsi::default();
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut scorer, 41, 33);
 }
 
 #[test]

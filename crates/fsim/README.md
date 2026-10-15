@@ -44,6 +44,6 @@ SIMD tiers (scalar / AVX2-FMA / AVX-512 / NEON / wasm128) via
 
 `Fsim::with_downscale(Downscale::Factor(NonZeroU32::new(2).unwrap()))`
 selects a fixed factor for `score_rgb8` and generic `Metric::evaluate` (including
-maps). `Default`, the `Fsim` value, and the free scoring functions retain automatic
+maps). `Default` and the free scoring functions retain automatic
 decimation. Factor 1 disables decimation. All factors use the same reference box
 filter and sampling anchor; map geometry records the selected factor.

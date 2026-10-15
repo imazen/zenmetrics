@@ -330,7 +330,7 @@ fn metric_trait_object_scores_and_maps() {
     let r = za::conformance::textured_rgb8(w, h, 5);
     let d = za::conformance::distort_rgb8(&r, w, h);
     let mk = |px| za::conformance::rgb8_image(px, w, h);
-    let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim);
+    let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim::default());
     assert_eq!(m.id().family(), "fsim");
     assert_eq!(m.score_kind(), ScoreKind::Similarity);
     assert!(m.accepts(&mk(&r).format()));
@@ -374,7 +374,7 @@ fn metric_trait_object_scores_and_maps() {
 /// The generic surface honors the abstractions contract.
 #[test]
 fn generic_surface_conforms() {
-    let mut scorer = crate::Fsim;
+    let mut scorer = crate::Fsim::default();
     zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut scorer, 45, 37);
 }
 

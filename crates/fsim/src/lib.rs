@@ -425,12 +425,6 @@ pub struct Fsim {
     downscale: Downscale,
 }
 
-/// Default automatic scorer, retaining unit-value construction compatibility.
-#[allow(non_upper_case_globals)]
-pub const Fsim: Fsim = Fsim {
-    downscale: Downscale::Auto,
-};
-
 /// Pre-scoring box-filter decimation policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Downscale {

@@ -51,5 +51,5 @@ SIMD tiers (scalar / AVX2-FMA / AVX-512 / NEON / wasm128) via
 `Vsi::with_downscale(Downscale::Factor(NonZeroU32::new(2).unwrap()))`
 selects a fixed opponent/saliency decimation factor for `score_rgb8` and generic
 `Metric::evaluate`, including maps. Saliency estimation retains its reference
-256×256 processing. `Default`, the `Vsi` value, and free functions retain the
+256×256 processing. `Default` and free functions retain the
 automatic factor. Factor 1 disables decimation; map geometry records the factor.
