@@ -598,10 +598,13 @@ nn-export-dreamsim python ladder out ckpt:
 nn-export-ahiq python ladder out upstream ckpt patch_size="8":
     AHIQ_SRC='{{upstream}}' {{python}} -I crates/zenmetrics-nn/models/ahiq/export.py '{{ladder}}' '{{out}}' '{{ckpt}}' '{{patch_size}}'
 
+nn-export-dmm python ladder out upstream:
+    {{python}} -I crates/zenmetrics-nn/models/dmm/export.py '{{ladder}}' '{{out}}' '{{upstream}}'
+
 # Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq,dmm":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1

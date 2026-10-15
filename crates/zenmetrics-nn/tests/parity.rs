@@ -5,7 +5,7 @@
 //!   (`<model>_goldens.tsv` next to each model's files).
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
-//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `ahiq`.
+//!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `ahiq`, `dmm`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Ahiq, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Ahiq, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -107,6 +107,12 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                 return (
                     Box::new(Ahiq::from_dir(&dir, engine(), &consent).expect("load ahiq")),
                     "ahiq",
+                );
+            }
+            if name == "dmm" {
+                return (
+                    Box::new(Dmm::from_dir(&dir, engine()).expect("load dmm")),
+                    "dmm",
                 );
             }
             let net = *LpipsNet::ALL
@@ -248,12 +254,11 @@ fn warm_reference_equals_cold() {
             // A trunk engine caches the reference's features; a whole-graph
             // engine (ort-cuda) recomputes them on every candidate (ahiq's
             // warm keeps the nine converted crops, still a recomputation of
-            // features per evaluate).
-            assert_eq!(
-                warm.reuses_reference_work(),
-                engine() == Engine::Rten,
-                "{col}"
-            );
+            // features per evaluate). DMM is the exception: its trunk runs
+            // on ort-cuda but the SVD decompositions it caches are
+            // host-side, so it reuses reference work on either engine.
+            let expect_reuse = engine() == Engine::Rten || col == "dmm";
+            assert_eq!(warm.reuses_reference_work(), expect_reuse, "{col}");
             for _ in 0..2 {
                 let s = score(
                     &*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap(),

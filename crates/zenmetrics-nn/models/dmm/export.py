@@ -18,7 +18,7 @@
 #                    (min side >128 -> PIL bilinear short-side resize to
 #                    max(floor(min/48)*32,128), then ToTensor -> [0,1]).
 #   dmm_export.meta    versions and sha256 of every output.
-import hashlib, os, sys, platform
+import gc, hashlib, os, sys, platform
 import numpy as np, torch
 import torch.nn.functional as F
 from PIL import Image
@@ -79,16 +79,17 @@ def head_score(t_r, t_d):
         td, tp = t_d[key], t_r[key]
         a, b, hh, ww = td.size()
         k = 16
-        dp = unfold(td).view(a, b, k, k, -1).transpose(2, 4).contiguous()
-        pp = unfold(tp).view(a, b, k, k, -1).transpose(2, 4).contiguous()
-        pt = dp.shape[2]
-        # identical math to upstream, chunked over channels so a
-        # multi-million-patch batch cannot OOM
+        # identical math to upstream, chunked over channels AND unfolded
+        # per channel slice (a whole-tap unfold is (a, b·k·k, pt) — 7 GB
+        # on relu3_3 of a 4096-prepared pair) so the batch stays ~1 GB
         diff_s = td.new_zeros(a)
         for c0 in range(0, b, 32):
             c1x = min(c0 + 32, b)
-            dpc = dp[:, c0:c1x].contiguous().view(-1, k, k)
-            ppc = pp[:, c0:c1x].contiguous().view(-1, k, k)
+            dpc = unfold(td[:, c0:c1x]).view(a, c1x - c0, k, k, -1) \
+                .transpose(2, 4).contiguous().view(-1, k, k)
+            ppc = unfold(tp[:, c0:c1x]).view(a, c1x - c0, k, k, -1) \
+                .transpose(2, 4).contiguous().view(-1, k, k)
+            pt = dpc.numel() // (a * (c1x - c0) * k * k)
             u_r, s_r, _ = torch.svd(ppc)
             u_d, s_d, _ = torch.svd(dpc)
             s_r = s_r.view(a, c1x - c0, pt, k)
@@ -118,33 +119,84 @@ torch.onnx.export(
     dynamic_axes={'x': {2: 'h', 3: 'w'},
                   't3': {2: 'h4', 3: 'w4'}, 't4': {2: 'h8', 3: 'w8'}})
 
-# goldens: full upstream DMM score on the ladder under prepare_image_adt
-rows = []
-for f in sorted(os.listdir(LADDER)):
-    if not f.endswith('_dist.png'):
-        continue
-    stem = f[:-9]
-    ref_p = os.path.join(LADDER, stem + '_ref.png')
-    dis_p = os.path.join(LADDER, f)
-    src, size = stem.rsplit('_', 1)
-    rt = prepare_image_adt(Image.open(ref_p).convert('RGB'))
-    dt = prepare_image_adt(Image.open(dis_p).convert('RGB'))
-    rows.append((src, size, f'{float(ref_dmm(rt, dt)):.9e}'))
-
-with open(os.path.join(OUT, 'dmm_goldens.tsv'), 'w') as f:
-    f.write('image\tsize\tdmm\n')
-    for r_ in rows:
-        f.write('\t'.join(r_) + '\n')
+# goldens: full upstream DMM score on the ladder under prepare_image_adt.
+# Upstream's forward materialises the whole unfold batch + (a,b,pt,16,16)
+# u_rd products per call — ~14 GB on the 2048 pair, ~30 GB on 4096 — so
+# rows past DIRECT_MAX are scored by head_score (the chunked replica
+# asserted <1e-5 vs upstream above), which schedules the SAME upstream
+# ops per channel block. Rows are tagged in dmm_export.meta.
+DIRECT_MAX = 1200  # prepared short-side cap for the literal upstream call
+GOLD = os.path.join(OUT, 'dmm_goldens.tsv')
+# Torch's CPU caching allocator ratchets RSS across the big pairs (the
+# multi-GB unfold buffers fragment instead of returning to the OS), so
+# rows are appended as they finish and already-written stems skipped —
+# the loop is resumable after a kill.
+done = set()
+if os.path.exists(GOLD):
+    with open(GOLD) as f:
+        next(f, None)
+        done = {ln.split('\t')[0] + '_' + ln.split('\t')[1] for ln in f if ln.strip()}
+new_rows = not done
+with open(GOLD, 'a') as out:
+    if new_rows:
+        out.write('image\tsize\tdmm\n')
+    for f in sorted(os.listdir(LADDER)):
+        if not f.endswith('_dist.png'):
+            continue
+        stem = f[:-9]
+        if stem in done:
+            continue
+        ref_p = os.path.join(LADDER, stem + '_ref.png')
+        dis_p = os.path.join(LADDER, f)
+        src, size = stem.rsplit('_', 1)
+        rt = prepare_image_adt(Image.open(ref_p).convert('RGB'))
+        dt = prepare_image_adt(Image.open(dis_p).convert('RGB'))
+        if min(rt.shape[2], rt.shape[3]) < 128:
+            # relu4_3 tap < one 16x16 patch — upstream's own forward
+            # raises the same F.unfold error; the port refuses with
+            # TooSmall. No golden exists upstream either.
+            print(stem, 'skipped (prepared <128)', flush=True)
+            continue
+        if min(rt.shape[2], rt.shape[3]) <= DIRECT_MAX:
+            s = float(ref_dmm(rt, dt))
+        else:
+            tr = ref_dmm.features_extractor(rt)
+            td = ref_dmm.features_extractor(dt)
+            s = float(head_score(tr, td))
+        del rt, dt
+        gc.collect()
+        out.write(f'{src}\t{size}\t{s:.9e}\n')
+        out.flush()
+        print(stem, f'{s:.9e}', flush=True)
 
 with open(os.path.join(OUT, 'dmm.meta'), 'w') as f:
     f.write('channels 256,512\nmin_size 128\n')
 
 meta = {'python': platform.python_version(), 'torch': torch.__version__,
         'torchvision': torchvision.__version__}
+# replica_rows is recomputed over the FINAL tsv, not just this run's
+# rows: a row was chunked iff its prepared short side exceeds
+# DIRECT_MAX, which is derivable from the source image's PIL header
+# (prepare_image_adt resizes short -> max(min//48*32, 128)).
+def _prep_short(path):
+    w, h = Image.open(path).size
+    m = min(w, h)
+    return max(m // 48 * 32, 128) if m > 128 else m
+replica_rows = []
+with open(GOLD) as gf:
+    next(gf, None)
+    for ln in gf:
+        if not ln.strip():
+            continue
+        stem = f'{ln.split(chr(9))[0]}_{ln.split(chr(9))[1]}'
+        if _prep_short(os.path.join(LADDER, stem + '_ref.png')) > DIRECT_MAX:
+            replica_rows.append(stem)
 with open(os.path.join(OUT, 'dmm_export.meta'), 'w') as f:
     f.write(f'# dmm export {meta}\n')
+    f.write(f'# goldens: upstream DMM() direct; chunked-replica rows '
+            f'(same math, <1e-5 verified): {sorted(replica_rows)}\n')
     for n in sorted(os.listdir(OUT)):
         if n.endswith(('.onnx', '.meta', '.tsv')):
             h = hashlib.sha256(open(os.path.join(OUT, n), 'rb').read()).hexdigest()
             f.write(f'{h}  {n}\n')
-print('wrote', len(rows), 'goldens')
+print('goldens complete')

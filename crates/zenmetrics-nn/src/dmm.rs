@@ -39,8 +39,10 @@ pub struct Dmm {
     min_size: usize,
 }
 
-/// One patch's SVD: `u` row-major 16×16, `s` the 16 singular values,
-/// descending. Stored f32 — upstream computes the whole head in f32.
+/// One patch's SVD: `u` row-major 16×16 holding the patch's *right*
+/// singular vectors (upstream's `u` of the transposed patch — see
+/// `svd16`), `s` the 16 singular values, descending. Stored f32 —
+/// upstream computes the whole head in f32.
 #[derive(Clone)]
 struct PatchSvd {
     u: [f32; 256],
@@ -48,6 +50,10 @@ struct PatchSvd {
 }
 
 /// One tap's per-patch decompositions plus its channel means (`y_mean`).
+/// Only the warm path materialises this — on a 2720² prepared image the two
+/// taps hold ~11.5 GB of `PatchSvd`, so the cold score streams the head per
+/// channel instead of keeping both sides resident (the sum over (c, pt) is
+/// order-free).
 struct TapDecomp {
     /// `c * pt` patches, channel-major.
     patches: Vec<PatchSvd>,
@@ -66,20 +72,15 @@ impl Dmm {
         let dir = dir.as_ref();
         let (channels, min_size) = read_meta(&dir.join("dmm.meta"))?;
         let backend = match engine {
-            Engine::Rten => Backend::Trunk(engine::load(
-                &dir.join("dmm_trunk.onnx"),
-                channels.len(),
-            )?),
+            Engine::Rten => {
+                Backend::Trunk(engine::load(&dir.join("dmm_trunk.onnx"), channels.len())?)
+            }
             #[cfg(feature = "ort")]
             Engine::OrtCuda => Backend::Trunk(Box::new(engine::ort_engine::OrtCudaTrunk::load(
                 &dir.join("dmm_trunk.onnx"),
                 "x",
                 vec!["t3", "t4"],
             )?)),
-            #[cfg(not(feature = "ort"))]
-            Engine::OrtCuda => {
-                return Err(Error::Engine("built without the ort feature".into()));
-            }
         };
         Ok(Self {
             backend,
@@ -138,7 +139,7 @@ impl Dmm {
             )));
         }
         for (t, &c) in taps.iter().zip(&self.channels) {
-            if t.c != c {
+            if t.c != c || t.data.len() != t.c * t.plane() {
                 return Err(Error::BadModel(format!(
                     "tap channel {}, expected {c}",
                     t.c
@@ -153,83 +154,73 @@ impl Dmm {
 
     /// Unfold `PATCH`-sized patches at `STRIDE` per channel and SVD each —
     /// the upstream `(a, C, L, 16, 16)` layout flattened to `(c * pt)`.
+    /// Upstream's `transpose(2,4)` makes its patch `Mᵀ` of ours, so its
+    /// `u` is our `v`: `PatchSvd.u` holds the *right* singular vectors
+    /// (see `svd16`).
     fn decompose(tap: &Tap) -> TapDecomp {
         let (c, h, w) = (tap.c, tap.h, tap.w);
-        let ny = (h - PATCH) / STRIDE + 1;
-        let nx = (w - PATCH) / STRIDE + 1;
+        let (ny, nx) = patch_grid(h, w);
         let pt = ny * nx;
         let mut patches = Vec::with_capacity(c * pt);
-        let mut means = Vec::with_capacity(c);
         for ch in 0..c {
-            let plane = &tap.data[ch * h * w..(ch + 1) * h * w];
-            means.push(plane.iter().map(|&v| f64::from(v)).sum::<f64>() as f32
-                / plane.len() as f32);
+            let plane = &tap.data[ch * tap.plane()..(ch + 1) * tap.plane()];
             for py in 0..ny {
                 for px in 0..nx {
-                    let mut m = [0f64; 256];
-                    for y in 0..PATCH {
-                        for x in 0..PATCH {
-                            m[y * PATCH + x] =
-                                f64::from(plane[(py * STRIDE + y) * w + px * STRIDE + x]);
-                        }
-                    }
-                    let (u, s) = svd16(&m);
-                    let mut uf = [0f32; 256];
-                    let mut sf = [0f32; 16];
-                    for i in 0..256 {
-                        uf[i] = u[i] as f32;
-                    }
-                    for i in 0..16 {
-                        sf[i] = s[i] as f32;
-                    }
-                    patches.push(PatchSvd { u: uf, s: sf });
+                    patches.push(svd_patch(plane, w, py * STRIDE, px * STRIDE));
                 }
             }
         }
         TapDecomp {
             patches,
-            means,
+            means: channel_means(tap),
             pt,
         }
     }
 
-    /// One tap's contribution: `mean_{c,pt}(diff_s·wt)·glb`.
-    fn tap_score(r: &TapDecomp, d: &TapDecomp, c: usize) -> f64 {
-        let n = r.pt * c;
+    /// One tap's contribution with both sides streamed: `mean_{c,pt}(diff_s·wt)·glb`.
+    fn tap_score_cold(r: &Tap, d: &Tap) -> f64 {
+        let (ny, nx) = patch_grid(r.h, r.w);
+        let n = ny * nx * r.c;
         let mut acc = 0.0f64;
-        for i in 0..n {
-            let (pr, pd) = (&r.patches[i], &d.patches[i]);
-            let mut diff_s = 0.0f64;
-            for k in 0..16 {
-                let ds = f64::from(pr.s[k]) - f64::from(pd.s[k]);
-                diff_s += ds * ds;
-            }
-            let mut u_rd = [0f64; 16];
-            for y in 0..16 {
-                let mut a = 0.0f64;
-                for x in 0..16 {
-                    a += f64::from(pr.u[y * 16 + x]) * f64::from(pd.u[y * 16 + x]).abs();
+        for ch in 0..r.c {
+            let (pr, pd) = channel_planes(r, d, ch);
+            for py in 0..ny {
+                for px in 0..nx {
+                    let pr = svd_patch(pr, r.w, py * STRIDE, px * STRIDE);
+                    let pd = svd_patch(pd, d.w, py * STRIDE, px * STRIDE);
+                    acc += patch_term(&pr, &pd);
                 }
-                u_rd[y] = a;
             }
-            let mean = u_rd.iter().sum::<f64>() / 16.0;
-            let var = u_rd.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / 15.0;
-            let wt = var.sqrt() / (mean + 1e-9);
-            acc += diff_s * wt;
         }
-        let avg = acc / n as f64;
-        let mut s1 = 0.0f64;
-        for ch in 0..c {
-            let (xm, ym) = (f64::from(d.means[ch]), f64::from(r.means[ch]));
-            s1 += (2.0 * xm * ym + 1e-6) / (xm * xm + ym * ym + 1e-6);
-        }
-        avg * (-2.0 * s1 / c as f64).exp()
+        let s1 = s1_gate(&channel_means(r), &channel_means(d));
+        acc / n as f64 * (-2.0 * s1).exp()
     }
 
-    fn score_taps(r: &[TapDecomp], d: &[TapDecomp]) -> f64 {
+    /// One tap's contribution against a cached reference decomp.
+    fn tap_score_warm(r: &TapDecomp, d: &Tap) -> f64 {
+        let (ny, nx) = patch_grid(d.h, d.w);
+        debug_assert_eq!(ny * nx, r.pt);
+        let c = r.means.len();
+        let n = r.pt * c;
+        let mut acc = 0.0f64;
+        for ch in 0..c {
+            let pd = &d.data[ch * d.plane()..(ch + 1) * d.plane()];
+            for py in 0..ny {
+                for px in 0..nx {
+                    let pr = &r.patches[ch * r.pt + py * nx + px];
+                    let pd = svd_patch(pd, d.w, py * STRIDE, px * STRIDE);
+                    acc += patch_term(pr, &pd);
+                }
+            }
+        }
+        let s1 = s1_gate(&r.means, &channel_means(d));
+        acc / n as f64 * (-2.0 * s1).exp()
+    }
+
+    fn score_taps(r: &[TapDecomp], d: &[Tap]) -> f64 {
         r.iter()
             .zip(d)
-            .map(|(rt, dt)| Self::tap_score(rt, dt, rt.means.len()))
+            .map(|(rt, dt)| Self::tap_score_warm(rt, dt))
             .sum()
     }
 
@@ -238,9 +229,7 @@ impl Dmm {
             return Err(Error::SizeMismatch);
         }
         if r.width.min(r.height) < self.min_size {
-            return Err(Error::TooSmall {
-                min: self.min_size,
-            });
+            return Err(Error::TooSmall { min: self.min_size });
         }
         let (pr, rh, rw) = Self::prep(r);
         let (pd, _, _) = Self::prep(d);
@@ -248,9 +237,30 @@ impl Dmm {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
         let (tr, td) = t.run_pair(pr, pd, rh, rw)?;
-        let dr = tr.into_iter().map(|t| Self::decompose(&t)).collect::<Vec<_>>();
-        let dd = td.into_iter().map(|t| Self::decompose(&t)).collect::<Vec<_>>();
-        Ok(Self::score_taps(&dr, &dd))
+        if tr.len() != self.channels.len() {
+            return Err(Error::BadModel(format!(
+                "{} taps, expected {}",
+                tr.len(),
+                self.channels.len()
+            )));
+        }
+        for (t, &c) in tr.iter().zip(&self.channels) {
+            if t.c != c || t.data.len() != t.c * t.plane() {
+                return Err(Error::BadModel(format!(
+                    "tap channel {}, expected {c}",
+                    t.c
+                )));
+            }
+            if t.h < PATCH || t.w < PATCH {
+                return Err(Error::TooSmall { min: self.min_size });
+            }
+        }
+        let s = tr
+            .iter()
+            .zip(&td)
+            .map(|(rt, dt)| Self::tap_score_cold(rt, dt))
+            .sum();
+        Ok(s)
     }
 }
 
@@ -296,21 +306,12 @@ impl za::Metric for Dmm {
         opts.checkpoint()?;
         let view = za::rgb8_view(&r)?;
         if view.width.min(view.height) < self.min_size {
-            return Err(Error::TooSmall {
-                min: self.min_size,
-            })
-            .metric_err_with(COLUMN, Error::kind);
+            return Err(Error::TooSmall { min: self.min_size })
+                .metric_err_with(COLUMN, Error::kind);
         }
         let (pr, rh, rw) = Self::prep(&view);
-        let Backend::Trunk(t) = &self.backend else {
-            return Err(Error::Engine("no trunk graph on this engine".into()));
-        };
         let taps = self.taps(pr, rh, rw).metric_err_with(COLUMN, Error::kind)?;
-        let _ = t;
-        let reference = taps
-            .iter()
-            .map(Self::decompose)
-            .collect::<Vec<TapDecomp>>();
+        let reference = taps.iter().map(Self::decompose).collect::<Vec<TapDecomp>>();
         Ok(Box::new(WarmDmm {
             metric: self,
             reference,
@@ -347,11 +348,7 @@ impl za::WarmReference for WarmDmm<'_> {
         }
         let (pd, dh, dw) = Dmm::prep(&d);
         let s = (|| -> Result<f64, Error> {
-            let taps = self.metric.taps(pd, dh, dw)?;
-            let dd = taps
-                .into_iter()
-                .map(|t| Dmm::decompose(&t))
-                .collect::<Vec<_>>();
+            let dd = self.metric.taps(pd, dh, dw)?;
             Ok(Dmm::score_taps(&self.reference, &dd))
         })()
         .metric_err_with(COLUMN, Error::kind)?;
@@ -363,141 +360,923 @@ impl za::WarmReference for WarmDmm<'_> {
     }
 }
 
-/// SVD of a 16×16 matrix via cyclic-Jacobi eigendecomposition of `MᵀM`:
-/// `s_i = √λ_i` descending, `u_i = M·v_i / s_i`. For distinct singular
-/// values the U columns are unique up to sign — and `|u_r ∘ u_d|` is
-/// sign-free, so this matches `torch.svd`'s `u`, `s` for everything the head
-/// reads. Near-zero `s_i` gets a deterministic Gram–Schmidt completion.
-fn svd16(m: &[f64; 256]) -> ([f64; 256], [f64; 16]) {
-    let mut g = [0f64; 256];
-    for i in 0..16 {
-        for j in 0..16 {
-            let mut a = 0.0;
-            for r in 0..16 {
-                a += m[r * 16 + i] * m[r * 16 + j];
-            }
-            g[i * 16 + j] = a;
+/// The unfold patch grid `(ny, nx)` for an `h×w` tap.
+fn patch_grid(h: usize, w: usize) -> (usize, usize) {
+    ((h - PATCH) / STRIDE + 1, (w - PATCH) / STRIDE + 1)
+}
+
+/// The `ch`-th channel planes of taps `r`/`d`.
+fn channel_planes<'a>(r: &'a Tap, d: &'a Tap, ch: usize) -> (&'a [f32], &'a [f32]) {
+    (
+        &r.data[ch * r.plane()..(ch + 1) * r.plane()],
+        &d.data[ch * d.plane()..(ch + 1) * d.plane()],
+    )
+}
+
+/// Upstream `t.mean([2,3])` — one f32 channel mean per channel.
+fn channel_means(tap: &Tap) -> Vec<f32> {
+    let n = tap.plane();
+    (0..tap.c)
+        .map(|ch| {
+            tap.data[ch * n..(ch + 1) * n]
+                .iter()
+                .map(|&v| f64::from(v))
+                .sum::<f64>() as f32
+                / n as f32
+        })
+        .collect()
+}
+
+/// One `PATCH`×`PATCH` patch at `(y0, x0)` of a `w`-strided f32 plane,
+/// SVD'd by [`svd16`].
+fn svd_patch(plane: &[f32], w: usize, y0: usize, x0: usize) -> PatchSvd {
+    let mut m = [0f32; 256];
+    for y in 0..PATCH {
+        for x in 0..PATCH {
+            m[y * PATCH + x] = plane[(y0 + y) * w + x0 + x];
         }
     }
-    let mut v = [0f64; 256];
-    for i in 0..16 {
-        v[i * 16 + i] = 1.0;
+    let (u, s) = svd16(&m);
+    PatchSvd { u, s }
+}
+
+/// One patch pair's `Σ_k(s_r−s_d)² · wt` term.
+fn patch_term(pr: &PatchSvd, pd: &PatchSvd) -> f64 {
+    let mut diff_s = 0.0f64;
+    for k in 0..16 {
+        let ds = f64::from(pr.s[k]) - f64::from(pd.s[k]);
+        diff_s += ds * ds;
     }
-    for _ in 0..60 {
-        let mut off = 0.0f64;
-        for p in 0..15 {
-            for q in p + 1..16 {
-                off += g[p * 16 + q] * g[p * 16 + q];
+    // upstream: |u_r ∘ u_d|.sum(-1) on ITS `u` (= our `v` — see `svd16`)
+    // — abs on the PRODUCT, so u_rd >= 0; `u_r·|u_d|` instead can cancel
+    // to ~0 and wt's mean+1e-9 guard blows up by ~1e9.
+    let mut u_rd = [0f64; 16];
+    for y in 0..16 {
+        let mut a = 0.0f64;
+        for x in 0..16 {
+            a += (f64::from(pr.u[y * 16 + x]) * f64::from(pd.u[y * 16 + x])).abs();
+        }
+        u_rd[y] = a;
+    }
+    let mean = u_rd.iter().sum::<f64>() / 16.0;
+    let var = u_rd.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / 15.0;
+    diff_s * (var.sqrt() / (mean + 1e-9))
+}
+
+/// Upstream `mean_c(S1)` where `S1 = (2·x̄_d·ȳ_r + 1e-6)/(x̄_d²+ȳ_r² + 1e-6)`
+/// per channel — the SSIM-style gate's inner mean (before `exp(−2·)`).
+fn s1_gate(means_r: &[f32], means_d: &[f32]) -> f64 {
+    let mut s1 = 0.0f64;
+    for ch in 0..means_r.len() {
+        let (xm, ym) = (f64::from(means_d[ch]), f64::from(means_r[ch]));
+        s1 += (2.0 * xm * ym + 1e-6) / (xm * xm + ym * ym + 1e-6);
+    }
+    s1 / means_r.len() as f64
+}
+
+// ---- LAPACK-faithful 16x16 SVD ------------------------------------------
+//
+// Upstream runs `torch.svd` on `unfold().view(a,b,k,k,-1).transpose(2,4)` —
+// the `.transpose(2,4)` swaps the two k axes, so its patch matrix is `Mᵀ`
+// and its `u` is *this* patch's V factor. The head therefore contracts
+// `|v_r ∘ v_d|`, not `|u_r ∘ u_d|`.
+//
+// The score's `wt` term is sensitive to the *draw*: which orthonormal
+// basis the solver emits inside degenerate (near-tied or exact-zero)
+// singular clusters. Measured on ladder pairs: a cyclic-Jacobi
+// eigendecomposition of `MᵀM` deviates ~+11% while a faithful port of
+// LAPACK's `dgebd2 -> dorg2r -> dbdsqr -> dlasdq -> dbdsdc` pipeline (the
+// path `gesdd` takes for n=16 < SMLSIZ) lands in-family. Running the
+// solver in f32 matches upstream's `sgesdd` numerical domain: the f32
+// eps/threshold constants steer the same deflation decisions, which
+// tightened the measured ensemble `wt`-statistic deviation from ~0.4%
+// (f64 port) to ~0.03% vs the MKL draw on identical taps (np.svd/
+// OpenBLAS sits ~+15% off — the draw is implementation-defined, and
+// reference `dbdsdc` tracks MKL closely). Only the left (U) factor is
+// accumulated — the head never reads `v`.
+//
+// `svd16(m)` therefore transposes `m` first (matching upstream's
+// `transpose(2,4)`) and returns `u` of the transposed patch.
+
+const D_EPS: f32 = f32::EPSILON;
+const D_SAFMIN: f32 = f32::MIN_POSITIVE;
+
+fn dlapy2(x: f32, y: f32) -> f32 {
+    let (x, y) = (x.abs(), y.abs());
+    let (w, z) = if x < y { (y, x) } else { (x, y) };
+    if w == 0.0 {
+        0.0
+    } else {
+        w * (1.0 + (z / w) * (z / w)).sqrt()
+    }
+}
+
+fn dnrm2(x: &[f32]) -> f32 {
+    let (mut scale, mut ssq) = (0.0f32, 1.0f32);
+    for &xi in x {
+        if xi != 0.0 {
+            let a = xi.abs();
+            if scale < a {
+                ssq = 1.0 + ssq * (scale / a) * (scale / a);
+                scale = a;
+            } else {
+                ssq += (a / scale) * (a / scale);
             }
         }
-        if off <= 1e-28 {
+    }
+    scale * ssq.sqrt()
+}
+
+/// DLARFG: householder reflector on (alpha; x). Returns (beta, tau); the
+/// normalized tail is written back into `x`.
+fn dlarfg(alpha: f32, x: &mut [f32]) -> (f32, f32) {
+    if x.is_empty() {
+        return (alpha, 0.0);
+    }
+    let mut alpha = alpha;
+    let xnorm = dnrm2(x);
+    if xnorm == 0.0 {
+        return (alpha, 0.0);
+    }
+    let mut beta = -dlapy2(alpha, xnorm).copysign(alpha);
+    let safmin = D_SAFMIN / D_EPS;
+    let mut knt = 0;
+    if beta.abs() < safmin {
+        let rsafmn = 1.0 / safmin;
+        while beta.abs() < safmin && knt < 20 {
+            knt += 1;
+            for xi in x.iter_mut() {
+                *xi *= rsafmn;
+            }
+            beta *= rsafmn;
+            alpha *= rsafmn;
+        }
+        let xnorm = dnrm2(x);
+        beta = -dlapy2(alpha, xnorm).copysign(alpha);
+    }
+    let tau = (beta - alpha) / beta;
+    let inv = 1.0 / (alpha - beta);
+    for xi in x.iter_mut() {
+        *xi *= inv;
+    }
+    for _ in 0..knt {
+        beta *= safmin;
+    }
+    (beta, tau)
+}
+
+/// DLARTGP: scaled safe Givens rotation. Returns (cs, sn, r).
+fn dlartgp(f: f32, g: f32) -> (f32, f32, f32) {
+    let safmn2 = 2f32.powi(((D_SAFMIN / D_EPS).ln() / 2f32.ln() / 2.0) as i32);
+    let safmx2 = 1.0 / safmn2;
+    if g == 0.0 {
+        return (1.0f32.copysign(f), 0.0, f.abs());
+    }
+    if f == 0.0 {
+        return (0.0, 1.0f32.copysign(g), g.abs());
+    }
+    let (mut f1, mut g1) = (f, g);
+    let scale = f1.abs().max(g1.abs());
+    let (cs, sn, mut r);
+    if scale >= safmx2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale >= safmx2 && count < 20 {
+            count += 1;
+            f1 *= safmn2;
+            g1 *= safmn2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmx2;
+        }
+    } else if scale <= safmn2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale <= safmn2 {
+            count += 1;
+            f1 *= safmx2;
+            g1 *= safmx2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmn2;
+        }
+    } else {
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+    }
+    if r < 0.0 {
+        return (-cs, -sn, -r);
+    }
+    (cs, sn, r)
+}
+
+/// DLAS2: singular values of the 2x2 lower-triangular [f 0; g h].
+/// Returns (ssmin, ssmax).
+fn dlas2(f: f32, g: f32, h: f32) -> (f32, f32) {
+    let (fa, ga, ha) = (f.abs(), g.abs(), h.abs());
+    let fhmn = fa.min(ha);
+    let fhmx = fa.max(ha);
+    let (ssmin, ssmax);
+    if fhmn == 0.0 {
+        ssmin = 0.0;
+        ssmax = if fhmx == 0.0 {
+            ga
+        } else {
+            fhmx.max(ga) * (1.0 + (fhmx.min(ga) / fhmx.max(ga)).powi(2)).sqrt()
+        };
+    } else if ga < fhmx {
+        let as_ = 1.0 + fhmn / fhmx;
+        let at = (fhmx - fhmn) / fhmx;
+        let au = (ga / fhmx) * (ga / fhmx);
+        let c = 2.0 / ((as_ * as_ + au).sqrt() + (at * at + au).sqrt());
+        ssmin = fhmn * c;
+        ssmax = fhmx / c;
+    } else {
+        let au = fhmx / ga;
+        if au == 0.0 {
+            ssmin = (fhmn * fhmx) / ga;
+            ssmax = ga;
+        } else {
+            let as_ = 1.0 + fhmn / fhmx;
+            let at = (fhmx - fhmn) / fhmx;
+            let c = 1.0 / ((1.0 + (as_ * au).powi(2)).sqrt() + (1.0 + (at * au).powi(2)).sqrt());
+            let mut s = (fhmn * c) * au;
+            s += s;
+            ssmin = s;
+            ssmax = ga / (c + c);
+        }
+    }
+    (ssmin, ssmax)
+}
+
+/// DLASV2: SVD of the 2x2 [f g; 0 h]. Returns (ssmin, ssmax, snr, csr, snl, csl).
+fn dlasv2(f: f32, g: f32, h: f32) -> (f32, f32, f32, f32, f32, f32) {
+    let (mut ft, mut fa) = (f, f.abs());
+    let (mut ht, mut ha) = (h, h.abs());
+    let mut pmax = 1;
+    let swap = ha > fa;
+    if swap {
+        pmax = 3;
+        std::mem::swap(&mut ft, &mut ht);
+        std::mem::swap(&mut fa, &mut ha);
+    }
+    let gt = g;
+    let ga = g.abs();
+    let (clt, slt, crt, srt, ssmin, ssmax);
+    if ga == 0.0 {
+        ssmin = ha;
+        ssmax = fa;
+        clt = 1.0;
+        slt = 0.0;
+        crt = 1.0;
+        srt = 0.0;
+    } else {
+        let mut gasmal = true;
+        let mut clt_ = 1.0;
+        let mut slt_ = 0.0;
+        let mut crt_ = 1.0;
+        let mut srt_ = 0.0;
+        let mut ssmin_ = 0.0;
+        let mut ssmax_ = 0.0;
+        if ga > fa {
+            pmax = 2;
+            if fa / ga < D_EPS {
+                gasmal = false;
+                ssmax_ = ga;
+                ssmin_ = if ha > 1.0 {
+                    fa / (ga / ha)
+                } else {
+                    (fa / ga) * ha
+                };
+                clt_ = 1.0;
+                slt_ = ht / gt;
+                srt_ = 1.0;
+                crt_ = ft / gt;
+            }
+        }
+        if gasmal {
+            let d = fa - ha;
+            let l = if d == fa { 1.0 } else { d / fa };
+            let m = gt / ft;
+            let t = 2.0 - l;
+            let mm = m * m;
+            let tt = t * t;
+            let s = (tt + mm).sqrt();
+            let r = if l == 0.0 {
+                m.abs()
+            } else {
+                (l * l + mm).sqrt()
+            };
+            let a = 0.5 * (s + r);
+            ssmin_ = ha / a;
+            ssmax_ = fa * a;
+            let t = if mm == 0.0 {
+                if l == 0.0 {
+                    2.0f32.copysign(ft) * 1.0f32.copysign(gt)
+                } else {
+                    gt / d.copysign(ft) + m / t
+                }
+            } else {
+                (m / (s + t) + m / (r + l)) * (1.0 + a)
+            };
+            let l = (t * t + 4.0).sqrt();
+            crt_ = 2.0 / l;
+            srt_ = t / l;
+            clt_ = (crt_ + srt_ * m) / a;
+            slt_ = (ht / ft) * srt_ / a;
+        }
+        clt = clt_;
+        slt = slt_;
+        crt = crt_;
+        srt = srt_;
+        ssmin = ssmin_;
+        ssmax = ssmax_;
+    }
+    let (csl, snl, csr, snr) = if swap {
+        (srt, crt, slt, clt)
+    } else {
+        (clt, slt, crt, srt)
+    };
+    let tsign = match pmax {
+        1 => 1.0f32.copysign(csr) * 1.0f32.copysign(csl) * 1.0f32.copysign(f),
+        2 => 1.0f32.copysign(snr) * 1.0f32.copysign(csl) * 1.0f32.copysign(g),
+        _ => 1.0f32.copysign(snr) * 1.0f32.copysign(snl) * 1.0f32.copysign(h),
+    };
+    let ssmax = ssmax.copysign(tsign);
+    let ssmin = ssmin.copysign(tsign * 1.0f32.copysign(f) * 1.0f32.copysign(h));
+    (ssmin, ssmax, snr, csr, snl, csl)
+}
+
+/// DLARF 'Left': apply H = I - tau·v·vᵀ (v = [1, x]) to `a[r..16, c0..]`,
+/// reference-BLAS accumulation order (row r0 first, then tail rows in order).
+fn dlarf_left(r0: usize, x: &[f32], tau: f32, a: &mut [f32; 256], c0: usize) {
+    if tau == 0.0 {
+        return;
+    }
+    for c in c0..16 {
+        let mut w = a[r0 * 16 + c]; // v[0] = 1 implicit
+        for (i, &xi) in x.iter().enumerate() {
+            w += xi * a[(r0 + 1 + i) * 16 + c];
+        }
+        let tw = tau * w;
+        a[r0 * 16 + c] -= tw;
+        for (i, &xi) in x.iter().enumerate() {
+            a[(r0 + 1 + i) * 16 + c] -= xi * tw;
+        }
+    }
+}
+
+/// DLARF 'Right': apply H on the right to `a[r0.., c0..16]`; v = [1, x] sits
+/// on row r0 starting at c0 (tail `x` is already stored there by the caller).
+fn dlarf_right(r0: usize, c0: usize, x: &[f32], tau: f32, a: &mut [f32; 256]) {
+    if tau == 0.0 {
+        return;
+    }
+    for r in (r0 + 1)..16 {
+        let mut w = a[r * 16 + c0];
+        for (i, &xi) in x.iter().enumerate() {
+            w += a[r * 16 + c0 + 1 + i] * xi;
+        }
+        let tw = tau * w;
+        a[r * 16 + c0] -= tw;
+        for (i, &xi) in x.iter().enumerate() {
+            a[r * 16 + c0 + 1 + i] -= tw * xi;
+        }
+    }
+}
+
+/// DGEBD2 on a 16x16 row-major matrix. On return `a` carries the left
+/// reflector tails below the diagonal (LAPACK storage), `d`/`e` the
+/// bidiagonal and `tq` the left taus. Right reflectors are applied (they
+/// shape the bidiagonal) but not accumulated: the head never reads V.
+fn dgebd2(a: &mut [f32; 256], d: &mut [f32; 16], e: &mut [f32; 15], tq: &mut [f32; 16]) {
+    for j in 0..16 {
+        let mut x = [0f32; 15];
+        for r in 0..(15usize.saturating_sub(j)) {
+            x[r] = a[(j + 1 + r) * 16 + j];
+        }
+        let (beta, tau) = dlarfg(a[j * 16 + j], &mut x[..15usize.saturating_sub(j)]);
+        for r in 0..(15usize.saturating_sub(j)) {
+            a[(j + 1 + r) * 16 + j] = x[r];
+        }
+        a[j * 16 + j] = beta;
+        tq[j] = tau;
+        if j < 15 {
+            dlarf_left(j, &x[..15 - j], tau, a, j + 1);
+        }
+        d[j] = beta;
+        if j < 15 {
+            let mut xr = [0f32; 14];
+            for c in 0..(14usize.saturating_sub(j)) {
+                xr[c] = a[j * 16 + j + 2 + c];
+            }
+            let (beta2, tau2) = dlarfg(a[j * 16 + j + 1], &mut xr[..14usize.saturating_sub(j)]);
+            for c in 0..(14usize.saturating_sub(j)) {
+                a[j * 16 + j + 2 + c] = xr[c];
+            }
+            a[j * 16 + j + 1] = beta2;
+            dlarf_right(j, j + 1, &xr[..14 - j], tau2, a);
+            e[j] = beta2;
+        }
+    }
+}
+
+/// DORG2R/dorgbr 'Q': build Q1 = H_0·...·H_15 in place, column-wise.
+/// `a` holds the dgebd2 storage (reflector tails below the diagonal).
+fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
+    for i in (0..16).rev() {
+        let tau = tq[i];
+        if i < 15 {
+            a[i * 16 + i] = 1.0;
+            for c in (i + 1)..16 {
+                let mut w = a[i * 16 + c];
+                for r in (i + 1)..16 {
+                    w += a[r * 16 + i] * a[r * 16 + c];
+                }
+                a[i * 16 + c] -= tau * w;
+                for r in (i + 1)..16 {
+                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
+                }
+            }
+        }
+        for r in (i + 1)..16 {
+            a[r * 16 + i] *= -tau;
+        }
+        a[i * 16 + i] = 1.0 - tau;
+        for r in 0..i {
+            a[r * 16 + i] = 0.0;
+        }
+    }
+}
+
+/// Rotate U column pair (i, j): LAPACK DROT convention.
+fn drot_cols(u: &mut [f32; 256], i: usize, j: usize, c: f32, s: f32) {
+    for r in 0..16 {
+        let (a, b) = (u[r * 16 + i], u[r * 16 + j]);
+        u[r * 16 + i] = c * a + s * b;
+        u[r * 16 + j] = c * b - s * a;
+    }
+}
+
+/// DLASR 'R','V': apply a sequence of plane rotations to U column pairs
+/// (c0+i, c0+i+1). forward: i = 0..k; backward: i = k-1..0.
+fn dlasr_cols(u: &mut [f32; 256], c0: usize, cs: &[f32], sn: &[f32], forward: bool) {
+    if forward {
+        for i in 0..cs.len() {
+            drot_cols(u, c0 + i, c0 + i + 1, cs[i], sn[i]);
+        }
+    } else {
+        for i in (0..cs.len()).rev() {
+            drot_cols(u, c0 + i, c0 + i + 1, cs[i], sn[i]);
+        }
+    }
+}
+
+/// DBDSQR, uplo='U', nru=16 (U accumulated), ncvt=0 (no Vt). Faithful port
+/// of the reference control flow; `tol < 0` branches are dropped because
+/// the caller always runs relative-accuracy (tol > 0).
+fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
+    const N: usize = 16;
+    let nm1 = N - 1;
+    let nm12 = 2 * nm1;
+    let nm13 = 3 * nm1;
+    let mut idir = 0;
+    let tolmult = (10.0f32).max((100.0f32).min(D_EPS.powf(-0.125)));
+    let tol = tolmult * D_EPS;
+    let mut smax = 0.0f32;
+    for i in 0..N {
+        smax = smax.max(d[i].abs());
+    }
+    for i in 0..N - 1 {
+        smax = smax.max(e[i].abs());
+    }
+    // LAPACK inits SMIN=0; every path that reads it assigns smin_c first.
+    #[allow(unused_assignments)]
+    let mut smin = 0.0f32;
+    // relative-accuracy threshold (tol > 0 path)
+    let mut sminoa = d[0].abs();
+    let thresh = if sminoa == 0.0 {
+        // LAPACK goes through the absacc path here; threshold is unused
+        // below eps-size anyway for our data
+        6.0 * (N as f32 * (N as f32 * D_SAFMIN))
+    } else {
+        let mut mu = sminoa;
+        for i in 1..N {
+            mu = d[i].abs() * (mu / (mu + e[i - 1].abs()));
+            sminoa = sminoa.min(mu);
+            if sminoa == 0.0 {
+                break;
+            }
+        }
+        sminoa /= (N as f32).sqrt();
+        (tol * sminoa).max(6.0 * (N as f32 * (N as f32 * D_SAFMIN)))
+    };
+    let maxitdivn = 6 * N;
+    let mut iterdivn = 0;
+    let mut iter = -1i64;
+    let (mut oldll, mut oldm) = (-1i64, -1i64);
+    let mut m = N; // 1-based position: active block is ll..m
+    let mut work = [0f32; 4 * N];
+
+    loop {
+        // label 60
+        if m <= 1 {
             break;
         }
-        for p in 0..15 {
-            for q in p + 1..16 {
-                let apq = g[p * 16 + q];
-                if apq == 0.0 {
-                    continue;
+        if iter >= N as i64 {
+            iter -= N as i64;
+            iterdivn += 1;
+            if iterdivn >= maxitdivn {
+                // LAPACK returns INFO>0 here: the caller (DMM head)
+                // treats nonconvergence like convergence — the score
+                // uses whatever basis was accumulated.
+                return;
+            }
+        }
+        // find block
+        let mut smax2 = d[m - 1].abs();
+        let mut ll = 0usize;
+        for lll in 1..m {
+            let llx = m - lll; // 1-based LL -> e index LL-1
+            let abss = d[llx - 1].abs();
+            let abse = if llx - 1 < N - 1 {
+                e[llx - 1].abs()
+            } else {
+                0.0
+            };
+            if abse <= thresh {
+                ll = llx;
+                e[llx - 1] = 0.0;
+                break;
+            }
+            smax2 = smax2.max(abss).max(abse);
+        }
+        if ll == m - 1 {
+            m -= 1;
+            continue;
+        }
+        ll += 1; // active block rows ll..m (1-based); 0-based ll-1..m-1
+        if ll == m - 1 {
+            // 2x2 block at (m-2, m-1) 0-based
+            let (m1, m2) = (m - 2, m - 1);
+            let (ssmin, ssmax, _sinr, _cosr, sinl, cosl) = dlasv2(d[m1], e[m1], d[m2]);
+            d[m1] = ssmax;
+            e[m1] = 0.0;
+            d[m2] = ssmin;
+            drot_cols(u, m1, m2, cosl, sinl);
+            m -= 2;
+            continue;
+        }
+        // shift direction
+        if ll as i64 > oldm || (m as i64) < oldll {
+            idir = if d[ll - 1].abs() >= d[m - 1].abs() {
+                1
+            } else {
+                2
+            };
+        }
+        // convergence tests
+        if idir == 1 {
+            if e[m - 2].abs() <= tol.abs() * d[m - 1].abs() {
+                e[m - 2] = 0.0;
+                continue;
+            }
+            let mut mu = d[ll - 1].abs();
+            let mut smin_c = mu;
+            let mut done = false;
+            for lll in ll..m {
+                if e[lll - 1].abs() <= tol * mu {
+                    e[lll - 1] = 0.0;
+                    done = true;
+                    break;
                 }
-                let theta = (g[q * 16 + q] - g[p * 16 + p]) / (2.0 * apq);
-                let t = if theta >= 0.0 {
-                    1.0 / (theta + (theta * theta + 1.0).sqrt())
-                } else {
-                    1.0 / (theta - (theta * theta + 1.0).sqrt())
-                };
-                let c = 1.0 / (t * t + 1.0).sqrt();
-                let s = t * c;
-                for i in 0..16 {
-                    let (gp, gq) = (g[i * 16 + p], g[i * 16 + q]);
-                    g[i * 16 + p] = c * gp - s * gq;
-                    g[i * 16 + q] = s * gp + c * gq;
+                mu = d[lll].abs() * (mu / (mu + e[lll - 1].abs()));
+                smin_c = smin_c.min(mu);
+            }
+            if done {
+                continue;
+            }
+            smin = smin_c;
+        } else {
+            if e[ll - 1].abs() <= tol.abs() * d[ll - 1].abs() {
+                e[ll - 1] = 0.0;
+                continue;
+            }
+            let mut mu = d[m - 1].abs();
+            let mut smin_c = mu;
+            let mut done = false;
+            // LAPACK: LLL = M-1 downto LL over e index lll-1
+            for lll in (ll..m).rev() {
+                if e[lll - 1].abs() <= tol * mu {
+                    e[lll - 1] = 0.0;
+                    done = true;
+                    break;
                 }
-                for i in 0..16 {
-                    let (gp, gq) = (g[p * 16 + i], g[q * 16 + i]);
-                    g[p * 16 + i] = c * gp - s * gq;
-                    g[q * 16 + i] = s * gp + c * gq;
+                mu = d[lll - 1].abs() * (mu / (mu + e[lll - 1].abs()));
+                smin_c = smin_c.min(mu);
+            }
+            if done {
+                continue;
+            }
+            smin = smin_c;
+        }
+        oldll = ll as i64;
+        oldm = m as i64;
+        // shift
+        let mut shift = 0.0;
+        if tol * (N as f32) * (smin / smax2) <= D_EPS.max(0.01 * tol) {
+            // tiny cluster: shift stays 0 (LAPACK's zero-shift path)
+        } else {
+            if idir == 1 {
+                let sll = d[ll - 1].abs();
+                let (s2, _r) = dlas2(d[m - 2], e[m - 2], d[m - 1]);
+                shift = s2;
+                if sll > 0.0 && (shift / sll).powi(2) < D_EPS {
+                    shift = 0.0;
                 }
-                for i in 0..16 {
-                    let (vp, vq) = (v[i * 16 + p], v[i * 16 + q]);
-                    v[i * 16 + p] = c * vp - s * vq;
-                    v[i * 16 + q] = s * vp + c * vq;
+            } else {
+                let sll = d[m - 1].abs();
+                let (s2, _r) = dlas2(d[ll - 1], e[ll - 1], d[ll]);
+                shift = s2;
+                if sll > 0.0 && (shift / sll).powi(2) < D_EPS {
+                    shift = 0.0;
                 }
+            }
+        }
+        iter += (m - ll) as i64;
+        if shift == 0.0 {
+            if idir == 1 {
+                let mut cs = 1.0;
+                let mut oldcs = 1.0;
+                let mut oldsn = 1.0;
+                for i in (ll - 1)..(m - 1) {
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i]);
+                    cs = csn;
+                    if i > ll - 1 {
+                        e[i - 1] = oldsn * r;
+                    }
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i + 1] * sn);
+                    oldcs = ocs;
+                    oldsn = osn;
+                    d[i] = dd;
+                    work[i - (ll - 1)] = cs;
+                    work[i - (ll - 1) + nm1] = sn;
+                    work[i - (ll - 1) + nm12] = oldcs;
+                    work[i - (ll - 1) + nm13] = oldsn;
+                }
+                let hh = d[m - 1] * cs;
+                d[m - 1] = hh * oldcs;
+                e[m - 2] = hh * oldsn;
+                dlasr_cols(
+                    u,
+                    ll - 1,
+                    &work[nm12..nm12 + (m - ll)],
+                    &work[nm13..nm13 + (m - ll)],
+                    true,
+                );
+                if e[m - 2].abs() <= thresh {
+                    e[m - 2] = 0.0;
+                }
+            } else {
+                let mut cs = 1.0;
+                let mut oldcs = 1.0;
+                let mut oldsn = 1.0;
+                for i in (ll..m).rev() {
+                    // i 0-based from m-1 down to ll
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i - 1]);
+                    cs = csn;
+                    if i < m - 1 {
+                        e[i] = oldsn * r;
+                    }
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i - 1] * sn);
+                    oldcs = ocs;
+                    oldsn = osn;
+                    d[i] = dd;
+                    work[i - ll] = cs;
+                    work[i - ll + nm1] = -sn;
+                    work[i - ll + nm12] = oldcs;
+                    work[i - ll + nm13] = -oldsn;
+                }
+                let hh = d[ll - 1] * cs;
+                d[ll - 1] = hh * oldcs;
+                e[ll - 1] = hh * oldsn;
+                dlasr_cols(
+                    u,
+                    ll - 1,
+                    &work[..m - ll],
+                    &work[nm1..nm1 + (m - ll)],
+                    false,
+                );
+                if e[ll - 1].abs() <= thresh {
+                    e[ll - 1] = 0.0;
+                }
+            }
+        } else if idir == 1 {
+            let mut f =
+                (d[ll - 1].abs() - shift) * (1.0f32.copysign(d[ll - 1]) + shift / d[ll - 1]);
+            let mut g = e[ll - 1];
+            for i in (ll - 1)..(m - 1) {
+                let (cosr, sinr, r) = dlartgp(f, g);
+                if i > ll - 1 {
+                    e[i - 1] = r;
+                }
+                f = cosr * d[i] + sinr * e[i];
+                e[i] = cosr * e[i] - sinr * d[i];
+                g = sinr * d[i + 1];
+                d[i + 1] *= cosr;
+                let (cosl, sinl, r) = dlartgp(f, g);
+                d[i] = r;
+                f = cosl * e[i] + sinl * d[i + 1];
+                d[i + 1] = cosl * d[i + 1] - sinl * e[i];
+                if i < m - 2 {
+                    g = sinl * e[i + 1];
+                    e[i + 1] *= cosl;
+                }
+                work[i - (ll - 1)] = cosr;
+                work[i - (ll - 1) + nm1] = sinr;
+                work[i - (ll - 1) + nm12] = cosl;
+                work[i - (ll - 1) + nm13] = sinl;
+            }
+            e[m - 2] = f;
+            dlasr_cols(
+                u,
+                ll - 1,
+                &work[nm12..nm12 + (m - ll)],
+                &work[nm13..nm13 + (m - ll)],
+                true,
+            );
+            if e[m - 2].abs() <= thresh {
+                e[m - 2] = 0.0;
+            }
+        } else {
+            let mut f = (d[m - 1].abs() - shift) * (1.0f32.copysign(d[m - 1]) + shift / d[m - 1]);
+            let mut g = e[m - 2];
+            for i in (ll..m).rev() {
+                let (cosr, sinr, r) = dlartgp(f, g);
+                if i < m - 1 {
+                    e[i] = r;
+                }
+                f = cosr * d[i] + sinr * e[i - 1];
+                e[i - 1] = cosr * e[i - 1] - sinr * d[i];
+                g = sinr * d[i - 1];
+                d[i - 1] *= cosr;
+                let (cosl, sinl, r) = dlartgp(f, g);
+                d[i] = r;
+                f = cosl * e[i - 1] + sinl * d[i - 1];
+                d[i - 1] = cosl * d[i - 1] - sinl * e[i - 1];
+                if i > ll {
+                    g = sinl * e[i - 2];
+                    e[i - 2] *= cosl;
+                }
+                work[i - ll] = cosr;
+                work[i - ll + nm1] = -sinr;
+                work[i - ll + nm12] = cosl;
+                work[i - ll + nm13] = -sinl;
+            }
+            e[ll - 1] = f;
+            if e[ll - 1].abs() <= thresh {
+                e[ll - 1] = 0.0;
+            }
+            dlasr_cols(
+                u,
+                ll - 1,
+                &work[..m - ll],
+                &work[nm1..nm1 + (m - ll)],
+                false,
+            );
+        }
+    }
+    // label 160: make positive (Vt sign-flip dropped: no Vt)
+    for i in 0..N {
+        if d[i] < 0.0 {
+            d[i] = -d[i];
+        }
+    }
+    // dbdsqr's own sort: move min to end, LE ties -> last occurrence
+    for i in 1..N {
+        let tgt = N - i;
+        let mut isub = 0usize;
+        let mut smin_ = d[0];
+        for j in 1..=tgt {
+            if d[j] <= smin_ {
+                isub = j;
+                smin_ = d[j];
+            }
+        }
+        if isub != tgt {
+            d[isub] = d[tgt];
+            d[tgt] = smin_;
+            for r in 0..16 {
+                u.swap(r * 16 + isub, r * 16 + tgt);
             }
         }
     }
-    // Descending eigenvalues → singular values; u_i = M·v_i / s_i.
-    let mut order: Vec<usize> = (0..16).collect();
-    order.sort_by(|&a, &b| g[b * 16 + b].total_cmp(&g[a * 16 + a]));
-    let max_s = g[order[0] * 16 + order[0]].max(0.0).sqrt();
-    let mut s = [0f64; 16];
-    let mut u = [0f64; 256];
-    for (rank, &k) in order.iter().enumerate() {
-        let sv = g[k * 16 + k].max(0.0).sqrt();
-        s[rank] = sv;
-        if sv > 1e-9 * max_s + 1e-300 {
-            for i in 0..16 {
-                let mut a = 0.0;
-                for r in 0..16 {
-                    a += m[i * 16 + r] * v[r * 16 + k];
-                }
-                u[i * 16 + rank] = a / sv;
-            }
-        } else {
-            // Degenerate singular value: deterministic orthonormal
-            // completion via Gram–Schmidt on the canonical basis.
-            let mut e = [0f64; 16];
-            e[rank] = 1.0;
-            for prev in 0..rank {
-                let mut dot = 0.0;
-                for i in 0..16 {
-                    dot += e[i] * u[i * 16 + prev];
-                }
-                for i in 0..16 {
-                    e[i] -= dot * u[i * 16 + prev];
-                }
-            }
-            let n = e.iter().map(|x| x * x).sum::<f64>().sqrt();
-            let n = if n < 1e-12 {
-                // exhausted the basis — pick the least-used canonical axis
-                let mut pick = 0usize;
-                let mut best = f64::MAX;
-                for j in 0..16 {
-                    let mut t = [0f64; 16];
-                    t[j] = 1.0;
-                    for prev in 0..rank {
-                        let mut dot = 0.0;
-                        for i in 0..16 {
-                            dot += t[i] * u[i * 16 + prev];
-                        }
-                        for i in 0..16 {
-                            t[i] -= dot * u[i * 16 + prev];
-                        }
-                    }
-                    let nn = t.iter().map(|x| x * x).sum::<f64>();
-                    if nn < best {
-                        best = nn;
-                        pick = j;
-                    }
-                }
-                e = [0f64; 16];
-                e[pick] = 1.0;
-                for prev in 0..rank {
-                    let mut dot = 0.0;
-                    for i in 0..16 {
-                        dot += e[i] * u[i * 16 + prev];
-                    }
-                    for i in 0..16 {
-                        e[i] -= dot * u[i * 16 + prev];
-                    }
-                }
-                e.iter().map(|x| x * x).sum::<f64>().sqrt()
-            } else {
-                n
-            };
-            for i in 0..16 {
-                u[i * 16 + rank] = e[i] / n.max(1e-30);
+}
+
+/// DLASDQ: dbdsqr + ascending selection sort on (d, U cols).
+fn dlasdq(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
+    dbdsqr(d, e, u);
+    for i in 0..16 {
+        let mut isub = i;
+        let mut smin_ = d[i];
+        for j in (i + 1)..16 {
+            if d[j] < smin_ {
+                isub = j;
+                smin_ = d[j];
             }
         }
+        if isub != i {
+            d[isub] = d[i];
+            d[i] = smin_;
+            for r in 0..16 {
+                u.swap(r * 16 + isub, r * 16 + i);
+            }
+        }
+    }
+}
+
+/// SVD of a 16×16 patch matrix via the LAPACK dgebd2/dorg2r/dbdsqr
+/// pipeline (the `gesdd` path for n=16). `m` is the patch in natural
+/// (y,x) layout; upstream feeds `Mᵀ` to `torch.svd`, so this transposes
+/// first and returns `u` of the transposed matrix — the patch's own V.
+fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
+    let mut a = [0f32; 256];
+    for i in 0..16 {
+        for j in 0..16 {
+            a[i * 16 + j] = m[j * 16 + i]; // P = Mᵀ
+        }
+    }
+    let mut d = [0f32; 16];
+    let mut e = [0f32; 15];
+    let mut tq = [0f32; 16];
+    dgebd2(&mut a, &mut d, &mut e, &mut tq);
+    // a now holds reflector tails below diag; build Q1 in place
+    dorg2r_q(&mut a, &tq); // a <- Q1
+    // dbdsdc scale
+    let orgnrm = d
+        .iter()
+        .fold(0.0f32, |m, &x| m.max(x.abs()))
+        .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
+    if orgnrm == 0.0 {
+        let mut s = [0f32; 16];
+        let u = a; // Q1 (identity for zero matrix)
+        s.copy_from_slice(&d);
+        return (u, s);
+    }
+    let mut ds = [0f32; 16];
+    let mut es = [0f32; 15];
+    for i in 0..16 {
+        ds[i] = d[i] / orgnrm;
+    }
+    for i in 0..15 {
+        es[i] = e[i] / orgnrm;
+    }
+    let mut ub = [0f32; 256];
+    for i in 0..16 {
+        ub[i * 16 + i] = 1.0;
+    }
+    dlasdq(&mut ds, &mut es, &mut ub);
+    // dbdsdc's descending selection sort with U column swaps
+    for i in 0..16 {
+        let mut kk = i;
+        let mut p = ds[i];
+        for j in (i + 1)..16 {
+            if ds[j] > p {
+                kk = j;
+                p = ds[j];
+            }
+        }
+        if kk != i {
+            ds[kk] = ds[i];
+            ds[i] = p;
+            for r in 0..16 {
+                ub.swap(r * 16 + kk, r * 16 + i);
+            }
+        }
+    }
+    // U = Q1 @ Ub ; s = ds * orgnrm
+    let mut u = [0f32; 256];
+    for i in 0..16 {
+        for j in 0..16 {
+            let mut acc = 0.0;
+            for r in 0..16 {
+                acc += a[i * 16 + r] * ub[r * 16 + j];
+            }
+            u[i * 16 + j] = acc;
+        }
+    }
+    let mut s = [0f32; 16];
+    for i in 0..16 {
+        s[i] = ds[i] * orgnrm;
     }
     (u, s)
 }
@@ -506,65 +1285,80 @@ fn svd16(m: &[f64; 256]) -> ([f64; 256], [f64; 16]) {
 mod tests {
     use super::*;
 
-    /// torch.svd references: np.linalg.svd on a fixed 16×16 matrix —
-    /// singular values match to ~1e-10 regardless of sign convention.
+    /// np.linalg.svd references on a fixed full-rank 16×16 matrix —
+    /// singular values are convention-free, so the f64 references
+    /// check the f32 solver at f32 accuracy (~1e-6 here).
+    /// The matrix is filled by a splitmix64 hash of the flat index:
+    /// linear/modular fills are low-rank (m[r,c] = f(16r+c) with f
+    /// polynomial-ish has rank ≤ deg+1), which is how the earlier
+    /// `(i*37+11)%97` constants went stale — its matrix was rank-3.
     #[test]
     fn svd16_singular_values() {
-        let mut m = [0f64; 256];
-        // deterministic non-trivial matrix
-        for i in 0..256 {
-            m[i] = ((i * 37 + 11) % 97) as f64 / 97.0 - 0.5;
+        let mut m = [0f32; 256];
+        for (i, v) in m.iter_mut().enumerate() {
+            let mut z = (i as u64).wrapping_add(0x9E3779B97F4A7C15);
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+            z ^= z >> 31;
+            *v = (((z >> 11) & 0x1F_FFFF_FFFF_FFFF) as f64 / (1u64 << 53) as f64 - 0.5) as f32;
         }
         let (_, s) = svd16(&m);
         // np.linalg.svd of the same matrix
         let want = [
-            4.894474977333818,
-            4.311668685704951,
-            4.047011757177965,
-            3.901522766047755,
-            3.723329429545972,
-            3.5683409036209595,
-            3.4457084360352185,
-            3.3299838398704553,
-            3.2152504370215305,
-            3.0832494607267413,
-            2.9558787838561444,
-            2.7975025069653294,
-            2.6405040318583014,
-            2.4303839759790355,
-            2.2041543922822446,
-            1.8638384474239944,
+            2.1005899846614215,
+            1.9556434753669627,
+            1.5021354514513066,
+            1.3943691120601851,
+            1.3701256032148814,
+            1.2917171886047512,
+            1.2268008722835027,
+            1.0570710744129788,
+            0.8143173918116010,
+            0.7853124261302923,
+            0.6858541004635299,
+            0.4762404932959022,
+            0.4056329466236199,
+            0.2141296450504027,
+            0.1273009999997064,
+            0.0431200927323836,
         ];
         for (i, (&got, &w)) in s.iter().zip(&want).enumerate() {
-            assert!((got - w).abs() < 1e-9, "s[{i}] = {got}, want {w}");
+            assert!(
+                (f64::from(got) - w).abs() < 1e-5,
+                "s[{i}] = {got}, want {w}"
+            );
         }
     }
 
     #[test]
     fn svd16_identity_and_reconstruction() {
-        let mut m = [0f64; 256];
+        let mut m = [0f32; 256];
         for i in 0..16 {
             m[i * 16 + i] = 2.0;
         }
         let (_, s) = svd16(&m);
         for &sv in &s {
-            assert!((sv - 2.0).abs() < 1e-12);
+            assert!((sv - 2.0).abs() < 1e-6);
         }
-        // reconstruction: U·S·Vᵀ ≈ M on a generic matrix
-        let mut m = [0f64; 256];
+        // The returned "u" columns are the patch's right singular vectors
+        // (v, upstream's u of the transposed patch) — check orthonormality.
+        let mut m = [0f32; 256];
         for i in 0..256 {
-            m[i] = ((i * 53 + 7) % 89) as f64 / 89.0 - 0.4;
+            m[i] = (((i * 53 + 7) % 89) as f64 / 89.0 - 0.4) as f32;
         }
-        let (u, s) = svd16(&m);
-        // Vᵀ = Uᵀ·M / S  ⇒  check ‖u_i‖=1 and orthogonality
+        let (u, _s) = svd16(&m);
         for c in 0..16 {
-            let n: f64 = (0..16).map(|r| u[r * 16 + c] * u[r * 16 + c]).sum();
-            assert!((n - 1.0).abs() < 1e-9, "u_{c} norm {n}");
+            let n: f64 = (0..16)
+                .map(|r| f64::from(u[r * 16 + c]) * f64::from(u[r * 16 + c]))
+                .sum();
+            assert!((n - 1.0).abs() < 1e-5, "u_{c} norm {n}");
         }
         for c in 0..15 {
             for d in c + 1..16 {
-                let dot: f64 = (0..16).map(|r| u[r * 16 + c] * u[r * 16 + d]).sum();
-                assert!(dot.abs() < 1e-9, "u_{c}·u_{d} = {dot}");
+                let dot: f64 = (0..16)
+                    .map(|r| f64::from(u[r * 16 + c]) * f64::from(u[r * 16 + d]))
+                    .sum();
+                assert!(dot.abs() < 1e-5, "u_{c}·u_{d} = {dot}");
             }
         }
     }

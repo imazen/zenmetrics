@@ -98,10 +98,14 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | ahiq | JPEG | 504 | 0.015013 | 0.022583 | 0.032845 | 0.024553 | 2.188 |
 | ahiq | BPG | 504 | 0.019683 | 0.026778 | 0.033226 | 0.027219 | 1.688 |
 | ahiq | pooled | 1008 | 0.017611 | **0.024882** | 0.032989 | 0.025886 | 1.873 |
+| dmm | JPEG | 504 | 0.119354 | 0.167535 | 0.234451 | 0.185220 | 1.964 |
+| dmm | BPG | 504 | 0.149615 | 0.218804 | 0.311843 | 0.242256 | 2.084 |
+| dmm | pooled | 1008 | 0.130450 | **0.191420** | 0.270059 | 0.213738 | 2.070 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
 ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053,
-A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176, AHIQ 0.0249.
+A-FINE (raw `afine_all`) 0.5074, DreamSim ensemble distance 0.0176, AHIQ 0.0249,
+DMM 0.1914.
 
 The `ckdn` rows are not from an upstream package: they were scored by the Rust port
 (`zenmetrics batch --metric ckdn --features nn,nn-ort`, engine ort-cuda, ONNX Runtime
@@ -147,6 +151,22 @@ Scored at native resolution with upstream's protocol (no resize; mean over
 the nine deterministic 224×224 `five_point_crop` crops; the 640×480 KonJND
 images are comfortably ≥224).
 
+The `dmm` rows are likewise scored by the Rust port (`--metric dmm`, engine
+ort-cuda, ONNX Runtime 1.31, dev, 2026-10-16, in the commit that adds the
+`dmm` row to `jnd_scale.tsv`). DMM is lower-is-better and its identical-pair
+score is exactly 0 on every reference, so each value is the raw distance
+`score(ref, dist)` and the table entries are its quartiles and median.
+Scored under upstream `prepare_image_adt` (640×480 → Pillow-bilinear
+short-side 416×480). Caveat unique to DMM: the score depends on which
+orthonormal basis the patch SVD draws inside degenerate singular clusters
+(86–93% of tap elements are exact zeros post-ReLU), so these numbers are
+specific to the shipped solver — an f32 transliteration of LAPACK's
+`dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` (`gesdd` path). A cyclic-Jacobi head
+measured on the same pairs gave pooled 0.218193 (+14%) before it was
+replaced; torch's own CPU (MKL) vs CUDA (cusolver) backends differ ~9e-3
+median on this metric, so a fraction of a percent of solver-draw noise is
+inherent to the column.
+
 ## Caveats
 
 - **Codec dependence.** For vgg, squeeze and DISTS the BPG median is 20–31 % below the JPEG median
@@ -186,5 +206,12 @@ images are comfortably ≥224).
   stlpips_alex, stlpips_vgg, deepdc`. Stored on dev at `/mnt/v/output/zenmetrics/nn-konjnd-2026-10-15/`
   and mirrored to tower `/mnt/tower/output/zenmetrics/nn-konjnd-2026-10-15/` (checked on dev,
   2026-10-15), with the run-1 version `pairs_scores.v1.tsv` (13 columns, sha256 `2510cb04…`).
+- Per-pair DMM scores (`konjnd2_dmm_all.tsv`, 1008 rows + header, ~40 KB, sha256
+  `2360bc8163909cad421a0d182b64173a0a2a0381cf07f7472e4c86dec88531dc`, columns
+  `ref_path, dist_path, distorted, dmm, codec`): stored at
+  `~/tmp/nn-port-scratch/konjnd2_dmm_all.tsv` on this host (dev/tower mounts not
+  reachable from the run host). Scored 2026-10-16 with the shipped f32 LAPACK
+  head; the abandoned cyclic-Jacobi run's `konjnd_dmm.tsv` sits alongside it
+  (pooled median 0.218193 — superseded, kept for the draw-sensitivity record).
 - Scripts: `nn_konjnd_scale_2026-10-15/konjnd_nn.py` (run 1), `konjnd_nn2.py` (run 2),
   `konjnd_summary.py` (the table). They read the dataset at the dev path above.

@@ -114,6 +114,72 @@ fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
         .collect()
 }
 
+/// PIL/Pillow `Image.resize(BILINEAR)` coefficients for one axis
+/// (`libImaging/Resample.c` `bilinear_filter`): triangle kernel
+/// `1 − |x|`, support `1·max(1, in/out)`; same fixed-point window bounds
+/// and 2⁻²² weight quantisation as [`bicubic_pil_1d`].
+fn bilinear_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
+    const PRECISION_BITS: u32 = 22;
+    let scale = in_size as f64 / out_size as f64;
+    let down = scale.max(1.0);
+    let support = down;
+    let tri = |x: f64| (1.0 - x.abs()).max(0.0);
+    (0..out_size)
+        .map(|i| {
+            let centre = (i as f64 + 0.5) * scale;
+            let lo = ((centre - support + 0.5) as i64).max(0) as usize;
+            let hi = (((centre + support + 0.5) as i64) as usize).min(in_size);
+            let mut ws: Vec<f64> = (lo..hi)
+                .map(|j| tri((j as f64 + 0.5 - centre) / down))
+                .collect();
+            let sum: f64 = ws.iter().sum();
+            if sum != 0.0 {
+                for w in &mut ws {
+                    *w /= sum;
+                }
+            }
+            let q = (1i64 << PRECISION_BITS) as f64;
+            Tap1DFix {
+                first: lo,
+                weights: ws
+                    .iter()
+                    .map(|&w| {
+                        if w > 0.0 {
+                            (0.5 + w * q) as i32
+                        } else {
+                            (-0.5 + w * q) as i32
+                        }
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
+/// Planar u8 `[c, h, w]` → `[c, oh, ow]`, bit-exact with Pillow's
+/// `Image.resize((ow, oh), BILINEAR)` — the same fixed-point separable
+/// recipe as [`resize_bicubic_pil_u8`] with the triangle kernel (DMM's
+/// `prepare_image_adt` calls `F.resize(img, tar_size)`, default BILINEAR).
+/// Standing rule says resampling goes through imazen's `zenresize`, but
+/// that crate has no Pillow-exactness knob: its Triangle path quantizes
+/// weights to i16 at 2^14 with largest-remainder normalisation, while
+/// Pillow uses 2^22 and folds the residual into the last tap — so it
+/// cannot reproduce upstream `F.resize` output bit-for-bit and this port
+/// stays until zenresize grows a `PillowExact` mode.
+pub(crate) fn resize_bilinear_pil_u8(
+    img: &[u8],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<u8> {
+    let wx = bilinear_pil_1d(w, ow);
+    let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
+    let wy = bilinear_pil_1d(h, oh);
+    resample_u8_axis(&tmp, c, h, ow, &wy, 0)
+}
+
 /// One fixed-point pass over a u8 plane: `clip8((2²¹ + Σ px·k) >> 22)`.
 /// `out[y,i]`, `tmp[y,i]` are planar `[c, n, m]`; `axis` 0 resamples rows,
 /// 1 resamples columns.

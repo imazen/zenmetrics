@@ -192,6 +192,12 @@ pub enum MetricKind {
     /// weights state no licence, so `ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq`.
     #[value(name = "ahiq")]
     Ahiq,
+    /// DMM — learned FR distance (upstream `Baoliang93/DMM`, MIT code;
+    /// VGG16 L2-pooled taps, per-patch SVD head, **lower** is better).
+    /// Needs feature `nn`; its only weights are torchvision VGG16
+    /// (permissive), so no consent gate.
+    #[value(name = "dmm")]
+    Dmm,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -475,6 +481,7 @@ impl MetricKind {
             MetricKind::Afine,
             MetricKind::Dreamsim,
             MetricKind::Ahiq,
+            MetricKind::Dmm,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -537,6 +544,7 @@ impl MetricKind {
             MetricKind::Afine => "afine",
             MetricKind::Dreamsim => "dreamsim",
             MetricKind::Ahiq => "ahiq",
+            MetricKind::Dmm => "dmm",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -658,6 +666,7 @@ impl MetricKind {
             MetricKind::Afine => &["afine"],
             MetricKind::Dreamsim => &["dreamsim"],
             MetricKind::Ahiq => &["ahiq"],
+            MetricKind::Dmm => &["dmm"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1833,7 +1842,8 @@ pub fn run_metric(
         | MetricKind::Ckdn
         | MetricKind::Afine
         | MetricKind::Dreamsim
-        | MetricKind::Ahiq => nn::score(kind, reference, distorted),
+        | MetricKind::Ahiq
+        | MetricKind::Dmm => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -1845,7 +1855,8 @@ pub fn run_metric(
         | MetricKind::Ckdn
         | MetricKind::Afine
         | MetricKind::Dreamsim
-        | MetricKind::Ahiq => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Ahiq
+        | MetricKind::Dmm => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

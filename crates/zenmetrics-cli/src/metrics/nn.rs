@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Ahiq, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Ahiq, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -82,6 +82,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "ahiq" {
         return Ok(Box::new(Ahiq::from_dir(&dir, engine, &consent())?));
+    }
+    if column == "dmm" {
+        return Ok(Box::new(Dmm::from_dir(&dir, engine)?));
     }
     let net = LpipsNet::ALL
         .into_iter()
