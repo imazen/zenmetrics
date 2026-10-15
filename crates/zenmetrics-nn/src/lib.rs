@@ -35,6 +35,7 @@ mod engine;
 mod error;
 mod lpips;
 mod preprocess;
+mod resize;
 mod weights;
 
 pub use ckdn::Ckdn;

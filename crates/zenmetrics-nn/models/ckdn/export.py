@@ -26,13 +26,20 @@ The export therefore splits into:
   ckdn_full.onnx  r, d [1,3,H,W] in 0..255 -> scalar dr: the whole upstream
                   forward on cat(d, r, d, r), output [:,0].
   ckdn.meta       `channels 256` (encoder tap width) and `min_size n`.
-  ckdn_goldens.tsv  upstream dr on the ladder (CPU, fp32, no resize: the
-                  model is fully convolutional; upstream's eval resize+crop
-                  to 288 is a demo default, not part of the metric).
+  ckdn_goldens.tsv  upstream dr on the ladder (CPU, fp32) under the eval
+                  transform each side applies first: resize so the short
+                  side is int(288/0.875)=329 (long side floored, keeping
+                  aspect) then centre-crop 288 — antialiased bicubic for the
+                  distorted image, NEAREST for the reference. That asymmetry
+                  is what the AIC-4 published column was scored with (pyiqa's
+                  wrapper; verified by bit-exact input capture) and it is
+                  also what upstream's own predict_score.py loader does to
+                  its packed input (img_size=288, crop_pct=0.875).
   ckdn_export.meta  versions and sha256 of every output.
 """
 import hashlib, os, sys, platform
 import numpy as np, torch
+import torchvision.transforms.functional as TF
 from PIL import Image
 
 LADDER, OUT, UPSTREAM, CKPT = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -145,6 +152,18 @@ def load(p):
     return torch.from_numpy(a).permute(2, 0, 1).unsqueeze(0)
 
 
+def prep(t, nearest):
+    """The eval transform: resize short side to int(288/0.875)=329 (long side
+    floored, torchvision's Resize(int) semantics) then centre-crop 288.
+    `nearest` selects the reference side's kernel (the published convention:
+    bicubic+antialias for the distorted image, nearest for the reference)."""
+    h, w = int(t.shape[2]), int(t.shape[3])
+    nh, nw = (329 * h // w, 329) if w <= h else (329, 329 * w // h)
+    interp = TF.InterpolationMode.NEAREST if nearest else TF.InterpolationMode.BICUBIC
+    return TF.center_crop(TF.resize(t, [nh, nw], interpolation=interp,
+                                    antialias=not nearest), 288)
+
+
 with open(os.path.join(OUT, 'ckdn_goldens.tsv'), 'w') as g:
     g.write('image\tsize\tckdn\n')
     for name in sorted(os.listdir(LADDER)):
@@ -154,7 +173,7 @@ with open(os.path.join(OUT, 'ckdn_goldens.tsv'), 'w') as g:
         if size not in GOLDEN_SIZES:
             continue
         r, d = load(os.path.join(LADDER, name)), load(os.path.join(LADDER, name.replace('_ref', '_dist')))
-        s = float(full(r, d).item())
+        s = float(full(prep(r, True), prep(d, False)).item())
         g.write(f'{stem}\t{size}\t{s:.9g}\n')
         print('ckdn', stem, size, s, flush=True)
 
