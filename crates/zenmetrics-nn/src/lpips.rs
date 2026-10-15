@@ -201,7 +201,7 @@ impl Lpips {
         }
         match &self.backend {
             Backend::Trunk(t) => {
-                let (mut rt, dt) = t.run_pair(
+                let (mut rt, mut dt) = t.run_pair(
                     rgb8_to_planar_pm1(r),
                     rgb8_to_planar_pm1(d),
                     r.height,
@@ -209,7 +209,11 @@ impl Lpips {
                 )?;
                 self.check_taps(&rt)?;
                 self.check_taps(&dt)?;
-                rt.iter_mut().for_each(normalize);
+                let threads = crate::par::threads_for(
+                    rt.iter().chain(dt.iter()).map(|t| t.c * t.plane()).sum(),
+                );
+                crate::par::par_each_mut(&mut rt, threads, normalize);
+                crate::par::par_each_mut(&mut dt, threads, normalize);
                 self.score_taps(&rt, &dt)
             }
             Backend::Pair(p) => p.score(
@@ -223,19 +227,28 @@ impl Lpips {
 
     /// The score of `dist` against reference taps already normalised.
     fn score_against(&self, reference: &[Tap], dist: &za::Rgb8In<'_>) -> Result<f64, Error> {
-        let taps = self.taps(dist)?;
+        let mut taps = self.taps(dist)?;
+        let threads = crate::par::threads_for(taps.iter().map(|t| t.c * t.plane()).sum());
+        crate::par::par_each_mut(&mut taps, threads, normalize);
         self.score_taps(reference, &taps)
     }
 
+    /// Sum of per-tap distances; both tap sets must be normalised already.
+    /// The per-tap work is independent and runs in parallel; the total
+    /// accumulates in tap order, unchanged.
     fn score_taps(&self, reference: &[Tap], taps: &[Tap]) -> Result<f64, Error> {
-        let mut total = 0.0f64;
-        for ((r, d), lin) in reference.iter().zip(taps).zip(&self.lin) {
+        let n = reference.len().min(taps.len()).min(self.lin.len());
+        let mut elems = 0;
+        for (r, d) in reference.iter().zip(taps).take(n) {
             if (r.h, r.w) != (d.h, d.w) {
                 return Err(Error::SizeMismatch);
             }
-            total += tap_distance(r, d, lin);
+            elems += r.c * r.plane();
         }
-        Ok(total)
+        let parts = crate::par::par_map(n, crate::par::threads_for(elems), |i| {
+            tap_distance(&reference[i], &taps[i], &self.lin[i])
+        });
+        Ok(parts.into_iter().sum())
     }
 }
 
@@ -258,19 +271,11 @@ fn normalize(t: &mut Tap) {
     }
 }
 
-/// `mean_p Σc lin[c]·(r[c,p] − d̂[c,p])²` with `r` already normalised and
-/// `d` normalised here on the fly.
+/// `mean_p Σc lin[c]·(r[c,p] − d[c,p])²` over two normalised taps — the
+/// same difference the fused version computed as `rv − dv/n`, since a
+/// normalised `dv` is `dv / n` bitwise.
 fn tap_distance(r: &Tap, d: &Tap, lin: &[f32]) -> f64 {
     let plane = d.plane();
-    let mut norm = vec![0.0f32; plane];
-    for ch in d.data.chunks_exact(plane) {
-        for (n, &v) in norm.iter_mut().zip(ch) {
-            *n += v * v;
-        }
-    }
-    for n in &mut norm {
-        *n = n.sqrt() + EPS;
-    }
     let mut acc = vec![0.0f32; plane];
     for ((rc, dc), &w) in r
         .data
@@ -278,8 +283,8 @@ fn tap_distance(r: &Tap, d: &Tap, lin: &[f32]) -> f64 {
         .zip(d.data.chunks_exact(plane))
         .zip(lin)
     {
-        for (((a, &rv), &dv), &n) in acc.iter_mut().zip(rc).zip(dc).zip(&norm) {
-            let diff = rv - dv / n;
+        for ((a, &rv), &dv) in acc.iter_mut().zip(rc).zip(dc) {
+            let diff = rv - dv;
             *a += w * diff * diff;
         }
     }
@@ -427,8 +432,9 @@ mod tests {
     #[test]
     fn identical_taps_score_zero() {
         let mut r = tap(4, 3, 5, |i| (i as f32 * 0.37).sin());
-        let d = r.clone();
+        let mut d = r.clone();
         normalize(&mut r);
+        normalize(&mut d);
         assert_eq!(tap_distance(&r, &d, &[1.0, 2.0, 3.0, 4.0]), 0.0);
     }
 
@@ -438,8 +444,10 @@ mod tests {
         let d0 = tap(3, 2, 2, |i| (i as f32 * 1.3).cos());
         let lin = [0.5f32, 1.5, 2.0];
         let mut r = r0.clone();
+        let mut d = d0.clone();
         normalize(&mut r);
-        let got = tap_distance(&r, &d0, &lin);
+        normalize(&mut d);
+        let got = tap_distance(&r, &d, &lin);
         let plane = 4;
         let norm = |t: &Tap, p: usize| {
             let s: f32 = (0..3).map(|c| t.data[c * plane + p].powi(2)).sum();

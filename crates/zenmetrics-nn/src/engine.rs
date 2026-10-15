@@ -36,7 +36,9 @@ pub(crate) struct AuxInput {
 pub(crate) trait Trunk: Send + Sync {
     /// Engine name, recorded in the score's implementation tag.
     fn engine(&self) -> &'static str;
-    /// Run on a planar `[3, h, w]` input.
+    /// Run on a planar `[3, h, w]` input. Owned: rten's in-place-capable
+    /// operators reuse the input buffer as scratch — a borrowed view would
+    /// force an internal copy instead.
     fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<Tap>, Error>;
 
     /// Run on a planar `[c, h, w]` input. Trunks whose graph takes a fixed
@@ -96,6 +98,18 @@ pub(crate) trait Trunk: Send + Sync {
     }
 }
 
+/// Worker count for the Rust-side head passes: `RTEN_NUM_THREADS` when set
+/// (the process's configured parallelism, and the knob kernel-level timing
+/// checks turn down), else available parallelism.
+pub(crate) fn workers() -> usize {
+    std::env::var("RTEN_NUM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
+        .unwrap_or(1)
+        .max(1)
+}
+
 /// Load `path` with the default engine.
 pub(crate) fn load(path: &Path, outputs: usize) -> Result<Box<dyn Trunk>, Error> {
     #[cfg(feature = "rten")]
@@ -128,18 +142,14 @@ mod rten_engine {
         /// Two pools splitting the threads, for [`Trunk::run_pair`]. One run
         /// of a conv trunk stops scaling well past ~8 threads (measured on
         /// i265), so two concurrent half-width runs beat two full-width ones
-        /// in a row.
+        /// in a row — and beat two runs sharing one pool (task-stealing
+        /// overhead loses at small sizes, measured on i265).
         halves: Option<[Arc<ThreadPool>; 2]>,
     }
 
     /// rten's own thread count: `RTEN_NUM_THREADS`, else available parallelism.
     fn thread_count() -> usize {
-        std::env::var("RTEN_NUM_THREADS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
-            .unwrap_or(1)
-            .max(1)
+        super::workers()
     }
 
     impl RtenTrunk {

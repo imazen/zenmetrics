@@ -100,22 +100,46 @@ struct TapStats {
     var: Vec<f64>,
 }
 
-impl TapStats {
-    fn new(tap: Tap) -> Self {
-        let plane = tap.plane();
+/// Per-channel `(mean, var)` over all taps, channel-major by tap. The items
+/// are independent, so they can run in parallel and stay bitwise identical
+/// to the sequential loop.
+fn channel_stats(taps: &[Tap]) -> Vec<(f64, f64)> {
+    let offs = channel_offs(taps.iter().map(|t| t.c));
+    let elems: usize = taps.iter().map(|t| t.c * t.plane()).sum();
+    crate::par::par_map(offs.total, crate::par::threads_for(elems), |i| {
+        let (t, c) = offs.locate(i);
+        let plane = taps[t].plane();
         let n = plane as f64;
-        let mut mean = Vec::with_capacity(tap.c);
-        let mut var = Vec::with_capacity(tap.c);
-        for ch in tap.data.chunks_exact(plane) {
-            let (sx, sxx) = plane_sums(ch);
-            let m = sx / n;
-            mean.push(m);
-            // E[x²] − m², accumulated in the same order as the covariance's
-            // `exy − mx·my` in `score_stats`, so an identical pair gets
-            // `cov == var` bitwise (see LANES).
-            var.push(sxx / n - m * m);
-        }
-        Self { tap, mean, var }
+        let (sx, sxx) = plane_sums(&taps[t].data[c * plane..(c + 1) * plane]);
+        let m = sx / n;
+        // E[x²] − m², accumulated in the same order as the covariance's
+        // `exy − mx·my` in `score_stats`, so an identical pair gets
+        // `cov == var` bitwise (see LANES).
+        (m, sxx / n - m * m)
+    })
+}
+
+/// Flat `(tap, channel)` item indexing over a set of channel counts.
+struct ChannelMap {
+    /// `tap_start[t]` is the flat index of tap `t`'s first channel.
+    tap_start: Vec<usize>,
+    total: usize,
+}
+
+fn channel_offs(counts: impl Iterator<Item = usize>) -> ChannelMap {
+    let mut tap_start = Vec::new();
+    let mut total = 0;
+    for c in counts {
+        tap_start.push(total);
+        total += c;
+    }
+    ChannelMap { tap_start, total }
+}
+
+impl ChannelMap {
+    fn locate(&self, i: usize) -> (usize, usize) {
+        let t = self.tap_start.iter().rposition(|&s| i >= s).unwrap_or(0);
+        (t, i - self.tap_start[t])
     }
 }
 
@@ -216,7 +240,17 @@ impl Dists {
                 )));
             }
         }
-        Ok(taps.into_iter().map(TapStats::new).collect())
+        let stats = channel_stats(&taps);
+        let mut at = 0;
+        Ok(taps
+            .into_iter()
+            .map(|tap| {
+                let mean = stats[at..at + tap.c].iter().map(|s| s.0).collect();
+                let var = stats[at..at + tap.c].iter().map(|s| s.1).collect();
+                at += tap.c;
+                TapStats { tap, mean, var }
+            })
+            .collect())
     }
 
     fn stats(&self, img: &za::Rgb8In<'_>) -> Result<Vec<TapStats>, Error> {
@@ -233,31 +267,50 @@ impl Dists {
     /// and in the final `1 − (dist1 + dist2)`, f32 as upstream's tensors
     /// are. The f32 steps matter: the f32-normalised α and β sum to
     /// 1 + 6.5e-8, which upstream's f32 total rounds away (an identical pair
-    /// scores exactly 0 there) and an f64 total would not.
+    /// scores exactly 0 there) and an f64 total would not. The per-channel
+    /// contributions run in parallel; they are merged in the same order the
+    /// sequential loops accumulated them, so the result is unchanged.
     fn score_stats(&self, r: &[TapStats], d: &[TapStats]) -> Result<f64, Error> {
-        let (mut dist1, mut dist2) = (0.0f32, 0.0f32);
-        for (((rs, ds), alpha), beta) in r.iter().zip(d).zip(&self.alpha).zip(&self.beta) {
-            let (mut tap1, mut tap2) = (0.0f64, 0.0f64);
+        let ntaps = r
+            .len()
+            .min(d.len())
+            .min(self.alpha.len())
+            .min(self.beta.len());
+        let mut elems = 0;
+        for (rs, ds) in r.iter().zip(d).take(ntaps) {
             if (rs.tap.h, rs.tap.w) != (ds.tap.h, ds.tap.w) {
                 return Err(Error::SizeMismatch);
             }
+            elems += rs.tap.c * rs.tap.plane();
+        }
+        let offs = channel_offs(self.alpha.iter().take(ntaps).map(Vec::len));
+        let contrib = crate::par::par_map(offs.total, crate::par::threads_for(elems), |i| {
+            let (t, c) = offs.locate(i);
+            let (rs, ds) = (&r[t], &d[t]);
             let plane = rs.tap.plane();
-            let n = plane as f64;
-            for (c, (rc, dc)) in rs
-                .tap
-                .data
-                .chunks_exact(plane)
-                .zip(ds.tap.data.chunks_exact(plane))
-                .enumerate()
-            {
-                let (mx, my) = (rs.mean[c], ds.mean[c]);
-                let s1 = (2.0 * mx * my + C1) / (mx * mx + my * my + C1);
-                let exy = plane_dot(rc, dc) / n;
-                let cov = exy - mx * my;
-                let s2 = (2.0 * cov + C2) / (rs.var[c] + ds.var[c] + C2);
-                tap1 += f64::from(alpha[c]) * s1;
-                tap2 += f64::from(beta[c]) * s2;
+            let (rc, dc) = (
+                &rs.tap.data[c * plane..(c + 1) * plane],
+                &ds.tap.data[c * plane..(c + 1) * plane],
+            );
+            let (mx, my) = (rs.mean[c], ds.mean[c]);
+            let s1 = (2.0 * mx * my + C1) / (mx * mx + my * my + C1);
+            let exy = plane_dot(rc, dc) / plane as f64;
+            let cov = exy - mx * my;
+            let s2 = (2.0 * cov + C2) / (rs.var[c] + ds.var[c] + C2);
+            (
+                f64::from(self.alpha[t][c]) * s1,
+                f64::from(self.beta[t][c]) * s2,
+            )
+        });
+        let (mut dist1, mut dist2) = (0.0f32, 0.0f32);
+        let mut at = 0;
+        for alpha in self.alpha.iter().take(ntaps) {
+            let (mut tap1, mut tap2) = (0.0f64, 0.0f64);
+            for &(a1, a2) in &contrib[at..at + alpha.len()] {
+                tap1 += a1;
+                tap2 += a2;
             }
+            at += alpha.len();
             dist1 += tap1 as f32;
             dist2 += tap2 as f32;
         }

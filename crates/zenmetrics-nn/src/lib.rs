@@ -36,6 +36,7 @@ mod dreamsim;
 mod engine;
 mod error;
 mod lpips;
+mod par;
 mod preprocess;
 mod resize;
 mod weights;
