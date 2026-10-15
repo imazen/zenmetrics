@@ -1,0 +1,11 @@
+Host: i265, 2026-10-15. Parent: 986f68d26605; source: VSI change containing this receipt.
+Command: python3 benchmarks/aic_variants_2026-10-15/panel.py ~/tmp/zenmetrics-lock-snap-aicvariants/target/release/zenmetrics ~/tmp/aic-variants-scratch/vsi-panel vsi vsi-k2 vsi-k3 vsi-k4 vsi-nodownscale
+All commands serialized through flock ~/tmp/i265-heavy.lock and run-heavy --mem 16G.
+run-heavy: done rc=0 20s | peak-RSS 1.21GiB | min-avail 21668MiB | peak-load 5.59
+Raw TSVs/logs: i265:~/tmp/aic-variants-scratch/vsi-panel/
+61/61 base serialized rows equal earlier aic-audit/raw/vsi.tsv.
+19 VSI tests passed, including Auto/fixed factors 1–4 score bits, stride,
+configured map/scalar equality and geometry. Strict fsim/vsi clippy passed.
+Pinned f32x8 AddAssign is exactly *self = *self + rhs; resize lint fixes
+retain the existing arithmetic order. No test assertions or tolerances relaxed.
+JND values apply the site's named mapping, then subtract JND_CVVDP; max is absolute.

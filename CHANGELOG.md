@@ -13,6 +13,22 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Correct SSIM/VSI dispatch and range comments and describe the sampled top/left padding in odd-size pooling.
+
+- Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
+
+- Add non-Auto factor/map coverage, direct MS-SSIM product verification and all-20-name convention routing coverage; remove redundant box comparison.
+
+- FSIM/VSI reject fixed factors larger than the shorter image dimension and compute box areas in u64 for 32-bit targets.
+
+- Fixed-factor FSIM/FSIMc/VSI columns inherit versioned base names and implementation-tag overrides; orchestration uses canonical column names.
+
+- Mark both independent downscale-policy enums non-exhaustive for future extension.
+
+- Remove same-name FSIM/VSI scorer constants; callers construct default scorers explicitly, including browser map evaluation.
+
+- FSIM/VSI fixed-factor metric identities now include their downscale configuration while preserving Auto fingerprints.
+
 ## zenmetrics-stats
 
 ### Added
@@ -29,6 +45,9 @@ Workspace conventions per the global rules:
 ### Changed
 
 - zenmetrics-cli `psnr-cb` and `psnr-cr` (JPEG AIC-4 `PSNR-Cb`, `PSNR-Cr`): PSNR of the full-resolution studio-swing BT.601 chroma planes, the `psnr-ycbcr611` conversion. 61 pairs: max 2.0e-3 / 8.8e-3 JND (1.7e-2 / 5.7e-2 dB); no tested convention gets closer ([search](benchmarks/aic_psnr_chroma_2026-10-15/README.md)).
+- zenmetrics-cli AIC SSIM-pyiqa family (`147b5cca`): rounded and unrounded `ssim-pyiqa` and `ms-ssim-pyiqa`, unrounded RGB `ssimc-pyiqa`, with fixed-factor k2–k6 variants; geometry too small for the 11×11 window is refused. Published 61-pair gates: SSIM-pyiqa max 3.8e-6, MS-SSIM-pyiqa max 1.9e-6.
+- VSI fixed-factor decimation (`e7e1ca5a`): `Vsi::with_downscale(Downscale::Factor(n))` and CLI `vsi-k2/k3/k4/nodownscale`; `Auto` output is unchanged bit for bit.
+- FSIM/FSIMc fixed-factor decimation (`986f68d2`): `Fsim::with_downscale` and CLI `fsim-k2/k3/k4/nodownscale` (each emits `fsim_*` and `fsimc_*`); `Auto` output is unchanged bit for bit.
 - zenmetrics-cli JPEG AIC-4 columns: `psnr-ycbcr611` (6:1:1 MSE-weighted studio-601 YCbCr PSNR; 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target), `ciede2000` (mean ΔE00, sRGB → CIELAB D65; median 3.0e-5, max 3.0e-4) and `ssimc` (per-RGB SSIM, valid window, contrast-structure clipped at 0; max 7.5e-7 at the CLI's print precision).
 - zenmetrics-cli VMAF ingress (`vmaf-studio601`, `vmaf-neg-studio601`): VMAF v0.6.1 / v0.6.1neg on studio-swing BT.601 YUV (the `psnr-y-studio601` luma), which reproduces the JPEG AIC-4 dataset `VMAF` / `VMAF-neg` columns on the 61-pair subset (median 0.0068 / 0.0034, max 0.075 / 0.12) where the BT.709 `vmaf` is off by up to 2.7. All `vmaf*` metrics now crop odd widths or heights to the largest even size instead of failing the batch (on the AIC-4 odd-size pairs cropping and edge padding agree within 0.003). Existing even-size `vmaf*` scores are unchanged.
 - Viewer loop auto-encode and readout (`e66a4b69`): choosing a metric or map in the top bar steers the JPEG XL loop with it and re-encodes, as do the loop distance slider (now in the top bar), effort, iterations, steering and a new reference; finished traces play on their own. The default layer shows the map on the trace's scale with magenta rings on blocks above the target and a ring on the worst block. A fixed readout (score/target gauge, blocks above target, worst block, next iteration or convergence) and a score-per-iteration chart replace the info line, so playback no longer moves the page. The target-anchored overlay now puts the palette's middle at the target. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).

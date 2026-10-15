@@ -1488,11 +1488,13 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // FSIM / FSIMc / FSIM-Y: similarity on [0, 1]; 1 = identical.
         // Constant inputs degenerate the phase-congruency maps to 0/0,
         // so a degenerate pair yields NaN — matching the reference.
-        MetricKind::Fsim | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Fsim | MetricKind::FsimK2 | MetricKind::FsimK3 | MetricKind::FsimK4 | MetricKind::FsimNodownscale | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
+        // SSIM-pyiqa family: similarity on ~[0, 1]; 1 = identical.
+        MetricKind::SsimPyiqa | MetricKind::SsimPyiqaF32 | MetricKind::SsimPyiqaF32K2 | MetricKind::SsimPyiqaF32K3 | MetricKind::SsimPyiqaF32K4 | MetricKind::SsimPyiqaF32K5 | MetricKind::SsimPyiqaF32K6 | MetricKind::SsimcPyiqaF32 | MetricKind::SsimcPyiqaF32K2 | MetricKind::SsimcPyiqaF32K3 | MetricKind::SsimcPyiqaF32K4 | MetricKind::SsimcPyiqaF32K5 | MetricKind::SsimcPyiqaF32K6 | MetricKind::MsSsimPyiqa | MetricKind::MsSsimPyiqaF32 | MetricKind::MsSsimPyiqaF32K2 | MetricKind::MsSsimPyiqaF32K3 | MetricKind::MsSsimPyiqaF32K4 | MetricKind::MsSsimPyiqaF32K5 | MetricKind::MsSsimPyiqaF32K6 => Some((-0.001, 1.001, 1.0)),
         // VSI: similarity on [0, 1]; 1 = identical. Flat inputs
         // degenerate the saliency normalisation to 0/0 → NaN, matching
         // the reference.
-        MetricKind::Vsi => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Vsi | MetricKind::VsiK2 | MetricKind::VsiK3 | MetricKind::VsiK4 | MetricKind::VsiNodownscale => Some((-0.001, 1.001, 1.0)),
         // MS-SSIM: similarity on ~[0, 1]; 1 = identical. Negative
         // means can push the score below 0 through the complex-power
         // real-part convention (matching the reference's `prod`);

@@ -1,0 +1,17 @@
+Host: i265, 2026-10-15. Round 2 base: 765a2f9c; implementation/test base: 50048f500b3b.
+Both candidates built through just snap-cargo @ build --release -p zenmetrics-cli.
+Score commands: panel.py <snapshot-binary> <r2-ties-even|r2-half-away> ssim-pyiqa ms-ssim-pyiqa
+Compare: rounding.py <r2-ties-even> <r2-half-away> ~/tmp/aic-site/site_fullres_subset61.csv <r2-rounding>
+Output roots on i265: ~/tmp/aic-variants-scratch/.
+All heavy commands serialized through the shared lock and run-heavy --mem 16G.
+Ties-even panel:
+run-heavy: done rc=0 28s | peak-RSS 1.43GiB | min-avail 21997MiB | peak-load 8.01
+Half-away panel:
+run-heavy: done rc=0 33s | peak-RSS 1.42GiB | min-avail 21084MiB | peak-load 30.83
+
+Only rounded-luma rounding was changed for the candidate run. Both 61-row
+columns pass max absolute error <=1e-5. Outputs differ at CLI precision.
+Ties-even has lower mean absolute error for each column and lower combined
+absolute error, so it is retained. The half-away CLI-precision tie fallback
+was not applicable. round2_rounding.tsv/json retain both policies' measurements.
+No metric parameters, data, thresholds or published scores were fitted or changed.

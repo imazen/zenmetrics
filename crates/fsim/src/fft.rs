@@ -1089,7 +1089,7 @@ mod tests {
             let mut im8 = vec![0.0f32; n * 8];
             let mut want: Vec<Complex> = Vec::with_capacity(n * 8);
             for j in 0..8 {
-                let lane = seeded_with(0x9E37_9B97_F4A7_C15u64.wrapping_mul(j as u64 + 1), n);
+                let lane = seeded_with(0x09E3_79B9_7F4A_7C15_u64.wrapping_mul(j as u64 + 1), n);
                 for (k, v) in lane.iter().enumerate() {
                     re8[k * 8 + j] = v.re;
                     im8[k * 8 + j] = v.im;
