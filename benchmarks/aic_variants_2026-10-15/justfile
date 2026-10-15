@@ -11,3 +11,6 @@ panel out +metrics:
 
 verify panel_root site probe:
     python3 {{justfile_directory()}}/verify.py {{panel_root}} {{site}} {{probe}}
+
+rounding even away site out:
+    python3 {{justfile_directory()}}/rounding.py {{even}} {{away}} {{site}} {{out}}

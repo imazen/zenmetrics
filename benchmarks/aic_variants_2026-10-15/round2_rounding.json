@@ -1,0 +1,9 @@
+{
+  "selected": "ties_even",
+  "identical_at_cli_precision": false,
+  "total_absolute_error": {
+    "ties_even": 6.157844083465314e-05,
+    "half_away": 6.958203429319187e-05
+  },
+  "criterion": "CLI-precision equality uses half-away; otherwise compare total absolute error over both 61-pair columns"
+}

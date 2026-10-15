@@ -4,6 +4,9 @@
 //! dropping incomplete bottom/right blocks; the site's values do not
 //! establish a unique downscale kernel. Input and all accumulation are f64;
 //! `f32` in the CLI name means unrounded input, not f32 arithmetic.
+//! Rounded luma uses ties-to-even: on the 61-pair AIC gate it has lower mean
+//! absolute error for both SSIM and MS-SSIM than half-away rounding. Both
+//! measurements are retained in `benchmarks/aic_variants_2026-10-15/round2_rounding.tsv`.
 
 use crate::decode::Rgb8Image;
 
@@ -328,6 +331,13 @@ mod tests {
                 "{w}x{h}: {actual} vs {expected}"
             );
         }
+    }
+
+    #[test]
+    fn rounded_luma_uses_the_measured_ties_even_rule() {
+        let rgb = [0, 0, 250];
+        assert_eq!(plane(&rgb, 1, 1, 3, false, 0, false).unwrap(), vec![28.5]);
+        assert_eq!(plane(&rgb, 1, 1, 3, false, 0, true).unwrap(), vec![28.0]);
     }
 
     #[test]

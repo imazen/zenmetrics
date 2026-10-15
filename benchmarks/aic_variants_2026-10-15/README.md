@@ -35,3 +35,22 @@ are 3.78e-6 (SSIM) and 1.88e-6 (MS-SSIM); the odd S53 pair differs by 2.35e-7.
 `ssim_summary.tsv` includes the published RGB base beside the variants. MS-SSIM
 k6 scores 27 pairs and rejects 34; the other nineteen names score all 61 pairs.
 Missing site maps are recorded explicitly rather than replaced by another map.
+
+
+## Round 2: rounded luma ties
+
+Rounded luma retains **ties-to-even**. Fresh 61-pair runs differ at the CLI's
+six-decimal precision; ties-to-even has lower mean absolute error for both
+published columns. Half-away therefore does not qualify for the equal-output
+fallback. These errors use the published values without refitting anything.
+
+| Metric | Tie rule | Median absolute error | Maximum absolute error | Mean absolute error |
+|---|---|---:|---:|---:|
+| SSIM-pyiqa | ties-to-even | 4.12384e-7 | 3.77692e-6 | 6.78512e-7 |
+| SSIM-pyiqa | half-away | 3.69388e-7 | 9.22308e-6 | 7.68571e-7 |
+| MS-SSIM-pyiqa | ties-to-even | 2.90910e-7 | 1.88279e-6 | 3.30971e-7 |
+| MS-SSIM-pyiqa | half-away | 3.16957e-7 | 1.69273e-6 | 3.72118e-7 |
+
+Exact measurements and the comparison criterion are in `round2_rounding.tsv`
+and `round2_rounding.json`; `rounding.py` reproduces the comparison from saved
+score tables. Both rules satisfy the existing 1e-5 base gates.

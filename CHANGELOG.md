@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
+
 - Add non-Auto factor/map coverage, direct MS-SSIM product verification and all-20-name convention routing coverage; remove redundant box comparison.
 
 - FSIM/VSI reject fixed factors larger than the shorter image dimension and compute box areas in u64 for 32-bit targets.
