@@ -72,6 +72,26 @@ try:
         default_loop = page.locator('#loop-info').inner_text()
         assert 'steered by zensim · ' in default_loop and 'live encode' in default_loop and 'external' in default_loop, default_loop
         assert page.locator('#loop-save').is_enabled()
+        # From iteration 2 the loop only refines blocks above the target; on
+        # the demo none are, so the last frames repeat and say so.
+        frames = int(default_loop.split(' of ')[1].split(' ')[0])
+        for _ in range(frames - 1):
+            page.locator('#loop-next').click()
+        assert 'same quant field and image as the previous iteration' in page.locator('#loop-info').inner_text()
+        # The top bar's Map menu and the loop's Steer menu both switch metric.
+        page.locator('#map-name').select_option('msssim|diffmap')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('msssim · diffmap ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'msssim'
+        assert page.locator('#loop-steer').input_value() == 'msssim|diffmap'
+        page.locator('#loop-steer').select_option('gmsd|gms')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd · gms ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'gmsd' and page.locator('#map-name').input_value() == 'gmsd|gms'
+        page.locator('#loop-steer').select_option('builtin')
+        page.locator('#loop-run').click()
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of') && document.getElementById('loop-info').textContent.includes('steered by butteraugli (built-in)')",timeout=300000)
+        assert page.locator('#metric').input_value() == 'gmsd'
+        ui_linked_menus = True
+        page.locator('#metric').select_option('zensim')
         # Negative control for the reported old-glue/new-module memory mismatch.
         import re
         glue=(args.site/asset_prefix/'pkg/zenmetrics_browser.js').read_text()
@@ -239,14 +259,17 @@ try:
         assert all(math.isfinite(value) for value in result['map'])
         # Map selection, the encoder modules and the live loop, through the
         # worker protocol.
+        result['ui_linked_menus'] = ui_linked_menus
+        result['default_loop'] = default_loop
         result['worker_maps_codecs_loop'] = page.evaluate('''async () => {
           const worker = new Worker(new URL('./worker.js', location.href), {type:'module'});
-          let progress=0;
+          let progress=0,frames=0;
           const wait = () => new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Worker deadline expired')), 120000);
             worker.onmessage = ({data}) => {
               if(['control','score','progress'].includes(data.type))return;
               if(data.type==='loop-progress'){if(!data.message)progress++;return;}
+              if(data.type==='loop-frame'){if(data.recon.length!==data.width*data.height*4||data.map.length!==data.width*data.height)throw new Error('loop frame size');frames++;return;}
               clearTimeout(timer);data.type==='error'?reject(new Error(data.message)):resolve(data);
             };
           });
@@ -289,7 +312,13 @@ try:
           const run=await response;
           const head=new TextDecoder().decode(run.trace.subarray(0,10));
           if(head!=='JXLTRACE1\\n'||!(progress>0)||run.file.length<2||run.file[0]!==255)throw new Error('loop '+head+' '+progress);
-          out.loop={scored:progress,bytes:run.file.length,trace:run.trace.byteLength};
+          if(frames!==progress)throw new Error('live frames '+frames+' vs scored '+progress);
+          out.loop={scored:progress,frames,bytes:run.file.length,trace:run.trace.byteLength};
+          frames=0;
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:null,steering:'butteraugli (built-in)'});
+          const builtin=await response;
+          if(!(frames>0)||builtin.file[0]!==255)throw new Error('built-in loop frames '+frames);
+          out.builtin_loop={frames,bytes:builtin.file.length};
           response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:{metric:'gmsd',map:'',scale:0,exponent:1},steering:'bad'});
           try{await response;throw new Error('A zero scale was accepted');}catch(error){if(!String(error.message).includes('scale and exponent'))throw error;}
           worker.terminate();return out;

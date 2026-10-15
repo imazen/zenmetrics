@@ -1305,6 +1305,7 @@ dependencies = [
 name = "zenmetrics-codec-jxl"
 version = "0.1.0"
 dependencies = [
+ "butteraugli",
  "console_error_panic_hook",
  "js-sys",
  "jxl-encoder",

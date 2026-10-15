@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 jxl-encoder = { version = "0.4.0", default-features = false, features = ["std", "butteraugli-loop", "__external_metric"] }
 zenjxl-decoder = "0.4.0"
+butteraugli = "0.9.4"
 serde_json = "1.0.150"
 wasm-bindgen.workspace = true
 js-sys.workspace = true

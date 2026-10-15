@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let worker;
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0},
-  catalog:[], mapName:'', mapNames:[], loopDefaults:[], generated:false, codec:'jpeg'};
+  catalog:[], metrics:[], mapName:'', mapNames:[], loopDefaults:[], defaultMaps:{}, generated:false, codec:'jpeg', steerBuiltin:false};
 // The default map of each metric: its fused map where it publishes one.
 const mapLabels={zensim:'Zensim error',butteraugli:'Butteraugli error',dssim:'DSSIM fused error (all scales)',cvvdp:'CVVDP masked error',gmsd:'GMSD similarity',psnr:'PSNR squared error',fsim:'FSIM luminance similarity',fsimc:'FSIMc luminance similarity',haarpsi:'HaarPSI similarity',vsi:'VSI saliency-weighted contribution',msssim:'MS-SSIM fused −ln error (all levels)',nlpd:'NLPD fused difference (all levels)',psnrhvs:'PSNR-HVS 8×8 CSF-weighted block error',mdctpsnr:'mDCT-PSNR window detection probability',mad:'MAD high-quality strategy (masked local MSE)',iwssim:'IW-SSIM fused −ln error (all scales)',vif:'VIF fused information loss (all scales)',vifvec:'VIF vector fused information loss (all subbands)','vmaf-v1':'VMAF v1 SPEED chroma-U block difference',ssim2:'SSIMULACRA2 weighted error (fused terms)'};
 const codecInfo={jpeg:{label:'zenjpeg',ext:'jpg',mime:'image/jpeg'},webp:{label:'zenwebp',ext:'webp',mime:'image/webp'},avif:{label:'zenavif',ext:'avif',mime:'image/avif'},jxl:{label:'jxl-encoder',ext:'jxl',mime:'image/jxl'}};
@@ -15,6 +15,7 @@ function showScore(result) {
   const values=result.score.values||[{column:result.score.metric,value:result.score.score}];
   $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
   $('score-label').textContent=result.score.metric;
+  $('bar-label').textContent=result.score.metric;$('bar-score').textContent=$('score').textContent;
   $('score-info').textContent=values.map(v=>v.column).join(' / ')+(result.score.profile?` · model ${result.score.profile}`:'');
   $('elapsed').textContent=`${result.scoreMilliseconds.toFixed(1)} ms scoring`;
   $('compute-timing').textContent=`Reference ${result.referenceMilliseconds.toFixed(1)} ms (${result.referencePrepared?'prepared':'cache check'}) · Score ${result.scoreMilliseconds.toFixed(1)} ms · Map pending`;
@@ -48,11 +49,12 @@ function startWorker() {
   worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
   worker.onmessage=({data})=>{
     if(data.type==='progress'){status(data.message);return;}
+    if(data.type==='loop-frame'){paintLive(data);return;}
     if(data.type==='loop-progress'){$('loop-info').textContent=data.message||`Encoding: scored ${data.scored} reconstructions (last ${data.score.toFixed(4)})…`;return;}
     if(data.type==='ready'){
       const startupMilliseconds=performance.now()-startupStart;
       $('startup-timing').textContent=`Worker startup ${startupMilliseconds.toFixed(1)} ms · WASM load/init ${data.startup.wasmMilliseconds.toFixed(1)} ms · Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;
-      S.ready=true;S.catalog=data.maps;S.loopDefaults=data.loopDefaults;const selected=$('metric').value;
+      S.ready=true;S.catalog=data.maps;S.metrics=data.metrics;S.loopDefaults=data.loopDefaults;const selected=$('metric').value;
       $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=S.catalog.includes(name)?name:`${name} (score only)`;return o;}));
       $('metric').value=data.metrics.includes(selected)?selected:'zensim';syncMetric();$('compare').disabled=false;
       status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`);
@@ -113,12 +115,8 @@ function mapUnavailable(metric){return `${metric} has no spatial map in this bui
 function setMaps(result){
   S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;S.geometry=result.geometry;
   S.mapName=result.mapName||'';S.mapNames=result.mapNames||[];S.mapPolarity=result.mapPolarity;
-  if(result.defaultMap)S.defaultMap=result.defaultMap;
-  const select=$('map-name');
-  select.replaceChildren(...S.mapNames.map(name=>{const o=document.createElement('option');o.value=name;
-    o.textContent=name===S.defaultMap?`${mapLabels[S.mapMetric]||name} · ${name} (default)`:name;return o;}));
-  select.value=S.mapName;select.disabled=S.mapNames.length<2;
-  syncLoopSteer();
+  if(result.defaultMap)S.defaultMaps[result.mapMetric]=result.defaultMap;
+  buildMenus();syncLoopSteer();
 }
 async function compare() {
   if(!S.ready||S.pending||!S.reference||!S.distorted)return;
@@ -127,10 +125,11 @@ async function compare() {
   const metric=$('metric').value,route=mapRoute(metric);
   const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';$('compute-timing').textContent='Computing…';status(`Computing ${metric}…`);
   try {
-    const request={type:'compare',metric,mapMetric:route,mapName:route===S.mapMetric?S.mapName:'',zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value};
+    const request={type:'compare',metric,mapMetric:route,mapName:route===S.mapMetric?S.mapName:(S.requestedMap||''),zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value};
     const result=await rpc(request);
     if(revision!==S.revision)return;
     if(!request.mapName)result.defaultMap=result.mapName;
+    S.requestedMap=undefined;
     setMaps(result);
     showScore(result);
     $('elapsed').textContent=`${result.milliseconds.toFixed(1)} ms total`;
@@ -149,16 +148,55 @@ $('compare').onclick=compare;
 function syncMetric(){
   const metric=$('metric').value;
   $('display-row').hidden=metric!=='cvvdp';
-  $('map-name').disabled=true;
-  if(!mapRoute(metric)){$('map-name').replaceChildren(new Option('No spatial map for this metric',''));}
-  snippet();syncLoopSteer(true);
+  buildMenus();snippet();syncLoopSteer(true);
 }
-$('metric').onchange=()=>{S.map=null;S.mapName='';S.mapMetric=null;syncMetric();S.revision++;paint();schedule();};
+// The Map menu (top bar) and the loop's Steer menu both list every metric's
+// maps, grouped by metric: the evaluated metric's own list, else the maps
+// with fitted loop defaults (the default map first). Choosing another
+// metric's map switches the metric.
+function mapChoices(){
+  return S.catalog.filter(m=>S.metrics.includes(m)).map(metric=>{
+    let maps=metric===S.mapMetric&&S.mapNames.length?S.mapNames:S.loopDefaults.filter(d=>d.metric===metric).map(d=>d.map);
+    return {metric,maps:maps.length?maps:['']};
+  });
+}
+function defaultMapOf(metric){return S.defaultMaps[metric]??S.loopDefaults.find(d=>d.metric===metric)?.map;}
+function fillMapMenu(select,first){
+  select.replaceChildren(...first,...mapChoices().map(({metric,maps})=>{
+    const group=document.createElement('optgroup');group.label=metric;
+    for(const map of maps){const o=new Option(!map?`${metric} · default map`:map===defaultMapOf(metric)?`${metric} · ${map} (default)`:`${metric} · ${map}`,`${metric}|${map}`);
+      if(map===defaultMapOf(metric)&&mapLabels[metric])o.title=mapLabels[metric];group.append(o);}
+    return group;
+  }));
+}
+function selectedMapValue(){
+  const route=mapRoute($('metric').value);if(!route)return '';
+  const map=route===S.mapMetric?S.mapName:(S.requestedMap||defaultMapOf(route)||'');
+  return `${route}|${map}`;
+}
+function buildMenus(){
+  const metric=$('metric').value,route=mapRoute(metric),value=selectedMapValue();
+  fillMapMenu($('map-name'),route?[]:[new Option(`${metric} has no spatial map`,'')]);
+  $('map-name').value=value;
+  if(route&&$('map-name').value!==value)$('map-name').value=[...$('map-name').options].find(o=>o.value.startsWith(route+'|'))?.value??'';
+  fillMapMenu($('loop-steer'),[new Option("jxl-encoder's own butteraugli",'builtin')]);
+  $('loop-steer').value=S.steerBuiltin||!route?'builtin':$('map-name').value;
+}
+function chooseMap(value){
+  const [metric,map]=value.split('|');if(!metric)return;
+  if(metric!==S.mapMetric||!S.mapNames.includes(map)){
+    // Another metric (or a map not evaluated yet): switch and evaluate.
+    $('metric').value=metric;S.map=null;S.mapMetric=null;S.mapName='';S.requestedMap=map;
+    syncMetric();S.revision++;paint();schedule();return;
+  }
+  showCachedMap(map);
+}
+$('metric').onchange=()=>{S.map=null;S.mapName='';S.mapMetric=null;S.requestedMap=undefined;syncMetric();S.revision++;paint();schedule();};
 $('zensim-model').onchange=()=>{snippet();S.map=null;S.revision++;paint();schedule();};
 $('display').onchange=()=>{snippet();S.revision++;schedule();};
 $('live').onchange=()=>{if($('live').checked)compare();};
-$('map-name').onchange=async()=>{
-  const name=$('map-name').value;if(!S.mapMetric||!name)return;
+$('map-name').onchange=()=>chooseMap($('map-name').value);
+async function showCachedMap(name){
   const revision=++S.revision;
   try{
     const result=await rpc({type:'map',mapMetric:S.mapMetric,mapName:name});
@@ -166,7 +204,7 @@ $('map-name').onchange=async()=>{
     setMaps({...result,mapProfile:S.mapProfile});paint();
     $('compute-timing').textContent=`Map ${name} from the last evaluation · ${result.mapMilliseconds.toFixed(1)} ms`;
   }catch(error){S.mapName=name;S.map=null;paint();schedule();}
-};
+}
 $('swap').onclick=()=>{[S.reference,S.distorted]=[S.distorted,S.reference];S.generated=false;const a=$('name-reference'),b=$('name-distorted');[a.textContent,b.textContent]=[b.textContent,a.textContent];S.map=null;S.revision++;paint();schedule();};
 $('quality').oninput=()=>{$('quality-value').textContent=$('quality').value;};
 $('quality').onchange=()=>{if(S.generated)generate();};
@@ -319,7 +357,11 @@ function syncLoopSteer(reset=false){
         (fitted.r<0.5?' This map tracks butteraugli\'s block distances poorly, so the loop follows the metric\'s own judgment.':''):'No fitted default for this map; starting at 1, 1.');
   $('loop-run').disabled=!S.ready||L.running||!builtin&&!route;
 }
-$('loop-steer').onchange=()=>syncLoopSteer();
+$('loop-steer').onchange=()=>{
+  const value=$('loop-steer').value;S.steerBuiltin=value==='builtin';
+  if(!S.steerBuiltin&&value!==$('map-name').value)chooseMap(value);
+  buildMenus();syncLoopSteer(true);
+};
 $('loop-default').onclick=()=>syncLoopSteer(true);
 async function runLoop(){
   if(!S.ready||!S.reference||L.running)return;
@@ -329,7 +371,7 @@ async function runLoop(){
   const steer=builtin?null:{metric:route,map,scale,exponent,display:$('display').value};
   const steering=builtin?'butteraugli (built-in)':`${route} · ${map||'default map'} · scale ${scale} · exponent ${exponent}`;
   const r=S.reference,distance=Number($('loop-distance').value),effort=Number($('loop-effort').value),iters=Number($('loop-iters').value);
-  L.running=true;loopStop();$('loop-run').disabled=true;$('loop-info').className='note';$('loop-info').textContent=`Encoding ${r.width}×${r.height} at distance ${distance}, effort ${effort}, steered by ${steering}…`;
+  L.running=true;L.liveTarget=distance;loopStop();$('loop-run').disabled=true;$('loop-info').className='note';$('loop-info').textContent=`Encoding ${r.width}×${r.height} at distance ${distance}, effort ${effort}, steered by ${steering}…`;
   try{
     const result=await rpc({type:'loop',reference:r.data,width:r.width,height:r.height,distance,effort,iters,steer,steering},600);
     const t=result.trace;L.bytes=t;showTrace(parseTrace(t.buffer.slice(t.byteOffset,t.byteOffset+t.byteLength)),`live encode · ${(result.milliseconds/1000).toFixed(1)} s`);
@@ -359,6 +401,23 @@ function parseTrace(buffer){
   sample.sort((a,b)=>a-b);const diffTop=sample.length?sample[Math.min(sample.length-1,Math.floor(sample.length*.995))]:1;
   return {...head,source,frames,diffTop,qfMin,qfMax,dqfTop};
 }
+// The steering map over a reconstruction, on the loop's own scale: the
+// palette's middle is the target distance, so a pixel at or past the middle
+// is where the map exceeds what the loop aims for.
+function overlayPixel(out,i,src,j,v,target){
+  // The blend weight rises steeply (t³) so pixels well below the target stay
+  // readable and those near or past it stand out.
+  const t=Math.sqrt(Math.min(1,Math.max(0,v)/(2*target))),k=Math.round(t*255)*3,a=.9*t*t*t;
+  for(let c=0;c<3;c++)out[i*4+c]=src[j+c]*(1-a)+ramp[k+c]*a;out[i*4+3]=255;
+}
+function paintLive(f){
+  if(!L.running)return;const {width:w,height:h}=f,canvas=$('loop-view');canvas.width=w;canvas.height=h;
+  const g=canvas.getContext('2d'),img=g.createImageData(w,h);
+  for(let i=0;i<w*h;i++)overlayPixel(img.data,i,f.recon,i*4,f.map[i],L.liveTarget);
+  g.putImageData(img,0,0);
+  $('loop-info').className='note';
+  $('loop-info').textContent=`Encoding live · reconstruction ${f.index+1} scored ${f.score.toFixed(4)} against target ${L.liveTarget} · map over the reconstruction, the palette's middle is the target`;
+}
 function paintLoop(){
   const t=L.trace;if(!t)return;const f=t.frames[L.frame],{width:w,height:h}=t,canvas=$('loop-view');canvas.width=w;canvas.height=h;
   const g=canvas.getContext('2d'),img=g.createImageData(w,h),out=img.data,layer=$('loop-layer').value;
@@ -366,7 +425,8 @@ function paintLoop(){
   const heat=(i,x)=>{const k=Math.max(0,Math.min(255,Math.round(x*255)))*3;put(i,ramp[k],ramp[k+1],ramp[k+2]);};
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const i=y*w+x,b=(y>>3)*t.xsize_blocks+(x>>3);
-    if(layer==='recon'||layer==='source'){const s=layer==='recon'?f.recon:t.source;put(i,s[i*3],s[i*3+1],s[i*3+2]);}
+    if(layer==='overlay')overlayPixel(out,i,f.recon,i*3,f.diffmap[i],f.target);
+    else if(layer==='recon'||layer==='source'){const s=layer==='recon'?f.recon:t.source;put(i,s[i*3],s[i*3+1],s[i*3+2]);}
     else if(layer==='diffmap')heat(i,Math.sqrt(Math.max(0,f.diffmap[i])/t.diffTop));
     else if(layer==='tile')heat(i,f.tile[b]/(2*f.target));
     else if(layer==='qf')heat(i,(f.qf[b]-t.qfMin)/((t.qfMax-t.qfMin)||1));
@@ -374,9 +434,11 @@ function paintLoop(){
   }
   g.putImageData(img,0,0);
   let above=0,finer=0,coarser=0;for(let b=0;b<f.tile.length;b++){if(f.tile[b]>f.target)above++;if(f.next){if(f.next[b]>f.qf[b])finer++;else if(f.next[b]<f.qf[b])coarser++;}}
-  const last=t.frames.filter(x=>x.seed===f.seed).length-1;
+  const last=t.frames.filter(x=>x.seed===f.seed).length-1,before=t.frames[L.frame-1];
+  const same=before&&before.seed===f.seed&&before.qf.every((q,b)=>q===f.qf[b]);
   $('loop-info').textContent=`Frame ${L.frame+1} of ${t.frames.length} · seed ${f.seed} · iteration ${f.iter} of ${last} · ${f.metric} ${f.score.toFixed(4)} (target ${f.target.toFixed(4)}) · ${above} of ${f.tile.length} blocks above target · `+
-    (f.next?`next: ${finer} blocks finer, ${coarser} coarser`:'score-only final pass')+` · ${t.width}×${t.height}, d${t.distance} e${t.effort}, final ${t.bytes} bytes`+(t.steering?` · steered by ${t.steering}`:'')+(L.origin?` · ${L.origin}`:'');
+    (f.next?`next: ${finer} blocks finer, ${coarser} coarser`:'score-only final pass')+` · ${t.width}×${t.height}, d${t.distance} e${t.effort}, final ${t.bytes} bytes`+(t.steering?` · steered by ${t.steering}`:'')+(L.origin?` · ${L.origin}`:'')+
+    (same?' · same quant field and image as the previous iteration: from iteration 2 the loop only refines blocks above the target':'');
   $('loop-frame').value=L.frame;
 }
 function loopStep(k){if(!L.trace)return;const n=L.trace.frames.length;L.frame=((L.frame+k)%n+n)%n;paintLoop();}

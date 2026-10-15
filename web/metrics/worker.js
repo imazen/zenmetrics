@@ -91,8 +91,13 @@ self.onmessage = async ({data}) => {
           return out;
         }catch(error){failure??=String(error);throw error;}
       }:undefined;
+      // Each scored iteration streams to the page as it happens.
+      const observer=(recon,map,score,index)=>{
+        const values=new Float32Array(map);
+        postMessage({type:'loop-frame',id,recon,map:values,score,index,width,height},[recon.buffer,values.buffer]);
+      };
       const start=performance.now();
-      const run=module.loop_encode(reference,width,height,data.distance,data.effort,data.iters,scorer,data.steering);
+      const run=module.loop_encode(reference,width,height,data.distance,data.effort,data.iters,scorer,observer,data.steering);
       if(failure){run.free();throw new Error(`The steering metric failed: ${failure}`);}
       const trace=run.trace,file=run.file,rgba=run.rgba;run.free();
       postMessage({type:'loop',id,trace,file,rgba,milliseconds:performance.now()-start},[trace.buffer,file.buffer,rgba.buffer]);return;

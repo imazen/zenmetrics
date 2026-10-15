@@ -4,15 +4,20 @@ The viewer's "Encoder loop player" panel runs jxl-encoder's perceptual
 quantization loop on the reference image inside the page and steps through
 it: play, pause, step back and forward, or scrub through every scored
 iteration of every seed. The demo scene loads when the page starts, and its
-loop encodes straight away.
+loop encodes straight away. While it encodes, each iteration appears as soon
+as it is scored, for both kinds of steering: the steering map over the
+reconstruction.
 
 ## Steering
 
 The loop is steered either by jxl-encoder's own butteraugli, as in a normal
 encode, or by the map selected in the Metric panel: any metric with a
 spatial map in this build, and any of its maps (its fused `diffmap` by
-default, or a per-scale map). The metric choice drives the score, the map
-and the steering; there is no second metric menu.
+default, or a per-scale map). One metric choice drives the score, the map
+and the steering. The metric and map menus sit in a bar that stays at the
+top of the page. The Map menu and the loop's Steer menu list every metric's
+maps, grouped by metric, so choosing another metric's map in either one
+switches the metric.
 
 jxl-encoder's loop was calibrated on butteraugli. It compares each 8×8
 block's 16-norm, times 1.2 (libjxl's `TileDistMap`), with the target
@@ -88,6 +93,7 @@ All layers are at the image's resolution:
 
 | Layer | Shows |
 | --- | --- |
+| Reconstruction + map (default) | the steering map over the reconstruction: `t = √(min(1, v/(2·target)))` on the palette, blended with weight `0.9·t³`, so the palette's middle is the target distance and pixels well below it stay readable |
 | Reconstruction | the image this iteration scored (sRGB8) |
 | Metric diffmap | the steering map, after normalization, one square-root scale across all frames (99.5th percentile) |
 | Block distance vs target | each 8×8 block's distance (16-norm of the map times 1.2); the middle of the palette is the target, and blocks above it get finer quantization next |
@@ -120,6 +126,25 @@ Format (`JXLTRACE1`, little-endian):
 4. Per frame: the quant field, the next quant field (when `has_next`), the
    tile distances and the diffmap, all as `f32`, then the reconstruction as
    packed sRGB8.
+
+### Why the last frames repeat
+
+jxl-encoder follows libjxl's schedule. Iterations 0 and 1 rescale every
+block's quant field by `(tile/target)^cur_pow`. From iteration 2,
+`resolved_cur_pow` is 0, and only blocks above the target get finer. When
+no block is above the target, the field stops changing, and later
+iterations encode and score the same image. The demo at distance 1 is such
+a case. Both of its traces (Zensim-steered and built-in butteraugli) change
+the field on every block in iterations 0 and 1, and their next/current
+ratio is exactly 1 from iteration 2 on. The info line marks a repeated
+frame. Higher distances, or images with blocks above the target, keep
+changing.
+
+Built-in steering scores through the same interface as an external
+metric. The JPEG XL module plugs in butteraugli with jxl-encoder's CPU
+parameters, which gives the built-in loop's bytes
+(`builtin_scoring_keeps_the_bytes`). That is how its iterations can stream
+to the page too.
 
 ## Encoder modules
 

@@ -135,8 +135,10 @@ pub fn quality_distance(quality: f32) -> f32 {
 }
 
 thread_local! {
-    /// The JavaScript scorer of the running [`loop_encode`].
+    /// The JavaScript scorer of the running [`loop_encode`], if any.
     static SCORER: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+    /// The JavaScript observer of the running [`loop_encode`], if any.
+    static OBSERVER: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
 }
 
 /// sRGB8 of a linear value in `[0, 1]`, as the trace stores reconstructions.
@@ -150,21 +152,52 @@ fn srgb8(v: f32) -> u8 {
     (e * 255.0 + 0.5) as u8
 }
 
-/// The loop's metric: each reconstruction goes to the JavaScript scorer as
-/// opaque sRGB8 RGBA, which returns `{values: Float32Array, score: number}`
-/// with `width × height` values on butteraugli's scale.
-struct JsScorer;
+/// The loop's metric. With a JavaScript scorer installed, each
+/// reconstruction goes to it as opaque sRGB8 RGBA and it returns
+/// `{values: Float32Array, score: number}` on butteraugli's scale.
+/// Without one, it is butteraugli with the parameters jxl-encoder's own CPU
+/// backend uses for SDR input, which gives the built-in loop's bytes. Either
+/// way an installed observer sees each iteration's reconstruction, map and
+/// score as it happens.
+struct LoopScorer {
+    butteraugli: Option<butteraugli::ButteraugliReference>,
+    iteration: u32,
+}
 
-impl ExternalLoopMetric for JsScorer {
+impl LoopScorer {
+    fn new() -> Self {
+        Self {
+            butteraugli: None,
+            iteration: 0,
+        }
+    }
+}
+
+fn js(value: JsValue) -> String {
+    format!("{value:?}")
+}
+
+impl ExternalLoopMetric for LoopScorer {
     fn set_reference(
         &mut self,
-        _: &[f32],
-        _: &[f32],
-        _: &[f32],
-        _: usize,
-        _: usize,
+        r: &[f32],
+        g: &[f32],
+        b: &[f32],
+        width: usize,
+        height: usize,
     ) -> Result<(), String> {
-        // The scorer already holds the source the encode was given.
+        if SCORER.with(|s| s.borrow().is_none()) {
+            let params = butteraugli::ButteraugliParams::new()
+                .with_intensity_target(80.0)
+                .with_compute_diffmap(true);
+            self.butteraugli = Some(
+                butteraugli::ButteraugliReference::new_linear_planar(
+                    r, g, b, width, height, width, params,
+                )
+                .map_err(|e| e.to_string())?,
+            );
+        }
+        // The JavaScript scorer already holds the source the encode was given.
         Ok(())
     }
 
@@ -178,20 +211,32 @@ impl ExternalLoopMetric for JsScorer {
         height: usize,
         diffmap: &mut Vec<f32>,
     ) -> Result<f64, String> {
-        let mut rgba = Vec::with_capacity(width * height * 4);
-        for y in 0..height {
-            for x in y * stride..y * stride + width {
-                rgba.extend([srgb8(r[x]), srgb8(g[x]), srgb8(b[x]), 255]);
+        let observed = OBSERVER.with(|o| o.borrow().is_some());
+        let scored = SCORER.with(|s| s.borrow().is_some());
+        let rgba = (observed || scored).then(|| {
+            let mut rgba = Vec::with_capacity(width * height * 4);
+            for y in 0..height {
+                for x in y * stride..y * stride + width {
+                    rgba.extend([srgb8(r[x]), srgb8(g[x]), srgb8(b[x]), 255]);
+                }
             }
-        }
-        SCORER.with(|slot| {
-            let slot = slot.borrow();
-            let scorer = slot.as_ref().ok_or("no scorer installed")?;
-            let out = scorer
-                .call1(&JsValue::NULL, &js_sys::Uint8Array::from(&rgba[..]))
-                .map_err(|e| format!("scorer failed: {e:?}"))?;
+            js_sys::Uint8Array::from(&rgba[..])
+        });
+        let (values, score) = if let Some(reference) = &self.butteraugli {
+            let (score, _) = reference
+                .compare_linear_planar_into(r, g, b, stride, diffmap)
+                .map_err(|e| e.to_string())?;
+            (None, score)
+        } else {
+            let out = SCORER.with(|slot| {
+                let slot = slot.borrow();
+                let scorer = slot.as_ref().ok_or("no scorer installed")?;
+                scorer
+                    .call1(&JsValue::NULL, rgba.as_ref().ok_or("no reconstruction")?)
+                    .map_err(|e| format!("scorer failed: {}", js(e)))
+            })?;
             let values: js_sys::Float32Array = js_sys::Reflect::get(&out, &"values".into())
-                .map_err(|e| format!("{e:?}"))?
+                .map_err(js)?
                 .dyn_into()
                 .map_err(|_| "scorer values must be a Float32Array")?;
             if values.length() as usize != width * height {
@@ -202,11 +247,29 @@ impl ExternalLoopMetric for JsScorer {
             }
             diffmap.resize(width * height, 0.0);
             values.copy_to(diffmap);
-            js_sys::Reflect::get(&out, &"score".into())
-                .map_err(|e| format!("{e:?}"))?
+            let score = js_sys::Reflect::get(&out, &"score".into())
+                .map_err(js)?
                 .as_f64()
-                .ok_or_else(|| "scorer score must be a number".into())
-        })
+                .ok_or("scorer score must be a number")?;
+            (Some(values), score)
+        };
+        if let Some(rgba) = rgba.filter(|_| observed) {
+            let values = values.unwrap_or_else(|| js_sys::Float32Array::from(&diffmap[..]));
+            OBSERVER.with(|o| {
+                if let Some(observer) = o.borrow().as_ref() {
+                    let args =
+                        js_sys::Array::of4(&rgba, &values, &score.into(), &self.iteration.into());
+                    observer
+                        .apply(&JsValue::NULL, &args)
+                        .map(|_| ())
+                        .map_err(js)
+                } else {
+                    Ok(())
+                }
+            })?;
+        }
+        self.iteration += 1;
+        Ok(score)
     }
 }
 
@@ -222,6 +285,8 @@ pub struct TraceHeader<'a> {
     pub bytes: usize,
     /// What scored the loop, for display.
     pub steering: &'a str,
+    /// The metric name frames carry; `None` keeps the encoder's label.
+    pub metric: Option<&'a str>,
 }
 
 /// Pack a loop's frames as `.ltrace` (see jxl-encoder's
@@ -250,7 +315,7 @@ pub fn pack_trace(
         "frames": frames.iter().map(|f| serde_json::json!({
             "seed": f.seed,
             "iter": f.iter,
-            "metric": f.metric,
+            "metric": head.metric.unwrap_or(f.metric),
             "score": f.score,
             "target": f.target,
             "has_next": f.next_quant_field.is_some(),
@@ -278,8 +343,10 @@ pub fn pack_trace(
 
 /// Encode with the perceptual loop traced: `iters` iterations per seed at
 /// `distance` and `effort`. With `scorer` (a function from a reconstruction's
-/// sRGB8 RGBA to `{values, score}`), the loop is scored by it instead of
-/// butteraugli; `steering` names it in the trace.
+/// sRGB8 RGBA to `{values, score}`) the loop is scored by it instead of
+/// butteraugli; `steering` names it in the trace. `observer`, when given, is
+/// called after each scored iteration with the reconstruction (sRGB8 RGBA),
+/// the map, the score and the call's index.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn loop_encode(
@@ -290,36 +357,20 @@ pub fn loop_encode(
     effort: u8,
     iters: u32,
     scorer: Option<js_sys::Function>,
+    observer: Option<js_sys::Function>,
     steering: &str,
 ) -> Result<LoopRun, JsError> {
     console_error_panic_hook::set_once();
     let rgb = rgb(rgba, width, height).map_err(|e| JsError::new(&e))?;
     let external = scorer.is_some();
     SCORER.with(|slot| *slot.borrow_mut() = scorer);
-    let trace = LoopTrace::new();
-    let metric = ExternalMetric::new(JsScorer);
-    let config = LossyConfig::new(distance)
-        .with_effort(effort)
-        .with_butteraugli_iters(iters);
-    let mut request = config
-        .encode_request(width, height, PixelLayout::Rgb8)
-        .with_loop_trace(&trace);
-    if external {
-        request = request.with_external_metric(&metric);
-    }
-    let encoded = request.encode(&rgb);
+    OBSERVER.with(|slot| *slot.borrow_mut() = observer);
+    let run = run_loop(
+        &rgb, width, height, distance, effort, iters, steering, external,
+    );
     SCORER.with(|slot| *slot.borrow_mut() = None);
-    let file = encoded.map_err(|e| JsError::new(&e.to_string()))?;
-    let decoded = decode(&file, width, height).map_err(|e| JsError::new(&e))?;
-    let head = TraceHeader {
-        distance,
-        effort,
-        iters,
-        bytes: file.len(),
-        steering,
-    };
-    let trace =
-        pack_trace(&trace.take(), &rgb, width, height, &head).map_err(|e| JsError::new(&e))?;
+    OBSERVER.with(|slot| *slot.borrow_mut() = None);
+    let (file, decoded, trace) = run.map_err(|e| JsError::new(&e))?;
     Ok(LoopRun {
         coded: Coded {
             file,
@@ -327,6 +378,43 @@ pub fn loop_encode(
         },
         trace,
     })
+}
+
+/// The traced encode behind [`loop_encode`]. Every encode goes through
+/// [`LoopScorer`], so an observer sees each iteration; without a JavaScript
+/// scorer that is butteraugli with the built-in loop's parameters, whose
+/// bytes `builtin_scoring_keeps_the_bytes` pins.
+#[allow(clippy::too_many_arguments)]
+fn run_loop(
+    rgb: &[u8],
+    width: u32,
+    height: u32,
+    distance: f32,
+    effort: u8,
+    iters: u32,
+    steering: &str,
+    external: bool,
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String> {
+    let trace = LoopTrace::new();
+    let file = LossyConfig::new(distance)
+        .with_effort(effort)
+        .with_butteraugli_iters(iters)
+        .encode_request(width, height, PixelLayout::Rgb8)
+        .with_loop_trace(&trace)
+        .with_external_metric(&ExternalMetric::new(LoopScorer::new()))
+        .encode(rgb)
+        .map_err(|e| e.to_string())?;
+    let decoded = decode(&file, width, height)?;
+    let head = TraceHeader {
+        distance,
+        effort,
+        iters,
+        bytes: file.len(),
+        steering,
+        metric: Some(if external { "external" } else { "butteraugli" }),
+    };
+    let packed = pack_trace(&trace.take(), rgb, width, height, &head)?;
+    Ok((file, decoded, packed))
 }
 
 #[cfg(test)]
@@ -353,6 +441,7 @@ mod tests {
             iters: 2,
             bytes: file.len(),
             steering: "butteraugli",
+            metric: None,
         };
         let packed = pack_trace(&frames, &rgb, w, h, &head).unwrap();
         assert_eq!(&packed[..10], b"JXLTRACE1\n");
@@ -373,5 +462,23 @@ mod tests {
                 .sum::<usize>();
         assert_eq!(packed.len(), expected);
         assert_eq!(decode(&file, w, h).unwrap().len(), pixels * 4);
+    }
+
+    /// Without a JavaScript scorer the loop is scored through the external
+    /// interface by butteraugli itself, and makes the built-in loop's bytes.
+    #[test]
+    fn builtin_scoring_keeps_the_bytes() {
+        let (w, h) = (72u32, 56u32);
+        let rgb: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 13 + (i / 97) * 29) % 253) as u8)
+            .collect();
+        let builtin = LossyConfig::new(1.5)
+            .with_effort(7)
+            .with_butteraugli_iters(3)
+            .encode(&rgb, w, h, PixelLayout::Rgb8)
+            .unwrap();
+        let (file, _, trace) = run_loop(&rgb, w, h, 1.5, 7, 3, "butteraugli", false).unwrap();
+        assert_eq!(file, builtin);
+        assert!(trace.len() > 14);
     }
 }
