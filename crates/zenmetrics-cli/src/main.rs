@@ -1525,7 +1525,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::ButteraugliOriginal => Some((-0.001, 1_000_000.0, 0.0)),
         MetricKind::Ssimulacra1 => Some((-0.001, 1.001, 0.0)),
         MetricKind::WsHv => Some((-0.001, 1.001, 1.0)),
-        MetricKind::Cambi => Some((-0.001, 1000.001, 0.0)),
+        // CAMBI is distorted-only: zero is normal for an unbanded image.
+        MetricKind::Cambi => None,
         MetricKind::CwSsim => Some((-0.001, 1.001, 1.0)),
         MetricKind::Flip => Some((-0.001, 1.001, 0.0)),
         MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
@@ -1639,7 +1640,8 @@ fn bogus_check(metric: crate::metrics::MetricKind, scores: &[f64], out_parquet: 
         }
     }
 
-    if finite.len() >= 4 {
+    // An unbanded batch legitimately has a constant zero CAMBI column.
+    if finite.len() >= 4 && metric != crate::metrics::MetricKind::Cambi {
         let min = finite.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = finite.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let range = max - min;
@@ -3503,6 +3505,12 @@ mod fail_on_bogus_tests {
 
     fn p() -> std::path::PathBuf {
         std::path::PathBuf::from("/tmp/test_sidecar.parquet")
+    }
+
+    #[test]
+    fn cambi_zero_distribution_is_not_bogus() {
+        assert_eq!(metric_range_bounds(MetricKind::Cambi), None);
+        assert!(bogus_check(MetricKind::Cambi, &vec![0.0; 20], &p()));
     }
 
     #[test]
