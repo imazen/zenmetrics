@@ -409,6 +409,23 @@ fn fixed_factor_matches_auto_and_strided() {
         assert_eq!(dm.factor(), factor);
         assert_eq!(dm.fsim, fixed.fsim);
         assert_eq!(dm.fsimc, Some(fixed.fsimc));
+        let alternate_factor = if factor == 1 { 2 } else { 1 };
+        let alternate = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(alternate_factor).unwrap(),
+        ));
+        let alternate_score = alternate.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let alternate_map = alternate.diffmap_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(
+            alternate_map.width as usize,
+            w.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(
+            alternate_map.height as usize,
+            h.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(alternate_map.factor(), alternate_factor);
+        assert_ne!(auto.fsim.to_bits(), alternate_score.fsim.to_bits());
+        assert_eq!(alternate_map.fsim.to_bits(), alternate_score.fsim.to_bits());
     }
 }
 

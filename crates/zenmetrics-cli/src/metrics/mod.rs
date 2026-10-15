@@ -508,6 +508,32 @@ pub enum MetricKind {
 }
 
 impl MetricKind {
+    fn ssim_pyiqa_flags(self) -> Option<(bool, bool, bool, usize)> {
+        match self {
+            Self::SsimPyiqa => Some((false, false, true, 1)),
+            Self::SsimPyiqaF32 => Some((false, false, false, 1)),
+            Self::SsimPyiqaF32K2 => Some((false, false, false, 2)),
+            Self::SsimPyiqaF32K3 => Some((false, false, false, 3)),
+            Self::SsimPyiqaF32K4 => Some((false, false, false, 4)),
+            Self::SsimPyiqaF32K5 => Some((false, false, false, 5)),
+            Self::SsimPyiqaF32K6 => Some((false, false, false, 6)),
+            Self::SsimcPyiqaF32 => Some((true, false, false, 1)),
+            Self::SsimcPyiqaF32K2 => Some((true, false, false, 2)),
+            Self::SsimcPyiqaF32K3 => Some((true, false, false, 3)),
+            Self::SsimcPyiqaF32K4 => Some((true, false, false, 4)),
+            Self::SsimcPyiqaF32K5 => Some((true, false, false, 5)),
+            Self::SsimcPyiqaF32K6 => Some((true, false, false, 6)),
+            Self::MsSsimPyiqa => Some((false, true, true, 1)),
+            Self::MsSsimPyiqaF32 => Some((false, true, false, 1)),
+            Self::MsSsimPyiqaF32K2 => Some((false, true, false, 2)),
+            Self::MsSsimPyiqaF32K3 => Some((false, true, false, 3)),
+            Self::MsSsimPyiqaF32K4 => Some((false, true, false, 4)),
+            Self::MsSsimPyiqaF32K5 => Some((false, true, false, 5)),
+            Self::MsSsimPyiqaF32K6 => Some((false, true, false, 6)),
+            _ => None,
+        }
+    }
+
     pub fn all() -> &'static [MetricKind] {
         &[
             MetricKind::Vmaf,
@@ -2249,86 +2275,34 @@ pub fn run_metric(
         // no GPU twin — same shape as GMSD). `fsim` emits both the
         // grayscale and color scores from one pass; `fsim-y` is the
         // luma-only variant.
-        MetricKind::SsimPyiqa => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, true, 1)?,
-        )]),
-        MetricKind::SsimPyiqaF32 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 1)?,
-        )]),
-        MetricKind::SsimPyiqaF32K2 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 2)?,
-        )]),
-        MetricKind::SsimPyiqaF32K3 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 3)?,
-        )]),
-        MetricKind::SsimPyiqaF32K4 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 4)?,
-        )]),
-        MetricKind::SsimPyiqaF32K5 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 5)?,
-        )]),
-        MetricKind::SsimPyiqaF32K6 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, false, false, 6)?,
-        )]),
-        MetricKind::SsimcPyiqaF32 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 1)?,
-        )]),
-        MetricKind::SsimcPyiqaF32K2 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 2)?,
-        )]),
-        MetricKind::SsimcPyiqaF32K3 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 3)?,
-        )]),
-        MetricKind::SsimcPyiqaF32K4 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 4)?,
-        )]),
-        MetricKind::SsimcPyiqaF32K5 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 5)?,
-        )]),
-        MetricKind::SsimcPyiqaF32K6 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, true, false, false, 6)?,
-        )]),
-        MetricKind::MsSsimPyiqa => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, true, 1)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 1)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32K2 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 2)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32K3 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 3)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32K4 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 4)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32K5 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 5)?,
-        )]),
-        MetricKind::MsSsimPyiqaF32K6 => Ok(vec![(
-            kind.column_names()[0],
-            ssim_pyiqa::score(reference, distorted, false, true, false, 6)?,
-        )]),
+        MetricKind::SsimPyiqa
+        | MetricKind::SsimPyiqaF32
+        | MetricKind::SsimPyiqaF32K2
+        | MetricKind::SsimPyiqaF32K3
+        | MetricKind::SsimPyiqaF32K4
+        | MetricKind::SsimPyiqaF32K5
+        | MetricKind::SsimPyiqaF32K6
+        | MetricKind::SsimcPyiqaF32
+        | MetricKind::SsimcPyiqaF32K2
+        | MetricKind::SsimcPyiqaF32K3
+        | MetricKind::SsimcPyiqaF32K4
+        | MetricKind::SsimcPyiqaF32K5
+        | MetricKind::SsimcPyiqaF32K6
+        | MetricKind::MsSsimPyiqa
+        | MetricKind::MsSsimPyiqaF32
+        | MetricKind::MsSsimPyiqaF32K2
+        | MetricKind::MsSsimPyiqaF32K3
+        | MetricKind::MsSsimPyiqaF32K4
+        | MetricKind::MsSsimPyiqaF32K5
+        | MetricKind::MsSsimPyiqaF32K6 => {
+            let (color, multiscale, rounded, factor) = kind
+                .ssim_pyiqa_flags()
+                .ok_or("missing SSIM-pyiqa configuration")?;
+            Ok(vec![(
+                kind.column_names()[0],
+                ssim_pyiqa::score(reference, distorted, color, multiscale, rounded, factor)?,
+            )])
+        }
         #[cfg(feature = "cpu-fsim")]
         MetricKind::Fsim => run_cpu_fsim(reference, distorted),
         #[cfg(feature = "cpu-fsim")]
@@ -3007,6 +2981,39 @@ fn run_cpu_vsi_fixed(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn all_twenty_ssim_names_select_expected_conventions() {
+        use super::*;
+        let cases = [
+            ("ssim-pyiqa", (false, false, true, 1)),
+            ("ssim-pyiqa-f32", (false, false, false, 1)),
+            ("ssim-pyiqa-f32-k2", (false, false, false, 2)),
+            ("ssim-pyiqa-f32-k3", (false, false, false, 3)),
+            ("ssim-pyiqa-f32-k4", (false, false, false, 4)),
+            ("ssim-pyiqa-f32-k5", (false, false, false, 5)),
+            ("ssim-pyiqa-f32-k6", (false, false, false, 6)),
+            ("ssimc-pyiqa-f32", (true, false, false, 1)),
+            ("ssimc-pyiqa-f32-k2", (true, false, false, 2)),
+            ("ssimc-pyiqa-f32-k3", (true, false, false, 3)),
+            ("ssimc-pyiqa-f32-k4", (true, false, false, 4)),
+            ("ssimc-pyiqa-f32-k5", (true, false, false, 5)),
+            ("ssimc-pyiqa-f32-k6", (true, false, false, 6)),
+            ("ms-ssim-pyiqa", (false, true, true, 1)),
+            ("ms-ssim-pyiqa-f32", (false, true, false, 1)),
+            ("ms-ssim-pyiqa-f32-k2", (false, true, false, 2)),
+            ("ms-ssim-pyiqa-f32-k3", (false, true, false, 3)),
+            ("ms-ssim-pyiqa-f32-k4", (false, true, false, 4)),
+            ("ms-ssim-pyiqa-f32-k5", (false, true, false, 5)),
+            ("ms-ssim-pyiqa-f32-k6", (false, true, false, 6)),
+        ];
+        assert_eq!(cases.len(), 20);
+        for (name, expected) in cases {
+            let kind = MetricKind::from_str(name, false).unwrap();
+            assert_eq!(kind.ssim_pyiqa_flags(), Some(expected), "{name}");
+        }
+        assert_eq!(MetricKind::Fsim.ssim_pyiqa_flags(), None);
+    }
+
     #[test]
     fn fixed_factor_columns_follow_versioned_base_and_overrides() {
         use super::*;

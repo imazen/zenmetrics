@@ -205,6 +205,13 @@ mod tests {
             .enumerate()
             .map(|(i, &v)| if i % 5 == 0 { (v + 41.0) % 256.0 } else { v })
             .collect();
+        let (expected_ssim, expected_cs) = direct_statistics(&a, &b, w, h);
+        let (ssim, cs) = statistics(&a, &b, w, h).unwrap();
+        assert!((ssim - expected_ssim).abs() < 1e-12);
+        assert!((cs - expected_cs).abs() < 1e-12);
+    }
+
+    fn direct_statistics(a: &[f64], b: &[f64], w: usize, h: usize) -> (f64, f64) {
         let mut g = [0.0; 11];
         for (i, v) in g.iter_mut().enumerate() {
             *v = (-((i as f64 - 5.0).powi(2)) / 4.5).exp();
@@ -232,10 +239,95 @@ mod tests {
                 sum += cs * (2.0 * ma * mb + 6.5025) / (ma * ma + mb * mb + 6.5025);
             }
         }
-        let (ssim, cs) = statistics(&a, &b, w, h).unwrap();
         let n = ((w - 10) * (h - 10)) as f64;
-        assert!((ssim - sum / n).abs() < 1e-12);
-        assert!((cs - csum / n).abs() < 1e-12);
+        (sum / n, csum / n)
+    }
+
+    #[test]
+    fn multiscale_score_matches_direct_scale_product() {
+        for (w, h) in [(161, 177), (162, 176)] {
+            let r = Rgb8Image {
+                width: w,
+                height: h,
+                pixels: (0..w * h * 3)
+                    .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                    .collect(),
+            };
+            let d = Rgb8Image {
+                width: w,
+                height: h,
+                pixels: r
+                    .pixels
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &v)| if i % 7 == 0 { v.wrapping_add(43) } else { v })
+                    .collect(),
+            };
+            let mut a = plane(
+                &r.pixels,
+                w as usize,
+                h as usize,
+                w as usize * 3,
+                false,
+                0,
+                false,
+            )
+            .unwrap();
+            let mut b = plane(
+                &d.pixels,
+                w as usize,
+                h as usize,
+                w as usize * 3,
+                false,
+                0,
+                false,
+            )
+            .unwrap();
+            let (mut sw, mut sh) = (w as usize, h as usize);
+            let mut expected = 1.0;
+            for (level, weight) in [0.0448, 0.2856, 0.3001, 0.2363, 0.1333]
+                .into_iter()
+                .enumerate()
+            {
+                let (ssim, cs) = direct_statistics(&a, &b, sw, sh);
+                expected *= if level == 4 { ssim } else { cs }.powf(weight);
+                if level < 4 {
+                    // Materialize the padded image, independently of the ring/scoring path.
+                    let down = |src: &[f64]| {
+                        let (pw, ph) = (sw + 2 * (sw % 2), sh + 2 * (sh % 2));
+                        let mut padded = vec![0.0; pw * ph];
+                        for y in 0..sh {
+                            for x in 0..sw {
+                                padded[(y + sh % 2) * pw + x + sw % 2] = src[y * sw + x];
+                            }
+                        }
+                        let mut dst = Vec::new();
+                        for y in (0..ph - 1).step_by(2) {
+                            for x in (0..pw - 1).step_by(2) {
+                                dst.push(
+                                    (padded[y * pw + x]
+                                        + padded[y * pw + x + 1]
+                                        + padded[(y + 1) * pw + x]
+                                        + padded[(y + 1) * pw + x + 1])
+                                        / 4.0,
+                                );
+                            }
+                        }
+                        dst
+                    };
+                    a = down(&a);
+                    b = down(&b);
+                    sw = sw.div_ceil(2);
+                    sh = sh.div_ceil(2);
+                }
+            }
+            let actual = score(&r, &d, false, true, false, 1).unwrap();
+            assert!(actual > 0.0 && actual < 1.0);
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "{w}x{h}: {actual} vs {expected}"
+            );
+        }
     }
 
     #[test]
@@ -261,9 +353,6 @@ mod tests {
                     let a = plane(&packed, w, h, w * 3, color, channel, rounded).unwrap();
                     let b = plane(&strided, w, h, stride, color, channel, rounded).unwrap();
                     assert_eq!(a, b);
-                    for factor in 1..=6 {
-                        assert_eq!(boxdown(&a, w, h, factor), boxdown(&b, w, h, factor));
-                    }
                     let (ssim, cs) = statistics(&a, &b, w, h).unwrap();
                     assert_eq!(ssim, 1.0);
                     assert_eq!(cs, 1.0);
