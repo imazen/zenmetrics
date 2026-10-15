@@ -7,3 +7,29 @@ The oracle is `flip-evaluator==1.7`; its source distribution SHA-256 is `88204ec
 The 61-pair published gate has median/max scalar error **0 / 0**. The 21 ladder maps (three images at 64, 128, 256, 512, 1024, 2048 and 4096 square pixels) have maximum per-pixel error **2.9802322387695312e-8** and maximum scalar error **0**, below the requested 1e-6 gates. Packed and strided RGB ingress must agree bit for bit.
 
 `flip_probe.rs` exports the production Rust map and mean without involving a decoder. `verify_flip.py` decodes the same RGB8 PNGs for both implementations and compares every raw cell; no colormap or screenshot is compared. Paths to the external AIC and ladder fixtures are explicit in the script. Install the oracle in a separate virtual environment; it is not a runtime dependency of the Rust CLI.
+
+## CW-SSIM
+
+The exact AIC pyramid has not been established. `cw-ssim` emits `cw_ssim` (higher is better); the selected implementation has median/max published error **2.9390669198381403e-7 / 1.106269287983741e-4**, with the largest residual on `S21_JXLM_09.png`. This is not an exact reproduction claim.
+
+The implementation follows [Wang and Simoncelli (2005)](https://www.cns.nyu.edu/pub/lcv/wang05a.pdf) and [Sampat et al. (2009)](https://doi.org/10.1109/TIP.2009.2025923): rounded BT.601 luma, four complex steerable-pyramid levels, eight orientations (order seven), the fourth oriented level, valid 7×7 windows, K=0, and orientation-averaged Gaussian spatial pooling with σ = uncropped band height/4. The radial transition spans one octave. Two exactly zero-energy windows are defined to have similarity 1. Inputs smaller than 64×64 are refused. RGB rows can be strided.
+
+The independent reference uses [pyrtools 1.0.11](https://github.com/LabForComputationalVision/pyrtools/blob/1ff70157232b9efc9f3ab043230fe6854690e516/src/pyrtools/pyramids/SteerablePyramidFreq.py), under the MIT notice retained in `LICENSE-pyrtools`. Its source file SHA-256 is `f234aa9442927e83d3add8791e9e31d5e489a9041938c2878174d1433b4b156c`. Rust adapts the existing in-tree scalar radix-2/Bluestein FFT to f64; no dependencies were added. Unused fine orientation bands are not materialized.
+
+The selected variant uses actual centred DFT-bin coordinates at odd sizes and interpolated radial/angular masks. Selection minimized the worst absolute published error over the 61-pair panel. Measurements are retained in `cw_pyramid_search_summary.tsv`, `cw_grid_search_summary.tsv`, `cw_diagnostic_grid_search.json` and `cw_aic.json`:
+
+| Convention | Median absolute error | Maximum absolute error |
+|---|---:|---:|
+| Original pyrtools grid, BLAS luma, level 4, valid, Gaussian | 4.5422022842966925e-7 | 8.901036304693744e-4 |
+| True DFT grid, f64 explicit luma, interpolated angular mask | 2.939066942042601e-7 | 1.1062692880392522e-4 |
+| True DFT grid, f64 explicit luma, analytic angular mask | 3.010417111148911e-7 | 1.1099389968893814e-4 |
+| True DFT grid, f32 explicit luma, interpolated angular mask | 2.8370234161911867e-7 | 1.1086544580862778e-4 |
+| True DFT grid, Gaussian σ = cropped height/4 | 1.3208148066390368e-4 | 5.677828847750144e-3 |
+
+Earlier levels, uniform pooling, and same-size zero-padded windows had larger residuals in the full panel. An inclusive-endpoint frequency grid was also worse on the four diagnostic pairs. No pyiqa source or package was read.
+
+The final Rust/reference check holds the scalar ingress expression fixed: `round_ties_even(0.299R + 0.587G + 0.114B)` in f64. NumPy/BLAS matrix multiplication can reassociate those terms and change a small number of half ties; its distinct measurements remain in the search receipts. With explicit ingress on both sides, all 61 Rust scores agree with the independent Python pyramid within **1.1114442699522442e-12**, retaining the 1e-9 oracle gate. The initial matrix-multiply comparison and its failed gate are retained in the full logs rather than treated as pyramid errors.
+
+`verify_cw_explicit.py` runs that final gate; `verify_cw.py` retains the initial matrix-multiply comparison. `input_hashes.tsv` identifies every AIC and ladder PNG used. `check_ci.sh` runs the CLI library tests, the full workspace format check with CI's package selection, CI's exact workspace Clippy flags, and the inventory test. Generated full logs and search matrices are referenced by `validation.meta`.
+
+Implementation commits: FLIP `4f0dac38006cada675c7f2b607d5d1ac875cec57`; CW-SSIM `636f6b2c84dccd04f94637295f87935d66d5f02b`. Gate recipes and diagnostics are in `5778ea61ecf02eba9bf1e37ae6f28958f02e6316`. Oracle output files are created exclusively; choose a fresh output directory when rerunning.
