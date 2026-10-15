@@ -172,6 +172,7 @@ impl Dists {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
@@ -279,6 +280,7 @@ impl Dists {
                 self.score_stats(&rs, &ds)
             }
             Backend::Pair(p) => p.score(xr, xd, h, w),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -333,6 +335,10 @@ impl za::Metric for Dists {
                     .metric_err_with(COLUMN, Error::kind)?;
                 WarmState::Pixels(rgb8_to_planar_01(&view))
             }
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmDists {
             metric: self,
@@ -375,7 +381,9 @@ impl za::WarmReference for WarmDists<'_> {
                 .and_then(|ds| self.metric.score_stats(rs, &ds)),
             WarmState::Pixels(px) => match &self.metric.backend {
                 Backend::Pair(p) => p.score(px.clone(), rgb8_to_planar_01(&d), d.height, d.width),
-                Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
+                Backend::Trunk(_) | Backend::Image(_) => {
+                    Err(Error::Engine("warm state does not match engine".into()))
+                }
             },
         }
         .metric_err_with(COLUMN, Error::kind)?;

@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
-use zenmetrics_abstractions::{EvalOpts, Image, Metric};
+use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -79,6 +79,13 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     if column == "dreamsim" {
         return Ok(Box::new(Dreamsim::from_dir(&dir, engine, &consent())?));
     }
+    if column == "arniqa" {
+        // A NoReferenceMetric wrapped for pair scoring: `arniqa` on the
+        // distorted image, `arniqa_ref` on the reference.
+        return Ok(Box::new(PairedNoReference::new(Arniqa::from_dir(
+            &dir, engine,
+        )?)));
+    }
     let net = LpipsNet::ALL
         .into_iter()
         .find(|n| n.column() == column)
@@ -113,12 +120,19 @@ pub(super) fn score(
     }
     let m = models.get_mut(column).ok_or("model cache")?;
     let eval = m.evaluate(image(reference)?, image(distorted)?, EvalOpts::new())?;
-    let value = eval
-        .scores()
-        .find(|(k, _)| k == column)
-        .map(|(_, v)| v)
-        .ok_or_else(|| format!("{column}: no score"))?;
-    Ok(vec![(column, value)])
+    let scores: Vec<(std::borrow::Cow<'static, str>, f64)> = eval.scores().collect();
+    // Every declared column — NR models also emit `<col>_ref` for the
+    // reference image.
+    kind.column_names()
+        .iter()
+        .map(|&col| {
+            scores
+                .iter()
+                .find(|(k, _)| *k == col)
+                .map(|(_, v)| (col, *v))
+                .ok_or_else(|| format!("{col}: no score").into())
+        })
+        .collect()
 }
 
 #[cfg(test)]

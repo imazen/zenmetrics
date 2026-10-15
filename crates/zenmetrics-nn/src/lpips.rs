@@ -144,13 +144,16 @@ impl Lpips {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
     fn trunk(&self) -> Result<&dyn Trunk, Error> {
         match &self.backend {
             Backend::Trunk(t) => Ok(t.as_ref()),
-            Backend::Pair(_) => Err(Error::Engine("no trunk graph on this engine".into())),
+            Backend::Pair(_) | Backend::Image(_) => {
+                Err(Error::Engine("no trunk graph on this engine".into()))
+            }
         }
     }
 
@@ -218,6 +221,7 @@ impl Lpips {
                 r.height,
                 r.width,
             ),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 
@@ -359,6 +363,10 @@ impl za::Metric for Lpips {
                 self.check_size(&view).metric_err_with(col, Error::kind)?;
                 WarmState::Pixels(rgb8_to_planar_pm1(&view))
             }
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(col, Error::kind);
+            }
         };
         Ok(Box::new(WarmLpips {
             metric: self,
@@ -399,7 +407,9 @@ impl za::WarmReference for WarmLpips<'_> {
             WarmState::Taps(taps) => self.metric.score_against(taps, &d),
             WarmState::Pixels(px) => match &self.metric.backend {
                 Backend::Pair(p) => p.score(px.clone(), rgb8_to_planar_pm1(&d), d.height, d.width),
-                Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
+                Backend::Trunk(_) | Backend::Image(_) => {
+                    Err(Error::Engine("warm state does not match engine".into()))
+                }
             },
         }
         .metric_err_with(col, Error::kind)?;

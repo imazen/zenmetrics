@@ -17,6 +17,9 @@
 //!   upstream `DeepDC_PyTorch` 0.2 package.
 //! - [`Ckdn`]: CKDN (Zheng et al., ICCV 2021), parity target the upstream
 //!   `researchmm/CKDN` checkpoint, `cat(dist, ref, dist, ref)` → `dr`.
+//! - [`Arniqa`]: ARNIQA (Agnolon et al., WACV 2024) — a [`za::NoReferenceMetric`]
+//!   (wrap it in [`za::PairedNoReference`] where a pair metric is expected);
+//!   parity target upstream `single_image_inference.py`, kadid10k regressor.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -28,6 +31,7 @@
 #![forbid(unsafe_code)]
 
 mod afine;
+mod arniqa;
 mod ckdn;
 mod common;
 mod deepdc;
@@ -41,6 +45,7 @@ mod resize;
 mod weights;
 
 pub use afine::Afine;
+pub use arniqa::Arniqa;
 pub use ckdn::Ckdn;
 pub use deepdc::DeepDc;
 pub use dists::Dists;

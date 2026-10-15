@@ -365,6 +365,7 @@ impl Afine {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
@@ -555,6 +556,7 @@ impl Afine {
             // equal input sizes ⇒ equal padded sizes; the dims here apply
             // to both graph inputs.
             Backend::Pair(p) => p.score(rn, dn, dh, dw),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -621,6 +623,10 @@ impl za::Metric for Afine {
                 }
             }
             Backend::Pair(_) => WarmState::Pixels(rn),
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmAfine {
             metric: self,
@@ -684,7 +690,7 @@ impl za::WarmReference for WarmAfine<'_> {
                 Backend::Pair(p) => p
                     .score(px.clone(), dn, dh, dw)
                     .metric_err_with(COLUMN, Error::kind)?,
-                Backend::Trunk(_) => {
+                Backend::Trunk(_) | Backend::Image(_) => {
                     return Err(Error::Engine("warm state does not match engine".into()))
                         .metric_err_with(COLUMN, Error::kind);
                 }

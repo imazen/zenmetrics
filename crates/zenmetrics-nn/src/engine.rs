@@ -292,6 +292,28 @@ pub(crate) trait PairGraph: Send + Sync {
     fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error>;
 }
 
+/// A named `[n, c, h, w]` input to an [`ImageGraph`]. Constructed by the
+/// model but read only by `ort`'s `OrtCudaImage`.
+#[cfg_attr(not(feature = "ort"), allow(dead_code))]
+pub(crate) struct NamedInput {
+    /// The graph's input name.
+    pub(crate) name: &'static str,
+    /// Tensor shape; `data` has `shape` elements, row-major.
+    pub(crate) shape: [usize; 4],
+    /// Row-major f32 tensor data.
+    pub(crate) data: Vec<f32>,
+}
+
+/// A whole-metric graph over one image: named inputs in, one score out. For
+/// no-reference models on whole-graph engines — the host still owns the eval
+/// transform (crops, multi-scale views) and the graph is upstream's forward.
+pub(crate) trait ImageGraph: Send + Sync {
+    /// Engine name, recorded in the score's implementation tag.
+    fn engine(&self) -> &'static str;
+    /// Score the inputs.
+    fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error>;
+}
+
 #[cfg(feature = "ort")]
 pub(crate) mod ort_engine {
     use std::path::Path;
@@ -302,7 +324,7 @@ pub(crate) mod ort_engine {
     use ort::session::Session;
     use ort::value::Tensor;
 
-    use super::PairGraph;
+    use super::{ImageGraph, NamedInput, PairGraph};
     use crate::Error;
 
     /// ONNX Runtime is loaded once per process, from `ORT_DYLIB_PATH` when it
@@ -371,6 +393,61 @@ pub(crate) mod ort_engine {
                 .map_err(|_| Error::Engine("session lock poisoned".into()))?;
             let out = session
                 .run(ort::inputs!["r" => rv, "d" => dv])
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let s = out[self.output]
+                .try_extract_scalar::<f32>()
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            Ok(f64::from(s))
+        }
+    }
+
+    /// [`OrtCudaPair`] for a single-image graph with named inputs —
+    /// [`ImageGraph`] on the same CUDA session configuration.
+    pub(crate) struct OrtCudaImage {
+        session: Mutex<Session>,
+        output: &'static str,
+    }
+
+    impl OrtCudaImage {
+        pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
+            let env = environment()?;
+            let cuda = ep::CUDA::default()
+                .with_tf32(false)
+                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
+                .build()
+                .error_on_failure();
+            let session = Session::builder(env)
+                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+                .and_then(|b| b.with_execution_providers([cuda]).map_err(Into::into))
+                .and_then(|mut b| b.commit_from_file(path))
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            Ok(Self {
+                session: Mutex::new(session),
+                output,
+            })
+        }
+    }
+
+    impl ImageGraph for OrtCudaImage {
+        fn engine(&self) -> &'static str {
+            "ort-cuda"
+        }
+
+        fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error> {
+            let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
+                .iter()
+                .map(|i| {
+                    Tensor::from_array((i.shape, i.data.clone()))
+                        .map(|t| (i.name, t))
+                        .map_err(|e| Error::Engine(e.to_string()))
+                })
+                .collect::<Result<_, _>>()?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(feeds)
                 .map_err(|e| Error::Engine(e.to_string()))?;
             let s = out[self.output]
                 .try_extract_scalar::<f32>()

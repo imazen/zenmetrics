@@ -1557,6 +1557,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
         // land ~0–10, synthetic outliers stay far under 50.
         MetricKind::Niqe => Some((-0.001, 50.0, 0.0)),
+        // ARNIQA: learned NR quality on [0, 1] (scaled kadid10k MOS);
+        // no meaningful identity value — 0.0 flags a default-fail
+        // constant only.
+        MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
     }
 }
 

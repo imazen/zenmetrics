@@ -61,26 +61,22 @@ struct Tap1DFix {
     weights: Vec<i32>,
 }
 
-/// PIL/Pillow `Image.resize(BICUBIC)` coefficients for one axis
-/// (`libImaging/Resample.c`): same Catmull-Rom kernel as
-/// [`bicubic_aa_1d`], but the window bounds are `trunc(center ± support +
-/// 0.5)` — C `(int)` rounding — not torch's ceil/floor, and the weights are
-/// quantised to `i32` fixed point at `2⁻²²` with round-half-away.
-fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
+/// PIL/Pillow `Image.resize` coefficients for one axis
+/// (`libImaging/Resample.c` `precompute_coeffs`): window bounds are
+/// `trunc(center ± support + 0.5)` — C `(int)` rounding — not torch's
+/// ceil/floor, and the weights are quantised to `i32` fixed point at `2⁻²²`
+/// with round-half-away. `support` is the filter's base support and
+/// `kernel` its function of the scaled distance.
+fn pil_1d(
+    in_size: usize,
+    out_size: usize,
+    support: f64,
+    kernel: impl Fn(f64) -> f64,
+) -> Vec<Tap1DFix> {
     const PRECISION_BITS: u32 = 22;
     let scale = in_size as f64 / out_size as f64;
     let down = scale.max(1.0);
-    let support = 2.0 * down;
-    let cubic = |x: f64| {
-        let x = x.abs();
-        if x <= 1.0 {
-            (1.5 * x - 2.5) * x * x + 1.0
-        } else if x < 2.0 {
-            -0.5 * ((x - 5.0) * x + 8.0) * x + 2.0
-        } else {
-            0.0
-        }
-    };
+    let support = support * down;
     (0..out_size)
         .map(|i| {
             let centre = (i as f64 + 0.5) * scale;
@@ -88,7 +84,7 @@ fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
             let lo = ((centre - support + 0.5) as i64).max(0) as usize;
             let hi = (((centre + support + 0.5) as i64) as usize).min(in_size);
             let mut ws: Vec<f64> = (lo..hi)
-                .map(|j| cubic((j as f64 + 0.5 - centre) / down))
+                .map(|j| kernel((j as f64 + 0.5 - centre) / down))
                 .collect();
             let sum: f64 = ws.iter().sum();
             if sum != 0.0 {
@@ -112,6 +108,25 @@ fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
             }
         })
         .collect()
+}
+
+/// Catmull-Rom cubic (a = −0.5), support 2 — `bicubic_filter` in Resample.c.
+fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
+    pil_1d(in_size, out_size, 2.0, |x| {
+        let x = x.abs();
+        if x <= 1.0 {
+            (1.5 * x - 2.5) * x * x + 1.0
+        } else if x < 2.0 {
+            -0.5 * ((x - 5.0) * x + 8.0) * x + 2.0
+        } else {
+            0.0
+        }
+    })
+}
+
+/// The tent kernel `1 − |x|`, support 1 — `bilinear_filter` in Resample.c.
+fn bilinear_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
+    pil_1d(in_size, out_size, 1.0, |x| (1.0 - x.abs()).max(0.0))
 }
 
 /// One fixed-point pass over a u8 plane: `clip8((2²¹ + Σ px·k) >> 22)`.
@@ -175,6 +190,24 @@ pub(crate) fn resize_bicubic_pil_u8(
     let wx = bicubic_pil_1d(w, ow);
     let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
     let wy = bicubic_pil_1d(h, oh);
+    resample_u8_axis(&tmp, c, h, ow, &wy, 0)
+}
+
+/// Planar u8 `[c, h, w]` → `[c, oh, ow]`, bit-exact with Pillow's
+/// `Image.resize((ow, oh), BILINEAR)` — same separable fixed-point pass as
+/// [`resize_bicubic_pil_u8`] with the tent kernel. torchvision's
+/// `Resize((oh, ow))` on a PIL image is this call.
+pub(crate) fn resize_bilinear_pil_u8(
+    img: &[u8],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<u8> {
+    let wx = bilinear_pil_1d(w, ow);
+    let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
+    let wy = bilinear_pil_1d(h, oh);
     resample_u8_axis(&tmp, c, h, ow, &wy, 0)
 }
 
@@ -489,6 +522,46 @@ mod tests {
             }
         }
         let out = resize_bicubic_pil_u8(&planar, 3, 9, 7, 4, 5);
+        let mut got = vec![0u8; WANT.len()];
+        for i in 0..4 * 5 {
+            for c in 0..3 {
+                got[i * 3 + c] = out[c * 4 * 5 + i];
+            }
+        }
+        assert_eq!(got, WANT);
+    }
+
+    /// `resize_bilinear_pil_u8` reproduces Pillow 12.x's
+    /// `Image.resize(BILINEAR)` output byte-for-byte on the same 9x7 → 4x5
+    /// pattern as the bicubic golden.
+    #[test]
+    fn pil_u8_bilinear_matches_pillow() {
+        const IN: [u8; 9 * 7 * 3] = [
+            153, 39, 38, 46, 191, 142, 124, 17, 80, 84, 252, 4, 91, 28, 43, 170, 81, 125, 149, 118,
+            183, 143, 177, 49, 13, 69, 149, 185, 76, 225, 32, 237, 161, 118, 146, 107, 71, 194,
+            236, 26, 82, 243, 68, 124, 24, 79, 200, 57, 109, 154, 69, 3, 92, 150, 118, 229, 176,
+            98, 196, 124, 253, 158, 128, 211, 160, 61, 26, 241, 45, 143, 194, 23, 236, 180, 205,
+            217, 125, 234, 195, 227, 132, 243, 222, 186, 34, 26, 185, 182, 140, 32, 214, 27, 129,
+            255, 148, 132, 74, 231, 214, 228, 37, 60, 15, 201, 245, 117, 110, 219, 231, 68, 113,
+            150, 212, 29, 67, 42, 81, 76, 161, 188, 91, 164, 224, 161, 152, 161, 41, 172, 248, 105,
+            62, 5, 145, 146, 86, 248, 67, 126, 226, 29, 70, 133, 19, 253, 171, 114, 253, 80, 114,
+            197, 49, 199, 242, 240, 108, 40, 192, 46, 112, 6, 125, 124, 76, 194, 79, 236, 216, 235,
+            96, 126, 122, 209, 23, 140, 49, 105, 155, 79, 57, 88, 70, 91, 144, 48, 89, 204, 156,
+            81, 107,
+        ];
+        const WANT: [u8; 4 * 5 * 3] = [
+            101, 124, 69, 99, 101, 135, 75, 170, 107, 110, 134, 130, 116, 125, 190, 110, 144, 73,
+            120, 162, 65, 156, 153, 157, 155, 176, 168, 173, 183, 166, 108, 105, 167, 169, 124, 70,
+            160, 100, 111, 123, 121, 169, 137, 139, 201, 92, 122, 172, 136, 111, 121, 143, 72, 106,
+            75, 105, 138, 155, 137, 181,
+        ];
+        let mut planar = vec![0u8; IN.len()];
+        for (i, px) in IN.as_chunks::<3>().0.iter().enumerate() {
+            for c in 0..3 {
+                planar[c * 9 * 7 + i] = px[c];
+            }
+        }
+        let out = resize_bilinear_pil_u8(&planar, 3, 9, 7, 4, 5);
         let mut got = vec![0u8; WANT.len()];
         for i in 0..4 * 5 {
             for c in 0..3 {

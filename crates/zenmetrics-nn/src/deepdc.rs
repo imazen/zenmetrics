@@ -83,6 +83,7 @@ impl DeepDc {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
@@ -149,6 +150,7 @@ impl DeepDc {
                 Ok(Self::score_matrices(&self.check(tr)?, &self.check(td)?))
             }
             Backend::Pair(p) => p.score(xr, xd, h, w),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -203,6 +205,10 @@ impl za::Metric for DeepDc {
                     .metric_err_with(COLUMN, Error::kind)?;
                 WarmState::Pixels(rgb8_to_planar_01(&view))
             }
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmDeepDc {
             metric: self,
@@ -245,7 +251,9 @@ impl za::WarmReference for WarmDeepDc<'_> {
                 .map(|dm| DeepDc::score_matrices(rm, &dm)),
             WarmState::Pixels(px) => match &self.metric.backend {
                 Backend::Pair(p) => p.score(px.clone(), rgb8_to_planar_01(&d), d.height, d.width),
-                Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
+                Backend::Trunk(_) | Backend::Image(_) => {
+                    Err(Error::Engine("warm state does not match engine".into()))
+                }
             },
         }
         .metric_err_with(COLUMN, Error::kind)?;

@@ -1,0 +1,43 @@
+# ARNIQA: no-reference IQA — ResNet-50 SimCLR trunk embeddings at full and
+# half scale concatenated [f, f_ds] into a Ridge regressor. The `arniqa`
+# column is upstream single_image_inference.py's output: mean of the five
+# center/corner-crop scores, kadid10k MOS 1..5 rescaled (s-1)/4 to [0,1].
+name = "arniqa"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `arniqa` on dist, `arniqa_ref` on ref
+direction = "higher-is-better"       # scaled MOS-quality score in [0, 1]
+columns = ["arniqa", "arniqa_ref"]
+paper = "Agnolon, Galteri, Bertini, Del Bimbo. ARNIQA: Learning Distortion Manifold for No-Reference Image Quality Assessment. WACV 2024"
+
+[code]
+source = "upstream-port"             # encoder/mean/std/crop convention re-implemented; the ResNet trunk and regressor run as exported graphs/data
+upstream = "https://github.com/miccunifi/ARNIQA"
+upstream_package = "git clone of miccunifi/ARNIQA (no pip package), pinned 66d16eb0ff1e1655872d32c0c233614a3922aaad"
+licence = "Apache-2.0"
+
+[weights]
+# Apache-2.0 covers the repository. The README's "Model weights" section
+# publishes ARNIQA.pth (SimCLR encoder) and the per-dataset regressors
+# (regressor_{kadid10k,koniq10k,...}.pth — TorchScript sk2torch
+# TorchLinearRegression) as GitHub release assets; the licence stated for
+# the whole repo applies, so loading needs no consent.
+licence_class = "permissive"
+checkpoint = "https://github.com/miccunifi/ARNIQA/releases/tag/weights — ARNIQA.pth sha256 ad2022e5…, regressor_kadid10k.pth sha256 4315bf47…"
+
+[input]
+format = "packed sRGB8"
+normalisation = "ToTensor u8 -> f32 /255, then ImageNet mean/std inside the graphs"
+resize = "single_image_inference.py: a second view at torchvision Resize((h//2, w//2)) — on a PIL image that is PIL BILINEAR fixed-point u8 (resize.rs::resize_bilinear_pil_u8); NOT the dataset path's bare img.resize (PIL's default BICUBIC — the standalone script is the scored convention)"
+crop = "five 224x224 center_corners_crop views per scale — centre, TL, BL, TR, BR — TF.crop, zero-padded past the edges"
+min_size = 2                         # measured: the half-scale view needs h//2, w//2 >= 1
+
+[export]
+script = "export.py"
+outputs = "arniqa_{trunk.onnx, full.onnx, head.f32, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "trunk: normalize + ResNet50 (ARNIQA.pth, no fc) + L2-normalize -> emb [1,2048,1,1] per crop, run 10x. full: the upstream forward on the two [5,3,224,224] crop batches -> scalar. head.f32: regressor weights [4096] + bias."
+
+[parity]
+oracle = "miccunifi/ARNIQA @66d16eb, single_image_inference.py, CPU, fp32 (its autocast is a no-op off CUDA), kadid10k regressor"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.053838                       # pooled median |arniqa - arniqa_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 0.072958, BPG 0.037216
+results = "rten vs upstream: worst |d| 7.81e-7 on 15 ladder goldens (worst ref 5.20e-7). ort-cuda identical to rten at print precision (CLI smoke 1415_256: 0.444375/0.639651)"
