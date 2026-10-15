@@ -66,8 +66,8 @@ class StudyTests(unittest.TestCase):
         # 81: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family;
         # 82: +flip; 83: +cw-ssim; 84: +flip-v17;
         # 91: +lpips-alex, lpips-vgg, lpips-squeeze, stlpips-alex, stlpips-vgg, dists, deepdc;
-        # 96: +ckdn, afine, dreamsim, piqe, niqe).
-        self.assertEqual(len(inv['metrics']), 96)
+        # 96: +ckdn, afine, dreamsim, piqe, niqe; 97: +brisque).
+        self.assertEqual(len(inv['metrics']), 97)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
