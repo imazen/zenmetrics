@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
-use zenmetrics_nn::{Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
+use zenmetrics_nn::{Afine, Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
@@ -84,6 +84,13 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                 return (
                     Box::new(Ckdn::from_dir(&dir, engine(), &consent).expect("load ckdn")),
                     "ckdn",
+                );
+            }
+            if name == "afine" {
+                let consent = WeightsConsent::new().accept(Afine::WEIGHTS);
+                return (
+                    Box::new(Afine::from_dir(&dir, engine(), &consent).expect("load afine")),
+                    "afine",
                 );
             }
             let net = *LpipsNet::ALL
@@ -183,7 +190,7 @@ fn warm_reference_equals_cold() {
         // CKDN is a quality score, not a distance: an identical pair's dr is
         // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
         // differ. For it the identical-pair check below is warm == cold.
-        let cold_same = (col == "ckdn").then(|| {
+        let cold_same = matches!(col, "ckdn" | "afine").then(|| {
             score(
                 &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
                     .unwrap(),

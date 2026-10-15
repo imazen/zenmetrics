@@ -206,6 +206,12 @@ pub enum MetricKind {
     /// it is a sigmoid quality score, not a distance. As `lpips-alex`.
     #[value(name = "ckdn")]
     Ckdn,
+    /// A-FINE — learned FR metric (upstream `ChrisDud0257/AFINE`, Apache-2.0;
+    /// CLIP ViT-B/32 taps + naturalness/fidelity heads, raw `afine_all`,
+    /// **lower** is better). Needs feature `nn`; its weights state no
+    /// licence, so `ZENMETRICS_NN_ACCEPT_WEIGHTS=afine` as for `ckdn`.
+    #[value(name = "afine")]
+    Afine,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -493,6 +499,7 @@ impl MetricKind {
             MetricKind::StlpipsVgg,
             MetricKind::Deepdc,
             MetricKind::Ckdn,
+            MetricKind::Afine,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -559,6 +566,7 @@ impl MetricKind {
             MetricKind::StlpipsVgg => "stlpips-vgg",
             MetricKind::Deepdc => "deepdc",
             MetricKind::Ckdn => "ckdn",
+            MetricKind::Afine => "afine",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -684,6 +692,7 @@ impl MetricKind {
             MetricKind::StlpipsVgg => &["stlpips_vgg"],
             MetricKind::Deepdc => &["deepdc"],
             MetricKind::Ckdn => &["ckdn"],
+            MetricKind::Afine => &["afine"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1930,7 +1939,8 @@ pub fn run_metric(
         | MetricKind::StlpipsAlex
         | MetricKind::StlpipsVgg
         | MetricKind::Deepdc
-        | MetricKind::Ckdn => nn::score(kind, reference, distorted),
+        | MetricKind::Ckdn
+        | MetricKind::Afine => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -1939,7 +1949,8 @@ pub fn run_metric(
         | MetricKind::StlpipsAlex
         | MetricKind::StlpipsVgg
         | MetricKind::Deepdc
-        | MetricKind::Ckdn => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Ckdn
+        | MetricKind::Afine => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

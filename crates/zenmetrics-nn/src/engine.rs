@@ -19,6 +19,17 @@ impl Tap {
     }
 }
 
+/// An extra trunk input, addressed by position in the graph's input list
+/// (index 0 is the image input `run` feeds).
+pub(crate) struct AuxInput {
+    /// Position in `model.input_ids()`.
+    pub(crate) index: usize,
+    /// Input shape, e.g. `[1, 1, n + 1, 768]`.
+    pub(crate) shape: [usize; 4],
+    /// Row-major tensor data, `shape` elements.
+    pub(crate) data: Vec<f32>,
+}
+
 /// A loaded trunk: one `[1, 3, h, w]` input, `n` feature-map outputs.
 pub(crate) trait Trunk: Send + Sync {
     /// Engine name, recorded in the score's implementation tag.
@@ -37,6 +48,19 @@ pub(crate) trait Trunk: Send + Sync {
         self.run(input, h, w)
     }
 
+    /// Run on a planar `[3, h, w]` input plus auxiliary inputs. Needed when
+    /// part of the host-side preprocessing feeds the middle of the graph —
+    /// e.g. afine's positional embedding is bicubic-resampled on the host
+    /// because rten's `Resize` has no cubic mode.
+    fn run_aux(&self, input: Vec<f32>, h: usize, w: usize, aux: &[AuxInput]) -> Result<Vec<Tap>, Error> {
+        if aux.is_empty() {
+            return self.run(input, h, w);
+        }
+        Err(Error::Engine(
+            "auxiliary inputs unsupported on this trunk".into(),
+        ))
+    }
+
     /// Run two same-size inputs. Engines that can split their threads run
     /// the two concurrently.
     fn run_pair(
@@ -47,6 +71,23 @@ pub(crate) trait Trunk: Send + Sync {
         w: usize,
     ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
         Ok((self.run(a, h, w)?, self.run(b, h, w)?))
+    }
+
+    /// [`Trunk::run_pair`] with auxiliary inputs — the same aux set feeds
+    /// both runs (aux contents may differ per image).
+    fn run_pair_aux(
+        &self,
+        a: Vec<f32>,
+        b: Vec<f32>,
+        h: usize,
+        w: usize,
+        aux_a: &[AuxInput],
+        aux_b: &[AuxInput],
+    ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
+        Ok((
+            self.run_aux(a, h, w, aux_a)?,
+            self.run_aux(b, h, w, aux_b)?,
+        ))
     }
 }
 
@@ -77,7 +118,7 @@ mod rten_engine {
 
     pub(crate) struct RtenTrunk {
         model: Model,
-        input: NodeId,
+        inputs: Vec<NodeId>,
         outputs: Vec<NodeId>,
         /// Two pools splitting the threads, for [`Trunk::run_pair`]. One run
         /// of a conv trunk stops scaling well past ~8 threads (measured on
@@ -103,10 +144,10 @@ mod rten_engine {
             let model = ModelOptions::with_all_ops()
                 .load_file(path)
                 .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
-            let input = *model
-                .input_ids()
-                .first()
-                .ok_or_else(|| Error::BadModel("graph has no input".into()))?;
+            let inputs = model.input_ids().to_vec();
+            if inputs.is_empty() {
+                return Err(Error::BadModel("graph has no input".into()));
+            }
             let outputs = model.output_ids().to_vec();
             if outputs.len() != n_outputs {
                 return Err(Error::BadModel(format!(
@@ -123,7 +164,7 @@ mod rten_engine {
             });
             Ok(Self {
                 model,
-                input,
+                inputs,
                 outputs,
                 halves,
             })
@@ -135,9 +176,17 @@ mod rten_engine {
             c: usize,
             h: usize,
             w: usize,
+            aux: &[super::AuxInput],
             pool: Option<Arc<ThreadPool>>,
         ) -> Result<Vec<Tap>, Error> {
             let x = NdTensor::from_data([1, c, h, w], input);
+            let mut feeds = vec![(self.inputs[0], x.into())];
+            for a in aux {
+                let id = *self.inputs.get(a.index).ok_or_else(|| {
+                    Error::BadModel(format!("graph has no input {}", a.index))
+                })?;
+                feeds.push((id, NdTensor::from_data(a.shape, a.data.clone()).into()));
+            }
             let opts = pool.map(|p| {
                 let mut o = RunOptions::default();
                 o.thread_pool = Some(p);
@@ -145,7 +194,7 @@ mod rten_engine {
             });
             let values = self
                 .model
-                .run(vec![(self.input, x.into())], &self.outputs, opts)
+                .run(feeds, &self.outputs, opts)
                 .map_err(|e| Error::Engine(e.to_string()))?;
             values
                 .into_iter()
@@ -176,11 +225,21 @@ mod rten_engine {
         }
 
         fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<Tap>, Error> {
-            self.run_with(input, 3, h, w, None)
+            self.run_with(input, 3, h, w, &[], None)
         }
 
         fn run_c(&self, input: Vec<f32>, c: usize, h: usize, w: usize) -> Result<Vec<Tap>, Error> {
-            self.run_with(input, c, h, w, None)
+            self.run_with(input, c, h, w, &[], None)
+        }
+
+        fn run_aux(
+            &self,
+            input: Vec<f32>,
+            h: usize,
+            w: usize,
+            aux: &[super::AuxInput],
+        ) -> Result<Vec<Tap>, Error> {
+            self.run_with(input, 3, h, w, aux, None)
         }
 
         fn run_pair(
@@ -190,12 +249,27 @@ mod rten_engine {
             h: usize,
             w: usize,
         ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
+            self.run_pair_aux(a, b, h, w, &[], &[])
+        }
+
+        fn run_pair_aux(
+            &self,
+            a: Vec<f32>,
+            b: Vec<f32>,
+            h: usize,
+            w: usize,
+            aux_a: &[super::AuxInput],
+            aux_b: &[super::AuxInput],
+        ) -> Result<(Vec<Tap>, Vec<Tap>), Error> {
             let Some([pa, pb]) = &self.halves else {
-                return Ok((self.run(a, h, w)?, self.run(b, h, w)?));
+                return Ok((
+                    self.run_aux(a, h, w, aux_a)?,
+                    self.run_aux(b, h, w, aux_b)?,
+                ));
             };
             std::thread::scope(|s| {
-                let ha = s.spawn(|| self.run_with(a, 3, h, w, Some(Arc::clone(pa))));
-                let tb = self.run_with(b, 3, h, w, Some(Arc::clone(pb)));
+                let ha = s.spawn(|| self.run_with(a, 3, h, w, aux_a, Some(Arc::clone(pa))));
+                let tb = self.run_with(b, 3, h, w, aux_b, Some(Arc::clone(pb)));
                 let ta = ha
                     .join()
                     .map_err(|_| Error::Engine("paired run panicked".into()))?;

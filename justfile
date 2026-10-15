@@ -590,11 +590,16 @@ nn-export-deepdc python ladder out sizes="64,128,256,512,1024":
 nn-export-ckdn python ladder out upstream ckpt sizes="64,128,256,512,1024":
     {{python}} -I crates/zenmetrics-nn/models/ckdn/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{ckpt}}' '{{sizes}}'
 
+# Export A-FINE from a clone of ChrisDud0257/AFINE plus its afine.pth and
+# OpenAI's ViT-B-32.pt (URLs in upstream's README/afine.py).
+nn-export-afine python ladder out upstream afine_pth clip_pth sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/afine/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{afine_pth}}' '{{clip_pth}}' '{{sizes}}'
+
 # Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
