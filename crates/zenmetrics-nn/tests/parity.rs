@@ -157,6 +157,9 @@ fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
 fn matches_upstream() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
+    // Non-square golden pairs live in `<ladder>-nonsquare`: sibling
+    // exporters parse `int(name.split('_')[1])` and crash on `320x240`.
+    let ladder_ns = PathBuf::from(format!("{}-nonsquare", ladder.display()));
     for (mut m, col) in models() {
         let path = model_dir.join(format!("{col}_goldens.tsv"));
         let goldens =
@@ -167,8 +170,13 @@ fn matches_upstream() {
             let f: Vec<&str> = line.split('\t').collect();
             // `size` is a filename fragment: `1024` or non-square `320x240`.
             let (stem, size, want): (&str, &str, f64) = (f[0], f[1], f[2].parse().unwrap());
-            let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
-            let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
+            let dir = if size.contains('x') {
+                &ladder_ns
+            } else {
+                &ladder
+            };
+            let (rp, w, h) = load_rgb8(&dir.join(format!("{stem}_{size}_ref.png")));
+            let (dp, _, _) = load_rgb8(&dir.join(format!("{stem}_{size}_dist.png")));
             let got = score(
                 &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                     .expect("evaluate"),
@@ -196,6 +204,7 @@ fn matches_upstream() {
 fn warm_reference_equals_cold() {
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
+    let ladder_ns = PathBuf::from(format!("{}-nonsquare", ladder.display()));
     for (mut m, col) in models() {
         // First golden row plus every non-square (`WxH` size) row: the
         // warm path must not care about the aspect ratio (ahiq once swapped
@@ -211,8 +220,13 @@ fn warm_reference_equals_cold() {
         for pick in picks {
             let f: Vec<&str> = pick.split('\t').collect();
             let (stem, size) = (f[0], f[1]);
-            let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
-            let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
+            let dir = if size.contains('x') {
+                &ladder_ns
+            } else {
+                &ladder
+            };
+            let (rp, w, h) = load_rgb8(&dir.join(format!("{stem}_{size}_ref.png")));
+            let (dp, _, _) = load_rgb8(&dir.join(format!("{stem}_{size}_dist.png")));
             let cold = score(
                 &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                     .unwrap(),

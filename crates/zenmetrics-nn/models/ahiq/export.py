@@ -33,7 +33,7 @@
 #                    get_resnet_feature/get_vit_feature + deform_fusion with
 #                    torchvision DeformConv2d + Pixel_Prediction), plus two
 #                    non-square pairs (2207_320x240, 2207_240x320, centre
-#                    crops of 2207_1024 written into the ladder dir)
+#                    crops of 2207_1024 written into <ladder>-nonsquare/)
 #  ahiq_export.meta  versions + sha256 of outputs
 import hashlib, os, sys, platform
 import numpy as np, torch
@@ -239,10 +239,14 @@ for name, mod, args, inputs, outs in (
                       input_names=inputs, output_names=outs)
 
 # --- non-square ladder pairs: centre crops of 2207_1024 ---------------------
+# Written to <ladder>-nonsquare/, NOT the shared ladder: sibling exporters
+# parse the size field with int(name.split('_')[1]) and crash on '320x240'.
+LADDER_NS = LADDER.rstrip('/') + '-nonsquare'
+os.makedirs(LADDER_NS, exist_ok=True)
 for dims in ('320x240', '240x320'):
     nw, nh = (int(v) for v in dims.split('x'))
     for side in ('ref', 'dist'):
-        dst = os.path.join(LADDER, f'2207_{dims}_{side}.png')
+        dst = os.path.join(LADDER_NS, f'2207_{dims}_{side}.png')
         if not os.path.exists(dst):
             src = Image.open(os.path.join(LADDER, f'2207_1024_{side}.png'))
             l, t = (1024 - nw) // 2, (1024 - nh) // 2
@@ -275,17 +279,18 @@ def score_pair(r_img, d_img):
 
 
 rows = []
-for f in sorted(os.listdir(LADDER)):
-    if not f.endswith('_dist.png'):
-        continue
-    stem = f[:-9]
-    size = stem.rsplit('_', 1)[1]
-    dims = [int(v) for v in size.split('x')]
-    if min(dims) < 224:
-        continue                      # upstream cannot score <224 crops
-    r = Image.open(os.path.join(LADDER, stem + '_ref.png'))
-    d = Image.open(os.path.join(LADDER, stem + '_dist.png'))
-    rows.append((stem.rsplit('_', 1)[0], size, f'{score_pair(r, d):.9e}'))
+for dir_ in (LADDER, LADDER_NS):
+    for f in sorted(os.listdir(dir_)):
+        if not f.endswith('_dist.png'):
+            continue
+        stem = f[:-9]
+        size = stem.rsplit('_', 1)[1]
+        dims = [int(v) for v in size.split('x')]
+        if min(dims) < 224:
+            continue                  # upstream cannot score <224 crops
+        r = Image.open(os.path.join(dir_, stem + '_ref.png'))
+        d = Image.open(os.path.join(dir_, stem + '_dist.png'))
+        rows.append((stem.rsplit('_', 1)[0], size, f'{score_pair(r, d):.9e}'))
 
 with open(os.path.join(OUT, 'ahiq_goldens.tsv'), 'w') as f:
     f.write('image\tsize\tahiq\n')
