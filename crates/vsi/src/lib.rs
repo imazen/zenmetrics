@@ -284,7 +284,92 @@ const SCORE_REVISION: u32 = 1;
 
 /// The VSI metric as a generic scorer — packed `RGB8_SRGB`.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Vsi;
+pub struct Vsi {
+    downscale: Downscale,
+}
+
+/// Default automatic scorer, retaining unit-value construction compatibility.
+#[allow(non_upper_case_globals)]
+pub const Vsi: Vsi = Vsi {
+    downscale: Downscale::Auto,
+};
+
+/// Pre-scoring opponent/saliency box-filter decimation policy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Downscale {
+    /// Reference max(1, round(min(width, height) / 256)) decimation.
+    #[default]
+    Auto,
+    /// Explicit nonzero factor, with the existing reference filter.
+    Factor(core::num::NonZeroU32),
+}
+impl Downscale {
+    fn factor(self, w: usize, h: usize) -> usize {
+        match self {
+            Self::Auto => kernel::decimation_factor(w, h),
+            Self::Factor(f) => f.get() as usize,
+        }
+    }
+}
+impl Vsi {
+    /// Construct a scorer with a fixed or automatic decimation policy.
+    pub const fn with_downscale(downscale: Downscale) -> Self {
+        Self { downscale }
+    }
+    /// Score strided RGB8 images with this scorer's decimation policy.
+    ///
+    /// # Errors
+    /// Returns [`Error::BufferLength`] for invalid buffer geometry.
+    pub fn score_rgb8(
+        &self,
+        r: &[u8],
+        d: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Result<f64, Error> {
+        check_len(r, w, h, stride)?;
+        check_len(d, w, h, stride)?;
+        Ok(kernel::vsi_planes_with_downscale(
+            &Input::from_rgb8(r, w, h, stride),
+            &Input::from_rgb8(d, w, h, stride),
+            w,
+            h,
+            None,
+            self.downscale,
+        ))
+    }
+    fn diffmap_rgb8(
+        &self,
+        r: &[u8],
+        d: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Result<VsiDiffmap, Error> {
+        check_len(r, w, h, stride)?;
+        check_len(d, w, h, stride)?;
+        let f = self.downscale.factor(w, h);
+        let (mw, mh) = (w.div_ceil(f), h.div_ceil(f));
+        let mut map = alloc::vec![0.0;mw*mh];
+        let vsi = kernel::vsi_planes_with_downscale(
+            &Input::from_rgb8(r, w, h, stride),
+            &Input::from_rgb8(d, w, h, stride),
+            w,
+            h,
+            Some(&mut map),
+            self.downscale,
+        );
+        Ok(VsiDiffmap {
+            map,
+            width: mw as u32,
+            height: mh as u32,
+            vsi,
+            input: (w as u32, h as u32),
+            factor: f as u32,
+        })
+    }
+}
 
 impl za::Metric for Vsi {
     fn id(&self) -> za::MetricId {
@@ -311,11 +396,13 @@ impl za::Metric for Vsi {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) = vsi_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            let dm = self
+                .diffmap_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
                 .metric_err_with("vsi", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = vsi_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+        let s = self
+            .score_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
             .metric_err_with("vsi", Error::kind)?;
         Ok(alloc::boxed::Box::new(za::ScalarEval::single("vsi", s)))
     }

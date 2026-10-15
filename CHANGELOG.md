@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- VSI: add explicit fixed-factor decimation and CLI k2/k3/k4/nodownscale variants; automatic output is preserved.
+
 - FSIM/FSIMc: add explicit fixed-factor decimation and CLI k2/k3/k4/nodownscale variants; automatic output is preserved.
 
 ### Changed

@@ -330,6 +330,19 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "vsi")]
     Vsi,
+    /// VSI with fixed factor 2.
+    #[value(name = "vsi-k2")]
+    VsiK2,
+    /// VSI with fixed factor 3.
+    #[value(name = "vsi-k3")]
+    VsiK3,
+    /// VSI with fixed factor 4.
+    #[value(name = "vsi-k4")]
+    VsiK4,
+    /// VSI with fixed factor 1.
+    #[value(name = "vsi-nodownscale")]
+    VsiNodownscale,
+
     /// MS-SSIM — multi-scale SSIM, CPU-only in-tree `msssim` crate
     /// (port of the authors' `msssim.m`: 5-level Gaussian-pyramid
     /// SSIM, weighted geometric mean of per-level means). Similarity
@@ -460,6 +473,10 @@ impl MetricKind {
             MetricKind::FsimNodownscale,
             MetricKind::FsimY,
             MetricKind::Vsi,
+            MetricKind::VsiK2,
+            MetricKind::VsiK3,
+            MetricKind::VsiK4,
+            MetricKind::VsiNodownscale,
             MetricKind::Msssim,
             MetricKind::Vif,
             MetricKind::VifVec,
@@ -518,6 +535,11 @@ impl MetricKind {
 
             MetricKind::FsimY => "fsim-y",
             MetricKind::Vsi => "vsi",
+            MetricKind::VsiK2 => "vsi-k2",
+            MetricKind::VsiK3 => "vsi-k3",
+            MetricKind::VsiK4 => "vsi-k4",
+            MetricKind::VsiNodownscale => "vsi-nodownscale",
+
             MetricKind::Msssim => "msssim",
             MetricKind::Vif => "vif",
             MetricKind::VifVec => "vifvec",
@@ -635,6 +657,11 @@ impl MetricKind {
 
             MetricKind::FsimY => FSIMY_CPU_COLUMNS,
             MetricKind::Vsi => VSI_CPU_COLUMNS,
+            MetricKind::VsiK2 => &["vsi_k2"],
+            MetricKind::VsiK3 => &["vsi_k3"],
+            MetricKind::VsiK4 => &["vsi_k4"],
+            MetricKind::VsiNodownscale => &["vsi_nodownscale"],
+
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
             MetricKind::Vif => VIF_CPU_COLUMNS,
             MetricKind::VifVec => VIFVEC_CPU_COLUMNS,
@@ -2056,6 +2083,25 @@ pub fn run_metric(
         // twin — same shape as GMSD/FSIM).
         #[cfg(feature = "cpu-vsi")]
         MetricKind::Vsi => run_cpu_vsi(reference, distorted),
+        #[cfg(feature = "cpu-vsi")]
+        MetricKind::VsiK2 => run_cpu_vsi_fixed(reference, distorted, 2, kind.column_names()[0]),
+        #[cfg(not(feature = "cpu-vsi"))]
+        MetricKind::VsiK2 => Err(disabled_msg("vsi-k2", "cpu-vsi")),
+        #[cfg(feature = "cpu-vsi")]
+        MetricKind::VsiK3 => run_cpu_vsi_fixed(reference, distorted, 3, kind.column_names()[0]),
+        #[cfg(not(feature = "cpu-vsi"))]
+        MetricKind::VsiK3 => Err(disabled_msg("vsi-k3", "cpu-vsi")),
+        #[cfg(feature = "cpu-vsi")]
+        MetricKind::VsiK4 => run_cpu_vsi_fixed(reference, distorted, 4, kind.column_names()[0]),
+        #[cfg(not(feature = "cpu-vsi"))]
+        MetricKind::VsiK4 => Err(disabled_msg("vsi-k4", "cpu-vsi")),
+        #[cfg(feature = "cpu-vsi")]
+        MetricKind::VsiNodownscale => {
+            run_cpu_vsi_fixed(reference, distorted, 1, kind.column_names()[0])
+        }
+        #[cfg(not(feature = "cpu-vsi"))]
+        MetricKind::VsiNodownscale => Err(disabled_msg("vsi-nodownscale", "cpu-vsi")),
+
         #[cfg(not(feature = "cpu-vsi"))]
         MetricKind::Vsi => Err(disabled_msg("vsi", "cpu-vsi")),
 
@@ -2658,6 +2704,26 @@ fn run_cpu_fsim_fixed(
     ));
     let scores = scorer.score_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(columns[0], scores.fsim), (columns[1], scores.fsimc)])
+}
+
+#[cfg(feature = "cpu-vsi")]
+fn run_cpu_vsi_fixed(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    factor: u32,
+    column: &'static str,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err("vsi: dimension mismatch".into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let scorer = vsi::Vsi::with_downscale(vsi::Downscale::Factor(
+        core::num::NonZeroU32::new(factor).expect("fixed nonzero factor"),
+    ));
+    Ok(vec![(
+        column,
+        scorer.score_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?,
+    )])
 }
 
 #[cfg(test)]

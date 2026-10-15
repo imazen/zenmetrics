@@ -1492,7 +1492,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // VSI: similarity on [0, 1]; 1 = identical. Flat inputs
         // degenerate the saliency normalisation to 0/0 → NaN, matching
         // the reference.
-        MetricKind::Vsi => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Vsi | MetricKind::VsiK2 | MetricKind::VsiK3 | MetricKind::VsiK4 | MetricKind::VsiNodownscale => Some((-0.001, 1.001, 1.0)),
         // MS-SSIM: similarity on ~[0, 1]; 1 = identical. Negative
         // means can push the score below 0 through the complex-power
         // real-part convention (matching the reference's `prod`);

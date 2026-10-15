@@ -194,6 +194,11 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
 
         CliMetricKind::FsimY => "fsim_y",
         CliMetricKind::Vsi => "vsi",
+        CliMetricKind::VsiK2 => "vsi-k2",
+        CliMetricKind::VsiK3 => "vsi-k3",
+        CliMetricKind::VsiK4 => "vsi-k4",
+        CliMetricKind::VsiNodownscale => "vsi-nodownscale",
+
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
         CliMetricKind::Mad => "mad",
@@ -308,6 +313,10 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::FsimNodownscale
         | CliMetricKind::FsimY
         | CliMetricKind::Vsi
+        | CliMetricKind::VsiK2
+        | CliMetricKind::VsiK3
+        | CliMetricKind::VsiK4
+        | CliMetricKind::VsiNodownscale
         | CliMetricKind::Msssim
         | CliMetricKind::Vif
         | CliMetricKind::Mad
@@ -467,6 +476,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::FsimNodownscale
             | CliMetricKind::FsimY
             | CliMetricKind::Vsi
+            | CliMetricKind::VsiK2
+            | CliMetricKind::VsiK3
+            | CliMetricKind::VsiK4
+            | CliMetricKind::VsiNodownscale
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
             | CliMetricKind::Mad
