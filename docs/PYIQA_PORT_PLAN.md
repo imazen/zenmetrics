@@ -255,10 +255,11 @@ writing:
 | AIC-4 deep FR | LPIPS-alex, LPIPS-VGG, DISTS, STLPIPS, STLPIPS-VGG, DeepDC | zenmetrics-nn | done (PR #81; AIC-4 crop columns matched, `benchmarks/nn_aic2026_crosscheck_2026-10-15.md`) |
 | AIC-4 deep FR | CKDN, A-FINE, DreamSim, AHIQ, DMM | zenmetrics-nn | devin lane `nn-port`, in that order |
 | AIC-4 deep FR | TOPIQ, TOPIQ-PIPAL, PieAPP, WaDIQaM (pyiqa weights) | zenmetrics-nn | NC weights: opt-in |
-| AIC-4 deep FR | MSSWD, proposal-IDFIQA | zenmetrics-nn | no upstream licence: from the papers |
+| AIC-4 deep FR | WD_s1–WD_s5 (Wasserstein Distortion on VGG-16, σ = 2^1…2^5) | zenmetrics-nn | permissive (Cool-Chic BSD-3, google/codex Apache-2.0); after the `nn-port` list |
+| AIC-4 deep FR | MSSWD, proposal-IDFIQA | zenmetrics-nn | MSSWD on hold (no upstream licence, weights only via pyiqa); IDFIQA from the paper |
 | AIC-4 classical | PSNR-YCbCr611, SSIMc, CIEDE2000, FLIP | zenmetrics-cli | opencode lane `aic-classic`; SSIMc convention found (per-RGB SSIM over the valid window, negative map values clipped to 0: 61 pairs max \|Δ\| 4.4e-7) |
-| AIC-4 classical | CW-SSIM, SSIM-pyiqa | zenmetrics-cli | after that |
-| AIC-4 unidentified | AIMOS, WD_s1–WD_s5 | — | identify first |
+| AIC-4 classical | SSIM-pyiqa, MS-SSIM-pyiqa, CW-SSIM | zenmetrics-cli | after that (conventions: `docs/AIC2026_COLUMN_IDENTIFICATION_2026-10-15.md`) |
+| AIC-4 unidentified | AIMOS | — | not identified anywhere public; ask the dataset contacts |
 | NR | PIQE (used before, via PU21, `benchmarks/pu_integrated_upiq_2026-06-09.md`), NIQE, BRISQUE | Rust ports, LIVE data with notice | after AIC-4 |
 | NR | MUSIQ, ARNIQA, MANIQA, LIQE | zenmetrics-nn | permissive; shape is `NoReferenceMetric`, run in pair tools through `PairedNoReference` (`<key>` on the distorted image, `<key>_ref` on the reference) |
 | NR | TOPIQ-NR, CLIP-IQA+, QualiCLIP | zenmetrics-nn | NC weights: opt-in |
