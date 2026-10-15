@@ -29,6 +29,10 @@
 //! - [`Musiq`]: MUSIQ (Ke et al., ICCV 2021) — a [`za::NoReferenceMetric`];
 //!   parity target upstream `run_predict_image.py`, `koniq_ckpt.npz`
 //!   (google-research, JAX/Flax).
+//! - [`Hyperiqa`]: HyperIQA (Su et al., CVPR 2020) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `demo.py`, `koniq_pretrained.pkl` with a
+//!   documented deterministic crop grid (upstream crops at random;
+//!   weights licence unknown: consent-gated).
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -48,6 +52,7 @@ mod dists;
 mod dreamsim;
 mod engine;
 mod error;
+mod hyperiqa;
 mod liqe;
 mod lpips;
 mod maniqa;
@@ -64,6 +69,7 @@ pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use dreamsim::Dreamsim;
 pub use error::Error;
+pub use hyperiqa::Hyperiqa;
 pub use liqe::Liqe;
 pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;

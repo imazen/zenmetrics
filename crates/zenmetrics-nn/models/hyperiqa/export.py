@@ -115,7 +115,7 @@ torch.onnx.export(
     model, probe, onnx_path,
     input_names=['x'], output_names=['hyperiqa'],
     dynamic_axes={'x': {0: 'b'}},
-    opset_version=17,
+    opset_version=17, dynamo=False,
 )
 
 with open(os.path.join(OUT, 'hyperiqa.meta'), 'w') as f:
@@ -150,14 +150,16 @@ if GOLDENS:
     sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
     worst = 0.0
     assert IMG_DIR, 'GOLDENS_TSV requires IMG_DIR'
-    for line in open(GOLDENS):
-        name, want_s = line.rstrip('\n').split('\t')
-        path = os.path.join(IMG_DIR, name)
-        if not os.path.exists(path):
-            print(f'skip {name}: not in IMG_DIR')
-            continue
-        got_s = sess.run(['hyperiqa'], {'x': prep(path).numpy()})[0][0]
-        d = abs(got_s - float(want_s))
-        worst = max(worst, d)
-        print(f'{name} golden {float(want_s):.6f} onnx {got_s:.6f} |d| {d:.2e}')
+    for line in open(GOLDENS).read().splitlines()[1:]:
+        f = line.split('\t')
+        stem, size = f[0], f[1]
+        for kind, want_s in (('dist', f[2]), ('ref', f[3])):
+            path = os.path.join(IMG_DIR, f'{stem}_{size}_{kind}.png')
+            if not os.path.exists(path):
+                print(f'skip {stem}_{size}_{kind}: not in IMG_DIR')
+                continue
+            got_s = sess.run(['hyperiqa'], {'x': prep(path).numpy()})[0][0]
+            d = abs(got_s - float(want_s))
+            worst = max(worst, d)
+            print(f'{stem}_{size}_{kind} golden {float(want_s):.6f} onnx {got_s:.6f} |d| {d:.2e}')
     print(f'worst |d| vs goldens: {worst:.3e}')

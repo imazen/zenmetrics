@@ -1571,6 +1571,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // MUSIQ: koniq10k-trained transformer score on the MOS 1..100
         // scale; the head extrapolates a little past the range.
         MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
+        MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
     }
 }
 

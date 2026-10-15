@@ -6,7 +6,7 @@
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
-//!   `musiq`.
+//!   `musiq`, `hyperiqa`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa, Musiq,
-    WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
+    Musiq, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -136,6 +136,15 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                         Musiq::from_dir(&dir, engine()).expect("load musiq"),
                     )),
                     "musiq",
+                );
+            }
+            if name == "hyperiqa" {
+                let consent = WeightsConsent::new().accept(Hyperiqa::WEIGHTS);
+                return (
+                    Box::new(PairedNoReference::new(
+                        Hyperiqa::from_dir(&dir, engine(), &consent).expect("load hyperiqa"),
+                    )),
+                    "hyperiqa",
                 );
             }
             let net = *LpipsNet::ALL
