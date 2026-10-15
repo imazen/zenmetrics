@@ -70,6 +70,12 @@ fn crops(h: usize, w: usize) -> [(usize, usize); NCROPS] {
     ]
 }
 
+/// `crops()` cannot serve below the ViT's fixed crop side, whatever the
+/// meta says.
+fn effective_min_size(meta_min: usize) -> usize {
+    meta_min.max(CROP)
+}
+
 /// The `[3, CROP, CROP]` f32 plane of the window at (top, left), in
 /// `[-1, 1]` — `(v/255)·2 − 1` per pixel, bit-identical to converting the
 /// whole image with `rgb8_to_planar_pm1` and slicing. Bounded at 150,528
@@ -128,7 +134,7 @@ impl Ahiq {
             .map_err(|_| Error::BadModel("ahiq.meta: expected 2 tap widths".into()))?;
         // crops() cannot serve below the ViT's fixed crop side, whatever
         // the meta says.
-        let min_size = min_size.max(CROP);
+        let min_size = effective_min_size(min_size);
         let backend = match engine {
             Engine::Rten => Backend::Trunk {
                 trunk: engine::load(&dir.join("ahiq_trunk.onnx"), 2)?,
@@ -616,17 +622,75 @@ mod tests {
         }
     }
 
-    /// A 224×8192 frame scores through bounded 224² inputs only — the stub
-    /// asserts no larger buffer ever reaches the engine.
+    /// A 16384-long-side frame in both orientations scores through bounded
+    /// 224² inputs only — the stubs assert no larger buffer ever reaches
+    /// the engine.
     #[test]
     fn extreme_aspect_is_bounded() {
-        let (w, h) = (8192, CROP);
-        let rp = frame(w, h, 5);
-        let dp = frame(w, h, 9);
-        for m in [stub_trunk(), stub_pair()] {
-            let s = m.score_pair(&view(&rp, w, h), &view(&dp, w, h));
-            assert!(s.is_ok());
+        for (w, h) in [(16384usize, CROP), (CROP, 16384)] {
+            let rp = frame(w, h, 5);
+            let dp = frame(w, h, 9);
+            for m in [stub_trunk(), stub_pair()] {
+                let s = m.score_pair(&view(&rp, w, h), &view(&dp, w, h));
+                assert!(s.is_ok(), "{w}x{h}: {s:?}");
+            }
         }
+    }
+
+    /// `Rgb8In.stride` may exceed `width·3`; the same logical image in a
+    /// padded buffer must feed identical crop pixels to the engine.
+    #[test]
+    fn padded_stride_is_honored() {
+        let (w, h) = (320, 240);
+        let tight = frame(w, h, 7);
+        let pad = 19;
+        let stride = w * 3 + pad;
+        let mut padded = vec![0u8; stride * h];
+        for y in 0..h {
+            padded[y * stride..y * stride + w * 3]
+                .copy_from_slice(&tight[y * w * 3..(y + 1) * w * 3]);
+        }
+        let pv = za::Rgb8In {
+            pixels: &padded,
+            width: w,
+            height: h,
+            stride,
+        };
+        let tv = view(&tight, w, h);
+        for (t, l) in crops(h, w) {
+            assert_eq!(crop_pm1(&pv, t, l), crop_pm1(&tv, t, l), "{t},{l}");
+        }
+        for m in [stub_trunk(), stub_pair()] {
+            let a = m.score_pair(&pv, &pv).unwrap();
+            let b = m.score_pair(&tv, &tv).unwrap();
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+    }
+
+    /// `ahiq.meta` may declare any `min_size` (or none meaningful); the
+    /// metric refuses below the fixed crop side regardless.
+    #[test]
+    fn meta_min_size_is_floored_at_crop() {
+        let dir = std::env::temp_dir().join(format!("ahiq-meta-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let meta = dir.join("ahiq.meta");
+        std::fs::write(&meta, "channels 3840,768\nmin_size 0\n").unwrap();
+        let (channels, declared) = read_meta(&meta).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(channels, [3840, 768]);
+        assert_eq!(effective_min_size(declared), CROP);
+        assert_eq!(effective_min_size(300), 300);
+        let m = Ahiq {
+            backend: Backend::Trunk {
+                trunk: Box::new(StubTrunk),
+                head: Box::new(StubHead),
+            },
+            channels: [4, 2],
+            min_size: effective_min_size(declared),
+        };
+        let rp = frame(300, 200, 7);
+        let err = m.score_pair(&view(&rp, 300, 200), &view(&rp, 300, 200));
+        assert!(matches!(err, Err(Error::TooSmall { min: CROP })), "{err:?}");
     }
 
     #[test]
