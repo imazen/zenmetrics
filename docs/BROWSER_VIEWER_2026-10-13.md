@@ -367,3 +367,8 @@ Validation:
 - The same check refuses undersized NLPD, vifvec, IW-SSIM and VMAF requests
   and an odd-sized VMAF request, repeats the identity results in WASM, and
   selects all eight routes on the 768×512 demo.
+
+## Encoder loop player, 2026-10-15
+
+The viewer steps through jxl-encoder's perceptual quantization loop from a
+`.ltrace` file: [loop player](BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).

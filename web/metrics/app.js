@@ -246,3 +246,68 @@ async function checkGpu() {
   finally {device?.destroy();}
 }
 checkGpu().then(gpu=>{$('capabilities').textContent=`${crossOriginIsolated?'Shared memory isolation ready':'Shared memory isolation unavailable'} · ${gpu}`;});
+
+// Encoder loop player: steps through a jxl-encoder LoopTrace (.ltrace,
+// written by jxl-encoder's loop_trace_dump example).
+const L={trace:null,frame:0,timer:null};
+function parseTrace(buffer){
+  const bytes=new Uint8Array(buffer),magic='JXLTRACE1\n';
+  for(let i=0;i<magic.length;i++)if(bytes[i]!==magic.charCodeAt(i))throw new Error('Not a jxl-encoder loop trace');
+  const n=new DataView(buffer).getUint32(10,true),head=JSON.parse(new TextDecoder().decode(bytes.subarray(14,14+n)));
+  const {width:w,height:h,xsize_blocks:xb,ysize_blocks:yb}=head;let off=14+n;
+  const take=k=>{if(off+k>bytes.length)throw new Error('Truncated loop trace');const out=bytes.subarray(off,off+k);off+=k;return out;};
+  const f32=k=>{const b=take(k*4);return new Float32Array(buffer.slice(b.byteOffset,b.byteOffset+k*4));};
+  const source=take(w*h*3);
+  const frames=head.frames.map(f=>({...f,qf:f32(xb*yb),next:f.has_next?f32(xb*yb):null,tile:f32(xb*yb),diffmap:f32(w*h),recon:take(w*h*3)}));
+  if(off!==bytes.length)throw new Error('Unexpected bytes after the last loop frame');
+  if(!frames.length)throw new Error('The trace holds no loop iterations');
+  // One scale per layer across all frames, so steps compare directly.
+  const sample=[];let qfMin=Infinity,qfMax=-Infinity,dqfTop=0;
+  for(const f of frames){
+    const step=Math.max(1,Math.floor(f.diffmap.length/50000));for(let i=0;i<f.diffmap.length;i+=step)if(f.diffmap[i]>0)sample.push(f.diffmap[i]);
+    for(let b=0;b<f.qf.length;b++){qfMin=Math.min(qfMin,f.qf[b]);qfMax=Math.max(qfMax,f.qf[b]);if(f.next)dqfTop=Math.max(dqfTop,Math.abs(Math.log2(f.next[b]/f.qf[b])));}
+  }
+  sample.sort((a,b)=>a-b);const diffTop=sample.length?sample[Math.min(sample.length-1,Math.floor(sample.length*.995))]:1;
+  return {...head,source,frames,diffTop,qfMin,qfMax,dqfTop};
+}
+function paintLoop(){
+  const t=L.trace;if(!t)return;const f=t.frames[L.frame],{width:w,height:h}=t,canvas=$('loop-view');canvas.width=w;canvas.height=h;
+  const g=canvas.getContext('2d'),img=g.createImageData(w,h),out=img.data,layer=$('loop-layer').value;
+  const put=(i,r,gg,b)=>{out[i*4]=r;out[i*4+1]=gg;out[i*4+2]=b;out[i*4+3]=255;};
+  const heat=(i,x)=>{const k=Math.max(0,Math.min(255,Math.round(x*255)))*3;put(i,ramp[k],ramp[k+1],ramp[k+2]);};
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const i=y*w+x,b=(y>>3)*t.xsize_blocks+(x>>3);
+    if(layer==='recon'||layer==='source'){const s=layer==='recon'?f.recon:t.source;put(i,s[i*3],s[i*3+1],s[i*3+2]);}
+    else if(layer==='diffmap')heat(i,Math.sqrt(Math.max(0,f.diffmap[i])/t.diffTop));
+    else if(layer==='tile')heat(i,f.tile[b]/(2*f.target));
+    else if(layer==='qf')heat(i,(f.qf[b]-t.qfMin)/((t.qfMax-t.qfMin)||1));
+    else{const d=f.next?Math.log2(f.next[b]/f.qf[b])/(t.dqfTop||1):0,c=Math.round(Math.min(1,Math.abs(d))*255);put(i,d<0?255-c:255,255-c,d>0?255-c:255);}
+  }
+  g.putImageData(img,0,0);
+  let above=0,finer=0,coarser=0;for(let b=0;b<f.tile.length;b++){if(f.tile[b]>f.target)above++;if(f.next){if(f.next[b]>f.qf[b])finer++;else if(f.next[b]<f.qf[b])coarser++;}}
+  const last=t.frames.filter(x=>x.seed===f.seed).length-1;
+  $('loop-info').textContent=`Frame ${L.frame+1} of ${t.frames.length} · seed ${f.seed} · iteration ${f.iter} of ${last} · ${f.metric} ${f.score.toFixed(4)} (target ${f.target.toFixed(4)}) · ${above} of ${f.tile.length} blocks above target · `+
+    (f.next?`next: ${finer} blocks finer, ${coarser} coarser`:'score-only final pass')+` · ${t.width}×${t.height}, d${t.distance} e${t.effort}, final ${t.bytes} bytes`;
+  $('loop-frame').value=L.frame;
+}
+function loopStep(k){if(!L.trace)return;const n=L.trace.frames.length;L.frame=((L.frame+k)%n+n)%n;paintLoop();}
+function loopStop(){clearInterval(L.timer);L.timer=null;$('loop-play').textContent='▶ Play';}
+async function loadTrace(file){
+  if(!file)return;loopStop();
+  try{
+    L.trace=parseTrace(await file.arrayBuffer());L.frame=0;$('name-trace').textContent=file.name;
+    for(const id of ['loop-prev','loop-play','loop-next','loop-frame'])$(id).disabled=false;
+    $('loop-frame').max=L.trace.frames.length-1;paintLoop();
+  }catch(error){L.trace=null;$('loop-info').textContent=error.message;$('loop-info').className='note error';return;}
+  $('loop-info').className='note';
+}
+$('trace').onchange=()=>loadTrace($('trace').files[0]);
+$('drop-trace').ondragover=e=>{e.preventDefault();$('drop-trace').classList.add('drag');};
+$('drop-trace').ondragleave=()=>$('drop-trace').classList.remove('drag');
+$('drop-trace').ondrop=e=>{e.preventDefault();$('drop-trace').classList.remove('drag');loadTrace(e.dataTransfer.files[0]);};
+$('loop-prev').onclick=()=>{loopStop();loopStep(-1);};
+$('loop-next').onclick=()=>{loopStop();loopStep(1);};
+$('loop-frame').oninput=()=>{loopStop();L.frame=Number($('loop-frame').value);paintLoop();};
+$('loop-layer').onchange=paintLoop;
+$('loop-play').onclick=()=>{if(L.timer){loopStop();return;}$('loop-play').textContent='⏸ Pause';L.timer=setInterval(()=>loopStep(1),800);};
+$('palette').addEventListener('change',paintLoop);

@@ -333,6 +333,36 @@ try:
         result['ui_cancel_recovery']=True
         result['capability_report']=page.locator('#capabilities').inner_text()
         result['incompatible_memory_refused']=mismatch
+        # Encoder loop player: a synthetic two-frame trace, 16x8 pixels in two
+        # 8x8 blocks, in the format jxl-encoder's loop_trace_dump writes.
+        import struct
+        lw, lh = 16, 8
+        head = {'width': lw, 'height': lh, 'distance': 1.0, 'effort': 7, 'iters': 1, 'bytes': 123,
+                'xsize_blocks': 2, 'ysize_blocks': 1,
+                'frames': [{'seed': 0.6, 'iter': 0, 'metric': 'butteraugli', 'score': 1.5, 'target': 1.0, 'has_next': True},
+                           {'seed': 0.6, 'iter': 1, 'metric': 'butteraugli', 'score': 1.2, 'target': 1.0, 'has_next': False}]}
+        hb = json.dumps(head).encode()
+        f32 = lambda v: struct.pack('<%df' % len(v), *v)
+        trace = b'JXLTRACE1\n' + struct.pack('<I', len(hb)) + hb + bytes([10, 20, 30] * (lw * lh))
+        trace += f32([1, 1]) + f32([2, 0.5]) + f32([1.5, 0.5]) + f32([i / (lw * lh) for i in range(lw * lh)]) + bytes([200, 100, 50] * (lw * lh))
+        trace += f32([2, 0.5]) + f32([1.1, 0.9]) + f32([0.1] * (lw * lh)) + bytes([210, 110, 60] * (lw * lh))
+        page.locator('#trace').set_input_files({'name': 'synthetic.ltrace', 'mimeType': 'application/octet-stream', 'buffer': trace})
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of 2')", timeout=10000)
+        info = page.locator('#loop-info').inner_text()
+        assert 'iteration 0 of 1' in info and '1 of 2 blocks above target' in info and 'next: 1 blocks finer, 1 coarser' in info, info
+        loop_px = lambda x, y: page.evaluate(f"Array.from(document.getElementById('loop-view').getContext('2d').getImageData({x},{y},1,1).data)")
+        assert loop_px(0, 0) == [200, 100, 50, 255]
+        page.locator('#loop-layer').select_option('dqf')
+        assert loop_px(1, 1) == [255, 0, 0, 255], loop_px(1, 1)  # left block finer: red
+        assert loop_px(9, 1) == [0, 0, 255, 255], loop_px(9, 1)  # right block coarser: blue
+        page.locator('#loop-next').click()
+        info = page.locator('#loop-info').inner_text()
+        assert 'Frame 2 of 2' in info and 'score-only final pass' in info, info
+        page.locator('#loop-layer').select_option('recon')
+        assert loop_px(3, 3) == [210, 110, 60, 255]
+        page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})
+        page.wait_for_function("document.getElementById('loop-info').textContent.includes('Not a jxl-encoder loop trace')", timeout=10000)
+        result['loop_player'] = True
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']
