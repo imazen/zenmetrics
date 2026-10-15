@@ -259,7 +259,7 @@ fn decimate_plane(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize, Vec
     }
     // Vertical box sums at the decimated positions only, normalised.
     let mut out = vec![0.0f32; w2 * h2];
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     for oi in 0..h2 {
         let i = oi * f;
         let lo = (i + s).saturating_sub(f - 1);
@@ -439,7 +439,7 @@ fn decimate_rgb8<const N: usize>(
         let pixels = &data[y * stride..y * stride + w * 3];
         decimate_hwin_rgb8(pixels, w, f, &coefficients, row);
     });
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     let mut compact = vec![[0.0f32; N]; w2 * h2];
     for_each_compact_row(&mut compact, w2, |oi, row| {
         let i = oi * f;
@@ -535,7 +535,7 @@ mod decimation_tests {
                             }
                             expected += row;
                         }
-                        expected *= 1.0 / (f * f) as f32;
+                        expected *= 1.0 / (f as u64 * f as u64) as f32;
                         assert_eq!(
                             actual[oy * dw + ox].to_bits(),
                             expected.to_bits(),

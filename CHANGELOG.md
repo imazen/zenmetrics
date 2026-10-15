@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- FSIM/VSI reject fixed factors larger than the shorter image dimension and compute box areas in u64 for 32-bit targets.
+
 - Fixed-factor FSIM/FSIMc/VSI columns inherit versioned base names and implementation-tag overrides; orchestration uses canonical column names.
 
 - Mark both independent downscale-policy enums non-exhaustive for future extension.

@@ -372,3 +372,30 @@ fn downscale_identity_preserves_auto_and_distinguishes_factors() {
     assert_ne!(auto, fixed(2));
     assert_ne!(fixed(2), fixed(3));
 }
+
+#[test]
+fn oversized_fixed_factor_is_refused_for_score_and_map() {
+    let (w, h) = (17, 13);
+    let image = alloc::vec![127;w*h*3];
+    for factor in [14, 18, u32::MAX] {
+        let scorer = Vsi::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let expected = Error::DownscaleFactor {
+            factor,
+            width: w,
+            height: h,
+        };
+        assert_eq!(
+            scorer.score_rgb8(&image, &image, w, h, w * 3).unwrap_err(),
+            expected
+        );
+        assert_eq!(
+            scorer
+                .diffmap_rgb8(&image, &image, w, h, w * 3)
+                .err()
+                .expect("oversized map must fail"),
+            expected
+        );
+    }
+}

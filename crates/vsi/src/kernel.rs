@@ -1219,7 +1219,7 @@ fn downsample_decimate(x: &[f32], w: usize, h: usize, f: usize) -> (usize, usize
         }
     });
     let mut out = vec![0.0f32; w2 * h2];
-    let inv = 1.0 / (f * f) as f32;
+    let inv = 1.0 / (f as u64 * f as u64) as f32;
     let tmp_ref = &tmp;
     for_each_row(&mut out, w2, |oi, orow| {
         let i = oi * f;
@@ -1266,7 +1266,7 @@ mod decimation_tests {
                             }
                             expected += row;
                         }
-                        expected *= 1.0 / (f * f) as f32;
+                        expected *= 1.0 / (f as u64 * f as u64) as f32;
                         assert_eq!(
                             actual[oy * dw + ox].to_bits(),
                             expected.to_bits(),

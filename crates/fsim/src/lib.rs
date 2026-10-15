@@ -139,6 +139,15 @@ pub const FSIMY_COLUMN_NAME: &str = match option_env!("FSIMY_IMPL_TAG") {
 /// Errors returned by the FSIM entry points.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
+    /// A fixed factor exceeds the shorter input dimension.
+    DownscaleFactor {
+        /// Requested fixed factor.
+        factor: u32,
+        /// Input width.
+        width: usize,
+        /// Input height.
+        height: usize,
+    },
     /// Input slice is too short for the declared geometry.
     BufferLength {
         /// Bytes/elements the caller must supply.
@@ -151,6 +160,14 @@ pub enum Error {
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Error::DownscaleFactor {
+                factor,
+                width,
+                height,
+            } => write!(
+                f,
+                "downscale factor {factor} exceeds image dimensions {width}x{height}"
+            ),
             Error::BufferLength { needed, got } => {
                 write!(f, "buffer too short: need {needed} elements, got {got}")
             }
@@ -410,7 +427,9 @@ pub fn fsim_rgb8_with_diffmap(
 impl Error {
     fn kind(&self) -> za::ErrorKind {
         match self {
-            Error::BufferLength { .. } => za::ErrorKind::InvalidInput,
+            Error::BufferLength { .. } | Error::DownscaleFactor { .. } => {
+                za::ErrorKind::InvalidInput
+            }
         }
     }
 }
@@ -437,6 +456,19 @@ pub enum Downscale {
 }
 
 impl Downscale {
+    fn validate(self, width: usize, height: usize) -> Result<(), Error> {
+        match self {
+            Self::Factor(n) if n.get() as usize > width.min(height) => {
+                Err(Error::DownscaleFactor {
+                    factor: n.get(),
+                    width,
+                    height,
+                })
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn factor(self, w: usize, h: usize) -> usize {
         match self {
             Self::Auto => kernel::downsample_factor(w, h),
@@ -454,7 +486,8 @@ impl Fsim {
     /// Score strided RGB8 images with this scorer's decimation policy.
     ///
     /// # Errors
-    /// Returns [`Error::BufferLength`] for invalid input geometry.
+    /// Returns [`Error::BufferLength`] for invalid input geometry, or
+    /// [`Error::DownscaleFactor`] when a fixed factor exceeds the shorter dimension.
     pub fn score_rgb8(
         &self,
         r: &[u8],
@@ -465,6 +498,7 @@ impl Fsim {
     ) -> Result<Scores, Error> {
         check_len_rgb(r, w, h, stride)?;
         check_len_rgb(d, w, h, stride)?;
+        self.downscale.validate(w, h)?;
         let ((fsim, fsimc), _, _) =
             kernel::fsim_rgb8_planes(r, d, w, h, stride, None, self.downscale);
         Ok(Scores { fsim, fsimc })
@@ -480,6 +514,7 @@ impl Fsim {
     ) -> Result<FsimDiffmap, Error> {
         check_len_rgb(r, w, h, stride)?;
         check_len_rgb(d, w, h, stride)?;
+        self.downscale.validate(w, h)?;
         let f = self.downscale.factor(w, h);
         let (mw, mh) = (w.div_ceil(f), h.div_ceil(f));
         let mut map = vec![0.0; mw * mh];
