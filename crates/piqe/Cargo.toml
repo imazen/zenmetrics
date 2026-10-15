@@ -23,6 +23,7 @@ std = ["zenmetrics-abstractions/std"]
 
 [dependencies]
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+libm = { version = "0.2.16", default-features = false }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

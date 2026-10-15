@@ -2275,7 +2275,7 @@ pub fn run_metric(
         #[cfg(feature = "nr")]
         MetricKind::Piqe | MetricKind::Niqe => nr::score(kind, reference, distorted),
         #[cfg(not(feature = "nr"))]
-        MetricKind::Piqe | MetricKind::Niqe => Err(disabled_msg("niqe/piqe", "nr")),
+        MetricKind::Piqe | MetricKind::Niqe => Err(disabled_msg(kind.name(), "nr")),
     }
 }
 

@@ -73,3 +73,55 @@ fn too_small_is_too_small_not_panic() {
         }
     }
 }
+
+#[test]
+fn gray8_accepted_and_crop_border_applies() {
+    // GRAY8 planes score (finite) — a contentful luma plane.
+    let (w, h) = (192usize, 192usize);
+    let rgb = textured_rgb8(w, h, 5);
+    let lum: Vec<u8> = rgb
+        .chunks_exact(3)
+        .map(|p| ((77 * p[0] as u32 + 150 * p[1] as u32 + 29 * p[2] as u32) >> 8) as u8)
+        .collect();
+    let gimg: Image<'_> = PixelSlice::new(&lum, w as u32, h as u32, w, PixelDescriptor::GRAY8)
+        .unwrap()
+        .into();
+    let v = evaluate(gimg);
+    assert!(v[0].1.is_finite(), "GRAY8 niqe should be finite: {v:?}");
+
+    // crop_border: scoring a (w+2c)×(h+2c) image with crop c equals
+    // scoring the w×h RGB interior directly — same Y plane, same blocks.
+    let c = 16usize;
+    let (pw, ph) = (w + 2 * c, h + 2 * c);
+    let mut padded = vec![7u8; pw * ph * 3];
+    for y in 0..h {
+        for x in 0..w {
+            padded[((y + c) * pw + x + c) * 3..((y + c) * pw + x + c) * 3 + 3]
+                .copy_from_slice(&rgb[(y * w + x) * 3..(y * w + x) * 3 + 3]);
+        }
+    }
+    let cropped = scores(
+        &*Niqe::with_crop_border(c as u32)
+            .evaluate_image(rgb8_image(&padded, pw, ph), EvalOpts::new())
+            .unwrap(),
+    )[0]
+    .1;
+    let interior = evaluate(rgb8_image(&rgb, w, h))[0].1;
+    assert_eq!(
+        cropped.to_bits(),
+        interior.to_bits(),
+        "crop_border score must equal scoring the interior directly"
+    );
+}
+
+#[test]
+fn degenerate_content_is_degenerate_not_nan() {
+    // Flat plane ≥ 2 blocks: the oracle propagates NaN through nanmean;
+    // the port reports ErrorKind::Degenerate.
+    let (w, h) = (192usize, 96usize);
+    let data = vec![128u8; w * h * 3];
+    match Niqe::new().evaluate_image(rgb8_image(&data, w, h), EvalOpts::new()) {
+        Err(e) => assert_eq!(e.error().kind(), za::ErrorKind::Degenerate, "{w}x{h} flat"),
+        Ok(v) => panic!("{w}x{h} flat: expected Degenerate, got {:?}", scores(&*v)),
+    }
+}

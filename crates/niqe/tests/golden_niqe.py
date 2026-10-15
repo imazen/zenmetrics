@@ -6,23 +6,27 @@ Regenerate (from the repo root):
     ~/tmp/nr-classic-scratch/venv/bin/python crates/niqe/tests/golden_niqe.py \
         > crates/niqe/tests/goldens_niqe.tsv
 
-Oracle environment (2026-10-15, i265):
-    python 3.12, basicsr==1.4.2, torch==2.14.1+cu130, torchvision,
-    numpy, scipy==1.18.1, opencv-python==5.0.0
-    (venv built with `uv venv` + `uv pip install`; basicsr 1.4.2's package
-    __init__ imports a torchvision symbol that no longer exists, so this
-    script shims `torchvision.transforms.functional_tensor` before
-    importing — the NIQE path itself does not use torchvision.)
+The oracle environment versions that produced this file are pinned in
+the generated TSV's `# oracle:` header. basicsr 1.4.2's package __init__
+imports a torchvision symbol that no longer exists, so this script shims
+`torchvision.transforms.functional_tensor` before importing — the NIQE
+path itself does not use torchvision. `torch.set_num_threads(1)` pins the
+deterministic single-thread reduction order the Rust port reproduces.
 
-`calculate_niqe(img, crop_border=0)` on a cv2 BGR u8 decode: BGR→Y is the
-MATLAB `rgb2gray` transform evaluated in the oracle's f32/f64 cast chain,
-then two-scale AGGD features vs the LIVE pristine MVG — identical to what
-the Rust port computes from RGB8.
+Rows are keyed by image path relative to `--root` (default `~/tmp`);
+the parity test resolves them against `$ZENMETRICS_NR_GOLDEN_ROOT`.
 
-Sub-96px inputs (the 64px ladder rows) make the oracle crash
-(`np.linalg.pinv` on the NaN covariance → "SVD did not converge"); the
-generator emits NaN for those rows and the Rust port reports
-`ErrorKind::TooSmall` — the parity test checks that mapping explicitly.
+`calculate_niqe(img, crop_border=0)` on a cv2 BGR u8 decode: BGR→Y is
+the `bgr2ycbcr` Y channel (studio-swing BT.601, not MATLAB `rgb2gray`)
+evaluated in the oracle's f32/f64 cast chain, then two-scale AGGD
+features vs the LIVE pristine MVG — identical to what the Rust port
+computes from RGB8.
+
+Inputs with fewer than two complete 96×96 blocks (the 64px and 128px
+ladder rows) make the oracle crash (`np.cov` of <2 rows is NaN →
+`np.linalg.pinv`: "SVD did not converge"); the generator emits NaN for
+those rows and the parity test asserts the port reports the matching
+error kind (`TooSmall` <2 blocks, `Degenerate` on flat ≥2-block input).
 """
 import sys
 import types
@@ -49,10 +53,18 @@ def _shim_basicsr_import():
 
 
 _shim_basicsr_import()
+import torch  # noqa: E402
+
+torch.set_num_threads(1)
 from basicsr.metrics.niqe import calculate_niqe  # noqa: E402
 
-LADDER = Path.home() / "tmp/nn-phase0/ladder"
-PAIRS = Path.home() / "tmp/konjnd-pairs/pairs_abs.tsv"
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "tmp"
+LADDER = ROOT / "nn-phase0/ladder"
+PAIRS = ROOT / "konjnd-pairs/pairs_abs.tsv"
+
+
+def rel(path: str) -> str:
+    return str(Path(path).resolve().relative_to(ROOT.resolve()))
 
 
 def score(path: str) -> float:
@@ -88,9 +100,18 @@ def main() -> None:
         rows.append((ln[ref_i], score(ln[ref_i])))
         rows.append((ln[dist_i], score(ln[dist_i])))
 
+    import scipy, torchvision
+    print("# niqe goldens — regenerate (from the repo root):")
+    print("#   ~/tmp/nr-classic-scratch/venv/bin/python \\")
+    print("#       crates/niqe/tests/golden_niqe.py > crates/niqe/tests/goldens_niqe.tsv")
+    print(f"# oracle: basicsr==1.4.2, torch=={torch.__version__}, "
+          f"torchvision=={torchvision.__version__}, numpy=={np.__version__}, "
+          f"scipy=={scipy.__version__}, opencv-python=={cv2.__version__}, "
+          f"python=={sys.version.split()[0]}, BLAS=MKL, torch threads=1")
+    print("# paths are relative to $ZENMETRICS_NR_GOLDEN_ROOT (default ~/tmp)")
     print("# path\tniqe")
     for p, s in rows:
-        print(f"{p}\t{s:.17g}")
+        print(f"{rel(p)}\t{s:.17g}")
 
 
 if __name__ == "__main__":

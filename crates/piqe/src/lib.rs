@@ -251,9 +251,35 @@ fn var1(v: &[f64]) -> f64 {
     dev / (n - 1.0)
 }
 
+// Correctly-rounded float ops routed through libm under `no_std` (sqrt and
+// rint are exact in both implementations, so parity holds).
+#[inline(always)]
+fn sqrt64(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrt(x)
+    }
+}
+/// `round_ties_even` = C `rint` under the default rounding mode.
+#[inline(always)]
+fn rint64(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.round_ties_even()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::rint(x)
+    }
+}
+
 /// `np.std(v, ddof=1)`.
 fn std1(v: &[f64]) -> f64 {
-    var1(v).sqrt()
+    sqrt64(var1(v))
 }
 
 /// One block edge (16 elements) through `at`: impaired when any of its 11
@@ -286,7 +312,7 @@ fn block_impaired(b: &[f64; 256]) -> bool {
 /// std ratio (NaN → 0). The oracle's sequential `np.delete`s drop original
 /// columns 7 and 9 — column 8 stays in the surround — which this reproduces.
 fn noise_criterion(b: &[f64; 256], block_var: f64) -> (f64, f64) {
-    let block_sigma = block_var.sqrt();
+    let block_sigma = sqrt64(block_var);
     let mut center = [0.0f64; 32];
     let mut surround = [0.0f64; 224];
     for r in 0..BLOCK {
@@ -321,7 +347,7 @@ fn score_gray_u8(gray: &[u8], w: usize, h: usize) -> f64 {
     for (y, row) in im.chunks_exact_mut(pw).enumerate() {
         let sy = sym(y, h);
         for (x, v) in row.iter_mut().enumerate() {
-            *v = ((f64::from(gray[sy * w + sym(x, w)]) / f64::from(max)) * 255.0).round_ties_even();
+            *v = rint64((f64::from(gray[sy * w + sym(x, w)]) / f64::from(max)) * 255.0);
         }
     }
 
@@ -338,7 +364,7 @@ fn score_gray_u8(gray: &[u8], w: usize, h: usize) -> f64 {
             for r in 0..BLOCK {
                 for c in 0..BLOCK {
                     let i = (by + r) * pw + bx + c;
-                    let sigma = (e2[i] - mu[i] * mu[i]).abs().sqrt();
+                    let sigma = sqrt64((e2[i] - mu[i] * mu[i]).abs());
                     b[r * BLOCK + c] = (im[i] - mu[i]) / (sigma + 1.0);
                 }
             }

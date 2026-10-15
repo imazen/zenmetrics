@@ -1538,6 +1538,21 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // finite identity value / mean bound is characterised yet.
         | MetricKind::PsnrhvsDaala
         | MetricKind::Mdctpsnr => None,
+        // LPIPS / ST-LPIPS / DISTS / DeepDC: distances, 0 = identical;
+        // each is a weighted deep-feature L2 bound well under 2 on real
+        // content.
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Dists
+        | MetricKind::Deepdc => Some((-0.001, 2.0, 0.0)),
+        // PIQE: [0, 100] distortion, 0 = identical.
+        MetricKind::Piqe => Some((-0.001, 100.5, 0.0)),
+        // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
+        // land ~0–10, synthetic outliers stay far under 50.
+        MetricKind::Niqe => Some((-0.001, 50.0, 0.0)),
     }
 }
 

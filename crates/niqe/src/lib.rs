@@ -22,7 +22,7 @@
 //! Conventions matched to the oracle (`basicsr.metrics.niqe`,
 //! `calculate_niqe(img, crop_border=0, input_order='HWC')`):
 //!
-//! - RGB8 → gray is MATLAB `rgb2gray`-style
+//! - RGB8 → gray is the `bgr2ycbcr` Y channel:
 //!   `Y ≈ 16 + 65.481·r + 128.553·g + 24.966·b` over `[0,1]`-normalized
 //!   channels: the dot product runs in f64 on f32-normalized inputs, the
 //!   result is divided by 255 (f64), cast to f32, multiplied by 255 (f32),
@@ -45,8 +45,9 @@
 //! Deliberate divergences: images that leave fewer than two complete 96×96
 //! blocks after `crop_border` report [`ErrorKind::TooSmall`] — the oracle
 //! crashes there (`np.cov` of <2 rows is NaN → `pinv`: "SVD did not
-//! converge"). Fully degenerate content (all-flat images) still propagates
-//! NaN as the oracle does.
+//! converge"). Degenerate content whose features go non-finite (e.g. a
+//! flat image, where the oracle propagates NaN through `nanmean`) reports
+//! `ErrorKind::Degenerate` instead of an NaN score.
 //!
 //! [`ErrorKind::TooSmall`]: zenmetrics_abstractions::ErrorKind::TooSmall
 
@@ -100,7 +101,7 @@ pub const JND: f64 = 0.602329;
 #[derive(Debug, Clone, Copy)]
 pub struct Niqe {
     /// Pixels trimmed from each border before scoring (oracle `crop_border`).
-    pub crop_border: u32,
+    crop_border: u32,
 }
 
 impl Niqe {
@@ -114,6 +115,12 @@ impl Niqe {
     #[must_use]
     pub fn with_crop_border(crop_border: u32) -> Self {
         Self { crop_border }
+    }
+
+    /// The configured border crop in pixels (oracle `crop_border`).
+    #[must_use]
+    pub fn crop_border(&self) -> u32 {
+        self.crop_border
     }
 }
 
@@ -188,8 +195,13 @@ fn packed_as<'a>(
 /// The oracle's Y plane as f64 (values are the f32-rounded oracle output).
 /// `crop` pixels are trimmed from every edge first.
 fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, usize, usize)> {
+    let crop2 = crop.checked_mul(2).ok_or_else(|| {
+        za::MetricError::new(za::ErrorKind::InvalidConfig)
+            .with_metric("niqe")
+            .with_message(alloc::format!("crop_border={crop} overflows"))
+    })?;
     if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
-        let (iw, ih) = (w.saturating_sub(2 * crop), h.saturating_sub(2 * crop));
+        let (iw, ih) = (w.saturating_sub(crop2), h.saturating_sub(crop2));
         if iw == 0 || ih == 0 {
             return za::fail(
                 za::MetricError::new(za::ErrorKind::TooSmall)
@@ -210,7 +222,7 @@ fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, u
         return Ok((y, iw, ih));
     }
     if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::GRAY8) {
-        let (iw, ih) = (w.saturating_sub(2 * crop), h.saturating_sub(2 * crop));
+        let (iw, ih) = (w.saturating_sub(crop2), h.saturating_sub(crop2));
         if iw == 0 || ih == 0 {
             return za::fail(
                 za::MetricError::new(za::ErrorKind::TooSmall)
@@ -246,11 +258,12 @@ fn to_y(r: u8, g: u8, b: u8) -> f64 {
     // then to_y_channel's img*255. is an f32 multiply; .round() in f32.
     let d = 24.966 * nf(b) + 128.553 * nf(g) + 65.481 * nf(r) + 16.0;
     let y01 = (d / 255.0) as f32;
-    f64::from((y01 * 255.0f32).round_ties_even())
+    f64::from(rint32(y01 * 255.0f32))
 }
 
 /// Full NIQE pipeline on the Y plane (`niqe()` + `computequality`).
-/// Returns NaN where the oracle does (degenerate content → NaN features).
+/// Non-finite results (degenerate content → NaN features, where the oracle
+/// raises inside pinv/nanmean) surface as `ErrorKind::Degenerate`.
 fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::MetricResult<f64> {
     // r_gam lookup, hoisted out of estimate_aggd_param: a pure function of
     // the fixed gam grid. The oracle computes
@@ -288,8 +301,8 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
             // imresize(img/255, 0.5, antialiasing) * 255 — all f32 ops.
             let scaled_in: Vec<f32> = cur.iter().map(|&v| v / 255.0).collect();
             cur = imresize(&scaled_in, cw, ch, 0.5);
-            cw = (cw as f64 * 0.5).ceil() as usize;
-            ch = (ch as f64 * 0.5).ceil() as usize;
+            cw = ceil64(cw as f64 * 0.5) as usize;
+            ch = ceil64(ch as f64 * 0.5) as usize;
             for v in &mut cur {
                 *v *= 255.0;
             }
@@ -301,7 +314,7 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
         let mu_sq = conv_gauss(&sq, cw, ch);
         let mut norm = vec![0.0f32; cw * ch];
         for i in 0..norm.len() {
-            let sigma = (mu_sq[i] - mu[i] * mu[i]).abs().sqrt();
+            let sigma = sqrt32((mu_sq[i] - mu[i] * mu[i]).abs());
             norm[i] = (cur[i] - mu[i]) / (sigma + 1.0);
         }
 
@@ -327,7 +340,7 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
     let mu_dist = nanmean_cols(&distparam, nblocks, NFEAT);
     let cov_dist = cov_drop_nan(&distparam, nblocks, NFEAT);
 
-    // invcov = pinv((cov_pris + cov_dist)/2), numpy rcond = eps·N·σ_max.
+    // invcov = pinv((cov_pris + cov_dist)/2), numpy 2.x rcond = 1e-15·σ_max.
     let mut avg = [0.0f64; NFEAT * NFEAT];
     let mut finite = true;
     for i in 0..NFEAT * NFEAT {
@@ -347,7 +360,16 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
             q += di * invcov[i * NFEAT + j] * (MU_PRIS[j] - mu_dist[j]);
         }
     }
-    Ok(q.sqrt())
+    // Degenerate content (e.g. a flat image): features/covariance carry NaN
+    // and the oracle raises inside pinv/nanmean — report Degenerate.
+    if !q.is_finite() {
+        return za::fail(
+            za::MetricError::new(za::ErrorKind::Degenerate)
+                .with_metric("niqe")
+                .with_message("image content is degenerate for NIQE (score NaN)"),
+        );
+    }
+    Ok(sqrt64(q))
 }
 
 /// scipy `ndimage.convolve(img, gaussian_window, mode='nearest')` — true
@@ -387,7 +409,7 @@ fn imresize(img: &[f32], w: usize, h: usize, scale: f64) -> Vec<f32> {
         }
     }
     let t1 = resample_rows(&t, h, w, scale, false); // w rows × out_h
-    let out_h = (h as f64 * scale).ceil() as usize;
+    let out_h = ceil64(h as f64 * scale) as usize;
     // transpose back → out_h × w, then pass 2 along each row (length w).
     let mut tmp = vec![0.0f32; out_h * w];
     for r in 0..out_h {
@@ -414,16 +436,16 @@ fn imresize(img: &[f32], w: usize, h: usize, scale: f64) -> Vec<f32> {
 /// `((p0+p1)+(p4+p5)) + ((p2+p3)+(p6+p7))` (hadd-style pairing) — verified
 /// bitwise against torch on this host for both layouts.
 fn resample_rows(img: &[f32], in_len: usize, rows: usize, scale: f64, dot8: bool) -> Vec<f32> {
-    let out_len = (in_len as f64 * scale).ceil() as usize;
+    let out_len = ceil64(in_len as f64 * scale) as usize;
     // kernel_width = 4/scale; p = ceil(kernel_width) + 2 taps per output.
     let kernel_width = 4.0f32 / scale as f32;
-    let p = (kernel_width as f64).ceil() as usize + 2;
+    let p = ceil64(kernel_width as f64) as usize + 2;
     let mut indices = vec![0i64; out_len * p];
     let mut weights = vec![0.0f32; out_len * p];
     for k in 0..out_len {
         let x = (k + 1) as f32; // torch.linspace(1, out, out) in f32
         let u = x / scale as f32 + 0.5 * (1.0 - 1.0 / scale as f32);
-        let left = (u - kernel_width / 2.0).floor() as i64;
+        let left = floor32(u - kernel_width / 2.0) as i64;
         let mut wsum = 0.0f32;
         for j in 0..p {
             let ix = left + j as i64;
@@ -517,6 +539,76 @@ fn fmaf(w: f32, v: f32, acc: f32) -> f32 {
     }
 }
 
+// Correctly-rounded float ops routed through libm under `no_std` (sqrt,
+// ceil/floor and rint are exact in both implementations, so parity holds).
+#[inline(always)]
+fn sqrt64(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrt(x)
+    }
+}
+#[inline(always)]
+fn sqrt32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrtf(x)
+    }
+}
+#[inline(always)]
+fn ceil64(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.ceil()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::ceil(x)
+    }
+}
+#[inline(always)]
+fn floor64(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        x.floor()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::floor(x)
+    }
+}
+#[inline(always)]
+fn floor32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.floor()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::floorf(x)
+    }
+}
+/// `round_ties_even` = C `rint` under the default rounding mode.
+#[inline(always)]
+fn rint32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.round_ties_even()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::rintf(x)
+    }
+}
+
 /// BasicSR `cubic` with a = −0.5 (MATLAB bicubic kernel) — evaluated in f32
 /// as the oracle's torch path does.
 fn cubic32(x: f32) -> f32 {
@@ -564,8 +656,8 @@ fn aggd(block: &[f32], r_gam: &[f64]) -> [f64; 4] {
             pairwise_sum_f32(a) / a.len() as f32
         }
     };
-    let left_std = mean32(&neg).sqrt();
-    let right_std = mean32(&pos).sqrt();
+    let left_std = sqrt32(mean32(&neg));
+    let right_std = sqrt32(mean32(&pos));
     let gammahat = left_std / right_std;
     let rhat = powf32(mean32(&abs), 2.0) / mean32(&sq);
     // (rhat·(γ̂³+1)·(γ̂+1)) / ((γ̂²+1)²) — left-associative f32, `**` = powf.
@@ -586,7 +678,7 @@ fn aggd(block: &[f32], r_gam: &[f64]) -> [f64; 4] {
     let alpha = GAM_LO + pos as f64 * GAM_STEP;
     // gamma(1/α)/gamma(3/α): division arguments, distinct from the gr·k
     // arguments in the r_gam table (one-ulp difference).
-    let beta_norm = (cephes_gamma(1.0 / alpha) / cephes_gamma(3.0 / alpha)).sqrt();
+    let beta_norm = sqrt64(cephes_gamma(1.0 / alpha) / cephes_gamma(3.0 / alpha));
     [
         alpha,
         0.0,
@@ -725,7 +817,7 @@ fn cephes_gamma(x: f64) -> f64 {
             let w = 1.0 + w * polevl(w, &STIR);
             let v = powf64(q, 0.5 * q - 0.25);
             let y = SQRT_PI * v * (v / exp64(q)) * w;
-            return -(core::f64::consts::PI / (q * sinpi64(q - q.floor()) * y).abs());
+            return -(core::f64::consts::PI / (q * sinpi64(q - floor64(q)) * y).abs());
         }
         // stirf(x)
         let w = 1.0 / x;
@@ -927,8 +1019,8 @@ fn pinv_sym(a: &[f64; NFEAT * NFEAT]) -> [f64; NFEAT * NFEAT] {
                     continue;
                 }
                 let theta = (m[q * N + q] - m[p * N + p]) / (2.0 * apq);
-                let t = theta.signum() / (theta.abs() + (theta * theta + 1.0).sqrt());
-                let c = 1.0 / (t * t + 1.0).sqrt();
+                let t = theta.signum() / (theta.abs() + sqrt64(theta * theta + 1.0));
+                let c = 1.0 / sqrt64(t * t + 1.0);
                 let s = t * c;
                 for k in 0..N {
                     let mkp = m[k * N + p];

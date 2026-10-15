@@ -55,4 +55,5 @@ distorted image and `piqe_ref` for the reference.
 `tests/golden_piqe.py` regenerates `tests/goldens_piqe.tsv` (ladder PNGs +
 64 KonJND images) with `pypiqe==1.2` on `opencv-python`; `tests/parity.rs`
 scores the same images and asserts each golden is within `JND/1000`, printing
-the worst |Δ| in absolute and JND units.
+the worst |Δ| in absolute and JND units. TSV paths are relative to
+`$ZENMETRICS_NR_GOLDEN_ROOT` (default `~/tmp`).

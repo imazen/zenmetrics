@@ -41,6 +41,10 @@ pub enum ErrorKind {
     /// Input values the metric can't score (non-finite samples, a buffer
     /// shorter than its declared geometry).
     InvalidInput,
+    /// Well-formed input whose content the metric can't characterise —
+    /// e.g. a featureless image that makes a fitted statistic NaN where
+    /// the reference implementation raises.
+    Degenerate,
     /// The metric's configuration or a request parameter is invalid
     /// (a zero subsample factor, a non-positive p-norm).
     InvalidConfig,
@@ -72,6 +76,7 @@ impl ErrorKind {
             ErrorKind::DimensionMismatch => "dimension_mismatch",
             ErrorKind::TooSmall => "too_small",
             ErrorKind::InvalidInput => "invalid_input",
+            ErrorKind::Degenerate => "degenerate",
             ErrorKind::InvalidConfig => "invalid_config",
             ErrorKind::NoMap => "no_map",
             ErrorKind::UnsupportedRequest => "unsupported_request",

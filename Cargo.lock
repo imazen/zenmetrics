@@ -4054,6 +4054,7 @@ name = "piqe"
 version = "0.1.0"
 dependencies = [
  "image",
+ "libm",
  "zenmetrics-abstractions",
 ]
 

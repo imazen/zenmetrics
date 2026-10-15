@@ -6,9 +6,8 @@ Regenerate (from the repo root):
     ~/tmp/nr-classic-scratch/venv/bin/python crates/piqe/tests/golden_piqe.py \
         > crates/piqe/tests/goldens_piqe.tsv
 
-Oracle environment (2026-10-15, i265):
-    python 3.12, pypiqe==1.2, opencv-python==4.12.0.88, numpy==2.2.6
-    (venv built with `uv venv` + `uv pip install` per the lane brief).
+Rows are keyed by image path relative to `--root` (default `~/tmp`);
+the parity test resolves them against `$ZENMETRICS_NR_GOLDEN_ROOT`.
 
 pypiqe is a pure function of the decoded pixels; cv2.imread loads PNG as
 BGR and piqe() converts BGR->GRAY internally, which is exactly what the
@@ -20,8 +19,13 @@ from pathlib import Path
 import cv2
 from pypiqe import piqe
 
-LADDER = Path.home() / "tmp/nn-phase0/ladder"
-PAIRS = Path.home() / "tmp/konjnd-pairs/pairs_abs.tsv"
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "tmp"
+LADDER = ROOT / "nn-phase0/ladder"
+PAIRS = ROOT / "konjnd-pairs/pairs_abs.tsv"
+
+
+def rel(path: str) -> str:
+    return str(Path(path).resolve().relative_to(ROOT.resolve()))
 
 
 def score(path: str) -> float:
@@ -50,9 +54,16 @@ def main() -> None:
         rows.append((ln[ref_i], score(ln[ref_i])))
         rows.append((ln[dist_i], score(ln[dist_i])))
 
+    import numpy
+    print("# piqe goldens — regenerate (from the repo root):")
+    print("#   ~/tmp/nr-classic-scratch/venv/bin/python \\")
+    print("#       crates/piqe/tests/golden_piqe.py > crates/piqe/tests/goldens_piqe.tsv")
+    print(f"# oracle: pypiqe==1.2, opencv-python=={cv2.__version__}, "
+          f"numpy=={numpy.__version__}, python=={sys.version.split()[0]}")
+    print("# paths are relative to $ZENMETRICS_NR_GOLDEN_ROOT (default ~/tmp)")
     print("# path\tpiqe")
     for p, s in rows:
-        print(f"{p}\t{s:.17g}")
+        print(f"{rel(p)}\t{s:.17g}")
 
 
 if __name__ == "__main__":
