@@ -73,4 +73,46 @@ LPIPS-vgg, 16 threads, median ms:
 - 95 % of a 64² run is convolution (`RTEN_TIMING`), so the remaining small-size
   gap is rten's conv kernel and its threading, not our head or preprocessing.
 
-Not measured: dev (Zen 5, AVX-512), other images for timing, GPU engines.
+
+## GPU engines
+
+Same 18 golden pairs, same RTX 4080. Two candidates for the GPU engine:
+
+**burn 0.22, hand-written VGG16 trunk + LPIPS head on device** (`burn_spike/`,
+weights from `scripts/export_raw.py`; `burn_spike/run1.log`,
+`burn_rerun_and_ort_trunk.log`):
+
+| backend, dtype | worst \|Δ\| | 64² | 256² | 1024² | 2048² |
+|---|---|---|---|---|---|
+| CUDA f32 | **1.3e-4** | 2.75 ms | 6.05 ms | 110 ms | 493 ms |
+| CUDA f16 | 3.5e-4 | 2.67 ms | 5.81 ms | 78.5 ms | 379 ms |
+| Vulkan f16 | 2.0e-4 | 4.10 ms | 119 ms | 2038 ms | 8286 ms |
+| Vulkan f32 | **5.9e-8** | 14.9 ms | 287 ms | 4797 ms | not run |
+
+- The Vulkan f32 run (burn's exact `conv_direct` kernel) matches upstream to
+  5.9e-8, so the spike's weights and head are right and **the CUDA f32 error is
+  burn's CUDA convolution arithmetic**. A second CUDA f32 run reproduced every
+  score bit for bit, so it is deterministic, not the 4080's bit flips. Its size
+  (1.3e-4) is 9× PyTorch's TF32 drift.
+- burn CUDA f32 is also 1.8× slower than PyTorch (110 vs 61.5 ms at 1024²).
+- Vulkan f16 is slow in the full model (2.0 s at 1024²) although single f16 conv
+  layers run at 6–9 TFLOP/s ([`burn_wgpu_conv_2026-10-15.md`](burn_wgpu_conv_2026-10-15.md)):
+  something else in the f16 graph is slow on Vulkan. Not investigated.
+
+**ONNX Runtime 1.31, CUDA EP, TF32 off** (Python `onnxruntime-gpu`):
+
+- Trunk-only graph with the head on the host (`scripts/ort_lpips.py`): worst
+  |Δ| 6.7e-8, but copying the five feature maps back costs most of the time
+  (156 ms at 1024²).
+- Whole LPIPS as one graph, r and d in, score out (`scripts/export_full.py`,
+  `scripts/ort_full.py`, `ort_cuda_full.log`, run twice): **worst |Δ| 6.0e-8**,
+  compute 1.38 / 1.63 / 3.40 / 13.8 / 62.1 / 276 ms at 64² / 128² / 256² / 512² /
+  1024² / 2048², including the input upload. PyTorch TF32-off compute (no
+  upload): 1.44 / 1.66 / 3.19 / 12.4 / 56.0 / 246 ms.
+
+Conclusion: for parity-grade GPU scores today, the engine is ONNX Runtime CUDA
+(the optional `ort` feature), from 4 % faster to 12 % slower than PyTorch. burn needs a CUDA
+conv path with f32 accuracy before it can serve scores.
+
+Not measured: dev (Zen 5, AVX-512), other images for timing, ORT through the
+Rust `ort` crate, 4096² on the GPU engines.
