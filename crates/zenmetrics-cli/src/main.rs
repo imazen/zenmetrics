@@ -1510,7 +1510,12 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // alone reaches ~1e5 on synthetic textures). Sweep means on
         // real corpora land in the tens–hundreds.
         MetricKind::Mad => Some((-0.001, 1_000_000.0, 0.0)),
-        MetricKind::Vmaf | MetricKind::VmafNeg | MetricKind::Vmaf4k | MetricKind::VmafV1 => {
+        MetricKind::Vmaf
+        | MetricKind::VmafNeg
+        | MetricKind::Vmaf4k
+        | MetricKind::VmafV1
+        | MetricKind::VmafStudio601
+        | MetricKind::VmafNegStudio601 => {
             Some((-0.5, 100.5, 100.0))
         }
         MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {

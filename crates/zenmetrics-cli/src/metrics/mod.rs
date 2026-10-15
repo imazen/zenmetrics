@@ -92,6 +92,13 @@ pub enum MetricKind {
     /// VMAF v1.0.16 3d0h model (in-tree `vmaf` crate).
     #[value(name = "vmaf-v1")]
     VmafV1,
+    /// `vmaf` on studio-swing BT.601 YUV (the `psnr-y-studio601` luma), the
+    /// convention behind the JPEG AIC-4 `VMAF` column.
+    #[value(name = "vmaf-studio601")]
+    VmafStudio601,
+    /// `vmaf-neg` on studio-swing BT.601 YUV (JPEG AIC-4 `VMAF-neg`).
+    #[value(name = "vmaf-neg-studio601")]
+    VmafNegStudio601,
     /// Peak signal-to-noise ratio on encoded RGB8, in decibels.
     #[value(name = "psnr")]
     Psnr,
@@ -400,6 +407,8 @@ impl MetricKind {
             MetricKind::VmafNeg,
             MetricKind::Vmaf4k,
             MetricKind::VmafV1,
+            MetricKind::VmafStudio601,
+            MetricKind::VmafNegStudio601,
             MetricKind::Psnr,
             MetricKind::PsnrY,
             MetricKind::PsnrY601,
@@ -451,6 +460,8 @@ impl MetricKind {
             MetricKind::VmafNeg => "vmaf-neg",
             MetricKind::Vmaf4k => "vmaf-4k",
             MetricKind::VmafV1 => "vmaf-v1",
+            MetricKind::VmafStudio601 => "vmaf-studio601",
+            MetricKind::VmafNegStudio601 => "vmaf-neg-studio601",
             MetricKind::Psnr => "psnr",
             MetricKind::PsnrY => "psnr-y",
             MetricKind::PsnrY601 => "psnr-y601",
@@ -561,6 +572,8 @@ impl MetricKind {
             MetricKind::VmafNeg => &["vmaf_neg"],
             MetricKind::Vmaf4k => &["vmaf_4k"],
             MetricKind::VmafV1 => &["vmaf_v1"],
+            MetricKind::VmafStudio601 => &["vmaf_studio601"],
+            MetricKind::VmafNegStudio601 => &["vmaf_neg_studio601"],
             MetricKind::Psnr => &["psnr"],
             MetricKind::PsnrY => &["psnr_y"],
             MetricKind::PsnrY601 => &["psnr_y601"],
@@ -1640,31 +1653,70 @@ pub fn run_metric(
         #[cfg(feature = "cpu-vmaf")]
         MetricKind::Vmaf => Ok(vec![(
             "vmaf",
-            vmaf::score(reference, distorted, vmaf::Model::V061)?,
+            vmaf::score(
+                reference,
+                distorted,
+                vmaf::Model::V061,
+                vmaf::Ingress::Bt709,
+            )?,
         )]),
         #[cfg(not(feature = "cpu-vmaf"))]
         MetricKind::Vmaf => Err(disabled_msg("vmaf", "cpu-vmaf")),
         #[cfg(feature = "cpu-vmaf")]
         MetricKind::VmafNeg => Ok(vec![(
             "vmaf_neg",
-            vmaf::score(reference, distorted, vmaf::Model::V061Neg)?,
+            vmaf::score(
+                reference,
+                distorted,
+                vmaf::Model::V061Neg,
+                vmaf::Ingress::Bt709,
+            )?,
         )]),
         #[cfg(not(feature = "cpu-vmaf"))]
         MetricKind::VmafNeg => Err(disabled_msg("vmaf-neg", "cpu-vmaf")),
         #[cfg(feature = "cpu-vmaf")]
         MetricKind::Vmaf4k => Ok(vec![(
             "vmaf_4k",
-            vmaf::score(reference, distorted, vmaf::Model::V061FourK)?,
+            vmaf::score(
+                reference,
+                distorted,
+                vmaf::Model::V061FourK,
+                vmaf::Ingress::Bt709,
+            )?,
         )]),
         #[cfg(not(feature = "cpu-vmaf"))]
         MetricKind::Vmaf4k => Err(disabled_msg("vmaf-4k", "cpu-vmaf")),
         #[cfg(feature = "cpu-vmaf")]
         MetricKind::VmafV1 => Ok(vec![(
             "vmaf_v1",
-            vmaf::score(reference, distorted, vmaf::Model::V1)?,
+            vmaf::score(reference, distorted, vmaf::Model::V1, vmaf::Ingress::Bt709)?,
         )]),
         #[cfg(not(feature = "cpu-vmaf"))]
         MetricKind::VmafV1 => Err(disabled_msg("vmaf-v1", "cpu-vmaf")),
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::VmafStudio601 => Ok(vec![(
+            "vmaf_studio601",
+            vmaf::score(
+                reference,
+                distorted,
+                vmaf::Model::V061,
+                vmaf::Ingress::Studio601,
+            )?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::VmafStudio601 => Err(disabled_msg("vmaf-studio601", "cpu-vmaf")),
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::VmafNegStudio601 => Ok(vec![(
+            "vmaf_neg_studio601",
+            vmaf::score(
+                reference,
+                distorted,
+                vmaf::Model::V061Neg,
+                vmaf::Ingress::Studio601,
+            )?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::VmafNegStudio601 => Err(disabled_msg("vmaf-neg-studio601", "cpu-vmaf")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Psnr => Ok(vec![(
             "psnr",
