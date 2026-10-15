@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- FSIM/FSIMc: add explicit fixed-factor decimation and CLI k2/k3/k4/nodownscale variants; automatic output is preserved.
+
 ### Changed
 
 - zenmetrics-cli VMAF ingress (`vmaf-studio601`, `vmaf-neg-studio601`): VMAF v0.6.1 / v0.6.1neg on studio-swing BT.601 YUV (the `psnr-y-studio601` luma), which reproduces the JPEG AIC-4 dataset `VMAF` / `VMAF-neg` columns on the 61-pair subset (median 0.0068 / 0.0034, max 0.075 / 0.12) where the BT.709 `vmaf` is off by up to 2.7. All `vmaf*` metrics now crop odd widths or heights to the largest even size instead of failing the batch (on the AIC-4 odd-size pairs cropping and edge padding agree within 0.003). Existing even-size `vmaf*` scores are unchanged.

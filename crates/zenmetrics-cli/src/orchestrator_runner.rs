@@ -187,6 +187,11 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Haarpsi => "haarpsi",
         CliMetricKind::HaarpsiY => "haarpsi_y",
         CliMetricKind::Fsim => "fsim",
+        CliMetricKind::FsimK2 => "fsim-k2",
+        CliMetricKind::FsimK3 => "fsim-k3",
+        CliMetricKind::FsimK4 => "fsim-k4",
+        CliMetricKind::FsimNodownscale => "fsim-nodownscale",
+
         CliMetricKind::FsimY => "fsim_y",
         CliMetricKind::Vsi => "vsi",
         CliMetricKind::Msssim => "msssim",
@@ -297,6 +302,10 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Haarpsi
         | CliMetricKind::HaarpsiY
         | CliMetricKind::Fsim
+        | CliMetricKind::FsimK2
+        | CliMetricKind::FsimK3
+        | CliMetricKind::FsimK4
+        | CliMetricKind::FsimNodownscale
         | CliMetricKind::FsimY
         | CliMetricKind::Vsi
         | CliMetricKind::Msssim
@@ -452,6 +461,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Haarpsi
             | CliMetricKind::HaarpsiY
             | CliMetricKind::Fsim
+            | CliMetricKind::FsimK2
+            | CliMetricKind::FsimK3
+            | CliMetricKind::FsimK4
+            | CliMetricKind::FsimNodownscale
             | CliMetricKind::FsimY
             | CliMetricKind::Vsi
             | CliMetricKind::Msssim

@@ -1283,8 +1283,9 @@ pub(crate) fn fsim_rgb8_planes(
     h: usize,
     stride: usize,
     map: Option<&mut [f32]>,
+    downscale: crate::Downscale,
 ) -> ((f64, f64), usize, usize) {
-    let f = downsample_factor(w, h);
+    let f = downscale.factor(w, h);
     let (w2, h2, [yr, ir, qr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     let (_, _, [yd, id, qd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF, I_COEF, Q_COEF]);
     debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));

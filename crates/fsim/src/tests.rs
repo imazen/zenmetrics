@@ -374,5 +374,40 @@ fn metric_trait_object_scores_and_maps() {
 /// The generic surface honors the abstractions contract.
 #[test]
 fn generic_surface_conforms() {
-    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Fsim, 45, 37);
+    let mut scorer = crate::Fsim;
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut scorer, 45, 37);
+}
+
+#[test]
+fn fixed_factor_matches_auto_and_strided() {
+    for (w, factor) in [(31, 1), (384, 2), (640, 3), (896, 4)] {
+        let h = w + 1;
+        let r: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 37 + i / 11) % 256) as u8)
+            .collect();
+        let d: Vec<u8> = r
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| if i % 17 == 0 { v.wrapping_add(29) } else { v })
+            .collect();
+        let scorer = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let auto = fsim_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let fixed = scorer.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(auto.fsim.to_bits(), fixed.fsim.to_bits());
+        assert_eq!(auto.fsimc.to_bits(), fixed.fsimc.to_bits());
+        let stride = w * 3 + 7;
+        let mut rs = alloc::vec![0;stride*h];
+        let mut ds = rs.clone();
+        for y in 0..h {
+            rs[y * stride..y * stride + w * 3].copy_from_slice(&r[y * w * 3..(y + 1) * w * 3]);
+            ds[y * stride..y * stride + w * 3].copy_from_slice(&d[y * w * 3..(y + 1) * w * 3]);
+        }
+        assert_eq!(fixed, scorer.score_rgb8(&rs, &ds, w, h, stride).unwrap());
+        let dm = scorer.diffmap_rgb8(&rs, &ds, w, h, stride).unwrap();
+        assert_eq!(dm.factor(), factor);
+        assert_eq!(dm.fsim, fixed.fsim);
+        assert_eq!(dm.fsimc, Some(fixed.fsimc));
+    }
 }

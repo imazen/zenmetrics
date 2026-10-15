@@ -304,6 +304,19 @@ pub enum MetricKind {
     /// orchestrator (CPU-only, no GPU twin).
     #[value(name = "fsim")]
     Fsim,
+    /// FSIM/FSIMc with fixed factor 2.
+    #[value(name = "fsim-k2")]
+    FsimK2,
+    /// FSIM/FSIMc with fixed factor 3.
+    #[value(name = "fsim-k3")]
+    FsimK3,
+    /// FSIM/FSIMc with fixed factor 4.
+    #[value(name = "fsim-k4")]
+    FsimK4,
+    /// FSIM/FSIMc with fixed factor 1.
+    #[value(name = "fsim-nodownscale")]
+    FsimNodownscale,
+
     /// FSIM on unrounded BT.601 luma only (the grayscale path — no I/Q
     /// chroma term). Emits `fsimy_imazen_v*`.
     #[value(name = "fsim-y")]
@@ -441,6 +454,10 @@ impl MetricKind {
             MetricKind::Haarpsi,
             MetricKind::HaarpsiY,
             MetricKind::Fsim,
+            MetricKind::FsimK2,
+            MetricKind::FsimK3,
+            MetricKind::FsimK4,
+            MetricKind::FsimNodownscale,
             MetricKind::FsimY,
             MetricKind::Vsi,
             MetricKind::Msssim,
@@ -494,6 +511,11 @@ impl MetricKind {
             MetricKind::Haarpsi => "haarpsi",
             MetricKind::HaarpsiY => "haarpsi-y",
             MetricKind::Fsim => "fsim",
+            MetricKind::FsimK2 => "fsim-k2",
+            MetricKind::FsimK3 => "fsim-k3",
+            MetricKind::FsimK4 => "fsim-k4",
+            MetricKind::FsimNodownscale => "fsim-nodownscale",
+
             MetricKind::FsimY => "fsim-y",
             MetricKind::Vsi => "vsi",
             MetricKind::Msssim => "msssim",
@@ -606,6 +628,11 @@ impl MetricKind {
             MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
             MetricKind::HaarpsiY => HAARPSIY_CPU_COLUMNS,
             MetricKind::Fsim => FSIM_CPU_COLUMNS,
+            MetricKind::FsimK2 => &["fsim_k2", "fsimc_k2"],
+            MetricKind::FsimK3 => &["fsim_k3", "fsimc_k3"],
+            MetricKind::FsimK4 => &["fsim_k4", "fsimc_k4"],
+            MetricKind::FsimNodownscale => &["fsim_nodownscale", "fsimc_nodownscale"],
+
             MetricKind::FsimY => FSIMY_CPU_COLUMNS,
             MetricKind::Vsi => VSI_CPU_COLUMNS,
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
@@ -1998,6 +2025,25 @@ pub fn run_metric(
         // luma-only variant.
         #[cfg(feature = "cpu-fsim")]
         MetricKind::Fsim => run_cpu_fsim(reference, distorted),
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::FsimK2 => run_cpu_fsim_fixed(reference, distorted, 2, kind.column_names()),
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::FsimK2 => Err(disabled_msg("fsim-k2", "cpu-fsim")),
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::FsimK3 => run_cpu_fsim_fixed(reference, distorted, 3, kind.column_names()),
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::FsimK3 => Err(disabled_msg("fsim-k3", "cpu-fsim")),
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::FsimK4 => run_cpu_fsim_fixed(reference, distorted, 4, kind.column_names()),
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::FsimK4 => Err(disabled_msg("fsim-k4", "cpu-fsim")),
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::FsimNodownscale => {
+            run_cpu_fsim_fixed(reference, distorted, 1, kind.column_names())
+        }
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::FsimNodownscale => Err(disabled_msg("fsim-nodownscale", "cpu-fsim")),
+
         #[cfg(not(feature = "cpu-fsim"))]
         MetricKind::Fsim => Err(disabled_msg("fsim", "cpu-fsim")),
 
@@ -2596,6 +2642,24 @@ pub fn run_zensim_features(
     Err(disabled_msg("zensim", "cpu-metrics"))
 }
 
+#[cfg(feature = "cpu-fsim")]
+fn run_cpu_fsim_fixed(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    factor: u32,
+    columns: &'static [&'static str],
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err("fsim: dimension mismatch".into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let scorer = fsim::Fsim::with_downscale(fsim::Downscale::Factor(
+        core::num::NonZeroU32::new(factor).expect("fixed nonzero factor"),
+    ));
+    let scores = scorer.score_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(columns[0], scores.fsim), (columns[1], scores.fsimc)])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2728,7 +2792,7 @@ mod tests {
         assert_eq!(y_of(2), 145); // G: 16 + 128.553
         assert_eq!(y_of(3), 41); // B: 16 + 24.966
         // Broadcast: every channel carries the same Y.
-        for px in g.pixels.chunks_exact(3) {
+        for px in g.pixels.as_chunks::<3>().0 {
             assert!(px[0] == px[1] && px[1] == px[2]);
         }
     }

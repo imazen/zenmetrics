@@ -210,8 +210,15 @@ pub fn fsim_rgb8(
 ) -> Result<Scores, Error> {
     check_len_rgb(reference, width, height, stride)?;
     check_len_rgb(distorted, width, height, stride)?;
-    let ((fsim, fsimc), _, _) =
-        kernel::fsim_rgb8_planes(reference, distorted, width, height, stride, None);
+    let ((fsim, fsimc), _, _) = kernel::fsim_rgb8_planes(
+        reference,
+        distorted,
+        width,
+        height,
+        stride,
+        None,
+        Downscale::Auto,
+    );
     Ok(Scores { fsim, fsimc })
 }
 
@@ -376,8 +383,15 @@ pub fn fsim_rgb8_with_diffmap(
     let w2 = width.div_ceil(f);
     let h2 = height.div_ceil(f);
     let mut map = vec![0.0f32; w2 * h2];
-    let ((fsim, fsimc), w2, h2) =
-        kernel::fsim_rgb8_planes(reference, distorted, width, height, stride, Some(&mut map));
+    let ((fsim, fsimc), w2, h2) = kernel::fsim_rgb8_planes(
+        reference,
+        distorted,
+        width,
+        height,
+        stride,
+        Some(&mut map),
+        Downscale::Auto,
+    );
     map.truncate(w2 * h2);
     Ok((
         Scores { fsim, fsimc },
@@ -407,7 +421,86 @@ const SCORE_REVISION: u32 = 1;
 /// The FSIM/FSIMc metric as a generic scorer — packed `RGB8_SRGB`
 /// (strided views welcome). Outputs `fsimc` (headline) and `fsim`.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Fsim;
+pub struct Fsim {
+    downscale: Downscale,
+}
+
+/// Default automatic scorer, retaining unit-value construction compatibility.
+#[allow(non_upper_case_globals)]
+pub const Fsim: Fsim = Fsim {
+    downscale: Downscale::Auto,
+};
+
+/// Pre-scoring box-filter decimation policy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Downscale {
+    /// Reference factor: max(1, round(min(width, height) / 256)).
+    #[default]
+    Auto,
+    /// Fixed nonzero factor, using the reference's existing filter and anchor.
+    Factor(core::num::NonZeroU32),
+}
+
+impl Downscale {
+    fn factor(self, w: usize, h: usize) -> usize {
+        match self {
+            Self::Auto => kernel::downsample_factor(w, h),
+            Self::Factor(f) => f.get() as usize,
+        }
+    }
+}
+
+impl Fsim {
+    /// Construct a scorer with an explicit pre-scoring decimation policy.
+    pub const fn with_downscale(downscale: Downscale) -> Self {
+        Self { downscale }
+    }
+
+    /// Score strided RGB8 images with this scorer's decimation policy.
+    ///
+    /// # Errors
+    /// Returns [`Error::BufferLength`] for invalid input geometry.
+    pub fn score_rgb8(
+        &self,
+        r: &[u8],
+        d: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Result<Scores, Error> {
+        check_len_rgb(r, w, h, stride)?;
+        check_len_rgb(d, w, h, stride)?;
+        let ((fsim, fsimc), _, _) =
+            kernel::fsim_rgb8_planes(r, d, w, h, stride, None, self.downscale);
+        Ok(Scores { fsim, fsimc })
+    }
+
+    fn diffmap_rgb8(
+        &self,
+        r: &[u8],
+        d: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Result<FsimDiffmap, Error> {
+        check_len_rgb(r, w, h, stride)?;
+        check_len_rgb(d, w, h, stride)?;
+        let f = self.downscale.factor(w, h);
+        let (mw, mh) = (w.div_ceil(f), h.div_ceil(f));
+        let mut map = vec![0.0; mw * mh];
+        let ((fsim, fsimc), _, _) =
+            kernel::fsim_rgb8_planes(r, d, w, h, stride, Some(&mut map), self.downscale);
+        Ok(FsimDiffmap {
+            map,
+            width: mw as u32,
+            height: mh as u32,
+            fsim,
+            fsimc: Some(fsimc),
+            input: (w as u32, h as u32),
+            factor: f as u32,
+        })
+    }
+}
 
 impl za::Metric for Fsim {
     fn id(&self) -> za::MetricId {
@@ -437,11 +530,13 @@ impl za::Metric for Fsim {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) = fsim_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            let dm = self
+                .diffmap_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
                 .metric_err_with("fsim", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = fsim_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+        let s = self
+            .score_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
             .metric_err_with("fsim", Error::kind)?;
         Ok(alloc::boxed::Box::new(
             za::ScalarEval::single("fsimc", s.fsimc).with("fsim", s.fsim),
