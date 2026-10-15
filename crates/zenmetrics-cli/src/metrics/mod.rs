@@ -124,6 +124,14 @@ pub enum MetricKind {
     /// adapter.
     #[value(name = "psnr-y-libvmaf")]
     PsnrYLibvmaf,
+    /// PSNR-YCbCr 6:1:1 — weighted PSNR on studio-swing BT.601 YCbCr
+    /// (6·MSE_Y + MSE_Cb + MSE_Cr)/8 converted to dB. Matches JPEG AIC-4
+    /// `PSNR-YCbCr611` column. Studio-swing conversion per pixel:
+    /// Y=round(16+(65.481R+128.553G+24.966B)/255),
+    /// Cb=round(128+(-37.797R-74.203G+112B)/255),
+    /// Cr=round(128+(112R-93.786G-18.214B)/255).
+    #[value(name = "psnr-ycbcr611")]
+    PsnrYCbCr611,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -414,6 +422,7 @@ impl MetricKind {
             MetricKind::PsnrY601,
             MetricKind::PsnrYStudio601,
             MetricKind::PsnrYLibvmaf,
+            MetricKind::PsnrYCbCr611,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
@@ -467,6 +476,7 @@ impl MetricKind {
             MetricKind::PsnrY601 => "psnr-y601",
             MetricKind::PsnrYStudio601 => "psnr-y-studio601",
             MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
+            MetricKind::PsnrYCbCr611 => "psnr-ycbcr611",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
             MetricKind::NlpdIqa => "nlpd-iqa",
@@ -579,6 +589,7 @@ impl MetricKind {
             MetricKind::PsnrY601 => &["psnr_y601"],
             MetricKind::PsnrYStudio601 => &["psnr_y_studio601"],
             MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
+            MetricKind::PsnrYCbCr611 => &["psnr_ycbcr611"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
             MetricKind::NlpdIqa => &["nlpd_iqa"],
@@ -1752,6 +1763,13 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::PsnrYLibvmaf => Err(disabled_msg("psnr-y-libvmaf", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrYCbCr611 => Ok(vec![(
+            "psnr_ycbcr611",
+            classical::score(classical::Kind::PsnrYCbCr611, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrYCbCr611 => Err(disabled_msg("psnr-ycbcr611", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim => Ok(vec![(
             "ssim",

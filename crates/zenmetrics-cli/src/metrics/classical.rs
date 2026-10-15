@@ -13,6 +13,7 @@ pub(crate) enum Kind {
     PsnrY601,
     PsnrYStudio601,
     PsnrYLibvmaf,
+    PsnrYCbCr611,
     Ssim,
 }
 
@@ -100,6 +101,15 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
                 f64::from((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8)
             })))
         }
+        Kind::PsnrYCbCr611 => {
+            // 6:1:1 weighted PSNR on studio-swing BT.601 YCbCr —
+            // `(6·PSNR_Y + PSNR_Cb + PSNR_Cr) / 8` computed in the MSE
+            // domain (weighted MSE average, then converted to dB).
+            // Matches JPEG AIC-4 `PSNR-YCbCr611` column.
+            let (mse_y, mse_cb, mse_cr) = yuv444_studio601_mse(r, d);
+            let mse = (6.0 * mse_y + mse_cb + mse_cr) / 8.0;
+            Ok(psnr(mse))
+        }
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
@@ -112,6 +122,61 @@ fn psnr(mse: f64) -> f64 {
     } else {
         10.0 * (255.0 * 255.0 / mse).log10()
     }
+}
+
+/// Compute MSE for studio-swing BT.601 Y, Cb, Cr planes between two RGB8 images.
+/// Uses the same per-pixel conversion as `studio601_yuv444` in mod.rs:
+/// Y  = round(16 + (65.481R + 128.553G + 24.966B)/255)
+/// Cb = round(128 + (-37.797R - 74.203G + 112B)/255)
+/// Cr = round(128 + (112R - 93.786G - 18.214B)/255)
+fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let mut sum_y = 0.0_f64;
+    let mut sum_cb = 0.0_f64;
+    let mut sum_cr = 0.0_f64;
+
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        let (r1, g1, b1) = (a[0] as f32, a[1] as f32, a[2] as f32);
+        let (r2, g2, b2) = (b[0] as f32, b[1] as f32, b[2] as f32);
+
+        // Studio-swing BT.601 YCbCr (same as studio601_yuv444 in mod.rs)
+        let y1 = (16.0 + (65.481 * r1 + 128.553 * g1 + 24.966 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let y2 = (16.0 + (65.481 * r2 + 128.553 * g2 + 24.966 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cb1 = (128.0 + (-37.797 * r1 - 74.203 * g1 + 112.0 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cb2 = (128.0 + (-37.797 * r2 - 74.203 * g2 + 112.0 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cr1 = (128.0 + (112.0 * r1 - 93.786 * g1 - 18.214 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cr2 = (128.0 + (112.0 * r2 - 93.786 * g2 - 18.214 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+
+        let dy = y1 - y2;
+        let dcb = cb1 - cb2;
+        let dcr = cr1 - cr2;
+        sum_y += (dy * dy) as f64;
+        sum_cb += (dcb * dcb) as f64;
+        sum_cr += (dcr * dcr) as f64;
+    }
+
+    let n_f = n as f64;
+    (sum_y / n_f, sum_cb / n_f, sum_cr / n_f)
 }
 
 fn reflect(x: isize, n: usize) -> usize {
