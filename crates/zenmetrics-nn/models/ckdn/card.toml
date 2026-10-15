@@ -23,7 +23,7 @@ checkpoint = "https://drive.google.com/file/d/13HzxPsRWdPC_CAsbvgMgU5IG_TKPVbNe/
 [input]
 format = "packed sRGB8"
 normalisation = "u8 as f32 (0..255), then (x - mean*255) / (std*255) inside the graph — upstream's PrefetchLoader does exactly this on the 12-channel input (ImageNet mean/std repeated per 3-channel group)"
-resize = "eval transform always applied: short side -> 329 (long side floored, torchvision Resize(int) semantics) then CentreCrop(288); antialiased bicubic for the distorted image, NEAREST for the reference. This is what upstream predict_score.py's timm loader does (img_size=288, crop_pct=0.875) — and what the AIC-4 published column was scored with (pyiqa's wrapper; nearest-on-ref verified by bit-exact capture of its network inputs)."
+resize = "eval transform always applied: short side -> 329 (long side floored, torchvision Resize(int) semantics) then CentreCrop(288); bicubic for the distorted image, NEAREST for the reference. This is upstream's own convention: predict_score.py's timm loader runs transforms_imagenet_eval(img_size=288, crop_pct=0.875), whose paired_transforms_tv04.Resize applies `interpolation` (bicubic per resolve_data_config) to the image and `interpolation_tg=Image.NEAREST` to the reference target. The AIC-4 published column uses the same convention (matched to median |d| 4e-5 over 61 pairs)."
 min_size = 1                         # measured: fully convolutional + adaptive pool; the graphs always see 288x288 after the transform
 
 [export]
@@ -41,4 +41,4 @@ results = "rten worst |d| 2.981e-7 (5.7e-5 JND); ort-cuda worst |d| 2.683e-7 (5.
 [aic4]
 column = "CKDN"
 results = "matches: median |d| 4.0e-05, max |d| 1.4e-04 on all 61 crop pairs (this port, ort-cuda). Native feed without the transform was median 3.5e-02 / max 3.7e-01 — the transform IS the published convention"
-finding = "The published column is the upstream epoch-14 checkpoint (pyiqa's CKDN_model_best-38b27dc6.pth is a repack — 290/290 tensors bit-identical) under pyiqa's loader convention: dist -> antialiased-bicubic resize short->329 + cc288, ref -> NEAREST resize short->329 + cc288, cat(d',r',d',r') -> dr. Identified by black-box probing only (impulse/crop/affine input captures); no pyiqa source read or used. torch's antialiased bicubic is Catmull-Rom a=-0.5 (verified vs F.interpolate impulse weights), torch NEAREST is floor(i*in/out); both re-implemented in src/resize.rs."
+finding = "The published column is the upstream epoch-14 checkpoint under upstream's own eval convention: paired_transforms_tv04.Resize(329, bicubic on the image, interpolation_tg=NEAREST on the reference target) + CentreCrop(288), then cat(d',r',d',r') -> dr as predict_score.py does. torch's antialiased bicubic is Catmull-Rom a=-0.5 (verified vs F.interpolate impulse weights), torch NEAREST is floor(i*in/out); both re-implemented in src/resize.rs."
