@@ -107,6 +107,13 @@ pub struct Interval {
     /// at 1, with B the finite resamples. Never exactly 0; the smallest value is
     /// `2 / (B + 1)`. Meaningful for paired differences.
     pub p_zero: f64,
+    /// Directional bootstrap probability `(1 + #{θ* ≤ 0}) / (B + 1)`,
+    /// with B the finite resamples. Includes ties at zero and is never zero.
+    /// NaN when there are no finite draws. Meaningful for a paired difference
+    /// oriented so positive values support the stated alternative; shift the
+    /// statistic itself when testing a nonzero margin. This is not generally
+    /// half of [`Interval::p_zero`].
+    pub p_nonpositive: f64,
 }
 
 impl Interval {
@@ -516,6 +523,7 @@ where
                     se: f64::NAN,
                     n_finite: 0,
                     p_zero: f64::NAN,
+                    p_nonpositive: f64::NAN,
                 };
             }
             let le = col.iter().filter(|&&x| x <= 0.0).count() as f64;
@@ -534,6 +542,7 @@ where
                 se,
                 n_finite: n,
                 p_zero: (2.0 * ((1.0 + le) / b1).min((1.0 + ge) / b1)).min(1.0),
+                p_nonpositive: (1.0 + le) / b1,
             }
         })
         .collect())
@@ -690,6 +699,61 @@ mod tests {
         // every draw is > 0, so the p-value is its floor 2/(B+1), not 0
         assert!((a[0].p_zero - 2.0 / 501.0).abs() < 1e-15, "{:?}", a[0]);
         assert!(a[0].lo > 0.0);
+    }
+
+    #[test]
+    fn directional_probability_counts_ties_and_only_finite_draws() {
+        use std::sync::{
+            Mutex,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let calls = AtomicUsize::new(0);
+        let recorded = Mutex::new(Vec::new());
+        let stat = |d: &Draw<'_>| {
+            let w = d.row_weights();
+            let mixed = if w[2] == 0.0 {
+                f64::NAN
+            } else {
+                w[0] - w[1]
+            };
+            // The first evaluation is the full-data estimate, not a draw.
+            if calls.fetch_add(1, Ordering::Relaxed) > 0 {
+                recorded.lock().unwrap().push(mixed);
+            }
+            vec![1.0, -1.0, 0.0, -0.0, f64::NAN, f64::INFINITY, mixed]
+        };
+        let result = cluster_bootstrap(3, &Design::Rows, &cfg(500), stat).unwrap();
+        assert_eq!(calls.into_inner(), 501);
+        assert_eq!(result[0].p_nonpositive, 1.0 / 501.0);
+        assert_eq!(result[0].p_zero, 2.0 / 501.0);
+        assert_eq!(result[1].p_nonpositive, 1.0);
+        assert_eq!(result[1].p_zero, 2.0 / 501.0);
+        for iv in &result[2..4] {
+            assert_eq!(iv.p_nonpositive, 1.0);
+            assert_eq!(iv.p_zero, 1.0);
+            assert_eq!(iv.n_finite, 500);
+        }
+        for iv in &result[4..6] {
+            assert_eq!(iv.n_finite, 0);
+            assert!(iv.p_nonpositive.is_nan());
+            assert!(iv.p_zero.is_nan());
+        }
+        let draws = recorded.into_inner().unwrap();
+        let finite: Vec<_> = draws.into_iter().filter(|x| x.is_finite()).collect();
+        let negative = finite.iter().filter(|&&x| x < 0.0).count();
+        let zero = finite.iter().filter(|&&x| x == 0.0).count();
+        let positive = finite.iter().filter(|&&x| x > 0.0).count();
+        assert!(negative > 0 && zero > 0 && positive > 0 && finite.len() < 500);
+        assert_eq!(result[6].n_finite, finite.len());
+        let denominator = (finite.len() + 1) as f64;
+        assert_eq!(
+            result[6].p_nonpositive,
+            (1 + negative + zero) as f64 / denominator
+        );
+        assert_eq!(
+            result[6].p_zero,
+            (2.0 * (1 + zero + negative.min(positive)) as f64 / denominator).min(1.0)
+        );
     }
 
     #[test]
