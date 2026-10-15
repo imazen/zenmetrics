@@ -294,6 +294,7 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Cambi
         | CliMetricKind::CwSsim
         | CliMetricKind::Flip
+        | CliMetricKind::FlipV17
         | CliMetricKind::Gmsd
         | CliMetricKind::Mdsi
         | CliMetricKind::MsGmsd
@@ -483,6 +484,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Cambi
             | CliMetricKind::CwSsim
             | CliMetricKind::Flip
+            | CliMetricKind::FlipV17
             | CliMetricKind::Gmsd
             | CliMetricKind::Mdsi
             | CliMetricKind::MsGmsd

@@ -64,7 +64,7 @@ class StudyTests(unittest.TestCase):
         # (51: +vmaf-studio601, vmaf-neg-studio601, psnr-ycbcr611, ciede2000, ssimc;
         # 53: +psnr-cb, psnr-cr;
         # 81: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family;
-        # 82: +flip; 83: +cw-ssim; 84: +flip-v17 on master; 85–88: +cambi, butteraugli-original, ssimulacra1, ws-hv).
+        # 82: +flip; 83: +cw-ssim; 84: +flip-v17; 85–88: +cambi, butteraugli-original, ssimulacra1, ws-hv).
         self.assertEqual(len(inv['metrics']), 88)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})

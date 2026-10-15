@@ -160,9 +160,15 @@ pub enum MetricKind {
     /// no clipping).
     #[value(name = "ssimc")]
     SsimC,
-    /// NVIDIA LDR-FLIP with default viewing conditions (lower is better).
+    /// NVIDIA LDR-FLIP with default viewing conditions (lower is better);
+    /// the error map's mean summed in f64, as NVlabs FLIP computes it.
     #[value(name = "flip")]
     Flip,
+    /// LDR-FLIP pooled as flip-evaluator 1.7 does (row-major f32 sum), which
+    /// reproduces the JPEG AIC-4 `FLIP` column exactly. Reads low against
+    /// `flip` on large images (about 0.1% at 2048², 1.7% at 4096²).
+    #[value(name = "flip-v17")]
+    FlipV17,
     /// Complex-wavelet SSIM: four levels, eight orientations, coarse 7x7 windows.
     #[value(name = "cw-ssim")]
     CwSsim,
@@ -587,6 +593,7 @@ impl MetricKind {
             MetricKind::Ciede2000,
             MetricKind::SsimC,
             MetricKind::Flip,
+            MetricKind::FlipV17,
             MetricKind::CwSsim,
             MetricKind::Cambi,
             MetricKind::ButteraugliOriginal,
@@ -678,6 +685,7 @@ impl MetricKind {
             MetricKind::PsnrCr => "psnr-cr",
             MetricKind::Ciede2000 => "ciede2000",
             MetricKind::Flip => "flip",
+            MetricKind::FlipV17 => "flip-v17",
             MetricKind::CwSsim => "cw-ssim",
             MetricKind::Cambi => "cambi",
             MetricKind::ButteraugliOriginal => "butteraugli-original",
@@ -832,6 +840,7 @@ impl MetricKind {
             MetricKind::PsnrCr => &["psnr_cr"],
             MetricKind::Ciede2000 => &["ciede2000"],
             MetricKind::Flip => &["flip"],
+            MetricKind::FlipV17 => &["flip_v17"],
             MetricKind::CwSsim => &["cw_ssim"],
             MetricKind::Cambi => &["cambi"],
             MetricKind::ButteraugliOriginal => &["butteraugli_original"],
@@ -2377,14 +2386,18 @@ pub fn run_metric(
             let value = cw_ssim::score(&reference.pixels, &distorted.pixels, w, h, w * 3, w * 3)?;
             Ok(vec![("cw_ssim", value)])
         }
-        MetricKind::Flip => {
+        MetricKind::Flip | MetricKind::FlipV17 => {
             if (reference.width, reference.height) != (distorted.width, distorted.height) {
                 return Err("FLIP: dimension mismatch".into());
             }
             let w = reference.width as usize;
             let h = reference.height as usize;
             let map = flip::error_map(&reference.pixels, &distorted.pixels, w, h, w * 3, w * 3)?;
-            Ok(vec![("flip", flip::mean(&map))])
+            Ok(if kind == MetricKind::Flip {
+                vec![("flip", flip::mean(&map))]
+            } else {
+                vec![("flip_v17", flip::mean_v17(&map))]
+            })
         }
         // SSIM-pyiqa family: valid-window scoring with explicit convention flags.
         MetricKind::SsimPyiqa
@@ -3420,6 +3433,7 @@ mod tests {
         }
         for (name, kind, column, identity) in [
             ("flip", MetricKind::Flip, "flip", 0.0),
+            ("flip-v17", MetricKind::FlipV17, "flip_v17", 0.0),
             ("cw-ssim", MetricKind::CwSsim, "cw_ssim", 1.0),
         ] {
             assert_eq!(MetricKind::from_str(name, false).unwrap(), kind);
@@ -3431,16 +3445,51 @@ mod tests {
             assert!((same[0].1 - identity).abs() < 1e-12);
             let changed = run_metric(kind, &r, &d, GpuRuntime::Auto).unwrap()[0].1;
             assert!(changed.is_finite());
-            assert!(if kind == MetricKind::Flip {
+            assert!(if matches!(kind, MetricKind::Flip | MetricKind::FlipV17) {
                 changed > identity
             } else {
                 changed < identity
             });
         }
         d.width = 63;
-        for kind in [MetricKind::Flip, MetricKind::CwSsim] {
+        for kind in [MetricKind::Flip, MetricKind::FlipV17, MetricKind::CwSsim] {
             assert!(run_metric(kind, &r, &d, GpuRuntime::Auto).is_err());
         }
+    }
+
+    /// FLIP on the dispatch test's 64×64 pair against flip-evaluator 1.7
+    /// (`flip_evaluator.evaluate(ref, dist, "LDR")` on the same pixels saved as
+    /// PNG): its mean is the f32 row-major sum (`flip-v17`); the f64 sum of its
+    /// returned map is `flip`. The two differ by 8.3e-8 here, so 1e-9 separates
+    /// the conventions.
+    #[test]
+    fn flip_and_cw_ssim_match_pinned_reference_values() {
+        let r = Rgb8Image {
+            pixels: (0..64 * 64 * 3)
+                .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let mut d = Rgb8Image {
+            pixels: r.pixels.clone(),
+            width: 64,
+            height: 64,
+        };
+        for pixel in d.pixels.iter_mut().step_by(17) {
+            *pixel ^= 63;
+        }
+        let v17 = run_metric(MetricKind::FlipV17, &r, &d, GpuRuntime::Auto).unwrap()[0].1;
+        let f64_mean = run_metric(MetricKind::Flip, &r, &d, GpuRuntime::Auto).unwrap()[0].1;
+        assert!((v17 - 0.07714099436998367).abs() < 1e-9, "flip-v17 {v17}");
+        assert!(
+            (f64_mean - 0.07714107689184857).abs() < 1e-9,
+            "flip {f64_mean}"
+        );
+        // CW-SSIM against the round-3 Python reference (benchmarks/aic_flip_2026-10-15/
+        // cw_variants.py: `fftfreq` grid, explicit f64 BT.601 luma, ties to even).
+        let cw = run_metric(MetricKind::CwSsim, &r, &d, GpuRuntime::Auto).unwrap()[0].1;
+        assert!((cw - 0.8767816402237913).abs() < 1e-9, "cw-ssim {cw}");
     }
 
     #[cfg(feature = "cpu-cvvdp")]

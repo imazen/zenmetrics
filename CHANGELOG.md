@@ -13,22 +13,6 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- Correct SSIM/VSI dispatch and range comments and describe the sampled top/left padding in odd-size pooling.
-
-- Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
-
-- Add non-Auto factor/map coverage, direct MS-SSIM product verification and all-20-name convention routing coverage; remove redundant box comparison.
-
-- FSIM/VSI reject fixed factors larger than the shorter image dimension and compute box areas in u64 for 32-bit targets.
-
-- Fixed-factor FSIM/FSIMc/VSI columns inherit versioned base names and implementation-tag overrides; orchestration uses canonical column names.
-
-- Mark both independent downscale-policy enums non-exhaustive for future extension.
-
-- Remove same-name FSIM/VSI scorer constants; callers construct default scorers explicitly, including browser map evaluation.
-
-- FSIM/VSI fixed-factor metric identities now include their downscale configuration while preserving Auto fingerprints.
-
 ## vmaf
 
 ### Changed
@@ -48,9 +32,6 @@ None.
 
 ### Added
 
-- zenmetrics-cli `cw-ssim` (`636f6b2c`): four-level/eight-orientation complex-wavelet similarity with valid 7x7 pooling; 61-pair independent-oracle max error 1.12e-12, published AIC median/max error 2.94e-7/1.11e-4 (exact AIC pyramid remains unconfirmed).
-- zenmetrics-cli `flip` (`4f0dac38`): LDR-FLIP with reference viewing conditions and v1.7 pooling; all 61 AIC values match exactly, and 21 ladder maps differ by at most 2.98e-8.
-
 - Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
 - Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
 
@@ -65,7 +46,9 @@ None.
 - CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
 - CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
 - SSIMULACRA1 matches OpenCV’s row-partial 4×4 reduction (`91fd4b2d`); original-author synthetic scores for all four Round 4 metrics are pinned with committed generators (`d0aa705a`).
-
+- zenmetrics-cli `flip` and `flip-v17` (`4f0dac38`, this commit): LDR-FLIP (NVlabs d3ab02a4, reference viewing conditions). `flip` pools the error map with an f64 sum as NVlabs does now; `flip-v17` keeps flip-evaluator 1.7's row-major f32 sum, which reproduces all 61 AIC-4 `FLIP` values exactly but reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²). 21 ladder maps within 2.98e-8 of the oracle; both means pinned in a unit test.
+- zenmetrics-cli `cw-ssim` (`636f6b2c`, this commit): four-level/eight-orientation complex-wavelet SSIM, valid 7×7 K=0 windows, Gaussian weighting. Independent reference within 1.1e-12. Against the published AIC-4 `CW-SSIM` column: median 2.9e-7, max 1.1e-4, with the variant selected on those same 61 pairs (in-sample); no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed. Zero-energy windows now test `<= 0`, matching the reference.
+- FSIM/VSI review fixes for #86: fixed-factor identities include the downscale (`a2ac8756`), same-name scorer constants removed (`1b0aca18`), `Downscale` non-exhaustive (`cb3fb369`), fixed-factor columns versioned (`468a4679`), oversized factors refused and box areas in u64 (`4d2f52cc`), coverage for non-Auto factors, the MS-SSIM product and all 20 SSIM-pyiqa names (`50048f50`), ties-to-even luma kept after measuring both rules (`cf012a5a`), comment fixes (`a3aa0d8f`).
 - zenmetrics-cli `psnr-cb` and `psnr-cr` (JPEG AIC-4 `PSNR-Cb`, `PSNR-Cr`): PSNR of the full-resolution studio-swing BT.601 chroma planes, the `psnr-ycbcr611` conversion. 61 pairs: max 2.0e-3 / 8.8e-3 JND (1.7e-2 / 5.7e-2 dB); no tested convention gets closer ([search](benchmarks/aic_psnr_chroma_2026-10-15/README.md)).
 - zenmetrics-cli AIC SSIM-pyiqa family (`147b5cca`): rounded and unrounded `ssim-pyiqa` and `ms-ssim-pyiqa`, unrounded RGB `ssimc-pyiqa`, with fixed-factor k2–k6 variants; geometry too small for the 11×11 window is refused. Published 61-pair gates: SSIM-pyiqa max 3.8e-6, MS-SSIM-pyiqa max 1.9e-6.
 - VSI fixed-factor decimation (`e7e1ca5a`): `Vsi::with_downscale(Downscale::Factor(n))` and CLI `vsi-k2/k3/k4/nodownscale`; `Auto` output is unchanged bit for bit.

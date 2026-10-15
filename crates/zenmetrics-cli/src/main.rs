@@ -1528,7 +1528,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // CAMBI is distorted-only: zero is normal for an unbanded image.
         MetricKind::Cambi => None,
         MetricKind::CwSsim => Some((-0.001, 1.001, 1.0)),
-        MetricKind::Flip => Some((-0.001, 1.001, 0.0)),
+        MetricKind::Flip | MetricKind::FlipV17 => Some((-0.001, 1.001, 0.0)),
         MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
             Some((-0.5, 1.5, 1.0))
         }

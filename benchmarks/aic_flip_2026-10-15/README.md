@@ -33,3 +33,17 @@ The final Rust/reference check holds the scalar ingress expression fixed: `round
 `verify_cw_explicit.py` runs that final gate; `verify_cw.py` retains the initial matrix-multiply comparison. `input_hashes.tsv` identifies every AIC and ladder PNG used. `check_ci.sh` runs the CLI library tests, the full workspace format check with CI's package selection, CI's exact workspace Clippy flags, and the inventory test. Generated full logs and search matrices are referenced by `validation.meta`.
 
 Implementation commits: FLIP `4f0dac38006cada675c7f2b607d5d1ac875cec57`; CW-SSIM `636f6b2c84dccd04f94637295f87935d66d5f02b`. Gate recipes and diagnostics are in `5778ea61ecf02eba9bf1e37ae6f28958f02e6316`. Oracle output files are created exclusively; choose a fresh output directory when rerunning.
+
+## Coordinator review notes (2026-10-15)
+
+- **FLIP pooling.** The AIC-4 `FLIP` column is flip-evaluator 1.7's row-major f32 running sum, now the
+  CLI metric `flip-v17`. The f32 sum loses precision as the map grows: on a uniform 0.075 map it reads
+  low by 8.7e-6 (512²), 9.4e-5 (1024²), 1.0e-3 (2048²) and 1.7e-2 (4096²) relative to the true mean
+  (sequential f32 vs exact, measured by the reviewer). `flip` therefore sums in f64, as NVlabs FLIP.h
+  does at the pinned revision. Both are pinned against flip-evaluator 1.7 in
+  `flip_and_cw_ssim_match_pinned_reference_values` (zenmetrics-cli).
+- **CW-SSIM selection is in-sample.** The grid, sigma and mask variant were chosen on the same 61 pairs
+  the residual is reported on. No pair reproduces exactly (best 6.45e-9; 20 of 61 above 1e-6). Only
+  the DFT-grid and sigma choices are clearly separated by the data; luma and angular-mask options move
+  the worst case by under 4e-7.
+- Parity measured on Linux/glibc only (`powf`/`exp` from the platform maths library).
