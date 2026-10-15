@@ -10,6 +10,7 @@ mod decode;
 #[path = "../../zenmetrics-cli/src/metrics/mod.rs"]
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod metrics;
+mod ssim2_map;
 
 use zensim::{DiffmapWeighting, PrecomputedReference, RgbSlice, Zensim, ZensimProfile};
 
@@ -814,7 +815,7 @@ fn yuv420_image(
 /// Spatial exports compiled in this browser build. No alternate metric is substituted.
 #[wasm_bindgen]
 pub fn available_spatial_maps() -> String {
-    let mut names = vec!["zensim", "butteraugli", "dssim", "gmsd", "psnr"];
+    let mut names = vec!["zensim", "butteraugli", "dssim", "gmsd", "psnr", "ssim2"];
     #[cfg(feature = "cpu-cvvdp")]
     names.push("cvvdp");
     #[cfg(feature = "cpu-fsim")]
@@ -966,6 +967,14 @@ pub fn spatial_map(
                 .map_err(|e| fail(e.to_string()))?;
         }
         "gmsd" => evaluate_spatial_map(&mut gmsd::Gmsd, &r, &d, width, height, &mut result)?,
+        "ssim2" => evaluate_spatial_map(
+            &mut ssim2_map::Ssimulacra2,
+            &r,
+            &d,
+            width,
+            height,
+            &mut result,
+        )?,
         "psnr" => {
             // Per-pixel mean squared sRGB code-value error, in normalized units.
             result.values = r
