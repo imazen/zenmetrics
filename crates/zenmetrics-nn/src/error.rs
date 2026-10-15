@@ -23,6 +23,12 @@ pub enum Error {
         /// Smallest supported width and height.
         min: usize,
     },
+    /// A bounded intermediate the metric computes would exceed its stated
+    /// limit (e.g. an extreme aspect ratio under an eval transform).
+    TooLarge {
+        /// The bound that would be exceeded, in pixels.
+        limit: usize,
+    },
     /// Reference and distorted images differ in size.
     SizeMismatch,
     /// The model's weights are not permissively licensed and the caller's
@@ -37,6 +43,12 @@ impl fmt::Display for Error {
             Self::BadModel(m) => write!(f, "bad model: {m}"),
             Self::Engine(m) => write!(f, "engine: {m}"),
             Self::TooSmall { min } => write!(f, "image smaller than {min}x{min}"),
+            Self::TooLarge { limit } => {
+                write!(
+                    f,
+                    "image exceeds the metric's {limit}-pixel intermediate bound"
+                )
+            }
             Self::SizeMismatch => f.write_str("reference and distorted sizes differ"),
             Self::WeightsNotAccepted(t) => write!(
                 f,
@@ -60,6 +72,7 @@ impl Error {
     pub(crate) fn kind(&self) -> za::ErrorKind {
         match self {
             Self::TooSmall { .. } => za::ErrorKind::TooSmall,
+            Self::TooLarge { .. } => za::ErrorKind::InvalidInput,
             Self::SizeMismatch => za::ErrorKind::DimensionMismatch,
             Self::Io { .. } | Self::BadModel(_) | Self::WeightsNotAccepted(_) => {
                 za::ErrorKind::InvalidConfig
