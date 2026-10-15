@@ -551,6 +551,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
+  `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
+  fixed.** `zenmetrics-gpu-core::Backend` gates its `Wgpu` and `Cpu` variants on
+  gpu-core's own `wgpu`/`cpu` features. When a sibling crate in the same build turns
+  those on, feature unification adds the variants, and `cvvdp-gpu`'s exhaustive matches
+  (`src/memory_mode.rs:131`, `src/opaque.rs:376`, `src/session.rs:70`) fail with
+  E0004 "`Backend::Wgpu` and `Backend::Cpu` not covered". Each crate builds on its own,
+  and `-p zenmetrics-api -p cvvdp-conformance` builds. Repro:
+  `just snap-cargo @ check -p cvvdp-conformance -p dssim-gpu`. Fix direction: give
+  those matches arms for variants cvvdp-gpu was not built for (an error return), as
+  the other `*-gpu` crates already compile under the same unification.
+
 - **i265's RTX 4080 flips a bit every few minutes (owner report, 2026-10-14).**
   Any GPU result on i265 that disagrees with a reference, a previous run, or
   another backend must be rerun before it counts as a finding; a mismatch is

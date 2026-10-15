@@ -128,3 +128,35 @@ from the author's site and STMAD is in Netflix/vmaf.
 6. **Open (counsel / permission)**: `fsim` and `vsi` against the research-only clause;
    ImageNet-pretrained backbone weights; OpenAI CLIP's model-card scope; A-FINE's
    DiffIQA-derived weights; LLaMA-2 terms for Compare2Score / Q-Align weights.
+
+## 5. zenmetrics' own crates (audit 2026-10-15)
+
+Every crate that ports or transcribes third-party code, constants or data was traced
+to its origin. Missing notices were added verbatim as `LICENSE-<origin>` files
+(commits `babd7861`, `c615004e`): vif, nlpd, msssim, iwssim, iwssim-gpu,
+butteraugli-gpu, ssim2-gpu, zensim-gpu, zenmetrics-api, dssim-gpu, fsim, mad-iqa,
+hdrvdp, zenmetrics-math, cvvdp-conformance, zenfleet-dash, psnrhvs, mdctpsnr.
+
+ColorVideoVDP is **MIT** for every version cvvdp and cvvdp-gpu port (it was CC BY-NC
+4.0 until 2024-06-17, commit `644abf6d`; v0.5.4 onward is MIT), and its MIT text is
+already vendored. No change needed.
+
+Open, for the owner (not changed):
+
+| crate | origin terms | what the crate takes |
+|---|---|---|
+| `fsim` | `FR_FSIMc.m` / `FeatureSIM.m`: research-only, "shall not be used, rewritten, or adapted as the basis of a commercial software or hardware product without first obtaining permission" | pipeline "pass-for-pass", constants |
+| `vsi` | `VSI.m`: same clause; octave-image `imresize.m` `conv_interp_vec`: GPL-3.0-or-later | pipeline and constants; a "bit-identical" port of the GPL helper |
+| `psnrhvs` | Ponomarenko `psnrhvsm.m`: same research-only clause | CSF and masking tables, block loop |
+| `hdrvdp` (v3) | follows jpeg-ai-qaf `VDP3/` (no licence file); reproduces the behaviour of three HDR-VDP helpers marked "internal use. Do not redistribute" | v3 pipeline. `THIRD-PARTY-NOTICES.md` §2's "no line reproduced" statement covers the v2 modules only |
+| `mad-iqa` | STMAD release files: no licence text | `validation/ical_{std,stat}.m` are verbatim transcriptions of the C files |
+| `msssim`, `iwssim`, `iwssim-gpu`, `nlpd` | Waterloo `msssim.zip`, `iwssim_iwpsnr.zip`, `NLPD_Pytorch`: no licence text (no grant, no restriction) | behaviour; low priority |
+| `cvvdp` | licence field is `AGPL-3.0-or-later` without the commercial option the other crates carry | owner decision |
+| `zenmetrics-corpus` | `data/source.png` is attributed to `imazen/dssim-cuda`, which returns 404; hash matches no kornelski/dssim test image | origin unrecorded |
+
+The research-only clauses (fsim, vsi, psnrhvs, and SSIM's NYU code, which zenmetrics
+does not port) restrict the authors' code; whether they bind an independent
+reimplementation of a published algorithm is the counsel question in
+[`PYIQA_PORT_PLAN.md`](PYIQA_PORT_PLAN.md) §9. Asking the authors for permission is the
+cheaper route.
+
