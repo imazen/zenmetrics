@@ -43,18 +43,59 @@ pub(crate) fn par_map<T: Send>(
     })
 }
 
-/// `f(&mut item)` over a slice, one item per task on up to `threads` scoped
-/// threads.
+/// `f(&mut item)` over a slice, split into at most `threads` contiguous
+/// chunks on scoped threads (same splitting as `par_map`).
 pub(crate) fn par_each_mut<T: Send>(items: &mut [T], threads: usize, f: impl Fn(&mut T) + Sync) {
     let threads = threads.min(items.len());
     if threads <= 1 {
         items.iter_mut().for_each(f);
         return;
     }
+    let per = items.len().div_ceil(threads);
     std::thread::scope(|s| {
         let f = &f;
-        for it in items.iter_mut() {
-            s.spawn(move || f(it));
+        for chunk in items.chunks_mut(per) {
+            s.spawn(move || chunk.iter_mut().for_each(f));
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// `par_each_mut` with more items than threads must never run more than
+    /// `threads` calls at once (a high-water mark over a shared counter),
+    /// and must visit every item exactly once.
+    #[test]
+    fn each_mut_respects_thread_cap() {
+        let live = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let mut items = vec![0usize; 16];
+        par_each_mut(&mut items, 3, |v| {
+            let n = live.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(n, Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            *v += 1;
+            live.fetch_sub(1, Ordering::SeqCst);
+        });
+        let peak = peak.load(Ordering::SeqCst);
+        assert!(peak <= 3, "peak concurrency {peak} exceeded the cap");
+        assert!(peak >= 2, "items serialised under a cap of 3 (peak {peak})");
+        assert!(items.iter().all(|&v| v == 1), "every item visited once");
+    }
+
+    /// `par_map` returns results in index order and `threads <= 1` collapses
+    /// both helpers to the plain sequential loop.
+    #[test]
+    fn map_order_and_sequential_fallback() {
+        let got = par_map(12, 4, |i| i * i);
+        assert_eq!(got, (0..12).map(|i| i * i).collect::<Vec<_>>());
+        let got = par_map(12, 1, |i| i * i);
+        assert_eq!(got, (0..12).map(|i| i * i).collect::<Vec<_>>());
+        let mut items = vec![1usize; 8];
+        par_each_mut(&mut items, 1, |v| *v += 1);
+        assert_eq!(items, [2; 8]);
+    }
 }
