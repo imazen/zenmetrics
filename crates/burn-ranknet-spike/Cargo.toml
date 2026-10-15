@@ -17,9 +17,9 @@ publish = false
 # ndarray + autodiff backend: pure-CPU, zero GPU-driver dependency, so the
 # spike compiles and runs anywhere. burn is generic over Backend, so the same
 # model swaps to the cubecl CUDA backend by changing one type alias.
-burn = { version = "0.21.0", default-features = false, features = ["std", "ndarray", "autodiff"] }
+burn = { version = "0.22.0", default-features = false, features = ["std", "ndarray", "autodiff"] }
 # Pure-Rust XGBoost-algorithm GBDT for the teacher in teacher_compare.
-forust-ml = "0.5.0"
+forust-ml = "0.7.0"
 
 [profile.release]
 opt-level = 3
