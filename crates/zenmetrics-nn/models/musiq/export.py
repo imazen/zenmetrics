@@ -2,12 +2,12 @@
 J. Ke, Q. Wang, Y. Wang, P. Milanfar, F. Yang, "MUSIQ: Multi-scale Image
 Quality Transformer", ICCV 2021) for zenmetrics-nn.
 
-usage: export.py CKPT_NPZ OUT_DIR [GOLDENS_TSV]
+usage: export.py CKPT_NPZ OUT_DIR GOLDENS_TSV LADDER_DIR
 
 CKPT_NPZ is the official KonIQ checkpoint `koniq_ckpt.npz` (the
 `opt/target/*` flax parameter tree) from the project's GCS bucket —
 gs://gresearch/musiq/, linked from upstream's README ("Model Zoo").
-GOLDENS_TSV, when given, is `oracle.py`'s output and the ONNX graph is
+GOLDENS_TSV, required, is `oracle.py`'s output and the ONNX graph is
 checked against it.
 
 The npz is mapped into a PyTorch mirror of upstream's model: a per-patch
@@ -31,6 +31,8 @@ jax/flax/tensorflow stack cannot coexist with this script's torch env.
 import hashlib
 import os
 import platform
+import runpy
+from pathlib import Path
 import sys
 
 import numpy as np
@@ -38,9 +40,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-NPZ, OUT = sys.argv[1], sys.argv[2]
-GOLDENS = sys.argv[3] if len(sys.argv) > 3 else None
-LADDER = sys.argv[4] if len(sys.argv) > 4 else None
+if len(sys.argv) != 5:
+    raise SystemExit('usage: export.py CKPT_NPZ OUT_DIR GOLDENS_TSV LADDER_DIR')
+NPZ, OUT, GOLDENS, LADDER = sys.argv[1:]
+checks = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'export_checks.py'))
+GOLDEN_ROWS = checks['golden_rows'](GOLDENS, LADDER, 'musiq')
 os.makedirs(OUT, exist_ok=True)
 torch.set_grad_enabled(False)
 
@@ -324,21 +328,17 @@ got = float(ort.InferenceSession(onnx_path).run(
 print(f'self-check: torch {want:.9g} ort-cpu {got:.9g} |d| {abs(got - want):.3e}')
 assert abs(got - want) <= 1e-4, (got, want)
 
-if GOLDENS and os.path.exists(GOLDENS) and LADDER:
-    # check the exported ONNX graph against the JAX-oracle goldens on the
-    # ladder images (image, size, musiq, musiq_ref columns)
-    worst = 0.0
-    rows = open(GOLDENS).read().splitlines()[1:]
-    for line in rows:
-        f = line.split('\t')
-        stem, size = f[0], f[1]
-        for col, want_s in (('ref', f[3]), ('dist', f[2])):
-            p = os.path.join(LADDER, f'{stem}_{size}_{col}.png')
-            x = torch.from_numpy(preprocess(load_rgb8(p)))
-            got_s = float(ort.InferenceSession(onnx_path).run(
-                ['musiq'], {'x': x.numpy()})[0][0])
-            worst = max(worst, abs(got_s - float(want_s)))
-    print(f'goldens check: {len(rows)} pairs, worst |d| {worst:.3e}')
+# Required qualification against the upstream goldens; missing files and
+# mismatches are errors rather than an optional printed diagnostic.
+sess = ort.InferenceSession(onnx_path)
+worst = 0.0
+for row in GOLDEN_ROWS:
+    for kind, key in (('ref', 'musiq_ref'), ('dist', 'musiq')):
+        path = os.path.join(LADDER, f"{row['image']}_{row['size']}_{kind}.png")
+        x = torch.from_numpy(preprocess(load_rgb8(path)))
+        got_s = float(sess.run(['musiq'], {'x': x.numpy()})[0][0])
+        worst = max(worst, checks['assert_parity']('musiq', got_s, float(row[key])))
+print(f'goldens check: {len(GOLDEN_ROWS)} pairs, worst |d| {worst:.3e}')
 
 with open(os.path.join(OUT, 'musiq.meta'), 'w') as f:
     f.write('channels 1\nmin_size 1\n')

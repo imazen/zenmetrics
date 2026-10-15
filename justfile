@@ -617,7 +617,7 @@ nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
 
 # Export HyperIQA from the official KonIQ checkpoint (koniq_pretrained.pkl);
 # upstream checkout + pkl paths, goldens from oracle.py.
-nn-export-hyperiqa python upstream ckpt out goldens="" ladder="":
+nn-export-hyperiqa python upstream ckpt out goldens ladder:
     {{python}} -I crates/zenmetrics-nn/models/hyperiqa/export.py '{{upstream}}' '{{ckpt}}' '{{out}}' '{{goldens}}' '{{ladder}}'
 
 # HyperIQA goldens via upstream models.py on the deterministic 5x5 grid
@@ -627,7 +627,7 @@ nn-goldens-hyperiqa python upstream ckpt out ladder:
 
 # Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
 # Goldens come from oracle.py under the legacy JAX env, not this recipe.
-nn-export-musiq python npz out goldens="" ladder="":
+nn-export-musiq python npz out goldens ladder:
     {{python}} -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
 
 # MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
@@ -688,3 +688,7 @@ aic-cw-search python out:
 aic-cw-verify python out:
     TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
     {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq
+
+# Export qualification gates without loading model weights.
+nn-export-checks:
+    python3 -I crates/zenmetrics-nn/models/test_export_checks.py

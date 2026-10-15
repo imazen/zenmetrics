@@ -1,13 +1,13 @@
 """Export HyperIQA (upstream SSL92/hyperIQA, MIT; S. Su et al., CVPR 2020)
 for zenmetrics-nn.
 
-usage: export.py UPSTREAM_DIR CKPT_PKL OUT_DIR [GOLDENS_TSV]
+usage: export.py UPSTREAM_DIR CKPT_PKL OUT_DIR GOLDENS_TSV IMG_DIR
 
 UPSTREAM_DIR is a checkout of https://github.com/SSL92/hyperIQA (pin:
 c42e7279, 2023-12-14); `models.py` is imported verbatim. CKPT_PKL is
 `pretrained/koniq_pretrained.pkl` from the project's Google Drive link
-(no stated licence — the metric is consent-gated). GOLDENS_TSV, when
-given, is `oracle.py`'s output and the exported ONNX graph is checked
+(no stated licence — the metric is consent-gated). GOLDENS_TSV,
+required, is `oracle.py`'s output and the exported ONNX graph is checked
 against it on the same deterministic crop grid.
 
 The export is ONE graph: upstream's HyperNet (ResNet-50 + LDA head +
@@ -33,6 +33,8 @@ the deterministic 5x5 crop grid — all replicated in `src/hyperiqa.rs`.
 import hashlib
 import os
 import platform
+import runpy
+from pathlib import Path
 import sys
 
 import numpy as np
@@ -41,9 +43,11 @@ import torch.nn as nn
 import torchvision
 from PIL import Image
 
-UPSTREAM, CKPT, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
-GOLDENS = sys.argv[4] if len(sys.argv) > 4 else None
-IMG_DIR = sys.argv[5] if len(sys.argv) > 5 else None
+if len(sys.argv) != 6:
+    raise SystemExit('usage: export.py UPSTREAM_DIR CKPT_PKL OUT_DIR GOLDENS_TSV IMG_DIR')
+UPSTREAM, CKPT, OUT, GOLDENS, IMG_DIR = sys.argv[1:]
+checks = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'export_checks.py'))
+GOLDEN_ROWS = checks['golden_rows'](GOLDENS, IMG_DIR, 'hyperiqa')
 os.makedirs(OUT, exist_ok=True)
 torch.set_grad_enabled(False)
 sys.path.insert(0, UPSTREAM)
@@ -115,7 +119,6 @@ onnx_path = os.path.join(OUT, 'hyperiqa.onnx')
 torch.onnx.export(
     model, probe, onnx_path,
     input_names=['x'], output_names=['hyperiqa'],
-    dynamic_axes={'x': {0: 'b'}},
     opset_version=17, dynamo=False,
 )
 
@@ -145,22 +148,18 @@ with torch.no_grad():
     want = float(t(paras['target_in_vec']).float().mean())
     got = float(model(probe))
 print(f'self-check upstream-vs-export |d| = {abs(want - got):.3e}')
+assert want == got, (want, got)
 
-if GOLDENS:
-    import onnxruntime as ort
-    sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
-    worst = 0.0
-    assert IMG_DIR, 'GOLDENS_TSV requires IMG_DIR'
-    for line in open(GOLDENS).read().splitlines()[1:]:
-        f = line.split('\t')
-        stem, size = f[0], f[1]
-        for kind, want_s in (('dist', f[2]), ('ref', f[3])):
-            path = os.path.join(IMG_DIR, f'{stem}_{size}_{kind}.png')
-            if not os.path.exists(path):
-                print(f'skip {stem}_{size}_{kind}: not in IMG_DIR')
-                continue
-            got_s = sess.run(['hyperiqa'], {'x': prep(path).numpy()})[0][0]
-            d = abs(got_s - float(want_s))
-            worst = max(worst, d)
-            print(f'{stem}_{size}_{kind} golden {float(want_s):.6f} onnx {got_s:.6f} |d| {d:.2e}')
-    print(f'worst |d| vs goldens: {worst:.3e}')
+import onnxruntime as ort
+sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+worst = 0.0
+for row in GOLDEN_ROWS:
+    for kind, key in (('dist', 'hyperiqa'), ('ref', 'hyperiqa_ref')):
+        name = f"{row['image']}_{row['size']}_{kind}"
+        path = os.path.join(IMG_DIR, name + '.png')
+        got_s = float(sess.run(['hyperiqa'], {'x': prep(path).numpy()})[0][0])
+        want_s = float(row[key])
+        delta = checks['assert_parity']('hyperiqa', got_s, want_s)
+        worst = max(worst, delta)
+        print(f'{name} golden {want_s:.6f} onnx {got_s:.6f} |d| {delta:.2e}')
+print(f'worst |d| vs goldens: {worst:.3e}')
