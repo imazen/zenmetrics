@@ -68,28 +68,44 @@ try:
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=60000)
         assert page.locator('#name-reference').inner_text() == 'Demo scene · 768×512'
         assert page.locator('#name-distorted').inner_text().startswith('zenjpeg · quality 40')
-        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of')",timeout=300000)
+        # A finished loop encode plays on its own.
+        loop_done = lambda steering: page.wait_for_function(
+            "document.getElementById('loop-info').textContent.startsWith('Frame ') && document.getElementById('loop-info').textContent.includes(%s) && document.getElementById('loop-play').textContent.includes('Pause')" % json.dumps(steering), timeout=300000)
+        loop_done('steered by zensim · ')
         default_loop = page.locator('#loop-info').inner_text()
-        assert 'steered by zensim · ' in default_loop and 'live encode' in default_loop and 'external' in default_loop, default_loop
-        assert page.locator('#loop-save').is_enabled()
+        assert 'live encode' in default_loop and 'external' in default_loop, default_loop
+        assert page.locator('#loop-save').is_enabled() and page.locator('#ls-encode').inner_text().startswith('768×512 · d1 e7 · ')
+        page.locator('#loop-play').click()
+        assert page.locator('#loop-play').inner_text() == '▶ Play'
         # From iteration 2 the loop only refines blocks above the target; on
-        # the demo none are, so the last frames repeat and say so.
+        # the demo none are, so one frame reports the field converged. The
+        # readout keeps its size, so stepping never moves the image or chart.
         frames = int(default_loop.split(' of ')[1].split(' ')[0])
-        for _ in range(frames - 1):
-            page.locator('#loop-next').click()
-        assert 'same quant field and image as the previous iteration' in page.locator('#loop-info').inner_text()
-        # The top bar's Map menu and the loop's Steer menu both switch metric.
+        seek = lambda k: page.evaluate("k => {const s=document.getElementById('loop-frame');s.value=k;s.dispatchEvent(new Event('input'));}", k)
+        boxes, converged = set(), False
+        for k in range(frames):
+            seek(k)
+            boxes.add((page.locator('#loop-view').bounding_box()['y'], page.locator('#loop-chart').bounding_box()['y']))
+            converged = converged or page.locator('#ls-next').inner_text().startswith('unchanged: converged')
+        assert converged and len(boxes) == 1, (converged, boxes)
+        # The top bar's Map menu and the loop's Steer menu both switch metric,
+        # and each choice re-encodes the loop steered by it.
         page.locator('#map-name').select_option('msssim|diffmap')
         page.wait_for_function("document.getElementById('map-info').textContent.startsWith('msssim · diffmap ·')",timeout=60000)
         assert page.locator('#metric').input_value() == 'msssim'
         assert page.locator('#loop-steer').input_value() == 'msssim|diffmap'
+        loop_done('steered by msssim · diffmap · ')
         page.locator('#loop-steer').select_option('gmsd|gms')
         page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd · gms ·')",timeout=60000)
         assert page.locator('#metric').input_value() == 'gmsd' and page.locator('#map-name').input_value() == 'gmsd|gms'
+        loop_done('steered by gmsd · gms · ')
         page.locator('#loop-steer').select_option('builtin')
-        page.locator('#loop-run').click()
-        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of') && document.getElementById('loop-info').textContent.includes('steered by butteraugli (built-in)')",timeout=300000)
+        loop_done('steered by butteraugli (built-in)')
         assert page.locator('#metric').input_value() == 'gmsd'
+        # The distance slider in the top bar re-encodes at its distance.
+        page.evaluate("() => {const s=document.getElementById('loop-distance-range');s.value=543;s.dispatchEvent(new Event('change'));}")
+        assert page.locator('#loop-distance').input_value() == '2'
+        page.wait_for_function("document.getElementById('ls-encode').textContent.startsWith('768×512 · d2 e7 · ')", timeout=300000)
         ui_linked_menus = True
         page.locator('#metric').select_option('zensim')
         # Negative control for the reported old-glue/new-module memory mismatch.
@@ -440,17 +456,30 @@ try:
         trace += f32([1, 1]) + f32([2, 0.5]) + f32([1.5, 0.5]) + f32([i / (lw * lh) for i in range(lw * lh)]) + bytes([200, 100, 50] * (lw * lh))
         trace += f32([2, 0.5]) + f32([1.1, 0.9]) + f32([0.1] * (lw * lh)) + bytes([210, 110, 60] * (lw * lh))
         page.locator('#trace').set_input_files({'name': 'synthetic.ltrace', 'mimeType': 'application/octet-stream', 'buffer': trace})
-        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of 2')", timeout=10000)
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame ') && document.getElementById('loop-info').textContent.includes('synthetic.ltrace') && document.getElementById('loop-play').textContent.includes('Pause')", timeout=10000)
+        page.locator('#loop-play').click()
+        seek(0)
         info = page.locator('#loop-info').inner_text()
-        assert 'iteration 0 of 1' in info and '1 of 2 blocks above target' in info and 'next: 1 blocks finer, 1 coarser' in info, info
+        assert info.startswith('Frame 1 of 2 · butteraugli'), info
+        text = lambda id: page.locator(id).inner_text()
+        assert text('#ls-iter') == '0 of 1 · seed 0.6', text('#ls-iter')
+        assert text('#ls-score') == '1.500 / 1.000 (150%)', text('#ls-score')
+        assert text('#ls-blocks') == '1 of 2 (50.0%)' and text('#ls-worst') == 'block 0, 0 · 1.500 (150%)', (text('#ls-blocks'), text('#ls-worst'))
+        assert text('#ls-next') == '1 finer · 1 coarser' and text('#ls-encode') == '16×8 · d1 e7 · 123 B'
         loop_px = lambda x, y: page.evaluate(f"Array.from(document.getElementById('loop-view').getContext('2d').getImageData({x},{y},1,1).data)")
+        # Default layer: the block above the target is outlined in magenta,
+        # the block below it is not; the map over the reconstruction leaves a
+        # zero-map pixel exactly the reconstruction.
+        assert loop_px(0, 0) == [255, 0, 255, 255] and loop_px(7, 7) == [255, 0, 255, 255], (loop_px(0, 0), loop_px(7, 7))
+        assert loop_px(8, 0) != [255, 0, 255, 255]
+        page.locator('#loop-layer').select_option('overlay')
         assert loop_px(0, 0) == [200, 100, 50, 255]
         page.locator('#loop-layer').select_option('dqf')
         assert loop_px(1, 1) == [255, 0, 0, 255], loop_px(1, 1)  # left block finer: red
         assert loop_px(9, 1) == [0, 0, 255, 255], loop_px(9, 1)  # right block coarser: blue
         page.locator('#loop-next').click()
         info = page.locator('#loop-info').inner_text()
-        assert 'Frame 2 of 2' in info and 'score-only final pass' in info, info
+        assert info.startswith('Frame 2 of 2') and text('#ls-next') == 'none: final pass, score only', (info, text('#ls-next'))
         page.locator('#loop-layer').select_option('recon')
         assert loop_px(3, 3) == [210, 110, 60, 255]
         page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})

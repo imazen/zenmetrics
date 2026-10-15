@@ -6,7 +6,18 @@ it: play, pause, step back and forward, or scrub through every scored
 iteration of every seed. The demo scene loads when the page starts, and its
 loop encodes straight away. While it encodes, each iteration appears as soon
 as it is scored, for both kinds of steering: the steering map over the
-reconstruction.
+reconstruction. When the encode finishes, the trace plays on its own.
+
+The loop re-encodes whenever what it encodes changes: choosing a metric or a
+map in the top bar (which also steers the loop with that map), choosing
+steering in the loop panel, the distance slider, effort, iterations, the
+steering scale or exponent, or a new reference. A change made during an
+encode runs once that encode finishes. "Auto-encode" turns this off, and a
+reference above 4 megapixels waits for "Encode and trace".
+
+The top bar holds the loop's distance slider beside the Metric and Map
+menus. It is logarithmic from 0.1 to 25, rounded to two significant digits,
+and the number field next to it takes any value in that range.
 
 ## Steering
 
@@ -93,7 +104,8 @@ All layers are at the image's resolution:
 
 | Layer | Shows |
 | --- | --- |
-| Reconstruction + map (default) | the steering map over the reconstruction: `t = √(min(1, v/(2·target)))` on the palette, blended with weight `0.9·t³`, so the palette's middle is the target distance and pixels well below it stay readable |
+| Blocks + map over reconstruction (default) | the map on the trace's own scale, as the Metric diffmap layer (`t = √(v/p99.5)` over all frames), blended over the reconstruction with weight `0.75·t`, so it shows even far below the target; plus the blocks: the outer ring of every 8×8 block whose distance is above the target in magenta (the blocks the next iteration quantizes finer), and the block with the largest distance with a black outer and white inner ring |
+| Map over reconstruction | the steering map over the reconstruction, on the palette at `v/(2·target)` (so the palette's middle is the target distance and its end twice that), blended with weight `0.85·min(1, v/(1.5·target))`, so the map shows everywhere and the reconstruction stays readable under it |
 | Reconstruction | the image this iteration scored (sRGB8) |
 | Metric diffmap | the steering map, after normalization, one square-root scale across all frames (99.5th percentile) |
 | Block distance vs target | each 8×8 block's distance (16-norm of the map times 1.2); the middle of the palette is the target, and blocks above it get finer quantization next |
@@ -101,13 +113,27 @@ All layers are at the image's resolution:
 | Quant field change | the loop's adjustment for the next iteration, `log2(next/current)`: red finer, blue coarser |
 | Source | the input |
 
-The info line gives:
-- the seed and iteration;
-- the score against the target;
-- how many blocks are above the target;
-- how many blocks the loop made finer or coarser;
-- the final encoded size;
-- what steered the loop.
+Under the image, the readout has one fixed-size field per item, so playing
+never moves the page:
+- Iteration: the iteration within its seed, the scheduled count when the
+  seed stopped early, and the seed.
+- Score / target: the score, the target, their ratio, and a gauge whose mark
+  is the target and whose end is twice the target.
+- Blocks above target: count and share.
+- Worst block: its coordinates and distance against the target.
+- Next iteration: how many blocks the loop made finer or coarser,
+  "converged" when it left the field unchanged, or the score-only final
+  pass.
+- Encode: size, distance, effort and the final encoded size.
+
+The line above the image gives the frame, the metric, where the trace came
+from and what steered the loop. Moving over the image shows the pixel's map
+value and its block's distance and quant field (and the next one).
+
+The chart under the readout plots every frame's score (dots, one line per
+seed; red above the target, green at or below) against the target (dashed),
+with the share of blocks above the target as bars on a 0–100 % axis.
+Clicking it picks a frame.
 
 "Save trace" writes the run as a `.ltrace` file, and "Saved trace" opens
 one. jxl-encoder can also write one natively:
@@ -136,9 +162,14 @@ no block is above the target, the field stops changing, and later
 iterations encode and score the same image. The demo at distance 1 is such
 a case. Both of its traces (Zensim-steered and built-in butteraugli) change
 the field on every block in iterations 0 and 1, and their next/current
-ratio is exactly 1 from iteration 2 on. The info line marks a repeated
-frame. Higher distances, or images with blocks above the target, keep
-changing.
+ratio is exactly 1 from iteration 2 on. The readout calls such a frame
+converged, and the info line marks a frame that repeats the previous one.
+Higher distances, or images with blocks above the target, keep changing.
+
+jxl-encoder's loop can stop at that fixed point instead of encoding the
+repeats (proposed in its PR for the fixed-point stop, with a corpus
+measurement). With it, a seed's last frame is the converged one, and the
+readout shows how many iterations were scheduled.
 
 Built-in steering scores through the same interface as an external
 metric. The JPEG XL module plugs in butteraugli with jxl-encoder's CPU
@@ -185,7 +216,14 @@ at `a8c11520`, the merge of #130.
   - JPEG, WebP, AVIF and JPEG XL round-trip with the right file magic;
   - an MS-SSIM-steered loop returns a trace and scores reconstructions;
   - a zero scale is refused.
-- A synthetic two-frame trace checks the info line (blocks above target,
-  finer and coarser counts, the score-only final pass), exact pixels of the
+- The finished demo loop plays on its own; stepping through every frame,
+  one reports the field converged, and the image and chart never move.
+- Choosing a map in the top bar (MS-SSIM), steering in the loop panel
+  (GMSD's `gms`) and the encoder's own butteraugli each re-encode the loop
+  steered by that choice, and the distance slider re-encodes at distance 2.
+- A synthetic two-frame trace checks every readout field (iteration, score
+  against target, blocks above target, worst block, finer and coarser
+  counts, the score-only final pass, the encode), exact pixels of the
+  default layer's block outline, the map over the reconstruction, the
   reconstruction and quant-field-change layers, and refusal of a malformed
   file.
