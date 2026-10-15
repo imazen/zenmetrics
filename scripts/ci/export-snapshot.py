@@ -4,16 +4,58 @@
 An empty revision snapshots the working copy first; explicit revisions never
 snapshot it. The archive supplies file bytes, executable bits and symlinks from
 one immutable tree, including jj-tracked additions and deletions.
+
+File mtimes: git archive stamps every file with the commit time. Cargo decides
+freshness by comparing source mtimes with the previous build's dep-info, so an
+older revision exported after a newer build would look up to date and cargo
+would hand back the newer revision's binary. A manifest beside the tree
+(`<tree>.mtimes.json`: path -> [sha256, mode, mtime_ns]) keeps the previous
+mtime for byte-identical files, so incremental builds stay incremental, and
+stamps every new or changed file later than anything stamped before.
 """
 
+import hashlib
+import json
+import os
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path, PurePosixPath
 
 
 def output(repo, *args):
     return subprocess.check_output(args, cwd=repo)
+
+
+def load_manifest(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def restamp(destination, extracted, manifest_path):
+    """Give unchanged files their previous mtime and changed ones a newer one."""
+    old = load_manifest(manifest_path)
+    newest_old = max((entry[2] for entry in old.values()), default=0)
+    stamp = max(time.time_ns(), newest_old + 1)
+    new = {}
+    for name, mode in extracted:
+        path = destination / name
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        previous = old.get(name)
+        if previous and previous[0] == digest and previous[1] == mode:
+            mtime = previous[2]
+        else:
+            mtime = stamp
+        os.utime(path, ns=(mtime, mtime))
+        new[name] = [digest, mode, mtime]
+    tmp = manifest_path.with_name(manifest_path.name + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(new, f)
+    os.replace(tmp, manifest_path)
 
 
 def export(repo, destination, revision):
@@ -49,6 +91,7 @@ def export(repo, destination, revision):
                 ):
                     blocked.add(parent)
 
+    extracted = []
     with subprocess.Popen(
         [*git, "archive", "--format=tar", commit], stdout=subprocess.PIPE, cwd=repo
     ) as archive:
@@ -62,8 +105,11 @@ def export(repo, destination, revision):
                 # Git archive contains relative paths; data filtering also
                 # rejects path traversal and symlinks escaping the snapshot.
                 members.extract(member, destination, filter="data")
+                if member.isfile():
+                    extracted.append((member.name, member.mode & 0o777))
         if archive.wait() != 0:
             raise RuntimeError("git archive failed")
+    restamp(destination, extracted, destination.with_name(destination.name + ".mtimes.json"))
     print(f"lock.sh: exported tracked tree {commit[:12]} (Cargo output excluded)")
 
 

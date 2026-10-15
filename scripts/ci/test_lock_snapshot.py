@@ -125,6 +125,24 @@ test ! -e nested/target-tracked
         self.assertTrue((tree / "deleted.txt").exists())
         self.assertFalse((tree / "source-link").exists())
 
+    def test_revision_switch_restamps_only_changed_files(self):
+        # Cargo compares source mtimes with its last build: a file whose bytes
+        # change between exports must get a newer mtime than any earlier
+        # export, or an older revision built after a newer one is "fresh".
+        tree = self.snap / "work/zenmetrics"
+        self.run_command("bash", "scripts/ci/lock.sh", "--check")
+        edited = (tree / "source.txt").stat().st_mtime_ns
+        same = (tree / "ci/sibling-pins.tsv").stat().st_mtime_ns
+        self.run_command("bash", "scripts/ci/lock.sh", "--check", "--rev", self.base)
+        self.assertEqual((tree / "source.txt").read_text(), "original\n")
+        original = (tree / "source.txt").stat().st_mtime_ns
+        self.assertGreater(original, edited)
+        self.assertEqual((tree / "ci/sibling-pins.tsv").stat().st_mtime_ns, same)
+        self.run_command("bash", "scripts/ci/lock.sh", "--check")
+        self.assertEqual((tree / "source.txt").read_text(), "edited\n")
+        self.assertGreater((tree / "source.txt").stat().st_mtime_ns, original)
+        self.assertEqual((tree / "ci/sibling-pins.tsv").stat().st_mtime_ns, same)
+
     def test_regen_keeps_matching_lock(self):
         self.run_command("bash", "scripts/ci/lock.sh", "--regen")
         self.assertEqual((self.repo / "Cargo.lock").read_text(), "locked\n")
