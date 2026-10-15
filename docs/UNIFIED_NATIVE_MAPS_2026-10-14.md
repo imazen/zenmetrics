@@ -373,12 +373,18 @@ whole image).
 | VIF (VIFp, vifvec) | `1 − VIF` | exact: `(den − num)/Σden` per element |
 | MS-SSIM | `−ln MS-SSIM` | each level's `w_l·(−ln m_l)` split in proportion to `1 − x` |
 | IW-SSIM | `−ln IW-SSIM` | each scale's `β_s·(−ln wmcs_s)` split in proportion to `iw·(1 − cs)` |
+| DSSIM (browser adapter, 2026-10-15) | `1 − SSIM`, with `DSSIM = 1/SSIM − 1` | exact: each scale's `w_n/Σw · |avg_n − s|` spread evenly over the full-resolution pixels its cell covers |
 
 The MS-SSIM and IW-SSIM splits are a choice (the log of a mean has no unique
 per-sample decomposition); the totals are exact while every level mean lies in
 `(0, 1)`. `diffmap` is the primary map for NLPD and VIF; MS-SSIM keeps `ssim`
-and IW-SSIM `cs_0` as primary, with `diffmap` among their maps. DSSIM is not
-fused: its scale weights are not exposed by `dssim-core`.
+and IW-SSIM `cs_0` as primary, with `diffmap` among their maps. DSSIM's fused
+map is built in `zenmetrics-browser` from its saved per-scale SSIM maps
+(`ssim_0` … `ssim_4`, also selectable): `dssim-core` keeps its default scale
+weights private, so the adapter sets the same weights explicitly, and
+`dssim_weights_match_the_default_score` pins that the score keeps its bits.
+A scale's score is `1 − mean|avg_n − s|`, where `avg_n` is its mean SSIM
+raised to `0.5ⁿ`.
 
 Validation: NLPD's mean equals the score within 1e-6 relative; VIF's equals
 `1 − VIF` within 1e-6 absolute (about 4e-8 measured), and a flat reference
@@ -387,14 +393,17 @@ within 1e-6 and 1e-5 relative; identical inputs give exact zeros (IW-SSIM:
 at most 1.3e-7, cs within f32 rounding of 1), and a local change peaks over
 it, for each metric. In headless Chromium the SSIMULACRA2, NLPD, VIF, vifvec
 and MS-SSIM fused maps equal the native oracle exactly; IW-SSIM's differs by at
-most 1.8e-7, the same cross-SIMD-tier rounding its `cs` maps show.
+most 1.8e-7, the same cross-SIMD-tier rounding its `cs` maps show. DSSIM's
+fused mean gives the DSSIM score within 1e-6 relative (on a 203×117 pair), and
+in Chromium it differs from the native build by at most 1.5e-6.
 
 ## Browser viewer
 
-The WASM viewer serves each metric's `diffmap` when it has one, else its
-primary map, through the same call
-(`feaafabd`): `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`, `vifvec`
-and `vmaf-v1`, and `ssim2` serves the fused `diffmap` through the adapter
-above. The
-other maps stay available to native callers through `Evaluation::maps()`.
+The WASM viewer routes `nlpd`, `psnrhvs`, `mdctpsnr`, `mad`, `iwssim`, `vif`,
+`vifvec` and `vmaf-v1` through `Metric::evaluate` (`feaafabd`), and `ssim2`
+through the adapter above. Each shows the metric's `diffmap` by default when it
+has one, else its primary map. Its Map menu (2026-10-15) lists every map the
+evaluation published: `spatial_map(metric, map, …)` evaluates once, and
+`cached_spatial_map(name)` serves the other maps from that evaluation without
+evaluating again. The metric menu drives both the score and the map.
 Routes and browser parity: [browser viewer](BROWSER_VIEWER_2026-10-13.md).
