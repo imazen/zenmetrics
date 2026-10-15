@@ -22,7 +22,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, WeightsConsent,
+    Musiq, Paq2piq, WeightsConsent,
 };
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
@@ -110,6 +110,7 @@ fn main() {
         Ok("liqe") => "liqe",
         Ok("musiq") => "musiq",
         Ok("hyperiqa") => "hyperiqa",
+        Ok("paq2piq") => "paq2piq",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
     };
     let mut m: Box<dyn Metric> = if col == "dists" {
@@ -146,6 +147,11 @@ fn main() {
     } else if col == "musiq" {
         Box::new(PairedNoReference::new(
             Musiq::from_dir(model, engine).expect("load model"),
+        ))
+    } else if col == "paq2piq" {
+        let consent = WeightsConsent::new().accept(Paq2piq::WEIGHTS);
+        Box::new(PairedNoReference::new(
+            Paq2piq::from_dir(model, engine, &consent).expect("load model"),
         ))
     } else {
         let net = LpipsNet::ALL

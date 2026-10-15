@@ -1552,12 +1552,6 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::StlpipsVgg
         | MetricKind::Dists
         | MetricKind::Deepdc => Some((-0.001, 2.0, 0.0)),
-        // DreamSim: cosine distance clamped to [0, 1], 0 = identical.
-        MetricKind::Dreamsim => Some((-0.001, 1.001, 0.0)),
-        // CKDN and A-FINE score an identical pair at an image-dependent value
-        // (A-FINE's raw afine_all is signed, about -3.9..-2.4 on KonJND
-        // identical pairs), so there is no identity value to check.
-        MetricKind::Ckdn | MetricKind::Afine => None,
         // PIQE: [0, 100] distortion, 0 = identical.
         MetricKind::Piqe => Some((-0.001, 100.5, 0.0)),
         // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
@@ -1582,6 +1576,16 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // scale; the head extrapolates a little past the range.
         MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
         MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
+        MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        // CKDN is sigmoid quality; identical pairs are image-dependent.
+        // Zero is only a default-failure sentinel here, as for NR heads.
+        MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),
+        // DreamSim: one minus cosine similarity, clamped to [0, 1] on both
+        // engines; 0 = identical.
+        MetricKind::Dreamsim => Some((-0.001, 1.001, 0.0)),
+        // A-FINE is an unbounded signed quality score; no characterised
+        // mean bounds or constant identity exist for this check.
+        MetricKind::Afine => None,
     }
 }
 

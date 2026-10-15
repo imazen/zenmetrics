@@ -190,6 +190,7 @@ pairs, scored with `zenmetrics-cli batch` on ort-cuda, model dir
 | `liqe` / `liqe_ref` | 0.393781 | 0.394682 | 0.390329 |
 | `musiq` / `musiq_ref` | 1.968925 | 2.823349 | 1.292500 |
 | `hyperiqa` / `hyperiqa_ref` | 4.461776 | 6.226422 | 2.913934 |
+| `paq2piq` / `paq2piq_ref` | 1.229401 | 1.762009 | 0.726505 |
 
 NR metrics see the reference column too via `PairedNoReference`; the JND is
 the score delta the pair produces, exactly like the FR columns. Rows are in

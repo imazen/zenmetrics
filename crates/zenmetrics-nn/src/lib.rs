@@ -33,6 +33,10 @@
 //!   parity target upstream `demo.py`, `koniq_pretrained.pkl` with a
 //!   documented deterministic crop grid (upstream crops at random;
 //!   weights licence unknown: consent-gated).
+//! - [`Paq2piq`]: PaQ-2-PiQ (Ying et al., CVPR 2020) — a
+//!   [`za::NoReferenceMetric`]; parity target upstream
+//!   `baidut/paq2piq` `InferenceModel.predict`,
+//!   `RoIPoolModel-fit.10.bs.120.pth` (CC-BY-NC weights: consent-gated).
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -57,6 +61,7 @@ mod liqe;
 mod lpips;
 mod maniqa;
 mod musiq;
+mod paq2piq;
 mod par;
 mod preprocess;
 mod resize;
@@ -75,6 +80,7 @@ pub use liqe::Liqe;
 pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;
 pub use musiq::Musiq;
+pub use paq2piq::Paq2piq;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.

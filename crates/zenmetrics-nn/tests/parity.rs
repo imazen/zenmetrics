@@ -6,7 +6,7 @@
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
-//!   `musiq`, `hyperiqa`.
+//!   `musiq`, `hyperiqa`, `paq2piq`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -17,7 +17,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, WeightsConsent,
+    Musiq, Paq2piq, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -147,6 +147,15 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     "hyperiqa",
                 );
             }
+            if name == "paq2piq" {
+                let consent = WeightsConsent::new().accept(Paq2piq::WEIGHTS);
+                return (
+                    Box::new(PairedNoReference::new(
+                        Paq2piq::from_dir(&dir, engine(), &consent).expect("load paq2piq"),
+                    )),
+                    "paq2piq",
+                );
+            }
             let net = *LpipsNet::ALL
                 .iter()
                 .find(|n| n.column() == name)
@@ -157,6 +166,17 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
             )
         })
         .collect()
+}
+
+/// Ladder PNG lookup: `ZENMETRICS_NN_LADDER` first, then the sibling
+/// `ladder-nonsquare` directory (non-square goldens live there; the
+/// shared square ladder must stay square).
+fn ladder_png(ladder: &Path, name: &str) -> PathBuf {
+    let p = ladder.join(name);
+    if p.exists() {
+        return p;
+    }
+    ladder.with_file_name("ladder-nonsquare").join(name)
 }
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
@@ -212,8 +232,8 @@ fn matches_upstream() {
         for line in goldens.lines().skip(1) {
             let f: Vec<&str> = line.split('\t').collect();
             let (stem, size, want): (&str, &str, f64) = (f[0], f[1], f[2].parse().unwrap());
-            let (rp, w, h) = load_rgb8(&ladder.join(format!("{stem}_{size}_ref.png")));
-            let (dp, _, _) = load_rgb8(&ladder.join(format!("{stem}_{size}_dist.png")));
+            let (rp, w, h) = load_rgb8(&ladder_png(&ladder, &format!("{stem}_{size}_ref.png")));
+            let (dp, _, _) = load_rgb8(&ladder_png(&ladder, &format!("{stem}_{size}_dist.png")));
             let eval = m
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");

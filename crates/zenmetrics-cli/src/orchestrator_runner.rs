@@ -544,7 +544,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Nlpd
             | CliMetricKind::NlpdIqa
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
-            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA) are routed through
+            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ) are routed through
             // `nr::score`/`nn::score` + `PairedNoReference`; the
             // orchestrator's FR leaves have no shape for them.
             | CliMetricKind::Piqe
@@ -555,6 +555,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Liqe
             | CliMetricKind::Musiq
             | CliMetricKind::Hyperiqa
+            | CliMetricKind::Paq2piq
     )
 }
 
@@ -862,5 +863,15 @@ mod tests {
         assert!(!metric_orchestrator_eligible(CliMetricKind::Nlpd));
         assert!(!metric_orchestrator_eligible(CliMetricKind::VmafNeg));
         assert!(!metric_orchestrator_eligible(CliMetricKind::Ssim));
+    }
+}
+
+#[cfg(test)]
+mod nr_routing_tests {
+    #[test]
+    fn paq2piq_uses_direct_no_reference_route() {
+        assert!(!super::metric_orchestrator_eligible(
+            crate::metrics::MetricKind::Paq2piq
+        ));
     }
 }

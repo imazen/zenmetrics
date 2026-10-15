@@ -1,0 +1,8 @@
+python 3.12.14
+torch 2.14.1+cu130
+torchvision 0.29.1+cu130
+numpy 2.5.2
+upstream baidut/paq2piq@48c91e844e9f7a768f6ddcfc744dddfdd1160fea
+ckpt_sha256 5ece3dcd18e7bfc619ef6eee0c6e2c3b94350a623d62409f5cac95a2979b5b32
+sha256 8a0a1434528d5a95dc7f0cfe887da0b70ef43b8af34777714c8d4a0e8c44da3e  paq2piq_body.onnx
+sha256 546137f0f955201bd77ecb47aa988e496f0b5164b778c6c3780bf8d25d87693b  paq2piq_head.onnx

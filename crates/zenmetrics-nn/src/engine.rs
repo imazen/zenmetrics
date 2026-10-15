@@ -340,6 +340,13 @@ mod rten_engine {
         }
 
         fn score(&self, inputs: &[super::NamedInput]) -> Result<f64, Error> {
+            let (_, d) = self.tensor(inputs)?;
+            d.first()
+                .map(|&s| f64::from(s))
+                .ok_or_else(|| Error::Engine("empty score output".into()))
+        }
+
+        fn tensor(&self, inputs: &[super::NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
             if inputs.len() != self.inputs.len() {
                 return Err(Error::BadModel(format!(
                     "graph takes {} inputs, got {}",
@@ -365,10 +372,8 @@ mod rten_engine {
             let t: rten_tensor::Tensor<f32> = v
                 .try_into()
                 .map_err(|e| Error::Engine(format!("output: {e:?}")))?;
-            t.into_data()
-                .first()
-                .map(|&s| f64::from(s))
-                .ok_or_else(|| Error::Engine("empty score output".into()))
+            let shape = t.shape().to_vec();
+            Ok((shape, t.into_data()))
         }
     }
 }
@@ -405,6 +410,11 @@ pub(crate) trait ImageGraph: Send + Sync {
     fn engine(&self) -> &'static str;
     /// Score the inputs.
     fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error>;
+
+    /// Run the inputs and return the first output tensor's `(shape,
+    /// row-major data)`. For graphs whose intermediate features feed
+    /// host-side logic (paq2piq's RoIPool) — `score` is `tensor().1[0]`.
+    fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error>;
 }
 
 #[cfg(feature = "ort")]
@@ -546,6 +556,28 @@ pub(crate) mod ort_engine {
                 .try_extract_scalar::<f32>()
                 .map_err(|e| Error::Engine(e.to_string()))?;
             Ok(f64::from(s))
+        }
+
+        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
+                .iter()
+                .map(|i| {
+                    Tensor::from_array((i.shape.clone(), i.data.clone()))
+                        .map(|t| (i.name, t))
+                        .map_err(|e| Error::Engine(e.to_string()))
+                })
+                .collect::<Result<_, _>>()?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(feeds)
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let (shape, data) = out[self.output]
+                .try_extract_tensor::<f32>()
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
         }
     }
 }

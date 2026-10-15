@@ -18,6 +18,7 @@ each model's upstream reference implementation. Plan and licensing:
 | LIQE (`Liqe`, no-reference, consent-gated) | `liqe`, `liqe_ref` | rten, ort-cuda | `zwx8981/LIQE` `LIQE.forward`, 495-prompt text bank, top-left-224-patch×15 quirk | 0.3938 | rten 1.25e-5, ort-cuda 4.96e-5 |
 | MUSIQ (`Musiq`, no-reference) | `musiq`, `musiq_ref` | rten, ort-cuda | `google-research/musiq` `run_predict_image.py`, koniq_ckpt.npz, 3-scale TF-gaussian 32² patches → transformer, MOS-scale | 1.969 | rten 1.20e-4, ort-cuda 6.98e-5 |
 | HyperIQA (`Hyperiqa`, no-reference) | `hyperiqa`, `hyperiqa_ref` | rten, ort-cuda | `SSL92/hyperIQA` `demo.py` model on a documented deterministic 5x5 crop grid (upstream crops at random), koniq_pretrained.pkl, ResNet-50 hypernetwork, trained on 0–100 MOS with an unbounded linear output | 4.462 | rten 3.42e-6, ort-cuda 3.42e-6 |
+| PaQ-2-PiQ (`Paq2piq`, no-reference) | `paq2piq`, `paq2piq_ref` | rten, ort-cuda | `baidut/paq2piq` `InferenceModel.predict` (MIT code; CC-BY-NC weights, consent-gated), RoIPoolModel-fit.10.bs.120.pth, ResNet-18 + 1+20x20 RoIPool grid, ~0-100 MOS | 1.229 | rten 2.51e-5, ort-cuda 1.28e-5 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold
@@ -31,6 +32,10 @@ Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,
 loaded at run time from `ORT_DYLIB_PATH`. Timings:
 [`benchmarks/nn_lpips_phase0_2026-10-15.md`](../../benchmarks/nn_lpips_phase0_2026-10-15.md).
+
+PaQ-2-PiQ accepts native-resolution inputs up to 4096 pixels per axis. Its
+[review receipt](../../benchmarks/paq2piq_review_2026-10-16.md) records export
+commands, small-image goldens and default-scheduler validation.
 
 Weights are not bundled. Export a model directory, then load it:
 

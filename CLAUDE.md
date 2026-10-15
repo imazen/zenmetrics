@@ -1581,3 +1581,13 @@ MACs without an extra output-axis multiplier, and sequential rows avoid a
 row-descriptor allocation. Empty preprocessing/resizing inputs return empty
 buffers, while DreamSim refuses zero dimensions before resize/inference.
 Review measurements live in benchmarks/nn_opt2_2026-10-15.md and its linked TSVs.
+
+### Known Bugs: PaQ-2-PiQ routing and input allocation (2026-10-16)
+
+The sweep range match lacked PaQ-2-PiQ and the default scheduler sent it to
+an FR-only orchestrator route. Add its range and direct NR exclusion together;
+check both sweep/GPU and sweep/orchestrator/NN builds. The native-resolution
+port now refuses either axis above 4096 before allocating its input tensor.
+Export must write both loader metadata and a provenance receipt; the oracle
+TSV must have a header so parity does not drop its first pair. Review commands
+and measurements live in `benchmarks/paq2piq_review_2026-10-16.md`.

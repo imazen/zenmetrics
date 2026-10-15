@@ -285,6 +285,16 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa`.
     #[value(name = "hyperiqa")]
     Hyperiqa,
+    /// PaQ-2-PiQ — no-reference, authors' `baidut/paq2piq` (MIT code;
+    /// CC-BY-NC-4.0 weights, consent-gated; ResNet-18 + 20x20-block
+    /// RoIPool head, `RoIPoolModel-fit.10.bs.120.pth`); **higher** is
+    /// better, MOS-scale `[0, 100]`. Scored through
+    /// `PairedNoReference`: emits `paq2piq` (distorted) and
+    /// `paq2piq_ref` (reference). As `arniqa` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`, plus
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
+    #[value(name = "paq2piq")]
+    Paq2piq,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -715,6 +725,7 @@ impl MetricKind {
             MetricKind::Liqe,
             MetricKind::Musiq,
             MetricKind::Hyperiqa,
+            MetricKind::Paq2piq,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -822,6 +833,7 @@ impl MetricKind {
             MetricKind::Liqe => "liqe",
             MetricKind::Musiq => "musiq",
             MetricKind::Hyperiqa => "hyperiqa",
+            MetricKind::Paq2piq => "paq2piq",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -991,6 +1003,7 @@ impl MetricKind {
             MetricKind::Liqe => &["liqe", "liqe_ref"],
             MetricKind::Musiq => &["musiq", "musiq_ref"],
             MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
+            MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -2304,7 +2317,8 @@ pub fn run_metric(
         | MetricKind::Maniqa
         | MetricKind::Liqe
         | MetricKind::Musiq
-        | MetricKind::Hyperiqa => nn::score(kind, reference, distorted),
+        | MetricKind::Hyperiqa
+        | MetricKind::Paq2piq => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -2320,7 +2334,8 @@ pub fn run_metric(
         | MetricKind::Maniqa
         | MetricKind::Liqe
         | MetricKind::Musiq
-        | MetricKind::Hyperiqa => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Hyperiqa
+        | MetricKind::Paq2piq => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
