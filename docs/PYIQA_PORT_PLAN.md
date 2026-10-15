@@ -258,6 +258,14 @@ permissive. That is a separate project and is not planned here.
    column), gated on parity with upstream `lpips`. This sets the template every later
    model copies.
 
+**Status 2026-10-15** ([`nn_lpips_phase0_2026-10-15.md`](../benchmarks/nn_lpips_phase0_2026-10-15.md)):
+step 1 done on i265 (upstream `lpips`/`DISTS_pytorch`, CPU and 4080, fp32/TF32-off/fp16,
+64²–4096²; dev not yet measured). Step 3's CPU part is in `crates/zenmetrics-nn`:
+LPIPS-vgg on rten, warm reference, parity 4.5e-8 against upstream on 18 pairs,
+1.13–1.32× faster than PyTorch CPU from 512² up and 9–16 % slower at 64–256².
+Still open in step 3: burn-cuda, the `ort` feature, the `score-pairs` column. Step 2
+not started.
+
 ## 8. Spillover to zentract, zensally, zensr
 
 - **zentract** (tract-onnx 0.22.3 cdylib; CPU, f32, tract multithreading not enabled):
