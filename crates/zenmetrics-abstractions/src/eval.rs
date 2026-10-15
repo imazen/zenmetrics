@@ -33,18 +33,25 @@ pub enum ScoreKind {
     /// A diagnostic or intermediate feature with no quality direction
     /// (VMAF's elementary features, per-scale terms).
     Feature,
+    /// No-reference quality of one image, higher = better (MUSIQ,
+    /// ARNIQA). The scale is the metric's own; no value means "identical".
+    Quality,
+    /// No-reference distortion of one image, higher = worse (NIQE, PIQE,
+    /// BRISQUE). The scale is the metric's own.
+    Distortion,
 }
 
 impl ScoreKind {
-    /// `Some(true)` when larger means closer to the reference; `None` for
-    /// [`ScoreKind::Feature`].
+    /// `Some(true)` when larger means closer to the reference (for the
+    /// no-reference kinds: better quality); `None` for [`ScoreKind::Feature`].
     pub const fn higher_is_better(self) -> Option<bool> {
         match self {
             ScoreKind::Similarity
             | ScoreKind::Jod
             | ScoreKind::Quality100
-            | ScoreKind::Decibels => Some(true),
-            ScoreKind::Difference | ScoreKind::Probability => Some(false),
+            | ScoreKind::Decibels
+            | ScoreKind::Quality => Some(true),
+            ScoreKind::Difference | ScoreKind::Probability | ScoreKind::Distortion => Some(false),
             ScoreKind::Feature => None,
         }
     }
@@ -58,7 +65,7 @@ impl ScoreKind {
             ScoreKind::Jod => Some(10.0),
             ScoreKind::Quality100 => Some(100.0),
             ScoreKind::Decibels => Some(f64::INFINITY),
-            ScoreKind::Feature => None,
+            ScoreKind::Feature | ScoreKind::Quality | ScoreKind::Distortion => None,
         }
     }
 }

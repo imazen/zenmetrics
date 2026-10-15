@@ -260,7 +260,7 @@ writing:
 | AIC-4 classical | CW-SSIM, SSIM-pyiqa | zenmetrics-cli | after that |
 | AIC-4 unidentified | AIMOS, WD_s1–WD_s5 | — | identify first |
 | NR | PIQE (used before, via PU21, `benchmarks/pu_integrated_upiq_2026-06-09.md`), NIQE, BRISQUE | Rust ports, LIVE data with notice | after AIC-4 |
-| NR | MUSIQ, ARNIQA, MANIQA, LIQE | zenmetrics-nn | permissive; needs the NR metric shape first |
+| NR | MUSIQ, ARNIQA, MANIQA, LIQE | zenmetrics-nn | permissive; shape is `NoReferenceMetric`, run in pair tools through `PairedNoReference` (`<key>` on the distorted image, `<key>_ref` on the reference) |
 | NR | TOPIQ-NR, CLIP-IQA+, QualiCLIP | zenmetrics-nn | NC weights: opt-in |
 
 ## 7. Phase 0 (first concrete steps)

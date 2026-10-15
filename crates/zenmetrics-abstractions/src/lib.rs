@@ -20,6 +20,9 @@
 //!   candidates; results are bit-identical to cold evaluation.
 //! - [`Metric::sequence`] — temporal sessions whose results may trail
 //!   their frames ([`Temporal`]).
+//! - [`NoReferenceMetric`] — one image in, a quality estimate out;
+//!   [`PairedNoReference`] runs it as a pair [`Metric`] (distorted image
+//!   under each key, reference under `<key>_ref`).
 //!
 //! Errors are [`MetricResult<T>`] = `Result<T, whereat::At<MetricError>>`:
 //! a located, classified ([`ErrorKind`]) envelope around the metric's own
@@ -38,6 +41,7 @@ mod identity;
 mod input;
 mod map;
 mod metric;
+mod no_reference;
 
 /// `f32` ↔ byte casts without a per-crate bytemuck dependency.
 pub use bytemuck;
@@ -69,6 +73,7 @@ pub use metric::{
     AlwaysStop, ColdReplay, EvalOpts, FrameEvaluation, FrameRate, Metric, Sequence, SequenceInfo,
     SequenceSummary, Temporal, ViewingConditions, WarmReference,
 };
+pub use no_reference::{NoReferenceMetric, PairedEval, PairedNoReference, REFERENCE_SUFFIX};
 
 #[cfg(test)]
 mod send_tests {
