@@ -48,7 +48,7 @@ nn-ort = ["nn", "zenmetrics-nn/ort"]
 # Classical no-reference metrics (piqe, niqe, brisque) — in-tree ports
 # scored through `zenmetrics-abstractions::PairedNoReference`, so batch /
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
-nr = ["dep:piqe", "dep:niqe", "dep:zenmetrics-abstractions"]
+nr = ["dep:piqe", "dep:niqe", "dep:brisque", "dep:zenmetrics-abstractions"]
 
 # Decoder feature flags
 # zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette
@@ -623,6 +623,7 @@ zenmetrics-nn = { path = "../zenmetrics-nn", optional = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", optional = true, default-features = false }
 piqe = { workspace = true, optional = true, features = ["std"] }
 niqe = { workspace = true, optional = true, features = ["std"] }
+brisque = { workspace = true, optional = true, features = ["std"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

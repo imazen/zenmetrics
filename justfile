@@ -653,3 +653,39 @@ aic-cw-search python out:
 aic-cw-verify python out:
     TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
     {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq
+
+# BRISQUE Round 6 review; caller holds shared heavy lock/run-heavy scope.
+brisque-review-build:
+    just snap-cargo @ build -p brisque --example review --release
+
+brisque-review-prepare python:
+    {{python}} benchmarks/brisque_review_2026-10-15/prepare.py
+
+brisque-review-run binary label:
+    {{binary}} ratios "$HOME/tmp/aic-variants-scratch/round6/ratios-input.bin" "$HOME/tmp/aic-variants-scratch/round6/{{label}}-ratios.bin"
+    {{binary}} panel "$HOME/tmp/aic-variants-scratch/round6/panel.paths" > "$HOME/tmp/aic-variants-scratch/round6/{{label}}-panel.tsv"
+
+brisque-review-analyze python label *flags:
+    {{python}} benchmarks/brisque_review_2026-10-15/analyze.py {{label}} {{flags}}
+
+# Final BRISQUE review gates, matching CI's all-member fmt and Lint flags.
+brisque-review-ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just snap-cargo @ test -p brisque --all-targets
+    just snap-cargo @ build -p brisque --no-default-features
+    just snap-cargo @ test -p brisque --no-default-features --lib
+    bash scripts/ci/lock.sh --check
+    mapfile -t brisque_fmt_packages < <(cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json,sys; [print(p["name"]) for p in json.load(sys.stdin)["packages"]]')
+    brisque_fmt_args=()
+    for package in "${brisque_fmt_packages[@]}"; do brisque_fmt_args+=(-p "$package"); done
+    just snap-cargo @ fmt "${brisque_fmt_args[@]}" --check
+    just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
+
+brisque-review-params python:
+    {{python}} crates/brisque/tests/gen_params.py
+
+# Run after an ordinary review build/export; changes only the isolated snapshot.
+brisque-review-computed-build:
+    just brisque-review-build
+    python3 benchmarks/brisque_review_2026-10-15/build_computed.py

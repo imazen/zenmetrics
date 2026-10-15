@@ -1550,3 +1550,12 @@ explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
 quality contribution is displayed directly. Regression coverage lives in
 `scripts/checkpoint/check-pages.py`; details and limits in
 [the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).
+
+### Known Bugs: BRISQUE integer powers (2026-10-15)
+
+BRISQUE's initial scalar power path differs from torch's multiplication for
+integer squares/cubes. The correction uses explicit multiplication and bumps
+the score revision. A 400,000-case GGD/AGGD ratio-and-argmin sweep and disjoint
+KonJND images supplement the existing 170 goldens; the fixed argmin case is
+pinned in the Rust unit tests. Measurement details live in
+`benchmarks/brisque_review_2026-10-15/`.

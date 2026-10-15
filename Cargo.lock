@@ -776,6 +776,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "brisque"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "libm",
+ "zenmetrics-abstractions",
+]
+
+[[package]]
 name = "built"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7968,6 +7977,7 @@ dependencies = [
  "almost-enough",
  "arrow-array",
  "arrow-schema",
+ "brisque",
  "butteraugli",
  "butteraugli-gpu",
  "bytemuck",

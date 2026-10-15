@@ -1557,6 +1557,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
         // land ~0–10, synthetic outliers stay far under 50.
         MetricKind::Niqe => Some((-0.001, 50.0, 0.0)),
+        // BRISQUE: SVR output, unbounded in principle; observed -41..110
+        // on the KonJND corpus. The 0.0 identity is inert (scores never
+        // land exactly on it) — it only satisfies the tuple shape.
+        MetricKind::Brisque => Some((-60.0, 150.0, 0.0)),
     }
 }
 

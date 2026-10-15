@@ -42,4 +42,17 @@ on i265).
 
 ## brisque
 
-pending
+|Δ| distribution over the 1,008 pairs (score units, BRISQUE observed
+range −41…+109 on this corpus):
+
+| set  | n    | p25       | median      | p75        | min      | max       | mean      |
+|------|------|-----------|-------------|------------|----------|-----------|-----------|
+| all  | 1008 | 8.819824  | **15.138428** | 23.475586 | 0.027100 | 68.294922 | 17.371926 |
+| JPEG | 504  | 7.254395  | 12.735596   | 20.834961  | 0.083496 | 64.258789 | 15.107874 |
+| BPG  | 504  | 10.338379 | 17.310303   | 26.183106  | 0.027100 | 68.294922 | 19.635979 |
+
+`brisque::JND = 15.138428`. Parity gate: |Δ_oracle| ≤ 0.015138428 (the
+port is bitwise-exact — observed worst |Δ| = 0).
+
+Output table: `brisque_konjnd.tsv` (~120 KB, not committed — regenerable
+with the command above; copy at `~/tmp/brisque_konjnd.tsv` on i265).

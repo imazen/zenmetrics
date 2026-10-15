@@ -595,6 +595,13 @@ pub enum MetricKind {
     /// (reference). Needs `nr`.
     #[value(name = "niqe")]
     Niqe,
+    /// BRISQUE — no-reference blind/referenceless image spatial quality
+    /// evaluator (in-tree `brisque` crate, port of piq 0.8.0 `brisque()`
+    /// with LIVE's released SVM model). SVR distance; higher is worse.
+    /// Scored through `PairedNoReference`: emits `brisque` (distorted)
+    /// and `brisque_ref` (reference). Needs `nr`.
+    #[value(name = "brisque")]
+    Brisque,
 }
 
 impl MetricKind {
@@ -722,6 +729,7 @@ impl MetricKind {
             MetricKind::Mdctpsnr,
             MetricKind::Piqe,
             MetricKind::Niqe,
+            MetricKind::Brisque,
         ]
     }
 
@@ -826,6 +834,7 @@ impl MetricKind {
             MetricKind::Mdctpsnr => "mdctpsnr",
             MetricKind::Piqe => "piqe",
             MetricKind::Niqe => "niqe",
+            MetricKind::Brisque => "brisque",
         }
     }
 
@@ -989,6 +998,7 @@ impl MetricKind {
             MetricKind::Mdctpsnr => MDCTPSNR_CPU_COLUMNS,
             MetricKind::Piqe => &["piqe", "piqe_ref"],
             MetricKind::Niqe => &["niqe", "niqe_ref"],
+            MetricKind::Brisque => &["brisque", "brisque_ref"],
         }
     }
 
@@ -2616,9 +2626,13 @@ pub fn run_metric(
         // `PairedNoReference` — `piqe` on the distorted image plus
         // `piqe_ref` on the reference (see metrics/nr.rs).
         #[cfg(feature = "nr")]
-        MetricKind::Piqe | MetricKind::Niqe => nr::score(kind, reference, distorted),
+        MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque => {
+            nr::score(kind, reference, distorted)
+        }
         #[cfg(not(feature = "nr"))]
-        MetricKind::Piqe | MetricKind::Niqe => Err(disabled_msg(kind.name(), "nr")),
+        MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque => {
+            Err(disabled_msg(kind.name(), "nr"))
+        }
     }
 }
 

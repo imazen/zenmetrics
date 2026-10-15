@@ -28,6 +28,7 @@ pub(super) fn score(
     let metric: Box<dyn Metric> = match kind {
         MetricKind::Piqe => Box::new(PairedNoReference::new(piqe::Piqe::new())),
         MetricKind::Niqe => Box::new(PairedNoReference::new(niqe::Niqe::new())),
+        MetricKind::Brisque => Box::new(PairedNoReference::new(brisque::Brisque::new())),
         _ => return Err(format!("nr: {} is not a no-reference metric", kind.name()).into()),
     };
     let mut metric = metric;
