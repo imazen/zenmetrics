@@ -169,7 +169,7 @@ pub enum MetricKind {
     /// Contrast-aware multiscale banding index, studio-swing BT.601 ingress.
     #[value(name = "cambi")]
     Cambi,
-    /// Original Google Butteraugli (2017); lower is better.
+    /// Original Google Butteraugli (revision 2019-03-19); lower is better.
     #[value(name = "butteraugli-original")]
     ButteraugliOriginal,
     /// Original Cloudinary SSIMULACRA; lower is better.
@@ -2386,6 +2386,7 @@ pub fn run_metric(
             let map = flip::error_map(&reference.pixels, &distorted.pixels, w, h, w * 3, w * 3)?;
             Ok(vec![("flip", flip::mean(&map))])
         }
+        // SSIM-pyiqa family: valid-window scoring with explicit convention flags.
         MetricKind::SsimPyiqa
         | MetricKind::SsimPyiqaF32
         | MetricKind::SsimPyiqaF32K2

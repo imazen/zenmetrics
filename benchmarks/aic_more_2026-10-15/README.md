@@ -20,7 +20,7 @@ tight path. Existing `cambi_v1_from_luma` and VMAF-v1 maps retain their preset.
 - CAMBI: [Netflix libvmaf v3.2.1](https://github.com/Netflix/vmaf/tree/f85a853692a8c730d0270cd733c8bb30b5b93b7c),
   commit `f85a853692a8c730d0270cd733c8bb30b5b93b7c`.
 - Original Butteraugli: [Google reference](https://github.com/google/butteraugli/tree/71b18b636b9c7d1ae0c1d3730b85b3c127eb4511),
-  commit `71b18b636b9c7d1ae0c1d3730b85b3c127eb4511`, Apache-2.0.
+  commit `71b18b636b9c7d1ae0c1d3730b85b3c127eb4511` (2019-03-19), Apache-2.0.
   The existing sibling crate is the libjxl algorithm; its available parameters do
   not select this earlier opsin response, masking or Malta weights. Its measured
   61-pair published median/max errors are 1.0871057609558106/11.723514236450196,
@@ -107,7 +107,10 @@ All tables show median / maximum absolute error.
 | ws/ladder | 1.11022302463e-16 / 2.77555756156e-16 | 8.881784197e-16 / 2.6645352591e-15 |
 | ws/aic | 1.11022302463e-16 / 2.32782102483e-08 | 8.881784197e-16 / 1.59105298714e-07 |
 
-CAMBI ladder statistics cover 12 numeric pairs and 9 matched refusals.
+CAMBI ladder statistics cover 12 numeric pairs, all exactly 0.0 in both
+implementations, and 9 matched refusals. Those zero scores do not establish
+banding sensitivity: the 61-pair panel is the substantive parity evidence, with
+58 non-zero scores and a maximum oracle error of 6.94e-18.
 CAMBI C JSON formatting was changed from six decimals to 17 significant digits
 without changing metric arithmetic; the earlier rounded-output captures are retained.
 
@@ -122,3 +125,11 @@ Pair tables: [CAMBI](cambi_aic.tsv), [Butteraugli-original](butter_aic.tsv),
 [SSIMULACRA1](ssim1_aic.tsv), [WS-HV](ws_aic.tsv). Full numeric summaries are in
 [summary.json](summary.json); source/log/binary hashes are in
 [validation.meta](validation.meta).
+
+## Alpha boundary
+
+The CLI decodes to RGB8 and drops alpha. These ports therefore score those RGB
+channels. Upstream SSIMULACRA1 instead blends transparent inputs onto gray 128
+and includes an alpha term. Upstream original Butteraugli evaluates black and
+white backgrounds and takes the worse result. The RGB oracle panels here do not
+qualify equivalence for transparent inputs.

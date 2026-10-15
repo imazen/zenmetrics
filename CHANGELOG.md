@@ -13,8 +13,6 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- Add CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv`, with pinned-author oracle and published AIC comparisons in [Round 4 evidence](benchmarks/aic_more_2026-10-15/README.md). Standalone CAMBI defaults preserve the existing VMAF-v1 preset.
-
 - Correct SSIM/VSI dispatch and range comments and describe the sampled top/left padding in odd-size pooling.
 
 - Retain ties-to-even AIC luma rounding after measuring both rules on 61 published pairs; record both errors and pin an exact half-tie regression.
@@ -30,6 +28,21 @@ Workspace conventions per the global rules:
 - Remove same-name FSIM/VSI scorer constants; callers construct default scorers explicitly, including browser map evaluation.
 
 - FSIM/VSI fixed-factor metric identities now include their downscale configuration while preserving Auto fingerprints.
+
+## vmaf
+
+### Changed
+
+- CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
+- Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
+### Added
+
+- Strided `cambi_from_luma` with libvmaf standalone CAMBI defaults (`5f19fcf7`); existing VMAF-v1 presets retain their settings.
 
 ## zenmetrics-stats
 
@@ -48,6 +61,10 @@ Workspace conventions per the global rules:
 ## Workspace
 
 ### Changed
+
+- CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
+- CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
+- SSIMULACRA1 matches OpenCV’s row-partial 4×4 reduction (`91fd4b2d`); original-author synthetic scores for all four Round 4 metrics are pinned with committed generators (`d0aa705a`).
 
 - zenmetrics-cli `psnr-cb` and `psnr-cr` (JPEG AIC-4 `PSNR-Cb`, `PSNR-Cr`): PSNR of the full-resolution studio-swing BT.601 chroma planes, the `psnr-ycbcr611` conversion. 61 pairs: max 2.0e-3 / 8.8e-3 JND (1.7e-2 / 5.7e-2 dB); no tested convention gets closer ([search](benchmarks/aic_psnr_chroma_2026-10-15/README.md)).
 - zenmetrics-cli AIC SSIM-pyiqa family (`147b5cca`): rounded and unrounded `ssim-pyiqa` and `ms-ssim-pyiqa`, unrounded RGB `ssimc-pyiqa`, with fixed-factor k2–k6 variants; geometry too small for the 11×11 window is refused. Published 61-pair gates: SSIM-pyiqa max 3.8e-6, MS-SSIM-pyiqa max 1.9e-6.
