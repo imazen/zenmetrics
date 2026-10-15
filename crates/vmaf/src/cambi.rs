@@ -5748,6 +5748,29 @@ fn cambi_impl(
     Ok(score.min(if v1_preset { CAMBI_MAX_VAL } else { 1000.0 }))
 }
 
+#[cfg(test)]
+mod standalone_tests {
+    use super::*;
+
+    #[test]
+    fn standalone_stride_and_input_validation() {
+        let (w, h, stride) = (216, 218, 223);
+        let y: Vec<u16> = (0..w * h)
+            .map(|i| (16 + (i / w + i % w) % 220) as u16)
+            .collect();
+        let mut padded = vec![65535; stride * h];
+        for row in 0..h {
+            padded[row * stride..row * stride + w].copy_from_slice(&y[row * w..(row + 1) * w]);
+        }
+        assert_eq!(
+            cambi_from_luma(&y, w, h, w, 8).unwrap(),
+            cambi_from_luma(&padded, w, h, stride, 8).unwrap()
+        );
+        assert!(cambi_from_luma(&y, w, h, w - 1, 8).is_err());
+        assert!(cambi_from_luma(&y[..y.len() - 1], w, h, w, 8).is_err());
+    }
+}
+
 #[cfg(all(
     test,
     feature = "simd",
@@ -5771,24 +5794,6 @@ mod tests {
         (0..w * h)
             .map(|i| ((i * 53 + (i % w) * 17 + (i / w) * 29 + salt * 131) & 1023) as u16)
             .collect()
-    }
-
-    #[test]
-    fn standalone_stride_and_input_validation() {
-        let (w, h, stride) = (216, 218, 223);
-        let y: Vec<u16> = (0..w * h)
-            .map(|i| (16 + (i / w + i % w) % 220) as u16)
-            .collect();
-        let mut padded = vec![65535; stride * h];
-        for row in 0..h {
-            padded[row * stride..row * stride + w].copy_from_slice(&y[row * w..(row + 1) * w]);
-        }
-        assert_eq!(
-            cambi_from_luma(&y, w, h, w, 8).unwrap(),
-            cambi_from_luma(&padded, w, h, stride, 8).unwrap()
-        );
-        assert!(cambi_from_luma(&y, w, h, w - 1, 8).is_err());
-        assert!(cambi_from_luma(&y[..y.len() - 1], w, h, w, 8).is_err());
     }
 
     #[test]
