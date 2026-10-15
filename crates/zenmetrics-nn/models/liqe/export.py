@@ -1,7 +1,8 @@
 """Export LIQE (upstream zwx8981/LIQE, MIT code © 2024 Weixia Zhang —
 weights via Google Drive/Baidu, terms unstated: Unknown, consent-gated
-host-side; Zhang, Ding, Ma, Zhai et al., "LIQE: Blind Image Quality
-Assessment via Vision-Language Correspondence", CVPR 2023) for
+host-side; Zhang, Zhai, Wei, Yang, Ma, "Blind Image Quality Assessment via
+Vision-Language Correspondence: A Multitask Learning Perspective", CVPR 2023,
+pp. 14071–14081) for
 zenmetrics-nn.
 
 usage: export.py LADDER_DIR OUT_DIR UPSTREAM_DIR CKPT_PATH [GOLDEN_SIZES]
