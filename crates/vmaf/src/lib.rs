@@ -11,7 +11,7 @@ mod v0_score;
 mod vif;
 
 pub use adm::{adm2_v0_from_luma, adm3_v1_from_luma};
-pub use cambi::cambi_v1_from_luma;
+pub use cambi::{cambi_from_luma, cambi_v1_from_luma};
 pub use metric::Vmaf;
 pub use score::{
     PoolingMethod, VmafFrameResult, VmafV1Scorer, VmafV1Stream, Yuv420Frame, pool_v1_scores,

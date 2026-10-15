@@ -5542,7 +5542,55 @@ pub fn cambi_v1_from_luma(
     height: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, bit_depth, None)
+    cambi_impl(dist_y, width, height, bit_depth, None, true)
+}
+
+/// CAMBI with libvmaf 3.2.1's default standalone feature settings.
+///
+/// Uses BT.1886 visibility with threshold 0.019, no luminance cutoff, no
+/// high-resolution decimation, a 65-sample base window, top-60% pooling and
+/// a maximum score of 1000. Unlike [`crate::cambi_v1_from_luma`], this is the
+/// standalone CAMBI convention, rather than the VMAF v1 feature preset.
+/// `dist_y` contains limited-range luma at `bit_depth`, with `stride` samples
+/// per row. The tightly packed path does not allocate a packing buffer.
+/// Returns an input error when both dimensions are below 216 or the adjusted
+/// histogram window exceeds the reference's reciprocal-table domain.
+pub fn cambi_from_luma(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    stride: usize,
+    bit_depth: u8,
+) -> Result<f64, Error> {
+    let needed = height
+        .checked_sub(1)
+        .and_then(|n| n.checked_mul(stride))
+        .and_then(|n| n.checked_add(width));
+    if width == 0 || height == 0 || stride < width || needed.is_none_or(|n| dist_y.len() < n) {
+        return Err(Error::InvalidInput("invalid luma geometry"));
+    }
+    if stride == width {
+        return cambi_impl(
+            &dist_y[..width * height],
+            width,
+            height,
+            bit_depth,
+            None,
+            false,
+        );
+    }
+    let mut packed = Vec::new();
+    packed
+        .try_reserve_exact(
+            width
+                .checked_mul(height)
+                .ok_or(Error::InvalidInput("dimension overflow"))?,
+        )
+        .map_err(|_| Error::InvalidInput("cannot allocate luma packing buffer"))?;
+    for row in 0..height {
+        packed.extend_from_slice(&dist_y[row * stride..row * stride + width]);
+    }
+    cambi_impl(&packed, width, height, bit_depth, None, false)
 }
 
 /// [`cambi_v1_from_luma`] plus every scale's c-values, copied before the
@@ -5557,7 +5605,7 @@ pub(crate) fn cambi_v1_maps(
         scales: Vec::new(),
         window_size: 0,
     };
-    let score = cambi_impl(dist_y, width, height, bit_depth, Some(&mut maps))?;
+    let score = cambi_impl(dist_y, width, height, bit_depth, Some(&mut maps), true)?;
     Ok((score, maps))
 }
 
@@ -5567,6 +5615,7 @@ fn cambi_impl(
     height: usize,
     bit_depth: u8,
     mut maps: Option<&mut CambiMaps>,
+    v1_preset: bool,
 ) -> Result<f64, Error> {
     if !(8..=16).contains(&bit_depth) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -5589,7 +5638,7 @@ fn cambi_impl(
         return Err(Error::InvalidInput("sample exceeds bit depth"));
     }
 
-    let speedup = width * height >= SPEEDUP_THRESHOLD_1080P;
+    let speedup = v1_preset && width * height >= SPEEDUP_THRESHOLD_1080P;
     let window_size = adjust_window_size(WINDOW_SIZE, width, height, speedup);
     if window_size * window_size >= 4226 {
         return Err(Error::InvalidInput("window size too large"));
@@ -5618,7 +5667,7 @@ fn cambi_impl(
     for (d, slot) in tvi_for_diff.iter_mut().enumerate().take(num_diffs) {
         *slot = (get_tvi_for_diff((d + 1) as i32, TVI_THRESHOLD) + num_diffs as i32) as u16;
     }
-    let vlt_luma = get_vlt_luma(VIS_LUM_THRESHOLD);
+    let vlt_luma = get_vlt_luma(if v1_preset { VIS_LUM_THRESHOLD } else { 0.0 });
 
     let v_lo_signed = vlt_luma as i32 - 3 * num_diffs as i32 + 1;
     let v_band_base: u16 = if v_lo_signed > 0 {
@@ -5696,7 +5745,7 @@ fn cambi_impl(
     pool::give_u16(mask);
     pool::give_f32(c_values);
     pool::give_u16(filter_buffer);
-    Ok(score.min(CAMBI_MAX_VAL))
+    Ok(score.min(if v1_preset { CAMBI_MAX_VAL } else { 1000.0 }))
 }
 
 #[cfg(all(
@@ -5722,6 +5771,24 @@ mod tests {
         (0..w * h)
             .map(|i| ((i * 53 + (i % w) * 17 + (i / w) * 29 + salt * 131) & 1023) as u16)
             .collect()
+    }
+
+    #[test]
+    fn standalone_stride_and_input_validation() {
+        let (w, h, stride) = (216, 218, 223);
+        let y: Vec<u16> = (0..w * h)
+            .map(|i| (16 + (i / w + i % w) % 220) as u16)
+            .collect();
+        let mut padded = vec![65535; stride * h];
+        for row in 0..h {
+            padded[row * stride..row * stride + w].copy_from_slice(&y[row * w..(row + 1) * w]);
+        }
+        assert_eq!(
+            cambi_from_luma(&y, w, h, w, 8).unwrap(),
+            cambi_from_luma(&padded, w, h, stride, 8).unwrap()
+        );
+        assert!(cambi_from_luma(&y, w, h, w - 1, 8).is_err());
+        assert!(cambi_from_luma(&y[..y.len() - 1], w, h, w, 8).is_err());
     }
 
     #[test]
