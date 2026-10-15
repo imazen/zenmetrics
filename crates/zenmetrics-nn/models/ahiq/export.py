@@ -219,11 +219,24 @@ ref = deform_net.deform(ct, ref_off)
 got = deform_gs(ct, ref_off, deform_net.deform.weight, deform_net.deform.bias)
 assert float((ref - got).abs().max()) < 1e-5, float((ref - got).abs().max())
 
-# Head/Full == upstream's literal per-crop score (real DeformConv2d)
+# Head() alone vs upstream deform+regressor on the SAME trunk taps —
+# isolates the head graph from trunk parity (measured worst |d| 6e-8
+# over 4 random pairs).
 a, b = torch.rand(1, 3, 224, 224) * 2 - 1, torch.rand(1, 3, 224, 224) * 2 - 1
+vd, cd = vit_taps(b), cnn_taps(b)
+vr, cr = vit_taps(a), cnn_taps(a)
+off = deform_net.conv_offset(F.interpolate(vr, size=(56, 56), mode='nearest'))
+up_head = float(regressor(vd, vr,
+                          deform_net.conv1(deform_net.deform(cd, off)),
+                          deform_net.conv1(deform_net.deform(cr, off))))
+got_head = float(Head()(vd, vr, cd, cr))
+assert abs(got_head - up_head) < 1e-6, (got_head, up_head)
+
+# Full() == upstream's literal per-crop score (real DeformConv2d),
+# measured worst |d| 6e-8 over the same random pairs.
 ref_score = float(upstream_score_crop(b, a))
 got_score = float(Full()(a, b))
-assert abs(got_score - ref_score) < 1e-5, (got_score, ref_score)
+assert abs(got_score - ref_score) < 1e-6, (got_score, ref_score)
 
 # --- export ----------------------------------------------------------------
 for name, mod, args, inputs, outs in (
