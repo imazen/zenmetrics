@@ -16,10 +16,10 @@ publish = false
 # resolution graph with a cubecl-stable lockfile.
 
 [dependencies]
-cubecl = { version = "0.10.0", default-features = false, features = ["std", "cuda"] }
-cubek-convolution = "0.2.0"
-cubek-matmul = "0.2.0"
-cubek-std = "0.2.0"
+cubecl = { version = "0.11.0", default-features = false, features = ["std", "cuda"] }
+cubek-convolution = "0.3.0"
+cubek-matmul = "0.3.0"
+cubek-std = "0.3.0"
 half = "2.5"
 bytemuck = "1.16"
 
