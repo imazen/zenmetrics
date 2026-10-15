@@ -10,11 +10,14 @@ each model's upstream reference implementation. Plan and licensing:
 | DISTS (`Dists`) | `dists` | rten, ort-cuda | `DISTS_pytorch` 0.1, CPU fp32, no resize | 0.094 | rten 1.9e-6, ort-cuda 1.9e-6 |
 | ST-LPIPS (`Lpips`, `LpipsNet::{AlexShiftTolerant,VggShiftTolerant}`) | `stlpips_alex`, `stlpips_vgg` | rten, ort-cuda | `stlpips_pytorch` 0.0.2 | 0.023 / 0.066 | rten ≤ 1.8e-6, ort-cuda ≤ 2.6e-6 |
 | DeepDC (`DeepDc`) | `deepdc` | rten, ort-cuda | `DeepDC_PyTorch` 0.2, ImageNet input norm, no resize | 0.064 | rten 1.9e-6, ort-cuda 1.9e-6 |
+| CKDN (`Ckdn`) | `ckdn` | rten, ort-cuda | `researchmm/CKDN` epoch-14 checkpoint, `cat(dist, ref, dist, ref)` → `dr`, no resize | 0.0135¹ | rten 6.6e-6, ort-cuda 4.4e-6 |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold
 (`models/jnd_scale.tsv`; method:
 [`benchmarks/nn_konjnd_scale_2026-10-15.md`](../../benchmarks/nn_konjnd_scale_2026-10-15.md)).
+¹ CKDN is a quality score whose identical-pair value is image-dependent, so its JND is the
+median |score − score(same reference vs itself)| rather than the median raw score.
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,

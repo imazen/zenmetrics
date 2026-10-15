@@ -1,16 +1,19 @@
-//! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC).
+//! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC,
+//! CKDN).
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the
 //! engine in `ZENMETRICS_NN_ENGINE`: `rten` (default, CPU) or `ort-cuda`
-//! (needs the `nn-ort` feature and `ORT_DYLIB_PATH`).
+//! (needs the `nn-ort` feature and `ORT_DYLIB_PATH`). Models whose weights are
+//! not permissively licensed also need `ZENMETRICS_NN_ACCEPT_WEIGHTS=<col>` —
+//! a refusal names the terms' URL.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
-use zenmetrics_nn::{DeepDc, Dists, Engine, Lpips, LpipsNet};
+use zenmetrics_nn::{Ckdn, DeepDc, Dists, Engine, Lpips, LpipsNet, WeightsConsent};
 
 use super::MetricKind;
 use crate::decode::Rgb8Image;
@@ -34,6 +37,24 @@ fn engine() -> Result<Engine, Box<dyn std::error::Error>> {
     }
 }
 
+/// `ZENMETRICS_NN_ACCEPT_WEIGHTS`: comma-separated score columns whose
+/// non-permissive weights terms the user accepts; each name maps to that
+/// model's `WEIGHTS` constant. Names without terms to accept are ignored —
+/// a load then fails with `WeightsNotAccepted`, which names the terms.
+fn consent() -> WeightsConsent {
+    let mut consent = WeightsConsent::new();
+    if let Ok(list) = std::env::var("ZENMETRICS_NN_ACCEPT_WEIGHTS") {
+        for name in list.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+            let terms = match name {
+                "ckdn" => Ckdn::WEIGHTS,
+                _ => continue,
+            };
+            consent = consent.accept(terms);
+        }
+    }
+    consent
+}
+
 fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Error>> {
     let dir = std::env::var_os("ZENMETRICS_NN_MODEL_DIR").ok_or(
         "learned metrics need ZENMETRICS_NN_MODEL_DIR: a directory exported by crates/zenmetrics-nn/models/*/export.py",
@@ -44,6 +65,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "deepdc" {
         return Ok(Box::new(DeepDc::from_dir(&dir, engine)?));
+    }
+    if column == "ckdn" {
+        return Ok(Box::new(Ckdn::from_dir(&dir, engine, &consent())?));
     }
     let net = LpipsNet::ALL
         .into_iter()
@@ -85,4 +109,23 @@ pub(super) fn score(
         .map(|(_, v)| v)
         .ok_or_else(|| format!("{column}: no score"))?;
     Ok(vec![(column, value)])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_permissive_weights_refuse_without_consent() {
+        // `from_dir` checks the consent before reading any file, so the
+        // directory need not exist.
+        let err = match Ckdn::from_dir("/nonexistent-ckdn", Engine::Rten, &WeightsConsent::new()) {
+            Err(e) => e,
+            Ok(_) => panic!("ckdn's weights have no stated licence"),
+        };
+        assert!(
+            matches!(err, zenmetrics_nn::Error::WeightsNotAccepted(t) if t == Ckdn::WEIGHTS),
+            "expected WeightsNotAccepted for ckdn, got {err:?}"
+        );
+    }
 }

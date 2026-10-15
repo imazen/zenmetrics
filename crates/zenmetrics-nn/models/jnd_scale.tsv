@@ -4,6 +4,9 @@
 # packages (CPU fp32); value = pooled median score over the 1,008 pairs.
 # Method, per-codec rows and quartiles: benchmarks/nn_konjnd_scale_2026-10-15.md
 # Used by tests/parity.rs to express engine tolerance in JND units.
+# ckdn is higher-is-better with an image-dependent identical-pair score, so its
+# JND is the pooled median |score(pair) - score(ref, ref)| per reference, from
+# the Rust port (zenmetrics-cli, ort-cuda) rather than an upstream package.
 column	jnd
 lpips_alex	0.065220
 lpips_vgg	0.193925
@@ -12,3 +15,4 @@ dists	0.094498
 stlpips_alex	0.023365
 stlpips_vgg	0.065762
 deepdc	0.064153
+ckdn	0.013521
