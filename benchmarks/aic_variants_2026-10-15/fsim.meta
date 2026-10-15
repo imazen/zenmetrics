@@ -1,0 +1,10 @@
+Host: i265, 2026-10-15. Parent: 613226a8; source: FSIM change containing this receipt.
+Command: python3 benchmarks/aic_variants_2026-10-15/panel.py ~/tmp/zenmetrics-lock-snap-aicvariants/target/release/zenmetrics ~/tmp/aic-variants-scratch/fsim-panel fsim fsim-k2 fsim-k3 fsim-k4 fsim-nodownscale
+All commands serialized through flock ~/tmp/i265-heavy.lock and run-heavy --mem 16G.
+run-heavy: done rc=0 86s | peak-RSS 6.02GiB | min-avail 17761MiB | peak-load 8.20
+Raw TSVs/logs: i265:~/tmp/aic-variants-scratch/fsim-panel/
+Base FSIM and FSIMc: 61/61 serialized rows equal earlier aic-audit/raw/fsim.tsv.
+Core tests: factors 1,2,3,4 Auto/fixed equality (score bits), packed/strided equality,
+configured map/scalar equality and geometry. 20 tests passed; strict crate clippy passed.
+JND values apply the site's named mapping, then subtract JND_CVVDP; max is absolute.
+These are validation observations, not fitted parameters or tuning inputs.

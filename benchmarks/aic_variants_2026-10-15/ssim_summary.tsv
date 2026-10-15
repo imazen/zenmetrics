@@ -1,0 +1,22 @@
+metric	column	site_mapping	n	max_published_abs_delta	median_jnd_offset	max_abs_jnd_offset	mapping_available	rejected_geometry
+SSIMc published baseline	SSIMc	SSIMc	61		-0.7446024178436665	2.6405215232068056	True	0
+ssim-pyiqa	ssim_pyiqa	SSIM-pyiqa	61	3.7769233379725264e-06	-0.7067917878327457	2.705274051623359	True	0
+ssim-pyiqa-f32	ssim_pyiqa_f32	SSIM-pyiqa-f32	61				False	0
+ssim-pyiqa-f32-k2	ssim_pyiqa_f32_k2	SSIM-pyiqa-f32-k2	61		-0.8283005950550653	2.0092123517091833	True	0
+ssim-pyiqa-f32-k3	ssim_pyiqa_f32_k3	SSIM-pyiqa-f32-k3	61		-0.6440532724276768	2.225876695499834	True	0
+ssim-pyiqa-f32-k4	ssim_pyiqa_f32_k4	SSIM-pyiqa-f32-k4	61		-0.47343193155653185	2.5291861082639073	True	0
+ssim-pyiqa-f32-k5	ssim_pyiqa_f32_k5	SSIM-pyiqa-f32-k5	61		-0.4420456014054077	2.3493843400085703	True	0
+ssim-pyiqa-f32-k6	ssim_pyiqa_f32_k6	SSIM-pyiqa-f32-k6	61		-0.3432826443604764	2.3801252009388416	True	0
+ssimc-pyiqa-f32	ssimc_pyiqa_f32	SSIMc-pyiqa-f32	61				False	0
+ssimc-pyiqa-f32-k2	ssimc_pyiqa_f32_k2	SSIMc-pyiqa-f32-k2	61		-0.6465094239336071	2.056979685053827	True	0
+ssimc-pyiqa-f32-k3	ssimc_pyiqa_f32_k3	SSIMc-pyiqa-f32-k3	61		-0.5590182888256905	2.0126500748161464	True	0
+ssimc-pyiqa-f32-k4	ssimc_pyiqa_f32_k4	SSIMc-pyiqa-f32-k4	61		-0.5020475881069917	2.188654430335231	True	0
+ssimc-pyiqa-f32-k5	ssimc_pyiqa_f32_k5	SSIMc-pyiqa-f32-k5	61		-0.5489488953344106	1.9709117157739673	True	0
+ssimc-pyiqa-f32-k6	ssimc_pyiqa_f32_k6	SSIMc-pyiqa-f32-k6	61		-0.4888716451043149	2.0346297824484583	True	0
+ms-ssim-pyiqa	ms_ssim_pyiqa	MS-SSIM-pyiqa	61	1.8827927489306617e-06	-0.7485599053037113	1.8437670300105569	True	0
+ms-ssim-pyiqa-f32	ms_ssim_pyiqa_f32	MS-SSIM-pyiqa-f32	61				False	0
+ms-ssim-pyiqa-f32-k2	ms_ssim_pyiqa_f32_k2	MS-SSIM-pyiqa-f32-k2	61				False	0
+ms-ssim-pyiqa-f32-k3	ms_ssim_pyiqa_f32_k3	MS-SSIM-pyiqa-f32-k3	61				False	0
+ms-ssim-pyiqa-f32-k4	ms_ssim_pyiqa_f32_k4	MS-SSIM-pyiqa-f32-k4	61				False	0
+ms-ssim-pyiqa-f32-k5	ms_ssim_pyiqa_f32_k5	MS-SSIM-pyiqa-f32-k5	61				False	0
+ms-ssim-pyiqa-f32-k6	ms_ssim_pyiqa_f32_k6	MS-SSIM-pyiqa-f32-k6	27				False	34

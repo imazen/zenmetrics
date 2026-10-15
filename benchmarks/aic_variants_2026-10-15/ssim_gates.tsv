@@ -1,0 +1,14 @@
+metric	n	max_abs_delta	worst_pair	oracle	tolerance
+ssim-pyiqa	61	3.7769233379725264e-06	S21_JXLM_09.png	published	1e-05
+ms-ssim-pyiqa	61	1.8827927489306617e-06	S60_FTIC_01.png	published	1e-05
+ms-ssim-pyiqa odd S53	1	2.3450634845101348e-07	S53_JAIB_07.png	published	1e-05
+ssim-pyiqa-f32-k2	61	4.972553915294498e-07	S43_JXL_19.png	independent audit probe	1e-06
+ssim-pyiqa-f32-k3	61	4.864355843681167e-07	S68_JAIB_15.png	independent audit probe	1e-06
+ssim-pyiqa-f32-k4	61	4.607150599911236e-07	S13_JPG_15.png	independent audit probe	1e-06
+ssim-pyiqa-f32-k5	61	4.959572268425916e-07	S11_J2K_01.png	independent audit probe	1e-06
+ssim-pyiqa-f32-k6	61	4.934590124294758e-07	S54_JPG_07.png	independent audit probe	1e-06
+ssimc-pyiqa-f32-k2	61	4.955568716491499e-07	S68_JAIB_15.png	independent audit probe	1e-06
+ssimc-pyiqa-f32-k3	61	4.97567819945921e-07	S36_JXL_17.png	independent audit probe	1e-06
+ssimc-pyiqa-f32-k4	61	4.875622922062561e-07	S56_JXL_01.png	independent audit probe	1e-06
+ssimc-pyiqa-f32-k5	61	4.914959610413661e-07	S68_JAIB_15.png	independent audit probe	1e-06
+ssimc-pyiqa-f32-k6	61	4.823094211792167e-07	S07_JXL_01.png	independent audit probe	1e-06

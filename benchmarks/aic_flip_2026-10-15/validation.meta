@@ -1,0 +1,41 @@
+host i265
+base_commit 4f0dac38006cada675c7f2b607d5d1ac875cec57
+rustc 1.99.0 (b940084d7 2026-09-28)
+flip_oracle flip-evaluator==1.7
+cw_oracle pyrtools==1.0.11 numpy==2.5.4 scipy==1.18.1
+heavy_wrapper flock $HOME/tmp/i265-heavy.lock $HOME/work/claudehints/scripts/run-heavy --mem 16G -- COMMAND
+snapshot_env LOCK_SNAP_DIR=$HOME/tmp/zenmetrics-lock-snap-aicvariants
+scratch_env TMPDIR=$HOME/tmp/aic-variants-scratch
+commands just aic-flip-verify PYTHON OUT; just aic-cw-search PYTHON OUT; just aic-cw-verify PYTHON OUT; just aic-flip-ci
+final_selected_grid true centred DFT bins; f64 explicit luma; LUT radial/angular masks; uncropped-height sigma
+final_cw_oracle_max 1.1114442699522442e-12
+final_cw_published_median 2.9390669198381403e-7
+final_cw_published_max 1.106269287983741e-4
+final_flip_published_max 0
+final_flip_map_max 2.9802322387695312e-8
+final_flip_mean_max 0
+final_combined_gate run-heavy: done rc=0 69s | peak-RSS 2.30GiB | min-avail 21708MiB | peak-load 6.41
+initial_oracle_search run-heavy: done rc=0 321s | peak-RSS 5.80GiB | min-avail 16278MiB | peak-load 18.20
+note Strict default-feature CLI-library clippy exposes inherited zenmetrics-api cpu_dispatch.rs:248 unused_mut. The requested CI workspace feature combination passes; no allow-list additions were made.
+note Initial BLAS-luma oracle mismatch is retained; explicit-ingress verification retains the original 1e-9 tolerance.
+artifacts sha256 path (relative to $HOME/tmp/aic-variants-scratch/retained-round3)
+59ab2b86c5ca69534e4496aba21f549d18e4b82556b9e7dff6e5a0fa4d0c0abb r3-oracles.log
+d07705d6257be54a28fee01120ca7c2d5fef0009d06902709fe8edfe9ea50930 r3-flip-checks.log
+ed76ab1bbd648e4c2e2976946176946526b98f17e44eb85ea6efd3907d634193 r3-flip-lib.log
+01bb09b8151ffbc50ec5fb5a2b8b69774b6213f64eb81297c244bf2fcba472cd r3-flip-clippy-ci.log
+057596c4f9aeb9d0d0a9779648920790d4685e46b2cf0a7bada9807bff66c06c r3-cw-checks.log
+08daf817a705132450502c801e0721994d05c335bcb33038148ee608ee9e591a r3-cw-variants.log
+5ff6929746ba66679c485d00c7e235907b11ef0cddc9ccc4211f57dd54bebb8e r3-cw-explicit.log
+ffb6e2464397711a6ffbd1452f13d364a95d63e8ac88c79f99f079ceb63179d6 r3-cw-grid-panel.log
+4340e13f4129fa65f183768b870bfae232c18cb8a7dca6d42bacc9baf3ffdc7c r3-ci.log
+427dbadb50e8f54afdb1655843a3ab35bbe4e60fa09448b1c3ab0528c7d52f0d r3-cw-final.log
+a1bdca668c1e0c66de53de5f29fc93dc512ec7f7e30239d6f41d98a1fedf4219 cw-search-pooling.json
+ef44f9bb4b24b97d03fe26f7c1a6a5a7bc86aa5695406e82436018154e8bdcc1 cw-grid-panel.json
+source_sha256 37496304c3cd040bdf892a978d0e42301cb051a1b63b96d3427c234e33ce699e crates/zenmetrics-cli/src/metrics/flip.rs
+source_sha256 41dc1358a23fa0ad3bef839e146e71e0ca0ca81cfd963cfacf9aeac7597bcf1f crates/zenmetrics-cli/src/metrics/cw_ssim.rs
+source_sha256 3558bc344fdfb3acdd2622a896278388f6a7c8cafc846e896e2a3362cf7d1460 crates/zenmetrics-cli/src/metrics/cw_fft.rs
+final_ci_gate run-heavy: done rc=0 11s | peak-RSS 2.30GiB | min-avail 23493MiB | peak-load 1.86
+e69a9f3f6ae222fbe9d98dcf9686d146e309938c848664d564b1914edc1cab00 r3-ci-final.log
+flip_commit 4f0dac38006cada675c7f2b607d5d1ac875cec57
+cw_commit 636f6b2c84dccd04f94637295f87935d66d5f02b
+harness_commit 5778ea61ecf02eba9bf1e37ae6f28958f02e6316

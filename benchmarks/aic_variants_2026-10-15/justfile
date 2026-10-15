@@ -1,0 +1,19 @@
+# Run from the lane checkout. Uses the required isolated pinned snapshot.
+repo := justfile_directory() / "../.."
+export LOCK_SNAP_DIR := env_var("HOME") / "tmp/zenmetrics-lock-snap-aicvariants"
+
+# Each command is serialized against other work on the shared host.
+cargo +args:
+    cd {{repo}} && flock "$HOME/tmp/i265-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- just snap-cargo @ {{args}}
+
+panel out +metrics:
+    cd {{repo}} && flock "$HOME/tmp/i265-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 16G -- python3 benchmarks/aic_variants_2026-10-15/panel.py "$LOCK_SNAP_DIR/target/release/zenmetrics" {{out}} {{metrics}}
+
+verify panel_root site probe:
+    python3 {{justfile_directory()}}/verify.py {{panel_root}} {{site}} {{probe}}
+
+rounding even away site out:
+    python3 {{justfile_directory()}}/rounding.py {{even}} {{away}} {{site}} {{out}}
+
+verify-baselines panel_root site probe baseline output:
+    python3 {{justfile_directory()}}/verify.py {{panel_root}} {{site}} {{probe}} --baseline-root {{baseline}} --output {{output}}

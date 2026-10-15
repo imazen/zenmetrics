@@ -187,8 +187,10 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Haarpsi => "haarpsi",
         CliMetricKind::HaarpsiY => "haarpsi_y",
         CliMetricKind::Fsim => "fsim",
+
         CliMetricKind::FsimY => "fsim_y",
         CliMetricKind::Vsi => "vsi",
+
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
         CliMetricKind::Mad => "mad",
@@ -286,7 +288,10 @@ pub fn rekey_orchestrator_columns(
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
-        CliMetricKind::Gmsd
+        CliMetricKind::CwSsim
+        | CliMetricKind::Flip
+        | CliMetricKind::FlipV17
+        | CliMetricKind::Gmsd
         | CliMetricKind::Mdsi
         | CliMetricKind::MsGmsd
         | CliMetricKind::MsGmsdc
@@ -297,8 +302,36 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Haarpsi
         | CliMetricKind::HaarpsiY
         | CliMetricKind::Fsim
+        | CliMetricKind::SsimPyiqa
+        | CliMetricKind::SsimPyiqaF32
+        | CliMetricKind::SsimPyiqaF32K2
+        | CliMetricKind::SsimPyiqaF32K3
+        | CliMetricKind::SsimPyiqaF32K4
+        | CliMetricKind::SsimPyiqaF32K5
+        | CliMetricKind::SsimPyiqaF32K6
+        | CliMetricKind::SsimcPyiqaF32
+        | CliMetricKind::SsimcPyiqaF32K2
+        | CliMetricKind::SsimcPyiqaF32K3
+        | CliMetricKind::SsimcPyiqaF32K4
+        | CliMetricKind::SsimcPyiqaF32K5
+        | CliMetricKind::SsimcPyiqaF32K6
+        | CliMetricKind::MsSsimPyiqa
+        | CliMetricKind::MsSsimPyiqaF32
+        | CliMetricKind::MsSsimPyiqaF32K2
+        | CliMetricKind::MsSsimPyiqaF32K3
+        | CliMetricKind::MsSsimPyiqaF32K4
+        | CliMetricKind::MsSsimPyiqaF32K5
+        | CliMetricKind::MsSsimPyiqaF32K6
+        | CliMetricKind::FsimK2
+        | CliMetricKind::FsimK3
+        | CliMetricKind::FsimK4
+        | CliMetricKind::FsimNodownscale
         | CliMetricKind::FsimY
         | CliMetricKind::Vsi
+        | CliMetricKind::VsiK2
+        | CliMetricKind::VsiK3
+        | CliMetricKind::VsiK4
+        | CliMetricKind::VsiNodownscale
         | CliMetricKind::Msssim
         | CliMetricKind::Vif
         | CliMetricKind::Mad
@@ -441,7 +474,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // one-shot only.
     !matches!(
         kind,
-        CliMetricKind::Gmsd
+        CliMetricKind::CwSsim
+            | CliMetricKind::Flip
+            | CliMetricKind::FlipV17
+            | CliMetricKind::Gmsd
             | CliMetricKind::Mdsi
             | CliMetricKind::MsGmsd
             | CliMetricKind::MsGmsdc
@@ -452,8 +488,36 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Haarpsi
             | CliMetricKind::HaarpsiY
             | CliMetricKind::Fsim
+            | CliMetricKind::SsimPyiqa
+            | CliMetricKind::SsimPyiqaF32
+            | CliMetricKind::SsimPyiqaF32K2
+            | CliMetricKind::SsimPyiqaF32K3
+            | CliMetricKind::SsimPyiqaF32K4
+            | CliMetricKind::SsimPyiqaF32K5
+            | CliMetricKind::SsimPyiqaF32K6
+            | CliMetricKind::SsimcPyiqaF32
+            | CliMetricKind::SsimcPyiqaF32K2
+            | CliMetricKind::SsimcPyiqaF32K3
+            | CliMetricKind::SsimcPyiqaF32K4
+            | CliMetricKind::SsimcPyiqaF32K5
+            | CliMetricKind::SsimcPyiqaF32K6
+            | CliMetricKind::MsSsimPyiqa
+            | CliMetricKind::MsSsimPyiqaF32
+            | CliMetricKind::MsSsimPyiqaF32K2
+            | CliMetricKind::MsSsimPyiqaF32K3
+            | CliMetricKind::MsSsimPyiqaF32K4
+            | CliMetricKind::MsSsimPyiqaF32K5
+            | CliMetricKind::MsSsimPyiqaF32K6
+            | CliMetricKind::FsimK2
+            | CliMetricKind::FsimK3
+            | CliMetricKind::FsimK4
+            | CliMetricKind::FsimNodownscale
             | CliMetricKind::FsimY
             | CliMetricKind::Vsi
+            | CliMetricKind::VsiK2
+            | CliMetricKind::VsiK3
+            | CliMetricKind::VsiK4
+            | CliMetricKind::VsiNodownscale
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
             | CliMetricKind::Mad

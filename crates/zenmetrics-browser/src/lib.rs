@@ -1152,11 +1152,17 @@ fn compute_maps(
         }
         "dssim" => dssim_maps(&r, &d, width, height)?,
         #[cfg(feature = "cpu-fsim")]
-        "fsim" | "fsimc" => evaluate_spatial_map(&mut fsim::Fsim, &r, &d, width, height)?,
+        "fsim" | "fsimc" => {
+            let mut scorer = fsim::Fsim::default();
+            evaluate_spatial_map(&mut scorer, &r, &d, width, height)?
+        }
         #[cfg(feature = "cpu-haarpsi")]
         "haarpsi" => evaluate_spatial_map(&mut haarpsi::Haarpsi, &r, &d, width, height)?,
         #[cfg(feature = "cpu-vsi")]
-        "vsi" => evaluate_spatial_map(&mut vsi::Vsi, &r, &d, width, height)?,
+        "vsi" => {
+            let mut scorer = vsi::Vsi::default();
+            evaluate_spatial_map(&mut scorer, &r, &d, width, height)?
+        }
         #[cfg(feature = "cpu-msssim")]
         "msssim" => evaluate_spatial_map(&mut msssim::Msssim, &r, &d, width, height)?,
         #[cfg(feature = "cpu-metrics")]
