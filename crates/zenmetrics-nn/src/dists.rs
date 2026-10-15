@@ -38,6 +38,61 @@ pub struct Dists {
     min_size: usize,
 }
 
+/// Lane count for the plane accumulators below. `plane_dot(x, x)` and the
+/// sum-of-squares lane of `plane_sums(x)` accumulate the same f64 products in
+/// the same lane order, so they return identical bits; `cov == var` then
+/// holds bitwise for an identical pair and `s2 == 1` exactly.
+const LANES: usize = 8;
+
+/// `Σ x` and `Σ x²` of one channel plane in a single pass, in f64.
+fn plane_sums(ch: &[f32]) -> (f64, f64) {
+    let mut sx = [0.0f64; LANES];
+    let mut sxx = [0.0f64; LANES];
+    let (body, tail) = ch.as_chunks::<LANES>();
+    for c in body {
+        for i in 0..LANES {
+            let x = f64::from(c[i]);
+            sx[i] += x;
+            sxx[i] += x * x;
+        }
+    }
+    let (mut tx, mut txx) = (0.0f64, 0.0f64);
+    for &v in tail {
+        let x = f64::from(v);
+        tx += x;
+        txx += x * x;
+    }
+    let (mut sum, mut sq) = (tx, txx);
+    for i in 0..LANES {
+        sum += sx[i];
+        sq += sxx[i];
+    }
+    (sum, sq)
+}
+
+/// `Σ x·y` over two channel planes, in f64. Same lane order as
+/// [`plane_sums`]' square term: `plane_dot(x, x)` is bitwise equal to it.
+fn plane_dot(a: &[f32], b: &[f32]) -> f64 {
+    let mut lanes = [0.0f64; LANES];
+    let n = a.len().min(b.len());
+    let (body, tail) = a[..n].as_chunks::<LANES>();
+    let (bbody, btail) = b[..n].as_chunks::<LANES>();
+    for (ca, cb) in body.iter().zip(bbody) {
+        for i in 0..LANES {
+            lanes[i] += f64::from(ca[i]) * f64::from(cb[i]);
+        }
+    }
+    let mut t = 0.0f64;
+    for (&va, &vb) in tail.iter().zip(btail) {
+        t += f64::from(va) * f64::from(vb);
+    }
+    let mut sum = t;
+    for l in lanes {
+        sum += l;
+    }
+    sum
+}
+
 /// One tap's per-channel statistics, plus the map itself for the covariance.
 struct TapStats {
     tap: Tap,
@@ -52,10 +107,13 @@ impl TapStats {
         let mut mean = Vec::with_capacity(tap.c);
         let mut var = Vec::with_capacity(tap.c);
         for ch in tap.data.chunks_exact(plane) {
-            let m = ch.iter().map(|&v| f64::from(v)).sum::<f64>() / n;
-            let v = ch.iter().map(|&v| (f64::from(v) - m).powi(2)).sum::<f64>() / n;
+            let (sx, sxx) = plane_sums(ch);
+            let m = sx / n;
             mean.push(m);
-            var.push(v);
+            // E[x²] − m², accumulated in the same order as the covariance's
+            // `exy − mx·my` in `score_stats`, so an identical pair gets
+            // `cov == var` bitwise (see LANES).
+            var.push(sxx / n - m * m);
         }
         Self { tap, mean, var }
     }
@@ -194,12 +252,7 @@ impl Dists {
             {
                 let (mx, my) = (rs.mean[c], ds.mean[c]);
                 let s1 = (2.0 * mx * my + C1) / (mx * mx + my * my + C1);
-                let exy = rc
-                    .iter()
-                    .zip(dc)
-                    .map(|(&a, &b)| f64::from(a) * f64::from(b))
-                    .sum::<f64>()
-                    / n;
+                let exy = plane_dot(rc, dc) / n;
                 let cov = exy - mx * my;
                 let s2 = (2.0 * cov + C2) / (rs.var[c] + ds.var[c] + C2);
                 tap1 += f64::from(alpha[c]) * s1;
