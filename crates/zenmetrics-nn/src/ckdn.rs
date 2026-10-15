@@ -18,6 +18,14 @@
 //! `ckdn_full.onnx` runs the upstream forward end to end. Inputs are u8
 //! pixels as f32 (0..255); the graphs normalise by `mean*255`/`std*255`
 //! inside, as upstream's PrefetchLoader does.
+//!
+//! Before the graphs, each image goes through the eval transform upstream's
+//! `predict_score.py` applies via its timm loader (`img_size=288`,
+//! `crop_pct=0.875`): resize so the short side is 329, centre-crop 288. The
+//! AIC-4 published column — which pyiqa's wrapper produces — uses an
+//! antialiased bicubic resize for the distorted image but **nearest** for
+//! the reference (verified by bit-exact input capture); this port follows
+//! that convention, since it is what the scored data was generated with.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -25,11 +33,17 @@ use std::path::Path;
 use crate::common::{Backend, read_meta};
 use crate::engine::{self, Tap, Trunk};
 use crate::preprocess::rgb8_to_planar_255;
+use crate::resize::{center_crop, resize_bicubic_aa, resize_nearest};
 use crate::{Engine, Error, WeightsConsent, WeightsLicence, WeightsTerms, za};
 
 /// Bump whenever any output can change.
-const SCORE_REVISION: u32 = 1;
+const SCORE_REVISION: u32 = 2;
 const COLUMN: &str = "ckdn";
+
+/// Eval transform: `Resize(329)` on the short side (long side floored to keep
+/// aspect) then `CenterCrop(288)` — upstream's `img_size=288, crop_pct=0.875`.
+const RESIZE_SHORT: usize = 329;
+const CROP: usize = 288;
 
 /// CKDN. Higher is closer (a sigmoid quality score in `(0, 1)`). Input:
 /// packed sRGB8 (any stride).
@@ -38,7 +52,6 @@ pub struct Ckdn {
     /// On trunk engines: the reference-side encoder and the diff→dr tail.
     parts: Option<Parts>,
     channels: usize,
-    min_size: usize,
 }
 
 struct Parts {
@@ -75,7 +88,7 @@ impl Ckdn {
     ) -> Result<Self, Error> {
         consent.check(&Self::WEIGHTS)?;
         let dir = dir.as_ref();
-        let (channels, min_size) = read_meta(&dir.join("ckdn.meta"))?;
+        let (channels, _min_size) = read_meta(&dir.join("ckdn.meta"))?;
         if channels.len() != 1 {
             return Err(Error::BadModel(
                 "ckdn.meta: expected one channel count".into(),
@@ -102,7 +115,6 @@ impl Ckdn {
             backend,
             parts,
             channels: channels[0],
-            min_size,
         })
     }
 
@@ -113,11 +125,26 @@ impl Ckdn {
         }
     }
 
-    fn check_size(&self, img: &za::Rgb8In<'_>) -> Result<(), Error> {
-        if img.width < self.min_size || img.height < self.min_size {
-            return Err(Error::TooSmall { min: self.min_size });
-        }
-        Ok(())
+    /// The eval transform: resize so the short side is [`RESIZE_SHORT`]
+    /// (long side floored to keep aspect, torchvision's `int()`), then
+    /// centre-crop [`CROP`]. `nearest` selects the reference side's kernel —
+    /// the published convention resizes the distorted image with antialiased
+    /// bicubic but the reference with nearest. Returns planar f32 `0..255`,
+    /// `[3, CROP, CROP]`.
+    fn prep(img: &za::Rgb8In<'_>, nearest: bool) -> Vec<f32> {
+        let (h, w) = (img.height, img.width);
+        let (nh, nw) = if w <= h {
+            (RESIZE_SHORT * h / w, RESIZE_SHORT)
+        } else {
+            (RESIZE_SHORT, RESIZE_SHORT * w / h)
+        };
+        let planar = rgb8_to_planar_255(img);
+        let resized = if nearest {
+            resize_nearest(&planar, 3, h, w, nh, nw)
+        } else {
+            resize_bicubic_aa(&planar, 3, h, w, nh, nw)
+        };
+        center_crop(&resized, 3, nh, nw, CROP)
     }
 
     /// A single-tap run's `[c, h, w]` output, checked against `channels`.
@@ -135,28 +162,23 @@ impl Ckdn {
         Ok(t)
     }
 
-    /// `qse(img)` on a trunk engine.
+    /// `qse(img)` on a trunk engine — the distorted-image encoder, fed the
+    /// antialiased-bicubic crop.
     fn encode_qse(&self, img: &za::Rgb8In<'_>) -> Result<Tap, Error> {
-        self.check_size(img)?;
         let Backend::Trunk(qse) = &self.backend else {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
-        Self::take(
-            qse.run(rgb8_to_planar_255(img), img.height, img.width)?,
-            self.channels,
-        )
+        Self::take(qse.run(Self::prep(img, false), CROP, CROP)?, self.channels)
     }
 
-    /// `dte(img)` on a trunk engine.
+    /// `dte(img)` on a trunk engine — the reference-side encoder, fed the
+    /// nearest-neighbour crop.
     fn encode_dte(&self, img: &za::Rgb8In<'_>) -> Result<Tap, Error> {
-        self.check_size(img)?;
         let Some(parts) = &self.parts else {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
         Self::take(
-            parts
-                .dte
-                .run(rgb8_to_planar_255(img), img.height, img.width)?,
+            parts.dte.run(Self::prep(img, true), CROP, CROP)?,
             self.channels,
         )
     }
@@ -181,18 +203,16 @@ impl Ckdn {
     }
 
     fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
-        self.check_size(r)?;
         if (r.width, r.height) != (d.width, d.height) {
             return Err(Error::SizeMismatch);
         }
-        let (h, w) = (r.height, r.width);
         match &self.backend {
             Backend::Trunk(qse) => {
                 let parts = self.parts.as_ref().expect("trunk parts");
-                let (xr, xd) = (rgb8_to_planar_255(r), rgb8_to_planar_255(d));
+                let (xr, xd) = (Self::prep(r, true), Self::prep(d, false));
                 let (qd, rr) = std::thread::scope(|s| {
-                    let hj = s.spawn(|| qse.run(xd, h, w));
-                    let rr = parts.dte.run(xr, h, w);
+                    let hj = s.spawn(|| qse.run(xd, CROP, CROP));
+                    let rr = parts.dte.run(xr, CROP, CROP);
                     (
                         hj.join()
                             .map_err(|_| Error::Engine("encoder run panicked".into()))
@@ -205,12 +225,7 @@ impl Ckdn {
                     &Self::take(rr?, self.channels)?,
                 )
             }
-            Backend::Pair(p) => p.score(
-                rgb8_to_planar_255(r),
-                rgb8_to_planar_255(d),
-                r.height,
-                r.width,
-            ),
+            Backend::Pair(p) => p.score(Self::prep(r, true), Self::prep(d, false), CROP, CROP),
         }
     }
 }
@@ -218,7 +233,7 @@ impl Ckdn {
 impl za::Metric for Ckdn {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(
-            "researchmm/CKDN checkpoint epoch 14, cat(dist, ref, dist, ref)[:,0], no resize; engine {}",
+            "researchmm/CKDN checkpoint epoch 14, cat(dist, ref, dist, ref)[:,0], resize short->329 + cc288 (dist bicubic-aa, ref nearest); engine {}",
             self.engine_name()
         ))
     }
@@ -261,11 +276,7 @@ impl za::Metric for Ckdn {
                 self.encode_dte(&view)
                     .metric_err_with(COLUMN, Error::kind)?,
             ),
-            Backend::Pair(_) => {
-                self.check_size(&view)
-                    .metric_err_with(COLUMN, Error::kind)?;
-                WarmState::Pixels(rgb8_to_planar_255(&view))
-            }
+            Backend::Pair(_) => WarmState::Pixels(Self::prep(&view, true)),
         };
         Ok(Box::new(WarmCkdn {
             metric: self,
@@ -307,7 +318,7 @@ impl za::WarmReference for WarmCkdn<'_> {
                 .encode_qse(&d)
                 .and_then(|qd| self.metric.dr(&qd, dte_r)),
             WarmState::Pixels(px) => match &self.metric.backend {
-                Backend::Pair(p) => p.score(px.clone(), rgb8_to_planar_255(&d), d.height, d.width),
+                Backend::Pair(p) => p.score(px.clone(), Ckdn::prep(&d, false), CROP, CROP),
                 Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
             },
         }

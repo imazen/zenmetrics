@@ -86,21 +86,24 @@ Percentiles are numpy linear interpolation. The spread column is p75/p25.
 | deepdc | JPEG | 504 | 0.064175 | 0.080536 | 0.099321 | 0.084171 | 1.548 |
 | deepdc | BPG | 504 | 0.035697 | 0.047554 | 0.064147 | 0.052494 | 1.797 |
 | deepdc | pooled | 1008 | 0.044892 | **0.064153** | 0.085502 | 0.068333 | 1.905 |
-| ckdn | JPEG | 504 | 0.010617 | 0.016775 | 0.022895 | 0.017589 | 2.157 |
-| ckdn | BPG | 504 | 0.005406 | 0.010524 | 0.016804 | 0.012262 | 3.109 |
-| ckdn | pooled | 1008 | 0.007385 | **0.013521** | 0.020423 | 0.014925 | 2.765 |
+| ckdn | JPEG | 504 | 0.003011 | 0.006051 | 0.010098 | 0.006987 | 3.354 |
+| ckdn | BPG | 504 | 0.002156 | 0.004728 | 0.008025 | 0.005915 | 3.723 |
+| ckdn | pooled | 1008 | 0.002575 | **0.005276** | 0.009086 | 0.006451 | 3.528 |
 
 Estimated 1 JND: LPIPS-alex 0.0652, LPIPS-vgg 0.194, LPIPS-squeeze 0.0796, DISTS 0.0945,
-ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0135.
+ST-LPIPS-alex 0.0234, ST-LPIPS-vgg 0.0658, DeepDC (input norm on) 0.0642, CKDN 0.0053.
 
 The `ckdn` rows are not from an upstream package: they were scored by the Rust port
 (`zenmetrics batch --metric ckdn --features nn,nn-ort`, engine ort-cuda, ONNX Runtime
 1.31, i265, 2026-10-15, in the commit that adds the `ckdn` row to `jnd_scale.tsv`).
 CKDN is higher-is-better and its identical-pair score is image-dependent (median
-0.615, range 0.444–0.803 on these references — qse ≠ dte), so each value is
+0.614, range 0.434–0.798 on these references — qse ≠ dte), so each value is
 `|score(ref, dist) − score(ref, ref)|`, the distance from the perfect score for that
-reference, and the table entries are its quartiles and median. In 166 of 1,008 pairs
-the distorted image scored above its own reference.
+reference, and the table entries are its quartiles and median. In 416 of 1,008 pairs
+the distorted image scored above its own reference. Measured with the AIC-4 eval
+transform in place (each image resized short-side→329 — bicubic+antialias for the
+distorted side, nearest for the reference — then centre-cropped to 288), which is
+the convention this column scores with; the earlier native-feed run is superseded.
 
 ## Caveats
 

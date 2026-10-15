@@ -23,8 +23,8 @@ checkpoint = "https://drive.google.com/file/d/13HzxPsRWdPC_CAsbvgMgU5IG_TKPVbNe/
 [input]
 format = "packed sRGB8"
 normalisation = "u8 as f32 (0..255), then (x - mean*255) / (std*255) inside the graph — upstream's PrefetchLoader does exactly this on the 12-channel input (ImageNet mean/std repeated per 3-channel group)"
-resize = "none (upstream's eval script resizes+center-crops to 288 as a demo; the model is fully convolutional and takes any size)"
-min_size = 1                         # measured: fully convolutional + adaptive pool
+resize = "eval transform always applied: short side -> 329 (long side floored, torchvision Resize(int) semantics) then CentreCrop(288); antialiased bicubic for the distorted image, NEAREST for the reference. This is what upstream predict_score.py's timm loader does (img_size=288, crop_pct=0.875) — and what the AIC-4 published column was scored with (pyiqa's wrapper; nearest-on-ref verified by bit-exact capture of its network inputs)."
+min_size = 1                         # measured: fully convolutional + adaptive pool; the graphs always see 288x288 after the transform
 
 [export]
 script = "export.py"
@@ -35,10 +35,10 @@ notes = "qse/dte are the two encoder branches (ResNet conv1+layer1 each); tail i
 [parity]
 oracle = "researchmm/CKDN checkpoint epoch 14, CPU, fp32"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
-jnd = 0.013521                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, rten
-results = "rten worst |d| 8.971e-8 (6.6e-6 JND); ort-cuda worst |d| 5.966e-8 (4.4e-6 JND); 15 goldens"
+jnd = 0.005276                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda), with the eval transform
+results = "rten worst |d| 2.981e-7 (5.7e-5 JND); ort-cuda worst |d| 2.683e-7 (5.1e-5 JND); 15 goldens under the eval transform"
 
 [aic4]
 column = "CKDN"
-results = "median |d| 3.483e-02, max |d| 3.720e-01 on the 61-pair crop set — does NOT match"
-finding = "AIC-4's CKDN column is not the researchmm/CKDN epoch-14 model evaluated natively. A black-box probe of pyiqa's 'ckdn' metric reproduces the published column to ~1e-4: its wrapper resizes each image to 288x288 and feeds TWO separate 3-ch tensors into a ResNet (not upstream's 12-ch cat), with a repackaged state-dict-only checkpoint (CKDN_model_best-38b27dc6.pth, ~51 MB vs upstream's ~107 MB full ckpt). Raw, res329+cc288, res288, half-size, BGR, per-image-pair mappings and all output taps were ruled out on the upstream checkpoint. The Rust port stays faithful to the upstream checkpoint; matching the AIC column would need pyiqa's rewritten wrapper/convention, which is out of scope for an upstream port."
+results = "matches: median |d| 4.0e-05, max |d| 1.4e-04 on all 61 crop pairs (this port, ort-cuda). Native feed without the transform was median 3.5e-02 / max 3.7e-01 — the transform IS the published convention"
+finding = "The published column is the upstream epoch-14 checkpoint (pyiqa's CKDN_model_best-38b27dc6.pth is a repack — 290/290 tensors bit-identical) under pyiqa's loader convention: dist -> antialiased-bicubic resize short->329 + cc288, ref -> NEAREST resize short->329 + cc288, cat(d',r',d',r') -> dr. Identified by black-box probing only (impulse/crop/affine input captures); no pyiqa source read or used. torch's antialiased bicubic is Catmull-Rom a=-0.5 (verified vs F.interpolate impulse weights), torch NEAREST is floor(i*in/out); both re-implemented in src/resize.rs."
