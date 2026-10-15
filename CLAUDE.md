@@ -1533,7 +1533,8 @@ and benchmark acceptance are unchanged.
 Recurred 2026-10-15 on website run 38729760597 (`dc9b8c32`), attempt 1:
 browser 91.21909967783705, native 91.21909967392351 (difference 3.9e-9),
 maximum map delta 0.0. Attempt 2 of the same commit passed and deployed, so
-the browser scalar is not deterministic run to run; the map is.
+the browser or the native oracle scalar varies between runs (not measured
+which); the maps matched exactly both times.
 
 ### Browser native map rendering (2026-10-14)
 
