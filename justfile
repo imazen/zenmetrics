@@ -559,3 +559,15 @@ viewer-check site oracle report:
 # Assemble the matching current-source viewer (not an old checkpoint frontend).
 viewer-site build source out:
     python3 scripts/checkpoint/prepare-pages.py --build '{{build}}' --source '{{source}}' --out '{{out}}'
+
+# --- zenmetrics-nn (learned metrics) ----------------------------------------
+# Export LPIPS-vgg from the upstream `lpips` package and write CPU-fp32 goldens
+# on a ladder dir (see crates/zenmetrics-nn/models/lpips-vgg/export.py).
+nn-export-lpips-vgg python ladder out sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/lpips-vgg/export.py '{{ladder}}' '{{out}}' '{{sizes}}'
+
+# Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
+# the pinned lock snapshot, so the paths are made absolute first.
+nn-parity model_dir ladder:
+    ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" \
+        {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests --test parity -- --nocapture

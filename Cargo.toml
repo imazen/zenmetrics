@@ -43,6 +43,7 @@ members = [
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",
     "crates/zenmetrics-stats",
+    "crates/zenmetrics-nn",
     "benchmarks/heaptrack/drivers/cpu_profile",
     "benchmarks/heaptrack/drivers/gpu_vram_profile",
 ]

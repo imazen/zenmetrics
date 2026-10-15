@@ -1,0 +1,150 @@
+//! Time LPIPS-vgg on the ladder, in the modes `bar.py` uses for PyTorch:
+//!
+//! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
+//! - `warm`: reference taps cached once → score one candidate (one trunk run)
+//! - `e2e`: read + PNG-decode both files → score
+//!
+//! ```text
+//! cargo run --release -p zenmetrics-nn --example lpips_bench -- \
+//!     <model_dir> <ladder_dir> <out.tsv> [image=1415] [sizes=64,...,2048] [budget_s=4]
+//! ```
+//! Thread count: rten's pool (`RTEN_NUM_THREADS`, default physical cores).
+
+use std::io::Write as _;
+use std::path::Path;
+use std::time::Instant;
+
+use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
+use zenmetrics_nn::LpipsVgg;
+
+fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
+    let data = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let out = zenpng::decode(
+        &data,
+        &zenpng::PngDecodeConfig::default(),
+        &enough::Unstoppable,
+    )
+    .expect("png decode");
+    let s = out.pixels.as_slice();
+    let (w, h) = (s.width() as usize, s.rows() as usize);
+    assert_eq!(
+        s.descriptor().bytes_per_pixel(),
+        3,
+        "{}: expected RGB8",
+        path.display()
+    );
+    let bytes = s.as_strided_bytes();
+    let mut px = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        px.extend_from_slice(&bytes[y * s.stride()..y * s.stride() + w * 3]);
+    }
+    (px, w, h)
+}
+
+fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
+    Image::from(PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap())
+}
+
+fn lpips(e: &dyn Evaluation) -> f64 {
+    e.scores().find(|(k, _)| k == "lpips_vgg").expect("score").1
+}
+
+/// One warmup, then at least 3 and at most 50 timed runs within `budget_s`.
+fn timed(budget_s: f64, mut f: impl FnMut() -> f64) -> (Vec<f64>, f64) {
+    let mut score = f();
+    let end = Instant::now() + std::time::Duration::from_secs_f64(budget_s);
+    let mut ts = Vec::new();
+    while ts.len() < 3 || (Instant::now() < end && ts.len() < 50) {
+        let t = Instant::now();
+        score = f();
+        ts.push(t.elapsed().as_secs_f64() * 1e3);
+    }
+    (ts, score)
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let (model, ladder, out) = (Path::new(&args[1]), Path::new(&args[2]), &args[3]);
+    let stem = args.get(4).map_or("1415", String::as_str);
+    let sizes: Vec<usize> = args
+        .get(5)
+        .map_or("64,128,256,512,1024,2048", String::as_str)
+        .split(',')
+        .map(|s| s.parse().unwrap())
+        .collect();
+    let budget: f64 = args.get(6).map_or(4.0, |s| s.parse().unwrap());
+    let host = std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let threads = std::env::var("RTEN_NUM_THREADS").unwrap_or_else(|_| "default".into());
+
+    let mut m = LpipsVgg::from_dir(model).expect("load model");
+    let new = !Path::new(out).exists();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(out)
+        .unwrap();
+    if new {
+        writeln!(
+            f,
+            "host\tengine\trten_threads\tmetric\tmode\tsize\tn\tmedian_ms\tmin_ms\tscore"
+        )
+        .unwrap();
+    }
+    for &n in &sizes {
+        let rp_path = ladder.join(format!("{stem}_{n}_ref.png"));
+        let dp_path = ladder.join(format!("{stem}_{n}_dist.png"));
+        let (rp, w, h) = load_rgb8(&rp_path);
+        let (dp, _, _) = load_rgb8(&dp_path);
+        let modes: [(&str, Box<dyn FnMut(&mut LpipsVgg) -> (Vec<f64>, f64)>); 3] = [
+            (
+                "compute",
+                Box::new(|m| {
+                    timed(budget, || {
+                        lpips(
+                            &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                                .unwrap(),
+                        )
+                    })
+                }),
+            ),
+            (
+                "warm",
+                Box::new(|m| {
+                    let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
+                    timed(budget, || {
+                        lpips(&*warm.evaluate(image(&dp, w, h), EvalOpts::new()).unwrap())
+                    })
+                }),
+            ),
+            (
+                "e2e",
+                Box::new(|m| {
+                    timed(budget, || {
+                        let (r, w, h) = load_rgb8(&rp_path);
+                        let (d, _, _) = load_rgb8(&dp_path);
+                        lpips(
+                            &*m.evaluate(image(&r, w, h), image(&d, w, h), EvalOpts::new())
+                                .unwrap(),
+                        )
+                    })
+                }),
+            ),
+        ];
+        for (mode, mut run) in modes {
+            let (mut ts, score) = run(&mut m);
+            ts.sort_by(f64::total_cmp);
+            let med = ts[ts.len() / 2];
+            let row = format!(
+                "{host}\trten\t{threads}\tlpips-vgg\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{score:.7}",
+                ts.len(),
+                ts[0]
+            );
+            println!("{row}");
+            writeln!(f, "{row}").unwrap();
+        }
+    }
+}
