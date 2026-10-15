@@ -1,7 +1,7 @@
 //! The FSIM/FSIMc pipeline, ported pass-for-pass from the authors'
 //! `FR_FSIMc.m` (the "FSIM Index with automatic downsampling, Version
-//! 1.0" reference — phasecong2 is Kovesi's public-domain code embedded
-//! in that file).
+//! 1.0" reference — phasecong2 and lowpassfilter are Peter Kovesi's code
+//! embedded in that file, MIT-style licensed: notice in `LICENSE-kovesi`).
 //!
 //! Precision layout: f32 planes end-to-end (the vendored FFT is f32),
 //! f64 for every scalar reduction (medians, noise sums, the pooling

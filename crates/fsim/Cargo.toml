@@ -7,6 +7,7 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+# Kovesi phasecong2 / lowpassfilter (MIT-style): `LICENSE-kovesi`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false

@@ -7,6 +7,7 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+# src/daala.rs follows Xiph.Org psnr_hvs.c (BSD-2): `LICENSE-xiph-daala`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false

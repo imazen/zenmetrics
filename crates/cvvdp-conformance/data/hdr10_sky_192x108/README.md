@@ -18,9 +18,9 @@ was re-picked so the nit range matches the original: v10 ≈ 387–872
 `hdr-pq-sky.mp4` from <https://github.com/JonaNorman/HDRSample>
 (`sample/src/main/assets/video/`): HEVC `yuv420p10le`, BT.2020
 non-constant-luminance matrix, SMPTE ST 2084 PQ transfer, 30 fps.
-That repository has no explicit license file; the files are published
-as Android-sample test assets. Only a small derivative crop is
-committed here, for test-fixture use.
+That repository is Apache-2.0 (its `LICENSE`, present since its first
+commit); the notice is in [`LICENSE-HDRSample`](LICENSE-HDRSample). Only
+a small, modified crop is committed here, for test-fixture use.
 
 ## Extraction (reproduces the committed frames)
 

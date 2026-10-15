@@ -1,0 +1,15 @@
+Notice for Peter Kovesi's log-Gabor filter bank (gaborconvolve), which the
+MAD reference lo_index.m embeds ("Author: Peter Kovesi ... Altered, 2008, Eric
+Larson") and src/ follows. Text from Kovesi's gaborconvolve.m (peterkovesi.com):
+
+Copyright (c) 2001-2010 Peter Kovesi
+www.peterkovesi.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+The Software is provided "as is", without warranty of any kind.

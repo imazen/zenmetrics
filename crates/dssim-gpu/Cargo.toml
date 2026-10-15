@@ -9,6 +9,7 @@ repository.workspace = true
 # Note: dssim-gpu has a SEPARATE commercial track from the rest of the
 # zenmetrics workspace because the underlying DSSIM algorithm is
 # upstream-licensed by Pornel. See COMMERCIAL.md at the repo root.
+# GPU port of dssim-core (AGPL-3.0-or-later, Kornel Lesiński): `LICENSE-dssim-core`.
 license = "AGPL-3.0-only OR LicenseRef-Imazen-DSSIM-Commercial"
 rust-version.workspace = true
 publish = false
