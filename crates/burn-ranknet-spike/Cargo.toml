@@ -2,22 +2,22 @@
 name = "burn-ranknet-spike"
 version = "0.0.1"
 edition = "2024"
-description = "Spike: burn 0.21 trains a RankNet-style MLP via autodiff (custom pairwise+monotonic loss); plus a GBDT(forust) teacher-vs-student + distillation comparison. Training-framework counterpart to burn-conv-spike. NOT a published crate."
+description = "Spike: burn 0.22 trains a RankNet-style MLP via autodiff (custom pairwise+monotonic loss); plus a GBDT(forust) teacher-vs-student + distillation comparison. Training-framework counterpart to burn-conv-spike. NOT a published crate."
 authors = ["Imazen <support@imazen.io>"]
 license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 publish = false
 
 # Standalone workspace so we don't pollute the parent resolution graph
 # (parent pins the zenforks-cubecl 0.10.x fork; this spike uses vanilla
-# burn 0.21 / ndarray backend in isolation — see README for why training and
+# burn 0.22 / Flex backend in isolation — see README for why training and
 # the zenforks metric graph stay in SEPARATE binaries on purpose).
 [workspace]
 
 [dependencies]
-# ndarray + autodiff backend: pure-CPU, zero GPU-driver dependency, so the
-# spike compiles and runs anywhere. burn is generic over Backend, so the same
-# model swaps to the cubecl CUDA backend by changing one type alias.
-burn = { version = "0.22.0", default-features = false, features = ["std", "ndarray", "autodiff"] }
+# Flex (pure-Rust CPU) + autodiff + optim: zero GPU-driver dependency, so the
+# spike compiles and runs anywhere. burn 0.22 picks the backend at run time
+# (`Device::flex()`); ndarray is deprecated there, and `optim` is a feature.
+burn = { version = "0.22.0", default-features = false, features = ["std", "flex", "autodiff", "optim"] }
 # Pure-Rust XGBoost-algorithm GBDT for the teacher in teacher_compare.
 forust-ml = "0.7.0"
 

@@ -8,14 +8,15 @@
 //! custom multi-term loss + optimizer *ergonomics*, not kernel throughput.
 //!
 //! What it proves (or disproves):
-//!   1. burn 0.21 compiles + runs in a standalone crate on vanilla cubecl 0.10.
+//!   1. burn (0.22 since 2026-10-15) compiles + runs in a standalone crate.
 //!   2. zensim/zenpicker's RankNet (pairwise-logistic) loss + a monotonicity
 //!      hinge express cleanly as a few tensor ops, and autodiff handles the
 //!      gradients we currently HAND-ROLL in zensim-train-core.
 //!   3. The optimizer/train-loop loop is no harder than the hand-rolled Adam.
 //!
-//! Backend: ndarray + Autodiff (CPU). burn is generic over `Backend`, so the
-//! same `Mlp<B>` swaps to the cubecl CUDA backend by changing the `B` alias.
+//! Backend: Flex (pure-Rust CPU) with autodiff. Since burn 0.22 the backend is
+//! a runtime `Device` (`Device::flex().autodiff()`), so the same `Mlp` runs on
+//! CUDA by constructing `Device::cuda(0).autodiff()` instead (feature `cuda`).
 //!
 //! Task: synthetic monotone ground-truth `y = sigmoid(w·x)`; the net must learn
 //! to RANK samples by `y` from sampled ordered pairs. Success = pair-ranking
@@ -23,12 +24,8 @@
 
 use burn::module::Module;
 use burn::nn::{Linear, LinearConfig, Relu};
-use burn::optim::{AdamConfig, GradientsParams, Optimizer};
-use burn::tensor::backend::Backend;
-use burn::tensor::{Int, Tensor, TensorData};
-
-/// Autodiff-wrapped CPU backend. One line to swap to `Cuda`/`Wgpu`.
-type B = burn::backend::Autodiff<burn::backend::NdArray>;
+use burn::optim::{AdamConfig, GradientsParams};
+use burn::tensor::{Device, Int, Tensor, TensorData};
 
 const D_IN: usize = 8;
 const D_HID: usize = 16;
@@ -43,14 +40,14 @@ const MARGIN: f64 = 0.0;
 // Model: a 2-layer MLP, the shape zensim/zenpicker actually ship.
 // ---------------------------------------------------------------------------
 #[derive(Module, Debug)]
-struct Mlp<B: Backend> {
-    l1: Linear<B>,
-    l2: Linear<B>,
+struct Mlp {
+    l1: Linear,
+    l2: Linear,
     act: Relu,
 }
 
-impl<B: Backend> Mlp<B> {
-    fn new(device: &B::Device) -> Self {
+impl Mlp {
+    fn new(device: &Device) -> Self {
         Self {
             l1: LinearConfig::new(D_IN, D_HID).init(device),
             l2: LinearConfig::new(D_HID, 1).init(device),
@@ -59,7 +56,7 @@ impl<B: Backend> Mlp<B> {
     }
 
     /// `[n, D_IN] -> [n, 1]` raw scores (kept 2-D to avoid rank gymnastics).
-    fn forward(&self, x: Tensor<B, 2>) -> Tensor<B, 2> {
+    fn forward(&self, x: Tensor<2>) -> Tensor<2> {
         let h = self.act.forward(self.l1.forward(x));
         self.l2.forward(h)
     }
@@ -72,7 +69,10 @@ struct Lcg(u64);
 impl Lcg {
     fn next_f32(&mut self) -> f32 {
         // Numerical Recipes LCG; take top bits for a uniform in [0,1).
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((self.0 >> 40) as f32) / ((1u64 << 24) as f32)
     }
 }
@@ -132,23 +132,22 @@ fn ranking_accuracy(scores: &[f32], hi: &[i64], lo: &[i64]) -> f32 {
 
 fn main() {
     println!("=== burn-ranknet-spike: train a RankNet MLP via burn autodiff ===");
-    println!("backend: Autodiff<NdArray> (CPU)   model: {D_IN}->{D_HID}->1");
+    println!("backend: Flex + autodiff (CPU)   model: {D_IN}->{D_HID}->1");
     println!("samples: {N}   pairs: {N_PAIRS}   epochs: {EPOCHS}   lr: {LR}");
     println!("loss: RankNet pairwise-logistic + {LAMBDA_MONO} * monotonicity hinge");
     println!();
 
-    // Device type is inferred as `<B as Backend>::Device` from the `from_data`
-    // / `Mlp::new` call sites below (NdArrayDevice for this backend).
-    let device = Default::default();
+    // Pure-Rust CPU backend with gradients; one line to move to CUDA/wgpu.
+    let device = Device::flex().autodiff();
 
     let (feats, y) = synth();
     let (hi, lo) = sample_pairs(&y);
 
-    let x = Tensor::<B, 2>::from_data(TensorData::new(feats, [N, D_IN]), &device);
-    let hi_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(hi.clone(), [N_PAIRS]), &device);
-    let lo_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(lo.clone(), [N_PAIRS]), &device);
+    let x = Tensor::<2>::from_data(TensorData::new(feats, [N, D_IN]), &device);
+    let hi_idx = Tensor::<1, Int>::from_data(TensorData::new(hi.clone(), [N_PAIRS]), &device);
+    let lo_idx = Tensor::<1, Int>::from_data(TensorData::new(lo.clone(), [N_PAIRS]), &device);
 
-    let mut model = Mlp::<B>::new(&device);
+    let mut model = Mlp::new(&device);
     let mut optim = AdamConfig::new().init();
 
     for epoch in 0..=EPOCHS {
@@ -163,8 +162,8 @@ fn main() {
         // RankNet pairwise-logistic loss = softplus(-diff), numerically stable:
         //   softplus(z) = relu(z) + log1p(exp(-|z|)),  with z = -diff.
         let z = diff.clone().mul_scalar(-1.0);
-        let softplus = z.clone().clamp_min(0.0)
-            + z.abs().mul_scalar(-1.0).exp().add_scalar(1.0).log();
+        let softplus =
+            z.clone().clamp_min(0.0) + z.abs().mul_scalar(-1.0).exp().add_scalar(1.0).log();
         let loss_rank = softplus.mean();
 
         // Monotonicity hinge: penalize diff <= margin, i.e. relu(margin - diff).
@@ -182,11 +181,11 @@ fn main() {
         model = optim.step(LR, model, grads);
 
         if epoch % 50 == 0 || epoch == EPOCHS {
-            let sv = scores.to_data().to_vec::<f32>().unwrap();
+            let sv = scores.to_data().try_to_vec::<f32>().unwrap();
             let acc = ranking_accuracy(&sv, &hi, &lo);
-            let l = loss.to_data().to_vec::<f32>().unwrap()[0];
-            let lr_ = loss_rank.to_data().to_vec::<f32>().unwrap()[0];
-            let lm = loss_mono.to_data().to_vec::<f32>().unwrap()[0];
+            let l = loss.to_data().try_to_vec::<f32>().unwrap()[0];
+            let lr_ = loss_rank.to_data().try_to_vec::<f32>().unwrap()[0];
+            let lm = loss_mono.to_data().try_to_vec::<f32>().unwrap()[0];
             println!(
                 "epoch {epoch:4}  loss {l:.4} (rank {lr_:.4}, mono {lm:.4})  pair-acc {acc:.4}"
             );
@@ -194,14 +193,16 @@ fn main() {
     }
 
     println!();
-    let sv = model.forward(x.clone()).to_data().to_vec::<f32>().unwrap();
+    let sv = model
+        .forward(x.clone())
+        .to_data()
+        .try_to_vec::<f32>()
+        .unwrap();
     let final_acc = ranking_accuracy(&sv, &hi, &lo);
     println!("=== Verdict ===");
     println!("final pair-ranking accuracy: {final_acc:.4}");
     if final_acc > 0.95 {
-        println!(
-            "PASS: burn autodiff trained a RankNet MLP with a custom 2-term loss to >0.95"
-        );
+        println!("PASS: burn autodiff trained a RankNet MLP with a custom 2-term loss to >0.95");
         println!("ranking accuracy. The loss that zensim-train-core HAND-ROLLS (pairwise");
         println!("logistic + monotonicity) is ~15 lines of tensor ops here; gradients are");
         println!("autodiff'd, not manually derived. Training ergonomics confirmed viable.");
