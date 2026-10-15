@@ -192,8 +192,13 @@ i265 before drawing CPU conclusions.
 
 ## 4. WebGPU
 
-- **Route 1, burn's wgpu/WebGPU backend** (the same generated model). Blocked on
-  root-causing burn-vulkan's 100× VGG result. Then measure in Chrome for lpips-alex,
+- **Route 1, burn's wgpu/WebGPU backend** (the same generated model). Root cause of
+  burn-vulkan's 100× VGG result (2026-10-15,
+  [`burn_wgpu_conv_2026-10-15.md`](../benchmarks/burn_wgpu_conv_2026-10-15.md)): an f32
+  3×3 conv on wgpu can only use burn's `conv_direct` kernel (0.16–1.2 TFLOP/s), because
+  the implicit-GEMM kernels need cooperative matrices, which Vulkan offers for f16/bf16
+  only. In f16 the same layers run 5.9–8.7 TFLOP/s. So route 1 means f16 activations
+  (parity unmeasured) or our own tiled f32 conv kernel. Then measure in Chrome for lpips-alex,
   lpips-vgg and dists at 256², 512² and 1 MP. WGSL has no cooperative-matrix path in
   burn or in zenforks-cubecl, so expect plain tiled-GEMM speed.
 - **Route 2, wasm CPU** with rten's wasm-SIMD kernels. LPIPS-alex has 2.47 M parameters
