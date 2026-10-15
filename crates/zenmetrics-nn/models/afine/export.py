@@ -5,9 +5,8 @@ TMM 2024) for zenmetrics-nn.
 usage: export.py LADDER_DIR OUT_DIR UPSTREAM_DIR AFINE_PTH CLIP_PTH [GOLDEN_SIZES]
 
 UPSTREAM_DIR is a clone of github.com/ChrisDud0257/AFINE; AFINE_PTH is its
-`afine.pth` (Google Drive link in upstream README; the pyiqa repack at
-huggingface.co/chaofengc/IQA-PyTorch-Weights is byte-identical at
-610,806,721 bytes). CLIP_PTH is OpenAI's ViT-B-32.pt (URL in upstream's
+`afine.pth` (Google Drive link in upstream README). CLIP_PTH is OpenAI's
+ViT-B-32.pt (URL in upstream's
 QuickInference/afine.py). The checkpoint carries no stated licence -> the
 Rust loader requires WeightsConsent.
 

@@ -31,10 +31,13 @@ The export therefore splits into:
                   side is int(288/0.875)=329 (long side floored, keeping
                   aspect) then centre-crop 288 — antialiased bicubic for the
                   distorted image, NEAREST for the reference. That asymmetry
-                  is what the AIC-4 published column was scored with (pyiqa's
-                  wrapper; verified by bit-exact input capture) and it is
-                  also what upstream's own predict_score.py loader does to
-                  its packed input (img_size=288, crop_pct=0.875).
+                  is upstream's own convention:
+                  timm/data/paired_transforms_tv04.py resizes img with
+                  `interpolation` (bicubic per resolve_data_config) and the
+                  reference target with `interpolation_tg=Image.NEAREST`,
+                  under predict_score.py's img_size=288, crop_pct=0.875.
+                  It is also what the AIC-4 published column was scored with
+                  (median |d| 4e-5 over 61 pairs).
   ckdn_export.meta  versions and sha256 of every output.
 """
 import hashlib, os, sys, platform
