@@ -26,6 +26,9 @@
 //! - [`Liqe`]: LIQE (Zhang et al., CVPR 2023) — a [`za::NoReferenceMetric`];
 //!   parity target upstream `LIQE.forward`, `LIQE.pt` over CLIP ViT-B/32
 //!   (weights licence unknown: consent-gated).
+//! - [`Musiq`]: MUSIQ (Ke et al., ICCV 2021) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `run_predict_image.py`, `koniq_ckpt.npz`
+//!   (google-research, JAX/Flax).
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -48,8 +51,10 @@ mod error;
 mod liqe;
 mod lpips;
 mod maniqa;
+mod musiq;
 mod preprocess;
 mod resize;
+mod tfresize;
 mod weights;
 
 pub use afine::Afine;
@@ -62,6 +67,7 @@ pub use error::Error;
 pub use liqe::Liqe;
 pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;
+pub use musiq::Musiq;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.

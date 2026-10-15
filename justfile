@@ -615,11 +615,21 @@ nn-export-maniqa python ladder out upstream weights sizes="64,128,256,512,1024":
 nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
     {{python}} -I crates/zenmetrics-nn/models/liqe/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{ckpt}}' '{{sizes}}'
 
+# Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
+# Goldens come from oracle.py under the legacy JAX env, not this recipe.
+nn-export-musiq python npz out goldens="":
+    {{python}} -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}'
+
+# MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
+# see models/musiq/card.toml; tensorflow CPU, eager mode).
+nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/musiq/oracle.py '{{ladder}}' '{{upstream}}' '{{npz}}' '{{out}}' '{{sizes}}'
+
 # Parity of zenmetrics-nn against the exported goldens (CPU, rten). Runs in
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 

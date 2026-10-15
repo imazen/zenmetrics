@@ -1,6 +1,6 @@
 //! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
 //! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc | ckdn | afine | dreamsim |
-//! arniqa | maniqa | liqe, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! arniqa | maniqa | liqe | musiq, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
@@ -21,7 +21,7 @@ use zenmetrics_abstractions::PairedNoReference;
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa, Musiq,
     WeightsConsent,
 };
 
@@ -108,6 +108,7 @@ fn main() {
         Ok("arniqa") => "arniqa",
         Ok("maniqa") => "maniqa",
         Ok("liqe") => "liqe",
+        Ok("musiq") => "musiq",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
     };
     let mut m: Box<dyn Metric> = if col == "dists" {
@@ -135,6 +136,10 @@ fn main() {
         let consent = WeightsConsent::new().accept(Liqe::WEIGHTS);
         Box::new(PairedNoReference::new(
             Liqe::from_dir(model, engine, &consent).expect("load model"),
+        ))
+    } else if col == "musiq" {
+        Box::new(PairedNoReference::new(
+            Musiq::from_dir(model, engine).expect("load model"),
         ))
     } else {
         let net = LpipsNet::ALL

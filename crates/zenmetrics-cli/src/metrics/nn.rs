@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Liqe, Lpips, LpipsNet, Maniqa, Musiq,
     WeightsConsent,
 };
 
@@ -98,6 +98,11 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
             &dir,
             engine,
             &consent(),
+        )?)));
+    }
+    if column == "musiq" {
+        return Ok(Box::new(PairedNoReference::new(Musiq::from_dir(
+            &dir, engine,
         )?)));
     }
     let net = LpipsNet::ALL

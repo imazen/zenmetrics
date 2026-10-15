@@ -96,6 +96,19 @@ pub(crate) trait Trunk: Send + Sync {
     }
 }
 
+/// Load `path` as a named-input scalar-output graph with the default engine.
+pub(crate) fn load_image(path: &Path) -> Result<Box<dyn ImageGraph>, Error> {
+    #[cfg(feature = "rten")]
+    {
+        Ok(Box::new(rten_engine::RtenImage::load(path)?))
+    }
+    #[cfg(not(feature = "rten"))]
+    {
+        let _ = path;
+        Err(Error::Engine("built without an engine feature".into()))
+    }
+}
+
 /// Load `path` with the default engine.
 pub(crate) fn load(path: &Path, outputs: usize) -> Result<Box<dyn Trunk>, Error> {
     #[cfg(feature = "rten")]
@@ -280,6 +293,76 @@ mod rten_engine {
             })
         }
     }
+
+    /// [`ImageGraph`] on rten: inputs feed `model.input_ids()` in declared
+    /// order, the single output is read as a scalar.
+    pub(crate) struct RtenImage {
+        model: Model,
+        inputs: Vec<NodeId>,
+        outputs: Vec<NodeId>,
+    }
+
+    impl RtenImage {
+        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            let model = ModelOptions::with_all_ops()
+                .load_file(path)
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            let inputs = model.input_ids().to_vec();
+            if inputs.is_empty() {
+                return Err(Error::BadModel("graph has no input".into()));
+            }
+            let outputs = model.output_ids().to_vec();
+            if outputs.len() != 1 {
+                return Err(Error::BadModel(format!(
+                    "expected one output, graph has {}",
+                    outputs.len()
+                )));
+            }
+            Ok(Self {
+                model,
+                inputs,
+                outputs,
+            })
+        }
+    }
+
+    impl super::ImageGraph for RtenImage {
+        fn engine(&self) -> &'static str {
+            "rten"
+        }
+
+        fn score(&self, inputs: &[super::NamedInput]) -> Result<f64, Error> {
+            if inputs.len() != self.inputs.len() {
+                return Err(Error::BadModel(format!(
+                    "graph takes {} inputs, got {}",
+                    self.inputs.len(),
+                    inputs.len()
+                )));
+            }
+            let feeds: Vec<(NodeId, _)> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    (
+                        self.inputs[i],
+                        rten_tensor::Tensor::from_data(&x.shape, x.data.clone()).into(),
+                    )
+                })
+                .collect();
+            let values = self
+                .model
+                .run(feeds, &self.outputs, None)
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let v = values.into_iter().next().unwrap();
+            let t: rten_tensor::Tensor<f32> = v
+                .try_into()
+                .map_err(|e| Error::Engine(format!("output: {e:?}")))?;
+            t.into_data()
+                .first()
+                .map(|&s| f64::from(s))
+                .ok_or_else(|| Error::Engine("empty score output".into()))
+        }
+    }
 }
 
 /// A whole-metric graph: reference and distorted in, one score out. For
@@ -292,14 +375,16 @@ pub(crate) trait PairGraph: Send + Sync {
     fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error>;
 }
 
-/// A named `[n, c, h, w]` input to an [`ImageGraph`]. Constructed by the
-/// model but read only by `ort`'s `OrtCudaImage`.
-#[cfg_attr(not(feature = "ort"), allow(dead_code))]
+/// A named tensor input to an [`ImageGraph`], any rank (e.g. `[n, c, h, w]`
+/// for image models, `[1, l, 3075]` for MUSIQ's patch list). Constructed by
+/// the model but read only by the engine backends.
+#[cfg_attr(not(any(feature = "rten", feature = "ort")), allow(dead_code))]
 pub(crate) struct NamedInput {
-    /// The graph's input name.
+    /// The graph's input name. Read only by engines that feed by name.
+    #[cfg_attr(not(feature = "ort"), allow(dead_code))]
     pub(crate) name: &'static str,
     /// Tensor shape; `data` has `shape` elements, row-major.
-    pub(crate) shape: [usize; 4],
+    pub(crate) shape: Vec<usize>,
     /// Row-major f32 tensor data.
     pub(crate) data: Vec<f32>,
 }
@@ -437,7 +522,7 @@ pub(crate) mod ort_engine {
             let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
                 .iter()
                 .map(|i| {
-                    Tensor::from_array((i.shape, i.data.clone()))
+                    Tensor::from_array((i.shape.clone(), i.data.clone()))
                         .map(|t| (i.name, t))
                         .map_err(|e| Error::Engine(e.to_string()))
                 })

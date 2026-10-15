@@ -189,7 +189,7 @@ impl Liqe {
             }
             Backend::Image(g) => g.score(&[NamedInput {
                 name: "x",
-                shape: [NUM_PATCH, 3, CROP, CROP],
+                shape: vec![NUM_PATCH, 3, CROP, CROP],
                 // The full graph takes the 15 selected patches explicitly.
                 data: x.repeat(NUM_PATCH),
             }]),
