@@ -17,7 +17,7 @@
 //!   upstream `DeepDC_PyTorch` 0.2 package.
 //! - [`Ckdn`]: CKDN (Zheng et al., ICCV 2021), parity target the upstream
 //!   `researchmm/CKDN` checkpoint, `cat(dist, ref, dist, ref)` → `dr`.
-//! - [`Arniqa`]: ARNIQA (Agnolon et al., WACV 2024) — a [`za::NoReferenceMetric`]
+//! - [`Arniqa`]: ARNIQA (Agnolucci, Galteri et al., WACV 2024) — a [`za::NoReferenceMetric`]
 //!   (wrap it in [`za::PairedNoReference`] where a pair metric is expected);
 //!   parity target upstream `single_image_inference.py`, kadid10k regressor.
 //! - [`Maniqa`]: MANIQA (Yang et al., CVPRW 2022) — a [`za::NoReferenceMetric`];

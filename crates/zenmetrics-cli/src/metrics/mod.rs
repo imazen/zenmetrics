@@ -250,8 +250,9 @@ pub enum MetricKind {
     Arniqa,
     /// MANIQA — learned no-reference quality score (upstream
     /// `IIGROUP/MANIQA`, Apache-2.0; ViT-B/8 + TABlocks + Swin stages,
-    /// `ckpt_koniq10k`); **higher** is better, unbounded (koniq10k MOS
-    /// territory ~1..5). Scored through `PairedNoReference`: emits
+    /// `ckpt_koniq10k`); **higher** is better, normalized `[0, 1]`
+    /// (upstream min-max normalizes koniq10k MOS labels). Scored
+    /// through `PairedNoReference`: emits
     /// `maniqa` (distorted) and `maniqa_ref` (reference). As `arniqa`
     /// for `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
     #[value(name = "maniqa")]

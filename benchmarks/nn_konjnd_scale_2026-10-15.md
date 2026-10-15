@@ -174,3 +174,21 @@ per-extractor normalisation inside the graph).
   2026-10-15), with the run-1 version `pairs_scores.v1.tsv` (13 columns, sha256 `2510cb04…`).
 - Scripts: `nn_konjnd_scale_2026-10-15/konjnd_nn.py` (run 1), `konjnd_nn2.py` (run 2),
   `konjnd_summary.py` (the table). They read the dataset at the dev path above.
+
+## No-reference additions (2026-10-15, nr-learned lane)
+
+The learned no-reference columns were measured the same way — pooled median
+|score(dist) − score(ref)| at each pair's PJND level over the 1,008 KonJND
+pairs, scored with `zenmetrics-cli batch` on ort-cuda, model dir
+`~/tmp/nr-learned-scratch/models` (export scripts pinned in
+`crates/zenmetrics-nn/models/<col>/export.py`):
+
+| column | pooled JND | JPEG | BPG |
+|---|---|---|---|
+| `arniqa` / `arniqa_ref` | 0.053838 | — | — |
+| `maniqa` / `maniqa_ref` | 0.021396 | 0.028907 | 0.013109 |
+| `liqe` / `liqe_ref` | 0.393781 | 0.394682 | 0.390329 |
+
+NR metrics see the reference column too via `PairedNoReference`; the JND is
+the score delta the pair produces, exactly like the FR columns. Rows are in
+`crates/zenmetrics-nn/models/jnd_scale.tsv`.

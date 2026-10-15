@@ -1565,9 +1565,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // no meaningful identity value — 0.0 flags a default-fail
         // constant only.
         MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
-        // MANIQA: learned NR quality, koniq10k-MOS-normalized output —
-        // corpus range ~0.28..0.95; ReLU head keeps it >= 0.
-        MetricKind::Maniqa => Some((-0.001, 5.0, 0.0)),
+        // MANIQA: learned NR quality — koniq10k MOS labels are min-max
+        // normalized to [0, 1] in the upstream loader; the head can
+        // extrapolate a hair past the range but not to 5.0.
+        MetricKind::Maniqa => Some((-0.001, 1.001, 0.0)),
         // LIQE: expected value of the 5-quality-bucket softmax — a
         // strict convex combination of 1..5.
         MetricKind::Liqe => Some((1.0, 5.0, 3.0)),

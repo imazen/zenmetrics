@@ -10,6 +10,13 @@
 //!   `F.interpolate` impulse responses (a = −0.5 reproduces torch's weights to
 //!   0.0; a = −0.75 — torch's own non-antialiased bicubic — does not.
 //!   Pillow's `bicubic_filter` in `libImaging/Resample.c` is also a = −0.5).
+//! - [`resize_bicubic_cv2_u8`]: OpenCV `cv2.resize` INTER_CUBIC on CV_8U.
+//!
+//! Licence notes: the PIL/Pillow-derived fixed-point resampling below
+//! (`pil_1d`, `resample_u8_axis`) reproduces `libImaging/Resample.c`
+//! conventions — Pillow's MIT-CMU licence is in ../LICENSE-pillow.
+//! `resize_bicubic_cv2_u8` reproduces OpenCV `resize.cpp` conventions —
+//! OpenCV's Apache-2.0 licence is in ../LICENSE-opencv.
 
 /// One 1-D resampling entry: the source index a kernel window starts at and its
 /// normalised weights.
@@ -62,7 +69,8 @@ struct Tap1DFix {
 }
 
 /// PIL/Pillow `Image.resize` coefficients for one axis
-/// (`libImaging/Resample.c` `precompute_coeffs`): window bounds are
+/// (`libImaging/Resample.c` `precompute_coeffs`; Pillow MIT-CMU licence
+/// in ../LICENSE-pillow): window bounds are
 /// `trunc(center ± support + 0.5)` — C `(int)` rounding — not torch's
 /// ceil/floor, and the weights are quantised to `i32` fixed point at `2⁻²²`
 /// with round-half-away. `support` is the filter's base support and
@@ -214,14 +222,29 @@ pub(crate) fn resize_bilinear_pil_u8(
 /// OpenCV `cv2.resize((ow, oh), INTER_CUBIC)` on a u8 image, planar
 /// `[c, h, w]` → `[c, oh, ow]`.
 ///
-/// Per axis (imgproc `resize.cpp`): `fx = (dx + 0.5)·(in/out) − 0.5`,
-/// `sx = floor(fx)`, frac `fx − sx`, and `interpolateCubic` gives 4 taps
-/// at `sx−1 .. sx+2` with the `A = −0.75` kernel, border positions
-/// clamped (BORDER_REPLICATE). On this host's OpenCV the 8U path keeps
-/// `float` coefficients — the horizontal pass is a `float` Σ px·k, the
-/// vertical pass `saturate_cast<uchar>` (cvRound ties-even + clamp).
-/// Verified: 0 diffs on the isolated 1-D probe, ≤1 u8 on ~0.04% of
-/// pixels vs `cv2.resize` 4.x on ladder images.
+/// OpenCV `cv2.resize(..., INTER_CUBIC)` on CV_8U — the `resize.cpp`
+/// `resizeGeneric_<HResizeCubic<uchar,int,short>,
+/// VResizeCubic<uchar,int,short,FixedPtCast<int,uchar,22>,
+/// VResizeCubicVec_32s8u>>` scalar path (OpenCV licence in
+/// LICENSE-opencv):
+///
+/// - per axis `fx = f32((dx + 0.5)·(in/out as f64) − 0.5)`,
+///   `sx = floor(fx)`, frac `fx − sx` (f32);
+/// - `interpolateCubic` f32 Horner coefficients (`A = −0.75`,
+///   `c3 = 1 − c0 − c1 − c2`), quantised `rint(c·2048)` → i16;
+/// - taps `sx−1 .. sx+2`, border-replicate clamped;
+/// - horizontal pass `mid[y][x] = Σ_k u8·alpha_k` in i32 (frac 11);
+/// - vertical pass is the x86 SIMD `VResizeCubicVec_32s8u` f32 FMA
+///   chain `rint_even(m0·b0 ⊕ fma(m1,b1, fma(m2,b2, m3·b3)))` with
+///   `b_k = f32(beta_k)·2⁻²²`, packed with u8 saturation. (At
+///   `ow = 224` every lane width divides it, so no integer
+///   `FixedPtCast` tail ever runs.)
+///
+/// Measured: bitwise-identical to `cv2.resize` u8 with
+/// `OPENCV_IPP=disabled` on 25+ random and structured images, and
+/// cv2 4.12 ≡ cv2 5.0 bitwise — the wheels' IPP build intercepts u8
+/// resize instead and differs on ~4% of pixels; the scalar path is
+/// the documented, version-stable convention.
 pub(crate) fn resize_bicubic_cv2_u8(
     img: &[u8],
     c: usize,
@@ -230,7 +253,8 @@ pub(crate) fn resize_bicubic_cv2_u8(
     oh: usize,
     ow: usize,
 ) -> Vec<u8> {
-    fn cv2_cubic_1d(n_in: usize, n_out: usize) -> Vec<([usize; 4], [f32; 4])> {
+    /// Per-axis taps: border-clamped indices + quantised i16 coeffs.
+    fn cv2_cubic_1d(n_in: usize, n_out: usize) -> Vec<([usize; 4], [i16; 4])> {
         let scale = n_in as f64 / n_out as f64;
         (0..n_out)
             .map(|dx| {
@@ -242,42 +266,45 @@ pub(crate) fn resize_bicubic_cv2_u8(
                 let c1 = ((a + 2.0) * x - (a + 3.0)) * x * x + 1.0;
                 let c2 = ((a + 2.0) * (1.0 - x) - (a + 3.0)) * (1.0 - x) * (1.0 - x) + 1.0;
                 let c3 = 1.0 - c0 - c1 - c2;
+                let coef = [c0, c1, c2, c3].map(|v| (v * 2048.0).round_ties_even() as i16);
                 let idx = [-1i64, 0, 1, 2].map(|k| (sx + k).clamp(0, n_in as i64 - 1) as usize);
-                (idx, [c0, c1, c2, c3])
+                (idx, coef)
             })
             .collect()
     }
 
     let wx = cv2_cubic_1d(w, ow);
-    // Horizontal pass: f32 intermediate (OpenCV keeps the row pass float).
-    let mut tmp = vec![0f32; c * h * ow];
+    // Horizontal pass: integer accumulation, mid = value × 2¹¹.
+    let mut tmp = vec![0i32; c * h * ow];
     for ch in 0..c {
         let inp = &img[ch * h * w..(ch + 1) * h * w];
         let outp = &mut tmp[ch * h * ow..];
         for y in 0..h {
             let row = &inp[y * w..];
             for (dx, (idx, coef)) in wx.iter().enumerate() {
-                outp[y * ow + dx] = idx
-                    .iter()
-                    .zip(coef)
-                    .map(|(&i, &k)| f32::from(row[i]) * k)
-                    .sum();
+                let mut v = 0i32;
+                for (&i, &k) in idx.iter().zip(coef) {
+                    v += i32::from(row[i]) * i32::from(k);
+                }
+                outp[y * ow + dx] = v;
             }
         }
     }
     let wy = cv2_cubic_1d(h, oh);
+    let inv = 1.0f32 / (2048.0 * 2048.0);
     let mut out = vec![0u8; c * oh * ow];
     for ch in 0..c {
         let inp = &tmp[ch * h * ow..];
         let outp = &mut out[ch * oh * ow..];
         for (dy, (idx, coef)) in wy.iter().enumerate() {
+            let beta = coef.map(|k| f32::from(k) * inv);
             for x in 0..ow {
-                let s: f32 = idx
-                    .iter()
-                    .zip(coef)
-                    .map(|(&i, &k)| inp[i * ow + x] * k)
-                    .sum();
-                outp[dy * ow + x] = s.round_ties_even().clamp(0.0, 255.0) as u8;
+                let m = |k: usize| inp[idx[k] * ow + x] as f32;
+                let s = m(0).mul_add(
+                    beta[0],
+                    m(1).mul_add(beta[1], m(2).mul_add(beta[2], m(3) * beta[3])),
+                );
+                outp[dy * ow + x] = (s.round_ties_even() as i32).clamp(0, 255) as u8;
             }
         }
     }
