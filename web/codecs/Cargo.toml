@@ -26,9 +26,9 @@ codegen-units = 4
 panic = "abort"
 
 [patch.crates-io]
-# jxl-encoder: the external loop metric (a commit of imazen/jxl-encoder#130, stacked on
-# #129's loop trace). Swap for a main revision once both merge.
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "c5f44b3ef0b180a7e0e6bbdab1afe5be57204891" }
+# jxl-encoder main with the loop trace and external loop metric
+# (imazen/jxl-encoder#129, #130), which the CLI's pinned revision predates.
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "a8c11520127ae2567cfd45f81ba0a0418f06c612" }
 # jxl-encoder's own pins (its .github/sibling-revisions.tsv and root patch).
 butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "d2466a4eaad67f8008838c0caa452484300214ca" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "b6948915e2d4e74dfb86b06bc42a997353c1fed6" }

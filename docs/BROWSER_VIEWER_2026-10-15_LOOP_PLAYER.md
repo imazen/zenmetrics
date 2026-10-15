@@ -76,7 +76,7 @@ steers to better files at equal size is a separate measurement this does
 not make.
 
 The jxl-encoder side is `EncodeRequest::with_external_metric`
-(imazen/jxl-encoder PR #130, stacked on PR #129's `LoopTrace`). The loop
+(imazen/jxl-encoder #130, merged with #129's `LoopTrace`). The loop
 keeps its seeds, iteration count, block reduction and quant-field update,
 and only the scorer changes. Its test plugs butteraugli in through the same
 interface and gets the built-in loop's bytes, scores, diffmaps and block
@@ -142,8 +142,8 @@ for two reasons. The JPEG XL module needs jxl-encoder's external loop
 metric, which the CLI's pinned jxl-encoder predates. Moving that pin would
 also change the encodes in the benchmark sweeps. WebP and AVIF use the
 CLI's pinned revisions (`ci/sibling-pins.tsv`), so browser and sweep encodes
-match. jxl-encoder is pinned to PR #130's first commit (`c5f44b3e`; the later
-commits there change only CI and a lint) until #129 and #130 merge.
+match. jxl-encoder is pinned to its main
+at `a8c11520`, the merge of #130.
 `scripts/checkpoint/build-codecs.sh` builds the modules, and
 `build-browser.sh` calls it.
 
