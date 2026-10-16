@@ -1,0 +1,9 @@
+{
+  "source_sha256": "224cd957c1222cc581829d3cbae8e08880778508470fa4e09582c735e451f131",
+  "pairs": 1008,
+  "method": "pooled median WD at observer JND threshold; identity is zero",
+  "codec_counts": {
+    "JPEG": 504,
+    "BPG": 504
+  }
+}
