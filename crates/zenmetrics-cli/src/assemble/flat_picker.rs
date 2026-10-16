@@ -30,7 +30,7 @@ fn err(msg: String) -> AssembleError {
     AssembleError::Schema(msg)
 }
 
-fn str_col<'t>(t: &'t Table, name: &str, what: &str) -> Result<Vec<Option<String>>, AssembleError> {
+fn str_col(t: &Table, name: &str, what: &str) -> Result<Vec<Option<String>>, AssembleError> {
     match t.column(name) {
         Some(Column::Str(v)) => Ok(v.clone()),
         Some(Column::I64(v)) => Ok(v.iter().map(|x| Some(x.to_string())).collect()),

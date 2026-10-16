@@ -20,10 +20,8 @@ impl Tap {
 }
 
 /// An extra trunk input, addressed by position in the graph's input list
-/// (index 0 is the image input `run` feeds). Heads with more than one
-/// tensor input take their other taps through these — e.g. ahiq's head
-/// consumes `vit_d` as the primary input with `vit_r`, `cnn_d`, `cnn_r`
-/// as aux.
+/// (index 0 is the image input `run` feeds).
+// Read only by the engine backends; a build with neither engine never reads it.
 #[cfg_attr(not(any(feature = "rten", feature = "ort")), expect(dead_code))]
 pub(crate) struct AuxInput {
     /// Position in `model.input_ids()`.
@@ -38,7 +36,9 @@ pub(crate) struct AuxInput {
 pub(crate) trait Trunk: Send + Sync {
     /// Engine name, recorded in the score's implementation tag.
     fn engine(&self) -> &'static str;
-    /// Run on a planar `[3, h, w]` input.
+    /// Run on a planar `[3, h, w]` input. Owned: rten's in-place-capable
+    /// operators reuse the input buffer as scratch — a borrowed view would
+    /// force an internal copy instead.
     fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<Tap>, Error>;
 
     /// Run on a planar `[c, h, w]` input. Trunks whose graph takes a fixed
@@ -120,6 +120,29 @@ pub(crate) trait Trunk: Send + Sync {
     }
 }
 
+/// Worker count for the Rust-side head passes: `RTEN_NUM_THREADS` when set
+/// (the process's configured parallelism, and the knob kernel-level timing
+/// checks turn down), else available parallelism.
+pub(crate) fn workers() -> usize {
+    std::env::var("RTEN_NUM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
+        .unwrap_or(1)
+        .max(1)
+}
+/// Load `path` as a named-input scalar-output graph with the default engine.
+pub(crate) fn load_image(path: &Path) -> Result<Box<dyn ImageGraph>, Error> {
+    #[cfg(feature = "rten")]
+    {
+        Ok(Box::new(rten_engine::RtenImage::load(path)?))
+    }
+    #[cfg(not(feature = "rten"))]
+    {
+        let _ = path;
+        Err(Error::Engine("built without an engine feature".into()))
+    }
+}
 /// Load `path` with the default engine.
 pub(crate) fn load(path: &Path, outputs: usize) -> Result<Box<dyn Trunk>, Error> {
     #[cfg(feature = "rten")]
@@ -152,18 +175,14 @@ mod rten_engine {
         /// Two pools splitting the threads, for [`Trunk::run_pair`]. One run
         /// of a conv trunk stops scaling well past ~8 threads (measured on
         /// i265), so two concurrent half-width runs beat two full-width ones
-        /// in a row.
+        /// in a row — and beat two runs sharing one pool (task-stealing
+        /// overhead loses at small sizes, measured on i265).
         halves: Option<[Arc<ThreadPool>; 2]>,
     }
 
     /// rten's own thread count: `RTEN_NUM_THREADS`, else available parallelism.
     fn thread_count() -> usize {
-        std::env::var("RTEN_NUM_THREADS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
-            .unwrap_or(1)
-            .max(1)
+        super::workers()
     }
 
     impl RtenTrunk {
@@ -315,6 +334,81 @@ mod rten_engine {
             })
         }
     }
+
+    /// [`ImageGraph`] on rten: inputs feed `model.input_ids()` in declared
+    /// order, the single output is read as a scalar.
+    pub(crate) struct RtenImage {
+        model: Model,
+        inputs: Vec<NodeId>,
+        outputs: Vec<NodeId>,
+    }
+
+    impl RtenImage {
+        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            let model = ModelOptions::with_all_ops()
+                .load_file(path)
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            let inputs = model.input_ids().to_vec();
+            if inputs.is_empty() {
+                return Err(Error::BadModel("graph has no input".into()));
+            }
+            let outputs = model.output_ids().to_vec();
+            if outputs.len() != 1 {
+                return Err(Error::BadModel(format!(
+                    "expected one output, graph has {}",
+                    outputs.len()
+                )));
+            }
+            Ok(Self {
+                model,
+                inputs,
+                outputs,
+            })
+        }
+    }
+
+    impl super::ImageGraph for RtenImage {
+        fn engine(&self) -> &'static str {
+            "rten"
+        }
+
+        fn score(&self, inputs: &[super::NamedInput]) -> Result<f64, Error> {
+            let (_, d) = self.tensor(inputs)?;
+            d.first()
+                .map(|&s| f64::from(s))
+                .ok_or_else(|| Error::Engine("empty score output".into()))
+        }
+
+        fn tensor(&self, inputs: &[super::NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            if inputs.len() != self.inputs.len() {
+                return Err(Error::BadModel(format!(
+                    "graph takes {} inputs, got {}",
+                    self.inputs.len(),
+                    inputs.len()
+                )));
+            }
+            let feeds: Vec<(NodeId, _)> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    (
+                        self.inputs[i],
+                        rten_tensor::Tensor::from_data(&x.shape, x.data.clone()).into(),
+                    )
+                })
+                .collect();
+            let values = self
+                .model
+                .run(feeds, &self.outputs, None)
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let v = values.into_iter().next().unwrap();
+            let t: rten_tensor::Tensor<f32> = v
+                .try_into()
+                .map_err(|e| Error::Engine(format!("output: {e:?}")))?;
+            let shape = t.shape().to_vec();
+            Ok((shape, t.into_data()))
+        }
+    }
 }
 
 /// A whole-metric graph: reference and distorted in, one score out. For
@@ -327,6 +421,35 @@ pub(crate) trait PairGraph: Send + Sync {
     fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error>;
 }
 
+/// A named tensor input to an [`ImageGraph`], any rank (e.g. `[n, c, h, w]`
+/// for image models, `[1, l, 3075]` for MUSIQ's patch list). Constructed by
+/// the model but read only by the engine backends.
+#[cfg_attr(not(any(feature = "rten", feature = "ort")), allow(dead_code))]
+pub(crate) struct NamedInput {
+    /// The graph's input name. Read only by engines that feed by name.
+    #[cfg_attr(not(feature = "ort"), allow(dead_code))]
+    pub(crate) name: &'static str,
+    /// Tensor shape; `data` has `shape` elements, row-major.
+    pub(crate) shape: Vec<usize>,
+    /// Row-major f32 tensor data.
+    pub(crate) data: Vec<f32>,
+}
+
+/// A whole-metric graph over one image: named inputs in, one score out. For
+/// no-reference models on whole-graph engines — the host still owns the eval
+/// transform (crops, multi-scale views) and the graph is upstream's forward.
+pub(crate) trait ImageGraph: Send + Sync {
+    /// Engine name, recorded in the score's implementation tag.
+    fn engine(&self) -> &'static str;
+    /// Score the inputs.
+    fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error>;
+
+    /// Run the inputs and return the first output tensor's `(shape,
+    /// row-major data)`. For graphs whose intermediate features feed
+    /// host-side logic (paq2piq's RoIPool) — `score` is `tensor().1[0]`.
+    fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error>;
+}
+
 #[cfg(feature = "ort")]
 pub(crate) mod ort_engine {
     use std::path::Path;
@@ -337,7 +460,7 @@ pub(crate) mod ort_engine {
     use ort::session::Session;
     use ort::value::Tensor;
 
-    use super::PairGraph;
+    use super::{ImageGraph, NamedInput, PairGraph};
     use crate::Error;
 
     /// ONNX Runtime is loaded once per process, from `ORT_DYLIB_PATH` when it
@@ -414,24 +537,15 @@ pub(crate) mod ort_engine {
         }
     }
 
-    /// A single-image trunk on CUDA: `[1, 3, h, w]` in, the graph's named
-    /// feature maps out — for metrics whose head is host-side Rust (DMM's
-    /// SVD), where a pair graph cannot express the score.
-    // live only under `ort` (DMM is its only consumer).
-    #[cfg_attr(not(feature = "ort"), allow(dead_code))]
-    pub(crate) struct OrtCudaTrunk {
+    /// [`OrtCudaPair`] for a single-image graph with named inputs —
+    /// [`ImageGraph`] on the same CUDA session configuration.
+    pub(crate) struct OrtCudaImage {
         session: Mutex<Session>,
-        input: &'static str,
-        outputs: Vec<&'static str>,
+        output: &'static str,
     }
 
-    impl OrtCudaTrunk {
-        #[cfg_attr(not(feature = "ort"), allow(dead_code))]
-        pub(crate) fn load(
-            path: &Path,
-            input: &'static str,
-            outputs: Vec<&'static str>,
-        ) -> Result<Self, Error> {
+    impl OrtCudaImage {
+        pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
             let env = environment()?;
             let cuda = ep::CUDA::default()
                 .with_tf32(false)
@@ -445,58 +559,139 @@ pub(crate) mod ort_engine {
                 .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
             Ok(Self {
                 session: Mutex::new(session),
+                output,
+            })
+        }
+    }
+
+    impl ImageGraph for OrtCudaImage {
+        fn engine(&self) -> &'static str {
+            "ort-cuda"
+        }
+
+        fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error> {
+            let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
+                .iter()
+                .map(|i| {
+                    Tensor::from_array((i.shape.clone(), i.data.clone()))
+                        .map(|t| (i.name, t))
+                        .map_err(|e| Error::Engine(e.to_string()))
+                })
+                .collect::<Result<_, _>>()?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(feeds)
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let s = out[self.output]
+                .try_extract_scalar::<f32>()
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            Ok(f64::from(s))
+        }
+
+        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
+                .iter()
+                .map(|i| {
+                    Tensor::from_array((i.shape.clone(), i.data.clone()))
+                        .map(|t| (i.name, t))
+                        .map_err(|e| Error::Engine(e.to_string()))
+                })
+                .collect::<Result<_, _>>()?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(feeds)
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let (shape, data) = out[self.output]
+                .try_extract_tensor::<f32>()
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
+        }
+    }
+    /// Multi-output feature graph with bounded host output retention.
+    /// `load` uses the WD graph's names (`x` -> `tap0..tap3`); `load_named`
+    /// takes an explicit input name and ordered output list for trunks with
+    /// different conventions (DMM's `x` -> `t3`,`t4`).
+    pub(crate) struct OrtCudaTrunk {
+        session: Mutex<Session>,
+        input: &'static str,
+        outputs: Vec<&'static str>,
+    }
+    impl OrtCudaTrunk {
+        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            Self::load_named(path, "x", vec!["tap0", "tap1", "tap2", "tap3"])
+        }
+        pub(crate) fn load_named(
+            path: &Path,
+            input: &'static str,
+            outputs: Vec<&'static str>,
+        ) -> Result<Self, Error> {
+            let env = environment()?;
+            let cuda = ep::CUDA::default()
+                .with_tf32(false)
+                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
+                .build()
+                .error_on_failure();
+            // Dynamic full-resolution feature maps must not accumulate in a
+            // host arena after copying into Rust-owned reference buffers.
+            let cpu = ep::CPU::default().with_arena_allocator(false).build();
+            let session = Session::builder(env)
+                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+                .and_then(|b| b.with_memory_pattern(false).map_err(Into::into))
+                .and_then(|b| b.with_execution_providers([cuda, cpu]).map_err(Into::into))
+                .and_then(|mut b| b.commit_from_file(path))
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            Ok(Self {
+                session: Mutex::new(session),
                 input,
                 outputs,
             })
         }
     }
-
     impl super::Trunk for OrtCudaTrunk {
         fn engine(&self) -> &'static str {
             "ort-cuda"
         }
-
         fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<super::Tap>, Error> {
-            self.run_c(input, 3, h, w)
-        }
-
-        fn run_c(
-            &self,
-            input: Vec<f32>,
-            c: usize,
-            h: usize,
-            w: usize,
-        ) -> Result<Vec<super::Tap>, Error> {
-            let x = Tensor::from_array(([1usize, c, h, w], input))
+            let input = Tensor::from_array(([1usize, 3, h, w], input))
                 .map_err(|e| Error::Engine(e.to_string()))?;
             let mut session = self
                 .session
                 .lock()
                 .map_err(|_| Error::Engine("session lock poisoned".into()))?;
             let out = session
-                .run(ort::inputs![self.input => x])
+                .run(ort::inputs![self.input => input])
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            self.outputs
-                .iter()
-                .map(|name| {
-                    let (shape, data) = out[*name]
-                        .try_extract_tensor::<f32>()
-                        .map_err(|e| Error::Engine(e.to_string()))?;
-                    let &[n, tc, th, tw] = &shape[..] else {
-                        return Err(Error::BadModel(format!(
-                            "tap {name} shape {shape:?}, expected [1, c, h, w]"
-                        )));
-                    };
-                    if n != 1 {
-                        return Err(Error::Engine(format!("batch {n} output")));
-                    }
-                    Ok(super::Tap {
-                        c: tc as usize,
-                        h: th as usize,
-                        w: tw as usize,
-                        data: data.to_vec(),
-                    })
-                })
+            let mut taps: Vec<Option<super::Tap>> = vec![None; self.outputs.len()];
+            // Consume each ORT value, releasing it immediately after its copy.
+            // Indexing a borrowed SessionOutputs retains every original until
+            // the complete collection has been cloned.
+            for (name, value) in out {
+                let index = self
+                    .outputs
+                    .iter()
+                    .position(|&o| o == name)
+                    .ok_or_else(|| Error::BadModel(format!("unexpected trunk output {name}")))?;
+                let (shape, data) = value
+                    .try_extract_tensor::<f32>()
+                    .map_err(|e| Error::Engine(e.to_string()))?;
+                if shape.len() != 4 || shape[0] != 1 || shape[1..].iter().any(|&x| x <= 0) {
+                    return Err(Error::BadModel(format!("trunk output shape {shape:?}")));
+                }
+                taps[index] = Some(super::Tap {
+                    c: shape[1] as usize,
+                    h: shape[2] as usize,
+                    w: shape[3] as usize,
+                    data: data.to_vec(),
+                });
+            }
+            taps.into_iter()
+                .map(|tap| tap.ok_or_else(|| Error::BadModel("missing trunk output".into())))
                 .collect()
         }
     }

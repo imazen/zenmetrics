@@ -1,0 +1,7 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	arniqa	compute	256	13	235.126	231.620	0.4443754
+i265	rten	16	arniqa	warm	256	26	117.988	115.633	0.4443754
+i265	rten	16	arniqa	e2e	256	13	236.853	232.462	0.4443754
+i265	rten	16	arniqa	compute	1024	14	231.056	224.107	0.4596632
+i265	rten	16	arniqa	warm	1024	26	115.458	112.844	0.4596632
+i265	rten	16	arniqa	e2e	1024	13	247.912	244.620	0.4596632

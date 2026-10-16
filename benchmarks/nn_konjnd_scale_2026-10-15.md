@@ -163,8 +163,10 @@ orthonormal basis the patch SVD draws inside degenerate singular clusters
 specific to the shipped solver — an f32 transliteration of LAPACK's
 `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` (`gesdd` path). A cyclic-Jacobi head
 measured on the same pairs gave pooled 0.218193 (+14%) before it was
-replaced; a fraction of a percent of solver-draw noise is inherent to the
-column.
+replaced. Even upstream's own `torch.svd` differs by backend: on ladder
+pairs the CPU (MKL) vs CUDA (cuSolver) scores diverge up to 1.73 absolute
+(2207_128: 31.51 vs 33.24 ≈ 9 JND) — solver-draw noise is inherent to the
+column, not a port defect.
 
 ## Caveats
 
@@ -214,3 +216,24 @@ column.
   (pooled median 0.218193 — superseded, kept for the draw-sensitivity record).
 - Scripts: `nn_konjnd_scale_2026-10-15/konjnd_nn.py` (run 1), `konjnd_nn2.py` (run 2),
   `konjnd_summary.py` (the table). They read the dataset at the dev path above.
+
+## No-reference additions (2026-10-15, nr-learned lane)
+
+The learned no-reference columns were measured the same way — pooled median
+|score(dist) − score(ref)| at each pair's PJND level over the 1,008 KonJND
+pairs, scored with `zenmetrics-cli batch` on ort-cuda, model dir
+`~/tmp/nr-learned-scratch/models` (export scripts pinned in
+`crates/zenmetrics-nn/models/<col>/export.py`):
+
+| column | pooled JND | JPEG | BPG |
+|---|---|---|---|
+| `arniqa` / `arniqa_ref` | 0.053838 | 0.072958 | 0.037216 |
+| `maniqa` / `maniqa_ref` | 0.021396 | 0.028907 | 0.013109 |
+| `liqe` / `liqe_ref` | 0.393781 | 0.394682 | 0.390329 |
+| `musiq` / `musiq_ref` | 1.968925 | 2.823349 | 1.292500 |
+| `hyperiqa` / `hyperiqa_ref` | 4.461776 | 6.226422 | 2.913934 |
+| `paq2piq` / `paq2piq_ref` | 1.229401 | 1.762009 | 0.726505 |
+
+NR metrics see the reference column too via `PairedNoReference`; the JND is
+the score delta the pair produces, exactly like the FR columns. Rows are in
+`crates/zenmetrics-nn/models/jnd_scale.tsv`.

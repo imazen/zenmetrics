@@ -1,0 +1,55 @@
+{
+  "torch": "2.14.1+cu130",
+  "torchvision": "0.29.1+cu130",
+  "cuda": "13.0",
+  "device": "NVIDIA GeForce RTX 4080",
+  "start_utc": "2026-10-16T05:06:05.034623+00:00",
+  "end_utc": "2026-10-16T05:08:33.066117+00:00",
+  "elapsed_seconds": 148.03150509501575,
+  "budget_seconds": 2581.0,
+  "best": {
+    "config": {
+      "name": "post_pool_rescaled_raw",
+      "norm": "raw",
+      "taps": [
+        4,
+        9,
+        16,
+        23
+      ],
+      "rescale": true
+    },
+    "aggregation": "sum",
+    "max_jnd": 0.16934832496715113,
+    "median_jnd": 0.05086421798669946
+  },
+  "checked_pairs": 61,
+  "repeat_mismatches": 0,
+  "novel_conventions_completed": 111,
+  "selection_pairs": [
+    "S01_AVIF_01.png",
+    "S02_CCM_01.png",
+    "S03_JAIB_01.png"
+  ],
+  "jnd_definition": "abs(a*predicted**c - a*published**c); WD b=0, sign=+1 from supplied site config",
+  "inputs": {
+    "reference": "ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43",
+    "site": "094a5d77ea72ddd744301f4ce2f55dd2d207d12c6311c019cea7cac65e897e8d",
+    "config": "fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447",
+    "native_scores": "82aca370fb55ff61a8c63d875e7b3e73297cae8fdb973c2b0aa5a903be1710ff",
+    "previous_log": "709d8891d2770b4493c55ba7af87868f9c44eeb6ec891c0efc16bd958c4df844"
+  },
+  "external_artifacts": {
+    "selection.tsv": "460757f935b272e8aa0de4ca19ddb472ea0c7c72f09c8e928a30e5c9fe137487",
+    "selection_summary.json": "e10c4e91d23b92c174d8b70ad1f3a49dfbc608cb19547380d6ec6220baba280e",
+    "best_full61.tsv": "3ac28f7a13a9972a6b6b4798a951b074f6e0729224d3df214aed2628f911a46d",
+    "receipt.json": "e1b20cbf39f259bcaa5a4ae5278d86848cdb8c70060486166794de49f996421b"
+  },
+  "selection_combinations": 113,
+  "original_clock": {
+    "start_epoch": 1792126145,
+    "start_utc": "2026-10-16T04:49:05.409014+00:00",
+    "budget_seconds": 3600
+  },
+  "coverage_note": "Selection on first three of 61; full verification includes those same three, not an independent held-out panel. No fitted coefficients."
+}

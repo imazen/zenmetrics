@@ -76,11 +76,13 @@ impl Dmm {
                 Backend::Trunk(engine::load(&dir.join("dmm_trunk.onnx"), channels.len())?)
             }
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Trunk(Box::new(engine::ort_engine::OrtCudaTrunk::load(
-                &dir.join("dmm_trunk.onnx"),
-                "x",
-                vec!["t3", "t4"],
-            )?)),
+            Engine::OrtCuda => {
+                Backend::Trunk(Box::new(engine::ort_engine::OrtCudaTrunk::load_named(
+                    &dir.join("dmm_trunk.onnx"),
+                    "x",
+                    vec!["t3", "t4"],
+                )?))
+            }
         };
         Ok(Self {
             backend,
@@ -94,6 +96,26 @@ impl Dmm {
             return "none";
         };
         t.engine()
+    }
+
+    /// Trunk taps of `img` after `prep` as `(c, h, w, planar)` per tap.
+    ///
+    /// Tooling surface for `examples/dmm_tap_dump.rs`, which feeds
+    /// `models/dmm/gen_netlib_goldens.py`: the netlib-`sgesdd` goldens
+    /// that `nn-parity-dmm` gates on must be scored on the *same* taps
+    /// this engine produces — the head amplifies tap noise ~100x into
+    /// score units, so torch-tap goldens cannot be matched at gate.
+    #[doc(hidden)]
+    pub fn taps_for_export(
+        &self,
+        img: &za::Rgb8In<'_>,
+    ) -> Result<Vec<(usize, usize, usize, Vec<f32>)>, Error> {
+        let (planar, h, w) = Self::prep(img);
+        Ok(self
+            .taps(planar, h, w)?
+            .into_iter()
+            .map(|t| (t.c, t.h, t.w, t.data))
+            .collect())
     }
 
     /// `prepare_image_adt`: conditional short-side PIL-bilinear resize, then

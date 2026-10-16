@@ -1,5 +1,7 @@
 //! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
-//! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc, default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc | ckdn | afine | dreamsim |
+//! arniqa | maniqa | liqe | musiq | hyperiqa | paq2piq | wadiqam_{fr,nr}_{live,tid};
+//! default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
@@ -16,10 +18,12 @@ use std::io::Write as _;
 use std::path::Path;
 use std::time::Instant;
 
+use zenmetrics_abstractions::PairedNoReference;
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
-    Afine, Ckdn, DeepDc, Dists, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
+    Musiq, Paq2piq, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
@@ -102,6 +106,16 @@ fn main() {
         Ok("dreamsim") => "dreamsim",
         Ok("stlpips_alex") => "stlpips_alex",
         Ok("stlpips_vgg") => "stlpips_vgg",
+        Ok("arniqa") => "arniqa",
+        Ok("maniqa") => "maniqa",
+        Ok("liqe") => "liqe",
+        Ok("musiq") => "musiq",
+        Ok("hyperiqa") => "hyperiqa",
+        Ok("paq2piq") => "paq2piq",
+        Ok("wadiqam_fr_live") => "wadiqam_fr_live",
+        Ok("wadiqam_fr_tid") => "wadiqam_fr_tid",
+        Ok("wadiqam_nr_live") => "wadiqam_nr_live",
+        Ok("wadiqam_nr_tid") => "wadiqam_nr_tid",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
     };
     let mut m: Box<dyn Metric> = if col == "dists" {
@@ -117,6 +131,48 @@ fn main() {
     } else if col == "dreamsim" {
         let consent = WeightsConsent::new().accept(Dreamsim::WEIGHTS);
         Box::new(Dreamsim::from_dir(model, engine, &consent).expect("load model"))
+    } else if col == "arniqa" {
+        Box::new(PairedNoReference::new(
+            Arniqa::from_dir(model, engine).expect("load model"),
+        ))
+    } else if col == "maniqa" {
+        Box::new(PairedNoReference::new(
+            Maniqa::from_dir(model, engine).expect("load model"),
+        ))
+    } else if col == "liqe" {
+        let consent = WeightsConsent::new().accept(Liqe::WEIGHTS);
+        Box::new(PairedNoReference::new(
+            Liqe::from_dir(model, engine, &consent).expect("load model"),
+        ))
+    } else if col == "hyperiqa" {
+        let consent = WeightsConsent::new().accept(Hyperiqa::WEIGHTS);
+        Box::new(PairedNoReference::new(
+            Hyperiqa::from_dir(model, engine, &consent).expect("load model"),
+        ))
+    } else if col == "musiq" {
+        Box::new(PairedNoReference::new(
+            Musiq::from_dir(model, engine).expect("load model"),
+        ))
+    } else if col == "paq2piq" {
+        let consent = WeightsConsent::new().accept(Paq2piq::WEIGHTS);
+        Box::new(PairedNoReference::new(
+            Paq2piq::from_dir(model, engine, &consent).expect("load model"),
+        ))
+    } else if let Some(kind) = col.strip_prefix("wadiqam_") {
+        let kind = match kind {
+            "fr_live" => WadiqamKind::FrLive,
+            "fr_tid" => WadiqamKind::FrTid,
+            "nr_live" => WadiqamKind::NrLive,
+            "nr_tid" => WadiqamKind::NrTid,
+            other => panic!("unknown wadiqam kind {other}"),
+        };
+        if kind.is_fr() {
+            Box::new(WadiqamFr::from_dir(model, engine, kind).expect("load model"))
+        } else {
+            Box::new(PairedNoReference::new(
+                WadiqamNr::from_dir(model, engine, kind).expect("load model"),
+            ))
+        }
     } else {
         let net = LpipsNet::ALL
             .into_iter()
@@ -186,11 +242,16 @@ fn main() {
             ),
         ];
         for (mode, mut run) in modes {
+            if let Ok(selected) = std::env::var("ZENMETRICS_NN_BENCH_MODES")
+                && !selected.split(',').any(|name| name == mode)
+            {
+                continue;
+            }
             let (mut ts, value) = run(&mut m);
             ts.sort_by(f64::total_cmp);
             let med = ts[ts.len() / 2];
             let row = format!(
-                "{host}\t{engine_name}\t{threads}\t{col}\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{value:.7}",
+                "{host}\t{engine_name}\t{threads}\t{col}\t{mode}\t{n}\t{}\t{med:.3}\t{:.3}\t{value:.17e}",
                 ts.len(),
                 ts[0]
             );

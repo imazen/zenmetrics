@@ -53,7 +53,7 @@ mod spyr0;
 mod stage_test;
 mod trans64;
 
-pub use metric::{HdrVdp3Result, hdrvdp3};
+pub use metric::{HdrVdp3Result, hdrvdp3, score};
 pub use params::{
     DisplayPreset, Emission, InputEncoding, Options, Params, Surround, Task, ViewingConditions,
     pix_per_deg,

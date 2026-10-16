@@ -126,6 +126,7 @@ impl Ckdn {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
@@ -242,6 +243,7 @@ impl Ckdn {
                 )
             }
             Backend::Pair(p) => p.score(Self::prep(r, true)?, Self::prep(d, false)?, CROP, CROP),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -295,6 +297,10 @@ impl za::Metric for Ckdn {
             Backend::Pair(_) => {
                 WarmState::Pixels(Self::prep(&view, true).metric_err_with(COLUMN, Error::kind)?)
             }
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmCkdn {
             metric: self,
@@ -339,7 +345,9 @@ impl za::WarmReference for WarmCkdn<'_> {
                 Backend::Pair(p) => {
                     Ckdn::prep(&d, false).and_then(|dd| p.score(px.clone(), dd, CROP, CROP))
                 }
-                Backend::Trunk(_) => Err(Error::Engine("warm state does not match engine".into())),
+                Backend::Trunk(_) | Backend::Image(_) => {
+                    Err(Error::Engine("warm state does not match engine".into()))
+                }
             },
         }
         .metric_err_with(COLUMN, Error::kind)?;

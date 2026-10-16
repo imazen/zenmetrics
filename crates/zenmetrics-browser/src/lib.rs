@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 #[path = "../../zenmetrics-cli/src/decode.rs"]
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod decode;
+mod loop_map;
 #[path = "../../zenmetrics-cli/src/metrics/mod.rs"]
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod metrics;
@@ -384,7 +385,7 @@ mod tests {
                 "{name} missing from catalog"
             );
             let (geometry, similarity, values) = direct(metric, packed(&a), packed(&b));
-            let got = super::spatial_map(name, &ra, &rb, w, h, stride, "").unwrap();
+            let got = super::spatial_map(name, "", &ra, &rb, w, h, stride, "").unwrap();
             assert_eq!(got.geometry, Some(geometry), "{name}");
             assert_eq!(
                 (got.width, got.height),
@@ -426,12 +427,155 @@ mod tests {
             super::yuv420_image(&yb, w, h).unwrap(),
         );
         let ((ra, stride), (rb, _)) = (rgba(&a, w, 8), rgba(&b, w, 8));
-        let got = super::spatial_map("vmaf-v1", &ra, &rb, w, h, stride, "").unwrap();
+        let got = super::spatial_map("vmaf-v1", "", &ra, &rb, w, h, stride, "").unwrap();
         assert_eq!(got.geometry, Some(geometry));
         assert_eq!((geometry.cells_x, geometry.cells_y), (3, 2));
         assert!(!similarity && !got.similarity);
         assert_eq!(got.values, values);
         assert!(got.values.iter().any(|&v| v > 0.0));
+    }
+
+    /// The weights the fused DSSIM map uses are DSSIM's defaults (same score
+    /// bits), and the fused map's mean is `1 − SSIM` with `DSSIM = 1/SSIM − 1`.
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    fn dssim_weights_match_the_default_score() {
+        let (w, h) = (203u32, 117u32);
+        let a = zenmetrics_abstractions::conformance::textured_rgb8(w as usize, h as usize, 11);
+        let b = zenmetrics_abstractions::conformance::textured_rgb8(w as usize, h as usize, 12);
+        let score = |weights: Option<&[f64]>| {
+            let mut s = dssim_core::Dssim::new();
+            if let Some(weights) = weights {
+                s.set_scales(weights);
+            }
+            let r = s
+                .create_image_rgb(bytemuck::cast_slice(&a), w as usize, h as usize)
+                .unwrap();
+            let d = s
+                .create_image_rgb(bytemuck::cast_slice(&b), w as usize, h as usize)
+                .unwrap();
+            f64::from(s.compare(&r, d).0)
+        };
+        let dssim = score(None);
+        assert_eq!(
+            dssim.to_bits(),
+            score(Some(&super::DSSIM_SCALE_WEIGHTS)).to_bits()
+        );
+        let (ra, stride) = rgba(&a, w, 0);
+        let (rb, _) = rgba(&b, w, 0);
+        let fused = super::spatial_map("dssim", "", &ra, &rb, w, h, stride, "").unwrap();
+        assert_eq!(
+            (fused.name.as_str(), fused.polarity),
+            ("diffmap", "difference")
+        );
+        assert_eq!((fused.width, fused.height), (w, h));
+        let mean = fused.values.iter().map(|&v| f64::from(v)).sum::<f64>() / f64::from(w * h);
+        let from_map = 1.0 / (1.0 - mean) - 1.0;
+        assert!(
+            (from_map - dssim).abs() <= 1e-6 * dssim.max(1e-3),
+            "{from_map} vs {dssim}"
+        );
+        let names: Vec<String> = serde_json::from_str(&fused.names()).unwrap();
+        assert_eq!(
+            names,
+            ["diffmap", "ssim_0", "ssim_1", "ssim_2", "ssim_3", "ssim_4"]
+        );
+        let s0 = super::cached_spatial_map("ssim_0").unwrap();
+        assert_eq!((s0.width, s0.height, s0.polarity), (w, h, "similarity"));
+        assert!(s0.similarity);
+    }
+
+    /// Every map an evaluation publishes is selectable by name, by request
+    /// or from the cache, and carries the metric's own values.
+    #[cfg(all(
+        feature = "cpu-metrics",
+        feature = "cpu-msssim",
+        feature = "cpu-iwssim"
+    ))]
+    #[test]
+    fn every_published_map_is_selectable() {
+        use zenmetrics_abstractions::{self as za, zenpixels};
+        let (w, h) = (224u32, 180u32);
+        let (a, b) = (
+            za::conformance::textured_rgb8(w as usize, h as usize, 5),
+            za::conformance::textured_rgb8(w as usize, h as usize, 6),
+        );
+        let ((ra, stride), (rb, _)) = (rgba(&a, w, 4), rgba(&b, w, 4));
+        let image = |px| {
+            za::Image::from(
+                zenpixels::PixelSlice::new(
+                    px,
+                    w,
+                    h,
+                    w as usize * 3,
+                    zenpixels::PixelDescriptor::RGB8_SRGB,
+                )
+                .unwrap(),
+            )
+        };
+        let mut iw = iwssim::Iwssim::new(w, h).unwrap();
+        let routes: [(&str, &mut dyn za::Metric); 3] = [
+            ("msssim", &mut msssim::Msssim),
+            ("iwssim", &mut iw),
+            ("nlpd", &mut nlpd::Nlpd),
+        ];
+        for (route, metric) in routes {
+            let e = metric
+                .evaluate(
+                    image(&a),
+                    image(&b),
+                    za::EvalOpts::SCORE_ONLY.with_native_map(),
+                )
+                .unwrap();
+            let direct = e.maps();
+            assert!(direct.len() > 1, "{route} publishes one map");
+            let first = super::spatial_map(route, "", &ra, &rb, w, h, stride, "").unwrap();
+            let names: Vec<String> = serde_json::from_str(&first.names()).unwrap();
+            assert_eq!(
+                names,
+                direct.iter().map(|m| m.name).collect::<Vec<_>>(),
+                "{route}"
+            );
+            for m in &direct {
+                let bits = |v: &[f32]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+                let cached = super::cached_spatial_map(m.name).unwrap();
+                let fresh = super::spatial_map(route, m.name, &ra, &rb, w, h, stride, "").unwrap();
+                for got in [&cached, &fresh] {
+                    assert_eq!(got.name, m.name);
+                    assert_eq!(got.geometry, Some(m.geometry), "{route}/{}", m.name);
+                    assert_eq!(bits(&got.values), bits(&m.values()), "{route}/{}", m.name);
+                }
+            }
+        }
+    }
+
+    /// Each metric's first fitted loop default is the map `spatial_map`
+    /// serves by default, which the viewer relies on, and every fitted map
+    /// still exists and reads as error.
+    #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf", feature = "cpu-iwssim"))]
+    #[test]
+    fn loop_defaults_name_existing_maps_default_first() {
+        let (w, h) = (240u32, 224u32);
+        let a = zenmetrics_abstractions::conformance::textured_rgb8(w as usize, h as usize, 21);
+        let b = zenmetrics_abstractions::conformance::textured_rgb8(w as usize, h as usize, 22);
+        let ((ra, stride), (rb, _)) = (rgba(&a, w, 0), rgba(&b, w, 0));
+        let mut seen = Vec::new();
+        for n in super::loop_map::DEFAULTS {
+            assert!(
+                n.scale > 0.0 && n.exponent > 0.0 && n.r.is_finite(),
+                "{n:?}"
+            );
+            let e = super::loop_error_map(n.metric, n.map, &ra, &rb, w, h, stride, "standard_4k")
+                .unwrap_or_else(|e| panic!("{}/{}: {e}", n.metric, n.map));
+            if !seen.contains(&n.metric) {
+                seen.push(n.metric);
+                let first = super::spatial_map(n.metric, "", &ra, &rb, w, h, stride, "standard_4k")
+                    .unwrap();
+                assert_eq!(first.name, n.map, "{}", n.metric);
+            }
+            assert_eq!(e.len(), (w * h) as usize);
+        }
+        assert!(seen.len() >= 19, "{seen:?}");
     }
 
     /// Identical odd-sized inputs: NLPD, PSNR-HVS, mDCT-PSNR and MAD vanish
@@ -456,7 +600,7 @@ mod tests {
         for name in [
             "nlpd", "psnrhvs", "mdctpsnr", "mad", "iwssim", "vif", "vifvec",
         ] {
-            let got = super::spatial_map(name, &px, &px, w, h, stride, "").unwrap();
+            let got = super::spatial_map(name, "", &px, &px, w, h, stride, "").unwrap();
             let g = got.geometry.unwrap();
             assert_eq!((g.input_width, g.input_height), (w, h), "{name}");
             let (lo, hi) = got
@@ -473,6 +617,50 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod listed_metrics_score {
+    /// Every metric `available_metrics` lists must be scoreable by this
+    /// build: a listed metric whose scoring arm is compiled out only answers
+    /// "disabled". Size refusals on this small pair are allowed.
+    #[test]
+    fn listed_metrics_are_compiled_in() {
+        let (w, h) = (64u32, 64u32);
+        let r: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 13 + i / 192 * 17) % 256) as u8)
+            .collect();
+        let d: Vec<u8> = r.iter().map(|v| v.saturating_sub(7)).collect();
+        let img = |px: &[u8]| super::decode::Rgb8Image {
+            pixels: px.to_vec(),
+            width: w,
+            height: h,
+        };
+        let (ri, di) = (img(&r), img(&d));
+        let names: Vec<String> = serde_json::from_str(&super::available_metrics()).unwrap();
+        let mut disabled = Vec::new();
+        for name in &names {
+            let kind =
+                <super::metrics::MetricKind as clap::ValueEnum>::from_str(name, false).unwrap();
+            let screen = kind
+                .needs_display()
+                .then(|| super::metrics::display::parse_display("standard_4k").unwrap());
+            if let Err(e) = super::metrics::run_metric_display(
+                kind,
+                &ri,
+                &di,
+                super::metrics::GpuRuntime::Cpu,
+                screen.as_ref(),
+            ) && e.to_string().contains("is disabled")
+            {
+                disabled.push(format!("{name}: {e}"));
+            }
+        }
+        assert!(
+            disabled.is_empty(),
+            "listed but not compiled in: {disabled:#?}"
+        );
+    }
+}
+
 /// The SDR CPU metrics accepted by this browser module; HDR and GPU names are
 /// refused rather than substituted. CVVDP requires an explicit display name.
 #[wasm_bindgen]
@@ -483,6 +671,7 @@ pub fn available_metrics() -> String {
             .iter()
             .filter(|m| {
                 !m.requires_gpu()
+                    && m.scoring_compiled_in()
                     && !matches!(
                         m,
                         metrics::MetricKind::Hdrvdp | metrics::MetricKind::Hdrvdp3
@@ -648,15 +837,110 @@ pub fn encode_jpeg(
 
 /// Native spatial output, with its actual sampling grid and units.
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct SpatialMap {
     width: u32,
     height: u32,
     similarity: bool,
     geometry: Option<zenmetrics_abstractions::MapGeometry>,
     values: Vec<f32>,
+    /// The metric's own name for this map (`"diffmap"`, `"ssim_0"`, …).
+    name: String,
+    /// `"similarity"`, `"difference"`, `"probability"` or `"feature"`.
+    polarity: &'static str,
+    /// Every map the same evaluation published, in the metric's order.
+    names: Vec<String>,
 }
+
+thread_local! {
+    /// Every map of the last [`spatial_map`] evaluation, so choosing another
+    /// map of the same pair does not evaluate the metric again.
+    static LAST_MAPS: RefCell<Vec<SpatialMap>> = const { RefCell::new(Vec::new()) };
+}
+
+impl SpatialMap {
+    fn empty(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            similarity: false,
+            geometry: None,
+            values: Vec::new(),
+            name: String::new(),
+            polarity: "difference",
+            names: Vec::new(),
+        }
+    }
+    /// A full-resolution difference map named `name`.
+    fn difference(name: &str, width: u32, height: u32, values: Vec<f32>) -> Self {
+        Self {
+            values,
+            name: name.into(),
+            ..Self::empty(width, height)
+        }
+    }
+}
+
+/// Pick `requested` (or, for an empty request, the metric's fused `diffmap`
+/// when it publishes one, else its first map) from one evaluation's maps and
+/// keep them all for [`cached_spatial_map`].
+fn select_map(mut maps: Vec<SpatialMap>, requested: &str) -> Result<SpatialMap, JsError> {
+    let names: Vec<String> = maps.iter().map(|m| m.name.clone()).collect();
+    for m in &mut maps {
+        m.names = names.clone();
+    }
+    let index = if requested.is_empty() {
+        maps.iter().position(|m| m.name == "diffmap").unwrap_or(0)
+    } else {
+        maps.iter()
+            .position(|m| m.name == requested)
+            .ok_or_else(|| {
+                JsError::new(&format!(
+                    "this metric publishes no map named {requested} (it has {})",
+                    names.join(", ")
+                ))
+            })?
+    };
+    let chosen = maps
+        .get(index)
+        .cloned()
+        .ok_or_else(|| JsError::new("Native evaluation returned no spatial map"))?;
+    LAST_MAPS.with(|slot| *slot.borrow_mut() = maps);
+    check_map(chosen)
+}
+
+/// Another map of the last [`spatial_map`] evaluation, without evaluating
+/// again. Fails when that evaluation published no map named `name`.
+#[wasm_bindgen]
+pub fn cached_spatial_map(name: &str) -> Result<SpatialMap, JsError> {
+    LAST_MAPS
+        .with(|slot| {
+            slot.borrow()
+                .iter()
+                .find(|m| m.name == name)
+                .cloned()
+                .ok_or_else(|| JsError::new(&format!("no cached map named {name}")))
+        })
+        .and_then(check_map)
+}
+
 #[wasm_bindgen]
 impl SpatialMap {
+    /// The metric's own name for this map.
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+    /// Every map name the evaluation published, as a JSON array.
+    #[wasm_bindgen(getter)]
+    pub fn names(&self) -> String {
+        serde_json::json!(self.names).to_string()
+    }
+    /// `"similarity"`, `"difference"`, `"probability"` or `"feature"`.
+    #[wasm_bindgen(getter)]
+    pub fn polarity(&self) -> String {
+        self.polarity.into()
+    }
     /// Native map width in samples.
     #[wasm_bindgen(getter)]
     pub fn width(&self) -> u32 {
@@ -695,24 +979,27 @@ impl SpatialMap {
     }
 }
 
-fn export_evaluation_map(
-    e: &dyn zenmetrics_abstractions::Evaluation,
-    out: &mut SpatialMap,
-) -> Result<(), JsError> {
-    // A metric's fused `diffmap` (its whole score broken down per pixel)
-    // when it publishes one, else its primary map.
-    let maps = e.maps();
-    let map = maps
+/// Every map an evaluation published, primary first.
+fn evaluation_maps(e: &dyn zenmetrics_abstractions::Evaluation) -> Vec<SpatialMap> {
+    use zenmetrics_abstractions::MapPolarity;
+    e.maps()
         .into_iter()
-        .find(|m| m.name == "diffmap")
-        .or_else(|| e.map())
-        .ok_or_else(|| JsError::new("Native evaluation returned no spatial map"))?;
-    out.width = map.width();
-    out.height = map.height();
-    out.similarity = map.polarity == zenmetrics_abstractions::MapPolarity::Similarity;
-    out.geometry = Some(map.geometry);
-    out.values = map.values().into_owned();
-    Ok(())
+        .map(|m| SpatialMap {
+            width: m.width(),
+            height: m.height(),
+            similarity: m.polarity == MapPolarity::Similarity,
+            geometry: Some(m.geometry),
+            values: m.values().into_owned(),
+            name: m.name.into(),
+            polarity: match m.polarity {
+                MapPolarity::Similarity => "similarity",
+                MapPolarity::Difference => "difference",
+                MapPolarity::DetectionProbability => "probability",
+                _ => "feature",
+            },
+            names: Vec::new(),
+        })
+        .collect()
 }
 
 fn evaluate_spatial_map(
@@ -721,8 +1008,7 @@ fn evaluate_spatial_map(
     d: &[[u8; 3]],
     width: u32,
     height: u32,
-    out: &mut SpatialMap,
-) -> Result<(), JsError> {
+) -> Result<Vec<SpatialMap>, String> {
     use za::zenpixels::{PixelDescriptor, PixelSlice};
     use zenmetrics_abstractions as za;
     let image = |pixels| {
@@ -734,34 +1020,29 @@ fn evaluate_spatial_map(
             PixelDescriptor::RGB8_SRGB,
         )
         .map(za::Image::from)
-        .map_err(|e| JsError::new(&e.to_string()))
+        .map_err(|e| e.to_string())
     };
     evaluate_native_map(
         metric,
         image(bytemuck::cast_slice(r))?,
         image(bytemuck::cast_slice(d))?,
-        out,
     )
 }
 
-/// The metric's own primary map for an already shaped input pair.
+/// Every map the metric publishes for an already shaped input pair.
 fn evaluate_native_map(
     metric: &mut dyn zenmetrics_abstractions::Metric,
     r: zenmetrics_abstractions::Image<'_>,
     d: zenmetrics_abstractions::Image<'_>,
-    out: &mut SpatialMap,
-) -> Result<(), JsError> {
+) -> Result<Vec<SpatialMap>, String> {
     use zenmetrics_abstractions as za;
     let pulse = how_far::StopOnly::new(control());
     let opts = za::EvalOpts::SCORE_ONLY
         .with_native_map()
         .with_pulse(&pulse);
-    let evaluation = metric
-        .evaluate(r, d, opts)
-        .map_err(|e| JsError::new(&e.to_string()))?;
-    opts.checkpoint()
-        .map_err(|e| JsError::new(&e.to_string()))?;
-    export_evaluation_map(evaluation.as_ref(), out)
+    let evaluation = metric.evaluate(r, d, opts).map_err(|e| e.to_string())?;
+    opts.checkpoint().map_err(|e| e.to_string())?;
+    Ok(evaluation_maps(evaluation.as_ref()))
 }
 
 /// VMAF v1.0.16 reads 8-bit BT.709 limited-range 4:2:0, converted exactly as
@@ -772,9 +1053,8 @@ fn vmaf_v1_map(
     d: &[[u8; 3]],
     width: u32,
     height: u32,
-    out: &mut SpatialMap,
-) -> Result<(), JsError> {
-    let fail = |e: Box<dyn std::error::Error>| JsError::new(&e.to_string());
+) -> Result<Vec<SpatialMap>, String> {
+    let fail = |e: Box<dyn std::error::Error>| e.to_string();
     let rgb8 = |p: &[[u8; 3]]| decode::Rgb8Image {
         pixels: p.as_flattened().to_vec(),
         width,
@@ -786,13 +1066,12 @@ fn vmaf_v1_map(
         metrics::vmaf::to_yuv420(&r).map_err(fail)?,
         metrics::vmaf::to_yuv420(&d).map_err(fail)?,
     );
-    let r = yuv420_image(&r, width, height).map_err(|e| JsError::new(&e))?;
-    let d = yuv420_image(&d, width, height).map_err(|e| JsError::new(&e))?;
+    let r = yuv420_image(&r, width, height)?;
+    let d = yuv420_image(&d, width, height)?;
     evaluate_native_map(
         &mut vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p),
         r,
         d,
-        out,
     )
 }
 
@@ -854,11 +1133,16 @@ pub fn available_spatial_maps() -> String {
     serde_json::json!(names).to_string()
 }
 
-/// Compute a metric's native spatial output. Unsupported map requests fail
+/// Compute a metric's native spatial output: the map named `map`, or for an
+/// empty `map` the metric's fused `diffmap` when it publishes one, else its
+/// primary map. Every map of the evaluation stays available through
+/// [`cached_spatial_map`] until the next call. Unsupported requests fail
 /// explicitly; a different metric is never substituted.
+#[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn spatial_map(
     metric: &str,
+    map: &str,
     reference: &[u8],
     distorted: &[u8],
     width: u32,
@@ -866,23 +1150,35 @@ pub fn spatial_map(
     stride: usize,
     display: &str,
 ) -> Result<SpatialMap, JsError> {
+    LAST_MAPS.with(|slot| slot.borrow_mut().clear());
+    let maps = compute_maps(metric, reference, distorted, width, height, stride, display)
+        .map_err(|e| JsError::new(&e))?;
+    LAST_NAN_OK.with(|slot| slot.set(metric == "haarpsi"));
+    select_map(maps, map)
+}
+
+/// Every map `metric` publishes for one pair, primary first.
+fn compute_maps(
+    metric: &str,
+    reference: &[u8],
+    distorted: &[u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    display: &str,
+) -> Result<Vec<SpatialMap>, String> {
     let _ = display; // Also valid when the CVVDP feature is disabled.
-    let r = rgb(reference, width, height, stride).map_err(|e| JsError::new(&e))?;
-    let d = rgb(distorted, width, height, stride).map_err(|e| JsError::new(&e))?;
+    let r = rgb(reference, width, height, stride)?;
+    let d = rgb(distorted, width, height, stride)?;
     let (w, h) = (width as usize, height as usize);
-    let fail = |e: String| JsError::new(&e);
-    let mut result = SpatialMap {
-        width,
-        height,
-        similarity: false,
-        geometry: None,
-        values: Vec::new(),
-    };
-    match metric {
-        "zensim" => {
-            let prepared = Reference::new(reference, width, height, stride)?;
-            result.values = prepared.compare(distorted, stride)?.map;
-        }
+    let fail = |e: String| e;
+    let maps: Vec<SpatialMap> = match metric {
+        "zensim" => vec![SpatialMap::difference(
+            "diffmap",
+            width,
+            height,
+            zensim_diffmap(&r, &d, width, height)?,
+        )],
         "butteraugli" => {
             let r: &[rgb::RGB<u8>] = bytemuck::cast_slice(&r);
             let d: &[rgb::RGB<u8>] = bytemuck::cast_slice(&d);
@@ -892,67 +1188,47 @@ pub fn spatial_map(
                 &butteraugli::ButteraugliParams::default().with_compute_diffmap(true),
             )
             .map_err(|e| fail(e.to_string()))?;
-            result.values = scored
+            let values = scored
                 .diffmap
                 .ok_or_else(|| fail("Butteraugli returned no spatial map".into()))?
                 .buf()
                 .to_vec();
+            vec![SpatialMap::difference("diffmap", width, height, values)]
         }
-        "dssim" => {
-            let mut scorer = dssim_core::Dssim::new();
-            scorer.set_save_ssim_maps(1);
-            let r = scorer
-                .create_image_rgb(bytemuck::cast_slice(&r), w, h)
-                .ok_or_else(|| fail("DSSIM rejected reference dimensions".into()))?;
-            let d = scorer
-                .create_image_rgb(bytemuck::cast_slice(&d), w, h)
-                .ok_or_else(|| fail("DSSIM rejected distorted dimensions".into()))?;
-            let (_, maps) = scorer.compare(&r, d);
-            let first = maps
-                .into_iter()
-                .next()
-                .ok_or_else(|| fail("DSSIM returned no spatial map".into()))?;
-            result.width = first.map.width() as u32;
-            result.height = first.map.height() as u32;
-            // DSSIM's saved maps hold per-pixel SSIM: higher = more similar.
-            result.similarity = true;
-            result.values = first.map.buf().to_vec();
-        }
+        "dssim" => dssim_maps(&r, &d, width, height)?,
         #[cfg(feature = "cpu-fsim")]
         "fsim" | "fsimc" => {
-            evaluate_spatial_map(&mut fsim::Fsim, &r, &d, width, height, &mut result)?
+            let mut scorer = fsim::Fsim::default();
+            evaluate_spatial_map(&mut scorer, &r, &d, width, height)?
         }
         #[cfg(feature = "cpu-haarpsi")]
-        "haarpsi" => {
-            evaluate_spatial_map(&mut haarpsi::Haarpsi, &r, &d, width, height, &mut result)?
-        }
+        "haarpsi" => evaluate_spatial_map(&mut haarpsi::Haarpsi, &r, &d, width, height)?,
         #[cfg(feature = "cpu-vsi")]
-        "vsi" => evaluate_spatial_map(&mut vsi::Vsi, &r, &d, width, height, &mut result)?,
+        "vsi" => {
+            let mut scorer = vsi::Vsi::default();
+            evaluate_spatial_map(&mut scorer, &r, &d, width, height)?
+        }
         #[cfg(feature = "cpu-msssim")]
-        "msssim" => evaluate_spatial_map(&mut msssim::Msssim, &r, &d, width, height, &mut result)?,
+        "msssim" => evaluate_spatial_map(&mut msssim::Msssim, &r, &d, width, height)?,
         #[cfg(feature = "cpu-metrics")]
-        "nlpd" => evaluate_spatial_map(&mut nlpd::Nlpd, &r, &d, width, height, &mut result)?,
+        "nlpd" => evaluate_spatial_map(&mut nlpd::Nlpd, &r, &d, width, height)?,
         #[cfg(feature = "cpu-psnrhvs")]
-        "psnrhvs" => {
-            evaluate_spatial_map(&mut psnrhvs::Psnrhvs, &r, &d, width, height, &mut result)?
-        }
+        "psnrhvs" => evaluate_spatial_map(&mut psnrhvs::Psnrhvs, &r, &d, width, height)?,
         #[cfg(feature = "cpu-mdctpsnr")]
-        "mdctpsnr" => {
-            evaluate_spatial_map(&mut mdctpsnr::MdctPsnr, &r, &d, width, height, &mut result)?
-        }
+        "mdctpsnr" => evaluate_spatial_map(&mut mdctpsnr::MdctPsnr, &r, &d, width, height)?,
         #[cfg(feature = "cpu-mad")]
-        "mad" => evaluate_spatial_map(&mut mad_iqa::Mad, &r, &d, width, height, &mut result)?,
+        "mad" => evaluate_spatial_map(&mut mad_iqa::Mad, &r, &d, width, height)?,
         #[cfg(feature = "cpu-iwssim")]
         "iwssim" => {
             let mut metric = iwssim::Iwssim::new(width, height).map_err(|e| fail(e.to_string()))?;
-            evaluate_spatial_map(&mut metric, &r, &d, width, height, &mut result)?
+            evaluate_spatial_map(&mut metric, &r, &d, width, height)?
         }
         #[cfg(feature = "cpu-vif")]
-        "vif" => evaluate_spatial_map(&mut vif::Vif, &r, &d, width, height, &mut result)?,
+        "vif" => evaluate_spatial_map(&mut vif::Vif, &r, &d, width, height)?,
         #[cfg(feature = "cpu-vifvec")]
-        "vifvec" => evaluate_spatial_map(&mut vif::Vifvec, &r, &d, width, height, &mut result)?,
+        "vifvec" => evaluate_spatial_map(&mut vif::Vifvec, &r, &d, width, height)?,
         #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
-        "vmaf-v1" => vmaf_v1_map(&r, &d, width, height, &mut result)?,
+        "vmaf-v1" => vmaf_v1_map(&r, &d, width, height)?,
         #[cfg(feature = "cpu-cvvdp")]
         "cvvdp" => {
             let display = metrics::display::parse_display(display).map_err(fail)?;
@@ -966,26 +1242,21 @@ pub fn spatial_map(
                 display.geometry(),
             )
             .map_err(|e| fail(e.to_string()))?;
+            let mut values = Vec::new();
             scorer
                 .score_with_diffmap(
                     bytemuck::cast_slice(&r),
                     bytemuck::cast_slice(&d),
-                    &mut result.values,
+                    &mut values,
                 )
                 .map_err(|e| fail(e.to_string()))?;
+            vec![SpatialMap::difference("diffmap", width, height, values)]
         }
-        "gmsd" => evaluate_spatial_map(&mut gmsd::Gmsd, &r, &d, width, height, &mut result)?,
-        "ssim2" => evaluate_spatial_map(
-            &mut ssim2_map::Ssimulacra2,
-            &r,
-            &d,
-            width,
-            height,
-            &mut result,
-        )?,
+        "gmsd" => evaluate_spatial_map(&mut gmsd::Gmsd, &r, &d, width, height)?,
+        "ssim2" => evaluate_spatial_map(&mut ssim2_map::Ssimulacra2, &r, &d, width, height)?,
         "psnr" => {
             // Per-pixel mean squared sRGB code-value error, in normalized units.
-            result.values = r
+            let values = r
                 .iter()
                 .zip(&d)
                 .map(|(a, b)| {
@@ -999,22 +1270,258 @@ pub fn spatial_map(
                         / 3.
                 })
                 .collect();
+            vec![SpatialMap::difference(
+                "squared_error",
+                width,
+                height,
+                values,
+            )]
         }
         _ => {
             return Err(fail(format!(
                 "{metric} has no native spatial-map export in this build"
             )));
         }
-    }
-    if result.values.len() != result.width as usize * result.height as usize
-        || result
-            .values
+    };
+    Ok(maps)
+}
+
+thread_local! {
+    /// HaarPSI leaves local similarity undefined (NaN) in zero-weight windows.
+    static LAST_NAN_OK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn check_map(m: SpatialMap) -> Result<SpatialMap, JsError> {
+    let nan_ok = LAST_NAN_OK.with(std::cell::Cell::get);
+    if m.values.len() != m.width as usize * m.height as usize
+        || m.values
             .iter()
-            .any(|v| v.is_infinite() || (v.is_nan() && metric != "haarpsi"))
+            .any(|v| v.is_infinite() || (v.is_nan() && !nan_ok))
     {
-        return Err(fail(
-            "Native spatial map has invalid dimensions or non-finite samples".into(),
+        return Err(JsError::new(&format!(
+            "Native spatial map {} has invalid dimensions or non-finite samples",
+            m.name
+        )));
+    }
+    Ok(m)
+}
+
+thread_local! {
+    /// The last Zensim reference prepared for a map, kept while a loop scores
+    /// many candidates against one source.
+    static ZENSIM_REFERENCE: RefCell<Option<(Vec<[u8; 3]>, u32, u32, PrecomputedReference)>> =
+        const { RefCell::new(None) };
+}
+
+/// Zensim's (model B) diffmap, the same values as [`Reference::compare`].
+/// The cached reference is taken out of its slot while comparing: rayon
+/// work-stealing can run another call on this thread meanwhile, which then
+/// prepares its own.
+fn zensim_diffmap(
+    r: &[[u8; 3]],
+    d: &[[u8; 3]],
+    width: u32,
+    height: u32,
+) -> Result<Vec<f32>, String> {
+    let (w, h) = (width as usize, height as usize);
+    let scorer = Zensim::new(ZensimProfile::B).with_stop(control());
+    let cached = ZENSIM_REFERENCE
+        .with(|slot| slot.borrow_mut().take())
+        .filter(|(pixels, sw, sh, _)| (*sw, *sh) == (width, height) && pixels == r);
+    let (pixels, prepared) = match cached {
+        Some((pixels, _, _, prepared)) => (pixels, prepared),
+        None => (
+            r.to_vec(),
+            scorer
+                .precompute_reference(&RgbSlice::new(r, w, h))
+                .map_err(|e| e.to_string())?,
+        ),
+    };
+    let result = scorer
+        .compute_with_ref_and_diffmap(
+            &prepared,
+            &RgbSlice::new(d, w, h),
+            DiffmapWeighting::default(),
+        )
+        .map(|result| result.diffmap().to_vec())
+        .map_err(|e| e.to_string());
+    ZENSIM_REFERENCE.with(|slot| *slot.borrow_mut() = Some((pixels, width, height, prepared)));
+    result
+}
+
+/// DSSIM's own default scale weights (`dssim-core` `DEFAULT_WEIGHTS`, which
+/// it does not export). Set explicitly so the fused map uses the weights the
+/// score uses; `dssim_weights_match_the_default_score` pins them.
+const DSSIM_SCALE_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
+
+/// DSSIM's per-scale SSIM maps (`ssim_0` full resolution … `ssim_4`) and a
+/// fused `diffmap` whose mean is `1 − SSIM`, the combined similarity DSSIM
+/// transforms (`DSSIM = 1/SSIM − 1`). Scale `n` scores
+/// `1 − mean|avg_n − s|`, with `avg_n` its mean SSIM raised to `0.5ⁿ`; each
+/// cell's `w_n/Σw · |avg_n − s|` is spread evenly over the full-resolution
+/// pixels it covers, so the fused mean is the weighted sum exactly.
+fn dssim_maps(
+    r: &[[u8; 3]],
+    d: &[[u8; 3]],
+    width: u32,
+    height: u32,
+) -> Result<Vec<SpatialMap>, String> {
+    let fail = |e: &str| e.to_string();
+    let (w, h) = (width as usize, height as usize);
+    let mut scorer = dssim_core::Dssim::new();
+    scorer.set_scales(&DSSIM_SCALE_WEIGHTS);
+    scorer.set_save_ssim_maps(DSSIM_SCALE_WEIGHTS.len() as u8);
+    let r = scorer
+        .create_image_rgb(bytemuck::cast_slice(r), w, h)
+        .ok_or_else(|| fail("DSSIM rejected reference dimensions"))?;
+    let d = scorer
+        .create_image_rgb(bytemuck::cast_slice(d), w, h)
+        .ok_or_else(|| fail("DSSIM rejected distorted dimensions"))?;
+    let (_, scales) = scorer.compare(&r, d);
+    if scales.is_empty() {
+        return Err(fail("DSSIM returned no spatial map"));
+    }
+    let total: f64 = DSSIM_SCALE_WEIGHTS[..scales.len()].iter().sum();
+    let mut fused = vec![0f64; w * h];
+    for (n, scale) in scales.iter().enumerate() {
+        let (sw, sh) = (scale.map.width(), scale.map.height());
+        let cells = (sw * sh) as f64;
+        let mean = scale.map.pixels().map(f64::from).sum::<f64>() / cells;
+        let avg = mean.max(0.0).powf(0.5f64.powi(n as i32));
+        let col = |x: usize| (x >> n).min(sw - 1);
+        let row = |y: usize| (y >> n).min(sh - 1);
+        // Full-resolution pixels per cell, so each cell's share is spread
+        // over exactly the pixels it covers.
+        let mut per_col = vec![0usize; sw];
+        let mut per_row = vec![0usize; sh];
+        (0..w).for_each(|x| per_col[col(x)] += 1);
+        (0..h).for_each(|y| per_row[row(y)] += 1);
+        let k = DSSIM_SCALE_WEIGHTS[n] / total * (w * h) as f64 / cells;
+        for y in 0..h {
+            let (cy, ry) = (row(y), per_row[row(y)] as f64);
+            for x in 0..w {
+                let cx = col(x);
+                let s = f64::from(scale.map[(cx, cy)]);
+                fused[y * w + x] += k * (avg - s).abs() / (per_col[cx] as f64 * ry);
+            }
+        }
+    }
+    const NAMES: [&str; 5] = ["ssim_0", "ssim_1", "ssim_2", "ssim_3", "ssim_4"];
+    let mut maps = vec![SpatialMap::difference(
+        "diffmap",
+        width,
+        height,
+        fused.into_iter().map(|v| v as f32).collect(),
+    )];
+    maps.extend(
+        scales
+            .into_iter()
+            .zip(NAMES)
+            .map(|(scale, name)| SpatialMap {
+                width: scale.map.width() as u32,
+                height: scale.map.height() as u32,
+                similarity: true,
+                polarity: "similarity",
+                values: scale.map.buf().to_vec(),
+                ..SpatialMap::difference(name, width, height, Vec::new())
+            }),
+    );
+    Ok(maps)
+}
+
+/// A metric map put on butteraugli's scale for jxl-encoder's loop: one
+/// value per pixel and the map's maximum, which the loop reads as the score.
+#[wasm_bindgen]
+pub struct LoopMap {
+    values: Vec<f32>,
+    score: f64,
+}
+
+#[wasm_bindgen]
+impl LoopMap {
+    /// `width × height` normalized values, row-major.
+    #[wasm_bindgen(getter)]
+    pub fn values(&self) -> Vec<f32> {
+        self.values.clone()
+    }
+    /// The maximum value, the loop's score (butteraugli's score is its
+    /// diffmap's maximum).
+    #[wasm_bindgen(getter)]
+    pub fn score(&self) -> f64 {
+        self.score
+    }
+}
+
+/// The error reading of `metric`'s map `map` (empty: its default map) at
+/// full resolution, before normalization. See [`loop_map`].
+#[allow(clippy::too_many_arguments)]
+pub fn loop_error_map(
+    metric: &str,
+    map: &str,
+    reference: &[u8],
+    distorted: &[u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    display: &str,
+) -> Result<Vec<f32>, String> {
+    let maps = compute_maps(metric, reference, distorted, width, height, stride, display)?;
+    let chosen = if map.is_empty() {
+        maps.iter()
+            .find(|m| m.name == "diffmap")
+            .or_else(|| maps.first())
+    } else {
+        maps.iter().find(|m| m.name == map)
+    }
+    .ok_or_else(|| format!("{metric} publishes no map named {map}"))?;
+    loop_map::error_pixels(chosen, width, height)
+}
+
+/// jxl-encoder's per-block distances for a full-resolution map: each 8×8
+/// block's 16-norm times libjxl's 1.2.
+pub fn loop_tile_norms(values: &[f32], width: usize, height: usize) -> Vec<f32> {
+    loop_map::tile_norms(values, width, height)
+}
+
+/// The steering map for one loop iteration: `metric`'s map `map` read as
+/// error, one value per pixel, then `scale · e^exponent`.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen]
+pub fn loop_map(
+    metric: &str,
+    map: &str,
+    reference: &[u8],
+    distorted: &[u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    display: &str,
+    scale: f64,
+    exponent: f64,
+) -> Result<LoopMap, JsError> {
+    if !(scale.is_finite() && scale > 0.0 && exponent.is_finite() && exponent > 0.0) {
+        return Err(JsError::new(
+            "scale and exponent must be finite and positive",
         ));
     }
-    Ok(result)
+    let mut values = loop_error_map(
+        metric, map, reference, distorted, width, height, stride, display,
+    )
+    .map_err(|e| JsError::new(&e))?;
+    loop_map::normalize(&mut values, scale, exponent);
+    let score = values.iter().copied().fold(0f32, f32::max).into();
+    Ok(LoopMap { values, score })
+}
+
+/// The fitted loop normalization defaults, as a JSON array of
+/// `{metric, map, scale, exponent, r}`, each metric's default map first.
+#[wasm_bindgen]
+pub fn loop_map_defaults() -> String {
+    serde_json::json!(
+        loop_map::DEFAULTS
+            .iter()
+            .map(|n| serde_json::json!({"metric":n.metric,"map":n.map,"scale":n.scale,"exponent":n.exponent,"r":n.r}))
+            .collect::<Vec<_>>()
+    )
+    .to_string()
 }

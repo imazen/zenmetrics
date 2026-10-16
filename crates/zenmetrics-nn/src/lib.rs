@@ -17,6 +17,31 @@
 //!   upstream `DeepDC_PyTorch` 0.2 package.
 //! - [`Ckdn`]: CKDN (Zheng et al., ICCV 2021), parity target the upstream
 //!   `researchmm/CKDN` checkpoint, `cat(dist, ref, dist, ref)` → `dr`.
+//! - [`Arniqa`]: ARNIQA (Agnolucci, Galteri et al., WACV 2024) — a [`za::NoReferenceMetric`]
+//!   (wrap it in [`za::PairedNoReference`] where a pair metric is expected);
+//!   parity target upstream `single_image_inference.py`, kadid10k regressor.
+//! - [`Maniqa`]: MANIQA (Yang et al., CVPRW 2022) — a [`za::NoReferenceMetric`];
+//!   parity target upstream's koniq10k eval path (224 INTER_CUBIC single
+//!   forward, `ckpt_koniq10k.pt`).
+//! - [`Liqe`]: LIQE (Zhang et al., CVPR 2023) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `LIQE.forward`, `LIQE.pt` over CLIP ViT-B/32
+//!   (weights licence unknown: consent-gated).
+//! - [`Musiq`]: MUSIQ (Ke et al., ICCV 2021) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `run_predict_image.py`, `koniq_ckpt.npz`
+//!   (google-research, JAX/Flax).
+//! - [`Hyperiqa`]: HyperIQA (Su et al., CVPR 2020) — a [`za::NoReferenceMetric`];
+//!   parity target upstream `demo.py`, `koniq_pretrained.pkl` with a
+//!   documented deterministic crop grid (upstream crops at random;
+//!   weights licence unknown: consent-gated).
+//! - [`Paq2piq`]: PaQ-2-PiQ (Ying et al., CVPR 2020) — a
+//!   [`za::NoReferenceMetric`]; parity target upstream
+//!   `baidut/paq2piq` `InferenceModel.predict`,
+//!   `RoIPoolModel-fit.10.bs.120.pth` (CC-BY-NC weights: consent-gated).
+//! - [`WadiqamFr`] / [`WadiqamNr`]: WaDIQaM (Bosse, Maniry et al., TIP
+//!   2018), `dmaniry/deepIQA` — shared conv trunk over non-overlapping
+//!   32×32 patches + relu-weighted pooling, LIVE- or TID2013-trained
+//!   (`WadiqamKind`); FR concatenates `(h − h_ref, h, h_ref)` and NR is
+//!   a [`za::NoReferenceMetric`]. MIT code and weights.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -29,6 +54,7 @@
 
 mod afine;
 mod ahiq;
+mod arniqa;
 mod ckdn;
 mod common;
 mod deepdc;
@@ -37,20 +63,37 @@ mod dmm;
 mod dreamsim;
 mod engine;
 mod error;
+mod hyperiqa;
+mod liqe;
 mod lpips;
+mod maniqa;
+mod musiq;
+mod paq2piq;
+mod par;
 mod preprocess;
 mod resize;
+mod tfresize;
+mod wadiqam;
+mod wd;
 mod weights;
 
 pub use afine::Afine;
 pub use ahiq::Ahiq;
+pub use arniqa::Arniqa;
 pub use ckdn::Ckdn;
 pub use deepdc::DeepDc;
 pub use dists::Dists;
 pub use dmm::Dmm;
 pub use dreamsim::Dreamsim;
 pub use error::Error;
+pub use hyperiqa::Hyperiqa;
+pub use liqe::Liqe;
 pub use lpips::{Lpips, LpipsNet};
+pub use maniqa::Maniqa;
+pub use musiq::Musiq;
+pub use paq2piq::Paq2piq;
+pub use wadiqam::{WadiqamFr, WadiqamKind, WadiqamNr};
+pub use wd::WassersteinDistortion;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.

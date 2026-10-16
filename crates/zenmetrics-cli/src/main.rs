@@ -19,6 +19,9 @@
 //!
 //! See `--help` on any subcommand for full options.
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "assemble")]
 mod assemble;
 // lib.rs exposes this module publicly; the bin keeps it private,
@@ -30,6 +33,11 @@ mod compare;
 #[allow(unreachable_pub)]
 mod decode;
 mod fleet_plan;
+#[cfg(all(feature = "sweep", feature = "png"))]
+mod palette_ladder;
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "hdr")]
 mod hdr;
 // lib.rs exposes this module publicly; the bin keeps it private,
@@ -60,6 +68,9 @@ mod score_video;
 #[cfg(feature = "cpu-metrics")]
 mod size_invariance;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "sweep")]
 mod sweep;
 
@@ -69,9 +80,15 @@ mod jobexec;
 #[cfg(feature = "jobexec")]
 mod objstore;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_runner;
 
@@ -1085,7 +1102,7 @@ fn cmd_sweep(
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
 
-    use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
+    use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, run_sweep};
 
     // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
     // build an `Orchestrator` and hand a wrapped `Arc<Mutex<...>>`
@@ -1488,11 +1505,13 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // FSIM / FSIMc / FSIM-Y: similarity on [0, 1]; 1 = identical.
         // Constant inputs degenerate the phase-congruency maps to 0/0,
         // so a degenerate pair yields NaN — matching the reference.
-        MetricKind::Fsim | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Fsim | MetricKind::FsimK2 | MetricKind::FsimK3 | MetricKind::FsimK4 | MetricKind::FsimNodownscale | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
+        // SSIM-pyiqa family: similarity on ~[0, 1]; 1 = identical.
+        MetricKind::SsimPyiqa | MetricKind::SsimPyiqaF32 | MetricKind::SsimPyiqaF32K2 | MetricKind::SsimPyiqaF32K3 | MetricKind::SsimPyiqaF32K4 | MetricKind::SsimPyiqaF32K5 | MetricKind::SsimPyiqaF32K6 | MetricKind::SsimcPyiqaF32 | MetricKind::SsimcPyiqaF32K2 | MetricKind::SsimcPyiqaF32K3 | MetricKind::SsimcPyiqaF32K4 | MetricKind::SsimcPyiqaF32K5 | MetricKind::SsimcPyiqaF32K6 | MetricKind::MsSsimPyiqa | MetricKind::MsSsimPyiqaF32 | MetricKind::MsSsimPyiqaF32K2 | MetricKind::MsSsimPyiqaF32K3 | MetricKind::MsSsimPyiqaF32K4 | MetricKind::MsSsimPyiqaF32K5 | MetricKind::MsSsimPyiqaF32K6 => Some((-0.001, 1.001, 1.0)),
         // VSI: similarity on [0, 1]; 1 = identical. Flat inputs
         // degenerate the saliency normalisation to 0/0 → NaN, matching
         // the reference.
-        MetricKind::Vsi => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Vsi | MetricKind::VsiK2 | MetricKind::VsiK3 | MetricKind::VsiK4 | MetricKind::VsiNodownscale => Some((-0.001, 1.001, 1.0)),
         // MS-SSIM: similarity on ~[0, 1]; 1 = identical. Negative
         // means can push the score below 0 through the complex-power
         // real-part convention (matching the reference's `prod`);
@@ -1510,10 +1529,24 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // alone reaches ~1e5 on synthetic textures). Sweep means on
         // real corpora land in the tens–hundreds.
         MetricKind::Mad => Some((-0.001, 1_000_000.0, 0.0)),
-        MetricKind::Vmaf | MetricKind::VmafNeg | MetricKind::Vmaf4k | MetricKind::VmafV1 => {
+        // CIEDE2000: mean ΔE00 >= 0, 0 = identical; sRGB pairs stay below ~120.
+        MetricKind::Ciede2000 => Some((-0.001, 200.0, 0.0)),
+        MetricKind::Vmaf
+        | MetricKind::VmafNeg
+        | MetricKind::Vmaf4k
+        | MetricKind::VmafV1
+        | MetricKind::VmafStudio601
+        | MetricKind::VmafNegStudio601 => {
             Some((-0.5, 100.5, 100.0))
         }
-        MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
+        MetricKind::ButteraugliOriginal => Some((-0.001, 1_000_000.0, 0.0)),
+        MetricKind::Ssimulacra1 => Some((-0.001, 1.001, 0.0)),
+        MetricKind::WsHv => Some((-0.001, 1.001, 1.0)),
+        // CAMBI is distorted-only: zero is normal for an unbanded image.
+        MetricKind::Cambi => None,
+        MetricKind::CwSsim => Some((-0.001, 1.001, 1.0)),
+        MetricKind::Flip | MetricKind::FlipV17 => Some((-0.001, 1.001, 0.0)),
+        MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
             Some((-0.5, 1.5, 1.0))
         }
         MetricKind::Nlpd
@@ -1523,11 +1556,72 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::PsnrY601
         | MetricKind::PsnrYStudio601
         | MetricKind::PsnrYLibvmaf
+        | MetricKind::PsnrYCbCr611
+        | MetricKind::PsnrCb
+        | MetricKind::PsnrCr
         // PSNR-HVS (Daala/libvmaf) and mDCT-PSNR are dB-scale, higher =
         // better; mDCT-PSNR reports `+inf` for identical inputs, so no
         // finite identity value / mean bound is characterised yet.
         | MetricKind::PsnrhvsDaala
         | MetricKind::Mdctpsnr => None,
+        // LPIPS / ST-LPIPS / DISTS / DeepDC: distances, 0 = identical;
+        // each is a weighted deep-feature L2 bound well under 2 on real
+        // content.
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Dists
+        | MetricKind::Deepdc => Some((-0.001, 2.0, 0.0)),
+        // PIQE: [0, 100] distortion, 0 = identical.
+        MetricKind::Piqe => Some((-0.001, 100.5, 0.0)),
+        // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
+        // land ~0–10, synthetic outliers stay far under 50.
+        MetricKind::Niqe => Some((-0.001, 50.0, 0.0)),
+        // BRISQUE: SVR output, unbounded in principle; observed -41..110
+        // on the KonJND corpus. The 0.0 identity is inert (scores never
+        // land exactly on it) — it only satisfies the tuple shape.
+        MetricKind::Brisque => Some((-60.0, 150.0, 0.0)),
+        // ARNIQA: learned NR quality on [0, 1] (scaled kadid10k MOS);
+        // no meaningful identity value — 0.0 flags a default-fail
+        // constant only.
+        MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
+        // MANIQA: learned NR quality — koniq10k MOS labels are min-max
+        // normalized to [0, 1] in the upstream loader; the head can
+        // extrapolate a hair past the range but not to 5.0.
+        MetricKind::Maniqa => Some((-0.001, 1.001, 0.0)),
+        // LIQE: expected value of the 5-quality-bucket softmax — a
+        // strict convex combination of 1..5.
+        MetricKind::Liqe => Some((1.0, 5.0, 3.0)),
+        // MUSIQ: koniq10k-trained transformer score on the MOS 1..100
+        // scale; the head extrapolates a little past the range.
+        MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
+        MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
+        MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        // WaDIQaM: LIVE/TID-trained quality heads on a relu-weighted
+        // patch pool; observed ~7–95 on the KonJND corpus (a hair below
+        // zero for nr_live references), unbounded in principle. The 0.0
+        // sentinel only flags a default-fail constant (identical FR
+        // pairs score near a nonzero floor, not exactly zero).
+        MetricKind::WadiqamFrLive
+        | MetricKind::WadiqamFrTid
+        | MetricKind::WadiqamNrLive
+        | MetricKind::WadiqamNrTid => Some((-1.0, 150.0, 0.0)),
+        // CKDN is sigmoid quality; identical pairs are image-dependent.
+        // Zero is only a default-failure sentinel here, as for NR heads.
+        MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),
+        // DreamSim: one minus cosine similarity, clamped to [0, 1] on both
+        // engines; 0 = identical.
+        MetricKind::Dreamsim => Some((-0.001, 1.001, 0.0)),
+        // A-FINE is an unbounded signed quality score; no characterised
+        // mean bounds or constant identity exist for this check.
+        MetricKind::Afine => None,
+        // WD is a nonnegative, unbounded feature distortion; identical
+        // inputs score exactly 0 in every column. Measured maxima: 1.50
+        // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens
+        // (zenmetrics-nn models/wd/wd_goldens.tsv); a mean above 50 is bogus.
+        MetricKind::Wd => Some((-0.001, 50.0, 0.0)),
     }
 }
 
@@ -1621,7 +1715,8 @@ fn bogus_check(metric: crate::metrics::MetricKind, scores: &[f64], out_parquet: 
         }
     }
 
-    if finite.len() >= 4 {
+    // An unbanded batch legitimately has a constant zero CAMBI column.
+    if finite.len() >= 4 && metric != crate::metrics::MetricKind::Cambi {
         let min = finite.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = finite.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let range = max - min;
@@ -2968,7 +3063,8 @@ fn cmd_batch(
             let peak = hdr::measured_display_peak_nits(r);
             let peak_bits = peak.to_bits();
             if !matches!(&cvvdp_hdr_scorer, Some((b, _)) if *b == peak_bits) {
-                cvvdp_hdr_scorer = None; // free the stale GPU slot first
+                // free the stale GPU slot first (drop before allocating)
+                drop(cvvdp_hdr_scorer.take());
                 cvvdp_hdr_scorer = Some((
                     peak_bits,
                     crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
@@ -3485,6 +3581,12 @@ mod fail_on_bogus_tests {
 
     fn p() -> std::path::PathBuf {
         std::path::PathBuf::from("/tmp/test_sidecar.parquet")
+    }
+
+    #[test]
+    fn cambi_zero_distribution_is_not_bogus() {
+        assert_eq!(metric_range_bounds(MetricKind::Cambi), None);
+        assert!(bogus_check(MetricKind::Cambi, &[0.0; 20], &p()));
     }
 
     #[test]

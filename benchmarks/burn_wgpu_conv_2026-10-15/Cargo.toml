@@ -1,0 +1,10 @@
+[package]
+name = "convprobe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+burn = { version = "0.22.0", features = ["cuda", "vulkan", "fusion", "autotune"] }
+[profile.release]
+lto = "thin"

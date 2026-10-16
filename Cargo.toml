@@ -21,6 +21,9 @@ members = [
     "crates/iwssim-gpu",
     "crates/psnrhvs",
     "crates/nlpd",
+    "crates/piqe",
+    "crates/niqe",
+    "crates/brisque",
     "crates/ssim2-gpu",
 
     "crates/vmaf",
@@ -88,6 +91,9 @@ haarpsi = { version = "0.1.0", path = "crates/haarpsi", default-features = false
 hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
+brisque = { version = "0.1.0", path = "crates/brisque", default-features = false }
+niqe = { version = "0.1.0", path = "crates/niqe", default-features = false }
+piqe = { version = "0.1.0", path = "crates/piqe", default-features = false }
 psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }
@@ -103,7 +109,6 @@ zenmetrics-orchestrator = { version = "0.0.1", path = "crates/zenmetrics-orchest
 zenfleet-cloud = { version = "0.0.1", path = "crates/zenfleet-cloud", default-features = false }
 zenfleet-local = { version = "0.0.1", path = "crates/zenfleet-local", default-features = false }
 zenfleet-vastai = { version = "0.0.1", path = "crates/zenfleet-vastai", default-features = false }
-zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", default-features = false }
 
 # CubeCL — single source of truth for the GPU backend version.
 #
@@ -133,17 +138,12 @@ zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", defaul
 # crates.io instead would put two distinct `cubecl_ir` crates in the graph
 # (same version, different source), and every `cubecl::ir::*` type
 # zenmetrics passes across that boundary would fail to unify.
+#
+# Only the umbrella crate is declared here: no workspace member references
+# the sub-crates (cubecl-runtime/-core/-cuda/-cpu/-wgpu/-hip/-cpp/-common/
+# -ir) directly — they resolve transitively through the umbrella's own
+# manifest, from the same rev, so the unification note above still holds.
 cubecl         = { package = "zenforks-cubecl",         git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false, features = ["std"] }
-cubecl-runtime = { package = "zenforks-cubecl-runtime", git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-core    = { package = "zenforks-cubecl-core",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-cuda    = { package = "zenforks-cubecl-cuda",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-cpu     = { package = "zenforks-cubecl-cpu",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-hip     = { package = "zenforks-cubecl-hip",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-cubecl-cpp     = { package = "zenforks-cubecl-cpp",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
-# Non-renamed leaves — same git source, see note above:
-cubecl-common  = { git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12" }
-cubecl-ir      = { git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12" }
 
 # CPU reference crates used by parity tests.
 butteraugli = { version = "0.9.4" }
@@ -187,7 +187,6 @@ clap = { version = "4", default-features = false, features = ["color", "derive",
 csv = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 imgref = "1"
-indicatif = "0.17"
 rgb = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -288,6 +287,8 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
+# Reviewed effective-dispatch API; publishing remains a separate decision.
+zenquant = { git = "https://github.com/imazen/zenquant", rev = "8ec37ee21f0216cf9b138e407eecc470ee620493" }
 # Temporary until zenpixels-convert >=0.2.17 publishes; then bump the
 # minimum and drop these patches. The 0.2.16 registry release predates the
 # exact U16->U8 narrowing fix already on zenpixels main at e56f626b.
@@ -516,6 +517,13 @@ butteraugli  = { path = "../../butteraugli/butteraugli" }
 # Drop this patch when a fast-ssim2 release ships `hdr-pu` (0.8.2+) and the
 # api/orchestrator deps move back to the registry version.
 fast-ssim2   = { path = "../fast-ssim2/fast-ssim2" }
+# zencodec: sibling `../zengif` (zenmetrics-cli's gif feature path dep)
+# bumped to `zencodec >=0.1.27` while 0.1.27 is unpublished — its own
+# [patch.crates-io] pin is ignored for consumers ("a dependency's [patch]
+# is ignored, only the root's counts"). House rule: unpublished dep ->
+# patch it in, don't stall. Same rev zengif carries: zencodec main, 0.1.27.
+# Drop this patch when zencodec 0.1.27 publishes.
+zencodec     = { git = "https://github.com/imazen/zencodec", rev = "2031094449ad1177ff96461d7c4d586c7ed384e6" }
 # Phase 8f (2026-05-27): cubecl-* deps moved from [patch.crates-io] git
 # pins to [workspace.dependencies] package aliases at the top of this
 # file. The zenforks-cubecl-* crates.io publication makes the workspace-

@@ -167,6 +167,7 @@ fn srgb8_dkl_lut_planes(
 /// - `(Srgb, Bt709)` → fast LUT path (bit-identical to v0.0.1).
 /// - Any other combination → per-pixel
 ///   [`display_byte_to_dkl_scalar`] dispatch.
+///
 /// `Eotf::Srgb + Primaries::Bt709` — the LUT fast-path gate.
 fn srgb_bt709_fast(display: &DisplayModel) -> bool {
     matches!(display.eotf, Eotf::Srgb) && matches!(display.primaries, Primaries::Bt709)

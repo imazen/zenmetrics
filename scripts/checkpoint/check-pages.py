@@ -54,13 +54,60 @@ try:
             context.route('**/pkg/**', lambda route: route.abort() if urlparse(route.request.url).path.startswith('/pkg/') else route.continue_())
         page = context.new_page()
         page.goto(url)
-        page.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')", timeout=30000)
+        # The demo scene starts encoding as soon as the worker is ready, so
+        # the "Ready:" status is transient; the startup line stays.
+        page.wait_for_function("document.getElementById('startup-timing').textContent.includes('Rayon pool')", timeout=30000)
         assert page.evaluate('crossOriginIsolated && typeof SharedArrayBuffer !== "undefined"')
         assert 'Shields off' in page.locator('details').filter(has_text='Brave:').text_content()
         page.wait_for_function("!document.getElementById('capabilities').textContent.startsWith('Checking')",timeout=10000)
         assert 'WebGPU' in page.locator('#capabilities').inner_text()
         if asset_prefix:
             assert asset_prefix in page.locator('script[type=module]').get_attribute('src')
+        # The demo scene loads by default: encoded, scored and mapped, and its
+        # loop encodes live in the worker, steered by the default metric.
+        page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=60000)
+        assert page.locator('#name-reference').inner_text() == 'Demo scene · 768×512'
+        assert page.locator('#name-distorted').inner_text().startswith('zenjpeg · quality 40')
+        # A finished loop encode plays on its own.
+        loop_done = lambda steering: page.wait_for_function(
+            "document.getElementById('loop-info').textContent.startsWith('Frame ') && document.getElementById('loop-info').textContent.includes(%s) && document.getElementById('loop-play').textContent.includes('Pause')" % json.dumps(steering), timeout=300000)
+        loop_done('steered by zensim · ')
+        default_loop = page.locator('#loop-info').inner_text()
+        assert 'live encode' in default_loop and 'external' in default_loop, default_loop
+        assert page.locator('#loop-save').is_enabled() and page.locator('#ls-encode').inner_text().startswith('768×512 · d1 e7 · ')
+        page.locator('#loop-play').click()
+        assert page.locator('#loop-play').inner_text() == '▶ Play'
+        # From iteration 2 the loop only refines blocks above the target; on
+        # the demo none are, so one frame reports the field converged. The
+        # readout keeps its size, so stepping never moves the image or chart.
+        frames = int(default_loop.split(' of ')[1].split(' ')[0])
+        seek = lambda k: page.evaluate("k => {const s=document.getElementById('loop-frame');s.value=k;s.dispatchEvent(new Event('input'));}", k)
+        boxes, converged = set(), False
+        for k in range(frames):
+            seek(k)
+            boxes.add((page.locator('#loop-view').bounding_box()['y'], page.locator('#loop-chart').bounding_box()['y']))
+            converged = converged or page.locator('#ls-next').inner_text().startswith('unchanged: converged')
+        assert converged and len(boxes) == 1, (converged, boxes)
+        # The top bar's Map menu and the loop's Steer menu both switch metric,
+        # and each choice re-encodes the loop steered by it.
+        page.locator('#map-name').select_option('msssim|diffmap')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('msssim · diffmap ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'msssim'
+        assert page.locator('#loop-steer').input_value() == 'msssim|diffmap'
+        loop_done('steered by msssim · diffmap · ')
+        page.locator('#loop-steer').select_option('gmsd|gms')
+        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd · gms ·')",timeout=60000)
+        assert page.locator('#metric').input_value() == 'gmsd' and page.locator('#map-name').input_value() == 'gmsd|gms'
+        loop_done('steered by gmsd · gms · ')
+        page.locator('#loop-steer').select_option('builtin')
+        loop_done('steered by butteraugli (built-in)')
+        assert page.locator('#metric').input_value() == 'gmsd'
+        # The distance slider in the top bar re-encodes at its distance.
+        page.evaluate("() => {const s=document.getElementById('loop-distance-range');s.value=543;s.dispatchEvent(new Event('change'));}")
+        assert page.locator('#loop-distance').input_value() == '2'
+        page.wait_for_function("document.getElementById('ls-encode').textContent.startsWith('768×512 · d2 e7 · ')", timeout=300000)
+        ui_linked_menus = True
+        page.locator('#metric').select_option('zensim')
         # Negative control for the reported old-glue/new-module memory mismatch.
         import re
         glue=(args.site/asset_prefix/'pkg/zenmetrics_browser.js').read_text()
@@ -195,10 +242,19 @@ try:
           const alpha=await response;if(alpha.type!=='error'||!alpha.message.includes('opaque'))throw new Error('PNG alpha silently accepted');
           const input={width:256,height:256},r=new Uint8Array(256*256*4),d=new Uint8Array(r.length);
           for(let i=0;i<r.length;i++){r[i]=i%4===3?255:(i*13+Math.floor(i/1024)*17)%256;d[i]=i%4===3?255:Math.max(0,r[i]-7);}
+          const inputBig={width:1024,height:1024},rBig=new Uint8Array(1024*1024*4),dBig=new Uint8Array(rBig.length);
+          for(let i=0;i<rBig.length;i++){rBig[i]=i%4===3?255:(i*13+Math.floor(i/4096)*17)%256;dBig[i]=i%4===3?255:Math.max(0,rBig[i]-7);}
           const metrics={};
           for(const metric of ready.metrics) {
             response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:r,distorted:d,...input,display:'standard_4k'});
-            const got=await response;if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
+            let got=await response;
+            // Some metrics refuse 256x256 by design (e.g. five-scale MS-SSIM
+            // variants with a fixed pre-downscale need >= 704 px); score those once at 1024x1024.
+            if(got.type==='error'&&/requires at least|too small/i.test(got.message||'')){
+              response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:rBig,distorted:dBig,...inputBig,display:'standard_4k'});
+              got=await response;
+            }
+            if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
           }
           const hd={width:1920,height:1080},hr=new Uint8Array(hd.width*hd.height*4),hdist=new Uint8Array(hr.length);
           for(let i=0;i<hr.length;i++){hr[i]=i%4===3?255:(i*17+Math.floor(i/(hd.width*4))*13)%256;hdist[i]=i%4===3?255:Math.max(0,hr[i]-7);}
@@ -226,6 +282,72 @@ try:
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
+        # Map selection, the encoder modules and the live loop, through the
+        # worker protocol.
+        result['ui_linked_menus'] = ui_linked_menus
+        result['default_loop'] = default_loop
+        result['worker_maps_codecs_loop'] = page.evaluate('''async () => {
+          const worker = new Worker(new URL('./worker.js', location.href), {type:'module'});
+          let progress=0,frames=0;
+          const wait = () => new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Worker deadline expired')), 120000);
+            worker.onmessage = ({data}) => {
+              if(['control','score','progress'].includes(data.type))return;
+              if(data.type==='loop-progress'){if(!data.message)progress++;return;}
+              if(data.type==='loop-frame'){if(data.recon.length!==data.width*data.height*4||data.map.length!==data.width*data.height)throw new Error('loop frame size');frames++;return;}
+              clearTimeout(timer);data.type==='error'?reject(new Error(data.message)):resolve(data);
+            };
+          });
+          let response=wait();worker.postMessage({type:'init',threads:2});
+          const ready=await response;
+          if(!Array.isArray(ready.loopDefaults))throw new Error('No loop defaults');
+          const width=240,height=200,reference=new Uint8Array(width*height*4),distorted=new Uint8Array(reference.length);
+          for(let y=0;y<height;y++) for(let x=0;x<width;x++) for(let c=0;c<4;c++) {
+            const i=(y*width+x)*4+c; reference[i]=c===3?255:((x>>3)*37+(y>>2)*11+c*53+((x*y)&15))%256;
+            distorted[i]=c===3?255:Math.max(0,reference[i]-((x+y)%7));
+          }
+          const out={};
+          for(const metric of ['msssim','dssim']){
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:metric,mapName:'',reference,distorted,width,height});
+            const first=await response;
+            // The fused diffmap is the default; the list keeps the metric's order.
+            if(first.mapName!=='diffmap'||first.mapNames.length<2||!first.mapNames.includes('diffmap'))throw new Error(metric+' maps '+JSON.stringify(first.mapNames));
+            const name=first.mapNames.find(n=>n!=='diffmap');
+            response=wait();worker.postMessage({type:'map',mapMetric:metric,mapName:name});
+            const cached=await response;
+            response=wait();worker.postMessage({type:'compare',metric:'psnr',mapMetric:metric,mapName:name,reference,distorted,width,height});
+            const fresh=await response;
+            if(cached.mapName!==name||fresh.mapName!==name||cached.map.length!==cached.mapWidth*cached.mapHeight)throw new Error(metric+' map '+name);
+            if(JSON.stringify(Array.from(cached.map))!==JSON.stringify(Array.from(fresh.map)))throw new Error(metric+' cached map differs');
+            out[metric]={names:first.mapNames,second:name,polarity:cached.mapPolarity};
+          }
+          response=wait();worker.postMessage({type:'compare',metric:'psnr-y',mapMetric:null,reference,distorted,width,height});
+          const scoreOnly=await response;
+          if(scoreOnly.map!==null)throw new Error('A score-only metric returned a map');
+          const magic={webp:[82,73,70,70],avif:[0,0,0],jxl:[255,10]};
+          out.codecs={};
+          for(const codec of ['jpeg','webp','avif','jxl']){
+            response=wait();worker.postMessage({type:'generate',codec,reference,width,height,quality:50});
+            const got=await response;
+            if(got.rgba.length!==width*height*4||!(got.bytes>0))throw new Error(codec+' roundtrip');
+            if(magic[codec]&&!magic[codec].every((v,i)=>got.encoded[i]===v))throw new Error(codec+' magic '+Array.from(got.encoded.slice(0,4)));
+            out.codecs[codec]=got.bytes;
+          }
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:{metric:'msssim',map:'',scale:1,exponent:1},steering:'msssim test'});
+          const run=await response;
+          const head=new TextDecoder().decode(run.trace.subarray(0,10));
+          if(head!=='JXLTRACE1\\n'||!(progress>0)||run.file.length<2||run.file[0]!==255)throw new Error('loop '+head+' '+progress);
+          if(frames!==progress)throw new Error('live frames '+frames+' vs scored '+progress);
+          out.loop={scored:progress,frames,bytes:run.file.length,trace:run.trace.byteLength};
+          frames=0;
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:null,steering:'butteraugli (built-in)'});
+          const builtin=await response;
+          if(!(frames>0)||builtin.file[0]!==255)throw new Error('built-in loop frames '+frames);
+          out.builtin_loop={frames,bytes:builtin.file.length};
+          response=wait();worker.postMessage({type:'loop',reference,width,height,distance:1.5,effort:7,iters:2,steer:{metric:'gmsd',map:'',scale:0,exponent:1},steering:'bad'});
+          try{await response;throw new Error('A zero scale was accepted');}catch(error){if(!String(error.message).includes('scale and exponent'))throw error;}
+          worker.terminate();return out;
+        }''')
         # Both file controls exercise the UI's independent upload revisions.
         jpeg=bytes(result.pop('jpeg_bytes'))
         observed=[]
@@ -237,15 +359,14 @@ try:
         assert '64×64' in page.locator('#dimensions').inner_text()
         assert page.locator('#score').inner_text()!='–'
         page.locator('#metric').select_option('ssim2')
-        page.wait_for_function("document.getElementById('score-label').textContent==='ssim2'",timeout=30000)
-        page.locator('#map-metric').select_option('gmsd')
-        page.wait_for_function("document.getElementById('map-info').textContent.startsWith('gmsd')",timeout=30000)
+        page.wait_for_function("document.getElementById('score-label').textContent==='ssim2' && document.getElementById('map-info').textContent.startsWith('ssim2 · diffmap ·')",timeout=30000)
+        page.locator('#metric').select_option('gmsd')
+        page.wait_for_function("document.getElementById('score-label').textContent==='gmsd' && document.getElementById('map-info').textContent.startsWith('gmsd ·')",timeout=30000)
         assert not observed,observed
         result['offline_upload_ui_and_scoring']=True
         context.set_offline(False)
         context.set_offline(False)
         page.locator('#metric').select_option('zensim')
-        page.locator('#map-metric').select_option('zensim')
         page.locator('#demo').click()
         page.wait_for_function("document.getElementById('status').textContent.includes('768×512 · native-cpu-wasm')",timeout=30000)
         assert page.locator('#score').inner_text()!='–'
@@ -255,7 +376,7 @@ try:
         assert page.locator('#norm').input_value() == 'sqrt'
         rendered = {}
         for map_metric in ('zensim', 'butteraugli', 'cvvdp'):
-            page.locator('#map-metric').select_option(map_metric)
+            page.locator('#metric').select_option(map_metric)
             page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·') && document.getElementById('map-info').textContent.includes('per-image scale')",arg=map_metric,timeout=30000)
             page.locator('[data-mode="map"]').click()
             colors = page.evaluate("""() => {
@@ -275,7 +396,7 @@ try:
         assert page.locator('#scale').is_enabled()
         assert 'fixed' in page.locator('#map-info').inner_text()
         page.locator('#norm').select_option('sqrt')
-        page.locator('#map-metric').select_option('zensim')
+        page.locator('#metric').select_option('zensim')
         page.wait_for_function("document.getElementById('map-info').textContent.startsWith('zensim ·')",timeout=30000)
         result['rendered_demo_maps'] = rendered
         # Invoke both UI handlers in one browser turn: a fast comparison must
@@ -299,12 +420,9 @@ try:
             page.wait_for_function("model => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.includes('model '+model+' ·')",arg=model,timeout=30000)
             assert '--zensim-profile '+model in page.locator('#cli-snippet').inner_text()
             assert 'model '+model in page.locator('#score-info').inner_text()
-        page.locator('#map-metric').select_option('psnr')
         page.locator('#zensim-model').select_option('c')
-        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('score-info').textContent.includes('model c') && document.getElementById('status').textContent.includes('psnr map')",timeout=30000)
+        page.wait_for_function("!document.getElementById('compare').disabled && document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
         assert page.locator('#zensim-model-note').is_visible()
-        page.locator('#map-metric').select_option('zensim')
-        page.wait_for_function("document.getElementById('status').textContent.includes('Model C spatial maps')",timeout=30000)
         assert page.locator('#map-info').inner_text() == 'No map yet'
         assert 'Map unavailable' in page.locator('#compute-timing').inner_text()
         assert 'model c' in page.locator('#score-info').inner_text()
@@ -318,8 +436,8 @@ try:
         assert 'Worker startup ' in page.locator('#startup-timing').inner_text()
         result['ui_separate_timings']=True
         # MS-SSIM stays last: the border check below reads its cropped origin.
-        for map_metric in ('ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','fsimc','haarpsi','vsi','msssim'):
-            page.locator('#map-metric').select_option(map_metric)
+        for map_metric in ('ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1','fsim','haarpsi','vsi','dssim','msssim'):
+            page.locator('#metric').select_option(map_metric)
             page.wait_for_function("metric => !document.getElementById('compare').disabled && document.getElementById('map-info').textContent.startsWith(metric+' ·')",arg=map_metric,timeout=30000)
             assert 'native samples' in page.locator('#map-info').inner_text()
             assert page.locator('#score').inner_text()!='–'
@@ -347,17 +465,30 @@ try:
         trace += f32([1, 1]) + f32([2, 0.5]) + f32([1.5, 0.5]) + f32([i / (lw * lh) for i in range(lw * lh)]) + bytes([200, 100, 50] * (lw * lh))
         trace += f32([2, 0.5]) + f32([1.1, 0.9]) + f32([0.1] * (lw * lh)) + bytes([210, 110, 60] * (lw * lh))
         page.locator('#trace').set_input_files({'name': 'synthetic.ltrace', 'mimeType': 'application/octet-stream', 'buffer': trace})
-        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame 1 of 2')", timeout=10000)
+        page.wait_for_function("document.getElementById('loop-info').textContent.startsWith('Frame ') && document.getElementById('loop-info').textContent.includes('synthetic.ltrace') && document.getElementById('loop-play').textContent.includes('Pause')", timeout=10000)
+        page.locator('#loop-play').click()
+        seek(0)
         info = page.locator('#loop-info').inner_text()
-        assert 'iteration 0 of 1' in info and '1 of 2 blocks above target' in info and 'next: 1 blocks finer, 1 coarser' in info, info
+        assert info.startswith('Frame 1 of 2 · butteraugli'), info
+        text = lambda id: page.locator(id).inner_text()
+        assert text('#ls-iter') == '0 of 1 · seed 0.6', text('#ls-iter')
+        assert text('#ls-score') == '1.500 / 1.000 (150%)', text('#ls-score')
+        assert text('#ls-blocks') == '1 of 2 (50.0%)' and text('#ls-worst') == 'block 0, 0 · 1.500 (150%)', (text('#ls-blocks'), text('#ls-worst'))
+        assert text('#ls-next') == '1 finer · 1 coarser' and text('#ls-encode') == '16×8 · d1 e7 · 123 B'
         loop_px = lambda x, y: page.evaluate(f"Array.from(document.getElementById('loop-view').getContext('2d').getImageData({x},{y},1,1).data)")
+        # Default layer: the block above the target is outlined in magenta,
+        # the block below it is not; the map over the reconstruction leaves a
+        # zero-map pixel exactly the reconstruction.
+        assert loop_px(0, 0) == [255, 0, 255, 255] and loop_px(7, 7) == [255, 0, 255, 255], (loop_px(0, 0), loop_px(7, 7))
+        assert loop_px(8, 0) != [255, 0, 255, 255]
+        page.locator('#loop-layer').select_option('overlay')
         assert loop_px(0, 0) == [200, 100, 50, 255]
         page.locator('#loop-layer').select_option('dqf')
         assert loop_px(1, 1) == [255, 0, 0, 255], loop_px(1, 1)  # left block finer: red
         assert loop_px(9, 1) == [0, 0, 255, 255], loop_px(9, 1)  # right block coarser: blue
         page.locator('#loop-next').click()
         info = page.locator('#loop-info').inner_text()
-        assert 'Frame 2 of 2' in info and 'score-only final pass' in info, info
+        assert info.startswith('Frame 2 of 2') and text('#ls-next') == 'none: final pass, score only', (info, text('#ls-next'))
         page.locator('#loop-layer').select_option('recon')
         assert loop_px(3, 3) == [210, 110, 60, 255]
         page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})

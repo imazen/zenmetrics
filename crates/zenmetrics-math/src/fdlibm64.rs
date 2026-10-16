@@ -398,7 +398,7 @@ fn log_libm_4x_impl<T: I64x4Bitcast, const LOG2: bool>(token: T, x: f64x4<T>) ->
     let mut hxr = xnbits.shr_logical_const::<32>();
 
     /* reduce x into [sqrt(2)/2, sqrt(2)] */
-    hxr = hxr + ci!(token, 0x3ff0_0000 - 0x3fe6_a09e);
+    hxr += ci!(token, 0x3ff0_0000 - 0x3fe6_a09e);
     let k = k + (hxr.shr_logical_const::<20>() - ci!(token, 0x3ff));
     hxr = (hxr & ci!(token, 0x000f_ffff)) + ci!(token, 0x3fe6_a09e);
     let xru = (hxr.shl_const::<32>() | (xnbits & ci!(token, 0xffff_ffff))).bitcast_to_f64();
@@ -422,7 +422,7 @@ fn log_libm_4x_impl<T: I64x4Bitcast, const LOG2: bool>(token: T, x: f64x4<T>) ->
         let mut val_lo = (lo + hi) * cf!(token, IVLN2LO) + lo * cf!(token, IVLN2HI);
         /* spadd(val_hi, val_lo, dk) */
         let wv = dk + val_hi;
-        val_lo = val_lo + ((dk - wv) + val_hi);
+        val_lo += (dk - wv) + val_hi;
         val_lo + wv
     } else {
         s * (hfsq + r) + dk * cf!(token, LN2_LO) - hfsq + f + dk * cf!(token, LN2_HI)

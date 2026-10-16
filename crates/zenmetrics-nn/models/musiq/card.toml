@@ -1,0 +1,43 @@
+# MUSIQ: no-reference IQA — 3-scale (longer-side 224, 384, full) 32x32
+# patch sequences -> weight-standardized 5-layer ResNet stem -> Dense(384)
+# + hashed spatial + scale embeddings + CLS -> 14 transformer blocks
+# (6 heads, mlp 1152, tanh-GELU) -> LN -> scalar head. The `musiq` column
+# is upstream run_predict_image.py on koniq_ckpt.npz.
+name = "musiq"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `musiq` on dist, `musiq_ref` on ref
+direction = "higher-is-better"       # koniq10k MOS-scale score; ladder goldens span 15.9-76.2
+columns = ["musiq", "musiq_ref"]
+paper = "Ke, Wang, Wang, Milanfar, Yang. MUSIQ: Multi-scale Image Quality Transformer. ICCV 2021. Google Research"
+
+[code]
+source = "upstream-port"             # npz params mirrored into a PyTorch module in export.py; the net runs as an exported ONNX graph
+upstream = "https://github.com/google-research/google-research/tree/master/musiq"
+upstream_package = "git clone of google-research (sparse musiq/), pinned 3ef5211; legacy stack jax 0.3.25 + flax 0.3.3 (flax.nn) + tensorflow CPU on python 3.9 — Kaggle/TF-Hub `google/musiq` instances are conversions of the same npz checkpoints (docs/pyiqa_licenses_2026-10-15/deep_origins.tsv)"
+licence = "Apache-2.0"
+
+[weights]
+# The repo is Apache-2.0 and its README's Model Zoo links the checkpoint
+# on the project's GCS bucket; the npz carries no separate terms, and the
+# Kaggle Models listing (google/musiq, koniq-10k) states Apache-2.0.
+licence_class = "permissive"
+checkpoint = "gs://gresearch/musiq/koniq_ckpt.npz (163 MB, opt/target/* flax params; sha256 recorded in musiq_export.meta provenance)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "u8/255 then -1 + t*2 (upstream normalize_value_range -> [-1,1])"
+resize = "per scale s in {224,384}: keep aspect, longer side = s via tf.image.resize GAUSSIAN — scale_and_translate kernel_type='gaussian' antialias=False: kernel_scale=1, sigma=0.5, radius 1.5, w=exp(-2 d^2) for |d|<1.5, reciprocal-multiply normalisation, vertical-then-horizontal. LOCAL PORT in src/tfresize.rs (LICENSE-tensorflow), f64 Gaussian exponential followed by f32 coefficients and accumulation — TEMPORARY: moves to zenresize when its gaussian mode lands: zenresize PR #18's `gaussian_tf()` + `.with_antialias(false)` is the replacement once merged (kernel_scale=1, sigma=0.5, radius 1.5)"
+patches = "32x32 stride-32 SAME zero-pad per scale; row = [3072 hwc pixels, spatial hash (tf v1 NEAREST of arange(10) over the patch grid), scale id, mask]; rescaled groups pad to ceil(s/32)^2 rows (49+144), full-res group uncapped -> [1, L, 3075], L = 193 + ceil(h/32)*ceil(w/32)"
+min_size = 1                         # every input resizes; a 1x1 still yields 194 rows
+max_rows = 8192                      # L = 193 + ceil(h/32)*ceil(w/32) must stay under this: native-res patches are uncapped upstream and attention is O(L^2) — 8192 rows (~2800px-square input) is ~1.6 GB for one [1,6,L,L] f32 map. Larger inputs -> TooManyPatches (limit in patch rows). Extreme aspect ratios whose rescaled side rounds to 0 -> DegenerateAspectRatio (upstream: 'output dimensions must be positive')
+
+[export]
+script = "export.py"
+outputs = "musiq_{onnx, meta, export.meta} + musiq_goldens.tsv (from oracle.py)"
+opset = 17
+notes = "x[1,l,3075] -> musiq[1], dynamic patch axis; the stem's per-patch ResNet batches all L patches (incl. pad rows, masked out by the -1e10 attention bias). Self-check ORT-CPU vs the torch mirror 1.5e-5; the torch mirror was verified vs the JAX oracle at worst 6.5e-5 (1415_256 pair). goldens: oracle.py under the musiq39 venv (jax 0.3.25 + flax 0.3.3 + tf-cpu, python 3.9, eager mode — upstream needs len(tf.shape) eagerly)"
+
+[parity]
+oracle = "google-research/musiq @3ef5211, run_predict_image.py preprocess+Model.call, CPU fp32, koniq_ckpt.npz"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 1.968925                       # pooled median |musiq - musiq_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 2.823349, BPG 1.292500
+results = "rten worst |d| 2.37e-4 = 1.20e-4 JND; ort-cuda worst |d| 1.37e-4 = 6.98e-5 JND against upstream JAX goldens over 24 ladder pairs, including non-square images and the 2048 rung. Goldens: models/musiq/musiq_goldens.tsv; source correction and measurements: ff792750. Residual floating accumulation differences remain within the 1e-3 JND gate."

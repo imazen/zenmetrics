@@ -1,0 +1,11 @@
+metric	column	site_mapping	n	max_published_abs_delta	median_jnd_offset	max_abs_jnd_offset	mapping_available
+fsim	fsim_imazen_v0_1_0	FSIM	61	0.006486278091430653	-0.70579441185022	3.557247295647563	True
+fsim	fsimc_imazen_v0_1_0	FSIMc	61	0.006448104362487772	-0.6932754481111671	3.6078938997610246	True
+fsim-k2	fsim_k2	FSIM-k2	61		-0.5125965117693616	3.1218188266879916	True
+fsim-k2	fsimc_k2	FSIMc-k2	61		-0.5321351705347972	3.1139308986903775	True
+fsim-k3	fsim_k3	FSIM-k3	61		-0.446389141335782	3.260814038293369	True
+fsim-k3	fsimc_k3	FSIMc-k3	61		-0.49133258401646285	3.1473464853091087	True
+fsim-k4	fsim_k4	FSIM-k4	61		-0.3547790200540284	2.857206962947392	True
+fsim-k4	fsimc_k4	FSIMc-k4	61		-0.3874144460495317	2.711370069794492	True
+fsim-nodownscale	fsim_nodownscale	FSIM-nodownscale	61		-0.5914407509118544	2.8011618191786822	True
+fsim-nodownscale	fsimc_nodownscale	FSIMc-nodownscale	61		-0.5526921081094698	2.795102864686251	True

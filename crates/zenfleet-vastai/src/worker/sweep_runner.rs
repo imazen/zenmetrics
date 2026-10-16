@@ -48,7 +48,7 @@ use zenmetrics_cli::sweep::{
 /// Build failures are recorded as `None` and the call site falls back
 /// to the legacy MetricCache path with a one-time warning. Refusing to
 /// fall back would surface as a hard chunk failure on machines whose
-/// capability-cache directory isn't writeable — better to keep working
+/// capability-cache directory isn't writable — better to keep working
 /// with the legacy path than to lose the chunk.
 static ORCHESTRATOR: OnceLock<Option<SweepOrchestratorHandle>> = OnceLock::new();
 

@@ -45,11 +45,17 @@ default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr"]
 # adds the ONNX Runtime CUDA engine (ZENMETRICS_NN_ENGINE=ort-cuda).
 nn = ["dep:zenmetrics-nn", "dep:zenmetrics-abstractions"]
 nn-ort = ["nn", "zenmetrics-nn/ort"]
+# Classical no-reference metrics (piqe, niqe, brisque) — in-tree ports
+# scored through `zenmetrics-abstractions::PairedNoReference`, so batch /
+# score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
+nr = ["dep:piqe", "dep:niqe", "dep:brisque", "dep:zenmetrics-abstractions"]
 
 # Decoder feature flags
 # zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette
 # backends the sweep's quantize axis (`-zq{N}` / `-iq{N}` cells) needs.
-png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
+png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant", "dep:zenquant"]
+# Separate binaries are required for joint-present and joint-absent palette routes.
+palette-joint = ["png", "zenpng/joint", "zenquant/joint"]
 # Enables the `zenjpeg` decoder + sweep encoder. We pin to a path dep on
 # the in-workspace zenjpeg 0.8.4 (sibling repo), which restores
 # magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
@@ -437,6 +443,7 @@ feature-rev = ["feature-jobs"]
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
+zenquant = { version = "=0.1.4", optional = true }
 sha2 = "0.11.0"
 # sha2 0.11 returns `Array`, which (unlike 0.10's `GenericArray`) does not
 # implement LowerHex, so `format!("{:x}", Sha256::digest(..))` no longer compiles.
@@ -617,6 +624,9 @@ vmaf = { workspace = true, optional = true, features = ["simd", "parallel"] }
 nlpd = { path = "../nlpd", optional = true, features = ["avx512", "parallel"] }
 zenmetrics-nn = { path = "../zenmetrics-nn", optional = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", optional = true, default-features = false }
+piqe = { workspace = true, optional = true, features = ["std"] }
+niqe = { workspace = true, optional = true, features = ["std"] }
+brisque = { workspace = true, optional = true, features = ["std"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
@@ -649,6 +659,7 @@ arrow-array = { version = "59.3.0", optional = true }
 arrow-schema = { version = "59.3.0", optional = true }
 
 [dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
 tempfile = "3"
 serde_json = { workspace = true }
 # Used by the `sweep_writes_zensim_feature_parquet` integration test to read

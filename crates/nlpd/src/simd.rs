@@ -94,10 +94,10 @@ fn h5_fused_inner<const ZINIT: bool>(token: Token, src: &[f32], out: &mut [f32])
     for i in (0..full).step_by(8) {
         let mut acc = f32x8::load_t(token, src[i..i + 8].try_into().unwrap()) * w[0];
         if ZINIT {
-            acc = acc + f32x8::zero_t(token);
+            acc += f32x8::zero_t(token);
         }
         for k in 1..5 {
-            acc = acc + f32x8::load_t(token, src[i + k..i + k + 8].try_into().unwrap()) * w[k];
+            acc += f32x8::load_t(token, src[i + k..i + k + 8].try_into().unwrap()) * w[k];
         }
         acc.store((&mut out[i..i + 8]).try_into().unwrap());
     }
@@ -193,10 +193,10 @@ fn h5_eo_inner<const ODDPAD: bool>(
             )
         };
         let mut acc = lv(h0, s0) * w[0] + zero;
-        acc = acc + lv(h1, s1) * w[1];
-        acc = acc + lv(h2, s2) * w[2];
-        acc = acc + lv(h3, s3) * w[3];
-        acc = acc + lv(h4, s4) * w[4];
+        acc += lv(h1, s1) * w[1];
+        acc += lv(h2, s2) * w[2];
+        acc += lv(h3, s3) * w[3];
+        acc += lv(h4, s4) * w[4];
         acc.store((&mut out[ox..ox + 8]).try_into().unwrap());
         ox += 8;
     }

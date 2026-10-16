@@ -107,6 +107,10 @@ impl KnobGrid {
 /// `quality(f32)`) — only the sweep pipeline historically truncated to a
 /// `u32`, which coarsened the near-lossless dial where 0.1-quality steps
 /// matter. Integer inputs (`5,10,15`) parse exactly as before (`5.0`, …).
+///
+/// `#[allow(dead_code)]`: part of the lib target's public API (re-exported
+/// via `sweep`); the bin itself calls [`parse_q_grid_with_max`] instead.
+#[allow(dead_code)]
 pub fn parse_q_grid(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
     parse_q_grid_with_max(s, 100.0)
 }

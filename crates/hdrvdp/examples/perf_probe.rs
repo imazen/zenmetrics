@@ -55,8 +55,8 @@ fn main() {
     let reps: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(1);
     let version = args.next().unwrap_or_else(|| "v2".into());
     assert!(
-        ["v2", "v3"].contains(&version.as_str()),
-        "expected v2 or v3"
+        ["v2", "v3", "v3s"].contains(&version.as_str()),
+        "expected v2, v3 or v3s"
     );
     let strict = args.next().is_some_and(|a| a == "strict");
 
@@ -74,7 +74,7 @@ fn main() {
 
     for rep in 0..reps {
         let t0 = std::time::Instant::now();
-        if version == "v3" {
+        if version == "v3" || version == "v3s" {
             use hdrvdp::v3;
             let encoding = v3::InputEncoding::Luminance;
             let mut opts = v3::Options::reference(v3::Task::Quality);
@@ -89,6 +89,17 @@ fn main() {
                 opts,
             )
             .expect("perf_probe: invalid viewing conditions");
+            if version == "v3s" {
+                let q_jod = v3::score(&test, &reference, side, side, &params)
+                    .expect("perf_probe: v3 score failed");
+                let dt = t0.elapsed();
+                println!(
+                    "rep {rep}: v3s {side}x{side} in {:.3} s  res_q={:.17}",
+                    dt.as_secs_f64(),
+                    q_jod
+                );
+                continue;
+            }
             let r = v3::hdrvdp3(&test, &reference, side, side, &params)
                 .expect("perf_probe: v3 metric failed");
             let dt = t0.elapsed();

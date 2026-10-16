@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::Error;
-use crate::engine::{PairGraph, Trunk};
+use crate::engine::{ImageGraph, PairGraph, Trunk};
 
 pub(crate) enum Backend {
     /// Trunk graph on the engine, head here: taps come back to the host.
@@ -11,6 +11,9 @@ pub(crate) enum Backend {
     /// The whole metric in one graph; only the score comes back.
     #[cfg_attr(not(feature = "ort"), allow(dead_code))]
     Pair(Box<dyn PairGraph>),
+    /// A whole-image NR graph; only the score comes back.
+    #[cfg_attr(not(feature = "ort"), allow(dead_code))]
+    Image(Box<dyn ImageGraph>),
 }
 
 /// `<prefix>.meta`: `channels c0,c1,...` and `min_size n`.

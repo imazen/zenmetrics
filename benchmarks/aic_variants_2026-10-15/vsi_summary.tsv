@@ -1,0 +1,6 @@
+metric	column	site_mapping	n	max_published_abs_delta	median_jnd_offset	max_abs_jnd_offset	mapping_available
+vsi	vsi_imazen_v0_1_0	VSI	61	0.0018531618055450672	-0.8178256693231298	3.5116637090561884	True
+vsi-k2	vsi_k2	VSI-k2	61		-0.6821928010439486	2.1744903550613506	True
+vsi-k3	vsi_k3	VSI-k3	61		-0.5410392157497466	1.837413559892231	True
+vsi-k4	vsi_k4	VSI-k4	61		-0.4861211343474867	1.8469852197428311	True
+vsi-nodownscale	vsi_nodownscale	VSI-nodownscale	61		-0.7100613633278705	2.8329430635945134	True

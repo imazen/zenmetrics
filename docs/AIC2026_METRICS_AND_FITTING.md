@@ -236,15 +236,17 @@ implementations. Qualify ours by reference + variant, not just metric name:
 
 | AIC-4 column | Actual implementation (identified) | Ours | Qualification |
 |---|---|---|---|
-| `PSNR` | RGB mean-MSE PSNR | — | computable; no dedicated CLI metric |
+| `PSNR` | RGB mean-MSE PSNR | `psnr` | ✅ reproduced — 61 pairs: median 9.09e-05, max 0.00128 dB, max 5.48e-05 JND |
 | `PSNR-Y` | PSNR on `round(16+(65.481R+128.553G+24.966B)/255)` (JPEG studio-601) | `psnr-y-studio601` (or `--luma-ingress yuv601-studio` + `psnr-y`) | exact convention identified |
-| `PSNR-YCbCr611` | 6:1:1 YCbCr composite PSNR | — | identified |
+| `PSNR-YCbCr611` | 6:1:1 YCbCr composite PSNR | `psnr-ycbcr611` | ✅ identified + implemented — 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target |
+| `PSNR-Cb` (excluded on the site) | PSNR of the full-resolution studio-swing BT.601 chroma planes (the `psnr-ycbcr611` conversion) | `psnr-cb` | ✅ 61 pairs: median 1.9e-3 dB, max 1.7e-2 dB (median 2.2e-4, max 2.0e-3 JND); no tested convention gets closer |
+| `PSNR-Cr` (excluded on the site) | as `PSNR-Cb` | `psnr-cr` | ✅ 61 pairs: median 2.1e-3 dB, max 5.7e-2 dB (median 3.3e-4, max 8.8e-3 JND); one pair 5.7e-2 dB off |
 | `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | **Daala/Xiph `dump_psnrhvs`** (7×7 CSF-weighted, per-plane + combined) | `psnrhvs-daala` | ✅ FFI-verified port — studio-601 YUV444 chroma; `psnrhvs`/`psnrhvsm` remain the Ponomarenko MATLAB variant (**different algorithm family**) |
 | `SSIM` | libvmaf `float_ssim` (auto-scale `round(min_dim/256)` box decimate, 11×11 Gaussian, zli l·c·s, L=255) | `ssim-libvmaf` | ✅ FFI-verified port |
-| `SSIM-pyiqa` | pyiqa SSIM | — | third variant |
-| `SSIMc` | MATLAB `ssim()` per-RGB-channel mean | — | computable |
+| `SSIM-pyiqa` | pyiqa SSIM | `ssim-pyiqa` (plus `ssim-pyiqa-f32` and k2–k6 fixed-factor variants) | ✅ published 61-pair gate: SSIM-pyiqa max 3.8e-6 |
+| `SSIMc` | MATLAB `ssim()` per-RGB-channel mean | `ssimc` (also `ssimc-pyiqa`) | ✅ max 7.5e-7 at the CLI's print precision |
 | `MS-SSIM` | libvmaf `float_ms_ssim` | `msssim-libvmaf` | ✅ FFI-verified port; `msssim` remains the Wang-MATLAB variant |
-| `MS-SSIM-pyiqa` | pyiqa ms_ssim (matched by ours to 3e-7 on one point) | `msssim` via `yuv601-studio` | variants differ at low quality |
+| `MS-SSIM-pyiqa` | pyiqa ms_ssim (matched by ours to 3e-7 on one point) | `ms-ssim-pyiqa` (plus `ms-ssim-pyiqa-f32` and k2–k6 fixed-factor variants); supersedes the `msssim` proxy | ✅ published 61-pair gate: MS-SSIM-pyiqa max 1.9e-6 |
 | `VIF` | **wavelet `vifvec`** family (SP5 steerable pyramid vecGSM; `IQA_pytorch.VIFs`/`vifvec.m`) on u8-rounded `round(0.299R+0.587G+0.114B)` luma | `vifvec` | ✅ implemented — med 1.9e-6 / max 6.3e-6 (n=54); `vif` remains pixel-domain `vifp_mscale` (**different algorithm family**) |
 | `VIF_vmaf` | libvmaf `vif` feature, Σ4 scales | `vmaf` crate `vif_scales` | matches |
 | `VMAF` / `VMAF-neg` / `ADM2` | libvmaf 3.2.1 `vmaf_v0.6.1[neg]` + `adm2` | `vmaf` crate | reproduction-grade |
@@ -252,21 +254,49 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `SSIMULACRA2` | "SSIMULACRA v2.1" | `ssim2` → sibling `fast-ssim2` | current lineage; JND delta ≤0.004 |
 | `GMSD` | standard GMSD | `gmsd` | exact |
 | `HaarPSI` | HaarPSI | `haarpsi` | reproduction-grade |
-| `VSI` | VSI, `k3`/`k4` weight variants in fit set | `vsi` | our port = paper weights; which `k` the CSV used is unresolved |
+| `VSI` | VSI, `k3`/`k4` weight variants in fit set | `vsi` (plus `vsi-k2/k3/k4/nodownscale`) | our port = paper weights; the site fit used the k3 values, and the published full-res CSV columns are the automatic factor (our auto-factor ports match them) |
 | `FSIM`/`FSIMc` | FSIM/FSIMc, `k4` variant in fit | `fsim`, `fsimc` | acceptable; JPG-16 tail 0.3 JND |
 | `DSSIM` | dssim-core ^3.4 | `dssim` | exact |
 | `IW-SSIM` | jpeg-ai-qaf `IW_SSIM` (Jack-guo torch port) on **unrounded** 0–255 Y (`0.299/0.587/0.114`, kornia-matrix YUV) | `iwssim-piq` | ✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); `iwssim` keeps the Python-IW-SSIM rounded-BT.601 oracle convention |
 | `proposal-Butteraugli` | AIC-4 **submission** — measured vs ours 2026-09-26: tracks `pnorm_3` (libjxl 3-norm) with Pearson **0.99997**, affine `pub ≈ 2.09·ours − 1.10` resid-rms 0.011; `score` (max-norm) fits far worse (Pearson 0.957) and every other aggregation probed (pnorm p∈{1,2,2.5,4,5,6,8,10,12,16}, single-exponent norms, 8×8-blockmax norms) is worse still. So the submission is a pnorm-3-family butteraugli over a *different diffmap* (version/ingress — `intensity_target` 250 fits worse than default 80), not a different norm. Not identity-reproducible from the shipped artifacts | `butteraugli` (`butteraugli_pnorm3` column) | family identified; exact upstream config unrecovered |
 | `proposal-mDCTPSNR` | mDCT-PSNR in JND units: the reference tool's `-jnd` remap, `0.000475997802·max(0, 80 − dB)^2.3182` — fits all 9,618 published rows to 5e-9 when applied to the `mDCT-PSNR` column (2026-10-09) | `mdctpsnr` + `mdct_psnr_jnd` | ✅ reproducible: our dB max error 1.13e-5 propagates to ≤3e-6 JND; not exposed as a CLI `--metric` |
 | `proposal-DVIFM*` | AIC-4 submission; DVIFM (Distortion Visibility Image Fidelity Measure) is by Maciej Pedzisz, Nokia | — | cannot reproduce |
-| `proposal-IDFIQA` | AIC-4 submission; variance-guided deep feature correlation (Khakpour, Yademellat, Mansouri, ICCKE 2025); PyTorch + torchvision pretrained backbone; code public on GitHub without a license | — | not implemented (needs a CNN runtime) |
+| `proposal-IDFIQA` | AIC-4 submission; variance-guided deep feature correlation (Khakpour, Yademellat, Mansouri, ICCKE 2025); PyTorch + torchvision pretrained backbone; code public on GitHub without a license | — | not implemented — no licensed code (the CNN runtime now exists in zenmetrics-nn); planned as "IDFIQA from the paper" in PYIQA_PORT_PLAN.md |
 | `HDR_VDP_2` | HDR-VDP-2.x, display config TBD | `hdrvdp` | needs absolute-nits ingress config |
 | `HDR_VDP_3` | HDR-VDP-3.0.7 lineage (jpeg-ai-qaf `VDP3/` port @ `0628a6b` — verified == official MATLAB 3.0.7) | `hdrvdp3` | ✅ implemented + bit-faithful to MATLAB 3.0.7; ⚠️ published column unreproduced — different upstream run config (see DIVERGENCES) |
 | `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
 | `NLPD` | `IQA_pytorch` `NLPD(channels=1)` — the **dingkeyan93 IQA-optimization** package (not pyiqa): BT.709 Y plane in [0,1] on the 8-bit grid, reflect-pad downsample, `bilinear(×2, align_corners)` upsample, unrotated DN kernels, 6 loop-levels (no residual band), **mean of per-level RMS** | `nlpd-iqa` (`crates/nlpd/src/iqa.rs`) | ✅ implemented — med 2.6e-3 / max 6.7e-3, med-rel 2.63% (n=53; residual = f32 op-order vs torch + bilinear edge detail). `nlpd` stays the Laparra-official RGB variant (≈20.5× the column — ≈`6^(1/0.6)`=19.8 pooling factor + RGB energy) |
-| `CW-SSIM`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
+| `CAMBI` | libvmaf 3.2.1 standalone defaults; distorted-only studio-swing BT.601, even crop | `cambi` | 61 pairs: native med/max 1.318e-4 / 0.1781; fitted JND 1.570e-4 / 0.06485; published settings unresolved |
+| `Butteraugli-original` | Google revision 71b18b63 (2019-03-19), maximum pooling | `butteraugli-original` | 61 pairs: native med/max 2.699e-6 / 4.947e-5; fitted JND 5.933e-7 / 8.943e-6 |
+| `SSIMULACRA1` | Cloudinary original Lab/six-scale/grid/edge pooling | `ssimulacra1` | 61 pairs: native med/max 2.285e-7 / 1.861e-5; fitted JND 5.585e-6 / 5.370e-4; exact published convention unresolved |
+| `WS-HV` | three Haar levels, RGB BT.601, diagonal-saliency pooling | `ws-hv` | 61 pairs: native med/max 8.942e-4 / 0.02076; fitted JND 0.004920 / 0.1393; exact published convention unresolved |
+| `FLIP` | NVIDIA LDR-FLIP; the AIC-4 column is flip-evaluator 1.7's row-major f32 sum | `flip-v17` (column convention) and `flip` (f64 sum, as NVlabs FLIP.h at the pinned revision) | ✅ `flip-v17` reproduces all 61 AIC-4 `FLIP` values exactly; 21 ladder maps within 2.98e-8 of the oracle. `flip` sums in f64 — the f32 sum reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²) |
+| `CW-SSIM` | Wang and Simoncelli (2005) + Sampat et al. (2009) complex steerable pyramid (pyrtools-derived conventions) | `cw-ssim` | port — against the published column: median 2.9e-7, max 1.1e-4; the variant was selected on those same 61 pairs (in-sample) and no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed |
+| `CIEDE2000` | mean ΔE00, sRGB → CIELAB D65 | `ciede2000` | ✅ median 3.0e-5, max 3.0e-4 |
+| `MSSWD` | learned MS-SWD | — | not implemented — see the not-implemented table below |
 | `LPIPS-alex`, `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC` | upstream packages (`lpips` 0.1.4, `DISTS_pytorch` 0.1, `stlpips_pytorch` 0.0.2, `DeepDC_PyTorch` 0.2 **with ImageNet input normalisation**), native resolution | `zenmetrics-nn` (`--features nn`): `lpips-alex`, `lpips-vgg`, `dists`, `stlpips-alex`, `stlpips-vgg`, `deepdc` | ✅ implemented — vs the cropped-set columns (n=61) max \|Δ\| 4.9e-7 / 1.0e-4 / 2.5e-5 / 9.3e-5 / 6.0e-5 / 3.0e-5 ([`nn_aic2026_crosscheck_2026-10-15.md`](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
-| `PieAPP`, `WaDIQaM`, `DreamSim`, `TOPIQ`, `TOPIQ-PIPAL`, `AHIQ`, `CKDN`, `A-FINE`, `DMM`, `MSSWD`, `AIMOS` | deep metrics | — | queued in [`PYIQA_PORT_PLAN.md`](PYIQA_PORT_PLAN.md) (priority table) |
+| `CKDN` | upstream's own eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288) | `zenmetrics-nn` `ckdn` | ✅ published column: median 4.0e-05, max 1.4e-04 (0.026 JND, not exact) |
+| `DreamSim` | upstream package's default preprocess (Pillow BICUBIC to 224×224) | `zenmetrics-nn` `dreamsim` | ✅ published column: max 6.1e-07 |
+| `A-FINE` | upstream-verified `afine_all` | `zenmetrics-nn` `afine` | port verified against upstream; published column **not reproduced** — `afine_all` sits 0.5–1.4 below the column (median 0.75) |
+| `WaDIQaM` | official `dmaniry/deepIQA` `top="weighted"` checkpoints (MIT), FR+NR × {live,tid} | `wadiqam-fr-live`, `wadiqam-fr-tid`, `wadiqam-nr-live`, `wadiqam-nr-tid` | implemented — 29 chainer-oracle pairs pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); agreement with the published AIC column: **not measured** |
+| `WD_s1`–`WD_s5` | Wasserstein Distortion on VGG-16 features (Cool-Chic), five KonJND scales | `wd` (`wd_s1`–`wd_s5`) | implemented — 25 upstream pairs pass the 1e-3-JND gate on both engines; published column convention **unmatched**: best of a bounded convention search still errs by median 0.23–0.37 site JND per column ([receipt](../benchmarks/wd_port_2026-10-16/README.md)) |
+| `PieAPP`, `TOPIQ`, `TOPIQ-PIPAL`, `AHIQ`, `DMM`, `MSSWD`, `AIMOS` | deep metrics | — | not on master — PieAPP, AHIQ and DMM are in progress on branches; the others are on hold or unidentified (reasons below) |
+
+### AIC-4 columns not implemented on master (2026-10-16)
+
+| Column(s) | Documented reason (verbatim where quoted) | Source on master@origin |
+|---|---|---|
+| `TOPIQ`, `TOPIQ-PIPAL` | "NC weights: opt-in"; weights are NC ("TOPIQ, DBCNN and PaQ-2-PiQ weights are NC") | `docs/PYIQA_PORT_PLAN.md:262`; `:41` |
+| `PieAPP` | in progress on branch `pieapp-port` (review fixes); "NC weights: opt-in"; "PieAPP, CLIP-IQA, QualiCLIP and URanker are NC upstream" | `docs/PYIQA_PORT_PLAN.md:262`; `:42` |
+| `AHIQ` | in progress on branch `nn-port`; still in the AIC-4 deep-FR queue behind the three that landed ("CKDN, A-FINE, DreamSim, AHIQ, DMM"); "AHIQ, CKDN, HyperIQA, LIQE, NIMA and UNIQUE publish weights with no stated terms" | `docs/PYIQA_PORT_PLAN.md:261`; `:40` |
+| `DMM` | in progress on branch `nn-port`; in the AIC-4 deep-FR queue (`:261`) and on the hold row (`:245`: "FID, DMM, TOPIQ face variants (need a face detector)") | `docs/PYIQA_PORT_PLAN.md:261`; `:245` |
+| `MSSWD` | "MSSWD on hold (no upstream licence, weights only via pyiqa)"; "on hold: weights only via pyiqa (noncommercial)" | `docs/PYIQA_PORT_PLAN.md:264`; `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:196` |
+| `AIMOS` | "not identified anywhere public; ask the dataset contacts"; "unidentified" | `docs/PYIQA_PORT_PLAN.md:268`; `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:197` |
+| `proposal-IDFIQA` | "no licensed code"; "IDFIQA from the paper" | `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:205`; `docs/PYIQA_PORT_PLAN.md:264` |
+| `proposal-DVIFM*` (13 site/screenshot names) | "dvifmish (dev `~/work/dvifmish`, publish=false) already ports the author's v0.2/v0.3 builds under exactly these preset names; not wired into zenmetrics and not compared to these columns here"; ledger's own wording: "cannot reproduce" | `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:45-48`, `:206`; `docs/AIC2026_METRICS_AND_FITTING.md:261` |
+| `HaarXYB-*/HaarY-*/HaarYCoCg-* -deltaL1248` (11 names, all excluded, no values) | "unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)"; "unidentified" | `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:140-150`; `:49` |
+| `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (excluded, no values) | "missing (MSU VQMT implementation)"; "excluded; no values" | `docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:139`; `:60` |
+
 
 ## Method / reproduction
 
@@ -284,3 +314,9 @@ implementations. Qualify ours by reference + variant, not just metric name:
   `JND_CVVDP` and carry the metric's own validity scatter; (c) everything is
   measured on 53 stratified pairs, not the full 9,618 — tails are samples,
   not bounds.
+
+The four Round 4 ports and their pinned-oracle/ladder comparisons are documented in
+[the comparison evidence](../benchmarks/aic_more_2026-10-15/README.md). CLI RGB8
+ingress drops alpha; upstream SSIMULACRA1 blends onto gray128 and includes an
+alpha term, while original Butteraugli takes the worse of black/white backgrounds.
+The reported RGB comparisons do not establish transparent-input equivalence.

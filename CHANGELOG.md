@@ -13,7 +13,62 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
+
+- Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
+
+- Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
+
+## zenmetrics-cli
+
 ### Added
+
+- Apply the owner-authorized question 15 short-class contract with canonical pool-authority verification, role/count guards and a bound declaration digest (`98a0edca`).
+
+- Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).
+
+- Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
+- Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
+- Registered source-family FitCell transport retains decoded-checkpoint admission and full-budget/seed/cap bindings (`6b3c2cd4`); public-source program packaging carries opaque external private-contract/data pins (`6cc84648`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
+## vmaf
+
+### Changed
+
+- CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
+- Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
+### Added
+
+- Strided `cambi_from_luma` with libvmaf standalone CAMBI defaults (`5f19fcf7`); existing VMAF-v1 presets retain their settings.
+
+## zenmetrics-stats
+
+### Added
+
+- Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
+- Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
+
+### QUEUED BREAKING CHANGES
+
+- Adding `Interval::p_nonpositive` requires downstream struct literals to initialize the new field (737dc977). Existing bootstrap calls retain their behavior.
+
+## Workspace
+
+### Added
+
+- hdrvdp `v3::score()`, a score-only HDR-VDP-3 entry point that skips map reconstruction (`6e5e62e0`, PR #76); `q_jod` is bit-identical to `hdrvdp3()` (test `score_matches_q_jod_bitwise`), and the integrated-PU-nits CPU dispatch path uses it.
+- zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
+
+- zenmetrics-nn WaDIQaM FR+NR (PR #81, review required): `WadiqamFr`/`WadiqamNr` and CLI `wadiqam-{fr,nr}-{live,tid}`, four columns on the MIT-licensed `dmaniry/deepIQA` `top="weighted"` checkpoints, ported as ONNX exports of upstream's own model classes (`2a8b22e8`). FR ships split trunk/head graphs so the reference's patch features cache under warm reference on both engines. 29 chainer-oracle pairs — including non-square and 4096² — pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); all four KonJND scales are measured (`wadiqam_nr_tid`'s is a noise floor, not a perceptual JND). Inference chunks at 2,000 patches per graph call. [Receipt](benchmarks/wadiqam_port_2026-10-16.md).
 
 - zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
 - zenmetrics-abstractions (PR #81, review required): `NoReferenceMetric`, the single-image metric shape, and `PairedNoReference`, which runs one as a pair `Metric`: the distorted image's outputs under their own keys, then the reference's under `<key>_ref`; a warm reference scores the reference once. `ScoreKind::Quality` (higher is better) and `ScoreKind::Distortion` (higher is worse) for no-reference scores; neither has a perfect value.
@@ -22,6 +77,23 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
+- CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
+- SSIMULACRA1 matches OpenCV’s row-partial 4×4 reduction (`91fd4b2d`); original-author synthetic scores for all four Round 4 metrics are pinned with committed generators (`d0aa705a`).
+- zenmetrics-cli `flip` and `flip-v17` (`4f0dac38`, this commit): LDR-FLIP (NVlabs d3ab02a4, reference viewing conditions). `flip` pools the error map with an f64 sum as NVlabs does now; `flip-v17` keeps flip-evaluator 1.7's row-major f32 sum, which reproduces all 61 AIC-4 `FLIP` values exactly but reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²). 21 ladder maps within 2.98e-8 of the oracle; both means pinned in a unit test.
+- zenmetrics-cli `cw-ssim` (`636f6b2c`, this commit): four-level/eight-orientation complex-wavelet SSIM, valid 7×7 K=0 windows, Gaussian weighting. Independent reference within 1.1e-12. Against the published AIC-4 `CW-SSIM` column: median 2.9e-7, max 1.1e-4, with the variant selected on those same 61 pairs (in-sample); no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed. Zero-energy windows now test `<= 0`, matching the reference.
+- FSIM/VSI review fixes for #86: fixed-factor identities include the downscale (`a2ac8756`), same-name scorer constants removed (`1b0aca18`), `Downscale` non-exhaustive (`cb3fb369`), fixed-factor columns versioned (`468a4679`), oversized factors refused and box areas in u64 (`4d2f52cc`), coverage for non-Auto factors, the MS-SSIM product and all 20 SSIM-pyiqa names (`50048f50`), ties-to-even luma kept after measuring both rules (`cf012a5a`), comment fixes (`a3aa0d8f`).
+- zenmetrics-cli `psnr-cb` and `psnr-cr` (JPEG AIC-4 `PSNR-Cb`, `PSNR-Cr`): PSNR of the full-resolution studio-swing BT.601 chroma planes, the `psnr-ycbcr611` conversion. 61 pairs: max 2.0e-3 / 8.8e-3 JND (1.7e-2 / 5.7e-2 dB); no tested convention gets closer ([search](benchmarks/aic_psnr_chroma_2026-10-15/README.md)).
+- zenmetrics-cli AIC SSIM-pyiqa family (`147b5cca`): rounded and unrounded `ssim-pyiqa` and `ms-ssim-pyiqa`, unrounded RGB `ssimc-pyiqa`, with fixed-factor k2–k6 variants; geometry too small for the 11×11 window is refused. Published 61-pair gates: SSIM-pyiqa max 3.8e-6, MS-SSIM-pyiqa max 1.9e-6.
+- VSI fixed-factor decimation (`e7e1ca5a`): `Vsi::with_downscale(Downscale::Factor(n))` and CLI `vsi-k2/k3/k4/nodownscale`; `Auto` output is unchanged bit for bit.
+- FSIM/FSIMc fixed-factor decimation (`986f68d2`): `Fsim::with_downscale` and CLI `fsim-k2/k3/k4/nodownscale` (each emits `fsim_*` and `fsimc_*`); `Auto` output is unchanged bit for bit.
+- zenmetrics-cli JPEG AIC-4 columns: `psnr-ycbcr611` (6:1:1 MSE-weighted studio-601 YCbCr PSNR; 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target), `ciede2000` (mean ΔE00, sRGB → CIELAB D65; median 3.0e-5, max 3.0e-4) and `ssimc` (per-RGB SSIM, valid window, contrast-structure clipped at 0; max 7.5e-7 at the CLI's print precision).
+- zenmetrics-cli VMAF ingress (`vmaf-studio601`, `vmaf-neg-studio601`): VMAF v0.6.1 / v0.6.1neg on studio-swing BT.601 YUV (the `psnr-y-studio601` luma), which reproduces the JPEG AIC-4 dataset `VMAF` / `VMAF-neg` columns on the 61-pair subset (median 0.0068 / 0.0034, max 0.075 / 0.12) where the BT.709 `vmaf` is off by up to 2.7. All `vmaf*` metrics now crop odd widths or heights to the largest even size instead of failing the batch (on the AIC-4 odd-size pairs cropping and edge padding agree within 0.003). Existing even-size `vmaf*` scores are unchanged.
+- Viewer loop auto-encode and readout (`e66a4b69`): choosing a metric or map in the top bar steers the JPEG XL loop with it and re-encodes, as do the loop distance slider (now in the top bar), effort, iterations, steering and a new reference; finished traces play on their own. The default layer shows the map on the trace's scale with magenta rings on blocks above the target and a ring on the worst block. A fixed readout (score/target gauge, blocks above target, worst block, next iteration or convergence) and a score-per-iteration chart replace the info line, so playback no longer moves the page. The target-anchored overlay now puts the palette's middle at the target. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).
+- Viewer metric bar and live loop frames (`17141836`): the metric and map menus sit in a sticky top bar; the Map menu and the loop's Steer menu list every metric's maps grouped by metric, and choosing another metric's map switches the metric. The loop streams each scored iteration as the map over the reconstruction (new default layer, the palette's middle at half the target; `e66a4b69` moved it to the target) for both metric and built-in butteraugli steering; built-in scoring goes through the external interface with butteraugli's CPU parameters and keeps the built-in bytes. Repeated frames are marked: from iteration 2 jxl-encoder only refines blocks above the target, so with none above it the last iterations repeat. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md#why-the-last-frames-repeat).
+- Viewer live encoder loop (`f16b22ed`, `94253764`, `be338560`): the loop player encodes the reference in the page with jxl-encoder's perceptual loop, steered by its own butteraugli or by the selected metric's map through `loop_map` (read as error, resampled to pixels, `scale · e^exponent`; jxl-encoder `EncodeRequest::with_external_metric`, its #130, merged; codec modules pin its main `a8c11520`), and plays and saves the trace; `.ltrace` files still open. Fitted scale/exponent defaults for 124 maps put each map's block distances on butteraugli's scale (held-out log r 0.76–0.90 for 12 of 19 default maps): [calibration](benchmarks/loop_norm_calibration_2026-10-15.tsv), [loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md). The demo scene and its loop load at startup.
+- Viewer encoders (`94253764`, `be338560`): WebP (zenwebp), AVIF (zenavif) and JPEG XL (jxl-encoder) join JPEG, as wasm modules from `web/codecs` (a workspace of its own) loaded on first use; a new quality or encoder re-encodes.
+- Viewer map selection (`f16b22ed`, `be338560`): one metric menu drives the score, the map and the loop's steering; the Map menu lists every map the metric publishes, served from one evaluation (`spatial_map(metric, map, …)`, `cached_spatial_map`). DSSIM gains a fused `diffmap` (mean `1 − SSIM`) and selectable per-scale `ssim_0` … `ssim_4`; its default weights are set explicitly and pinned to the score's bits.
 - Fused maps (`ec50e4f4`): NLPD, VIF/vifvec, MS-SSIM and IW-SSIM serve `diffmap`, the metric's own score broken down at input resolution over every scale it pools, cropped to covered pixels. Its mean is NLPD, `1 − VIF`, `−ln MS-SSIM` or `−ln IW-SSIM` (NLPD and VIF exact per-sample shares; MS-SSIM and IW-SSIM split each scale's log term in proportion to `(iw·)(1 − x)`). Primary for NLPD and VIF; MS-SSIM and IW-SSIM keep their primaries. The browser shows a metric's `diffmap` when it has one (also SSIMULACRA2's). Scores unchanged. [Native maps](docs/UNIFIED_NATIVE_MAPS_2026-10-14.md#fused-maps-diffmap-2026-10-15).
 - Viewer encoder loop player (`64b43892`): plays and steps through a jxl-encoder `.ltrace` (jxl-encoder PR #129): reconstruction, metric diffmap, block distance against target, quant field and its per-iteration change. [Loop player](docs/BROWSER_VIEWER_2026-10-15_LOOP_PLAYER.md).
 - `MapPolarity::Feature` and the maps that need it (`b5fa70cf`, `78ac87da`; PR, review required): a polarity for native intermediates with no similarity/difference reading (pooling weights, one information term, no-reference measurements); `higher_is_worse()` is false. IW-SSIM serves `iw_0` … `iw_3`, the information-content weights on the `cs_s` grids (global support). VIF serves `num_s`/`den_s` and vifvec `num_lL_bB`/`den_lL_bB`, the two information terms behind the `info_loss` maps. VMAF serves `cambi_0` … `cambi_4`, CAMBI's per-scale c-values of the distorted frame, and `adm_num_*`/`adm_den_*`, ADM3's detail-loss terms on the AIM grids (they fold to each scale's numerator and denominator bit for bit); phone models now serve CAMBI and all ADM maps. CAMBI maps, quantized as libvmaf quantizes its heatmaps, match libvmaf's `heatmaps_path` dump exactly (0 samples differ, 91,133 nonzero) and fold to the CAMBI score bit for bit; IW weights pool the cs maps to `wmcs_s` within f32 division precision. Scores are unchanged with maps.
@@ -3554,6 +3626,16 @@ All five are the Nomad-migration ADR's stated preconditions
 
 ### Changed
 
+- zenmetrics-nn PaQ-2-PiQ no-reference metric (rten and ort-cuda), CLI `paq2piq` via PairedNoReference: parity 2.5e-5 JND against the authors' code incl. non-square and sub-64-px pairs; weights CC-BY-NC (`NonCommercial`, consent-gated); inputs above 4096 px refused.
+- zenmetrics-nn PaQ-2-PiQ RoIPool runs its 401 ROIs on worker threads (572e94da): 1–4% faster per 16T eval, scores bit-identical; profile and A/B in `benchmarks/nn_opt3_2026-10-16/`.
+- zenmetrics-nn head threading for the newer models (nn-opt round 2, `f9d6eec7`, `1b118849`): the LIQE head runs its 495 prompt logits on worker threads, and the A-FINE `qhead` runs its `proj_feat`/`mlp` rows on worker threads. At 16 threads LIQE is 8% faster warm / 9% compute at every size and A-FINE 7% faster warm at 256² (engine-bound above); 1 thread and the other sizes are unchanged and scores are bit-identical. Profile and A/B in `benchmarks/nn_opt4_2026-10-16/`.
+- zenmetrics-nn CPU speed for the newer models (nn-opt round 2): row-parallel resampling and single-pass planar conversion, paired ARNIQA crop runs, A-FINE without input clones. 16 threads at 2048²: about 2.1× faster compute and warm; small images and 1 thread unchanged. Scores bit-identical across all 13 columns. Data: `benchmarks/nn_opt2_2026-10-15/`.
+- zenmetrics-nn MUSIQ and HyperIQA no-reference metrics (rten and ort-cuda), CLI `musiq`, `hyperiqa` via PairedNoReference. Parity against the authors' code: MUSIQ 1.2e-4 JND (24 pairs incl. non-square), HyperIQA 3.4e-6 JND on a documented deterministic 5×5 crop grid (upstream's random crops vary by 0.08–0.19 JND). New `Error::TooManyPatches` and `Error::DegenerateAspectRatio`. MUSIQ weights `Permissive` (Apache-2.0), HyperIQA `Unknown` (consent-gated).
+- zenmetrics-nn learned no-reference metrics ARNIQA, MANIQA and LIQE (rten and ort-cuda), CLI `arniqa`, `maniqa`, `liqe` via PairedNoReference. Parity against the authors' code (rten): ARNIQA 6.7e-6, MANIQA 8.4e-6, LIQE 1.3e-5 JND against the 1e-3 gate (MANIQA's resize follows OpenCV's scalar INTER_CUBIC with IPP disabled, unfused as in the pinned SSE build). Weights: ARNIQA and MANIQA `Permissive`, LIQE `Unknown` (consent-gated). The OpenCV and Pillow resize conventions carry `LICENSE-opencv` / `LICENSE-pillow` until zenresize grows those modes.
+- `brisque` crate, CLI metric `brisque` behind `nr` (PairedNoReference): port of piq's BRISQUE with LIVE's SVR model, stored as a 232 KB aligned little-endian binary. 170 goldens within JND/1000 (worst 5.2e-4 JND; 6.8e-4 JND on 200 extra KonJND images). Inputs under 8 px return `TooSmall`.
+- zenmetrics-nn CPU speed (nn-opt lane; i265, 16 threads, rten; `62b38654`, `e8db1bf5`, `3effa389`, `a4a891e9`): trunk outputs move out instead of copying (DISTS 2048² peak RSS 8.0 → 6.4 GiB), DISTS head statistics fused into lane-parallel f64 sums, and the Rust-side metric heads threaded with a hard threads cap. Measured, two A/B runs each: DISTS 1024² compute 1941/1689 → 1293/1304 ms, 2048² warm 3735/3736 → 2639/2615 ms; LPIPS-alex 1024² warm 58.0/61.5 → 44.2/45.4 ms. Scores bit-identical. Splitting the DeepDC head was measured and rejected (0.12% of cycles). Data: `benchmarks/nn_opt_2026-10-15/`.
+- zenmetrics-nn CKDN, A-FINE and DreamSim on rten and ort-cuda (`5bd1f468`, `0de4d5b7`, `8af0d0ae`, `fba8bec7`; review fixes `1081dddc`, `43c62165`, `47d4d306`, `13f4c151`, `3d6f1d89`, `9ae32815`). Parity against the upstream code: worst 5.65e-5 / 1.42e-5 / 1.17e-5 JND on rten, 5.09e-5 / 1.94e-5 / 2.03e-5 on ort-cuda (gate 1e-3). CKDN applies upstream's eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288) and refuses inputs whose resized long side exceeds 32,768 px. AIC-4 columns: CKDN median 4.0e-5 / max 1.4e-4 (0.026 JND, not exact); DreamSim max 6.1e-7; A-FINE not reproduced (`afine_all` sits 0.5–1.4 below the column). Weights are consent-gated: CKDN and DreamSim `Unknown`, A-FINE `NonCommercial` (trained on DiffIQA). Upstream notices in `crates/zenmetrics-nn/LICENSE-*`.
+- `piqe` and `niqe` crates, CLI metrics `piqe` and `niqe` behind the `nr` feature (`91962eb0`, `78add1c4`, `3b62e82a`): no-reference ports of pypiqe and BasicSR's NIQE (LIVE pristine model as generated constants, `crates/niqe/src/params.rs`, approved). Scored through `PairedNoReference` (`<m>` distorted, `<m>_ref` reference). 170 goldens each, worst 2.9e-12 (PIQE) and 7.3e-12 (NIQE). Inputs under two complete blocks return `TooSmall`; flat NIQE inputs return `Degenerate` instead of NaN. `no_std` builds route float maths through libm.
 - **deps: migrate to published `zencodec` 0.1.24 estimate API; drop the path
   patch; bump CI codec clone pins to the migrated revs.** Removed the
   temporary `zencodec = { path = "../zencodec" }` `[patch.crates-io]` entry —

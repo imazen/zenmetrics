@@ -1,0 +1,44 @@
+# LIQE: no-reference IQA over a fine-tuned OpenAI CLIP ViT-B/32 —
+# image patches vs 495 joint vision-language prompts (5 quality x
+# 9 scene x 11 distortion). The `liqe` column is upstream
+# LIQE.forward's output (the module demo2.py drives): mean softmax
+# over the joint classes marginalised to the quality buckets,
+# expected value 1*p0 + ... + 5*p4 — a MOS in [1, 5].
+name = "liqe"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `liqe` on dist, `liqe_ref` on ref
+direction = "higher-is-better"       # expected-value MOS in [1, 5]
+columns = ["liqe", "liqe_ref"]
+paper = "Zhang, Zhai, Wei, Yang, Ma. Blind Image Quality Assessment via Vision-Language Correspondence: A Multitask Learning Perspective. CVPR 2023, pp. 14071–14081"
+
+[code]
+source = "upstream-port"             # unfold/normalise/head re-implemented; the CLIP image tower runs as exported graphs, text features as data
+upstream = "https://github.com/zwx8981/LIQE"
+upstream_package = "git clone of zwx8981/LIQE (no pip package), pinned a64655f7b84b9543b513394472851884cde5b257"
+licence = "MIT"                      # plus openai/CLIP (MIT) for the base towers
+
+[weights]
+# The MIT LICENSE covers the repository code. The README's
+# "Pre-trained Weights" links LIQE.pt via Google Drive / Baidu with no
+# licence stated for the weights themselves, so loading needs an
+# explicit WeightsConsent (ZENMETRICS_NN_ACCEPT_WEIGHTS=liqe).
+licence_class = "unknown"
+checkpoint = "https://drive.google.com/file/d/1GoKwUKNR-rvX11QbKRN8MuBZw2hXKHGh/view (README 'Pre-trained Weights'; LIQE.pt, ~354 MiB)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "torchvision ToTensor (u8 -> f32 /255), then CLIP mean/std normalise inside LIQE.forward and so inside the graphs"
+resize = "none"                      # the module works at native resolution on unfold patches
+crop = "unfold 224x224 patches stride 32 (partial borders dropped), then sel[i] = (batch//15)*i: batch is 1 in every eval, so sel = [0]*15 — the TOP-LEFT 224x224 patch is scored 15 times (upstream code, reproduced verbatim; the mean over 15 identical logits is the single patch's)"
+min_size = 224                       # the unfold grid needs at least one patch
+
+[export]
+script = "export.py"
+outputs = "liqe_{trunk.onnx, full.onnx, head.f32, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "trunk: CLIP-normalise + ViT-B/32 image tower + L2-norm -> emb [1,512,1,1] per crop, run per selected patch (all 15 are crop 0 — one call). full: [15,3,224,224] -> scalar (softmax head inside). head.f32: logit_scale.exp() (=100.0) + text_features [495,512] L2-normalised."
+
+[parity]
+oracle = "zwx8981/LIQE @a64655f, LIQE.forward on ToTensor input, CPU fp32, LIQE.pt"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.393781                       # pooled median |liqe - liqe_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 0.394682, BPG 0.390329
+results = "rten: worst |d| 4.93e-6 (1.25e-5 JND) on 9 ladder goldens; ort-cuda: worst |d| 1.955e-5 (4.96e-5 JND). CLI smoke 1415_256: 3.814563/4.990012 vs golden 3.81456041/4.99001217"

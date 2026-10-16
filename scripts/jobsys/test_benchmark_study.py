@@ -60,7 +60,18 @@ class StudyTests(unittest.TestCase):
 
     def test_source_inventory_and_exact_expansion(self):
         inv, summary, rows = study.expand(self.write())
-        self.assertEqual(len(inv['metrics']), 46)
+        # Every `#[value(name)]` in the CLI's MetricKind; bump with each metric added
+        # (51: +vmaf-studio601, vmaf-neg-studio601, psnr-ycbcr611, ciede2000, ssimc;
+        # 53: +psnr-cb, psnr-cr;
+        # 81: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family;
+        # 82: +flip; 83: +cw-ssim; 84: +flip-v17;
+        # 88: +cambi, butteraugli-original, ssimulacra1, ws-hv;
+        # 95: +lpips-alex, lpips-vgg, lpips-squeeze, stlpips-alex, stlpips-vgg, dists, deepdc;
+        # 100: +ckdn, afine, dreamsim, piqe, niqe; 101: +brisque;
+        # 104: +arniqa, maniqa, liqe; 106: +musiq, hyperiqa; 107: +paq2piq;
+        # 108: +wd (five scalar columns in one metric family);
+        # 112: +wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid).
+        self.assertEqual(len(inv['metrics']), 112)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)

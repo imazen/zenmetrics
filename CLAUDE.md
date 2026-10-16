@@ -120,6 +120,10 @@ registry `zenjpeg ^0.9.0`, now redirected by the root `zenjpeg` patch), run carg
 snapshot: `just snap-cargo @ test -p <crate>`. A plain `cargo` in a dev tree rewrites
 `Cargo.lock` to match the local siblings: never commit that; `jj restore Cargo.lock`.
 
+`snap-cargo` runs in a snapshot copy, so `snap-cargo @ fmt` would format the copy and leave
+the tree unformatted (2026-10-15: that is how 48e768ed reached master unformatted). The recipe
+refuses `fmt` without `--check`; format the tree with `just fmt`.
+
 `scripts/safe_push.sh` refuses (exit 8) any push that changes `Cargo.lock` or `ci/sibling-pins.tsv`
 unless `lock.sh --check` passes on the outgoing commit. If a pin must move, edit
 `ci/sibling-pins.tsv`, run `--regen`, and commit both together.
@@ -415,6 +419,10 @@ Decision order: no GPU → no-op · compute cap < 7.5 → **12** · driver adver
 - **Before claiming any metric is "GPU-only": `ls crates/` first.** `crates/cvvdp` + `crates/iwssim` are
   SIMD CPU ports; never infer architecture from a feature-gated build error (memory:
   `enumerate-repo-before-capability-claims`).
+- **Feature-combination gate**: `just cli-feature-matrix` (CI twin: the `cli-feature-matrix` job in
+  `.github/workflows/ci.yml`) check-builds all 12 zenmetrics-cli shapes (10 `--features` combos +
+  bare + default) and prints a PASS/FAIL table — run it after touching CLI cfg/feature gates; keep
+  the justfile and CI lists in sync.
 
 ## Sweep runner discipline
 
@@ -551,6 +559,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
+  A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
+  The WD trunk now disables its CPU arena and consumes output tensors individually.
+  The four-case recovery panel completes at 11,210,496 KiB maximum RSS, with
+  unchanged pilot bits and both-engine ladder parity. See
+  [the measured receipt](benchmarks/wd_port_2026-10-16/README.md).
+
+
 - **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
   `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
   fixed.** `zenmetrics-gpu-core::Backend` gates its `Wgpu` and `Cpu` variants on
@@ -605,6 +621,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 - The pinned fast-ssim2 revision d989014a predates the PixelSlice/config API already used by zenmetrics-api. Native CPU CI fails resolving those symbols. Pin 96ad1ab0 supplies that surface and the hdr-pu cancellation fix; regenerate the lock against pinned siblings when changing it.
 - Adding Benchmark to the fleet enum requires the dashboard kind label as well as core/controller/worker matches. The broad CI compile caught the missing dashboard arm after the smaller contract suite passed.
+
+- **2026-10-15 — `just snap-cargo <older-rev>` could return the previous
+  revision's binary. FIXED.** `git archive` stamps exported files with the
+  commit time, so after a build of a newer tree an older revision's sources
+  looked older than cargo's dep-info and cargo skipped the rebuild (found by
+  the nn-opt lane while A/B-benchmarking revisions). `export-snapshot.py` now
+  keeps `<tree>.mtimes.json` (sha256, mode, mtime per file): byte-identical
+  files keep their previous mtime, changed files get one newer than any
+  earlier stamp. Regression: `just lock-snapshot-tests`
+  (`test_revision_switch_restamps_only_changed_files`; fails on the old
+  exporter). Benchmarks taken with `snap-cargo --rev` before this fix may
+  have measured the wrong revision.
 
 - **2026-10-07 — CI lock snapshots copied ignored custom Cargo target
   directories. FIXED (`8cbf9cbb`).** Export the jj-tracked tree, excluding
@@ -1518,6 +1546,32 @@ The assertion now reports both scalar values and maximum map delta so CI can
 identify the difference. The cause remains unverified; numeric expectations
 and benchmark acceptance are unchanged.
 
+Recurred 2026-10-15 on website run 38729760597 (`dc9b8c32`), attempt 1:
+browser 91.21909967783705, native 91.21909967392351 (difference 3.9e-9),
+maximum map delta 0.0. Attempt 2 of the same commit passed and deployed, so
+the browser or the native oracle scalar varies between runs (not measured
+which); the maps matched exactly both times.
+
+Recurred again 2026-10-16 on runs 38756697855 (`48e768ed`) and 38884395886
+(`71560bd8`, attempt 1) with the SAME two values (browser 91.21909967783705,
+native 91.21909967392351, map delta 0.0). Identical values across commits and
+days point to two deterministic paths rather than run-to-run noise; one
+untested hypothesis is that the native oracle's runtime SIMD tier follows the
+CI runner's CPU. Next step: have `browser_oracle` record the dispatched tier
+and the runner CPU model, then compare a failing and a passing run.
+
+Measured 2026-10-16 on i265 (Core Ultra 7 265K, no AVX-512, so archmage
+dispatches the AVX2 tier): the native `browser_oracle` gives preview-v0.1
+91.21909967783705, exactly the browser's value, while the failing CI runs'
+native oracle gave 91.21909967392351 (other profiles on i265: a 83.85812862461522,
+b 91.2532491069443, c 76.20876739427798, d 90.20924821186748, preview-v0.2
+90.79464912498275). So the AVX2 native path and wasm agree, and the mismatch
+appears only when the native oracle runs on a different tier — most likely
+AVX-512 runners (not yet confirmed on an AVX-512 host). That is two native SIMD
+tiers disagreeing in zensim's preview-v0.1 path: per the zero-tolerance rule it
+needs a zensim tier-parity test and fix, not a looser assertion. Next: run the
+oracle on an AVX-512 host (dev) and bisect the preview-v0.1 kernels by tier.
+
 ### Browser native map rendering (2026-10-14)
 
 The viewer now consumes native cell geometry for FSIM/FSIMc, HaarPSI, VSI,
@@ -1528,3 +1582,52 @@ explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
 quality contribution is displayed directly. Regression coverage lives in
 `scripts/checkpoint/check-pages.py`; details and limits in
 [the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).
+
+### Known Bugs: learned NR export qualification (2026-10-15)
+
+HyperIQA's traced HyperNet supports a fixed batch of 25, despite the original
+ONNX input's dynamic-axis label. The model card and exporter now state the fixed
+contract; fresh exports omit the misleading axis label. Its linear head is
+unbounded; parity qualifies the documented deterministic grid, distinct from
+upstream random-crop sampling. MUSIQ and HyperIQA exports require complete
+goldens and image pairs and fail above the canonical 1e-3 JND gate. Run
+`just nn-export-checks` for the rejection controls. MUSIQ reports patch-row
+limits and degenerate aspect ratios through distinct public error variants.
+
+### Known Bugs: BRISQUE integer powers (2026-10-15)
+
+BRISQUE's initial scalar power path differs from torch's multiplication for
+integer squares/cubes. The correction uses explicit multiplication and bumps
+the score revision. A 400,000-case GGD/AGGD ratio-and-argmin sweep and disjoint
+KonJND images supplement the existing 170 goldens; the fixed argmin case is
+pinned in the Rust unit tests. Measurement details live in
+`benchmarks/brisque_review_2026-10-15/`.
+
+### Known Bugs: NN preprocessing worker caps and empty rows (2026-10-16)
+
+A-FINE's pixel paths previously requested three helpers even with
+RTEN_NUM_THREADS=1. They now use the configured work-scaled cap; a child-process
+regression records zero helper launches at a cap of one. Planar conversion
+visits all three channels in one packed-row pass. Resize work counts scalar
+MACs without an extra output-axis multiplier, and sequential rows avoid a
+row-descriptor allocation. Empty preprocessing/resizing inputs return empty
+buffers, while DreamSim refuses zero dimensions before resize/inference.
+Review measurements live in benchmarks/nn_opt2_2026-10-15.md and its linked TSVs.
+
+### Known Bugs: PaQ-2-PiQ routing and input allocation (2026-10-16)
+
+The sweep range match lacked PaQ-2-PiQ and the default scheduler sent it to
+an FR-only orchestrator route. Add its range and direct NR exclusion together;
+check both sweep/GPU and sweep/orchestrator/NN builds. The native-resolution
+port now refuses either axis above 4096 before allocating its input tensor.
+Export must write both loader metadata and a provenance receipt; the oracle
+TSV must have a header so parity does not drop its first pair. Review commands
+and measurements live in `benchmarks/paq2piq_review_2026-10-16.md`.
+
+### Known Bugs: CAMBI bogus-output checks (2026-10-15)
+
+CAMBI scores only the distorted image; zero is normal for unbanded photos.
+Identity and constant-output checks previously rejected valid zero batches.
+CAMBI now has no identity range and is exempt from the constant-output check;
+empty/nonfinite checks remain active. The sweep-feature binary regression
+`cambi_zero_distribution_is_not_bogus` covers the all-zero batch.

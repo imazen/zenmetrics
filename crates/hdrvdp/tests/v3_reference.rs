@@ -217,6 +217,37 @@ fn all_cases_match_reference_vdp3() {
     }
 }
 
+/// `v3::score` must return `q_jod` bit-identically — it runs the same
+/// pipeline minus the `p_map`/`s_map` reconstruction phase.
+#[test]
+fn score_matches_q_jod_bitwise() {
+    let w = 72;
+    let h = 48;
+    let reference: Vec<f64> = (0..w * h).map(|i| (i % 97) as f64 + 20.0).collect();
+    let test: Vec<f64> = reference
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| v + ((i % 7) as f64 - 3.0) * 0.35)
+        .collect();
+    let par = Params::new(
+        Task::Quality,
+        ViewingConditions::new(30.0, Surround::None, 24),
+        InputEncoding::Luminance,
+        Emission::default_for(InputEncoding::Luminance),
+        Options::reference(Task::Quality),
+    )
+    .unwrap();
+    let full = hdrvdp3(&test, &reference, w, h, &par).unwrap();
+    let q_jod = hdrvdp::v3::score(&test, &reference, w, h, &par).unwrap();
+    assert_eq!(
+        full.q_jod.to_bits(),
+        q_jod.to_bits(),
+        "score() {} vs hdrvdp3().q_jod {}",
+        q_jod,
+        full.q_jod
+    );
+}
+
 /// Every structurally-invalid call must return `Err`, never panic —
 /// the caller's entire job is declaring the physical setup correctly.
 #[test]

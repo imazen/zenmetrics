@@ -226,7 +226,7 @@ fn tier_parity() {
     // `prepare` needs the private Scratch type — build planes via the
     // full pipeline for both tiers (prepare is shared, so only the
     // pool differs per tier anyway).
-    let p = kernel::prepare(&ri, &di, w, h, &mut scratch);
+    let p = kernel::prepare_with_downscale(&ri, &di, w, h, Downscale::Auto, &mut scratch);
     let s_scalar = crate::dev::vsi_core_tier_scalar_t(archmage::ScalarToken, p, None);
     #[cfg(target_arch = "x86_64")]
     {
@@ -322,5 +322,97 @@ fn vsi_diffmap_is_decimated_at_large_sizes() {
 /// The generic surface honors the abstractions contract.
 #[test]
 fn generic_surface_conforms() {
-    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Vsi, 41, 33);
+    let mut scorer = crate::Vsi::default();
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut scorer, 41, 33);
+}
+
+#[test]
+fn fixed_factor_matches_auto_and_strided() {
+    for (w, factor) in [(31, 1), (384, 2), (640, 3), (896, 4)] {
+        let h = w + 1;
+        let r: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 37 + i / 11) % 256) as u8)
+            .collect();
+        let d: Vec<u8> = r
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| if i % 17 == 0 { v.wrapping_add(29) } else { v })
+            .collect();
+        let scorer = Vsi::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let auto = vsi_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let fixed = scorer.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(auto.to_bits(), fixed.to_bits());
+        let stride = w * 3 + 7;
+        let mut rs = alloc::vec![0;stride*h];
+        let mut ds = rs.clone();
+        for y in 0..h {
+            rs[y * stride..y * stride + w * 3].copy_from_slice(&r[y * w * 3..(y + 1) * w * 3]);
+            ds[y * stride..y * stride + w * 3].copy_from_slice(&d[y * w * 3..(y + 1) * w * 3]);
+        }
+        assert_eq!(fixed, scorer.score_rgb8(&rs, &ds, w, h, stride).unwrap());
+        let dm = scorer.diffmap_rgb8(&rs, &ds, w, h, stride).unwrap();
+        assert_eq!(dm.factor(), factor);
+        assert_eq!(dm.vsi.to_bits(), fixed.to_bits());
+        let alternate_factor = if factor == 1 { 2 } else { 1 };
+        let alternate = Vsi::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(alternate_factor).unwrap(),
+        ));
+        let alternate_score = alternate.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let alternate_map = alternate.diffmap_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(
+            alternate_map.width as usize,
+            w.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(
+            alternate_map.height as usize,
+            h.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(alternate_map.factor(), alternate_factor);
+        assert_ne!(auto.to_bits(), alternate_score.to_bits());
+        assert_eq!(alternate_map.vsi.to_bits(), alternate_score.to_bits());
+    }
+}
+
+#[test]
+fn downscale_identity_preserves_auto_and_distinguishes_factors() {
+    use zenmetrics_abstractions::Metric as _;
+    // Auto fingerprint from base 765a2f9c's identity fields and FNV-1a encoding.
+    let auto = Vsi::default().id().fingerprint();
+    assert_eq!(auto, 0x57ad6b5bda41d80a);
+    let fixed = |n| {
+        Vsi::with_downscale(Downscale::Factor(core::num::NonZeroU32::new(n).unwrap()))
+            .id()
+            .fingerprint()
+    };
+    assert_ne!(auto, fixed(2));
+    assert_ne!(fixed(2), fixed(3));
+}
+
+#[test]
+fn oversized_fixed_factor_is_refused_for_score_and_map() {
+    let (w, h) = (17, 13);
+    let image = alloc::vec![127;w*h*3];
+    for factor in [14, 18, u32::MAX] {
+        let scorer = Vsi::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let expected = Error::DownscaleFactor {
+            factor,
+            width: w,
+            height: h,
+        };
+        assert_eq!(
+            scorer.score_rgb8(&image, &image, w, h, w * 3).unwrap_err(),
+            expected
+        );
+        assert_eq!(
+            scorer
+                .diffmap_rgb8(&image, &image, w, h, w * 3)
+                .err()
+                .expect("oversized map must fail"),
+            expected
+        );
+    }
 }

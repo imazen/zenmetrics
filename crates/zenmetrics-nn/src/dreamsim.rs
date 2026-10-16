@@ -101,16 +101,20 @@ impl Dreamsim {
         match &self.backend {
             Backend::Trunk(t) => t.engine(),
             Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
         }
     }
 
     /// Upstream's `preprocess`: torchvision `Resize((224, 224), BICUBIC)`
     /// on the PIL image — Pillow's anamorphic fixed-point bicubic on u8 —
     /// then `ToTensor` (`v/255` planar f32).
-    fn prep(img: &za::Rgb8In<'_>) -> Vec<f32> {
+    fn prep(img: &za::Rgb8In<'_>) -> Result<Vec<f32>, Error> {
+        if img.width == 0 || img.height == 0 {
+            return Err(Error::TooSmall { min: 1 });
+        }
         let planar = rgb8_to_planar_u8(img);
         let u8r = resize_bicubic_pil_u8(&planar, 3, img.height, img.width, IMG, IMG);
-        u8r.into_iter().map(|v| v as f32 * (1.0 / 255.0)).collect()
+        Ok(u8r.into_iter().map(|v| v as f32 * (1.0 / 255.0)).collect())
     }
 
     /// The three trunk taps concatenated into upstream's 1792d embedding.
@@ -139,7 +143,7 @@ impl Dreamsim {
         let Backend::Trunk(t) = &self.backend else {
             return Err(Error::Engine("no trunk graph on this engine".into()));
         };
-        self.embed_of(t.run(Self::prep(img), IMG, IMG)?)
+        self.embed_of(t.run(Self::prep(img)?, IMG, IMG)?)
     }
 
     /// Upstream's `normalize_embedding` + cosine distance: mean-centre,
@@ -168,7 +172,7 @@ impl Dreamsim {
         }
         match &self.backend {
             Backend::Trunk(t) => {
-                let (pr, pd) = (Self::prep(r), Self::prep(d));
+                let (pr, pd) = (Self::prep(r)?, Self::prep(d)?);
                 let (tr, td) = std::thread::scope(|s| {
                     let hr = s.spawn(|| t.run(pr, IMG, IMG));
                     let td = t.run(pd, IMG, IMG);
@@ -184,9 +188,10 @@ impl Dreamsim {
             Backend::Pair(p) => {
                 // The graph emits unclamped 1-cos; mirror distance()'s
                 // cosine clamp so identical pairs score exactly 0.
-                Ok(p.score(Self::prep(r), Self::prep(d), IMG, IMG)?
+                Ok(p.score(Self::prep(r)?, Self::prep(d)?, IMG, IMG)?
                     .clamp(0.0, 2.0))
             }
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
 }
@@ -236,7 +241,13 @@ impl za::Metric for Dreamsim {
             Backend::Trunk(_) => {
                 WarmState::Embed(self.embed(&view).metric_err_with(COLUMN, Error::kind)?)
             }
-            Backend::Pair(_) => WarmState::Pixels(Self::prep(&view)),
+            Backend::Pair(_) => {
+                WarmState::Pixels(Self::prep(&view).metric_err_with(COLUMN, Error::kind)?)
+            }
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
         };
         Ok(Box::new(WarmDreamsim {
             metric: self,
@@ -281,7 +292,12 @@ impl za::WarmReference for WarmDreamsim<'_> {
                 Ok(Dreamsim::distance(er, &ed))
             }
             (Backend::Pair(p), WarmState::Pixels(pr)) => p
-                .score(pr.clone(), Dreamsim::prep(&view), IMG, IMG)
+                .score(
+                    pr.clone(),
+                    Dreamsim::prep(&view).metric_err_with(COLUMN, Error::kind)?,
+                    IMG,
+                    IMG,
+                )
                 .map(|s| s.clamp(0.0, 2.0)),
             _ => Err(Error::Engine("warm state does not match engine".into())),
         }
@@ -291,5 +307,25 @@ impl za::WarmReference for WarmDreamsim<'_> {
 
     fn reuses_reference_work(&self) -> bool {
         matches!(self.reference, WarmState::Embed(_))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn prep_refuses_zero_dimensions() {
+        for (width, height) in [(0, 5), (5, 0), (0, 0)] {
+            let image = za::Rgb8In {
+                pixels: &[],
+                width,
+                height,
+                stride: 0,
+            };
+            assert!(matches!(
+                Dreamsim::prep(&image),
+                Err(Error::TooSmall { min: 1 })
+            ));
+        }
     }
 }

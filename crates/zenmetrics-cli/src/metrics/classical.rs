@@ -13,7 +13,12 @@ pub(crate) enum Kind {
     PsnrY601,
     PsnrYStudio601,
     PsnrYLibvmaf,
+    PsnrYCbCr611,
+    PsnrCb,
+    PsnrCr,
     Ssim,
+    SsimC,
+    Ciede2000,
 }
 
 /// MSE between the per-pixel luma of `r` and `d` under luma function
@@ -100,8 +105,29 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
                 f64::from((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8)
             })))
         }
+        Kind::PsnrYCbCr611 => {
+            // 6:1:1 weighted PSNR on studio-swing BT.601 YCbCr —
+            // `(6·PSNR_Y + PSNR_Cb + PSNR_Cr) / 8` computed in the MSE
+            // domain (weighted MSE average, then converted to dB).
+            // Matches JPEG AIC-4 `PSNR-YCbCr611` column.
+            let (mse_y, mse_cb, mse_cr) = yuv444_studio601_mse(r, d);
+            let mse = (6.0 * mse_y + mse_cb + mse_cr) / 8.0;
+            Ok(psnr(mse))
+        }
+        // PSNR of one full-resolution studio-swing BT.601 chroma plane, the
+        // same per-pixel conversion as `PsnrYCbCr611`. JPEG AIC-4 `PSNR-Cb`
+        // and `PSNR-Cr`.
+        Kind::PsnrCb => Ok(psnr(studio601_plane_mse(r, d, 1))),
+        Kind::PsnrCr => Ok(psnr(studio601_plane_mse(r, d, 2))),
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
+        }
+        Kind::SsimC => ssimc(r, d),
+        Kind::Ciede2000 => {
+            // Mean CIEDE2000 colour difference (ΔE00).
+            // Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
+            // Matches JPEG AIC-4 `CIEDE2000` column.
+            Ok(ciede2000_mean(r, d))
         }
     }
 }
@@ -112,6 +138,385 @@ fn psnr(mse: f64) -> f64 {
     } else {
         10.0 * (255.0 * 255.0 / mse).log10()
     }
+}
+
+/// SSIM half-window and Gaussian taps for [`ssimc`]: 11 taps, sigma 1.5,
+/// normalised to sum 1 (MATLAB `fspecial('gaussian', 11, 1.5)` is their
+/// outer product).
+const SSIMC_R: usize = 5;
+fn ssimc_taps() -> [f64; 2 * SSIMC_R + 1] {
+    let mut t = [0.0; 2 * SSIMC_R + 1];
+    for (i, v) in t.iter_mut().enumerate() {
+        let x = i as f64 - SSIMC_R as f64;
+        *v = (-x * x / (2.0 * 1.5 * 1.5)).exp();
+    }
+    let sum: f64 = t.iter().sum();
+    t.map(|v| v / sum)
+}
+
+/// JPEG AIC-4 `SSIMc`: SSIM (Wang et al. 2004) on each of R, G, B at
+/// 0-255, averaged. 11x11 Gaussian (sigma 1.5), K1 = 0.01, K2 = 0.03,
+/// L = 255, **valid** region only (an (H-10) x (W-10) map, no padding), no
+/// downsampling, and the contrast-structure term clipped at 0 before it
+/// multiplies the luminance term (for non-negative pixels the luminance
+/// term is positive, so this equals clipping the SSIM map at 0). Matches
+/// the published column on 61 AIC-4 pairs (see the commit). Streams rows
+/// through an 11-row ring of horizontally filtered moments, f64 throughout.
+fn ssimc(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
+    let (w, h) = (r.width as usize, r.height as usize);
+    let k = 2 * SSIMC_R + 1;
+    if w < k || h < k {
+        return Err(format!("ssimc needs at least {k}x{k} pixels"));
+    }
+    let taps = ssimc_taps();
+    let (c1, c2) = ((0.01f64 * 255.0).powi(2), (0.03f64 * 255.0).powi(2));
+    let ow = w - 2 * SSIMC_R;
+    let oh = h - 2 * SSIMC_R;
+    let mut total = 0.0f64;
+    for ch in 0..3 {
+        // ring[row % k][x] = horizontally filtered (x, y, x², y², xy).
+        let mut ring = vec![[0.0f64; 5]; k * ow];
+        let mut sum = 0.0f64;
+        for row in 0..h {
+            let base = row * w * 3;
+            let slot = &mut ring[(row % k) * ow..(row % k + 1) * ow];
+            for (ox, out) in slot.iter_mut().enumerate() {
+                let mut m = [0.0f64; 5];
+                for (t, &g) in taps.iter().enumerate() {
+                    let i = base + (ox + t) * 3 + ch;
+                    let (a, b) = (f64::from(r.pixels[i]), f64::from(d.pixels[i]));
+                    m[0] += g * a;
+                    m[1] += g * b;
+                    m[2] += g * a * a;
+                    m[3] += g * b * b;
+                    m[4] += g * a * b;
+                }
+                *out = m;
+            }
+            if row + 1 < k {
+                continue;
+            }
+            // Rows row+1-k ..= row are in the ring; filter vertically.
+            for ox in 0..ow {
+                let mut m = [0.0f64; 5];
+                for (t, &g) in taps.iter().enumerate() {
+                    let src = &ring[((row + 1 - k + t) % k) * ow + ox];
+                    for (acc, v) in m.iter_mut().zip(src) {
+                        *acc += g * v;
+                    }
+                }
+                let (mx, my) = (m[0], m[1]);
+                let vx = m[2] - mx * mx;
+                let vy = m[3] - my * my;
+                let cov = m[4] - mx * my;
+                let lum = (2.0 * mx * my + c1) / (mx * mx + my * my + c1);
+                let cs = ((2.0 * cov + c2) / (vx + vy + c2)).max(0.0);
+                sum += lum * cs;
+            }
+        }
+        total += sum / (ow * oh) as f64;
+    }
+    Ok(total / 3.0)
+}
+
+/// Compute MSE for studio-swing BT.601 Y, Cb, Cr planes between two RGB8 images.
+/// Uses the same per-pixel conversion as `studio601_yuv444` in mod.rs:
+/// Y  = round(16 + (65.481R + 128.553G + 24.966B)/255)
+/// Cb = round(128 + (-37.797R - 74.203G + 112B)/255)
+/// Cr = round(128 + (112R - 93.786G - 18.214B)/255)
+fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let mut sum_y = 0.0_f64;
+    let mut sum_cb = 0.0_f64;
+    let mut sum_cr = 0.0_f64;
+
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        let (r1, g1, b1) = (f64::from(a[0]), f64::from(a[1]), f64::from(a[2]));
+        let (r2, g2, b2) = (f64::from(b[0]), f64::from(b[1]), f64::from(b[2]));
+
+        // Studio-swing BT.601 YCbCr (same as studio601_yuv444 in mod.rs)
+        let y1 = (16.0 + (65.481 * r1 + 128.553 * g1 + 24.966 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let y2 = (16.0 + (65.481 * r2 + 128.553 * g2 + 24.966 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cb1 = (128.0 + (-37.797 * r1 - 74.203 * g1 + 112.0 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cb2 = (128.0 + (-37.797 * r2 - 74.203 * g2 + 112.0 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cr1 = (128.0 + (112.0 * r1 - 93.786 * g1 - 18.214 * b1) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+        let cr2 = (128.0 + (112.0 * r2 - 93.786 * g2 - 18.214 * b2) / 255.0)
+            .round()
+            .clamp(0.0, 255.0);
+
+        let dy = y1 - y2;
+        let dcb = cb1 - cb2;
+        let dcr = cr1 - cr2;
+        sum_y += dy * dy;
+        sum_cb += dcb * dcb;
+        sum_cr += dcr * dcr;
+    }
+
+    let n_f = n as f64;
+    (sum_y / n_f, sum_cb / n_f, sum_cr / n_f)
+}
+
+/// The studio-swing BT.601 luma/chroma linear parts, before `round`/`clamp`:
+/// `(Y - 16, Cb - 128, Cr - 128)` as in [`yuv444_studio601_mse`].
+#[inline]
+fn studio601_linear(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    (
+        (65.481 * r + 128.553 * g + 24.966 * b) / 255.0,
+        (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0,
+        (112.0 * r - 93.786 * g - 18.214 * b) / 255.0,
+    )
+}
+
+/// MSE of one full-resolution studio-swing BT.601 plane (`0` = Y, `1` = Cb,
+/// `2` = Cr), using the same per-pixel conversion as
+/// [`yuv444_studio601_mse`] but touching only the requested plane. The
+/// compiler drops the unused linear parts, so a single-plane metric does not
+/// pay for the other two.
+fn studio601_plane_mse(r: &Rgb8Image, d: &Rgb8Image, plane: usize) -> f64 {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let offset = if plane == 0 { 16.0 } else { 128.0 };
+    let pick = |v: (f64, f64, f64)| match plane {
+        0 => v.0,
+        1 => v.1,
+        _ => v.2,
+    };
+    let mut sum = 0.0_f64;
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        let v1 = (offset
+            + pick(studio601_linear(
+                f64::from(a[0]),
+                f64::from(a[1]),
+                f64::from(a[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let v2 = (offset
+            + pick(studio601_linear(
+                f64::from(b[0]),
+                f64::from(b[1]),
+                f64::from(b[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let dv = v1 - v2;
+        sum += dv * dv;
+    }
+    sum / n as f64
+}
+
+/// Mean CIEDE2000 (ΔE00) between two RGB8 images.
+/// Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
+fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let mut sum_de = 0.0_f64;
+
+    // sRGB -> linear is a function of the 8-bit input alone. The table holds
+    // the exact f64 results of `srgb_to_linear` for every byte value.
+    let lin: [f64; 256] = std::array::from_fn(|i| srgb_to_linear(i as u8));
+
+    // sRGB to XYZ D65 matrix
+    const M: [[f64; 3]; 3] = [
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041],
+    ];
+
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        // sRGB to linear
+        let r1_lin = lin[usize::from(a[0])];
+        let g1_lin = lin[usize::from(a[1])];
+        let b1_lin = lin[usize::from(a[2])];
+        let r2_lin = lin[usize::from(b[0])];
+        let g2_lin = lin[usize::from(b[1])];
+        let b2_lin = lin[usize::from(b[2])];
+
+        // Linear RGB to XYZ
+        let x1 = M[0][0] * r1_lin + M[0][1] * g1_lin + M[0][2] * b1_lin;
+        let y1 = M[1][0] * r1_lin + M[1][1] * g1_lin + M[1][2] * b1_lin;
+        let z1 = M[2][0] * r1_lin + M[2][1] * g1_lin + M[2][2] * b1_lin;
+
+        let x2 = M[0][0] * r2_lin + M[0][1] * g2_lin + M[0][2] * b2_lin;
+        let y2 = M[1][0] * r2_lin + M[1][1] * g2_lin + M[1][2] * b2_lin;
+        let z2 = M[2][0] * r2_lin + M[2][1] * g2_lin + M[2][2] * b2_lin;
+
+        // XYZ to CIELAB
+        let (l1, a1, b1) = xyz_to_lab(x1, y1, z1);
+        let (l2, a2, b2) = xyz_to_lab(x2, y2, z2);
+
+        // CIEDE2000
+        let de = ciede2000(l1, a1, b1, l2, a2, b2);
+        sum_de += de;
+    }
+
+    sum_de / n as f64
+}
+
+/// Convert sRGB component [0, 255] to linear [0, 1].
+fn srgb_to_linear(c: u8) -> f64 {
+    let srgb = c as f64 / 255.0;
+    if srgb <= 0.04045 {
+        srgb / 12.92
+    } else {
+        ((srgb + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Convert XYZ to CIELAB (D65 white point).
+fn xyz_to_lab(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+    const XN: f64 = 0.95047;
+    const YN: f64 = 1.00000;
+    const ZN: f64 = 1.08883;
+
+    let fx = f_lab(x / XN);
+    let fy = f_lab(y / YN);
+    let fz = f_lab(z / ZN);
+
+    let l = 116.0 * fy - 16.0;
+    let a = 500.0 * (fx - fy);
+    let b = 200.0 * (fy - fz);
+    (l, a, b)
+}
+
+fn f_lab(t: f64) -> f64 {
+    const DELTA: f64 = 6.0 / 29.0;
+    if t > DELTA * DELTA * DELTA {
+        t.cbrt()
+    } else {
+        t / (3.0 * DELTA * DELTA) + 4.0 / 29.0
+    }
+}
+
+/// CIEDE2000 colour difference between two CIELAB points.
+fn ciede2000(l1: f64, a1: f64, b1: f64, l2: f64, a2: f64, b2: f64) -> f64 {
+    // Parametric factors (standard: kL = kC = kH = 1)
+    const KL: f64 = 1.0;
+    const KC: f64 = 1.0;
+    const KH: f64 = 1.0;
+
+    // Step 1: C1, C2
+    let c1 = (a1 * a1 + b1 * b1).sqrt();
+    let c2 = (a2 * a2 + b2 * b2).sqrt();
+
+    // Step 2: C_bar
+    let c_bar = (c1 + c2) * 0.5;
+
+    // Step 3: G
+    let c_bar7 = c_bar.powi(7);
+    let g = 0.5 * (1.0 - (c_bar7 / (c_bar7 + 25.0_f64.powi(7))).sqrt());
+
+    // Step 4: a_prime
+    let a1p = a1 * (1.0 + g);
+    let a2p = a2 * (1.0 + g);
+
+    // Step 5: C_prime
+    let c1p = (a1p * a1p + b1 * b1).sqrt();
+    let c2p = (a2p * a2p + b2 * b2).sqrt();
+
+    // Step 6: h_prime
+    let h1p = b1.atan2(a1p);
+    let h2p = b2.atan2(a2p);
+
+    // Normalize to [0, 2π)
+    let h1p = if h1p < 0.0 {
+        h1p + 2.0 * std::f64::consts::PI
+    } else {
+        h1p
+    };
+    let h2p = if h2p < 0.0 {
+        h2p + 2.0 * std::f64::consts::PI
+    } else {
+        h2p
+    };
+
+    // Step 7: delta L', C', H'
+    let dl_p = l2 - l1;
+    let dc_p = c2p - c1p;
+
+    let dh_p = h2p - h1p;
+    let dh_p = if c1p * c2p == 0.0 {
+        0.0
+    } else if dh_p > std::f64::consts::PI {
+        dh_p - 2.0 * std::f64::consts::PI
+    } else if dh_p < -std::f64::consts::PI {
+        dh_p + 2.0 * std::f64::consts::PI
+    } else {
+        dh_p
+    };
+    let dh_p = 2.0 * (c1p * c2p).sqrt() * (dh_p * 0.5).sin();
+
+    // Step 8: L_bar_prime, C_bar_prime, h_bar_prime
+    let l_bar_p = (l1 + l2) * 0.5;
+    let c_bar_p = (c1p + c2p) * 0.5;
+
+    let h_bar_p = if c1p * c2p == 0.0 {
+        h1p + h2p
+    } else if (h1p - h2p).abs() <= std::f64::consts::PI {
+        (h1p + h2p) * 0.5
+    } else if h1p + h2p < 2.0 * std::f64::consts::PI {
+        (h1p + h2p + 2.0 * std::f64::consts::PI) * 0.5
+    } else {
+        (h1p + h2p - 2.0 * std::f64::consts::PI) * 0.5
+    };
+
+    // Step 9: T
+    let h_bar_p_deg = h_bar_p * 180.0 / std::f64::consts::PI;
+    let t = 1.0 - 0.17 * (h_bar_p - std::f64::consts::PI / 6.0).cos()
+        + 0.24 * (2.0 * h_bar_p).cos()
+        + 0.32 * (3.0 * h_bar_p + std::f64::consts::PI / 30.0).cos()
+        - 0.20 * (4.0 * h_bar_p - 63.0 * std::f64::consts::PI / 180.0).cos();
+
+    // Step 10: SL, SC, SH
+    let dl_bar_p = l_bar_p - 50.0;
+    let sl = 1.0 + (0.015 * dl_bar_p * dl_bar_p) / (20.0 + dl_bar_p * dl_bar_p).sqrt();
+    let sc = 1.0 + 0.045 * c_bar_p;
+    let sh = 1.0 + 0.015 * c_bar_p * t;
+
+    // Step 11: RT
+    let delta_theta = std::f64::consts::PI / 6.0 * (-((h_bar_p_deg - 275.0) / 25.0).powi(2)).exp();
+    let rc = 2.0 * (c_bar_p.powi(7) / (c_bar_p.powi(7) + 25.0_f64.powi(7))).sqrt();
+    let rt = -rc * (2.0 * delta_theta).sin();
+
+    // Step 12: dE00
+    let term1 = (dl_p / (KL * sl)).powi(2);
+    let term2 = (dc_p / (KC * sc)).powi(2);
+    let term3 = (dh_p / (KH * sh)).powi(2);
+    let term4 = rt * (dc_p / (KC * sc)) * (dh_p / (KH * sh));
+
+    (term1 + term2 + term3 + term4).sqrt()
 }
 
 fn reflect(x: isize, n: usize) -> usize {
@@ -478,6 +883,157 @@ fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
+
+    /// The pre-LUT CIEDE2000 mean: identical pipeline, but it calls
+    /// `srgb_to_linear` per channel instead of the 256-entry table.
+    fn ciede2000_mean_scalar_ref(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+        const M: [[f64; 3]; 3] = [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ];
+        let n = (r.width as usize) * (r.height as usize);
+        let mut sum_de = 0.0_f64;
+        for (a, b) in r
+            .pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(d.pixels.as_chunks::<3>().0)
+        {
+            let (pr1, pg1, pb1) = (
+                srgb_to_linear(a[0]),
+                srgb_to_linear(a[1]),
+                srgb_to_linear(a[2]),
+            );
+            let (pr2, pg2, pb2) = (
+                srgb_to_linear(b[0]),
+                srgb_to_linear(b[1]),
+                srgb_to_linear(b[2]),
+            );
+            let x1 = M[0][0] * pr1 + M[0][1] * pg1 + M[0][2] * pb1;
+            let y1 = M[1][0] * pr1 + M[1][1] * pg1 + M[1][2] * pb1;
+            let z1 = M[2][0] * pr1 + M[2][1] * pg1 + M[2][2] * pb1;
+            let x2 = M[0][0] * pr2 + M[0][1] * pg2 + M[0][2] * pb2;
+            let y2 = M[1][0] * pr2 + M[1][1] * pg2 + M[1][2] * pb2;
+            let z2 = M[2][0] * pr2 + M[2][1] * pg2 + M[2][2] * pb2;
+            let (l1, al1, bl1) = xyz_to_lab(x1, y1, z1);
+            let (l2, al2, bl2) = xyz_to_lab(x2, y2, z2);
+            sum_de += ciede2000(l1, al1, bl1, l2, al2, bl2);
+        }
+        sum_de / n as f64
+    }
+
+    #[test]
+    fn studio601_plane_mse_matches_combined_planes() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            let (my, mcb, mcr) = yuv444_studio601_mse(&r, &d);
+            assert_eq!(studio601_plane_mse(&r, &d, 0), my);
+            assert_eq!(studio601_plane_mse(&r, &d, 1), mcb);
+            assert_eq!(studio601_plane_mse(&r, &d, 2), mcr);
+        }
+    }
+
+    #[test]
+    fn ciede2000_lut_matches_scalar_ingress() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            assert_eq!(
+                score(Kind::Ciede2000, &r, &d).unwrap(),
+                ciede2000_mean_scalar_ref(&r, &d)
+            );
+        }
+    }
+
+    /// Direct 2-D evaluation of the `ssimc` definition (no ring, no
+    /// separable passes), for checking the streamed implementation.
+    fn ssimc_brute(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+        let (w, h) = (r.width as usize, r.height as usize);
+        let g = ssimc_taps();
+        let (c1, c2) = ((0.01f64 * 255.0).powi(2), (0.03f64 * 255.0).powi(2));
+        let mut total = 0.0;
+        for ch in 0..3 {
+            let mut sum = 0.0;
+            for oy in 0..h - 10 {
+                for ox in 0..w - 10 {
+                    let mut m = [0.0f64; 5];
+                    for ty in 0..11 {
+                        for tx in 0..11 {
+                            let i = ((oy + ty) * w + ox + tx) * 3 + ch;
+                            let (a, b) = (f64::from(r.pixels[i]), f64::from(d.pixels[i]));
+                            let wt = g[ty] * g[tx];
+                            m[0] += wt * a;
+                            m[1] += wt * b;
+                            m[2] += wt * a * a;
+                            m[3] += wt * b * b;
+                            m[4] += wt * a * b;
+                        }
+                    }
+                    let lum = (2.0 * m[0] * m[1] + c1) / (m[0] * m[0] + m[1] * m[1] + c1);
+                    let cs = ((2.0 * (m[4] - m[0] * m[1]) + c2)
+                        / (m[2] - m[0] * m[0] + m[3] - m[1] * m[1] + c2))
+                        .max(0.0);
+                    sum += lum * cs;
+                }
+            }
+            total += sum / ((w - 10) * (h - 10)) as f64;
+        }
+        total / 3.0
+    }
+
+    fn ssimc_pair(w: u32, h: u32, invert: bool) -> (Rgb8Image, Rgb8Image) {
+        let n = (w * h) as usize;
+        let a: Vec<u8> = (0..n * 3)
+            .map(|i| ((i * 37 + (i / 7) * 11) % 251) as u8)
+            .collect();
+        let b: Vec<u8> = a
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                if invert {
+                    255 - v
+                } else {
+                    v.wrapping_add((i % 5) as u8 * 9)
+                }
+            })
+            .collect();
+        (
+            Rgb8Image {
+                pixels: a,
+                width: w,
+                height: h,
+            },
+            Rgb8Image {
+                pixels: b,
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    #[test]
+    fn ssimc_streaming_matches_direct_definition() {
+        for (w, h, invert) in [(11, 11, false), (37, 23, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            let got = score(Kind::SsimC, &r, &d).unwrap();
+            let want = ssimc_brute(&r, &d);
+            assert!((got - want).abs() < 1e-12, "{w}x{h}: {got} vs {want}");
+            if invert {
+                // An inverted pair drives cs negative: the clip must bite.
+                assert!(got >= 0.0);
+            }
+        }
+        let (r, _) = ssimc_pair(29, 17, false);
+        assert_eq!(score(Kind::SsimC, &r, &r).unwrap(), 1.0);
+        let tiny = Rgb8Image {
+            pixels: vec![0; 10 * 10 * 3],
+            width: 10,
+            height: 10,
+        };
+        assert!(score(Kind::SsimC, &tiny, &tiny).is_err());
+    }
+
     use super::*;
 
     #[test]
@@ -646,6 +1202,60 @@ mod tests {
         // The four conventions should not all collapse to one number.
         let scores: Vec<f64> = kinds.iter().map(|&k| score(k, &r, &d).unwrap()).collect();
         assert!(scores.iter().any(|&s| s != scores[0]));
+    }
+
+    /// `psnr-cb` / `psnr-cr` equal PSNR over the directly computed
+    /// `round(128 + (…)/255)` studio-601 chroma planes, and
+    /// `psnr-ycbcr611` is their 6:1:1 MSE combination with
+    /// `psnr-y-studio601`.
+    #[test]
+    fn chroma_psnr_matches_direct_planes_and_611() {
+        let (r, d) = ssimc_pair(48, 40, false);
+        let plane = |img: &Rgb8Image, k: [f64; 3]| -> Vec<f64> {
+            img.pixels
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|p| {
+                    (128.0
+                        + (k[0] * f64::from(p[0])
+                            + k[1] * f64::from(p[1])
+                            + k[2] * f64::from(p[2]))
+                            / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0)
+                })
+                .collect()
+        };
+        let direct = |k: [f64; 3]| {
+            let (a, b) = (plane(&r, k), plane(&d, k));
+            let mse = a
+                .iter()
+                .zip(&b)
+                .map(|(x, y)| (x - y) * (x - y))
+                .sum::<f64>()
+                / a.len() as f64;
+            10.0 * (255.0 * 255.0 / mse).log10()
+        };
+        let cb = score(Kind::PsnrCb, &r, &d).unwrap();
+        let cr = score(Kind::PsnrCr, &r, &d).unwrap();
+        assert!(
+            (cb - direct([-37.797, -74.203, 112.0])).abs() < 1e-9,
+            "cb {cb}"
+        );
+        assert!(
+            (cr - direct([112.0, -93.786, -18.214])).abs() < 1e-9,
+            "cr {cr}"
+        );
+        assert_ne!(cb, cr);
+        assert!(score(Kind::PsnrCb, &r, &r).unwrap().is_infinite());
+        assert!(score(Kind::PsnrCr, &r, &r).unwrap().is_infinite());
+
+        let mse = |p: f64| 255.0 * 255.0 / 10f64.powf(p / 10.0);
+        let y = score(Kind::PsnrYStudio601, &r, &d).unwrap();
+        let combined = 10.0 * (255.0 * 255.0 / ((6.0 * mse(y) + mse(cb) + mse(cr)) / 8.0)).log10();
+        let p611 = score(Kind::PsnrYCbCr611, &r, &d).unwrap();
+        assert!((p611 - combined).abs() < 1e-9, "611 {p611} vs {combined}");
     }
 
     /// `psnr-y-studio601` must equal `psnr-y` scored on the

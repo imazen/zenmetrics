@@ -53,6 +53,8 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `iwssim-gpu` | in-tree **`iwssim`** (this repo) | CPU-vs-GPU parity | see entry — column-name split is deliberate |
 | `zensim` (CPU) | in-house metric — **no external reference exists** | self | n/a — the crate *is* the definition |
 | `zensim-gpu` | **`zensim` 0.2.8 / pinned 0.3.0** | `crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs` | ≤ 2.08e-4 pointwise; 12 documented items |
+| `wadiqam` (zenmetrics-nn) | **`dmaniry/deepIQA`** @ `51dece99` (MIT code + weights), `top="weighted"` checkpoints | chainer CPU oracle (`models/wadiqam/oracle.py`) | 4.2e-5 worst export-check score delta; both-engine parity ≤ 7.8e-6 JND — see entry |
+| `zenmetrics-nn` `dmm` | **Baoliang93/DMM** `DMM_PyTorch` 0.1.2 (MIT), CPU fp32 `torch.svd` | netlib-`sgesdd` goldens on the engine's own taps (`dmm_goldens_netlib_<engine>.tsv`); MKL goldens recorded, not gated | score is solver-draw-dependent in degenerate patches — see `### dmm` |
 
 ## Cross-cutting house conventions (diverge from every MATLAB reference by design)
 
@@ -611,9 +613,81 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   the new ports' parity
   because the diffmap path still runs a CPU fallback (§2b/§9).
 
+### `dmm` (`zenmetrics-nn`) — vs Baoliang93/DMM `DMM_PyTorch` 0.1.2
+
+- **DIVERGES** — the score is *implementation-defined*: `wt` weights each
+  patch's singular-value distance by the spread of elementwise products
+  of the two SVD bases, and ~90% of tap elements are exact zeros
+  post-ReLU, so most patches sit in degenerate singular clusters whose
+  orthonormal basis is chosen by the LAPACK build's deflation path, not
+  by the math. Upstream's oracle is MKL `sgesdd` (`torch.svd` CPU);
+  our port is a pure-Rust f32 transliteration of the netlib
+  `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` path and matches *that* draw —
+  on the worst degenerate ladder patch (rank-1, 15-dim null space) MKL
+  draws `wt=3.090`, scipy `sgesdd` 3.8179, ours 3.8181.
+- Measured spreads on the 24-row ladder (score units; 1 JND = 0.191420):
+  ours vs MKL-goldens: rten median 1.77e-3 / max 5.7e-2, ort-cuda median
+  8.1e-4 / max 0.176. Upstream's *own* CPU-vs-CUDA (`torch.svd` MKL vs
+  cuSolver, same pipeline): up to **1.73 absolute (~9 JND)** on
+  `2207_128`, +1.7% on `2207_256`, +3.3% on `2406_128` — the published
+  variation is larger than any port gap we introduce.
+- Gate: `dmm` is out of the default `nn-parity` model set;
+  `just nn-parity-dmm` asserts the port against per-engine
+  netlib-`sgesdd` goldens (`dmm_goldens_netlib_{rten,ort_cuda}.tsv`,
+  `models/dmm/gen_netlib_goldens.py` on `examples/dmm_tap_dump`
+  same-engine taps — the ~100x tap-noise amplification rules out
+  torch-tap goldens). Rows the transliteration tracks at 1e-3 JND gate
+  there; rows whose netlib-vs-port draws drift past the gate are pinned
+  at their measured residual +5% (`kind=pinned` in the TSV) — a
+  regression floor, not a parity claim. The MKL comparison is printed
+  per row, not asserted. Measured 2026-10-17: rten 6 jnd + 18 pinned
+  (worst jnd-row err 1.09e-4), ort-cuda 7 jnd + 17 pinned (worst
+  1.81e-4). See `models/dmm/card.toml`, `benchmarks/dmm_aic_probe/`.
+
 ## Maintenance rule
 
 Every metric port or reference-version bump updates this file **in the
 same commit**: a ledger row (or delta refresh) plus a per-metric entry
 for anything that isn't pure float noise. Crate-level depth stays in the
 crate docs — this file links, it does not duplicate.
+
+## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
+
+- **RESOLVED:** RTen and CUDA VGG16 trunk plus Rust statistics pass 25 upstream
+  pairs × five columns per engine at 1e-3 KonJND. Worst error is
+  3.443705654e-6 JND. The 1008-pair calibration and source hashes are in the
+  [receipt](benchmarks/wd_port_2026-10-16/README.md).
+- **EXTENSION:** native strided RGB8 and warm-reference feature reuse; explicit
+  size/area errors. Spatial maps are unsupported.
+- **EXTENSION:** `wd_s3` is Cool-Chic's default `WassersteinLoss` (`log2_sigma=3`);
+  `wd_s1`, `wd_s2`, `wd_s4` and `wd_s5` run the same code at `log2_sigma` 1, 2, 4
+  and 5, which Cool-Chic does not expose.
+- **MATCHES (on purpose):** local variance is `E[x²] − μ²` in f32, then clamped
+  to 5e-7, as upstream. It cancels in smooth regions; a centred variance would
+  be more stable but would break parity with Cool-Chic.
+- **DIVERGES:** the published AIC preprocessing remains unidentified. A separate
+  time-boxed search selected raw post-pool taps with feature-rescaled sigma on
+  three pairs; all-61 verification gives column median site errors
+  0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
+  the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## `wadiqam` — deepIQA WaDIQaM FR+NR (2026-10-16)
+
+- **RESOLVED:** ONNX exports of upstream's own chainer model classes (ported to
+  torch for export; mirror verified ≤ 4.2e-5 pooled-score delta against the
+  checkpoints) pass 29 ladder pairs — including non-square and 4096² — at
+  1e-3 KonJND on rten and ort-cuda, worst 7.8e-6 JND
+  (`benchmarks/wadiqam_port_2026-10-16.md`).
+- **DIVERGES:** inputs with more than 32,768 patches (≈ 5824² at stride 32,
+  above the 4096² evaluation ceiling) are refused. Upstream accepts arbitrary
+  sizes and silently batches inference at 2,000 patches per graph call.
+- **DIVERGES:** the host-side attention pool `Σ(y·a)/Σa` accumulates in f64;
+  upstream's chainer path is f32 end-to-end. Observed effect is below the
+  1e-3-JND parity gate (≤ 7.8e-6 JND vs the chainer oracle).
+- **EXTENSION:** the public API accepts strided RGB8 input (`Rgb8In`), which
+  upstream's `evaluate.py` does not define; extraction is non-overlapping
+  stride-32 patches at native resolution, edge partials dropped, same as
+  upstream.
+- **EXTENSION:** inference chunking at 2,000 patches per graph call matches
+  upstream's batch size; chunk-vs-whole equivalence is unit-tested, scores are
+  bit-identical by construction (concatenated inputs, per-patch outputs).

@@ -330,7 +330,7 @@ fn metric_trait_object_scores_and_maps() {
     let r = za::conformance::textured_rgb8(w, h, 5);
     let d = za::conformance::distort_rgb8(&r, w, h);
     let mk = |px| za::conformance::rgb8_image(px, w, h);
-    let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim);
+    let mut m: alloc::boxed::Box<dyn Metric> = alloc::boxed::Box::new(crate::Fsim::default());
     assert_eq!(m.id().family(), "fsim");
     assert_eq!(m.score_kind(), ScoreKind::Similarity);
     assert!(m.accepts(&mk(&r).format()));
@@ -374,5 +374,99 @@ fn metric_trait_object_scores_and_maps() {
 /// The generic surface honors the abstractions contract.
 #[test]
 fn generic_surface_conforms() {
-    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut crate::Fsim, 45, 37);
+    let mut scorer = crate::Fsim::default();
+    zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut scorer, 45, 37);
+}
+
+#[test]
+fn fixed_factor_matches_auto_and_strided() {
+    for (w, factor) in [(31, 1), (384, 2), (640, 3), (896, 4)] {
+        let h = w + 1;
+        let r: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 37 + i / 11) % 256) as u8)
+            .collect();
+        let d: Vec<u8> = r
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| if i % 17 == 0 { v.wrapping_add(29) } else { v })
+            .collect();
+        let scorer = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let auto = fsim_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let fixed = scorer.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(auto.fsim.to_bits(), fixed.fsim.to_bits());
+        assert_eq!(auto.fsimc.to_bits(), fixed.fsimc.to_bits());
+        let stride = w * 3 + 7;
+        let mut rs = alloc::vec![0;stride*h];
+        let mut ds = rs.clone();
+        for y in 0..h {
+            rs[y * stride..y * stride + w * 3].copy_from_slice(&r[y * w * 3..(y + 1) * w * 3]);
+            ds[y * stride..y * stride + w * 3].copy_from_slice(&d[y * w * 3..(y + 1) * w * 3]);
+        }
+        assert_eq!(fixed, scorer.score_rgb8(&rs, &ds, w, h, stride).unwrap());
+        let dm = scorer.diffmap_rgb8(&rs, &ds, w, h, stride).unwrap();
+        assert_eq!(dm.factor(), factor);
+        assert_eq!(dm.fsim, fixed.fsim);
+        assert_eq!(dm.fsimc, Some(fixed.fsimc));
+        let alternate_factor = if factor == 1 { 2 } else { 1 };
+        let alternate = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(alternate_factor).unwrap(),
+        ));
+        let alternate_score = alternate.score_rgb8(&r, &d, w, h, w * 3).unwrap();
+        let alternate_map = alternate.diffmap_rgb8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(
+            alternate_map.width as usize,
+            w.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(
+            alternate_map.height as usize,
+            h.div_ceil(alternate_factor as usize)
+        );
+        assert_eq!(alternate_map.factor(), alternate_factor);
+        assert_ne!(auto.fsim.to_bits(), alternate_score.fsim.to_bits());
+        assert_eq!(alternate_map.fsim.to_bits(), alternate_score.fsim.to_bits());
+    }
+}
+
+#[test]
+fn downscale_identity_preserves_auto_and_distinguishes_factors() {
+    use zenmetrics_abstractions::Metric as _;
+    // Auto fingerprint from base 765a2f9c's identity fields and FNV-1a encoding.
+    let auto = Fsim::default().id().fingerprint();
+    assert_eq!(auto, 0xf2de67b03bafb14e);
+    let fixed = |n| {
+        Fsim::with_downscale(Downscale::Factor(core::num::NonZeroU32::new(n).unwrap()))
+            .id()
+            .fingerprint()
+    };
+    assert_ne!(auto, fixed(2));
+    assert_ne!(fixed(2), fixed(3));
+}
+
+#[test]
+fn oversized_fixed_factor_is_refused_for_score_and_map() {
+    let (w, h) = (17, 13);
+    let image = alloc::vec![127;w*h*3];
+    for factor in [14, 18, u32::MAX] {
+        let scorer = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let expected = Error::DownscaleFactor {
+            factor,
+            width: w,
+            height: h,
+        };
+        assert_eq!(
+            scorer.score_rgb8(&image, &image, w, h, w * 3).unwrap_err(),
+            expected
+        );
+        assert_eq!(
+            scorer
+                .diffmap_rgb8(&image, &image, w, h, w * 3)
+                .err()
+                .expect("oversized map must fail"),
+            expected
+        );
+    }
 }

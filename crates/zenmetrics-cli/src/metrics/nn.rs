@@ -1,5 +1,5 @@
 //! Learned metrics from `zenmetrics-nn` (LPIPS ×3, ST-LPIPS ×2, DISTS, DeepDC,
-//! CKDN, A-FINE, DreamSim, AHIQ).
+//! CKDN, A-FINE, DreamSim, AHIQ, DMM, plus the no-reference set).
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the
@@ -12,9 +12,11 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
-use zenmetrics_abstractions::{EvalOpts, Image, Metric};
+use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Afine, Ahiq, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Lpips, LpipsNet, WeightsConsent,
+    Afine, Ahiq, Arniqa, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Hyperiqa, Liqe, Lpips,
+    LpipsNet, Maniqa, Musiq, Paq2piq, WadiqamFr, WadiqamKind, WadiqamNr, WassersteinDistortion,
+    WeightsConsent,
 };
 
 use super::MetricKind;
@@ -52,6 +54,9 @@ fn consent() -> WeightsConsent {
                 "afine" => Afine::WEIGHTS,
                 "dreamsim" => Dreamsim::WEIGHTS,
                 "ahiq" => Ahiq::WEIGHTS,
+                "liqe" => Liqe::WEIGHTS,
+                "hyperiqa" => Hyperiqa::WEIGHTS,
+                "paq2piq" => Paq2piq::WEIGHTS,
                 _ => continue,
             };
             consent = consent.accept(terms);
@@ -65,6 +70,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
         "learned metrics need ZENMETRICS_NN_MODEL_DIR: a directory exported by crates/zenmetrics-nn/models/*/export.py",
     )?;
     let engine = engine()?;
+    if column == "wd_s1" {
+        return Ok(Box::new(WassersteinDistortion::from_dir(&dir, engine)?));
+    }
     if column == "dists" {
         return Ok(Box::new(Dists::from_dir(&dir, engine)?));
     }
@@ -85,6 +93,73 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
     }
     if column == "dmm" {
         return Ok(Box::new(Dmm::from_dir(&dir, engine)?));
+    }
+    if column == "arniqa" {
+        // A NoReferenceMetric wrapped for pair scoring: `arniqa` on the
+        // distorted image, `arniqa_ref` on the reference.
+        return Ok(Box::new(PairedNoReference::new(Arniqa::from_dir(
+            &dir, engine,
+        )?)));
+    }
+    if column == "maniqa" {
+        return Ok(Box::new(PairedNoReference::new(Maniqa::from_dir(
+            &dir, engine,
+        )?)));
+    }
+    if column == "liqe" {
+        return Ok(Box::new(PairedNoReference::new(Liqe::from_dir(
+            &dir,
+            engine,
+            &consent(),
+        )?)));
+    }
+    if column == "musiq" {
+        return Ok(Box::new(PairedNoReference::new(Musiq::from_dir(
+            &dir, engine,
+        )?)));
+    }
+    if column == "hyperiqa" {
+        return Ok(Box::new(PairedNoReference::new(Hyperiqa::from_dir(
+            &dir,
+            engine,
+            &consent(),
+        )?)));
+    }
+    if column == "paq2piq" {
+        return Ok(Box::new(PairedNoReference::new(Paq2piq::from_dir(
+            &dir,
+            engine,
+            &consent(),
+        )?)));
+    }
+    // WaDIQaM weights ship inside the MIT repo — permissive, no consent.
+    if column == "wadiqam_fr_live" {
+        return Ok(Box::new(WadiqamFr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::FrLive,
+        )?));
+    }
+    if column == "wadiqam_fr_tid" {
+        return Ok(Box::new(WadiqamFr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::FrTid,
+        )?));
+    }
+    if column == "wadiqam_nr_live" {
+        return Ok(Box::new(PairedNoReference::new(WadiqamNr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::NrLive,
+        )?)));
+    }
+    if column == "wadiqam_nr_tid" {
+        return Ok(Box::new(PairedNoReference::new(WadiqamNr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::NrTid,
+        )?)));
     }
     let net = LpipsNet::ALL
         .into_iter()
@@ -120,12 +195,38 @@ pub(super) fn score(
     }
     let m = models.get_mut(column).ok_or("model cache")?;
     let eval = m.evaluate(image(reference)?, image(distorted)?, EvalOpts::new())?;
-    let value = eval
-        .scores()
-        .find(|(k, _)| k == column)
-        .map(|(_, v)| v)
-        .ok_or_else(|| format!("{column}: no score"))?;
-    Ok(vec![(column, value)])
+    let scores: Vec<(std::borrow::Cow<'static, str>, f64)> = eval.scores().collect();
+    // Every declared column — NR models also emit `<col>_ref` for the
+    // reference image.
+    kind.column_names()
+        .iter()
+        .map(|&col| {
+            scores
+                .iter()
+                .find(|(k, _)| *k == col)
+                .map(|(_, v)| (col, *v))
+                .ok_or_else(|| format!("{col}: no score").into())
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_permissive_weights_refuse_without_consent() {
+        // `from_dir` checks the consent before reading any file, so the
+        // directory need not exist.
+        let err = match Ckdn::from_dir("/nonexistent-ckdn", Engine::Rten, &WeightsConsent::new()) {
+            Err(e) => e,
+            Ok(_) => panic!("ckdn's weights have no stated licence"),
+        };
+        assert!(
+            matches!(err, zenmetrics_nn::Error::WeightsNotAccepted(t) if t == Ckdn::WEIGHTS),
+            "expected WeightsNotAccepted for ckdn, got {err:?}"
+        );
+    }
 }
 
 #[cfg(test)]

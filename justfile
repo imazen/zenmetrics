@@ -296,6 +296,10 @@ worker-clippy:
 lock-check *args:
     bash scripts/ci/lock.sh --check {{args}}
 
+# Every remote branch and open PR with a verdict (merged/stale/conflict/...); read-only.
+branch-status *args:
+    python3 scripts/ci/branch_status.py {{args}}
+
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
 
@@ -305,9 +309,45 @@ lock-snapshot-tests:
 # any other revision is exported as committed), checks the lock,
 # then runs `cargo --locked <args>` in the snapshot with its own target dir.
 # Example: just snap-cargo @ test -p zenstats
+# `fmt` is refused without `--check`: it would format the snapshot copy and
+# never reach the tree (use `just fmt`).
 snap-cargo rev +args:
+    @case " {{args}} " in " fmt "*) case " {{args}} " in *" --check "*) ;; *) echo "snap-cargo: fmt edits the snapshot, not this tree; run 'just fmt' (fmt --check is fine here)" >&2; exit 2 ;; esac ;; esac
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
+
+# zenmetrics-cli feature-combination matrix: 12 rows — every supported
+# `--no-default-features --features <F>` shape, plus the bare
+# `--no-default-features` build, plus the default build. Prints a PASS/FAIL
+# row per combination and exits nonzero if any fails. CI runs the same list
+# as plain `cargo --locked check` (ci.yml, `cli-feature-matrix` job) — keep
+# the two lists in sync.
+cli-feature-matrix:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    total=0
+    fails=0
+    run_combo() {
+        local label="$1" out status=0
+        shift
+        out=$(just snap-cargo @ check "$@" 2>&1) || status=$?
+        total=$((total + 1))
+        if [ "$status" -eq 0 ]; then
+            printf 'PASS  %s\n' "$label"
+        else
+            printf 'FAIL  %s\n' "$label"
+            printf '%s\n' "$out"
+            fails=$((fails + 1))
+        fi
+    }
+    for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+        run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
+    done
+    run_combo bare -p zenmetrics-cli --no-default-features
+    run_combo default -p zenmetrics-cli
+    printf '%s\n' "---- $((total - fails))/$total combinations passed ----"
+    [ "$fails" -eq 0 ]
 
 # Matched CPU-metric wall/counter runs; pass a preserved baseline or candidate example.
 ranked-wall binary threads output w="3355" h="2516" reps="5":
@@ -593,6 +633,61 @@ nn-export-afine python ladder out upstream afine_pth clip_pth sizes="64,128,256,
 nn-export-dreamsim python ladder out ckpt:
     {{python}} -I crates/zenmetrics-nn/models/dreamsim/export.py '{{ladder}}' '{{out}}' '{{ckpt}}'
 
+# Export ARNIQA from a clone of miccunifi/ARNIQA plus its release weights
+# dir (ARNIQA.pth + regressor_kadid10k.pth), with goldens.
+nn-export-arniqa python ladder out upstream weights sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/arniqa/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{weights}}' '{{sizes}}'
+
+# Export MANIQA from a clone of IIGROUP/MANIQA plus its release weights
+# dir (ckpt_koniq10k.pt), with goldens.
+nn-export-maniqa python ladder out upstream weights sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/maniqa/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{weights}}' '{{sizes}}'
+
+# Export LIQE from a clone of zwx8981/LIQE plus its checkpoint
+# (LIQE.pt), with goldens.
+nn-export-liqe python ladder out upstream ckpt sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/liqe/export.py '{{ladder}}' '{{out}}' '{{upstream}}' '{{ckpt}}' '{{sizes}}'
+
+# Export HyperIQA from the official KonIQ checkpoint (koniq_pretrained.pkl);
+# upstream checkout + pkl paths, goldens from oracle.py.
+nn-export-hyperiqa python upstream ckpt out goldens ladder:
+    {{python}} -u -I crates/zenmetrics-nn/models/hyperiqa/export.py '{{upstream}}' '{{ckpt}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+
+# HyperIQA goldens via upstream models.py on the deterministic 5x5 grid
+# (upstream's eval crops at random — see models/hyperiqa/card.toml).
+nn-goldens-hyperiqa python upstream ckpt out ladder:
+    {{python}} -I crates/zenmetrics-nn/models/hyperiqa/oracle.py '{{upstream}}' '{{ckpt}}' '{{out}}' {{ladder}}/*.png
+
+nn-export-paq2piq python upstream ckpt out goldens ladder nonsquare:
+    {{python}} -I crates/zenmetrics-nn/models/paq2piq/export.py '{{out}}' --upstream '{{upstream}}' --checkpoint '{{ckpt}}' --goldens '{{goldens}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
+
+nn-goldens-paq2piq python upstream ckpt out ladder:
+    {{python}} -I crates/zenmetrics-nn/models/paq2piq/oracle.py --upstream '{{upstream}}' --checkpoint '{{ckpt}}' '{{ladder}}' > '{{out}}'
+
+# Export WaDIQaM (dmaniry/deepIQA `models/{fr,nr}_{live,tid}_weighted.model`,
+# h5py-only — no chainer needed). `weights` is the directory holding the
+# official checkpoints. The recipe does not forward --goldens/--ladder (the
+# oracle-vs-ONNX check); run export.py directly for that after
+# nn-goldens-wadiqam produces the TSVs.
+nn-export-wadiqam python out weights:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/export.py '{{out}}' --weights '{{weights}}'
+
+# WaDIQaM goldens via upstream's chainer model classes on CPU
+# (needs the chainer venv — see models/wadiqam/card.toml; chainer's
+# cuda shim is patched inside oracle.py).
+nn-goldens-wadiqam python upstream model top mode col out ladder nonsquare:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/oracle.py '{{upstream}}' '{{model}}' '{{top}}' '{{mode}}' '{{col}}' '{{out}}' '{{ladder}}' '{{nonsquare}}'
+
+# Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
+# Goldens come from oracle.py under the legacy JAX env, not this recipe.
+nn-export-musiq python npz out goldens ladder:
+    {{python}} -u -I crates/zenmetrics-nn/models/musiq/export.py '{{npz}}' '{{out}}' '{{goldens}}' '{{ladder}}'
+
+# MUSIQ goldens via the upstream JAX oracle (jax 0.3.25 + flax 0.3.3 venv —
+# see models/musiq/card.toml; tensorflow CPU, eager mode).
+nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
+    {{python}} -I crates/zenmetrics-nn/models/musiq/oracle.py '{{ladder}}' '{{upstream}}' '{{npz}}' '{{out}}' '{{sizes}}'
+
 # Export AHIQ from a clone of IIGROUP/AHIQ (AHIQ_SRC, needs model/) plus its
 # epoch-32 .pth from upstream's Google Drive link. patch_size 8 = upstream.
 nn-export-ahiq python ladder out upstream ckpt patch_size="8":
@@ -605,6 +700,253 @@ nn-export-dmm python ladder out upstream:
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq,dmm":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
+
+# DMM parity has its own lane: the metric's `wt` term consumes the
+# orthonormal basis its SVD solver draws inside degenerate singular
+# clusters — implementation-defined per LAPACK build (MKL != netlib !=
+# cuSolver; upstream torch itself spreads up to ~9 JND across CPU/CUDA —
+# see crates/zenmetrics-nn/models/dmm/card.toml). This recipe gates the
+# port against netlib-sgesdd-f32 goldens scored on the SAME engine's taps
+# (models/dmm/dmm_goldens_netlib_<engine>.tsv via examples/dmm_tap_dump +
+# models/dmm/gen_netlib_goldens.py); the MKL-draw dmm_goldens.tsv deltas
+# are printed as a recorded measurement, not asserted.
+nn-parity-dmm model_dir ladder engine="rten" features="model-tests":
+    ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='dmm' \
+        {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
+
+# Crate-scoped statistical API validation in the pinned dependency snapshot.
+stats-helpers-check:
+    just snap-cargo @ test -p zenmetrics-stats
+    just snap-cargo @ clippy -p zenmetrics-stats --all-targets -- -D warnings
+
+stats-helpers-serial-check:
+    just snap-cargo @ test -p zenmetrics-stats --no-default-features
+
+# --- no-reference classical metrics (piqe, niqe, brisque) ---------------------
+# Regenerate a crate's goldens TSV with the oracle venv
+# (~/tmp/nr-classic-scratch/venv, built per the nr-classic lane brief).
+nr-golden crate python="$HOME/tmp/nr-classic-scratch/venv/bin/python":
+    {{python}} -I crates/{{crate}}/tests/golden_{{crate}}.py > crates/{{crate}}/tests/goldens_{{crate}}.tsv
+
+# Score all 1,008 KonJND pairs for one NR metric (PairedNoReference: `<m>` on
+# the distorted image, `<m>_ref` on the reference) into a TSV for the JND
+# estimate. `bin` is a zenmetrics-cli binary built with `--features nr`.
+nr-konjnd bin metric out pairs="$HOME/tmp/konjnd-pairs/pairs_abs.tsv":
+    {{bin}} batch --metric {{metric}} --pairs '{{pairs}}' --output '{{out}}' --use-legacy-scheduler
+
+# Crate tests (behaviour + oracle parity) in the pinned lock snapshot.
+nr-test crate:
+    {{just_executable()}} snap-cargo @ test -p {{crate}}
+
+# AIC LDR-FLIP raw-map gate. Run under run-heavy with the shared heavy lock.
+# python is the isolated venv containing flip-evaluator==1.7, numpy and Pillow.
+aic-flip-verify python out:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/flip_probe.rs -o "$HOME/tmp/aic-variants-scratch/flip-probe"
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py aic {{out}}/flip-aic.json
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_flip.py ladder {{out}}/flip-ladder.json
+
+# Round 3 library, complete workspace fmt, CI lint flags, and CLI inventory.
+aic-flip-ci:
+    bash benchmarks/aic_flip_2026-10-15/check_ci.sh
+
+# Independent complex steerable-pyramid convention search; pyrtools==1.0.11.
+aic-cw-search python out:
+    {{python}} benchmarks/aic_flip_2026-10-15/search_cw.py {{out}}/cw-search.json
+    {{python}} benchmarks/aic_flip_2026-10-15/cw_variants.py {{out}}/cw-variants.json S01_AVIF_01.png S15_PNG_15.png S53_JAIB_07.png S66_AVIF_15.png
+    {{python}} benchmarks/aic_flip_2026-10-15/cw_grid_panel.py {{out}}/cw-grid-panel.json
+
+# Selected CW-SSIM raw RGB / independent Python gate (true DFT-bin grid).
+aic-cw-verify python out:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
+    {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq
+
+# BRISQUE Round 6 review; caller holds shared heavy lock/run-heavy scope.
+brisque-review-build:
+    just snap-cargo @ build -p brisque --example review --release
+
+brisque-review-prepare python:
+    {{python}} benchmarks/brisque_review_2026-10-15/prepare.py
+
+brisque-review-run binary label:
+    {{binary}} ratios "$HOME/tmp/aic-variants-scratch/round6/ratios-input.bin" "$HOME/tmp/aic-variants-scratch/round6/{{label}}-ratios.bin"
+    {{binary}} panel "$HOME/tmp/aic-variants-scratch/round6/panel.paths" > "$HOME/tmp/aic-variants-scratch/round6/{{label}}-panel.tsv"
+
+brisque-review-analyze python label *flags:
+    {{python}} benchmarks/brisque_review_2026-10-15/analyze.py {{label}} {{flags}}
+
+# Final BRISQUE review gates, matching CI's all-member fmt and Lint flags.
+brisque-review-ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just snap-cargo @ test -p brisque --all-targets
+    just snap-cargo @ build -p brisque --no-default-features
+    just snap-cargo @ test -p brisque --no-default-features --lib
+    bash scripts/ci/lock.sh --check
+    mapfile -t brisque_fmt_packages < <(cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json,sys; [print(p["name"]) for p in json.load(sys.stdin)["packages"]]')
+    brisque_fmt_args=()
+    for package in "${brisque_fmt_packages[@]}"; do brisque_fmt_args+=(-p "$package"); done
+    just snap-cargo @ fmt "${brisque_fmt_args[@]}" --check
+    just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
+
+brisque-review-params python:
+    {{python}} crates/brisque/tests/gen_params.py
+
+# Run after an ordinary review build/export; changes only the isolated snapshot.
+brisque-review-computed-build:
+    just brisque-review-build
+    python3 benchmarks/brisque_review_2026-10-15/build_computed.py
+
+# Export qualification gates without loading model weights.
+nn-export-checks:
+    python3 -I crates/zenmetrics-nn/models/test_export_checks.py
+
+# Review gates in the CI-pinned sibling snapshot (caller uses run-heavy).
+nn-review-tests:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ test --release -p zenmetrics-nn
+
+nn-review-format:
+    bash scripts/ci/lock.sh --check
+    cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
+
+nn-review-lint:
+    just snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
+
+# Round-10 review: caller serializes these through run-heavy/flock.
+nn-opt2-review-build rev out:
+    bash benchmarks/nn_opt2_2026-10-15/review_build.sh '{{rev}}' '{{out}}'
+
+nn-opt2-review-tests:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ test --release -p zenmetrics-nn
+
+nn-opt2-review-run stage binaries models ladder out:
+    python3 benchmarks/nn_opt2_2026-10-15/review_run.py '{{stage}}' '{{binaries}}' '{{models}}' '{{ladder}}' '{{out}}'
+
+nn-opt2-review-ci:
+    bash benchmarks/nn_opt2_2026-10-15/review_ci.sh
+
+# PaQ-2-PiQ review: run under the shared heavy-job lock and run-heavy.
+nn-review-paq2piq-gates:
+    bash benchmarks/paq2piq_review_2026-10-16.sh
+
+nn-paq2piq-small-inputs python ladder nonsquare:
+    {{python}} -I crates/zenmetrics-nn/models/paq2piq/small_inputs.py '{{ladder}}' '{{nonsquare}}'
+
+# Default scheduler, explicitly excluding any inherited legacy override.
+nn-paq2piq-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/paq2piq/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+# WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
+nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
+    {{python}} -I crates/zenmetrics-nn/models/wd/reference.py '{{stage}}' --reference '{{reference}}' --out '{{out}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
+
+nn-wd-score models pairs out engine="rten":
+    {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features ort --example wd_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+nn-wd-parity models ladder engine="rten":
+    ZENMETRICS_NN_MODEL_DIR='{{models}}' ZENMETRICS_NN_LADDER='{{ladder}}' ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests,ort --test wd_parity -- --nocapture --test-threads=1
+
+nn-wd-kon-jnd scores out:
+    python3 -I crates/zenmetrics-nn/models/wd/konjnd.py '{{scores}}' '{{out}}'
+
+nn-wd-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/wd/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-wd-gates models ladder:
+    bash benchmarks/wd_port_gates_2026-10-16.sh '{{models}}' '{{ladder}}'
+
+# AIC probe has its own hard one-hour clock after acquiring the heavy lock.
+nn-wd-aic-probe models python reference site images config previous pairs out:
+    bash benchmarks/wd_aic_probe_2026-10-16.sh '{{models}}' '{{python}}' '{{reference}}' '{{site}}' '{{images}}' '{{config}}' '{{previous}}' '{{pairs}}' '{{out}}'
+
+# Compact an existing WD convention probe; no inference.
+nn-wd-aic-report probe native site config out:
+    python3 -I crates/zenmetrics-nn/models/wd/aic_report.py --probe '{{probe}}' --native '{{native}}' --site '{{site}}' --config '{{config}}' --out '{{out}}'
+
+# Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
+aic-more-verify python:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
+    {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-more-ci:
+    bash benchmarks/aic_more_2026-10-15/check_ci.sh
+
+# Round 5 review controls; run under shared heavy lock and run-heavy.
+aic-review-bogus:
+    just snap-cargo @ test -p zenmetrics-cli --features sweep --bin zenmetrics fail_on_bogus_tests
+
+aic-review-pins python:
+    {{python}} benchmarks/aic_review_2026-10-15/pin_oracles.py
+
+aic-review-libs:
+    just snap-cargo @ test -p zenmetrics-cli --lib
+    just snap-cargo @ test -p vmaf --no-default-features --lib
+    just snap-cargo @ test -p vmaf --features simd,avx512 --lib
+
+aic-review-ssim-order python:
+    rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_SSIM1_PROBE="$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+
+aic-review-rust-pins:
+    rustc --edition 2024 -O benchmarks/aic_review_2026-10-15/pins_rust.rs -o "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+    "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+
+aic-review-cambi python:
+    cp "$LOCK_SNAP_DIR/target/release/examples/aic_more_probe" "$HOME/tmp/aic-variants-scratch/round5/aic-more-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_CAMBI_PROBE="$HOME/tmp/aic-variants-scratch/round5/aic-more-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-review-oracles python:
+    bash benchmarks/aic_review_2026-10-15/check_oracles.sh {{python}}
+
+aic-review-ci:
+    bash benchmarks/aic_review_2026-10-15/check_ci.sh
+
+aic-review-pin-sensitivity:
+    python3 benchmarks/aic_review_2026-10-15/check_pin_sensitivity.py
+
+aic-review-cambi-reference python:
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+
+# Label-free indexed planner/executor checks, including an independent PNG decoder.
+palette-check:
+    just palette-pool-check
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
+    just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings
+
+budget-preflight-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_budget_preflight.py
+
+registered-fit-check:
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
+
+# Invented local-smoke transport and existing fit/harvest negative controls.
+steer-smoke-transport-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_steer_smoke_transport.py'
+    python3 -m unittest discover -s scripts/jobsys -p 'test_fit_tools.py'
+
+# Operator wrappers retain the canonical packer/launcher and caller-supplied caps.
+fit-pack-bounded-smoke source bin_dir build_meta pins contract out:
+    python3 scripts/jobsys/pack_fit_program.py --source "{{source}}" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "{{bin_dir}}" --build-meta "{{build_meta}}" --profile bounded-smoke --source-pins "{{pins}}" --source-pins-sha256 "$(sha256sum '{{pins}}' | cut -d' ' -f1)" --data "benchmarks/e33_fit_contract_2026-10-10.json={{contract}}" --out "{{out}}"
+
+lan-fit-smoke-launch host run role image:
+    bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+
+# Generated-input effective-dispatch receipts for the reviewed quantizer API.
+palette-dispatch-receipts out:
+    ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
+    ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
+
+# Invented metadata only: sealed palette pool validation and declaration contracts.
+palette-pool-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py scripts/jobsys/test_palette_pool_authority.py scripts/jobsys/test_budget_preflight.py

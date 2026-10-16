@@ -40,6 +40,7 @@ The export therefore splits into:
                   (median |d| 4e-5 over 61 pairs).
   ckdn_export.meta  versions and sha256 of every output.
 """
+import re
 import hashlib, os, sys, platform
 import numpy as np, torch
 import torchvision.transforms.functional as TF
@@ -170,7 +171,9 @@ def prep(t, nearest):
 with open(os.path.join(OUT, 'ckdn_goldens.tsv'), 'w') as g:
     g.write('image\tsize\tckdn\n')
     for name in sorted(os.listdir(LADDER)):
-        if not name.endswith('_ref.png'):
+        # Square ladder pairs only (`<src>_<size>_ref.png`); other models keep
+        # non-square goldens (`<src>_<w>x<h>_*`) in the same directory.
+        if not re.fullmatch(r'\d+_\d+_ref\.png', name):
             continue
         stem, size = name.split('_')[0], int(name.split('_')[1])
         if size not in GOLDEN_SIZES:
