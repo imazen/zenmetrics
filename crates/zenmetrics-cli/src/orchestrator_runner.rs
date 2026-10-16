@@ -544,9 +544,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Nlpd
             | CliMetricKind::NlpdIqa
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
-            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ) are routed through
-            // `nr::score`/`nn::score` + `PairedNoReference`; the
-            // orchestrator's FR leaves have no shape for them.
+            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ,
+            // WaDIQaM-NR) are routed through `nr::score`/`nn::score` +
+            // `PairedNoReference`; the orchestrator's FR leaves have no
+            // shape for them.
             | CliMetricKind::Piqe
             | CliMetricKind::Niqe
             | CliMetricKind::Brisque
@@ -556,6 +557,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Musiq
             | CliMetricKind::Hyperiqa
             | CliMetricKind::Paq2piq
+            | CliMetricKind::WadiqamNrLive
+            | CliMetricKind::WadiqamNrTid
             // WD exposes five host-statistic outputs outside the FR leaves.
             | CliMetricKind::Wd
     )

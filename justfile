@@ -631,6 +631,19 @@ nn-export-paq2piq python upstream ckpt out goldens ladder nonsquare:
 nn-goldens-paq2piq python upstream ckpt out ladder:
     {{python}} -I crates/zenmetrics-nn/models/paq2piq/oracle.py --upstream '{{upstream}}' --checkpoint '{{ckpt}}' '{{ladder}}' > '{{out}}'
 
+# Export WaDIQaM (dmaniry/deepIQA `models/{fr,nr}_{live,tid}_weighted.model`,
+# h5py-only — no chainer needed). `weights` is the directory holding the
+# official checkpoints; pass --goldens/--ladder to verify against oracle
+# output after nn-goldens-wadiqam runs.
+nn-export-wadiqam python out weights:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/export.py '{{out}}' --weights '{{weights}}'
+
+# WaDIQaM goldens via upstream's chainer model classes on CPU
+# (needs the chainer venv — see models/wadiqam/card.toml; chainer's
+# cuda shim is patched inside oracle.py).
+nn-goldens-wadiqam python upstream model top mode col out ladder nonsquare:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/oracle.py '{{upstream}}' '{{model}}' '{{top}}' '{{mode}}' '{{col}}' '{{out}}' '{{ladder}}' '{{nonsquare}}'
+
 # Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
 # Goldens come from oracle.py under the legacy JAX env, not this recipe.
 nn-export-musiq python npz out goldens ladder:
@@ -645,7 +658,7 @@ nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 

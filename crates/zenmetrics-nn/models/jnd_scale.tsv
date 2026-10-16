@@ -4,12 +4,13 @@
 # packages (CPU fp32); value = pooled median score over the 1,008 pairs.
 # Method, per-codec rows and quartiles: benchmarks/nn_konjnd_scale_2026-10-15.md
 # Used by tests/parity.rs to express engine tolerance in JND units.
-# ckdn and afine have image-dependent identical-pair scores, so their JND is
-# a pooled median over score(pair) - score(ref, ref) per reference, from the
-# Rust port (zenmetrics-cli, ort-cuda) rather than an upstream package:
-# |delta| for ckdn, the SIGNED delta for afine (afine_all is a signed raw
-# score; 12% of its deltas are negative).
-# ckdn is higher-is-better; afine is lower-is-better (raw afine_all).
+# ckdn, afine and wadiqam_fr_* have image-dependent identical-pair scores,
+# so their JND is a pooled median over score(pair) - score(ref, ref) per
+# reference, from the Rust port (zenmetrics-cli, ort-cuda) rather than an
+# upstream package: |delta| for ckdn and wadiqam_fr_*, the SIGNED delta for
+# afine (afine_all is a signed raw score; 12% of its deltas are negative).
+# ckdn is higher-is-better; afine is lower-is-better (raw afine_all);
+# wadiqam_fr_* are distance-like.
 # dreamsim is lower-is-better with identical-pair score exactly 0, so its JND
 # is the plain pooled median, also from the Rust port (same engine/host).
 column	jnd
@@ -29,6 +30,10 @@ liqe	0.393781
 musiq	1.968925
 hyperiqa	4.461776
 paq2piq	1.229401	JPEG 1.762009, BPG 0.726505; pooled median |paq2piq-paq2piq_ref| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wadiqam_fr_live	29.932910	JPEG 30.459814, BPG 29.453248; pooled median |score(pair)-score(ref,ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wadiqam_fr_tid	5.209576	JPEG 6.383762, BPG 3.720833; pooled median |score(pair)-score(ref,ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wadiqam_nr_live	23.551063	JPEG 24.827529, BPG 21.711020; pooled median |score(dist)-score(ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wadiqam_nr_tid	2.757295	JPEG 3.007036, BPG 2.525072; pooled median |score(dist)-score(ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
 wd_s1	3.82174283266067505e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
 wd_s2	2.47734993696212769e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
 wd_s3	1.60238809883594513e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)

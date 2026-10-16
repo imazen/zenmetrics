@@ -1586,6 +1586,15 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
         MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
         MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        // WaDIQaM: LIVE/TID-trained quality heads on a relu-weighted
+        // patch pool; observed ~7–95 on the KonJND corpus (a hair below
+        // zero for nr_live references), unbounded in principle. The 0.0
+        // sentinel only flags a default-fail constant (identical FR
+        // pairs score near a nonzero floor, not exactly zero).
+        MetricKind::WadiqamFrLive
+        | MetricKind::WadiqamFrTid
+        | MetricKind::WadiqamNrLive
+        | MetricKind::WadiqamNrTid => Some((-1.0, 150.0, 0.0)),
         // CKDN is sigmoid quality; identical pairs are image-dependent.
         // Zero is only a default-failure sentinel here, as for NR heads.
         MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),

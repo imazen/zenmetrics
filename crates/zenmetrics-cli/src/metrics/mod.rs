@@ -295,6 +295,34 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
     #[value(name = "paq2piq")]
     Paq2piq,
+    /// WaDIQaM-FR LIVE — full-reference learned quality (upstream
+    /// `dmaniry/deepIQA`, MIT code and weights; shared conv trunk over
+    /// non-overlapping 32x32 patches + relu-weighted pooling,
+    /// `fr_live_weighted.model`); distance-like — **higher** is more
+    /// degraded versus the reference (an identical pair scores a
+    /// nonzero image-dependent floor near 0.2). Emits
+    /// `wadiqam_fr_live`. As `arniqa` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "wadiqam-fr-live")]
+    WadiqamFrLive,
+    /// WaDIQaM-FR TID — as `wadiqam-fr-live` with the TID2013-trained
+    /// checkpoint (`fr_tid_weighted.model`; identical-pair floor near
+    /// 13.7). Emits `wadiqam_fr_tid`.
+    #[value(name = "wadiqam-fr-tid")]
+    WadiqamFrTid,
+    /// WaDIQaM-NR LIVE — no-reference learned quality (upstream
+    /// `dmaniry/deepIQA`, MIT code and weights;
+    /// `nr_live_weighted.model`); DMOS-like, **higher** is worse.
+    /// Scored through `PairedNoReference`: emits `wadiqam_nr_live`
+    /// (distorted) and `wadiqam_nr_live_ref` (reference). As `arniqa`
+    /// for `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "wadiqam-nr-live")]
+    WadiqamNrLive,
+    /// WaDIQaM-NR TID — as `wadiqam-nr-live` with the TID2013-trained
+    /// checkpoint (`nr_tid_weighted.model`); MOS-like, **higher** is
+    /// better. Emits `wadiqam_nr_tid` and `wadiqam_nr_tid_ref`.
+    #[value(name = "wadiqam-nr-tid")]
+    WadiqamNrTid,
     /// Cool-Chic Wasserstein Distortion at sigma 2^1 through 2^5.
     /// Raw sRGB VGG16 pre-pool features; lower is closer. Emits five columns.
     #[value(name = "wd")]
@@ -730,6 +758,10 @@ impl MetricKind {
             MetricKind::Musiq,
             MetricKind::Hyperiqa,
             MetricKind::Paq2piq,
+            MetricKind::WadiqamFrLive,
+            MetricKind::WadiqamFrTid,
+            MetricKind::WadiqamNrLive,
+            MetricKind::WadiqamNrTid,
             MetricKind::Wd,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
@@ -839,6 +871,10 @@ impl MetricKind {
             MetricKind::Musiq => "musiq",
             MetricKind::Hyperiqa => "hyperiqa",
             MetricKind::Paq2piq => "paq2piq",
+            MetricKind::WadiqamFrLive => "wadiqam-fr-live",
+            MetricKind::WadiqamFrTid => "wadiqam-fr-tid",
+            MetricKind::WadiqamNrLive => "wadiqam-nr-live",
+            MetricKind::WadiqamNrTid => "wadiqam-nr-tid",
             MetricKind::Wd => "wd",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
@@ -1010,6 +1046,10 @@ impl MetricKind {
             MetricKind::Musiq => &["musiq", "musiq_ref"],
             MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
             MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
+            MetricKind::WadiqamFrLive => &["wadiqam_fr_live"],
+            MetricKind::WadiqamFrTid => &["wadiqam_fr_tid"],
+            MetricKind::WadiqamNrLive => &["wadiqam_nr_live", "wadiqam_nr_live_ref"],
+            MetricKind::WadiqamNrTid => &["wadiqam_nr_tid", "wadiqam_nr_tid_ref"],
             MetricKind::Wd => &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
@@ -2326,6 +2366,10 @@ pub fn run_metric(
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
         | MetricKind::Paq2piq
+        | MetricKind::WadiqamFrLive
+        | MetricKind::WadiqamFrTid
+        | MetricKind::WadiqamNrLive
+        | MetricKind::WadiqamNrTid
         | MetricKind::Wd => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
@@ -2344,6 +2388,10 @@ pub fn run_metric(
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
         | MetricKind::Paq2piq
+        | MetricKind::WadiqamFrLive
+        | MetricKind::WadiqamFrTid
+        | MetricKind::WadiqamNrLive
+        | MetricKind::WadiqamNrTid
         | MetricKind::Wd => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(

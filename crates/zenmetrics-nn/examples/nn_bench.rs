@@ -1,6 +1,7 @@
 //! Time one zenmetrics-nn model (`ZENMETRICS_NN_MODEL` = lpips_alex | lpips_vgg |
 //! lpips_squeeze | stlpips_alex | stlpips_vgg | dists | deepdc | ckdn | afine | dreamsim |
-//! arniqa | maniqa | liqe | musiq | hyperiqa; default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
+//! arniqa | maniqa | liqe | musiq | hyperiqa | paq2piq | wadiqam_{fr,nr}_{live,tid};
+//! default lpips_vgg) on the ladder, in the modes `bar.py` uses for PyTorch:
 //!
 //! - `compute`: decoded RGB8 in memory → score (preprocess, two trunk runs, head)
 //! - `warm`: reference taps cached once → score one candidate (one trunk run)
@@ -22,7 +23,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, WeightsConsent,
+    Musiq, Paq2piq, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
 fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
@@ -111,6 +112,10 @@ fn main() {
         Ok("musiq") => "musiq",
         Ok("hyperiqa") => "hyperiqa",
         Ok("paq2piq") => "paq2piq",
+        Ok("wadiqam_fr_live") => "wadiqam_fr_live",
+        Ok("wadiqam_fr_tid") => "wadiqam_fr_tid",
+        Ok("wadiqam_nr_live") => "wadiqam_nr_live",
+        Ok("wadiqam_nr_tid") => "wadiqam_nr_tid",
         Ok(other) => panic!("unknown ZENMETRICS_NN_MODEL {other}"),
     };
     let mut m: Box<dyn Metric> = if col == "dists" {
@@ -153,6 +158,21 @@ fn main() {
         Box::new(PairedNoReference::new(
             Paq2piq::from_dir(model, engine, &consent).expect("load model"),
         ))
+    } else if let Some(kind) = col.strip_prefix("wadiqam_") {
+        let kind = match kind {
+            "fr_live" => WadiqamKind::FrLive,
+            "fr_tid" => WadiqamKind::FrTid,
+            "nr_live" => WadiqamKind::NrLive,
+            "nr_tid" => WadiqamKind::NrTid,
+            other => panic!("unknown wadiqam kind {other}"),
+        };
+        if kind.is_fr() {
+            Box::new(WadiqamFr::from_dir(model, engine, kind).expect("load model"))
+        } else {
+            Box::new(PairedNoReference::new(
+                WadiqamNr::from_dir(model, engine, kind).expect("load model"),
+            ))
+        }
     } else {
         let net = LpipsNet::ALL
             .into_iter()

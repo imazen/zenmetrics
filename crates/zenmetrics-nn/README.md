@@ -20,14 +20,15 @@ each model's upstream reference implementation. Plan and licensing:
 | HyperIQA (`Hyperiqa`, no-reference) | `hyperiqa`, `hyperiqa_ref` | rten, ort-cuda | `SSL92/hyperIQA` `demo.py` model on a documented deterministic 5x5 crop grid (upstream crops at random), koniq_pretrained.pkl, ResNet-50 hypernetwork, trained on 0–100 MOS with an unbounded linear output | 4.462 | rten 3.42e-6, ort-cuda 3.42e-6 |
 | PaQ-2-PiQ (`Paq2piq`, no-reference) | `paq2piq`, `paq2piq_ref` | rten, ort-cuda | `baidut/paq2piq` `InferenceModel.predict` (MIT code; CC-BY-NC weights, consent-gated), RoIPoolModel-fit.10.bs.120.pth, ResNet-18 + 1+20x20 RoIPool grid, ~0-100 MOS | 1.229 | rten 2.51e-5, ort-cuda 1.28e-5 |
 | WD (`WassersteinDistortion`, full-reference) | `wd_s1` … `wd_s5` | rten, ort-cuda | Cool-Chic raw RGB VGG16 pre-pool, five sigma maps; [validation](../../benchmarks/wd_port_2026-10-16/README.md) | 0.3822 / 0.2477 / 0.1602 / 0.1038 / 0.06745 | rten ≤1.93e-6, ort-cuda ≤3.45e-6 (25 pairs, including non-square and 2048²) |
+| WaDIQaM (`WadiqamFr`, `WadiqamNr` no-reference) | `wadiqam_fr_live`, `wadiqam_fr_tid`, `wadiqam_nr_live(_ref)`, `wadiqam_nr_tid(_ref)` | rten, ort-cuda | `dmaniry/deepIQA` `evaluate.py` CPU fp32, `top="weighted"`, non-overlapping 32² stride-32 patches at native res, raw u8→f32; MIT code + weights | 29.93 / 5.21 / 23.55 / 2.76¹ | rten ≤ 7.8e-6, ort-cuda ≤ 5.5e-6 (29 pairs incl. non-square + 4096²) |
 
 Parity tolerance is 1e-3 JND per column (`tests/parity.rs`). One JND is the median score
 of each column on KonJND-1k pairs at the observers' just-noticeable threshold
 (`models/jnd_scale.tsv`; method:
 [`benchmarks/nn_konjnd_scale_2026-10-15.md`](../../benchmarks/nn_konjnd_scale_2026-10-15.md)).
-¹ CKDN and A-FINE have image-dependent identical-pair scores, so their JND is the pooled
-median over score(pair) − score(reference vs itself): |delta| for CKDN, signed for
-A-FINE.
+¹ CKDN, A-FINE and WaDIQaM-FR have image-dependent identical-pair scores, so their JND
+is the pooled median over score(pair) − score(reference vs itself): |delta| for CKDN
+and WaDIQaM-FR, signed for A-FINE.
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,
