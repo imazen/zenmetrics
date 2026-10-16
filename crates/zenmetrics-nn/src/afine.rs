@@ -205,10 +205,10 @@ impl Heads {
 
     /// `AFINEQhead(img, feats)` — naturalness of one image.
     ///
-    /// `proj_feat` of the 12 taps and the `mlp` hidden rows are independent,
-    /// and every row keeps its original summation order — means then vars for
-    /// `proj_feat`, in tap order for `x` — so the parallel split reassembles
-    /// bitwise identically to the sequential code (see [`crate::par`]).
+    /// `proj_feat` of the 12 taps and the `mlp` hidden rows are independent.
+    /// Every row keeps the sequential code's grouping — bias plus one
+    /// `Iterator::sum` over means then vars — and `x` is assembled in tap
+    /// order, so the parallel split is bitwise identical (see [`crate::par`]).
     fn qhead(&self, s: &ImgStats) -> f64 {
         let mut x = Vec::with_capacity(HEAD_IN);
         for t in &s.pix {
@@ -224,14 +224,17 @@ impl Heads {
             |idx| {
                 let tap = &s.taps[idx / HIDDEN];
                 let row = &proj_w[idx % HIDDEN];
-                let mut acc = f64::from(self.proj_b[idx % HIDDEN]);
-                for (c, st) in tap.iter().enumerate() {
-                    acc += f64::from(row[c]) * st.mean;
-                }
-                for (c, st) in tap.iter().enumerate() {
-                    acc += f64::from(row[TAP_C + c]) * st.var;
-                }
-                acc
+                // b + Σ over [means ‖ vars], summed exactly as the
+                // sequential proj_feat did.
+                let means = row[..TAP_C]
+                    .iter()
+                    .zip(tap)
+                    .map(|(&w, st)| f64::from(w) * st.mean);
+                let vars = row[TAP_C..]
+                    .iter()
+                    .zip(tap)
+                    .map(|(&w, st)| f64::from(w) * st.var);
+                f64::from(self.proj_b[idx % HIDDEN]) + means.chain(vars).sum::<f64>()
             },
         );
         x.extend(proj);
@@ -831,5 +834,36 @@ mod tests {
         let (many, spawns) = crate::par::observe_workers(Some(16), || heads.qhead(&s));
         assert!(spawns > 0);
         assert_eq!(one.to_bits(), many.to_bits(), "{one} vs {many}");
+        // The pre-threading sequential formula: x = pix means ‖ pix vars ‖
+        // per tap `b + Σ(w·[means ‖ vars])`, then the same mlp.
+        let mut x: Vec<f64> = s.pix.iter().map(|t| t.mean).collect();
+        x.extend(s.pix.iter().map(|t| t.var));
+        for tap in &s.taps {
+            let mv: Vec<f64> = tap
+                .iter()
+                .map(|t| t.mean)
+                .chain(tap.iter().map(|t| t.var))
+                .collect();
+            for (&b, row) in heads
+                .proj_b
+                .iter()
+                .zip(heads.proj_w.as_chunks::<{ 2 * TAP_C }>().0)
+            {
+                x.push(
+                    f64::from(b)
+                        + row
+                            .iter()
+                            .zip(&mv)
+                            .map(|(&w, &v)| f64::from(w) * v)
+                            .sum::<f64>(),
+                );
+            }
+        }
+        let (reference, _) = crate::par::observe_workers(Some(1), || heads.mlp(&x));
+        assert_eq!(
+            one.to_bits(),
+            reference.to_bits(),
+            "{one} vs sequential {reference}"
+        );
     }
 }
