@@ -20,16 +20,20 @@ assert len(pairs) == 24
 rows=[]
 for index, row in enumerate(pairs):
     command=[a.python, 'test_PieAPP_PT.py', '--ref_path', row['ref_path'], '--A_path', row['dist_path'], '--sampling_mode', 'dense', '--gpu_id', '0']
-    result=subprocess.run(command,cwd=a.upstream,capture_output=True,text=True)
-    log=result.stdout+'\n'+result.stderr
-    (logs/f'{index:02}.log').write_text(log)
-    if result.returncode:
-        raise RuntimeError((row,result.returncode,log[-1000:]))
-    # The documented CLI prints "PieAPP score ... = VALUE".
-    matches=re.findall(r'(?im)^.*PieAPP.*(?:=|:)\s*([-+0-9.eE]+)\s*$',result.stdout)
-    if len(matches)!=1:
-        raise ValueError(('unrecognized CLI output',result.stdout))
-    score=float(matches[0]);entry=official[row['dist_path']]
-    item=dict(key=Path(row['dist_path']).stem,cli=score,entry=entry,absolute_difference=abs(score-entry),jnd_difference=abs(score-entry)/0.5189487912492419)
+    observed=[]
+    for repetition in range(2):
+        result=subprocess.run(command,cwd=a.upstream,capture_output=True,text=True)
+        log=result.stdout+'\n'+result.stderr
+        (logs/f'{index:02}-{repetition}.log').write_text(log)
+        if result.returncode:
+            raise RuntimeError((row,result.returncode,log[-1000:]))
+        # The documented CLI prints "PieAPP value ... with respect to: VALUE".
+        matches=re.findall(r'(?im)^.*PieAPP.*(?:=|:)\s*([-+0-9.eE]+)\s*$',result.stdout)
+        if len(matches)!=1:
+            raise ValueError(('unrecognized CLI output',result.stdout))
+        observed.append(float(matches[0]))
+    assert observed[0] == observed[1], ('CLI repeat mismatch',row,observed)
+    score=observed[0];entry=official[row['dist_path']]
+    item=dict(key=Path(row['dist_path']).stem,cli=score,cli_repeat=observed[1],entry=entry,absolute_difference=abs(score-entry),jnd_difference=abs(score-entry)/0.5189487912492419)
     rows.append(item);print(json.dumps(item),flush=True)
 with open(a.out,'x') as f: json.dump(dict(pairs=len(rows),worst=max(rows,key=lambda r:r['absolute_difference']),rows=rows),f,indent=2);f.write('\n')

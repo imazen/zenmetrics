@@ -39,6 +39,9 @@ rows=[]
 for key,images in cases:
     r,d=[torch.from_numpy(v).cuda() for v in images]
     public=oracle.compute_score(d,r)
+    repeated=oracle.compute_score(d,r)
+    for index in (1,2):
+        assert torch.equal(public[index],repeated[index]), ('public output repeat mismatch',key,index)
     error,weight=ours.raw(r,d)
     target_error=float(public[1].reshape(-1)[0]);target_weight=float(public[2].reshape(-1)[0])
     hypotheses={}
