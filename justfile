@@ -923,13 +923,14 @@ aic-review-pin-sensitivity:
 aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
 
-# Round 13b public-oracle review controls; caller holds heavy-job lock.
+# Round 13b public-oracle controls; individual steps use the heavy-job lock.
 nn-pieapp-review-head python upstream checkpoint pairs out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_head_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}'
 
 nn-pieapp-review-cli python upstream pairs entry out logs:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_cli_panel.py --python '{{python}}' --upstream '{{upstream}}' --pairs '{{pairs}}' --entry_scores '{{entry}}' --out '{{out}}' --logs '{{logs}}'
 
+# Run outside the lock: the orchestrator acquires/releases it for each step.
 nn-pieapp-review models ladder output:
     bash -c "$(cat benchmarks/pieapp_review_2026-10-16.sh)" -- '{{models}}' '{{ladder}}' '{{output}}'
 
