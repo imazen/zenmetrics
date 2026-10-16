@@ -48,3 +48,11 @@ have a distinct receipt. The interrupted RTen cap is never repeated.
 
 Fresh export/control step resource receipt:
 `run-heavy: done rc=0 7s | peak-RSS 1.51GiB | min-avail 24791MiB | peak-load 11.37`.
+
+
+The corrected revision-3 CUDA cap completed: 35.622168 s and 35.493394 s
+per evaluation, identical bits `4001941dff57cb53`, 71.96 s process wall,
+maximum RSS 1,281,836 KiB. Start load averages: 3.96 / 3.02 / 4.79.
+[Raw receipt](cap-ort-cuda-v3.log) measures the graph in `export-v3.json`
+on shared i265. This is a cap/resource observation, not a quiet-host
+performance comparison to revision 2.

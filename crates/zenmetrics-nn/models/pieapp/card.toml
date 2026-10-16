@@ -51,6 +51,12 @@ cap_rten_first_evaluation_seconds = 845.578715
 cap_rten_interrupted_process_wall_seconds = 1607.74
 cap_rten_max_rss_kib_before_interruption = 744300
 cap_rten_status = "First evaluation completed; coordinator stopped the process during its second evaluation. Repeat identity and complete two-evaluation elapsed time are unmeasured. Do not rerun."
+revision_3_cap_graph_sha256 = "e3905d3625402369174e1d52fa889f7fed0fe982eab1d47ed49498cbdd868653"
+revision_3_cuda_process_wall_seconds = 71.96
+revision_3_cuda_max_rss_kib = 1281836
+revision_3_cuda_start_load_average = [3.96, 3.02, 4.79]
+revision_3_cuda_repeat_bit_identical = true
+revision_3_rten_cap = "Not rerun by coordinator instruction; revision-2 first-call/interrupted-repeat receipt above is historical."
 cap_receipts = "../../../../benchmarks/pieapp_review_2026-10-16/"
 
 [parity]
