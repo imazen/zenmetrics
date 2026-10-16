@@ -866,4 +866,191 @@ mod tests {
             "{one} vs sequential {reference}"
         );
     }
+
+    /// AIC-4 convention-search dump — the reproduction path for
+    /// `benchmarks/afine_aic_2026-10-16/`. Env-gated and inert unless
+    /// `AFINE_DUMP_OUT` (tsv path) is set; also reads
+    /// `ZENMETRICS_NN_MODEL_DIR`, `AFINE_PAIRS` (tsv `ref    dist`),
+    /// `AFINE_VARIANTS` (comma list, default all) and
+    /// `AFINE_DUMP_ENGINE` (`rten` default, `ort-cuda` fused — fused
+    /// emits only `afine_all`). Emits every sub-score per pair per
+    /// preprocessing variant so the combination space is searchable
+    /// offline.
+    #[test]
+    fn aic_dump() {
+        use std::io::Write;
+        let Some(out) = std::env::var_os("AFINE_DUMP_OUT") else {
+            return;
+        };
+        let dir = std::env::var("ZENMETRICS_NN_MODEL_DIR").expect("ZENMETRICS_NN_MODEL_DIR");
+        let pairs = std::env::var("AFINE_PAIRS").expect("AFINE_PAIRS");
+        let consent = WeightsConsent::new().accept(Afine::WEIGHTS);
+        let engine = match std::env::var("AFINE_DUMP_ENGINE").as_deref() {
+            #[cfg(feature = "ort")]
+            Ok("ort-cuda") => Engine::OrtCuda,
+            _ => Engine::Rten,
+        };
+        let af = Afine::from_dir(dir, engine, &consent).expect("load afine");
+
+        // (name, forced (th,tw) pre-resize, clip_norm, bgr_swap)
+        let variants: &[(&str, Option<(usize, usize)>, bool, bool)] = &[
+            ("native", None, true, false),
+            ("r224", Some((224, 224)), true, false),
+            ("r384", Some((384, 384)), true, false),
+            ("r512", Some((512, 512)), true, false),
+            ("nonorm", None, false, false),
+            ("bgr", None, true, true),
+        ];
+        let only: Option<Vec<String>> = std::env::var("AFINE_VARIANTS")
+            .ok()
+            .map(|v| v.split(',').map(str::to_string).collect());
+
+        let mut f = std::io::BufWriter::new(std::fs::File::create(&out).unwrap());
+        writeln!(
+            f,
+            "#k={} nr={:?} fr={:?}",
+            af.heads.k, af.heads.nr, af.heads.fr
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "pair\tvariant\tn_r\tn_d\tfid\ts_r\ts_d\ts_f\tlambda\tafine_all"
+        )
+        .unwrap();
+
+        for line in std::fs::read_to_string(&pairs).unwrap().lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') || line.starts_with("ref_path") {
+                continue;
+            }
+            let mut fields = line.split('\t');
+            let (rp, dp) = (fields.next().expect("ref"), fields.next().expect("dist"));
+            let load = |p: &str| -> (Vec<u8>, usize, usize) {
+                let data = std::fs::read(p).unwrap();
+                let out = zenpng::decode(
+                    &data,
+                    &zenpng::PngDecodeConfig::default(),
+                    &enough::Unstoppable,
+                )
+                .expect("png");
+                let s = out.pixels.as_slice();
+                let (w, h) = (s.width() as usize, s.rows() as usize);
+                let bytes = s.as_strided_bytes();
+                let mut px = Vec::with_capacity(w * h * 3);
+                for y in 0..h {
+                    px.extend_from_slice(&bytes[y * s.stride() as usize..][..w * 3]);
+                }
+                (px, w, h)
+            };
+            let name = std::path::Path::new(dp)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            let (rpx, rw0, rh0) = load(rp);
+            let (dpx, dw0, dh0) = load(dp);
+            for &(vname, force, clip_norm, bgr) in variants {
+                if let Some(only) = &only
+                    && !only.iter().any(|o| o == vname)
+                {
+                    continue;
+                }
+                let prep_v =
+                    |px: &[u8], w: usize, h: usize| -> (Vec<f32>, usize, usize, Vec<f32>) {
+                        let img = za::Rgb8In {
+                            pixels: px,
+                            width: w,
+                            height: h,
+                            stride: w * 3,
+                        };
+                        let mut planar = crate::preprocess::rgb8_to_planar_01(&img);
+                        if bgr {
+                            let n = w * h;
+                            let (b, rest) = planar.split_at_mut(n);
+                            b.swap_with_slice(&mut rest[n..]);
+                        }
+                        if clip_norm {
+                            let n = w * h;
+                            for c in 0..3 {
+                                for v in &mut planar[c * n..(c + 1) * n] {
+                                    *v = (*v - MEAN[c]) / STD[c];
+                                }
+                            }
+                        }
+                        let (mut cw, mut ch) = (w, h);
+                        if let Some((th, tw)) = force {
+                            planar = resize_bicubic(&planar, 3, ch, cw, th, tw);
+                            ch = th;
+                            cw = tw;
+                        }
+                        let (nh, nw) = (ch + (32 - ch % 32) % 32, cw + (32 - cw % 32) % 32);
+                        if nh != ch || nw != cw {
+                            planar = resize_bicubic(&planar, 3, ch, cw, nh, nw);
+                        }
+                        let n_tok = (nh / 32) * (nw / 32) + 1;
+                        let pe = resize_bicubic(&af.heads.pos_emb, 1, 50, TAP_C, n_tok, TAP_C);
+                        (planar, nh, nw, pe)
+                    };
+                let (rn, rh, rw, rpe) = prep_v(&rpx, rw0, rh0);
+                let (dn, dh, dw, dpe) = prep_v(&dpx, dw0, dh0);
+                let plane = rh * rw;
+                if let Backend::Pair(p) = &af.backend {
+                    // Fused graph: only afine_all is observable.
+                    match p.score(rn, dn, dh, dw) {
+                        Ok(all) => {
+                            writeln!(f, "{name}\t{vname}\t\t\t\t\t\t\t\t{all:.17e}").unwrap()
+                        }
+                        Err(e) => writeln!(f, "{name}\t{vname}\t\t\t\t\t\t\t\tERROR:{e}").unwrap(),
+                    }
+                    continue;
+                }
+                let Backend::Trunk(trunk) = &af.backend else {
+                    panic!("expected trunk or pair backend");
+                };
+                let (pix_r, pix_d, cov0) = (
+                    Afine::pix_stats(&rn, plane),
+                    Afine::pix_stats(&dn, plane),
+                    Afine::pix_cov(&dn, &rn, plane),
+                );
+                let (ft_r, ft_d) = trunk
+                    .run_pair_aux(
+                        rn,
+                        dn,
+                        rh,
+                        rw,
+                        &[Afine::pe_aux(rpe, rh, rw)],
+                        &[Afine::pe_aux(dpe, dh, dw)],
+                    )
+                    .unwrap();
+                let s_r = ImgStats {
+                    pix: pix_r,
+                    taps: Afine::taps_stats(&ft_r),
+                };
+                let s_d = ImgStats {
+                    pix: pix_d,
+                    taps: Afine::taps_stats(&ft_d),
+                };
+                let cov = Afine::cross_covs(cov0, &ft_d, &ft_r);
+                let (n_r, n_d, fid) = (
+                    af.heads.qhead(&s_r),
+                    af.heads.qhead(&s_d),
+                    af.heads.dhead(&s_d, &s_r, &cov),
+                );
+                let (sr, sd, sf) = (
+                    nlm(n_r, af.heads.nr),
+                    nlm(n_d, af.heads.nr),
+                    nlm_fr(fid, af.heads.fr),
+                );
+                let lam = (softplus(af.heads.k) * (sr - sd)).exp();
+                let all = lam * sd + sf;
+                writeln!(
+                    f,
+                    "{name}\t{vname}\t{n_r:.17e}\t{n_d:.17e}\t{fid:.17e}\t{sr:.17e}\t{sd:.17e}\t{sf:.17e}\t{lam:.17e}\t{all:.17e}"
+                )
+                .unwrap();
+            }
+            f.flush().unwrap();
+            eprintln!("done {name}");
+        }
+    }
 }

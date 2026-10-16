@@ -637,3 +637,19 @@ crate docs — this file links, it does not duplicate.
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## `afine` — A-FINE (zenmetrics-nn, 2026-10-16)
+
+- **DIVERGES (unresolved, upstream-side):** the published AIC-4 `A-FINE`
+  column is **not** upstream `afine_all` under any convention found. The
+  black-box search ([receipt](benchmarks/afine_aic_2026-10-16/README.md))
+  dumped every internal sub-score (`n_r`/`n_d`/`fid`/`s_r`/`s_d`/`s_f`/`λ`)
+  on all 61 pairs and evaluated ~700 recombinations plus six preprocessing
+  variants (native, BGR, no-norm, 224/384/512 resizes) and ref/dist order.
+  Best raw candidate `s_f + (s_d − s_r)` still misses at 0.106 JND median /
+  0.59 max vs the ≤0.01/≤0.05 gate; fitted forms cap SRCC ≈0.92 — a rank
+  disagreement no convention can repair. Likely a different checkpoint or
+  pipeline step on the site side; the shipped metric stays the
+  upstream-verified `afine_all` (parity ≤1.5e-5).
+- **Resource note:** the rten path needs ~28 GB of activations on the 8.4 MP
+  pair (S67 3355×2516); ort-cuda handles it in VRAM without issue.
