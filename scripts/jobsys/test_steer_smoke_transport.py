@@ -8,6 +8,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import fit_cell_exec as exe
 import harvest_fit_cells as harvest
@@ -54,6 +55,35 @@ class SteerSmokeTransport(unittest.TestCase):
             p.write_text(json.dumps(dict(schema='bounded-smoke-program-v1',files={'scripts/rev4_featpot/'+n:'a'*64 for n in required},data={'benchmarks/e33_fit_contract_2026-10-10.json':'b'*64})))
             self.assertEqual(len(pack.bounded_smoke_sources(p,sha(p.read_bytes()))),6)
 
+
+    def test_timed_control_preserves_fresh_destination(self):
+        # Independent child contract: a strict trainer refuses any existing destination.
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); program=root/'program'; source=program/'scripts/rev4_featpot'
+            source.mkdir(parents=True); fits=root/'fits'; dest=fits/'results/cells/arm/fit'
+            dest.parent.mkdir(parents=True)
+            (source/'v2_lodo_mlp.py').write_text("""
+import sys,json,hashlib
+from pathlib import Path
+p=Path(sys.argv[sys.argv.index('--dest')+1])
+if p.exists():
+    raise RuntimeError('strict child requires a fresh destination')
+(p/'refit').mkdir(parents=True)
+m=p/'refit/model.bin';m.write_bytes(b'invented control')
+(p/'result.json').write_text(json.dumps(dict(selected_bake=str(m),selected_bake_sha256=hashlib.sha256(m.read_bytes()).hexdigest())))
+""")
+            argv=['v2_lodo_mlp.py','--dest',str(dest),'--strict-admission','--local-smoke-budget','1:49999']
+            def local_path(value):
+                return root/'runtime-tmp' if str(value)=='/scratch/tmp' else Path(value)
+            with patch.object(exe,'PROGRAM',program),patch.object(exe,'FIT_ROOT',fits), \
+                 patch.object(exe,'registered_wall_cap',return_value=10),patch.object(exe,'Path',side_effect=local_path):
+                blob=exe.run_fit_locked({},dict(data_sha='b'*64),'a'*64,dict(effective='v3'),argv,'c'*64,Path('arm/fit'),None,dest)
+            with tarfile.open(fileobj=io.BytesIO(blob),mode='r:gz') as t:
+                resource=t.extractfile('results/cells/arm/fit/RESOURCE_USAGE.txt').read()
+                receipt=json.load(t.extractfile('results/cells/arm/fit/fleet_receipt.json'))
+            self.assertIn(b'Maximum resident set size (kbytes)',resource)
+            self.assertIn(b'Exit status: 0',resource)
+            self.assertEqual(receipt['files']['RESOURCE_USAGE.txt'],sha(resource))
 
     def test_archive_verifier_and_negative_controls(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -337,10 +337,12 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
     command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
     cap = registered_wall_cap(argv, kind["data_sha"])
+    resource = None
     if argv[0] == "steer_exact_smoke.py" or "--local-smoke-budget" in argv:
-        # Explicit smoke jobs only. Registered numerical execution is unchanged.
-        dest.mkdir(parents=True, exist_ok=True)
-        command = ["/usr/bin/time", "-v", "-o", str(dest / "RESOURCE_USAGE.txt"), *command]
+        # The strict driver owns creation of its fresh destination. Stage timing
+        # beside it, retaining failed-run timing separately, and export on success.
+        resource = dest.parent / f".{name.name}.resources-{time.time_ns()}.txt"
+        command = ["/usr/bin/time", "-v", "-o", str(resource), *command]
     if cap is not None:
         stdout = run_capped(command, env, cap, dest, name)
     else:
@@ -349,6 +351,8 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
         if result.returncode:
             raise RuntimeError(f"fit exited {result.returncode}: {result.stdout[-4000:]}")
         stdout = result.stdout
+    if resource is not None:
+        resource.rename(dest / "RESOURCE_USAGE.txt")
     if importance_script and "--outer" in argv:
         # The local runner (run_mlp_baseline.sh) follows every outer-fold fit with the
         # outer-fold permutation-importance step, which check_core_gates requires
