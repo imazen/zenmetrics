@@ -295,6 +295,10 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
     #[value(name = "paq2piq")]
     Paq2piq,
+    /// Cool-Chic Wasserstein Distortion at sigma 2^1 through 2^5.
+    /// Raw sRGB VGG16 pre-pool features; lower is closer. Emits five columns.
+    #[value(name = "wd")]
+    Wd,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -726,6 +730,7 @@ impl MetricKind {
             MetricKind::Musiq,
             MetricKind::Hyperiqa,
             MetricKind::Paq2piq,
+            MetricKind::Wd,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -834,6 +839,7 @@ impl MetricKind {
             MetricKind::Musiq => "musiq",
             MetricKind::Hyperiqa => "hyperiqa",
             MetricKind::Paq2piq => "paq2piq",
+            MetricKind::Wd => "wd",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -1004,6 +1010,7 @@ impl MetricKind {
             MetricKind::Musiq => &["musiq", "musiq_ref"],
             MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
             MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
+            MetricKind::Wd => &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -2318,7 +2325,8 @@ pub fn run_metric(
         | MetricKind::Liqe
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
-        | MetricKind::Paq2piq => nn::score(kind, reference, distorted),
+        | MetricKind::Paq2piq
+        | MetricKind::Wd => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -2335,7 +2343,8 @@ pub fn run_metric(
         | MetricKind::Liqe
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
-        | MetricKind::Paq2piq => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Paq2piq
+        | MetricKind::Wd => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

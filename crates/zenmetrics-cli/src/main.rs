@@ -1586,6 +1586,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // A-FINE is an unbounded signed quality score; no characterised
         // mean bounds or constant identity exist for this check.
         MetricKind::Afine => None,
+        // WD is a nonnegative, unbounded feature distortion.
+        MetricKind::Wd => None,
     }
 }
 

@@ -15,7 +15,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, WeightsConsent,
+    Musiq, Paq2piq, WassersteinDistortion, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -68,6 +68,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
         "learned metrics need ZENMETRICS_NN_MODEL_DIR: a directory exported by crates/zenmetrics-nn/models/*/export.py",
     )?;
     let engine = engine()?;
+    if column == "wd_s1" {
+        return Ok(Box::new(WassersteinDistortion::from_dir(&dir, engine)?));
+    }
     if column == "dists" {
         return Ok(Box::new(Dists::from_dir(&dir, engine)?));
     }
