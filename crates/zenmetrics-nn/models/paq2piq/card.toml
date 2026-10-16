@@ -1,0 +1,44 @@
+# PaQ-2-PiQ: no-reference IQA — a ResNet-18 backbone feeding RoIPool
+# over the whole image plus a 20x20 block grid, then a shared FC head
+# scores every region; `t[0]` (the whole-image ROI) is the score.
+# MOS-scale ~0-100, higher is better.
+name = "paq2piq"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `paq2piq` on dist, `paq2piq_ref` on ref
+direction = "higher-is-better"       # MOS-scale score; goldens include 32x32 and 33x47 native-resolution inputs
+columns = ["paq2piq", "paq2piq_ref"]
+paper = "Ying, Niu, Gupta, Mahajan, Ghadiyaram, Bovik. From Patches to Pictures (PaQ-2-PiQ): Mapping the Perceptual Space of Picture Quality. CVPR 2020"
+
+[code]
+source = "upstream-port"             # paq2piq/model.py imported verbatim in oracle.py/export.py
+upstream = "https://github.com/baidut/paq2piq"
+upstream_package = "git clone of baidut/paq2piq @48c91e844e9f7a768f6ddcfc744dddfdd1160fea (the first author's official inference repo; LICENSE.md added 2024-10-25)"
+licence = "MIT"                      # LICENSE.md, 'Copyright (c) 2024 Zhenqiang Ying'
+
+[weights]
+# The checkpoint is a release asset of the sibling repo baidut/PaQ-2-PiQ
+# (the author's project/data repo). That repo carries CC-BY-NC-4.0.txt
+# and a README badge CC BY-NC-SA 4.0 — noncommercial terms. Loading
+# therefore needs an explicit WeightsConsent
+# (ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq).
+licence_class = "noncommercial"
+checkpoint = "https://github.com/baidut/PaQ-2-PiQ/releases/download/v1.0/RoIPoolModel-fit.10.bs.120.pth (~134 MiB; sha256 5ece3dcd18e7bfc619ef6eee0c6e2c3b94350a623d62409f5cac95a2979b5b32)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "torchvision ToTensor only (u8 -> f32 /255) — upstream applies NO resize and NO ImageNet normalisation"
+resize = "none — fully convolutional graph at native resolution"
+crop = "none — deterministic; the ROI grid is computed from (h,w) identically in oracle.py, export.py and paq2piq.rs (linspace(0,dim,21) block boundaries, input-pixel coordinates, upstream get_blockwise_rois)"
+min_size = 1
+max_side = 4096                     # checked before allocating native-resolution tensors
+
+[export]
+script = "export.py"
+outputs = "paq2piq_{body.onnx, head.onnx, meta, export.meta}; supplied goldens copied to paq2piq_goldens.tsv"
+opset = 16
+notes = "paq2piq_body.onnx: x[1,3,h,w] -> feats[1,512,hf,wf] (upstream resnet18 children[:-2]); paq2piq_head.onnx: pooled[401,512,2,2] -> score[1] (= preds[:1], the whole-image ROI; head = AdaptiveConcatPool2d + BN/Dropout/Linear(512)/ReLU + BN/Dropout/Linear(1) in eval mode). The torchvision RoIPool between them runs HOST-SIDE in paq2piq.rs (rten has no MaxRoiPool op) with upstream quantization: std::round (half-away) on roi*1/32, +1 sizes, floor/ceil bins, clamped, empty bins 0. Self-check + goldens check inside export.py."
+
+[parity]
+oracle = "baidut/paq2piq @48c91e8 RoIPoolModel + InferenceModel.predict semantics (t[0]), CPU fp32, RoIPoolModel-fit.10.bs.120.pth"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 1.229401                      # pooled median |paq2piq - paq2piq_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 1.762009, BPG 0.726505
+results = "export self-check (body->host RoIPool->head vs upstream end-to-end) |d| 3.8e-6; ONNX-CPU vs upstream goldens worst 3.087e-5 over 29 pairs (including 32x32 and 33x47). rten: 29 pairs worst |d| 3.087e-5 (2.51e-5 JND); ort-cuda: original 27 pairs worst |d| 1.572e-5 (1.28e-5 JND)."

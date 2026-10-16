@@ -1,0 +1,29 @@
+[package]
+name = "piqe"
+version = "0.1.0"
+description = "Pure-Rust CPU port of PIQE (Venkatanath et al., NCC 2015) from pypiqe 1.2"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+# The port of pypiqe (MIT, Copyright (c) 2023 Michael Rutherford) keeps that
+# notice in `LICENSE-pypiqe` and in the header of `src/lib.rs`.
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = ["zenmetrics-abstractions/std"]
+
+[dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+libm = { version = "0.2.16", default-features = false }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }

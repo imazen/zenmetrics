@@ -5543,7 +5543,28 @@ pub fn cambi_v1_from_luma(
     height: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, bit_depth, None)
+    cambi_impl(dist_y, width, height, width, bit_depth, None, true)
+}
+
+/// CAMBI with libvmaf 3.2.1's default standalone feature settings.
+///
+/// Uses BT.1886 visibility with threshold 0.019, no luminance cutoff, no
+/// high-resolution decimation, a 65-sample base window, top-60% pooling and
+/// a maximum score of 1000. Unlike [`crate::cambi_v1_from_luma`], this is the
+/// standalone CAMBI convention, rather than the VMAF v1 feature preset.
+/// `dist_y` contains limited-range luma at `bit_depth`, with `stride` samples
+/// per row. Stride is consumed in the internal 10-bit image copy; no
+/// intermediate packing buffer is allocated.
+/// Returns an input error when both dimensions are below 216 or the adjusted
+/// histogram window exceeds the reference's reciprocal-table domain.
+pub fn cambi_from_luma(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    stride: usize,
+    bit_depth: u8,
+) -> Result<f64, Error> {
+    cambi_impl(dist_y, width, height, stride, bit_depth, None, false)
 }
 
 /// [`cambi_v1_from_luma`] plus every scale's c-values, copied before the
@@ -5558,7 +5579,15 @@ pub(crate) fn cambi_v1_maps(
         scales: Vec::new(),
         window_size: 0,
     };
-    let score = cambi_impl(dist_y, width, height, bit_depth, Some(&mut maps))?;
+    let score = cambi_impl(
+        dist_y,
+        width,
+        height,
+        width,
+        bit_depth,
+        Some(&mut maps),
+        true,
+    )?;
     Ok((score, maps))
 }
 
@@ -5566,8 +5595,10 @@ fn cambi_impl(
     dist_y: &[u16],
     width: usize,
     height: usize,
+    stride: usize,
     bit_depth: u8,
     mut maps: Option<&mut CambiMaps>,
+    v1_preset: bool,
 ) -> Result<f64, Error> {
     if !(8..=16).contains(&bit_depth) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -5582,33 +5613,46 @@ fn cambi_impl(
     if width < CAMBI_MIN_WIDTH_HEIGHT && height < CAMBI_MIN_WIDTH_HEIGHT {
         return Err(Error::InvalidInput("both dimensions below CAMBI minimum"));
     }
-    if dist_y.len() != npix {
+    let needed = (height - 1)
+        .checked_mul(stride)
+        .and_then(|n| n.checked_add(width));
+    if stride < width
+        || needed.is_none_or(|n| dist_y.len() < n)
+        || (v1_preset && dist_y.len() != npix)
+    {
         return Err(Error::InvalidInput("frame length mismatch"));
     }
     let max_sample = (1u32 << bit_depth) - 1;
-    if dist_y.iter().any(|&v| v as u32 > max_sample) {
+    if (0..height).any(|row| {
+        dist_y[row * stride..row * stride + width]
+            .iter()
+            .any(|&v| v as u32 > max_sample)
+    }) {
         return Err(Error::InvalidInput("sample exceeds bit depth"));
     }
 
-    let speedup = width * height >= SPEEDUP_THRESHOLD_1080P;
+    let speedup = v1_preset && width * height >= SPEEDUP_THRESHOLD_1080P;
     let window_size = adjust_window_size(WINDOW_SIZE, width, height, speedup);
     if window_size * window_size >= 4226 {
         return Err(Error::InvalidInput("window size too large"));
     }
 
     let mut image = pool::take_u16(npix);
-    if bit_depth < 10 {
-        let shift = 10 - bit_depth;
-        for (o, &v) in image.iter_mut().zip(dist_y.iter()) {
-            *o = v << shift;
-        }
-    } else if bit_depth == 10 {
-        image.copy_from_slice(dist_y);
-    } else {
-        let shift = bit_depth - 10;
-        let rounding = 1u32 << (shift - 1);
-        for (o, &v) in image.iter_mut().zip(dist_y.iter()) {
-            *o = ((v as u32 + rounding) >> shift) as u16;
+    for (row, output) in image.chunks_exact_mut(width).enumerate() {
+        let input = &dist_y[row * stride..row * stride + width];
+        if bit_depth < 10 {
+            let shift = 10 - bit_depth;
+            for (o, &v) in output.iter_mut().zip(input) {
+                *o = v << shift;
+            }
+        } else if bit_depth == 10 {
+            output.copy_from_slice(input);
+        } else {
+            let shift = bit_depth - 10;
+            let rounding = 1u32 << (shift - 1);
+            for (o, &v) in output.iter_mut().zip(input) {
+                *o = ((v as u32 + rounding) >> shift) as u16;
+            }
         }
     }
     if bit_depth < 10 {
@@ -5619,7 +5663,7 @@ fn cambi_impl(
     for (d, slot) in tvi_for_diff.iter_mut().enumerate().take(num_diffs) {
         *slot = (get_tvi_for_diff((d + 1) as i32, TVI_THRESHOLD) + num_diffs as i32) as u16;
     }
-    let vlt_luma = get_vlt_luma(VIS_LUM_THRESHOLD);
+    let vlt_luma = get_vlt_luma(if v1_preset { VIS_LUM_THRESHOLD } else { 0.0 });
 
     let v_lo_signed = vlt_luma as i32 - 3 * num_diffs as i32 + 1;
     let v_band_base: u16 = if v_lo_signed > 0 {
@@ -5697,7 +5741,67 @@ fn cambi_impl(
     pool::give_u16(mask);
     pool::give_f32(c_values);
     pool::give_u16(filter_buffer);
-    Ok(score.min(CAMBI_MAX_VAL))
+    Ok(score.min(if v1_preset { CAMBI_MAX_VAL } else { 1000.0 }))
+}
+
+#[cfg(test)]
+mod standalone_tests {
+    use super::*;
+
+    #[test]
+    fn original_author_banded_pins() {
+        // Netflix f85a8536, 17-digit JSON output. Fixture generator:
+        // benchmarks/aic_review_2026-10-15/pin_oracles.py.
+        // 1e-12 covers final f64 rounding; it is far below f32 pool drift.
+        let (w, h) = (256, 256);
+        for (block, step, expected) in [(8, 1, 0.824363696451263), (16, 4, 15.471107781777791)] {
+            let y: Vec<u16> = (0..h)
+                .flat_map(|_| (0..w).map(move |x| (256 + (x / block) * step) as u16))
+                .collect();
+            let actual = cambi_from_luma(&y, w, h, w, 10).unwrap();
+            assert!(actual > 0.0);
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "{actual:.17} != {expected:.17}"
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_stride_and_input_validation() {
+        let (w, h, stride) = (216, 218, 223);
+        let y: Vec<u16> = (0..w * h)
+            .map(|i| (16 + (i / w + i % w) % 220) as u16)
+            .collect();
+        let mut padded = vec![65535; stride * h];
+        for row in 0..h {
+            padded[row * stride..row * stride + w].copy_from_slice(&y[row * w..(row + 1) * w]);
+        }
+        assert_eq!(
+            cambi_from_luma(&y, w, h, w, 8).unwrap(),
+            cambi_from_luma(&padded, w, h, stride, 8).unwrap()
+        );
+        for depth in [10, 12, 16] {
+            let tight: Vec<u16> = (0..w * h)
+                .map(|i| ((256 + ((i % w) / 16) * 4) << (depth - 10)) as u16)
+                .collect();
+            let mut padded = vec![65535; stride * h];
+            for row in 0..h {
+                padded[row * stride..row * stride + w]
+                    .copy_from_slice(&tight[row * w..(row + 1) * w]);
+            }
+            let expected = cambi_from_luma(&tight, w, h, w, depth).unwrap();
+            assert!(expected > 0.0);
+            assert_eq!(
+                expected.to_bits(),
+                cambi_from_luma(&padded, w, h, stride, depth)
+                    .unwrap()
+                    .to_bits()
+            );
+        }
+        assert!(cambi_from_luma(&y, w, h, w - 1, 8).is_err());
+        assert!(cambi_from_luma(&y[..y.len() - 1], w, h, w, 8).is_err());
+    }
 }
 
 #[cfg(all(

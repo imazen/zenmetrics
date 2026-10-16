@@ -1,0 +1,7 @@
+# WD peak memory at the 9,000,000-pixel area cap, i265, 2026-10-16.
+# Pair: AIC S67_Ref_00 / S67_CCM_15 Lanczos-resized to 3000x3000 (content irrelevant to memory).
+# Binary: zenmetrics-nn example wd_score, release, built from wd-port 9b0556690957 plus the review-fix commit (test, CLI and doc changes only; WD source unchanged).
+# Command: /usr/bin/time -v wd_score <wd model dir> pairs.tsv out.tsv <engine>, under run-heavy --mem 16G.
+engine	width	height	max_rss_kib	elapsed_s	wd_s1	wd_s2	wd_s3	wd_s4	wd_s5
+rten	3000	3000	12346372	50.43	1.54932558536529541e-1	1.04192845523357391e-1	7.13114887475967407e-2	5.40935136377811432e-2	4.43591065704822540e-2
+ort-cuda	3000	3000	11880128	36.43	1.54932543635368347e-1	1.04192838072776794e-1	7.13114812970161438e-2	5.40935099124908447e-2	4.43591028451919556e-2

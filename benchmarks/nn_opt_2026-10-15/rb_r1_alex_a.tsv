@@ -1,0 +1,7 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	lpips_alex	compute	256	50	5.886	5.455	0.2360495
+i265	rten	16	lpips_alex	warm	256	50	4.565	3.867	0.2360495
+i265	rten	16	lpips_alex	e2e	256	50	6.742	6.169	0.2360495
+i265	rten	16	lpips_alex	compute	1024	39	77.464	72.005	0.3207639
+i265	rten	16	lpips_alex	warm	1024	50	44.171	40.637	0.3207639
+i265	rten	16	lpips_alex	e2e	1024	32	94.896	89.291	0.3207639

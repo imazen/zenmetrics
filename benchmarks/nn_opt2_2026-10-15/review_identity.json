@@ -1,0 +1,10 @@
+{
+  "stage": "identity",
+  "models": "$HOME/tmp/nn-opt2/models-all",
+  "ladder": "$HOME/tmp/nn-phase0/ladder",
+  "binaries": {
+    "base": "f233fb8e4ae7b81063e855ccf245c2b382baec58af3e20393c9dd42d3eefcb4d",
+    "opt2": "f6e217b8e0c90d7a142d55db8a82d860a2c1cb6f322211f3a62323a27d8a5bf3",
+    "fixed": "618b88d7bb9d5f8e98c7ce17672b0459d0b69700930d2c7db7f075d0faafdebb"
+  }
+}

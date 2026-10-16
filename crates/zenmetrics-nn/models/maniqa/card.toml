@@ -1,0 +1,41 @@
+# MANIQA: no-reference IQA — vit_base_patch8_224 trunk, blocks 6..9 token
+# features concat [784,3072] -> TABlocks + SwinTransformer stages ->
+# per-token fc_score*fc_weight weighted mean. The `maniqa` column is
+# upstream's deterministic eval path for koniq10k (num_avg_val=1).
+name = "maniqa"
+kind = "no-reference"                # pair tools run it through PairedNoReference: `maniqa` on dist, `maniqa_ref` on ref
+direction = "higher-is-better"       # normalized [0,1] quality — upstream min-max normalizes koniq10k MOS labels; ladder goldens span 0.078-0.857
+columns = ["maniqa", "maniqa_ref"]
+paper = "Yang, Wu, Shi, Lao, Gong, Cao, Wang, Yang. MANIQA: Multi-dimension Attention Network for No-Reference Image Quality Assessment. CVPR Workshops 2022. Tsinghua University IIGROUP + vivo"
+
+[code]
+source = "upstream-port"             # model module subcalls re-implemented in the export wrapper; the net runs as an exported graph
+upstream = "https://github.com/IIGROUP/MANIQA"
+upstream_package = "git clone of IIGROUP/MANIQA (no pip package; vendored timm 0.5.5 in-repo), pinned f573d862401243c45641951a0303b8059c1c8577"
+licence = "Apache-2.0"
+
+[weights]
+# Apache-2.0 covers the repository. The README publishes per-dataset
+# checkpoints as GitHub release assets; ckpt_koniq10k.pt is the dataset
+# predict_one_image.py defaults to and the in-the-wild corpus.
+licence_class = "permissive"
+checkpoint = "https://github.com/IIGROUP/MANIQA/releases/tag/Koniq10k — ckpt_koniq10k.pt (543 MB, sha256 recorded in maniqa_export.meta provenance)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "u8/255 then (x-0.5)/0.5 — utils/inference_process.py Normalize(0.5,0.5)+ToTensor on the cv2-decoded /255 image"
+resize = "data/koniq10k.py eval loader: cv2.resize((224,224), INTER_CUBIC) on the u8 image — resize.rs::resize_bicubic_cv2_u8. Convention: OpenCV's own scalar u8 path (export pins OPENCV_IPP=disabled; the wheels' IPP differs on ~4% of pixels, and cv2 4.12 ≡ 5.0 bitwise with it off): f32 Horner coeffs quantised rint(c*2048) -> i16, i32 horizontal mid, unfused f32 vertical chain (VResizeCubicVec_32s8u at the SSE baseline; no FMA3 in the pinned build), A=-0.75, BORDER_REPLICATE. Measured bitwise vs cv2-noIPP on probes; ~0 diffs on ladder images. OpenCV Apache-2.0 in ../../LICENSE-opencv"
+crop = "five_point_crop(0) on the 224x224 image = the image itself (num_avg_val=1)"
+min_size = 1                         # every input resizes to 224x224
+
+[export]
+script = "export.py"
+outputs = "maniqa_{full.onnx, meta, goldens.tsv, export.meta}"
+opset = 17
+notes = "full: normalized [1,3,224,224] -> score [1,1,1]; upstream forward verbatim modulo the CUDA/loop scaffolding (vectorized weighted mean). Self-check |d|=0 vs the literal loop. The checkpoint also embeds the fine-tuned ViT trunk weights (strict=False load overwrites the timm-pretrained init)."
+
+[parity]
+oracle = "IIGROUP/MANIQA @f573d86, koniq10k eval path (train_maniqa.py validation), CPU fp32, ckpt_koniq10k.pt"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = 0.021396                       # pooled median |maniqa - maniqa_ref| over the 1,008 KonJND pairs, this port (zenmetrics-cli batch, ort-cuda). JPEG 0.028907, BPG 0.013109
+results = "rten 3.64e-6 = 1.70e-4 JND; ort-cuda 3.16e-6 = 1.48e-4 JND vs upstream (IPPs-disabled goldens), 15 ladder goldens — the exact fixed-point port + non-IPP convention opened the margin ~6x over the earlier float-model run (2.07e-5 = 9.7e-4 JND). Goldens committed at models/maniqa/maniqa_goldens.tsv; oracle env: cv2 5.0.0 OPENCV_IPP=disabled, numpy 2.5.2, Pillow 12.3.0"

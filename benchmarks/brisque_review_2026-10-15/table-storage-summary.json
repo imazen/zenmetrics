@@ -1,0 +1,14 @@
+{
+  "R_GGD": {
+    "different": 5966,
+    "max_ulp": 41
+  },
+  "R_AGGD": {
+    "different": 5384,
+    "max_ulp": 41
+  },
+  "ETA_FACTOR": {
+    "different": 4514,
+    "max_ulp": 15
+  }
+}

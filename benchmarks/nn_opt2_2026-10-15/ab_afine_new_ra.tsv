@@ -1,0 +1,7 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	afine	compute	256	50	37.947	35.496	0.4792416
+i265	rten	16	afine	warm	256	50	31.800	30.284	0.4792416
+i265	rten	16	afine	e2e	256	50	38.990	36.255	0.4792416
+i265	rten	16	afine	compute	1024	6	518.586	511.191	-1.1712353
+i265	rten	16	afine	warm	1024	11	298.624	280.517	-1.1712353
+i265	rten	16	afine	e2e	1024	6	560.800	516.902	-1.1712353
