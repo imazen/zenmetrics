@@ -2,7 +2,7 @@ name = "wd"
 kind = "full-reference"
 direction = "lower-is-better"
 columns = ["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"]
-paper = "Qiu, Wagner, Balle, Theis. Wasserstein Distortion: Unifying Fidelity and Realism. CISS 2024. https://arxiv.org/abs/2310.03629"
+paper = "Qiu, Wagner, Ballé, Theis. Wasserstein Distortion: Unifying Fidelity and Realism. CISS 2024. https://arxiv.org/abs/2310.03629"
 
 [code]
 source = "upstream-port"
@@ -38,3 +38,6 @@ aic = "The AIC-4 WD_s1..WD_s5 preprocessing is unidentified. This metric impleme
 [parity]
 tolerance_jnd = 1e-3
 oracle = "Caller-supplied unmodified Cool-Chic WassersteinLoss on CPU fp32. Large feature planes are channel-chunked for bounded oracle memory; each upstream channel mean is combined by its channel count."
+
+results = "25 pairs x 5 columns per engine: rten worst 1.924787254e-6 JND, ort-cuda worst 3.443705654e-6 JND; 1e-3 gate. Includes 32-square, 64..2048 and non-square. Stride/warm/identity controls pass."
+jnd_source = "models/jnd_scale.tsv; native WD pooled medians on all 1008 KonJND pairs (504 JPEG, 504 BPG); benchmarks/wd_port_2026-10-16/konjnd_scales.tsv"
