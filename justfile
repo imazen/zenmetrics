@@ -957,15 +957,10 @@ nn-pieapp-review-shards models out:
 nn-pieapp-review-step phase models ladder shards output:
     bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}' '{{output}}'
 
-nn-pieapp-review-weight-sign python upstream checkpoint out:
-    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
-
-nn-pieapp-review-weight-joint python upstream checkpoint out:
-    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 500
-
-# Public-tensor diagnostic outside RGB code-value range; never native image parity.
-nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
-    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 1000 --lower -4096 --upper 4096 --rate 32
+# Extra documented probe arguments select joint/diagnostic controls.
+# Out-of-range tensors are diagnostics, never native image parity.
+nn-pieapp-review-weight-sign python upstream checkpoint out *args:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' {{args}}
 
 nn-pieapp-review-weight-identify python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'

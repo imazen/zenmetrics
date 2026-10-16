@@ -264,6 +264,14 @@ fn matches_upstream() {
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
             let got = score(&*eval, col);
+            let err = (got - want).abs();
+            worst = worst.max(err);
+            eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
+            assert!(
+                err <= tol(col),
+                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
+                tol(col)
+            );
             let repeat = if col == "pieapp" && engine() != Engine::Rten {
                 let repeated = m
                     .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
@@ -274,14 +282,6 @@ fn matches_upstream() {
             } else {
                 None
             };
-            let err = (got - want).abs();
-            worst = worst.max(err);
-            eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
-            assert!(
-                err <= tol(col),
-                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
-                tol(col)
-            );
             if let Some(repeat) = repeat {
                 assert_eq!(
                     got.to_bits(),
