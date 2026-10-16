@@ -615,48 +615,12 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
 
 ## PieAPP sampling and official entry point (2026-10-16)
 
-PieAPP uses valid 64×64 patches on a deterministic stride-6 grid, in row-major
-order. Origins are `0, 6, … <= side - 64`; an unaligned far-edge origin is not
-added. The [official README](https://github.com/prashnani/PerceptualImageError/blob/master/README.md)
-documents dense stride 6. The port targets the official `compute_score`
-entry point as the parity oracle for this explicit grid.
+The port targets official `compute_score` on a regular stride-six patch grid.
+It does not reproduce the demo CLI's sub-image sampling: in the 24-pair
+panel the worst gap is 1.88 JND (`2207_2048`), median 0.44 JND, and 10/24
+pairs exceed 1 JND. See [model provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md)
+and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
 
-On `1415_128`, the original demo CLI returns `1.6797861082006782`, while
-`compute_score` on the regular 121-patch grid returns `1.6567797660827637`:
-absolute difference `0.0230063421179145` native units. The independent network
-returns `1.65677956601148813` on that grid. Thus this port does not claim
-numerical equivalence to the demo CLI wrapper. Its documented `--sampling_mode sparse` option
-also changes the CLI score (`1.7122649515845207`); it does not explain the dense
-result. No documented option has established equivalence. Official source is
-not read, and any further wrapper probes are restricted to documented options.
-
-
-The [full 24-pair demo panel](benchmarks/pieapp_review_2026-10-16/cli.json)
-runs the documented dense CUDA CLI twice per pair; all printed scores repeat
-exactly. The worst difference is `2207_2048`: demo `3.4582222` versus explicit
-entry-point grid `2.4828926609204816`, or `0.9753295390795182` native units
-(`1.879433106938455` operational JND). This modern compatible CUDA demo panel
-retains values at their printed precision; the earlier original-runtime
-128-square control above remains a separate observation. Neither panel
-establishes equivalence between the demo's sub-image wrapper and the selected
-full-image stride-six entry-point grid.
-
-**RESOLVED — weight-head reconstruction:** the initial `abs(weight)+1e-6`
-hypothesis matched the positive observed weights, but controlled public
-bias/projection probes return negative values for negative raw heads. Revision
-3 uses signed `weight+1e-6`; original checkpoint files and oracle goldens stay
-unchanged. [Controlled measurements and provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md#head-convention-evidence).
-
-Input is strided RGB8; the exported graph converts to BGR code values. Neural
-patch errors and finite signed weights are pooled in fixed row-major order with
-f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references
-cache planar conversion only. Both dimensions must be 64–4096 pixels, with
-at most 9,000,000 pixels total (1,048,576 on 32-bit).
-Revision 3 passes all 24 supported pairs on both engines at the unchanged
-1e-3 JND gate, with exact repeat and warm/cold identity. See the
-[qualification record](benchmarks/pieapp_2026-10-16.md).
-The KonJND scale is 0.5189487912492419 native units per operational JND, so the
-original CLI/entry-point control divergence is 0.04433258638589831 JND.
 
 ## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
 

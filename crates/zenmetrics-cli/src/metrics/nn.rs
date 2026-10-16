@@ -15,7 +15,8 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WassersteinDistortion, WeightsConsent,
+    Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WassersteinDistortion,
+    WeightsConsent,
 };
 
 use super::MetricKind;

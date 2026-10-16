@@ -333,14 +333,15 @@ fn warm_reference_equals_cold() {
         // is (0, h, h) — a nonzero "perfect pair" quality — and an NR
         // model's headline on (r, r) is the reference's own quality score.
         // For all of them the identical-pair check below is warm == cold.
-        let cold_same = (nr || matches!(col, "ckdn" | "afine" | "pieapp") || col.starts_with("wadiqam_fr"))
-            .then(|| {
-                score(
-                    &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
-                        .unwrap(),
-                    col,
-                )
-            });
+        let cold_same =
+            (nr || matches!(col, "ckdn" | "afine" | "pieapp") || col.starts_with("wadiqam_fr"))
+                .then(|| {
+                    score(
+                        &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+                            .unwrap(),
+                        col,
+                    )
+                });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
         // PieAPP caches only planar conversion on both engines.
         // A trunk engine caches the reference's features; a whole-graph
