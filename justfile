@@ -909,7 +909,19 @@ budget-preflight-check:
 registered-fit-check:
     TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
 
-# Local-only dispatch API integration; pending quantizer PR review.
+# Invented local-smoke transport and existing fit/harvest negative controls.
+steer-smoke-transport-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_steer_smoke_transport.py'
+    python3 -m unittest discover -s scripts/jobsys -p 'test_fit_tools.py'
+
+# Operator wrappers retain the canonical packer/launcher and caller-supplied caps.
+fit-pack-bounded-smoke source bin_dir build_meta pins contract out:
+    python3 scripts/jobsys/pack_fit_program.py --source "{{source}}" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "{{bin_dir}}" --build-meta "{{build_meta}}" --profile bounded-smoke --source-pins "{{pins}}" --source-pins-sha256 "$(sha256sum '{{pins}}' | cut -d' ' -f1)" --data "benchmarks/e33_fit_contract_2026-10-10.json={{contract}}" --out "{{out}}"
+
+lan-fit-smoke-launch host run role image:
+    bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+
+# Generated-input effective-dispatch receipts for the reviewed quantizer API.
 palette-dispatch-receipts out:
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture

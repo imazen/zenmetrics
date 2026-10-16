@@ -56,15 +56,12 @@ product declaration. A self-consistent source inventory that omits one of
 these required owners refuses packaging. Additional dependencies of the final
 program remain part of its independently reviewed source closure.
 
-## Local dispatch integration pending review
+## Reviewed dispatch integration
 
-The local executor uses [zenquant PR14](https://github.com/imazen/zenquant/pull/14)
-at `e4e4ce4ee86e5ed711ae0eec03a817a12f6518f9`, through a root Cargo patch.
-This integration and its regenerated lockfile must stay unpushed until the
-owner merges the API. The direct requirement is locally 0.1.4, with one
-resolved quantizer shared by zenpng and the executor. After merge, replace the
-patch with the owner-approved dependency binding and rerun the lock and
-synthetic gates before pushing.
+The executor pins the merged [zenquant PR14](https://github.com/imazen/zenquant/pull/14)
+revision `8ec37ee21f0216cf9b138e407eecc470ee620493` through a root Cargo patch.
+The direct requirement is 0.1.4, with one resolved quantizer shared by zenpng
+and the executor. Release publishing remains a separate owner decision.
 
 `effective_dispatch` now records the native report, including Fast/Adaptive
 promotion, target-tier quality/priority/strength, format defaults, exact-palette

@@ -12,7 +12,7 @@ FROM ghcr.io/imazen/zenfleet-worker:latest@sha256:3a7652755a81cfd623ed7d2c05ac77
 
 FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates coreutils gzip tar util-linux python3 python3-venv && \
+    bash ca-certificates coreutils gzip tar time util-linux python3 python3-venv && \
     rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir \
     numpy==2.5.2 pandas==3.0.5 pyarrow==25.0.1 scipy==1.18.1 \

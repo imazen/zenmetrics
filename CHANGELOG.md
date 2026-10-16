@@ -13,11 +13,15 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
+
+- Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
+
 ## zenmetrics-cli
 
 ### Added
 
-- LOCAL ONLY: effective palette dispatch receipts against unmerged zenquant PR14, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost. Do not push this dependency until owner review/merge.
+- Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).
 
 - Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
 - Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.

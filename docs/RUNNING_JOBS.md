@@ -778,3 +778,20 @@ worker — chunk 2 wires it into execution.
 ## Benchmark observations
 
 For native timing and memory experiments, use the [benchmark fleet workflow](BENCHMARK_FLEET.md). It uses the existing job system with explicit machine/domain/replicate identities and retains unsuccessful observations.
+
+### Bounded steering engineering smokes
+
+The `bounded-smoke` fit-program profile requires an explicit hashed source inventory.
+Control cells carry `--local-smoke-budget` and an archive-bound smoke-only wall policy;
+registered fits keep their existing caps. `steer_exact_smoke.py` uses FitCell transport
+for synthetic geometry probes on explicitly hashed existing control weights, with no
+optimizer or assessment labels. Its positive literal cap is at most900 seconds.
+The separate result schema is always local-smoke and the archive-bound harvest
+verifier refuses scientific installation. GNU `time -v` receipts are included in the
+cell's hashed exports. `just steer-smoke-transport-check` covers identity/geometry,
+cap/hash refusal and scientific-installation negative controls.
+
+Bounded fit smoke timing stages its GNU-time file beside the cell destination.
+The strict driver creates the fresh destination; after success, the executor
+includes RESOURCE_USAGE.txt in the normal hashed exports. Failed timing stays
+beside the destination for diagnosis; it does not authorize a retry.

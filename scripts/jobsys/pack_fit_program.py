@@ -222,20 +222,40 @@ def registered_sources(path, pin):
     return files
 
 
+def bounded_smoke_sources(path, pin):
+    if path is None or pin is None or digest(path)!=pin:
+        raise ValueError("bounded smoke source inventory/hash required")
+    record=json.loads(Path(path).read_text())
+    if record.get("schema")!="bounded-smoke-program-v1":
+        raise ValueError("bounded smoke inventory schema")
+    files=record["files"]
+    required={"scripts/rev4_featpot/"+n for n in ["v2_lodo_mlp.py","v2_confirm_fit.py",
+        "v2_common.py","v2_teacher.py","v2_smoke_contract.py","steer_exact_smoke.py"]}
+    if set(record.get("data",{})) != {"benchmarks/e33_fit_contract_2026-10-10.json"} or any(len(v)!=64 for v in record["data"].values()):
+        raise ValueError("bounded smoke must bind its existing training contract as data")
+    if not required<=set(files):
+        raise ValueError("bounded smoke import/contract closure incomplete")
+    for name,value in files.items():
+        p=Path(name)
+        if p.is_absolute() or ".." in p.parts or p.parts[0] not in ("scripts","benchmarks") or p.suffix not in (".py",".json") or len(value)!=64:
+            raise ValueError("unsafe bounded smoke source entry")
+    return files
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered", "bounded-smoke"), default="p0")
     p.add_argument("--source-pins", type=Path)
     p.add_argument("--source-pins-sha256")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    pins = registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
+    pins = bounded_smoke_sources(args.source_pins,args.source_pins_sha256) if args.profile == "bounded-smoke" else registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
     for name, expected in pins.items():
         path = args.source / name
         if digest(path) != expected:
@@ -243,6 +263,8 @@ def main() -> None:
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
     wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA, "v2r5s2recipe28": V2R5_DATA, "v40": V40_PINS["data"], "e33": E33_PINS["data"]}.get(args.profile, {})
+    if args.profile == "bounded-smoke":
+        wanted = json.loads(args.source_pins.read_text())["data"]
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
@@ -255,7 +277,10 @@ def main() -> None:
     if args.profile == "registered":
         files["registered_fit_contract.py"] = args.executor.with_name("registered_fit_contract.py")
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
-    if args.profile in ("v2d1", "v2e29", "v40", "e33"):
+    if args.profile == "bounded-smoke":
+        files["bin/steer_exact_smoke"] = args.bin_dir / "steer_exact_smoke"
+        files["bounded_smoke_policy.json"] = args.source / "benchmarks/steer_smoke_policy_2026-10-16.json"
+    if args.profile in ("v2d1", "v2e29", "v40", "e33", "bounded-smoke"):
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
         files["qualified_fit_contract.py"] = args.executor.with_name("qualified_fit_contract.py")
         files["harvest_fit_cells.py"] = args.executor.with_name("harvest_fit_cells.py")

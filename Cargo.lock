@@ -7891,6 +7891,7 @@ dependencies = [
 name = "zenmetrics-browser"
 version = "0.1.0"
 dependencies = [
+ "archmage 0.9.30",
  "butteraugli",
  "bytemuck",
  "clap",
@@ -8171,7 +8172,7 @@ dependencies = [
 [[package]]
 name = "zenquant"
 version = "0.1.4"
-source = "git+https://github.com/imazen/zenquant?rev=e4e4ce4ee86e5ed711ae0eec03a817a12f6518f9#e4e4ce4ee86e5ed711ae0eec03a817a12f6518f9"
+source = "git+https://github.com/imazen/zenquant?rev=8ec37ee21f0216cf9b138e407eecc470ee620493#8ec37ee21f0216cf9b138e407eecc470ee620493"
 dependencies = [
  "archmage 0.9.30",
  "enough",

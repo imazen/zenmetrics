@@ -1,14 +1,15 @@
 """Explicit strict results destinations, shared by execution and harvesting."""
 from pathlib import Path
 
-ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
+ROOTED = {"steer_exact_smoke.py": "cells", "v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
 
 
 def explicit_root(argv, fit_root):
     if "--dest" not in argv:
         return None
-    if argv[0] not in ROOTED or any(flag not in argv for flag in ("--strict-admission", "--train-only", "--root")):
-        raise ValueError("explicit fit destination requires a strict training-only rooted cell")
+    required = ("--root",) if argv[0] == "steer_exact_smoke.py" else ("--strict-admission", "--train-only", "--root")
+    if argv[0] not in ROOTED or any(flag not in argv for flag in required):
+        raise ValueError("explicit fit destination requires a strict training-only rooted cell or bounded exact probe")
     dest = Path(argv[argv.index("--dest") + 1])
     data = Path(argv[argv.index("--root") + 1])
     relative = dest.relative_to(fit_root)
