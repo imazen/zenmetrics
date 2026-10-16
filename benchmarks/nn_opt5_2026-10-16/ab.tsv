@@ -1,0 +1,133 @@
+size	threads	bin	rep	ms	max_rss_kib
+256	16	base	base1	310	156792
+256	16	commit	B1	300	154092
+256	16	excluded_otffuse	new1	310	150492
+256	16	base	base2	300	155952
+256	16	commit	B2	300	155272
+256	16	excluded_otffuse	new2	310	153276
+256	16	base	base3	290	154928
+256	16	commit	B3	300	154556
+256	16	excluded_otffuse	new3	290	150640
+256	16	base	base4	290	154648
+256	16	commit	B4	290	155708
+256	16	excluded_otffuse	new4	300	150536
+1024	16	base	base1	3880	1548656
+1024	16	commit	B1	3860	1529084
+1024	16	excluded_otffuse	new1	3520	1571620
+1024	16	base	base2	3880	1548736
+1024	16	commit	B2	3860	1525676
+1024	16	excluded_otffuse	new2	3540	1572556
+1024	16	base	base3	3900	1556564
+1024	16	commit	B3	3830	1527548
+1024	16	excluded_otffuse	new3	3530	1575736
+1024	16	base	base4	3900	1550116
+1024	16	commit	B4	3850	1520068
+1024	16	excluded_otffuse	new4	3530	1577172
+2048	16	base	base1	15560	5873400
+2048	16	commit	B1	14570	5866608
+2048	16	excluded_otffuse	new1	14220	5830208
+2048	16	base	base2	15650	5880912
+2048	16	commit	B2	14500	5864460
+2048	16	excluded_otffuse	new2	14140	5829472
+2048	16	base	base3	15580	5878588
+2048	16	commit	B3	14570	5867924
+2048	16	excluded_otffuse	new3	14170	5826092
+2048	16	base	base4	15590	5870468
+2048	16	commit	B4	14650	5864028
+2048	16	excluded_otffuse	new4	14230	5823132
+cap	16	base	base1	34310	12347300
+cap	16	commit	B1	32890	12188720
+cap	16	excluded_otffuse	new1	30210	12304336
+cap	16	base	base2	34420	12338996
+cap	16	commit	B2	33130	12186440
+cap	16	excluded_otffuse	new2	30280	12304596
+cap	16	base	base3	34360	12364788
+cap	16	commit	B3	32980	12183964
+cap	16	excluded_otffuse	new3	30180	12300696
+cap	16	base	base4	34380	12335380
+cap	16	commit	B4	33100	12189636
+cap	16	excluded_otffuse	new4	30170	12302828
+256	16	base	r12	300	
+256	16	commit	r12	300	
+256	16	excluded_otffuse	r12	290	
+256	16	base	r12	280	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	280	
+256	16	excluded_otffuse	r12	310	
+256	16	base	r12	290	
+256	16	commit	r12	300	
+256	16	excluded_otffuse	r12	310	
+256	16	base	r12	290	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	310	
+256	16	base	r12	290	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	300	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	300	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	290	
+256	16	base	r12	300	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	300	
+256	16	base	r12	290	
+256	16	commit	r12	290	
+256	16	excluded_otffuse	r12	300	
+256	1	base	r12	1290	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1300	
+256	1	base	r12	1310	
+256	1	commit	r12	1290	
+256	1	excluded_otffuse	r12	1300	
+256	1	base	r12	1300	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1290	
+256	1	base	r12	1300	
+256	1	commit	r12	1280	
+256	1	excluded_otffuse	r12	1290	
+256	1	base	r12	1280	
+256	1	commit	r12	1290	
+256	1	excluded_otffuse	r12	1300	
+256	1	base	r12	1300	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1280	
+256	1	base	r12	1300	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1300	
+256	1	base	r12	1320	
+256	1	commit	r12	1290	
+256	1	excluded_otffuse	r12	1290	
+256	1	base	r12	1300	
+256	1	commit	r12	1290	
+256	1	excluded_otffuse	r12	1290	
+256	1	base	r12	1300	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1280	
+256	1	base	r12	1300	
+256	1	commit	r12	1300	
+256	1	excluded_otffuse	r12	1290	
+256	1	base	r12	1300	
+256	1	commit	r12	1310	
+256	1	excluded_otffuse	r12	1290	
+1024	1	base	r1	20140	1445284
+1024	1	commit	r1	20060	1445576
+1024	1	base	r1	20110	1445600
+1024	1	commit	r1	20120	1445748
+2048	1	base	r1	84500	5669484
+2048	1	commit	r1	82830	5669328
+2048	1	base	r1	84890	5669504
+2048	1	commit	r1	83300	5669560
+cap	1	base	r1	186490	12075568
+cap	1	commit	r1	181740	12075616
+cap	1	base	r1	185130	12075408
+cap	1	commit	r1	182550	12075844

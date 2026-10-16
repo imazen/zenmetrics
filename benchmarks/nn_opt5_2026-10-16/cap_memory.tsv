@@ -1,0 +1,16 @@
+# WD peak RSS on the 3000x3000 area-cap pair, base vs the committed change, rten engine.
+# base = 51d804f3 (nn-lpips-vgg tip), commit = channel() borrows its inputs (this lane).
+# Command: /usr/bin/time -f "%e %M" wd_score <models> pairs_cap.tsv out.tsv rten, RTEN_NUM_THREADS=<threads>.
+engine	pair	threads	bin	max_rss_kib	elapsed_ms
+rten	cap_3000	16	base	12347300	34310
+rten	cap_3000	16	commit	12188720	32890
+rten	cap_3000	16	base	12338996	34420
+rten	cap_3000	16	commit	12186440	33130
+rten	cap_3000	16	base	12364788	34360
+rten	cap_3000	16	commit	12183964	32980
+rten	cap_3000	16	base	12335380	34380
+rten	cap_3000	16	commit	12189636	33100
+rten	cap_3000	1	base	12075568	186490
+rten	cap_3000	1	commit	12075616	181740
+rten	cap_3000	1	base	12075408	185130
+rten	cap_3000	1	commit	12075844	182550
