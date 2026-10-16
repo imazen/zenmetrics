@@ -932,3 +932,6 @@ nn-pieapp-review-cli python upstream pairs entry out logs:
 
 nn-pieapp-review models ladder output:
     bash -c "$(cat benchmarks/pieapp_review_2026-10-16.sh)" -- '{{models}}' '{{ladder}}' '{{output}}'
+
+nn-pieapp-review-summary directory log out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_summary.py '{{directory}}' '{{log}}' '{{out}}'
