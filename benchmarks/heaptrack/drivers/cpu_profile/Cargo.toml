@@ -25,7 +25,7 @@ path = "src/bin/cpu_wall.rs"
 compete = ["zenmetrics-cli/nn-ort", "zenmetrics-cli/nr", "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
 heap-phases = ["zenbench/heap-profiling"]
 study-gpu-wgpu = ["zenmetrics-api/all-metrics", "zenmetrics-api/wgpu", "dep:cubecl", "cubecl/wgpu"]
-study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc"]
+study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc", "dep:cubecl", "cubecl/cuda"]
 metrics-parallel = [
     "cvvdp/parallel", "iwssim/parallel", "fast-ssim2/rayon",
     "dep:fsim", "fsim/parallel", "dep:haarpsi", "haarpsi/parallel",

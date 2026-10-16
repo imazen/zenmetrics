@@ -150,7 +150,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !config["probe_only"].as_bool().unwrap_or(false) && before.first().is_some_and(|v| *v > 4.) {
         return Err(format!("busy load {before:?}").into());
     }
-    let mut score: maps::Call = if name == "cvvdp" {
+    let mut score: maps::Call = if name.ends_with("-gpu") {
+        #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
+        let call = maps::gpu_score(
+            name,
+            r,
+            d,
+            config["gpu_runtime"]
+                .as_str()
+                .unwrap_or("explicit-runtime-required"),
+            false,
+        );
+        #[cfg(not(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu")))]
+        let call: Result<maps::Call, String> =
+            Err("GPU metric requires a GPU benchmark build and explicit device".into());
+        match call {
+            Ok(call) => call,
+            Err(error) => Box::new(move || Err(error.clone())),
+        }
+    } else if name == "cvvdp" {
         maps::cvvdp_score(r, d, false)?
     } else {
         Box::new(move || {
@@ -192,6 +210,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let first = first?;
     let mut map_call = maps::native(name, r, d);
+    #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
+    if name.ends_with("-gpu") {
+        map_call = maps::gpu_score(
+            name,
+            r,
+            d,
+            config["gpu_runtime"]
+                .as_str()
+                .unwrap_or("explicit-runtime-required"),
+            true,
+        )
+        .ok();
+    }
     let map_first = map_call.as_mut().map(|f| f());
     let mut unsupported = row.clone();
     unsupported["mode"] = json!("score+map");

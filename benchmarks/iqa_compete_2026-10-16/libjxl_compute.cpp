@@ -33,7 +33,7 @@ int main(int argc,char**argv) {try {
     if(metric=="ssim2" && mode=="score+map"){std::cout<<"UNSUPPORTED_MAP no native pixel-map output in the v0.12 SSIMULACRA2 API\n";return 0;}
     const auto rb=read(argv[4],static_cast<size_t>(w)*h*3),db=read(argv[5],static_cast<size_t>(w)*h*3);
     jpegxl::tools::ThreadPoolInternal pool(threads==1?0:threads);
-    jxl::ImageMetadata rm,dm;rm.SetUintSamples(8);dm.SetUintSamples(8);rm.SetIntensityTarget(80.f);dm.SetIntensityTarget(80.f);
+    jxl::ImageMetadata rm,dm;rm.SetUintSamples(8);dm.SetUintSamples(8);const float intensity=metric=="ssim2"?255.f:80.f;rm.SetIntensityTarget(intensity);dm.SetIntensityTarget(intensity);
     rm.color_encoding=jxl::ColorEncoding::SRGB();dm.color_encoding=jxl::ColorEncoding::SRGB();
     auto* manager=jpegxl::tools::NoMemoryManager();
     jxl::ImageBundle r(manager,&rm),d(manager,&dm);

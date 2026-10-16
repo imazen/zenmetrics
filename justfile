@@ -1056,3 +1056,15 @@ iqa-compete-collect output +ledgers:
 
 iqa-compete-cuda-i265 binary pairs output models model_map reference qualified mode="nn" sizes="cid22,2k":
     bash benchmarks/iqa_compete_2026-10-16/run_cuda.sh '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' '{{sizes}}' '{{mode}}' '{{reference}}' '{{qualified}}'
+
+iqa-compete-clippy:
+    bash benchmarks/iqa_compete_2026-10-16/build_cpu.sh cached clippy
+
+iqa-compete-model-manifest default overrides output:
+    python3 benchmarks/iqa_compete_2026-10-16/model_manifest.py '{{default}}' '{{overrides}}' '{{output}}'
+
+iqa-compete-python-setup output:
+    bash benchmarks/iqa_compete_2026-10-16/python_setup.sh '{{output}}'
+
+iqa-compete-python package python binary pairs output reference qualified sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads '{{threads}}' --sizes '{{sizes}}' --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --reference-jsonl '{{qualified}}'

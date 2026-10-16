@@ -14,12 +14,13 @@ ADAPTERS={
  ('psnr-y-libvmaf','psnr','709-y',1e-10),('psnrhvs-daala','psnr_hvs','601-420',2e-4),
  ('cambi','cambi','601-420',1e-4),('vif','vif','601-y',5e-13)],
  'libjxl':[('butteraugli','butteraugli','rgb',0.),('ssim2','ssim2','rgb',0.)]}
+RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity.rs SCORE_TOLERANCE
 def percentile(s,p):
  s=sorted(s);i=(len(s)-1)*p;lo=int(i);hi=min(lo+1,len(s)-1);return s[lo]+(s[hi]-s[lo])*(i-lo)
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--host',default='i265');a=p.parse_args()
  a.root.mkdir(parents=True,exist_ok=True);(a.root/'logs').mkdir(exist_ok=True);(a.root/'cells').mkdir(exist_ok=True)
- meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine)
+ meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine,impl_version={'libvmaf':'3.2.0 (vmaf-head-sys 0.2.0 vendored source)','libjxl':'0.12.0'}[a.engine])
  output=a.root/f'{a.host}.jsonl';done=set()
  if output.exists():
   for s in output.read_text().splitlines():
@@ -33,7 +34,7 @@ def main():
     for mode in ['score','score+map']:
      key=(metric,pair['size_name'],threads,mode)
      if key in done:continue
-     row=dict(meta|pair,metric_name=metric,metric_family=family(metric),threads=threads,mode=mode,pair_sha256=pair_hash,input_sha256=hashes,parity_abs_bound=bound,parity_source='docs/METRIC_PROVENANCE.md; exact comparison where no cross-version bound is specified',n=0,status='unsupported')
+     row=dict(meta|pair,metric_name=metric,metric_family=family(metric),threads=threads,mode=mode,pair_sha256=pair_hash,input_sha256=hashes,parity_abs_bound=bound,parity_source='docs/METRIC_PROVENANCE.md; pinned butteraugli/tests/reference_parity.rs (relative 0.001); exact where no cross-version bound is specified',n=0,status='unsupported')
      if mode=='score+map' and (a.engine=='libvmaf' or metric=='ssim2'):
       row['notes']='Public in-process adapter does not expose native map buffers; no file-based map output is timed';append(output,row);continue
      native=pair if convention=='rgb' else next(r for r in planes if r['size_name']==pair['size_name'] and r['convention']==convention)
@@ -68,7 +69,8 @@ def main():
      import struct
      reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0]
      values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference)
-     row.update(n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if delta<=bound else 'variant_mismatch',samples_ns=values,sample_scores=scores,notes='Warmup one call; ten individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
+     row.update(n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; ten individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
+     if a.engine=='libjxl' and metric=='ssim2':row['notes']+=' ComputeSSIMULACRA2 has no worker-pool argument; the thread count is the declared budget, not a claim that this entry point uses all workers.'
      if metric=='psnrhvs-daala':row['notes']+=' Rust CLI processes YUV444; this libvmaf adapter processes YUV420. Y headline is compared; chroma workloads differ.'
      if metric=='vif':row['notes']+=' libvmaf float_vif and MATLAB vifp are distinct variants; 8-bit studio-luma ingress also differs. Retain as variant comparison.';row['status']='variant_mismatch'
      append(output,row);print('RESULT',stem,row['status'],delta,flush=True)

@@ -38,5 +38,8 @@
   ],
   "cached_flags": "--cfg iqa_compete_ingress --cfg iqa_compete_cached",
   "reference_flags": "--cfg iqa_compete_ingress",
-  "target_cpu_native": false
+  "target_cpu_native": false,
+  "gpu_build_receipt": "run-heavy: done rc=0 42s | peak-RSS 1.33GiB | min-avail 20842MiB | peak-load 7.09",
+  "merged_nn_test_receipt": "run-heavy: done rc=0 9s | peak-RSS 0.75GiB | min-avail 22389MiB | peak-load 2.63",
+  "merged_inventory_test_receipt": "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 23401MiB | peak-load 1.13"
 }

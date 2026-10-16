@@ -71,9 +71,13 @@ compares every headline with a separate Rust probe. It is not a timing panel.
 libvmaf reports version 3.2.0 from vmaf-head-sys 0.2.0's vendored source;
 this is recorded rather than relabeled as the port's 3.2.1 parity reference.
 VMAF, SSIM/MS-SSIM, PSNR, PSNR-HVS-Y and CAMBI fall within their existing
-parity gates on that pair. The VIF and libjxl comparisons exceed the chosen
-bounds and remain separate variant comparisons. SSIMULACRA2's measured
-delta is 2.4278133457799242 points; its cause is not yet established.
+parity gates on that pair. The VIF and Butteraugli comparisons exceed the chosen
+bounds and remain separate variant comparisons. The initial SSIMULACRA2
+probe accidentally reused Butteraugli's 80-nit metadata. The corrected
+[probe](native-probe-intensity.json) uses SSIMULACRA2's standard 255-nit
+metadata and matches Rust exactly on CID22. The earlier receipt remains
+as evidence of the adapter correction; its 2.4278133457799242-point gap
+was not an implementation difference.
 
 Native input exports reuse the CLI's BT.709/BT.601 4:2:0 conversion,
 including even cropping. SSIM uses the full-size f32 studio-601 luma
@@ -90,3 +94,22 @@ The native runner saves every timed sample and repeated score, the
 corresponding Rust reference probe, input hashes, admission load and the
 resource-wrapper receipt. Public APIs without a native buffer map route
 produce explicit unsupported rows.
+
+## GPU qualification
+
+[CID22 CUDA observations](gpu-qualified-cid22.json) cover five score paths
+and the CVVDP map at one worker. Four score paths and CVVDP's map stay
+within their selected CPU parity bounds. Butteraugli differs by
+0.008256673812866211 on both independent attempts and is plotted as a
+variant mismatch. Both attempts and logs are retained externally. Zensim
+GPU scoring is disabled by the product and has explicit refusal rows.
+This smoke does not establish the larger-size or all-worker matrix.
+
+GPU instances persist outside timing, with full memory mode and no
+cached reference features; each call recomputes both images. Readback
+finishes before the call returns. CVVDP names standard_fhd photometry
+and geometry, matching the CPU panel. CUDA mismatches against a supplied
+CPU ledger trigger a second complete bounded cell; the first attempt
+is preserved and linked from the selected row.
+
+Adapter boundaries and source links: [protocol](PROTOCOL.md).

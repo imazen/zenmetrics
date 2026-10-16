@@ -330,3 +330,97 @@ pub(super) fn competitor_planes(
         _ => Err("unknown competitor component convention".into()),
     }
 }
+
+/// Retain device buffers/JIT state, without caching the reference's features.
+#[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
+pub(super) fn gpu_score(
+    name: &str,
+    r: &'static Rgb8Image,
+    d: &'static Rgb8Image,
+    runtime: &str,
+    map: bool,
+) -> Result<Call, String> {
+    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricInner, MetricKind, MetricParams};
+    let backend = match runtime {
+        #[cfg(feature = "study-gpu-cuda")]
+        "cuda" => Backend::Cuda,
+        #[cfg(feature = "study-gpu-wgpu")]
+        "wgpu" => Backend::Wgpu,
+        _ => return Err("requested GPU backend is not compiled".into()),
+    };
+    let kind = match name {
+        "butteraugli-gpu" => MetricKind::Butter,
+        "ssim2-gpu" => MetricKind::Ssim2,
+        "dssim-gpu" => MetricKind::Dssim,
+        "iwssim-gpu" => MetricKind::Iwssim,
+        "cvvdp-gpu" => MetricKind::Cvvdp,
+        "zensim-gpu" => return Err("GPU zensim scoring is disabled pending v2 validation".into()),
+        _ => return Err("unknown GPU metric".into()),
+    };
+    if map && name == "butteraugli-gpu" {
+        return match runtime {
+            #[cfg(feature = "study-gpu-cuda")]
+            "cuda" => butter_gpu_map::<cubecl::cuda::CudaRuntime>(r, d),
+            #[cfg(feature = "study-gpu-wgpu")]
+            "wgpu" => butter_gpu_map::<cubecl::wgpu::WgpuRuntime>(r, d),
+            _ => Err("requested GPU map runtime is not compiled".into()),
+        };
+    }
+    if map && name != "cvvdp-gpu" {
+        return Err("native maps are not exposed by this metric's opaque pair API".into());
+    }
+    let params = if kind == MetricKind::Cvvdp {
+        let display = "standard_fhd"
+            .parse::<zenmetrics_api::cvvdp::params::CvvdpDisplay>()
+            .map_err(|e| e.to_string())?;
+        MetricParams::cvvdp(display)
+    } else {
+        MetricParams::try_default_for(kind).map_err(|e| e.to_string())?
+    };
+    let mut metric =
+        Metric::new_with_memory_mode(kind, backend, r.width, r.height, params, MemoryMode::Full)
+            .map_err(|e| e.to_string())?;
+    let mut output = Vec::new();
+    Ok(Box::new(move || {
+        if map {
+            match metric.inner_mut() {
+                MetricInner::Cvvdp(m) => {
+                    let score = m
+                        .compute_srgb_u8_with_diffmap(&r.pixels, &d.pixels, &mut output)
+                        .map_err(|e| e.to_string())?;
+                    std::hint::black_box(&output);
+                    Ok(score.value)
+                }
+                _ => Err("native GPU map route unavailable".into()),
+            }
+        } else {
+            metric
+                .compute_srgb_u8(&r.pixels, &d.pixels)
+                .map(|s| s.value)
+                .map_err(|e| e.to_string())
+        }
+    }))
+}
+
+#[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
+fn butter_gpu_map<R: cubecl::Runtime>(
+    r: &'static Rgb8Image,
+    d: &'static Rgb8Image,
+) -> Result<Call, String> {
+    let client = R::client(&Default::default());
+    let mut scorer = zenmetrics_api::butter::Butteraugli::<R>::new_multires_with_memory_mode(
+        client,
+        r.width,
+        r.height,
+        zenmetrics_api::butter::MemoryMode::Full,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(Box::new(move || {
+        let value = scorer
+            .compute(&r.pixels, &d.pixels)
+            .map_err(|e| e.to_string())?;
+        let map = scorer.copy_diffmap().map_err(|e| e.to_string())?;
+        std::hint::black_box(map);
+        Ok(value.score)
+    }))
+}
