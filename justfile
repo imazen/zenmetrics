@@ -942,3 +942,6 @@ nn-pieapp-review-shards models out:
 
 nn-pieapp-review-step phase models ladder shards:
     bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}'
+
+nn-pieapp-review-weight-sign python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
