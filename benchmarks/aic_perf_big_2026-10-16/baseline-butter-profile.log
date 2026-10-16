@@ -1,0 +1,76 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23102MiB :: timeout --kill-after=20s 1150s just aic-perf-big-baseline-step profile /home/lilith/tmp/aic-variants-scratch/round14 butter 3355 2516 1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- 'profile' '/home/lilith/tmp/aic-variants-scratch/round14' 'butter' '3355' '2516' '1'
+metric=butter profile dimensions=3355x2516 load=4.25 5.19 4.45 2/1925 1520844
+3355x2516 5 reps: 8019.447032 ms/call score 7.99973535537719727 bits 40fffdd5
+[ perf record: Woken up 258 times to write data ]
+[ perf record: Captured and wrote 64.407 MB /home/lilith/tmp/aic-variants-scratch/round14/butter-base.data (7990 samples) ]
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 7K of event 'cpu_core/cycles/'
+# Event count (approx.): 211613059691
+#
+# Overhead  Command      Shared Object      Symbol                                                                                                                                                                                                                      
+# ........  ...........  .................  ............................................................................................................................................................................................................................
+#
+    44.77%  butter-base  butter-base        [.] butter_wall::butteraugli_original::convolve
+            |          
+            |--30.35%--is_empty<usize> (inlined)
+            |          next<usize> (inlined)
+            |          convolve (inlined)
+            |          
+            |--9.58%--convolve (inlined)
+            |          
+            |--1.55%--spec_next<usize> (inlined)
+            |          next<usize> (inlined)
+            |          convolve (inlined)
+            |          
+            |--1.44%--index<f32> (inlined)
+            |          index<f32, usize> (inlined)
+            |          index<f32, usize, alloc::alloc::Global> (inlined)
+            |          convolve (inlined)
+            |          
+             --1.37%--overflowing_add (inlined)
+                       forward_overflowing (inlined)
+                       next<usize> (inlined)
+                       convolve (inlined)
+
+    36.80%  butter-base  butter-base        [.] butter_wall::butteraugli_original::malta
+            |          
+            |--18.77%--malta (inlined)
+            |          
+            |--10.86%--eq<(i8, i8)> (inlined)
+            |          next<(i8, i8)> (inlined)
+            |          malta (inlined)
+            |          
+             --6.05%--index<f32> (inlined)
+                       index<f32, usize> (inlined)
+                       index<f32, usize, alloc::alloc::Global> (inlined)
+                       malta (inlined)
+
+     3.28%  butter-base  butter-base        [.] butter_wall::butteraugli_original::separate
+     2.06%  butter-base  [kernel.kallsyms]  [k] asm_exc_page_fault
+            |
+            ---asm_exc_page_fault
+
+     1.40%  butter-base  butter-base        [.] butter_wall::butteraugli_original::compute
+     1.30%  butter-base  [kernel.kallsyms]  [k] _raw_spin_lock
+            |
+            ---_raw_spin_lock
+               |          
+                --1.29%--do_anonymous_page
+                          handle_pte_fault
+                          __handle_mm_fault
+                          handle_mm_fault
+                          do_user_addr_fault
+                          exc_page_fault
+                          asm_exc_page_fault
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
+run-heavy: done rc=0 42s | peak-RSS 1.37GiB | min-avail 22352MiB | peak-load 4.25

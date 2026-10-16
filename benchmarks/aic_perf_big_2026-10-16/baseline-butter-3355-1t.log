@@ -1,0 +1,40 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23840MiB :: timeout --kill-after=20s 1150s just aic-perf-big-baseline-step wall /home/lilith/tmp/aic-variants-scratch/round14 butter 3355 2516 1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- 'wall' '/home/lilith/tmp/aic-variants-scratch/round14' 'butter' '3355' '2516' '1'
+metric=butter threads=1 dimensions=3355x2516 load=5.51 5.94 4.60 2/2050 1516106
+3355x2516 5 reps: 8001.100498 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5"
+	User time (seconds): 35.60
+	System time (seconds): 4.43
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:40.06
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437576
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505443
+	Voluntary context switches: 1
+	Involuntary context switches: 832
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5':
+
+     1141636579242      cpu_core/instructions/                                                
+      211311512763      cpu_core/cycles/                                                      
+
+      40.065188929 seconds time elapsed
+
+      35.606597000 seconds user
+       4.434522000 seconds sys
+
+
+run-heavy: done rc=0 40s | peak-RSS 1.37GiB | min-avail 22922MiB | peak-load 5.51
