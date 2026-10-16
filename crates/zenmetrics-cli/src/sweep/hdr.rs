@@ -241,6 +241,10 @@ impl HdrCodec {
     }
 
     /// The cell-identity name (inverse of [`Self::from_name`]).
+    ///
+    /// `#[allow(dead_code)]`: part of the lib target's public API; the bin
+    /// round-trips codec names through [`Self::from_name`] only.
+    #[allow(dead_code)]
     pub fn name(self) -> &'static str {
         match self {
             HdrCodec::Zenjxl => "zenjxl",
@@ -990,7 +994,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
                 let mut px = [0f32; 4];
-                for (x, sample) in row.chunks_exact(2).enumerate() {
+                for (x, sample) in row.as_chunks::<2>().0.iter().enumerate() {
                     px[x % channels] =
                         f32::from(u16::from_ne_bytes([sample[0], sample[1]])) / 65535.0;
                     if x % channels == channels - 1 {
@@ -1017,7 +1021,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
                 let mut px = [0f32; 4];
-                for (x, sample) in row.chunks_exact(4).enumerate() {
+                for (x, sample) in row.as_chunks::<4>().0.iter().enumerate() {
                     px[x % channels] =
                         f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]])
                             .clamp(0.0, 1.0);

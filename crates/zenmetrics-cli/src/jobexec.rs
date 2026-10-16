@@ -36,11 +36,10 @@ use serde_json::{Map, Value};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Parser, Debug)]
-pub struct JobexecArgs {
+pub(crate) struct JobexecArgs {
     /// R2 prefix under $ZEN_CORPUS_BUCKET (or $ZEN_BUCKET) where source images live (overrides
     /// $ZEN_CORPUS_PREFIX). The job's `cell.image_path` is appended to it. Omit if image_path is
     /// already an `s3://…` or local path.
@@ -220,7 +219,7 @@ fn cvvdp_display_payload(
 /// - serve mode: a status-3 frame `{"class": …, "detail": …}` (`run_serve`);
 /// - one-shot mode: a `ZEN_ERROR_CLASS: <class>` stderr marker line before the nonzero exit.
 #[derive(Debug)]
-pub struct ExecError {
+pub(crate) struct ExecError {
     pub class: &'static str,
     pub msg: String,
 }
@@ -294,29 +293,6 @@ fn error_class_of(e: &(dyn Error + 'static)) -> Option<&'static str> {
         return Some(xe.class);
     }
     classify_msg(&e.to_string())
-}
-
-/// Point an s5cmd `Command` at the read-only corpus credential (`ZEN_CORPUS_AWS_*`) when one is set,
-/// so corpus reads don't reuse the run-write cred. No-op when `ZEN_CORPUS_AWS_ACCESS_KEY_ID` is unset —
-/// the command then inherits the ambient `AWS_*` (single-cred / single-bucket setups). When the corpus
-/// cred is permanent (no session token), the ambient `AWS_SESSION_TOKEN` is removed so the run cred's
-/// session can't leak onto the corpus access key.
-fn apply_corpus_creds(cmd: &mut Command) {
-    let Ok(ak) = std::env::var("ZEN_CORPUS_AWS_ACCESS_KEY_ID") else {
-        return;
-    };
-    cmd.env("AWS_ACCESS_KEY_ID", ak);
-    if let Ok(sk) = std::env::var("ZEN_CORPUS_AWS_SECRET_ACCESS_KEY") {
-        cmd.env("AWS_SECRET_ACCESS_KEY", sk);
-    }
-    match std::env::var("ZEN_CORPUS_AWS_SESSION_TOKEN") {
-        Ok(st) => {
-            cmd.env("AWS_SESSION_TOKEN", st);
-        }
-        Err(_) => {
-            cmd.env_remove("AWS_SESSION_TOKEN");
-        }
-    }
 }
 
 /// Filename prefix of every on-disk source-cache entry. The sweeper below will only ever
@@ -582,8 +558,8 @@ struct VariantLoc {
 ///   * byte-range GET from R2 (`$ZEN_VARIANTS_TAR_URI`) — no whole-tar download, one R2 request/variant;
 ///   * TAR-SHARD local read (`$ZEN_VARIANTS_LOCAL_DIR`) — the worker pulled + extracted the tar ONCE
 ///     and reads `<dir>/<name>` off disk, ZERO per-variant R2 requests (the I/O-bound fix).
-/// The optional 4th `name` column is what enables the local path; legacy 3-column indices still parse
-/// (name = "") and fall back to the byte-range GET.
+///     The optional 4th `name` column is what enables the local path; legacy 3-column indices still parse
+///     (name = "") and fall back to the byte-range GET.
 static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, VariantLoc>> =
     std::sync::OnceLock::new();
 
@@ -1725,15 +1701,7 @@ fn score_hdr_decoded_variant(
     Ok(rows)
 }
 
-/// Serialize a per-pixel map as a gzip'd PFM blob — the Diffmap job's output format.
-///
-/// PFM (Portable FloatMap): `Pf\n{w} {h}\n-1.0\n` + rows of little-endian f32,
-/// **bottom row first** (the PFM spec's raster order; readers flip). Chosen over a
-/// bespoke format because it is self-describing (dims + endianness in the header),
-/// exact (no quantization decision to defend), and standard-tool-readable; gzip
-/// because diffmaps are smooth and compress well, via the in-house `zenflate`.
 #[cfg(feature = "hdr")]
-
 /// Runtime provenance for a scored row (GOAL FLEET criterion: "runtime column
 /// proves it"). Truthful by construction: a `-gpu`/`_gpu` metric name can only
 /// execute on the built GPU backend (the dispatch errors otherwise), and bare
@@ -1762,6 +1730,13 @@ fn metric_runtime(metric: &str) -> &'static str {
     }
 }
 
+/// Serialize a per-pixel map as a gzip'd PFM blob — the Diffmap job's output format.
+///
+/// PFM (Portable FloatMap): `Pf\n{w} {h}\n-1.0\n` + rows of little-endian f32,
+/// **bottom row first** (the PFM spec's raster order; readers flip). Chosen over a
+/// bespoke format because it is self-describing (dims + endianness in the header),
+/// exact (no quantization decision to defend), and standard-tool-readable; gzip
+/// because diffmaps are smooth and compress well, via the in-house `zenflate`.
 fn diffmap_to_pfm_gz(map: &[f32], width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
     use zenflate::{CompressionLevel, Compressor, Unstoppable};
     let (w, h) = (width as usize, height as usize);
@@ -1926,7 +1901,9 @@ fn diffmap_pair_to_blob(
                 "butteraugli" => {
                     let to_linear = |img: &crate::hdr::NitsImage| -> Vec<rgb::RGB<f32>> {
                         img.rgb
-                            .chunks_exact(3)
+                            .as_chunks::<3>()
+                            .0
+                            .iter()
                             .map(|p| rgb::RGB {
                                 r: p[0] / peak,
                                 g: p[1] / peak,
@@ -2660,7 +2637,7 @@ fn run_serve(corpus_prefix: Option<&str>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     let corpus_prefix = args
         .corpus_prefix
         .or_else(|| std::env::var("ZEN_CORPUS_PREFIX").ok());
