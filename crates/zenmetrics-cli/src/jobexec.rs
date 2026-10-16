@@ -295,6 +295,34 @@ fn error_class_of(e: &(dyn Error + 'static)) -> Option<&'static str> {
     classify_msg(&e.to_string())
 }
 
+/// Point an s5cmd `Command` at the read-only corpus credential (`ZEN_CORPUS_AWS_*`) when one is set,
+/// so corpus reads don't reuse the run-write cred. No-op when `ZEN_CORPUS_AWS_ACCESS_KEY_ID` is unset —
+/// the command then inherits the ambient `AWS_*` (single-cred / single-bucket setups). When the corpus
+/// cred is permanent (no session token), the ambient `AWS_SESSION_TOKEN` is removed so the run cred's
+/// session can't leak onto the corpus access key.
+///
+/// Currently uncalled: corpus reads moved in-process (objstore), and the corpus credential is not yet
+/// threaded into objstore (see the note in the source fetch below). Kept so that wiring has the exact
+/// credential semantics, including the session-token removal.
+#[allow(dead_code)]
+fn apply_corpus_creds(cmd: &mut std::process::Command) {
+    let Ok(ak) = std::env::var("ZEN_CORPUS_AWS_ACCESS_KEY_ID") else {
+        return;
+    };
+    cmd.env("AWS_ACCESS_KEY_ID", ak);
+    if let Ok(sk) = std::env::var("ZEN_CORPUS_AWS_SECRET_ACCESS_KEY") {
+        cmd.env("AWS_SECRET_ACCESS_KEY", sk);
+    }
+    match std::env::var("ZEN_CORPUS_AWS_SESSION_TOKEN") {
+        Ok(st) => {
+            cmd.env("AWS_SESSION_TOKEN", st);
+        }
+        Err(_) => {
+            cmd.env_remove("AWS_SESSION_TOKEN");
+        }
+    }
+}
+
 /// Filename prefix of every on-disk source-cache entry. The sweeper below will only ever
 /// delete a file starting with this, so an unrelated temp file can never be collected.
 const SRC_CACHE_PREFIX: &str = "jobexec_src_";
@@ -558,8 +586,9 @@ struct VariantLoc {
 ///   * byte-range GET from R2 (`$ZEN_VARIANTS_TAR_URI`) — no whole-tar download, one R2 request/variant;
 ///   * TAR-SHARD local read (`$ZEN_VARIANTS_LOCAL_DIR`) — the worker pulled + extracted the tar ONCE
 ///     and reads `<dir>/<name>` off disk, ZERO per-variant R2 requests (the I/O-bound fix).
-///     The optional 4th `name` column is what enables the local path; legacy 3-column indices still parse
-///     (name = "") and fall back to the byte-range GET.
+///
+/// The optional 4th `name` column is what enables the local path; legacy 3-column indices still parse
+/// (name = "") and fall back to the byte-range GET.
 static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, VariantLoc>> =
     std::sync::OnceLock::new();
 

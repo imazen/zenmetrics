@@ -40,8 +40,8 @@ use crate::metrics::{GpuRuntime, auto_order, runtime_label};
 
 /// Display viewing conditions for a cvvdp scorer: photometry
 /// (`DisplayModel` — peak/black luminance, ambient reflection, EOTF)
-/// + geometry (`DisplayGeometry` — resolution / distance / diagonal,
-///   which derives pixels-per-degree).
+/// and geometry (`DisplayGeometry` — resolution / distance / diagonal,
+/// which derives pixels-per-degree).
 ///
 /// Both halves matter and both must be set together: the photometry
 /// drives the sRGB→linear-cd/m² conversion in the color stage, and
@@ -125,9 +125,9 @@ impl DisplayTarget {
 ///
 /// Dimension cache shape: a single slot. When a pair arrives with
 /// dims differing from the cached slot, the old `Cvvdp` is dropped
-/// + a fresh one allocated. Sweep producers should sort pairs by
-///   (width, height) to maximise hit rate; the cvvdp-backfill
-///   pipeline does this implicitly by grouping by source image.
+/// and a fresh one allocated. Sweep producers should sort pairs by
+/// (width, height) to maximise hit rate; the cvvdp-backfill
+/// pipeline does this implicitly by grouping by source image.
 pub enum CvvdpBatchScorer {
     #[cfg(feature = "gpu-cuda")]
     Cuda(CvvdpBatchScorerState<cubecl::cuda::CudaRuntime>),
