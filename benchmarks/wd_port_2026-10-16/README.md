@@ -136,3 +136,11 @@ on i265; native/recovery logs are retained beside it. New search wrapper:
 A first four-second attempt failed on integer sigma tensor dtype; the corrected
 float32 attempt retains the original clock. `nn-wd-aic-report` compacts existing
 measurements without repeating inference.
+
+The largest 3355×2516 pair also completes on RTen under the same 16-GiB cap:
+`rc=0 34s | peak-RSS 11.08GiB | min-avail 11620MiB | peak-load 8.22`.
+`/usr/bin/time -v` reports 11,615,712 KiB maximum RSS, elapsed 34.12 s,
+exit 0 (`~/tmp/wd-port/aic-round12/largest-rten.time`). All five scores agree
+with retained CUDA controls within 1.1046152371067653e-7 KonJND;
+[full-precision comparison](largest_engine_parity.tsv). This is a two-engine
+capacity/parity control, separate from the timed convention search.
