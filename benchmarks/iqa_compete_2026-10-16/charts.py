@@ -3,23 +3,46 @@
 import argparse, collections, html, json, math, pathlib, statistics
 P=pathlib.Path
 
+def plot_svg(figure):
+    import io
+    import matplotlib.pyplot as plt
+    out=io.StringIO()
+    figure.savefig(out,format='svg',bbox_inches='tight',metadata={'Date':None})
+    plt.close(figure)
+    return out.getvalue()
+
+def plotting():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    matplotlib.rcParams.update({'svg.fonttype':'none','svg.hashsalt':'iqa-compete','font.size':9})
+    return plt
+
 def svg_bars(title,rows):
-    width=1200;height=70+26*len(rows);maximum=max((r['median_ns'] for r in rows),default=1)
-    out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12"><text x="12" y="22">{html.escape(title)} — per-call median, milliseconds</text>']
-    for i,r in enumerate(rows):
-        y=48+26*i;label=f"{r['metric_name']} / {r['impl']} ({r.get('engine','native')}/{r['device']}) / {r['threads']}T / {r['mode']}";color='#cf702c' if r['status']=='variant_mismatch' else ('#2166ac' if r['impl']=='zenmetrics' else '#4f9e79')
-        out.append(f'<text x="12" y="{y+13}">{html.escape(label)}</text><rect x="410" y="{y}" width="{r["median_ns"]/maximum*660:.3f}" height="18" fill="{color}"/><text x="1080" y="{y+13}">{r["median_ns"]/1e6:.4g}</text>')
-    return ''.join(out)+'</g></svg>'
+    plt=plotting()
+    figure,axis=plt.subplots(figsize=(16,max(2,.25*len(rows)+1)))
+    labels=[f"{r['metric_name']} / {r['impl']} ({r.get('engine','native')}/{r['device']}) / {r['threads']}T / {r['mode']}" for r in rows]
+    values=[r['median_ns']/1e6 for r in rows]
+    colors=['#cf702c' if r['status']=='variant_mismatch' else ('#2166ac' if r['impl']=='zenmetrics' else '#4f9e79') for r in rows]
+    bars=axis.barh(range(len(rows)),values,color=colors)
+    axis.set_yticks(range(len(rows)),labels,fontsize=8)
+    axis.invert_yaxis();axis.set_xlabel('Per-call median (ms)');axis.set_title(title)
+    axis.bar_label(bars,labels=[f'{v:.4g}' for v in values],padding=3,fontsize=7)
+    axis.margins(x=.13);axis.grid(axis='x',alpha=.2);axis.set_axisbelow(True)
+    return plot_svg(figure)
+
 def svg_lines(title,rows):
-    groups=collections.defaultdict(list)
+    plt=plotting();groups=collections.defaultdict(list)
     for r in rows:groups[(r['metric_name'],r['impl'],r.get('engine','native'),r['device'],r['threads'],r['mode'],r['status'])].append(r)
-    xmax=max((r['width']*r['height']/1e6 for r in rows),default=1);ymax=max((r['median_ns']/1e6 for r in rows),default=1)
-    out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="{max(540,70+17*len(groups))}"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12">',f'<text x="12" y="22">{html.escape(title)} — x: megapixels; y: milliseconds/call</text><path d="M60 40V480H880" fill="none" stroke="black"/>']
-    for i,(key,rs) in enumerate(sorted(groups.items())):
-        color=['#2166ac','#4f9e79','#cf702c','#9c58a1','#6b6b6b'][i%5];points=' '.join(f'{60+820*r["width"]*r["height"]/1e6/xmax:.3f},{480-420*r["median_ns"]/1e6/ymax:.3f}' for r in sorted(rs,key=lambda r:r['width']*r['height']))
-        out.append(f'<polyline points="{points}" fill="none" stroke="{color}"/><text x="900" y="{45+17*i}" fill="{color}">{html.escape(str(key))}</text>')
-    for n in range(6):out.append(f'<text x="{60+164*n}" y="505">{xmax*n/5:.2g}</text><text x="2" y="{480-84*n}">{ymax*n/5:.3g}</text>')
-    return ''.join(out)+'</g></svg>'
+    figure,axis=plt.subplots(figsize=(12,max(4,.16*len(groups)+1)))
+    for key,values in sorted(groups.items()):
+        values=sorted(values,key=lambda r:r['width']*r['height'])
+        axis.plot([r['width']*r['height']/1e6 for r in values],[r['median_ns']/1e6 for r in values],marker='o',markersize=3,label=' / '.join(map(str,key)))
+    axis.set_xlabel('Image size (megapixels)');axis.set_ylabel('Per-call median (ms)')
+    axis.set_title(title);axis.grid(alpha=.2);axis.set_ylim(bottom=0);axis.set_xlim(left=0)
+    axis.legend(loc='upper left',bbox_to_anchor=(1.02,1),fontsize=6)
+    return plot_svg(figure)
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('raw',nargs='+',type=P);p.add_argument('--output',type=P,required=True);a=p.parse_args();a.output.mkdir(exist_ok=False)
     rows=[];seen=set()
@@ -53,6 +76,6 @@ def main():
         for key,values in sorted(groups.items()):
             name=prefix+'-'+'-'.join(key).replace('+','_')+'.svg';(a.output/name).write_text(draw(' / '.join(key),sorted(values,key=lambda r:(r['metric_name'],r['threads'],r['impl']))));links.append(name)
     status=collections.Counter(r['status'] for r in rows)
-    (a.output/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>IQA compute comparison</title><h1>IQA compute comparison</h1><p>Descriptive observations, no confidence intervals. Orange marks variant mismatch; unsupported/skipped cells remain in the summaries.</p><pre>'+html.escape(json.dumps(status,indent=2))+'</pre>'+''.join(f'<p><a href="{html.escape(n)}">{html.escape(n)}</a></p>' for n in links))
-    print(json.dumps(dict(rows=len(rows),statuses=status,panels=len(links))))
+    (a.output/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>IQA compute comparison</title><h1>IQA compute comparison</h1><p>Descriptive observations, no confidence intervals. Orange bars mark variant mismatch; unsupported/skipped cells remain in the summaries.</p><pre>'+html.escape(json.dumps(status,indent=2))+'</pre>'+''.join(f'<p><a href="{html.escape(n)}">{html.escape(n)}</a></p>' for n in links))
+    print(json.dumps(dict(rows=len(rows),statuses=status,panels=len(links),renderer='matplotlib',renderer_version=__import__('matplotlib').__version__)))
 if __name__=='__main__':main()

@@ -93,3 +93,28 @@ its capacity. Map computation and writing/readback remain timed, while final
 caller-buffer destruction occurs after measurement. Butteraugli GPU copies its
 native map into a returned host vector and drops that vector within the call.
 These distinct public output-buffer contracts are retained in both adapters.
+
+Static charts use Matplotlib from the owned competitor environment. Pass its
+Python executable as the optional third argument to `just iqa-compete-charts`.
+The script writes standalone SVGs and an HTML index. Markers represent observed
+sizes; connecting lines join measured points without fitting or extrapolation.
+
+Linux scope failures can leave zenbench admission records. The driver emits its
+PID, process group and timestamp before warmup. Recovery is limited to that
+reported process: the owner and every group member must have exited, the record
+must match the owner/time window, and its guard must be acquired without waiting.
+The original record is archived verbatim and retained under a backup name; live
+or other-owner reservations stay in place. Seven OS-backed controls and a real
+PieAPP timeout recovery exercise this path. Rust-header build validation is
+recorded separately from the Python recovery controls.
+
+Resource-wrapper receipts cover the entire admitted command, including untimed
+input loading and warmup. Their peak RSS is a process-scope measurement, not
+an isolated timed-kernel heap measurement.
+
+The CLI learned-metric route caches loaded models in a process-wide `OnceLock`
+([NN adapter](../../crates/zenmetrics-cli/src/metrics/nn.rs)). The first callable
+warmup loads the selected model; later timed calls use that model directly.
+The `IQA_WARMUP` duration measures that first score callable after persistent
+scorer construction. Earlier input loading and eager constructor work are also
+untimed but are outside that diagnostic duration.
