@@ -17,6 +17,6 @@ for engine,adapters in ADAPTERS.items():
   config=a.output/f'{metric}-rust.json';config.write_text(json.dumps(dict(pair,metric_name=metric,probe_only=True,reference=str(a.pairs.parent/pair['reference']),distorted=str(a.pairs.parent/pair['distorted']))))
   rust=subprocess.run([str(a.rust),str(config)],capture_output=True,text=True,check=True);(a.output/f'{engine}-{metric}-rust.log').write_text(rust.stdout+rust.stderr)
   probe=json.loads(next(s[len('IQA_PROBE '):] for s in rust.stdout.splitlines() if s.startswith('IQA_PROBE ')));score=struct.unpack('>d',bytes.fromhex(probe['scores'][0][1]))[0]
-  row.update(score=native_score,ref_score=score,abs_delta=abs(score-native_score),parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),within_bound=abs(score-native_score)<=max(bound,abs(score)*RELATIVE_BOUNDS.get(metric,0.)));rows.append(row);print(json.dumps(row),flush=True)
+  row.update(reference_column=probe['scores'][0][0],score=native_score,ref_score=score,abs_delta=abs(score-native_score),parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),within_bound=abs(score-native_score)<=max(bound,abs(score)*RELATIVE_BOUNDS.get(metric,0.)));rows.append(row);print(json.dumps(row),flush=True)
 (a.output/'receipt.json').write_text(json.dumps(dict(not_a_timing_panel=True,cases=rows),indent=2)+'\n')
 assert all(r['rc']==0 for r in rows),'native adapter invocation failed; inspect retained logs'

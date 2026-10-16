@@ -95,7 +95,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
     pieces={mode:[] for mode in MODES}
     completed={}
     chunk_ledger=args.root/'chunk-attempts.jsonl'
-    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','chunk_budget_ms','sample_target_ns']
+    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','chunk_budget_ms','sample_target_ns']
     def retain(value):
         mode=value['mode']
         if value['status']=='partial':

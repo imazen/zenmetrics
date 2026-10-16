@@ -1078,3 +1078,7 @@ iqa-compete-python-preflight python:
 # Repair only the owned competitor environment; existing oracle sites are read-only.
 iqa-compete-python-deps python:
     uv pip install --python '{{python}}' --no-deps ffmpeg-python matplotlib contourpy cycler fonttools kiwisolver pyparsing python-dateutil six PyEXR OpenEXR
+
+# Force multiple short holds while preserving the production ten-round criterion.
+iqa-compete-chunk-e2e binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --chunk-budget-ms 200 --sample-target-ns 20000000

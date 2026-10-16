@@ -17,6 +17,10 @@ class Aggregation(unittest.TestCase):
     def test_different_inputs_cannot_merge(self):
         a,b=piece([1.]*6),piece([1.]*4);b['pair_sha256']='other'
         with self.assertRaisesRegex(ValueError,'identity'):combine([a,b])
+    def test_different_runtime_or_model_cannot_merge(self):
+        for key in ['engine','model_dir']:
+            a,b=piece([1.]*6),piece([1.]*4);a[key]='first';b[key]='second'
+            with self.assertRaisesRegex(ValueError,'identity'):combine([a,b])
     def test_score_bits_and_map_score_disagreement_are_preserved(self):
         self.assertEqual(combine([piece([1.]*6),piece([1.]*4,1.0000001)])['status'],'variant_mismatch')
         a,b=piece([1.]*6),piece([1.]*4);b['map_score_matches_scalar_bits']=False
