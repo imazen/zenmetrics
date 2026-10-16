@@ -2438,7 +2438,6 @@ dependencies = [
  "archmage 0.9.31-beta.1",
  "enough",
  "image",
- "imgref",
  "magetypes 0.9.31-beta.1",
  "rayon",
  "rgb",
