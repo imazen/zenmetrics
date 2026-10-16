@@ -143,7 +143,9 @@ impl DistortWorker {
             .into_iter()
             .map(|r| {
                 r.map(|b| {
-                    b.chunks_exact(2)
+                    b.as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|c| u16::from_le_bytes([c[0], c[1]]))
                         .collect()
                 })

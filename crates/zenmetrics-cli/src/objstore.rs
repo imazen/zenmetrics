@@ -54,10 +54,10 @@ fn store_for(bucket: &str) -> Result<Arc<dyn ObjectStore>, Box<dyn Error>> {
         // as the worker's s3io (55f8a339) — without it, `jobexec` on a LAN-store fleet
         // fails every source/variant/index GET while the worker half succeeds.
         .with_allow_http(endpoint.starts_with("http://"));
-    if let Ok(tok) = std::env::var("AWS_SESSION_TOKEN") {
-        if !tok.is_empty() {
-            b = b.with_token(tok);
-        }
+    if let Ok(tok) = std::env::var("AWS_SESSION_TOKEN")
+        && !tok.is_empty()
+    {
+        b = b.with_token(tok);
     }
     let store: Arc<dyn ObjectStore> =
         Arc::new(b.build().map_err(|e| format!("objstore build: {e}"))?);
@@ -67,7 +67,7 @@ fn store_for(bucket: &str) -> Result<Arc<dyn ObjectStore>, Box<dyn Error>> {
 }
 
 /// GET a whole object (`bucket`, `key`) into memory over the pooled connection.
-pub fn get_object(bucket: &str, key: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+pub(crate) fn get_object(bucket: &str, key: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     let store = store_for(bucket)?;
     let p = OsPath::from(key);
     let bytes = runtime()
@@ -80,7 +80,7 @@ pub fn get_object(bucket: &str, key: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 /// GET an object addressed by a full `s3://bucket/key` URI.
-pub fn get_uri(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+pub(crate) fn get_uri(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     let rest = uri
         .strip_prefix("s3://")
         .ok_or_else(|| format!("not an s3:// uri: {uri}"))?;
@@ -92,7 +92,7 @@ pub fn get_uri(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
 /// GET a single byte range `[offset, offset+len)` of an object (one R2 request, pooled connection).
 /// Replaces the per-variant `aws s3api get-object --range` spawn on the byte-range tar path.
-pub fn get_range(
+pub(crate) fn get_range(
     bucket: &str,
     key: &str,
     offset: u64,
@@ -105,30 +105,4 @@ pub fn get_range(
         .block_on(async move { store.get_range(&p, range).await })
         .map_err(|e| format!("objstore get_range {bucket}/{key} [{offset}+{len}]: {e}"))?;
     Ok(bytes.to_vec())
-}
-
-/// GET MANY byte ranges of ONE object CONCURRENTLY — all in flight together over the pooled
-/// connection, not one-at-a-time. `ranges` is `(offset, len)` pairs; the returned `Vec` is in the
-/// same order. This is the concurrency win for a ScoreFile cell: its ~12 variants are all ranges of
-/// the same `variants.tar`, so one call overlaps every fetch instead of 12 serial round-trips.
-pub fn get_ranges(
-    bucket: &str,
-    key: &str,
-    ranges: &[(u64, u64)],
-) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
-    if ranges.is_empty() {
-        return Ok(Vec::new());
-    }
-    let store = store_for(bucket)?;
-    let p = OsPath::from(key);
-    let rs: Vec<std::ops::Range<u64>> = ranges.iter().map(|&(o, l)| o..o + l).collect();
-    let out = runtime()
-        .block_on(async move { store.get_ranges(&p, &rs).await })
-        .map_err(|e| {
-            format!(
-                "objstore get_ranges {bucket}/{key} ({} ranges): {e}",
-                ranges.len()
-            )
-        })?;
-    Ok(out.into_iter().map(|b| b.to_vec()).collect())
 }

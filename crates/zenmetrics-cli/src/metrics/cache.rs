@@ -729,12 +729,11 @@ fn build_params(
 ) -> Result<zenmetrics_api::MetricParams, zenmetrics_api::Error> {
     #[cfg(feature = "gpu-zensim")]
     {
-        if matches!(kind, zenmetrics_api::MetricKind::Zensim) {
-            if let Some(r) = regime {
-                let zp =
-                    zenmetrics_api::zensim::ZensimParams::default_weights().with_regime(r.into());
-                return Ok(zenmetrics_api::MetricParams::Zensim(zp));
-            }
+        if matches!(kind, zenmetrics_api::MetricKind::Zensim)
+            && let Some(r) = regime
+        {
+            let zp = zenmetrics_api::zensim::ZensimParams::default_weights().with_regime(r.into());
+            return Ok(zenmetrics_api::MetricParams::Zensim(zp));
         }
     }
     let _ = regime; // unused when zensim feature off

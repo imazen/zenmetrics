@@ -19,6 +19,9 @@
 //!
 //! See `--help` on any subcommand for full options.
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "assemble")]
 mod assemble;
 // lib.rs exposes this module publicly; the bin keeps it private,
@@ -30,6 +33,9 @@ mod compare;
 #[allow(unreachable_pub)]
 mod decode;
 mod fleet_plan;
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "hdr")]
 mod hdr;
 // lib.rs exposes this module publicly; the bin keeps it private,
@@ -60,6 +66,9 @@ mod score_video;
 #[cfg(feature = "cpu-metrics")]
 mod size_invariance;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "sweep")]
 mod sweep;
 
@@ -1085,7 +1094,7 @@ fn cmd_sweep(
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
 
-    use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
+    use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, run_sweep};
 
     // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
     // build an `Orchestrator` and hand a wrapped `Arc<Mutex<...>>`
@@ -2988,7 +2997,8 @@ fn cmd_batch(
             let peak = hdr::measured_display_peak_nits(r);
             let peak_bits = peak.to_bits();
             if !matches!(&cvvdp_hdr_scorer, Some((b, _)) if *b == peak_bits) {
-                cvvdp_hdr_scorer = None; // free the stale GPU slot first
+                // free the stale GPU slot first (drop before allocating)
+                drop(cvvdp_hdr_scorer.take());
                 cvvdp_hdr_scorer = Some((
                     peak_bits,
                     crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
