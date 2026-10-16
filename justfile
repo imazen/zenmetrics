@@ -645,7 +645,7 @@ nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,pieapp":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
@@ -771,3 +771,58 @@ nn-paq2piq-small-inputs python ladder nonsquare:
 # Default scheduler, explicitly excluding any inherited legacy override.
 nn-paq2piq-cli-smoke binary models ladder:
     python3 -I crates/zenmetrics-nn/models/paq2piq/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+# Official PieAPP release is executed only as a documented black-box CLI.
+nn-pieapp-oracle python upstream reference distorted log sampling="dense":
+    python3 -I crates/zenmetrics-nn/models/pieapp/oracle_cli.py --python '{{python}}' --upstream '{{upstream}}' --reference '{{reference}}' --distorted '{{distorted}}' --log '{{log}}' --sampling '{{sampling}}'
+
+# Paper/tensor-metadata reconstruction candidates; no official source imports.
+nn-pieapp-probe python checkpoint reference distorted:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/probe.py --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Score a TSV using explicitly accepted NC PieAPP weights; verify repeatability.
+nn-pieapp-score models pairs out engine="rten":
+    just snap-cargo @ run --release -p zenmetrics-nn --features ort --example pieapp_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+# Complete PieAPP landing checks; invoke under run-heavy and the shared lock.
+nn-pieapp-gates models ladder:
+    bash -c "$(cat benchmarks/pieapp_gates_2026-10-16.sh)" -- '{{models}}' '{{ladder}}'
+
+nn-pieapp-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/pieapp/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-pieapp-core-check:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ clippy -p zenmetrics-nn --all-targets --features ort,model-tests -- -D warnings
+
+# Fixed convention qualified through the public oracle.
+nn-pieapp-export python checkpoint out:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/export.py --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+# The release's public patch-error/weight entry point, used only as an opaque oracle.
+nn-pieapp-blackbox-probe python upstream checkpoint reference distorted:
+    {{python}} crates/zenmetrics-nn/models/pieapp/blackbox_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Opaque official entry-point oracle; caller holds the heavy-job lock.
+nn-pieapp-entry-oracle python pairs out device:
+    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream "$HOME/tmp/pieapp-oracle/upstream" --checkpoint "$HOME/tmp/pieapp-oracle/upstream/weights/PieAPPv0.1.pth" --pairs {{pairs}} --out {{out}} --device {{device}}
+
+nn-pieapp-calibration-summary pairs scores out:
+    python3 crates/zenmetrics-nn/models/pieapp/summarize.py '{{pairs}}' '{{scores}}' '{{out}}'
+
+nn-pieapp-goldens pairs oracle out:
+    python3 crates/zenmetrics-nn/models/pieapp/goldens.py '{{pairs}}' '{{oracle}}' '{{out}}'
+
+# Install the complete measured scale and run all landing gates.
+nn-pieapp-finish:
+    bash -c "$(cat benchmarks/pieapp_finish_2026-10-16.sh)"
+
+
+# Calibration installation is independently checkable after measured gate runs.
+nn-pieapp-install-calibration:
+    python3 -I crates/zenmetrics-nn/models/pieapp/install_calibration.py
+
+# Check the wrapper and real bookkeeping without repeating numerical panels.
+nn-pieapp-wrapper-check:
+    bash -n benchmarks/pieapp_finish_2026-10-16.sh benchmarks/pieapp_gates_2026-10-16.sh
+    just nn-pieapp-install-calibration

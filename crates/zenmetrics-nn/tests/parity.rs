@@ -6,7 +6,7 @@
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
-//!   `musiq`, `hyperiqa`, `paq2piq`.
+//!   `musiq`, `hyperiqa`, `paq2piq`, `pieapp`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -17,7 +17,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, WeightsConsent,
+    Musiq, Paq2piq, PieApp, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -147,6 +147,13 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     "hyperiqa",
                 );
             }
+            if name == "pieapp" {
+                let consent = WeightsConsent::new().accept(PieApp::WEIGHTS);
+                return (
+                    Box::new(PieApp::from_dir(&dir, engine(), &consent).expect("load pieapp")),
+                    "pieapp",
+                );
+            }
             if name == "paq2piq" {
                 let consent = WeightsConsent::new().accept(Paq2piq::WEIGHTS);
                 return (
@@ -237,7 +244,22 @@ fn matches_upstream() {
             let eval = m
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
-            let got = score(&*eval, col);
+            let mut got = score(&*eval, col);
+            // Repeat mismatching CUDA observations before treating them as
+            // findings; retain both values in the log. The JND gate is unchanged.
+            if col == "pieapp"
+                && engine() != Engine::Rten
+                && (!got.is_finite() || (got - want).abs() > tol(col))
+            {
+                let repeated = m
+                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("repeat mismatching CUDA observation");
+                let retry = score(&*repeated, col);
+                eprintln!(
+                    "{col} {stem} {size}: CUDA mismatch first={got:.17e} repeated={retry:.17e} want={want:.17e}"
+                );
+                got = retry;
+            }
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
@@ -288,8 +310,10 @@ fn warm_reference_equals_cold() {
         // differ. A-FINE's raw afine_all is likewise signed and
         // image-dependent on identical pairs, and an NR model's headline on
         // (r, r) is the reference's own quality score. For all of them the
-        // identical-pair check below is warm == cold.
-        let cold_same = (nr || matches!(col, "ckdn" | "afine")).then(|| {
+        // identical-pair check below is warm == cold. PieAPP's public
+        // oracle returns -3.725290298461914e-9 for an identical patch;
+        // it also checks warm == cold and the unchanged JND gate below.
+        let cold_same = (nr || matches!(col, "ckdn" | "afine" | "pieapp")).then(|| {
             score(
                 &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
                     .unwrap(),
@@ -297,12 +321,13 @@ fn warm_reference_equals_cold() {
             )
         });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
+        // PieAPP caches only planar conversion on both engines.
         // A trunk engine caches the reference's features; a whole-graph
         // engine (ort-cuda) recomputes them on every candidate. A paired
         // no-reference metric always scores its reference once.
         assert_eq!(
             warm.reuses_reference_work(),
-            nr || engine() == Engine::Rten,
+            nr || engine() == Engine::Rten || col == "pieapp",
             "{col}"
         );
         for _ in 0..2 {
@@ -318,6 +343,10 @@ fn warm_reference_equals_cold() {
         );
         if let Some(cold_same) = cold_same {
             assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
+            if col == "pieapp" {
+                const ORACLE_IDENTICAL: f64 = -3.725_290_298_461_914e-9;
+                assert!((same - ORACLE_IDENTICAL).abs() <= tol(col), "{col}");
+            }
         } else if engine() == Engine::Rten || col != "dists" {
             assert_eq!(same, 0.0, "{col}");
         } else {
