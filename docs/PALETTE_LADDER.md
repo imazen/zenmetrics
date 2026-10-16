@@ -34,3 +34,10 @@ No launch or measured budget is implied by a generated manifest.
 `just palette-check` exercises invented source metadata and indexed encoding
 under both build variants, including the independent PNG decoder. Run it with
 the shared heavy-command lock and resource wrapper.
+
+`scripts/jobsys/budget_preflight.py` writes an exclusive metadata-only manifest:
+native-size omissions, the generation union, twenty full-budget mock fit routes
+per admitted host, supporting stages and explicit watchdog reservations. Host
+identity is included in each task namespace. Missing caps or budget produce
+UNREADY. Measurements, production quotas, placement admission and execution
+receipts remain separate launch prerequisites; the generator never launches.

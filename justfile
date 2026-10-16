@@ -902,3 +902,6 @@ palette-check:
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
     just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings
+
+budget-preflight-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_budget_preflight.py
