@@ -41,14 +41,21 @@
 use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
+mod butteraugli_original;
 mod cw_fft;
 mod cw_ssim;
 pub mod display;
 mod flip;
 mod ssim_pyiqa;
+mod ssimulacra1;
+mod ws_hv;
 pub use display::CvvdpDisplay;
 #[cfg(feature = "cpu-metrics")]
 mod classical;
+#[cfg(feature = "nn")]
+mod nn;
+#[cfg(feature = "nr")]
+mod nr;
 #[cfg(feature = "cpu-metrics")]
 pub mod vmaf;
 
@@ -169,6 +176,18 @@ pub enum MetricKind {
     /// Complex-wavelet SSIM: four levels, eight orientations, coarse 7x7 windows.
     #[value(name = "cw-ssim")]
     CwSsim,
+    /// Contrast-aware multiscale banding index, studio-swing BT.601 ingress.
+    #[value(name = "cambi")]
+    Cambi,
+    /// Original Google Butteraugli (revision 2019-03-19); lower is better.
+    #[value(name = "butteraugli-original")]
+    ButteraugliOriginal,
+    /// Original Cloudinary SSIMULACRA; lower is better.
+    #[value(name = "ssimulacra1")]
+    Ssimulacra1,
+    /// Wavelet horizontal/vertical similarity; higher is better.
+    #[value(name = "ws-hv")]
+    WsHv,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -188,6 +207,113 @@ pub enum MetricKind {
     /// CPU-only.
     #[value(name = "nlpd-iqa")]
     NlpdIqa,
+    /// LPIPS v0.1, AlexNet trunk (upstream `lpips` 0.1.4); lower is
+    /// better. Needs the `nn` feature and an exported model directory in
+    /// `ZENMETRICS_NN_MODEL_DIR` (see `crates/zenmetrics-nn`).
+    #[value(name = "lpips-alex")]
+    LpipsAlex,
+    /// LPIPS v0.1, VGG16 trunk; as `lpips-alex`.
+    #[value(name = "lpips-vgg")]
+    LpipsVgg,
+    /// LPIPS v0.1, SqueezeNet 1.1 trunk; as `lpips-alex`.
+    #[value(name = "lpips-squeeze")]
+    LpipsSqueeze,
+    /// DISTS (upstream `DISTS_pytorch` 0.1, no resize); lower is better.
+    /// As `lpips-alex`.
+    #[value(name = "dists")]
+    Dists,
+    /// ST-LPIPS, AlexNet (upstream `stlpips_pytorch` 0.0.2,
+    /// shift-tolerant); lower is better. As `lpips-alex`.
+    #[value(name = "stlpips-alex")]
+    StlpipsAlex,
+    /// ST-LPIPS, VGG16; as `stlpips-alex`.
+    #[value(name = "stlpips-vgg")]
+    StlpipsVgg,
+    /// DeepDC (upstream `DeepDC_PyTorch` 0.2 with its ImageNet input
+    /// normalisation on, as the JPEG AIC-4 `DeepDC` column; no resize); lower
+    /// is better. As `lpips-alex`.
+    #[value(name = "deepdc")]
+    Deepdc,
+    /// CKDN (upstream `researchmm/CKDN` checkpoint, fed as
+    /// `cat(dist, ref, dist, ref)` → `dr`; upstream eval transform:
+    /// short side →329 then centre-crop 288, bicubic for the distorted
+    /// image, nearest for the reference); **higher** is better —
+    /// it is a sigmoid quality score, not a distance. As `lpips-alex`.
+    #[value(name = "ckdn")]
+    Ckdn,
+    /// A-FINE — learned FR metric (upstream `ChrisDud0257/AFINE`, Apache-2.0;
+    /// CLIP ViT-B/32 taps + naturalness/fidelity heads, raw `afine_all`,
+    /// **lower** is better). Needs feature `nn`; its weights carry
+    /// noncommercial terms (trained on DiffIQA data), so
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=afine` as for `ckdn`.
+    #[value(name = "afine")]
+    Afine,
+    /// DreamSim ensemble — learned perceptual similarity distance
+    /// (upstream `ssundaram21/dreamsim`, MIT; DINO + CLIP + OpenCLIP
+    /// ViT-B/16 ensemble, `1 - cosine`, **lower** is better). Needs
+    /// feature `nn`; its weights state no licence, so
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=dreamsim`.
+    #[value(name = "dreamsim")]
+    Dreamsim,
+    /// ARNIQA — learned no-reference quality score (upstream
+    /// `miccunifi/ARNIQA`, Apache-2.0; ResNet-50 SimCLR embeddings at full +
+    /// PIL-bilinear half scale, kadid10k Ridge regressor); **higher** is
+    /// better, `[0, 1]`. Scored through `PairedNoReference`: emits `arniqa`
+    /// (distorted) and `arniqa_ref` (reference). As `lpips-alex` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "arniqa")]
+    Arniqa,
+    /// MANIQA — learned no-reference quality score (upstream
+    /// `IIGROUP/MANIQA`, Apache-2.0; ViT-B/8 + TABlocks + Swin stages,
+    /// `ckpt_koniq10k`); **higher** is better, normalized `[0, 1]`
+    /// (upstream min-max normalizes koniq10k MOS labels). Scored
+    /// through `PairedNoReference`: emits
+    /// `maniqa` (distorted) and `maniqa_ref` (reference). As `arniqa`
+    /// for `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "maniqa")]
+    Maniqa,
+    /// LIQE — learned no-reference quality score (upstream
+    /// `zwx8981/LIQE`, MIT code / weights licence unknown:
+    /// consent-gated; fine-tuned CLIP ViT-B/32, `LIQE.pt`); **higher**
+    /// is better, MOS `[1, 5]`. Scored through `PairedNoReference`:
+    /// emits `liqe` (distorted) and `liqe_ref` (reference). As `arniqa`
+    /// for `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`, plus
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=liqe`.
+    #[value(name = "liqe")]
+    Liqe,
+    /// MUSIQ — learned no-reference quality score (upstream
+    /// `google-research/google-research/musiq`, Apache-2.0 incl.
+    /// `koniq_ckpt.npz`; multi-scale transformer over 32x32 patches at
+    /// 224/384/full resolution); **higher** is better, MOS-scale score.
+    /// Scored through `PairedNoReference`: emits `musiq` (distorted) and
+    /// `musiq_ref` (reference). As `arniqa` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
+    #[value(name = "musiq")]
+    Musiq,
+    /// HyperIQA — learned no-reference quality score (upstream
+    /// `SSL92/hyperIQA`, MIT code; weights licence unknown —
+    /// consent-gated; fine-tuned ResNet-50 hypernetwork,
+    /// `koniq_pretrained.pkl`); **higher** is better, MOS-scale
+    /// `[0, 100]`. Scored through `PairedNoReference`: emits `hyperiqa`
+    /// (distorted) and `hyperiqa_ref` (reference). As `arniqa` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`, plus
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa`.
+    #[value(name = "hyperiqa")]
+    Hyperiqa,
+    /// PaQ-2-PiQ — no-reference, authors' `baidut/paq2piq` (MIT code;
+    /// CC-BY-NC-4.0 weights, consent-gated; ResNet-18 + 20x20-block
+    /// RoIPool head, `RoIPoolModel-fit.10.bs.120.pth`); **higher** is
+    /// better, MOS-scale `[0, 100]`. Scored through
+    /// `PairedNoReference`: emits `paq2piq` (distorted) and
+    /// `paq2piq_ref` (reference). As `arniqa` for
+    /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`, plus
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
+    #[value(name = "paq2piq")]
+    Paq2piq,
+    /// Cool-Chic Wasserstein Distortion at sigma 2^1 through 2^5.
+    /// Raw sRGB VGG16 pre-pool features; lower is closer. Emits five columns.
+    #[value(name = "wd")]
+    Wd,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -530,6 +656,26 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "mdctpsnr")]
     Mdctpsnr,
+    /// PIQE — no-reference perception-based block distortion (in-tree
+    /// `piqe` crate, port of pypiqe 1.2 / MATLAB `piqe`). Score in
+    /// `[0, 100]`; higher is worse. Scored through `PairedNoReference`:
+    /// emits `piqe` (distorted) and `piqe_ref` (reference). Needs `nr`.
+    #[value(name = "piqe")]
+    Piqe,
+    /// NIQE — no-reference natural-image-quality evaluator (in-tree `niqe`
+    /// crate, port of BasicSR `niqe.py` with LIVE's pristine-model params).
+    /// Mahalanobis distance to the pristine MVG; higher is worse. Scored
+    /// through `PairedNoReference`: emits `niqe` (distorted) and `niqe_ref`
+    /// (reference). Needs `nr`.
+    #[value(name = "niqe")]
+    Niqe,
+    /// BRISQUE — no-reference blind/referenceless image spatial quality
+    /// evaluator (in-tree `brisque` crate, port of piq 0.8.0 `brisque()`
+    /// with LIVE's released SVM model). SVR distance; higher is worse.
+    /// Scored through `PairedNoReference`: emits `brisque` (distorted)
+    /// and `brisque_ref` (reference). Needs `nr`.
+    #[value(name = "brisque")]
+    Brisque,
 }
 
 impl MetricKind {
@@ -580,9 +726,30 @@ impl MetricKind {
             MetricKind::Flip,
             MetricKind::FlipV17,
             MetricKind::CwSsim,
+            MetricKind::Cambi,
+            MetricKind::ButteraugliOriginal,
+            MetricKind::Ssimulacra1,
+            MetricKind::WsHv,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
+            MetricKind::LpipsAlex,
+            MetricKind::LpipsVgg,
+            MetricKind::LpipsSqueeze,
+            MetricKind::Dists,
+            MetricKind::StlpipsAlex,
+            MetricKind::StlpipsVgg,
+            MetricKind::Deepdc,
+            MetricKind::Ckdn,
+            MetricKind::Afine,
+            MetricKind::Dreamsim,
+            MetricKind::Arniqa,
+            MetricKind::Maniqa,
+            MetricKind::Liqe,
+            MetricKind::Musiq,
+            MetricKind::Hyperiqa,
+            MetricKind::Paq2piq,
+            MetricKind::Wd,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -645,6 +812,9 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf,
             MetricKind::PsnrhvsDaala,
             MetricKind::Mdctpsnr,
+            MetricKind::Piqe,
+            MetricKind::Niqe,
+            MetricKind::Brisque,
         ]
     }
 
@@ -668,10 +838,31 @@ impl MetricKind {
             MetricKind::Flip => "flip",
             MetricKind::FlipV17 => "flip-v17",
             MetricKind::CwSsim => "cw-ssim",
+            MetricKind::Cambi => "cambi",
+            MetricKind::ButteraugliOriginal => "butteraugli-original",
+            MetricKind::Ssimulacra1 => "ssimulacra1",
+            MetricKind::WsHv => "ws-hv",
             MetricKind::SsimC => "ssimc",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
             MetricKind::NlpdIqa => "nlpd-iqa",
+            MetricKind::LpipsAlex => "lpips-alex",
+            MetricKind::LpipsVgg => "lpips-vgg",
+            MetricKind::LpipsSqueeze => "lpips-squeeze",
+            MetricKind::Dists => "dists",
+            MetricKind::StlpipsAlex => "stlpips-alex",
+            MetricKind::StlpipsVgg => "stlpips-vgg",
+            MetricKind::Deepdc => "deepdc",
+            MetricKind::Ckdn => "ckdn",
+            MetricKind::Afine => "afine",
+            MetricKind::Dreamsim => "dreamsim",
+            MetricKind::Arniqa => "arniqa",
+            MetricKind::Maniqa => "maniqa",
+            MetricKind::Liqe => "liqe",
+            MetricKind::Musiq => "musiq",
+            MetricKind::Hyperiqa => "hyperiqa",
+            MetricKind::Paq2piq => "paq2piq",
+            MetricKind::Wd => "wd",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -737,6 +928,9 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf => "msssim-libvmaf",
             MetricKind::PsnrhvsDaala => "psnrhvs-daala",
             MetricKind::Mdctpsnr => "mdctpsnr",
+            MetricKind::Piqe => "piqe",
+            MetricKind::Niqe => "niqe",
+            MetricKind::Brisque => "brisque",
         }
     }
 
@@ -753,6 +947,41 @@ impl MetricKind {
             // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention.
             _ => "CPU",
         }
+    }
+
+    /// False when this build compiled the metric's scoring arm out: the
+    /// learned metrics need the `nn` feature and the no-reference ports the
+    /// `nr` feature. Such a metric parses but only returns a "disabled"
+    /// error, so callers listing usable metrics (the browser module) skip it.
+    // Called by zenmetrics-browser, which includes this file by path; the CLI
+    // binary's private copy of the module has no caller.
+    #[allow(dead_code)]
+    pub fn scoring_compiled_in(self) -> bool {
+        let nn = matches!(
+            self,
+            MetricKind::LpipsAlex
+                | MetricKind::LpipsVgg
+                | MetricKind::LpipsSqueeze
+                | MetricKind::Dists
+                | MetricKind::StlpipsAlex
+                | MetricKind::StlpipsVgg
+                | MetricKind::Deepdc
+                | MetricKind::Ckdn
+                | MetricKind::Afine
+                | MetricKind::Dreamsim
+                | MetricKind::Arniqa
+                | MetricKind::Maniqa
+                | MetricKind::Liqe
+                | MetricKind::Musiq
+                | MetricKind::Hyperiqa
+                | MetricKind::Paq2piq
+                | MetricKind::Wd
+        );
+        let nr = matches!(
+            self,
+            MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque
+        );
+        !((nn && !cfg!(feature = "nn")) || (nr && !cfg!(feature = "nr")))
     }
 
     pub fn requires_gpu(self) -> bool {
@@ -819,10 +1048,31 @@ impl MetricKind {
             MetricKind::Flip => &["flip"],
             MetricKind::FlipV17 => &["flip_v17"],
             MetricKind::CwSsim => &["cw_ssim"],
+            MetricKind::Cambi => &["cambi"],
+            MetricKind::ButteraugliOriginal => &["butteraugli_original"],
+            MetricKind::Ssimulacra1 => &["ssimulacra1"],
+            MetricKind::WsHv => &["ws_hv"],
             MetricKind::SsimC => &["ssimc"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
             MetricKind::NlpdIqa => &["nlpd_iqa"],
+            MetricKind::LpipsAlex => &["lpips_alex"],
+            MetricKind::LpipsVgg => &["lpips_vgg"],
+            MetricKind::LpipsSqueeze => &["lpips_squeeze"],
+            MetricKind::Dists => &["dists"],
+            MetricKind::StlpipsAlex => &["stlpips_alex"],
+            MetricKind::StlpipsVgg => &["stlpips_vgg"],
+            MetricKind::Deepdc => &["deepdc"],
+            MetricKind::Ckdn => &["ckdn"],
+            MetricKind::Afine => &["afine"],
+            MetricKind::Dreamsim => &["dreamsim"],
+            MetricKind::Arniqa => &["arniqa", "arniqa_ref"],
+            MetricKind::Maniqa => &["maniqa", "maniqa_ref"],
+            MetricKind::Liqe => &["liqe", "liqe_ref"],
+            MetricKind::Musiq => &["musiq", "musiq_ref"],
+            MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
+            MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
+            MetricKind::Wd => &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -888,6 +1138,9 @@ impl MetricKind {
             MetricKind::MsssimLibvmaf => MSSSIM_LIBVMAF_CPU_COLUMNS,
             MetricKind::PsnrhvsDaala => PSNRHVS_DAALA_CPU_COLUMNS,
             MetricKind::Mdctpsnr => MDCTPSNR_CPU_COLUMNS,
+            MetricKind::Piqe => &["piqe", "piqe_ref"],
+            MetricKind::Niqe => &["niqe", "niqe_ref"],
+            MetricKind::Brisque => &["brisque", "brisque_ref"],
         }
     }
 
@@ -1911,6 +2164,7 @@ pub fn run_metric(
     #[cfg_attr(
         not(any(
             feature = "cpu-metrics",
+            feature = "nn",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
             feature = "gpu-dssim",
@@ -1924,6 +2178,7 @@ pub fn run_metric(
     #[cfg_attr(
         not(any(
             feature = "cpu-metrics",
+            feature = "nn",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
             feature = "gpu-dssim",
@@ -2116,6 +2371,42 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::NlpdIqa => Err(disabled_msg("nlpd-iqa", "cpu-metrics")),
+        #[cfg(feature = "nn")]
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::Dists
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Deepdc
+        | MetricKind::Ckdn
+        | MetricKind::Afine
+        | MetricKind::Dreamsim
+        | MetricKind::Arniqa
+        | MetricKind::Maniqa
+        | MetricKind::Liqe
+        | MetricKind::Musiq
+        | MetricKind::Hyperiqa
+        | MetricKind::Paq2piq
+        | MetricKind::Wd => nn::score(kind, reference, distorted),
+        #[cfg(not(feature = "nn"))]
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::Dists
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Deepdc
+        | MetricKind::Ckdn
+        | MetricKind::Afine
+        | MetricKind::Dreamsim
+        | MetricKind::Arniqa
+        | MetricKind::Maniqa
+        | MetricKind::Liqe
+        | MetricKind::Musiq
+        | MetricKind::Hyperiqa
+        | MetricKind::Paq2piq
+        | MetricKind::Wd => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
@@ -2325,6 +2616,31 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-haarpsi"))]
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
 
+        // Standalone CAMBI uses the same studio-601 ingress as the VMAF variants.
+        #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+        MetricKind::Cambi => Ok(vec![("cambi", vmaf::cambi(reference, distorted)?)]),
+        #[cfg(not(all(feature = "cpu-metrics", feature = "cpu-vmaf")))]
+        MetricKind::Cambi => Err(disabled_msg("cambi", "cpu-metrics,cpu-vmaf")),
+        MetricKind::ButteraugliOriginal | MetricKind::Ssimulacra1 | MetricKind::WsHv => {
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err("metric: dimension mismatch".into());
+            }
+            let w = reference.width as usize;
+            let h = reference.height as usize;
+            let r = &reference.pixels;
+            let d = &distorted.pixels;
+            let value = match kind {
+                MetricKind::ButteraugliOriginal => {
+                    butteraugli_original::error_map(r, d, w, h, w * 3, w * 3)?
+                        .into_iter()
+                        .fold(0.0_f32, f32::max) as f64
+                }
+                MetricKind::Ssimulacra1 => ssimulacra1::score(r, d, w, h, w * 3, w * 3)?,
+                MetricKind::WsHv => ws_hv::score(r, d, w, h, w * 3, w * 3)?,
+                _ => unreachable!(),
+            };
+            Ok(vec![(kind.column_names()[0], value)])
+        }
         MetricKind::CwSsim => {
             if (reference.width, reference.height) != (distorted.width, distorted.height) {
                 return Err("CW-SSIM: dimension mismatch".into());
@@ -2347,7 +2663,7 @@ pub fn run_metric(
                 vec![("flip_v17", flip::mean_v17(&map))]
             })
         }
-        // SSIM-pyiqa family: f64 valid-window scoring with explicit convention flags.
+        // SSIM-pyiqa family: valid-window scoring with explicit convention flags.
         MetricKind::SsimPyiqa
         | MetricKind::SsimPyiqaF32
         | MetricKind::SsimPyiqaF32K2
@@ -2486,6 +2802,18 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-mdctpsnr"))]
         MetricKind::Mdctpsnr => Err(disabled_msg("mdctpsnr", "cpu-mdctpsnr")),
+
+        // No-reference metrics: in-tree ports scored through
+        // `PairedNoReference` — `piqe` on the distorted image plus
+        // `piqe_ref` on the reference (see metrics/nr.rs).
+        #[cfg(feature = "nr")]
+        MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque => {
+            nr::score(kind, reference, distorted)
+        }
+        #[cfg(not(feature = "nr"))]
+        MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque => {
+            Err(disabled_msg(kind.name(), "nr"))
+        }
     }
 }
 
@@ -3325,6 +3653,40 @@ mod tests {
             pixels: vec![fill; (w as usize) * (h as usize) * 3],
             width: w,
             height: h,
+        }
+    }
+
+    #[test]
+    fn round4_dispatch_columns_and_mismatch() {
+        let r = Rgb8Image {
+            pixels: (0..64 * 64 * 3)
+                .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let wrong = Rgb8Image {
+            pixels: vec![0; 63 * 64 * 3],
+            width: 63,
+            height: 64,
+        };
+        for (name, kind, column) in [
+            (
+                "butteraugli-original",
+                MetricKind::ButteraugliOriginal,
+                "butteraugli_original",
+            ),
+            ("ssimulacra1", MetricKind::Ssimulacra1, "ssimulacra1"),
+            ("ws-hv", MetricKind::WsHv, "ws_hv"),
+        ] {
+            assert_eq!(MetricKind::from_str(name, false).unwrap(), kind);
+            assert!(MetricKind::all().contains(&kind));
+            assert_eq!(kind.name(), name);
+            assert_eq!(kind.column_names(), &[column]);
+            let same = run_metric(kind, &r, &r, GpuRuntime::Auto).unwrap();
+            assert_eq!(same[0].0, column);
+            assert!((same[0].1 - if kind == MetricKind::WsHv { 1.0 } else { 0.0 }).abs() < 1e-6);
+            assert!(run_metric(kind, &r, &wrong, GpuRuntime::Auto).is_err());
         }
     }
 

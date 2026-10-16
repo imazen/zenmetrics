@@ -1,0 +1,46 @@
+{
+  "stage": "multiply",
+  "JND": 15.138428,
+  "gate": 0.015138427999999999,
+  "panels": {
+    "golden": {
+      "rows": 170,
+      "matched_errors": 0,
+      "argmin_feature_flips": 0,
+      "argmin_flip_images": 0,
+      "max_abs": 0.0,
+      "max_jnd": 0.0,
+      "median_abs": 0.0,
+      "worst": "nn-phase0/ladder/2406_64_ref.png",
+      "within_gate": true
+    },
+    "extra": {
+      "rows": 200,
+      "matched_errors": 0,
+      "argmin_feature_flips": 0,
+      "argmin_flip_images": 0,
+      "max_abs": 0.0,
+      "max_jnd": 0.0,
+      "median_abs": 0.0,
+      "worst": "konjnd-pairs/img/SRC0586_ref.png",
+      "within_gate": true
+    }
+  },
+  "synthetic": {
+    "rows": 400000,
+    "ggd": {
+      "ratio_bit_mismatches": 0,
+      "argmin_flips": 0,
+      "max_ratio_abs": 0.0
+    },
+    "aggd": {
+      "ratio_bit_mismatches": 0,
+      "argmin_flips": 0,
+      "max_ratio_abs": 0.0
+    }
+  },
+  "change_from_baseline": {
+    "max_abs": 0.001953125,
+    "max_jnd": 0.00012901768928715718
+  }
+}

@@ -264,8 +264,13 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `HDR_VDP_3` | HDR-VDP-3.0.7 lineage (jpeg-ai-qaf `VDP3/` port @ `0628a6b` — verified == official MATLAB 3.0.7) | `hdrvdp3` | ✅ implemented + bit-faithful to MATLAB 3.0.7; ⚠️ published column unreproduced — different upstream run config (see DIVERGENCES) |
 | `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
 | `NLPD` | `IQA_pytorch` `NLPD(channels=1)` — the **dingkeyan93 IQA-optimization** package (not pyiqa): BT.709 Y plane in [0,1] on the 8-bit grid, reflect-pad downsample, `bilinear(×2, align_corners)` upsample, unrotated DN kernels, 6 loop-levels (no residual band), **mean of per-level RMS** | `nlpd-iqa` (`crates/nlpd/src/iqa.rs`) | ✅ implemented — med 2.6e-3 / max 6.7e-3, med-rel 2.63% (n=53; residual = f32 op-order vs torch + bilinear edge detail). `nlpd` stays the Laparra-official RGB variant (≈20.5× the column — ≈`6^(1/0.6)`=19.8 pooling factor + RGB energy) |
+| `CAMBI` | libvmaf 3.2.1 standalone defaults; distorted-only studio-swing BT.601, even crop | `cambi` | 61 pairs: native med/max 1.318e-4 / 0.1781; fitted JND 1.570e-4 / 0.06485; published settings unresolved |
+| `Butteraugli-original` | Google revision 71b18b63 (2019-03-19), maximum pooling | `butteraugli-original` | 61 pairs: native med/max 2.699e-6 / 4.947e-5; fitted JND 5.933e-7 / 8.943e-6 |
+| `SSIMULACRA1` | Cloudinary original Lab/six-scale/grid/edge pooling | `ssimulacra1` | 61 pairs: native med/max 2.285e-7 / 1.861e-5; fitted JND 5.585e-6 / 5.370e-4; exact published convention unresolved |
+| `WS-HV` | three Haar levels, RGB BT.601, diagonal-saliency pooling | `ws-hv` | 61 pairs: native med/max 8.942e-4 / 0.02076; fitted JND 0.004920 / 0.1393; exact published convention unresolved |
 | `CW-SSIM`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
-| `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |
+| `LPIPS-alex`, `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC` | upstream packages (`lpips` 0.1.4, `DISTS_pytorch` 0.1, `stlpips_pytorch` 0.0.2, `DeepDC_PyTorch` 0.2 **with ImageNet input normalisation**), native resolution | `zenmetrics-nn` (`--features nn`): `lpips-alex`, `lpips-vgg`, `dists`, `stlpips-alex`, `stlpips-vgg`, `deepdc` | ✅ implemented — vs the cropped-set columns (n=61) max \|Δ\| 4.9e-7 / 1.0e-4 / 2.5e-5 / 9.3e-5 / 6.0e-5 / 3.0e-5 ([`nn_aic2026_crosscheck_2026-10-15.md`](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
+| `PieAPP`, `WaDIQaM`, `DreamSim`, `TOPIQ`, `TOPIQ-PIPAL`, `AHIQ`, `CKDN`, `A-FINE`, `DMM`, `MSSWD`, `AIMOS` | deep metrics | — | queued in [`PYIQA_PORT_PLAN.md`](PYIQA_PORT_PLAN.md) (priority table) |
 
 ## Method / reproduction
 
@@ -283,3 +288,9 @@ implementations. Qualify ours by reference + variant, not just metric name:
   `JND_CVVDP` and carry the metric's own validity scatter; (c) everything is
   measured on 53 stratified pairs, not the full 9,618 — tails are samples,
   not bounds.
+
+The four Round 4 ports and their pinned-oracle/ladder comparisons are documented in
+[the comparison evidence](../benchmarks/aic_more_2026-10-15/README.md). CLI RGB8
+ingress drops alpha; upstream SSIMULACRA1 blends onto gray128 and includes an
+alpha term, while original Butteraugli takes the worse of black/white backgrounds.
+The reported RGB comparisons do not establish transparent-input equivalence.

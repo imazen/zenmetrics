@@ -1,0 +1,12 @@
+EXHAUSTIVE	det=False	256	calls 1..8 distinct bit patterns 2	first==rest False	first 1051034534 later 1051034533	median(2..8) 3.594 ms
+EXHAUSTIVE	det=False	1024	calls 1..8 distinct bit patterns 1	first==rest True	first 1052151251 later 1052151251	median(2..8) 61.230 ms
+EXHAUSTIVE	det=True	256	calls 1..8 distinct bit patterns 1	first==rest True	first 1051034534 later 1051034534	median(2..8) 3.541 ms
+EXHAUSTIVE	det=True	1024	calls 1..8 distinct bit patterns 1	first==rest True	first 1052151251 later 1052151251	median(2..8) 62.546 ms
+HEURISTIC	det=False	256	calls 1..8 distinct bit patterns 2	first==rest False	first 1051034534 later 1051034533	median(2..8) 3.329 ms
+HEURISTIC	det=False	1024	calls 1..8 distinct bit patterns 3	first==rest False	first 1052151251 later 1052151251	median(2..8) 61.351 ms
+HEURISTIC	det=True	256	calls 1..8 distinct bit patterns 1	first==rest True	first 1051034534 later 1051034534	median(2..8) 3.544 ms
+HEURISTIC	det=True	1024	calls 1..8 distinct bit patterns 1	first==rest True	first 1052151251 later 1052151251	median(2..8) 62.722 ms
+DEFAULT	det=False	256	calls 1..8 distinct bit patterns 1	first==rest True	first 1051034532 later 1051034532	median(2..8) 8.293 ms
+DEFAULT	det=False	1024	calls 1..8 distinct bit patterns 2	first==rest False	first 1052151251 later 1052151251	median(2..8) 94.387 ms
+DEFAULT	det=True	256	calls 1..8 distinct bit patterns 1	first==rest True	first 1051034532 later 1051034532	median(2..8) 8.530 ms
+DEFAULT	det=True	1024	calls 1..8 distinct bit patterns 1	first==rest True	first 1052151251 later 1052151251	median(2..8) 95.713 ms

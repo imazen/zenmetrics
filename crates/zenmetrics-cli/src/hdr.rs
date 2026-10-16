@@ -1171,6 +1171,7 @@ pub struct HdrImageFeeds {
     nits: NitsImage,
     transfer: HdrTransfer,
     sdr_u8: OnceCell<Rgb8Image>,
+    #[cfg(any(feature = "gpu-cvvdp", test))]
     measured_peak: OnceCell<f32>,
     cvvdp_u8: std::cell::RefCell<Option<(u32, Rgb8Image)>>,
 }
@@ -1181,6 +1182,7 @@ impl HdrImageFeeds {
             nits,
             transfer,
             sdr_u8: OnceCell::new(),
+            #[cfg(any(feature = "gpu-cvvdp", test))]
             measured_peak: OnceCell::new(),
             cvvdp_u8: std::cell::RefCell::new(None),
         }
@@ -1200,7 +1202,9 @@ impl HdrImageFeeds {
 
     /// This image's MEASURED display peak ([`measured_display_peak_nits`]),
     /// computed once. Only the REFERENCE side's value parameterizes a pair's
-    /// display model — never the distorted side's.
+    /// display model — never the distorted side's. Only the `gpu-cvvdp`
+    /// HDR display-target construction reads it (plus unit tests).
+    #[cfg(any(feature = "gpu-cvvdp", test))]
     pub fn measured_peak_nits(&self) -> f32 {
         *self
             .measured_peak

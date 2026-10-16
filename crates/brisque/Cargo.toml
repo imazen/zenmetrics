@@ -1,0 +1,31 @@
+[package]
+name = "brisque"
+version = "0.1.0"
+description = "Pure-Rust CPU port of BRISQUE (Mittal, Moorthy & Bovik 2012) from piq"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+# The port of piq's `piq/brisque.py` (Apache-2.0, photosynthesis-team)
+# keeps that licence in `LICENSE-piq`; the embedded SVR model is LIVE's
+# released `allmodel` (bit-identical to piq's brisque_svm_weights.pt),
+# whose redistribution notice is kept verbatim in `LICENSE-LIVE-brisque`.
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = ["zenmetrics-abstractions/std"]
+
+[dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+libm = { version = "0.2.16", default-features = false }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
