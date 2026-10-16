@@ -177,39 +177,25 @@ impl Heads {
         })
     }
 
-    /// proj_feat on a `[2·768]` mean‖var vector → `[128]`.
-    fn proj_feat(&self, mv: &[f64]) -> Vec<f64> {
-        self.proj_b
-            .iter()
-            .zip(self.proj_w.as_chunks::<{ 2 * TAP_C }>().0)
-            .map(|(&b, row)| {
-                f64::from(b)
-                    + row
-                        .iter()
-                        .zip(mv)
-                        .map(|(&w, &x)| f64::from(w) * x)
-                        .sum::<f64>()
-            })
-            .collect()
-    }
-
-    /// proj_head: `[1542]` → Linear→GELU→Linear → scalar.
+    /// proj_head: `[1542]` → Linear→GELU→Linear → scalar. The hidden rows
+    /// feed the same final sum in index order, so a row split is bitwise
+    /// identical to the sequential loop (see [`crate::par`]).
     fn mlp(&self, x: &[f64]) -> f64 {
-        let h = self
-            .head0_b
-            .iter()
-            .zip(self.head0_w.as_chunks::<HEAD_IN>().0)
-            .map(|(&b, row)| {
+        let rows = self.head0_w.as_chunks::<HEAD_IN>().0;
+        let h = crate::par::par_map(
+            HEAD_HIDDEN,
+            crate::par::threads_for(HEAD_HIDDEN * HEAD_IN),
+            |i| {
                 gelu(
-                    f64::from(b)
-                        + row
+                    f64::from(self.head0_b[i])
+                        + rows[i]
                             .iter()
                             .zip(x)
                             .map(|(&w, &x)| f64::from(w) * x)
                             .sum::<f64>(),
                 )
-            })
-            .collect::<Vec<f64>>();
+            },
+        );
         self.head2_b
             + h.iter()
                 .zip(&self.head2_w)
@@ -218,6 +204,11 @@ impl Heads {
     }
 
     /// `AFINEQhead(img, feats)` — naturalness of one image.
+    ///
+    /// `proj_feat` of the 12 taps and the `mlp` hidden rows are independent,
+    /// and every row keeps its original summation order — means then vars for
+    /// `proj_feat`, in tap order for `x` — so the parallel split reassembles
+    /// bitwise identically to the sequential code (see [`crate::par`]).
     fn qhead(&self, s: &ImgStats) -> f64 {
         let mut x = Vec::with_capacity(HEAD_IN);
         for t in &s.pix {
@@ -226,12 +217,24 @@ impl Heads {
         for t in &s.pix {
             x.push(t.var);
         }
-        for tap in &s.taps {
-            let mut mv = Vec::with_capacity(2 * TAP_C);
-            mv.extend(tap.iter().map(|s| s.mean));
-            mv.extend(tap.iter().map(|s| s.var));
-            x.extend(self.proj_feat(&mv));
-        }
+        let proj_w = self.proj_w.as_chunks::<{ 2 * TAP_C }>().0;
+        let proj = crate::par::par_map(
+            TAPS * HIDDEN,
+            crate::par::threads_for(TAPS * HIDDEN * 2 * TAP_C),
+            |idx| {
+                let tap = &s.taps[idx / HIDDEN];
+                let row = &proj_w[idx % HIDDEN];
+                let mut acc = f64::from(self.proj_b[idx % HIDDEN]);
+                for (c, st) in tap.iter().enumerate() {
+                    acc += f64::from(row[c]) * st.mean;
+                }
+                for (c, st) in tap.iter().enumerate() {
+                    acc += f64::from(row[TAP_C + c]) * st.var;
+                }
+                acc
+            },
+        );
+        x.extend(proj);
         self.mlp(&x)
     }
 
@@ -802,5 +805,31 @@ mod tests {
         assert_eq!(softplus(0.0), std::f64::consts::LN_2);
         assert!((softplus(5.0) - 5.006715348489118).abs() <= 1e-12);
         assert_eq!(softplus(50.0), 50.0);
+    }
+
+    /// `qhead` is bitwise identical on one worker and on many: only the
+    /// schedule over the independent `proj_feat`/`mlp` rows changes, and a
+    /// capped run starts no threads.
+    #[test]
+    fn qhead_thread_count_bit_identical() {
+        let w: Vec<f32> = (0..HEADS_LEN)
+            .map(|i| (((i * 1_103_515_245usize + 12345) % 997) as f32) / 997.0 - 0.5)
+            .collect();
+        let heads = Heads::parse(&w).unwrap();
+        let st = |i: usize| Stats {
+            mean: (i % 101) as f64 / 101.0 - 0.5,
+            var: 0.25 + (i % 53) as f64 / 53.0,
+        };
+        let s = ImgStats {
+            pix: [st(1), st(2), st(3)],
+            taps: (0..TAPS)
+                .map(|t| (0..TAP_C).map(|c| st(t * TAP_C + c)).collect())
+                .collect(),
+        };
+        let (one, spawns) = crate::par::observe_workers(Some(1), || heads.qhead(&s));
+        assert_eq!(spawns, 0, "a capped qhead started helper threads");
+        let (many, spawns) = crate::par::observe_workers(Some(16), || heads.qhead(&s));
+        assert!(spawns > 0);
+        assert_eq!(one.to_bits(), many.to_bits(), "{one} vs {many}");
     }
 }
