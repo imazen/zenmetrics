@@ -91,6 +91,12 @@ work, please open an issue.
 | VSI | Lin Zhang, Ying Shen, Hongyu Li. IEEE TIP 23(10), 2014 ([doi](https://doi.org/10.1109/TIP.2014.2346028)) | `vsi` | authors' `VSI.m`, GNU Octave | 1e-4 |
 | zensim | Imazen ([imazen/zensim](https://github.com/imazen/zensim)) | `zensim`, `zensim-gpu` | our own metric; the crate defines it | GPU vs CPU 2e-4 |
 
+PieAPP is available as `pieapp` with `--features nn` (RTen CPU), or `nn-ort`
+for ONNX Runtime CUDA. Its noncommercial weights require explicit consent;
+[the model card](crates/zenmetrics-nn/models/pieapp/card.toml) records export,
+input bounds, sampling and the measured demo-CLI divergence. Canonical parity
+uses the official public `compute_score` on a fixed stride-six patch grid.
+
 The `-gpu` variants need `--features gpu-<metric>` and run on CUDA or wgpu;
 [docs/GPU_METRIC_PARITY.md](docs/GPU_METRIC_PARITY.md) has their tolerances.
 
