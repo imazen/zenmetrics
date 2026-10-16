@@ -49,6 +49,11 @@ class SteerSmokeTransport(unittest.TestCase):
             p=Path(d)/'pins.json';p.write_text(json.dumps({'schema':'bounded-smoke-program-v1','files':{}}))
             with self.assertRaises(ValueError):pack.bounded_smoke_sources(p,sha(p.read_bytes()))
             with self.assertRaises(ValueError):pack.bounded_smoke_sources(p,'0'*64)
+            # A training contract is data, not a source file in the checkout.
+            required=["v2_lodo_mlp.py","v2_confirm_fit.py","v2_common.py","v2_teacher.py","v2_smoke_contract.py","steer_exact_smoke.py"]
+            p.write_text(json.dumps(dict(schema='bounded-smoke-program-v1',files={'scripts/rev4_featpot/'+n:'a'*64 for n in required},data={'benchmarks/e33_fit_contract_2026-10-10.json':'b'*64})))
+            self.assertEqual(len(pack.bounded_smoke_sources(p,sha(p.read_bytes()))),6)
+
 
     def test_archive_verifier_and_negative_controls(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -231,7 +231,8 @@ def bounded_smoke_sources(path, pin):
     files=record["files"]
     required={"scripts/rev4_featpot/"+n for n in ["v2_lodo_mlp.py","v2_confirm_fit.py",
         "v2_common.py","v2_teacher.py","v2_smoke_contract.py","steer_exact_smoke.py"]}
-    required.add("benchmarks/e33_fit_contract_2026-10-10.json")
+    if set(record.get("data",{})) != {"benchmarks/e33_fit_contract_2026-10-10.json"} or any(len(v)!=64 for v in record["data"].values()):
+        raise ValueError("bounded smoke must bind its existing training contract as data")
     if not required<=set(files):
         raise ValueError("bounded smoke import/contract closure incomplete")
     for name,value in files.items():
@@ -262,6 +263,8 @@ def main() -> None:
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
     wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA, "v2r5s2recipe28": V2R5_DATA, "v40": V40_PINS["data"], "e33": E33_PINS["data"]}.get(args.profile, {})
+    if args.profile == "bounded-smoke":
+        wanted = json.loads(args.source_pins.read_text())["data"]
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
