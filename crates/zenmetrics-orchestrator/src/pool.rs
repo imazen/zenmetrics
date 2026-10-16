@@ -271,7 +271,7 @@ struct WorkerResult {
 
 /// Tunable knobs for the worker pool. All fields keep public visibility
 /// + a [`Default`] impl so callers can override one knob via
-/// struct-update syntax.
+///   struct-update syntax.
 ///
 /// Phase 5 does NOT plumb this through [`crate::OrchestratorConfig`]
 /// because that struct is the persistent config (cache_dir,
@@ -2002,7 +2002,7 @@ impl Orchestrator {
             pool.pending_queue.window_started_at = None;
             return;
         }
-        let mut window: Vec<PreparedTask> = pool.pending_queue.tasks.drain(..).collect();
+        let mut window: Vec<PreparedTask> = std::mem::take(&mut pool.pending_queue.tasks);
         pool.pending_queue.window_started_at = None;
         // Sort the window. Tie-break on task_id for deterministic
         // output across runs.
