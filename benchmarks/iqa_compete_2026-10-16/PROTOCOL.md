@@ -86,3 +86,10 @@ returning distorted and reference columns; the BRISQUE Python adapter does the
 same two-image work. Each row records the declared output columns. Extra native
 outputs and any differences in public API workload are stated rather than
 presented as an isolated single-plane or single-image cost.
+
+CVVDP CPU and GPU native-map entry points write into a caller-owned vector.
+The adapter retains that vector across warmup and timed calls; warmup establishes
+its capacity. Map computation and writing/readback remain timed, while final
+caller-buffer destruction occurs after measurement. Butteraugli GPU copies its
+native map into a returned host vector and drops that vector within the call.
+These distinct public output-buffer contracts are retained in both adapters.
