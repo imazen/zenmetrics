@@ -895,3 +895,10 @@ aic-review-pin-sensitivity:
 
 aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+
+# Label-free indexed planner/executor checks, including an independent PNG decoder.
+palette-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
+    just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings

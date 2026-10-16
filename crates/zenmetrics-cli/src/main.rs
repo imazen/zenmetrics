@@ -33,6 +33,8 @@ mod compare;
 #[allow(unreachable_pub)]
 mod decode;
 mod fleet_plan;
+#[cfg(all(feature = "sweep", feature = "png"))]
+mod palette_ladder;
 // lib.rs exposes this module publicly; the bin keeps it private,
 // so its `pub` items are unreachable here by design.
 #[allow(unreachable_pub)]
