@@ -26,7 +26,10 @@ observations have no confidence intervals and cover this host only.
 CAMBI keeps the original one-worker path. Its parallel column regions use
 the existing Rayon pool at per-scale areas of at least 512×512. Original
 Butteraugli remains serial within one image; its 16-worker-budget rows
-measure the same serial implementation under that requested budget.
+measure the same serial implementation under that requested budget. VMAF
+frame and streaming scorers keep CAMBI serial with the default/one-thread
+configuration; configured private pools also own single-frame CAMBI work.
+A nested-pool regression checks this routing and serial/parallel score bits.
 
 [All observations, counters, RSS and load averages](measurements.tsv);
 [audited summary and gate receipts](summary.json). Each linked raw cell log

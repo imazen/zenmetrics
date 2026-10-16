@@ -919,3 +919,11 @@ aic-perf-big-residuals parity pairs published config output:
 
 aic-perf-big-summary scratch output:
     python3 -I benchmarks/aic_perf_big_2026-10-16/summarize.py '{{scratch}}' '{{output}}'
+
+# Scorer-budget regression and refreshed standalone executable; caller owns heavy lock.
+aic-perf-big-thread-budget output:
+    just snap-cargo @ test -p vmaf --features parallel,simd,avx512 --lib
+    just snap-cargo @ build --release -p vmaf --features parallel,simd,avx512 --example cambi_wall
+    mkdir '{{output}}'
+    cp "$LOCK_SNAP_DIR/target/release/examples/cambi_wall" '{{output}}/cambi-candidate'
+    sha256sum '{{output}}/cambi-candidate'

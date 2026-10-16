@@ -5761,7 +5761,18 @@ pub fn cambi_v1_from_luma(
     height: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, width, bit_depth, None, true)
+    cambi_impl::<true>(dist_y, width, height, width, bit_depth, None, true)
+}
+
+// The frame scorer owns its thread budget. Its default/one-thread path must
+// not enter Rayon's global pool through the standalone CAMBI scheduler.
+pub(crate) fn cambi_v1_serial(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+) -> Result<f64, Error> {
+    cambi_impl::<false>(dist_y, width, height, width, bit_depth, None, true)
 }
 
 /// CAMBI with libvmaf 3.2.1's default standalone feature settings.
@@ -5782,7 +5793,7 @@ pub fn cambi_from_luma(
     stride: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, stride, bit_depth, None, false)
+    cambi_impl::<true>(dist_y, width, height, stride, bit_depth, None, false)
 }
 
 /// [`cambi_v1_from_luma`] plus every scale's c-values, copied before the
@@ -5797,7 +5808,7 @@ pub(crate) fn cambi_v1_maps(
         scales: Vec::new(),
         window_size: 0,
     };
-    let score = cambi_impl(
+    let score = cambi_impl::<true>(
         dist_y,
         width,
         height,
@@ -5809,7 +5820,7 @@ pub(crate) fn cambi_v1_maps(
     Ok((score, maps))
 }
 
-fn cambi_impl(
+fn cambi_impl<const PARALLEL: bool>(
     dist_y: &[u16],
     width: usize,
     height: usize,
@@ -5921,7 +5932,12 @@ fn cambi_impl(
             scaled_height,
             &mut filter_buffer,
         );
-        calculate_c_values_scheduled(
+        let calculate = if PARALLEL {
+            calculate_c_values_scheduled
+        } else {
+            calculate_c_values
+        };
+        calculate(
             &image,
             &mask,
             &mut c_values,
