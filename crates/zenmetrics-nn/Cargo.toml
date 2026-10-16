@@ -17,6 +17,8 @@ rten = ["dep:rten", "dep:rten-tensor"]
 # ONNX Runtime (C++), loaded at run time from ORT_DYLIB_PATH. CUDA execution
 # provider with TF32 off. Fleet throughput engine; off by default.
 ort = ["dep:ort"]
+# Alias matching the engine's `ZENMETRICS_NN_ENGINE=ort-cuda` name.
+ort-cuda = ["ort"]
 # Parity tests against upstream goldens. They need exported models in
 # ZENMETRICS_NN_MODEL_DIR; run them through `just nn-parity`.
 model-tests = []
