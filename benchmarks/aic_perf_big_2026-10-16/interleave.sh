@@ -2,8 +2,9 @@
 # Runs outside the shared lock; each configuration is one bounded ABAB step.
 set -euo pipefail
 cambi_base=$1 butter_base=$2 candidate=$3 output=$4
+metrics=$5
 mkdir "$output"
-for metric in cambi butter; do
+for metric in $metrics; do
  if [ "$metric" = cambi ]; then base="$cambi_base/cambi-base"; else base="$butter_base/butter-base"; fi
  for size in '1024 1024' '3355 2516'; do
   read -r width height <<< "$size"
