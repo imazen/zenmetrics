@@ -130,3 +130,12 @@ Source freeze: zenmetrics `205efe2e` (master at this study's start), plus
 PieAPP `9b5f704b` and the benchmark commits. The separate Round 14 performance
 branch is outside this freeze. Every executable has its own SHA; later master
 changes do not silently alter an existing observation.
+
+## CID22 progress including PieAPP
+
+The [second progress snapshot](cid22-cpu-progress-v2.meta.json) covers
+452 explicit CPU cells across all 113 names: 261 qualified timed cells,
+146 unsupported-map rows and 45 other refusals. PieAPP single-thread
+sampling still lacks ten rounds and needs its chunked rerun. This inventory
+coverage does not complete the timing panel or the larger-size matrix.
+Split compact observations: [CID22 progress v2](cid22-cpu-progress-v2/).
