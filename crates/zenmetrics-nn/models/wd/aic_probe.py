@@ -95,7 +95,7 @@ def components(loss, a, b, shape, rescale):
             loss.compute_multiscale_stats = moments
             try:
                 for k in range(1,6):
-                    sigma = torch.full((1,1,h,w), max(k-ratio,0), device=ca.device)
+                    sigma = torch.full((1,1,h,w), max(k-ratio,0), device=ca.device, dtype=ca.dtype)
                     values[k-1] += float(loss.wasserstein_distortion(ca,cb,sigma,5))*len(ca)/n
             finally:
                 loss.compute_multiscale_stats = original
