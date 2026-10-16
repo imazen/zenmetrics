@@ -34,7 +34,7 @@ Reproduce the remaining gates with `just nn-pieapp-review MODEL_DIR LADDER
 NEW_OUTPUT`, outside any enclosing flock. Set `LOCK_SNAP_DIR` explicitly.
 Create the unchanged golden groups first with `just nn-pieapp-review-shards
 MODEL_DIR NEW_OUTPUT/shards`. Each step has a 1150-second timeout followed
-by at most twenty seconds for termination. The runner never repeats the cap.
+by at most twenty seconds for termination. The runner never repeats the stopped RTen cap.
 The head and weight-sign probes have their own bounded lock acquisitions.
 
 Revision 3 corrects the independently reconstructed weight head to signed

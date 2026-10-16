@@ -64,7 +64,7 @@ text=path.read_text()
 calls=re.findall(r'call=(\d+) seconds=([0-9.]+) score=([-+0-9.eE]+) bits=([0-9a-f]+)',text)
 assert len(calls)==2 and calls[0][3]==calls[1][3]
 assert re.search(r'Exit status: 0\s*$',text)
-summary['revision_3_cuda_cap']=dict(calls=[dict(call=int(i),seconds=float(t),score=float(v),bits=b) for i,t,v,b in calls],maximum_resident_kib=int(re.search(r'Maximum resident set size \(kbytes\): (\d+)',text)[1]),log_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+summary['revision_3_cuda_cap']=dict(start_load_average=[float(x) for x in re.search(r'^start_load=(.*)$',text,re.M)[1].split()[:3]],calls=[dict(call=int(i),seconds=float(t),score=float(v),bits=b) for i,t,v,b in calls],maximum_resident_kib=int(re.search(r'Maximum resident set size \(kbytes\): (\d+)',text)[1]),log_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 summary['workflow'] = dict(steps=resources,orchestrator_log_sha256=hashlib.sha256(a.workflow_log.read_bytes()).hexdigest())
 with a.output.open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
 print(json.dumps(summary,indent=2))
