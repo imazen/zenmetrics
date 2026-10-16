@@ -1560,6 +1560,18 @@ untested hypothesis is that the native oracle's runtime SIMD tier follows the
 CI runner's CPU. Next step: have `browser_oracle` record the dispatched tier
 and the runner CPU model, then compare a failing and a passing run.
 
+Measured 2026-10-16 on i265 (Core Ultra 7 265K, no AVX-512, so archmage
+dispatches the AVX2 tier): the native `browser_oracle` gives preview-v0.1
+91.21909967783705, exactly the browser's value, while the failing CI runs'
+native oracle gave 91.21909967392351 (other profiles on i265: a 83.85812862461522,
+b 91.2532491069443, c 76.20876739427798, d 90.20924821186748, preview-v0.2
+90.79464912498275). So the AVX2 native path and wasm agree, and the mismatch
+appears only when the native oracle runs on a different tier — most likely
+AVX-512 runners (not yet confirmed on an AVX-512 host). That is two native SIMD
+tiers disagreeing in zensim's preview-v0.1 path: per the zero-tolerance rule it
+needs a zensim tier-parity test and fix, not a looser assertion. Next: run the
+oracle on an AVX-512 host (dev) and bisect the preview-v0.1 kernels by tier.
+
 ### Browser native map rendering (2026-10-14)
 
 The viewer now consumes native cell geometry for FSIM/FSIMc, HaarPSI, VSI,

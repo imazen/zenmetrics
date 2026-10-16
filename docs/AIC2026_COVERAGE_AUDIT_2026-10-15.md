@@ -1,5 +1,12 @@
 # AIC2026 site metrics vs zenmetrics: coverage audit (2026-10-15, i265)
 
+> **Superseded (2026-10-16).** This audit predates the 2026-10-15/16 landings (FLIP, CW-SSIM, CIEDE2000,
+> PSNR-YCbCr611, SSIMc, the SSIM-pyiqa family, CAMBI, Butteraugli-original, SSIMULACRA1, WS-HV and the zenmetrics-nn
+> learned metrics), so several rows below still say "missing". The current per-column status is the naming ledger in
+> [AIC2026_METRICS_AND_FITTING.md](AIC2026_METRICS_AND_FITTING.md#naming--qualification-ledger). The measurements
+> recorded here remain valid for the commits they name.
+
+
 Scope: every name in the site's `config.json` (`mappings`, 124; `excluded`, 52), the 2026 dataset CSV
 columns, and the screenshot names. Measured on the 61 full-resolution pairs in `~/tmp/aic-sub/img/`
 against `site_fullres_subset61.csv` (site) and `metrics_subset.csv` (dataset). Binary:

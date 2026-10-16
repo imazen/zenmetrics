@@ -13,6 +13,17 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli
+
+### Added
+
+- Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
+- Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
+
+### QUEUED BREAKING CHANGES
+
+None.
+
 ## vmaf
 
 ### Changed
@@ -45,6 +56,8 @@ None.
 
 - hdrvdp `v3::score()`, a score-only HDR-VDP-3 entry point that skips map reconstruction (`6e5e62e0`, PR #76); `q_jod` is bit-identical to `hdrvdp3()` (test `score_matches_q_jod_bitwise`), and the integrated-PU-nits CPU dispatch path uses it.
 - zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
+
+- zenmetrics-nn WaDIQaM FR+NR (PR #81, review required): `WadiqamFr`/`WadiqamNr` and CLI `wadiqam-{fr,nr}-{live,tid}`, four columns on the MIT-licensed `dmaniry/deepIQA` `top="weighted"` checkpoints, ported as ONNX exports of upstream's own model classes (`2a8b22e8`). FR ships split trunk/head graphs so the reference's patch features cache under warm reference on both engines. 29 chainer-oracle pairs — including non-square and 4096² — pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); all four KonJND scales are measured (`wadiqam_nr_tid`'s is a noise floor, not a perceptual JND). Inference chunks at 2,000 patches per graph call. [Receipt](benchmarks/wadiqam_port_2026-10-16.md).
 
 - zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
 - zenmetrics-abstractions (PR #81, review required): `NoReferenceMetric`, the single-image metric shape, and `PairedNoReference`, which runs one as a pair `Metric`: the distorted image's outputs under their own keys, then the reference's under `<key>_ref`; a warm reference scores the reference once. `ScoreKind::Quality` (higher is better) and `ScoreKind::Distortion` (higher is worse) for no-reference scores; neither has a perfect value.

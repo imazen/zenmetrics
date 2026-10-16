@@ -44,29 +44,29 @@
 //!   the adapter caches the prepared `DssimImage`.
 //! - **fast-ssim2** has a true cached-ref path (`Ssimulacra2Reference::new`
 //!   + `compare`) that skips ~50 % of the pipeline. The adapter wires it
-//!   up so `set_reference` + `compute_with_cached_reference` are now
-//!   amortised, not recompute. **Change vs. Phase 6's `ssimulacra2` 0.5
-//!   wiring**: that crate had no precompute API and the adapter just
-//!   stashed bytes for shape parity. fast-ssim2's `Ssimulacra2Reference`
-//!   replaces that with a true warm path.
+//!     up so `set_reference` + `compute_with_cached_reference` are now
+//!     amortised, not recompute. **Change vs. Phase 6's `ssimulacra2` 0.5
+//!     wiring**: that crate had no precompute API and the adapter just
+//!     stashed bytes for shape parity. fast-ssim2's `Ssimulacra2Reference`
+//!     replaces that with a true warm path.
 //! - **zensim** (task #134, 2026-05-28): the `Zensim::precompute_reference`
 //!   + `compute_with_ref` pair is wired through `set_reference` +
-//!   `compute_with_cached_reference`. The reference-side sRGB → linear → XYB
-//!   conversion + multi-scale downscale pyramid runs once per source;
-//!   subsequent compare calls reuse the cached `PrecomputedReference`.
-//!   Measured speedup on the 7950X at 16 MP is ≈+12 % per amortized
-//!   warm call (3-trial median, 10-distorteds-per-ref sweep — see
-//!   `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`). The previous
-//!   wiring stashed raw bytes and re-converted them on every call —
-//!   `supports_cached_ref` returned `false`, so the orchestrator never
-//!   picked the warm dispatch. The strip warm-ref variant now
-//!   dispatches through `compute_with_ref_streaming_strips` so the
-//!   warm dispatch carries into the memory-bounded strip mode too.
-//!   (Note: the GPU cached_ref sweep at
-//!   `benchmarks/zensim_cached_ref_2026-05-22.csv` measures 38–40 % on
-//!   CUDA / wgpu — the GPU win is larger because it skips device
-//!   uploads and ref-side kernel launches across the sweep, neither of
-//!   which apply on the CPU path.)
+//!     `compute_with_cached_reference`. The reference-side sRGB → linear → XYB
+//!     conversion + multi-scale downscale pyramid runs once per source;
+//!     subsequent compare calls reuse the cached `PrecomputedReference`.
+//!     Measured speedup on the 7950X at 16 MP is ≈+12 % per amortized
+//!     warm call (3-trial median, 10-distorteds-per-ref sweep — see
+//!     `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`). The previous
+//!     wiring stashed raw bytes and re-converted them on every call —
+//!     `supports_cached_ref` returned `false`, so the orchestrator never
+//!     picked the warm dispatch. The strip warm-ref variant now
+//!     dispatches through `compute_with_ref_streaming_strips` so the
+//!     warm dispatch carries into the memory-bounded strip mode too.
+//!     (Note: the GPU cached_ref sweep at
+//!     `benchmarks/zensim_cached_ref_2026-05-22.csv` measures 38–40 % on
+//!     CUDA / wgpu — the GPU win is larger because it skips device
+//!     uploads and ref-side kernel launches across the sweep, neither of
+//!     which apply on the CPU path.)
 //!
 //! The pool's worker decides whether to dispatch through
 //! `compute_with_cached_reference` based on a static feature query

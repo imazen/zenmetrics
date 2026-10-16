@@ -53,6 +53,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `iwssim-gpu` | in-tree **`iwssim`** (this repo) | CPU-vs-GPU parity | see entry — column-name split is deliberate |
 | `zensim` (CPU) | in-house metric — **no external reference exists** | self | n/a — the crate *is* the definition |
 | `zensim-gpu` | **`zensim` 0.2.8 / pinned 0.3.0** | `crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs` | ≤ 2.08e-4 pointwise; 12 documented items |
+| `wadiqam` (zenmetrics-nn) | **`dmaniry/deepIQA`** @ `51dece99` (MIT code + weights), `top="weighted"` checkpoints | chainer CPU oracle (`models/wadiqam/oracle.py`) | 4.2e-5 worst export-check score delta; both-engine parity ≤ 7.8e-6 JND — see entry |
 
 ## Cross-cutting house conventions (diverge from every MATLAB reference by design)
 
@@ -637,3 +638,24 @@ crate docs — this file links, it does not duplicate.
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## `wadiqam` — deepIQA WaDIQaM FR+NR (2026-10-16)
+
+- **RESOLVED:** ONNX exports of upstream's own chainer model classes (ported to
+  torch for export; mirror verified ≤ 4.2e-5 pooled-score delta against the
+  checkpoints) pass 29 ladder pairs — including non-square and 4096² — at
+  1e-3 KonJND on rten and ort-cuda, worst 7.8e-6 JND
+  (`benchmarks/wadiqam_port_2026-10-16.md`).
+- **DIVERGES:** inputs with more than 32,768 patches (≈ 5824² at stride 32,
+  above the 4096² evaluation ceiling) are refused. Upstream accepts arbitrary
+  sizes and silently batches inference at 2,000 patches per graph call.
+- **DIVERGES:** the host-side attention pool `Σ(y·a)/Σa` accumulates in f64;
+  upstream's chainer path is f32 end-to-end. Observed effect is below the
+  1e-3-JND parity gate (≤ 7.8e-6 JND vs the chainer oracle).
+- **EXTENSION:** the public API accepts strided RGB8 input (`Rgb8In`), which
+  upstream's `evaluate.py` does not define; extraction is non-overlapping
+  stride-32 patches at native resolution, edge partials dropped, same as
+  upstream.
+- **EXTENSION:** inference chunking at 2,000 patches per graph call matches
+  upstream's batch size; chunk-vs-whole equivalence is unit-tested, scores are
+  bit-identical by construction (concatenated inputs, per-patch outputs).
