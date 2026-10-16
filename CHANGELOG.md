@@ -19,6 +19,7 @@ Workspace conventions per the global rules:
 
 - Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
 - Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
+- Registered source-family FitCell transport retains decoded-checkpoint admission and full-budget/seed/cap bindings (`6b3c2cd4`); public-source program packaging carries opaque external private-contract/data pins (`6cc84648`).
 
 ### QUEUED BREAKING CHANGES
 
