@@ -8106,7 +8106,6 @@ name = "zensim-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "enough",
  "image",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
