@@ -27,6 +27,7 @@ FIT_ROOT = Path("/var/tmp/rev4-featpot")
 # Approved fit programs: (output root under FIT_ROOT, outer-fold importance script or None).
 # The importance step is the local runners' second step (run_mlp_baseline.sh / run_p2_mlp.sh).
 SCRIPTS = {
+    "steer_exact_smoke.py": ("steer-smoke/cells", None),
     "subjective_cell.py": ("registered/cells", None),
     "mlp_probe.py": ("fits", "mlp_importance.py"),
     "p2_mlp.py": ("p2/mlp", "p2_mlp_importance.py"),
@@ -40,7 +41,7 @@ SCRIPTS = {
 }
 # Scripts that take `--root /var/tmp/rev4-featpot/<name>` (v2-canon tables beside the Rev3 v2 ones): their cells
 # live under `<name>/<suffix>` instead of the default root. Keep in step with harvest_fit_cells.ROOTED.
-ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
+ROOTED = {"steer_exact_smoke.py": "cells", "v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
 sys.path.insert(0, str(PROGRAM))
 from fit_paths import explicit_root
 
@@ -59,6 +60,25 @@ class WallCapExceeded(RuntimeError):
 
 def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
     """The registered per-cell wall cap in seconds, or None for a program with no E33 package."""
+    policy_path = program / "bounded_smoke_policy.json"
+    if "--local-smoke-budget" in argv and policy_path.is_file():
+        policy = json.loads(policy_path.read_text())
+        if policy.get("schema") != "bounded-fit-smoke-policy-v1" or argv.count("--local-smoke-budget") != 1:
+            raise ValueError("invalid bounded smoke policy")
+        epochs,pairs = map(int, argv[argv.index("--local-smoke-budget")+1].split(":"))
+        if (epochs,pairs)!=(policy["epochs"],policy["pairs_per_epoch"]):
+            raise ValueError("smoke budget differs from archive-bound policy")
+        cap=policy["control_wall_cap_sec"]
+        if type(cap) is not int or not 0<cap<=900:
+            raise ValueError("invalid control smoke cap")
+        return cap
+    if argv[0] == "steer_exact_smoke.py":
+        if argv.count("--wall-cap-sec") != 1:
+            raise ValueError("exact smoke requires a literal cap")
+        cap = int(argv[argv.index("--wall-cap-sec") + 1])
+        if not 0 < cap <= 900:
+            raise ValueError("exact smoke cap must be in1..900 seconds")
+        return cap
     if argv[0] == "subjective_cell.py":
         from registered_fit_contract import load
         meta = json.loads((program / "build_meta.json").read_text())
@@ -317,6 +337,10 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
     command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
     cap = registered_wall_cap(argv, kind["data_sha"])
+    if argv[0] == "steer_exact_smoke.py" or "--local-smoke-budget" in argv:
+        # Explicit smoke jobs only. Registered numerical execution is unchanged.
+        dest.mkdir(parents=True, exist_ok=True)
+        command = ["/usr/bin/time", "-v", "-o", str(dest / "RESOURCE_USAGE.txt"), *command]
     if cap is not None:
         stdout = run_capped(command, env, cap, dest, name)
     else:

@@ -908,3 +908,8 @@ budget-preflight-check:
 
 registered-fit-check:
     TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
+
+# Invented local-smoke transport and existing fit/harvest negative controls.
+steer-smoke-transport-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_steer_smoke_transport.py'
+    python3 -m unittest discover -s scripts/jobsys -p 'test_fit_tools.py'
