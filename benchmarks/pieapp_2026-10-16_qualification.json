@@ -15,7 +15,7 @@
   "goldens_sha256": "370a6ca5047ea6f3611ad9ffae8549599611018e1c95e19bda783187c3ea42ab",
   "ladder_input_manifest_sha256": "2c04e57cfe58614438e3f164688e5520ffea89aff9086c7f8d8fad45c55302a6",
   "konjnd_receipt_sha256": "7ede5e7bb9a33dc5426823f9334767a9e8b8c185d473b9220774d1fdadda9813",
-  "review_recheck": "Revision 3 both-engine unchanged-golden qualification passed; full calibration and final CLI gates pending",
+  "review_recheck": "Passed all 21 bounded merged-tree revision-3 steps; interrupted historical RTen cap is not rerun by coordinator instruction",
   "review_caps": {
     "host": "i265",
     "shared_under_load": true,
@@ -127,7 +127,60 @@
       "pairs": 24,
       "reported_worst_abs": 1.395e-07,
       "reported_worst_jnd": 2.69e-07,
-      "warm_cold_bit_identity": true
+      "warm_cold_bit_identity": true,
+      "first_result_gated": true,
+      "all_repeats_bit_identical": true
     }
-  }
+  },
+  "inventory_metric_kinds": 109,
+  "review_v3_receipt": {
+    "path": "benchmarks/pieapp_review_2026-10-16/summary-v3.json",
+    "sha256": "3c546228c9eb38bf8d488a3a228cf40413ed44f88259855f9b695d5ecb8f22ff",
+    "all_steps_passed": true,
+    "steps": 21
+  },
+  "calibration_recheck": {
+    "pairs": 1008,
+    "bit_identical_pairs": 1008,
+    "maximum_absolute_change": 0.0,
+    "maximum_change_in_jnd": 0.0,
+    "jnd_unchanged": true,
+    "input_manifest_unchanged": true,
+    "receipt": "benchmarks/pieapp_review_2026-10-16/konjnd-comparison-v3.json"
+  },
+  "revision_3_cuda_cap": {
+    "start_load_average": [
+      3.96,
+      3.02,
+      4.79
+    ],
+    "calls": [
+      {
+        "call": 0,
+        "seconds": 35.622168,
+        "score": 2.1973228405635523,
+        "bits": "4001941dff57cb53"
+      },
+      {
+        "call": 1,
+        "seconds": 35.493394,
+        "score": 2.1973228405635523,
+        "bits": "4001941dff57cb53"
+      }
+    ],
+    "maximum_resident_kib": 1281836,
+    "log_sha256": "109fe5d4ae0f7e51172a9c72a8526a41492889e8cedfc177337f7e42bf0dc683"
+  },
+  "individual_required_checks_passed": [
+    "NN debug/release and doctests",
+    "locked pinned siblings",
+    "workspace fmt",
+    "exact CI workspace clippy",
+    "strict NN all-target clippy, model-tests+ort",
+    "CLI sweep,png,gpu,gpu-cuda",
+    "CLI sweep,orchestrator,nn,nr",
+    "inventory 109",
+    "CLI routing unit",
+    "real default-scheduler CLI consent refusal and oracle score"
+  ]
 }

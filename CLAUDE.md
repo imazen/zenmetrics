@@ -563,8 +563,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
   hypothesis matched the positive observed weights, but opaque bias/projection
   controls identify signed `weight+1e-6`. Score revision 3 removes the
   unsupported absolute value and accepts finite signed weights in pooling.
-  Both native 24-pair panels and exact warm/cold identity pass; full KonJND
-  recheck is pending. Original goldens and JND gates are unchanged.
+  Both native 24-pair panels and exact warm/cold identity pass. All 1008
+  corrected KonJND scores are bit-identical and all input hashes match.
+  Original goldens, calibration scale and JND gates are unchanged.
   Evidence: `benchmarks/pieapp_review_2026-10-16/weight-identify.json`.
 
 

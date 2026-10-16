@@ -1,7 +1,7 @@
 # PieAPP review measurements
 
 Host: i265. Release build with runtime dispatch, no target-cpu=native.
-Production source: `995d6ba3` (review fixes on merge `f62324c4`).
+Original revision-2 cap production source: `995d6ba3` (review fixes on merge `f62324c4`).
 
 The cap driver measures model loading and two cold evaluations of the same
 procedural RGB pair at 3000×3000, checks repeat bits, and reports each call.
@@ -28,7 +28,7 @@ completed first call. The cap will not be rerun.
 The combined initial workflow exited 143 after the coordinator's stop:
 `run-heavy: done rc=143 1686s | peak-RSS 1.23GiB | min-avail 18567MiB | peak-load 24.44`.
 Remaining checks run with separate lock acquisitions, bounded below twenty
-minutes each. Full review validation is still in progress.
+minutes each. All 21 bounded revision-3 review steps subsequently passed; see `summary-v3.json`.
 
 Reproduce the remaining gates with `just nn-pieapp-review MODEL_DIR LADDER
 NEW_OUTPUT`, outside any enclosing flock. Set `LOCK_SNAP_DIR` explicitly.
@@ -41,10 +41,10 @@ Revision 3 corrects the independently reconstructed weight head to signed
 `weight + 1e-6`. `weight-identify.json` records fourteen opaque public-output
 controls; `reconstruction-v3.json` records exact equality against each control.
 `export-v3.json` identifies the fresh graph and its separate export conversion
-checks. End-to-end native qualification is pending. `konjnd-shards.json` binds
+checks. End-to-end native qualification passes on both engines. `konjnd-shards.json` binds
 four disjoint 252-pair groups to the unchanged original 1008-pair input table.
-The original cap files above measure revision 2; the corrected CUDA cap will
-have a distinct receipt. The interrupted RTen cap is never repeated.
+The original cap files above measure revision 2; the corrected CUDA cap has
+a distinct receipt. The interrupted RTen cap is never repeated.
 
 Fresh export/control step resource receipt:
 `run-heavy: done rc=0 7s | peak-RSS 1.51GiB | min-avail 24791MiB | peak-load 11.37`.
@@ -57,3 +57,14 @@ maximum RSS 1,281,836 KiB. Start load averages: 3.96 / 3.02 / 4.79.
 on shared i265. This is a cap/resource observation, not a quiet-host
 performance comparison to revision 2.
 `run-heavy: done rc=0 77s | peak-RSS 1.22GiB | min-avail 22318MiB | peak-load 3.96`.
+
+
+[Completed qualification summary](summary-v3.json) retains all 21 successful
+phase exit codes, run-heavy resource footers and full-log hashes.
+[Calibration comparison](konjnd-comparison-v3.json) verifies unchanged scores
+for every original pair and the unchanged 2016-image hash root. All 1008
+scores are bit-identical; no calibration or tolerance changed.
+
+Calibration shard resource receipts are retained in `konjnd-v3-{0,1,2,3}.log`.
+The final hash/comparison step reports:
+`run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 23548MiB | peak-load 1.89`.
