@@ -245,6 +245,16 @@ fn matches_upstream() {
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
             let got = score(&*eval, col);
+            let repeat = if col == "pieapp" && engine() != Engine::Rten {
+                let repeated = m
+                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("repeat CUDA evaluation without replacing the first result");
+                let value = score(&*repeated, col);
+                eprintln!("{col} {stem} {size}: first={got:.17e} repeated={value:.17e}");
+                Some(value)
+            } else {
+                None
+            };
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
@@ -253,6 +263,13 @@ fn matches_upstream() {
                 "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
                 tol(col)
             );
+            if let Some(repeat) = repeat {
+                assert_eq!(
+                    got.to_bits(),
+                    repeat.to_bits(),
+                    "{col} {stem} {size}: CUDA repeat changed"
+                );
+            }
             if nr {
                 // The reference column: golden field 3 under `<col>_ref`.
                 let want_ref: f64 = f[3].parse().unwrap();
