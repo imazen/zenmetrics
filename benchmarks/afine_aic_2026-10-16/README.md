@@ -9,10 +9,12 @@ round drives **our** port's outputs on the full-res inputs.
 
 ## Inputs
 
-- Dumped sub-scores: `dump_*.tsv` — written by the temporary
-  `afine::tests::aic_dump` test (this branch): per (pair, variant) the
-  raw `qhead`/`dhead` outputs, the NLM-scaled `s_r`/`s_d`/`s_f`, the
-  adaptive `lambda`, and the assembled `afine_all`.
+- Dumped sub-scores: `dump_*.tsv` — written by
+  `crates/zenmetrics-nn/examples/afine_aic_dump.rs` (originally a
+  temporary env-gated test, moved to the example in the follow-up):
+  per (pair, variant) the raw `qhead`/`dhead` outputs, the NLM-scaled
+  `s_r`/`s_d`/`s_f`, the adaptive `lambda`, and the assembled
+  `afine_all`.
   Variants: `native` (CLIP-norm + pad32 bicubic up — the shipped
   convention), `r224`/`r384`/`r512` (bicubic pre-resize, then pad32),
   `nonorm` (no CLIP normalization), `bgr` (channel swap).
@@ -30,7 +32,11 @@ round drives **our** port's outputs on the full-res inputs.
   shared pair, e.g. S01 −2.84463930 vs −2.84463948).
 - `dump_ort_partial.tsv` — ort-cuda fused score only (no sub-scores),
   39 pairs × all 6 preprocessing variants before the ORT CUDA arena
-  OOM'd at pair 45 (accumulating allocations, pre-existing).
+  OOM'd at pair 45 (shape-varying arena accumulation — since fixed,
+  see "ort-cuda arena fix" below).
+- `dump_ort_full.tsv` — post-fix ort-cuda re-run: all 61 pairs × 6
+  variants, zero failures, bit-identical to `dump_ort_partial.tsv` on
+  the 234 shared rows.
 - `candidates.tsv` — all 703 evaluated formulas over the native dump,
   sorted by site-JND median.
 - `candidates_ort_preproc.tsv` — same runner over the ort dump's
@@ -78,23 +84,43 @@ S67 (3355×2516, 8.4 MP) is also a resource finding: the rten trunk
 needs ~28 GB on it — the only pair we could not score with the
 sub-score path on this box. Its `afine_all` came from ort-cuda.
 
+## ort-cuda arena fix (follow-up)
+
+The original ort-cuda sweep OOM'd at pair 45 — ORT's device-side
+memory-pattern arena retains a per-shape block pool, so 366
+shape-varying runs exhaust VRAM (the last alloc attempt was a 2.4 GB
+Softmax). Fix, ported from WD's `ae582a3b` into a shared
+`engine::ort_engine::cuda_session`: `with_memory_pattern(false)`,
+CPU provider `.with_arena_allocator(false)`, outputs consumed by
+move-iteration. Applies to every ort-cuda backend — `OrtCudaPair`
+(afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips), `OrtCudaImage`
+(arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq), `OrtCudaTrunk` (wd).
+
+Measured, same 61-pair × 6-variant sequence, `/usr/bin/time -v`:
+
+| run | rows scored | Softmax arena failures | peak RSS | wall |
+|---|---|---|---|---|
+| pre-fix  | 357/366 | 9 (S46/S54/S67 × native,nonorm,bgr) | 1.95 GiB | 105 s |
+| post-fix | 366/366 | 0 — S67 `afine_all` now comes through ort-cuda too | 2.00 GiB | 129 s |
+
+All 357 shared rows bit-identical (0.0 abs diff). Host RSS is a wash —
+the retention was device-side; the failure signature is gone. afine
+ladder parity unchanged: rten 1.42e-5 JND, ort-cuda 1.94e-5 JND.
+
 ## Reproduce
 
 ```sh
-# sub-score dump (rten) — needs model dir + pairs list, writes dump tsv
-env ZENMETRICS_NN_MODEL_DIR=<models> AFINE_PAIRS=<pairs.tsv> \
-    AFINE_VARIANTS=native AFINE_DUMP_ENGINE=rten \
-    AFINE_DUMP_OUT=dump_native.tsv \
-  cargo test --release -p zenmetrics-nn --features model-tests,ort \
-    --lib aic_dump -- --nocapture
-# engine=ort-cuda additionally needs ORT_DYLIB_PATH + cuDNN 9.19 libs on
-# LD_LIBRARY_PATH (cuDNN 9.24 has a ~10 GB conv-workspace regression)
+# sub-score dump — needs model dir + pairs list, writes dump tsv.
+# variants: native r224 r384 r512 nonorm bgr (comma list, default all)
+cargo run --release -p zenmetrics-nn --features ort \
+    --example afine_aic_dump -- \
+    <model_dir> <pairs.tsv> dump_native.tsv rten native
+# ort-cuda additionally needs ORT_DYLIB_PATH + cuDNN 9.19 libs on
+# LD_LIBRARY_PATH (cuDNN 9.24 has a ~10 GB conv-workspace regression);
+# `just nn-afine-aic-dump <models> <pairs> <out> <engine> [variants]`
 
 # candidate evaluation
 python3 afine_aic_search.py --dump dump_native.tsv \
     --site ~/tmp/aic-site/site_fullres_subset61.csv \
     --config ~/tmp/aic-site/config.json > candidates.tsv
 ```
-
-The `aic_dump` test is deliberately retained (env-gated, inert without
-`AFINE_DUMP_*`) as the reproduction path for this receipt.

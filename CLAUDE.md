@@ -559,6 +559,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — ORT CUDA arena/memory-pattern accumulation across changing
+  input shapes.** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
+  arena at pair 45/61 of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
+  intermediate). WD's trunk had the same class fixed in `ae582a3b`
+  (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
+  is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
+  — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
+  `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
+  `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
+  paths. Scores are bit-identical before/after; RSS numbers are in
+  `benchmarks/afine_aic_2026-10-16/README.md`.
+
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
   A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
   The WD trunk now disables its CPU arena and consumes output tensors individually.
