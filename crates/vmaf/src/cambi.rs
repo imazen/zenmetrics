@@ -5966,6 +5966,73 @@ fn cambi_impl(
 mod standalone_tests {
     use super::*;
 
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn scheduled_columns_preserve_ordered_c_value_bits_and_stride() {
+        let (width, height, stride) = (523usize, 517usize, 528usize);
+        let mut image = vec![u16::MAX; stride * height];
+        let mut mask = vec![0u16; stride * height];
+        for y in 0..height {
+            for x in 0..width {
+                image[y * stride + x] = (256 + x / 8 + (y / 32) % 4) as u16;
+                mask[y * stride + x] = u16::from((x + 3 * y) % 7 != 0);
+            }
+        }
+        let num_diffs = 1 << MAX_LOG_CONTRAST;
+        let mut thresholds = [0u16; 32];
+        for (d, value) in thresholds.iter_mut().enumerate().take(num_diffs) {
+            *value = (get_tvi_for_diff((d + 1) as i32, TVI_THRESHOLD) + num_diffs as i32) as u16;
+        }
+        let vlt = get_vlt_luma(0.0);
+        let band_size = thresholds[num_diffs - 1] + 1;
+        let mut expected = vec![0.0f32; width * height];
+        calculate_c_values(
+            &image,
+            &mask,
+            &mut expected,
+            stride,
+            width,
+            height,
+            17,
+            num_diffs,
+            &thresholds,
+            vlt,
+            0,
+            band_size,
+            &CONTRAST_WEIGHTS,
+        )
+        .unwrap();
+        assert!(expected.iter().any(|&v| v > 0.0));
+        for threads in [1, 2, 4] {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            let mut actual = vec![-1.0f32; width * height];
+            pool.install(|| {
+                calculate_c_values_scheduled(
+                    &image,
+                    &mask,
+                    &mut actual,
+                    stride,
+                    width,
+                    height,
+                    17,
+                    num_diffs,
+                    &thresholds,
+                    vlt,
+                    0,
+                    band_size,
+                    &CONTRAST_WEIGHTS,
+                )
+            })
+            .unwrap();
+            for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "threads={threads} pixel={index}");
+            }
+        }
+    }
+
     #[test]
     fn histogram_runs_match_ordered_pixel_windows() {
         for width in [1usize, 2, 3, 8, 16, 31, 32, 64, 65] {
