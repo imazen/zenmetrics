@@ -86,5 +86,30 @@
       "sha256": "a0ed24cc6a31c1a4e5bd1b6a400a4dca3cf29a9ab0bbc6f4ec0a10b5004c8e0b"
     }
   },
-  "review_recheck": "Pending Round 13b merged-tree validation"
+  "review_recheck": "Pending Round 13b merged-tree validation",
+  "review_caps": {
+    "host": "i265",
+    "shared_under_load": true,
+    "geometry": [
+      3000,
+      3000
+    ],
+    "ort-cuda": {
+      "complete": true,
+      "evaluations": 2,
+      "process_wall_seconds": 72.6,
+      "maximum_rss_kib": 1293308,
+      "repeat_bit_identical": true
+    },
+    "rten": {
+      "complete": false,
+      "completed_evaluations": 1,
+      "first_evaluation_seconds": 845.578715,
+      "process_wall_seconds_at_sigterm": 1607.74,
+      "maximum_observed_rss_kib": 744300,
+      "repeat_bit_identity": "unmeasured",
+      "termination": "Coordinator stopped second evaluation; do not rerun"
+    },
+    "receipts": "benchmarks/pieapp_review_2026-10-16/"
+  }
 }
