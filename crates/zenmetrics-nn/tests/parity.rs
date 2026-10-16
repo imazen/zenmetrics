@@ -267,6 +267,17 @@ fn matches_upstream() {
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
+            // A mismatch on this CUDA host needs a diagnostic rerun. Preserve
+            // and gate the first result even if the diagnostic happens to pass.
+            if col == "pieapp" && engine() != Engine::Rten && !(err <= tol(col)) {
+                let diagnostic = m
+                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("diagnostic CUDA evaluation after first-score mismatch");
+                eprintln!(
+                    "{col} {stem} {size}: first mismatch={got:.17e} diagnostic={:.17e}",
+                    score(&*diagnostic, col)
+                );
+            }
             assert!(
                 err <= tol(col),
                 "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
