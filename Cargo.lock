@@ -3497,7 +3497,6 @@ dependencies = [
  "rayon",
  "vmaf-head-sys",
  "zenmetrics-abstractions",
- "zenpixels",
 ]
 
 [[package]]
