@@ -2,6 +2,7 @@
 # Run OUTSIDE flock: every bounded step acquires/releases the shared lock.
 set -euo pipefail
 output=$1
+metrics=$2
 : "${LOCK_SNAP_DIR:?set a dedicated pinned snapshot}"
 mkdir -p "$output"
 mkdir "$output/baseline-steps"
@@ -16,7 +17,7 @@ run_step() {
  if [ "$status" -ne 0 ]; then cat "$output/baseline-steps/$name.log"; exit "$status"; fi
 }
 run_step build build "$output" cambi 1024 1024 1
-for metric in cambi butter; do
+for metric in $metrics; do
  for size in '1024 1024' '3355 2516'; do
   read -r width height <<< "$size"
   for threads in 1 16; do
