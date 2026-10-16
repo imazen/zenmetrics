@@ -92,3 +92,47 @@ pairs complete: `/usr/bin/time -v` reports maximum RSS 11,210,496 KiB, elapsed
 five-column scores are bit-identical before/after. Both-engine numerical errors
 remain unchanged on the complete ladder; every landing gate passes again.
 These are recovery-panel measurements, not a measured before/after RSS ratio.
+
+## AIC convention search — unmatched
+
+The single clock began 04:49:05 UTC and ended 05:08:33 UTC on 2026-10-16,
+including native controls, the resource correction, selection and full winner
+verification. The 60-minute deadline was 05:49:05 UTC. Previously measured
+24-grid conventions were read and not repeated. Native Rust controls cover all
+61 pairs. Historical ImageNet controls were reused at their archived six-decimal
+precision on the three selection pairs.
+
+The new search evaluates pre-ReLU/post-pool taps, raw/normalized/range/linear/
+BGR/luma inputs, 256/512 short-side resize, feature-rescaled sigma, and seven
+pooling forms. It completes 113 combinations: two previous/native controls plus
+111 new combinations (including six new aggregations of those controls).
+[Selection ranking](aic_selection.tsv) uses worst then median site JND over
+S01–S03; it fits no coefficients. The selected configuration is raw RGB [0,1],
+post-pool taps 4/9/16/23, sigma `max(k−mean(log2(input_size/feature_size)),0)`,
+and sum across taps. Every winner pair was evaluated twice; all 61 reproduce
+exactly, with no repeat mismatches. This full panel includes the selection
+pairs and is not an independent held-out test. Other candidates were not
+measured on all 61 pairs, so “best” means selected on S01–S03.
+
+| Column | Winner median absolute error | Winner max absolute error | Winner median site JND | Winner max site JND |
+|---|---:|---:|---:|---:|
+| WD_s1 | 0.2346362472 | 1.8276839256 | 0.2405550604 | 1.3984686018 |
+| WD_s2 | 0.2219514847 | 1.6570122242 | 0.2310363687 | 1.4947104439 |
+| WD_s3 | 0.2223619223 | 2.0376310349 | 0.2902315124 | 2.3648735969 |
+| WD_s4 | 0.1776740551 | 1.4441973567 | 0.3724274401 | 2.4017891693 |
+| WD_s5 | 0.1123020649 | 0.8913221955 | 0.3459800033 | 2.1742165445 |
+
+These residuals do **not** establish an AIC match. The shipped `wd` remains the
+Cool-Chic convention. Its native-control median site errors across columns are
+0.9974450227, 1.1794214028, 1.2246033057, 1.0541206793 and 0.8888083345 JND.
+[AIC residuals](aic_residuals.tsv) and [all predictions](aic_predictions.tsv)
+retain full precision. Site JND is `abs(a*predicted^c − a*published^c)` using the
+supplied mapping (b=0, sign=+1); it is distinct from the KonJND port-parity scale.
+
+[Receipt](aic_receipt.json) records input/artifact digests, versions, coverage
+and timing. Full probe artifacts remain at `~/tmp/wd-port/aic-round12/search`
+on i265; native/recovery logs are retained beside it. New search wrapper:
+`rc=0 150s | peak-RSS 1.82GiB | min-avail 19468MiB | peak-load 8.42`.
+A first four-second attempt failed on integer sigma tensor dtype; the corrected
+float32 attempt retains the original clock. `nn-wd-aic-report` compacts existing
+measurements without repeating inference.

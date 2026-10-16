@@ -33,7 +33,7 @@ notes = "RTen and ONNX Runtime CUDA expose the same four taps; all statistics an
 [convention]
 statistics = "Five levels of local mean and variance, zero-padded 3x3 outer([1,2,1]/4), decimation at indices ::2. Variances clamp to 5e-7 before square roots."
 weighting = "Triangular weight relu(1-abs(log2_sigma-level)); sigma maps themselves use zero-padded stride-two convolution after each statistic level, including border attenuation. Spatial/channel mean per level, then f32 sums across levels and four VGG taps."
-aic = "The AIC-4 WD_s1..WD_s5 preprocessing is unidentified. This metric implements the pinned Cool-Chic convention; the separate AIC probe receipt records residuals."
+aic = "The AIC-4 WD_s1..WD_s5 preprocessing is unidentified. This metric implements the pinned Cool-Chic convention; 113-combination selection on three pairs chose raw post-pool/rescaled-sigma/sum. Its 61-pair verification has median site errors 0.2310363687..0.3724274401 JND and worst 2.4017891693 JND, so it does not reproduce AIC. Full receipt: benchmarks/wd_port_2026-10-16/README.md."
 
 [parity]
 tolerance_jnd = 1e-3

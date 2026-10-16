@@ -617,3 +617,17 @@ Every metric port or reference-version bump updates this file **in the
 same commit**: a ledger row (or delta refresh) plus a per-metric entry
 for anything that isn't pure float noise. Crate-level depth stays in the
 crate docs — this file links, it does not duplicate.
+
+## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
+
+- **RESOLVED:** RTen and CUDA VGG16 trunk plus Rust statistics pass 25 upstream
+  pairs × five columns per engine at 1e-3 KonJND. Worst error is
+  3.443705654e-6 JND. The 1008-pair calibration and source hashes are in the
+  [receipt](benchmarks/wd_port_2026-10-16/README.md).
+- **EXTENSION:** native strided RGB8 and warm-reference feature reuse; explicit
+  size/area errors. Spatial maps are unsupported.
+- **DIVERGES:** the published AIC preprocessing remains unidentified. A separate
+  time-boxed search selected raw post-pool taps with feature-rescaled sigma on
+  three pairs; all-61 verification gives column median site errors
+  0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
+  the shipped metric retains Cool-Chic's pre-pool raw-input convention.
