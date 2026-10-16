@@ -91,9 +91,10 @@ fn weights(h: usize, w: usize) -> Vec<[Vec<f32>; 5]> {
 }
 
 fn channel(a: &[f32], b: &[f32], h: usize, w: usize, weights: &[[Vec<f32>; 5]]) -> [[f64; 5]; 5] {
-    let (mut a, mut b) = (a.to_vec(), b.to_vec());
-    let mut aa: Vec<_> = a.iter().map(|x| x * x).collect();
-    let mut bb: Vec<_> = b.iter().map(|x| x * x).collect();
+    let mut a: Cow<[f32]> = Cow::Borrowed(a);
+    let mut b: Cow<[f32]> = Cow::Borrowed(b);
+    let mut aa: Vec<f32> = a.iter().map(|x| x * x).collect();
+    let mut bb: Vec<f32> = b.iter().map(|x| x * x).collect();
     let (mut h, mut w) = (h, w);
     let mut result = [[0.0; 5]; 5];
     for (level, weights) in weights.iter().enumerate() {
@@ -114,8 +115,8 @@ fn channel(a: &[f32], b: &[f32], h: usize, w: usize, weights: &[[Vec<f32>; 5]]) 
         for value in &mut result[level] {
             *value /= (h * w) as f64;
         }
-        a = decimate(&ma, h, w);
-        b = decimate(&mb, h, w);
+        a = Cow::Owned(decimate(&ma, h, w));
+        b = Cow::Owned(decimate(&mb, h, w));
         aa = decimate(&pa, h, w);
         bb = decimate(&pb, h, w);
         h = h.div_ceil(2);
