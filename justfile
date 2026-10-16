@@ -948,3 +948,7 @@ nn-pieapp-review-weight-sign python upstream checkpoint out:
 
 nn-pieapp-review-weight-joint python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 500
+
+# Public-tensor diagnostic outside RGB code-value range; never native image parity.
+nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 1000 --lower -4096 --upper 4096 --rate 32

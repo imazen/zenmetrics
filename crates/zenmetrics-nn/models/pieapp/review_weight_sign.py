@@ -11,6 +11,9 @@ p=argparse.ArgumentParser(description=__doc__)
 for name in ('upstream','checkpoint','out'):p.add_argument('--'+name,required=True)
 p.add_argument('--joint',action='store_true')
 p.add_argument('--steps',type=int,default=100)
+p.add_argument('--lower',type=int,default=0)
+p.add_argument('--upper',type=int,default=255)
+p.add_argument('--rate',type=float,default=2.0)
 a=p.parse_args()
 spec=importlib.util.spec_from_file_location('independent_pieapp',Path(__file__).with_name('network.py'))
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
@@ -24,25 +27,25 @@ if receipt['final_weight_min']>=0 and receipt['final_bias']>=0:
 else:
     torch.manual_seed(20261016)
     batch=4 if a.joint else 1
-    r=torch.randint(0,256,(batch,3,64,64),device='cuda').float()
-    d=(torch.randint(0,256,r.shape,device='cuda').float() if a.joint else r.clone()).requires_grad_(True)
+    r=torch.randint(a.lower,a.upper+1,(batch,3,64,64),device='cuda').float()
+    d=(torch.randint(a.lower,a.upper+1,r.shape,device='cuda').float() if a.joint else r.clone()).requires_grad_(True)
     if a.joint:r.requires_grad_(True)
     with torch.enable_grad():
-        optimizer=torch.optim.Adam([r,d] if a.joint else [d],lr=2.0 if a.joint else 5.0)
+        optimizer=torch.optim.Adam([r,d] if a.joint else [d],lr=a.rate if a.joint else 5.0)
         for step in range(a.steps):
             optimizer.zero_grad()
             _,weight=model.raw(r,d)
             weight.sum().backward();optimizer.step()
             with torch.no_grad():
-                d.clamp_(0,255)
-                if a.joint:r.clamp_(0,255)
+                d.clamp_(a.lower,a.upper)
+                if a.joint:r.clamp_(a.lower,a.upper)
             if float(weight.detach().min()) < -1:break
     r=r.detach().round();d=d.detach().round()
     _,all_raw=model.raw(r,d)
     selected=int(all_raw.reshape(-1).argmin())
     r=r[selected:selected+1];d=d[selected:selected+1]
     _,raw=model.raw(r,d)
-    receipt.update(search_mode="joint" if a.joint else "identity",batch=batch,selected=selected,steps=step+1,rounded_raw_weight=float(raw.reshape(-1)[0]),reference_bgr_nchw_u8_sha256=hashlib.sha256(r.cpu().numpy().astype('uint8').tobytes()).hexdigest(),distorted_bgr_nchw_u8_sha256=hashlib.sha256(d.cpu().numpy().astype('uint8').tobytes()).hexdigest())
+    receipt.update(input_domain=[a.lower,a.upper],learning_rate=a.rate if a.joint else 5.0,reference_bgr_nchw_f32_sha256=hashlib.sha256(r.cpu().numpy().tobytes()).hexdigest(),distorted_bgr_nchw_f32_sha256=hashlib.sha256(d.cpu().numpy().tobytes()).hexdigest(),search_mode="joint" if a.joint else "identity",batch=batch,selected=selected,steps=step+1,rounded_raw_weight=float(raw.reshape(-1)[0]),reference_bgr_nchw_u8_sha256=(hashlib.sha256(r.cpu().numpy().astype('uint8').tobytes()).hexdigest() if a.lower==0 and a.upper==255 else None),distorted_bgr_nchw_u8_sha256=(hashlib.sha256(d.cpu().numpy().astype('uint8').tobytes()).hexdigest() if a.lower==0 and a.upper==255 else None))
     sys.path.insert(0,a.upstream)
     from model.PieAPPv0pt1_PT import PieAPP
     oracle=PieAPP(1,1).cuda().eval();oracle.load_state_dict(state)
