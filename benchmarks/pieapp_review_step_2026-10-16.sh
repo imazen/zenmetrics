@@ -5,8 +5,9 @@ phase=$1
 models=$2
 ladder=$3
 shards=$4
+output=$5
 case "$phase" in
- cli) env -u LD_LIBRARY_PATH PIEAPP_LEGACY_NUM_PATCHES=1024 just nn-pieapp-review-cli "$HOME/tmp/pieapp-oracle/venv-gpu/bin/python" "$HOME/tmp/pieapp-oracle/upstream" "$HOME/tmp/pieapp-port/ladder-pairs.tsv" "$HOME/tmp/pieapp-port/oracle-ladder.tsv" "$HOME/tmp/pieapp-port/review13b/cli.json" "$HOME/tmp/pieapp-port/review13b/cli-logs" ;;
+ cli) env -u LD_LIBRARY_PATH PIEAPP_LEGACY_NUM_PATCHES=1024 just nn-pieapp-review-cli "$HOME/tmp/pieapp-oracle/venv-gpu/bin/python" "$HOME/tmp/pieapp-oracle/upstream" "$HOME/tmp/pieapp-port/ladder-pairs.tsv" "$HOME/tmp/pieapp-port/oracle-ladder.tsv" "$output/cli.json" "$output/cli-logs" ;;
  inventory) python3 scripts/jobsys/test_benchmark_study.py ;;
  debug) just snap-cargo @ test -p zenmetrics-nn ;;
  release) just snap-cargo @ test --release -p zenmetrics-nn ;;
@@ -16,6 +17,8 @@ case "$phase" in
  gpu-features) just snap-cargo @ check -p zenmetrics-cli --features sweep,png,gpu,gpu-cuda ;;
  nn-features) just snap-cargo @ check -p zenmetrics-cli --features sweep,orchestrator,nn,nr ;;
  rten-*) just nn-parity "$shards/${phase#rten-}" "$ladder" rten model-tests,ort pieapp ;;
+ cuda-cap) just snap-cargo @ build --release -p zenmetrics-nn --features ort --example pieapp_cap; /usr/bin/time -v "$LOCK_SNAP_DIR/target/release/examples/pieapp_cap" "$models" ort-cuda 3000 3000 > "$output/cap-ort-cuda-v3.log" 2>&1; cat "$output/cap-ort-cuda-v3.log" ;;
+ konjnd-*) just nn-pieapp-score "$models" "$output/konjnd/pairs-${phase#konjnd-}.tsv" "$output/konjnd/scores-${phase#konjnd-}.tsv" ort-cuda ;;
  cuda) just nn-parity "$models" "$ladder" ort-cuda model-tests,ort pieapp ;;
  routing) just snap-cargo @ test -p zenmetrics-cli --features sweep,orchestrator,nn,nr --lib pieapp_uses_direct_learned_route ;;
  cli-build) just snap-cargo @ build -p zenmetrics-cli --features sweep,orchestrator,nn,nr --bin zenmetrics ;;

@@ -940,8 +940,8 @@ nn-pieapp-review-summary directory log out:
 nn-pieapp-review-shards models out:
     python3 -I crates/zenmetrics-nn/models/pieapp/review_shards.py '{{models}}' '{{out}}'
 
-nn-pieapp-review-step phase models ladder shards:
-    bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}'
+nn-pieapp-review-step phase models ladder shards output:
+    bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}' '{{output}}'
 
 nn-pieapp-review-weight-sign python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
@@ -961,3 +961,6 @@ nn-pieapp-review-weight-identify python upstream checkpoint out:
 
 nn-pieapp-review-reexport oldmodels models output:
     bash -c "$(cat benchmarks/pieapp_reexport_2026-10-16.sh)" -- '{{oldmodels}}' '{{models}}' '{{output}}'
+
+nn-pieapp-review-konjnd-shards pairs output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_shards.py '{{pairs}}' '{{output}}'
