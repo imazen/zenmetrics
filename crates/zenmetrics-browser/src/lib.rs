@@ -627,6 +627,7 @@ pub fn available_metrics() -> String {
             .iter()
             .filter(|m| {
                 !m.requires_gpu()
+                    && m.scoring_compiled_in()
                     && !matches!(
                         m,
                         metrics::MetricKind::Hdrvdp | metrics::MetricKind::Hdrvdp3

@@ -1,0 +1,66 @@
+[
+  {
+    "metric": "butter",
+    "panel": "aic",
+    "numeric": 61,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/butter-aic-verified.json"
+  },
+  {
+    "metric": "butter",
+    "panel": "ladder",
+    "numeric": 21,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/butter-ladder-verified.json"
+  },
+  {
+    "metric": "ssim1",
+    "panel": "aic",
+    "numeric": 61,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round5/ssim1-opencv-order-aic-verified.json"
+  },
+  {
+    "metric": "ssim1",
+    "panel": "ladder",
+    "numeric": 21,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round5/ssim1-opencv-order-ladder-verified.json"
+  },
+  {
+    "metric": "ws",
+    "panel": "aic",
+    "numeric": 61,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/ws-aic-verified.json"
+  },
+  {
+    "metric": "ws",
+    "panel": "ladder",
+    "numeric": 21,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/ws-ladder-verified.json"
+  },
+  {
+    "metric": "cambi",
+    "panel": "aic",
+    "numeric": 61,
+    "refusals": 0,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/cambi-precise-aic-verified.json"
+  },
+  {
+    "metric": "cambi",
+    "panel": "ladder",
+    "numeric": 12,
+    "refusals": 9,
+    "bit_identical": true,
+    "baseline": "/home/lilith/tmp/aic-variants-scratch/round4/cambi-precise-ladder-verified.json"
+  }
+]

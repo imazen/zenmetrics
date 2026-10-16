@@ -89,6 +89,10 @@ impl za::Evaluation for HdrVdp3Result {
     }
 
     fn map(&self) -> Option<za::MapView<'_>> {
+        // `v3::score` leaves `p_map` empty by design.
+        if self.p_map.is_empty() {
+            return None;
+        }
         self.view("p_det", &self.p_map, za::MapPolarity::DetectionProbability)
     }
 
@@ -150,6 +154,35 @@ pub fn hdrvdp3(
     width: usize,
     height: usize,
     par: &Params,
+) -> Result<HdrVdp3Result> {
+    hdrvdp3_run(test, reference, width, height, par, true)
+}
+
+/// Score a pair of images, returning only `q_jod` — the map-free form of
+/// [`hdrvdp3`]. `q`/`q_jod` depend only on the per-band `q_err`
+/// accumulator; the pyramid `reconstruct`, `s_map` and `P_map` sweeps are
+/// skipped, so sweep-style callers that never read the maps save that
+/// whole phase. Bit-identical to `hdrvdp3(..).q_jod`.
+///
+/// # Errors
+/// Same conditions as [`hdrvdp3`].
+pub fn score(
+    test: &[f64],
+    reference: &[f64],
+    width: usize,
+    height: usize,
+    par: &Params,
+) -> Result<f64> {
+    Ok(hdrvdp3_run(test, reference, width, height, par, false)?.q_jod)
+}
+
+fn hdrvdp3_run(
+    test: &[f64],
+    reference: &[f64],
+    width: usize,
+    height: usize,
+    par: &Params,
+    want_maps: bool,
 ) -> Result<HdrVdp3Result> {
     if test.len() != reference.len() {
         return Err(Error::SizeMismatch {
@@ -409,17 +442,24 @@ pub fn hdrvdp3(
     let levs: Vec<usize> = (0..b_count).collect();
     crate::par::timed_eprintln!("bands: {:?}", t0.elapsed());
     let t0 = std::time::Instant::now();
-    let rec = d_bands.reconstruct(&levs, relaxed);
-    let s_map: Vec<f64> = crate::par::collect_indexed(rec.len(), |i| rec[i].abs());
-    let mut p_map: Vec<f64> = if relaxed {
-        trans64::one_mexp_scale(&s_map, 0.5f64.ln())
+    // `q`/`q_jod` read only `q_err` — the reconstruction + map sweeps
+    // exist for `p_map`/`s_map` consumers. `score()` skips them entirely.
+    let (s_map, mut p_map) = if want_maps {
+        let rec = d_bands.reconstruct(&levs, relaxed);
+        let s_map: Vec<f64> = crate::par::collect_indexed(rec.len(), |i| rec[i].abs());
+        let p_map: Vec<f64> = if relaxed {
+            trans64::one_mexp_scale(&s_map, 0.5f64.ln())
+        } else {
+            s_map
+                .iter()
+                .map(|&s| 1.0 - (0.5f64.ln() * s).exp())
+                .collect()
+        };
+        (s_map, p_map)
     } else {
-        s_map
-            .iter()
-            .map(|&s| 1.0 - (0.5f64.ln() * s).exp())
-            .collect()
+        (Vec::new(), Vec::new())
     };
-    if mp.do_sprob_sum {
+    if mp.do_sprob_sum && want_maps {
         let si_sigma = 10f64.powf(mp.si_sigma) * ppd_of(&par.viewing);
         let log1m: Vec<f64> = if relaxed {
             trans64::ln_1mx(&p_map)
@@ -443,7 +483,7 @@ pub fn hdrvdp3(
             }
         }
     }
-    if mp.do_pixel_threshold {
+    if mp.do_pixel_threshold && want_maps {
         let m_thr = 0.01;
         if relaxed {
             trans64::thresh_mul(&mut p_map, &pr.l_adapt, &pt.l_adapt, m_thr);

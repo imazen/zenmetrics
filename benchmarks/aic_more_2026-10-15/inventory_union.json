@@ -1,0 +1,14 @@
+{
+  "local_count": 87,
+  "master_count": 84,
+  "union_count": 88,
+  "master_only": [
+    "flip-v17"
+  ],
+  "round4_only": [
+    "butteraugli-original",
+    "cambi",
+    "ssimulacra1",
+    "ws-hv"
+  ]
+}

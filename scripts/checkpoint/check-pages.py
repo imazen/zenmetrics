@@ -242,10 +242,19 @@ try:
           const alpha=await response;if(alpha.type!=='error'||!alpha.message.includes('opaque'))throw new Error('PNG alpha silently accepted');
           const input={width:256,height:256},r=new Uint8Array(256*256*4),d=new Uint8Array(r.length);
           for(let i=0;i<r.length;i++){r[i]=i%4===3?255:(i*13+Math.floor(i/1024)*17)%256;d[i]=i%4===3?255:Math.max(0,r[i]-7);}
+          const inputBig={width:1024,height:1024},rBig=new Uint8Array(1024*1024*4),dBig=new Uint8Array(rBig.length);
+          for(let i=0;i<rBig.length;i++){rBig[i]=i%4===3?255:(i*13+Math.floor(i/4096)*17)%256;dBig[i]=i%4===3?255:Math.max(0,rBig[i]-7);}
           const metrics={};
           for(const metric of ready.metrics) {
             response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:r,distorted:d,...input,display:'standard_4k'});
-            const got=await response;if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
+            let got=await response;
+            // Some metrics refuse 256x256 by design (e.g. five-scale MS-SSIM
+            // variants with a fixed pre-downscale need >= 704 px); score those once at 1024x1024.
+            if(got.type==='error'&&/requires at least|too small/i.test(got.message||'')){
+              response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:rBig,distorted:dBig,...inputBig,display:'standard_4k'});
+              got=await response;
+            }
+            if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
           }
           const hd={width:1920,height:1080},hr=new Uint8Array(hd.width*hd.height*4),hdist=new Uint8Array(hr.length);
           for(let i=0;i<hr.length;i++){hr[i]=i%4===3?255:(i*17+Math.floor(i/(hd.width*4))*13)%256;hdist[i]=i%4===3?255:Math.max(0,hr[i]-7);}

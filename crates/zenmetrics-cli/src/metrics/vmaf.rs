@@ -205,8 +205,49 @@ pub(crate) fn to_yuv420(
     Ok((y, cb, cr))
 }
 
+/// Standalone CAMBI defaults with the AIC VMAF studio-601/even-crop ingress.
+#[cfg(feature = "cpu-vmaf")]
+pub(crate) fn cambi(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Box<dyn std::error::Error>> {
+    check_dims(r, d)?;
+    let (w, h) = even_size(d);
+    let (y, _, _) = to_yuv420_even(d, Ingress::Studio601)?;
+    let y: Vec<_> = y.into_iter().map(u16::from).collect();
+    Ok(vmaf::cambi_from_luma(&y, w, h, w, 8)?)
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "cpu-vmaf")]
+    #[test]
+    fn cambi_uses_distorted_even_crop_and_not_reference_pixels() {
+        let make = |fill| Rgb8Image {
+            pixels: vec![fill; 217 * 219 * 3],
+            width: 217,
+            height: 219,
+        };
+        let r = make(128);
+        let mut d = make(0);
+        for y in 0..219 {
+            for x in 0..217 {
+                let v = (32 + (x / 8) * 5) as u8;
+                d.pixels[(y * 217 + x) * 3..(y * 217 + x) * 3 + 3].fill(v);
+            }
+        }
+        let actual = cambi(&r, &d).unwrap();
+        assert!(actual.is_finite());
+        assert_eq!(actual, cambi(&make(11), &d).unwrap());
+        let pixels: Vec<_> = (0..218)
+            .flat_map(|y| d.pixels[y * 217 * 3..y * 217 * 3 + 216 * 3].iter().copied())
+            .collect();
+        let crop = Rgb8Image {
+            pixels,
+            width: 216,
+            height: 218,
+        };
+        assert_eq!(actual, cambi(&crop, &crop).unwrap());
+        assert!(cambi(&r, &crop).is_err());
+    }
+
     use super::*;
 
     fn pair() -> (Rgb8Image, Rgb8Image) {
