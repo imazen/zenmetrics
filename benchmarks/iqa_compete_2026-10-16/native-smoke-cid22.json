@@ -1,0 +1,480 @@
+[
+  {
+    "metric_name": "psnr",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 0,
+    "median_ns": null,
+    "p10_ns": null,
+    "p90_ns": null,
+    "mean_ns": null,
+    "score": null,
+    "ref_score": null,
+    "abs_delta": null,
+    "status": "unsupported",
+    "rayon_threads_observed": null,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.44,
+      1.18,
+      0.8
+    ],
+    "load_after": null
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 385548.157051282,
+    "p10_ns": 383784.95384615386,
+    "p90_ns": 444121.9692307695,
+    "mean_ns": 425342.565017205,
+    "score": 48.25860830672113,
+    "ref_score": 48.25860830672113,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.44,
+      1.18,
+      0.8
+    ],
+    "load_after": [
+      1.32,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 19053263.0,
+    "p10_ns": 18640200.7,
+    "p90_ns": 30087198.10000001,
+    "mean_ns": 21229130.766666666,
+    "score": 91.77586213860482,
+    "ref_score": 91.77586213860482,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.32,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.32,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 26308281.5,
+    "p10_ns": 25748999.3,
+    "p90_ns": 32995240.5,
+    "mean_ns": 27603707.96666666,
+    "score": 91.77586213860482,
+    "ref_score": 91.77586213860482,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.32,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.32,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 186773.07794117648,
+    "p10_ns": 185528.32666666666,
+    "p90_ns": 192455.45361842107,
+    "mean_ns": 198722.9039216915,
+    "score": 0.0009864770445797344,
+    "ref_score": 0.0009864770445797344,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.3,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.3,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 257660.19444444444,
+    "p10_ns": 253862.0806722689,
+    "p90_ns": 278839.79,
+    "mean_ns": 273941.98084095045,
+    "score": 0.0009864770445797344,
+    "ref_score": 0.0009864770445797344,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.3,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.3,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 14297797.5,
+    "p10_ns": 14126408.4,
+    "p90_ns": 14901200.0,
+    "mean_ns": 14725959.466666669,
+    "score": 0.9994480210792571,
+    "ref_score": 0.9994480210792571,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.3,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.3,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 14453671.5,
+    "p10_ns": 14062307.1,
+    "p90_ns": 22395294.400000002,
+    "mean_ns": 16367002.166666664,
+    "score": 0.9994480210792571,
+    "ref_score": 0.9994480210792571,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.3,
+      1.16,
+      0.8
+    ],
+    "load_after": [
+      1.3,
+      1.16,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 0,
+    "median_ns": null,
+    "p10_ns": null,
+    "p90_ns": null,
+    "mean_ns": null,
+    "score": null,
+    "ref_score": null,
+    "abs_delta": null,
+    "status": "unsupported",
+    "rayon_threads_observed": null,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.19,
+      1.14,
+      0.8
+    ],
+    "load_after": null
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 379260.43406593404,
+    "p10_ns": 376625.28863636364,
+    "p90_ns": 384267.96987179486,
+    "mean_ns": 380000.8429448329,
+    "score": 48.25860830672113,
+    "ref_score": 48.25860830672113,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.19,
+      1.14,
+      0.8
+    ],
+    "load_after": [
+      1.19,
+      1.14,
+      0.8
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 8949939.5,
+    "p10_ns": 8568740.3,
+    "p90_ns": 10055261.8,
+    "mean_ns": 9153257.566666668,
+    "score": 91.77586213860482,
+    "ref_score": 91.77586213860482,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.19,
+      1.14,
+      0.8
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 17226929.5,
+    "p10_ns": 16218883.8,
+    "p90_ns": 17932412.1,
+    "mean_ns": 17206785.599999998,
+    "score": 91.77586213860482,
+    "ref_score": 91.77586213860482,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.19,
+      1.14,
+      0.8
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 125039.38461538462,
+    "p10_ns": 111109.78653846154,
+    "p90_ns": 169039.15454545454,
+    "mean_ns": 136498.04620712617,
+    "score": 0.0009864770445797344,
+    "ref_score": 0.0009864770445797344,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 386533.9810606061,
+    "p10_ns": 347321.6916666667,
+    "p90_ns": 391638.85649350646,
+    "mean_ns": 375741.26848040853,
+    "score": 0.0009864770445797344,
+    "ref_score": 0.0009864770445797344,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 6033354.5,
+    "p10_ns": 5387683.5,
+    "p90_ns": 6986429.2,
+    "mean_ns": 6144697.1000000015,
+    "score": 0.9994480210792571,
+    "ref_score": 0.9994480210792571,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 6345938.0,
+    "p10_ns": 5636852.3,
+    "p90_ns": 6769891.5,
+    "mean_ns": 6389257.1000000015,
+    "score": 0.9994480210792571,
+    "ref_score": 0.9994480210792571,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": [
+      1.1,
+      1.12,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "cvvdp",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 6403275.0,
+    "p10_ns": 6213072.8,
+    "p90_ns": 6836451.800000001,
+    "mean_ns": 7140568.666666668,
+    "score": 9.951986312866211,
+    "ref_score": 9.951986312866211,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "d57ffb71a0c1c37cbc969c294d71b20ae2d69100367a85b0398ef4e3db33b308",
+    "load_before": [
+      2.67,
+      1.61,
+      1.0
+    ],
+    "load_after": [
+      2.62,
+      1.62,
+      1.01
+    ]
+  },
+  {
+    "metric_name": "cvvdp",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 34506378.0,
+    "p10_ns": 33918048.9,
+    "p90_ns": 43533908.90000001,
+    "mean_ns": 37059296.099999994,
+    "score": 9.951986312866211,
+    "ref_score": 9.951986312866211,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "d57ffb71a0c1c37cbc969c294d71b20ae2d69100367a85b0398ef4e3db33b308",
+    "load_before": [
+      2.67,
+      1.61,
+      1.0
+    ],
+    "load_after": [
+      2.62,
+      1.62,
+      1.01
+    ]
+  }
+]
