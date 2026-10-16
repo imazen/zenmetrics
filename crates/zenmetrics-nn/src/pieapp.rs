@@ -128,8 +128,10 @@ impl PieApp {
             }
             Ok(())
         };
-        for y in (0..=r.h - PATCH).step_by(STEP) {
-            for x in (0..=r.w - PATCH).step_by(STEP) {
+        let ys = axis_positions(r.h);
+        let xs = axis_positions(r.w);
+        for y in ys {
+            for &x in &xs {
                 positions.push((y, x));
                 if positions.len() == BATCH {
                     consume(&positions)?;
@@ -150,6 +152,11 @@ struct Prepared {
     h: usize,
 }
 
+/// Dense stride-six grid; incomplete trailing strides are not sampled.
+fn axis_positions(side: usize) -> Vec<usize> {
+    (0..=side - PATCH).step_by(STEP).collect()
+}
+
 fn patches(image: &Prepared, positions: &[(usize, usize)]) -> Vec<f32> {
     let plane = image.w * image.h;
     let mut out = Vec::with_capacity(positions.len() * 3 * PATCH * PATCH);
@@ -166,7 +173,7 @@ fn patches(image: &Prepared, positions: &[(usize, usize)]) -> Vec<f32> {
 
 impl za::Metric for PieApp {
     fn id(&self) -> za::MetricId {
-        za::MetricId::new(COLUMN, za::implementation!(1)).with_reference(format!(
+        za::MetricId::new(COLUMN, za::implementation!(2)).with_reference(format!(
             "PieAPP v0.1 paper/weights reconstruction, dense stride 6; engine {}",
             self.graph.engine()
         ))
@@ -240,6 +247,24 @@ impl za::WarmReference for WarmPieApp<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dense_grid_matches_small_blackbox_cases() {
+        assert_eq!(axis_positions(64), [0]);
+        assert_eq!(axis_positions(65), [0]);
+        assert_eq!(
+            axis_positions(128),
+            [0, 6, 12, 18, 24, 30, 36, 42, 48, 54, 60]
+        );
+    }
+
+    #[test]
+    fn normalized_ingress_preserves_every_code_value() {
+        for code in 0u8..=255 {
+            let planar = f32::from(code) / 255.0;
+            assert_eq!(planar * 255.0, f32::from(code));
+        }
+    }
 
     #[test]
     fn consent_precedes_file_access() {
