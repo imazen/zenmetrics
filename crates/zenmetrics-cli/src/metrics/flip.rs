@@ -55,6 +55,18 @@ fn filtered_lab(p: [f32; 4]) -> Pixel {
         (0.055639423 * q[0] - 0.204011202 * q[1] + 1.057148933 * q[2]).clamp(0.0, 1.0),
     ])
 }
+// sRGB -> linear is a function of the 8-bit input alone; the table holds the
+// exact f32 results the per-pixel expression produced.
+fn linear_lut() -> [f32; 256] {
+    std::array::from_fn(|i| {
+        let s = i as f32 / 255.0;
+        if s <= 0.04045 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    })
+}
 fn ingress(data: &[u8], w: usize, h: usize, stride: usize) -> Result<Vec<Pixel>, &'static str> {
     let need = h
         .checked_sub(1)
@@ -63,17 +75,11 @@ fn ingress(data: &[u8], w: usize, h: usize, stride: usize) -> Result<Vec<Pixel>,
     if w == 0 || h == 0 || stride < w.saturating_mul(3) || need.is_none_or(|n| data.len() < n) {
         return Err("FLIP: invalid RGB geometry");
     }
+    let linear = linear_lut();
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h {
         for p in data[y * stride..y * stride + w * 3].as_chunks::<3>().0 {
-            let q = xyz(p.map(|v| {
-                let s = f32::from(v) / 255.0;
-                if s <= 0.04045 {
-                    s / 12.92
-                } else {
-                    ((s + 0.055) / 1.055).powf(2.4)
-                }
-            }));
+            let q = xyz(p.map(|v| linear[usize::from(v)]));
             let q: Pixel = std::array::from_fn(|i| q[i] * INV_WHITE[i]);
             out.push([
                 116.0 * q[1] - 16.0,
@@ -154,7 +160,9 @@ fn convolve<const N: usize>(
     let r = (f.len() / 2) as isize;
     for y in 0..h {
         for x in 0..w {
-            let v = &mut out[y * w + x];
+            // Accumulate the tap chain in registers; the addition order and
+            // each product are unchanged.
+            let mut acc = [0.0f32; N];
             for (k, t) in f.iter().enumerate() {
                 let xx = if vertical {
                     x
@@ -166,10 +174,12 @@ fn convolve<const N: usize>(
                 } else {
                     y
                 };
+                let s = a[yy * w + xx];
                 for c in 0..N {
-                    v[c] += t[c] * a[yy * w + xx][c];
+                    acc[c] += t[c] * s[c];
                 }
             }
+            out[y * w + x] = acc;
         }
     }
     out
@@ -258,6 +268,72 @@ pub(super) fn mean_v17(map: &[f32]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The register-accumulating `convolve` is bit-identical to the original
+    /// in-place accumulation, on odd sizes, both directions, clamped borders.
+    #[test]
+    fn convolve_matches_in_place_reference() {
+        fn reference<const N: usize>(
+            a: &[[f32; N]],
+            w: usize,
+            h: usize,
+            f: &[[f32; N]],
+            vertical: bool,
+        ) -> Vec<[f32; N]> {
+            let mut out = vec![[0.0; N]; w * h];
+            let r = (f.len() / 2) as isize;
+            for y in 0..h {
+                for x in 0..w {
+                    let v = &mut out[y * w + x];
+                    for (k, t) in f.iter().enumerate() {
+                        let xx = if vertical {
+                            x
+                        } else {
+                            (x as isize + k as isize - r).clamp(0, w as isize - 1) as usize
+                        };
+                        let yy = if vertical {
+                            (y as isize + k as isize - r).clamp(0, h as isize - 1) as usize
+                        } else {
+                            y
+                        };
+                        for c in 0..N {
+                            v[c] += t[c] * a[yy * w + xx][c];
+                        }
+                    }
+                }
+            }
+            out
+        }
+        let bits = |v: &[[f32; 3]]| v.iter().flatten().map(|x| x.to_bits()).collect::<Vec<_>>();
+        for &(w, h) in &[(1, 1), (7, 5), (33, 17), (64, 3)] {
+            let a: Vec<[f32; 3]> = (0..w * h)
+                .map(|i| std::array::from_fn(|c| ((i * 31 + c * 7) % 97) as f32 * 0.013 - 0.4))
+                .collect();
+            let f: Vec<[f32; 3]> = (0..9)
+                .map(|k| std::array::from_fn(|c| ((k * 5 + c) % 11) as f32 * 0.021 + 0.003))
+                .collect();
+            for vertical in [false, true] {
+                assert_eq!(
+                    bits(&convolve(&a, w, h, &f, vertical)),
+                    bits(&reference(&a, w, h, &f, vertical)),
+                    "{w}x{h} vertical={vertical}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn srgb_linear_lut_matches_per_pixel_expression() {
+        let lut = linear_lut();
+        for v in 0u16..=255 {
+            let s = v as u8 as f32 / 255.0;
+            let direct = if s <= 0.04045 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            };
+            assert_eq!(lut[usize::from(v as u8)], direct, "v={v}");
+        }
+    }
     #[test]
     fn identity_stride_and_border_distortion() {
         let (w, h) = (19, 17);
