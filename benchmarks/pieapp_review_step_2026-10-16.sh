@@ -6,7 +6,7 @@ models=$2
 ladder=$3
 shards=$4
 case "$phase" in
- cli) PIEAPP_LEGACY_NUM_PATCHES=1024 just nn-pieapp-review-cli "$HOME/tmp/pieapp-oracle/venv-gpu/bin/python" "$HOME/tmp/pieapp-oracle/upstream" "$HOME/tmp/pieapp-port/ladder-pairs.tsv" "$HOME/tmp/pieapp-port/oracle-ladder.tsv" "$HOME/tmp/pieapp-port/review13b/cli.json" "$HOME/tmp/pieapp-port/review13b/cli-logs" ;;
+ cli) env -u LD_LIBRARY_PATH PIEAPP_LEGACY_NUM_PATCHES=1024 just nn-pieapp-review-cli "$HOME/tmp/pieapp-oracle/venv-gpu/bin/python" "$HOME/tmp/pieapp-oracle/upstream" "$HOME/tmp/pieapp-port/ladder-pairs.tsv" "$HOME/tmp/pieapp-port/oracle-ladder.tsv" "$HOME/tmp/pieapp-port/review13b/cli.json" "$HOME/tmp/pieapp-port/review13b/cli-logs" ;;
  inventory) python3 scripts/jobsys/test_benchmark_study.py ;;
  debug) just snap-cargo @ test -p zenmetrics-nn ;;
  release) just snap-cargo @ test --release -p zenmetrics-nn ;;
