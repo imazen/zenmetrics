@@ -95,7 +95,7 @@ Source/binary/function hashes: [qualification metadata](qualification.meta.json)
 - `just aic-perf-big-interleave CAMBI_BASE BUTTER_BASE CANDIDATE OUTPUT`
 - `just aic-perf-big-parity BASE CANDIDATE OUTPUT_TSV FRESH_ARTIFACT_DIR`
 - `just aic-perf-big-oracles FRESH_OUTPUT ORACLE_PYTHON`
-- `just aic-perf-big-summary SCRATCH OUTPUT_PREFIX`
+- `just aic-perf-big-summary SCRATCH OUTPUT_PREFIX thread`
 
 The first noise scout produced zero CAMBI; the primary banded fixture
 extends the original-author pinned 10-bit staircase. Baseline source is
