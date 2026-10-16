@@ -29,6 +29,7 @@ use std::path::Path;
 
 use crate::common::read_meta;
 use crate::engine::{self, ImageGraph, NamedInput};
+use crate::par;
 use crate::preprocess::rgb8_to_planar_01;
 use crate::{Engine, Error, WeightsConsent, WeightsLicence, WeightsTerms, za};
 
@@ -136,38 +137,67 @@ impl Paq2piq {
     /// `std::round` (half-away) ROI bounds scaled by 1/32, ROI size
     /// `max(end−start+1, 1)`, floor/ceil bin edges clamped to the map,
     /// empty bins 0.
+    ///
+    /// Each ROI's four bins read only `feats` and write only its own `C·4`
+    /// slice of the output, so the ROIs run on scoped worker threads — every
+    /// output element keeps the original scan order (its max over the same
+    /// cells), so the result is unchanged.
     fn roi_pool(feats: &[f32], hf: usize, wf: usize, rois: &[[f32; 4]]) -> Vec<f32> {
         let mut out = vec![0.0f32; rois.len() * C * 4];
-        for (i, &[x1, y1, x2, y2]) in rois.iter().enumerate() {
-            let (xs, ys) = ((x1 * SCALE).round() as i64, (y1 * SCALE).round() as i64);
-            let rw = ((x2 * SCALE).round() as i64 - xs + 1).max(1);
-            let rh = ((y2 * SCALE).round() as i64 - ys + 1).max(1);
-            for ph in 0..2i64 {
-                for pw in 0..2i64 {
-                    let h0 =
-                        ((ph as f64 * rh as f64 / 2.0).floor() as i64 + ys).clamp(0, hf as i64);
-                    let h1 = (((ph + 1) as f64 * rh as f64 / 2.0).ceil() as i64 + ys)
-                        .clamp(0, hf as i64);
-                    let w0 =
-                        ((pw as f64 * rw as f64 / 2.0).floor() as i64 + xs).clamp(0, wf as i64);
-                    let w1 = (((pw + 1) as f64 * rw as f64 / 2.0).ceil() as i64 + xs)
-                        .clamp(0, wf as i64);
-                    if h1 > h0 && w1 > w0 {
-                        let (h0, h1, w0, w1) = (h0 as usize, h1 as usize, w0 as usize, w1 as usize);
-                        for c in 0..C {
-                            let mut m = f32::NEG_INFINITY;
-                            for y in h0..h1 {
-                                for x in w0..w1 {
-                                    m = m.max(feats[(c * hf + y) * wf + x]);
-                                }
+        // One max over a feature cell per bin per channel is the work that
+        // decides the thread count.
+        let work: usize = rois
+            .iter()
+            .map(|&r| {
+                Self::roi_bins(hf, wf, r)
+                    .iter()
+                    .filter(|(h0, h1, w0, w1)| h1 > h0 && w1 > w0)
+                    .map(|(h0, h1, w0, w1)| ((h1 - h0) * (w1 - w0)) as usize)
+                    .sum::<usize>()
+            })
+            .sum::<usize>()
+            * C;
+        let threads = par::threads_for(work);
+        par::for_each_row(&mut out, C * 4, threads, |i, orow| {
+            for (bin, &(h0, h1, w0, w1)) in Self::roi_bins(hf, wf, rois[i]).iter().enumerate() {
+                if h1 > h0 && w1 > w0 {
+                    let (h0, h1, w0, w1) = (h0 as usize, h1 as usize, w0 as usize, w1 as usize);
+                    for c in 0..C {
+                        let mut m = f32::NEG_INFINITY;
+                        for y in h0..h1 {
+                            for x in w0..w1 {
+                                m = m.max(feats[(c * hf + y) * wf + x]);
                             }
-                            out[(i * C + c) * 4 + (ph * 2 + pw) as usize] = m;
                         }
+                        orow[c * 4 + bin] = m;
                     }
                 }
             }
-        }
+        });
         out
+    }
+
+    /// The four `RoIPool` bins of one ROI as clamped `(h0, h1, w0, w1)`
+    /// half-open feature-map ranges (an empty bin has `h1 == h0` or
+    /// `w1 == w0`).
+    fn roi_bins(hf: usize, wf: usize, roi: [f32; 4]) -> [(i64, i64, i64, i64); 4] {
+        let [x1, y1, x2, y2] = roi;
+        let (xs, ys) = ((x1 * SCALE).round() as i64, (y1 * SCALE).round() as i64);
+        let rw = ((x2 * SCALE).round() as i64 - xs + 1).max(1);
+        let rh = ((y2 * SCALE).round() as i64 - ys + 1).max(1);
+        let mut bins = [(0i64, 0i64, 0i64, 0i64); 4];
+        for ph in 0..2i64 {
+            for pw in 0..2i64 {
+                let h0 = ((ph as f64 * rh as f64 / 2.0).floor() as i64 + ys).clamp(0, hf as i64);
+                let h1 =
+                    (((ph + 1) as f64 * rh as f64 / 2.0).ceil() as i64 + ys).clamp(0, hf as i64);
+                let w0 = ((pw as f64 * rw as f64 / 2.0).floor() as i64 + xs).clamp(0, wf as i64);
+                let w1 =
+                    (((pw + 1) as f64 * rw as f64 / 2.0).ceil() as i64 + xs).clamp(0, wf as i64);
+                bins[(ph * 2 + pw) as usize] = (h0, h1, w0, w1);
+            }
+        }
+        bins
     }
 
     /// Score one prepared image: body → host RoIPool → head → `t[0]`.
@@ -322,6 +352,27 @@ mod tests {
         let f0 = vec![0.0f32; C * 4];
         let out3 = Paq2piq::roi_pool(&f0, 2, 2, &[[64.0, 64.0, 64.0, 64.0]]);
         assert_eq!(&out3[0..4], &[0.0, 0.0, 0.0, 0.0]);
+    }
+
+    /// The ROI-parallel pool is bit-identical to the sequential path and a
+    /// one-worker cap launches no helper thread.
+    #[test]
+    fn roi_pool_thread_bit_identical() {
+        let (hf, wf) = (64, 64);
+        let feats: Vec<f32> = (0..C * hf * wf)
+            .map(|i| (i as f32 * 0.371).sin() * 5.0)
+            .collect();
+        let rois = Paq2piq::rois(2048, 2048);
+        let (a, spawns) =
+            par::observe_workers(Some(1), || Paq2piq::roi_pool(&feats, hf, wf, &rois));
+        assert_eq!(spawns, 0);
+        let (b, parallel_spawns) =
+            par::observe_workers(Some(16), || Paq2piq::roi_pool(&feats, hf, wf, &rois));
+        assert!(parallel_spawns > 0);
+        assert_eq!(
+            a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
     }
 
     /// Strided input rows are honoured.
