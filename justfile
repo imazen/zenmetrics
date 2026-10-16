@@ -955,3 +955,6 @@ nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
 
 nn-pieapp-review-weight-control python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_control.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-weight-identify python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'

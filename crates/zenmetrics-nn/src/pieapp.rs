@@ -272,7 +272,7 @@ mod tests {
             stride: 768,
         };
         let planar = rgb8_to_planar_01(&input);
-        for (channel_index, channel) in planar.chunks_exact(256).enumerate() {
+        for (channel_index, channel) in planar.as_chunks::<256>().0.iter().enumerate() {
             for (position, &value) in channel.iter().enumerate() {
                 let code = f32::from(pixels[position * 3 + channel_index]);
                 assert_eq!(value.to_bits(), (code / 255.0).to_bits());
