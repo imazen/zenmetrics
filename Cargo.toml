@@ -21,6 +21,9 @@ members = [
     "crates/iwssim-gpu",
     "crates/psnrhvs",
     "crates/nlpd",
+    "crates/piqe",
+    "crates/niqe",
+    "crates/brisque",
     "crates/ssim2-gpu",
 
     "crates/vmaf",
@@ -43,6 +46,7 @@ members = [
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",
     "crates/zenmetrics-stats",
+    "crates/zenmetrics-nn",
     "benchmarks/heaptrack/drivers/cpu_profile",
     "benchmarks/heaptrack/drivers/gpu_vram_profile",
 ]
@@ -87,6 +91,9 @@ haarpsi = { version = "0.1.0", path = "crates/haarpsi", default-features = false
 hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
+brisque = { version = "0.1.0", path = "crates/brisque", default-features = false }
+niqe = { version = "0.1.0", path = "crates/niqe", default-features = false }
+piqe = { version = "0.1.0", path = "crates/piqe", default-features = false }
 psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }

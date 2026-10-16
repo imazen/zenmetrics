@@ -1,0 +1,29 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=19890MiB :: bash -c ./target/release/burnlpips /home/lilith/tmp/nn-phase0/spike /home/lilith/tmp/nn-phase0/model-lpips-vgg/goldens.tsv cuda f32 64,256,1024 5; cd ~/tmp/nn-phase0 && ~/tmp/nnrt-research/venv-cu/bin/python -I -W ignore scripts/ort_lpips.py model-lpips-vgg ladder cuda 64,128,256,512,1024,2048 10
+cuda	f32	1415	1024	got 0.356575221	want 0.356550783	|d| 2.444e-5	median 109.701 ms
+cuda	f32	1415	256	got 0.323216587	want 0.323269993	|d| 5.341e-5	median 6.069 ms
+cuda	f32	1415	64	got 0.234538317	want 0.234536231	|d| 2.086e-6	median 2.755 ms
+cuda	f32	2207	1024	got 0.243613362	want 0.243604422	|d| 8.940e-6	median 109.869 ms
+cuda	f32	2207	256	got 0.372611105	want 0.372635663	|d| 2.456e-5	median 6.135 ms
+cuda	f32	2207	64	got 0.370146811	want 0.370130688	|d| 1.612e-5	median 2.889 ms
+cuda	f32	2406	1024	got 0.302098006	want 0.302160621	|d| 6.261e-5	median 109.707 ms
+cuda	f32	2406	256	got 0.309836060	want 0.309901178	|d| 6.512e-5	median 6.044 ms
+cuda	f32	2406	64	got 0.259005129	want 0.259086668	|d| 8.154e-5	median 2.809 ms
+ort-cuda	1415	1024	got 0.356550777	want 0.356550783	|d| 5.669e-09	trunk x2 median 156.309 ms
+ort-cuda	1415	128	got 0.314692317	want 0.314692378	|d| 6.142e-08	trunk x2 median 3.802 ms
+ort-cuda	1415	2048	got 0.328064548	want 0.328064531	|d| 1.685e-08	trunk x2 median 622.226 ms
+ort-cuda	1415	256	got 0.323269991	want 0.323269993	|d| 1.796e-09	trunk x2 median 9.712 ms
+ort-cuda	1415	512	got 0.352369759	want 0.352369756	|d| 3.232e-09	trunk x2 median 36.824 ms
+ort-cuda	1415	64	got 0.234536224	want 0.234536231	|d| 6.955e-09	trunk x2 median 1.842 ms
+ort-cuda	2207	1024	got 0.243604422	want 0.243604422	|d| 3.844e-10	trunk x2 median 166.118 ms
+ort-cuda	2207	128	got 0.429533590	want 0.429533541	|d| 4.863e-08	trunk x2 median 3.752 ms
+ort-cuda	2207	2048	got 0.276450746	want 0.276450753	|d| 7.239e-09	trunk x2 median 721.054 ms
+ort-cuda	2207	256	got 0.372635650	want 0.372635663	|d| 1.348e-08	trunk x2 median 10.393 ms
+ort-cuda	2207	512	got 0.236915402	want 0.236915410	|d| 7.886e-09	trunk x2 median 44.740 ms
+ort-cuda	2207	64	got 0.370130755	want 0.370130688	|d| 6.701e-08	trunk x2 median 2.094 ms
+ort-cuda	2406	1024	got 0.302160611	want 0.302160621	|d| 9.624e-09	trunk x2 median 200.849 ms
+ort-cuda	2406	128	got 0.285819748	want 0.285819739	|d| 9.417e-09	trunk x2 median 3.498 ms
+ort-cuda	2406	2048	got 0.315420747	want 0.315420747	|d| 1.967e-10	trunk x2 median 638.027 ms
+ort-cuda	2406	256	got 0.309901167	want 0.309901178	|d| 1.129e-08	trunk x2 median 9.943 ms
+ort-cuda	2406	512	got 0.304837454	want 0.304837465	|d| 1.089e-08	trunk x2 median 36.957 ms
+ort-cuda	2406	64	got 0.259086659	want 0.259086668	|d| 8.822e-09	trunk x2 median 1.885 ms
+run-heavy: done rc=0 51s | peak-RSS 9.53GiB | min-avail 12494MiB | peak-load 4.60

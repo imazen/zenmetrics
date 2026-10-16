@@ -1,0 +1,7 @@
+image	sha256	location_on_i265
+1415_64_ref.png	2aa3fcd7af669edf2dc7d28562714e037ad3bd38acc69329ccd09f16777bd3b0	$HOME/tmp/nn-phase0/ladder/1415_64_ref.png
+1415_64_dist.png	d0b7c1759cba4214545481ea041a4c0bb1704ecdcbb68ab53d08309b2082dfc5	$HOME/tmp/nn-phase0/ladder/1415_64_dist.png
+1415_32_ref.png	e7122c926663a6859b7948c3675be3937d7f6d1f57ef84e464543e0e2534b06c	$HOME/tmp/nn-phase0/ladder-nonsquare/1415_32_ref.png
+1415_32_dist.png	04cd7a120c0c047ecf8c8e782cd4e062edb7f5b635835c2fe9f7694ac96eafbe	$HOME/tmp/nn-phase0/ladder-nonsquare/1415_32_dist.png
+1415_33x47_ref.png	3d930384611ba043354d347a5339c80f5e6eea7e5b2c213be1b69c1f3fed10be	$HOME/tmp/nn-phase0/ladder-nonsquare/1415_33x47_ref.png
+1415_33x47_dist.png	7609c60d4f0429fd9a350d4b566c5472dc2efb8cd6bde0b6271ba9e5eb665c0b	$HOME/tmp/nn-phase0/ladder-nonsquare/1415_33x47_dist.png

@@ -1,0 +1,13 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	16	lpips_vgg	compute	64	50	8.570	7.997	0.2345362
+i265	rten	16	lpips_vgg	warm	64	50	6.982	6.681	0.2345362
+i265	rten	16	lpips_vgg	e2e	64	50	8.400	8.038	0.2345362
+i265	rten	16	lpips_vgg	compute	256	35	86.892	82.296	0.3232700
+i265	rten	16	lpips_vgg	warm	256	50	53.217	48.915	0.3232700
+i265	rten	16	lpips_vgg	e2e	256	34	89.201	84.826	0.3232700
+i265	rten	16	lpips_vgg	compute	1024	3	1403.357	1400.218	0.3565508
+i265	rten	16	lpips_vgg	warm	1024	4	866.066	852.336	0.3565508
+i265	rten	16	lpips_vgg	e2e	1024	3	1423.531	1411.001	0.3565508
+i265	rten	16	lpips_vgg	compute	2048	3	5488.999	5423.794	0.3280646
+i265	rten	16	lpips_vgg	warm	2048	3	3297.225	3281.137	0.3280646
+i265	rten	16	lpips_vgg	e2e	2048	3	5536.500	5492.760	0.3280646

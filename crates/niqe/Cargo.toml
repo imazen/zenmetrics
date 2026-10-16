@@ -1,0 +1,31 @@
+[package]
+name = "niqe"
+version = "0.1.0"
+description = "Pure-Rust CPU port of NIQE (Mittal, Soundararajan & Bovik 2013) from BasicSR"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+# The port of BasicSR's `basicsr/metrics/niqe.py` (Apache-2.0, XPixel Group)
+# keeps that licence in `LICENSE-BasicSR`; the embedded pristine-model
+# parameters are LIVE's `niqe_release` data, whose notice is kept verbatim in
+# `LICENSE-LIVE-niqe` (it requires the notice to appear in all copies).
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = ["zenmetrics-abstractions/std"]
+
+[dependencies]
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+libm = { version = "0.2.16", default-features = false }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }

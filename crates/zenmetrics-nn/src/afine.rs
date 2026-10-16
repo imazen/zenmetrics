@@ -1,0 +1,869 @@
+//! A-FINE (Du et al., "A-FINE: Adaptive Fidelity-Naturalness Evaluation for
+//! AI-Generated Image Quality Assessment", TMM 2024; upstream
+//! `ChrisDud0257/AFINE`, Apache-2.0). Parity target: upstream `afine.py`'s
+//! `afine_all` output — the raw adapter score, which is what the AIC-4
+//! `A-FINE` column publishes (range ≈ −2..2, **lower is better**).
+//!
+//! Pipeline (upstream QuickInference/afine.py + utils/network_archs.py):
+//!   1. CLIP-normalize the 0..1 sRGB image with the CLIP ViT stats.
+//!   2. `F.interpolate` bicubic-upsample (a = −0.75, no antialias, index
+//!      clamp) to the next multiple of 32 per axis — ViT-B/32 patch grid.
+//!   3. The finetuned CLIP visual trunk yields 12 token maps `[1, N, 768]`.
+//!   4. `AFINEQhead`: per feature (de-normalized pixels + relu(tap)) take
+//!      token mean/variance, project, MLP → naturalness scalar.
+//!   5. `AFINEDhead`: SSIM-style mean/var/cov terms between ref and dist
+//!      statistics, channel-weighted → fidelity scalar.
+//!   6. NLM logistic scalers + `AFINELearnLambda` adapter → `afine_all`.
+//!
+//! `models/afine/export.py` emits `afine_trunk.onnx` (the network of step 3:
+//! normalized image → 12 taps `[1,768,N,1]`), `afine_full.onnx` (the whole
+//! pipeline for whole-graph engines) and `afine_heads.f32` (the step 4-6
+//! weights, layout documented in the export script). The heads run in Rust:
+//! they are per-channel statistics plus two small linears, so on a trunk
+//! engine they need only each tap's channel moments — computed on the host
+//! where the data already is — rather than a multi-input head graph.
+
+use std::borrow::Cow;
+use std::path::Path;
+
+use crate::common::{Backend, read_f32, read_meta};
+use crate::engine::{self, Tap};
+use crate::preprocess::rgb8_to_planar_01;
+use crate::resize::resize_bicubic;
+use crate::{Engine, Error, WeightsConsent, WeightsLicence, WeightsTerms, za};
+
+/// Bump whenever any output can change.
+const SCORE_REVISION: u32 = 1;
+const COLUMN: &str = "afine";
+
+/// CLIP normalization stats (upstream `afine.py`).
+const MEAN: [f32; 3] = [0.48145466, 0.4578275, 0.40821073];
+const STD: [f32; 3] = [0.26862954, 0.26130258, 0.27577711];
+
+/// ViT-B/32: one token per 32×32 patch, 768 channels, 12 tapped layers.
+const TAPS: usize = 12;
+const TAP_C: usize = 768;
+const HIDDEN: usize = 128;
+/// proj_head input: pixel mean‖var (3·2) + 12 projected features.
+const HEAD_IN: usize = 3 * 2 + HIDDEN * TAPS; // 1542
+/// proj_head hidden width (`hidden_dim * 6`).
+const HEAD_HIDDEN: usize = 768;
+/// dhead channel weights: 3 pixel + 12·768 feature channels.
+const DHEAD_CH: usize = 3 + TAPS * TAP_C; // 9219
+/// Positional embedding: 768 channels × 50 base positions, resized to
+/// `N+1` positions on the host (rten's `Resize` has no cubic mode).
+const POS_EMB: usize = TAP_C * 50;
+
+/// Expected `afine_heads.f32` element count — layout documented in
+/// `models/afine/export.py`.
+const HEADS_LEN: usize = HIDDEN * 2 * TAP_C // proj_feat 128×1536
+    + HIDDEN
+    + HEAD_HIDDEN * HEAD_IN
+    + HEAD_HIDDEN
+    + HEAD_HIDDEN // proj_head.2 row
+    + 1
+    + 2 * DHEAD_CH
+    + 2
+    + 2
+    + 1
+    + POS_EMB;
+
+/// Per-channel moments of one plane of one feature — the only reductions
+/// the heads ever need.
+#[derive(Clone, Copy)]
+struct Stats {
+    mean: f64,
+    var: f64,
+}
+
+impl Stats {
+    fn of(it: impl Iterator<Item = f64> + Clone) -> Self {
+        let n = it.clone().count() as f64;
+        let mean = it.clone().sum::<f64>() / n;
+        let var = it.map(|v| (v - mean) * (v - mean)).sum::<f64>() / n;
+        Self { mean, var }
+    }
+}
+
+/// Per-image statistics the heads consume.
+struct ImgStats {
+    /// Pixel planes, de-normalized to 0..1: `[3]`.
+    pix: [Stats; 3],
+    /// Trunk taps, relu'd: `12` × `[768]` per channel over `N` tokens.
+    taps: Vec<Vec<Stats>>,
+}
+
+/// A-FINE. Lower is better (a distortion/naturalness score ≈ −2..2, the
+/// `afine_all` tap). Input: packed sRGB8 (any stride).
+pub struct Afine {
+    backend: Backend,
+    heads: Heads,
+    min_size: usize,
+}
+
+/// The step 4-6 weights, in `afine_heads.f32` order.
+struct Heads {
+    /// proj_feat `[128, 1536]` row-major.
+    proj_w: Vec<f32>,
+    proj_b: Vec<f32>,
+    /// proj_head.0 `[768, 1542]` row-major.
+    head0_w: Vec<f32>,
+    head0_b: Vec<f32>,
+    /// proj_head.2 `[1, 768]`, then bias.
+    head2_w: Vec<f32>,
+    head2_b: f64,
+    /// softplus(alpha)/Σ · softplus(alpha‖beta) — dhead's normalized
+    /// channel weights, in `chns` order: pixel block of 3, then 12×768.
+    alpha_n: Vec<f64>,
+    beta_n: Vec<f64>,
+    /// NLM `(yita3, yita4)` for naturalness and fidelity.
+    nr: [f64; 2],
+    fr: [f64; 2],
+    /// adapter `k` (pre-softplus).
+    k: f64,
+    /// CLIP visual positional embedding, seq-major `[50][768]`.
+    pos_emb: Vec<f32>,
+}
+
+impl Heads {
+    fn parse(w: &[f32]) -> Result<Self, Error> {
+        let bad = |m: &str| Error::BadModel(format!("afine_heads.f32: {m}"));
+        let mut it = w.iter();
+        let mut take = |n: usize| -> Result<Vec<f32>, Error> {
+            let v: Vec<f32> = it.by_ref().take(n).copied().collect();
+            if v.len() != n {
+                return Err(bad("truncated"));
+            }
+            Ok(v)
+        };
+        let (proj_w, proj_b) = (take(HIDDEN * 2 * TAP_C)?, take(HIDDEN)?);
+        let (head0_w, head0_b) = (take(HEAD_HIDDEN * HEAD_IN)?, take(HEAD_HIDDEN)?);
+        let (head2_w, hb2) = (take(HEAD_HIDDEN)?, take(1)?);
+        let (alpha, beta) = (take(DHEAD_CH)?, take(DHEAD_CH)?);
+        let (nr, fr, k) = (take(2)?, take(2)?, take(1)?);
+        let pos_emb = take(POS_EMB)?;
+        if it.next().is_some() {
+            return Err(bad("trailing values"));
+        }
+        // upstream: w_sum = softplus(alpha).sum() + softplus(beta).sum() + ε,
+        // then each block divides by w_sum.
+        let w_sum = alpha
+            .iter()
+            .chain(&beta)
+            .map(|&v| softplus(f64::from(v)))
+            .sum::<f64>()
+            + 1e-10;
+        let alpha_n = alpha
+            .iter()
+            .map(|&v| softplus(f64::from(v)) / w_sum)
+            .collect();
+        let beta_n = beta
+            .iter()
+            .map(|&v| softplus(f64::from(v)) / w_sum)
+            .collect();
+        Ok(Self {
+            proj_w,
+            proj_b,
+            head0_w,
+            head0_b,
+            head2_w,
+            head2_b: f64::from(hb2[0]),
+            alpha_n,
+            beta_n,
+            nr: [f64::from(nr[0]), f64::from(nr[1])],
+            fr: [f64::from(fr[0]), f64::from(fr[1])],
+            k: f64::from(k[0]),
+            pos_emb,
+        })
+    }
+
+    /// proj_head: `[1542]` → Linear→GELU→Linear → scalar. The hidden rows
+    /// feed the same final sum in index order, so a row split is bitwise
+    /// identical to the sequential loop (see [`crate::par`]).
+    fn mlp(&self, x: &[f64]) -> f64 {
+        let rows = self.head0_w.as_chunks::<HEAD_IN>().0;
+        let h = crate::par::par_map(
+            HEAD_HIDDEN,
+            crate::par::threads_for(HEAD_HIDDEN * HEAD_IN),
+            |i| {
+                gelu(
+                    f64::from(self.head0_b[i])
+                        + rows[i]
+                            .iter()
+                            .zip(x)
+                            .map(|(&w, &x)| f64::from(w) * x)
+                            .sum::<f64>(),
+                )
+            },
+        );
+        self.head2_b
+            + h.iter()
+                .zip(&self.head2_w)
+                .map(|(&v, &w)| f64::from(w) * v)
+                .sum::<f64>()
+    }
+
+    /// `AFINEQhead(img, feats)` — naturalness of one image.
+    ///
+    /// `proj_feat` of the 12 taps and the `mlp` hidden rows are independent.
+    /// Every row keeps the sequential code's grouping — bias plus one
+    /// `Iterator::sum` over means then vars — and `x` is assembled in tap
+    /// order, so the parallel split is bitwise identical (see [`crate::par`]).
+    fn qhead(&self, s: &ImgStats) -> f64 {
+        let mut x = Vec::with_capacity(HEAD_IN);
+        for t in &s.pix {
+            x.push(t.mean);
+        }
+        for t in &s.pix {
+            x.push(t.var);
+        }
+        let proj_w = self.proj_w.as_chunks::<{ 2 * TAP_C }>().0;
+        let proj = crate::par::par_map(
+            TAPS * HIDDEN,
+            crate::par::threads_for(TAPS * HIDDEN * 2 * TAP_C),
+            |idx| {
+                let tap = &s.taps[idx / HIDDEN];
+                let row = &proj_w[idx % HIDDEN];
+                // b + Σ over [means ‖ vars], summed exactly as the
+                // sequential proj_feat did.
+                let means = row[..TAP_C]
+                    .iter()
+                    .zip(tap)
+                    .map(|(&w, st)| f64::from(w) * st.mean);
+                let vars = row[TAP_C..]
+                    .iter()
+                    .zip(tap)
+                    .map(|(&w, st)| f64::from(w) * st.var);
+                f64::from(self.proj_b[idx % HIDDEN]) + means.chain(vars).sum::<f64>()
+            },
+        );
+        x.extend(proj);
+        self.mlp(&x)
+    }
+
+    /// `AFINEDhead(d, r, fd, fr)` — fidelity. `cov` carries the per-channel
+    /// cross-moment `E[x·y]` for each feature (pixels first, then 12 taps).
+    fn dhead(&self, d: &ImgStats, r: &ImgStats, cov: &[Vec<f64>]) -> f64 {
+        const C1: f64 = 1e-10;
+        const C2: f64 = 1e-10;
+        let (mut d1, mut d2) = (0.0, 0.0);
+        let mut off = 0usize;
+        for k in 0..=TAPS {
+            let ch = if k == 0 { 3 } else { TAP_C };
+            let (sx, sy, xy): (&[Stats], &[Stats], &[f64]) = if k == 0 {
+                (&d.pix, &r.pix, &cov[0])
+            } else {
+                (&d.taps[k - 1], &r.taps[k - 1], &cov[k])
+            };
+            for c in 0..ch {
+                let (mx, my) = (sx[c].mean, sy[c].mean);
+                let s1 = (2.0 * mx * my + C1) / (mx * mx + my * my + C1);
+                d1 += self.alpha_n[off + c] * s1;
+                let cxy = xy[c] - mx * my;
+                let s2 = (2.0 * cxy + C2) / (sx[c].var + sy[c].var + C2);
+                d2 += self.beta_n[off + c] * s2;
+            }
+            off += ch;
+        }
+        1.0 - (d1 + d2)
+    }
+}
+
+/// logistic NLM `(y1−y2)/(1+e^e)+y2`, y1=2, y2=−2 — the `e ≥ 10` branch
+/// coincides with this expression there and beyond (4·e⁻ᵉ/(1+e⁻ᵉ) equals it
+/// to fp64 precision once e ≥ ~17, and differs by <2e-4 at the switch), and
+/// `models/afine/export.py` emits the branch-free equivalent for ONNX.
+fn nlm(x: f64, [y3, y4]: [f64; 2]) -> f64 {
+    let e = -(x - y3) / (y4.abs() + 1e-10);
+    if e >= 10.0 {
+        4.0 * (-e).exp() / (1.0 + (-e).exp()) - 2.0
+    } else {
+        4.0 / (1.0 + e.exp()) - 2.0
+    }
+}
+
+/// NLM_FR_Fit_with_limit: parameter clamps, then the same logistic.
+fn nlm_fr(x: f64, [y3, y4]: [f64; 2]) -> f64 {
+    nlm(x, [y3.clamp(0.05, 0.95), y4.clamp(0.01, 0.70)])
+}
+
+fn softplus(x: f64) -> f64 {
+    if x > 30.0 { x } else { (1.0 + x.exp()).ln() }
+}
+
+/// `nn.GELU` default (erf form).
+fn gelu(x: f64) -> f64 {
+    0.5 * x * (1.0 + erf(x / std::f64::consts::SQRT_2))
+}
+
+/// `erf(x)` via the Numerical Recipes `erfcc` Chebyshev fit (fractional
+/// error < 1.2e-7; zenmetrics-stats' `special.rs` carries the same form).
+fn erf(x: f64) -> f64 {
+    let z = x.abs();
+    let t = 1.0 / (1.0 + 0.5 * z);
+    let p = -z * z - 1.26551223
+        + t * (1.00002368
+            + t * (0.37409196
+                + t * (0.09678418
+                    + t * (-0.18628806
+                        + t * (0.27886807
+                            + t * (-1.13520398
+                                + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277))))))));
+    let erfc = t * p.exp(); // erfc(|x|)
+    if x >= 0.0 { 1.0 - erfc } else { erfc - 1.0 }
+}
+
+impl Afine {
+    /// This model's weights' published terms: `afine.pth` is distributed
+    /// through a Google Drive link in upstream's README with no licence
+    /// stated for it, but it was trained on DiffIQA data whose terms are
+    /// noncommercial — derived weights inherit them, so loading needs a
+    /// [`WeightsConsent`] accepting these terms. The OpenAI CLIP ViT-B/32
+    /// it overlays ships a model card, not a licence — the consent covers
+    /// the fine-tuned product as distributed.
+    pub const WEIGHTS: WeightsTerms = WeightsTerms {
+        model: COLUMN,
+        licence: WeightsLicence::NonCommercial,
+        terms_url: "https://github.com/ChrisDud0257/AFINE",
+    };
+
+    /// Load an exported model directory (`afine_trunk.onnx`,
+    /// `afine_heads.f32`, `afine.meta`, as written by
+    /// `models/afine/export.py`) on `engine`. The ONNX Runtime engines read
+    /// `afine_full.onnx` instead of the trunk graph.
+    ///
+    /// `consent` must accept [`Self::WEIGHTS`] (the weights state no
+    /// licence); it is checked before any file is read.
+    ///
+    /// # Errors
+    /// As [`crate::Lpips::from_dir`], plus [`Error::WeightsNotAccepted`]
+    /// when `consent` does not accept [`Self::WEIGHTS`].
+    pub fn from_dir(
+        dir: impl AsRef<Path>,
+        engine: Engine,
+        consent: &WeightsConsent,
+    ) -> Result<Self, Error> {
+        consent.check(&Self::WEIGHTS)?;
+        let dir = dir.as_ref();
+        let (channels, min_size) = read_meta(&dir.join("afine.meta"))?;
+        if channels != [TAP_C] {
+            return Err(Error::BadModel(format!(
+                "afine.meta: expected channels {TAP_C}, got {channels:?}"
+            )));
+        }
+        let heads = Heads::parse(&read_f32(&dir.join("afine_heads.f32"), HEADS_LEN)?)?;
+        let backend = match engine {
+            Engine::Rten => Backend::Trunk(engine::load(&dir.join("afine_trunk.onnx"), TAPS)?),
+            #[cfg(feature = "ort")]
+            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+                &dir.join("afine_full.onnx"),
+                "afine",
+            )?)),
+        };
+        Ok(Self {
+            backend,
+            heads,
+            min_size,
+        })
+    }
+
+    fn engine_name(&self) -> &'static str {
+        match &self.backend {
+            Backend::Trunk(t) => t.engine(),
+            Backend::Pair(p) => p.engine(),
+            Backend::Image(g) => g.engine(),
+        }
+    }
+
+    /// Upstream preprocessing: RGB8 → planar 0..1 → CLIP normalize →
+    /// bicubic upsample to the next multiple of 32 per axis. Returns the
+    /// normalized `[3, nh, nw]` tensor and the positional embedding
+    /// resampled to `nh/32·nw/32 + 1` tokens (seq-major `[N+1, 768]`,
+    /// the trunk graph's `pe` input — the resample happens here because
+    /// rten's `Resize` op cannot do bicubic).
+    fn prep(&self, img: &za::Rgb8In<'_>) -> (Vec<f32>, usize, usize, Vec<f32>) {
+        let (h, w) = (img.height, img.width);
+        let (nh, nw) = (h + (32 - h % 32) % 32, w + (32 - w % 32) % 32);
+        let planar = Self::normalize(img);
+        let norm = resize_bicubic(&planar, 3, h, w, nh, nw);
+        let n_tok = (nh / 32) * (nw / 32) + 1;
+        let pe = resize_bicubic(&self.heads.pos_emb, 1, 50, TAP_C, n_tok, TAP_C);
+        (norm, nh, nw, pe)
+    }
+
+    fn normalize(img: &za::Rgb8In<'_>) -> Vec<f32> {
+        let plane = img.width * img.height;
+        if plane == 0 {
+            return Vec::new();
+        }
+        let mut planar = rgb8_to_planar_01(img);
+        let mut chans: Vec<(usize, &mut [f32])> = planar.chunks_mut(plane).enumerate().collect();
+        crate::par::par_each_mut(
+            &mut chans,
+            crate::par::threads_for(3 * plane).min(3),
+            |it| {
+                let (ch, plane) = it;
+                for v in plane.iter_mut() {
+                    *v = (*v - MEAN[*ch]) / STD[*ch];
+                }
+            },
+        );
+        planar
+    }
+
+    /// The trunk graph's `pe` aux input for a prepped `(nh, nw)` image.
+    fn pe_aux(pe: Vec<f32>, nh: usize, nw: usize) -> engine::AuxInput {
+        engine::AuxInput {
+            index: 1,
+            shape: [1, 1, (nh / 32) * (nw / 32) + 1, TAP_C],
+            data: pe,
+        }
+    }
+
+    /// Pixel-plane stats of a normalized `[3, h, w]` tensor, de-normalized
+    /// (as the heads' `x * std + mean` does). Channels are independent, so
+    /// each reduction keeps its exact accumulation order on its own worker.
+    fn pix_stats(norm: &[f32], plane: usize) -> [Stats; 3] {
+        let v = crate::par::par_map(3, crate::par::threads_for(3 * plane).min(3), |c| {
+            let (m, sd) = (f64::from(MEAN[c]), f64::from(STD[c]));
+            Stats::of(
+                norm[c * plane..(c + 1) * plane]
+                    .iter()
+                    .map(|&v| f64::from(v) * sd + m),
+            )
+        });
+        [v[0], v[1], v[2]]
+    }
+
+    /// Per-channel `E[x·y]` of two normalized planes, de-normalized.
+    fn pix_cov(x: &[f32], y: &[f32], plane: usize) -> Vec<f64> {
+        crate::par::par_map(3, crate::par::threads_for(3 * plane).min(3), |c| {
+            let (m, sd) = (f64::from(MEAN[c]), f64::from(STD[c]));
+            x[c * plane..(c + 1) * plane]
+                .iter()
+                .zip(&y[c * plane..(c + 1) * plane])
+                .map(|(&a, &b)| (f64::from(a) * sd + m) * (f64::from(b) * sd + m))
+                .sum::<f64>()
+                / plane as f64
+        })
+    }
+
+    /// `taps.iter().map(tap_stats)` flattened over `(tap, channel)` items —
+    /// one worker pool round instead of twelve, index order preserved.
+    fn taps_stats(taps: &[Tap]) -> Vec<Vec<Stats>> {
+        let work: usize = taps.iter().map(|t| t.data.len()).sum();
+        let all = crate::par::par_map(taps.len() * TAP_C, crate::par::threads_for(work), |i| {
+            let t = &taps[i / TAP_C];
+            let n = t.plane();
+            let c = i % TAP_C;
+            Stats::of(
+                t.data[c * n..(c + 1) * n]
+                    .iter()
+                    .map(|&v| f64::from(v.max(0.0))),
+            )
+        });
+        all.chunks(TAP_C).map(<[Stats]>::to_vec).collect()
+    }
+
+    /// Feature taps of a prepped (normalized) image on the trunk engine.
+    fn taps(&self, norm: Vec<f32>, h: usize, w: usize, pe: Vec<f32>) -> Result<Vec<Tap>, Error> {
+        let Backend::Trunk(t) = &self.backend else {
+            return Err(Error::Engine("no trunk graph on this engine".into()));
+        };
+        let taps = t.run_aux(norm, h, w, &[Self::pe_aux(pe, h, w)])?;
+        Self::check_taps(&taps)?;
+        Ok(taps)
+    }
+
+    fn check_taps(taps: &[Tap]) -> Result<(), Error> {
+        if taps.len() != TAPS {
+            return Err(Error::BadModel(format!(
+                "{} taps, expected {TAPS}",
+                taps.len()
+            )));
+        }
+        for t in taps {
+            if t.c != TAP_C || t.w != 1 || t.plane() == 0 || t.data.len() != t.c * t.plane() {
+                return Err(Error::BadModel(format!(
+                    "tap shape [{}, {}, {}], expected [{TAP_C}, N, 1]",
+                    t.c, t.h, t.w
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// `ImgStats` of a prepped image: pixel stats + per-tap relu stats.
+    fn img_stats(norm: &[f32], plane: usize, taps: &[Tap]) -> ImgStats {
+        ImgStats {
+            pix: Self::pix_stats(norm, plane),
+            taps: Self::taps_stats(taps),
+        }
+    }
+
+    /// Steps 4-6 on a prepped pair.
+    fn score_stats(&self, d: &ImgStats, r: &ImgStats, cov: &[Vec<f64>]) -> f64 {
+        let n_d = self.heads.qhead(d);
+        let n_r = self.heads.qhead(r);
+        let fid = self.heads.dhead(d, r, cov);
+        let (s_d, s_r, s_f) = (
+            nlm(n_d, self.heads.nr),
+            nlm(n_r, self.heads.nr),
+            nlm_fr(fid, self.heads.fr),
+        );
+        // AFINELearnLambda: u = exp(softplus(k)·(n_r − n_d))·n_d + f.
+        (softplus(self.heads.k) * (s_r - s_d)).exp() * s_d + s_f
+    }
+
+    /// Pixel+tap cross-moments, `[13][ch]` — `cov[0]` is the pixel
+    /// covariance (computed before the trunk consumed the input), then the
+    /// per-tap `E[relu(x)·relu(y)]` flattened over `(tap, channel)` like
+    /// [`Self::taps_stats`].
+    fn cross_covs(cov0: Vec<f64>, f_d: &[Tap], f_r: &[Tap]) -> Vec<Vec<f64>> {
+        let work: usize = f_d.iter().map(|t| t.data.len()).sum();
+        let all = crate::par::par_map(f_d.len() * TAP_C, crate::par::threads_for(work), |i| {
+            let (x, y) = (&f_d[i / TAP_C], &f_r[i / TAP_C]);
+            let n = x.plane();
+            let c = i % TAP_C;
+            x.data[c * n..(c + 1) * n]
+                .iter()
+                .zip(&y.data[c * n..(c + 1) * n])
+                .map(|(&a, &b)| f64::from(a.max(0.0)) * f64::from(b.max(0.0)))
+                .sum::<f64>()
+                / n as f64
+        });
+        let mut v = Vec::with_capacity(TAPS + 1);
+        v.push(cov0);
+        v.extend(all.chunks(TAP_C).map(<[f64]>::to_vec));
+        v
+    }
+
+    fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
+        if (r.width, r.height) != (d.width, d.height) {
+            return Err(Error::SizeMismatch);
+        }
+        let (rn, rh, rw, rpe) = self.prep(r);
+        let (dn, dh, dw, dpe) = self.prep(d);
+        match &self.backend {
+            Backend::Trunk(t) => {
+                let plane = rh * rw;
+                // The pixel statistics need `norm` only — compute them
+                // before the trunk consumes the inputs, then move `rn`/`dn`
+                // in without cloning (they're ~3·nh·nw f32 each).
+                let (pix_r, pix_d, cov0) = (
+                    Self::pix_stats(&rn, plane),
+                    Self::pix_stats(&dn, plane),
+                    Self::pix_cov(&dn, &rn, plane),
+                );
+                let (ft_r, ft_d) = t.run_pair_aux(
+                    rn,
+                    dn,
+                    rh,
+                    rw,
+                    &[Self::pe_aux(rpe, rh, rw)],
+                    &[Self::pe_aux(dpe, dh, dw)],
+                )?;
+                Self::check_taps(&ft_r)?;
+                Self::check_taps(&ft_d)?;
+                let (s_r, s_d) = (
+                    ImgStats {
+                        pix: pix_r,
+                        taps: Self::taps_stats(&ft_r),
+                    },
+                    ImgStats {
+                        pix: pix_d,
+                        taps: Self::taps_stats(&ft_d),
+                    },
+                );
+                let cov = Self::cross_covs(cov0, &ft_d, &ft_r);
+                Ok(self.score_stats(&s_d, &s_r, &cov))
+            }
+            // equal input sizes ⇒ equal padded sizes; the dims here apply
+            // to both graph inputs.
+            Backend::Pair(p) => p.score(rn, dn, dh, dw),
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
+        }
+    }
+}
+
+impl za::Metric for Afine {
+    fn id(&self) -> za::MetricId {
+        za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(
+            "ChrisDud0257/AFINE afine_all (raw adapter output), CLIP-norm + bicubic upsample to mult-32; engine {}",
+            self.engine_name()
+        ))
+    }
+
+    fn outputs(&self) -> Cow<'static, [za::ScoreSpec]> {
+        const OUTPUTS: &[za::ScoreSpec] = &[za::ScoreSpec::new(COLUMN, za::ScoreKind::Difference)];
+        Cow::Borrowed(OUTPUTS)
+    }
+
+    fn accepts(&self, format: &za::InputFormat) -> bool {
+        za::is_rgb8_srgb(format)
+    }
+
+    fn evaluate(
+        &mut self,
+        r: za::Image<'_>,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map(COLUMN)?;
+        let (r, d) = za::rgb8_pair(&r, &d)?;
+        if r.width.min(r.height) < self.min_size || d.width.min(d.height) < self.min_size {
+            return Err(Error::TooSmall { min: self.min_size })
+                .metric_err_with(COLUMN, Error::kind);
+        }
+        let s = self
+            .score_pair(&r, &d)
+            .metric_err_with(COLUMN, Error::kind)?;
+        Ok(Box::new(za::ScalarEval::single(COLUMN, s)))
+    }
+
+    fn warm_reference<'m>(
+        &'m mut self,
+        r: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<Box<dyn za::WarmReference + 'm>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        let view = za::rgb8_view(&r)?;
+        if view.width.min(view.height) < self.min_size {
+            return Err(Error::TooSmall { min: self.min_size })
+                .metric_err_with(COLUMN, Error::kind);
+        }
+        let (rn, rh, rw, rpe) = self.prep(&view);
+        let reference = match &self.backend {
+            Backend::Trunk(_) => {
+                let taps = self
+                    .taps(rn.clone(), rh, rw, rpe)
+                    .metric_err_with(COLUMN, Error::kind)?;
+                WarmState::Trunk {
+                    stats: Self::img_stats(&rn, rh * rw, &taps),
+                    norm: rn,
+                    taps,
+                }
+            }
+            Backend::Pair(_) => WarmState::Pixels(rn),
+            Backend::Image(_) => {
+                return Err(Error::Engine("image graph on a pair model".into()))
+                    .metric_err_with(COLUMN, Error::kind);
+            }
+        };
+        Ok(Box::new(WarmAfine {
+            metric: self,
+            reference,
+            size: (view.width, view.height),
+        }))
+    }
+}
+
+/// A reference prepared once: its stats and taps on a trunk engine, the
+/// prepped input on a whole-graph engine (which recomputes its features).
+struct WarmAfine<'m> {
+    metric: &'m Afine,
+    reference: WarmState,
+    size: (usize, usize),
+}
+
+enum WarmState {
+    /// Reference tap tensors (needed for the covariances) + their stats and
+    /// the normalized pixels (for the pixel covariance).
+    Trunk {
+        stats: ImgStats,
+        norm: Vec<f32>,
+        taps: Vec<Tap>,
+    },
+    Pixels(Vec<f32>),
+}
+
+impl za::WarmReference for WarmAfine<'_> {
+    fn evaluate(
+        &mut self,
+        d: za::Image<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<Box<dyn za::Evaluation>> {
+        use za::ResultMetricExt as _;
+        opts.checkpoint()?;
+        opts.refuse_map(COLUMN)?;
+        let d = za::rgb8_view(&d)?;
+        if (d.width, d.height) != self.size {
+            return Err(Error::SizeMismatch).metric_err_with(COLUMN, Error::kind);
+        }
+        if d.width.min(d.height) < self.metric.min_size {
+            return Err(Error::TooSmall {
+                min: self.metric.min_size,
+            })
+            .metric_err_with(COLUMN, Error::kind);
+        }
+        let (dn, dh, dw, dpe) = self.metric.prep(&d);
+        let s = match &self.reference {
+            WarmState::Trunk { stats, norm, taps } => {
+                let plane = dh * dw;
+                // Same hoist as `score_pair`: pixel stats and covariance
+                // before `taps` consumes `dn` — one less full-frame clone
+                // per warm evaluation.
+                let (pix_d, cov0) = (
+                    Afine::pix_stats(&dn, plane),
+                    Afine::pix_cov(&dn, norm, plane),
+                );
+                let ft_d = self
+                    .metric
+                    .taps(dn, dh, dw, dpe)
+                    .metric_err_with(COLUMN, Error::kind)?;
+                let s_d = ImgStats {
+                    pix: pix_d,
+                    taps: Afine::taps_stats(&ft_d),
+                };
+                let cov = Afine::cross_covs(cov0, &ft_d, taps);
+                self.metric.score_stats(&s_d, stats, &cov)
+            }
+            WarmState::Pixels(px) => match &self.metric.backend {
+                Backend::Pair(p) => p
+                    .score(px.clone(), dn, dh, dw)
+                    .metric_err_with(COLUMN, Error::kind)?,
+                Backend::Trunk(_) | Backend::Image(_) => {
+                    return Err(Error::Engine("warm state does not match engine".into()))
+                        .metric_err_with(COLUMN, Error::kind);
+                }
+            },
+        };
+        Ok(Box::new(za::ScalarEval::single(COLUMN, s)))
+    }
+
+    fn reuses_reference_work(&self) -> bool {
+        matches!(self.reference, WarmState::Trunk { .. })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_thread_cap_never_spawns_for_pixel_paths() {
+        if std::env::var_os("ZEN_NN_CAP_CHILD").is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "afine::tests::one_thread_cap_never_spawns_for_pixel_paths",
+                ])
+                .env("RTEN_NUM_THREADS", "1")
+                .env("ZEN_NN_CAP_CHILD", "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        assert_eq!(engine::workers(), 1);
+        let px = vec![123; 512 * 512 * 3];
+        let view = za::Rgb8In {
+            pixels: &px,
+            width: 512,
+            height: 512,
+            stride: 512 * 3,
+        };
+        let (_, spawned) = crate::par::observe_workers(None, || {
+            let normalized = Afine::normalize(&view);
+            let _ = Afine::pix_stats(&normalized, 512 * 512);
+            let _ = Afine::pix_cov(&normalized, &normalized, 512 * 512);
+        });
+        assert_eq!(spawned, 0, "a capped pixel path started helper threads");
+    }
+
+    #[test]
+    fn erf_gelu_sign_and_values() {
+        // Exact fp64 references from Python `math.erf` (GELU = x·Φ(x)). The
+        // earlier values were float32 torch outputs, 1.5e-7 off at x = 4.
+        let erf_cases = [
+            (-2.0, -0.9953222650189527),
+            (-0.5, -0.5204998778130465),
+            (0.0, 0.0),
+            (0.5, 0.5204998778130465),
+            (2.0, 0.9953222650189527),
+            (6.0, 1.0),
+        ];
+        for (x, want) in erf_cases {
+            assert!((erf(x) - want).abs() <= 1e-7, "erf({x}) = {}", erf(x));
+        }
+        let gelu_cases = [
+            (-0.9704703041139714, -0.16100690451172137),
+            (-1.0, -0.15865525393145707),
+            (-0.40589515, -0.1389824856144608),
+            (0.0, 0.0),
+            (0.5, 0.34573123063700656),
+            (1.0, 0.8413447460685429),
+            (4.0, 3.9998733150326675),
+        ];
+        for (x, want) in gelu_cases {
+            assert!((gelu(x) - want).abs() <= 1e-7, "gelu({x}) = {}", gelu(x));
+        }
+    }
+
+    #[test]
+    fn softplus_edges() {
+        assert_eq!(softplus(0.0), std::f64::consts::LN_2);
+        assert!((softplus(5.0) - 5.006715348489118).abs() <= 1e-12);
+        assert_eq!(softplus(50.0), 50.0);
+    }
+
+    /// `qhead` is bitwise identical on one worker and on many: only the
+    /// schedule over the independent `proj_feat`/`mlp` rows changes, and a
+    /// capped run starts no threads.
+    #[test]
+    fn qhead_thread_count_bit_identical() {
+        let w: Vec<f32> = (0..HEADS_LEN)
+            .map(|i| (((i * 1_103_515_245usize + 12345) % 997) as f32) / 997.0 - 0.5)
+            .collect();
+        let heads = Heads::parse(&w).unwrap();
+        let st = |i: usize| Stats {
+            mean: (i % 101) as f64 / 101.0 - 0.5,
+            var: 0.25 + (i % 53) as f64 / 53.0,
+        };
+        let s = ImgStats {
+            pix: [st(1), st(2), st(3)],
+            taps: (0..TAPS)
+                .map(|t| (0..TAP_C).map(|c| st(t * TAP_C + c)).collect())
+                .collect(),
+        };
+        let (one, spawns) = crate::par::observe_workers(Some(1), || heads.qhead(&s));
+        assert_eq!(spawns, 0, "a capped qhead started helper threads");
+        let (many, spawns) = crate::par::observe_workers(Some(16), || heads.qhead(&s));
+        assert!(spawns > 0);
+        assert_eq!(one.to_bits(), many.to_bits(), "{one} vs {many}");
+        // The pre-threading sequential formula: x = pix means ‖ pix vars ‖
+        // per tap `b + Σ(w·[means ‖ vars])`, then the same mlp.
+        let mut x: Vec<f64> = s.pix.iter().map(|t| t.mean).collect();
+        x.extend(s.pix.iter().map(|t| t.var));
+        for tap in &s.taps {
+            let mv: Vec<f64> = tap
+                .iter()
+                .map(|t| t.mean)
+                .chain(tap.iter().map(|t| t.var))
+                .collect();
+            for (&b, row) in heads
+                .proj_b
+                .iter()
+                .zip(heads.proj_w.as_chunks::<{ 2 * TAP_C }>().0)
+            {
+                x.push(
+                    f64::from(b)
+                        + row
+                            .iter()
+                            .zip(&mv)
+                            .map(|(&w, &v)| f64::from(w) * v)
+                            .sum::<f64>(),
+                );
+            }
+        }
+        let (reference, _) = crate::par::observe_workers(Some(1), || heads.mlp(&x));
+        assert_eq!(
+            one.to_bits(),
+            reference.to_bits(),
+            "{one} vs sequential {reference}"
+        );
+    }
+}
