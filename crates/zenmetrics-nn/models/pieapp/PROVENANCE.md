@@ -61,7 +61,18 @@ intermediate features and implementation remain opaque. Candidate error
 divisors are 1, 10, 100 and 255; weight candidates distinguish signed versus
 absolute values and the added epsilon. Identity, black/white, photographic
 and deterministic random patches provide controls. The committed review
-receipt will report the measured discrimination and any unresolved ambiguity.
+receipt reports the measured discrimination and any unresolved ambiguity.
+
+The [22-case public-output receipt](../../../../benchmarks/pieapp_review_2026-10-16/head-positive.json)
+records exact equality for division by 100. The maximum absolute patch-error
+differences for divisors 1, 10 and 255 are 461.6010956764221,
+41.963736057281494 and 2.834151864051819 native units, respectively.
+Adding `1e-6` likewise matches every public weight exactly; omitting it gives
+maximum error 1.9073486328125e-6. For the identity patch, raw weight
+7.4552412033081055 becomes the public 7.455242156982422 after the addition.
+All these raw weights are positive, so this panel alone cannot distinguish
+signed weights from absolute weights. A separate sign probe addresses that
+ambiguity using only the independent network and opaque public outputs.
 
 ## Selected dense sampling contract
 
