@@ -556,6 +556,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Musiq
             | CliMetricKind::Hyperiqa
             | CliMetricKind::Paq2piq
+            // WD exposes five host-statistic outputs outside the FR leaves.
+            | CliMetricKind::Wd
     )
 }
 
@@ -873,5 +875,18 @@ mod nr_routing_tests {
         assert!(!super::metric_orchestrator_eligible(
             crate::metrics::MetricKind::Paq2piq
         ));
+    }
+}
+
+#[cfg(test)]
+mod wd_routing_tests {
+    #[test]
+    fn wd_routes_five_outputs_directly() {
+        let wd = crate::metrics::MetricKind::Wd;
+        assert!(!super::metric_orchestrator_eligible(wd));
+        assert_eq!(
+            wd.column_names(),
+            &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"]
+        );
     }
 }

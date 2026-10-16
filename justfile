@@ -771,3 +771,30 @@ nn-paq2piq-small-inputs python ladder nonsquare:
 # Default scheduler, explicitly excluding any inherited legacy override.
 nn-paq2piq-cli-smoke binary models ladder:
     python3 -I crates/zenmetrics-nn/models/paq2piq/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+# WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
+nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
+    {{python}} -I crates/zenmetrics-nn/models/wd/reference.py '{{stage}}' --reference '{{reference}}' --out '{{out}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
+
+nn-wd-score models pairs out engine="rten":
+    {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features ort --example wd_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+nn-wd-parity models ladder engine="rten":
+    ZENMETRICS_NN_MODEL_DIR='{{models}}' ZENMETRICS_NN_LADDER='{{ladder}}' ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests,ort --test wd_parity -- --nocapture --test-threads=1
+
+nn-wd-kon-jnd scores out:
+    python3 -I crates/zenmetrics-nn/models/wd/konjnd.py '{{scores}}' '{{out}}'
+
+nn-wd-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/wd/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-wd-gates models ladder:
+    bash benchmarks/wd_port_gates_2026-10-16.sh '{{models}}' '{{ladder}}'
+
+# AIC probe has its own hard one-hour clock after acquiring the heavy lock.
+nn-wd-aic-probe models python reference site images config previous pairs out:
+    bash benchmarks/wd_aic_probe_2026-10-16.sh '{{models}}' '{{python}}' '{{reference}}' '{{site}}' '{{images}}' '{{config}}' '{{previous}}' '{{pairs}}' '{{out}}'
+
+# Compact an existing WD convention probe; no inference.
+nn-wd-aic-report probe native site config out:
+    python3 -I crates/zenmetrics-nn/models/wd/aic_report.py --probe '{{probe}}' --native '{{native}}' --site '{{site}}' --config '{{config}}' --out '{{out}}'

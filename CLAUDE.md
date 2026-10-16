@@ -555,6 +555,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
+  A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
+  The WD trunk now disables its CPU arena and consumes output tensors individually.
+  The four-case recovery panel completes at 11,210,496 KiB maximum RSS, with
+  unchanged pilot bits and both-engine ladder parity. See
+  [the measured receipt](benchmarks/wd_port_2026-10-16/README.md).
+
+
 - **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
   `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
   fixed.** `zenmetrics-gpu-core::Backend` gates its `Wgpu` and `Cpu` variants on
