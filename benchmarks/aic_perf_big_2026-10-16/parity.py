@@ -15,17 +15,19 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('scratch', type=Path)
     args = parser.parse_args()
-    args.scratch.mkdir(parents=True, exist_ok=True)
+    args.scratch.mkdir(parents=True, exist_ok=False)
     rows = []
     with (Path.home() / 'tmp/aic-audit/pairs.tsv').open() as source:
         pairs = list(csv.DictReader(source, delimiter='\t'))
     assert len(pairs) == 61, len(pairs)
-    for pair in pairs:
+    for index, pair in enumerate(pairs):
+        pair_dir = args.scratch / f'pair-{index:02d}'
+        pair_dir.mkdir()
         ref = Image.open(pair['ref_path']).convert('RGB')
         dis = Image.open(pair['dist_path']).convert('RGB')
         assert ref.size == dis.size
         w, h = ref.size
-        r, d = args.scratch / 'r.rgb', args.scratch / 'd.rgb'
+        r, d = pair_dir / 'r.rgb', pair_dir / 'd.rgb'
         r.write_bytes(ref.tobytes())
         d.write_bytes(dis.tobytes())
         for metric in ['butter', 'cambi']:
@@ -33,7 +35,7 @@ def main():
             for label, directory in [('base', args.base), ('candidate', args.candidate)]:
                 binary = directory / f'{metric}-{label}'
                 if metric == 'butter':
-                    path = args.scratch / f'{label}.map'
+                    path = pair_dir / f'{label}.map'
                     command = [binary, str(w), str(h), 'pair', r, d, path]
                 else:
                     command = [binary, str(w), str(h), 'pair', d]
