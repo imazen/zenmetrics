@@ -1,0 +1,9 @@
+source_revision: 995d6ba3
+build: just snap-cargo @ build --release -p zenmetrics-nn --features ort --example pieapp_cap
+binary_sha256: 660d3d1ec48ddf692372421d907c48f7b07fa5bc7c9430e48668a8198ffdebc6
+driver_sha256: 65f0edc4f2de606f8c737d6749275edee933d343da505ba4bae1e32d99ed6364
+onnx_sha256: 7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322
+command: /usr/bin/time -v pieapp_cap MODEL_DIR ENGINE 3000 3000
+engines: ort-cuda, rten
+RTEN_NUM_THREADS: 16
+resources: enclosing shared flock and run-heavy --mem 16G --jobs 16
