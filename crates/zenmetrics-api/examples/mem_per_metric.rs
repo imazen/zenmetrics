@@ -388,8 +388,8 @@ fn run_cell_subprocess(
 
     // Read any stderr for context if the child failed.
     let mut stderr_capture = String::new();
-    if let Some(mut sterr) = child.stderr.take() {
-        let _ = std::io::Read::read_to_string(&mut sterr, &mut stderr_capture);
+    if let Some(mut stderr_pipe) = child.stderr.take() {
+        let _ = std::io::Read::read_to_string(&mut stderr_pipe, &mut stderr_capture);
     }
 
     let status = if !error_line.is_empty() {

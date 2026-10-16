@@ -1,7 +1,7 @@
 //! PARITY GATE: the shared HDR pair-scoring layer (`hdr::score_hdr_pair_per_score_pairs`
 //! + `hdr::score_hdr_zensim_with_features_per_score_pairs`, consumed by jobexec's
-//! ScoreFile HDR arm) must produce values IDENTICAL to what `cmd_score_pairs --hdr`
-//! computes for the same pair.
+//!   ScoreFile HDR arm) must produce values IDENTICAL to what `cmd_score_pairs --hdr`
+//!   computes for the same pair.
 //!
 //! Side (a) below is `cmd_score_pairs --hdr`'s per-metric feeding, hand-composed from
 //! the SAME primitives its HDR blocks call, line-for-line (main.rs: the

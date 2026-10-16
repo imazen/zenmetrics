@@ -617,6 +617,50 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod listed_metrics_score {
+    /// Every metric `available_metrics` lists must be scoreable by this
+    /// build: a listed metric whose scoring arm is compiled out only answers
+    /// "disabled". Size refusals on this small pair are allowed.
+    #[test]
+    fn listed_metrics_are_compiled_in() {
+        let (w, h) = (64u32, 64u32);
+        let r: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 13 + i / 192 * 17) % 256) as u8)
+            .collect();
+        let d: Vec<u8> = r.iter().map(|v| v.saturating_sub(7)).collect();
+        let img = |px: &[u8]| super::decode::Rgb8Image {
+            pixels: px.to_vec(),
+            width: w,
+            height: h,
+        };
+        let (ri, di) = (img(&r), img(&d));
+        let names: Vec<String> = serde_json::from_str(&super::available_metrics()).unwrap();
+        let mut disabled = Vec::new();
+        for name in &names {
+            let kind =
+                <super::metrics::MetricKind as clap::ValueEnum>::from_str(name, false).unwrap();
+            let screen = kind
+                .needs_display()
+                .then(|| super::metrics::display::parse_display("standard_4k").unwrap());
+            if let Err(e) = super::metrics::run_metric_display(
+                kind,
+                &ri,
+                &di,
+                super::metrics::GpuRuntime::Cpu,
+                screen.as_ref(),
+            ) && e.to_string().contains("is disabled")
+            {
+                disabled.push(format!("{name}: {e}"));
+            }
+        }
+        assert!(
+            disabled.is_empty(),
+            "listed but not compiled in: {disabled:#?}"
+        );
+    }
+}
+
 /// The SDR CPU metrics accepted by this browser module; HDR and GPU names are
 /// refused rather than substituted. CVVDP requires an explicit display name.
 #[wasm_bindgen]
@@ -627,6 +671,7 @@ pub fn available_metrics() -> String {
             .iter()
             .filter(|m| {
                 !m.requires_gpu()
+                    && m.scoring_compiled_in()
                     && !matches!(
                         m,
                         metrics::MetricKind::Hdrvdp | metrics::MetricKind::Hdrvdp3

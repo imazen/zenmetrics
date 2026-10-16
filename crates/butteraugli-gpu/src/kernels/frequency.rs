@@ -16,7 +16,7 @@ const UHF_MUL: f32 = 2.693_137_6;
 const HF_MUL: f32 = 2.155;
 const HF_AMPLIFY: f32 = 0.132;
 
-const SUPRESS_S: f32 = 0.653_020_56;
+const SUPPRESS_S: f32 = 0.653_020_56;
 
 /// Soft clamp around `±maxval`. Matches CPU butteraugli `psycho.rs::maximum_clamp`.
 #[cube]
@@ -118,7 +118,7 @@ pub fn suppress_x_by_y_kernel(x: &mut Array<f32>, y: &Array<f32>, yw: f32) {
         terminate!();
     }
     let yv = y[idx];
-    let scaler = SUPRESS_S + (yw * (1.0 - SUPRESS_S)) / (yw + yv * yv);
+    let scaler = SUPPRESS_S + (yw * (1.0 - SUPPRESS_S)) / (yw + yv * yv);
     x[idx] = x[idx] * scaler;
 }
 

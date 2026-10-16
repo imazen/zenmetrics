@@ -41,7 +41,6 @@ enough = "0.4.4"
 [dev-dependencies]
 # Constructible `Stop` flag for the cancellation tests.
 almost-enough = "0.4.4"
-bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg", "bmp"] }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
 

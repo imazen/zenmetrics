@@ -54,7 +54,6 @@ almost-enough = "0.4.4"
 # params) — needed so the CPU reference score matches the GPU path's
 # 228-feature linear `score_from_features`.
 zensim = { workspace = true, features = ["custom-profiles", "feature-regime-v2"] }
-bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }

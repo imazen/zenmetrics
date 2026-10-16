@@ -15,7 +15,7 @@ PACKAGES = {
     V40_CONTRACT: ('v40-research-fit-package-v1', 'v40-research-fit-contract-v1'),
     E33_CONTRACT: ('e33-research-fit-package-v1', 'e33-research-fit-contract-v1'),
 }
-VARIANT_SCHEMAS = tuple(variant for _, variant in PACKAGES.values())
+VARIANT_SCHEMAS = (*tuple(variant for _, variant in PACKAGES.values()), "registered-fit-contract-v1")
 
 
 def sha(path):
@@ -39,6 +39,11 @@ def trusted_contract(kind, program_archive, inspector):
         raise ValueError('trusted program SHA differs from manifest')
     with tarfile.open(program_archive, 'r:gz') as tar:
         meta = json.load(tar.extractfile('build_meta.json'))
+        if kind['argv'][0] == 'subjective_cell.py':
+            from registered_fit_contract import load
+            if sha(inspector) != meta['files']['bin/inspect_qualified_checkpoint']:
+                raise ValueError('registered inspector identity differs')
+            return load(kind['argv'], kind['data_sha'], meta)
         present = [name for name in PACKAGES if name in meta['files']]
         if len(present) > 1:
             raise ValueError('program inventory carries more than one variant package')
@@ -113,6 +118,17 @@ def trusted_contract(kind, program_archive, inspector):
     return contract
 
 
+def verify_bounded_smoke_activation(decoded, expected):
+    activation = expected.get('bounded_smoke_activation')
+    if activation is None:
+        return
+    if (activation != 'smooth_hinge_tau_1_8'
+            or expected.get('execution_contract') != 'local-smoke'
+            or ':sh1' not in expected.get('spec', '')
+            or decoded.get('hidden_activation') != 'SmoothHinge'):
+        raise ValueError('bounded S smoke activation differs from its archive-bound contract')
+
+
 def verify_training(result, checkpoint, kind, expected, inspector):
     def refuse(why):
         raise ValueError(f'unqualified/incomplete training-only result: {why}')
@@ -120,7 +136,7 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         refuse('strict training-only flags required')
     if result.get('training_only') is not True:
         refuse('registered training-only contract cannot use a prediction result')
-    if result.get('schema') != ('e31-native-hdr-research-training-cell-v1' if expected.get('research_upiq') else 'e29-research-training-cell-v1' if expected.get('research_hdr') else 'rev5-qualified-training-cell-v1'):
+    if result.get('schema') != ('registered-training-cell-v1' if expected.get('schema') == 'registered-fit-contract-v1' else 'e31-native-hdr-research-training-cell-v1' if expected.get('research_upiq') else 'e29-research-training-cell-v1' if expected.get('research_hdr') else 'rev5-qualified-training-cell-v1'):
         refuse('result schema')
     for key in ('epochs', 'pairs_per_epoch', 'seed_index', 'wide_receipt_sha256', 'frozen_sha256',
                 'data_role_decision_sha256', 'execution_contract'):
@@ -134,6 +150,7 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         refuse('table admission differs from pinned inputs')
     decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e31-research'] if expected.get('research_upiq') else ['--e29-research'] if expected.get('research_hdr') else [])], check=True,
                                         capture_output=True, text=True).stdout)
+    verify_bounded_smoke_activation(decoded, expected)
     repro = decoded['repro']
     if (decoded['formula_revision'] != 5 or decoded['qualified_provenance'] is not (not (expected.get('research_hdr', False) or expected.get('research_upiq', False)))
             or decoded['feature_set_id'] != expected['feature_set_id']

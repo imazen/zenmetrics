@@ -36,7 +36,6 @@ avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512"]
 archmage = { workspace = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 zenmetrics-math = { path = "../zenmetrics-math", default-features = false }
-zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
 libm = "0.2.16"
 magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }
