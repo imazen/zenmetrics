@@ -1493,7 +1493,6 @@ dependencies = [
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
