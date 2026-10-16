@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Caller holds flock and run-heavy; serialize all GPU and build work.
 set -euo pipefail
 export LOCK_SNAP_DIR="$HOME/tmp/zenmetrics-lock-snap-pieapp"

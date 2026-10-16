@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 set -u
 root=$HOME/tmp/pieapp-oracle
 for mode in original modern; do

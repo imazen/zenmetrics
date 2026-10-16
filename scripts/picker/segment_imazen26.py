@@ -5,7 +5,7 @@ manifest + the canonical `origin_split` rule. Deterministic — re-run any time.
 Outputs (under /mnt/v/output/imazen-26-features/ by default):
   - imazen26_split_evenodd.tsv  : stem split manifest_split content_class source original_path
   - optionally, train/ validate/ test/ subfolders of SYMLINKS to the originals
-    (--subfolders <dir>) so the corpus is browseable per the user's request,
+    (--subfolders <dir>) so the corpus is browsable per the user's request,
     without duplicating GBs.
 
 Usage:

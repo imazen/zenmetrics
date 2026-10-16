@@ -321,6 +321,8 @@ mod tests {
 
     #[test]
     fn geometry_bounds_report_the_relevant_limit() {
+        assert!(validate_geometry(4096, 64).is_ok());
+        assert!(validate_geometry(64, 4096).is_ok());
         assert!(matches!(
             validate_geometry(4097, 64),
             Err(Error::TooLarge { limit: MAX_SIDE })

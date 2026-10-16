@@ -62,15 +62,14 @@ def main():
                     repeated = run()
                     if not np.array_equal(got, repeated):
                         print('GPU repeat mismatch', row, start, got.tolist(), repeated.tolist(), flush=True)
-                        third = run()
-                        if not np.array_equal(repeated, third):
-                            raise ValueError('unreproduced GPU oracle')
-                        got = repeated
+                        raise ValueError('GPU oracle repeat mismatch')
                 for error, weight in got:
-                    if not math.isfinite(float(error)) or not math.isfinite(float(weight)) or weight <= 0:
+                    if not math.isfinite(float(error)) or not math.isfinite(float(weight)):
                         raise ValueError('invalid public patch output')
                     numerator += float(error) * float(weight)
                     denominator += float(weight)
+            if not math.isfinite(denominator) or denominator == 0 or not math.isfinite(numerator):
+                raise ValueError('invalid public pooling denominator or numerator')
             value = numerator / denominator
             writer.writerow([row['ref_path'], row['dist_path'], format(value, '.17e')])
             f.flush()

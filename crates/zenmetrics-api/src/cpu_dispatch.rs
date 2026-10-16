@@ -720,7 +720,10 @@ impl CpuMetricState {
                 // `RgbBt709` matches this transport exactly.
                 let r64: Vec<f64> = ref_nits.iter().map(|&v| f64::from(v)).collect();
                 let d64: Vec<f64> = dis_nits.iter().map(|&v| f64::from(v)).collect();
-                let res = hdrvdp::v3::hdrvdp3(&d64, &r64, w, h, params.as_ref()).map_err(|e| {
+                // Score-only path — `hdrvdp3`'s `p_map`/`s_map`
+                // reconstruction is skipped entirely; `q_jod` is
+                // bit-identical.
+                let q_jod = hdrvdp::v3::score(&d64, &r64, w, h, params.as_ref()).map_err(|e| {
                     Error::Metric {
                         kind: "hdrvdp3",
                         message: format!("hdrvdp3: {e}"),
@@ -728,7 +731,7 @@ impl CpuMetricState {
                 })?;
                 Ok((
                     Score {
-                        value: res.q_jod,
+                        value: q_jod,
                         metric_name: "hdrvdp3",
                         metric_version: env!("CARGO_PKG_VERSION"),
                     },

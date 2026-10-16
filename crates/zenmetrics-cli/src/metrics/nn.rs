@@ -15,7 +15,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, PieApp, WassersteinDistortion, WeightsConsent,
+    Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WassersteinDistortion, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -126,6 +126,35 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
             &dir,
             engine,
             &consent(),
+        )?)));
+    }
+    // WaDIQaM weights ship inside the MIT repo — permissive, no consent.
+    if column == "wadiqam_fr_live" {
+        return Ok(Box::new(WadiqamFr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::FrLive,
+        )?));
+    }
+    if column == "wadiqam_fr_tid" {
+        return Ok(Box::new(WadiqamFr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::FrTid,
+        )?));
+    }
+    if column == "wadiqam_nr_live" {
+        return Ok(Box::new(PairedNoReference::new(WadiqamNr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::NrLive,
+        )?)));
+    }
+    if column == "wadiqam_nr_tid" {
+        return Ok(Box::new(PairedNoReference::new(WadiqamNr::from_dir(
+            &dir,
+            engine,
+            WadiqamKind::NrTid,
         )?)));
     }
     let net = LpipsNet::ALL

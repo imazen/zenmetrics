@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Caller holds the heavy lock and run-heavy scope.
 set -euo pipefail
 models=$1

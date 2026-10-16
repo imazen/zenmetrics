@@ -6,7 +6,8 @@
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
-//!   `musiq`, `hyperiqa`, `paq2piq`, `pieapp`.
+//!   `musiq`, `hyperiqa`, `paq2piq`, `pieapp`, `wadiqam_fr_live`, `wadiqam_fr_tid`,
+//!   `wadiqam_nr_live`, `wadiqam_nr_tid`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -17,10 +18,12 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, PieApp, WeightsConsent,
+    Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
-/// Tolerance against the upstream CPU fp32 score, in JND units (owner,
+/// PieAPP goldens use the official CUDA model with TF32 disabled; the CPU
+/// control differs by at most 4.8e-7 native units. Other models use CPU fp32.
+/// Tolerance in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
 /// model may differ from upstream by 1/1000 of its estimated just-noticeable
 /// difference. The engines differ from PyTorch in summation order, and
@@ -162,6 +165,22 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     )),
                     "paq2piq",
                 );
+            }
+            if let Some((kind, col)) = match name {
+                "wadiqam_fr_live" => Some((WadiqamKind::FrLive, "wadiqam_fr_live")),
+                "wadiqam_fr_tid" => Some((WadiqamKind::FrTid, "wadiqam_fr_tid")),
+                "wadiqam_nr_live" => Some((WadiqamKind::NrLive, "wadiqam_nr_live")),
+                "wadiqam_nr_tid" => Some((WadiqamKind::NrTid, "wadiqam_nr_tid")),
+                _ => None,
+            } {
+                let m: Box<dyn Metric> = if kind.is_fr() {
+                    Box::new(WadiqamFr::from_dir(&dir, engine(), kind).expect("load wadiqam fr"))
+                } else {
+                    Box::new(PairedNoReference::new(
+                        WadiqamNr::from_dir(&dir, engine(), kind).expect("load wadiqam nr"),
+                    ))
+                };
+                return (m, col);
             }
             let net = *LpipsNet::ALL
                 .iter()
@@ -310,26 +329,28 @@ fn warm_reference_equals_cold() {
         // CKDN is a quality score, not a distance: an identical pair's dr is
         // sigmoid(fc(csp(qse(x) - dte(x)))) — nonzero because the two encoders
         // differ. A-FINE's raw afine_all is likewise signed and
-        // image-dependent on identical pairs, and an NR model's headline on
-        // (r, r) is the reference's own quality score. For all of them the
-        // identical-pair check below is warm == cold. PieAPP's public
-        // oracle returns -3.725290298461914e-9 for an identical patch;
-        // it also checks warm == cold and the unchanged JND gate below.
-        let cold_same = (nr || matches!(col, "ckdn" | "afine" | "pieapp")).then(|| {
-            score(
-                &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
-                    .unwrap(),
-                col,
-            )
-        });
+        // image-dependent on identical pairs, WaDIQaM-FR's concat on (r, r)
+        // is (0, h, h) — a nonzero "perfect pair" quality — and an NR
+        // model's headline on (r, r) is the reference's own quality score.
+        // For all of them the identical-pair check below is warm == cold.
+        let cold_same = (nr || matches!(col, "ckdn" | "afine" | "pieapp") || col.starts_with("wadiqam_fr"))
+            .then(|| {
+                score(
+                    &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+                        .unwrap(),
+                    col,
+                )
+            });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
         // PieAPP caches only planar conversion on both engines.
         // A trunk engine caches the reference's features; a whole-graph
         // engine (ort-cuda) recomputes them on every candidate. A paired
-        // no-reference metric always scores its reference once.
+        // no-reference metric always scores its reference once, and
+        // WaDIQaM-FR's split trunk+head caches the reference's patch
+        // features on every engine.
         assert_eq!(
             warm.reuses_reference_work(),
-            nr || (engine() == Engine::Rten && col != "pieapp"),
+            nr || (engine() == Engine::Rten && col != "pieapp") || col.starts_with("wadiqam_fr"),
             "{col}"
         );
         for _ in 0..2 {

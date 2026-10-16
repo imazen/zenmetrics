@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # One bounded heavy step; caller holds shared flock/run-heavy.
 set -euo pipefail
 oldmodels=$1

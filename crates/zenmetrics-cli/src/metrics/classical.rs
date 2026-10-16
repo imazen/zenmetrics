@@ -117,8 +117,8 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
         // PSNR of one full-resolution studio-swing BT.601 chroma plane, the
         // same per-pixel conversion as `PsnrYCbCr611`. JPEG AIC-4 `PSNR-Cb`
         // and `PSNR-Cr`.
-        Kind::PsnrCb => Ok(psnr(yuv444_studio601_mse(r, d).1)),
-        Kind::PsnrCr => Ok(psnr(yuv444_studio601_mse(r, d).2)),
+        Kind::PsnrCb => Ok(psnr(studio601_plane_mse(r, d, 1))),
+        Kind::PsnrCr => Ok(psnr(studio601_plane_mse(r, d, 2))),
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
@@ -274,6 +274,62 @@ fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
     (sum_y / n_f, sum_cb / n_f, sum_cr / n_f)
 }
 
+/// The studio-swing BT.601 luma/chroma linear parts, before `round`/`clamp`:
+/// `(Y - 16, Cb - 128, Cr - 128)` as in [`yuv444_studio601_mse`].
+#[inline]
+fn studio601_linear(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    (
+        (65.481 * r + 128.553 * g + 24.966 * b) / 255.0,
+        (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0,
+        (112.0 * r - 93.786 * g - 18.214 * b) / 255.0,
+    )
+}
+
+/// MSE of one full-resolution studio-swing BT.601 plane (`0` = Y, `1` = Cb,
+/// `2` = Cr), using the same per-pixel conversion as
+/// [`yuv444_studio601_mse`] but touching only the requested plane. The
+/// compiler drops the unused linear parts, so a single-plane metric does not
+/// pay for the other two.
+fn studio601_plane_mse(r: &Rgb8Image, d: &Rgb8Image, plane: usize) -> f64 {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let offset = if plane == 0 { 16.0 } else { 128.0 };
+    let pick = |v: (f64, f64, f64)| match plane {
+        0 => v.0,
+        1 => v.1,
+        _ => v.2,
+    };
+    let mut sum = 0.0_f64;
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        let v1 = (offset
+            + pick(studio601_linear(
+                f64::from(a[0]),
+                f64::from(a[1]),
+                f64::from(a[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let v2 = (offset
+            + pick(studio601_linear(
+                f64::from(b[0]),
+                f64::from(b[1]),
+                f64::from(b[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let dv = v1 - v2;
+        sum += dv * dv;
+    }
+    sum / n as f64
+}
+
 /// Mean CIEDE2000 (ΔE00) between two RGB8 images.
 /// Pipeline: sRGB → linear → XYZ D65 → CIELAB → ΔE00 per pixel → mean.
 fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
@@ -281,6 +337,10 @@ fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
         .checked_mul(r.height as usize)
         .expect("image dimensions overflow");
     let mut sum_de = 0.0_f64;
+
+    // sRGB -> linear is a function of the 8-bit input alone. The table holds
+    // the exact f64 results of `srgb_to_linear` for every byte value.
+    let lin: [f64; 256] = std::array::from_fn(|i| srgb_to_linear(i as u8));
 
     // sRGB to XYZ D65 matrix
     const M: [[f64; 3]; 3] = [
@@ -297,12 +357,12 @@ fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
         .zip(d.pixels.as_chunks::<3>().0)
     {
         // sRGB to linear
-        let r1_lin = srgb_to_linear(a[0]);
-        let g1_lin = srgb_to_linear(a[1]);
-        let b1_lin = srgb_to_linear(a[2]);
-        let r2_lin = srgb_to_linear(b[0]);
-        let g2_lin = srgb_to_linear(b[1]);
-        let b2_lin = srgb_to_linear(b[2]);
+        let r1_lin = lin[usize::from(a[0])];
+        let g1_lin = lin[usize::from(a[1])];
+        let b1_lin = lin[usize::from(a[2])];
+        let r2_lin = lin[usize::from(b[0])];
+        let g2_lin = lin[usize::from(b[1])];
+        let b2_lin = lin[usize::from(b[2])];
 
         // Linear RGB to XYZ
         let x1 = M[0][0] * r1_lin + M[0][1] * g1_lin + M[0][2] * b1_lin;
@@ -823,6 +883,68 @@ fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
+
+    /// The pre-LUT CIEDE2000 mean: identical pipeline, but it calls
+    /// `srgb_to_linear` per channel instead of the 256-entry table.
+    fn ciede2000_mean_scalar_ref(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+        const M: [[f64; 3]; 3] = [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ];
+        let n = (r.width as usize) * (r.height as usize);
+        let mut sum_de = 0.0_f64;
+        for (a, b) in r
+            .pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(d.pixels.as_chunks::<3>().0)
+        {
+            let (pr1, pg1, pb1) = (
+                srgb_to_linear(a[0]),
+                srgb_to_linear(a[1]),
+                srgb_to_linear(a[2]),
+            );
+            let (pr2, pg2, pb2) = (
+                srgb_to_linear(b[0]),
+                srgb_to_linear(b[1]),
+                srgb_to_linear(b[2]),
+            );
+            let x1 = M[0][0] * pr1 + M[0][1] * pg1 + M[0][2] * pb1;
+            let y1 = M[1][0] * pr1 + M[1][1] * pg1 + M[1][2] * pb1;
+            let z1 = M[2][0] * pr1 + M[2][1] * pg1 + M[2][2] * pb1;
+            let x2 = M[0][0] * pr2 + M[0][1] * pg2 + M[0][2] * pb2;
+            let y2 = M[1][0] * pr2 + M[1][1] * pg2 + M[1][2] * pb2;
+            let z2 = M[2][0] * pr2 + M[2][1] * pg2 + M[2][2] * pb2;
+            let (l1, al1, bl1) = xyz_to_lab(x1, y1, z1);
+            let (l2, al2, bl2) = xyz_to_lab(x2, y2, z2);
+            sum_de += ciede2000(l1, al1, bl1, l2, al2, bl2);
+        }
+        sum_de / n as f64
+    }
+
+    #[test]
+    fn studio601_plane_mse_matches_combined_planes() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            let (my, mcb, mcr) = yuv444_studio601_mse(&r, &d);
+            assert_eq!(studio601_plane_mse(&r, &d, 0), my);
+            assert_eq!(studio601_plane_mse(&r, &d, 1), mcb);
+            assert_eq!(studio601_plane_mse(&r, &d, 2), mcr);
+        }
+    }
+
+    #[test]
+    fn ciede2000_lut_matches_scalar_ingress() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            assert_eq!(
+                score(Kind::Ciede2000, &r, &d).unwrap(),
+                ciede2000_mean_scalar_ref(&r, &d)
+            );
+        }
+    }
 
     /// Direct 2-D evaluation of the `ssimc` definition (no ring, no
     /// separable passes), for checking the streamed implementation.

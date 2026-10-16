@@ -33,6 +33,8 @@ mod compare;
 #[allow(unreachable_pub)]
 mod decode;
 mod fleet_plan;
+#[cfg(all(feature = "sweep", feature = "png"))]
+mod palette_ladder;
 // lib.rs exposes this module publicly; the bin keeps it private,
 // so its `pub` items are unreachable here by design.
 #[allow(unreachable_pub)]
@@ -1599,6 +1601,15 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
         // Ladder scores 0.93–3.35; measured KonJND median 0.52 native units.
         MetricKind::Pieapp => Some((-0.5, 50.0, 0.0)), // Learned error head is unbounded.
+        // WaDIQaM: LIVE/TID-trained quality heads on a relu-weighted
+        // patch pool; observed ~7–95 on the KonJND corpus (a hair below
+        // zero for nr_live references), unbounded in principle. The 0.0
+        // sentinel only flags a default-fail constant (identical FR
+        // pairs score near a nonzero floor, not exactly zero).
+        MetricKind::WadiqamFrLive
+        | MetricKind::WadiqamFrTid
+        | MetricKind::WadiqamNrLive
+        | MetricKind::WadiqamNrTid => Some((-1.0, 150.0, 0.0)),
         // CKDN is sigmoid quality; identical pairs are image-dependent.
         // Zero is only a default-failure sentinel here, as for NR heads.
         MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),
@@ -3577,7 +3588,7 @@ mod fail_on_bogus_tests {
     #[test]
     fn cambi_zero_distribution_is_not_bogus() {
         assert_eq!(metric_range_bounds(MetricKind::Cambi), None);
-        assert!(bogus_check(MetricKind::Cambi, &vec![0.0; 20], &p()));
+        assert!(bogus_check(MetricKind::Cambi, &[0.0; 20], &p()));
     }
 
     #[test]

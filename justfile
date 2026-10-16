@@ -664,6 +664,20 @@ nn-export-paq2piq python upstream ckpt out goldens ladder nonsquare:
 nn-goldens-paq2piq python upstream ckpt out ladder:
     {{python}} -I crates/zenmetrics-nn/models/paq2piq/oracle.py --upstream '{{upstream}}' --checkpoint '{{ckpt}}' '{{ladder}}' > '{{out}}'
 
+# Export WaDIQaM (dmaniry/deepIQA `models/{fr,nr}_{live,tid}_weighted.model`,
+# h5py-only — no chainer needed). `weights` is the directory holding the
+# official checkpoints. The recipe does not forward --goldens/--ladder (the
+# oracle-vs-ONNX check); run export.py directly for that after
+# nn-goldens-wadiqam produces the TSVs.
+nn-export-wadiqam python out weights:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/export.py '{{out}}' --weights '{{weights}}'
+
+# WaDIQaM goldens via upstream's chainer model classes on CPU
+# (needs the chainer venv — see models/wadiqam/card.toml; chainer's
+# cuda shim is patched inside oracle.py).
+nn-goldens-wadiqam python upstream model top mode col out ladder nonsquare:
+    {{python}} -I crates/zenmetrics-nn/models/wadiqam/oracle.py '{{upstream}}' '{{model}}' '{{top}}' '{{mode}}' '{{col}}' '{{out}}' '{{ladder}}' '{{nonsquare}}'
+
 # Export MUSIQ from the official KonIQ checkpoint NPZ (koniq_ckpt.npz).
 # Goldens come from oracle.py under the legacy JAX env, not this recipe.
 nn-export-musiq python npz out goldens ladder:
@@ -678,7 +692,7 @@ nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,pieapp":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,pieapp,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
@@ -837,8 +851,8 @@ nn-pieapp-blackbox-probe python upstream checkpoint reference distorted:
     {{python}} crates/zenmetrics-nn/models/pieapp/blackbox_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
 
 # Opaque official entry-point oracle; caller holds the heavy-job lock.
-nn-pieapp-entry-oracle python pairs out device:
-    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream "$HOME/tmp/pieapp-oracle/upstream" --checkpoint "$HOME/tmp/pieapp-oracle/upstream/weights/PieAPPv0.1.pth" --pairs {{pairs}} --out {{out}} --device {{device}}
+nn-pieapp-entry-oracle python pairs out device upstream checkpoint:
+    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs {{pairs}} --out {{out}} --device {{device}}
 
 nn-pieapp-calibration-summary pairs scores out:
     python3 crates/zenmetrics-nn/models/pieapp/summarize.py '{{pairs}}' '{{scores}}' '{{out}}'
@@ -953,9 +967,6 @@ nn-pieapp-review-weight-joint python upstream checkpoint out:
 nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 1000 --lower -4096 --upper 4096 --rate 32
 
-nn-pieapp-review-weight-control python upstream checkpoint out:
-    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_control.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
-
 nn-pieapp-review-weight-identify python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
 
@@ -971,3 +982,33 @@ nn-pieapp-review-konjnd-compare baseline directory output:
 # Syntax-check independent probes without importing or executing an oracle.
 nn-pieapp-review-python-check:
     python3 -I -m compileall -q crates/zenmetrics-nn/models/pieapp
+
+# Label-free indexed planner/executor checks, including an independent PNG decoder.
+palette-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
+    just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
+    just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings
+
+budget-preflight-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_budget_preflight.py
+
+registered-fit-check:
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
+
+# Invented local-smoke transport and existing fit/harvest negative controls.
+steer-smoke-transport-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_steer_smoke_transport.py'
+    python3 -m unittest discover -s scripts/jobsys -p 'test_fit_tools.py'
+
+# Operator wrappers retain the canonical packer/launcher and caller-supplied caps.
+fit-pack-bounded-smoke source bin_dir build_meta pins contract out:
+    python3 scripts/jobsys/pack_fit_program.py --source "{{source}}" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "{{bin_dir}}" --build-meta "{{build_meta}}" --profile bounded-smoke --source-pins "{{pins}}" --source-pins-sha256 "$(sha256sum '{{pins}}' | cut -d' ' -f1)" --data "benchmarks/e33_fit_contract_2026-10-10.json={{contract}}" --out "{{out}}"
+
+lan-fit-smoke-launch host run role image:
+    bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+
+# Generated-input effective-dispatch receipts for the reviewed quantizer API.
+palette-dispatch-receipts out:
+    ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
+    ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture

@@ -1,0 +1,16 @@
+run-heavy: mem-cap=8G (cgroup, hard) jobs=16/20 avail=25169MiB :: bash -c for i in 1 2 3 4 5 6 7; do taskset -c 2 ./bin/aic_perf_wall ssimulacra1 3355 2516 1; taskset -c 2 ./bin/aic_perf_wall_new ssimulacra1 3355 2516 1; done
+3355x2516 1 reps ssimulacra1: 4582.66 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4524.95 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4594.81 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4529.89 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4601.89 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4663.07 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4579.59 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4525.41 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4589.77 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4522.14 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4582.72 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4533.03 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4584.57 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+3355x2516 1 reps ssimulacra1: 4533.52 ms/call (ssimulacra1=0.09096402368443823 bits=3fb7496b12d654d0)
+run-heavy: done rc=0 65s | peak-RSS 0.59GiB | min-avail 24637MiB | peak-load 4.11

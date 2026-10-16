@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Original source / original torch runtime, CPU redirection only.
 set -u
 root=$HOME/tmp/pieapp-oracle

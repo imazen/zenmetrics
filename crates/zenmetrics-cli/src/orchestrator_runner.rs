@@ -557,9 +557,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             // PieAPP uses its learned full-reference adapter directly.
             | CliMetricKind::Pieapp
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
-            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ) are routed through
-            // `nr::score`/`nn::score` + `PairedNoReference`; the
-            // orchestrator's FR leaves have no shape for them.
+            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ,
+            // WaDIQaM-NR) are routed through `nr::score`/`nn::score` +
+            // `PairedNoReference`; the orchestrator's FR leaves have no
+            // shape for them.
             | CliMetricKind::Piqe
             | CliMetricKind::Niqe
             | CliMetricKind::Brisque
@@ -569,6 +570,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Musiq
             | CliMetricKind::Hyperiqa
             | CliMetricKind::Paq2piq
+            | CliMetricKind::WadiqamNrLive
+            | CliMetricKind::WadiqamNrTid
             // WD exposes five host-statistic outputs outside the FR leaves.
             | CliMetricKind::Wd
     )
@@ -922,5 +925,40 @@ mod wd_routing_tests {
             wd.column_names(),
             &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"]
         );
+    }
+}
+
+#[cfg(test)]
+mod wadiqam_routing_tests {
+    use crate::metrics::MetricKind;
+
+    #[test]
+    fn wadiqam_nr_uses_direct_route() {
+        // NR variants emit `<col>` + `<col>_ref` through `PairedNoReference`,
+        // which the orchestrator's FR leaves cannot carry — excluded like
+        // the other learned NR kinds. FR variants stay eligible like
+        // lpips/dists (the nn spec errors at build).
+        for kind in [MetricKind::WadiqamNrLive, MetricKind::WadiqamNrTid] {
+            assert!(!super::metric_orchestrator_eligible(kind));
+        }
+        assert!(super::metric_orchestrator_eligible(
+            MetricKind::WadiqamFrLive
+        ));
+        assert!(super::metric_orchestrator_eligible(
+            MetricKind::WadiqamFrTid
+        ));
+        assert_eq!(
+            MetricKind::WadiqamNrLive.column_names(),
+            &["wadiqam_nr_live", "wadiqam_nr_live_ref"]
+        );
+        assert_eq!(
+            MetricKind::WadiqamNrTid.column_names(),
+            &["wadiqam_nr_tid", "wadiqam_nr_tid_ref"]
+        );
+        assert_eq!(
+            MetricKind::WadiqamFrLive.column_names(),
+            &["wadiqam_fr_live"]
+        );
+        assert_eq!(MetricKind::WadiqamFrTid.column_names(), &["wadiqam_fr_tid"]);
     }
 }

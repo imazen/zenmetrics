@@ -180,7 +180,7 @@ ENCP+=(-e "ZEN_REQUIRE_SNAPSHOT=${ZM_REQ_SNAP}")   # strict by default for singl
 CAPS=()
 [ -n "${ZM_CPUSET:-}" ] && CAPS+=(--cpuset-cpus "$ZM_CPUSET")
 [ -n "${ZM_CPU_SHARES:-}" ] && CAPS+=(--cpu-shares "$ZM_CPU_SHARES")
-[ -n "${ZM_MEMORY:-}" ] && CAPS+=(--memory "$ZM_MEMORY")
+[ -n "${ZM_MEMORY:-}" ] && CAPS+=(--memory "$ZM_MEMORY" --memory-swap "$ZM_MEMORY")
 
 $DK pull "$ZM_IMG" >/dev/null 2>&1 || true
 $DK rm -f "$ZM_CTR" >/dev/null 2>&1 || true
