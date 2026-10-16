@@ -282,6 +282,10 @@ fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
         .expect("image dimensions overflow");
     let mut sum_de = 0.0_f64;
 
+    // sRGB -> linear is a function of the 8-bit input alone. The table holds
+    // the exact f64 results of `srgb_to_linear` for every byte value.
+    let lin: [f64; 256] = std::array::from_fn(|i| srgb_to_linear(i as u8));
+
     // sRGB to XYZ D65 matrix
     const M: [[f64; 3]; 3] = [
         [0.4124564, 0.3575761, 0.1804375],
@@ -297,12 +301,12 @@ fn ciede2000_mean(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
         .zip(d.pixels.as_chunks::<3>().0)
     {
         // sRGB to linear
-        let r1_lin = srgb_to_linear(a[0]);
-        let g1_lin = srgb_to_linear(a[1]);
-        let b1_lin = srgb_to_linear(a[2]);
-        let r2_lin = srgb_to_linear(b[0]);
-        let g2_lin = srgb_to_linear(b[1]);
-        let b2_lin = srgb_to_linear(b[2]);
+        let r1_lin = lin[usize::from(a[0])];
+        let g1_lin = lin[usize::from(a[1])];
+        let b1_lin = lin[usize::from(a[2])];
+        let r2_lin = lin[usize::from(b[0])];
+        let g2_lin = lin[usize::from(b[1])];
+        let b2_lin = lin[usize::from(b[2])];
 
         // Linear RGB to XYZ
         let x1 = M[0][0] * r1_lin + M[0][1] * g1_lin + M[0][2] * b1_lin;
@@ -823,6 +827,57 @@ fn window_score(a: &[f64], b: &[f64], w: usize, h: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
+
+    /// The pre-LUT CIEDE2000 mean: identical pipeline, but it calls
+    /// `srgb_to_linear` per channel instead of the 256-entry table.
+    fn ciede2000_mean_scalar_ref(r: &Rgb8Image, d: &Rgb8Image) -> f64 {
+        const M: [[f64; 3]; 3] = [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ];
+        let n = (r.width as usize) * (r.height as usize);
+        let mut sum_de = 0.0_f64;
+        for (a, b) in r
+            .pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(d.pixels.as_chunks::<3>().0)
+        {
+            let (pr1, pg1, pb1) = (
+                srgb_to_linear(a[0]),
+                srgb_to_linear(a[1]),
+                srgb_to_linear(a[2]),
+            );
+            let (pr2, pg2, pb2) = (
+                srgb_to_linear(b[0]),
+                srgb_to_linear(b[1]),
+                srgb_to_linear(b[2]),
+            );
+            let x1 = M[0][0] * pr1 + M[0][1] * pg1 + M[0][2] * pb1;
+            let y1 = M[1][0] * pr1 + M[1][1] * pg1 + M[1][2] * pb1;
+            let z1 = M[2][0] * pr1 + M[2][1] * pg1 + M[2][2] * pb1;
+            let x2 = M[0][0] * pr2 + M[0][1] * pg2 + M[0][2] * pb2;
+            let y2 = M[1][0] * pr2 + M[1][1] * pg2 + M[1][2] * pb2;
+            let z2 = M[2][0] * pr2 + M[2][1] * pg2 + M[2][2] * pb2;
+            let (l1, al1, bl1) = xyz_to_lab(x1, y1, z1);
+            let (l2, al2, bl2) = xyz_to_lab(x2, y2, z2);
+            sum_de += ciede2000(l1, al1, bl1, l2, al2, bl2);
+        }
+        sum_de / n as f64
+    }
+
+    #[test]
+    fn ciede2000_lut_matches_scalar_ingress() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            assert_eq!(
+                score(Kind::Ciede2000, &r, &d).unwrap(),
+                ciede2000_mean_scalar_ref(&r, &d)
+            );
+        }
+    }
 
     /// Direct 2-D evaluation of the `ssimc` definition (no ring, no
     /// separable passes), for checking the streamed implementation.
