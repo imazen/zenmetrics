@@ -958,3 +958,6 @@ nn-pieapp-review-weight-control python upstream checkpoint out:
 
 nn-pieapp-review-weight-identify python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-reexport oldmodels models output:
+    bash -c "$(cat benchmarks/pieapp_reexport_2026-10-16.sh)" -- '{{oldmodels}}' '{{models}}' '{{output}}'
