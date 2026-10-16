@@ -651,7 +651,8 @@ patch errors and finite signed weights are pooled in fixed row-major order with
 f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references
 cache planar conversion only. Both dimensions must be 64–4096 pixels, with
 at most 9,000,000 pixels total (1,048,576 on 32-bit).
-Both engines pass the 24 supported pairs at 1e-3 JND; see the
+The original revision-2 engines passed the 24 supported pairs at 1e-3 JND;
+revision 3 is undergoing the same unchanged gate. See the
 [qualification record](benchmarks/pieapp_2026-10-16.md).
 The KonJND scale is 0.5189487912492419 native units per operational JND, so the
 original CLI/entry-point control divergence is 0.04433258638589831 JND.
