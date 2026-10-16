@@ -898,7 +898,7 @@ aic-review-cambi-reference python:
 
 # Label-free indexed planner/executor checks, including an independent PNG decoder.
 palette-check:
-    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py
+    just palette-pool-check
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
     just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings
@@ -925,3 +925,7 @@ lan-fit-smoke-launch host run role image:
 palette-dispatch-receipts out:
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
+
+# Invented metadata only: sealed palette pool validation and declaration contracts.
+palette-pool-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py scripts/jobsys/test_palette_pool_authority.py scripts/jobsys/test_budget_preflight.py
