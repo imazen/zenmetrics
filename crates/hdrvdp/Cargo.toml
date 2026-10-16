@@ -46,7 +46,6 @@ zenbench = "0.1.7"
 # trait a different type.
 zenpng = { git = "https://github.com/imazen/zenpng", branch = "main" }
 enough = "0.4.2"
-imgref = { workspace = true }
 rgb = { workspace = true }
 
 [[example]]

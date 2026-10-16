@@ -1,0 +1,50 @@
+# WaDIQaM (Weighted Average Deep Image Quality Measure): a shared
+# VGG-ish trunk — five blocks of 2x conv3x3+relu + maxpool2 — maps each
+# non-overlapping 32x32 patch to 512 features. FR concatenates
+# (h - h_ref, h, h_ref) to 1536; NR uses h alone. fc1 -> relu -> fc2 is
+# the per-patch score y; a parallel fc1_a -> relu -> fc2_a -> relu+1e-6
+# is the attention weight a. The image score is sum(y*a)/sum(a) —
+# upstream's documented default eval top is "weighted" (the paper's
+# randomly-sampled overlapping patch protocol is not what evaluate.py
+# ships; see [input]).
+name = "wadiqam"
+kind = "full-reference and no-reference checkpoints"
+direction = "per checkpoint, measured on a 12-source KonJND JPEG q95..q3 ladder (benchmarks/wadiqam_port_2026-10-16.md): fr_* are distance-like (higher = more degraded vs reference; an identical pair scores a nonzero image-dependent floor — KonJND medians 0.019 live / 12.5 tid, ranges -0.29..0.70 / 9.7..20.6 — since the (0,h,h) concat is not the head's zero); nr_live and nr_tid are both DMOS-like (higher = worse; median rho +0.98 / +0.79). nr_tid is TID2013 MOS-trained but rises with distortion anyway — the MOS labels do not transfer to this head's direction"
+columns = ["wadiqam_fr_live", "wadiqam_fr_tid",
+           "wadiqam_nr_live", "wadiqam_nr_live_ref",
+           "wadiqam_nr_tid", "wadiqam_nr_tid_ref"]
+paper = "Bosse, Maniry, Mueller, Wiegand, Samek. Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment. IEEE TIP 27(1), 2018"
+
+[code]
+source = "upstream-port"             # fr_model.FRModel / nr_model.Model run verbatim in oracle.py (chainer CPU shim); h5py loads the same weights in export.py's torch mirror
+upstream = "https://github.com/dmaniry/deepIQA"
+upstream_package = "git clone of dmaniry/deepIQA @51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link)"
+licence = "MIT"                      # LICENSE, 'Copyright (c) 2016 Dominique Maniry'
+
+[weights]
+# The checkpoints (models/{fr,nr}_{live,tid}_{patchwise,weighted}.model)
+# are checked into the MIT-licensed repo itself, so they carry the same
+# MIT terms — permissive, no consent gate. sha256 of each file is
+# pinned in export.py's MODELS table.
+licence_class = "permissive"
+checkpoint = "dmaniry/deepIQA models/{fr,nr}_{live,tid}_weighted.model (~9.5 MB each, chainer HDF5; hashes in export.py)"
+
+[input]
+format = "packed sRGB8"
+normalisation = "none — raw u8 -> f32 (evaluate.py feeds imageio.imread output straight in)"
+resize = "none — fully convolutional at native resolution"
+patches = "non-overlapping 32x32 stride-32 grid, row-major (evaluate.py's extract_patches; partial edge patches dropped). README documents this as the eval protocol; the paper's randomly-sampled overlapping patch scheme is the training protocol, not eval"
+min_size = 32                       # one full patch required on both axes
+max_patches = 32768                 # grid patches per image, checked before allocating (~400 MiB f32 input; a 4096x4096 image uses 16,384). Trunk/NR graph calls run in <=2000-patch batches like evaluate.py, capping conv intermediates near 256 MiB. Measured peak RSS (/usr/bin/time -v, whole `score` process): 4096^2 fr_live rten 943 MiB / ort-cuda 1.42 GiB, nr_live rten 875 MiB / ort-cuda 1.42 GiB; at the 32,768-patch cap fr_live rten 1.26 GiB / ort-cuda 1.71 GiB, nr_live rten 1.14 GiB / ort-cuda 1.71 GiB (ort-cuda's ~1.4 GiB floor is ORT+CUDA provider overhead)
+
+[export]
+script = "export.py"
+outputs = "wadiqam_fr_{live,tid}_{trunk,head}.onnx, wadiqam_nr_{live,tid}.onnx, wadiqam_{col}.meta, wadiqam_{col}_export.meta; oracle goldens copied to wadiqam_{col}_goldens.tsv"
+opset = 17
+notes = "FR ships split — trunk: x[P,3,32,32] -> h[P,512], head: f[P,1536] -> ya[2,P] — so the runtime caches the reference's patch features under warm_reference (the host owns the (h-h_ref,h,h_ref) concat). NR ships whole: x[P,3,32,32] -> ya[2,P]. Self-check inside export.py: ONNX-vs-torch ya bound 1e-2, pooled-score bound 1e-4 (elementwise ya error is f32 reduction-order noise at y~100, a~10 magnitudes; the pooled score is what ships)."
+
+[parity]
+oracle = "dmaniry/deepIQA @51dece99 fr_model.FRModel / nr_model.Model, top='weighted', extract_patches + evaluate.py batching verbatim, chainer CPU fp32 (cuda.cupy shimmed to numpy after weight load)"
+tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd = "fr_live 29.932910 (JPEG 30.460, BPG 29.453), fr_tid 5.209576 (6.384/3.721), nr_live 23.551063 (24.828/21.711), nr_tid 2.757295 (3.007/2.525); fr_* = |score(pair)-score(ref,ref)|, nr_* = |score(dist)-score(ref)| — 1008 KonJND pairs, this port on ort-cuda, 2026-10-16"
+results = "29 ladder pairs incl. non-square + 4096, both engines, gate 1e-3 JND: fr_live rten 7.65e-7 JND (worst |d| 2.29e-5) / ort-cuda 1.05e-6 JND (3.15e-5); fr_tid rten 7.83e-6 (4.08e-5) / ort-cuda 3.66e-6 (1.91e-5); nr_live rten 2.63e-7 (6.20e-6) / ort-cuda 1.03e-6 (2.43e-5); nr_tid rten 5.54e-6 (1.53e-5) / ort-cuda 5.54e-6 (1.53e-5). Export --goldens (ONNX vs chainer): worst 4.2e-5."

@@ -5,6 +5,7 @@ This is a manifest adapter only. zenfleet-ctl owns job IDs and declaration;
 the worker/ledger own claims and duplicate prevention.
 """
 
+import hashlib
 import argparse
 import json
 from pathlib import Path
@@ -91,11 +92,28 @@ def grid():
                         yield {"name": dest, "argv": argv}
 
 
+def grid_registered(path, pin):
+    raw=Path(path).read_bytes()
+    if hashlib.sha256(raw).hexdigest()!=pin:
+        raise ValueError("registered grid pin changed")
+    cells=json.loads(raw)["cells"]
+    if len(cells)!=736 or len({c["name"] for c in cells})!=736:
+        raise ValueError("registered grid must contain every unique scientific fit")
+    for c in cells:
+        argv=c["argv"]
+        if (argv[0]!="subjective_cell.py" or "--strict-admission" not in argv or "--train-only" not in argv
+                or argv.count("--cell-id")!=1 or argv[argv.index("--cell-id")+1]!=c["name"]):
+            raise ValueError("registered grid transport differs")
+    return cells
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--program-sha", required=True)
     p.add_argument("--data-sha", required=True)
-    p.add_argument("--grid", choices=("p0", "p2", "d2", "v2"), default="p0")
+    p.add_argument("--grid", choices=("p0", "p2", "d2", "v2", "registered"), default="p0")
+    p.add_argument("--registered-grid", type=Path)
+    p.add_argument("--registered-grid-sha256")
     p.add_argument("--v2-phase", choices=("calibration", "arms", "all"), default="calibration")
     p.add_argument("--existing-root", type=Path, default=None)
     p.add_argument("--include-complete", action="store_true")
@@ -104,15 +122,17 @@ def main():
     for label, value in (("program", args.program_sha), ("data", args.data_sha)):
         if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
             p.error(f"{label} SHA-256 must be lowercase hex")
-    if args.grid == "v2":
+    if args.grid == "registered":
+        all_cells = grid_registered(args.registered_grid,args.registered_grid_sha256)
+    elif args.grid == "v2":
         all_cells = list(grid_v2(args.v2_phase))
         assert len(all_cells) == {"calibration": 700, "arms": 6800, "all": 7500}[args.v2_phase]
     else:
         all_cells = list({"p0": grid, "p2": grid_p2, "d2": grid_d2}[args.grid]())
         assert len(all_cells) == {"p0": 960, "p2": 960, "d2": 210}[args.grid]
-    if args.existing_root is None:
+    if args.grid != "registered" and args.existing_root is None:
         args.existing_root = Path(EXISTING[args.grid])
-    complete = {cell["name"] for cell in all_cells
+    complete = set() if args.grid == "registered" else {cell["name"] for cell in all_cells
                 if (args.existing_root / cell["name"] / "result.json").is_file()}
     cells = all_cells if args.include_complete else [cell for cell in all_cells if cell["name"] not in complete]
     spec = {"program_sha": args.program_sha, "data_sha": args.data_sha, "cells": cells}

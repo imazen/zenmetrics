@@ -33,11 +33,11 @@ import pyarrow.parquet as pq
 POT_ROOT = Path("/var/tmp/rev4-featpot")
 # fit_cell_exec.py archives members relative to /var/tmp/rev4-featpot, under <root>/<cell>/ where the
 # root depends on the fit program (must match SCRIPTS in fit_cell_exec.py).
-PROGRAM_ROOTS = {"mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py": "p2/d2_mlp",
+PROGRAM_ROOTS = {"steer_exact_smoke.py": "steer-smoke/cells", "subjective_cell.py": "registered/cells", "mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py": "p2/d2_mlp",
                  "v2_lodo_mlp.py": "v2/cells", "v2_confirm_fit.py": "v2/confirm/cells",
                  "e5_epochs.py": "e5/v2/cells"}
 # `--root /var/tmp/rev4-featpot/<name>` moves these scripts' cells to `<name>/<suffix>` (fit_cell_exec.ROOTED).
-ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+ROOTED = {"steer_exact_smoke.py": "cells", "v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
 from fit_paths import explicit_root
 
 
@@ -254,7 +254,41 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if "--strict-admission" in kind["argv"] or result.get("training_only") is True:
+    if kind["argv"][0] == "steer_exact_smoke.py":
+        if not allow_local_smoke:
+            raise ValueError("exact engineering smoke cannot install as a scientific cell")
+        if program_archive is None or checkpoint_inspector is None or digest(program_archive) != kind["program_sha"]:
+            raise ValueError("exact smoke requires its archive-bound verifier and inspector")
+        with tarfile.open(program_archive, "r:gz") as program:
+            meta = json.load(program.extractfile("build_meta.json"))
+        if digest(checkpoint_inspector) != meta["files"]["bin/inspect_qualified_checkpoint"]:
+            raise ValueError("exact smoke inspector changed")
+        argv=kind["argv"]
+        def arg(key):
+            if argv.count(key)!=1:
+                raise ValueError("missing exact smoke binding: " + key)
+            return argv[argv.index(key)+1]
+        if (result.get("schema")!="steer-exact-smoke-cell-v1" or result.get("execution_contract")!="local-smoke"
+                or result.get("epochs")!=0 or result.get("family")!=arg("--family")
+                or result["selected_bake_sha256"]!=arg("--model-sha256")
+                or result.get("probe_sha256")!=listed.get("exact-probe.json")
+                or "RESOURCE_USAGE.txt" not in listed):
+            raise ValueError("exact smoke result binding invalid")
+        probe=json.loads((dest/"exact-probe.json").read_text())
+        if (probe.get("schema")!="steer-exact-synthetic-smoke-v1" or probe.get("policy")!="all-blocks-v1"
+                or probe.get("model_sha256")!=result["selected_bake_sha256"]):
+            raise ValueError("exact smoke probe identity invalid")
+        for case, geometry, count in zip(probe.get("cases",[]),[(65,49),(128,96)],[91,256],strict=True):
+            rectangles=case.get("rectangles",[])
+            if ((case.get("width"),case.get("height"))!=geometry
+                    or not case.get("score_and_feature_bits_equal") or len(rectangles)!=count
+                    or any(r.get("gain_bits")!=r.get("native_gain_bits") for r in rectangles)):
+                raise ValueError("exact smoke native parity/inventory invalid")
+        if len(probe.get("cases",[]))!=2:
+            raise ValueError("exact smoke geometry inventory incomplete")
+        subprocess.run([str(checkpoint_inspector),str(dest/relative)],check=True,capture_output=True)
+        receipt["execution_contract"]="local-smoke"
+    elif "--strict-admission" in kind["argv"] or result.get("training_only") is True:
         from qualified_fit_contract import trusted_contract, verify_training
         expected = trusted_contract(kind, program_archive, checkpoint_inspector)
         execution = verify_training(result, dest / relative, kind, expected, checkpoint_inspector)

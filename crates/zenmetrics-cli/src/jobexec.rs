@@ -2495,6 +2495,27 @@ fn run_encode_or_metric_job(
     let reference = decode_image_to_rgb8(&src_path)?;
 
     let codec = codec_from_name(codec_name)?;
+    #[cfg(feature = "png")]
+    if knobs.contains_key("palette_ladder") {
+        if codec_name != "zenpng"
+            || knobs.len() != 1
+            || job["kind"]["hdr"].as_bool().unwrap_or(false)
+        {
+            return Err("palette ladder requires SDR zenpng".into());
+        }
+        let (bytes, receipt) =
+            crate::palette_ladder::execute(&reference, &knobs["palette_ladder"])?;
+        return match kind {
+            "encode" => bytes
+                .ok_or_else(|| "declared palette quality-floor refusal; inspect receipt".into()),
+            "metric" if job["kind"]["metric"] == "palette-receipt" => {
+                Ok(serde_json::to_vec(&receipt)?)
+            }
+            _ => Err(
+                "palette ladder supports encode or palette-receipt; score persisted bytes".into(),
+            ),
+        };
+    }
     let encoded = encode_cell_for_job(codec, &reference, q, knob_json, &knobs)?;
 
     match kind {

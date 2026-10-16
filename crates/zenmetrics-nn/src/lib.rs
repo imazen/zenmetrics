@@ -37,6 +37,11 @@
 //!   [`za::NoReferenceMetric`]; parity target upstream
 //!   `baidut/paq2piq` `InferenceModel.predict`,
 //!   `RoIPoolModel-fit.10.bs.120.pth` (CC-BY-NC weights: consent-gated).
+//! - [`WadiqamFr`] / [`WadiqamNr`]: WaDIQaM (Bosse, Maniry et al., TIP
+//!   2018), `dmaniry/deepIQA` — shared conv trunk over non-overlapping
+//!   32×32 patches + relu-weighted pooling, LIVE- or TID2013-trained
+//!   (`WadiqamKind`); FR concatenates `(h − h_ref, h, h_ref)` and NR is
+//!   a [`za::NoReferenceMetric`]. MIT code and weights.
 //!
 //! Engines ([`Engine`]): `rten` (pure-Rust CPU, default feature) and, with
 //! the `ort` feature, ONNX Runtime on CUDA. Weights are never bundled in the
@@ -66,6 +71,7 @@ mod par;
 mod preprocess;
 mod resize;
 mod tfresize;
+mod wadiqam;
 mod wd;
 mod weights;
 
@@ -82,6 +88,7 @@ pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;
 pub use musiq::Musiq;
 pub use paq2piq::Paq2piq;
+pub use wadiqam::{WadiqamFr, WadiqamKind, WadiqamNr};
 pub use wd::WassersteinDistortion;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Black-box convention search for the published AIC-4 `A-FINE` column.
 
-Input 1: `--dump` — the TSV written by the `afine::tests::aic_dump` test in
-`crates/zenmetrics-nn/src/afine.rs` (branch afine-aic): per
+Input 1: `--dump` — the TSV written by the
+`crates/zenmetrics-nn/examples/afine_aic_dump.rs` example
+(`just nn-afine-aic-dump`, branch afine-aic): per
 (pair, variant) rows of every A-FINE sub-score our port computes —
 `n_r`/`n_d` raw `AFINEQhead` naturalness, `fid` raw `AFINEDhead`
 fidelity, `s_r`/`s_d`/`s_f` after the NLM scalers, `lambda` the
@@ -22,7 +23,7 @@ Candidate space, per preprocessing variant:
   * swapped ref/dist (fid is symmetric; (s_r−s_d) and λ flip sign).
 
 Reports every candidate's residual vs the published column in raw units
-(median/max |Δ|) and site JND (median/max), plus SRCC. Sorted by JND max.
+(median/max |Δ|) and site JND (median/max), plus SRCC. Sorted by JND median.
 """
 
 import argparse

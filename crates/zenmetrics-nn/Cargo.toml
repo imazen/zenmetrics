@@ -38,3 +38,7 @@ required-features = ["model-tests"]
 [[test]]
 name = "wd_parity"
 required-features = ["model-tests"]
+
+[[example]]
+name = "afine_aic_dump"
+required-features = ["model-tests"]

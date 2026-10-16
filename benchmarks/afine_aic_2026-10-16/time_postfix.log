@@ -1,0 +1,86 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24211MiB :: bash -c . /home/lilith/tmp/ort-env.sh && /usr/bin/time -v /home/lilith/tmp/afine_aic_dump_postfix /home/lilith/tmp/nn-opt2/models-all /home/lilith/tmp/aic-sub/pairs.tsv /home/lilith/tmp/dump_postfix.tsv ort-cuda
+done S01_AVIF_01.png
+done S02_CCM_01.png
+done S03_JAIB_01.png
+done S04_JAI_01.png
+done S05_JAI_01.png
+done S06_JXL_01.png
+done S07_JXL_01.png
+done S09_AVIF_01.png
+done S10_CCW_01.png
+done S11_J2K_01.png
+done S12_JAI_15.png
+done S13_JPG_15.png
+done S14_VVC_15.png
+done S15_PNG_15.png
+done S17_AVIFQ_15.png
+done S18_CCM_15.png
+done S19_J2K_15.png
+done S20_JPG_15.png
+done S21_JXLM_09.png
+done S22_JXL_09.png
+done S24_AVIF_09.png
+done S25_J2K_17.png
+done S26_JPGL_17.png
+done S27_JPG_17.png
+done S28_JXLM_17.png
+done S29_WEBP_17.png
+done S31_AVIF_17.png
+done S32_J2K_17.png
+done S33_J2K_17.png
+done S34_J2K_17.png
+done S35_JPG_17.png
+done S36_JXL_17.png
+done S38_AVIF_11.png
+done S39_AVIF_11.png
+done S40_JAIB_05.png
+done S41_JPG_19.png
+done S42_JPG_19.png
+done S43_JXL_19.png
+done S45_AVIF_19.png
+done S46_AVIF_19.png
+done S47_J2K_19.png
+done S48_JAI_13.png
+done S49_JXL_07.png
+done S51_AVIF_07.png
+done S52_HEVC_07.png
+done S53_JAIB_07.png
+done S54_JPG_07.png
+done S55_JPG_07.png
+done S56_JXL_01.png
+done S58_AVIF_01.png
+done S59_HEVC_01.png
+done S60_FTIC_01.png
+done S61_JAIB_15.png
+done S62_JPGL_15.png
+done S63_JPG_15.png
+done S64_VVC_15.png
+done S66_AVIF_15.png
+done S67_CCM_15.png
+done S68_JAIB_15.png
+done S69_JAI_09.png
+done S70_VVC_03.png
+	Command being timed: "/home/lilith/tmp/afine_aic_dump_postfix /home/lilith/tmp/nn-opt2/models-all /home/lilith/tmp/aic-sub/pairs.tsv /home/lilith/tmp/dump_postfix.tsv ort-cuda"
+	User time (seconds): 126.40
+	System time (seconds): 44.21
+	Percent of CPU this job got: 131%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:09.92
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2100524
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 227
+	Minor (reclaiming a frame) page faults: 5966954
+	Voluntary context switches: 34894
+	Involuntary context switches: 7369
+	Swaps: 0
+	File system inputs: 1378360
+	File system outputs: 192
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 129s | peak-RSS 2.00GiB | min-avail 19342MiB | peak-load 6.36

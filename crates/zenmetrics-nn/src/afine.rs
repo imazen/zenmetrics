@@ -589,6 +589,7 @@ impl Afine {
     /// the AIC-4 convention-search dump (`#k=… nr=[…] fr=[…]`) — see
     /// [`Self::aic_dump_scores`].
     #[doc(hidden)]
+    #[cfg(feature = "model-tests")]
     pub fn aic_dump_header(&self) -> String {
         format!(
             "#k={} nr={:?} fr={:?}",
@@ -600,22 +601,27 @@ impl Afine {
     /// `examples/afine_aic_dump.rs` and the reproduction path for
     /// `benchmarks/afine_aic_2026-10-16/`. A probing interface, not a
     /// scoring API. `variant` is `native`, `r224`, `r384`, `r512`,
-    /// `nonorm` or `bgr`; both images are decoded packed RGB8 at the
-    /// same `w`×`h`. Returns `[n_r, n_d, fid, s_r, s_d, s_f, lambda,
+    /// `nonorm` or `bgr`; `r` and `d` are strided packed sRGB8 at the
+    /// same size. Returns `[n_r, n_d, fid, s_r, s_d, s_f, lambda,
     /// afine_all]`; the fused pair backend leaves the first seven NaN.
     ///
     /// # Errors
-    /// [`Error::BadModel`] on an unknown `variant`; any engine error
-    /// from the trunk or fused run.
+    /// [`Error::BadModel`] on an unknown `variant` or a size mismatch;
+    /// any engine error from the trunk or fused run.
     #[doc(hidden)]
+    #[cfg(feature = "model-tests")]
     pub fn aic_dump_scores(
         &self,
-        r: &[u8],
-        d: &[u8],
-        w: usize,
-        h: usize,
+        r: &za::Rgb8In<'_>,
+        d: &za::Rgb8In<'_>,
         variant: &str,
     ) -> Result<[f64; 8], Error> {
+        if r.width != d.width || r.height != d.height {
+            return Err(Error::BadModel(format!(
+                "aic_dump size mismatch {}x{} vs {}x{}",
+                r.width, r.height, d.width, d.height
+            )));
+        }
         // (forced (th,tw) pre-resize, clip_norm, bgr_swap)
         let (force, clip_norm, bgr) = match variant {
             "native" => (None, true, false),
@@ -626,14 +632,9 @@ impl Afine {
             "bgr" => (None, true, true),
             _ => return Err(Error::BadModel(format!("aic_dump variant {variant}"))),
         };
-        let prep = |px: &[u8]| -> (Vec<f32>, usize, usize, Vec<f32>) {
-            let img = za::Rgb8In {
-                pixels: px,
-                width: w,
-                height: h,
-                stride: w * 3,
-            };
-            let mut planar = rgb8_to_planar_01(&img);
+        let prep = |img: &za::Rgb8In<'_>| -> (Vec<f32>, usize, usize, Vec<f32>) {
+            let (w, h) = (img.width, img.height);
+            let mut planar = rgb8_to_planar_01(img);
             if bgr {
                 let n = w * h;
                 let (b, rest) = planar.split_at_mut(n);

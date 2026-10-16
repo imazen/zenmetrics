@@ -1,0 +1,3 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=16671MiB :: bash /home/lilith/tmp/aic-classic-scratch/baseline_run.sh /home/lilith/tmp/aic-classic-scratch/bin/aic_perf_wall /home/lilith/tmp/aic-classic-scratch/baseline
+baseline sweep complete
+run-heavy: done rc=0 177s | peak-RSS 1.06GiB | min-avail 14461MiB | peak-load 43.16

@@ -13,6 +13,26 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
+
+- Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
+
+- Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
+
+## zenmetrics-cli
+
+### Added
+
+- Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).
+
+- Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
+- Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
+- Registered source-family FitCell transport retains decoded-checkpoint admission and full-budget/seed/cap bindings (`6b3c2cd4`); public-source program packaging carries opaque external private-contract/data pins (`6cc84648`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
 ## vmaf
 
 ### Changed
@@ -45,6 +65,8 @@ None.
 
 - hdrvdp `v3::score()`, a score-only HDR-VDP-3 entry point that skips map reconstruction (`6e5e62e0`, PR #76); `q_jod` is bit-identical to `hdrvdp3()` (test `score_matches_q_jod_bitwise`), and the integrated-PU-nits CPU dispatch path uses it.
 - zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
+
+- zenmetrics-nn WaDIQaM FR+NR (PR #81, review required): `WadiqamFr`/`WadiqamNr` and CLI `wadiqam-{fr,nr}-{live,tid}`, four columns on the MIT-licensed `dmaniry/deepIQA` `top="weighted"` checkpoints, ported as ONNX exports of upstream's own model classes (`2a8b22e8`). FR ships split trunk/head graphs so the reference's patch features cache under warm reference on both engines. 29 chainer-oracle pairs — including non-square and 4096² — pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); all four KonJND scales are measured (`wadiqam_nr_tid`'s is a noise floor, not a perceptual JND). Inference chunks at 2,000 patches per graph call. [Receipt](benchmarks/wadiqam_port_2026-10-16.md).
 
 - zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
 - zenmetrics-abstractions (PR #81, review required): `NoReferenceMetric`, the single-image metric shape, and `PairedNoReference`, which runs one as a pair `Metric`: the distorted image's outputs under their own keys, then the reference's under `<key>_ref`; a warm reference scores the reference once. `ScoreKind::Quality` (higher is better) and `ScoreKind::Distortion` (higher is worse) for no-reference scores; neither has a perfect value.
@@ -3611,7 +3633,7 @@ All five are the Nomad-migration ADR's stated preconditions
 - `brisque` crate, CLI metric `brisque` behind `nr` (PairedNoReference): port of piq's BRISQUE with LIVE's SVR model, stored as a 232 KB aligned little-endian binary. 170 goldens within JND/1000 (worst 5.2e-4 JND; 6.8e-4 JND on 200 extra KonJND images). Inputs under 8 px return `TooSmall`.
 - zenmetrics-nn CPU speed (nn-opt lane; i265, 16 threads, rten; `62b38654`, `e8db1bf5`, `3effa389`, `a4a891e9`): trunk outputs move out instead of copying (DISTS 2048² peak RSS 8.0 → 6.4 GiB), DISTS head statistics fused into lane-parallel f64 sums, and the Rust-side metric heads threaded with a hard threads cap. Measured, two A/B runs each: DISTS 1024² compute 1941/1689 → 1293/1304 ms, 2048² warm 3735/3736 → 2639/2615 ms; LPIPS-alex 1024² warm 58.0/61.5 → 44.2/45.4 ms. Scores bit-identical. Splitting the DeepDC head was measured and rejected (0.12% of cycles). Data: `benchmarks/nn_opt_2026-10-15/`.
 - zenmetrics-nn CKDN, A-FINE and DreamSim on rten and ort-cuda (`5bd1f468`, `0de4d5b7`, `8af0d0ae`, `fba8bec7`; review fixes `1081dddc`, `43c62165`, `47d4d306`, `13f4c151`, `3d6f1d89`, `9ae32815`). Parity against the upstream code: worst 5.65e-5 / 1.42e-5 / 1.17e-5 JND on rten, 5.09e-5 / 1.94e-5 / 2.03e-5 on ort-cuda (gate 1e-3). CKDN applies upstream's eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288) and refuses inputs whose resized long side exceeds 32,768 px. AIC-4 columns: CKDN median 4.0e-5 / max 1.4e-4 (0.026 JND, not exact); DreamSim max 6.1e-7; A-FINE not reproduced (`afine_all` sits 0.5–1.4 below the column; the 61-pair sub-score convention search in `benchmarks/afine_aic_2026-10-16/` found no convention inside 10× of the acceptance gate). Weights are consent-gated: CKDN and DreamSim `Unknown`, A-FINE `NonCommercial` (trained on DiffIQA). Upstream notices in `crates/zenmetrics-nn/LICENSE-*`.
-- zenmetrics-nn ort-cuda: bound arena retention for shape-varying inputs (this commit). All CUDA sessions share one builder with ORT memory-pattern disabled and the CPU provider arena off, and session outputs are consumed by move — previously the 61-pair AIC sweep accumulated per-shape blocks until BFCArena allocs failed (A-FINE fused graph, 9 rows on the three largest pairs). Scores bit-identical before/after on all 357 shared rows; afine parity unchanged (1.42e-5 rten / 1.94e-5 ort-cuda JND). Receipt: `benchmarks/afine_aic_2026-10-16/` "ort-cuda arena fix".
+- zenmetrics-nn ort-cuda: bound arena retention for shape-varying inputs (`f48b71a0`). All CUDA sessions share one builder with ORT memory-pattern disabled and the CPU provider arena off, and session outputs are consumed by move — previously the 61-pair AIC sweep accumulated per-shape blocks until BFCArena allocs failed (A-FINE fused graph, 9 rows on the three largest pairs). A-FINE sweep scores bit-identical before/after on all 357 shared rows; ort-cuda ladder parity unchanged on afine (1.94e-5), lpips_alex, dists, deepdc, wd, paq2piq, hyperiqa and wadiqam. Receipt: `benchmarks/afine_aic_2026-10-16/` "ort-cuda arena fix".
 - `piqe` and `niqe` crates, CLI metrics `piqe` and `niqe` behind the `nr` feature (`91962eb0`, `78add1c4`, `3b62e82a`): no-reference ports of pypiqe and BasicSR's NIQE (LIVE pristine model as generated constants, `crates/niqe/src/params.rs`, approved). Scored through `PairedNoReference` (`<m>` distorted, `<m>_ref` reference). 170 goldens each, worst 2.9e-12 (PIQE) and 7.3e-12 (NIQE). Inputs under two complete blocks return `TooSmall`; flat NIQE inputs return `Degenerate` instead of NaN. `no_std` builds route float maths through libm.
 - **deps: migrate to published `zencodec` 0.1.24 estimate API; drop the path
   patch; bump CI codec clone pins to the migrated revs.** Removed the

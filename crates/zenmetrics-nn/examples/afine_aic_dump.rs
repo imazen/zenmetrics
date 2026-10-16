@@ -4,7 +4,7 @@
 //! evaluator).
 //!
 //! ```text
-//! cargo run --release -p zenmetrics-nn --features ort \
+//! cargo run --release -p zenmetrics-nn --features model-tests,ort \
 //!   --example afine_aic_dump -- \
 //!   <model_dir> <pairs.tsv> <out.tsv> [engine=rten|ort-cuda] [variants=native,...]
 //! ```
@@ -19,11 +19,12 @@
 
 use std::io::Write;
 
+use zenmetrics_abstractions::Rgb8In;
 use zenmetrics_nn::{Afine, Engine, WeightsConsent};
 
 const VARIANTS: &[&str] = &["native", "r224", "r384", "r512", "nonorm", "bgr"];
 
-fn load_rgb8(path: &str) -> (Vec<u8>, usize, usize) {
+fn load_rgb8(path: &str) -> (Vec<u8>, usize, usize, usize) {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     let out = zenpng::decode(
         &data,
@@ -33,13 +34,12 @@ fn load_rgb8(path: &str) -> (Vec<u8>, usize, usize) {
     .unwrap_or_else(|e| panic!("{path}: {e}"));
     let s = out.pixels.as_slice();
     assert_eq!(s.descriptor().bytes_per_pixel(), 3, "RGB8 required: {path}");
-    let (w, h) = (s.width() as usize, s.rows() as usize);
-    let bytes = s.as_strided_bytes();
-    let mut px = Vec::with_capacity(w * h * 3);
-    for y in 0..h {
-        px.extend_from_slice(&bytes[y * s.stride() as usize..][..w * 3]);
-    }
-    (px, w, h)
+    (
+        s.as_strided_bytes().to_vec(),
+        s.width() as usize,
+        s.rows() as usize,
+        s.stride() as usize,
+    )
 }
 
 fn main() {
@@ -92,11 +92,24 @@ fn main() {
                 .to_string_lossy()
                 .to_string()
         });
-        let (rpx, rw0, rh0) = load_rgb8(rp);
-        let (dpx, dw0, dh0) = load_rgb8(dp);
-        assert_eq!((rw0, rh0), (dw0, dh0), "size mismatch: {rp} vs {dp}");
+        let (rpx, rw, rh, rs) = load_rgb8(rp);
+        let (dpx, dw, dh, ds) = load_rgb8(dp);
+        let (rimg, dimg) = (
+            Rgb8In {
+                pixels: &rpx,
+                width: rw,
+                height: rh,
+                stride: rs,
+            },
+            Rgb8In {
+                pixels: &dpx,
+                width: dw,
+                height: dh,
+                stride: ds,
+            },
+        );
         for vname in &variants {
-            match af.aic_dump_scores(&rpx, &dpx, rw0, rh0, vname) {
+            match af.aic_dump_scores(&rimg, &dimg, vname) {
                 Ok(row) => {
                     let (cells, all) = row.split_at(7);
                     let sub: Vec<String> = cells

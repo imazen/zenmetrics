@@ -2,6 +2,19 @@
 use zenmetrics_abstractions::zenpixels;
 use zensim::{DiffmapWeighting, RgbSlice, Zensim, ZensimProfile};
 fn main() {
+    // zensim's AVX-512 vertical-blur feature kernels reduce 16 lanes in one
+    // f32 tree while its AVX2 and wasm kernels reduce two 8-lane halves, so
+    // on AVX-512 hosts preview-v0.1/v0.2 differ from the browser in the low
+    // bits (CLAUDE.md Known Bugs). Pin the native oracle to the AVX2 tier so
+    // it computes what the wasm build computes. Remove once zensim's tiers
+    // are bit-identical.
+    #[cfg(target_arch = "x86_64")]
+    {
+        archmage::X64V4xToken::dangerously_disable_token_process_wide(true)
+            .expect("disable AVX-512 (v4x) before any dispatch");
+        archmage::X64V4Token::dangerously_disable_token_process_wide(true)
+            .expect("disable AVX-512 (v4) before any dispatch");
+    }
     let (w, h) = (64, 64);
     let reference: Vec<[u8; 3]> = (0..h)
         .flat_map(|y| {

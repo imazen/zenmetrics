@@ -46,7 +46,6 @@ serde_json = { workspace = true }
 # Cooperative cancellation for the strip walkers (`*_with_stop`, zenmetrics#30).
 enough = "0.4.4"
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 # Constructible `Stop` flag for the cancellation tests.

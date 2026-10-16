@@ -28,17 +28,27 @@ round drives **our** port's outputs on the full-res inputs.
 - `dump_native.tsv` — rten trunk, `native` variant: 60/61 pairs with
   full sub-scores + S67 `afine_all` from the ort-cuda fused graph
   (rten needs ~28 GB of activations for the 3355×2516 pair — beyond
-  this box's headroom; ort-cuda agrees with rten to ~2e-7 on every
-  shared pair, e.g. S01 −2.84463930 vs −2.84463948).
+  this box's headroom; ort-cuda agrees with rten on shared pairs to
+  median 7.3e-7, max 4.4e-6 — S02 — e.g. S01 −2.84463930 vs
+  −2.84463948).
 - `dump_ort_partial.tsv` — ort-cuda fused score only (no sub-scores),
   39 pairs × all 6 preprocessing variants before the ORT CUDA arena
-  OOM'd at pair 45 (shape-varying arena accumulation — since fixed,
+  failed at pair 40, S46 (shape-varying arena accumulation — since fixed,
   see "ort-cuda arena fix" below).
 - `dump_ort_full.tsv` — post-fix ort-cuda re-run: all 61 pairs × 6
   variants, zero failures, bit-identical to `dump_ort_partial.tsv` on
   the 234 shared rows.
-- `candidates.tsv` — all 703 evaluated formulas over the native dump,
-  sorted by site-JND median.
+- `dump_ort_prefix.tsv` — pre-fix ort-cuda re-run over the full sweep:
+  357/366 rows scored, 9 BFCArena `Softmax` failures (S46/S54/S67 ×
+  native/nonorm/bgr — ORT's multi-line error text spills a wrapped
+  continuation line after each). Paired with `dump_ort_full.tsv` this
+  is the before/after evidence.
+- `time_prefix.log` / `time_postfix.log` — the `/usr/bin/time -v` +
+  `run-heavy` records of those two runs (peak RSS, wall time).
+- `candidates.tsv` — top 60 of the 703 evaluated formulas over the
+  native dump, sorted by site-JND median (generated-data size cap; the
+  full 703-row file is at `~/tmp/afine-aic/candidates_full.tsv`,
+  sha256 `8d73303aded5d3f64ab28e45a83b7af1fbdd6899f75333fd1d0395b36f1a0293`).
 - `candidates_ort_preproc.tsv` — same runner over the ort dump's
   `afine_all` under the 6 preprocessing variants (39 pairs).
 
@@ -48,7 +58,8 @@ Gate for adding an `afine-aic` CLI variant: ≤0.01 JND median, ≤0.05 JND
 max vs the published column (≈0.007/0.034 raw units at x≈−1.9). No
 candidate comes close.
 
-Best **raw** (unfitted) conventions:
+Best **raw** (unfitted) conventions (sub-score formulas n=60 — S67's
+sub-scores are absent from the rten dump; `afine_all` rows n=61):
 
 | formula | JND med | JND max | raw med | raw max | SRCC |
 |---|---|---|---|---|---|
@@ -62,10 +73,12 @@ at JND med 0.038 / max 0.46 — still >3× over the median gate with a
 fit we cannot justify as a convention. Fitted SRCC ceilings at ≈0.92.
 
 Preprocessing (ort, 39 pairs, raw |Δ| median of `afine_all`):
-native 0.689 < bgr 0.685 ≈ nonorm 0.794 << r384 1.23 < r512 1.26 <<
-r224 2.18 (plus r224 max 152). Resolution is not the gap — native
-full-res ≈ the earlier crop-res run (−2.845 vs −2.84 on S01), and
-forcing training-size resizes only worsens it.
+bgr 0.685 < native 0.689 < nonorm 0.794 << r384 1.23 < r512 1.26 <<
+r224 2.18 (plus r224 max 152); JND median likewise bgr 0.966 <
+native 0.977 — channel swap is marginally *closer*, still ~100× over
+gate. Resolution is not the gap — native full-res ≈ the earlier
+crop-res run (−2.845 vs −2.84 on S01), and forcing training-size
+resizes only worsens it.
 
 ## Interpretation
 
@@ -86,7 +99,7 @@ sub-score path on this box. Its `afine_all` came from ort-cuda.
 
 ## ort-cuda arena fix (follow-up)
 
-The original ort-cuda sweep OOM'd at pair 45 — ORT's device-side
+The original ort-cuda sweep hit BFCArena failure at pair 40 (S46) — ORT's device-side
 memory-pattern arena retains a per-shape block pool, so 366
 shape-varying runs exhaust VRAM (the last alloc attempt was a 2.4 GB
 Softmax). Fix, ported from WD's `ae582a3b` into a shared
@@ -104,8 +117,20 @@ Measured, same 61-pair × 6-variant sequence, `/usr/bin/time -v`:
 | post-fix | 366/366 | 0 — S67 `afine_all` now comes through ort-cuda too | 2.00 GiB | 129 s |
 
 All 357 shared rows bit-identical (0.0 abs diff). Host RSS is a wash —
-the retention was device-side; the failure signature is gone. afine
+the retention was device-side (inference — VRAM was not directly
+measured); the failure signature is gone. afine
 ladder parity unchanged: rten 1.42e-5 JND, ort-cuda 1.94e-5 JND.
+
+Post-merge re-verification, ort-cuda ladder parity — identical to the
+recorded values on every model probed: lpips_alex 5.981e-8 (card
+6.0e-8), dists 1.789e-7 (1.8e-7), deepdc 1.197e-7 (1.2e-7), paq2piq
+1.28e-5, hyperiqa 3.42e-6, wd 3.443705654e-6, wadiqam fr_live 1.05e-6 /
+fr_tid 3.66e-6 / nr_live 1.03e-6 / nr_tid 5.54e-6 JND.
+
+Throughput A/B, lpips_vgg @ 1024² ort-cuda, 50 timed runs per mode
+(`bench_ort_prefix.tsv` / `bench_ort_postfix.tsv`): compute median
+65.8 → 62.9 ms (−4.4%), warm 67.3 → 67.6 ms, e2e 77.4 → 77.5 ms —
+memory-pattern off costs nothing measurable at fixed size.
 
 ## Reproduce
 

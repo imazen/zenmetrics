@@ -560,15 +560,17 @@ packed-sRGB-u8 sweep shape and answers a different question.
 ## Known Bugs
 
 - **2026-10-16 — ORT CUDA arena/memory-pattern accumulation across changing
-  input shapes.** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
-  arena at pair 45/61 of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
+  input shapes. FIXED (`f48b71a0`).** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
+  arena at pair 40/61 (S46) of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
   intermediate). WD's trunk had the same class fixed in `ae582a3b`
   (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
   is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
   — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
   `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
   `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
-  paths. Scores are bit-identical before/after; RSS numbers are in
+  paths. afine sweep scores are bit-identical before/after (357/357
+  shared rows) and ort-cuda ladder parity re-verified on lpips_alex,
+  dists, deepdc, wd, paq2piq, hyperiqa and wadiqam; RSS numbers are in
   `benchmarks/afine_aic_2026-10-16/README.md`.
 
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
@@ -1563,6 +1565,26 @@ browser 91.21909967783705, native 91.21909967392351 (difference 3.9e-9),
 maximum map delta 0.0. Attempt 2 of the same commit passed and deployed, so
 the browser or the native oracle scalar varies between runs (not measured
 which); the maps matched exactly both times.
+
+Recurred again 2026-10-16 on runs 38756697855 (`48e768ed`) and 38884395886
+(`71560bd8`, attempt 1) with the SAME two values (browser 91.21909967783705,
+native 91.21909967392351, map delta 0.0). Identical values across commits and
+days point to two deterministic paths rather than run-to-run noise; one
+untested hypothesis is that the native oracle's runtime SIMD tier follows the
+CI runner's CPU. Next step: have `browser_oracle` record the dispatched tier
+and the runner CPU model, then compare a failing and a passing run.
+
+Measured 2026-10-16 on i265 (Core Ultra 7 265K, no AVX-512, so archmage
+dispatches the AVX2 tier): the native `browser_oracle` gives preview-v0.1
+91.21909967783705, exactly the browser's value, while the failing CI runs'
+native oracle gave 91.21909967392351 (other profiles on i265: a 83.85812862461522,
+b 91.2532491069443, c 76.20876739427798, d 90.20924821186748, preview-v0.2
+90.79464912498275). So the AVX2 native path and wasm agree, and the mismatch
+appears only when the native oracle runs on a different tier — most likely
+AVX-512 runners (not yet confirmed on an AVX-512 host). That is two native SIMD
+tiers disagreeing in zensim's preview-v0.1 path: per the zero-tolerance rule it
+needs a zensim tier-parity test and fix, not a looser assertion. Next: run the
+oracle on an AVX-512 host (dev) and bisect the preview-v0.1 kernels by tier.
 
 ### Browser native map rendering (2026-10-14)
 
