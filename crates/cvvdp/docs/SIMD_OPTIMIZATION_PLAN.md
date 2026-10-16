@@ -492,7 +492,7 @@ Every chunk MUST clear:
 - DO NOT cite "FMA precision" for any wall-time delta. The wins
   here are SIMD-vectorization wins; report them as such.
 - DO NOT default-on a chunk that requires reading a new
-  envrionment variable. All SIMD chunks should be unconditionally
+  environment variable. All SIMD chunks should be unconditionally
   enabled (or behind a `cargo` feature flag that's default-on).
 
 ## Reference implementations (where to copy from)

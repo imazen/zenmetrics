@@ -1193,7 +1193,6 @@ dependencies = [
  "mad-iqa",
  "mdctpsnr",
  "msssim",
- "nlpd",
  "psnrhvs",
  "rayon",
  "rgb",
@@ -1457,10 +1456,8 @@ name = "cvvdp"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.31-beta.1",
- "bytemuck",
  "fast-ssim2 0.9.0",
  "image",
- "imgref",
  "magetypes 0.9.31-beta.1",
  "rayon",
  "serde_json",
@@ -1505,7 +1502,6 @@ dependencies = [
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
@@ -1722,7 +1718,6 @@ name = "dssim-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "dssim-core",
  "enough",
  "image",
@@ -2099,7 +2094,6 @@ dependencies = [
  "rayon",
  "zenmetrics-abstractions",
  "zenmetrics-math",
- "zenpixels",
 ]
 
 [[package]]
@@ -2322,8 +2316,6 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "serde",
- "serde_json",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenmetrics-abstractions",
  "zenpixels",
@@ -2400,7 +2392,6 @@ dependencies = [
  "magetypes 0.9.31-beta.1",
  "rayon",
  "zenmetrics-abstractions",
- "zenpixels",
 ]
 
 [[package]]
@@ -2455,7 +2446,6 @@ dependencies = [
  "archmage 0.9.31-beta.1",
  "enough",
  "image",
- "imgref",
  "magetypes 0.9.31-beta.1",
  "rayon",
  "rgb",
@@ -2967,7 +2957,6 @@ name = "iwssim-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "enough",
  "image",
  "iwssim",
@@ -3516,7 +3505,6 @@ dependencies = [
  "rayon",
  "vmaf-head-sys",
  "zenmetrics-abstractions",
- "zenpixels",
 ]
 
 [[package]]
@@ -4196,8 +4184,6 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "serde",
- "serde_json",
  "zenmetrics-abstractions",
 ]
 
@@ -5280,14 +5266,10 @@ name = "ssim2-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "enough",
  "image",
- "imgref",
  "nalgebra",
- "rgb",
  "ssimulacra2",
- "yuvxyb 0.6.0",
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
@@ -6160,12 +6142,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "v_frame"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06b99be99e91ea12170d453a6547324ef2df3fcd79aaf336f5b1fff88ac89d84"
-
-[[package]]
 name = "variadics_please"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6228,7 +6204,6 @@ dependencies = [
  "rayon",
  "zenmetrics-abstractions",
  "zenmetrics-math",
- "zenpixels",
 ]
 
 [[package]]
@@ -7031,19 +7006,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yuvxyb"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e540323d597041fe2bb8610a54df24011d3ef64341ef52257dafad96d22d5ba"
-dependencies = [
- "av-data",
- "log",
- "v_frame 0.7.0",
- "wide",
- "yuvxyb-math",
-]
-
-[[package]]
 name = "yuvxyb-math"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7358,7 +7320,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
- "tokio",
 ]
 
 [[package]]
@@ -7378,7 +7339,6 @@ name = "zenfleet-ctl"
 version = "0.0.1"
 dependencies = [
  "arrow-array",
- "arrow-schema",
  "clap",
  "parquet",
  "serde",
@@ -7919,7 +7879,6 @@ dependencies = [
  "iwssim-gpu",
  "rgb",
  "ssim2-gpu",
- "thiserror 2.0.21",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
  "zenpixels",
@@ -8328,7 +8287,6 @@ name = "zensim-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "enough",
  "image",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
