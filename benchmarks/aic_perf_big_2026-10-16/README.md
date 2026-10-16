@@ -36,3 +36,8 @@ Subsequent measurements pin perf itself to CPU 2 and explicitly select
 `cpu_core/instructions/` and `cpu_core/cycles/`; this avoids scaling an
 incidental pre-affinity atom-core sample. CPU 2 belongs to the observed
 `/sys/devices/cpu_core/cpus` set `0-7`.
+
+The nonzero banded CAMBI profile (`baseline-banded-cambi.profile.txt`) assigns
+62.36% of samples to histogram row updates and 16.31% to c-value evaluation.
+The first optimization therefore targets integer histogram updates, while
+preserving all floating-point c-value calculations and pooling order.
