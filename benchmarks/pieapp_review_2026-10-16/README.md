@@ -36,3 +36,12 @@ Create the unchanged golden groups first with `just nn-pieapp-review-shards
 MODEL_DIR NEW_OUTPUT/shards`. Each step has a 1150-second timeout followed
 by at most twenty seconds for termination. The runner never repeats the cap.
 The head and weight-sign probes have their own bounded lock acquisitions.
+
+Revision 3 corrects the independently reconstructed weight head to signed
+`weight + 1e-6`. `weight-identify.json` records fourteen opaque public-output
+controls; `reconstruction-v3.json` records exact equality against each control.
+`export-v3.json` identifies the fresh graph and its separate export conversion
+checks. End-to-end native qualification is pending. `konjnd-shards.json` binds
+four disjoint 252-pair groups to the unchanged original 1008-pair input table.
+The original cap files above measure revision 2; the corrected CUDA cap will
+have a distinct receipt. The interrupted RTen cap is never repeated.

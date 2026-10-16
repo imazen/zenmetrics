@@ -1,0 +1,89 @@
+{
+  "cases": 14,
+  "rows": [
+    {
+      "mode": "bias",
+      "raw": -2.0,
+      "official": -1.9999990463256836,
+      "reconstruction": -1.9999990463256836
+    },
+    {
+      "mode": "bias",
+      "raw": -1.0,
+      "official": -0.9999989867210388,
+      "reconstruction": -0.9999989867210388
+    },
+    {
+      "mode": "bias",
+      "raw": -0.25,
+      "official": -0.2499990016222,
+      "reconstruction": -0.2499990016222
+    },
+    {
+      "mode": "bias",
+      "raw": 0.0,
+      "official": 9.999999974752427e-07,
+      "reconstruction": 9.999999974752427e-07
+    },
+    {
+      "mode": "bias",
+      "raw": 0.25,
+      "official": 0.2500010132789612,
+      "reconstruction": 0.2500010132789612
+    },
+    {
+      "mode": "bias",
+      "raw": 1.0,
+      "official": 1.0000009536743164,
+      "reconstruction": 1.0000009536743164
+    },
+    {
+      "mode": "bias",
+      "raw": 2.0,
+      "official": 2.0000009536743164,
+      "reconstruction": 2.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "raw": -2.0,
+      "official": -1.9999990463256836,
+      "reconstruction": -1.9999990463256836
+    },
+    {
+      "mode": "projection",
+      "raw": -1.0,
+      "official": -0.9999989867210388,
+      "reconstruction": -0.9999989867210388
+    },
+    {
+      "mode": "projection",
+      "raw": -0.25,
+      "official": -0.2499990016222,
+      "reconstruction": -0.2499990016222
+    },
+    {
+      "mode": "projection",
+      "raw": 0.0,
+      "official": 9.999999974752427e-07,
+      "reconstruction": 9.999999974752427e-07
+    },
+    {
+      "mode": "projection",
+      "raw": 0.25,
+      "official": 0.2500010132789612,
+      "reconstruction": 0.2500010132789612
+    },
+    {
+      "mode": "projection",
+      "raw": 1.0,
+      "official": 1.0000009536743164,
+      "reconstruction": 1.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "raw": 2.0,
+      "official": 2.0000009536743164,
+      "reconstruction": 2.0000009536743164
+    }
+  ]
+}

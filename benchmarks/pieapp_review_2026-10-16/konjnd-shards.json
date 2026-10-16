@@ -1,0 +1,26 @@
+{
+  "pairs": 1008,
+  "original_sha256": "79d16bd9a2323ad1ef81c639fc8d37ab66db7baa15c47a7b87e3e186acc44508",
+  "shards": [
+    {
+      "index": 0,
+      "pairs": 252,
+      "sha256": "fae7089faf15941c9e923f32f5c49d9f51b2ef96185dc83dfa51a1e1cd8c050e"
+    },
+    {
+      "index": 1,
+      "pairs": 252,
+      "sha256": "ab332be14cc3f6284dadfb287e762ac0e0e6b4baadd593fa6af0601b9888fc91"
+    },
+    {
+      "index": 2,
+      "pairs": 252,
+      "sha256": "71740297e9ef11ee9377e63d03cbeb82587d8bcac9c75447a03659901ddaa8b0"
+    },
+    {
+      "index": 3,
+      "pairs": 252,
+      "sha256": "9eba2ff2097efc6790fc7109e77ab534dfc4ac0be6156fb13d278269f1b3ec8f"
+    }
+  ]
+}
