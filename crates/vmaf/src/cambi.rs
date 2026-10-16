@@ -5983,52 +5983,61 @@ mod standalone_tests {
         for (d, value) in thresholds.iter_mut().enumerate().take(num_diffs) {
             *value = (get_tvi_for_diff((d + 1) as i32, TVI_THRESHOLD) + num_diffs as i32) as u16;
         }
-        let vlt = get_vlt_luma(0.0);
-        let band_size = thresholds[num_diffs - 1] + 1;
-        let mut expected = vec![0.0f32; width * height];
-        calculate_c_values(
-            &image,
-            &mask,
-            &mut expected,
-            stride,
-            width,
-            height,
-            17,
-            num_diffs,
-            &thresholds,
-            vlt,
-            0,
-            band_size,
-            &CONTRAST_WEIGHTS,
-        )
-        .unwrap();
-        assert!(expected.iter().any(|&v| v > 0.0));
-        for threads in [1, 2, 4] {
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .unwrap();
-            let mut actual = vec![-1.0f32; width * height];
-            pool.install(|| {
-                calculate_c_values_scheduled(
+        for visibility in [0.0, VIS_LUM_THRESHOLD] {
+            let vlt = get_vlt_luma(visibility);
+            let band_base = (i32::from(vlt) - 3 * num_diffs as i32 + 1).max(0) as u16;
+            let band_size = thresholds[num_diffs - 1] + 1 - band_base;
+            for window in [17, 65] {
+                let mut expected = vec![0.0f32; width * height];
+                calculate_c_values(
                     &image,
                     &mask,
-                    &mut actual,
+                    &mut expected,
                     stride,
                     width,
                     height,
-                    17,
+                    window,
                     num_diffs,
                     &thresholds,
                     vlt,
-                    0,
+                    band_base,
                     band_size,
                     &CONTRAST_WEIGHTS,
                 )
-            })
-            .unwrap();
-            for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
-                assert_eq!(a.to_bits(), b.to_bits(), "threads={threads} pixel={index}");
+                .unwrap();
+                assert!(expected.iter().any(|&v| v > 0.0));
+                for threads in [1, 2, 4] {
+                    let pool = rayon::ThreadPoolBuilder::new()
+                        .num_threads(threads)
+                        .build()
+                        .unwrap();
+                    let mut actual = vec![-1.0f32; width * height];
+                    pool.install(|| {
+                        calculate_c_values_scheduled(
+                            &image,
+                            &mask,
+                            &mut actual,
+                            stride,
+                            width,
+                            height,
+                            window,
+                            num_diffs,
+                            &thresholds,
+                            vlt,
+                            band_base,
+                            band_size,
+                            &CONTRAST_WEIGHTS,
+                        )
+                    })
+                    .unwrap();
+                    for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                        assert_eq!(
+                            a.to_bits(),
+                            b.to_bits(),
+                            "visibility={visibility} window={window} threads={threads} pixel={index}"
+                        );
+                    }
+                }
             }
         }
     }
