@@ -795,3 +795,7 @@ Bounded fit smoke timing stages its GNU-time file beside the cell destination.
 The strict driver creates the fresh destination; after success, the executor
 includes RESOURCE_USAGE.txt in the normal hashed exports. Failed timing stays
 beside the destination for diagnosis; it does not authorize a retry.
+
+A bounded S smoke may bind bounded_smoke_activation=smooth_hinge_tau_1_8
+in its archive contract. Native inspection must report SmoothHinge; an ordinary
+ReLU export or a scientific execution contract is refused on that path.

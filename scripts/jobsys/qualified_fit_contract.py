@@ -118,6 +118,17 @@ def trusted_contract(kind, program_archive, inspector):
     return contract
 
 
+def verify_bounded_smoke_activation(decoded, expected):
+    activation = expected.get('bounded_smoke_activation')
+    if activation is None:
+        return
+    if (activation != 'smooth_hinge_tau_1_8'
+            or expected.get('execution_contract') != 'local-smoke'
+            or ':sh1' not in expected.get('spec', '')
+            or decoded.get('hidden_activation') != 'SmoothHinge'):
+        raise ValueError('bounded S smoke activation differs from its archive-bound contract')
+
+
 def verify_training(result, checkpoint, kind, expected, inspector):
     def refuse(why):
         raise ValueError(f'unqualified/incomplete training-only result: {why}')
@@ -139,6 +150,7 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         refuse('table admission differs from pinned inputs')
     decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e31-research'] if expected.get('research_upiq') else ['--e29-research'] if expected.get('research_hdr') else [])], check=True,
                                         capture_output=True, text=True).stdout)
+    verify_bounded_smoke_activation(decoded, expected)
     repro = decoded['repro']
     if (decoded['formula_revision'] != 5 or decoded['qualified_provenance'] is not (not (expected.get('research_hdr', False) or expected.get('research_upiq', False)))
             or decoded['feature_set_id'] != expected['feature_set_id']

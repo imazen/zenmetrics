@@ -13,6 +13,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 import fit_cell_exec as exe
 import harvest_fit_cells as harvest
 import pack_fit_program as pack
+import qualified_fit_contract as qualified
 
 
 def sha(b):
@@ -43,6 +44,16 @@ class SteerSmokeTransport(unittest.TestCase):
             self.assertEqual(exe.registered_wall_cap(a,'b'*64,root),900)
             with self.assertRaises(ValueError):exe.registered_wall_cap(a[:-1]+['2:128'],'b'*64,root)
             self.assertIsNone(exe.registered_wall_cap(['v2_lodo_mlp.py'],'b'*64,root))
+
+    def test_bounded_s_requires_native_s_activation(self):
+        expected=dict(bounded_smoke_activation='smooth_hinge_tau_1_8',execution_contract='local-smoke',spec='example:sh1')
+        qualified.verify_bounded_smoke_activation(dict(hidden_activation='SmoothHinge'),expected)
+        for decoded,contract in [(dict(hidden_activation='Relu'),expected),({},expected),
+                (dict(hidden_activation='SmoothHinge'),expected|dict(execution_contract='registered-fit')),
+                (dict(hidden_activation='SmoothHinge'),expected|dict(spec='example')),
+                (dict(hidden_activation='SmoothHinge'),expected|dict(bounded_smoke_activation='unregistered'))]:
+            with self.assertRaises(ValueError):qualified.verify_bounded_smoke_activation(decoded,contract)
+        qualified.verify_bounded_smoke_activation({},dict(execution_contract='registered-fit'))
 
     def test_source_pins_are_required(self):
         with self.assertRaises(ValueError):pack.bounded_smoke_sources(None,None)
