@@ -419,6 +419,10 @@ Decision order: no GPU → no-op · compute cap < 7.5 → **12** · driver adver
 - **Before claiming any metric is "GPU-only": `ls crates/` first.** `crates/cvvdp` + `crates/iwssim` are
   SIMD CPU ports; never infer architecture from a feature-gated build error (memory:
   `enumerate-repo-before-capability-claims`).
+- **Feature-combination gate**: `just cli-feature-matrix` (CI twin: the `cli-feature-matrix` job in
+  `.github/workflows/ci.yml`) check-builds all 12 zenmetrics-cli shapes (10 `--features` combos +
+  bare + default) and prints a PASS/FAIL table — run it after touching CLI cfg/feature gates; keep
+  the justfile and CI lists in sync.
 
 ## Sweep runner discipline
 
@@ -554,6 +558,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
   β on 1024²–4096².
 
 ## Known Bugs
+
+- **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
+  A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
+  The WD trunk now disables its CPU arena and consumes output tensors individually.
+  The four-case recovery panel completes at 11,210,496 KiB maximum RSS, with
+  unchanged pilot bits and both-engine ladder parity. See
+  [the measured receipt](benchmarks/wd_port_2026-10-16/README.md).
+
 
 - **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
   `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
@@ -1591,3 +1603,11 @@ port now refuses either axis above 4096 before allocating its input tensor.
 Export must write both loader metadata and a provenance receipt; the oracle
 TSV must have a header so parity does not drop its first pair. Review commands
 and measurements live in `benchmarks/paq2piq_review_2026-10-16.md`.
+
+### Known Bugs: CAMBI bogus-output checks (2026-10-15)
+
+CAMBI scores only the distorted image; zero is normal for unbanded photos.
+Identity and constant-output checks previously rejected valid zero batches.
+CAMBI now has no identity range and is exempt from the constant-output check;
+empty/nonfinite checks remain active. The sweep-feature binary regression
+`cambi_zero_distribution_is_not_bogus` covers the all-zero batch.

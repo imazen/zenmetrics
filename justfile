@@ -316,6 +316,39 @@ snap-cargo rev +args:
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 
+# zenmetrics-cli feature-combination matrix: 12 rows — every supported
+# `--no-default-features --features <F>` shape, plus the bare
+# `--no-default-features` build, plus the default build. Prints a PASS/FAIL
+# row per combination and exits nonzero if any fails. CI runs the same list
+# as plain `cargo --locked check` (ci.yml, `cli-feature-matrix` job) — keep
+# the two lists in sync.
+cli-feature-matrix:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    total=0
+    fails=0
+    run_combo() {
+        local label="$1" out status=0
+        shift
+        out=$(just snap-cargo @ check "$@" 2>&1) || status=$?
+        total=$((total + 1))
+        if [ "$status" -eq 0 ]; then
+            printf 'PASS  %s\n' "$label"
+        else
+            printf 'FAIL  %s\n' "$label"
+            printf '%s\n' "$out"
+            fails=$((fails + 1))
+        fi
+    }
+    for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+        run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
+    done
+    run_combo bare -p zenmetrics-cli --no-default-features
+    run_combo default -p zenmetrics-cli
+    printf '%s\n' "---- $((total - fails))/$total combinations passed ----"
+    [ "$fails" -eq 0 ]
+
 # Matched CPU-metric wall/counter runs; pass a preserved baseline or candidate example.
 ranked-wall binary threads output w="3355" h="2516" reps="5":
     bash scripts/bench/ranked-metric-wall.sh "{{binary}}" "{{threads}}" "{{output}}" "{{w}}" "{{h}}" "{{reps}}"
@@ -830,3 +863,80 @@ nn-pieapp-wrapper-check:
 # Reproduce the mutable-file failure and verify the actual immutable launcher.
 nn-pieapp-launcher-control:
     python3 -I crates/zenmetrics-nn/models/pieapp/launcher_control.py
+
+# WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
+nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
+    {{python}} -I crates/zenmetrics-nn/models/wd/reference.py '{{stage}}' --reference '{{reference}}' --out '{{out}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
+
+nn-wd-score models pairs out engine="rten":
+    {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features ort --example wd_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+nn-wd-parity models ladder engine="rten":
+    ZENMETRICS_NN_MODEL_DIR='{{models}}' ZENMETRICS_NN_LADDER='{{ladder}}' ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests,ort --test wd_parity -- --nocapture --test-threads=1
+
+nn-wd-kon-jnd scores out:
+    python3 -I crates/zenmetrics-nn/models/wd/konjnd.py '{{scores}}' '{{out}}'
+
+nn-wd-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/wd/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-wd-gates models ladder:
+    bash benchmarks/wd_port_gates_2026-10-16.sh '{{models}}' '{{ladder}}'
+
+# AIC probe has its own hard one-hour clock after acquiring the heavy lock.
+nn-wd-aic-probe models python reference site images config previous pairs out:
+    bash benchmarks/wd_aic_probe_2026-10-16.sh '{{models}}' '{{python}}' '{{reference}}' '{{site}}' '{{images}}' '{{config}}' '{{previous}}' '{{pairs}}' '{{out}}'
+
+# Compact an existing WD convention probe; no inference.
+nn-wd-aic-report probe native site config out:
+    python3 -I crates/zenmetrics-nn/models/wd/aic_report.py --probe '{{probe}}' --native '{{native}}' --site '{{site}}' --config '{{config}}' --out '{{out}}'
+
+# Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
+aic-more-verify python:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
+    {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-more-ci:
+    bash benchmarks/aic_more_2026-10-15/check_ci.sh
+
+# Round 5 review controls; run under shared heavy lock and run-heavy.
+aic-review-bogus:
+    just snap-cargo @ test -p zenmetrics-cli --features sweep --bin zenmetrics fail_on_bogus_tests
+
+aic-review-pins python:
+    {{python}} benchmarks/aic_review_2026-10-15/pin_oracles.py
+
+aic-review-libs:
+    just snap-cargo @ test -p zenmetrics-cli --lib
+    just snap-cargo @ test -p vmaf --no-default-features --lib
+    just snap-cargo @ test -p vmaf --features simd,avx512 --lib
+
+aic-review-ssim-order python:
+    rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_SSIM1_PROBE="$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+
+aic-review-rust-pins:
+    rustc --edition 2024 -O benchmarks/aic_review_2026-10-15/pins_rust.rs -o "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+    "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+
+aic-review-cambi python:
+    cp "$LOCK_SNAP_DIR/target/release/examples/aic_more_probe" "$HOME/tmp/aic-variants-scratch/round5/aic-more-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_CAMBI_PROBE="$HOME/tmp/aic-variants-scratch/round5/aic-more-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-review-oracles python:
+    bash benchmarks/aic_review_2026-10-15/check_oracles.sh {{python}}
+
+aic-review-ci:
+    bash benchmarks/aic_review_2026-10-15/check_ci.sh
+
+aic-review-pin-sensitivity:
+    python3 benchmarks/aic_review_2026-10-15/check_pin_sensitivity.py
+
+aic-review-cambi-reference python:
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py

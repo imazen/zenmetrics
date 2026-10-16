@@ -382,7 +382,7 @@ pub fn try_init_thread_pool(jobs: usize) -> Result<(), Box<dyn Error>> {
 /// produces, so the sweep loop's row-writer doesn't branch.
 ///
 /// Column names are determined by
-/// [`crate::orchestrator_runner::rekey_orchestrator_columns`] —
+/// `crate::orchestrator_runner::rekey_orchestrator_columns` —
 /// which maps from the orchestrator's canonical GPU-variant keys
 /// back to the CLI-variant-specific names (e.g. `ssim2_gpu` stays
 /// the same for `Ssim2Gpu`; `ssim2_gpu` becomes `ssim2` for

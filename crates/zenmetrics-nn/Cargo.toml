@@ -34,3 +34,7 @@ enough = "0.4.4"
 [[test]]
 name = "parity"
 required-features = ["model-tests"]
+
+[[test]]
+name = "wd_parity"
+required-features = ["model-tests"]

@@ -1,0 +1,15 @@
+{
+  "python": "3.12.14",
+  "torch": "2.14.1+cpu",
+  "torchvision": "0.29.1+cpu",
+  "reference_sha256": "ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43",
+  "checkpoint_sha256": "397923af8e79cdbb6a7127f12361acd7a2f83e06b05044ddf496e83de57a5bf0",
+  "graph_sha256": "1b410b51bafefcae2cf70c9fe1f4202d7001585d1fdb77768cf2a593f866b935",
+  "input": "RGB f32 0..1, no ImageNet normalization",
+  "taps": [
+    3,
+    8,
+    15,
+    22
+  ]
+}

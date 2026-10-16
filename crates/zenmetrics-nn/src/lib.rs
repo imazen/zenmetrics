@@ -67,6 +67,7 @@ mod pieapp;
 mod preprocess;
 mod resize;
 mod tfresize;
+mod wd;
 mod weights;
 
 pub use afine::Afine;
@@ -83,6 +84,7 @@ pub use maniqa::Maniqa;
 pub use musiq::Musiq;
 pub use paq2piq::Paq2piq;
 pub use pieapp::PieApp;
+pub use wd::WassersteinDistortion;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.

@@ -1,0 +1,22 @@
+[
+  {
+    "panel": "aic",
+    "rows": 61,
+    "settings": [
+      "default",
+      "v1",
+      "uncapped_v1"
+    ],
+    "exactly_unchanged": true
+  },
+  {
+    "panel": "ladder",
+    "rows": 21,
+    "settings": [
+      "default",
+      "v1",
+      "uncapped_v1"
+    ],
+    "exactly_unchanged": true
+  }
+]

@@ -30,6 +30,21 @@ Workspace conventions per the global rules:
 
 - None.
 
+## vmaf
+
+### Changed
+
+- CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
+- Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
+### Added
+
+- Strided `cambi_from_luma` with libvmaf standalone CAMBI defaults (`5f19fcf7`); existing VMAF-v1 presets retain their settings.
+
 ## zenmetrics-stats
 
 ### Added
@@ -45,6 +60,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
+
 - zenmetrics-nn (new crate; PR #81, review required): learned full-reference metrics from ONNX graphs exported out of each upstream package, on `rten` (pure Rust, CPU) and, with the `ort` feature, ONNX Runtime CUDA. LPIPS alex/vgg/squeeze (`b08405ad`, `eb8083d9`), DISTS (`ad892659`), ST-LPIPS alex/vgg and DeepDC (`cfa8a95f`, `6729f18f`), each with a warm reference. Parity with the upstream packages is gated at 1e-3 JND per column (`e352d70c`; one JND per column measured on KonJND-1k); measured worst 2.6e-6 JND over 18 pairs at 64–2048 px. JPEG AIC-4 crop columns reproduced (`benchmarks/nn_aic2026_crosscheck_2026-10-15.md`). CPU speed-ups `62b38654`, `e8db1bf5`. Weights are not bundled; `models/<name>/export.py` writes a model directory. [README](crates/zenmetrics-nn/README.md).
 - zenmetrics-abstractions (PR #81, review required): `NoReferenceMetric`, the single-image metric shape, and `PairedNoReference`, which runs one as a pair `Metric`: the distorted image's outputs under their own keys, then the reference's under `<key>_ref`; a warm reference scores the reference once. `ScoreKind::Quality` (higher is better) and `ScoreKind::Distortion` (higher is worse) for no-reference scores; neither has a perfect value.
 - zenmetrics-nn `WeightsConsent` (PR #81, review required): weights with no stated licence or noncommercial terms load only when the caller accepts that model's `WEIGHTS` terms; the refusal names the terms URL.
@@ -52,6 +69,9 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
+- CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
+- SSIMULACRA1 matches OpenCV’s row-partial 4×4 reduction (`91fd4b2d`); original-author synthetic scores for all four Round 4 metrics are pinned with committed generators (`d0aa705a`).
 - zenmetrics-cli `flip` and `flip-v17` (`4f0dac38`, this commit): LDR-FLIP (NVlabs d3ab02a4, reference viewing conditions). `flip` pools the error map with an f64 sum as NVlabs does now; `flip-v17` keeps flip-evaluator 1.7's row-major f32 sum, which reproduces all 61 AIC-4 `FLIP` values exactly but reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²). 21 ladder maps within 2.98e-8 of the oracle; both means pinned in a unit test.
 - zenmetrics-cli `cw-ssim` (`636f6b2c`, this commit): four-level/eight-orientation complex-wavelet SSIM, valid 7×7 K=0 windows, Gaussian weighting. Independent reference within 1.1e-12. Against the published AIC-4 `CW-SSIM` column: median 2.9e-7, max 1.1e-4, with the variant selected on those same 61 pairs (in-sample); no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed. Zero-energy windows now test `<= 0`, matching the reference.
 - FSIM/VSI review fixes for #86: fixed-factor identities include the downscale (`a2ac8756`), same-name scorer constants removed (`1b0aca18`), `Downscale` non-exhaustive (`cb3fb369`), fixed-factor columns versioned (`468a4679`), oversized factors refused and box areas in u64 (`4d2f52cc`), coverage for non-Auto factors, the MS-SSIM product and all 20 SSIM-pyiqa names (`50048f50`), ties-to-even luma kept after measuring both rules (`cf012a5a`), comment fixes (`a3aa0d8f`).
@@ -3600,6 +3620,7 @@ All five are the Nomad-migration ADR's stated preconditions
 
 - zenmetrics-nn PaQ-2-PiQ no-reference metric (rten and ort-cuda), CLI `paq2piq` via PairedNoReference: parity 2.5e-5 JND against the authors' code incl. non-square and sub-64-px pairs; weights CC-BY-NC (`NonCommercial`, consent-gated); inputs above 4096 px refused.
 - zenmetrics-nn PaQ-2-PiQ RoIPool runs its 401 ROIs on worker threads (572e94da): 1–4% faster per 16T eval, scores bit-identical; profile and A/B in `benchmarks/nn_opt3_2026-10-16/`.
+- zenmetrics-nn head threading for the newer models (nn-opt round 2, `f9d6eec7`, `1b118849`): the LIQE head runs its 495 prompt logits on worker threads, and the A-FINE `qhead` runs its `proj_feat`/`mlp` rows on worker threads. At 16 threads LIQE is 8% faster warm / 9% compute at every size and A-FINE 7% faster warm at 256² (engine-bound above); 1 thread and the other sizes are unchanged and scores are bit-identical. Profile and A/B in `benchmarks/nn_opt4_2026-10-16/`.
 - zenmetrics-nn CPU speed for the newer models (nn-opt round 2): row-parallel resampling and single-pass planar conversion, paired ARNIQA crop runs, A-FINE without input clones. 16 threads at 2048²: about 2.1× faster compute and warm; small images and 1 thread unchanged. Scores bit-identical across all 13 columns. Data: `benchmarks/nn_opt2_2026-10-15/`.
 - zenmetrics-nn MUSIQ and HyperIQA no-reference metrics (rten and ort-cuda), CLI `musiq`, `hyperiqa` via PairedNoReference. Parity against the authors' code: MUSIQ 1.2e-4 JND (24 pairs incl. non-square), HyperIQA 3.4e-6 JND on a documented deterministic 5×5 crop grid (upstream's random crops vary by 0.08–0.19 JND). New `Error::TooManyPatches` and `Error::DegenerateAspectRatio`. MUSIQ weights `Permissive` (Apache-2.0), HyperIQA `Unknown` (consent-gated).
 - zenmetrics-nn learned no-reference metrics ARNIQA, MANIQA and LIQE (rten and ort-cuda), CLI `arniqa`, `maniqa`, `liqe` via PairedNoReference. Parity against the authors' code (rten): ARNIQA 6.7e-6, MANIQA 8.4e-6, LIQE 1.3e-5 JND against the 1e-3 gate (MANIQA's resize follows OpenCV's scalar INTER_CUBIC with IPP disabled, unfused as in the pinned SSE build). Weights: ARNIQA and MANIQA `Permissive`, LIQE `Unknown` (consent-gated). The OpenCV and Pillow resize conventions carry `LICENSE-opencv` / `LICENSE-pillow` until zenresize grows those modes.

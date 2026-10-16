@@ -1,0 +1,20 @@
+[
+  {
+    "metric": "butteraugli_original",
+    "mutation": "mask-response constant",
+    "returncode": 101,
+    "pin_failed": true
+  },
+  {
+    "metric": "ssimulacra1",
+    "mutation": "previous sequential 4x4 sum",
+    "returncode": 101,
+    "pin_failed": true
+  },
+  {
+    "metric": "ws_hv",
+    "mutation": "f32 pool reduction",
+    "returncode": 101,
+    "pin_failed": true
+  }
+]
