@@ -1012,6 +1012,10 @@ impl MetricKind {
                 | MetricKind::Musiq
                 | MetricKind::Hyperiqa
                 | MetricKind::Paq2piq
+                | MetricKind::WadiqamFrLive
+                | MetricKind::WadiqamFrTid
+                | MetricKind::WadiqamNrLive
+                | MetricKind::WadiqamNrTid
                 | MetricKind::Wd
         );
         let nr = matches!(
