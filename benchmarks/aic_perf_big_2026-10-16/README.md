@@ -4,12 +4,12 @@ All required gates pass. All 61 AIC scores for each metric and all 61 complete
 Butteraugli error maps match the preserved baselines exactly. Published-unit
 and JND residual bits are unchanged.
 
-## Measured results
+## Original Round 14 measurements (before review follow-up)
 
 Host: i265, release builds, no `target-cpu=native`. One-worker runs pin CPU 2;
 16-worker-budget runs use the available CPUs. Each cell runs base, new, base,
 new in separate processes; each process averages five calls. Values below are
-medians of the two process means per role. These procedural-fixture kernel
+means of the two process means per role. These procedural-fixture kernel
 observations have no confidence intervals and cover this host only.
 
 | Rust metric | Size | Thread budget | Base ms/call | New ms/call | Base/new |
@@ -38,8 +38,9 @@ contains its run-heavy resource footer and all four `/usr/bin/time -v` records.
 ## Changes and ordering
 
 - CAMBI (`0ffb7674`): independent column regions retain each histogram cell’s
-  original row/pixel update order. Eight-column alignment preserves original
-  SIMD groups and scalar tails. Regions return to their original positions
+  original row/pixel update order. Eight-column alignment leaves eight scalar
+  columns at the end of every non-final region; those columns used SIMD in
+  the full-width traversal. Results retain their original pixel positions
   before unchanged spatial pooling. The original serial histogram, point
   evaluator and pooling functions remain text-identical to `849ea8da`.
 - Butteraugli-original (`6ced5b29`, `50acada6`): 32×32 convolution tiles retain
@@ -53,7 +54,8 @@ contains its run-heavy resource footer and all four `/usr/bin/time -v` records.
 [CAMBI evidence](cambi-ordered-kernels.json) identifies the unchanged point
 evaluator. Full disassembly remains at the hashed external paths.
 
-CAMBI column results add temporary c-value storage. At 3355×2516 and budget
+The original column-region implementation added temporary c-value storage.
+At 3355×2516 and budget
 16, measured process peak RSS changes from 105,824 to 140,060 KiB. The
 Butteraugli one-worker process peak is 1,437,516 KiB for both versions.
 Corresponding large-image resource scopes:

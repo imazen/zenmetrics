@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "host": "i265",
-  "method": "Base,new,base,new; each new process averages five calls; median of two process means per role. No confidence interval or cross-host extrapolation.",
+  "method": "Base,new,base,new; each new process averages five calls; mean of two process means per role. No confidence interval or cross-host extrapolation.",
   "threading": "CAMBI uses ordered column regions with the existing Rayon pool above its per-scale size threshold; its one-worker and small-scale paths use the original serial kernel. Butteraugli remains serial within one image. 16 is the requested thread budget.",
   "target_cpu_native": false,
   "cells": [
