@@ -45,3 +45,6 @@ checks. End-to-end native qualification is pending. `konjnd-shards.json` binds
 four disjoint 252-pair groups to the unchanged original 1008-pair input table.
 The original cap files above measure revision 2; the corrected CUDA cap will
 have a distinct receipt. The interrupted RTen cap is never repeated.
+
+Fresh export/control step resource receipt:
+`run-heavy: done rc=0 7s | peak-RSS 1.51GiB | min-avail 24791MiB | peak-load 11.37`.
