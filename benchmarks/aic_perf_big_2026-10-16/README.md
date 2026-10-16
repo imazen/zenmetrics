@@ -23,7 +23,7 @@ observations have no confidence intervals and cover this host only.
 | [Butteraugli-original](abab-butter-3355-1t.log) | 3355×2516 | 1 | 7958.670 | 3005.396 | 2.65× |
 | [Butteraugli-original](abab-butter-3355-16t.log) | 3355×2516 | 16 | 7970.544 | 3015.221 | 2.64× |
 
-CAMBI keeps the original one-worker path. Its parallel column regions use
+CAMBI keeps the original one-worker path. With `parallel` enabled, its column regions use
 the existing Rayon pool at per-scale areas of at least 512×512. Original
 Butteraugli remains serial within one image; its 16-worker-budget rows
 measure the same serial implementation under that requested budget. VMAF
