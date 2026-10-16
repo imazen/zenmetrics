@@ -34,7 +34,8 @@ use std::path::Path;
 use crate::common::{Backend, read_meta};
 use crate::engine::{self, Tap, Trunk};
 use crate::preprocess::rgb8_to_planar_255;
-use crate::resize::{center_crop, resize_bicubic_aa, resize_nearest};
+use crate::resize::center_crop;
+use crate::resize::{resize_bicubic_aa, resize_nearest};
 use crate::{Engine, Error, WeightsConsent, WeightsLicence, WeightsTerms, za};
 
 /// Bump whenever any output can change.

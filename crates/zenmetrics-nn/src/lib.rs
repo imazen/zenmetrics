@@ -65,7 +65,6 @@ mod paq2piq;
 mod par;
 mod preprocess;
 mod resize;
-mod tfresize;
 mod wd;
 mod weights;
 

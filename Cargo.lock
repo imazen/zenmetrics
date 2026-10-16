@@ -8081,6 +8081,7 @@ dependencies = [
  "rten-tensor",
  "zenmetrics-abstractions",
  "zenpng 0.2.0",
+ "zenresize 0.3.1 (git+https://github.com/imazen/zenresize?rev=4f5287e65f28b24815ffe49effa2dc40284da471)",
 ]
 
 [[package]]
@@ -8274,6 +8275,23 @@ dependencies = [
 [[package]]
 name = "zenresize"
 version = "0.3.1"
+source = "git+https://github.com/imazen/zenresize?rev=4f5287e65f28b24815ffe49effa2dc40284da471#4f5287e65f28b24815ffe49effa2dc40284da471"
+dependencies = [
+ "archmage 0.9.30",
+ "imgref",
+ "libm",
+ "linear-srgb",
+ "magetypes 0.9.30",
+ "rgb",
+ "safe_unaligned_simd",
+ "whereat",
+ "zenblend",
+ "zenpixels",
+]
+
+[[package]]
+name = "zenresize"
+version = "0.3.1"
 source = "git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012#e3975fb9d6d6b7baa96038a0eb8e27febb37c012"
 dependencies = [
  "archmage 0.9.30",
@@ -8319,7 +8337,7 @@ dependencies = [
  "rgb",
  "thiserror 2.0.21",
  "zenpredict",
- "zenresize",
+ "zenresize 0.3.1 (git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012)",
 ]
 
 [[package]]

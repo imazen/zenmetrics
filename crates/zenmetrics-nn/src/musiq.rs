@@ -28,7 +28,7 @@ use std::path::Path;
 use crate::common::{Backend, read_meta};
 use crate::engine::{self, NamedInput};
 use crate::preprocess::rgb8_to_planar_u8;
-use crate::tfresize::resize_gaussian_tf_f32;
+use crate::resize::resize_gaussian_tf_f32;
 use crate::{Engine, Error, WeightsLicence, WeightsTerms, za};
 
 /// Bump whenever any output can change.

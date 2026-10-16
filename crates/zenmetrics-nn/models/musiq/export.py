@@ -62,7 +62,7 @@ def gauss_spans(ni, no):
     """TF scale_and_translate spans for kernel_type='gaussian',
     antialias=False (tf.image.resize's GAUSSIAN default): kernel_scale=1,
     sigma=0.5, radius 1.5, weights exp(-2 d^2) for |d| < 1.5, normalised by
-    reciprocal multiply. Mirrors src/tfresize.rs."""
+    reciprocal multiply. Mirrors src/resize.rs::resize_gaussian_tf_f32 (zenresize gaussian_tf)."""
     scale = f32(no) / f32(ni)
     inv = f32(1.0) / scale
     span_n = min(2 * int(np.ceil(f32(1.5))) + 1, ni)

@@ -28,7 +28,7 @@ checkpoint = "https://drive.google.com/drive/folders/1SgcMmv-9yejHYTT8F8hGN_5Vv8
 [input]
 format = "packed sRGB8"
 normalisation = "0..1 then CLIP stats (0.48145466, 0.4578275, 0.40821073 / 0.26862954, 0.26130258, 0.27577711); the heads de-normalize internally (x*std+mean)"
-resize = "upstream afine.py: F.interpolate(mode='bicubic', align_corners=False) UPSAMPLE to the next multiple of 32 on each axis that needs it (a=-0.75, 4 taps, edge-clamp, no renorm — resize.rs::resize_bicubic, impulse-verified vs torch)"
+resize = "upstream afine.py: F.interpolate(mode='bicubic', align_corners=False) UPSAMPLE to the next multiple of 32 on each axis that needs it (a=-0.75, 4 taps, edge-clamp, no renorm — resize.rs::resize_bicubic via zenresize cubic_bc(0,0.75)+Clamp, impulse-verified vs torch)"
 min_size = 1                         # anything smaller is upsampled to 32; N = (H'/32)(W'/32) tokens
 
 [export]
@@ -41,7 +41,7 @@ notes = "afine_trunk.onnx: normalized [1,3,H,W] -> 12 token maps [1,768,N,1] (en
 oracle = "upstream afine.pth + ViT-B-32.pt, CPU, fp32, upstream preprocessing"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = 0.507388                       # signed-median JND over 1008 KonJND pairs (raw afine_all is signed; identical-pair scores are image-dependent, -3.89..-2.35)
-results = "rten worst |d| 7.228e-6 (1.42e-5 JND); ort-cuda worst |d| 9.865e-6 (1.94e-5 JND); 15 goldens"
+results = "rten worst |d| 5.878e-6 (1.16e-5 JND); ort-cuda worst |d| 9.865e-6 (1.94e-5 JND); 15 goldens. Re-measured on the zenresize cubic_bc(0,0.75)+Clamp path (was 7.228e-6/9.865e-6 on the local port) — see benchmarks/zenresize_migration_2026-10-16.md"
 
 [aic4]
 column = "A-FINE"

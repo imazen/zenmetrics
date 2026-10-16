@@ -23,6 +23,11 @@ model-tests = []
 
 [dependencies]
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+# Pinned to unmerged PR #18 (`resample-conventions`): provides the framework
+# resampling conventions (`PillowCubicResizer`, `InterpolationDetails::cubic_bc`,
+# `gaussian_tf`, `SampleMapping`/`BoundaryMode`). MUST move to the released
+# zenresize version that lands PR #18 before this crate is published/landed.
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "4f5287e65f28b24815ffe49effa2dc40284da471" }
 rten = { version = "0.27.0", optional = true, default-features = false, features = ["onnx_format"] }
 rten-tensor = { version = "0.27.0", optional = true }
 ort = { version = "=2.0.0-rc.14", optional = true, default-features = false, features = ["std", "load-dynamic", "cuda", "api-31"] }

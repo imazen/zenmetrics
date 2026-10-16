@@ -36,9 +36,9 @@ notes = "qse/dte are the two encoder branches (ResNet conv1+layer1 each); tail i
 oracle = "researchmm/CKDN checkpoint epoch 14, CPU, fp32"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = 0.005276                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda), with the eval transform
-results = "rten worst |d| 2.981e-7 (5.7e-5 JND); ort-cuda worst |d| 2.683e-7 (5.1e-5 JND); 15 goldens under the eval transform"
+results = "rten worst |d| 2.981e-7 (5.7e-5 JND); ort-cuda worst |d| 3.279e-7 (6.2e-5 JND); 15 goldens under the eval transform. Re-measured on the zenresize bicubic_aa/nearest paths (ort was 2.683e-7 on the local ports) — see benchmarks/zenresize_migration_2026-10-16.md"
 
 [aic4]
 column = "CKDN"
 results = "matches: median |d| 4.0e-05, max |d| 1.4e-04 on all 61 crop pairs (this port, ort-cuda). Native feed without the transform was median 3.5e-02 / max 3.7e-01 — the transform IS the published convention"
-finding = "The published column is the upstream epoch-14 checkpoint under upstream's own eval convention: paired_transforms_tv04.Resize(329, bicubic on the image, interpolation_tg=NEAREST on the reference target) + CentreCrop(288), then cat(d',r',d',r') -> dr as predict_score.py does. torch's antialiased bicubic is Catmull-Rom a=-0.5 (verified vs F.interpolate impulse weights), torch NEAREST is floor(i*in/out); both re-implemented in src/resize.rs."
+finding = "The published column is the upstream epoch-14 checkpoint under upstream's own eval convention: paired_transforms_tv04.Resize(329, bicubic on the image, interpolation_tg=NEAREST on the reference target) + CentreCrop(288), then cat(d',r',d',r') -> dr as predict_score.py does. torch's antialiased bicubic is Catmull-Rom a=-0.5 (verified vs F.interpolate impulse weights), torch NEAREST is floor(i*in/out); both go through zenresize (pinned PR #18): resize.rs::resize_bicubic_aa = cubic_bc(0,0.5)+antialias+Truncate; resize.rs::resize_nearest = nearest()+Asymmetric (bit-identical to the retired integer port)."

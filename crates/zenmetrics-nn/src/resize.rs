@@ -1,24 +1,53 @@
 //! Separable image resampling matching `torchvision.transforms.functional.resize`
 //! (and `torch.nn.functional.interpolate`) exactly, for the model conventions that
-//! bake a loader transform into the score (CKDN's AIC-4 column).
+//! bake a loader transform into the score.
 //!
-//! - [`resize_nearest`]: torch `InterpolationMode.NEAREST` — `src = floor(i·in/out)`
-//!   per axis (the legacy `nearest`, not `nearest_exact`).
-//! - [`resize_bicubic_aa`]: torch `BICUBIC` + `antialias=True` — Catmull-Rom cubic
-//!   (a = −0.5), centre `(i + 0.5)·in/out − 0.5`, support `2·max(1, in/out)`,
-//!   weights renormalised over the clamped window. Verified bit-exact against
-//!   `F.interpolate` impulse responses (a = −0.5 reproduces torch's weights to
-//!   0.0; a = −0.75 — torch's own non-antialiased bicubic — does not.
-//!   Pillow's `bicubic_filter` in `libImaging/Resample.c` is also a = −0.5).
-//! - [`resize_bicubic_cv2_u8`]: OpenCV `cv2.resize` INTER_CUBIC on CV_8U.
+//! Most kernels now delegate to **zenresize** (pinned `resample-conventions`
+//! API, PR #18 — see Cargo.toml). zenresize works on interleaved rows, so the
+//! planar `[c, h, w]` signatures below shuffle `c == 3` data through packed
+//! RGB staging (a pure reorder — bit-exact). All f32 paths use `Linear`
+//! descriptors with `.srgb()` (no transfer stage): the tensors are
+//! model-space values, possibly negative — never pixels to linearise.
+//!
+//! Migrated (zenresize-backed):
+//! - [`resize_bicubic_pil_u8`]: Pillow `Image.resize(BICUBIC)` via
+//!   `PillowCubicResizer` — bit-identical to the previous local port on the
+//!   full caller-geometry sweep (71 images × every caller size).
+//! - [`resize_nearest`]: torch `InterpolationMode.NEAREST` — `src =
+//!   floor(i·in/out)` exact-rational via `SampleMapping::Asymmetric`;
+//!   bit-identical on the same sweep.
+//! - [`resize_bicubic_aa`]: torch `BICUBIC` + `antialias=True` —
+//!   `cubic_bc(0.0, 0.5)` + antialias + `Truncate`. Not bit-identical
+//!   (zenresize's f64→f32 weight pipeline rounds differently, ≤ ~1e-4 abs on
+//!   0..255 input); measured model parity stayed inside the 1e-3 JND gate
+//!   (see benchmarks/zenresize_migration_2026-10-16.md).
+//! - [`resize_bicubic`]: torch non-antialiased bicubic (a = −0.75) —
+//!   `cubic_bc(0.0, 0.75)` + `Clamp` (edge-replicated taps). Same gate result.
+//! - [`resize_gaussian_tf_f32`]: TF `scale_and_translate` σ = 0.5/radius 1.5
+//!   via `gaussian_tf()` + `antialias = false` (moved from tfresize.rs, now
+//!   deleted). Same gate result.
+//!
+//! Retained local ports (zenresize compatibility gaps at the pinned rev —
+//! recorded in DIVERGENCES.md):
+//! - [`resize_bilinear_pil_u8`]: Pillow `BILINEAR` on u8 — zenresize ships
+//!   only `PillowCubicResizer`; there is no byte-exact Pillow bilinear path.
+//! - [`resize_bicubic_cv2_u8`]: OpenCV `cv2.resize` INTER_CUBIC on CV_8U —
+//!   zenresize's conventions doc states the OpenCV integer compatibility
+//!   paths are not installed.
 //!
 //! Licence notes: the PIL/Pillow-derived fixed-point resampling below
 //! (`pil_1d`, `resample_u8_axis`) reproduces `libImaging/Resample.c`
 //! conventions — Pillow's MIT-CMU licence is in ../LICENSE-pillow.
 //! `resize_bicubic_cv2_u8` reproduces OpenCV `resize.cpp` conventions —
-//! OpenCV's Apache-2.0 licence is in ../LICENSE-opencv.
+//! OpenCV's Apache-2.0 licence is in ../LICENSE-opencv. The TensorFlow
+//! `scale_and_translate` port (`resize_gaussian_tf_f32`) moved to zenresize;
+//! TensorFlow's Apache-2.0 licence is in ../LICENSE-tensorflow.
 
 use crate::par;
+use zenresize::{
+    BoundaryMode, InterpolationDetails, PillowCubicResizer, PixelDescriptor, ResizeConfig, Resizer,
+    SampleMapping,
+};
 
 // A scoped launch is worthwhile only for sufficiently large passes. The
 // estimate counts actual scalar MACs (or copied elements for crop/nearest).
@@ -30,46 +59,222 @@ fn resize_threads(work: usize) -> usize {
     }
 }
 
-/// One 1-D resampling entry: the source index a kernel window starts at and its
-/// normalised weights.
-struct Tap1D {
-    first: usize,
-    weights: Vec<f32>,
+/// Interleave planar `[c, plane]` to packed `[pixel, c]` rows. `c == 1` is a
+/// no-op copy — the plane is already packed.
+fn interleave_f32(img: &[f32], c: usize, plane: usize) -> Vec<f32> {
+    if c == 1 {
+        return img.to_vec();
+    }
+    let mut out = vec![0.0f32; img.len()];
+    for ch in 0..c {
+        for (i, &v) in img[ch * plane..(ch + 1) * plane].iter().enumerate() {
+            out[i * c + ch] = v;
+        }
+    }
+    out
 }
 
-/// Bicubic-antialias weights for one axis: `in_size` → `out_size`.
-/// `weight(j) = cubic((j − centre) / max(1, in/out))`, renormalised over
-/// `j ∈ [⌈c−sup⌉, ⌊c+sup⌋] ∩ [0, in−1]` with `sup = 2·max(1, in/out)`.
-fn bicubic_aa_1d(in_size: usize, out_size: usize) -> Vec<Tap1D> {
-    let scale = in_size as f64 / out_size as f64;
-    let down = scale.max(1.0);
-    let support = 2.0 * down;
-    // Catmull-Rom cubic, a = −0.5: (a+2)x³−(a+3)x²+1 / a(x³−5x²+8x−4).
-    let cubic = |x: f64| {
-        let x = x.abs();
-        if x <= 1.0 {
-            1.5 * x * x * x - 2.5 * x * x + 1.0
-        } else if x < 2.0 {
-            -0.5 * (x * x * x - 5.0 * x * x + 8.0 * x - 4.0)
-        } else {
-            0.0
+/// Undo [`interleave_f32`]: packed rows → planar `[c, plane]`.
+fn deinterleave_f32(img: &[f32], c: usize, plane: usize) -> Vec<f32> {
+    if c == 1 {
+        return img.to_vec();
+    }
+    let mut out = vec![0.0f32; img.len()];
+    for ch in 0..c {
+        for i in 0..plane {
+            out[ch * plane + i] = img[i * c + ch];
         }
-    };
-    (0..out_size)
-        .map(|i| {
-            let centre = (i as f64 + 0.5) * scale - 0.5;
-            let lo = (centre - support).ceil().max(0.0) as usize;
-            let hi = (centre + support).floor().min(in_size as f64 - 1.0) as usize;
-            let mut weights: Vec<f32> = (lo..=hi)
-                .map(|j| cubic((j as f64 - centre) / down) as f32)
-                .collect();
-            let sum: f64 = weights.iter().map(|&w| f64::from(w)).sum();
-            for w in &mut weights {
-                *w = (*w as f64 / sum) as f32;
-            }
-            Tap1D { first: lo, weights }
-        })
-        .collect()
+    }
+    out
+}
+
+/// u8 variants of the shuffles (the Pillow path works on encoded bytes).
+fn interleave_u8(img: &[u8], c: usize, plane: usize) -> Vec<u8> {
+    if c == 1 {
+        return img.to_vec();
+    }
+    let mut out = vec![0u8; img.len()];
+    for ch in 0..c {
+        for (i, &v) in img[ch * plane..(ch + 1) * plane].iter().enumerate() {
+            out[i * c + ch] = v;
+        }
+    }
+    out
+}
+
+fn deinterleave_u8(img: &[u8], c: usize, plane: usize) -> Vec<u8> {
+    if c == 1 {
+        return img.to_vec();
+    }
+    let mut out = vec![0u8; img.len()];
+    for ch in 0..c {
+        for i in 0..plane {
+            out[ch * plane + i] = img[i * c + ch];
+        }
+    }
+    out
+}
+
+/// f32 descriptor for `c` channels — only the layouts the callers use
+/// (`GRAYF32` for A-FINE's positional embedding, `RGBF32` for images).
+fn f32_descriptor(c: usize) -> PixelDescriptor {
+    match c {
+        1 => PixelDescriptor::GRAYF32_LINEAR,
+        3 => PixelDescriptor::RGBF32_LINEAR,
+        _ => panic!("unsupported channel count for zenresize f32 path: {c}"),
+    }
+}
+
+/// Run a zenresize `interpolation` over planar f32 `[c, h, w]` → `[c, oh, ow]`.
+fn zr_f32(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+    interpolation: InterpolationDetails,
+) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
+    let desc = f32_descriptor(c);
+    let config = ResizeConfig::builder(w as u32, h as u32, ow as u32, oh as u32)
+        .interpolation(interpolation)
+        .input(desc)
+        .output(desc)
+        .srgb()
+        .build();
+    let mut resizer = Resizer::try_new(&config).expect("zenresize config rejected");
+    let packed = interleave_f32(img, c, h * w);
+    let out = resizer.resize_f32(&packed);
+    deinterleave_f32(&out, c, oh * ow)
+}
+
+/// Planar u8 `[c, h, w]` → `[c, oh, ow]`, bit-exact with Pillow's
+/// `Image.resize((ow, oh), BICUBIC)` on an RGB image — zenresize's
+/// `PillowCubicResizer` (separable 22-bit fixed point, u8-rounded
+/// intermediate, half-pixel Catmull-Rom). `c` must be 3.
+pub(crate) fn resize_bicubic_pil_u8(
+    img: &[u8],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<u8> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
+    assert_eq!(c, 3, "PillowCubicResizer is an RGB8 path");
+    let resizer = PillowCubicResizer::new(w as u32, h as u32, ow as u32, oh as u32)
+        .expect("PillowCubicResizer rejected dimensions");
+    let packed = interleave_u8(img, c, h * w);
+    let mut out = vec![0u8; c * oh * ow];
+    resizer
+        .resize_rgb8(&packed, PixelDescriptor::RGB8_SRGB, w * 3, &mut out, ow * 3)
+        .expect("PillowCubicResizer resize failed");
+    deinterleave_u8(&out, c, oh * ow)
+}
+
+/// Planar `[c, h, w]` → `[c, oh, ow]`, torch `antialias=True` bicubic via
+/// zenresize `cubic_bc(0.0, 0.5)` + antialias + renormalised-truncated
+/// window.
+pub(crate) fn resize_bicubic_aa(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<f32> {
+    zr_f32(
+        img,
+        c,
+        h,
+        w,
+        oh,
+        ow,
+        InterpolationDetails::cubic_bc(0.0, 0.5)
+            .with_antialias(true)
+            .with_boundary_mode(BoundaryMode::Truncate),
+    )
+}
+
+/// Planar `[c, h, w]` → `[c, oh, ow]`, torch `InterpolationMode.NEAREST`:
+/// `src = floor(i·in/out)` exact-rational (`SampleMapping::Asymmetric`,
+/// matching the integer index math this replaced).
+pub(crate) fn resize_nearest(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<f32> {
+    zr_f32(
+        img,
+        c,
+        h,
+        w,
+        oh,
+        ow,
+        InterpolationDetails::nearest().with_sample_mapping(SampleMapping::Asymmetric),
+    )
+}
+
+/// Planar `[c, h, w]` → `[c, oh, ow]`, `F.interpolate` bicubic (a = −0.75,
+/// no antialias, edge-replicated taps — `BoundaryMode::Clamp` folds the
+/// out-of-range tap weights into the edge samples).
+pub(crate) fn resize_bicubic(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<f32> {
+    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
+        return Vec::new();
+    }
+    if h == oh && w == ow {
+        return img.to_vec();
+    }
+    zr_f32(
+        img,
+        c,
+        h,
+        w,
+        oh,
+        ow,
+        InterpolationDetails::cubic_bc(0.0, 0.75)
+            .with_antialias(false)
+            .with_boundary_mode(BoundaryMode::Clamp),
+    )
+}
+
+/// Planar `[c, h, w]` → `[c, oh, ow]`, TensorFlow `scale_and_translate`
+/// gaussian (σ = 0.5, radius 1.5, `antialias = false`) via zenresize
+/// `gaussian_tf()`. Replaces the local TF port (tfresize.rs); zenresize's
+/// conventions doc notes this is not bit-exact TF arithmetic — the measured
+/// model-level deltas are in benchmarks/zenresize_migration_2026-10-16.md.
+pub(crate) fn resize_gaussian_tf_f32(
+    img: &[f32],
+    c: usize,
+    h: usize,
+    w: usize,
+    oh: usize,
+    ow: usize,
+) -> Vec<f32> {
+    zr_f32(
+        img,
+        c,
+        h,
+        w,
+        oh,
+        ow,
+        InterpolationDetails::gaussian_tf().with_antialias(false),
+    )
 }
 
 /// Fixed-point 1-D resampling entry for the PIL u8 path: start index and
@@ -130,20 +335,6 @@ fn pil_1d(
         .collect()
 }
 
-/// Catmull-Rom cubic (a = −0.5), support 2 — `bicubic_filter` in Resample.c.
-fn bicubic_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
-    pil_1d(in_size, out_size, 2.0, |x| {
-        let x = x.abs();
-        if x <= 1.0 {
-            (1.5 * x - 2.5) * x * x + 1.0
-        } else if x < 2.0 {
-            -0.5 * ((x - 5.0) * x + 8.0) * x + 2.0
-        } else {
-            0.0
-        }
-    })
-}
-
 /// The tent kernel `1 − |x|`, support 1 — `bilinear_filter` in Resample.c.
 fn bilinear_pil_1d(in_size: usize, out_size: usize) -> Vec<Tap1DFix> {
     pil_1d(in_size, out_size, 1.0, |x| (1.0 - x.abs()).max(0.0))
@@ -198,31 +389,10 @@ fn resample_u8_axis(
 }
 
 /// Planar u8 `[c, h, w]` → `[c, oh, ow]`, bit-exact with Pillow's
-/// `Image.resize((ow, oh), BICUBIC)` on an RGB image: separable
-/// fixed-point resample with a u8 intermediate between the horizontal and
-/// vertical passes (`Resample.c`: `PRECISION_BITS = 22`, `2²¹` rounding
-/// bias, `clip8` per pass).
-pub(crate) fn resize_bicubic_pil_u8(
-    img: &[u8],
-    c: usize,
-    h: usize,
-    w: usize,
-    oh: usize,
-    ow: usize,
-) -> Vec<u8> {
-    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
-        return Vec::new();
-    }
-    let wx = bicubic_pil_1d(w, ow);
-    let tmp = resample_u8_axis(img, c, h, w, &wx, 1);
-    let wy = bicubic_pil_1d(h, oh);
-    resample_u8_axis(&tmp, c, h, ow, &wy, 0)
-}
-
-/// Planar u8 `[c, h, w]` → `[c, oh, ow]`, bit-exact with Pillow's
-/// `Image.resize((ow, oh), BILINEAR)` — same separable fixed-point pass as
-/// [`resize_bicubic_pil_u8`] with the tent kernel. torchvision's
-/// `Resize((oh, ow))` on a PIL image is this call.
+/// `Image.resize((ow, oh), BILINEAR)` — the separable fixed-point pass with
+/// the tent kernel. torchvision's `Resize((oh, ow))` on a PIL image is this
+/// call. RETAINED PORT: zenresize at the pinned rev has no byte-exact Pillow
+/// bilinear path (`PillowCubicResizer` is bicubic-only) — see DIVERGENCES.md.
 pub(crate) fn resize_bilinear_pil_u8(
     img: &[u8],
     c: usize,
@@ -267,6 +437,9 @@ pub(crate) fn resize_bilinear_pil_u8(
 /// cv2 4.12 ≡ cv2 5.0 bitwise — the wheels' IPP build intercepts u8
 /// resize instead and differs on ~4% of pixels; the scalar path is
 /// the documented, version-stable convention.
+///
+/// RETAINED PORT: zenresize's conventions doc states the OpenCV CV_8U
+/// cubic/linear compatibility paths are not installed — see DIVERGENCES.md.
 pub(crate) fn resize_bicubic_cv2_u8(
     img: &[u8],
     c: usize,
@@ -331,136 +504,6 @@ pub(crate) fn resize_bicubic_cv2_u8(
     out
 }
 
-/// Planar `[c, h, w]` → `[c, oh, ow]`, torch `antialias=True` bicubic.
-pub(crate) fn resize_bicubic_aa(
-    img: &[f32],
-    c: usize,
-    h: usize,
-    w: usize,
-    oh: usize,
-    ow: usize,
-) -> Vec<f32> {
-    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
-        return Vec::new();
-    }
-    let wx = bicubic_aa_1d(w, ow);
-    let tmp = resample_w(img, c, h, w, &wx);
-    let wy = bicubic_aa_1d(h, oh);
-    resample_h(&tmp, c, h, ow, &wy)
-}
-
-/// Planar `[c, h, w]` → `[c, oh, ow]`, torch `InterpolationMode.NEAREST`:
-/// `src = floor(dst · in/out)` per axis (legacy `nearest`, not `nearest_exact`).
-pub(crate) fn resize_nearest(
-    img: &[f32],
-    c: usize,
-    h: usize,
-    w: usize,
-    oh: usize,
-    ow: usize,
-) -> Vec<f32> {
-    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
-        return Vec::new();
-    }
-    let idx = |n_in: usize, n_out: usize| {
-        (0..n_out)
-            .map(|i| (i * n_in / n_out).min(n_in - 1))
-            .collect::<Vec<_>>()
-    };
-    let ys = idx(h, oh);
-    let xs = idx(w, ow);
-    let mut out = vec![0.0f32; c * oh * ow];
-    par::for_each_row(&mut out, ow, resize_threads(c * oh * ow), |i, drow| {
-        let (ch, y) = (i / oh, i % oh);
-        let srow = &img[ch * h * w + ys[y] * w..ch * h * w + ys[y] * w + w];
-        for (x, &sx) in xs.iter().enumerate() {
-            drow[x] = srow[sx];
-        }
-    });
-    out
-}
-
-/// One 1-D resampling entry with individually clamped source indices — for
-/// torch's non-antialiased bicubic, whose four taps replicate edge pixels
-/// instead of renormalising the window.
-struct Tap4 {
-    idx: [usize; 4],
-    w: [f32; 4],
-}
-
-/// Non-antialiased bicubic weights for one axis: `in_size` → `out_size`.
-/// `F.interpolate(mode='bicubic', align_corners=False)`: centre
-/// `(i + 0.5)·in/out − 0.5`, four taps `⌊c⌋−1 ..= ⌊c⌋+2`, cubic a = −0.75,
-/// source indices clamped to `[0, in−1]`, weights NOT renormalised.
-fn bicubic_1d(in_size: usize, out_size: usize) -> Vec<Tap4> {
-    let scale = in_size as f64 / out_size as f64;
-    let cubic = |x: f64| {
-        let x = x.abs();
-        if x <= 1.0 {
-            1.25 * x * x * x - 2.25 * x * x + 1.0
-        } else if x < 2.0 {
-            -0.75 * (x * x * x - 5.0 * x * x + 8.0 * x - 4.0)
-        } else {
-            0.0
-        }
-    };
-    (0..out_size)
-        .map(|i| {
-            let centre = (i as f64 + 0.5) * scale - 0.5;
-            let base = centre.floor() as i64;
-            let mut tap = Tap4 {
-                idx: [0; 4],
-                w: [0.0; 4],
-            };
-            for k in 0..4 {
-                let j = base - 1 + k as i64;
-                tap.idx[k] = j.clamp(0, in_size as i64 - 1) as usize;
-                tap.w[k] = cubic(j as f64 - centre) as f32;
-            }
-            tap
-        })
-        .collect()
-}
-
-/// Planar `[c, h, w]` → `[c, oh, ow]`, `F.interpolate` bicubic (a = −0.75,
-/// no antialias — the resize A-FINE applies to its normalised input when
-/// padding up to a multiple of 32).
-pub(crate) fn resize_bicubic(
-    img: &[f32],
-    c: usize,
-    h: usize,
-    w: usize,
-    oh: usize,
-    ow: usize,
-) -> Vec<f32> {
-    if c == 0 || h == 0 || w == 0 || oh == 0 || ow == 0 {
-        return Vec::new();
-    }
-    if h == oh && w == ow {
-        return img.to_vec();
-    }
-    let wx = bicubic_1d(w, ow);
-    let mut tmp = vec![0.0f32; c * h * ow];
-    par::for_each_row(&mut tmp, ow, resize_threads(c * h * ow * 4), |i, drow| {
-        let (ch, y) = (i / h, i % h);
-        let srow = &img[ch * h * w + y * w..ch * h * w + (y + 1) * w];
-        for (x, t) in wx.iter().enumerate() {
-            drow[x] = (0..4).map(|k| t.w[k] * srow[t.idx[k]]).sum();
-        }
-    });
-    let wy = bicubic_1d(h, oh);
-    let mut out = vec![0.0f32; c * oh * ow];
-    par::for_each_row(&mut out, ow, resize_threads(c * oh * ow * 4), |i, drow| {
-        let (ch, y) = (i / oh, i % oh);
-        let src = &tmp[ch * h * ow..(ch + 1) * h * ow];
-        let t = &wy[y];
-        for x in 0..ow {
-            drow[x] = (0..4).map(|k| t.w[k] * src[t.idx[k] * ow + x]).sum();
-        }
-    });
-    out
-}
-
 /// Centre-crop planar `[c, h, w]` → `[c, k, k]` (torch `CenterCrop` semantics:
 /// `(in − k) / 2` floor, so an odd margin's extra pixel goes bottom/right).
 pub(crate) fn center_crop(img: &[f32], c: usize, h: usize, w: usize, k: usize) -> Vec<f32> {
@@ -482,80 +525,35 @@ pub(crate) fn center_crop(img: &[f32], c: usize, h: usize, w: usize, k: usize) -
     out
 }
 
-/// Horizontal pass of a 1-D tap table: `[c, h, w]` → `[c, h, taps.len()]`.
-fn resample_w(img: &[f32], c: usize, h: usize, w: usize, taps: &[Tap1D]) -> Vec<f32> {
-    if c == 0 || h == 0 || w == 0 || taps.is_empty() {
-        return Vec::new();
-    }
-    let ow = taps.len();
-    let mut out = vec![0.0f32; c * h * ow];
-    let macs = c * h * taps.iter().map(|t| t.weights.len()).sum::<usize>();
-    par::for_each_row(&mut out, ow, resize_threads(macs), |i, drow| {
-        let (ch, y) = (i / h, i % h);
-        let srow = &img[ch * h * w + y * w..ch * h * w + (y + 1) * w];
-        for (x, tap) in taps.iter().enumerate() {
-            drow[x] = tap
-                .weights
-                .iter()
-                .zip(&srow[tap.first..tap.first + tap.weights.len()])
-                .map(|(&k, &v)| k * v)
-                .sum();
-        }
-    });
-    out
-}
-
-/// Vertical pass of a 1-D tap table: `[c, h, w]` → `[c, taps.len(), w]`.
-fn resample_h(img: &[f32], c: usize, h: usize, w: usize, taps: &[Tap1D]) -> Vec<f32> {
-    if c == 0 || h == 0 || w == 0 || taps.is_empty() {
-        return Vec::new();
-    }
-    let oh = taps.len();
-    let mut out = vec![0.0f32; c * oh * w];
-    let macs = c * w * taps.iter().map(|t| t.weights.len()).sum::<usize>();
-    par::for_each_row(&mut out, w, resize_threads(macs), |i, drow| {
-        let (ch, y) = (i / oh, i % oh);
-        let src = &img[ch * h * w..(ch + 1) * h * w];
-        let tap = &taps[y];
-        for (k, &wt) in tap.weights.iter().enumerate() {
-            let srow = &src[(tap.first + k) * w..(tap.first + k + 1) * w];
-            for (d, &s) in drow.iter_mut().zip(srow) {
-                *d += wt * s;
-            }
-        }
-    });
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The migrated zenresize-backed kernels are deterministic and
+    /// empty-safe (zenresize manages its own threading, so these cannot be
+    /// observed through `par`).
     #[test]
-    fn all_resize_paths_are_thread_bit_identical_and_empty_safe() {
+    fn zenresize_paths_are_deterministic_and_empty_safe() {
         type FloatResize = fn(&[f32], usize, usize, usize, usize, usize) -> Vec<f32>;
-        type ByteResize = fn(&[u8], usize, usize, usize, usize, usize) -> Vec<u8>;
         let (h, w, oh, ow) = (385, 513, 769, 1027);
-        let bytes: Vec<u8> = (0..3 * h * w)
-            .map(|i| ((i * 73 + i / 7 * 19) % 256) as u8)
-            .collect();
-        let floats: Vec<f32> = bytes
-            .iter()
-            .enumerate()
-            .map(|(i, &v)| {
+        let floats: Vec<f32> = (0..3 * h * w)
+            .map(|i| {
                 if i % 13 == 0 {
                     -0.0
                 } else {
-                    f32::from(v) / 113.0 - 1.0
+                    ((i * 73 + i / 7 * 19) % 256) as f32 / 113.0 - 1.0
                 }
             })
             .collect();
-        for resize in [resize_nearest, resize_bicubic, resize_bicubic_aa] as [FloatResize; 3] {
-            let (a, spawned) = par::observe_workers(Some(1), || resize(&floats, 3, h, w, oh, ow));
-            assert_eq!(spawned, 0);
-            let (b, parallel_spawns) =
-                par::observe_workers(Some(16), || resize(&floats, 3, h, w, oh, ow));
-            assert!(parallel_spawns > 0);
+        for resize in [
+            resize_nearest,
+            resize_bicubic,
+            resize_bicubic_aa,
+            resize_gaussian_tf_f32,
+        ] as [FloatResize; 4]
+        {
+            let a = resize(&floats, 3, h, w, oh, ow);
+            let b = resize(&floats, 3, h, w, oh, ow);
             assert_eq!(
                 a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                 b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
@@ -570,12 +568,32 @@ mod tests {
                 assert!(resize(&[], c, h, w, oh, ow).is_empty());
             }
         }
-        for resize in [
-            resize_bicubic_pil_u8,
-            resize_bilinear_pil_u8,
-            resize_bicubic_cv2_u8,
-        ] as [ByteResize; 3]
-        {
+        let bytes: Vec<u8> = (0..3 * h * w)
+            .map(|i| ((i * 73 + i / 7 * 19) % 256) as u8)
+            .collect();
+        let a = resize_bicubic_pil_u8(&bytes, 3, h, w, oh, ow);
+        assert_eq!(a, resize_bicubic_pil_u8(&bytes, 3, h, w, oh, ow));
+        for (c, h, w, oh, ow) in [
+            (0, 2, 2, 3, 3),
+            (3, 0, 2, 3, 3),
+            (3, 2, 0, 3, 3),
+            (3, 2, 2, 0, 3),
+            (3, 2, 2, 3, 0),
+        ] {
+            assert!(resize_bicubic_pil_u8(&[], c, h, w, oh, ow).is_empty());
+        }
+    }
+
+    /// The retained local ports still parallelise through `par` and stay
+    /// thread-bit-identical + empty-safe.
+    #[test]
+    fn retained_resize_paths_are_thread_bit_identical_and_empty_safe() {
+        type ByteResize = fn(&[u8], usize, usize, usize, usize, usize) -> Vec<u8>;
+        let (h, w, oh, ow) = (385, 513, 769, 1027);
+        let bytes: Vec<u8> = (0..3 * h * w)
+            .map(|i| ((i * 73 + i / 7 * 19) % 256) as u8)
+            .collect();
+        for resize in [resize_bilinear_pil_u8, resize_bicubic_cv2_u8] as [ByteResize; 2] {
             let (a, spawned) = par::observe_workers(Some(1), || resize(&bytes, 3, h, w, oh, ow));
             assert_eq!(spawned, 0);
             let (b, parallel_spawns) =
@@ -608,16 +626,12 @@ mod tests {
         assert!(center_crop(&[], 3, 0, 2, 0).is_empty());
     }
 
+    /// Small retained-port passes stay on the calling thread.
     #[test]
     fn small_resize_passes_stay_on_the_calling_thread() {
         for n in [64, 256] {
-            let x = vec![0.125; 3 * n * n];
-            let bytes = vec![31; 3 * n * n];
+            let bytes = vec![31u8; 3 * n * n];
             let (_, spawns) = par::observe_workers(Some(16), || {
-                let _ = resize_bicubic_aa(&x, 3, n, n, 329, 329);
-                let _ = resize_bicubic(&x, 3, n, n, 329, 329);
-                let _ = resize_nearest(&x, 3, n, n, 329, 329);
-                let _ = resize_bicubic_pil_u8(&bytes, 3, n, n, 224, 224);
                 let _ = resize_bilinear_pil_u8(&bytes, 3, n, n, 224, 224);
                 let _ = resize_bicubic_cv2_u8(&bytes, 3, n, n, 224, 224);
             });
@@ -625,7 +639,8 @@ mod tests {
         }
     }
 
-    /// torch `NEAREST` floor(i·in/out), verified against cv2/torch output.
+    /// torch `NEAREST` floor(i·in/out) through the zenresize `Asymmetric`
+    /// mapping — same indices the integer port produced.
     #[test]
     fn nearest_downsamples_by_floor() {
         let img: Vec<f32> = (0..16).map(|i| i as f32).collect();
@@ -634,8 +649,10 @@ mod tests {
         assert_eq!(out, vec![0.0, 2.0, 5.0, 8.0, 10.0, 13.0]);
     }
 
-    /// Antialiased bicubic weights: impulse responses measured against
-    /// `F.interpolate(mode='bicubic', antialias=True)` at in=8 → out=3.
+    /// Antialiased bicubic impulse responses measured against
+    /// `F.interpolate(mode='bicubic', antialias=True)` at in=8 → out=3:
+    /// probing the zenresize path with unit impulses reconstructs the same
+    /// weight matrix the old port computed directly.
     #[test]
     fn bicubic_aa_matches_torch_impulse_weights() {
         const TORCH_W: [[f32; 8]; 3] = [
@@ -649,19 +666,24 @@ mod tests {
                 0.0, -0.00074, -0.02174, -0.025, 0.06227, 0.26135, 0.40009, 0.32377,
             ],
         ];
-        let taps = bicubic_aa_1d(8, 3);
-        for (o, expect) in TORCH_W.iter().enumerate() {
-            let mut got = [0.0f32; 8];
-            for (k, &wt) in taps[o].weights.iter().enumerate() {
-                got[taps[o].first + k] = wt;
+        let mut got = [[0.0f32; 8]; 3];
+        for k in 0..8 {
+            let mut img = vec![0.0f32; 8];
+            img[k] = 1.0;
+            let out = resize_bicubic_aa(&img, 1, 1, 8, 1, 3);
+            for (o, &v) in out.iter().enumerate() {
+                got[o][k] = v;
             }
-            for (g, e) in got.iter().zip(expect) {
-                assert!((g - e).abs() < 2e-5, "out {o}: {got:?} vs {expect:?}");
+        }
+        for (o, expect) in TORCH_W.iter().enumerate() {
+            for (g, e) in got[o].iter().zip(expect) {
+                assert!((g - e).abs() < 2e-5, "out {o}: {:?} vs {expect:?}", got[o]);
             }
         }
     }
 
-    /// Non-antialiased bicubic upsample: outputs measured against
+    /// Non-antialiased bicubic upsample through zenresize's
+    /// `cubic_bc(0.0, 0.75)` + `Clamp`: outputs measured against
     /// `F.interpolate(mode='bicubic', align_corners=False)`, in=8 → out=12
     /// and in=10 → out=14 (edge taps replicate, weights unnormalised).
     #[test]
@@ -682,8 +704,6 @@ mod tests {
         ];
         let img: Vec<f32> = (0..8).map(|i| i as f32).collect();
         let got = resize_bicubic(&img, 1, 1, 8, 1, 12);
-        // torch accumulates in f32 in its own tap order; ~ulp differences
-        // (≤ 3e-6 seen) are expected — far below the metric parity budget.
         for (g, e) in got.iter().zip(TORCH_8_12) {
             assert!((g - e).abs() < 1e-5, "{got:?} vs {TORCH_8_12:?}");
         }
@@ -790,8 +810,8 @@ mod tests {
         assert_eq!(got, WANT);
     }
 
-    /// A constant image stays constant through both kernels (renormalised
-    /// weights), and the crop takes the geometric centre.
+    /// A constant image stays constant through the zenresize kernels
+    /// (renormalised weights), and the crop takes the geometric centre.
     #[test]
     fn const_and_crop() {
         let img = vec![3.0f32; 3 * 10 * 12];

@@ -31,7 +31,7 @@ checkpoint = "https://github.com/ssundaram21/dreamsim/releases/download/v0.2.0-c
 [input]
 format = "packed sRGB8"
 normalisation = "0..1, then per-extractor stats inside the graph (ImageNet 0.485/0.456/0.406, 0.229/0.224/0.225 for DINO; CLIP 0.48145466/0.4578275/0.40821073, 0.26862954/0.26130258/0.27577711 for both CLIP nets)"
-resize = "upstream preprocess: PIL/torchvision antialiased bicubic Resize to EXACTLY 224x224 on both axes (anamorphic, aspect ignored — resize.rs::resize_bicubic_aa), then ToTensor"
+resize = "upstream preprocess: PIL/torchvision antialiased bicubic Resize to EXACTLY 224x224 on both axes (anamorphic, aspect ignored — resize.rs::resize_bicubic_pil_u8), then ToTensor"
 min_size = 1                         # everything is resampled to 224x224
 
 [export]
@@ -44,9 +44,9 @@ notes = "LoRA folded with peft merge_and_unload (verified ~6e-8 on the model's o
 oracle = "pip dreamsim 0.21.2 ensemble, CPU, fp32, upstream preprocess"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = 0.017641                       # median |score - score(same-ref identical pair)|, 1008 KonJND pairs, this port (ort-cuda); identical pairs are exactly 0 (deterministic cosine)
-results = "rten worst |d| 2.064e-7 (1.17e-5 JND); ort-cuda worst |d| 3.577e-7 (2.03e-5 JND); 21 goldens; identical pairs score exactly 0 on both engines"
+results = "rten worst |d| 2.064e-7 (1.17e-5 JND); ort-cuda worst |d| 3.577e-7 (2.03e-5 JND); 21 goldens; identical pairs score exactly 0 on both engines. Unchanged after the resize moved to zenresize PillowCubicResizer (the path is bit-identical)"
 
 [aic4]
 column = "DreamSim"
 results = "matches: median |d| 2.9e-07, max |d| 6.1e-07 on all 61 crop pairs (this port, ort-cuda), SRCC 1.0000"
-finding = "The published column is the raw 1-cosine ensemble distance on the anamorphic 224x224 PIL-bicubic resize; no eval transform. The port's fixed-point Pillow resize (resize.rs::resize_bicubic_pil_u8) is byte-exact vs PIL."
+finding = "The published column is the raw 1-cosine ensemble distance on the anamorphic 224x224 PIL-bicubic resize; no eval transform. The resize runs through zenresize's PillowCubicResizer (pinned PR #18) — byte-exact vs PIL, and bit-identical to the retired local port on the caller-geometry sweep."
