@@ -49,3 +49,9 @@ Its image metadata carries only opaque data/contract hashes. Private cell
 contracts stay in the data archive; an authorized harvester supplies the same
 contract through `ZEN_REGISTERED_FIT_CONTRACT`. Missing watchdogs, changed
 contracts and incomplete decoded checkpoint admission refuse installation.
+
+The registered source gate also requires the transitive native-statistics and
+assessment-identity Python helpers, the Rev5 bank schema owner and C's frozen
+product declaration. A self-consistent source inventory that omits one of
+these required owners refuses packaging. Additional dependencies of the final
+program remain part of its independently reviewed source closure.

@@ -210,7 +210,8 @@ def registered_sources(path, pin):
     files=record["files"]
     required={"scripts/rev4_featpot/"+name for name in ("subjective_cell.py","subjective_loso.py",
         "subjective_training_leg.py","v2_lodo_mlp.py","v2_common.py","v2_teacher.py","v2c_wide.py",
-        "v2_human_role.py","v2_production_pack.py")}
+        "v2_human_role.py","v2_production_pack.py","rev5_bank.py","e33_fx1_declaration.json")}
+    required.update(("scripts/lib/zen_stats.py","scripts/lib/assessment_identity.py"))
     if not required <= set(files):
         raise ValueError("registered program import closure missing required owners")
     for name,value in files.items():
