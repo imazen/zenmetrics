@@ -63,6 +63,7 @@ mod maniqa;
 mod musiq;
 mod paq2piq;
 mod par;
+mod pieapp;
 mod preprocess;
 mod resize;
 mod tfresize;
@@ -81,6 +82,7 @@ pub use lpips::{Lpips, LpipsNet};
 pub use maniqa::Maniqa;
 pub use musiq::Musiq;
 pub use paq2piq::Paq2piq;
+pub use pieapp::PieApp;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 
 /// Which engine runs a model's network.
