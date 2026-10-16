@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "metric": "pieapp",
+  "date": "2026-10-16",
+  "host": "i265",
+  "reference_parity_qualified": true,
+  "checkpoint_sha256": "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0",
+  "onnx_sha256": "7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322",
+  "score_revision": 2,
+  "sampling": "Valid 64x64 patch pairs, stride 6, row-major, no extra unaligned edge; batches <=32",
+  "oracle": "Official public PieAPP.compute_score, release 0513613d1f575136ea52418e35f2cebc5a49f783; no official source read",
+  "jnd": 0.5189487912492419,
+  "konjnd_pairs": 1008,
+  "tolerance_jnd": 0.001,
+  "goldens_sha256": "370a6ca5047ea6f3611ad9ffae8549599611018e1c95e19bda783187c3ea42ab",
+  "ladder_input_manifest_sha256": "2c04e57cfe58614438e3f164688e5520ffea89aff9086c7f8d8fad45c55302a6",
+  "konjnd_receipt_sha256": "7ede5e7bb9a33dc5426823f9334767a9e8b8c185d473b9220774d1fdadda9813",
+  "native_parity": {
+    "rten": {
+      "pairs": 24,
+      "reported_worst_abs": 9.537e-07,
+      "reported_worst_jnd": 1.84e-06,
+      "warm_cold_bit_identity": true
+    },
+    "ort-cuda": {
+      "pairs": 24,
+      "reported_worst_abs": 1.395e-07,
+      "reported_worst_jnd": 2.69e-07,
+      "warm_cold_bit_identity": true
+    }
+  },
+  "individual_required_checks_passed": [
+    "NN debug/release and doctests",
+    "locked pinned siblings",
+    "workspace fmt",
+    "exact CI workspace clippy",
+    "strict NN all-target clippy, model-tests+ort",
+    "CLI sweep,png,gpu,gpu-cuda",
+    "CLI sweep,orchestrator,nn,nr",
+    "inventory 104",
+    "CLI routing unit",
+    "real default-scheduler CLI consent refusal and oracle score"
+  ],
+  "workflow": {
+    "original_outer_exit_code": 2,
+    "all_individual_gate_commands_passed": true,
+    "cause": "In-flight rewrite of shell source caused EOF after the final successful CLI smoke check",
+    "fix": "Shell command text loaded before launch; calibration installer separated",
+    "wrapper_syntax_and_real_install_recheck_exit_code": 0,
+    "numerical_checks_repeated_after_wrapper_fix": false
+  },
+  "resources": {
+    "measurement": {
+      "rc": 0,
+      "seconds": 2671,
+      "peak_rss_gib": 1.57,
+      "min_available_mib": 1404,
+      "peak_load": 51.75
+    },
+    "gates": {
+      "outer_rc": 2,
+      "seconds": 1756,
+      "peak_rss_gib": 3.71,
+      "min_available_mib": 11534,
+      "peak_load": 21.72
+    },
+    "wrapper_recheck": {
+      "rc": 0,
+      "seconds": 0,
+      "peak_rss_gib": 0.02,
+      "min_available_mib": 21350,
+      "peak_load": 6.76
+    }
+  },
+  "logs": {
+    "round13-measure.log": {
+      "path": "/home/lilith/tmp/aic-variants-scratch/round13-measure.log",
+      "sha256": "163d6da474435e6f053a32f24ffd0e56e84de01c7de3af2b48d8cbaff8655d8e"
+    },
+    "round13-gates.log": {
+      "path": "/home/lilith/tmp/aic-variants-scratch/round13-gates.log",
+      "sha256": "9a8f73256a85f472105036442f2d9a776b867a0125765e84350001e8fddc3ccc"
+    },
+    "round13-wrapper-check.log": {
+      "path": "/home/lilith/tmp/aic-variants-scratch/round13-wrapper-check.log",
+      "sha256": "a0ed24cc6a31c1a4e5bd1b6a400a4dca3cf29a9ab0bbc6f4ec0a10b5004c8e0b"
+    }
+  }
+}

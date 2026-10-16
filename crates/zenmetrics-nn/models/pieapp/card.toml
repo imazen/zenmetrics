@@ -2,11 +2,12 @@ name = "pieapp"
 kind = "full-reference"
 direction = "lower-is-better"
 columns = ["pieapp"]
+score_revision = 2
 paper = "Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018. https://arxiv.org/abs/1806.02067"
 
 [code]
 source = "paper-and-weight-metadata-reconstruction"
-implementation = "Independently written from section 3 / figure 4 and checkpoint tensor names/shapes. Official source files are not read or imported by the reconstruction. Official release CLI is a black-box oracle only."
+implementation = "Independently written from section 3 / figure 4 and checkpoint tensor names/shapes. Official source files are not read or imported by the reconstruction. The official public entry point and documented CLI are opaque oracles only."
 provenance = "PROVENANCE.md"
 
 [weights]
@@ -20,6 +21,8 @@ bundled = false
 
 [input]
 format = "strided RGB8 sRGB"
+graph_input = "NCHW RGB [0,1]"
+network_input = "NCHW BGR code values [0,255]"
 patch_size = 64
 stride = 6
 sampling_source = "Official release README documents deterministic dense stride 6 as the default; paper section 3 instead describes random sampling of 1024 patches."
@@ -31,22 +34,36 @@ max_pixels_32bit = 1048576
 [execution]
 engines = ["rten", "ort-cuda"]
 batch_bound = 32
-statistics = "Host weighted pooling of graph patch errors/weights; fixed row-major order."
+batch_unit = "reference/distorted patch pairs"
+statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row-major order."
 warm_reference = "Reuses planar input conversion only, not neural features."
 maps = false
 
 [parity]
 tolerance_jnd = 1e-3
-status = "Qualification pending; no parity claim yet."
+identical_patch_oracle = -3.72529029846191406e-9
+status = "Both engines pass 24 pairs at 1e-3 JND; all required individual landing checks pass."
+qualified_pairs_per_engine = 24
+rten_reported_worst_jnd = 1.84e-6
+ort_cuda_reported_worst_jnd = 2.69e-7
+qualification_receipt = "../../../../benchmarks/pieapp_2026-10-16_qualification.json"
+onnx_sha256 = "7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322"
+jnd_scale = 0.5189487912492419
+konjnd_pairs = 1008
+jpeg_pairs = 504
+bpg_pairs = 504
 
 [oracle_convention]
 entry_point = "Official PieAPP.compute_score(distorted_patches, reference_patches)"
 grid = "Row-major valid 64x64 patches, origins 0,6,... <= side-64; no unaligned far-edge patch."
-selection = "Coordinator selected this explicit stride-6 entry-point convention."
+selection = "Canonical parity targets this explicit stride-6 public-entry-point convention."
 cli_divergence_case = "1415_128"
 cli_score = 1.6797861082006782
 entry_point_score = 1.6567797660827637
 cli_absolute_difference = 0.0230063421179145
 cli_equivalence = false
+cli_documented_sparse_flag = "--sampling_mode sparse"
 cli_documented_sparse_score = 1.7122649515845207
 cli_explanation = "No documented option has established equivalence. Official source is not read; wrapper probing is restricted to documented options."
+
+cli_difference_jnd = 0.044332586385898314

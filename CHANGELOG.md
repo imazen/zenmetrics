@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-nn
+
+### Added
+
+- `PieApp` (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
+  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
+  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
+  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
+  oracle is official `compute_score`; the measured demo-wrapper difference
+  is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
+  and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
+  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
+
+### QUEUED BREAKING CHANGES
+
+- None.
+
 ## zenmetrics-stats
 
 ### Added

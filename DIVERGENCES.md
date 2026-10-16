@@ -623,20 +623,24 @@ crate docs — this file links, it does not duplicate.
 PieAPP uses valid 64×64 patches on a deterministic stride-6 grid, in row-major
 order. Origins are `0, 6, … <= side - 64`; an unaligned far-edge origin is not
 added. The [official README](https://github.com/prashnani/PerceptualImageError/blob/master/README.md)
-documents dense stride 6. The coordinator selected the official `compute_score`
+documents dense stride 6. The port targets the official `compute_score`
 entry point as the parity oracle for this explicit grid.
 
 On `1415_128`, the original demo CLI returns `1.6797861082006782`, while
 `compute_score` on the regular 121-patch grid returns `1.6567797660827637`:
 absolute difference `0.0230063421179145` native units. The independent network
 returns `1.65677956601148813` on that grid. Thus this port does not claim
-numerical equivalence to the demo CLI wrapper. Its documented sparse option
+numerical equivalence to the demo CLI wrapper. Its documented `--sampling_mode sparse` option
 also changes the CLI score (`1.7122649515845207`); it does not explain the dense
 result. No documented option has established equivalence. Official source is
 not read, and any further wrapper probes are restricted to documented options.
 
 Input is strided RGB8; the exported graph converts to BGR code values. Neural
 patch errors and positive weights are pooled in fixed row-major order with
-f64 accumulation, with at most 32 patches materialized per batch. Warm references
-cache planar conversion only. Both dimensions must be at least 64 pixels.
-Full ladder/JND qualification is recorded separately when complete.
+f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references
+cache planar conversion only. Both dimensions must be 64–4096 pixels, with
+at most 9,000,000 pixels total (1,048,576 on 32-bit).
+Both engines pass the 24 supported pairs at 1e-3 JND; see the
+[qualification record](benchmarks/pieapp_2026-10-16.md).
+The KonJND scale is 0.5189487912492419 native units per operational JND, so the
+original CLI/entry-point control divergence is 0.04433258638589831 JND.

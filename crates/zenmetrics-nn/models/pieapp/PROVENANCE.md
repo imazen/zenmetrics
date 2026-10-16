@@ -13,8 +13,8 @@ for patch error/weight, and weighted patch pooling. Its test procedure uses
 [official release README](https://github.com/prashnani/PerceptualImageError/blob/master/README.md)
 documents deterministic dense 64×64 patches at stride 6 (default) and sparse
 sampling at stride 27. We target the documented dense release convention;
-endpoint inclusion, input units, flatten order and head details must be
-qualified against black-box outputs before shipping.
+the canonical valid-origin grid, BGR code values, NCHW flattening and head
+are qualified against public black-box outputs.
 
 Weights: [official UCSB checkpoint](https://web.ece.ucsb.edu/~ekta/projects/PieAPPv0.1/weights/PieAPPv0.1.pth),
 modified BSD-2 terms for noncommercial use only. Weights are not bundled;
@@ -35,7 +35,7 @@ the reconstruction's error/weight head. On one 64-square patch and two
 128-square patch sets, aggregate differences are below 3e-7 native units.
 This is a network control, not the full ladder/JND qualification.
 The CLI's 128-square sampling still differs from a regular stride-six
-patch set; no sampling equivalence is claimed yet.
+patch set; wrapper sampling equivalence is not claimed.
 
 The original Python 2.7 / torch 0.3.1 CPU oracle uses device redirection
 only, plus the missing demo configuration `num_patches=1024` (paper's test
@@ -47,8 +47,8 @@ outputs agree with the original runtime at printed precision.
 
 ## Selected dense sampling contract
 
-The coordinator selected regular stride-six sampling with parity against
-`compute_score`, rather than the demo wrapper. Valid origins are
+Canonical parity uses regular stride-six sampling against `compute_score`.
+The demo wrapper has a separately recorded result. Valid origins are
 `range(0, side - 63, 6)`, without an extra far-edge origin. On `1415_128`,
 the CLI scores `1.6797861082006782`, while the 121-patch entry-point call
 scores `1.6567797660827637` (absolute difference `0.0230063421179145`).
@@ -63,3 +63,14 @@ adapters used as `sitecustomize.py` in the isolated oracle environments.
 They adapt old Python/Torch runtime conventions; they contain no official
 model source. CUDA disables TF32 and uses deterministic cuDNN. Oracle GPU
 batches are repeated; any mismatch requires a third matching result.
+
+
+## Native qualification
+
+Both engines pass all 24 supported ladder pairs at 1e-3 operational JND.
+RTen's reported worst error is 1.84e-6 JND; ort-cuda's is 2.69e-7 JND.
+One operational JND is 0.5189487912492419 native units, the pooled median
+across all 1008 KonJND threshold pairs. Both engines pass warm/cold bit-identity
+checks. The [qualification receipt](../../../../benchmarks/pieapp_2026-10-16_qualification.json)
+and [full record](../../../../benchmarks/pieapp_2026-10-16.md) retain hashes,
+input bounds and the separately verified wrapper bookkeeping.

@@ -291,3 +291,22 @@ Validation probes used for this matrix live at
 `crates/vmaf/examples/aic_probe.rs` (studio-Y YUV420 → `VmafV0Scorer`) and
 `crates/vif/examples/aic_vif.rs` (candidate luma conventions through
 `vif_plane_f32`); both take raw-RGB dumps as argv.
+
+## PieAPP learned port (2026-10-16)
+
+`pieapp` is independently reconstructed from the [CVPR 2018 paper](https://arxiv.org/abs/1806.02067)
+section 3 / figure 4 and official checkpoint tensor names/shapes. The official
+implementation is executed only as an opaque oracle; its source is not read.
+No pyiqa package, source or weights are used. Noncommercial official weights
+require explicit `WeightsConsent` and are not bundled.
+
+The selected reference is official `compute_score` on valid 64×64 patches at
+stride six, with no extra unaligned far-edge origin. The demo CLI differs by
+`0.0230063421179145` native units on `1415_128`; see
+[DIVERGENCES](../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
+The [qualification receipt](../benchmarks/pieapp_2026-10-16.md) records the
+24 official ladder goldens, original-runtime controls, and native pilot
+results. All 1008 KonJND pairs calibrate one operational JND to
+0.5189487912492419 native units. Both engines pass all 24 supported pairs
+and warm/cold checks at 1e-3 JND. The receipt also records the corrected
+qualification wrapper and its separate bookkeeping recheck.
