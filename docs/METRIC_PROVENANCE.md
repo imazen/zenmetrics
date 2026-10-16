@@ -188,7 +188,8 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
 | `NLPD` | ~0.03–0.22 | `IQA_pytorch` `NLPD(channels=1)` (dingkeyan93, not pyiqa) — BT.709 Y `[0,1]` 8-bit-gridded, mean-of-RMS pooling | ✅ implemented — `nlpd-iqa` (med 2.6e-3 / max 6.7e-3, med-rel 2.63%, n=53; `nlpd` is the RGB/Laparra variant — ≈20.5× off, deliberately distinct) |
 | `CW-SSIM`, `CIEDE2000`, `FLIP` | — | pyiqa / colour metrics | ⬜ |
-| `DISTS`, `LPIPS`×4, `PieAPP`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
+| `DISTS`, `LPIPS`, `DeepDC`, `DreamSim`, `STLPIPS`×2 | `zenmetrics-nn` | ONNX exports of the upstream packages on rten / ONNX Runtime | ✅ implemented ([crosscheck](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
+| `PieAPP`, `TOPIQ`×2, `AHIQ` | — | torch models | ⬜ not on master (PieAPP and AHIQ in progress; TOPIQ weights only via pyiqa) |
 | `WaDIQaM` | — | `dmaniry/deepIQA` @ `51dece99` (chainer), `top="weighted"` checkpoints | ✅ implemented — `wadiqam_{fr,nr}_{live,tid}` in zenmetrics-nn (chainer CPU oracle parity ≤ 7.8e-6 JND on both engines; see DIVERGENCES) |
 | `proposal-*` (Butteraugli, DVIFM, IDFIQA) | — | AIC-4 **submitted** metrics; DVIFM is by Maciej Pedzisz (Nokia); IDFIQA is by Khakpour, Yademellat & Mansouri (ICCKE 2025, PyTorch, CNN features) | ⬜ not reproduced |
 | `proposal-mDCTPSNR` | — | mDCT-PSNR's reference `-jnd` remap `0.000475997802·max(0, 80 − dB)^2.3182` (fits all 9,618 rows to 5e-9 from the `mDCT-PSNR` column) | ✅ reproducible via `mdctpsnr::mdct_psnr_jnd`; ≤3e-6 JND |
