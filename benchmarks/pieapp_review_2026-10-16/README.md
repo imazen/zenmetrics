@@ -6,8 +6,9 @@ Production source: `995d6ba3` (review fixes on merge `f62324c4`).
 The cap driver measures model loading and two cold evaluations of the same
 procedural RGB pair at 3000×3000, checks repeat bits, and reports each call.
 `/usr/bin/time -v` surrounds the complete process, including input creation.
-The enclosing review workflow runs under the shared heavy lock and
+The initial cap workflow ran under the shared heavy lock and
 `run-heavy --mem 16G --jobs 16`. RTen uses `RTEN_NUM_THREADS=16`.
+The remaining review steps acquire and release that lock independently.
 
 CUDA cap start load average: `6.84 101.42 174.97` (1/5/15 minutes).
 RTen cap start load average: `3.56 79.40 161.57`.
@@ -28,3 +29,10 @@ The combined initial workflow exited 143 after the coordinator's stop:
 `run-heavy: done rc=143 1686s | peak-RSS 1.23GiB | min-avail 18567MiB | peak-load 24.44`.
 Remaining checks run with separate lock acquisitions, bounded below twenty
 minutes each. Full review validation is still in progress.
+
+Reproduce the remaining gates with `just nn-pieapp-review MODEL_DIR LADDER
+NEW_OUTPUT`, outside any enclosing flock. Set `LOCK_SNAP_DIR` explicitly.
+Create the unchanged golden groups first with `just nn-pieapp-review-shards
+MODEL_DIR NEW_OUTPUT/shards`. Each step has a 1150-second timeout followed
+by at most twenty seconds for termination. The runner never repeats the cap.
+The head and weight-sign probes have their own bounded lock acquisitions.
