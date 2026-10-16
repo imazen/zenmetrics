@@ -58,16 +58,11 @@ fn cubic(t: f32) -> [f32; 4] {
 }
 fn resize(a: &Image, w: usize, h: usize, is_cubic: bool) -> Image {
     let mut out = vec![0.0; w * h];
-    for y in 0..h {
-        let yy = ((y as f64 + 0.5) * a.h as f64 / h as f64 - 0.5) as f32;
-        let sy = yy.floor() as isize;
-        let ty = yy - sy as f32;
-        let wy = if is_cubic {
-            cubic(ty)
-        } else {
-            [0.0, 1.0 - ty, ty, 0.0]
-        };
-        for x in 0..w {
+    // The source coordinate and interpolation weights depend on one axis
+    // alone, so compute them once per column and once per row instead of
+    // per pixel. Values and their order are unchanged.
+    let columns: Vec<(isize, [f32; 4])> = (0..w)
+        .map(|x| {
             let xx = ((x as f64 + 0.5) * a.w as f64 / w as f64 - 0.5) as f32;
             let sx = xx.floor() as isize;
             let tx = xx - sx as f32;
@@ -76,6 +71,26 @@ fn resize(a: &Image, w: usize, h: usize, is_cubic: bool) -> Image {
             } else {
                 [0.0, 1.0 - tx, tx, 0.0]
             };
+            (sx, wx)
+        })
+        .collect();
+    let rows: Vec<(isize, [f32; 4])> = (0..h)
+        .map(|y| {
+            let yy = ((y as f64 + 0.5) * a.h as f64 / h as f64 - 0.5) as f32;
+            let sy = yy.floor() as isize;
+            let ty = yy - sy as f32;
+            let wy = if is_cubic {
+                cubic(ty)
+            } else {
+                [0.0, 1.0 - ty, ty, 0.0]
+            };
+            (sy, wy)
+        })
+        .collect();
+    for y in 0..h {
+        let (sy, wy) = rows[y];
+        for x in 0..w {
+            let (sx, wx) = columns[x];
             let mut value = 0.0;
             for (j, &ky) in wy.iter().enumerate() {
                 let iy = (sy + j as isize - 1).clamp(0, a.h as isize - 1) as usize;
@@ -204,6 +219,65 @@ pub(super) fn score_order(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pre-change resize: the weights are recomputed for every pixel.
+    fn resize_ordered_ref(a: &Image, w: usize, h: usize, is_cubic: bool) -> Image {
+        let mut out = vec![0.0; w * h];
+        for y in 0..h {
+            let yy = ((y as f64 + 0.5) * a.h as f64 / h as f64 - 0.5) as f32;
+            let sy = yy.floor() as isize;
+            let ty = yy - sy as f32;
+            let wy = if is_cubic {
+                cubic(ty)
+            } else {
+                [0.0, 1.0 - ty, ty, 0.0]
+            };
+            for x in 0..w {
+                let xx = ((x as f64 + 0.5) * a.w as f64 / w as f64 - 0.5) as f32;
+                let sx = xx.floor() as isize;
+                let tx = xx - sx as f32;
+                let wx = if is_cubic {
+                    cubic(tx)
+                } else {
+                    [0.0, 1.0 - tx, tx, 0.0]
+                };
+                let mut value = 0.0;
+                for (j, &ky) in wy.iter().enumerate() {
+                    let iy = (sy + j as isize - 1).clamp(0, a.h as isize - 1) as usize;
+                    let mut row = 0.0;
+                    for (i, &kx) in wx.iter().enumerate() {
+                        let ix = (sx + i as isize - 1).clamp(0, a.w as isize - 1) as usize;
+                        row += a.v[iy * a.w + ix] * f64::from(kx);
+                    }
+                    value += row * f64::from(ky);
+                }
+                out[y * w + x] = value;
+            }
+        }
+        Image { v: out, w, h }
+    }
+
+    #[test]
+    fn resize_precompute_matches_per_pixel_reference() {
+        for &(aw, ah) in &[(3usize, 5usize), (8, 8), (37, 41)] {
+            let src = Image {
+                v: (0..aw * ah)
+                    .map(|i| ((i * 13) % 97) as f64 * 0.25)
+                    .collect(),
+                w: aw,
+                h: ah,
+            };
+            for &(w, h) in &[(aw * 2, ah * 2), (aw / 2 + 1, ah / 2 + 1), (23, 19)] {
+                for is_cubic in [false, true] {
+                    assert_eq!(
+                        resize(&src, w, h, is_cubic).v,
+                        resize_ordered_ref(&src, w, h, is_cubic).v,
+                        "{aw}x{ah} -> {w}x{h} cubic={is_cubic}"
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn known_haar_coefficients_and_constant_convention() {
         let a = Image {
