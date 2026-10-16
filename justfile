@@ -901,3 +901,6 @@ aic-perf-big-cambi-scout output:
 
 aic-perf-big-butter-scout output:
     bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/butter_scout.sh)" -- '{{output}}'
+
+aic-perf-big-assembly binary output:
+    python3 -I benchmarks/aic_perf_big_2026-10-16/assembly.py '{{binary}}' '{{output}}'
