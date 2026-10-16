@@ -47,6 +47,22 @@ compatibility additionally adapts scalar parameter shape, integral reshape
 sizes, scalar indexing, and contiguous device-copy layout. Small CLI
 outputs agree with the original runtime at printed precision.
 
+## Head-convention evidence
+
+The paper does not specify the division by 100 or the `abs(weight) + 1e-6`
+transform. Those expressions were initially hypotheses in `probe.py`, rather
+than conclusions drawn from the paper. The tensor metadata supplies the
+learned scalar affine parameters, but does not establish either expression.
+
+`review_head_probe.py` tests these hypotheses against the official public
+`compute_score` patch-error and patch-weight outputs. Only the independent
+reconstruction exposes raw head values to this probe. The official model's
+intermediate features and implementation remain opaque. Candidate error
+divisors are 1, 10, 100 and 255; weight candidates distinguish signed versus
+absolute values and the added epsilon. Identity, black/white, photographic
+and deterministic random patches provide controls. The committed review
+receipt will report the measured discrimination and any unresolved ambiguity.
+
 ## Selected dense sampling contract
 
 Canonical parity uses regular stride-six sampling against `compute_score`.
