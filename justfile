@@ -907,4 +907,4 @@ budget-preflight-check:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_budget_preflight.py
 
 registered-fit-check:
-    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_registered_program.py scripts/jobsys/test_registered_fit.py scripts/jobsys/test_fit_tools.py scripts/jobsys/test_strict_fit_harvest.py scripts/jobsys/test_e33_contract.py scripts/jobsys/test_e33_wall_cap.py
