@@ -3,6 +3,27 @@ fn main() {
     let a: Vec<_> = std::env::args().collect();
     let w: usize = a[1].parse().unwrap();
     let h: usize = a[2].parse().unwrap();
+    if a[3] == "pair" {
+        let rgb = std::fs::read(&a[4]).unwrap();
+        let ew = w & !1;
+        let eh = h & !1;
+        let mut y = Vec::with_capacity(ew * eh);
+        for row in rgb.chunks_exact(w * 3).take(eh) {
+            for p in row[..ew * 3].chunks_exact(3) {
+                let value = 16.0
+                    + (65.481 * f64::from(p[0])
+                        + 128.553 * f64::from(p[1])
+                        + 24.966 * f64::from(p[2]))
+                        / 255.0;
+                y.push(value.round().clamp(0.0, 255.0) as u16);
+            }
+        }
+        match vmaf::cambi_from_luma(&y, ew, eh, ew, 8) {
+            Ok(score) => println!("{:016x}", score.to_bits()),
+            Err(error) => println!("refused: {error}"),
+        }
+        return;
+    }
     let reps: usize = a[3].parse().unwrap();
     let r: Vec<u8> = (0..w * h * 3)
         .map(|i| ((i * 7 + i / w * 13) ^ (i % 251)) as u8)
