@@ -1586,6 +1586,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
         MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
         MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        MetricKind::Pieapp => None, // Learned error head is unbounded.
         // CKDN is sigmoid quality; identical pairs are image-dependent.
         // Zero is only a default-failure sentinel here, as for NR heads.
         MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),

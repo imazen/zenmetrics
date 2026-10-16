@@ -295,6 +295,9 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
     #[value(name = "paq2piq")]
     Paq2piq,
+    /// PieAPP v0.1, dense patches; noncommercial weights require consent.
+    #[value(name = "pieapp")]
+    Pieapp,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -726,6 +729,7 @@ impl MetricKind {
             MetricKind::Musiq,
             MetricKind::Hyperiqa,
             MetricKind::Paq2piq,
+            MetricKind::Pieapp,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -834,6 +838,7 @@ impl MetricKind {
             MetricKind::Musiq => "musiq",
             MetricKind::Hyperiqa => "hyperiqa",
             MetricKind::Paq2piq => "paq2piq",
+            MetricKind::Pieapp => "pieapp",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -1004,6 +1009,7 @@ impl MetricKind {
             MetricKind::Musiq => &["musiq", "musiq_ref"],
             MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
             MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
+            MetricKind::Pieapp => &["pieapp"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -2318,7 +2324,8 @@ pub fn run_metric(
         | MetricKind::Liqe
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
-        | MetricKind::Paq2piq => nn::score(kind, reference, distorted),
+        | MetricKind::Paq2piq
+        | MetricKind::Pieapp => nn::score(kind, reference, distorted),
         #[cfg(not(feature = "nn"))]
         MetricKind::LpipsAlex
         | MetricKind::LpipsVgg
@@ -2335,7 +2342,8 @@ pub fn run_metric(
         | MetricKind::Liqe
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
-        | MetricKind::Paq2piq => Err(disabled_msg(kind.name(), "nn")),
+        | MetricKind::Paq2piq
+        | MetricKind::Pieapp => Err(disabled_msg(kind.name(), "nn")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
