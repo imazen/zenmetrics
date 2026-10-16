@@ -949,6 +949,41 @@ impl MetricKind {
         }
     }
 
+    /// False when this build compiled the metric's scoring arm out: the
+    /// learned metrics need the `nn` feature and the no-reference ports the
+    /// `nr` feature. Such a metric parses but only returns a "disabled"
+    /// error, so callers listing usable metrics (the browser module) skip it.
+    // Called by zenmetrics-browser, which includes this file by path; the CLI
+    // binary's private copy of the module has no caller.
+    #[allow(dead_code)]
+    pub fn scoring_compiled_in(self) -> bool {
+        let nn = matches!(
+            self,
+            MetricKind::LpipsAlex
+                | MetricKind::LpipsVgg
+                | MetricKind::LpipsSqueeze
+                | MetricKind::Dists
+                | MetricKind::StlpipsAlex
+                | MetricKind::StlpipsVgg
+                | MetricKind::Deepdc
+                | MetricKind::Ckdn
+                | MetricKind::Afine
+                | MetricKind::Dreamsim
+                | MetricKind::Arniqa
+                | MetricKind::Maniqa
+                | MetricKind::Liqe
+                | MetricKind::Musiq
+                | MetricKind::Hyperiqa
+                | MetricKind::Paq2piq
+                | MetricKind::Wd
+        );
+        let nr = matches!(
+            self,
+            MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque
+        );
+        !((nn && !cfg!(feature = "nn")) || (nr && !cfg!(feature = "nr")))
+    }
+
     pub fn requires_gpu(self) -> bool {
         matches!(
             self,
