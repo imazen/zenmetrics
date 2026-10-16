@@ -930,3 +930,12 @@ iqa-compete-prepare binary reference distorted output:
 
 iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --threads '{{threads}}'
+
+iqa-compete-charts raw output:
+    python3 benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}'
+
+iqa-compete-smoke binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
+
+iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --threads 1,20 --sizes '{{sizes}}' --model-root '{{models}}' --models-json '{{model_map}}'

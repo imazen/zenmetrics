@@ -1,4 +1,6 @@
 //! Compute-only IQA benchmark. File IO/preparation and model warmup are outside zenbench.
+#[path = "../iqa_compete_maps.rs"]
+mod maps;
 use serde_json::{Value, json};
 use std::{env, fs, hint::black_box, path::Path, time::Duration};
 use zenmetrics_cli::{
@@ -100,8 +102,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if before.first().is_some_and(|v| *v > 4.) {
         return Err(format!("busy load {before:?}").into());
     }
-    let score =
-        move || run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display)).map(|v| v[0].1);
+    let mut score: maps::Call = if name == "cvvdp" {
+        maps::cvvdp_score(r, d, false)?
+    } else {
+        Box::new(move || {
+            run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))
+                .map(|v| v[0].1)
+                .map_err(|e| e.to_string())
+        })
+    };
     let first = score(); // Model/initialization warmup is outside the timer.
     let mut row = config.clone();
     row["load_before"] = json!(before);
@@ -110,9 +119,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["n"] = json!(0);
         row["load_after"] = json!(load());
         println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        row["mode"] = json!("score+map");
+        row["status"] =
+            json!("skipped:score-path-refused; map capability not qualified on this input");
+        println!("IQA_ROW {}", serde_json::to_string(&row)?);
         return Ok(());
     }
     let first = first?;
+    let mut map_call = maps::native(name, r, d);
+    let map_first = map_call.as_mut().map(|f| f());
+    let mut unsupported = row.clone();
+    unsupported["mode"] = json!("score+map");
+    unsupported["n"] = json!(0);
+    match &map_first {
+        None => {
+            unsupported["status"] = json!("unsupported");
+            unsupported["notes"] =
+                json!("No qualified native-map adapter for this metric; see coverage inventory");
+            println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
+        }
+        Some(Err(e)) => {
+            unsupported["status"] = json!(format!("skipped:map-input:{e}"));
+            println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
+            map_call = None;
+        }
+        Some(Ok(_)) => {}
+    }
     let result = zenbench::run(|suite| {
         suite.group(name, |g| {
             g.config()
@@ -123,59 +155,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .max_time(Duration::from_secs(10))
                 .max_wall_time(Duration::from_secs(120));
             g.bench("score", move |b| {
-                b.iter(move || {
+                b.iter(|| {
                     let value = score().expect("metric failed after warmup");
                     black_box(value)
                 })
             });
+            if let Some(mut call) = map_call {
+                g.bench("score+map", move |b| {
+                    b.iter(|| black_box(call().expect("map failed after warmup")))
+                });
+            }
         });
     });
     let cmp = result.comparisons.first().ok_or("no comparison")?;
-    let bm = cmp.benchmarks.first().ok_or("no benchmark")?;
-    let mut samples: Vec<f64> = cmp
-        .samples
-        .iter()
-        .map(|s| s.compensated_ns[0] as f64 / s.iterations as f64)
-        .collect();
-    samples.sort_by(f64::total_cmp);
-    if samples.len() < 10 {
-        return Err(format!("insufficient zenbench rounds {}", samples.len()).into());
-    }
-    let percentile = |p: f64| {
-        let i = p * (samples.len() - 1) as f64;
-        let lo = i.floor() as usize;
-        let hi = i.ceil() as usize;
-        samples[lo] + (samples[hi] - samples[lo]) * (i - lo as f64)
-    };
-    row["zenbench_samples"] = serde_json::to_value(&cmp.samples)?;
-    row["rayon_threads_observed"] = json!(rayon::current_num_threads());
-    #[cfg(target_arch = "x86_64")]
-    {
-        row["simd_tier"] = json!(if std::is_x86_feature_detected!("avx512f") {
-            "v4-capable"
-        } else if std::is_x86_feature_detected!("avx2") {
-            "v3-capable"
+    for (index, bm) in cmp.benchmarks.iter().enumerate() {
+        let mut row = row.clone();
+        row["mode"] = json!(bm.name);
+        let mut samples: Vec<f64> = cmp
+            .samples
+            .iter()
+            .map(|s| s.compensated_ns[index] as f64 / s.iterations as f64)
+            .collect();
+        samples.sort_by(f64::total_cmp);
+        if samples.len() < 10 {
+            return Err(format!("insufficient zenbench rounds {}", samples.len()).into());
+        }
+        let percentile = |p: f64| {
+            let i = p * (samples.len() - 1) as f64;
+            let lo = i.floor() as usize;
+            let hi = i.ceil() as usize;
+            samples[lo] + (samples[hi] - samples[lo]) * (i - lo as f64)
+        };
+        row["zenbench_samples"] = serde_json::to_value(&cmp.samples)?;
+        row["rayon_threads_observed"] = json!(rayon::current_num_threads());
+        #[cfg(target_arch = "x86_64")]
+        {
+            row["simd_tier"] = json!(if std::is_x86_feature_detected!("avx512f") {
+                "v4-capable"
+            } else if std::is_x86_feature_detected!("avx2") {
+                "v3-capable"
+            } else {
+                "scalar-capable"
+            });
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            row["simd_tier"] = json!("neon-capable");
+        }
+        row["n"] = json!(samples.len());
+        row["median_ns"] = json!(percentile(0.5));
+        row["p10_ns"] = json!(percentile(0.1));
+        row["p90_ns"] = json!(percentile(0.9));
+        row["mean_ns"] = json!(bm.summary.mean);
+        let measured = if index == 0 {
+            first
         } else {
-            "scalar-capable"
+            *map_first.as_ref().unwrap().as_ref().unwrap()
+        };
+        row["score"] = json!(measured);
+        row["ref_score"] = json!(first);
+        row["abs_delta"] = json!((measured - first).abs());
+        row["relative_delta"] =
+            json!((measured - first).abs() / first.abs().max(f64::MIN_POSITIVE));
+        row["status"] = json!(if measured.to_bits() == first.to_bits() {
+            "ok"
+        } else {
+            "variant_mismatch"
         });
+        row["load_after"] = json!(load());
+        row["notes"] = json!(
+            "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles"
+        );
+        println!("IQA_ROW {}", serde_json::to_string(&row)?);
     }
-    #[cfg(target_arch = "aarch64")]
-    {
-        row["simd_tier"] = json!("neon-capable");
-    }
-    row["n"] = json!(samples.len());
-    row["median_ns"] = json!(percentile(0.5));
-    row["p10_ns"] = json!(percentile(0.1));
-    row["p90_ns"] = json!(percentile(0.9));
-    row["mean_ns"] = json!(bm.summary.mean);
-    row["score"] = json!(first);
-    row["ref_score"] = json!(first);
-    row["abs_delta"] = json!(0.0);
-    row["status"] = json!("ok");
-    row["load_after"] = json!(load());
-    row["notes"] = json!(
-        "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles"
-    );
-    println!("IQA_ROW {}", serde_json::to_string(&row)?);
     Ok(())
 }
