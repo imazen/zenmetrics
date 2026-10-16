@@ -883,8 +883,11 @@ aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
 
 # Round 14 preserved CPU baseline and profiles; caller owns heavy-job lock.
-aic-perf-big-baseline:
-    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline.sh)"
+aic-perf-big-baseline output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline.sh)" -- '{{output}}'
+
+aic-perf-big-baseline-step phase output metric width height threads:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- '{{phase}}' '{{output}}' '{{metric}}' '{{width}}' '{{height}}' '{{threads}}'
 
 aic-perf-big-parity base candidate output scratch:
     python3 benchmarks/aic_perf_big_2026-10-16/parity.py '{{base}}' '{{candidate}}' '{{output}}' '{{scratch}}'

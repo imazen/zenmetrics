@@ -6,10 +6,12 @@ Butteraugli driver imports the production module directly and compiles with
 `rustc -O -g`. The latter module uses f32 image planes and selected f64
 expressions; preserving their types is part of exact parity.
 
-`just aic-perf-big-baseline` builds and preserves both binaries, records
+`just aic-perf-big-baseline OUTPUT` builds and preserves both binaries, records
 single-thread instructions/cycles and wall time, records sixteen-thread wall
-time, and captures native perf samples. The caller owns the shared heavy-job
-lock and run-heavy resource scope. The immutable shell body is loaded before
+time, and captures native perf samples. The orchestrator runs outside the shared lock and gives each build, wall
+measurement and profile a separate bounded lock/run-heavy resource scope.
+Set a dedicated `LOCK_SNAP_DIR`; hardware counters use `sudo -n perf` because
+the host restricts unprivileged perf. The immutable shell body is loaded before
 execution. Full output is retained in the caller's log; perf data stays outside
 git and its textual reports will accompany the results here.
 
