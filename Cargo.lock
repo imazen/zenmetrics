@@ -1710,7 +1710,6 @@ name = "dssim-gpu"
 version = "0.0.1"
 dependencies = [
  "almost-enough",
- "bytemuck",
  "dssim-core",
  "enough",
  "image",
