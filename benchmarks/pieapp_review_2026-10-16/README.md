@@ -31,10 +31,12 @@ Remaining checks run with separate lock acquisitions, bounded below twenty
 minutes each. All 21 bounded revision-3 review steps subsequently passed; see `summary-v3.json`.
 
 Reproduce the remaining gates with `just nn-pieapp-review MODEL_DIR LADDER
-NEW_OUTPUT`, outside any enclosing flock. Set `LOCK_SNAP_DIR` explicitly.
+NEW_OUTPUT`, outside any enclosing flock. Set `LOCK_SNAP_DIR`, `ORT_DYLIB_PATH`, `LD_LIBRARY_PATH`, `HEAVY_LOCK`,
+and `RUN_HEAVY` explicitly. The CLI phase also requires `PIEAPP_ORACLE_PYTHON`,
+`PIEAPP_UPSTREAM`, `PIEAPP_PAIRS`, and `PIEAPP_ENTRY_SCORES`.
 Create the unchanged golden groups first with `just nn-pieapp-review-shards
-MODEL_DIR NEW_OUTPUT/shards`. Each step has a 1150-second timeout followed
-by at most twenty seconds for termination. The runner never repeats the stopped RTen cap.
+MODEL_DIR NEW_OUTPUT/shards`. Each step has a 900-second timeout followed
+by at most ten seconds for termination. The runner never repeats the stopped RTen cap.
 The head and weight-sign probes have their own bounded lock acquisitions.
 
 Revision 3 corrects the independently reconstructed weight head to signed
@@ -49,7 +51,6 @@ a distinct receipt. The interrupted RTen cap is never repeated.
 Fresh export/control step resource receipt:
 `run-heavy: done rc=0 7s | peak-RSS 1.51GiB | min-avail 24791MiB | peak-load 11.37`.
 
-
 The corrected revision-3 CUDA cap completed: 35.622168 s and 35.493394 s
 per evaluation, identical bits `4001941dff57cb53`, 71.96 s process wall,
 maximum RSS 1,281,836 KiB. Start load averages: 3.96 / 3.02 / 4.79.
@@ -57,7 +58,6 @@ maximum RSS 1,281,836 KiB. Start load averages: 3.96 / 3.02 / 4.79.
 on shared i265. This is a cap/resource observation, not a quiet-host
 performance comparison to revision 2.
 `run-heavy: done rc=0 77s | peak-RSS 1.22GiB | min-avail 22318MiB | peak-load 3.96`.
-
 
 [Completed qualification summary](summary-v3.json) retains all 21 successful
 phase exit codes, run-heavy resource footers and full-log hashes.

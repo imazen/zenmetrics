@@ -102,7 +102,6 @@ The documented sparse CLI option gives `1.7122649515845207`; no documented
 option has explained the dense difference. Further wrapper probes are
 restricted to documented options. See [DIVERGENCES](../../../../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
 
-
 The [full 24-pair demo panel](../../../../benchmarks/pieapp_review_2026-10-16/cli.json)
 runs the documented dense CUDA CLI twice per pair; all printed scores repeat
 exactly. The worst difference is `2207_2048`: demo `3.4582222` versus explicit
@@ -119,8 +118,7 @@ and `oracle_runtime_cuda.py` preserve the independently written compatibility
 adapters used as `sitecustomize.py` in the isolated oracle environments.
 They adapt old Python/Torch runtime conventions; they contain no official
 model source. CUDA disables TF32 and uses deterministic cuDNN. Oracle GPU
-batches are repeated; any mismatch requires a third matching result.
-
+batches are repeated; the first mismatch fails qualification.
 
 ## Native qualification
 
