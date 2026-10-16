@@ -46,6 +46,8 @@ None.
 - zenmetrics-nn `PieApp` (PR #81 follow-up, review required) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
   reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
   CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
+  New public surface: `PieApp`, `PieApp::WEIGHTS`, `PieApp::from_dir`, and
+  `MetricKind::Pieapp`.
   KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
   oracle is official `compute_score`; the measured demo-wrapper difference
   is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
