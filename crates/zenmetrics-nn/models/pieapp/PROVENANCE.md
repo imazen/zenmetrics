@@ -20,3 +20,27 @@ Weights: [official UCSB checkpoint](https://web.ece.ucsb.edu/~ekta/projects/PieA
 modified BSD-2 terms for noncommercial use only. Weights are not bundled;
 explicit `WeightsConsent` is required. The code written here is independent
 of the noncommercial official source.
+
+## Qualified patch network (2026-10-16)
+
+The official model and CLI archive are pinned to commit
+`0513613d1f575136ea52418e35f2cebc5a49f783` (blob hashes checked without
+inspecting source). Official checkpoint SHA-256:
+`0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0`.
+
+The same `compute_score` entry point used by the documented CLI returns
+an aggregate, patch errors, and patch weights. Calling it as an opaque
+oracle establishes BGR code-value inputs, NCHW feature flattening, and
+the reconstruction's error/weight head. On one 64-square patch and two
+128-square patch sets, aggregate differences are below 3e-7 native units.
+This is a network control, not the full ladder/JND qualification.
+The CLI's 128-square sampling still differs from a regular stride-six
+patch set; no sampling equivalence is claimed yet.
+
+The original Python 2.7 / torch 0.3.1 CPU oracle uses device redirection
+only, plus the missing demo configuration `num_patches=1024` (paper's test
+count). Public method input/output signatures are observed to call it;
+no official implementation or feature internals are read. Modern-runtime
+compatibility additionally adapts scalar parameter shape, integral reshape
+sizes, scalar indexing, and contiguous device-copy layout. Small CLI
+outputs agree with the original runtime at printed precision.
