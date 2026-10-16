@@ -6042,7 +6042,6 @@ dependencies = [
  "rayon",
  "zenmetrics-abstractions",
  "zenmetrics-math",
- "zenpixels",
 ]
 
 [[package]]
