@@ -163,9 +163,8 @@ orthonormal basis the patch SVD draws inside degenerate singular clusters
 specific to the shipped solver — an f32 transliteration of LAPACK's
 `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` (`gesdd` path). A cyclic-Jacobi head
 measured on the same pairs gave pooled 0.218193 (+14%) before it was
-replaced; torch's own CPU (MKL) vs CUDA (cusolver) backends differ ~9e-3
-median on this metric, so a fraction of a percent of solver-draw noise is
-inherent to the column.
+replaced; a fraction of a percent of solver-draw noise is inherent to the
+column.
 
 ## Caveats
 
