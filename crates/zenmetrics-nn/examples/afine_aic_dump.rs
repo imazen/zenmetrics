@@ -70,6 +70,7 @@ fn main() {
     let consent = WeightsConsent::new().accept(Afine::WEIGHTS);
     let af = Afine::from_dir(dir, engine, &consent).expect("load afine");
 
+    let mut errors = 0u32;
     let mut f = std::io::BufWriter::new(std::fs::File::create(out).expect("create out"));
     writeln!(f, "{}", af.aic_dump_header()).unwrap();
     writeln!(
@@ -124,10 +125,23 @@ fn main() {
                         .collect();
                     writeln!(f, "{name}\t{vname}\t{}\t{:.17e}", sub.join("\t"), all[0]).unwrap();
                 }
-                Err(e) => writeln!(f, "{name}\t{vname}\t\t\t\t\t\t\t\tERROR:{e}").unwrap(),
+                Err(e) => {
+                    errors += 1;
+                    // ORT errors are multi-line; keep one TSV row per cell.
+                    let msg = e
+                        .to_string()
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    writeln!(f, "{name}\t{vname}\t\t\t\t\t\t\t\tERROR:{msg}").unwrap();
+                }
             }
         }
         f.flush().unwrap();
         eprintln!("done {name}");
+    }
+    if errors > 0 {
+        eprintln!("{errors} ERROR row(s) written to {out}");
+        std::process::exit(1);
     }
 }

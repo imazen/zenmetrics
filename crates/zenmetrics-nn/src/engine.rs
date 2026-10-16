@@ -450,11 +450,12 @@ pub(crate) mod ort_engine {
 
     /// Shared CUDA session config: TF32 off (PyTorch's
     /// `allow_tf32 = False`), exhaustive cuDNN algorithm search,
-    /// deterministic compute, and bounded arena retention.
+    /// deterministic compute, bounded arena retention, and no silent
+    /// fallback to the CPU provider.
     ///
     /// Two accumulation modes must be bounded for shape-varying inputs
-    /// (61-pair AIC sweep OOM'd the afine fused graph at pair 45/61,
-    /// 2026-10-16): the device-side memory-pattern block retains a
+    /// (61-pair AIC sweep OOM'd the afine fused graph at pair 40/61,
+    /// S46, 2026-10-16): the device-side memory-pattern block retains a
     /// per-shape intermediate arena, and the CPU arena buckets freed
     /// host buffers by size without returning them. Memory-pattern is
     /// off and the CPU provider's arena is disabled (same fix as

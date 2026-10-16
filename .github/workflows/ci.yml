@@ -105,6 +105,7 @@ jobs:
         run: |
           mkdir -p "$HOME/tmp"
           TMPDIR="$HOME/tmp" python3 -B -m unittest discover -s scripts/jobsys -p test_benchmark_exec.py
+          TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -B -m unittest scripts/jobsys/test_palette_plan.py scripts/jobsys/test_palette_pool_authority.py scripts/jobsys/test_budget_preflight.py
           cargo test --no-fail-fast \
             -p zenfleet-core -p zenfleet-ledger -p zenfleet-worker -p zenfleet-ctl \
             -p zenfleet-cloud -p zenfleet-hetzner -p zenfleet-local -p zenfleet-dash \

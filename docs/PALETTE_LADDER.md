@@ -82,3 +82,28 @@ implicit compute deduplication.
 Fast/Adaptive, target-tier/joint and quality-floor receipts in both build
 variants. All ordinary palette and independent decoder tests still run through
 `just palette-check`. These tests do not invoke job execution or a fleet.
+
+## Palette pool authority
+
+The source inventory includes a `pool` object with schema `e35-palette-pool-v2`,
+`certified_clean=true`, all five classes' complete `available_families`, and an
+`authority_sha256`. The caller supplies the approved, frozen authority. The
+validator recomputes SHA-256 from every field except `authority_sha256`, encoded
+as JSON with sorted object keys, compact separators, ASCII escapes, finite
+numbers, UTF-8 bytes and no trailing newline. Array order is retained. Additional
+provenance fields are hashed too. A stale or invented digest is refused.
+
+Each class supplies 64 families, or every clean family if fewer are available.
+Development counts round 14n/64 to the nearest integer, bounded to 1..n-1;
+64 retains 50 fit and 14 development. A class below two clean families is
+incomplete. The complete authority prevents a selected subset from declaring
+its own scarcity. The pair builder divides nominal mass equally between
+classes and then between the actual families in each class/role, before the
+existing acceptance correction.
+
+The registration names a frozen family-hash order without defining its hash
+algorithm, string encoding, sort direction or tie-breaks. Role order therefore
+remains an external freeze binding; these validators check role counts and
+family disjointness. `just palette-pool-check` runs invented metadata checks,
+including pruning with the old digest, without opening datasets or executing
+preflight work.

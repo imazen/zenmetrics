@@ -27,8 +27,9 @@ round drives **our** port's outputs on the full-res inputs.
 
 - `dump_native.tsv` — rten trunk, `native` variant: 60/61 pairs with
   full sub-scores + S67 `afine_all` from the ort-cuda fused graph
-  (rten needs ~28 GB of activations for the 3355×2516 pair — beyond
-  this box's headroom; ort-cuda agrees with rten on shared pairs to
+  (rten's activation peak on the 3355×2516 pair OOM-kills on this ~30 GB
+  box — measured 22.3 GB at 8 threads and 27.2 GB at 4 threads before
+  the kill; ort-cuda agrees with rten on shared pairs to
   median 7.3e-7, max 4.4e-6 — S02 — e.g. S01 −2.84463930 vs
   −2.84463948).
 - `dump_ort_partial.tsv` — ort-cuda fused score only (no sub-scores),
@@ -40,15 +41,18 @@ round drives **our** port's outputs on the full-res inputs.
   the 234 shared rows.
 - `dump_ort_prefix.tsv` — pre-fix ort-cuda re-run over the full sweep:
   357/366 rows scored, 9 BFCArena `Softmax` failures (S46/S54/S67 ×
-  native/nonorm/bgr — ORT's multi-line error text spills a wrapped
-  continuation line after each). Paired with `dump_ort_full.tsv` this
-  is the before/after evidence.
+  native/nonorm/bgr — captured before the example sanitized error text,
+  so each ORT multi-line error spills a wrapped continuation line after
+  its row). Paired with `dump_ort_full.tsv` this is the before/after
+  evidence.
 - `time_prefix.log` / `time_postfix.log` — the `/usr/bin/time -v` +
   `run-heavy` records of those two runs (peak RSS, wall time).
-- `candidates.tsv` — top 60 of the 703 evaluated formulas over the
-  native dump, sorted by site-JND median (generated-data size cap; the
-  full 703-row file is at `~/tmp/afine-aic/candidates_full.tsv`,
-  sha256 `8d73303aded5d3f64ab28e45a83b7af1fbdd6899f75333fd1d0395b36f1a0293`).
+- `candidates.tsv` — the 42 `raw` + 36 `affine` candidate rows that
+  back the results table below, out of the 703 formulas evaluated over
+  the native dump, sorted by site-JND median (generated-data size cap:
+  the 625 fitted `2term` rows stay out of git with the rest of the full
+  output at `~/tmp/afine-aic/candidates_full.tsv`, sha256
+  `8d73303aded5d3f64ab28e45a83b7af1fbdd6899f75333fd1d0395b36f1a0293`).
 - `candidates_ort_preproc.tsv` — same runner over the ort dump's
   `afine_all` under the 6 preprocessing variants (39 pairs).
 
@@ -75,8 +79,9 @@ fit we cannot justify as a convention. Fitted SRCC ceilings at ≈0.92.
 Preprocessing (ort, 39 pairs, raw |Δ| median of `afine_all`):
 bgr 0.685 < native 0.689 < nonorm 0.794 << r384 1.23 < r512 1.26 <<
 r224 2.18 (plus r224 max 152); JND median likewise bgr 0.966 <
-native 0.977 — channel swap is marginally *closer*, still ~100× over
-gate. Resolution is not the gap — native full-res ≈ the earlier
+native 0.977 — but bgr is *worse* on JND max (2.009 vs 1.696) and SRCC
+(0.809 vs 0.843), so no convention either way. Resolution is not the
+gap — native full-res ≈ the earlier
 crop-res run (−2.845 vs −2.84 on S01), and forcing training-size
 resizes only worsens it.
 
@@ -91,18 +96,21 @@ no monotone convention can repair. The likeliest explanation is that
 the AIC-4 site ran a different checkpoint or pipeline step we cannot
 observe (upstream ships one `afine.pth`; the site may have retrained
 or used a variant). The shipped metric stays upstream-verified
-`afine_all` (parity ≤1.5e-5 vs upstream goldens).
+`afine_all` (rten parity 1.42e-5, ort-cuda 1.94e-5 JND).
 
-S67 (3355×2516, 8.4 MP) is also a resource finding: the rten trunk
-needs ~28 GB on it — the only pair we could not score with the
-sub-score path on this box. Its `afine_all` came from ort-cuda.
+S67 (3355×2516, 8.4 MP) is also a resource finding: the rten trunk's
+activation demand on it OOM-kills on this ~30 GB box (measured peaks
+22.3 GB at 8 threads and 27.2 GB at 4 threads before the kill) — the
+only pair we could not score with the sub-score path here. Its
+`afine_all` came from ort-cuda.
 
 ## ort-cuda arena fix (follow-up)
 
-The original ort-cuda sweep hit BFCArena failure at pair 40 (S46) — ORT's device-side
-memory-pattern arena retains a per-shape block pool, so 366
-shape-varying runs exhaust VRAM (the last alloc attempt was a 2.4 GB
-Softmax). Fix, ported from WD's `ae582a3b` into a shared
+The original ort-cuda sweep hit BFCArena failure at pair 40 (S46). Our
+inferred mechanism — not ablated, since the fix disables two retention
+modes at once — is ORT's device-side memory-pattern arena retaining a
+per-shape block pool, so 366 shape-varying runs exhaust VRAM (the last
+alloc attempt was a 2.4 GB Softmax). Fix, ported from WD's `ae582a3b` into a shared
 `engine::ort_engine::cuda_session`: `with_memory_pattern(false)`,
 CPU provider `.with_arena_allocator(false)`, outputs consumed by
 move-iteration. Applies to every ort-cuda backend — `OrtCudaPair`
@@ -127,6 +135,13 @@ recorded values on every model probed: lpips_alex 5.981e-8 (card
 1.28e-5, hyperiqa 3.42e-6, wd 3.443705654e-6, wadiqam fr_live 1.05e-6 /
 fr_tid 3.66e-6 / nr_live 1.03e-6 / nr_tid 5.54e-6 JND.
 
+Remaining-session coverage (2026-10-16, post-fix), ort-cuda ladder
+parity in both model dirs — `~/tmp/nn-phase0/models` and
+`~/tmp/nn-opt2/models-all` agree where they overlap: ckdn 5.09e-5,
+dreamsim 2.03e-5, stlpips_alex 2.57e-6, stlpips_vgg 9.07e-7 JND
+(models-all only: arniqa 7.74e-6, maniqa 1.95e-5, liqe 4.96e-5, musiq
+6.98e-5 JND — musiq identical to its recorded ort-cuda value).
+
 Throughput A/B, lpips_vgg @ 1024² ort-cuda, 50 timed runs per mode
 (`bench_ort_prefix.tsv` / `bench_ort_postfix.tsv`): compute median
 65.8 → 62.9 ms (−4.4%), warm 67.3 → 67.6 ms, e2e 77.4 → 77.5 ms —
@@ -137,7 +152,7 @@ memory-pattern off costs nothing measurable at fixed size.
 ```sh
 # sub-score dump — needs model dir + pairs list, writes dump tsv.
 # variants: native r224 r384 r512 nonorm bgr (comma list, default all)
-cargo run --release -p zenmetrics-nn --features ort \
+cargo run --release -p zenmetrics-nn --features model-tests,ort \
     --example afine_aic_dump -- \
     <model_dir> <pairs.tsv> dump_native.tsv rten native
 # ort-cuda additionally needs ORT_DYLIB_PATH + cuDNN 9.19 libs on

@@ -569,8 +569,12 @@ packed-sRGB-u8 sweep shape and answers a different question.
   `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
   `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
   paths. afine sweep scores are bit-identical before/after (357/357
-  shared rows) and ort-cuda ladder parity re-verified on lpips_alex,
-  dists, deepdc, wd, paq2piq, hyperiqa and wadiqam; RSS numbers are in
+  shared rows) and ort-cuda ladder parity re-verified on afine,
+  lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim,
+  arniqa, maniqa, liqe, musiq, hyperiqa, paq2piq, wadiqam and wd;
+  lpips_vgg covered by the fixed-size nn_bench A/B in the same receipt
+  (lpips_squeeze shares lpips_alex's `OrtCudaPair` graph shape, weights
+  only — not separately probed). RSS numbers are in
   `benchmarks/afine_aic_2026-10-16/README.md`.
 
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
