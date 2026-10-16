@@ -179,6 +179,7 @@ pub(crate) fn execute(
                     None,
                     json!({"schema":"indexed-receipt-v1","status":"quality-floor","requested":value,
                     "minimum":min_ssim2,"achieved":achieved_ssim2,"effective_dispatch":dispatch_json(report),
+                        "build_commit":env!("ZEN_METRICS_COMMIT"),
                     "quantize_seconds":started.elapsed().as_secs_f64(),"quantize_passes":1,
                     "resolved_requested_config_debug":requested_debug}),
                 ));
@@ -357,6 +358,7 @@ mod tests {
         for (name, value) in cases {
             let (bytes, receipt) = execute(&source, &value).unwrap();
             let dispatch = &receipt["effective_dispatch"];
+            assert_eq!(receipt["build_commit"], env!("ZEN_METRICS_COMMIT"));
             assert_eq!(dispatch["schema"], "zenquant-effective-dispatch-v1");
             assert_eq!(dispatch["joint_available"], cfg!(feature = "palette-joint"));
             assert_eq!(dispatch["joint_deflate_effort_used"], false);
