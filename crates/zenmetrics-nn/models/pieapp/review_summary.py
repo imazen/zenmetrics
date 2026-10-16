@@ -31,6 +31,7 @@ for engine in ('rten', 'ort-cuda'):
                         log_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 summary['caps'] = caps
 head = json.loads((a.directory/'head.json').read_text())
+summary['weight_sign'] = json.loads((a.directory/'weight-sign.json').read_text())
 summary['head'] = dict(cases=len(head),negative_raw_weights=sum(r['raw_weight']<0 for r in head),
                       maximum_error_by_hypothesis={key:max(row['hypotheses'][key]['absolute_error'] for row in head) for key in head[0]['hypotheses']})
 cli = json.loads((a.directory/'cli.json').read_text())
@@ -44,6 +45,15 @@ for phase in phases:
     receipt = re.search(r'run-heavy: done rc=(\d+) (\d+)s \| peak-RSS ([0-9.]+)GiB \| min-avail (\d+)MiB \| peak-load ([0-9.]+)',log.read_text())
     assert receipt and int(receipt[1]) == 0 and int(receipt[2]) < 1200, phase
     resources[phase]=dict(rc=int(receipt[1]),seconds=int(receipt[2]),peak_rss_gib=float(receipt[3]),min_available_mib=int(receipt[4]),peak_load=float(receipt[5]),log_sha256=hashlib.sha256(log.read_bytes()).hexdigest())
+parity={}
+manifest=json.loads((a.directory/'shards'/'manifest.json').read_text())
+assert manifest['total_pairs'] == 24
+for phase,expected in [(f'rten-{name}',row['pairs']) for name,row in manifest['shards'].items()]+[('cuda',24)]:
+    text=(a.directory/'steps'/f'{phase}.log').read_text()
+    found=re.findall(r'pieapp: (\d+) pairs, worst \|d\| ([0-9.eE+-]+) = ([0-9.eE+-]+) JND',text)
+    assert len(found)==1 and int(found[0][0])==expected,(phase,found,expected)
+    parity[phase]=dict(pairs=int(found[0][0]),reported_worst_absolute=float(found[0][1]),reported_worst_jnd=float(found[0][2]))
+summary['native_parity']=parity
 summary['workflow'] = dict(steps=resources,orchestrator_log_sha256=hashlib.sha256(a.workflow_log.read_bytes()).hexdigest())
 with a.output.open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
 print(json.dumps(summary,indent=2))
