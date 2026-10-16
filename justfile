@@ -834,9 +834,9 @@ nn-wd-aic-report probe native site config out:
 
 # Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
 aic-more-verify python:
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "${AIC_BUTTER_PROBE:-$HOME/tmp/aic-variants-scratch/round4/butter-original-probe}"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "${AIC_SSIM1_PROBE:-$HOME/tmp/aic-variants-scratch/round4/ssim1-probe}"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "${AIC_WS_PROBE:-$HOME/tmp/aic-variants-scratch/round4/ws-probe}"
     {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
     {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
     {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
@@ -904,3 +904,6 @@ aic-perf-big-butter-scout output:
 
 aic-perf-big-assembly binary output:
     python3 -I benchmarks/aic_perf_big_2026-10-16/assembly.py '{{binary}}' '{{output}}'
+
+aic-perf-big-oracles output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/oracles.sh)" -- '{{output}}'
