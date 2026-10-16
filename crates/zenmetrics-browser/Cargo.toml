@@ -79,4 +79,7 @@ workspace = true
 
 [dev-dependencies]
 imgref = { workspace = true }
+# The browser_oracle example pins zensim's dispatch tier; this must be the
+# archmage copy zensim links (registry 0.9.30), or the disable has no effect.
+archmage = "=0.9.30"
 jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }

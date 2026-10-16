@@ -7891,6 +7891,7 @@ dependencies = [
 name = "zenmetrics-browser"
 version = "0.1.0"
 dependencies = [
+ "archmage 0.9.30",
  "butteraugli",
  "bytemuck",
  "clap",
