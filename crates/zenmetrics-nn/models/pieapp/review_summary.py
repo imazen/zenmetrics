@@ -29,7 +29,12 @@ for engine in ('rten', 'ort-cuda'):
                         interruption_note=(None if engine == 'ort-cuda' else 'Coordinator stopped second evaluation; first call completed; no rerun'),
                         maximum_resident_kib=int(re.search(r'Maximum resident set size \(kbytes\): (\d+)',text)[1]),
                         log_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
-summary['caps'] = caps
+summary['historical_revision_2_caps'] = caps
+summary['score_revision'] = 3
+summary['export'] = json.loads((a.directory/'export.json').read_text())
+summary['weight_identification'] = json.loads((a.directory/'weight-identify.json').read_text())
+summary['reconstruction'] = json.loads((a.directory/'reconstruction.json').read_text())
+summary['calibration_comparison'] = json.loads((a.directory/'konjnd-comparison.json').read_text())
 head = json.loads((a.directory/'head.json').read_text())
 summary['weight_sign'] = json.loads((a.directory/'weight-sign.json').read_text())
 summary['head'] = dict(cases=len(head),negative_raw_weights=sum(r['raw_weight']<0 for r in head),
@@ -37,7 +42,7 @@ summary['head'] = dict(cases=len(head),negative_raw_weights=sum(r['raw_weight']<
 cli = json.loads((a.directory/'cli.json').read_text())
 assert cli['pairs'] == 24
 summary['demo_cli'] = dict(pairs=cli['pairs'],worst=cli['worst'],precision='Demo CUDA CLI printed decimal values; retained exactly as printed')
-phases = ['cli','inventory','debug','release','fmt','clippy','nn-clippy','gpu-features','nn-features','rten-1415','rten-2207','rten-2406','cuda','routing','cli-build','cli-smoke']
+phases = ['cli','inventory','debug','release','fmt','clippy','nn-clippy','gpu-features','nn-features','rten-1415','rten-2207','rten-2406','cuda','cuda-cap','konjnd-0','konjnd-1','konjnd-2','konjnd-3','routing','cli-build','cli-smoke']
 resources={}
 for phase in phases:
     log=a.directory/'steps'/f'{phase}.log'
@@ -54,6 +59,12 @@ for phase,expected in [(f'rten-{name}',row['pairs']) for name,row in manifest['s
     assert len(found)==1 and int(found[0][0])==expected,(phase,found,expected)
     parity[phase]=dict(pairs=int(found[0][0]),reported_worst_absolute=float(found[0][1]),reported_worst_jnd=float(found[0][2]))
 summary['native_parity']=parity
+path=a.directory/'cap-ort-cuda-v3.log'
+text=path.read_text()
+calls=re.findall(r'call=(\d+) seconds=([0-9.]+) score=([-+0-9.eE]+) bits=([0-9a-f]+)',text)
+assert len(calls)==2 and calls[0][3]==calls[1][3]
+assert re.search(r'Exit status: 0\s*$',text)
+summary['revision_3_cuda_cap']=dict(calls=[dict(call=int(i),seconds=float(t),score=float(v),bits=b) for i,t,v,b in calls],maximum_resident_kib=int(re.search(r'Maximum resident set size \(kbytes\): (\d+)',text)[1]),log_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 summary['workflow'] = dict(steps=resources,orchestrator_log_sha256=hashlib.sha256(a.workflow_log.read_bytes()).hexdigest())
 with a.output.open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
 print(json.dumps(summary,indent=2))
