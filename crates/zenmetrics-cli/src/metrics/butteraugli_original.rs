@@ -245,6 +245,71 @@ fn malta(
         dif.push(value);
     }
     let paths = if low { MALTA_LOW } else { MALTA_HIGH };
+    malta_accumulate(&dif, w, h, paths, out);
+}
+fn malta_accumulate(dif: &[f32], w: usize, h: usize, paths: &[&[(i8, i8)]], out: &mut [f32]) {
+    let scalar = |x: usize, y: usize| {
+        let mut value = 0.0;
+        for path in paths {
+            let mut sum = 0.0;
+            for &(dx, dy) in *path {
+                let xx = x as isize + isize::from(dx);
+                let yy = y as isize + isize::from(dy);
+                if xx >= 0 && yy >= 0 && xx < w as isize && yy < h as isize {
+                    sum += dif[yy as usize * w + xx as usize];
+                }
+            }
+            value += sum * sum;
+        }
+        value
+    };
+    for y in 0..h {
+        let mut x = 0;
+        if y >= 4 && y + 4 < h {
+            for xx in 0..w.min(4) {
+                out[y * w + xx] += scalar(xx, y);
+            }
+            x = w.min(4);
+            // Both fixed path sets have radius four. A contiguous eight-
+            // sample load handles eight independent sums in the same order
+            // as the scalar traversal, with one bounds check per neighbor.
+            while x + 8 <= w.saturating_sub(4) {
+                let mut value = [0.0f32; 8];
+                for path in paths {
+                    let mut sum = [0.0f32; 8];
+                    for &(dx, dy) in *path {
+                        let lo = (y as isize + isize::from(dy)) as usize * w
+                            + (x as isize + isize::from(dx)) as usize;
+                        let samples: &[f32; 8] = dif[lo..lo + 8].try_into().unwrap();
+                        for i in 0..8 {
+                            sum[i] += samples[i];
+                        }
+                    }
+                    for i in 0..8 {
+                        value[i] += sum[i] * sum[i];
+                    }
+                }
+                let dst: &mut [f32; 8] = (&mut out[y * w + x..y * w + x + 8]).try_into().unwrap();
+                for i in 0..8 {
+                    dst[i] += value[i];
+                }
+                x += 8;
+            }
+        }
+        for xx in x..w {
+            out[y * w + xx] += scalar(xx, y);
+        }
+    }
+}
+
+#[cfg(test)]
+fn malta_accumulate_ordered(
+    dif: &[f32],
+    w: usize,
+    h: usize,
+    paths: &[&[(i8, i8)]],
+    out: &mut [f32],
+) {
     for y in 0..h {
         for x in 0..w {
             let mut value = 0.0;
@@ -263,6 +328,7 @@ fn malta(
         }
     }
 }
+
 fn l2(a: &[f32], b: &[f32], weight: f64, out: &mut [f32]) {
     if weight == 0.0 {
         return;
@@ -737,6 +803,41 @@ fn convolve_ordered(a: &[f32], w: usize, h: usize, k: &[f32], border: f32) -> Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malta_blocks_match_ordered_paths_at_borders_and_tails() {
+        for paths in [MALTA_LOW, MALTA_HIGH] {
+            assert!(
+                paths
+                    .iter()
+                    .flatten()
+                    .all(|&&(x, y)| (-4..=4).contains(&x) && (-4..=4).contains(&y))
+            );
+            for (w, h) in [
+                (1, 1),
+                (7, 5),
+                (8, 9),
+                (16, 9),
+                (17, 15),
+                (31, 19),
+                (32, 33),
+                (65, 35),
+                (129, 67),
+            ] {
+                let dif: Vec<f32> = (0..w * h)
+                    .map(|i| (((i * 7919 + i / w * 13) % 8191) as i32 - 4095) as f32 * 0.0625)
+                    .collect();
+                let mut expected: Vec<f32> =
+                    (0..w * h).map(|i| (i % 19) as f32 * 0.015625).collect();
+                let mut actual = expected.clone();
+                malta_accumulate_ordered(&dif, w, h, paths, &mut expected);
+                malta_accumulate(&dif, w, h, paths, &mut actual);
+                for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.to_bits(), b.to_bits(), "{w}x{h} pixel{index}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn tiled_convolution_matches_ordered_taps_at_borders_and_tails() {
