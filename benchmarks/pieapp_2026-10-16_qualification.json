@@ -110,7 +110,7 @@
       "strict NN all-target clippy, model-tests+ort",
       "CLI sweep,png,gpu,gpu-cuda",
       "CLI sweep,orchestrator,nn,nr",
-      "inventory 109",
+      "inventory 104",
       "CLI routing unit",
       "real default-scheduler CLI consent refusal and oracle score"
     ]
