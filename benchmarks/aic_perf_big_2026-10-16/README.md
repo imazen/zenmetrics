@@ -54,3 +54,12 @@ passes all standalone Butteraugli tests and preserves both scout score bits.
 The next experiment processes eight independent interior Malta pixels per
 window, retaining each pixel's neighbor/path order and the original border
 path. It introduces no reduction across pixels.
+
+The integer-run scout is superseded and is not the production change: it
+proved bit identity but regrouped histogram updates, contrary to the required
+ordering contract. Its helper/assertions remain test-only research. Production
+keeps the original serial histogram function text-identical and schedules
+independent column regions only when the existing parallel feature/pool and
+geometry permit it. Region widths preserve original eight-lane groups and
+scalar tails; each histogram cell receives the original ordered +/-1 updates.
+The original floating-point point evaluator and final pooling are unchanged.

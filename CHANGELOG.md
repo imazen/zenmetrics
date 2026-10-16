@@ -17,7 +17,7 @@ Workspace conventions per the global rules:
 
 ### Changed
 
-- CAMBI groups adjacent equal-valued histogram updates with exact integer ramps (`aa16deab`), preserving floating-point evaluation and pooling order; [CPU and bit-parity evidence](benchmarks/aic_perf_big_2026-10-16/README.md).
+- CAMBI schedules independent column regions (`0ffb7674`), preserving every original histogram update, SIMD lane group and floating-point pooling order; [CPU and bit-parity evidence](benchmarks/aic_perf_big_2026-10-16/README.md).
 
 - CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
 - Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
