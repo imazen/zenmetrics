@@ -63,3 +63,30 @@ or change metric arithmetic. The initial VMAF timing rows remain diagnostic.
 at CID22/2K and one/all workers, with zero score difference.
 C/C++ competitor adapters are buildable scaffolding; their timing and
 same-score qualification are not yet complete.
+
+## Native competitor correctness probes
+
+The [CID22 one-call smoke](native-probe.json) verifies shim invocation and
+compares every headline with a separate Rust probe. It is not a timing panel.
+libvmaf reports version 3.2.0 from vmaf-head-sys 0.2.0's vendored source;
+this is recorded rather than relabeled as the port's 3.2.1 parity reference.
+VMAF, SSIM/MS-SSIM, PSNR, PSNR-HVS-Y and CAMBI fall within their existing
+parity gates on that pair. The VIF and libjxl comparisons exceed the chosen
+bounds and remain separate variant comparisons. SSIMULACRA2's measured
+delta is 2.4278133457799242 points; its cause is not yet established.
+
+Native input exports reuse the CLI's BT.709/BT.601 4:2:0 conversion,
+including even cropping. SSIM uses the full-size f32 studio-601 luma
+formula, PSNR the full-size f64 BT.709 formula. Raw buffer hashes are
+recorded in each competitor row. Input conversion to the native buffer
+type is untimed; conversions performed inside the metric remain timed.
+The libvmaf timer covers picture submission, feature extraction, flush and
+score prediction. Context registration, picture allocation/fill and model
+loading precede it. The libjxl timer covers ComputeScore or
+ComputeSSIMULACRA2, including conversion within those calls and map release.
+Raw RGB unpacking and pool/metadata creation precede it.
+
+The native runner saves every timed sample and repeated score, the
+corresponding Rust reference probe, input hashes, admission load and the
+resource-wrapper receipt. Public APIs without a native buffer map route
+produce explicit unsupported rows.

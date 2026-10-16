@@ -82,6 +82,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}",serde_json::to_string(&MetricKind::all().iter().map(|k|json!({"metric_name":k.name(),"gpu":k.requires_gpu(),"compiled":k.scoring_compiled_in(),"columns":k.column_names()})).collect::<Vec<_>>())?);
         return Ok(());
     }
+    #[cfg(iqa_compete_ingress)]
+    if a.get(1).is_some_and(|s| s == "prepare-planes") {
+        let pairs_path = Path::new(&a[2]);
+        let pairs: Vec<Value> = serde_json::from_slice(&fs::read(pairs_path)?)?;
+        let out = Path::new(&a[3]);
+        fs::create_dir(out)?;
+        let mut manifest = Vec::new();
+        for pair in pairs {
+            for convention in ["709-420", "601-420", "601-y", "709-y"] {
+                let mut row = pair.clone();
+                row["convention"] = json!(convention);
+                for role in ["reference", "distorted"] {
+                    let image = Rgb8Image {
+                        width: pair["width"].as_u64().ok_or("width")? as u32,
+                        height: pair["height"].as_u64().ok_or("height")? as u32,
+                        pixels: fs::read(
+                            pairs_path
+                                .parent()
+                                .ok_or("parent")?
+                                .join(pair[role].as_str().ok_or("input")?),
+                        )?,
+                    };
+                    let (w, h, bytes) = maps::competitor_planes(&image, convention)?;
+                    let filename = format!(
+                        "{}-{convention}-{role}.yuv",
+                        pair["size_name"].as_str().ok_or("size name")?
+                    );
+                    fs::write(out.join(&filename), bytes)?;
+                    row[role] = json!(filename);
+                    row["width"] = json!(w);
+                    row["height"] = json!(h);
+                }
+                manifest.push(row);
+            }
+        }
+        fs::write(
+            out.join("planes.json"),
+            serde_json::to_vec_pretty(&manifest)?,
+        )?;
+        return Ok(());
+    }
     let config: Value = serde_json::from_slice(&fs::read(&a[1])?)?;
     let w = config["width"].as_u64().ok_or("width")? as u32;
     let h = config["height"].as_u64().ok_or("height")? as u32;

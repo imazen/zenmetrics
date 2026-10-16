@@ -137,6 +137,7 @@ def main():
     p.add_argument('binary', type=Path)
     p.add_argument('pairs', type=Path)
     p.add_argument('root', type=Path)
+    p.add_argument('--host', help='Public CPU-derived host alias, independent of local hostname')
     p.add_argument('--sizes', default='cid22,2k')
     p.add_argument('--metrics')
     p.add_argument('--threads', default='1,all')
@@ -148,6 +149,8 @@ def main():
         (args.root / directory).mkdir(exist_ok=True)
     models = json.loads(args.models_json.read_text()) if args.models_json else {}
     meta = metadata(args.binary)
+    if args.host:
+        meta["host"] = args.host
     output = args.root / f"{meta['host']}.jsonl"
     inventory = json.loads(subprocess.check_output([args.binary, 'inventory'], text=True))
     if not (args.root / 'inventory.json').exists():

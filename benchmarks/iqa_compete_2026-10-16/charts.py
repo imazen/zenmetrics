@@ -14,7 +14,7 @@ def svg_lines(title,rows):
     groups=collections.defaultdict(list)
     for r in rows:groups[(r['metric_name'],r['impl'],r['threads'],r['mode'],r['status'])].append(r)
     xmax=max((r['width']*r['height']/1e6 for r in rows),default=1);ymax=max((r['median_ns']/1e6 for r in rows),default=1)
-    out=['<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12">',f'<text x="12" y="22">{html.escape(title)} — x: megapixels; y: milliseconds/call</text><path d="M60 40V480H880" fill="none" stroke="black"/>']
+    out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="{max(540,70+17*len(groups))}"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12">',f'<text x="12" y="22">{html.escape(title)} — x: megapixels; y: milliseconds/call</text><path d="M60 40V480H880" fill="none" stroke="black"/>']
     for i,(key,rs) in enumerate(sorted(groups.items())):
         color=['#2166ac','#4f9e79','#cf702c','#9c58a1','#6b6b6b'][i%5];points=' '.join(f'{60+820*r["width"]*r["height"]/1e6/xmax:.3f},{480-420*r["median_ns"]/1e6/ymax:.3f}' for r in sorted(rs,key=lambda r:r['width']*r['height']))
         out.append(f'<polyline points="{points}" fill="none" stroke="{color}"/><text x="900" y="{45+17*i}" fill="{color}">{html.escape(str(key))}</text>')

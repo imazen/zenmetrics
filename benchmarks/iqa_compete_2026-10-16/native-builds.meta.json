@@ -1,0 +1,42 @@
+{
+  "receipts": [
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-cached-v5.log",
+      "sha256": "ed74d5b2593d7257127db26416fd54e4c2ad76024518fd8679ad44773b6c4616",
+      "resource": "run-heavy: done rc=0 17s | peak-RSS 1.12GiB | min-avail 21980MiB | peak-load 2.27"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-reference-v5.log",
+      "sha256": "d99f802e870bb7ec70246bd4c3a005a356b8ceda8fbc92f2c7ad47d7e95a7304",
+      "resource": "run-heavy: done rc=0 16s | peak-RSS 1.12GiB | min-avail 22056MiB | peak-load 3.68"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/model-adapter-parity.log",
+      "sha256": "69f06999e3dc2be75d3d2b799968e42b795c1a5c9fc48cd6f4455e9fbde652c6",
+      "resource": "run-heavy: done rc=0 6s | peak-RSS 0.18GiB | min-avail 22967MiB | peak-load 0.73"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-planes-v6.log",
+      "sha256": "219488513bb24a4c032089adffc8bfe4402f10ca39538f146bfaf3c8d9accc7f",
+      "resource": "run-heavy: done rc=0 17s | peak-RSS 1.15GiB | min-avail 22105MiB | peak-load 6.03"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/prepare-planes-v6.log",
+      "sha256": "01ce890cda7a8fed1373bfe6ce619a1427c86360b6270c9a524ae63cfaa1ca77",
+      "resource": "run-heavy: done rc=0 2s | peak-RSS 0.33GiB | min-avail 23443MiB | peak-load 4.75"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-libvmaf-v2.log",
+      "sha256": "1cb050901753abe15c08a7cf10b81f6321ab2f2b8590326cca2ae640ef8b52fe",
+      "resource": "run-heavy: done rc=0 1s | peak-RSS 0.10GiB | min-avail 23643MiB | peak-load 4.10"
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-libjxl-final.log",
+      "sha256": "775e8ae6acb5843d49a9e4979301c339535908fb097b5b74eb2576f30c01d53e",
+      "resource": "run-heavy: done rc=0 1s | peak-RSS 0.17GiB | min-avail 23532MiB | peak-load 3.68"
+    }
+  ],
+  "cached_flags": "--cfg iqa_compete_ingress --cfg iqa_compete_cached",
+  "reference_flags": "--cfg iqa_compete_ingress",
+  "target_cpu_native": false
+}

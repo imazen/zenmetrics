@@ -274,3 +274,59 @@ pub(super) fn vmaf_probe_dump(
     }
     Ok(serde_json::json!({"score_bits":format!("{:016x}",eval.score().to_bits()),"maps":manifest}))
 }
+
+/// Export native component buffers once, before competitor timing.
+#[cfg(iqa_compete_ingress)]
+pub(super) fn competitor_planes(
+    image: &Rgb8Image,
+    convention: &str,
+) -> Result<(usize, usize, Vec<u8>), Box<dyn std::error::Error>> {
+    let (w, h) = (image.width as usize, image.height as usize);
+    match convention {
+        "709-420" | "601-420" => {
+            let matrix = if convention == "709-420" {
+                ingress::Ingress::Bt709
+            } else {
+                ingress::Ingress::Studio601
+            };
+            let (y, u, v) = ingress::to_yuv420_even(image, matrix)?;
+            Ok((w & !1, h & !1, [y, u, v].concat()))
+        }
+        "601-y" => {
+            // Public converter crops odd sizes. Replicate to even first, then
+            // extract the original rectangle: the per-pixel f32 formula is unchanged.
+            let pw = (w + 1) & !1;
+            let ph = (h + 1) & !1;
+            let mut padded = Vec::with_capacity(pw * ph * 3);
+            for y in 0..ph {
+                for x in 0..pw {
+                    let i = (y.min(h - 1) * w + x.min(w - 1)) * 3;
+                    padded.extend_from_slice(&image.pixels[i..i + 3]);
+                }
+            }
+            let gray = zenmetrics_cli::metrics::studio601_gray(&Rgb8Image {
+                width: pw as u32,
+                height: ph as u32,
+                pixels: padded,
+            });
+            let mut plane = Vec::with_capacity(w * h);
+            for y in 0..h {
+                for x in 0..w {
+                    plane.push(gray.pixels[(y * pw + x) * 3]);
+                }
+            }
+            Ok((w, h, plane))
+        }
+        "709-y" => {
+            let mut plane = Vec::with_capacity(w * h);
+            for rgb in image.pixels.as_chunks::<3>().0 {
+                let lum = 0.2126 * (f64::from(rgb[0]) / 255.0)
+                    + 0.7152 * (f64::from(rgb[1]) / 255.0)
+                    + 0.0722 * (f64::from(rgb[2]) / 255.0);
+                plane.push((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8);
+            }
+            Ok((w, h, plane))
+        }
+        _ => Err("unknown competitor component convention".into()),
+    }
+}

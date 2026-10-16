@@ -951,3 +951,12 @@ iqa-compete-libjxl-build source output:
 
 iqa-compete-model-parity reference candidate pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/check_model_adapter.py '{{reference}}' '{{candidate}}' '{{pairs}}' '{{output}}'
+
+iqa-compete-planes binary pairs output:
+    '{{binary}}' prepare-planes '{{pairs}}' '{{output}}'
+
+iqa-compete-native engine binary rust pairs planes output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes '{{sizes}}'
+
+iqa-compete-native-probe vmaf jxl rust pairs planes output:
+    python3 benchmarks/iqa_compete_2026-10-16/native_probe.py '{{vmaf}}' '{{jxl}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}'
