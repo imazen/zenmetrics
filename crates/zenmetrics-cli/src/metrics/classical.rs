@@ -117,8 +117,8 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
         // PSNR of one full-resolution studio-swing BT.601 chroma plane, the
         // same per-pixel conversion as `PsnrYCbCr611`. JPEG AIC-4 `PSNR-Cb`
         // and `PSNR-Cr`.
-        Kind::PsnrCb => Ok(psnr(yuv444_studio601_mse(r, d).1)),
-        Kind::PsnrCr => Ok(psnr(yuv444_studio601_mse(r, d).2)),
+        Kind::PsnrCb => Ok(psnr(studio601_plane_mse(r, d, 1))),
+        Kind::PsnrCr => Ok(psnr(studio601_plane_mse(r, d, 2))),
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
@@ -272,6 +272,62 @@ fn yuv444_studio601_mse(r: &Rgb8Image, d: &Rgb8Image) -> (f64, f64, f64) {
 
     let n_f = n as f64;
     (sum_y / n_f, sum_cb / n_f, sum_cr / n_f)
+}
+
+/// The studio-swing BT.601 luma/chroma linear parts, before `round`/`clamp`:
+/// `(Y - 16, Cb - 128, Cr - 128)` as in [`yuv444_studio601_mse`].
+#[inline]
+fn studio601_linear(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    (
+        (65.481 * r + 128.553 * g + 24.966 * b) / 255.0,
+        (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0,
+        (112.0 * r - 93.786 * g - 18.214 * b) / 255.0,
+    )
+}
+
+/// MSE of one full-resolution studio-swing BT.601 plane (`0` = Y, `1` = Cb,
+/// `2` = Cr), using the same per-pixel conversion as
+/// [`yuv444_studio601_mse`] but touching only the requested plane. The
+/// compiler drops the unused linear parts, so a single-plane metric does not
+/// pay for the other two.
+fn studio601_plane_mse(r: &Rgb8Image, d: &Rgb8Image, plane: usize) -> f64 {
+    let n = (r.width as usize)
+        .checked_mul(r.height as usize)
+        .expect("image dimensions overflow");
+    let offset = if plane == 0 { 16.0 } else { 128.0 };
+    let pick = |v: (f64, f64, f64)| match plane {
+        0 => v.0,
+        1 => v.1,
+        _ => v.2,
+    };
+    let mut sum = 0.0_f64;
+    for (a, b) in r
+        .pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
+    {
+        let v1 = (offset
+            + pick(studio601_linear(
+                f64::from(a[0]),
+                f64::from(a[1]),
+                f64::from(a[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let v2 = (offset
+            + pick(studio601_linear(
+                f64::from(b[0]),
+                f64::from(b[1]),
+                f64::from(b[2]),
+            )))
+        .round()
+        .clamp(0.0, 255.0);
+        let dv = v1 - v2;
+        sum += dv * dv;
+    }
+    sum / n as f64
 }
 
 /// Mean CIEDE2000 (ΔE00) between two RGB8 images.
@@ -866,6 +922,17 @@ mod tests {
             sum_de += ciede2000(l1, al1, bl1, l2, al2, bl2);
         }
         sum_de / n as f64
+    }
+
+    #[test]
+    fn studio601_plane_mse_matches_combined_planes() {
+        for (w, h, invert) in [(17, 19, false), (40, 31, true)] {
+            let (r, d) = ssimc_pair(w, h, invert);
+            let (my, mcb, mcr) = yuv444_studio601_mse(&r, &d);
+            assert_eq!(studio601_plane_mse(&r, &d, 0), my);
+            assert_eq!(studio601_plane_mse(&r, &d, 1), mcb);
+            assert_eq!(studio601_plane_mse(&r, &d, 2), mcr);
+        }
     }
 
     #[test]
