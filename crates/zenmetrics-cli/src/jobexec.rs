@@ -2085,6 +2085,10 @@ fn diffmap_pair_to_blob(
                     .map_err(|e| format!("gmsd diffmap: {e:?}"))?;
                     diffmap_to_pfm_gz(dm.map(), dm.width, dm.height)
                 }
+                // `CvvdpDisplay::model`/`geometry` exist only when a cvvdp
+                // backend is built (`metrics/display.rs`); the display parse
+                // is what maps the selection onto them.
+                #[cfg(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
                 _ if cvvdp_sdr_display.is_some() => {
                     let display = cvvdp_sdr_display.expect("guarded");
                     let display = crate::metrics::display::parse_display(display)
@@ -2101,6 +2105,11 @@ fn diffmap_pair_to_blob(
                         .map_err(|e| format!("cvvdp diffmap: {e}"))?;
                     diffmap_to_pfm_gz(&dm, w, h)
                 }
+                #[cfg(not(any(feature = "cpu-cvvdp", feature = "gpu-cvvdp")))]
+                _ if cvvdp_sdr_display.is_some() => Err(
+                    "diffmap: SDR cvvdp maps need --features cpu-cvvdp (the CPU port) in this build"
+                        .into(),
+                ),
                 _ => unreachable!("metric validated above"),
             }
         })()
