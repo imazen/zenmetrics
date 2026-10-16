@@ -316,6 +316,39 @@ snap-cargo rev +args:
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 
+# zenmetrics-cli feature-combination matrix: 12 rows — every supported
+# `--no-default-features --features <F>` shape, plus the bare
+# `--no-default-features` build, plus the default build. Prints a PASS/FAIL
+# row per combination and exits nonzero if any fails. CI runs the same list
+# as plain `cargo --locked check` (ci.yml, `cli-feature-matrix` job) — keep
+# the two lists in sync.
+cli-feature-matrix:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    total=0
+    fails=0
+    run_combo() {
+        local label="$1" out status=0
+        shift
+        out=$(just snap-cargo @ check "$@" 2>&1) || status=$?
+        total=$((total + 1))
+        if [ "$status" -eq 0 ]; then
+            printf 'PASS  %s\n' "$label"
+        else
+            printf 'FAIL  %s\n' "$label"
+            printf '%s\n' "$out"
+            fails=$((fails + 1))
+        fi
+    }
+    for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+        run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
+    done
+    run_combo bare -p zenmetrics-cli --no-default-features
+    run_combo default -p zenmetrics-cli
+    printf '%s\n' "---- $((total - fails))/$total combinations passed ----"
+    [ "$fails" -eq 0 ]
+
 # Matched CPU-metric wall/counter runs; pass a preserved baseline or candidate example.
 ranked-wall binary threads output w="3355" h="2516" reps="5":
     bash scripts/bench/ranked-metric-wall.sh "{{binary}}" "{{threads}}" "{{output}}" "{{w}}" "{{h}}" "{{reps}}"
