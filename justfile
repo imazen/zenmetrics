@@ -916,3 +916,6 @@ aic-perf-big-interleave-step base candidate output width height threads:
 
 aic-perf-big-residuals parity pairs published config output:
     python3 -I benchmarks/aic_perf_big_2026-10-16/residuals.py '{{parity}}' '{{pairs}}' '{{published}}' '{{config}}' '{{output}}'
+
+aic-perf-big-summary scratch output:
+    python3 -I benchmarks/aic_perf_big_2026-10-16/summarize.py '{{scratch}}' '{{output}}'
