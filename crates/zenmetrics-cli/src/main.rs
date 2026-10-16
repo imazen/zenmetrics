@@ -78,9 +78,15 @@ mod jobexec;
 #[cfg(feature = "jobexec")]
 mod objstore;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_runner;
 
