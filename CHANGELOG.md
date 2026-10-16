@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
+
 - Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
 
 - Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.

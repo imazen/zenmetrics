@@ -799,3 +799,7 @@ beside the destination for diagnosis; it does not authorize a retry.
 A bounded S smoke may bind bounded_smoke_activation=smooth_hinge_tau_1_8
 in its archive contract. Native inspection must report SmoothHinge; an ordinary
 ReLU export or a scientific execution contract is refused on that path.
+
+### Scientific STEER preparation
+
+The `steer` fit-program profile binds an explicit source/data inventory and full120×50,000 budget. Its archive-bound activation declaration is checked against the native loader for both ReLU controls and fixed tau1/8 smooth models. Every such fit exports GNU-time resources beside the fresh destination; historical programs retain their prior path. This prepares artifacts only; registration freeze and launch remain separate coordinator actions.
