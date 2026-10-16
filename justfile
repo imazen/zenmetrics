@@ -826,3 +826,7 @@ nn-pieapp-install-calibration:
 nn-pieapp-wrapper-check:
     bash -n benchmarks/pieapp_finish_2026-10-16.sh benchmarks/pieapp_gates_2026-10-16.sh
     just nn-pieapp-install-calibration
+
+# Reproduce the mutable-file failure and verify the actual immutable launcher.
+nn-pieapp-launcher-control:
+    python3 -I crates/zenmetrics-nn/models/pieapp/launcher_control.py
