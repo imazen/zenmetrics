@@ -162,9 +162,29 @@ fn average(a: &[f32]) -> f64 {
 }
 fn grid(a: &[f32], w: usize, h: usize) -> f64 {
     let mut rows: Vec<_> = a.chunks_exact(w).map(average).collect();
-    let mut cols: Vec<_> = (0..w)
-        .map(|x| (0..h).map(|y| f64::from(a[y * w + x])).sum::<f64>() / h as f64)
-        .collect();
+    // Column sums are accumulated over a block of columns at a time, so the
+    // strided reads stay in cache. Each column still sums in ascending `y`
+    // order from -0.0 (the identity `Iterator::sum` starts from), which keeps
+    // the f64 result bit-identical, including an all -0.0 column.
+    let mut cols = vec![-0.0f64; w];
+    const BLOCK: usize = 256;
+    let mut x0 = 0;
+    while x0 < w {
+        let x1 = (x0 + BLOCK).min(w);
+        for c in &mut cols[x0..x1] {
+            *c = -0.0;
+        }
+        for y in 0..h {
+            let base = y * w;
+            for x in x0..x1 {
+                cols[x] += f64::from(a[base + x]);
+            }
+        }
+        x0 = x1;
+    }
+    for c in &mut cols {
+        *c /= h as f64;
+    }
     rows.sort_by(f64::total_cmp);
     cols.sort_by(f64::total_cmp);
     rows[h / 50] + cols[w / 50]
@@ -313,6 +333,32 @@ mod tests {
                 "const {w}x{h}"
             );
         }
+    }
+
+    #[test]
+    fn grid_blocked_columns_match_column_major_reference() {
+        let grid_ref = |a: &[f32], w: usize, h: usize| {
+            let mut rows: Vec<_> = a.chunks_exact(w).map(average).collect();
+            let mut cols: Vec<_> = (0..w)
+                .map(|x| (0..h).map(|y| f64::from(a[y * w + x])).sum::<f64>() / h as f64)
+                .collect();
+            rows.sort_by(f64::total_cmp);
+            cols.sort_by(f64::total_cmp);
+            rows[h / 50] + cols[w / 50]
+        };
+        for &(w, h) in &[(51, 50), (256, 51), (300, 300), (331, 199)] {
+            let a: Vec<f32> = (0..w * h)
+                .map(|i| ((i * 29 + i / 3) % 137) as f32 * 0.01 - 0.5)
+                .collect();
+            assert_eq!(
+                grid(&a, w, h).to_bits(),
+                grid_ref(&a, w, h).to_bits(),
+                "{w}x{h}"
+            );
+        }
+        // An all -0.0 plane: column sums must keep the -0.0 identity.
+        let z = vec![-0.0f32; 51 * 50];
+        assert_eq!(grid(&z, 51, 50).to_bits(), grid_ref(&z, 51, 50).to_bits());
     }
 
     #[test]
