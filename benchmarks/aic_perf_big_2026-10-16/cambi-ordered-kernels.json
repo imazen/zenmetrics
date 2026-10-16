@@ -1,0 +1,21 @@
+{
+  "binary": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new",
+  "binary_sha256": "37297ecf698aeff27f3c67e580ded18627ae9f3c16799f13fd19949b99cfa832",
+  "disassembly_path": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/kernels.asm",
+  "disassembly_sha256": "c3058dbda935888f3b29c7bb2a76e438db1e641ecd9c7d26298517bbd690c736",
+  "functions": {
+    "00000000000737e0 <vmaf::cambi::calculate_c_values_columns::{closure#0}>:": {
+      "packed_arithmetic": {
+        "paddw": 3
+      },
+      "fma_instructions": {}
+    },
+    "000000000007e240 <vmaf::cambi::__arcane_calculate_c_values_row_v3_t>:": {
+      "packed_arithmetic": {
+        "vmulps": 1
+      },
+      "fma_instructions": {}
+    }
+  },
+  "counts_are_static_instruction_sites": true
+}

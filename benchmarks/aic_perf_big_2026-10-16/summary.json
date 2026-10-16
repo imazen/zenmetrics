@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "host": "i265",
+  "method": "Base,new,base,new; each new process averages five calls; median of two process means per role. No confidence interval or cross-host extrapolation.",
+  "threading": "CAMBI uses ordered column regions with the existing Rayon pool above its per-scale size threshold; its one-worker and small-scale paths use the original serial kernel. Butteraugli remains serial within one image. 16 is the requested thread budget.",
+  "target_cpu_native": false,
+  "cells": [
+    {
+      "key": "cambi-1024x1024-1t",
+      "base_ms": [
+        22.393833,
+        22.308556
+      ],
+      "new_ms": [
+        22.250344,
+        22.503625
+      ],
+      "median_base_ms": 22.3511945,
+      "median_new_ms": 22.3769845,
+      "base_over_new": 0.9988474765221381,
+      "base_peak_rss_kib": 16544,
+      "new_peak_rss_kib": 16840,
+      "resource": {
+        "seconds": 1,
+        "peak_rss_gib": 0.02,
+        "min_available_mib": 24362,
+        "peak_load": 0.93,
+        "log_sha256": "cb3407b576760b2c5a8c59cfab64e9fff634324f08971e76478861f77d45f71e"
+      }
+    },
+    {
+      "key": "cambi-1024x1024-16t",
+      "base_ms": [
+        24.045051,
+        25.211923
+      ],
+      "new_ms": [
+        9.320568,
+        8.696144
+      ],
+      "median_base_ms": 24.628487,
+      "median_new_ms": 9.008356,
+      "base_over_new": 2.733960225372976,
+      "base_peak_rss_kib": 16556,
+      "new_peak_rss_kib": 19976,
+      "resource": {
+        "seconds": 1,
+        "peak_rss_gib": 0.02,
+        "min_available_mib": 24355,
+        "peak_load": 0.94,
+        "log_sha256": "c07465c59b5b757c12ace8a387b473b6319de6039e2ec044b7fa41e8dc639ad4"
+      }
+    },
+    {
+      "key": "cambi-3355x2516-1t",
+      "base_ms": [
+        164.06363,
+        162.054568
+      ],
+      "new_ms": [
+        162.831062,
+        161.527887
+      ],
+      "median_base_ms": 163.059099,
+      "median_new_ms": 162.1794745,
+      "base_over_new": 1.0054237720445938,
+      "base_peak_rss_kib": 105860,
+      "new_peak_rss_kib": 106096,
+      "resource": {
+        "seconds": 4,
+        "peak_rss_gib": 0.1,
+        "min_available_mib": 24272,
+        "peak_load": 0.94,
+        "log_sha256": "7ac43183c1b4b2183332d8903948d3d8836db91b82a9b55c0fb0fdae1039a443"
+      }
+    },
+    {
+      "key": "cambi-3355x2516-16t",
+      "base_ms": [
+        160.882895,
+        162.677086
+      ],
+      "new_ms": [
+        65.548691,
+        62.332069
+      ],
+      "median_base_ms": 161.7799905,
+      "median_new_ms": 63.940380000000005,
+      "base_over_new": 2.530169362459216,
+      "base_peak_rss_kib": 105760,
+      "new_peak_rss_kib": 140032,
+      "resource": {
+        "seconds": 3,
+        "peak_rss_gib": 0.13,
+        "min_available_mib": 24146,
+        "peak_load": 0.94,
+        "log_sha256": "f59a79310900809b8f41c151ebf77fd2bcc47973375bb00019d463cb60b57ce8"
+      }
+    },
+    {
+      "key": "butter-1024x1024-1t",
+      "base_ms": [
+        1036.971679,
+        1031.818461
+      ],
+      "new_ms": [
+        307.575806,
+        309.008128
+      ],
+      "median_base_ms": 1034.39507,
+      "median_new_ms": 308.291967,
+      "base_over_new": 3.3552449649134064,
+      "base_peak_rss_kib": 189544,
+      "new_peak_rss_kib": 189480,
+      "resource": {
+        "seconds": 14,
+        "peak_rss_gib": 0.18,
+        "min_available_mib": 23657,
+        "peak_load": 5.01,
+        "log_sha256": "b6d4faaccae62d01dfb029b8907a909e7e7ae5e298746f41f23917b947151472"
+      }
+    },
+    {
+      "key": "butter-1024x1024-16t",
+      "base_ms": [
+        1071.476322,
+        1077.410289
+      ],
+      "new_ms": [
+        310.608056,
+        316.176808
+      ],
+      "median_base_ms": 1074.4433055,
+      "median_new_ms": 313.392432,
+      "base_over_new": 3.428427734017521,
+      "base_peak_rss_kib": 189512,
+      "new_peak_rss_kib": 189500,
+      "resource": {
+        "seconds": 14,
+        "peak_rss_gib": 0.18,
+        "min_available_mib": 23909,
+        "peak_load": 4.47,
+        "log_sha256": "3c5d630ca45c8863a04996508cd7a38981ee5555cbcd7b9c5345617b3bbd34f1"
+      }
+    },
+    {
+      "key": "butter-3355x2516-1t",
+      "base_ms": [
+        7963.637214,
+        7953.702307
+      ],
+      "new_ms": [
+        3010.482715,
+        3000.308784
+      ],
+      "median_base_ms": 7958.6697605,
+      "median_new_ms": 3005.3957495,
+      "base_over_new": 2.648127043443135,
+      "base_peak_rss_kib": 1437516,
+      "new_peak_rss_kib": 1437516,
+      "resource": {
+        "seconds": 110,
+        "peak_rss_gib": 1.37,
+        "min_available_mib": 23092,
+        "peak_load": 5.92,
+        "log_sha256": "2d47415ab2760b1b290b224ceba311a21213d2833e12a7c61939397491dbbae3"
+      }
+    },
+    {
+      "key": "butter-3355x2516-16t",
+      "base_ms": [
+        7933.403656,
+        8007.683621
+      ],
+      "new_ms": [
+        3017.604593,
+        3012.837144
+      ],
+      "median_base_ms": 7970.5436385,
+      "median_new_ms": 3015.2208685,
+      "base_over_new": 2.643436081836736,
+      "base_peak_rss_kib": 1437432,
+      "new_peak_rss_kib": 1437512,
+      "resource": {
+        "seconds": 110,
+        "peak_rss_gib": 1.37,
+        "min_available_mib": 22989,
+        "peak_load": 5.33,
+        "log_sha256": "b79de3e9e8bffc82598fcf4ae5bd81454ab1f6383bab676ae80caff266857994"
+      }
+    }
+  ],
+  "gates": {
+    "ci-final": {
+      "seconds": 21,
+      "peak_rss_gib": 2.31,
+      "min_available_mib": 23780,
+      "peak_load": 1.94,
+      "log_sha256": "ad2ced1262c6d63ab744a617a6244f5519ed3ac8e9b96e25f6805a32ed10e815"
+    },
+    "feature-matrix-final": {
+      "seconds": 25,
+      "peak_rss_gib": 0.36,
+      "min_available_mib": 23912,
+      "peak_load": 2.39,
+      "log_sha256": "7136edbae25d8ce28bb289b62f46947d87f6caf31ebd906193d344ffee5baa92"
+    },
+    "oracles-final": {
+      "seconds": 402,
+      "peak_rss_gib": 2.97,
+      "min_available_mib": 21414,
+      "peak_load": 3.57,
+      "log_sha256": "7cf5b48410045655faca72f91f83c7c0e89001ea3d5c830021f538653fd78db5"
+    },
+    "parity-final": {
+      "seconds": 166,
+      "peak_rss_gib": 1.37,
+      "min_available_mib": 22856,
+      "peak_load": 2.12,
+      "log_sha256": "daefcb6a43705d594006b75e968e9883a82be9e94849a55759ef9228425c13ed"
+    },
+    "residuals-final": {
+      "seconds": 0,
+      "peak_rss_gib": 0.02,
+      "min_available_mib": 24083,
+      "peak_load": 3.04,
+      "log_sha256": "c60fe7df20efdf5251f8099e0002fcb36454040110156129b55bae855e375c7d"
+    }
+  },
+  "oracle": {
+    "butter_ladder_maximum_error": 4.790954593048014e-07,
+    "butter_ladder_unchanged_bound": 4.8e-07,
+    "butter_aic_maximum_error": 4.7357177734852485e-07,
+    "cambi": {
+      "ladder": {
+        "scored": 18,
+        "matching_refusals": 9,
+        "maximum_oracle_error": 0.0
+      },
+      "aic": {
+        "scored": 61,
+        "matching_refusals": 0,
+        "maximum_oracle_error": 6.938893903907228e-18
+      }
+    }
+  },
+  "residual_audit": {
+    "pairs_per_metric": 61,
+    "metrics": [
+      "butter",
+      "cambi"
+    ],
+    "numeric_residual_rows": 122,
+    "residuals_unchanged_by_exact_score_identity": true,
+    "common_residual_table_sha256": "f1ae615f5819d26816d9842c4de4f52f087bfec7d1332165f935dc06be769f6a",
+    "input_images": 122,
+    "input_image_manifest_sha256": "a865f7ba00aaa12d6186ca2bdcb08260fec5d8e6cdcf0332ddbfbcfb13340452",
+    "input_files": {
+      "/home/lilith/tmp/aic-variants-scratch/round14-aic-parity-final.tsv": "a302ba74e72676dc529442bd8b7a720805ae9215446f7827e3929957386cbd52",
+      "/home/lilith/tmp/aic-audit/pairs.tsv": "5888a1dae6a1358609c643cfec5e4ffe725caa7e3b1acd6815d67bfb96cfc762",
+      "/home/lilith/tmp/aic-site/site_fullres_subset61.csv": "094a5d77ea72ddd744301f4ce2f55dd2d207d12c6311c019cea7cac65e897e8d",
+      "/home/lilith/tmp/aic-site/config.json": "fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447"
+    }
+  },
+  "full_measurements_path": "/home/lilith/tmp/aic-variants-scratch/round14-final-summary.tsv",
+  "full_measurements_sha256": "26744704763f43724e5e12585eb522d97499b734f2eaa59a9a32ab203a48a5ef"
+}
