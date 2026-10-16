@@ -30,3 +30,9 @@ the CAMBI wall fixture is extended from the original-author pinned 10-bit
 block-eight, one-code-value staircase. The banded baseline uses the updated
 driver and a separate preserved binary; comparisons use that same driver
 on both sides. The 61-pair path and its studio-601 ingress are unchanged.
+
+The first auto-PMU scouts retain their separate core/atom counter lines.
+Subsequent measurements pin perf itself to CPU 2 and explicitly select
+`cpu_core/instructions/` and `cpu_core/cycles/`; this avoids scaling an
+incidental pre-affinity atom-core sample. CPU 2 belongs to the observed
+`/sys/devices/cpu_core/cpus` set `0-7`.
