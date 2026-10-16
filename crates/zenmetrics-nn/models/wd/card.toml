@@ -19,7 +19,9 @@ sha256 = "397923af8e79cdbb6a7127f12361acd7a2f83e06b05044ddf496e83de57a5bf0"
 format = "strided RGB8 sRGB"
 normalisation = "u8 / 255 in f32; no ImageNet normalization, resize or colour conversion"
 min_size = 8
-max_side = 2048
+max_side = 4096
+max_pixels = 9000000
+max_pixels_32bit = 1048576
 
 [export]
 script = "reference.py export"

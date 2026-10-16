@@ -15,12 +15,18 @@ use crate::{Engine, Error, za};
 
 const COLUMNS: [&str; 5] = ["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"];
 const CHANNELS: [usize; 4] = [64, 128, 256, 512];
-const MAX_SIDE: usize = 2048;
+const MAX_SIDE: usize = 4096;
+const MAX_PIXELS: usize = if usize::BITS == 32 {
+    1024 * 1024
+} else {
+    9_000_000
+};
 const VAR_MIN: f32 = 5e-7;
 
 /// Wasserstein Distortion at log2(sigma) 1 through 5, in Cool-Chic's
 /// convention. Lower is closer; identical inputs score zero in all columns.
-/// Input is strided sRGB8, with each dimension in 8..=2048.
+/// Input is strided sRGB8, with each dimension in 8..=4096 and at most
+/// 9,000,000 pixels (1,048,576 pixels on 32-bit targets).
 ///
 /// VGG16 IMAGENET1K_V1 weights are permissive and are not bundled.
 pub struct WassersteinDistortion {
@@ -198,6 +204,9 @@ impl WassersteinDistortion {
         if img.width > MAX_SIDE || img.height > MAX_SIDE {
             return Err(Error::TooLarge { limit: MAX_SIDE });
         }
+        if img.width * img.height > MAX_PIXELS {
+            return Err(Error::TooLarge { limit: MAX_PIXELS });
+        }
         Ok(())
     }
 
@@ -368,5 +377,17 @@ mod tests {
             WassersteinDistortion::check_size(&img),
             Err(Error::TooLarge { .. })
         ));
+        for (w, h) in [(4096, 4096), (4097, 8), (8, 4097), (usize::MAX, 8)] {
+            let img = za::Rgb8In {
+                pixels: &[],
+                width: w,
+                height: h,
+                stride: 0,
+            };
+            assert!(matches!(
+                WassersteinDistortion::check_size(&img),
+                Err(Error::TooLarge { .. })
+            ));
+        }
     }
 }
