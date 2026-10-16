@@ -2308,8 +2308,6 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "serde",
- "serde_json",
  "zenbench 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "zenmetrics-abstractions",
  "zenpixels",
