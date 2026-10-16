@@ -922,8 +922,8 @@ lan-fit-smoke-launch host run role image:
     bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
 
 # IQA competition harness: every heavy stage runs under the caller's resource lock.
-iqa-compete-build:
-    just snap-cargo @ build --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete
+iqa-compete-build mode="cached":
+    bash benchmarks/iqa_compete_2026-10-16/build_cpu.sh '{{mode}}'
 
 iqa-compete-prepare binary reference distorted output:
     '{{binary}}' prepare '{{reference}}' '{{distorted}}' '{{output}}'
@@ -939,3 +939,15 @@ iqa-compete-smoke binary pairs output:
 
 iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --threads 1,20 --sizes '{{sizes}}' --model-root '{{models}}' --models-json '{{model_map}}'
+
+iqa-compete-libvmaf-build source output:
+    bash benchmarks/iqa_compete_2026-10-16/build_libvmaf.sh '{{source}}' '{{output}}'
+
+iqa-compete-libjxl-fetch output:
+    python3 benchmarks/iqa_compete_2026-10-16/fetch_libjxl.py '{{output}}'
+
+iqa-compete-libjxl-build source output:
+    bash benchmarks/iqa_compete_2026-10-16/build_libjxl.sh '{{source}}' '{{output}}'
+
+iqa-compete-model-parity reference candidate pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/check_model_adapter.py '{{reference}}' '{{candidate}}' '{{pairs}}' '{{output}}'

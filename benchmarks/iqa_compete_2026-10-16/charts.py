@@ -47,7 +47,7 @@ def main():
     panels=collections.defaultdict(list);families=collections.defaultdict(list)
     for r in rows:
         if r['status'] not in ['ok','variant_mismatch']:continue
-        panels[(r['host'],r['size_name'],r['mode'])].append(r);families[(r['host'],r['metric_family'])].append(r)
+        panels[(r['host'],r['size_name'],r['mode'],r['status'])].append(r);families[(r['host'],r['metric_family'],r['status'])].append(r)
     links=[]
     for prefix,groups,draw in [('bars',panels,svg_bars),('lines',families,svg_lines)]:
         for key,values in sorted(groups.items()):

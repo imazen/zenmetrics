@@ -1,12 +1,19 @@
 //! Compute-only IQA benchmark. File IO/preparation and model warmup are outside zenbench.
+#[allow(unexpected_cfgs)]
 #[path = "../iqa_compete_maps.rs"]
 mod maps;
 use serde_json::{Value, json};
 use std::{env, fs, hint::black_box, path::Path, time::Duration};
+#[allow(unexpected_cfgs)]
+#[cfg(iqa_compete_ingress)]
+use zenmetrics_cli::decode;
 use zenmetrics_cli::{
     decode::{Rgb8Image, decode_image_to_rgb8},
     metrics::{GpuRuntime, MetricKind, display::parse_display, run_metric_display},
 };
+
+#[allow(unexpected_cfgs)]
+const MODEL_PRELOAD_ADAPTER: bool = cfg!(iqa_compete_cached);
 
 fn prepare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let r = decode_image_to_rgb8(Path::new(&args[2]))?;
@@ -99,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display = Box::leak(Box::new(parse_display("standard_fhd")?));
     let display: &'static _ = display;
     let before = load();
-    if before.first().is_some_and(|v| *v > 4.) {
+    if !config["probe_only"].as_bool().unwrap_or(false) && before.first().is_some_and(|v| *v > 4.) {
         return Err(format!("busy load {before:?}").into());
     }
     let mut score: maps::Call = if name == "cvvdp" {
@@ -111,9 +118,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(|e| e.to_string())
         })
     };
+    if config["probe_only"].as_bool().unwrap_or(false) {
+        let warmup = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))?;
+        let values = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))?;
+        assert_eq!(
+            warmup.iter().map(|(_, v)| v.to_bits()).collect::<Vec<_>>(),
+            values.iter().map(|(_, v)| v.to_bits()).collect::<Vec<_>>(),
+            "probe changed after model warmup"
+        );
+        let mut probe = json!({"metric_name":name,"scores":values.iter().map(|(k,v)|(*k,format!("{:016x}",v.to_bits()))).collect::<Vec<_>>(),"model_preload_adapter":MODEL_PRELOAD_ADAPTER});
+        #[cfg(iqa_compete_ingress)]
+        if let Some(path) = config["map_dump_dir"].as_str() {
+            probe["maps"] = maps::vmaf_probe_dump(r, d, Path::new(path))?;
+        }
+        println!("IQA_PROBE {}", serde_json::to_string(&probe)?);
+        return Ok(());
+    }
     let first = score(); // Model/initialization warmup is outside the timer.
     let mut row = config.clone();
     row["load_before"] = json!(before);
+    row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
     if let Err(e) = first {
         row["status"] = json!(format!("skipped:{e}"));
         row["n"] = json!(0);
@@ -149,11 +173,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         suite.group(name, |g| {
             g.config()
                 .min_rounds(10)
-                .max_rounds(30)
+                .max_rounds(10)
                 .auto_rounds(false)
                 .warmup_time(Duration::from_millis(100))
-                .max_time(Duration::from_secs(10))
-                .max_wall_time(Duration::from_secs(120));
+                .max_time(Duration::from_secs(850))
+                .max_wall_time(Duration::from_secs(850));
             g.bench("score", move |b| {
                 b.iter(|| {
                     let value = score().expect("metric failed after warmup");

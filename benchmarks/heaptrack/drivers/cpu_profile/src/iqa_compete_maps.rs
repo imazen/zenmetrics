@@ -1,11 +1,17 @@
 //! Native output adapters; no IO or display conversion inside these calls.
 use za::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions as za;
+#[cfg(iqa_compete_ingress)]
+use zenmetrics_abstractions::Metric;
 use zenmetrics_cli::decode::Rgb8Image;
 #[path = "../../../../../crates/zenmetrics-cli/src/metrics/butteraugli_original.rs"]
 mod butter_original;
 #[path = "../../../../../crates/zenmetrics-cli/src/metrics/flip.rs"]
 mod flip;
+#[cfg(iqa_compete_ingress)]
+#[allow(dead_code, unexpected_cfgs, unreachable_pub)]
+#[path = "../../../../../crates/zenmetrics-cli/src/metrics/vmaf.rs"]
+mod ingress;
 pub(super) type Call = Box<dyn FnMut() -> Result<f64, String> + Send>;
 pub(super) fn cvvdp_score(
     r: &'static Rgb8Image,
@@ -68,6 +74,47 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
             .map_err(|e| e.to_string())?;
             std::hint::black_box(&result.diffmap);
             Ok(result.score)
+        }));
+    }
+    if name == "zensim" {
+        let scorer = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+        return Some(Box::new(move || {
+            let result = scorer
+                .compute_with_diffmap(
+                    &zensim::RgbSlice::new(bytemuck::cast_slice::<u8, [u8; 3]>(&r.pixels), w, h),
+                    &zensim::RgbSlice::new(bytemuck::cast_slice::<u8, [u8; 3]>(&d.pixels), w, h),
+                    zensim::DiffmapWeighting::default(),
+                )
+                .map_err(|e| e.to_string())?;
+            std::hint::black_box(&result);
+            Ok(result.score())
+        }));
+    }
+    if name == "dssim" {
+        let mut scorer = dssim_core::Dssim::new();
+        scorer.set_save_ssim_maps(5);
+        return Some(Box::new(move || {
+            let rr = scorer
+                .create_image_rgb(bytemuck::cast_slice::<u8, rgb::RGB<u8>>(&r.pixels), w, h)
+                .ok_or("DSSIM reference input")?;
+            let dd = scorer
+                .create_image_rgb(bytemuck::cast_slice::<u8, rgb::RGB<u8>>(&d.pixels), w, h)
+                .ok_or("DSSIM distorted input")?;
+            let (score, maps) = scorer.compare(&rr, dd);
+            if maps.is_empty() {
+                return Err("DSSIM produced no native maps".into());
+            }
+            std::hint::black_box(&maps);
+            Ok(f64::from(score))
+        }));
+    }
+    #[cfg(iqa_compete_ingress)]
+    if name == "vmaf-v1" {
+        let mut scorer = vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p);
+        return Some(Box::new(move || {
+            let eval = vmaf_evaluate(&mut scorer, r, d)?;
+            std::hint::black_box(&eval);
+            Ok(eval.score())
         }));
     }
     if name == "ssim2" {
@@ -161,4 +208,69 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
         std::hint::black_box(&eval);
         Ok(score)
     }))
+}
+
+#[cfg(iqa_compete_ingress)]
+fn vmaf_image(
+    planes: &(Vec<u8>, Vec<u8>, Vec<u8>),
+    w: usize,
+    h: usize,
+) -> Result<za::Image<'_>, String> {
+    use za::zenpixels::{ChannelType, PlaneLayout};
+    fn gray(p: &[u8], w: usize, h: usize) -> Result<PixelSlice<'_>, String> {
+        PixelSlice::new(p, w as u32, h as u32, w, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
+    }
+    za::Planes::new(
+        PlaneLayout::ycbcr_420(ChannelType::U8),
+        vec![
+            gray(&planes.0, w, h)?,
+            gray(&planes.1, w / 2, h / 2)?,
+            gray(&planes.2, w / 2, h / 2)?,
+        ],
+    )
+    .map(za::Image::from)
+    .map_err(|e| e.to_string())
+}
+
+#[cfg(iqa_compete_ingress)]
+fn vmaf_evaluate(
+    scorer: &mut vmaf::Vmaf,
+    r: &Rgb8Image,
+    d: &Rgb8Image,
+) -> Result<Box<dyn za::Evaluation>, String> {
+    let (w, h) = (r.width as usize & !1, r.height as usize & !1);
+    let rp = ingress::to_yuv420_even(r, ingress::Ingress::Bt709).map_err(|e| e.to_string())?;
+    let dp = ingress::to_yuv420_even(d, ingress::Ingress::Bt709).map_err(|e| e.to_string())?;
+    scorer
+        .evaluate(
+            vmaf_image(&rp, w, h)?,
+            vmaf_image(&dp, w, h)?,
+            za::EvalOpts::SCORE_ONLY.with_native_map(),
+        )
+        .map_err(|e| e.to_string())
+}
+#[cfg(iqa_compete_ingress)]
+pub(super) fn vmaf_probe_dump(
+    r: &Rgb8Image,
+    d: &Rgb8Image,
+    path: &std::path::Path,
+) -> Result<serde_json::Value, String> {
+    std::fs::create_dir(path).map_err(|e| e.to_string())?;
+    let eval = vmaf_evaluate(
+        &mut vmaf::Vmaf::new(vmaf::ModelVariant::Standard1080p),
+        r,
+        d,
+    )?;
+    let mut manifest = Vec::new();
+    for (i, m) in eval.maps().into_iter().enumerate() {
+        let bytes: Vec<u8> = m
+            .values()
+            .iter()
+            .flat_map(|v| v.to_bits().to_le_bytes())
+            .collect();
+        let name = format!("map-{i}.f32");
+        std::fs::write(path.join(&name), bytes).map_err(|e| e.to_string())?;
+        manifest.push(serde_json::json!({"file":name,"name":m.name,"width":m.width(),"height":m.height(),"geometry":format!("{:?}",m.geometry)}));
+    }
+    Ok(serde_json::json!({"score_bits":format!("{:016x}",eval.score().to_bits()),"maps":manifest}))
 }
