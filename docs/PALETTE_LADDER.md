@@ -55,3 +55,16 @@ assessment-identity Python helpers, the Rev5 bank schema owner and C's frozen
 product declaration. A self-consistent source inventory that omits one of
 these required owners refuses packaging. Additional dependencies of the final
 program remain part of its independently reviewed source closure.
+
+## Remaining receipt qualification
+
+The current executor records the requested configuration, its Debug rendering,
+palette/indices and decoded output. In zenquant 0.1.3, the result does not expose
+the effective automatic dither, target-tier overrides or selected joint
+candidate. The Debug rendering is the requested config, not a trace of these
+internal decisions. This is an implementation gap against the complete
+requested/effective-knob receipt requirement. Do not treat these receipts as
+freeze-qualified. Closing the gap requires instrumentation in the quantizer
+owner and review of any additional API; byte/pixel parity alone cannot certify
+internal dispatch provenance. No throughput or experiment-readiness claim is
+made by the current generator.
