@@ -1730,7 +1730,6 @@ fn score_hdr_decoded_variant(
     Ok(rows)
 }
 
-#[cfg(feature = "hdr")]
 /// Runtime provenance for a scored row (GOAL FLEET criterion: "runtime column
 /// proves it"). Truthful by construction: a `-gpu`/`_gpu` metric name can only
 /// execute on the built GPU backend (the dispatch errors otherwise), and bare
@@ -1766,6 +1765,7 @@ fn metric_runtime(metric: &str) -> &'static str {
 /// bespoke format because it is self-describing (dims + endianness in the header),
 /// exact (no quantization decision to defend), and standard-tool-readable; gzip
 /// because diffmaps are smooth and compress well, via the in-house `zenflate`.
+#[cfg(feature = "hdr")] // `zenflate` is `dep:zenflate`, hdr-gated (see Cargo.toml)
 fn diffmap_to_pfm_gz(map: &[f32], width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
     use zenflate::{CompressionLevel, Compressor, Unstoppable};
     let (w, h) = (width as usize, height as usize);
