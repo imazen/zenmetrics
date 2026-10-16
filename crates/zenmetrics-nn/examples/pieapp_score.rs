@@ -107,14 +107,12 @@ fn main() {
             };
             let a = score();
             let b = score();
-            let value = if a.to_bits() == b.to_bits() {
-                b
-            } else {
-                eprintln!("repeat mismatch {path}: {a:.17e} {b:.17e}");
-                let c = score();
-                assert_eq!(b.to_bits(), c.to_bits(), "nonreproducible score {path}");
-                c
-            };
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "nonreproducible score {path}: first={a:.17e} repeated={b:.17e}"
+            );
+            let value = a;
             assert!(value.is_finite());
             writeln!(out, "{reference}\t{path}\t{value:.17e}").unwrap();
             out.flush().unwrap();
