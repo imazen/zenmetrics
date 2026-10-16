@@ -2,7 +2,7 @@ name = "pieapp"
 kind = "full-reference"
 direction = "lower-is-better"
 columns = ["pieapp"]
-score_revision = 2
+score_revision = 3
 paper = "Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018. https://arxiv.org/abs/1806.02067"
 
 [code]
@@ -36,6 +36,9 @@ engines = ["rten", "ort-cuda"]
 batch_bound = 32
 batch_unit = "reference/distorted patch pairs"
 statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row-major order."
+weight_head = "Signed raw weight + 1e-6; identified by opaque bias/projection controls"
+cap_score_revision = 2
+cap_graph_sha256 = "7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322"
 warm_reference = "Caches planar input conversion only; reuses_reference_work() is false because neural features are recomputed."
 maps = false
 

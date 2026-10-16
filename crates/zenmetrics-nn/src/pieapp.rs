@@ -106,11 +106,9 @@ impl PieApp {
             }
             for pair in result.as_chunks::<2>().0 {
                 let [error, weight] = [f64::from(pair[0]), f64::from(pair[1])];
-                if !error.is_finite() || !weight.is_finite() || weight <= 0.0 {
-                    return Err(Error::Engine(
-                        "nonfinite PieAPP prediction or nonpositive weight".into(),
-                    ))
-                    .metric_err_with(COLUMN, Error::kind);
+                if !error.is_finite() || !weight.is_finite() {
+                    return Err(Error::Engine("nonfinite PieAPP prediction".into()))
+                        .metric_err_with(COLUMN, Error::kind);
                 }
                 sum += error * weight;
                 weights += weight;
@@ -130,6 +128,10 @@ impl PieApp {
         }
         if !positions.is_empty() {
             consume(&positions)?;
+        }
+        if !sum.is_finite() || !weights.is_finite() || weights == 0.0 {
+            return Err(Error::Engine("invalid PieAPP weighted pool".into()))
+                .metric_err_with(COLUMN, Error::kind);
         }
         Ok(sum / weights)
     }
@@ -175,7 +177,7 @@ fn patches(image: &Prepared, positions: &[(usize, usize)]) -> Vec<f32> {
 
 impl za::Metric for PieApp {
     fn id(&self) -> za::MetricId {
-        za::MetricId::new(COLUMN, za::implementation!(2)).with_reference(format!(
+        za::MetricId::new(COLUMN, za::implementation!(3)).with_reference(format!(
             "PieAPP v0.1 paper/weights reconstruction, dense stride 6; engine {}",
             self.graph.engine()
         ))
@@ -249,6 +251,42 @@ impl za::WarmReference for WarmPieApp<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct SignedWeights([f32; 2]);
+    impl ImageGraph for SignedWeights {
+        fn engine(&self) -> &'static str {
+            "controlled-oracle-weights"
+        }
+        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+            Err(Error::Engine("tensor-only test graph".into()))
+        }
+        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            assert_eq!(inputs[0].shape[0], 2);
+            Ok((vec![2, 2], vec![1.0, self.0[0], 1.0, self.0[1]]))
+        }
+    }
+
+    #[test]
+    fn signed_public_weights_pool_and_zero_denominator_is_refused() {
+        let image = Prepared {
+            data: vec![0.0; 70 * 64 * 3],
+            w: 70,
+            h: 64,
+        };
+        // Official opaque bias/projection controls, forced raw heads -1/+1.
+        // benchmarks/pieapp_review_2026-10-16/weight-identify.json.
+        let model = PieApp {
+            graph: Box::new(SignedWeights([-0.999_999, 1.000_001])),
+        };
+        assert_eq!(
+            model.score(&image, &image, za::EvalOpts::new()).unwrap(),
+            1.0
+        );
+        let model = PieApp {
+            graph: Box::new(SignedWeights([-1.0, 1.0])),
+        };
+        assert!(model.score(&image, &image, za::EvalOpts::new()).is_err());
+    }
 
     #[test]
     fn dense_grid_matches_small_blackbox_cases() {

@@ -44,7 +44,7 @@ class PieAPP(nn.Module):
 
     def forward(self, reference, distorted):
         error,weight=self.raw(reference,distorted)
-        # Scalar normalization and positive weights match the public oracle.
+        # Scalar normalization and signed weights match controlled public outputs.
         error=(error/100)*self.ref_score_subtract.weight+self.ref_score_subtract.bias
-        weight=torch.abs(weight)+1e-6
+        weight=weight+1e-6
         return torch.cat((error,weight),dim=1)
