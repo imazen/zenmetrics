@@ -611,13 +611,6 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   the new ports' parity
   because the diffmap path still runs a CPU fallback (§2b/§9).
 
-## Maintenance rule
-
-Every metric port or reference-version bump updates this file **in the
-same commit**: a ledger row (or delta refresh) plus a per-metric entry
-for anything that isn't pure float noise. Crate-level depth stays in the
-crate docs — this file links, it does not duplicate.
-
 ## PieAPP sampling and official entry point (2026-10-16)
 
 PieAPP uses valid 64×64 patches on a deterministic stride-6 grid, in row-major
@@ -664,3 +657,11 @@ original CLI/entry-point control divergence is 0.04433258638589831 JND.
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## Maintenance rule
+
+Every metric port or reference-version bump updates this file **in the
+same commit**: a ledger row (or delta refresh) plus a per-metric entry
+for anything that isn't pure float noise. Crate-level depth stays in the
+crate docs — this file links, it does not duplicate.
+

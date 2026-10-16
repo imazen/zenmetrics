@@ -37,7 +37,7 @@
     "strict NN all-target clippy, model-tests+ort",
     "CLI sweep,png,gpu,gpu-cuda",
     "CLI sweep,orchestrator,nn,nr",
-    "inventory 104",
+    "inventory 109",
     "CLI routing unit",
     "real default-scheduler CLI consent refusal and oracle score"
   ],
@@ -85,5 +85,6 @@
       "path": "/home/lilith/tmp/aic-variants-scratch/round13-wrapper-check.log",
       "sha256": "a0ed24cc6a31c1a4e5bd1b6a400a4dca3cf29a9ab0bbc6f4ec0a10b5004c8e0b"
     }
-  }
+  },
+  "review_recheck": "Pending Round 13b merged-tree validation"
 }

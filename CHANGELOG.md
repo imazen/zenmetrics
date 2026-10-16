@@ -13,23 +13,6 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-## zenmetrics-nn
-
-### Added
-
-- `PieApp` (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
-  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
-  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
-  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
-  oracle is official `compute_score`; the measured demo-wrapper difference
-  is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
-  and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
-  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
-
-### QUEUED BREAKING CHANGES
-
-- None.
-
 ## vmaf
 
 ### Changed
@@ -59,6 +42,15 @@ None.
 ## Workspace
 
 ### Added
+
+- zenmetrics-nn `PieApp` (PR #81 follow-up, review required) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
+  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
+  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
+  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
+  oracle is official `compute_score`; the measured demo-wrapper difference
+  is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
+  and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
+  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
 
 - zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
 

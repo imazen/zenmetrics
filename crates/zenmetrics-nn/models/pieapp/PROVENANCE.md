@@ -12,7 +12,8 @@ for patch error/weight, and weighted patch pooling. Its test procedure uses
 1024 random 64×64 patches. The later
 [official release README](https://github.com/prashnani/PerceptualImageError/blob/master/README.md)
 documents deterministic dense 64×64 patches at stride 6 (default) and sparse
-sampling at stride 27. We target the documented dense release convention;
+sampling at stride 27. Those modes belong to the demo CLI over sub-images.
+We target an explicit stride-six public-entry-point convention;
 the canonical valid-origin grid, BGR code values, NCHW flattening and head
 are qualified against public black-box outputs.
 
@@ -38,8 +39,9 @@ The CLI's 128-square sampling still differs from a regular stride-six
 patch set; wrapper sampling equivalence is not claimed.
 
 The original Python 2.7 / torch 0.3.1 CPU oracle uses device redirection
-only, plus the missing demo configuration `num_patches=1024` (paper's test
-count). Public method input/output signatures are observed to call it;
+only, plus demo configuration `num_patches=1024` (the paper's test
+count). Oracle exception tracebacks printed two lines of the official demo
+script; no implementation files were opened or read. Public method input/output signatures are observed to call it;
 no official implementation or feature internals are read. Modern-runtime
 compatibility additionally adapts scalar parameter shape, integral reshape
 sizes, scalar indexing, and contiguous device-copy layout. Small CLI

@@ -244,22 +244,7 @@ fn matches_upstream() {
             let eval = m
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
-            let mut got = score(&*eval, col);
-            // Repeat mismatching CUDA observations before treating them as
-            // findings; retain both values in the log. The JND gate is unchanged.
-            if col == "pieapp"
-                && engine() != Engine::Rten
-                && (!got.is_finite() || (got - want).abs() > tol(col))
-            {
-                let repeated = m
-                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
-                    .expect("repeat mismatching CUDA observation");
-                let retry = score(&*repeated, col);
-                eprintln!(
-                    "{col} {stem} {size}: CUDA mismatch first={got:.17e} repeated={retry:.17e} want={want:.17e}"
-                );
-                got = retry;
-            }
+            let got = score(&*eval, col);
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
@@ -327,7 +312,7 @@ fn warm_reference_equals_cold() {
         // no-reference metric always scores its reference once.
         assert_eq!(
             warm.reuses_reference_work(),
-            nr || engine() == Engine::Rten || col == "pieapp",
+            nr || (engine() == Engine::Rten && col != "pieapp"),
             "{col}"
         );
         for _ in 0..2 {

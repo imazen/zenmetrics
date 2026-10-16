@@ -64,18 +64,7 @@ impl PieApp {
     }
 
     fn prepare(img: &za::Rgb8In<'_>) -> Result<Prepared, Error> {
-        if img.width < PATCH || img.height < PATCH {
-            return Err(Error::TooSmall { min: PATCH });
-        }
-        if img.width > MAX_SIDE
-            || img.height > MAX_SIDE
-            || img
-                .width
-                .checked_mul(img.height)
-                .is_none_or(|n| n > MAX_PIXELS)
-        {
-            return Err(Error::TooLarge { limit: MAX_PIXELS });
-        }
+        validate_geometry(img.width, img.height)?;
         Ok(Prepared {
             data: rgb8_to_planar_01(img),
             w: img.width,
@@ -144,6 +133,19 @@ impl PieApp {
         }
         Ok(sum / weights)
     }
+}
+
+fn validate_geometry(width: usize, height: usize) -> Result<(), Error> {
+    if width < PATCH || height < PATCH {
+        return Err(Error::TooSmall { min: PATCH });
+    }
+    if width > MAX_SIDE || height > MAX_SIDE {
+        return Err(Error::TooLarge { limit: MAX_SIDE });
+    }
+    if width.checked_mul(height).is_none_or(|n| n > MAX_PIXELS) {
+        return Err(Error::TooLarge { limit: MAX_PIXELS });
+    }
+    Ok(())
 }
 
 struct Prepared {
@@ -226,7 +228,7 @@ struct WarmPieApp<'m> {
 }
 impl za::WarmReference for WarmPieApp<'_> {
     fn reuses_reference_work(&self) -> bool {
-        true
+        false
     }
     fn evaluate(
         &mut self,
@@ -260,9 +262,36 @@ mod tests {
 
     #[test]
     fn normalized_ingress_preserves_every_code_value() {
-        for code in 0u8..=255 {
-            let planar = f32::from(code) / 255.0;
-            assert_eq!(planar * 255.0, f32::from(code));
+        let pixels: Vec<u8> = (0u8..=255).flat_map(|v| [v, v, v]).collect();
+        let input = za::Rgb8In {
+            pixels: &pixels,
+            width: 256,
+            height: 1,
+            stride: 768,
+        };
+        let planar = rgb8_to_planar_01(&input);
+        for channel in planar.chunks_exact(256) {
+            for (code, &value) in channel.iter().enumerate() {
+                assert_eq!(value.to_bits(), (code as f32 / 255.0).to_bits());
+                assert_eq!(value * 255.0, code as f32);
+            }
+        }
+    }
+
+    #[test]
+    fn geometry_bounds_report_the_relevant_limit() {
+        assert!(matches!(
+            validate_geometry(4097, 64),
+            Err(Error::TooLarge { limit: MAX_SIDE })
+        ));
+        assert!(matches!(
+            validate_geometry(3001, 3000),
+            Err(Error::TooLarge { limit: MAX_PIXELS })
+        ));
+        if usize::BITS >= 64 {
+            assert!(validate_geometry(3000, 3000).is_ok());
+        } else {
+            assert!(validate_geometry(1024, 1024).is_ok());
         }
     }
 

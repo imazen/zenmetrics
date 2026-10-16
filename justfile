@@ -846,24 +846,6 @@ nn-pieapp-calibration-summary pairs scores out:
 nn-pieapp-goldens pairs oracle out:
     python3 crates/zenmetrics-nn/models/pieapp/goldens.py '{{pairs}}' '{{oracle}}' '{{out}}'
 
-# Install the complete measured scale and run all landing gates.
-nn-pieapp-finish:
-    bash -c "$(cat benchmarks/pieapp_finish_2026-10-16.sh)"
-
-
-# Calibration installation is independently checkable after measured gate runs.
-nn-pieapp-install-calibration:
-    python3 -I crates/zenmetrics-nn/models/pieapp/install_calibration.py
-
-# Check the wrapper and real bookkeeping without repeating numerical panels.
-nn-pieapp-wrapper-check:
-    bash -n benchmarks/pieapp_finish_2026-10-16.sh benchmarks/pieapp_gates_2026-10-16.sh
-    just nn-pieapp-install-calibration
-
-# Reproduce the mutable-file failure and verify the actual immutable launcher.
-nn-pieapp-launcher-control:
-    python3 -I crates/zenmetrics-nn/models/pieapp/launcher_control.py
-
 # WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
 nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
     {{python}} -I crates/zenmetrics-nn/models/wd/reference.py '{{stage}}' --reference '{{reference}}' --out '{{out}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
@@ -940,3 +922,13 @@ aic-review-pin-sensitivity:
 
 aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+
+# Round 13b public-oracle review controls; caller holds heavy-job lock.
+nn-pieapp-review-head python upstream checkpoint pairs out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_head_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}'
+
+nn-pieapp-review-cli python upstream pairs entry out logs:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_cli_panel.py --python '{{python}}' --upstream '{{upstream}}' --pairs '{{pairs}}' --entry_scores '{{entry}}' --out '{{out}}' --logs '{{logs}}'
+
+nn-pieapp-review models ladder output:
+    bash -c "$(cat benchmarks/pieapp_review_2026-10-16.sh)" -- '{{models}}' '{{ladder}}' '{{output}}'
