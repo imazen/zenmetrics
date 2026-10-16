@@ -11,7 +11,7 @@ ADAPTERS={
  ('vmaf','vmaf','709-420',.02),('vmaf-neg','vmaf-neg','709-420',.02),
  ('vmaf-studio601','vmaf','601-420',.02),('vmaf-neg-studio601','vmaf-neg','601-420',.02),
  ('ssim-libvmaf','float_ssim','601-y',2e-4),('msssim-libvmaf','float_ms_ssim','601-y',2e-4),
- ('psnr-y-libvmaf','psnr','709-y',1e-10),('psnrhvs-daala','psnr_hvs','601-420',2e-4),
+ ('psnr-y-libvmaf','psnr','709-y',1e-10),('psnrhvs-daala','psnr_hvs','601-444',2e-4),
  ('cambi','cambi','601-420',1e-4),('vif','vif','601-y',5e-13)],
  'libjxl':[('butteraugli','butteraugli','rgb',0.),('ssim2','ssim2','rgb',0.)]}
 RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity.rs SCORE_TOLERANCE
@@ -43,7 +43,7 @@ def main():
      stem=f'{metric}-{pair["size_name"]}-{threads}t-{mode.replace("+","_")}-{uuid.uuid4().hex[:12]}'
      config=a.root/'cells'/f'{stem}.json';config.write_text(json.dumps(dict(pair|paths,metric_name=metric,probe_only=True)))
      command=[str(a.binary.resolve()),adapter,str(native['width']),str(native['height']),inputs['reference'],inputs['distorted'],str(threads)]
-     command+=([mode,'10'] if a.engine=='libjxl' else ['10','400' if convention.endswith('-y') else '420'])
+     command+=([mode,'10'] if a.engine=='libjxl' else ['10','400' if convention.endswith('-y') else ('444' if convention.endswith('-444') else '420')])
      # One bounded process warms/times the native implementation, then probes
      # Rust outside its timer. Neither process start nor reference scoring is timed.
      env=os.environ.copy();env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
@@ -69,9 +69,9 @@ def main():
      import struct
      reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0]
      values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference)
-     row.update(n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; ten individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
+     row.update(reference_column=probes[0]["scores"][0][0],native_feature=adapter,n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; ten individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
      if a.engine=='libjxl' and metric=='ssim2':row['notes']+=' ComputeSSIMULACRA2 has no worker-pool argument; the thread count is the declared budget, not a claim that this entry point uses all workers.'
-     if metric=='psnrhvs-daala':row['notes']+=' Rust CLI processes YUV444; this libvmaf adapter processes YUV420. Y headline is compared; chroma workloads differ.'
+     if metric=='psnrhvs-daala':row['notes']+=' Both APIs process full-size studio-601 YUV444 and compute all three channels; Y headline is compared.'
      if metric=='vif':row['notes']+=' libvmaf float_vif and MATLAB vifp are distinct variants; 8-bit studio-luma ingress also differs. Retain as variant comparison.';row['status']='variant_mismatch'
      append(output,row);print('RESULT',stem,row['status'],delta,flush=True)
 if __name__=='__main__':

@@ -13,12 +13,14 @@ import socket
 import subprocess
 import time
 import uuid
+from chunks import combine
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
 TIMING = ['n', 'median_ns', 'p10_ns', 'p90_ns', 'mean_ns', 'score', 'ref_score',
           'abs_delta', 'relative_delta', 'load_before', 'load_after']
 MODES = ['score', 'score+map']
+LEARNED = {'lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg','dists','deepdc','ckdn','afine','dreamsim','arniqa','maniqa','liqe','musiq','hyperiqa','paq2piq','wadiqam-fr-live','wadiqam-fr-tid','wadiqam-nr-live','wadiqam-nr-tid','wd','pieapp'}
 
 def sha(path):
     h = hashlib.sha256()
@@ -68,7 +70,7 @@ def resource(text):
     return dict(exit_code=int(match[1]), seconds=int(match[2]), peak_rss_gib=float(match[3]),
                 min_available_mib=int(match[4]), peak_load=float(match[5]))
 
-def run_cell(args, row, models):
+def run_cell(args, row, models, *, restore_chunks=True):
     count, name = row['threads'], row['metric_name']
     env = os.environ.copy()
     env.update({key: str(count) for key in THREAD_ENV})
@@ -90,6 +92,24 @@ def run_cell(args, row, models):
         chosen = None
         row['placement_policy'] = 'unrestricted descriptive study; no uniform-class certification'
     stem = f"{name}-{row['size_name']}-{count}t"
+    pieces={mode:[] for mode in MODES}
+    completed={}
+    chunk_ledger=args.root/'chunk-attempts.jsonl'
+    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','chunk_budget_ms','sample_target_ns']
+    def retain(value):
+        mode=value['mode']
+        if value['status']=='partial':
+            pieces[mode].append(value)
+            aggregate=combine(pieces[mode])
+            if aggregate['status']!='partial':completed[mode]=aggregate
+        elif pieces[mode] and value.get('round_means_ns'):
+            pieces[mode].append(value);completed[mode]=combine(pieces[mode])
+        else:completed[mode]=value
+    if restore_chunks and chunk_ledger.exists():
+        for line in chunk_ledger.read_text().splitlines():
+            value=json.loads(line)
+            if all(value.get(k)==row.get(k) for k in identity):retain(value)
+    if set(completed)==set(MODES):return list(completed.values())
     while True:
         attempt = uuid.uuid4().hex[:12]
         config = args.root / 'cells' / f'{stem}-{attempt}.json'
@@ -99,17 +119,23 @@ def run_cell(args, row, models):
         config.write_text(json.dumps(row) + '\n')
         command = [str(args.binary.resolve()), str(config.resolve())]
         if args.python_executable:
-            command = [str(args.python_executable.absolute()),str(Path(__file__).with_name('python_cell.py').resolve()),str(config.resolve())]
+            command = [str(args.python_executable.absolute()),str(args.python_adapter),str(config.resolve())]
+        # Set metric budgets after the independent build/job cap.
+        command = ['env',*[f'{key}={env[key]}' for key in THREAD_ENV],
+                   'ZENBENCH_CPU_POLICY=unrestricted','ZENBENCH_NO_SAVE=1',*command]
         if chosen:
-            # Set metric budgets after run-heavy sets its independent build/job cap.
-            command = ['taskset', '-c', ','.join(map(str, chosen)), 'env',
-                       *[f'{key}={env[key]}' for key in THREAD_ENV],
-                       'ZENBENCH_CPU_POLICY=unrestricted', 'ZENBENCH_NO_SAVE=1', *command]
-            command = ['flock', str(Path.home() / 'tmp/i265-heavy.lock'),
-                       str(Path.home() / 'work/claudehints/scripts/run-heavy'),
-                       '--mem', '16G', '--jobs', '16', '--', 'timeout', '--kill-after=20s',
-                       '1100s', *command]
-        print('RUN', stem, attempt, flush=True)
+            command = ['taskset','-c',','.join(map(str,chosen)),*command]
+        system=platform.system()
+        if system not in ['Linux','Darwin']:
+            raise RuntimeError('A qualified native resource wrapper must be configured before running on '+system)
+        timeout='gtimeout' if system=='Darwin' else 'timeout'
+        memory='12G' if system=='Darwin' else '16G'
+        host=args.host or socket.gethostname().split('.')[0]
+        command = ['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),
+                   str(Path.home()/'work/claudehints/scripts/run-heavy'),
+                   '--mem',memory,'--jobs',str(max(1,(os.cpu_count() or 1)-4)),
+                   '--',timeout,'--kill-after=20s','1100s',*command]
+        print('SUBMIT', stem, attempt, flush=True)
         with log.open('x') as f:
             process = subprocess.run(command, env=env, stdout=f, stderr=subprocess.STDOUT,
                                      check=False)
@@ -121,22 +147,30 @@ def run_cell(args, row, models):
             print('ADMISSION_WAIT', stem, log, flush=True)
             time.sleep(30)
             continue
-        rows = [json.loads(s[8:]) for s in text.splitlines() if s.startswith('IQA_ROW ')]
-        modes = {r['mode'] for r in rows}
-        if len(rows) != len(modes) or modes - set(MODES):
-            raise ValueError(f'invalid emitted modes: {log}')
-        if process.returncode or modes != set(MODES):
-            reason = {124: 'timeout_1100s', 137: 'memory_limit_16GiB'}.get(
-                      process.returncode, f'process_exit_{process.returncode}')
-            for mode in set(MODES) - modes:
-                rows.append(dict(row, mode=mode, status=f'skipped:{reason}', n=0,
-                            notes=f'No completed timing; retained attempt log {log}'))
-        for result in rows:
-            result['resource'] = resource(text)
-            result['log_sha256'] = sha(log)
-            result['log_path'] = str(log)
-        print('RESULT', stem, [(r['mode'], r['status']) for r in rows], flush=True)
-        return rows
+        rows=[]
+        for line in text.splitlines():
+            if line.startswith('IQA_ROW '):rows.append(json.loads(line[8:]))
+            elif line.startswith('IQA_PARTIAL '):rows.append(json.loads(line[len('IQA_PARTIAL '):]))
+        modes={value['mode'] for value in rows}
+        if len(rows)!=len(modes) or modes-set(MODES):raise ValueError(f'invalid emitted modes: {log}')
+        if process.returncode or modes!=set(MODES):
+            reason={124:'timeout_1100s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
+            for mode in set(MODES)-modes:
+                rows.append(dict(row,mode=mode,status=f'skipped:{reason}',n=0,
+                                 notes=f'No completed timing; retained attempt log {log}'))
+        chunked=any(value['status']=='partial' for value in rows) or any(pieces.values())
+        for value in rows:
+            value['initialization_diagnostics']=[json.loads(s[len('IQA_WARMUP '):]) for s in text.splitlines() if s.startswith('IQA_WARMUP ')]
+            value['resource']=resource(text)
+            value['resource_memory_method']=('macOS monitored process-tree RSS; no hard cgroup cap; availability is free+inactive+speculative page proxy' if platform.system()=='Darwin' else 'Linux run-heavy cgroup MemoryMax=16G when available; wrapper log states actual scope support')
+            value['log_sha256']=sha(log);value['log_path']=str(log)
+            if chunked:append(chunk_ledger,value)
+            retain(value)
+        print('RESULT',stem,[(v['mode'],v['status'],v.get('n')) for v in rows],flush=True)
+        if set(completed)==set(MODES):return list(completed.values())
+        print('CHUNK_CONTINUE',stem,{mode:sum(v['n'] for v in values) for mode,values in pieces.items()},flush=True)
+        # The scope and lock have both ended. A fresh admitted, warmed process
+        # contributes further actual rounds; no duration is extrapolated.
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -153,6 +187,8 @@ def main():
     p.add_argument('--threads', default='1,all')
     p.add_argument('--model-root', type=Path)
     p.add_argument('--models-json', type=Path)
+    p.add_argument('--chunk-budget-ms', type=int, default=850000)
+    p.add_argument('--sample-target-ns', type=int, default=1000000)
     p.add_argument('--python-package')
     p.add_argument('--python-executable', type=Path)
     p.add_argument('--reference-jsonl', action='append', type=Path, default=[])
@@ -175,10 +211,20 @@ def main():
     def qualify(results):
         mismatch=False
         for value in results:
-            if value.get('score') is None or value['status'] not in ['ok','variant_mismatch']:continue
+            if value['status']=='skipped:nonfinite_score':mismatch=True;continue
+            if value['status'] not in ['ok','variant_mismatch']:continue
+            if value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:
+                value['status']='variant_mismatch';mismatch=True
+            if value.get('score') is None:
+                if value.get('n',0)>0:
+                    value.update(status='variant_mismatch',score_nonfinite=True);mismatch=True
+                continue
             name=value['metric_name'];base=name.removesuffix('-gpu')
             ref=references.get((base,value['size_name'],value['threads']))
-            if ref is None:continue
+            if ref is None:
+                value.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status='unavailable:no qualified same-pair CPU reference',notes=value.get('notes','')+'; Native timing retained without a CPU reference')
+                if args.python_package:value['status']='skipped:missing_same-pair_Rust_reference'
+                continue
             reference=ref['score'];delta=abs(value['score']-reference)
             if name.endswith('-gpu'):
                 bounds={'ssim2-gpu':max(.1,abs(reference)*.005),'dssim-gpu':abs(reference)*.01,
@@ -194,7 +240,7 @@ def main():
                 source='zenmetrics-nn/models/jnd_scale.tsv; 1e-3 JND unchanged parity gate'
             value.update(ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,
                          parity_abs_bound=bound,parity_source=source,reference_binary_sha=ref['impl_binary_sha'])
-            if delta>bound:value['status']='variant_mismatch';mismatch=True
+            if delta>bound or value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:value['status']='variant_mismatch';mismatch=True
         return mismatch
 
     if args.ort_library:
@@ -207,7 +253,12 @@ def main():
         meta["host"] = args.host
     if args.python_package:
         if not args.python_executable:raise ValueError('--python-package requires --python-executable')
-        meta.update(impl=args.python_package,package=args.python_package,impl_binary_sha=sha(args.python_executable),adapter_sha256=sha(Path(__file__).with_name('python_cell.py')))
+        adapter=Path(__file__).with_name('python_cell.py');digest=sha(adapter)
+        snapshot=args.root/f'python-adapter-{digest}.py'
+        if not snapshot.exists():snapshot.write_bytes(adapter.read_bytes())
+        if sha(snapshot)!=digest:raise ValueError('adapter snapshot hash mismatch')
+        args.python_adapter=snapshot.resolve()
+        meta.update(engine='numpy' if args.python_package in ['scikit-image','flip-evaluator'] else 'torch',impl=args.python_package,package=args.python_package,impl_binary_sha=sha(args.python_executable),adapter_sha256=digest)
     output = args.root / f"{meta['host']}.jsonl"
     inventory = json.loads(subprocess.check_output([args.binary, 'inventory'], text=True))
     if not (args.root / 'inventory.json').exists():
@@ -223,7 +274,7 @@ def main():
     if args.gpu_runtime and not args.metrics:
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:
-        selected &= {'lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg','dists','deepdc','ckdn','afine','dreamsim','arniqa','maniqa','liqe','musiq','hyperiqa','paq2piq','wadiqam-fr-live','wadiqam-fr-tid','wadiqam-nr-live','wadiqam-nr-tid','wd','pieapp'}
+        selected &= LEARNED
     if not selected <= {r['metric_name'] for r in inventory}:
         raise ValueError('selected metric absent from executable inventory')
     available = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
@@ -242,8 +293,10 @@ def main():
                     continue
                 if all((name, pair['size_name'], count, mode, meta['device']) in done for mode in MODES):
                     continue
-                row = dict(meta | pair | paths, metric_name=name, metric_family=family(name),
+                row = dict(meta | pair | paths, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
                            threads=count, mode='score', pair_sha256=pair_sha, input_sha256=hashes)
+                if not args.python_package:
+                    row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')
                 row.update({key: None for key in TIMING})
                 results=run_cell(args, row, models)
                 mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) else False
@@ -252,12 +305,14 @@ def main():
                     # attempt and rerun the same bounded cell, including timing.
                     for value in results:append(args.root/'gpu-mismatch-attempts.jsonl',value)
                     first_attempts=[{k:v.get(k) for k in ['mode','score','abs_delta','status','log_path','log_sha256']} for v in results]
-                    results=run_cell(args,row,models)
+                    results=run_cell(args,row,models,restore_chunks=False)
                     qualify(results)
                     for value in results:value['mismatch_first_attempt']=first_attempts
                 for result in results:
                     append(output, result)
                     done.add((name, pair['size_name'], count, result['mode'], meta['device']))
+                if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):
+                    raise RuntimeError('Competitor adapter failed; inspect retained logs before proceeding')
 
 if __name__ == '__main__':
     main()

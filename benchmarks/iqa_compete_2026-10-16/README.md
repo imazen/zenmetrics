@@ -71,8 +71,10 @@ compares every headline with a separate Rust probe. It is not a timing panel.
 libvmaf reports version 3.2.0 from vmaf-head-sys 0.2.0's vendored source;
 this is recorded rather than relabeled as the port's 3.2.1 parity reference.
 VMAF, SSIM/MS-SSIM, PSNR, PSNR-HVS-Y and CAMBI fall within their existing
-parity gates on that pair. The VIF and Butteraugli comparisons exceed the chosen
-bounds and remain separate variant comparisons. The initial SSIMULACRA2
+parity gates on that pair. The initial exact comparison flags VIF and Butteraugli. The final C++
+Butteraugli decision uses its pinned reference test's 0.001 relative bound;
+the measured CID22 residual is within that existing gate. VIF remains a
+variant comparison. The initial SSIMULACRA2
 probe accidentally reused Butteraugli's 80-nit metadata. The corrected
 [probe](native-probe-intensity.json) uses SSIMULACRA2's standard 255-nit
 metadata and matches Rust exactly on CID22. The earlier receipt remains
@@ -113,3 +115,18 @@ CPU ledger trigger a second complete bounded cell; the first attempt
 is preserved and linked from the selected row.
 
 Adapter boundaries and source links: [protocol](PROTOCOL.md).
+
+## CID22 CPU progress
+
+Missing: PieAPP, the remaining 2K cells and size ladder, competitor timing
+panels and other hosts. The [CID22 panel](cid22-cpu-progress.meta.json)
+covers 112 of the required 113 names: 448 cells at one/all workers, with
+260 timed results, 144 unsupported native-map routes and 44 explicit
+input/build refusals. [Split summaries](cid22-cpu-progress/) retain each
+cell's statistics, score, load and resource receipt. These are observations
+from the named raw ledgers, not a completed full-matrix claim.
+
+Source freeze: zenmetrics `205efe2e` (master at this study's start), plus
+PieAPP `9b5f704b` and the benchmark commits. The separate Round 14 performance
+branch is outside this freeze. Every executable has its own SHA; later master
+changes do not silently alter an existing observation.

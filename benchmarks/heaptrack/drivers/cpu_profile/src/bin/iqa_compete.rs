@@ -4,7 +4,6 @@
 mod maps;
 use serde_json::{Value, json};
 use std::{env, fs, hint::black_box, path::Path, time::Duration};
-#[allow(unexpected_cfgs)]
 #[cfg(iqa_compete_ingress)]
 use zenmetrics_cli::decode;
 use zenmetrics_cli::{
@@ -14,6 +13,41 @@ use zenmetrics_cli::{
 
 #[allow(unexpected_cfgs)]
 const MODEL_PRELOAD_ADAPTER: bool = cfg!(iqa_compete_cached);
+
+struct ScoreObservations {
+    expected: u64,
+    last: std::sync::atomic::AtomicU64,
+    different: std::sync::atomic::AtomicU64,
+    count: std::sync::atomic::AtomicU64,
+}
+impl ScoreObservations {
+    fn new(value: f64) -> Self {
+        Self {
+            expected: value.to_bits(),
+            last: std::sync::atomic::AtomicU64::new(value.to_bits()),
+            different: std::sync::atomic::AtomicU64::new(u64::MAX),
+            count: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+}
+struct ObservedScore {
+    value: f64,
+    observations: &'static ScoreObservations,
+}
+impl Drop for ObservedScore {
+    fn drop(&mut self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let bits = self.value.to_bits();
+        self.observations.last.store(bits, Relaxed);
+        if bits != self.observations.expected {
+            self.observations.count.fetch_add(1, Relaxed);
+            let _ = self
+                .observations
+                .different
+                .compare_exchange(u64::MAX, bits, Relaxed, Relaxed);
+        }
+    }
+}
 
 fn prepare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let r = decode_image_to_rgb8(Path::new(&args[2]))?;
@@ -63,15 +97,23 @@ fn prepare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 fn load() -> Vec<f64> {
-    fs::read_to_string("/proc/loadavg")
-        .ok()
-        .map(|s| {
-            s.split_whitespace()
-                .take(3)
-                .filter_map(|v| v.parse().ok())
-                .collect()
-        })
-        .unwrap_or_default()
+    let text = fs::read_to_string("/proc/loadavg").ok();
+    #[cfg(target_os = "macos")]
+    let text = text.or_else(|| {
+        std::process::Command::new("sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output()
+            .ok()
+            .and_then(|v| String::from_utf8(v.stdout).ok())
+            .map(|s| s.replace(['{', '}'], ""))
+    });
+    text.map(|s| {
+        s.split_whitespace()
+            .take(3)
+            .filter_map(|v| v.parse().ok())
+            .collect()
+    })
+    .unwrap_or_default()
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let a: Vec<String> = env::args().collect();
@@ -90,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir(out)?;
         let mut manifest = Vec::new();
         for pair in pairs {
-            for convention in ["709-420", "601-420", "601-y", "709-y"] {
+            for convention in ["709-420", "601-420", "601-444", "601-y", "709-y"] {
                 let mut row = pair.clone();
                 row["convention"] = json!(convention);
                 for role in ["reference", "distorted"] {
@@ -146,6 +188,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("unknown metric")?;
     let display = Box::leak(Box::new(parse_display("standard_fhd")?));
     let display: &'static _ = display;
+    let admitted_unix_ns = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let before = load();
     if !config["probe_only"].as_bool().unwrap_or(false) && before.first().is_some_and(|v| *v > 4.) {
         return Err(format!("busy load {before:?}").into());
@@ -193,10 +238,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("IQA_PROBE {}", serde_json::to_string(&probe)?);
         return Ok(());
     }
+    let warmup_start = std::time::Instant::now();
     let first = score(); // Model/initialization warmup is outside the timer.
+    println!(
+        "IQA_WARMUP {}",
+        json!({"initialization_and_warmup_ns":warmup_start.elapsed().as_nanos(),"completed":true,"score_bits":first.as_ref().ok().map(|v|format!("{:016x}",v.to_bits()))})
+    );
     let mut row = config.clone();
     row["load_before"] = json!(before);
+    row["admitted_unix_ns"] = json!(admitted_unix_ns);
     row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
+    row["declared_columns"] = json!(kind.column_names());
+    row["headline_declared_column"] = json!(kind.column_names()[0]);
     if let Err(e) = first {
         row["status"] = json!(format!("skipped:{e}"));
         row["n"] = json!(0);
@@ -209,6 +262,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let first = first?;
+    if !first.is_finite() {
+        row["status"] = json!("skipped:nonfinite_score");
+        row["n"] = json!(0);
+        row["score_bits"] = json!(format!("{:016x}", first.to_bits()));
+        row["load_after"] = json!(load());
+        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        row["mode"] = json!("score+map");
+        row["status"] = json!("skipped:nonfinite_score");
+        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        return Ok(());
+    }
     let mut map_call = maps::native(name, r, d);
     #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
     if name.ends_with("-gpu") {
@@ -241,6 +305,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(Ok(_)) => {}
     }
+    let chunk_budget_ms = config["chunk_budget_ms"].as_u64().unwrap_or(850_000);
+    if !(1..=850_000).contains(&chunk_budget_ms) {
+        return Err("chunk budget must be within 1..=850000 ms".into());
+    }
+    let sample_target_ns = config["sample_target_ns"].as_u64().unwrap_or(1_000_000);
+    let inspect_gpu = config["device"].as_str().is_some_and(|v| v != "cpu");
+    let observations: &'static [ScoreObservations; 2] = Box::leak(Box::new([
+        ScoreObservations::new(first),
+        ScoreObservations::new(
+            map_first
+                .as_ref()
+                .and_then(|v| v.as_ref().ok())
+                .copied()
+                .unwrap_or(first),
+        ),
+    ]));
     let result = zenbench::run(|suite| {
         suite.group(name, |g| {
             g.config()
@@ -248,17 +328,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .max_rounds(10)
                 .auto_rounds(false)
                 .warmup_time(Duration::from_millis(100))
-                .max_time(Duration::from_secs(850))
-                .max_wall_time(Duration::from_secs(850));
+                .sample_target_ns(sample_target_ns)
+                .max_time(Duration::from_millis(chunk_budget_ms))
+                .max_wall_time(Duration::from_millis(chunk_budget_ms));
             g.bench("score", move |b| {
-                b.iter(|| {
-                    let value = score().expect("metric failed after warmup");
-                    black_box(value)
-                })
+                if inspect_gpu {
+                    // Deferred Drop checks every returned score AFTER the clock.
+                    b.iter_deferred_drop(|| ObservedScore {
+                        value: score().expect("metric failed after warmup"),
+                        observations: &observations[0],
+                    });
+                } else {
+                    b.iter(|| black_box(score().expect("metric failed after warmup")));
+                }
             });
             if let Some(mut call) = map_call {
                 g.bench("score+map", move |b| {
-                    b.iter(|| black_box(call().expect("map failed after warmup")))
+                    if inspect_gpu {
+                        b.iter_deferred_drop(|| ObservedScore {
+                            value: call().expect("map failed after warmup"),
+                            observations: &observations[1],
+                        });
+                    } else {
+                        b.iter(|| black_box(call().expect("map failed after warmup")));
+                    }
                 });
             }
         });
@@ -267,14 +360,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (index, bm) in cmp.benchmarks.iter().enumerate() {
         let mut row = row.clone();
         row["mode"] = json!(bm.name);
-        let mut samples: Vec<f64> = cmp
+        let round_means: Vec<f64> = cmp
             .samples
             .iter()
             .map(|s| s.compensated_ns[index] as f64 / s.iterations as f64)
             .collect();
+        let mut samples = round_means.clone();
         samples.sort_by(f64::total_cmp);
-        if samples.len() < 10 {
-            return Err(format!("insufficient zenbench rounds {}", samples.len()).into());
+        if samples.is_empty() {
+            return Err("zenbench completed no rounds".into());
         }
         let percentile = |p: f64| {
             let i = p * (samples.len() - 1) as f64;
@@ -282,6 +376,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let hi = i.ceil() as usize;
             samples[lo] + (samples[hi] - samples[lo]) * (i - lo as f64)
         };
+        row["round_means_ns"] = json!(round_means);
+        row["zenbench_arm_index"] = json!(index);
         row["zenbench_samples"] = serde_json::to_value(&cmp.samples)?;
         row["rayon_threads_observed"] = json!(rayon::current_num_threads());
         #[cfg(target_arch = "x86_64")]
@@ -303,17 +399,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["p10_ns"] = json!(percentile(0.1));
         row["p90_ns"] = json!(percentile(0.9));
         row["mean_ns"] = json!(bm.summary.mean);
-        let measured = if index == 0 {
+        let arm = usize::from(bm.name != "score");
+        let measured = if inspect_gpu {
+            f64::from_bits(
+                observations[arm]
+                    .last
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            )
+        } else if arm == 0 {
             first
         } else {
             *map_first.as_ref().unwrap().as_ref().unwrap()
         };
+        if inspect_gpu {
+            let count = observations[arm]
+                .count
+                .load(std::sync::atomic::Ordering::Relaxed);
+            row["gpu_call_bit_variation_count"] = json!(count);
+            row["gpu_call_observation_scope"] = json!(
+                "Every zenbench warmup/calibration/timed result; checks run in deferred output Drop after timing"
+            );
+            row["gpu_one_different_score_bits"] = if count > 0 {
+                json!(format!(
+                    "{:016x}",
+                    observations[arm]
+                        .different
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                ))
+            } else {
+                Value::Null
+            };
+        }
         row["score"] = json!(measured);
+        row["score_bits"] = json!(format!("{:016x}", measured.to_bits()));
+        row["map_score_matches_scalar_bits"] = json!(measured.to_bits() == first.to_bits());
         row["ref_score"] = json!(first);
+        row["self_warmup_score"] = json!(first);
         row["abs_delta"] = json!((measured - first).abs());
         row["relative_delta"] =
             json!((measured - first).abs() / first.abs().max(f64::MIN_POSITIVE));
-        row["status"] = json!(if measured.to_bits() == first.to_bits() {
+        row["status"] = json!(if measured.to_bits() == first.to_bits()
+            && row["gpu_call_bit_variation_count"].as_u64().unwrap_or(0) == 0
+        {
             "ok"
         } else {
             "variant_mismatch"
@@ -322,7 +449,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["notes"] = json!(
             "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles"
         );
-        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        if samples.len() < 10 {
+            row["status"] = json!("partial");
+            row["partial_reason"] = json!("chunk time budget reached before ten zenbench rounds");
+            println!("IQA_PARTIAL {}", serde_json::to_string(&row)?);
+        } else {
+            println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        }
     }
     Ok(())
 }

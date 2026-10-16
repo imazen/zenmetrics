@@ -7,12 +7,12 @@ def svg_bars(title,rows):
     width=1200;height=70+26*len(rows);maximum=max((r['median_ns'] for r in rows),default=1)
     out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12"><text x="12" y="22">{html.escape(title)} — per-call median, milliseconds</text>']
     for i,r in enumerate(rows):
-        y=48+26*i;label=f"{r['metric_name']} / {r['impl']} / {r['threads']}T / {r['mode']}";color='#cf702c' if r['status']=='variant_mismatch' else ('#2166ac' if r['impl']=='zenmetrics' else '#4f9e79')
+        y=48+26*i;label=f"{r['metric_name']} / {r['impl']} ({r.get('engine','native')}/{r['device']}) / {r['threads']}T / {r['mode']}";color='#cf702c' if r['status']=='variant_mismatch' else ('#2166ac' if r['impl']=='zenmetrics' else '#4f9e79')
         out.append(f'<text x="12" y="{y+13}">{html.escape(label)}</text><rect x="410" y="{y}" width="{r["median_ns"]/maximum*660:.3f}" height="18" fill="{color}"/><text x="1080" y="{y+13}">{r["median_ns"]/1e6:.4g}</text>')
     return ''.join(out)+'</g></svg>'
 def svg_lines(title,rows):
     groups=collections.defaultdict(list)
-    for r in rows:groups[(r['metric_name'],r['impl'],r['threads'],r['mode'],r['status'])].append(r)
+    for r in rows:groups[(r['metric_name'],r['impl'],r.get('engine','native'),r['device'],r['threads'],r['mode'],r['status'])].append(r)
     xmax=max((r['width']*r['height']/1e6 for r in rows),default=1);ymax=max((r['median_ns']/1e6 for r in rows),default=1)
     out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="{max(540,70+17*len(groups))}"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" font-size="12">',f'<text x="12" y="22">{html.escape(title)} — x: megapixels; y: milliseconds/call</text><path d="M60 40V480H880" fill="none" stroke="black"/>']
     for i,(key,rs) in enumerate(sorted(groups.items())):
@@ -33,7 +33,7 @@ def main():
                     if not isinstance(r[k],(int,float)) or not math.isfinite(r[k]) or r[k]<=0:raise ValueError((key,k))
                 if r['n']<10 and r.get('timed_seconds',0)<3:raise ValueError((key,'insufficient sampling'))
             rows.append(r)
-    fields=['host','metric_name','impl','impl_binary_sha','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','load_before','load_after','resource']
+    fields=['host','metric_name','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','load_before','load_after','resource','resource_memory_method']
     byhost=collections.defaultdict(list)
     for r in rows:byhost[r['host']].append({k:r.get(k) for k in fields})
     for host,values in byhost.items():

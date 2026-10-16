@@ -1068,3 +1068,13 @@ iqa-compete-python-setup output:
 
 iqa-compete-python package python binary pairs output reference qualified sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads '{{threads}}' --sizes '{{sizes}}' --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --reference-jsonl '{{qualified}}'
+
+iqa-compete-chunk-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_chunks.py
+
+iqa-compete-python-preflight python:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/python_preflight.py
+
+# Repair only the owned competitor environment; existing oracle sites are read-only.
+iqa-compete-python-deps python:
+    uv pip install --python '{{python}}' --no-deps ffmpeg-python matplotlib contourpy cycler fonttools kiwisolver pyparsing python-dateutil six PyEXR OpenEXR

@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """One resident numpy/torch metric cell. Import/model/tensor setup is untimed."""
-import argparse,importlib.metadata,json,os,pathlib,statistics,time
+import argparse,importlib.metadata,json,os,pathlib,statistics,subprocess,sys,time
 P=pathlib.Path
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('config',type=P);a=p.parse_args();c=json.loads(a.config.read_text())
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('config',type=P);p.add_argument('--mode',choices=['score','score+map']);a=p.parse_args();c=json.loads(a.config.read_text())
+if a.mode is None:
+ for selected in ['score','score+map']:
+  result=subprocess.run([sys.executable,str(P(__file__).absolute()),str(a.config.absolute()),'--mode',selected])
+  if result.returncode:raise SystemExit(result.returncode)
+ raise SystemExit
+c['mode']=a.mode
 before=list(os.getloadavg()) if hasattr(os,'getloadavg') else []
 if before and before[0]>4:print('IQA_BUSY '+json.dumps(before),flush=True);raise SystemExit(75)
-# Package choices are explicit; no aggregate IQA dependency is imported.
+# Package choices are explicit; PyIQA is excluded.
 package=c['package'];metric=c['metric_name'];mode=c['mode'];device=c.get('device','cpu');threads=c['threads']
 import numpy as np
 r=np.fromfile(c['reference'],dtype=np.uint8).reshape(c['height'],c['width'],3);d=np.fromfile(c['distorted'],dtype=np.uint8).reshape(r.shape)
@@ -31,8 +37,9 @@ else:
  torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
  row['package_versions'].update(torch=torch.__version__,torchvision=importlib.metadata.version('torchvision'))
  row.update(torch_threads_observed=torch.get_num_threads(),tf32_matmul=False,tf32_cudnn=False)
- x=torch.from_numpy(r.copy()).permute(2,0,1).unsqueeze(0).to(device=device,dtype=torch.float32)/255
- y=torch.from_numpy(d.copy()).permute(2,0,1).unsqueeze(0).to(device=device,dtype=torch.float32)/255
+ x=torch.from_numpy(r.copy()).permute(2,0,1).unsqueeze(0).contiguous().to(device=device,dtype=torch.float32)/255
+ y=torch.from_numpy(d.copy()).permute(2,0,1).unsqueeze(0).contiguous().to(device=device,dtype=torch.float32)/255
+ row.update(tensor_dtype=str(x.dtype),tensor_layout='contiguous NCHW',tensor_strides=list(x.stride()))
  if device=='cuda':sync=torch.cuda.synchronize
  maps=(package=='torchmetrics' and metric=='ssimc-pyiqa-f32') or package=='cvvdp'
  if mode=='score+map' and not maps:
@@ -75,7 +82,7 @@ else:
    fn=lambda:multiscale_structural_similarity_index_measure((x*weights).sum(1,keepdim=True),(y*weights).sum(1,keepdim=True),data_range=1.)
  elif package=='pytorch-msssim':
   import pytorch_msssim
-  if metric=='ssimc-pyiqa-f32':fn=lambda:pytorch_msssim.ssim(x,y,data_range=1.,size_average=True)
+  if metric=='ssimc-pyiqa-f32':fn=lambda:pytorch_msssim.ssim(x,y,data_range=1.,size_average=True,nonnegative_ssim=True)
   else:
    weights=torch.tensor([.299,.587,.114],device=device).view(1,3,1,1)
    fn=lambda:pytorch_msssim.ms_ssim((x*weights).sum(1,keepdim=True),(y*weights).sum(1,keepdim=True),data_range=1.,size_average=True)
@@ -113,10 +120,12 @@ samples=[];scores=[];before=list(os.getloadavg()) if hasattr(os,'getloadavg') el
 for _ in range(10):
  sync();start=time.perf_counter_ns();value=fn();sync();observed=score(value);del value;elapsed=time.perf_counter_ns()-start
  samples.append(elapsed);scores.append(observed)
+ print('IQA_SAMPLE '+json.dumps({'ns':elapsed,'score':observed}),flush=True)
+ if len(samples)>=3 and sum(samples)>=3_000_000_000:break
 # Scalar extraction and output destruction are included, as on the Rust
 # adapters returning f64 after releasing their native outputs.
 sorted_samples=sorted(samples)
 def percentile(p):
  i=p*(len(samples)-1);lo=int(i);hi=min(lo+1,len(samples)-1);return sorted_samples[lo]+(sorted_samples[hi]-sorted_samples[lo])*(i-lo)
-row.update(status='ok',n=len(samples),median_ns=statistics.median(samples),mean_ns=statistics.mean(samples),p10_ns=percentile(.1),p90_ns=percentile(.9),score=scores[-1],sample_scores=scores,samples_ns=samples,load_before=before,load_after=list(os.getloadavg()) if hasattr(os,'getloadavg') else [],notes='Resident native ndarray/tensors. Imports, model load, normalization/upload excluded. Callable including its internal color conversion + device synchronization timed; scalar extraction/output destruction included. One warmup; ten individual calls.')
+row.update(status='ok',n=len(samples),timed_seconds=sum(samples)/1e9,median_ns=statistics.median(samples),mean_ns=statistics.mean(samples),p10_ns=percentile(.1),p90_ns=percentile(.9),score=scores[-1],sample_scores=scores,samples_ns=samples,load_before=before,load_after=list(os.getloadavg()) if hasattr(os,'getloadavg') else [],notes='Resident native ndarray/tensors. Imports, model load, normalization/upload excluded. Callable including its internal color conversion + device synchronization timed; scalar extraction/output destruction included. One warmup; ten calls or at least three calls totaling three seconds.')
 print('IQA_ROW '+json.dumps(row,allow_nan=False),flush=True)

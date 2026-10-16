@@ -20,8 +20,9 @@ synchronous readback needed to return a scalar, not only kernel submission.
 
 Rust uses interleaved zenbench arms, warmup and at least ten rounds. Percentiles
 are over round batch means; iteration counts and raw rounds are retained.
-Other adapters use one warmup and ten individual timed calls, retaining every
-sample. All cells have an outer process timeout below twenty minutes and a
+Native C/C++ adapters use one warmup and ten individual timed calls. Python
+uses ten calls or at least three calls totaling three seconds. Every sample
+is retained. All cells have an outer process timeout below twenty minutes and a
 host memory limit. Timeout or memory refusal is an explicit row, not a timing.
 Admission is separate from measurement: a high-load refusal is retained and
 retried after releasing the heavy-job lock.
@@ -56,6 +57,32 @@ The Python package APIs and conventions are documented by their projects:
 [ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP).
 
 Third-party code is confined to this benchmark harness and external tools.
-No aggregate IQA package is installed or imported by these adapters. The legacy
+PyIQA is not installed, imported or invoked by these adapters. The legacy
 CLI metric names containing a package name are identifiers of the existing Rust
 implementations; they do not cause a Python dependency to load.
+
+Slow Rust cells can span independently bounded chunks. Every zenbench group
+still requests ten rounds. If its chunk budget ends first, it emits a partial
+record with the actual rounds; that record cannot qualify alone. The controller
+releases the scope/lock, starts another warmed chunk, and combines actual round
+means only after at least ten have completed. Input, executable, thread budget
+and sampling configuration must match. Score-bit disagreement is preserved.
+Each chunk's load, log hash and resource receipt remain in the raw result;
+aggregate resource seconds sum separate lock holds. No duration or sample is
+estimated from an incomplete run.
+
+The extended GPU driver checks every returned score using zenbench's deferred
+output Drop, after the measured interval. Native map release remains inside the
+metric adapter's call. Rows retain the last actual result and count any score
+bit variation across zenbench warmup/calibration/timed calls. A variation or
+out-of-bound CPU comparison triggers a second complete cell and links both
+attempts. The initial GPU qualification summary predates this additional
+per-call check; the full matrix uses the qualified extended driver.
+
+A metric call may return multiple scalar columns. The timing covers that public
+call's outputs; the primary comparison uses its first declared column (for
+example WD scale 1 or PSNR-HVS Y). Paired no-reference routes score both images,
+returning distorted and reference columns; the BRISQUE Python adapter does the
+same two-image work. Each row records the declared output columns. Extra native
+outputs and any differences in public API workload are stated rather than
+presented as an isolated single-plane or single-image cost.

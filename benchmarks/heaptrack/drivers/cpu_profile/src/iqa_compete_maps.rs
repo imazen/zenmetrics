@@ -12,6 +12,10 @@ mod flip;
 #[allow(dead_code, unexpected_cfgs, unreachable_pub)]
 #[path = "../../../../../crates/zenmetrics-cli/src/metrics/vmaf.rs"]
 mod ingress;
+#[cfg(iqa_compete_ingress)]
+mod ingress444 {
+    include!(concat!(env!("OUT_DIR"), "/iqa_ingress444.rs"));
+}
 pub(super) type Call = Box<dyn FnMut() -> Result<f64, String> + Send>;
 pub(super) fn cvvdp_score(
     r: &'static Rgb8Image,
@@ -283,6 +287,10 @@ pub(super) fn competitor_planes(
 ) -> Result<(usize, usize, Vec<u8>), Box<dyn std::error::Error>> {
     let (w, h) = (image.width as usize, image.height as usize);
     match convention {
+        "601-444" => {
+            let (y, u, v) = ingress444::studio601_yuv444(image);
+            Ok((w, h, [y, u, v].concat()))
+        }
         "709-420" | "601-420" => {
             let matrix = if convention == "709-420" {
                 ingress::Ingress::Bt709
@@ -421,6 +429,6 @@ fn butter_gpu_map<R: cubecl::Runtime>(
             .map_err(|e| e.to_string())?;
         let map = scorer.copy_diffmap().map_err(|e| e.to_string())?;
         std::hint::black_box(map);
-        Ok(value.score)
+        Ok(f64::from(value.score))
     }))
 }
