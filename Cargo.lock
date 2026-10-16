@@ -7717,7 +7717,6 @@ dependencies = [
  "iwssim-gpu",
  "rgb",
  "ssim2-gpu",
- "thiserror 2.0.21",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
  "zenpixels",
