@@ -580,14 +580,29 @@ pub(crate) mod ort_engine {
             Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
         }
     }
-    /// Multi-output VGG feature graph using the same deterministic CUDA session.
+    /// Multi-output VGG feature graph with bounded host output retention.
     pub(crate) struct OrtCudaTrunk {
-        inner: OrtCudaImage,
+        session: Mutex<Session>,
     }
     impl OrtCudaTrunk {
         pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            let env = environment()?;
+            let cuda = ep::CUDA::default()
+                .with_tf32(false)
+                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
+                .build()
+                .error_on_failure();
+            // Dynamic full-resolution feature maps must not accumulate in a
+            // host arena after copying into Rust-owned reference buffers.
+            let cpu = ep::CPU::default().with_arena_allocator(false).build();
+            let session = Session::builder(env)
+                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+                .and_then(|b| b.with_memory_pattern(false).map_err(Into::into))
+                .and_then(|b| b.with_execution_providers([cuda, cpu]).map_err(Into::into))
+                .and_then(|mut b| b.commit_from_file(path))
+                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
             Ok(Self {
-                inner: OrtCudaImage::load(path, "tap0")?,
+                session: Mutex::new(session),
             })
         }
     }
@@ -599,29 +614,39 @@ pub(crate) mod ort_engine {
             let input = Tensor::from_array(([1usize, 3, h, w], input))
                 .map_err(|e| Error::Engine(e.to_string()))?;
             let mut session = self
-                .inner
                 .session
                 .lock()
                 .map_err(|_| Error::Engine("session lock poisoned".into()))?;
             let out = session
                 .run(ort::inputs!["x"=>input])
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            ["tap0", "tap1", "tap2", "tap3"]
-                .into_iter()
-                .map(|name| {
-                    let (shape, data) = out[name]
-                        .try_extract_tensor::<f32>()
-                        .map_err(|e| Error::Engine(e.to_string()))?;
-                    if shape.len() != 4 || shape[0] != 1 || shape[1..].iter().any(|&x| x <= 0) {
-                        return Err(Error::BadModel(format!("WD output shape {shape:?}")));
-                    }
-                    Ok(super::Tap {
-                        c: shape[1] as usize,
-                        h: shape[2] as usize,
-                        w: shape[3] as usize,
-                        data: data.to_vec(),
-                    })
-                })
+            let mut taps: [Option<super::Tap>; 4] = core::array::from_fn(|_| None);
+            // Consume each ORT value, releasing it immediately after its copy.
+            // Indexing a borrowed SessionOutputs retains every original until
+            // the complete collection has been cloned.
+            for (name, value) in out {
+                let index = match name {
+                    "tap0" => 0,
+                    "tap1" => 1,
+                    "tap2" => 2,
+                    "tap3" => 3,
+                    _ => return Err(Error::BadModel(format!("unexpected WD output {name}"))),
+                };
+                let (shape, data) = value
+                    .try_extract_tensor::<f32>()
+                    .map_err(|e| Error::Engine(e.to_string()))?;
+                if shape.len() != 4 || shape[0] != 1 || shape[1..].iter().any(|&x| x <= 0) {
+                    return Err(Error::BadModel(format!("WD output shape {shape:?}")));
+                }
+                taps[index] = Some(super::Tap {
+                    c: shape[1] as usize,
+                    h: shape[2] as usize,
+                    w: shape[3] as usize,
+                    data: data.to_vec(),
+                });
+            }
+            taps.into_iter()
+                .map(|tap| tap.ok_or_else(|| Error::BadModel("missing WD output".into())))
                 .collect()
         }
     }
