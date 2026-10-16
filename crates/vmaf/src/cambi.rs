@@ -5316,6 +5316,13 @@ fn calculate_c_values_row_v3_t(
         let value_v = _mm256_add_epi32(_mm256_cvtepu16_epi32(img16), num_diffs_v);
 
         let mut compact_v = _mm256_sub_epi32(value_v, band_offset_v);
+        // Clamping protects gathers; out-of-band active pixels still have
+        // zero c-value, matching c_value_pixel and the scalar row tail.
+        let in_band = _mm256_and_si256(
+            _mm256_cmpgt_epi32(compact_v, _mm256_set1_epi32(-1)),
+            _mm256_cmpgt_epi32(_mm256_set1_epi32(band_size as i32), compact_v),
+        );
+        let mask_active = _mm256_and_si256(mask_active, in_band);
         compact_v = _mm256_max_epi32(compact_v, zero);
         compact_v = _mm256_min_epi32(compact_v, band_max_v);
 
@@ -5682,8 +5689,9 @@ fn calculate_c_values_scheduled(
                 counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         });
-        // Every nonfinal region has a multiple of eight columns, preserving
-        // the original SIMD lane groups and the original scalar tail.
+        // Align nonfinal regions to eight columns. The last eight columns
+        // of each such region use c_value_pixel because the vector loop
+        // requires col + 8 < width; the row parity control covers both paths.
         let columns = width.div_ceil(rayon::current_num_threads()).div_ceil(8) * 8;
         let starts: Vec<usize> = (0..width).step_by(columns).collect();
         let regions = starts

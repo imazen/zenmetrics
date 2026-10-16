@@ -85,8 +85,9 @@ impl VmafV1Scorer {
         reference: &Yuv420Frame<'_>,
         distorted: &Yuv420Frame<'_>,
         motion3: f64,
+        parallel_cambi: bool,
     ) -> Result<VmafFrameResult, Error> {
-        let mut features = self.extract_features(reference, distorted)?;
+        let mut features = self.extract_features(reference, distorted, parallel_cambi)?;
         features.motion3 = motion3;
         self.predict_features(features)
     }
@@ -95,15 +96,18 @@ impl VmafV1Scorer {
         &self,
         reference: &Yuv420Frame<'_>,
         distorted: &Yuv420Frame<'_>,
+        parallel_cambi: bool,
     ) -> Result<VmafFeatures, Error> {
         #[cfg(feature = "parallel")]
-        let cambi = self.with_cambi_threads(|parallel| {
+        let cambi = self.with_cambi_threads(parallel_cambi, |parallel| {
             if parallel {
                 crate::cambi_v1_from_luma(distorted.y, self.width, self.height, self.bit_depth)
             } else {
                 crate::cambi::cambi_v1_serial(distorted.y, self.width, self.height, self.bit_depth)
             }
         })?;
+        #[cfg(not(feature = "parallel"))]
+        let _ = parallel_cambi;
         #[cfg(not(feature = "parallel"))]
         let cambi =
             crate::cambi::cambi_v1_serial(distorted.y, self.width, self.height, self.bit_depth)?;
@@ -132,8 +136,12 @@ impl VmafV1Scorer {
     }
 
     #[cfg(feature = "parallel")]
-    fn with_cambi_threads<T: Send>(&self, compute: impl FnOnce(bool) -> T + Send) -> T {
-        if let Some(pool) = &self.pool {
+    fn with_cambi_threads<T: Send>(
+        &self,
+        allow_parallel: bool,
+        compute: impl FnOnce(bool) -> T + Send,
+    ) -> T {
+        if allow_parallel && let Some(pool) = &self.pool {
             pool.install(|| compute(true))
         } else {
             compute(false)
@@ -182,7 +190,7 @@ impl VmafV1Scorer {
                     .zip(distorted.par_iter())
                     .zip(motion.par_iter())
                     .map(|((reference, distorted), &motion3)| {
-                        self.score_frame(reference, distorted, motion3)
+                        self.score_frame(reference, distorted, motion3, false)
                     })
                     .collect()
             });
@@ -192,7 +200,7 @@ impl VmafV1Scorer {
             .zip(distorted)
             .zip(motion)
             .map(|((reference, distorted), motion3)| {
-                self.score_frame(reference, distorted, motion3)
+                self.score_frame(reference, distorted, motion3, true)
             })
             .collect()
     }
@@ -247,7 +255,7 @@ impl VmafV1Stream {
         let next = index
             .checked_add(1)
             .ok_or(Error::InvalidInput("frame count overflow"))?;
-        let features = self.scorer.extract_features(&reference, &distorted)?;
+        let features = self.scorer.extract_features(&reference, &distorted, true)?;
         let hfr = matches!(
             self.scorer.variant,
             ModelVariant::HfrStandard1080p
@@ -479,9 +487,9 @@ mod cambi_thread_tests {
                     .unwrap()
                     .to_bits(),
             );
-            assert!(!scorer.with_cambi_threads(|parallel| parallel));
+            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
             let scorer = scorer.with_threads(1).unwrap();
-            assert!(!scorer.with_cambi_threads(|parallel| parallel));
+            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
             // A one-worker private pool is valid on every test host and must
             // override the unrelated four-worker caller pool.
             let scorer = VmafV1Scorer {
@@ -494,7 +502,8 @@ mod cambi_thread_tests {
                 ..scorer
             };
             assert_eq!(
-                scorer.with_cambi_threads(|parallel| (parallel, rayon::current_num_threads())),
+                scorer
+                    .with_cambi_threads(true, |parallel| (parallel, rayon::current_num_threads())),
                 (true, 1)
             );
         });
