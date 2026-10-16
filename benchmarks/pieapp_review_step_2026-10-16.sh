@@ -17,7 +17,7 @@ case "$phase" in
  gpu-features) just snap-cargo @ check -p zenmetrics-cli --features sweep,png,gpu,gpu-cuda ;;
  nn-features) just snap-cargo @ check -p zenmetrics-cli --features sweep,orchestrator,nn,nr ;;
  rten-*) just nn-parity "$shards/${phase#rten-}" "$ladder" rten model-tests,ort pieapp ;;
- cuda-cap) just snap-cargo @ build --release -p zenmetrics-nn --features ort --example pieapp_cap; /usr/bin/time -v "$LOCK_SNAP_DIR/target/release/examples/pieapp_cap" "$models" ort-cuda 3000 3000 > "$output/cap-ort-cuda-v3.log" 2>&1; cat "$output/cap-ort-cuda-v3.log" ;;
+ cuda-cap) just snap-cargo @ build --release -p zenmetrics-nn --features ort --example pieapp_cap; test ! -e "$output/cap-ort-cuda-v3.log"; printf 'start_load=%s\n' "$(cat /proc/loadavg)" > "$output/cap-ort-cuda-v3.log"; /usr/bin/time -v "$LOCK_SNAP_DIR/target/release/examples/pieapp_cap" "$models" ort-cuda 3000 3000 >> "$output/cap-ort-cuda-v3.log" 2>&1; cat "$output/cap-ort-cuda-v3.log" ;;
  konjnd-*) just nn-pieapp-score "$models" "$output/konjnd/pairs-${phase#konjnd-}.tsv" "$output/konjnd/scores-${phase#konjnd-}.tsv" ort-cuda ;;
  cuda) just nn-parity "$models" "$ladder" ort-cuda model-tests,ort pieapp ;;
  routing) just snap-cargo @ test -p zenmetrics-cli --features sweep,orchestrator,nn,nr --lib pieapp_uses_direct_learned_route ;;
