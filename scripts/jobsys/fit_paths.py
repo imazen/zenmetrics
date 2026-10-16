@@ -1,7 +1,7 @@
 """Explicit strict results destinations, shared by execution and harvesting."""
 from pathlib import Path
 
-ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
 
 
 def explicit_root(argv, fit_root):

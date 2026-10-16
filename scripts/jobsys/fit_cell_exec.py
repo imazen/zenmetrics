@@ -27,6 +27,7 @@ FIT_ROOT = Path("/var/tmp/rev4-featpot")
 # Approved fit programs: (output root under FIT_ROOT, outer-fold importance script or None).
 # The importance step is the local runners' second step (run_mlp_baseline.sh / run_p2_mlp.sh).
 SCRIPTS = {
+    "subjective_cell.py": ("registered/cells", None),
     "mlp_probe.py": ("fits", "mlp_importance.py"),
     "p2_mlp.py": ("p2/mlp", "p2_mlp_importance.py"),
     "p2_lodo_mlp.py": ("p2/d2_mlp", None),
@@ -39,7 +40,7 @@ SCRIPTS = {
 }
 # Scripts that take `--root /var/tmp/rev4-featpot/<name>` (v2-canon tables beside the Rev3 v2 ones): their cells
 # live under `<name>/<suffix>` instead of the default root. Keep in step with harvest_fit_cells.ROOTED.
-ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells", "subjective_cell.py": "cells"}
 sys.path.insert(0, str(PROGRAM))
 from fit_paths import explicit_root
 
@@ -58,6 +59,10 @@ class WallCapExceeded(RuntimeError):
 
 def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
     """The registered per-cell wall cap in seconds, or None for a program with no E33 package."""
+    if argv[0] == "subjective_cell.py":
+        from registered_fit_contract import load
+        meta = json.loads((program / "build_meta.json").read_text())
+        return load(argv,data_sha,meta)["wall_cap_sec"]
     path = program / E33_CONTRACT
     if not path.is_file():
         return None
