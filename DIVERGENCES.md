@@ -629,6 +629,17 @@ also changes the CLI score (`1.7122649515845207`); it does not explain the dense
 result. No documented option has established equivalence. Official source is
 not read, and any further wrapper probes are restricted to documented options.
 
+
+The [full 24-pair demo panel](benchmarks/pieapp_review_2026-10-16/cli.json)
+runs the documented dense CUDA CLI twice per pair; all printed scores repeat
+exactly. The worst difference is `2207_2048`: demo `3.4582222` versus explicit
+entry-point grid `2.4828926609204816`, or `0.9753295390795182` native units
+(`1.879433106938455` operational JND). This modern compatible CUDA demo panel
+retains values at their printed precision; the earlier original-runtime
+128-square control above remains a separate observation. Neither panel
+establishes equivalence between the demo's sub-image wrapper and the selected
+full-image stride-six entry-point grid.
+
 Input is strided RGB8; the exported graph converts to BGR code values. Neural
 patch errors and positive weights are pooled in fixed row-major order with
 f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references

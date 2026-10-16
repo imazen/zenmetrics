@@ -78,3 +78,13 @@ cli_documented_sparse_score = 1.7122649515845207
 cli_explanation = "No documented option has established equivalence. Official source is not read; wrapper probing is restricted to documented options."
 
 cli_difference_jnd = 0.044332586385898314
+
+cli_panel_pairs = 24
+cli_panel_repetitions = 2
+cli_panel_engine = "Modern compatible official demo on CUDA; values retained at printed precision"
+cli_panel_worst_case = "2207_2048"
+cli_panel_worst_cli_score = 3.4582222
+cli_panel_worst_entry_point_score = 2.4828926609204816
+cli_panel_worst_absolute_difference = 0.9753295390795182
+cli_panel_worst_difference_jnd = 1.879433106938455
+cli_panel_receipt = "../../../../benchmarks/pieapp_review_2026-10-16/cli.json"
