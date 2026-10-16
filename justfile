@@ -967,3 +967,7 @@ nn-pieapp-review-konjnd-shards pairs output:
 
 nn-pieapp-review-konjnd-compare baseline directory output:
     python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_compare.py '{{baseline}}' '{{directory}}' '{{output}}'
+
+# Syntax-check independent probes without importing or executing an oracle.
+nn-pieapp-review-python-check:
+    python3 -I -m compileall -q crates/zenmetrics-nn/models/pieapp

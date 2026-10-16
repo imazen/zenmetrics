@@ -10,7 +10,7 @@ p.add_argument('directory', type=Path)
 p.add_argument('workflow_log', type=Path)
 p.add_argument('output', type=Path)
 a = p.parse_args()
-summary = {'schema': 1, 'metric': 'pieapp', 'host': 'i265', 'geometry': [3000, 3000]}
+summary = {'schema': 1, 'metric': 'pieapp', 'host': 'i265', 'cap_geometry': [3000, 3000]}
 caps = {}
 for engine in ('rten', 'ort-cuda'):
     path = a.directory / f'cap-{engine}.log'
