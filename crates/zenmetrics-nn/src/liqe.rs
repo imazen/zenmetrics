@@ -145,18 +145,28 @@ impl Liqe {
     /// The head on the selected patches' embeddings: per-patch logits
     /// `scale·f·tᵀ` over the 495 prompts, mean over patches, softmax,
     /// marginalised to 5 quality buckets, `Σ (k+1)·p_k`. f64 on host.
+    ///
+    /// Every prompt's dot product is independent, and each accumulates its
+    /// patches in the same order on its own worker, so the parallel split is
+    /// bitwise identical to the sequential loop (see [`crate::par`]).
     fn head(head: &[f32], embs: &[Vec<f32>]) -> f64 {
         let (scale, text) = (f64::from(head[0]), &head[1..]);
-        let mut logits = vec![0.0f64; NPROMPTS];
-        for emb in embs {
-            for (j, l) in logits.iter_mut().enumerate() {
-                let mut d = 0.0f64;
-                for i in 0..DIM {
-                    d += f64::from(emb[i]) * f64::from(text[j * DIM + i]);
+        let mut logits = crate::par::par_map(
+            NPROMPTS,
+            crate::par::threads_for(embs.len() * NPROMPTS * DIM),
+            |j| {
+                let row = &text[j * DIM..(j + 1) * DIM];
+                let mut l = 0.0f64;
+                for emb in embs {
+                    let mut d = 0.0f64;
+                    for i in 0..DIM {
+                        d += f64::from(emb[i]) * f64::from(row[i]);
+                    }
+                    l += scale * d;
                 }
-                *l += scale * d;
-            }
-        }
+                l
+            },
+        );
         for l in &mut logits {
             *l /= embs.len() as f64;
         }
@@ -343,5 +353,27 @@ mod tests {
         let want = (1.0 + 98.0 * e2) / s + (99.0 * e2 / s) * (2.0 + 3.0 + 4.0 + 5.0);
         let got = Liqe::head(&head, &[emb]);
         assert!((got - want).abs() < 1e-12, "{got} vs {want}");
+    }
+
+    /// The head is bitwise identical on one worker and on many: only the
+    /// schedule over the independent prompts changes, and a capped run
+    /// starts no threads.
+    #[test]
+    fn head_thread_count_bit_identical() {
+        let mut head = vec![0.0f32; HEAD_LEN];
+        head[0] = 1.7; // scale
+        for (i, v) in head[1..].iter_mut().enumerate() {
+            *v = ((i * 2_654_435_761usize) % 1000) as f32 / 1000.0 - 0.5;
+        }
+        let mut emb = vec![0.0f32; DIM];
+        for (i, v) in emb.iter_mut().enumerate() {
+            *v = ((i * 40503) % 991) as f32 / 991.0 - 0.5;
+        }
+        let embs = vec![emb; NUM_PATCH];
+        let (one, spawns) = crate::par::observe_workers(Some(1), || Liqe::head(&head, &embs));
+        assert_eq!(spawns, 0, "a capped head started helper threads");
+        let (many, spawns) = crate::par::observe_workers(Some(16), || Liqe::head(&head, &embs));
+        assert!(spawns > 0);
+        assert_eq!(one.to_bits(), many.to_bits(), "{one} vs {many}");
     }
 }
