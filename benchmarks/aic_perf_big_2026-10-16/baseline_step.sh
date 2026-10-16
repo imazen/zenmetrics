@@ -17,7 +17,7 @@ case "$phase" in
   export RAYON_NUM_THREADS="$threads"
   echo "metric=$metric threads=$threads dimensions=${width}x${height} load=$(cat /proc/loadavg)"
   if [ "$threads" = 1 ]; then
-   sudo -n perf stat -e instructions,cycles -- taskset -c 2 env RAYON_NUM_THREADS=1 /usr/bin/time -v "$binary" "$width" "$height" 5
+   sudo -n taskset -c 2 perf stat -e cpu_core/instructions/,cpu_core/cycles/ -- env RAYON_NUM_THREADS=1 /usr/bin/time -v "$binary" "$width" "$height" 5
   else
    /usr/bin/time -v "$binary" "$width" "$height" 5
   fi
@@ -25,7 +25,7 @@ case "$phase" in
  profile)
   export RAYON_NUM_THREADS=1
   echo "metric=$metric profile dimensions=${width}x${height} load=$(cat /proc/loadavg)"
-  sudo -n perf record -F 199 --call-graph dwarf,8192 -o "$output/$metric-base.data" -- taskset -c 2 env RAYON_NUM_THREADS=1 "$binary" "$width" "$height" 5
+  sudo -n taskset -c 2 perf record -e cpu_core/cycles/ -F 199 --call-graph dwarf,8192 -o "$output/$metric-base.data" -- env RAYON_NUM_THREADS=1 "$binary" "$width" "$height" 5
   sudo -n perf report -i "$output/$metric-base.data" --stdio --no-children --percent-limit 1 > "$output/$metric-base.report"
   cat "$output/$metric-base.report"
   ;;
