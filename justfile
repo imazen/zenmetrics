@@ -905,8 +905,8 @@ aic-perf-big-butter-scout output:
 aic-perf-big-assembly binary output:
     python3 -I benchmarks/aic_perf_big_2026-10-16/assembly.py '{{binary}}' '{{output}}'
 
-aic-perf-big-oracles output:
-    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/oracles.sh)" -- '{{output}}'
+aic-perf-big-oracles output python="python3":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/oracles.sh)" -- '{{output}}' '{{python}}'
 
 aic-perf-big-interleave cambi_base butter_base candidate output:
     bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave.sh)" -- '{{cambi_base}}' '{{butter_base}}' '{{candidate}}' '{{output}}'
