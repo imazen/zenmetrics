@@ -443,7 +443,7 @@ feature-rev = ["feature-jobs"]
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
-zenquant = { version = "=0.1.3", optional = true }
+zenquant = { version = "=0.1.4", optional = true }
 sha2 = "0.11.0"
 # sha2 0.11 returns `Array`, which (unlike 0.10's `GenericArray`) does not
 # implement LowerHex, so `format!("{:x}", Sha256::digest(..))` no longer compiles.
