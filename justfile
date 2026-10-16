@@ -945,3 +945,6 @@ nn-pieapp-review-step phase models ladder shards:
 
 nn-pieapp-review-weight-sign python upstream checkpoint out:
     {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-weight-joint python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 500
