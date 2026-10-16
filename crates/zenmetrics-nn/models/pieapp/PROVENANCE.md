@@ -106,7 +106,8 @@ The [full 24-pair demo panel](../../../../benchmarks/pieapp_review_2026-10-16/cl
 runs the documented dense CUDA CLI twice per pair; all printed scores repeat
 exactly. The worst difference is `2207_2048`: demo `3.4582222` versus explicit
 entry-point grid `2.4828926609204816`, or `0.9753295390795182` native units
-(`1.879433106938455` operational JND). This modern compatible CUDA demo panel
+(`1.879433106938455` operational JND). The panel median is
+`0.4394398850987827` JND, and 10/24 pairs exceed 1 JND. This modern compatible CUDA demo panel
 retains values at their printed precision; the earlier original-runtime
 128-square control above remains a separate observation. Neither panel
 establishes equivalence between the demo's sub-image wrapper and the selected

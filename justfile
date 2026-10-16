@@ -831,7 +831,7 @@ nn-pieapp-probe python checkpoint reference distorted:
 nn-pieapp-score models pairs out engine="rten":
     just snap-cargo @ run --release -p zenmetrics-nn --features ort --example pieapp_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
 
-# Complete PieAPP landing checks; invoke under run-heavy and the shared lock.
+# Historical combined qualification; use nn-pieapp-review for bounded steps.
 nn-pieapp-gates models ladder:
     bash -c "$(cat benchmarks/pieapp_gates_2026-10-16.sh)" -- '{{models}}' '{{ladder}}'
 
@@ -852,7 +852,7 @@ nn-pieapp-blackbox-probe python upstream checkpoint reference distorted:
 
 # Opaque official entry-point oracle; caller holds the heavy-job lock.
 nn-pieapp-entry-oracle python pairs out device upstream checkpoint:
-    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs {{pairs}} --out {{out}} --device {{device}}
+    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}' --device '{{device}}'
 
 nn-pieapp-calibration-summary pairs scores out:
     python3 crates/zenmetrics-nn/models/pieapp/summarize.py '{{pairs}}' '{{scores}}' '{{out}}'
