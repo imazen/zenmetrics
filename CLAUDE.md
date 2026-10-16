@@ -419,6 +419,10 @@ Decision order: no GPU → no-op · compute cap < 7.5 → **12** · driver adver
 - **Before claiming any metric is "GPU-only": `ls crates/` first.** `crates/cvvdp` + `crates/iwssim` are
   SIMD CPU ports; never infer architecture from a feature-gated build error (memory:
   `enumerate-repo-before-capability-claims`).
+- **Feature-combination gate**: `just cli-feature-matrix` (CI twin: the `cli-feature-matrix` job in
+  `.github/workflows/ci.yml`) check-builds all 12 zenmetrics-cli shapes (10 `--features` combos +
+  bare + default) and prints a PASS/FAIL table — run it after touching CLI cfg/feature gates; keep
+  the justfile and CI lists in sync.
 
 ## Sweep runner discipline
 
