@@ -104,6 +104,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
     ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" ZM_CLAIM_ORDER="${ZEN_CLAIM_ORDER:-}" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
+    ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
   ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
@@ -158,6 +159,7 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 # would let other workers re-claim a live cell, because lease renewal only fires on completions.
 [ -n "${ZM_CLAIM_TTL:-}" ] && ENCP+=(-e "ZEN_CLAIM_TTL_SECS=$ZM_CLAIM_TTL")
 [ -n "${ZM_STALE_CLAIM:-}" ] && ENCP+=(-e "ZEN_STALE_CLAIM_SEC=$ZM_STALE_CLAIM")
+[ -n "${ZM_NO_NEW_AFTER:-}" ] && ENCP+=(-e "ZEN_NO_NEW_AFTER_EPOCH=$ZM_NO_NEW_AFTER")
 # The zensim FORMULA REVISION is a LAUNCH-level pin, not a per-job setting: zensim reads
 # ZENSIM_FORMULA_REV once per process into a OnceLock, and the worker reuses one warm child
 # across jobs, so a child that has already resolved the variable cannot serve the other
