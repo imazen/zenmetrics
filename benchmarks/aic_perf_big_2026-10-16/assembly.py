@@ -13,7 +13,7 @@ text=subprocess.check_output(['objdump','-Cd',str(a.binary)],text=True)
 selected=[];functions={}
 for block in re.split(r'(?m)(?=^[0-9a-f]+ <)',text):
     name=block.splitlines()[0] if block else ''
-    if not any(key in name for key in ['butteraugli_original::convolve','butteraugli_original::malta','cambi::update_histogram_run']):continue
+    if not any(key in name for key in ['butteraugli_original::convolve','butteraugli_original::malta','cambi::update_histogram_run','cambi::calculate_c_values_columns','cambi::__arcane_calculate_c_values_row']):continue
     selected.append(block)
     instructions=re.findall(r'^\s*[0-9a-f]+:\s+(?:[0-9a-f]{2}\s+)+\s*([a-z0-9]+)',block,re.M)
     counts=Counter(instructions)
