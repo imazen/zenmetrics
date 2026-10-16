@@ -1,65 +1,108 @@
-# CAMBI and Butteraugli-original CPU work
+# CAMBI and original Butteraugli CPU optimization
 
-Baseline production source: `849ea8da`. Build with runtime dispatch and no
-`target-cpu=native`. The CAMBI driver enables `parallel,simd,avx512`; the
-Butteraugli driver imports the production module directly and compiles with
-`rustc -O -g`. The latter module uses f32 image planes and selected f64
-expressions; preserving their types is part of exact parity.
+All required gates pass. All 61 AIC scores for each metric and all 61 complete
+Butteraugli error maps match the preserved baselines exactly. Published-unit
+and JND residual bits are unchanged.
 
-`just aic-perf-big-baseline OUTPUT` builds and preserves both binaries, records
-single-thread instructions/cycles and wall time, records sixteen-thread wall
-time, and captures native perf samples. The orchestrator runs outside the shared lock and gives each build, wall
-measurement and profile a separate bounded lock/run-heavy resource scope.
-Set a dedicated `LOCK_SNAP_DIR`; hardware counters use `sudo -n perf` because
-the host restricts unprivileged perf. The immutable shell body is loaded before
-execution. Full output is retained in the caller's log; perf data stays outside
-git and its textual reports will accompany the results here.
+## Measured results
 
-`just aic-perf-big-parity <baseline-dir> <candidate-dir> <output.tsv> <scratch>`
-compares score bits and hashes of complete Butteraugli error maps on the AIC
-panel. CAMBI uses the CLI's even crop and ordered studio-601 luma expression.
-An identical refusal is retained as an explicit result, rather than silently
-skipping a pair. Both drivers also provide procedural wall inputs; generation
-and CAMBI luma construction are outside the timed scoring loop.
+Host: i265, release builds, no `target-cpu=native`. One-worker runs pin CPU 2;
+16-worker-budget runs use the available CPUs. Each cell runs base, new, base,
+new in separate processes; each process averages five calls. Values below are
+medians of the two process means per role. These procedural-fixture kernel
+observations have no confidence intervals and cover this host only.
 
-Measurements and optimization qualification are pending.
+| Rust metric | Size | Thread budget | Base ms/call | New ms/call | Base/new |
+|---|---:|---:|---:|---:|---:|
+| [CAMBI](abab-cambi-1024-1t.log) | 1024×1024 | 1 | 22.351 | 22.377 | 1.00× |
+| [CAMBI](abab-cambi-1024-16t.log) | 1024×1024 | 16 | 24.628 | 9.008 | 2.73× |
+| [CAMBI](abab-cambi-3355-1t.log) | 3355×2516 | 1 | 163.059 | 162.179 | 1.01× |
+| [CAMBI](abab-cambi-3355-16t.log) | 3355×2516 | 16 | 161.780 | 63.940 | 2.53× |
+| [Butteraugli-original](abab-butter-1024-1t.log) | 1024×1024 | 1 | 1034.395 | 308.292 | 3.36× |
+| [Butteraugli-original](abab-butter-1024-16t.log) | 1024×1024 | 16 | 1074.443 | 313.392 | 3.43× |
+| [Butteraugli-original](abab-butter-3355-1t.log) | 3355×2516 | 1 | 7958.670 | 3005.396 | 2.65× |
+| [Butteraugli-original](abab-butter-3355-16t.log) | 3355×2516 | 16 | 7970.544 | 3015.221 | 2.64× |
 
-The initial noise scout returns exactly zero CAMBI at 1024 square. Its
-receipts and binary remain a separate control. Before changing metric code,
-the CAMBI wall fixture is extended from the original-author pinned 10-bit
-block-eight, one-code-value staircase. The banded baseline uses the updated
-driver and a separate preserved binary; comparisons use that same driver
-on both sides. The 61-pair path and its studio-601 ingress are unchanged.
+CAMBI keeps the original one-worker path. Its parallel column regions use
+the existing Rayon pool at per-scale areas of at least 512×512. Original
+Butteraugli remains serial within one image; its 16-worker-budget rows
+measure the same serial implementation under that requested budget.
 
-The first auto-PMU scouts retain their separate core/atom counter lines.
-Subsequent measurements pin perf itself to CPU 2 and explicitly select
-`cpu_core/instructions/` and `cpu_core/cycles/`; this avoids scaling an
-incidental pre-affinity atom-core sample. CPU 2 belongs to the observed
-`/sys/devices/cpu_core/cpus` set `0-7`.
+[All observations, counters, RSS and load averages](measurements.tsv);
+[audited summary and gate receipts](summary.json). Each linked raw cell log
+contains its run-heavy resource footer and all four `/usr/bin/time -v` records.
 
-The nonzero banded CAMBI profile (`baseline-banded-cambi.profile.txt`) assigns
-62.36% of samples to histogram row updates and 16.31% to c-value evaluation.
-The first optimization therefore targets integer histogram updates, while
-preserving all floating-point c-value calculations and pooling order.
+## Changes and ordering
 
-The first histogram-run candidate passes the pinned CAMBI scores, stride and
-map/score tests and a direct ordered-pixel-window comparison across clipped
-runs, pads and wrapping increments/decrements. `cambi-candidate1.log` retains
-the initial candidate scout; its score bits match both banded baselines.
-These initial observations are not the final interleaved A/B result.
+- CAMBI (`0ffb7674`): independent column regions retain each histogram cell’s
+  original row/pixel update order. Eight-column alignment preserves original
+  SIMD groups and scalar tails. Regions return to their original positions
+  before unchanged spatial pooling. The original serial histogram, point
+  evaluator and pooling functions remain text-identical to `849ea8da`.
+- Butteraugli-original (`6ced5b29`, `50acada6`): 32×32 convolution tiles retain
+  each pixel’s tap order and original border weights. Eight independent
+  interior Malta pixels retain their neighbor/path order; border pixels keep
+  the original traversal. f32 planes and selected f64 expressions retain
+  their types, grouping and identity multiplications.
 
-After convolution tiling, the preserved candidate profile puts 55.32% of
-samples in Malta neighborhoods and 17.39% in convolution. The candidate
-passes all standalone Butteraugli tests and preserves both scout score bits.
-The next experiment processes eight independent interior Malta pixels per
-window, retaining each pixel's neighbor/path order and the original border
-path. It introduces no reduction across pixels.
+[Generated-code evidence](butter-kernels.json) records separate packed
+`mulps`/`addps` with no FMA in the inspected Butteraugli kernels.
+[CAMBI evidence](cambi-ordered-kernels.json) identifies the unchanged point
+evaluator. Full disassembly remains at the hashed external paths.
 
-The integer-run scout is superseded and is not the production change: it
-proved bit identity but regrouped histogram updates, contrary to the required
-ordering contract. Its helper/assertions remain test-only research. Production
-keeps the original serial histogram function text-identical and schedules
-independent column regions only when the existing parallel feature/pool and
-geometry permit it. Region widths preserve original eight-lane groups and
-scalar tails; each histogram cell receives the original ordered +/-1 updates.
-The original floating-point point evaluator and final pooling are unchanged.
+CAMBI column results add temporary c-value storage. At 3355×2516 and budget
+16, measured process peak RSS changes from 105,760 to 140,032 KiB. The
+Butteraugli one-worker process peak is 1,437,516 KiB for both versions.
+Corresponding large-image resource scopes:
+
+- `run-heavy: done rc=0 3s | peak-RSS 0.13GiB | min-avail 24146MiB | peak-load 0.94`
+- `run-heavy: done rc=0 110s | peak-RSS 1.37GiB | min-avail 22989MiB | peak-load 5.33`
+
+The [512×512 boundary control](cambi-threshold-512.log) retains score bits
+and exercises the parallel dispatch boundary. Strict strided map tests
+compare both visibility presets and native windows 17/65 on 1/2/4-worker
+pools against the original ordered implementation ([receipt](cambi-presets.log)).
+
+## Correctness and required gates
+
+CAMBI retains nine explicit geometry refusals in the 27-case expanded
+ladder. Its 18 supported ladder cases match pinned libvmaf numerically;
+all 61 AIC pairs produce scores. Maximum libvmaf differences are 0 on the
+supported ladder and 6.938893903907228e-18 on AIC. Original Butteraugli’s
+ladder maximum is 4.790954593048014e-7, below the unchanged 4.8e-7 bound.
+The original C++/libvmaf builds and output-precision convention are recorded
+in the [existing oracle provenance](../aic_more_2026-10-15/validation.meta).
+
+[61-pair bit panel](aic-parity.tsv) / [raw run](aic-parity.log);
+[common residual bits](residuals.tsv) / [input hashes and derivation](residuals.json).
+The final oracle run uses fresh output files for all four original panels,
+including new pinned CAMBI references for the six added non-square cases.
+
+`just aic-more-ci` passes CLI/vmaf tests, all-member fmt, exact CI workspace
+clippy and inventory. [All 12 CLI feature combinations pass](feature-matrix.log).
+The advisory quality kit is absent; explicit required checks pass.
+
+## Reproduction and retained controls
+
+Use a dedicated `LOCK_SNAP_DIR`. Baseline and interleave orchestrators run
+outside flock; every bounded step acquires/releases the shared heavy lock.
+Source/binary/function hashes: [qualification metadata](qualification.meta.json).
+
+- `just aic-perf-big-baseline OUTPUT "cambi butter"`
+- `just aic-perf-big-interleave CAMBI_BASE BUTTER_BASE CANDIDATE OUTPUT`
+- `just aic-perf-big-parity BASE CANDIDATE OUTPUT_TSV FRESH_ARTIFACT_DIR`
+- `just aic-perf-big-oracles FRESH_OUTPUT ORACLE_PYTHON`
+- `just aic-perf-big-summary SCRATCH OUTPUT_PREFIX`
+
+The first noise scout produced zero CAMBI; the primary banded fixture
+extends the original-author pinned 10-bit staircase. Baseline source is
+`849ea8da`; binaries and perf traces remain preserved outside Cargo output.
+Early hybrid-PMU scouts retain both counter lines. Final comparisons pin
+perf itself to performance-core CPU 2 and select `cpu_core` counters.
+
+An integer-run experiment is superseded because it regrouped histogram
+updates despite bit identity. Its receipts are labelled as experiments;
+its helper/assertions are test-only. The final production change preserves
+the original updates. The first oracle attempt stopped on missing system
+OpenCV; final runs explicitly use the existing complete oracle environment.
+No expectation, tolerance or golden was relaxed.
