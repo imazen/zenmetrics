@@ -4124,8 +4124,6 @@ dependencies = [
  "libm",
  "magetypes 0.9.31-beta.1",
  "rayon",
- "serde",
- "serde_json",
  "zenmetrics-abstractions",
 ]
 
