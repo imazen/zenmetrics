@@ -1,6 +1,7 @@
 """Test weight-sign hypotheses using our reconstruction and opaque oracle."""
 import argparse
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -15,7 +16,7 @@ state=torch.load(a.checkpoint,map_location='cpu')
 model=module.PieAPP(state).cuda().eval()
 for parameter in model.parameters():parameter.requires_grad_(False)
 final=model.fc2_weight
-receipt=dict(final_weight_min=float(final.weight.min()),final_weight_max=float(final.weight.max()),final_bias=float(final.bias.reshape(-1)[0]))
+receipt=dict(torch_version=torch.__version__,cuda_version=torch.version.cuda,checkpoint_sha256=hashlib.sha256(Path(a.checkpoint).read_bytes()).hexdigest(),final_weight_min=float(final.weight.min()),final_weight_max=float(final.weight.max()),final_bias=float(final.bias.reshape(-1)[0]))
 if receipt['final_weight_min']>=0 and receipt['final_bias']>=0:
     receipt['conclusion']='Final layer has nonnegative weights and bias after a ReLU; raw weights are nonnegative for every input, so abs is observationally redundant for this checkpoint.'
 else:
@@ -32,7 +33,7 @@ else:
             if float(weight.detach().min()) < -1:break
     d=d.detach().round()
     _,raw=model.raw(r,d)
-    receipt.update(steps=step+1,rounded_raw_weight=float(raw.reshape(-1)[0]))
+    receipt.update(steps=step+1,rounded_raw_weight=float(raw.reshape(-1)[0]),reference_bgr_nchw_u8_sha256=hashlib.sha256(r.cpu().numpy().astype('uint8').tobytes()).hexdigest(),distorted_bgr_nchw_u8_sha256=hashlib.sha256(d.cpu().numpy().astype('uint8').tobytes()).hexdigest())
     sys.path.insert(0,a.upstream)
     from model.PieAPPv0pt1_PT import PieAPP
     oracle=PieAPP(1,1).cuda().eval();oracle.load_state_dict(state)
