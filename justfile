@@ -898,3 +898,6 @@ aic-perf-big-measure binary width height threads reps="5":
 
 aic-perf-big-cambi-scout output:
     bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/cambi_scout.sh)" -- '{{output}}'
+
+aic-perf-big-butter-scout output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/butter_scout.sh)" -- '{{output}}'
