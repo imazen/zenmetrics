@@ -408,3 +408,53 @@ jobs:
           -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments
           -A clippy::doc_lazy_continuation -A clippy::if_same_then_else
           -A clippy::doc_overindented_list_items
+
+  # zenmetrics-cli feature-combination matrix: every supported
+  # `--no-default-features --features <F>` shape, the bare
+  # `--no-default-features` build, and the default build must `cargo check`.
+  # The local twin is `just cli-feature-matrix` (same 12-row list — keep the
+  # two in sync). Plain `cargo --locked check` because CI has no lock
+  # snapshot. Ubuntu-only, check-only (no tests), one job looping the rows.
+  cli-feature-matrix:
+    name: CLI feature matrix (check-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Clone sibling-repo path-dep targets (pinned in ci/sibling-pins.tsv)
+        # Every sibling repository the workspace path-deps / [patch]es, at the revision
+        # ci/sibling-pins.tsv pins (that file carries the per-pin reasons). The same file
+        # drives scripts/ci/lock.sh, which proves Cargo.lock resolves against exactly
+        # these revisions — change pins THERE, not here.
+        run: bash scripts/ci/clone-siblings.sh
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-cli-feature-matrix
+      - name: cargo check each zenmetrics-cli feature combination
+        # Same combination list as `just cli-feature-matrix` (justfile).
+        run: |
+          set -uo pipefail
+          fails=0
+          for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
+                   gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+            if cargo check --locked -p zenmetrics-cli --no-default-features --features "$f"; then
+              printf 'PASS  %s\n' "$f"
+            else
+              printf 'FAIL  %s\n' "$f"
+              fails=$((fails + 1))
+            fi
+          done
+          if cargo check --locked -p zenmetrics-cli --no-default-features; then
+            printf 'PASS  bare\n'
+          else
+            printf 'FAIL  bare\n'
+            fails=$((fails + 1))
+          fi
+          if cargo check --locked -p zenmetrics-cli; then
+            printf 'PASS  default\n'
+          else
+            printf 'FAIL  default\n'
+            fails=$((fails + 1))
+          fi
+          printf '%s\n' "---- $((12 - fails))/12 combinations passed ----"
+          [ "$fails" -eq 0 ]
