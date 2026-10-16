@@ -1,0 +1,239 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23327MiB :: timeout --kill-after=20s 1150s just aic-perf-big-butter-scout /home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/butter_scout.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1'
+
+running 3 tests
+test butteraugli_original::tests::tiled_convolution_matches_ordered_taps_at_borders_and_tails ... ok
+test butteraugli_original::tests::stride_identity_and_tiny_padding ... ok
+test butteraugli_original::oracle_tests::original_author_synthetic_pin ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+bc830fbc4618fa61e9e1c5dd793d9b7d4afd87070a2abcdb083da036fb3563f5  /home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new
+555c5ba49266c05dfe117ca671fd8482eb47b7f282d87249d7eabe1390977949  crates/zenmetrics-cli/src/metrics/butteraugli_original.rs
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new' '1024' '1024' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new threads=1 dimensions=1024x1024 load=7.97 7.45 5.77 2/1768 1530442
+1024x1024 5 reps: 601.172029 ms/call score 12.53154754638671875 bits 41488138
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 1024 1024 5"
+	User time (seconds): 2.78
+	System time (seconds): 0.22
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.01
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 189504
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 228370
+	Voluntary context switches: 1
+	Involuntary context switches: 25
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 1024 1024 5':
+
+       86742690342      cpu_core/instructions/                                                
+       16064360865      cpu_core/cycles/                                                      
+
+       3.016027352 seconds time elapsed
+
+       2.784731000 seconds user
+       0.230954000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new' '1024' '1024' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new threads=16 dimensions=1024x1024 load=7.97 7.45 5.77 1/1754 1530483
+1024x1024 5 reps: 607.610869 ms/call score 12.53154754638671875 bits 41488138
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 1024 1024 5"
+	User time (seconds): 2.79
+	System time (seconds): 0.24
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.04
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 189428
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 228371
+	Voluntary context switches: 1
+	Involuntary context switches: 21
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new threads=1 dimensions=3355x2516 load=7.41 7.35 5.75 1/1760 1530504
+3355x2516 5 reps: 5351.038343 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 3355 2516 5"
+	User time (seconds): 22.57
+	System time (seconds): 4.21
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:26.81
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437404
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505444
+	Voluntary context switches: 1
+	Involuntary context switches: 771
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 3355 2516 5':
+
+      706678490893      cpu_core/instructions/                                                
+      142865272647      cpu_core/cycles/                                                      
+
+      26.812619282 seconds time elapsed
+
+      22.575689000 seconds user
+       4.214925000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new' '3355' '2516' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new threads=16 dimensions=3355x2516 load=5.30 6.85 5.63 1/1762 1530788
+3355x2516 5 reps: 5375.553257 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new 3355 2516 5"
+	User time (seconds): 22.63
+	System time (seconds): 4.30
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:26.94
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437268
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505446
+	Voluntary context switches: 1
+	Involuntary context switches: 248
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+3355x2516 5 reps: 5327.062003 ms/call score 7.99973535537719727 bits 40fffdd5
+[ perf record: Woken up 172 times to write data ]
+[ perf record: Captured and wrote 42.857 MB /home/lilith/tmp/aic-variants-scratch/round14-butter-candidate1/butter-new.data (5311 samples) ]
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 5K of event 'cpu_core/cycles/'
+# Event count (approx.): 142104717199
+#
+# Overhead  Command     Shared Object      Symbol                                                                                                                                                                                                                      
+# ........  ..........  .................  ............................................................................................................................................................................................................................
+#
+    55.32%  butter-new  butter-new         [.] butter_wall::butteraugli_original::malta
+            |          
+            |--28.59%--malta (inlined)
+            |          |          
+            |          |--17.92%--0x80cd5b
+            |          |          
+            |           --8.35%--0xc010a59d53333332
+            |          
+            |--16.11%--eq<(i8, i8)> (inlined)
+            |          next<(i8, i8)> (inlined)
+            |          malta (inlined)
+            |          |          
+            |           --12.92%--0xc010a59d53333332
+            |          
+             --8.97%--index<f32> (inlined)
+                       index<f32, usize> (inlined)
+                       index<f32, usize, alloc::alloc::Global> (inlined)
+                       malta (inlined)
+                       |          
+                        --7.14%--0xc010a59d53333332
+
+    17.39%  butter-new  butter-new         [.] butter_wall::butteraugli_original::convolve
+            |          
+            |--14.77%--convolve (inlined)
+            |          
+             --1.58%--next<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> (inlined)
+                       next<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> (inlined)
+                       convolve (inlined)
+
+     5.03%  butter-new  butter-new         [.] butter_wall::butteraugli_original::separate
+            |          
+            |--1.19%--{closure#0} (inlined)
+            |          |          
+            |           --1.09%--gamma (inlined)
+            |                     {closure#2} (inlined)
+            |                     {closure#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}> (inlined)
+            |                     try_from_fn_erased<core::ops::try_trait::NeverShortCircuit<f32>, core::ops::try_trait::{impl#0}::wrap_mut_1::{closure_env#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}>> (inlined)
+            |                     try_from_fn<core::ops::try_trait::NeverShortCircuit<f32>, 3, core::ops::try_trait::{impl#0}::wrap_mut_1::{closure_env#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}>> (inlined)
+            |                     from_fn<f32, 3, butter_wall::butteraugli_original::xyb::{closure_env#2}> (inlined)
+            |                     xyb (inlined)
+            |                     separate (inlined)
+            |          
+             --1.09%--separate (inlined)
+                       compute (inlined)
+
+     2.62%  butter-new  [kernel.kallsyms]  [k] asm_exc_page_fault
+            |
+            ---asm_exc_page_fault
+               |          
+                --1.04%--convolve (inlined)
+
+     2.21%  butter-new  [kernel.kallsyms]  [k] _raw_spin_lock
+            |
+            ---_raw_spin_lock
+               |          
+                --2.02%--do_anonymous_page
+                          handle_pte_fault
+                          __handle_mm_fault
+                          handle_mm_fault
+                          do_user_addr_fault
+                          exc_page_fault
+                          asm_exc_page_fault
+                          |          
+                           --1.19%--convolve (inlined)
+
+     1.92%  butter-new  butter-new         [.] butter_wall::butteraugli_original::compute
+     1.53%  butter-new  [kernel.kallsyms]  [k] sync_regs
+            |
+            ---sync_regs
+
+     1.13%  butter-new  libc.so.6          [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               copy_nonoverlapping<f32> (inlined)
+               copy_to_nonoverlapping<f32> (inlined)
+               to_vec<f32, alloc::alloc::Global> (inlined)
+               to_vec_in<f32, alloc::alloc::Global> (inlined)
+               clone<f32, alloc::alloc::Global> (inlined)
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
+run-heavy: done rc=0 89s | peak-RSS 1.37GiB | min-avail 22633MiB | peak-load 7.97

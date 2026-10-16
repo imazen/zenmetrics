@@ -47,3 +47,10 @@ map/score tests and a direct ordered-pixel-window comparison across clipped
 runs, pads and wrapping increments/decrements. `cambi-candidate1.log` retains
 the initial candidate scout; its score bits match both banded baselines.
 These initial observations are not the final interleaved A/B result.
+
+After convolution tiling, the preserved candidate profile puts 55.32% of
+samples in Malta neighborhoods and 17.39% in convolution. The candidate
+passes all standalone Butteraugli tests and preserves both scout score bits.
+The next experiment processes eight independent interior Malta pixels per
+window, retaining each pixel's neighbor/path order and the original border
+path. It introduces no reduction across pixels.
