@@ -1,0 +1,26 @@
+{
+  "command": "just iqa-compete-python-preflight ~/tmp/iqa-compete/python-venv/bin/python",
+  "packages": {
+    "torch": "2.14.1+cpu",
+    "torchvision": "0.29.1+cpu",
+    "piq": "0.8.0",
+    "scikit-image": "0.26.0",
+    "torchmetrics": "1.9.0",
+    "pytorch-msssim": "1.0.0",
+    "lpips": "0.1.4",
+    "DISTS-pytorch": "0.1",
+    "stlpips-pytorch": "0.0.2",
+    "DeepDC-PyTorch": "0.2",
+    "cvvdp": "0.5.7"
+  },
+  "log": "/home/lilith/tmp/iqa-compete/python-preflight-v2.log",
+  "log_sha256": "3847e8dd3145f52c7a2e4311db4d2a6d92af411cb2804117be4a08bd85e8bed1",
+  "resource": {
+    "exit_code": 0,
+    "seconds": 4,
+    "peak_rss_gib": 0.5,
+    "min_available_mib": 23365,
+    "peak_load": 10.36
+  },
+  "scope": "Package imports and public API signatures only; not a metric timing panel"
+}
