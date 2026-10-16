@@ -23,6 +23,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 
 | Crate | Reference implementation + version | Oracle for goldens/parity | Worst observed delta |
 |---|---|---|---|
+| `zenmetrics-nn` PieAPP | Official v0.1 `compute_score`, release `0513613d1f575136ea52418e35f2cebc5a49f783` | Explicit stride-six public-entry-point grid | Worst 1.84e-6 operational JND over 24 supported pairs; demo CLI sampling differs (see section below) |
 | `cvvdp` | pycvvdp **v0.5.7** (gfxdisp/ColorVideoVDP); `PYCVVDP_REFERENCE_VERSION` | pycvvdp itself + cvvdp-conformance cells | 2e-6 JOD (u16 video cells), 1.2e-5 (stills); scalar parity 3e-6 JOD |
 | `cvvdp-gpu` | pycvvdp **v0.5.7**; `parity-goldens` test pins **v0.5.4** manifest from R2 | pycvvdp goldens + in-tree `cvvdp` | see crate `crates/cvvdp-gpu/docs/PORT_STATUS.md` |
 | `hdrvdp` | official **HDR-VDP 2.2.2** MATLAB release (SourceForge) | Octave 11.1 run of official 2.2.2; UPIQ corpus | P_det 1.4e-5 rel, C_max 1e-4 rel, P_map 1.7e-2 abs, `res.Q` 7.8e-4 |
