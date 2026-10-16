@@ -935,3 +935,9 @@ nn-pieapp-review models ladder output:
 
 nn-pieapp-review-summary directory log out:
     python3 -I crates/zenmetrics-nn/models/pieapp/review_summary.py '{{directory}}' '{{log}}' '{{out}}'
+
+nn-pieapp-review-shards models out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_shards.py '{{models}}' '{{out}}'
+
+nn-pieapp-review-step phase models ladder shards:
+    bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}'
