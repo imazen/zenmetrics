@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
+
 - Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
 
 - Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
