@@ -580,4 +580,49 @@ pub(crate) mod ort_engine {
             Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
         }
     }
+    /// Multi-output VGG feature graph using the same deterministic CUDA session.
+    pub(crate) struct OrtCudaTrunk {
+        inner: OrtCudaImage,
+    }
+    impl OrtCudaTrunk {
+        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
+            Ok(Self {
+                inner: OrtCudaImage::load(path, "tap0")?,
+            })
+        }
+    }
+    impl super::Trunk for OrtCudaTrunk {
+        fn engine(&self) -> &'static str {
+            "ort-cuda"
+        }
+        fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<super::Tap>, Error> {
+            let input = Tensor::from_array(([1usize, 3, h, w], input))
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            let mut session = self
+                .inner
+                .session
+                .lock()
+                .map_err(|_| Error::Engine("session lock poisoned".into()))?;
+            let out = session
+                .run(ort::inputs!["x"=>input])
+                .map_err(|e| Error::Engine(e.to_string()))?;
+            ["tap0", "tap1", "tap2", "tap3"]
+                .into_iter()
+                .map(|name| {
+                    let (shape, data) = out[name]
+                        .try_extract_tensor::<f32>()
+                        .map_err(|e| Error::Engine(e.to_string()))?;
+                    if shape.len() != 4 || shape[0] != 1 || shape[1..].iter().any(|&x| x <= 0) {
+                        return Err(Error::BadModel(format!("WD output shape {shape:?}")));
+                    }
+                    Ok(super::Tap {
+                        c: shape[1] as usize,
+                        h: shape[2] as usize,
+                        w: shape[3] as usize,
+                        data: data.to_vec(),
+                    })
+                })
+                .collect()
+        }
+    }
 }

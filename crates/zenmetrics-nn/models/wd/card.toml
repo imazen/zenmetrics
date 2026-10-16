@@ -1,0 +1,38 @@
+name = "wd"
+kind = "full-reference"
+direction = "lower-is-better"
+columns = ["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"]
+paper = "Qiu, Wagner, Balle, Theis. Wasserstein Distortion: Unifying Fidelity and Realism. CISS 2024. https://arxiv.org/abs/2310.03629"
+
+[code]
+source = "upstream-port"
+upstream = "https://github.com/Orange-OpenSource/Cool-Chic/blob/main/coolchic/training/metrics/wasserstein.py"
+licence = "BSD-3-Clause; source and license notices in LICENSE-wd"
+reference_sha256 = "ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43"
+
+[weights]
+licence_class = "permissive"
+checkpoint = "torchvision VGG16_Weights.IMAGENET1K_V1, vgg16-397923af.pth"
+sha256 = "397923af8e79cdbb6a7127f12361acd7a2f83e06b05044ddf496e83de57a5bf0"
+
+[input]
+format = "strided RGB8 sRGB"
+normalisation = "u8 / 255 in f32; no ImageNet normalization, resize or colour conversion"
+min_size = 8
+max_side = 2048
+
+[export]
+script = "reference.py export"
+outputs = "wd_trunk.onnx, wd.meta, wd_export.json"
+opset = 17
+taps = "VGG16 features[3,8,15,22], before the first four max-pools; raw feature values"
+notes = "RTen and ONNX Runtime CUDA expose the same four taps; all statistics and sigma-map weighting run in Rust. Five columns use log2_sigma=1..5. Scalar-only; warm references cache VGG features."
+
+[convention]
+statistics = "Five levels of local mean and variance, zero-padded 3x3 outer([1,2,1]/4), decimation at indices ::2. Variances clamp to 5e-7 before square roots."
+weighting = "Triangular weight relu(1-abs(log2_sigma-level)); sigma maps themselves use zero-padded stride-two convolution after each statistic level, including border attenuation. Spatial/channel mean per level, then f32 sums across levels and four VGG taps."
+aic = "The AIC-4 WD_s1..WD_s5 preprocessing is unidentified. This metric implements the pinned Cool-Chic convention; the separate AIC probe receipt records residuals."
+
+[parity]
+tolerance_jnd = 1e-3
+oracle = "Caller-supplied unmodified Cool-Chic WassersteinLoss on CPU fp32. Large feature planes are channel-chunked for bounded oracle memory; each upstream channel mean is combined by its channel count."
