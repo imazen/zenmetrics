@@ -1,0 +1,16 @@
+# Observed 2026-10-16T23:59:00.968239+00:00; host i265.
+# Candidate tracked source tree: d317b64b (identical to exported working copy 293a4027).
+phase	purpose	rc	seconds	peak_rss_gib	min_available_mib	peak_load	log_sha256	exported_working_copy
+base-build	baseline build	0	7	0.46	22526	11.48	345aab713635cde252de64e20a863c6b4c8e2d0b63cd0d0f0a3dd9ab01b347a3	7585b851718b
+before-tests	before-fix negative control	101	7	0.51	22573	10.23	8f797c51573ec90cdede552de2c88b51560974f089869c1940167fc76338b2e4	4cbd3b4cc649
+ci	required gate	0	37	2.34	19497	10.51	cbe14cff8d17671449d02d6e095067698ea4e1aa1d95b421afdc4a7e4859b8eb	0da4e51e3bdd
+matrix	required gate	0	28	0.45	22868	3.40	3336468cf502847cd5ce07b126c0444ce9ca97034b59c9fa3fde6a99b9317c48	
+scalar-tests	required gate	0	51	0.61	22691	7.61	e4f6567897b7b9aa0d120d4509ad641cf2fe226b507343e2edbad4c28569f824	0da4e51e3bdd
+simd-tests	required gate	0	97	0.63	22705	5.43	27afe58d942fa8b97c402855c6614239ee37570e2e41e2d625fa86f8b8aa7139	0da4e51e3bdd
+clippy	additional all-target lint census	101	4	0.40	22838	2.67	e377effd2771a6ad6b0a43c86fb0e27b46fc1d592acdb09a776a0e1bb8770694	293a402791f2
+candidate-build	candidate build	0	5	0.47	22776	2.67	21107f7ba72bcfdf3a4a45a9d9d72ad26c964c16daf2b9119c12ccc24e0f58a3	293a402791f2
+baseline-clippy	baseline all-target lint census	101	3	0.30	23104	1.52	ad947439b530f2e9c48a9cbf2c01eafa8bf7bf443dce5b08179f4140be16fa31	7585b851718b
+lib-clippy	strict library lint	0	2	0.24	23097	1.52	25f4729a8fc710b00627e2fdffc0e024c5d81f9eed7a4d3fe3b4292d368a3d02	293a402791f2
+rss-1024	RSS comparison	0	0	0.02	23034	1.64	d63792f7c1d1a1f785a2b7e2fdca17329534d4458f72edbd2adb7534474b548f	
+rss-3355	RSS comparison	0	1	0.13	23269	1.45	52ce9b84284187e04749d6a46bc337cf8a43068b729c3f5173432c70ee1ae4f7	
+panel	complete bit/map panel	0	90	1.37	22318	1.64	2af45275f3175fd040396aa61d117d4522b362dc09ea37445dc0eccb94404881	

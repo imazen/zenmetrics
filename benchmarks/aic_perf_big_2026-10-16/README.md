@@ -111,3 +111,45 @@ its helper/assertions are test-only. The final production change preserves
 the original updates. The first oracle attempt stopped on missing system
 OpenCV; final runs explicitly use the existing complete oracle environment.
 No expectation, tolerance or golden was relaxed.
+
+## Review follow-up
+
+The merged review tree keeps scalar CAMBI inside parallel frame workers while
+retaining column work for single-frame and streaming private-pool calls.
+Direct row controls cover active out-of-band values, vector groups and scalar
+tails; both new controls fail before the fix and pass afterward. Column regions
+borrow disjoint output-row segments with fallible descriptor allocation.
+Both Malta path banks have compile-time four-pixel halo checks.
+
+[Fresh local gate receipts](review-gates.tsv) cover `just aic-more-ci`, all
+12 CLI feature combinations, complete scalar and SIMD/parallel VMAF suites,
+and strict library clippy. [The new bit panel](review-panel.tsv) matches the
+committed original panel: 61/61 CAMBI scores, 61/61 Butteraugli-original scores
+and 61/61 complete Butteraugli map hashes are unchanged.
+
+The [RSS comparison](review-memory.tsv) runs fresh base/new/base/new processes,
+five calls each, with 16 Rayon workers. Values below are the maximum of two
+OS peak-RSS observations per version, from `/usr/bin/time -v`.
+
+| Standalone CAMBI | Before KiB | After KiB |
+|---|---:|---:|
+| 1024×1024 | 19,808 | 16,656 |
+| 3355×2516 | 140,488 | 107,624 |
+
+Source: baseline `7585b851`, reviewed tracked tree `d317b64b` (identical to
+exported working copy `293a4027`); binary hashes and individual wall/RSS
+observations are retained in the TSV. Release features are
+`parallel,simd,avx512`, without `target-cpu=native`. Execution is AVX2 on i265;
+AVX-512 code was compiled and was not executed.
+
+Large-image comparison resource receipt:
+`run-heavy: done rc=0 1s | peak-RSS 0.13GiB | min-avail 23269MiB | peak-load 1.45`.
+Full bit-panel receipt:
+`run-heavy: done rc=0 90s | peak-RSS 1.37GiB | min-avail 22318MiB | peak-load 1.64`.
+
+An additional strict all-target clippy probe remains red on the original and
+reviewed trees with the [same 49 diagnostics](review-lint.tsv): one unused
+mutable test binding, two constant-size chunk lints, and 46 FFI safety-comment
+lints. All affected files are byte-identical to `7585b851`. The required CI
+clippy command and the strict library clippy command pass; no lint allowances
+or test expectations changed.
