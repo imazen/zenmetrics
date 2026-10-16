@@ -1,0 +1,4 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	rten	1	ckdn	compute	2048	26	118.666	117.216	0.5022853
+i265	rten	1	ckdn	warm	2048	38	79.057	77.842	0.5022853
+i265	rten	1	ckdn	e2e	2048	18	168.856	165.620	0.5022853

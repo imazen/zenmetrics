@@ -269,7 +269,8 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `SSIMULACRA1` | Cloudinary original Lab/six-scale/grid/edge pooling | `ssimulacra1` | 61 pairs: native med/max 2.285e-7 / 1.861e-5; fitted JND 5.585e-6 / 5.370e-4; exact published convention unresolved |
 | `WS-HV` | three Haar levels, RGB BT.601, diagonal-saliency pooling | `ws-hv` | 61 pairs: native med/max 8.942e-4 / 0.02076; fitted JND 0.004920 / 0.1393; exact published convention unresolved |
 | `CW-SSIM`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
-| `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |
+| `LPIPS-alex`, `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC` | upstream packages (`lpips` 0.1.4, `DISTS_pytorch` 0.1, `stlpips_pytorch` 0.0.2, `DeepDC_PyTorch` 0.2 **with ImageNet input normalisation**), native resolution | `zenmetrics-nn` (`--features nn`): `lpips-alex`, `lpips-vgg`, `dists`, `stlpips-alex`, `stlpips-vgg`, `deepdc` | ✅ implemented — vs the cropped-set columns (n=61) max \|Δ\| 4.9e-7 / 1.0e-4 / 2.5e-5 / 9.3e-5 / 6.0e-5 / 3.0e-5 ([`nn_aic2026_crosscheck_2026-10-15.md`](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
+| `PieAPP`, `WaDIQaM`, `DreamSim`, `TOPIQ`, `TOPIQ-PIPAL`, `AHIQ`, `CKDN`, `A-FINE`, `DMM`, `MSSWD`, `AIMOS` | deep metrics | — | queued in [`PYIQA_PORT_PLAN.md`](PYIQA_PORT_PLAN.md) (priority table) |
 
 ## Method / reproduction
 

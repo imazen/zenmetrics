@@ -37,16 +37,16 @@
 //!   are validated.
 
 use std::path::PathBuf;
+#[cfg(feature = "orchestrator-cuda")]
 use std::sync::Arc;
 
-use zenmetrics_api::MetricKind as ApiMetricKind;
 use zenmetrics_orchestrator::Orchestrator;
 
 use crate::decode::Rgb8Image;
 use crate::metrics::MetricKind as CliMetricKind;
-use crate::orchestrator_glue::{
-    OrchestratorBuildError, OrchestratorMetricSpec, OrchestratorRuntimeOpts,
-};
+#[cfg(feature = "orchestrator-cuda")]
+use crate::orchestrator_glue::OrchestratorMetricSpec;
+use crate::orchestrator_glue::{OrchestratorBuildError, OrchestratorRuntimeOpts};
 
 /// Result of scoring one `(ref, dist, metric)` triple via the
 /// orchestrator. Mirrors the legacy `run_metric` shape (one row per
@@ -167,6 +167,7 @@ pub fn orchestrator_score_one(
 /// orchestrator build without Phase 7.5's column emission); modern
 /// builds drive column names from `output_columns` directly so this
 /// function only fires for graceful degradation.
+#[cfg(feature = "orchestrator-cuda")]
 fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
     match kind {
         CliMetricKind::Ssim2 => "ssim2",
@@ -224,7 +225,9 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
 ///
 /// Returns a `Vec<(String, f64)>` in the input BTreeMap's iteration
 /// order (sorted-by-key), so callers iterating the result emit
-/// deterministic column order.
+/// deterministic column order. Only consumed by `orchestrator-cuda`
+/// scoring paths and unit tests.
+#[cfg(any(feature = "orchestrator-cuda", test))]
 pub fn rekey_orchestrator_columns(
     cli_kind: CliMetricKind,
     columns: &std::collections::BTreeMap<String, f64>,
@@ -418,8 +421,8 @@ pub fn rekey_orchestrator_columns(
 ///   * flat on every axis — magnitude, megapixels, strip count,
 ///     quality, content class — and invariant to the strip body itself
 ///     (2,118 / 2,118 groups identical across all bodies tested).
-///   That is inside the ≤ 5e-5 gate by two orders of magnitude, so no
-///   `MemoryMode::Full` pin is needed in `executor::construct`.
+///     That is inside the ≤ 5e-5 gate by two orders of magnitude, so no
+///     `MemoryMode::Full` pin is needed in `executor::construct`.
 ///
 ///   Bit-identity is the *expected* outcome, not luck: `HALO_ROWS = 80`
 ///   gives the half-res sibling 40 real halo rows against a 34-row blur
@@ -551,6 +554,21 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Ssim
             | CliMetricKind::Nlpd
             | CliMetricKind::NlpdIqa
+            // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
+            // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ) are routed through
+            // `nr::score`/`nn::score` + `PairedNoReference`; the
+            // orchestrator's FR leaves have no shape for them.
+            | CliMetricKind::Piqe
+            | CliMetricKind::Niqe
+            | CliMetricKind::Brisque
+            | CliMetricKind::Arniqa
+            | CliMetricKind::Maniqa
+            | CliMetricKind::Liqe
+            | CliMetricKind::Musiq
+            | CliMetricKind::Hyperiqa
+            | CliMetricKind::Paq2piq
+            // WD exposes five host-statistic outputs outside the FR leaves.
+            | CliMetricKind::Wd
     )
 }
 
@@ -569,10 +587,13 @@ pub fn build_orchestrator(
 /// Helper struct for the runner-level cache — keeps the orchestrator
 /// alive across multiple subcommand calls (e.g. when used as a
 /// library by the sweep worker, which scores many cells per process).
+/// Only constructed by `orchestrator-cuda` jobexec paths.
+#[cfg(feature = "orchestrator-cuda")]
 pub struct OrchestratorHandle {
     inner: Arc<std::sync::Mutex<Orchestrator>>,
 }
 
+#[cfg(feature = "orchestrator-cuda")]
 impl OrchestratorHandle {
     /// Wrap a freshly-built orchestrator.
     pub fn new(orch: Orchestrator) -> Self {
@@ -587,6 +608,7 @@ impl OrchestratorHandle {
     }
 }
 
+#[cfg(feature = "orchestrator-cuda")]
 impl Clone for OrchestratorHandle {
     fn clone(&self) -> Self {
         Self {
@@ -695,6 +717,9 @@ pub fn bench_on_start_from_flag(flag: Option<&str>) -> Result<BenchOnStart, Stri
 
 /// Re-export the ApiMetricKind to make doctest examples in the
 /// migration guide compile without a transitive zenmetrics-api dep.
+/// Used only through the lib target's public module; the bin compiles
+/// this file as a private module where the re-export is unreachable.
+#[allow(unused_imports)]
 pub use zenmetrics_api::MetricKind;
 
 #[cfg(test)]
@@ -858,5 +883,28 @@ mod tests {
         assert!(!metric_orchestrator_eligible(CliMetricKind::Nlpd));
         assert!(!metric_orchestrator_eligible(CliMetricKind::VmafNeg));
         assert!(!metric_orchestrator_eligible(CliMetricKind::Ssim));
+    }
+}
+
+#[cfg(test)]
+mod nr_routing_tests {
+    #[test]
+    fn paq2piq_uses_direct_no_reference_route() {
+        assert!(!super::metric_orchestrator_eligible(
+            crate::metrics::MetricKind::Paq2piq
+        ));
+    }
+}
+
+#[cfg(test)]
+mod wd_routing_tests {
+    #[test]
+    fn wd_routes_five_outputs_directly() {
+        let wd = crate::metrics::MetricKind::Wd;
+        assert!(!super::metric_orchestrator_eligible(wd));
+        assert_eq!(
+            wd.column_names(),
+            &["wd_s1", "wd_s2", "wd_s3", "wd_s4", "wd_s5"]
+        );
     }
 }

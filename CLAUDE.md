@@ -559,6 +559,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
+  A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
+  The WD trunk now disables its CPU arena and consumes output tensors individually.
+  The four-case recovery panel completes at 11,210,496 KiB maximum RSS, with
+  unchanged pilot bits and both-engine ladder parity. See
+  [the measured receipt](benchmarks/wd_port_2026-10-16/README.md).
+
+
 - **`cvvdp-gpu` fails to compile when built in one cargo invocation with `dssim-gpu`,
   `ssim2-gpu` or `iwssim-gpu` — found 2026-10-15, reproduced on master `c95dbc6d`, NOT
   fixed.** `zenmetrics-gpu-core::Backend` gates its `Wgpu` and `Cpu` variants on
@@ -1554,6 +1562,47 @@ explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
 quality contribution is displayed directly. Regression coverage lives in
 `scripts/checkpoint/check-pages.py`; details and limits in
 [the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).
+
+### Known Bugs: learned NR export qualification (2026-10-15)
+
+HyperIQA's traced HyperNet supports a fixed batch of 25, despite the original
+ONNX input's dynamic-axis label. The model card and exporter now state the fixed
+contract; fresh exports omit the misleading axis label. Its linear head is
+unbounded; parity qualifies the documented deterministic grid, distinct from
+upstream random-crop sampling. MUSIQ and HyperIQA exports require complete
+goldens and image pairs and fail above the canonical 1e-3 JND gate. Run
+`just nn-export-checks` for the rejection controls. MUSIQ reports patch-row
+limits and degenerate aspect ratios through distinct public error variants.
+
+### Known Bugs: BRISQUE integer powers (2026-10-15)
+
+BRISQUE's initial scalar power path differs from torch's multiplication for
+integer squares/cubes. The correction uses explicit multiplication and bumps
+the score revision. A 400,000-case GGD/AGGD ratio-and-argmin sweep and disjoint
+KonJND images supplement the existing 170 goldens; the fixed argmin case is
+pinned in the Rust unit tests. Measurement details live in
+`benchmarks/brisque_review_2026-10-15/`.
+
+### Known Bugs: NN preprocessing worker caps and empty rows (2026-10-16)
+
+A-FINE's pixel paths previously requested three helpers even with
+RTEN_NUM_THREADS=1. They now use the configured work-scaled cap; a child-process
+regression records zero helper launches at a cap of one. Planar conversion
+visits all three channels in one packed-row pass. Resize work counts scalar
+MACs without an extra output-axis multiplier, and sequential rows avoid a
+row-descriptor allocation. Empty preprocessing/resizing inputs return empty
+buffers, while DreamSim refuses zero dimensions before resize/inference.
+Review measurements live in benchmarks/nn_opt2_2026-10-15.md and its linked TSVs.
+
+### Known Bugs: PaQ-2-PiQ routing and input allocation (2026-10-16)
+
+The sweep range match lacked PaQ-2-PiQ and the default scheduler sent it to
+an FR-only orchestrator route. Add its range and direct NR exclusion together;
+check both sweep/GPU and sweep/orchestrator/NN builds. The native-resolution
+port now refuses either axis above 4096 before allocating its input tensor.
+Export must write both loader metadata and a provenance receipt; the oracle
+TSV must have a header so parity does not drop its first pair. Review commands
+and measurements live in `benchmarks/paq2piq_review_2026-10-16.md`.
 
 ### Known Bugs: CAMBI bogus-output checks (2026-10-15)
 

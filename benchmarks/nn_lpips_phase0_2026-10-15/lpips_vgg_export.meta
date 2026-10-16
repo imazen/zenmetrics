@@ -1,0 +1,7 @@
+torch 2.14.1+cpu
+lpips 0.1.4
+python 3.12.14
+host i265
+sha256 b8021231f432e4d215c65b35fc11a268f35736e3d9ef96b872f58f5fef418a48 lpips_vgg_trunk.onnx
+sha256 9153a2043dccf3b525d4f13db916e93ef040548ea923b6f2100de5ebac141a78 lpips_vgg_lin.f32
+sha256 c254f4e809d68eeddb043cda022a9981bac7f725b600c904983c7a785b4021af goldens.tsv

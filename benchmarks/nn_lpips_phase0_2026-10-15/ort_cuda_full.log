@@ -1,0 +1,20 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=25438MiB :: /home/lilith/tmp/nnrt-research/venv-cu/bin/python -I -W ignore scripts/ort_full.py model-lpips-vgg ladder 64,128,256,512,1024,2048 20
+ort-cuda-full	1415	1024	got 0.356550753	want 0.356550783	|d| 2.988e-08	compute median 62.110 ms
+ort-cuda-full	1415	128	got 0.314692318	want 0.314692378	|d| 5.956e-08	compute median 1.629 ms
+ort-cuda-full	1415	2048	got 0.328064591	want 0.328064531	|d| 5.969e-08	compute median 276.243 ms
+ort-cuda-full	1415	256	got 0.323270023	want 0.323269993	|d| 2.987e-08	compute median 3.398 ms
+ort-cuda-full	1415	512	got 0.352369756	want 0.352369756	|d| 4.935e-10	compute median 13.766 ms
+ort-cuda-full	1415	64	got 0.234536201	want 0.234536231	|d| 3.024e-08	compute median 1.380 ms
+ort-cuda-full	2207	1024	got 0.243604422	want 0.243604422	|d| 3.844e-10	compute median 62.723 ms
+ort-cuda-full	2207	128	got 0.429533601	want 0.429533541	|d| 5.981e-08	compute median 1.705 ms
+ort-cuda-full	2207	2048	got 0.276450753	want 0.276450753	|d| 2.120e-10	compute median 283.422 ms
+ort-cuda-full	2207	256	got 0.372635663	want 0.372635663	|d| 4.443e-10	compute median 3.314 ms
+ort-cuda-full	2207	512	got 0.236915410	want 0.236915410	|d| 4.350e-10	compute median 13.503 ms
+ort-cuda-full	2207	64	got 0.370130748	want 0.370130688	|d| 5.956e-08	compute median 1.377 ms
+ort-cuda-full	2406	1024	got 0.302160621	want 0.302160621	|d| 3.106e-10	compute median 62.250 ms
+ort-cuda-full	2406	128	got 0.285819739	want 0.285819739	|d| 1.033e-10	compute median 1.630 ms
+ort-cuda-full	2406	2048	got 0.315420717	want 0.315420747	|d| 3.000e-08	compute median 273.510 ms
+ort-cuda-full	2406	256	got 0.309901178	want 0.309901178	|d| 1.169e-10	compute median 3.305 ms
+ort-cuda-full	2406	512	got 0.304837465	want 0.304837465	|d| 2.863e-10	compute median 13.546 ms
+ort-cuda-full	2406	64	got 0.259086639	want 0.259086668	|d| 2.931e-08	compute median 1.384 ms
+run-heavy: done rc=0 25s | peak-RSS 1.77GiB | min-avail 22463MiB | peak-load 5.77

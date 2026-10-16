@@ -1,0 +1,96 @@
+BRISQUE Round 6, measured 2026-10-15 on i265.
+Base commit: 5ae173ee (nr-classic); no target-cpu=native.
+Evidence root (observed): /home/lilith/tmp/aic-variants-scratch/round6
+Resolve retained files: ls -l /home/lilith/tmp/aic-variants-scratch/round6
+Commands: just brisque-review-{prepare,build,run,analyze,ci,params}; see README.
+All heavy scoring/CI runs serialized via flock ~/tmp/i265-heavy.lock and run-heavy --mem 16G.
+The first small fixed-model generator run was not wrapped; its repeat is serialized.
+Resource receipts (full logs retained):
+lock-regen.log: run-heavy: done rc=0 3s | peak-RSS 0.16GiB | min-avail 21575MiB | peak-load 29.12
+prepare.log: run-heavy: done rc=0 53s | peak-RSS 2.51GiB | min-avail 17493MiB | peak-load 29.15
+baseline-build-retry.log: run-heavy: done rc=0 3s | peak-RSS 0.40GiB | min-avail 21713MiB | peak-load 13.91
+baseline-run.log: run-heavy: done rc=0 73s | peak-RSS 0.77GiB | min-avail 18116MiB | peak-load 33.38
+multiply-run.log: run-heavy: done rc=0 80s | peak-RSS 0.77GiB | min-avail 18899MiB | peak-load 35.17
+pow-tests.log: run-heavy: done rc=0 4s | peak-RSS 0.45GiB | min-avail 20937MiB | peak-load 26.24
+libm-run.log: run-heavy: done rc=0 79s | peak-RSS 0.77GiB | min-avail 20752MiB | peak-load 19.30
+small-tests.log: run-heavy: done rc=0 3s | peak-RSS 0.18GiB | min-avail 21418MiB | peak-load 17.56
+computed-run-retry.log: run-heavy: done rc=1 84s | peak-RSS 0.77GiB | min-avail 17535MiB | peak-load 43.82
+binary-run.log: run-heavy: done rc=0 75s | peak-RSS 0.77GiB | min-avail 19149MiB | peak-load 38.68
+
+sha256 of retained artifacts:
+94c06bdfc1263d74a58caff29bee77aa3f73409a29f3d244aa658ba0070c7a3f  baseline-build-retry.log
+8e6c1e27d9da6cb7d3056341f802302debac22a1fa8631a82d5dafe7d23b4728  baseline-build.log
+a4fda64ea24082edfacc5dc8015eb761bc7bf132bdace15898a654619d99dabb  baseline-panel.tsv
+48e69a011c4e1b71cbe26e79c73a01386498ce26ee590216ea7593f9288a0ba6  baseline-ratios.bin
+e667e560b96c7a8329914286f03e98730ceba5e22ce29e6d0dfd5f825b477520  baseline-review
+c6fb5c7dd4ccf011fb9a9af7bf89229ad593354464073409e9248274c2824a52  baseline-run.log
+a8872035dcf6b9913d3cb353af43c5a2080b177d6344ccfaf595d1d1cbcc8f77  baseline-summary.json
+0d75076103817f5e572f36e7e47fde7f163f5ea10625bf406c80ac79310fffde  baseline-summary.log
+b5ec35eabe751e16b634312727710311bab792dd56013bf326b9accf415c7d38  binary-generate.log
+9764cfa7a5f8f9e6301ff6f0880c99f84daaa0de62daa41de9ef77b434cb4bdf  binary-panel.tsv
+0a3317768dc330fe6347951ac6ec436f316eb7e5820b202c9c80f19620210f8c  binary-ratios.bin
+02b9294b13117530d7dfb49747840dab54d026dc9d3eefab66dc2627559b248c  binary-review
+f392cd5d928bead83a78df7cbcd80fe143a13886b9a792f73b564e401e70eae9  binary-run.log
+0e9c4398184d36b7d84ab05a29abacc7ae912a925c0e133b82aeb7a8e61712e0  binary-summary.json
+eef77205875ae67ad0652c301c5c5fcd6dfccc7fd79f89c61280f0c24dd8b104  computed-grids.bin
+8ee42e63c01955e4251e87cbb72466ee8f14d0ef24e6ff8e7ba552ca4529681d  computed-panel.tsv
+d75d254d1c8ddaba9e84b2d5d753b7e85d7745cf61774e2fd3361ea9bfe2abe8  computed-ratios.bin
+8df21f9e726d4e728e74f32b12cfe29f1bb51c2b43186d76f17d134e2be4dbc4  computed-review
+5ba2b83413f09217f28a71ca139287bc9f28a764af2f59deb6774770d3747170  computed-run-retry.log
+2aa80603a5e7b9d034a4562ad4018f1b6222f270e3de28ddb4bb49c2bee6d04d  computed-run.log
+bb36434532061e8703d246820269c9abe560287422c48b6242cd6763d1709d09  computed-summary.json
+9764cfa7a5f8f9e6301ff6f0880c99f84daaa0de62daa41de9ef77b434cb4bdf  libm-panel.tsv
+0a3317768dc330fe6347951ac6ec436f316eb7e5820b202c9c80f19620210f8c  libm-ratios.bin
+59cb7a4d7a12a0cc36e071da5f31820e31995d56fa1332879e463e0a7baf477e  libm-review
+423e4643989d8afb546587c2238e7e36db5ad30315d272121d13f355f52f2386  libm-run.log
+607e15ae33be75147c89c49e8ea9f81295e6fe96ad1a33ad2f7a55b97ac666d9  libm-summary.json
+9b8b99092a7c66d347131aba66d81ea3f232101b05754aa34bc48ee2d1fdc406  lock-regen.log
+b42b093beee7b80feeec5c6cf3f696bc3b04a30866afb8aa87476459c95a0ada  multiply-panel.tsv
+0a3317768dc330fe6347951ac6ec436f316eb7e5820b202c9c80f19620210f8c  multiply-ratios.bin
+339037b79c74f93a6938619e0daa6ad6d7528d80f21bf5b03c79edf9d676ce1f  multiply-review
+df134de599e20fcc57d31280210a61dff0b431300a0911aac9274a27199d9585  multiply-run.log
+2f798ed2c75daef725b412275b710b41bda6dcac8543ed166435edb7cf7e88e3  multiply-summary.json
+2b05f2fb7757016c259178934381b3dde554e71d646e5b4b47767afd49ef0f91  multiply-summary.log
+5e9065e7b607f11d1990a6b0528cc96c14ac0b65088872ee8a5703e750d0f857  oracle-api.log
+001b9e0f41b3d50141db11d9914459f5d544a8197a8d27fdeda3c8f4bf77c5e8  oracle_environment.json
+083b2cf756b9b8f2854ef068ac4f6d524c1d57b2521a57c69c0077fb8c506c0b  oracle_grids.npz
+29cb10a51500eedcbb2d4ee32c38fdb4fa3a6ccc6a450a9899c0969951d8b5ff  oracle_panel.json
+30155aec5bbbbafc95c4cedea7abf1ddce2c03e9b8aef9a71fb7571b5d85343c  original-params.rs
+b1086cadced6fdc1946ec7f0cb2371c836e84137a0fb541c041c48650334a556  panel.paths
+05a3aa3fd412536aeb8cce77fbb70ac8ba8a6397c338f99d81794caea5d21327  pow-tests.log
+d376f905e0c7784e233a8c9d280107f030bbeff434ccdb9f43bb86aa21c334b8  prepare.log
+6f679e693c2adad811cb3f3fdda0147f83fbe3414cad8b14b9bcdd180eb53d83  ratios-input.bin
+0a3317768dc330fe6347951ac6ec436f316eb7e5820b202c9c80f19620210f8c  ratios-oracle.bin
+db5af57b7212bfd8aa49dd8196f00e45f7e13b7fdae64c31e646e60e1b2130e2  small-tests.log
+5d91f75a0615084ec32bf1003a3a55e3d401071c9c29105fa952e744a91f7fcc  table-storage-summary.json
+
+Final independent reducer:
+run-heavy: done rc=0 78s | peak-RSS 0.77GiB | min-avail 19277MiB | peak-load 33.28
+6e364b2f5c39ae9d7a7d45d176385bb5a43e74b4f1bad12ee6d62de580c5a6c3  independent-run.log
+6f8125e2bf50b54b8981e913cee3372e654e4aecccb7c0287c0253c3e0b9eca1  independent-review
+0a3317768dc330fe6347951ac6ec436f316eb7e5820b202c9c80f19620210f8c  independent-ratios.bin
+42b5ab933c940ef0415e3919eb9d59a769bb5cf9e42f10e086533b79e150f6a2  independent-panel.tsv
+414daec51ff0999a1de1bd60bf163f37ee854dfc1989841d22eaf0b6660692b9  independent-summary.json
+97c57a30b1546a1e6bcebe2091bab1804df3393242de7b69bd5ee5bad96af3a1  final-ci.log
+6650dd3f881576b90bb348b9fab4f5cea840fd78ebaaa5efd4eb4a9f7812c506  push-independent.log
+final-ci.log was interrupted at coordinator steering and is not passing evidence.
+Remote ancestor verified with git merge-base --is-ancestor: 20c1a2e0b63b8a92ff73d62f806393151c0165fa origin/brisque-fix.
+gh run list --branch brisque-fix: no runs observed 2026-10-15.
+
+Final CI, deterministic regeneration and computed-grid confirmation:
+final-independent-ci.log: run-heavy: done rc=0 339s | peak-RSS 0.73GiB | min-avail 16125MiB | peak-load 55.61
+params-repeat.log: run-heavy: done rc=0 2s | peak-RSS 0.76GiB | min-avail 19025MiB | peak-load 40.36
+computed-independent-run.log: run-heavy: done rc=0 89s | peak-RSS 0.77GiB | min-avail 17729MiB | peak-load 43.96
+8827a016fd97a4f2874bc301f0614ccc0d3ce312456941c4908b3383b3c4e6c7  final-independent-ci.log
+0b1e5635e0a455458822cba86e0a4e179750413ed05bd3f068c6e2c70c8472ce  params-repeat.log
+52cb77223a3b2f8b28aac8955cb2701dd12152d9346b23001dc8cbf6362e15a1  computed-independent-run.log
+f732e272d6e97727818921fd3273dd5dd893ac6b506172ed4bc6623280436fe3  computed-independent-review
+6fe8e51d6b27f8a39b0d163c8cdcf1f778dcc65904be03e63362964a8526b7b1  computed-independent-panel.tsv
+d75d254d1c8ddaba9e84b2d5d753b7e85d7745cf61774e2fd3361ea9bfe2abe8  computed-independent-ratios.bin
+0a20a97c82e01ce487708a5db3ecbedd1738426c8aab89338bfc371eeefa77cb  computed-independent-summary.json
+4276088d7513c8e1949141b476f1fbcc0514af3d1027c22d13b0587f7a945155  params-before.sha256
+f4356578f7412b08f09ea887ddb1aab31c3ae2e5096a4842e30f9e3b6196ac4e  push-api.log
+df9e83c47e817ecc560b3a75da0e6fc7f8e48328d35bf48c98d5031fa256d519  push-docs.log
+ceb7d7a5ce5fada1474fb85fd184ab7821aad6c616c5db559b590fac4724e83c  push-generator.log
+Production snapshot source restored byte-for-byte; normal release artifacts rebuilt after experiment.
+Computed-table analysis command returns rc0 to retain its measurement; within_gate=false explicitly rejects that configuration.

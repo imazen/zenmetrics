@@ -28,14 +28,18 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[cfg(any(feature = "orchestrator-cuda", test))]
 use zenmetrics_api::MetricKind as ApiMetricKind;
 use zenmetrics_orchestrator::{
     Orchestrator, OrchestratorConfig, OrchestratorError as OrchestratorCacheError,
 };
 
+#[cfg(any(feature = "orchestrator-cuda", test))]
 use crate::metrics::MetricKind as CliMetricKind;
 
-/// How the orchestrator should treat a CLI metric variant.
+/// How the orchestrator should treat a CLI metric variant. Only
+/// consumed by `orchestrator-cuda` scoring paths and unit tests.
+#[cfg(any(feature = "orchestrator-cuda", test))]
 #[derive(Debug, Clone, Copy)]
 pub struct OrchestratorMetricSpec {
     /// Underlying metric family (matches the orchestrator's API).
@@ -47,6 +51,7 @@ pub struct OrchestratorMetricSpec {
     pub prefer_cpu: bool,
 }
 
+#[cfg(any(feature = "orchestrator-cuda", test))]
 impl OrchestratorMetricSpec {
     /// Map a CLI variant → orchestrator spec. Returns the full bridge
     /// metadata the caller needs; the caller can fan out one
@@ -238,12 +243,16 @@ impl OrchestratorRuntimeOpts {
 #[derive(Debug)]
 pub enum OrchestratorBuildError {
     /// This metric has no orchestrator backend; use the direct CLI scorer.
+    /// Constructed only by `orchestrator-cuda` paths and unit tests.
+    #[cfg(any(feature = "orchestrator-cuda", test))]
     UnsupportedMetric(&'static str),
     /// Capability cache I/O or persistence failure.
     Cache(OrchestratorCacheError),
     /// Caller asked for a CPU variant that this build doesn't include
     /// (e.g. `--metric ssim2` but the binary was built without
-    /// `--features orchestrator-cpu-ssim2`).
+    /// `--features orchestrator-cpu-ssim2`). Constructed only by
+    /// `orchestrator-cuda` paths and unit tests.
+    #[cfg(any(feature = "orchestrator-cuda", test))]
     CpuVariantUnavailable {
         /// Metric tag, e.g. `"ssim2"`.
         metric: &'static str,
@@ -255,11 +264,13 @@ pub enum OrchestratorBuildError {
 impl std::fmt::Display for OrchestratorBuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(any(feature = "orchestrator-cuda", test))]
             OrchestratorBuildError::UnsupportedMetric(metric) => write!(
                 f,
                 "metric '{metric}' is not available through the orchestrator; run without --use-orchestrator"
             ),
             OrchestratorBuildError::Cache(e) => write!(f, "orchestrator cache: {e}"),
+            #[cfg(any(feature = "orchestrator-cuda", test))]
             OrchestratorBuildError::CpuVariantUnavailable {
                 metric,
                 required_feature,
@@ -277,6 +288,8 @@ impl std::error::Error for OrchestratorBuildError {}
 /// possible with the current build. Surfaces a structured error so the
 /// CLI can suggest a feature flag rather than silently falling back to
 /// GPU.
+#[cfg(any(feature = "orchestrator-cuda", test))]
+#[allow(dead_code)] // public lib API; no in-crate caller under any feature set yet
 pub fn validate_cpu_variant_built_in(
     cli_kind: CliMetricKind,
 ) -> Result<(), OrchestratorBuildError> {

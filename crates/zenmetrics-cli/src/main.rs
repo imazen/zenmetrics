@@ -78,9 +78,15 @@ mod jobexec;
 #[cfg(feature = "jobexec")]
 mod objstore;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 #[cfg(feature = "orchestrator")]
 mod orchestrator_runner;
 
@@ -1556,6 +1562,55 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // finite identity value / mean bound is characterised yet.
         | MetricKind::PsnrhvsDaala
         | MetricKind::Mdctpsnr => None,
+        // LPIPS / ST-LPIPS / DISTS / DeepDC: distances, 0 = identical;
+        // each is a weighted deep-feature L2 bound well under 2 on real
+        // content.
+        MetricKind::LpipsAlex
+        | MetricKind::LpipsVgg
+        | MetricKind::LpipsSqueeze
+        | MetricKind::StlpipsAlex
+        | MetricKind::StlpipsVgg
+        | MetricKind::Dists
+        | MetricKind::Deepdc => Some((-0.001, 2.0, 0.0)),
+        // PIQE: [0, 100] distortion, 0 = identical.
+        MetricKind::Piqe => Some((-0.001, 100.5, 0.0)),
+        // NIQE: Mahalanobis distance ≥ 0, 0 = identical; natural images
+        // land ~0–10, synthetic outliers stay far under 50.
+        MetricKind::Niqe => Some((-0.001, 50.0, 0.0)),
+        // BRISQUE: SVR output, unbounded in principle; observed -41..110
+        // on the KonJND corpus. The 0.0 identity is inert (scores never
+        // land exactly on it) — it only satisfies the tuple shape.
+        MetricKind::Brisque => Some((-60.0, 150.0, 0.0)),
+        // ARNIQA: learned NR quality on [0, 1] (scaled kadid10k MOS);
+        // no meaningful identity value — 0.0 flags a default-fail
+        // constant only.
+        MetricKind::Arniqa => Some((-0.001, 1.001, 0.0)),
+        // MANIQA: learned NR quality — koniq10k MOS labels are min-max
+        // normalized to [0, 1] in the upstream loader; the head can
+        // extrapolate a hair past the range but not to 5.0.
+        MetricKind::Maniqa => Some((-0.001, 1.001, 0.0)),
+        // LIQE: expected value of the 5-quality-bucket softmax — a
+        // strict convex combination of 1..5.
+        MetricKind::Liqe => Some((1.0, 5.0, 3.0)),
+        // MUSIQ: koniq10k-trained transformer score on the MOS 1..100
+        // scale; the head extrapolates a little past the range.
+        MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
+        MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
+        MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        // CKDN is sigmoid quality; identical pairs are image-dependent.
+        // Zero is only a default-failure sentinel here, as for NR heads.
+        MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),
+        // DreamSim: one minus cosine similarity, clamped to [0, 1] on both
+        // engines; 0 = identical.
+        MetricKind::Dreamsim => Some((-0.001, 1.001, 0.0)),
+        // A-FINE is an unbounded signed quality score; no characterised
+        // mean bounds or constant identity exist for this check.
+        MetricKind::Afine => None,
+        // WD is a nonnegative, unbounded feature distortion; identical
+        // inputs score exactly 0 in every column. Measured maxima: 1.50
+        // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens
+        // (zenmetrics-nn models/wd/wd_goldens.tsv); a mean above 50 is bogus.
+        MetricKind::Wd => Some((-0.001, 50.0, 0.0)),
     }
 }
 

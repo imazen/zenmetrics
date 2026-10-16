@@ -1,0 +1,36 @@
+# One estimated just-noticeable difference per score column, in that column's units.
+# Source: KonJND-1k (1,008 pairs, 640x480, 504 JPEG + 504 BPG, distorted level at each
+# image's mean picture-wise JND threshold, round-half-up), scored by the upstream Python
+# packages (CPU fp32); value = pooled median score over the 1,008 pairs.
+# Method, per-codec rows and quartiles: benchmarks/nn_konjnd_scale_2026-10-15.md
+# Used by tests/parity.rs to express engine tolerance in JND units.
+# ckdn and afine have image-dependent identical-pair scores, so their JND is
+# a pooled median over score(pair) - score(ref, ref) per reference, from the
+# Rust port (zenmetrics-cli, ort-cuda) rather than an upstream package:
+# |delta| for ckdn, the SIGNED delta for afine (afine_all is a signed raw
+# score; 12% of its deltas are negative).
+# ckdn is higher-is-better; afine is lower-is-better (raw afine_all).
+# dreamsim is lower-is-better with identical-pair score exactly 0, so its JND
+# is the plain pooled median, also from the Rust port (same engine/host).
+column	jnd
+lpips_alex	0.065220
+lpips_vgg	0.193925
+lpips_squeeze	0.079601
+dists	0.094498
+stlpips_alex	0.023365
+stlpips_vgg	0.065762
+deepdc	0.064153
+ckdn	0.005276
+afine	0.507388
+dreamsim	0.017641
+arniqa	0.053838
+maniqa	0.021396
+liqe	0.393781
+musiq	1.968925
+hyperiqa	4.461776
+paq2piq	1.229401	JPEG 1.762009, BPG 0.726505; pooled median |paq2piq-paq2piq_ref| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wd_s1	3.82174283266067505e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wd_s2	2.47734993696212769e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wd_s3	1.60238809883594513e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wd_s4	1.03849720209836960e-01	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+wd_s5	6.74495548009872437e-02	Cool-Chic native RGB; pooled median over 1008 KonJND pairs (ort-cuda, 2026-10-16)
