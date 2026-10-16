@@ -5651,6 +5651,13 @@ fn calculate_c_values_columns(
     Ok(c_values)
 }
 
+#[cfg(all(test, feature = "parallel"))]
+std::thread_local! {
+    pub(crate) static TEST_COLUMN_SPLITS: std::cell::RefCell<
+        Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>
+    > = const { std::cell::RefCell::new(None) };
+}
+
 fn calculate_c_values_scheduled(
     image: &[u16],
     mask: &[u16],
@@ -5669,6 +5676,12 @@ fn calculate_c_values_scheduled(
     #[cfg(feature = "parallel")]
     if width * height >= 512 * 512 && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
+        #[cfg(test)]
+        TEST_COLUMN_SPLITS.with(|slot| {
+            if let Some(counter) = slot.borrow().as_ref() {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        });
         // Every nonfinal region has a multiple of eight columns, preserving
         // the original SIMD lane groups and the original scalar tail.
         let columns = width.div_ceil(rayon::current_num_threads()).div_ceil(8) * 8;
@@ -5981,6 +5994,63 @@ fn cambi_impl<const PARALLEL: bool>(
 #[cfg(test)]
 mod standalone_tests {
     use super::*;
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[test]
+    fn review_row_scalar_avx2_parity_includes_active_out_of_band_pixels() {
+        let token = v3_token().expect("direct AVX2 row control requires AVX2");
+        let (num_diffs, band_offset, band_size) = (3, 103, 32);
+        let thresholds = [115; 3];
+        let weights = [1, 2, 3];
+        for width in [8, 9, 16, 17, 24, 25, 32, 33] {
+            let histograms: Vec<u16> = (0..band_size as usize * width)
+                .map(|i| (1 + ((i / width) * 11 + (i % width) * 7) % 13) as u16)
+                .collect();
+            let image: Vec<u16> = (0..width)
+                .map(|i| [99, 100, 103, 131, 132, 200][i % 6])
+                .collect();
+            let mask: Vec<u16> = (0..width).map(|i| u16::from(i % 7 != 6)).collect();
+            let expected: Vec<f32> = (0..width)
+                .map(|col| {
+                    if mask[col] == 0 {
+                        0.0
+                    } else {
+                        c_value_pixel(
+                            &histograms,
+                            width,
+                            image[col] + num_diffs as u16,
+                            &weights,
+                            num_diffs,
+                            &thresholds,
+                            101,
+                            band_offset,
+                            band_size,
+                            col,
+                        )
+                    }
+                })
+                .collect();
+            assert!(expected.iter().any(|&value| value > 0.0));
+            let mut actual = vec![-1.0; width];
+            calculate_c_values_row_v3_t(
+                token,
+                &mut actual,
+                &histograms,
+                &image,
+                &mask,
+                width,
+                num_diffs,
+                &thresholds,
+                101,
+                &weights,
+                band_offset,
+                band_size,
+            );
+            for (col, (got, want)) in actual.iter().zip(&expected).enumerate() {
+                assert_eq!(got.to_bits(), want.to_bits(), "width={width} col={col}");
+            }
+        }
+    }
 
     #[cfg(feature = "parallel")]
     #[test]

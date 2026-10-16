@@ -386,6 +386,81 @@ mod cambi_thread_tests {
     use super::*;
 
     #[test]
+    fn review_parallel_frames_keep_cambi_serial_at_512_square() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let counter = Arc::new(AtomicUsize::new(0));
+        let observed = counter.clone();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .start_handler(move |_| {
+                crate::cambi::TEST_COLUMN_SPLITS.with(|slot| {
+                    *slot.borrow_mut() = Some(observed.clone());
+                });
+            })
+            .build()
+            .unwrap();
+        let (width, height) = (512, 512);
+        let reference: Vec<u16> = (0..width * height)
+            .map(|i| (256 + (i % width) / 4 + (i / width) / 16) as u16)
+            .collect();
+        let distorted: Vec<u16> = (0..width * height)
+            .map(|i| (256 + ((i % width) / 16) * 4) as u16)
+            .collect();
+        let chroma = vec![512; width * height / 4];
+        let references = [Yuv420Frame {
+            y: &reference,
+            u: &chroma,
+            v: &chroma,
+        }; 2];
+        let distortions = [Yuv420Frame {
+            y: &distorted,
+            u: &chroma,
+            v: &chroma,
+        }; 2];
+        let serial = VmafV1Scorer::new(width, height, 10, ModelVariant::Standard1080p).unwrap();
+        let parallel = VmafV1Scorer {
+            pool: Some(pool),
+            ..VmafV1Scorer::new(width, height, 10, ModelVariant::Standard1080p).unwrap()
+        };
+        for count in [1, 2] {
+            counter.store(0, Ordering::SeqCst);
+            let expected = serial
+                .score(&references[..count], &distortions[..count])
+                .unwrap();
+            let actual = parallel
+                .score(&references[..count], &distortions[..count])
+                .unwrap();
+            assert!(actual[0].features.cambi > 0.0);
+            for (got, want) in actual.iter().zip(&expected) {
+                for (a, b) in [
+                    (got.score, want.score),
+                    (got.features.cambi, want.features.cambi),
+                    (got.features.adm3, want.features.adm3),
+                    (got.features.motion3, want.features.motion3),
+                    (got.features.speed_chroma_uv, want.features.speed_chroma_uv),
+                ] {
+                    assert_eq!(a.to_bits(), b.to_bits());
+                }
+            }
+            if count == 1 {
+                assert!(
+                    counter.load(Ordering::SeqCst) > 0,
+                    "single frame uses columns"
+                );
+            } else {
+                assert_eq!(
+                    counter.load(Ordering::SeqCst),
+                    0,
+                    "frame workers must not split columns"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn frame_and_stream_cambi_use_the_scorer_budget() {
         let outer = rayon::ThreadPoolBuilder::new()
             .num_threads(4)
