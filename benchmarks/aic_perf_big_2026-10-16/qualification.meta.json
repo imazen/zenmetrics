@@ -11,10 +11,6 @@
     "calculate_c_values_row_v3_t": "0e92272c6a710a992f6bab60eafd5e2ca32cee4e6eaa7f4e4319b3591ee37632",
     "spatial_pooling": "71a07c141c43f6b4387ff6ded38bd9f8a188d893b07a55d022b652106281e010"
   },
-  "production_sources": {
-    "crates/vmaf/src/cambi.rs": "652398859353db4a002429d843713b0fca57a273958f20655364af772182bb2f",
-    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "6410ad74c99a51bdd38f04b53f7a4b64f84ac958c0b8b8d0897a48b94cf81860"
-  },
   "candidate_binaries": {
     "/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate": "37297ecf698aeff27f3c67e580ded18627ae9f3c16799f13fd19949b99cfa832",
     "/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/butter-candidate": "dd4bfbd9cf8389c874a6fcd52152f623937b64bf62b64c9f0450392c36d2c37c"
@@ -32,5 +28,21 @@
   "rustflags": null,
   "cargo_encoded_rustflags": null,
   "host": "i265",
-  "superseded_integer_grouping_not_in_production": true
+  "superseded_integer_grouping_not_in_production": true,
+  "current_source_file_sha256": {
+    "crates/vmaf/src/cambi.rs": "652398859353db4a002429d843713b0fca57a273958f20655364af772182bb2f",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "6410ad74c99a51bdd38f04b53f7a4b64f84ac958c0b8b8d0897a48b94cf81860"
+  },
+  "retained_production_function_sha256": {
+    "calculate_c_values_columns": "56014c983a45ae3e608658694896a382f8a406c8a19c4579ed5fe9d27650ecb7",
+    "calculate_c_values_scheduled": "128a1a2b27d09319da4df1abcf95d5ab55d918ce48848daa404de251d25c8434",
+    "cambi_impl": "1edb2e1311b542cce7aabc99176f7d8faf100b5f72ff5f0a76f7d4e2bd98fec6",
+    "convolve": "e5c60026fde845445e94c8e1bb49f611e0407b4f59f978effd8fb8a535b4daae",
+    "malta": "36851c228d55a8a1e135bb2aca78ecf1f5cc1e56e8fd9188c8f460ee70415e45",
+    "malta_accumulate": "3ca8950aa6dc969c03d17d3aaeb7356577490be1787c9ddcd2d8a275a7975b4a"
+  },
+  "compiled_source_file_sha256": {
+    "crates/vmaf/src/cambi.rs": "e749f6db3e48f6364f101e232989d4c7d698efdc0d9bf52f03b244a1cd4d25bd",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "6410ad74c99a51bdd38f04b53f7a4b64f84ac958c0b8b8d0897a48b94cf81860"
+  }
 }
