@@ -1554,3 +1554,11 @@ explicitly while retaining the valid pooled scalar. VSI's saliency-weighted
 quality contribution is displayed directly. Regression coverage lives in
 `scripts/checkpoint/check-pages.py`; details and limits in
 [the browser viewer contract](docs/BROWSER_VIEWER_2026-10-13.md).
+
+### Known Bugs: CAMBI bogus-output checks (2026-10-15)
+
+CAMBI scores only the distorted image; zero is normal for unbanded photos.
+Identity and constant-output checks previously rejected valid zero batches.
+CAMBI now has no identity range and is exempt from the constant-output check;
+empty/nonfinite checks remain active. The sweep-feature binary regression
+`cambi_zero_distribution_is_not_bogus` covers the all-zero batch.

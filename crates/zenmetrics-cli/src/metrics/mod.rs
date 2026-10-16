@@ -41,11 +41,14 @@
 use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
+mod butteraugli_original;
 mod cw_fft;
 mod cw_ssim;
 pub mod display;
 mod flip;
 mod ssim_pyiqa;
+mod ssimulacra1;
+mod ws_hv;
 pub use display::CvvdpDisplay;
 #[cfg(feature = "cpu-metrics")]
 mod classical;
@@ -169,6 +172,18 @@ pub enum MetricKind {
     /// Complex-wavelet SSIM: four levels, eight orientations, coarse 7x7 windows.
     #[value(name = "cw-ssim")]
     CwSsim,
+    /// Contrast-aware multiscale banding index, studio-swing BT.601 ingress.
+    #[value(name = "cambi")]
+    Cambi,
+    /// Original Google Butteraugli (revision 2019-03-19); lower is better.
+    #[value(name = "butteraugli-original")]
+    ButteraugliOriginal,
+    /// Original Cloudinary SSIMULACRA; lower is better.
+    #[value(name = "ssimulacra1")]
+    Ssimulacra1,
+    /// Wavelet horizontal/vertical similarity; higher is better.
+    #[value(name = "ws-hv")]
+    WsHv,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -580,6 +595,10 @@ impl MetricKind {
             MetricKind::Flip,
             MetricKind::FlipV17,
             MetricKind::CwSsim,
+            MetricKind::Cambi,
+            MetricKind::ButteraugliOriginal,
+            MetricKind::Ssimulacra1,
+            MetricKind::WsHv,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::NlpdIqa,
@@ -668,6 +687,10 @@ impl MetricKind {
             MetricKind::Flip => "flip",
             MetricKind::FlipV17 => "flip-v17",
             MetricKind::CwSsim => "cw-ssim",
+            MetricKind::Cambi => "cambi",
+            MetricKind::ButteraugliOriginal => "butteraugli-original",
+            MetricKind::Ssimulacra1 => "ssimulacra1",
+            MetricKind::WsHv => "ws-hv",
             MetricKind::SsimC => "ssimc",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
@@ -819,6 +842,10 @@ impl MetricKind {
             MetricKind::Flip => &["flip"],
             MetricKind::FlipV17 => &["flip_v17"],
             MetricKind::CwSsim => &["cw_ssim"],
+            MetricKind::Cambi => &["cambi"],
+            MetricKind::ButteraugliOriginal => &["butteraugli_original"],
+            MetricKind::Ssimulacra1 => &["ssimulacra1"],
+            MetricKind::WsHv => &["ws_hv"],
             MetricKind::SsimC => &["ssimc"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
@@ -2325,6 +2352,31 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-haarpsi"))]
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
 
+        // Standalone CAMBI uses the same studio-601 ingress as the VMAF variants.
+        #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+        MetricKind::Cambi => Ok(vec![("cambi", vmaf::cambi(reference, distorted)?)]),
+        #[cfg(not(all(feature = "cpu-metrics", feature = "cpu-vmaf")))]
+        MetricKind::Cambi => Err(disabled_msg("cambi", "cpu-metrics,cpu-vmaf")),
+        MetricKind::ButteraugliOriginal | MetricKind::Ssimulacra1 | MetricKind::WsHv => {
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err("metric: dimension mismatch".into());
+            }
+            let w = reference.width as usize;
+            let h = reference.height as usize;
+            let r = &reference.pixels;
+            let d = &distorted.pixels;
+            let value = match kind {
+                MetricKind::ButteraugliOriginal => {
+                    butteraugli_original::error_map(r, d, w, h, w * 3, w * 3)?
+                        .into_iter()
+                        .fold(0.0_f32, f32::max) as f64
+                }
+                MetricKind::Ssimulacra1 => ssimulacra1::score(r, d, w, h, w * 3, w * 3)?,
+                MetricKind::WsHv => ws_hv::score(r, d, w, h, w * 3, w * 3)?,
+                _ => unreachable!(),
+            };
+            Ok(vec![(kind.column_names()[0], value)])
+        }
         MetricKind::CwSsim => {
             if (reference.width, reference.height) != (distorted.width, distorted.height) {
                 return Err("CW-SSIM: dimension mismatch".into());
@@ -2347,7 +2399,7 @@ pub fn run_metric(
                 vec![("flip_v17", flip::mean_v17(&map))]
             })
         }
-        // SSIM-pyiqa family: f64 valid-window scoring with explicit convention flags.
+        // SSIM-pyiqa family: valid-window scoring with explicit convention flags.
         MetricKind::SsimPyiqa
         | MetricKind::SsimPyiqaF32
         | MetricKind::SsimPyiqaF32K2
@@ -3325,6 +3377,40 @@ mod tests {
             pixels: vec![fill; (w as usize) * (h as usize) * 3],
             width: w,
             height: h,
+        }
+    }
+
+    #[test]
+    fn round4_dispatch_columns_and_mismatch() {
+        let r = Rgb8Image {
+            pixels: (0..64 * 64 * 3)
+                .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let wrong = Rgb8Image {
+            pixels: vec![0; 63 * 64 * 3],
+            width: 63,
+            height: 64,
+        };
+        for (name, kind, column) in [
+            (
+                "butteraugli-original",
+                MetricKind::ButteraugliOriginal,
+                "butteraugli_original",
+            ),
+            ("ssimulacra1", MetricKind::Ssimulacra1, "ssimulacra1"),
+            ("ws-hv", MetricKind::WsHv, "ws_hv"),
+        ] {
+            assert_eq!(MetricKind::from_str(name, false).unwrap(), kind);
+            assert!(MetricKind::all().contains(&kind));
+            assert_eq!(kind.name(), name);
+            assert_eq!(kind.column_names(), &[column]);
+            let same = run_metric(kind, &r, &r, GpuRuntime::Auto).unwrap();
+            assert_eq!(same[0].0, column);
+            assert!((same[0].1 - if kind == MetricKind::WsHv { 1.0 } else { 0.0 }).abs() < 1e-6);
+            assert!(run_metric(kind, &r, &wrong, GpuRuntime::Auto).is_err());
         }
     }
 

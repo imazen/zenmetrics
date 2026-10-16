@@ -629,3 +629,53 @@ aic-cw-search python out:
 aic-cw-verify python out:
     TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_flip_2026-10-15/cw_probe.rs -o "$HOME/tmp/aic-variants-scratch/cw-probe"
     {{python}} benchmarks/aic_flip_2026-10-15/verify_cw_explicit.py {{out}}/cw-final.json fftfreq
+
+# Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
+aic-more-verify python:
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
+    {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+    {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-more-ci:
+    bash benchmarks/aic_more_2026-10-15/check_ci.sh
+
+# Round 5 review controls; run under shared heavy lock and run-heavy.
+aic-review-bogus:
+    just snap-cargo @ test -p zenmetrics-cli --features sweep --bin zenmetrics fail_on_bogus_tests
+
+aic-review-pins python:
+    {{python}} benchmarks/aic_review_2026-10-15/pin_oracles.py
+
+aic-review-libs:
+    just snap-cargo @ test -p zenmetrics-cli --lib
+    just snap-cargo @ test -p vmaf --no-default-features --lib
+    just snap-cargo @ test -p vmaf --features simd,avx512 --lib
+
+aic-review-ssim-order python:
+    rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_SSIM1_PROBE="$HOME/tmp/aic-variants-scratch/round5/ssim1-row-block-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
+
+aic-review-rust-pins:
+    rustc --edition 2024 -O benchmarks/aic_review_2026-10-15/pins_rust.rs -o "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+    "$HOME/tmp/aic-variants-scratch/round5/pins-rust"
+
+aic-review-cambi python:
+    cp "$LOCK_SNAP_DIR/target/release/examples/aic_more_probe" "$HOME/tmp/aic-variants-scratch/round5/aic-more-probe"
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5" AIC_CAMBI_PROBE="$HOME/tmp/aic-variants-scratch/round5/aic-more-probe" {{python}} benchmarks/aic_more_2026-10-15/verify_cambi.py
+
+aic-review-oracles python:
+    bash benchmarks/aic_review_2026-10-15/check_oracles.sh {{python}}
+
+aic-review-ci:
+    bash benchmarks/aic_review_2026-10-15/check_ci.sh
+
+aic-review-pin-sensitivity:
+    python3 benchmarks/aic_review_2026-10-15/check_pin_sensitivity.py
+
+aic-review-cambi-reference python:
+    AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
