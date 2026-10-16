@@ -794,3 +794,7 @@ nn-wd-gates models ladder:
 # AIC probe has its own hard one-hour clock after acquiring the heavy lock.
 nn-wd-aic-probe models python reference site images config previous pairs out:
     bash benchmarks/wd_aic_probe_2026-10-16.sh '{{models}}' '{{python}}' '{{reference}}' '{{site}}' '{{images}}' '{{config}}' '{{previous}}' '{{pairs}}' '{{out}}'
+
+# Compact an existing WD convention probe; no inference.
+nn-wd-aic-report probe native site config out:
+    python3 -I crates/zenmetrics-nn/models/wd/aic_report.py --probe '{{probe}}' --native '{{native}}' --site '{{site}}' --config '{{config}}' --out '{{out}}'
