@@ -23,6 +23,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Apply the owner-authorized question 15 short-class contract with canonical pool-authority verification, role/count guards and a bound declaration digest (`98a0edca`).
+
 - Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).
 
 - Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
