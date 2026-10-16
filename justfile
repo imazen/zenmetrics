@@ -886,8 +886,8 @@ aic-review-cambi-reference python:
 aic-perf-big-baseline output metrics="cambi butter":
     bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline.sh)" -- '{{output}}' '{{metrics}}'
 
-aic-perf-big-baseline-step phase output metric width height threads:
-    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- '{{phase}}' '{{output}}' '{{metric}}' '{{width}}' '{{height}}' '{{threads}}'
+aic-perf-big-baseline-step phase output metric width height threads rev="@" label="base":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- '{{phase}}' '{{output}}' '{{metric}}' '{{width}}' '{{height}}' '{{threads}}' '{{rev}}' '{{label}}'
 
 aic-perf-big-parity base candidate output scratch:
     python3 benchmarks/aic_perf_big_2026-10-16/parity.py '{{base}}' '{{candidate}}' '{{output}}' '{{scratch}}'
