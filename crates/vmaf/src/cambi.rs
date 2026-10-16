@@ -5030,7 +5030,7 @@ fn compute_dp_row_v3_t(
 
 /// mask[j] = dp_bottom[j+2p+1] + dp_top[j] - dp_bottom[j] - dp_top[j+2p+1]
 /// > mask_index — the window sum read straight out of the two dp rows.
-/// Matches `compute_mask_row_avx2`.
+/// > Matches `compute_mask_row_avx2`.
 fn compute_mask_row(
     mask_row: &mut [u16],
     dp_bottom: &[u32],
