@@ -56,3 +56,4 @@ maximum RSS 1,281,836 KiB. Start load averages: 3.96 / 3.02 / 4.79.
 [Raw receipt](cap-ort-cuda-v3.log) measures the graph in `export-v3.json`
 on shared i265. This is a cap/resource observation, not a quiet-host
 performance comparison to revision 2.
+`run-heavy: done rc=0 77s | peak-RSS 1.22GiB | min-avail 22318MiB | peak-load 3.96`.
