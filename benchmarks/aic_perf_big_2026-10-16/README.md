@@ -14,10 +14,10 @@ observations have no confidence intervals and cover this host only.
 
 | Rust metric | Size | Thread budget | Base ms/call | New ms/call | Base/new |
 |---|---:|---:|---:|---:|---:|
-| [CAMBI](abab-cambi-1024-1t.log) | 1024×1024 | 1 | 22.351 | 22.377 | 1.00× |
-| [CAMBI](abab-cambi-1024-16t.log) | 1024×1024 | 16 | 24.628 | 9.008 | 2.73× |
-| [CAMBI](abab-cambi-3355-1t.log) | 3355×2516 | 1 | 163.059 | 162.179 | 1.01× |
-| [CAMBI](abab-cambi-3355-16t.log) | 3355×2516 | 16 | 161.780 | 63.940 | 2.53× |
+| [CAMBI](abab-cambi-1024-1t.log) | 1024×1024 | 1 | 22.208 | 22.203 | 1.00× |
+| [CAMBI](abab-cambi-1024-16t.log) | 1024×1024 | 16 | 26.029 | 8.953 | 2.91× |
+| [CAMBI](abab-cambi-3355-1t.log) | 3355×2516 | 1 | 160.759 | 160.828 | 1.00× |
+| [CAMBI](abab-cambi-3355-16t.log) | 3355×2516 | 16 | 164.801 | 63.282 | 2.60× |
 | [Butteraugli-original](abab-butter-1024-1t.log) | 1024×1024 | 1 | 1034.395 | 308.292 | 3.36× |
 | [Butteraugli-original](abab-butter-1024-16t.log) | 1024×1024 | 16 | 1074.443 | 313.392 | 3.43× |
 | [Butteraugli-original](abab-butter-3355-1t.log) | 3355×2516 | 1 | 7958.670 | 3005.396 | 2.65× |
@@ -54,11 +54,11 @@ contains its run-heavy resource footer and all four `/usr/bin/time -v` records.
 evaluator. Full disassembly remains at the hashed external paths.
 
 CAMBI column results add temporary c-value storage. At 3355×2516 and budget
-16, measured process peak RSS changes from 105,760 to 140,032 KiB. The
+16, measured process peak RSS changes from 105,824 to 140,060 KiB. The
 Butteraugli one-worker process peak is 1,437,516 KiB for both versions.
 Corresponding large-image resource scopes:
 
-- `run-heavy: done rc=0 3s | peak-RSS 0.13GiB | min-avail 24146MiB | peak-load 0.94`
+- `run-heavy: done rc=0 2s | peak-RSS 0.13GiB | min-avail 24187MiB | peak-load 1.68`
 - `run-heavy: done rc=0 110s | peak-RSS 1.37GiB | min-avail 22989MiB | peak-load 5.33`
 
 The [512×512 boundary control](cambi-threshold-512.log) retains score bits

@@ -1,5 +1,5 @@
-run-heavy: mem-cap=16G (cgroup, hard) jobs=12/20 avail=24402MiB :: timeout --kill-after=20s 1150s just aic-perf-big-parity /home/lilith/tmp/aic-variants-scratch/round14 /home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2 /home/lilith/tmp/aic-variants-scratch/round14-aic-parity-final.tsv /home/lilith/tmp/aic-variants-scratch/round14-aic-artifacts-final
-python3 benchmarks/aic_perf_big_2026-10-16/parity.py '/home/lilith/tmp/aic-variants-scratch/round14' '/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2' '/home/lilith/tmp/aic-variants-scratch/round14-aic-parity-final.tsv' '/home/lilith/tmp/aic-variants-scratch/round14-aic-artifacts-final'
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24134MiB :: timeout --kill-after=20s 1150s just aic-perf-big-parity /home/lilith/tmp/aic-variants-scratch/round14-base-bins /home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins /home/lilith/tmp/aic-variants-scratch/round14-aic-parity-thread.tsv /home/lilith/tmp/aic-variants-scratch/round14-aic-artifacts-thread
+python3 benchmarks/aic_perf_big_2026-10-16/parity.py '/home/lilith/tmp/aic-variants-scratch/round14-base-bins' '/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins' '/home/lilith/tmp/aic-variants-scratch/round14-aic-parity-thread.tsv' '/home/lilith/tmp/aic-variants-scratch/round14-aic-artifacts-thread'
 {"key": "S01_AVIF_01.png", "metric": "butter", "score_bits": "400b49af", "map_sha256": "779075f8033a7e53ce41f786ab6957f5eda51747a6008cb752ec88a06db1a7e8"}
 {"key": "S01_AVIF_01.png", "metric": "cambi", "score_bits": "3f99bfc98d0c392e", "map_sha256": ""}
 {"key": "S02_CCM_01.png", "metric": "butter", "score_bits": "3fc22f3a", "map_sha256": "50597b4a22dca837454bb4b81cb511b9ab40181d4912b215898a9b469fd44e73"}
@@ -122,4 +122,4 @@ python3 benchmarks/aic_perf_big_2026-10-16/parity.py '/home/lilith/tmp/aic-varia
 {"key": "S69_JAI_09.png", "metric": "cambi", "score_bits": "3fe2ef8e7e3737a8", "map_sha256": ""}
 {"key": "S70_VVC_03.png", "metric": "butter", "score_bits": "4091419d", "map_sha256": "05826a6d6cb784de5729da9c004e7423c3237ed5df7fe710ad91ea1d49b310b0"}
 {"key": "S70_VVC_03.png", "metric": "cambi", "score_bits": "3f89b529f08389ba", "map_sha256": ""}
-run-heavy: done rc=0 166s | peak-RSS 1.37GiB | min-avail 22856MiB | peak-load 2.12
+run-heavy: done rc=0 166s | peak-RSS 1.37GiB | min-avail 23036MiB | peak-load 3.53

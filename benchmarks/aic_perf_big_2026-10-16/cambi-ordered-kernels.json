@@ -1,16 +1,16 @@
 {
-  "binary": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new",
-  "binary_sha256": "37297ecf698aeff27f3c67e580ded18627ae9f3c16799f13fd19949b99cfa832",
-  "disassembly_path": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/kernels.asm",
-  "disassembly_sha256": "c3058dbda935888f3b29c7bb2a76e438db1e641ecd9c7d26298517bbd690c736",
+  "binary": "/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/cambi-candidate",
+  "binary_sha256": "eda1ddb2d0cd349aa68d1bc5c5d36a96746071b23b368aa39808356d685a76fd",
+  "disassembly_path": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-thread-kernels.asm",
+  "disassembly_sha256": "c7143b51a576281092f1b10eb130896462d04be7930fc2e2c19d2bfe6e3075a3",
   "functions": {
-    "00000000000737e0 <vmaf::cambi::calculate_c_values_columns::{closure#0}>:": {
+    "0000000000074f40 <vmaf::cambi::calculate_c_values_columns::{closure#0}>:": {
       "packed_arithmetic": {
         "paddw": 3
       },
       "fma_instructions": {}
     },
-    "000000000007e240 <vmaf::cambi::__arcane_calculate_c_values_row_v3_t>:": {
+    "000000000007e260 <vmaf::cambi::__arcane_calculate_c_values_row_v3_t>:": {
       "packed_arithmetic": {
         "vmulps": 1
       },

@@ -1,0 +1,99 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=12/20 avail=24564MiB :: timeout --kill-after=20s 1150s just aic-perf-big-thread-budget /home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins
+just snap-cargo @ test -p vmaf --features parallel,simd,avx512 --lib
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree f44d94dc4c4d (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked test -p vmaf --features parallel,simd,avx512 --lib
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+   Compiling vmaf v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/crates/vmaf)
+warning: variable does not need to be mutable
+    --> crates/vmaf/src/adm.rs:6595:9
+     |
+6595 |     let mut f = |rng: &mut dyn FnMut() -> i32| BandI32 {
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `vmaf` (lib test) generated 1 warning (run `cargo fix --lib -p vmaf --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s
+     Running unittests src/lib.rs (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/target/debug/deps/vmaf-b6174fde566f08e0)
+
+running 42 tests
+test adm::adm_decouple_s123_row_timing ... ignored
+test adm::simd_csf_den_scale_matches_scalar_for_tails_and_edges ... ok
+test cambi::tests::v3_decimate_and_filter_mode_match_fallback ... ok
+test adm::simd_csf_i16_matches_scalar_for_tails_and_edges ... ok
+test adm::simd_csf_i32_matches_scalar_for_tails_and_edges ... ok
+test adm::simd_csf_den_s123_matches_scalar_for_tails_and_edges ... ok
+test cambi::standalone_tests::histogram_runs_match_ordered_pixel_windows ... ok
+test adm::simd_dwt2_matches_scalar_for_edges_tails_and_bit_depths ... ok
+test adm::simd_cm_i16_matches_scalar_for_tails_and_edges ... ok
+test adm::simd_decouple_matches_scalar_for_tails_zeros_and_gains ... ok
+test metric::size_tests::below_cambi_minimum_is_too_small ... ok
+test cambi::tests::v3_c_values_match_fallback ... ok
+test cambi::tests::spatial_mask_matches_direct_window ... ok
+test speed::tests::v3_covariance_matches_scalar ... ok
+test adm::simd_decouple_s123_matches_scalar_for_tails_zeros_and_gains ... ok
+test speed::tests::simd_vif_filter1d_matches_scalar_for_tails_and_edges ... ok
+test tests::motion_sad_matches_scalar_across_widths_and_depths ... ok
+test metric::map_tests::sequences_refuse_maps ... ok
+test adm::simd_cm_i32_matches_scalar_for_tails_and_edges ... ok
+test adm::simd_dwt2_s123_matches_scalar_for_tails_and_edges ... ok
+test vif::tests::reflected_padding_matches_border_indices ... ok
+test vif::tests::odd_frame_dimensions_remain_supported ... ok
+test vif::tests::simd_vertical_u8_matches_scalar_formula ... ok
+test vif::tests::simd_vertical_u10_matches_scalar_formula ... ok
+test vif::tests::simd_vertical_hiscale_matches_scalar_formula ... ok
+test vif::tests::v3_stat8_matches_simd_fallback_at_odd_widths ... ok
+test vif::tests::v3_subsample_matches_simd_fallback_at_odd_widths ... ok
+test cambi::standalone_tests::original_author_banded_pins ... ok
+test adm::adm_terms_tests::identical_frames_have_no_additive_impairment ... ok
+test adm::adm_terms_tests::adm_terms_fold_to_the_score_path ... ok
+test metric::tests::ten_bit_planes_are_accepted_sixteen_refused ... ok
+test cambi::standalone_tests::standalone_stride_and_input_validation ... ok
+test score::cambi_thread_tests::frame_and_stream_cambi_use_the_scorer_budget ... ok
+test metric::tests::mid_sequence_size_change_fails_and_poisons_the_session ... ok
+test cambi::map_tests::cambi_maps_fold_to_the_score ... ok
+test vif::tests::v3_stat16_matches_simd_fallback_at_odd_widths ... ok
+test metric::map_tests::a_chroma_change_peaks_in_its_block ... ok
+test cambi::standalone_tests::scheduled_columns_preserve_ordered_c_value_bits_and_stride ... ok
+test metric::tests::single_pair_conforms ... ok
+test metric::map_tests::adm_maps_are_adm_terms_on_their_band_grids ... ok
+test metric::map_tests::speed_maps_keep_the_scores_and_fold_to_the_feature ... ok
+test metric::tests::sequence_matches_the_stream_and_respects_latency ... ok
+
+test result: ok. 41 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.46s
+
+just snap-cargo @ build --release -p vmaf --features parallel,simd,avx512 --example cambi_wall
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree f44d94dc4c4d (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked build --release -p vmaf --features parallel,simd,avx512 --example cambi_wall
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+   Compiling vmaf v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/crates/vmaf)
+    Finished `release` profile [optimized + debuginfo] target(s) in 3.23s
+mkdir '/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins'
+cp "$LOCK_SNAP_DIR/target/release/examples/cambi_wall" '/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/cambi-candidate'
+sha256sum '/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/cambi-candidate'
+eda1ddb2d0cd349aa68d1bc5c5d36a96746071b23b368aa39808356d685a76fd  /home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/cambi-candidate
+run-heavy: done rc=0 12s | peak-RSS 0.46GiB | min-avail 23941MiB | peak-load 1.83
