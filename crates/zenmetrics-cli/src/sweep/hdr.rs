@@ -936,6 +936,16 @@ pub(crate) fn encode_pq_png(
     .map_err(|e| format!("pq-png encode: {e}").into())
 }
 
+#[cfg(not(feature = "png"))]
+pub(crate) fn encode_pq_png(
+    _rgb16: &[u16],
+    _width: u32,
+    _height: u32,
+    _cicp: zenpixels::Cicp,
+) -> Result<Vec<u8>, Err> {
+    Err("HDR sweep: PQ-PNG encode requires the `png` build feature".into())
+}
+
 /// Decode a 16-bit PQ PNG variant back to absolute nits — the distortion
 /// cells' decode-back. Same contract as every other decode-back: the PNG
 /// must carry cICP (transfer 16 = PQ, or 18 = HLG which routes through the
