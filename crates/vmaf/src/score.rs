@@ -190,6 +190,7 @@ impl VmafV1Scorer {
                     .zip(distorted.par_iter())
                     .zip(motion.par_iter())
                     .map(|((reference, distorted), &motion3)| {
+                        // Frame workers own the pool; CAMBI stays serial here.
                         self.score_frame(reference, distorted, motion3, false)
                     })
                     .collect()
