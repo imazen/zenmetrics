@@ -3586,7 +3586,7 @@ mod fail_on_bogus_tests {
     #[test]
     fn cambi_zero_distribution_is_not_bogus() {
         assert_eq!(metric_range_bounds(MetricKind::Cambi), None);
-        assert!(bogus_check(MetricKind::Cambi, &vec![0.0; 20], &p()));
+        assert!(bogus_check(MetricKind::Cambi, &[0.0; 20], &p()));
     }
 
     #[test]

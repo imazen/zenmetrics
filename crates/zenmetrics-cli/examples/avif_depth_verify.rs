@@ -140,10 +140,10 @@ fn depth_from_name(name: &str) -> Option<u8> {
         while start > 0 && bytes[start - 1].is_ascii_digit() {
             start -= 1;
         }
-        if start < at {
-            if let Ok(v) = name[start..at].parse::<u8>() {
-                return Some(v);
-            }
+        if start < at
+            && let Ok(v) = name[start..at].parse::<u8>()
+        {
+            return Some(v);
         }
         from = at + 3;
     }
@@ -375,10 +375,10 @@ fn verify_one(path: &Path, data: &[u8], expect: Option<u8>, control: Option<&str
     }
 
     // G3's second half: a bd10 cell must not be byte-identical to its 8-bit control.
-    if let Some(c) = control {
-        if row.sha256 == c {
-            problems.push("BYTE-IDENTICAL to the control blob".into());
-        }
+    if let Some(c) = control
+        && row.sha256 == c
+    {
+        problems.push("BYTE-IDENTICAL to the control blob".into());
     }
 
     row.pass = problems.is_empty();
