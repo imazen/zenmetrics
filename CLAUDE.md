@@ -1641,3 +1641,15 @@ Identity and constant-output checks previously rejected valid zero batches.
 CAMBI now has no identity range and is exempt from the constant-output check;
 empty/nonfinite checks remain active. The sweep-feature binary regression
 `cambi_zero_distribution_is_not_bogus` covers the all-zero batch.
+
+### Known Bugs: Linux IQA benchmark timeout admission (2026-10-17)
+
+The competition harness's killed Rust scopes could leave zenbench running
+reservations, causing later cells to refuse admission. The Linux controller now
+records each child's PID/process group and recovers only its matching dead
+reservation after verifying the whole group has exited and acquiring the guard.
+It archives the original bytes and retains a backup in the admission directory.
+The [real interruption control](benchmarks/iqa_compete_2026-10-16/timeout-recovery-control.json)
+keeps interrupted samples unqualified; OS-backed controls protect live groups,
+other owners and locked guards. This is benchmark scheduling state, not a metric
+score discrepancy.
