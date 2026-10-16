@@ -790,3 +790,7 @@ nn-wd-cli-smoke binary models ladder:
 
 nn-wd-gates models ladder:
     bash benchmarks/wd_port_gates_2026-10-16.sh '{{models}}' '{{ladder}}'
+
+# AIC probe has its own hard one-hour clock after acquiring the heavy lock.
+nn-wd-aic-probe models python reference site images config previous pairs out:
+    bash benchmarks/wd_aic_probe_2026-10-16.sh '{{models}}' '{{python}}' '{{reference}}' '{{site}}' '{{images}}' '{{config}}' '{{previous}}' '{{pairs}}' '{{out}}'
