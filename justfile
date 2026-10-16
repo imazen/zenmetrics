@@ -964,3 +964,6 @@ nn-pieapp-review-reexport oldmodels models output:
 
 nn-pieapp-review-konjnd-shards pairs output:
     python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_shards.py '{{pairs}}' '{{output}}'
+
+nn-pieapp-review-konjnd-compare baseline directory output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_compare.py '{{baseline}}' '{{directory}}' '{{output}}'
