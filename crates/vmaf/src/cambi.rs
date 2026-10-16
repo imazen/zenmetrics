@@ -5398,6 +5398,9 @@ fn calculate_c_values_row_v3_t(
     }
 }
 
+// Historical regrouping experiment: retained only in tests; production
+// preserves every original per-pixel histogram update.
+#[cfg(test)]
 // Sum a contiguous run's box-window contributions with integer ramps and a
 // constant plateau. This is exactly the same u16 histogram as adding each
 // pixel's clipped window separately; no floating-point sum is regrouped.
@@ -5461,31 +5464,16 @@ fn calculate_c_values(
     let token = v3_token();
 
     let update_row = |histograms: &mut [u16], r: usize, delta: i16| {
-        let source = &image[r * stride..r * stride + width];
-        let valid = &mask[r * stride..r * stride + width];
-        let mut j = 0;
-        while j < width {
-            if valid[j] == 0 {
-                j += 1;
+        for j in 0..width {
+            if mask[r * stride + j] == 0 {
                 continue;
             }
-            let v = source[j];
+            let v = image[r * stride + j];
             let rel = v.wrapping_sub(v_band_base);
             if rel >= v_band_size {
-                j += 1;
                 continue;
             }
             let row = &mut histograms[rel as usize * width..(rel as usize + 1) * width];
-            let start = j;
-            j += 1;
-            while j < width && valid[j] != 0 && source[j] == v {
-                j += 1;
-            }
-            if j - start > 1 {
-                update_histogram_run(row, start, j, pad, delta);
-                continue;
-            }
-            let j = start;
             let c_lo = j.saturating_sub(pad);
             let c_hi = (j + pad).min(width - 1);
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -5549,6 +5537,190 @@ fn calculate_c_values(
     }
     pool::give_u16(histograms_acc);
     Ok(())
+}
+
+// A column region receives precisely the same per-pixel +/-1 updates,
+// in the same vertical and horizontal order, as the original full-width
+// histogram. Source halos contribute only to this region's target columns.
+#[cfg(feature = "parallel")]
+fn calculate_c_values_columns(
+    image: &[u16],
+    mask: &[u16],
+    stride: usize,
+    full_width: usize,
+    height: usize,
+    window_size: usize,
+    num_diffs: usize,
+    tvi_for_diff: &[u16],
+    vlt_luma: u16,
+    v_band_base: u16,
+    v_band_size: u16,
+    diff_weights: &[i32],
+    column_start: usize,
+    column_end: usize,
+) -> Result<Vec<f32>, Error> {
+    let width = column_end - column_start;
+    let pad = window_size / 2;
+    let v_band_offset_val = v_band_base + num_diffs as u16;
+    // Pooled but zeroed on take: accumulated via += so contents must
+    // start at zero.
+    let mut histograms_acc = pool::take_u16(
+        (v_band_size as usize)
+            .checked_mul(width)
+            .ok_or(Error::InvalidInput("dimension overflow"))?,
+    );
+    histograms_acc.fill(0);
+    let mut c_values = vec![0.0f32; width * height];
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let token = v3_token();
+
+    let update_row = |histograms: &mut [u16], r: usize, delta: i16| {
+        for j in column_start.saturating_sub(pad)..(column_end + pad).min(full_width) {
+            if mask[r * stride + j] == 0 {
+                continue;
+            }
+            let v = image[r * stride + j];
+            let rel = v.wrapping_sub(v_band_base);
+            if rel >= v_band_size {
+                continue;
+            }
+            let row = &mut histograms[rel as usize * width..(rel as usize + 1) * width];
+            let c_lo = j.saturating_sub(pad).max(column_start) - column_start;
+            let c_hi = (j + pad).min(column_end - 1) - column_start;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(token) = token {
+                cambi_range_update_v3_t(token, &mut row[c_lo..=c_hi], delta < 0);
+                continue;
+            }
+            for v in row[c_lo..=c_hi].iter_mut() {
+                *v = (*v as i16 + delta) as u16;
+            }
+        }
+    };
+
+    for r in 0..=pad.min(height - 1) {
+        update_row(&mut histograms_acc, r, 1);
+    }
+    for i in 0..height {
+        if i > 0 {
+            if i + pad < height {
+                update_row(&mut histograms_acc, i + pad, 1);
+            }
+            if i > pad {
+                update_row(&mut histograms_acc, i - pad - 1, -1);
+            }
+        }
+        let histograms = &histograms_acc[..];
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(token) = token {
+            calculate_c_values_row_v3_t(
+                token,
+                &mut c_values[i * width..(i + 1) * width],
+                histograms,
+                &image[i * stride + column_start..i * stride + column_end],
+                &mask[i * stride + column_start..i * stride + column_end],
+                width,
+                num_diffs,
+                tvi_for_diff,
+                vlt_luma,
+                diff_weights,
+                v_band_offset_val,
+                v_band_size,
+            );
+            continue;
+        }
+        for col in 0..width {
+            if mask[i * stride + column_start + col] != 0 {
+                c_values[i * width + col] = c_value_pixel(
+                    histograms,
+                    width,
+                    image[i * stride + column_start + col] + num_diffs as u16,
+                    diff_weights,
+                    num_diffs,
+                    tvi_for_diff,
+                    vlt_luma,
+                    v_band_offset_val,
+                    v_band_size,
+                    col,
+                );
+            }
+        }
+    }
+    pool::give_u16(histograms_acc);
+    Ok(c_values)
+}
+
+fn calculate_c_values_scheduled(
+    image: &[u16],
+    mask: &[u16],
+    c_values: &mut [f32],
+    stride: usize,
+    width: usize,
+    height: usize,
+    window_size: usize,
+    num_diffs: usize,
+    tvi_for_diff: &[u16],
+    vlt_luma: u16,
+    v_band_base: u16,
+    v_band_size: u16,
+    diff_weights: &[i32],
+) -> Result<(), Error> {
+    #[cfg(feature = "parallel")]
+    if width * height >= 512 * 512 && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        // Every nonfinal region has a multiple of eight columns, preserving
+        // the original SIMD lane groups and the original scalar tail.
+        let columns = width.div_ceil(rayon::current_num_threads()).div_ceil(8) * 8;
+        let starts: Vec<usize> = (0..width).step_by(columns).collect();
+        let regions = starts
+            .into_par_iter()
+            .map(|start| {
+                let end = (start + columns).min(width);
+                calculate_c_values_columns(
+                    image,
+                    mask,
+                    stride,
+                    width,
+                    height,
+                    window_size,
+                    num_diffs,
+                    tvi_for_diff,
+                    vlt_luma,
+                    v_band_base,
+                    v_band_size,
+                    diff_weights,
+                    start,
+                    end,
+                )
+                .map(|values| (start, end, values))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        for (start, end, values) in regions {
+            for (row, source) in c_values[..width * height]
+                .chunks_exact_mut(width)
+                .zip(values.chunks_exact(end - start))
+            {
+                row[start..end].copy_from_slice(source);
+            }
+        }
+        return Ok(());
+    }
+    calculate_c_values(
+        image,
+        mask,
+        c_values,
+        stride,
+        width,
+        height,
+        window_size,
+        num_diffs,
+        tvi_for_diff,
+        vlt_luma,
+        v_band_base,
+        v_band_size,
+        diff_weights,
+    )
 }
 
 fn spatial_pooling(c_values: &mut [f32], topk: f64, width: usize, height: usize) -> f64 {
@@ -5749,7 +5921,7 @@ fn cambi_impl(
             scaled_height,
             &mut filter_buffer,
         );
-        calculate_c_values(
+        calculate_c_values_scheduled(
             &image,
             &mask,
             &mut c_values,
