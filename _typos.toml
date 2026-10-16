@@ -16,9 +16,22 @@ extend-exclude = [
     "docs/refs/**/*.log",
     "docs/salad_scaleup_results_*.md",
     "docs/GPU_MPS_*.md",
+    # Upstream licence texts are reproduced verbatim.
+    "**/LICENSE-*",
 ]
 
 [default.extend-words]
+# Lucas Theis, co-author of Wasserstein Distortion (Qiu, Wagner, Ballé, Theis).
+Theis = "Theis"
+# PIQE's oracle names: `centerSurDev` (centre/surround deviation).
+Sur = "Sur"
+# NIQE's pristine-model parameters (`mu_pris`, `cov_pris`), named as upstream.
+pris = "pris"
+PRIS = "PRIS"
+# LPIPS/ST-LPIPS upstream module name for the linear calibration layers.
+lins = "lins"
+# NIQE oracle variable `img_nomalized`, quoted with upstream's spelling.
+nomalized = "nomalized"
 dssim = "dssim"
 ssim = "ssim"
 ssimulacra = "ssimulacra"
