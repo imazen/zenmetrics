@@ -419,6 +419,10 @@ Decision order: no GPU → no-op · compute cap < 7.5 → **12** · driver adver
 - **Before claiming any metric is "GPU-only": `ls crates/` first.** `crates/cvvdp` + `crates/iwssim` are
   SIMD CPU ports; never infer architecture from a feature-gated build error (memory:
   `enumerate-repo-before-capability-claims`).
+- **Feature-combination gate**: `just cli-feature-matrix` (CI twin: the `cli-feature-matrix` job in
+  `.github/workflows/ci.yml`) check-builds all 12 zenmetrics-cli shapes (10 `--features` combos +
+  bare + default) and prints a PASS/FAIL table — run it after touching CLI cfg/feature gates; keep
+  the justfile and CI lists in sync.
 
 ## Sweep runner discipline
 
@@ -1599,3 +1603,11 @@ port now refuses either axis above 4096 before allocating its input tensor.
 Export must write both loader metadata and a provenance receipt; the oracle
 TSV must have a header so parity does not drop its first pair. Review commands
 and measurements live in `benchmarks/paq2piq_review_2026-10-16.md`.
+
+### Known Bugs: CAMBI bogus-output checks (2026-10-15)
+
+CAMBI scores only the distorted image; zero is normal for unbanded photos.
+Identity and constant-output checks previously rejected valid zero batches.
+CAMBI now has no identity range and is exempt from the constant-output check;
+empty/nonfinite checks remain active. The sweep-feature binary regression
+`cambi_zero_distribution_is_not_bogus` covers the all-zero batch.

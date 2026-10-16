@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## vmaf
+
+### Changed
+
+- CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
+- Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
+
+### QUEUED BREAKING CHANGES
+
+None.
+
+### Added
+
+- Strided `cambi_from_luma` with libvmaf standalone CAMBI defaults (`5f19fcf7`); existing VMAF-v1 presets retain their settings.
+
 ## zenmetrics-stats
 
 ### Added
@@ -37,6 +52,9 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
+- CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
+- SSIMULACRA1 matches OpenCV’s row-partial 4×4 reduction (`91fd4b2d`); original-author synthetic scores for all four Round 4 metrics are pinned with committed generators (`d0aa705a`).
 - zenmetrics-cli `flip` and `flip-v17` (`4f0dac38`, this commit): LDR-FLIP (NVlabs d3ab02a4, reference viewing conditions). `flip` pools the error map with an f64 sum as NVlabs does now; `flip-v17` keeps flip-evaluator 1.7's row-major f32 sum, which reproduces all 61 AIC-4 `FLIP` values exactly but reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²). 21 ladder maps within 2.98e-8 of the oracle; both means pinned in a unit test.
 - zenmetrics-cli `cw-ssim` (`636f6b2c`, this commit): four-level/eight-orientation complex-wavelet SSIM, valid 7×7 K=0 windows, Gaussian weighting. Independent reference within 1.1e-12. Against the published AIC-4 `CW-SSIM` column: median 2.9e-7, max 1.1e-4, with the variant selected on those same 61 pairs (in-sample); no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed. Zero-energy windows now test `<= 0`, matching the reference.
 - FSIM/VSI review fixes for #86: fixed-factor identities include the downscale (`a2ac8756`), same-name scorer constants removed (`1b0aca18`), `Downscale` non-exhaustive (`cb3fb369`), fixed-factor columns versioned (`468a4679`), oversized factors refused and box areas in u64 (`4d2f52cc`), coverage for non-Auto factors, the MS-SSIM product and all 20 SSIM-pyiqa names (`50048f50`), ties-to-even luma kept after measuring both rules (`cf012a5a`), comment fixes (`a3aa0d8f`).

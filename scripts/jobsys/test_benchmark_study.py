@@ -65,11 +65,12 @@ class StudyTests(unittest.TestCase):
         # 53: +psnr-cb, psnr-cr;
         # 81: +fsim-k2/k3/k4/nodownscale, vsi-k2/k3/k4/nodownscale, 20 ssim-pyiqa family;
         # 82: +flip; 83: +cw-ssim; 84: +flip-v17;
-        # 91: +lpips-alex, lpips-vgg, lpips-squeeze, stlpips-alex, stlpips-vgg, dists, deepdc;
-        # 96: +ckdn, afine, dreamsim, piqe, niqe; 97: +brisque;
-        # 100: +arniqa, maniqa, liqe; 102: +musiq, hyperiqa; 103: +paq2piq;
-        # 104: +wd (five scalar columns in one metric family)).
-        self.assertEqual(len(inv['metrics']), 104)
+        # 88: +cambi, butteraugli-original, ssimulacra1, ws-hv;
+        # 95: +lpips-alex, lpips-vgg, lpips-squeeze, stlpips-alex, stlpips-vgg, dists, deepdc;
+        # 100: +ckdn, afine, dreamsim, piqe, niqe; 101: +brisque;
+        # 104: +arniqa, maniqa, liqe; 106: +musiq, hyperiqa; 107: +paq2piq;
+        # 108: +wd (five scalar columns in one metric family)).
+        self.assertEqual(len(inv['metrics']), 108)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
