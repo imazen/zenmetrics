@@ -1,0 +1,27 @@
+load_seconds=0.758009
+call=0 seconds=35.985059 score=2.19732284056355232 bits=4001941dff57cb53
+call=1 seconds=35.631341 score=2.19732284056355232 bits=4001941dff57cb53
+total_seconds=72.431952
+	Command being timed: "/home/lilith/tmp/zenmetrics-lock-snap-pieapp/target/release/examples/pieapp_cap /home/lilith/tmp/pieapp-port/models-final ort-cuda 3000 3000"
+	User time (seconds): 77.18
+	System time (seconds): 1.05
+	Percent of CPU this job got: 107%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:12.60
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1293308
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 123
+	Minor (reclaiming a frame) page faults: 502801
+	Voluntary context switches: 2907
+	Involuntary context switches: 1652
+	Swaps: 0
+	File system inputs: 596592
+	File system outputs: 272
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
