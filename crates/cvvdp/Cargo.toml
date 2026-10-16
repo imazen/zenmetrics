@@ -81,8 +81,6 @@ image = { workspace = true, features = ["png", "jpeg"] }
 # measured a stale build. `version` stays so publish-rewrite and the
 # version-match failure mode both stay loud.
 fast-ssim2 = { version = "0.9", path = "../../../fast-ssim2/fast-ssim2", features = ["imgref", "rayon"] }
-imgref = { workspace = true }
-bytemuck = { workspace = true }
 
 [[test]]
 name = "it"
