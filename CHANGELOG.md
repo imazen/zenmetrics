@@ -13,6 +13,17 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli
+
+### Added
+
+- Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
+- Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
+
+### QUEUED BREAKING CHANGES
+
+None.
+
 ## vmaf
 
 ### Changed
