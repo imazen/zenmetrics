@@ -1,0 +1,52 @@
+name = "pieapp"
+kind = "full-reference"
+direction = "lower-is-better"
+columns = ["pieapp"]
+paper = "Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018. https://arxiv.org/abs/1806.02067"
+
+[code]
+source = "paper-and-weight-metadata-reconstruction"
+implementation = "Independently written from section 3 / figure 4 and checkpoint tensor names/shapes. Official source files are not read or imported by the reconstruction. Official release CLI is a black-box oracle only."
+provenance = "PROVENANCE.md"
+
+[weights]
+licence_class = "noncommercial"
+terms = "Modified BSD-2 for Non-Commercial Use Only, UC Regents"
+terms_url = "https://github.com/prashnani/PerceptualImageError/blob/master/LICENSE.txt"
+checkpoint = "https://web.ece.ucsb.edu/~ekta/projects/PieAPPv0.1/weights/PieAPPv0.1.pth"
+sha256 = "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0"
+consent = "PieApp::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp"
+bundled = false
+
+[input]
+format = "strided RGB8 sRGB"
+patch_size = 64
+stride = 6
+sampling_source = "Official release README documents deterministic dense stride 6 as the default; paper section 3 instead describes random sampling of 1024 patches."
+min_size = 64
+max_side = 4096
+max_pixels = 9000000
+max_pixels_32bit = 1048576
+
+[execution]
+engines = ["rten", "ort-cuda"]
+batch_bound = 32
+statistics = "Host weighted pooling of graph patch errors/weights; fixed row-major order."
+warm_reference = "Reuses planar input conversion only, not neural features."
+maps = false
+
+[parity]
+tolerance_jnd = 1e-3
+status = "Qualification pending; no parity claim yet."
+
+[oracle_convention]
+entry_point = "Official PieAPP.compute_score(distorted_patches, reference_patches)"
+grid = "Row-major valid 64x64 patches, origins 0,6,... <= side-64; no unaligned far-edge patch."
+selection = "Coordinator selected this explicit stride-6 entry-point convention."
+cli_divergence_case = "1415_128"
+cli_score = 1.6797861082006782
+entry_point_score = 1.6567797660827637
+cli_absolute_difference = 0.0230063421179145
+cli_equivalence = false
+cli_documented_sparse_score = 1.7122649515845207
+cli_explanation = "No documented option has established equivalence. Official source is not read; wrapper probing is restricted to documented options."

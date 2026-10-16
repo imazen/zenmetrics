@@ -44,3 +44,22 @@ no official implementation or feature internals are read. Modern-runtime
 compatibility additionally adapts scalar parameter shape, integral reshape
 sizes, scalar indexing, and contiguous device-copy layout. Small CLI
 outputs agree with the original runtime at printed precision.
+
+## Selected dense sampling contract
+
+The coordinator selected regular stride-six sampling with parity against
+`compute_score`, rather than the demo wrapper. Valid origins are
+`range(0, side - 63, 6)`, without an extra far-edge origin. On `1415_128`,
+the CLI scores `1.6797861082006782`, while the 121-patch entry-point call
+scores `1.6567797660827637` (absolute difference `0.0230063421179145`).
+The documented sparse CLI option gives `1.7122649515845207`; no documented
+option has explained the dense difference. Further wrapper probes are
+restricted to documented options. See [DIVERGENCES](../../../../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
+
+`oracle.py` calls the official method, consuming only its public patch
+errors/weights and pooling those outputs in f64. `oracle_runtime_cpu.py`
+and `oracle_runtime_cuda.py` preserve the independently written compatibility
+adapters used as `sitecustomize.py` in the isolated oracle environments.
+They adapt old Python/Torch runtime conventions; they contain no official
+model source. CUDA disables TF32 and uses deterministic cuDNN. Oracle GPU
+batches are repeated; any mismatch requires a third matching result.
