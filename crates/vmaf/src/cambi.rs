@@ -5398,6 +5398,37 @@ fn calculate_c_values_row_v3_t(
     }
 }
 
+// Sum a contiguous run's box-window contributions with integer ramps and a
+// constant plateau. This is exactly the same u16 histogram as adding each
+// pixel's clipped window separately; no floating-point sum is regrouped.
+fn update_histogram_run(row: &mut [u16], start: usize, end: usize, pad: usize, delta: i16) {
+    let width = row.len();
+    let last = end - 1;
+    let lo = start.saturating_sub(pad);
+    let hi = (last + pad).min(width - 1);
+    let a = start + pad;
+    let b = last.saturating_sub(pad);
+    let plateau_lo = a.min(b).min(width - 1);
+    let plateau_hi = a.max(b).min(width - 1);
+    let update = |v: &mut u16, count: usize| {
+        *v = if delta > 0 {
+            v.wrapping_add(count as u16)
+        } else {
+            v.wrapping_sub(count as u16)
+        };
+    };
+    for (col, v) in row.iter_mut().enumerate().take(plateau_lo).skip(lo) {
+        update(v, col + pad + 1 - start);
+    }
+    let count = (end - start).min(2 * pad + 1);
+    for v in &mut row[plateau_lo..=plateau_hi] {
+        update(v, count);
+    }
+    for (col, v) in row.iter_mut().enumerate().take(hi + 1).skip(plateau_hi + 1) {
+        update(v, end + pad - col);
+    }
+}
+
 #[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn calculate_c_values(
     image: &[u16],
@@ -5430,16 +5461,31 @@ fn calculate_c_values(
     let token = v3_token();
 
     let update_row = |histograms: &mut [u16], r: usize, delta: i16| {
-        for j in 0..width {
-            if mask[r * stride + j] == 0 {
+        let source = &image[r * stride..r * stride + width];
+        let valid = &mask[r * stride..r * stride + width];
+        let mut j = 0;
+        while j < width {
+            if valid[j] == 0 {
+                j += 1;
                 continue;
             }
-            let v = image[r * stride + j];
+            let v = source[j];
             let rel = v.wrapping_sub(v_band_base);
             if rel >= v_band_size {
+                j += 1;
                 continue;
             }
             let row = &mut histograms[rel as usize * width..(rel as usize + 1) * width];
+            let start = j;
+            j += 1;
+            while j < width && valid[j] != 0 && source[j] == v {
+                j += 1;
+            }
+            if j - start > 1 {
+                update_histogram_run(row, start, j, pad, delta);
+                continue;
+            }
+            let j = start;
             let c_lo = j.saturating_sub(pad);
             let c_hi = (j + pad).min(width - 1);
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -5747,6 +5793,37 @@ fn cambi_impl(
 #[cfg(test)]
 mod standalone_tests {
     use super::*;
+
+    #[test]
+    fn histogram_runs_match_ordered_pixel_windows() {
+        for width in [1usize, 2, 3, 8, 16, 31, 32, 64, 65] {
+            for pad in [0, 1, 3, 7, 16, width + 3] {
+                for start in [0, width / 4, width / 2, width - 1] {
+                    for end in [(start + 1).min(width), (start + 2).min(width), width] {
+                        for delta in [-1i16, 1] {
+                            let mut expected: Vec<u16> = (0..width)
+                                .map(|i| if i % 2 == 0 { 0 } else { u16::MAX - 2 })
+                                .collect();
+                            let mut actual = expected.clone();
+                            for pixel in start..end {
+                                let lo = pixel.saturating_sub(pad);
+                                let hi = (pixel + pad).min(width - 1);
+                                for v in &mut expected[lo..=hi] {
+                                    *v = if delta > 0 {
+                                        v.wrapping_add(1)
+                                    } else {
+                                        v.wrapping_sub(1)
+                                    };
+                                }
+                            }
+                            update_histogram_run(&mut actual, start, end, pad, delta);
+                            assert_eq!(actual, expected, "{width} {pad} {start} {end} {delta}");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn original_author_banded_pins() {
