@@ -201,18 +201,41 @@ def add_file(tar: tarfile.TarFile, path: Path, name: str) -> None:
         tar.addfile(member, stream)
 
 
+def registered_sources(path, pin):
+    if path is None or pin is None or digest(path)!=pin:
+        raise ValueError("independently frozen registered source pins required")
+    record=json.loads(Path(path).read_text())
+    if record.get("schema")!="registered-public-program-v1":
+        raise ValueError("registered public source inventory required")
+    files=record["files"]
+    required={"scripts/rev4_featpot/"+name for name in ("subjective_cell.py","subjective_loso.py",
+        "subjective_training_leg.py","v2_lodo_mlp.py","v2_common.py","v2_teacher.py","v2c_wide.py",
+        "v2_human_role.py","v2_production_pack.py")}
+    if not required <= set(files):
+        raise ValueError("registered program import closure missing required owners")
+    for name,value in files.items():
+        p=Path(name)
+        if (p.is_absolute() or ".." in p.parts or p.parts[0] not in ("scripts","benchmarks")
+                or p.suffix not in (".py",".json") or len(value)!=64):
+            raise ValueError("registered program contains an unsafe source entry")
+    return files
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered"), default="p0")
+    p.add_argument("--source-pins", type=Path)
+    p.add_argument("--source-pins-sha256")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile].items():
+    pins = registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
+    for name, expected in pins.items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
@@ -228,6 +251,9 @@ def main() -> None:
         files[name] = path
     files["fit_cell_exec.py"] = args.executor
     files["fit_paths.py"] = args.executor.with_name("fit_paths.py")
+    if args.profile == "registered":
+        files["registered_fit_contract.py"] = args.executor.with_name("registered_fit_contract.py")
+        files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
     if args.profile in ("v2d1", "v2e29", "v40", "e33"):
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
         files["qualified_fit_contract.py"] = args.executor.with_name("qualified_fit_contract.py")
@@ -240,6 +266,10 @@ def main() -> None:
     metadata = json.loads(args.build_meta.read_text())
     if metadata.get("schema") != "fleet-fits-build-v1":
         raise ValueError("build metadata missing or wrong schema")
+    if args.profile == "registered":
+        binding=metadata.get("registered_fit",{})
+        if set(binding)!={"data_sha256","contract_sha256"} or any(len(v)!=64 for v in binding.values()):
+            raise ValueError("registered build metadata requires opaque data and external-contract hashes")
     inventory = {name: digest(path) for name, path in sorted(files.items())}
     metadata = {**metadata, "files": inventory}
     meta_bytes = json.dumps(metadata, sort_keys=True, indent=2).encode() + b"\n"

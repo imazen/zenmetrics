@@ -41,3 +41,11 @@ per admitted host, supporting stages and explicit watchdog reservations. Host
 identity is included in each task namespace. Missing caps or budget produce
 UNREADY. Measurements, production quotas, placement admission and execution
 receipts remain separate launch prerequisites; the generator never launches.
+
+Registered source-family cells use the existing FitCell executor, archive,
+ledger, grid coverage and decoded-checkpoint qualification owner. The
+`registered` program profile accepts separately frozen public source pins.
+Its image metadata carries only opaque data/contract hashes. Private cell
+contracts stay in the data archive; an authorized harvester supplies the same
+contract through `ZEN_REGISTERED_FIT_CONTRACT`. Missing watchdogs, changed
+contracts and incomplete decoded checkpoint admission refuse installation.
