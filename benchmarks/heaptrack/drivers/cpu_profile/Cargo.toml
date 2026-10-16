@@ -78,8 +78,6 @@ rgb          = "0.8"
 # `&[[u8; 3]]` / `&[RGB<u8>]` — mirrors the adapter so the driver's heap
 # accounting reflects the production allocation pattern.
 bytemuck     = "1"
-# 2026-09-24 additions — the new metrics under test.
-nlpd         = { path = "../../../../crates/nlpd" }
 # Optional: only so `metrics-parallel` can name their `parallel` features.
 fsim         = { workspace = true, optional = true }
 haarpsi      = { workspace = true, optional = true }
