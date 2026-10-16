@@ -36,7 +36,7 @@ engines = ["rten", "ort-cuda"]
 batch_bound = 32
 batch_unit = "reference/distorted patch pairs"
 statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row-major order."
-warm_reference = "Reuses planar input conversion only, not neural features."
+warm_reference = "Caches planar input conversion only; reuses_reference_work() is false because neural features are recomputed."
 maps = false
 
 [parity]
