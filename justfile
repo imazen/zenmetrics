@@ -907,3 +907,9 @@ aic-perf-big-assembly binary output:
 
 aic-perf-big-oracles output:
     bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/oracles.sh)" -- '{{output}}'
+
+aic-perf-big-interleave cambi_base butter_base candidate output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave.sh)" -- '{{cambi_base}}' '{{butter_base}}' '{{candidate}}' '{{output}}'
+
+aic-perf-big-interleave-step base candidate output width height threads:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave_step.sh)" -- '{{base}}' '{{candidate}}' '{{output}}' '{{width}}' '{{height}}' '{{threads}}'
