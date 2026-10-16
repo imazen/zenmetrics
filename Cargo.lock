@@ -1447,10 +1447,8 @@ name = "cvvdp"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.31-beta.1",
- "bytemuck",
  "fast-ssim2 0.9.0",
  "image",
- "imgref",
  "magetypes 0.9.31-beta.1",
  "rayon",
  "serde_json",
