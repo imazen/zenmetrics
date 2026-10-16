@@ -41,3 +41,9 @@ The nonzero banded CAMBI profile (`baseline-banded-cambi.profile.txt`) assigns
 62.36% of samples to histogram row updates and 16.31% to c-value evaluation.
 The first optimization therefore targets integer histogram updates, while
 preserving all floating-point c-value calculations and pooling order.
+
+The first histogram-run candidate passes the pinned CAMBI scores, stride and
+map/score tests and a direct ordered-pixel-window comparison across clipped
+runs, pads and wrapping increments/decrements. `cambi-candidate1.log` retains
+the initial candidate scout; its score bits match both banded baselines.
+These initial observations are not the final interleaved A/B result.
