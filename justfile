@@ -920,3 +920,13 @@ fit-pack-bounded-smoke source bin_dir build_meta pins contract out:
 
 lan-fit-smoke-launch host run role image:
     bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+
+# IQA competition harness: every heavy stage runs under the caller's resource lock.
+iqa-compete-build:
+    just snap-cargo @ build --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete
+
+iqa-compete-prepare binary reference distorted output:
+    '{{binary}}' prepare '{{reference}}' '{{distorted}}' '{{output}}'
+
+iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --threads '{{threads}}'

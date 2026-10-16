@@ -1204,10 +1204,12 @@ dependencies = [
  "vsi",
  "zenbench 0.1.10 (git+https://github.com/imazen/zenbench?rev=ac675d3)",
  "zenforks-cubecl",
+ "zenmetrics-abstractions",
  "zenmetrics-api",
  "zenmetrics-cli",
  "zenmetrics-corpus",
  "zenpixels",
+ "zenresize",
  "zensim 0.3.0",
 ]
 
