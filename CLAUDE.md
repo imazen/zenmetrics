@@ -1552,6 +1552,14 @@ maximum map delta 0.0. Attempt 2 of the same commit passed and deployed, so
 the browser or the native oracle scalar varies between runs (not measured
 which); the maps matched exactly both times.
 
+Recurred again 2026-10-16 on runs 38756697855 (`48e768ed`) and 38884395886
+(`71560bd8`, attempt 1) with the SAME two values (browser 91.21909967783705,
+native 91.21909967392351, map delta 0.0). Identical values across commits and
+days point to two deterministic paths rather than run-to-run noise; one
+untested hypothesis is that the native oracle's runtime SIMD tier follows the
+CI runner's CPU. Next step: have `browser_oracle` record the dispatched tier
+and the runner CPU model, then compare a failing and a passing run.
+
 ### Browser native map rendering (2026-10-14)
 
 The viewer now consumes native cell geometry for FSIM/FSIMc, HaarPSI, VSI,
