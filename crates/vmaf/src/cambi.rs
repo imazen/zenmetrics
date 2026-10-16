@@ -5405,40 +5405,6 @@ fn calculate_c_values_row_v3_t(
     }
 }
 
-// Historical regrouping experiment: retained only in tests; production
-// preserves every original per-pixel histogram update.
-#[cfg(test)]
-// Sum a contiguous run's box-window contributions with integer ramps and a
-// constant plateau. This is exactly the same u16 histogram as adding each
-// pixel's clipped window separately; no floating-point sum is regrouped.
-fn update_histogram_run(row: &mut [u16], start: usize, end: usize, pad: usize, delta: i16) {
-    let width = row.len();
-    let last = end - 1;
-    let lo = start.saturating_sub(pad);
-    let hi = (last + pad).min(width - 1);
-    let a = start + pad;
-    let b = last.saturating_sub(pad);
-    let plateau_lo = a.min(b).min(width - 1);
-    let plateau_hi = a.max(b).min(width - 1);
-    let update = |v: &mut u16, count: usize| {
-        *v = if delta > 0 {
-            v.wrapping_add(count as u16)
-        } else {
-            v.wrapping_sub(count as u16)
-        };
-    };
-    for (col, v) in row.iter_mut().enumerate().take(plateau_lo).skip(lo) {
-        update(v, col + pad + 1 - start);
-    }
-    let count = (end - start).min(2 * pad + 1);
-    for v in &mut row[plateau_lo..=plateau_hi] {
-        update(v, count);
-    }
-    for (col, v) in row.iter_mut().enumerate().take(hi + 1).skip(plateau_hi + 1) {
-        update(v, end + pad - col);
-    }
-}
-
 #[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn calculate_c_values(
     image: &[u16],
@@ -5550,6 +5516,7 @@ fn calculate_c_values(
 // in the same vertical and horizontal order, as the original full-width
 // histogram. Source halos contribute only to this region's target columns.
 #[cfg(feature = "parallel")]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
 fn calculate_c_values_columns(
     image: &[u16],
     mask: &[u16],
@@ -5565,7 +5532,8 @@ fn calculate_c_values_columns(
     diff_weights: &[i32],
     column_start: usize,
     column_end: usize,
-) -> Result<Vec<f32>, Error> {
+    c_rows: &mut [&mut [f32]],
+) -> Result<(), Error> {
     let width = column_end - column_start;
     let pad = window_size / 2;
     let v_band_offset_val = v_band_base + num_diffs as u16;
@@ -5577,7 +5545,6 @@ fn calculate_c_values_columns(
             .ok_or(Error::InvalidInput("dimension overflow"))?,
     );
     histograms_acc.fill(0);
-    let mut c_values = vec![0.0f32; width * height];
 
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     let token = v3_token();
@@ -5618,12 +5585,13 @@ fn calculate_c_values_columns(
                 update_row(&mut histograms_acc, i - pad - 1, -1);
             }
         }
+        let c_row = &mut *c_rows[i];
         let histograms = &histograms_acc[..];
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(token) = token {
             calculate_c_values_row_v3_t(
                 token,
-                &mut c_values[i * width..(i + 1) * width],
+                c_row,
                 histograms,
                 &image[i * stride + column_start..i * stride + column_end],
                 &mask[i * stride + column_start..i * stride + column_end],
@@ -5637,9 +5605,10 @@ fn calculate_c_values_columns(
             );
             continue;
         }
+        c_row.fill(0.0);
         for col in 0..width {
             if mask[i * stride + column_start + col] != 0 {
-                c_values[i * width + col] = c_value_pixel(
+                c_row[col] = c_value_pixel(
                     histograms,
                     width,
                     image[i * stride + column_start + col] + num_diffs as u16,
@@ -5655,7 +5624,7 @@ fn calculate_c_values_columns(
         }
     }
     pool::give_u16(histograms_acc);
-    Ok(c_values)
+    Ok(())
 }
 
 #[cfg(all(test, feature = "parallel"))]
@@ -5693,10 +5662,32 @@ fn calculate_c_values_scheduled(
         // of each such region use c_value_pixel because the vector loop
         // requires col + 8 < width; the row parity control covers both paths.
         let columns = width.div_ceil(rayon::current_num_threads()).div_ceil(8) * 8;
-        let starts: Vec<usize> = (0..width).step_by(columns).collect();
-        let regions = starts
+        // Borrow disjoint segments of each output row. Regions own only
+        // row descriptors, avoiding a second full c-value plane and copy.
+        let mut regions: Vec<Vec<&mut [f32]>> = Vec::new();
+        regions
+            .try_reserve_exact(width.div_ceil(columns))
+            .map_err(|_| Error::InvalidInput("CAMBI region allocation failed"))?;
+        for _ in 0..width.div_ceil(columns) {
+            let mut rows = Vec::new();
+            rows.try_reserve_exact(height)
+                .map_err(|_| Error::InvalidInput("CAMBI row allocation failed"))?;
+            regions.push(rows);
+        }
+        for row in c_values[..width * height].chunks_exact_mut(width) {
+            let mut remaining = row;
+            for rows in &mut regions {
+                let count = columns.min(remaining.len());
+                let (region, rest) = remaining.split_at_mut(count);
+                rows.push(region);
+                remaining = rest;
+            }
+        }
+        regions
             .into_par_iter()
-            .map(|start| {
+            .enumerate()
+            .try_for_each(|(index, mut rows)| {
+                let start = index * columns;
                 let end = (start + columns).min(width);
                 calculate_c_values_columns(
                     image,
@@ -5713,18 +5704,9 @@ fn calculate_c_values_scheduled(
                     diff_weights,
                     start,
                     end,
+                    &mut rows,
                 )
-                .map(|values| (start, end, values))
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        for (start, end, values) in regions {
-            for (row, source) in c_values[..width * height]
-                .chunks_exact_mut(width)
-                .zip(values.chunks_exact(end - start))
-            {
-                row[start..end].copy_from_slice(source);
-            }
-        }
+            })?;
         return Ok(());
     }
     calculate_c_values(
@@ -6130,37 +6112,6 @@ mod standalone_tests {
                             b.to_bits(),
                             "visibility={visibility} window={window} threads={threads} pixel={index}"
                         );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn histogram_runs_match_ordered_pixel_windows() {
-        for width in [1usize, 2, 3, 8, 16, 31, 32, 64, 65] {
-            for pad in [0, 1, 3, 7, 16, width + 3] {
-                for start in [0, width / 4, width / 2, width - 1] {
-                    for end in [(start + 1).min(width), (start + 2).min(width), width] {
-                        for delta in [-1i16, 1] {
-                            let mut expected: Vec<u16> = (0..width)
-                                .map(|i| if i % 2 == 0 { 0 } else { u16::MAX - 2 })
-                                .collect();
-                            let mut actual = expected.clone();
-                            for pixel in start..end {
-                                let lo = pixel.saturating_sub(pad);
-                                let hi = (pixel + pad).min(width - 1);
-                                for v in &mut expected[lo..=hi] {
-                                    *v = if delta > 0 {
-                                        v.wrapping_add(1)
-                                    } else {
-                                        v.wrapping_sub(1)
-                                    };
-                                }
-                            }
-                            update_histogram_run(&mut actual, start, end, pad, delta);
-                            assert_eq!(actual, expected, "{width} {pad} {start} {end} {delta}");
-                        }
                     }
                 }
             }

@@ -302,6 +302,25 @@ fn malta_accumulate(dif: &[f32], w: usize, h: usize, paths: &[&[(i8, i8)]], out:
     }
 }
 
+// Interior Malta traversal reserves a four-pixel halo on every side.
+const _: () = {
+    let banks = [MALTA_LOW, MALTA_HIGH];
+    let mut bank = 0;
+    while bank < banks.len() {
+        let mut path = 0;
+        while path < banks[bank].len() {
+            let mut step = 0;
+            while step < banks[bank][path].len() {
+                let (x, y) = banks[bank][path][step];
+                assert!(x >= -4 && x <= 4 && y >= -4 && y <= 4);
+                step += 1;
+            }
+            path += 1;
+        }
+        bank += 1;
+    }
+};
+
 #[cfg(test)]
 fn malta_accumulate_ordered(
     dif: &[f32],
