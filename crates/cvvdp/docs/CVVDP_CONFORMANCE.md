@@ -101,7 +101,7 @@ requires ≥ 120).
 
 1. `cargo run -p cvvdp-conformance --bin emit_situations -- <dir>`
    writes every situation's `ref.png` + `dist.png` (lossless RGB8) and
-   a `manifest.json` cross-producting situations × displays.
+   a `manifest.json` that is the cross product of situations × displays.
 2. `scripts/cvvdp_goldens/build_conformance_goldens.py <dir>` loads
    those exact PNGs and scores each `(situation, display)` cell with
    pycvvdp v0.5.4 — `metric.predict(dist, ref, dim_order="HWC")` at
