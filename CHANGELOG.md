@@ -53,6 +53,8 @@ None.
   is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
   and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
   validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
+  Review correction `94daa378` uses signed weight-head outputs established
+  by opaque parameter controls (score revision 3); requalification is pending.
 
 - zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
 

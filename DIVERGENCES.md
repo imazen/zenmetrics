@@ -640,8 +640,14 @@ retains values at their printed precision; the earlier original-runtime
 establishes equivalence between the demo's sub-image wrapper and the selected
 full-image stride-six entry-point grid.
 
+**RESOLVED — weight-head reconstruction:** the initial `abs(weight)+1e-6`
+hypothesis matched the positive observed weights, but controlled public
+bias/projection probes return negative values for negative raw heads. Revision
+3 uses signed `weight+1e-6`; original checkpoint files and oracle goldens stay
+unchanged. [Controlled measurements and provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md#head-convention-evidence).
+
 Input is strided RGB8; the exported graph converts to BGR code values. Neural
-patch errors and positive weights are pooled in fixed row-major order with
+patch errors and finite signed weights are pooled in fixed row-major order with
 f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references
 cache planar conversion only. Both dimensions must be 64–4096 pixels, with
 at most 9,000,000 pixels total (1,048,576 on 32-bit).

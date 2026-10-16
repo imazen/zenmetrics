@@ -49,8 +49,8 @@ outputs agree with the original runtime at printed precision.
 
 ## Head-convention evidence
 
-The paper does not specify the division by 100 or the `abs(weight) + 1e-6`
-transform. Those expressions were initially hypotheses in `probe.py`, rather
+The paper does not specify division by 100 or the weight-head epsilon.
+The initial reconstruction also hypothesized an absolute value. Those expressions were initially hypotheses in `probe.py`, rather
 than conclusions drawn from the paper. The tensor metadata supplies the
 learned scalar affine parameters, but does not establish either expression.
 
@@ -71,8 +71,25 @@ Adding `1e-6` likewise matches every public weight exactly; omitting it gives
 maximum error 1.9073486328125e-6. For the identity patch, raw weight
 7.4552412033081055 becomes the public 7.455242156982422 after the addition.
 All these raw weights are positive, so this panel alone cannot distinguish
-signed weights from absolute weights. A separate sign probe addresses that
-ambiguity using only the independent network and opaque public outputs.
+signed weights from absolute weights. Constrained and joint-input searches also kept weights positive, so they
+could not establish an absolute-value operation.
+
+The [14 public bias/projection controls](../../../../benchmarks/pieapp_review_2026-10-16/weight-identify.json)
+resolve the ambiguity. Using only public `load_state_dict`, the oracle gets
+in-memory parameter copies that force the final raw weight to each of
+−2, −1, −0.25, 0, 0.25, 1 and 2. Bias and projection are controlled separately.
+Every public output equals signed `weight + 1e-6` exactly, on both evaluations.
+For raw −2, the output is −1.9999990463256836; `abs(weight)+1e-6` would produce
++2.0000009536743164. The original checkpoint file is hash-checked before and
+after and is never modified. No official source or internal features are read.
+
+This falsified the initial `abs` hypothesis. Revision 3 removes that operator
+and permits finite signed weights in host pooling (`94daa378`); zero total
+weight is an explicit undefined-pool error. The independently reconstructed
+network is checked against these pinned public controls before export.
+The [falsified-hypothesis log](../../../../benchmarks/pieapp_review_2026-10-16/falsified-abs-control.log)
+and unsuccessful input-search receipts are retained. No production checkpoint
+parameters are changed by this correction.
 
 ## Selected dense sampling contract
 

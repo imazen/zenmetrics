@@ -559,6 +559,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — PieAPP weight-head reconstruction:** the initial absolute-value
+  hypothesis matched the positive observed weights, but opaque bias/projection
+  controls identify signed `weight+1e-6`. Score revision 3 removes the
+  unsupported absolute value and accepts finite signed weights in pooling.
+  Native requalification is pending; original goldens and JND gates are unchanged.
+  Evidence: `benchmarks/pieapp_review_2026-10-16/weight-identify.json`.
+
+
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
   A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
   The WD trunk now disables its CPU arena and consumes output tensors individually.
