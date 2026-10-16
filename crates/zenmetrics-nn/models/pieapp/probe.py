@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Historical input/layout hypothesis probe; not the canonical parity oracle."""
+"""Historical revision-2 input/layout probe; not the canonical parity oracle.
+
+Preserves the initial absolute-weight hypothesis, since falsified by public
+operator controls. Current qualification uses network.forward instead.
+"""
 import argparse
 import importlib.util
 from pathlib import Path

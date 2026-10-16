@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Rank explicit sampling rules against a measured release CLI scalar.
+"""Historical revision-2 sampling hypothesis search, not canonical parity.
 
-The paper/weight reconstruction is already checked against public reference
-patch outputs. Only discrete sample locations are varied; no values are fit.
+This preserves the initial absolute-weight hypothesis, since falsified by
+public operator controls. Use network.forward and the revision-3 qualification
+workflow for current scores; do not treat this historical search as evidence
+for the signed-weight implementation.
 """
 import argparse
 import importlib.util
