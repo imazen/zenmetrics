@@ -13,4 +13,18 @@ CUDA cap start load average: `6.84 101.42 174.97` (1/5/15 minutes).
 RTen cap start load average: `3.56 79.40 161.57`.
 These are cap/resource observations, not quiet-machine throughput claims.
 
-Full review run and remaining measurements are in progress.
+CUDA completed both evaluations in 72.60 seconds process wall time, with
+maximum RSS 1,293,308 KiB and identical score bits.
+
+RTen completed its first evaluation in 845.578715 seconds. The coordinator
+terminated the process during the second evaluation at 1607.74 seconds
+process wall, with maximum observed RSS 744,300 KiB. The first score is
+retained in `cap-rten-interrupted.log`; complete two-evaluation time and repeat
+identity are unmeasured. This is a shared i265 observation under load. It is
+not a lower bound of 1607 seconds for one evaluation: the log contains a
+completed first call. The cap will not be rerun.
+
+The combined initial workflow exited 143 after the coordinator's stop:
+`run-heavy: done rc=143 1686s | peak-RSS 1.23GiB | min-avail 18567MiB | peak-load 24.44`.
+Remaining checks run with separate lock acquisitions, bounded below twenty
+minutes each. Full review validation is still in progress.

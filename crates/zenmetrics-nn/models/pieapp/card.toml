@@ -39,6 +39,17 @@ statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row
 warm_reference = "Caches planar input conversion only; reuses_reference_work() is false because neural features are recomputed."
 maps = false
 
+cap_geometry = [3000, 3000]
+cap_host = "i265; shared box under load"
+cap_ort_cuda_process_wall_seconds = 72.60
+cap_ort_cuda_max_rss_kib = 1293308
+cap_ort_cuda_repeat_bit_identical = true
+cap_rten_first_evaluation_seconds = 845.578715
+cap_rten_interrupted_process_wall_seconds = 1607.74
+cap_rten_max_rss_kib_before_interruption = 744300
+cap_rten_status = "First evaluation completed; coordinator stopped the process during its second evaluation. Repeat identity and complete two-evaluation elapsed time are unmeasured. Do not rerun."
+cap_receipts = "../../../../benchmarks/pieapp_review_2026-10-16/"
+
 [parity]
 tolerance_jnd = 1e-3
 identical_patch_oracle = -3.72529029846191406e-9
