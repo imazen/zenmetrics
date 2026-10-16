@@ -2,6 +2,20 @@
 extend-exclude = [
     "CHANGELOG.md", "Cargo.lock", "docs/public-api/*.txt",
     "benchmarks/", "*.min.js", "ci/",
+    # Binary golden dumps — test data, not text to spellcheck.
+    "crates/hdrvdp/tests/data/**",
+    # Vendored upstream trees (butteraugli port, pypng, margarine/vendor/...).
+    "**/vendor/**",
+    # Upstream MATLAB reference copies — the authors' own spelling is preserved.
+    "crates/haarpsi/validation/**",
+    # License/provenance inventories and machine inventories: git hashes,
+    # upstream file paths, distro package names — not prose.
+    "docs/pyiqa_licenses_*/**",
+    "ubuntu-node/**",
+    # Captured logs and result tables with embedded git hashes.
+    "docs/refs/**/*.log",
+    "docs/salad_scaleup_results_*.md",
+    "docs/GPU_MPS_*.md",
 ]
 
 [default.extend-words]
@@ -20,3 +34,43 @@ ghcr = "ghcr"
 eotf = "eotf"
 oetf = "oetf"
 mibc = "mibc"
+# Metric-family and pipeline abbreviations the dictionary does not know:
+jod = "jod"          # JOD ("Just Objectionable Difference") metric family
+aimd = "aimd"        # AIMD congestion control (additive increase / multiplicative decrease)
+alls = "alls"        # scripts/picker/metric_calib.py accumulator series (allz/alls)
+alph = "alph"        # constant-time-eq test vector (zenfleet-dash)
+arange = "arange"    # numpy-style "a range" local
+arre = "arre"        # SIMD even-array local (arre/arro = array even/odd)
+arro = "arro"
+ba = "ba"            # blue-channel local (ba/bb/bg brgb-style) + git-hash/golden fragments
+caf = "caf"          # git short-hash fragment (e.g. 0caf36d5) in status docs
+bre = "bre"          # FFT complex-real locals (bre/tre/wre/ure/bim...)
+cannt = "cannt"      # verbatim user quote in docs/CLEAN_PICKER_PROGRAM.md
+chage = "chage"      # Linux chage(1) command (cloud_init password policy)
+cll = "cll"          # CLL / MaxCLL (content light level)
+Damon = "Damon"      # MAD paper co-author (Damon M. Chandler) — author name
+DELET = "DELET"      # inflected caps-verb DELETEs/DELETEd (S3/REST style)
+dout = "dout"        # d-out local (msssim)
+fo = "fo"            # feature-object local (jobexec) + fsim fo frequency symbol
+GAM = "GAM"          # generalized additive model surrogate
+hel = "hel"          # Hetzner hel1 (Helsinki) datacenter id
+interm = "interm"    # dump_vdp3_interm.py intermediate-dump script name
+iy = "iy"            # image-y coordinate local
+kend = "kend"        # k-end FFT local (hdrvdp fft64)
+longe = "longe"      # long-edge local (knobablation sources)
+lso = "lso"          # haarpsi local
+metrix = "metrix"    # upstream metrix_mux MATLAB package path (sattarab/image-quality-tools)
+mis = "mis"          # correct mis- prefix ("mis-ranked")
+nd = "nd"            # "2nd"-style suffix tokenisation
+numer = "numer"      # numerator local (NEON vif)
+ot = "ot"            # out-transpose local (mdctpsnr)
+paeth = "paeth"      # Paeth PNG filter (Alan Paeth — author eponym)
+pn = "pn"            # create_pn_jnd helper prefix (hdrvdp)
+recal = "recal"      # recalibration shorthand (cvvdp-gpu tests)
+rror = "rror"        # fleet-entrypoint regex character class [Ee]rror
+strat = "strat"      # strategy shorthand (picker configs)
+thr = "thr"          # threshold shorthand
+tre = "tre"          # FFT t-real local (vsi fft)
+unparseable = "unparseable"  # accepted spelling variant
+ure = "ure"          # FFT u-real local (vsi fft)
+wre = "wre"          # FFT w-real local (vsi fft)
