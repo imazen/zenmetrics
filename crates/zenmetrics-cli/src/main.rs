@@ -1608,6 +1608,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::WadiqamFrTid
         | MetricKind::WadiqamNrLive
         | MetricKind::WadiqamNrTid => Some((-1.0, 150.0, 0.0)),
+        // Ladder scores 0.93–3.35; measured KonJND median 0.52 native units.
+        MetricKind::Pieapp => Some((-0.5, 50.0, 0.0)), // Learned error head is unbounded.
         // CKDN is sigmoid quality; identical pairs are image-dependent.
         // Zero is only a default-failure sentinel here, as for NR heads.
         MetricKind::Ckdn => Some((-0.001, 1.001, 0.0)),

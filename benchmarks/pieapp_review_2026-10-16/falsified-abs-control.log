@@ -1,0 +1,9 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23882MiB :: timeout --kill-after=20s 1150s just nn-pieapp-review-weight-control /home/lilith/tmp/pieapp-oracle/venv-gpu/bin/python /home/lilith/tmp/pieapp-oracle/upstream /home/lilith/tmp/pieapp-oracle/upstream/weights/PieAPPv0.1.pth /home/lilith/tmp/pieapp-port/review13b/weight-control.json
+/home/lilith/tmp/pieapp-oracle/venv-gpu/bin/python crates/zenmetrics-nn/models/pieapp/review_weight_control.py --upstream '/home/lilith/tmp/pieapp-oracle/upstream' --checkpoint '/home/lilith/tmp/pieapp-oracle/upstream/weights/PieAPPv0.1.pth' --out '/home/lilith/tmp/pieapp-port/review13b/weight-control.json'
+Traceback (most recent call last):
+  File "/home/lilith/work/zen/zenmetrics--aicvariants/crates/zenmetrics-nn/models/pieapp/review_weight_control.py", line 36, in <module>
+    assert got==predicted,(value,got,predicted)
+           ^^^^^^^^^^^^^^
+AssertionError: (-2.0, -1.9999990463256836, 2.0000009536743164)
+error: recipe `nn-pieapp-review-weight-control` failed on line 957 with exit code 1
+run-heavy: done rc=1 2s | peak-RSS 1.40GiB | min-avail 23882MiB | peak-load 4.36

@@ -1,0 +1,76 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23936MiB :: timeout --kill-after=20s 1150s just nn-pieapp-review-step cuda /home/lilith/tmp/pieapp-port/models-review /home/lilith/tmp/nn-phase0/ladder /home/lilith/tmp/pieapp-port/review13b-v3/shards /home/lilith/tmp/pieapp-port/review13b-v3
+bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- 'cuda' '/home/lilith/tmp/pieapp-port/models-review' '/home/lilith/tmp/nn-phase0/ladder' '/home/lilith/tmp/pieapp-port/review13b-v3/shards' '/home/lilith/tmp/pieapp-port/review13b-v3'
+ZENMETRICS_NN_MODEL_DIR="$(realpath '/home/lilith/tmp/pieapp-port/models-review')" ZENMETRICS_NN_LADDER="$(realpath '/home/lilith/tmp/nn-phase0/ladder')" ZENMETRICS_NN_ENGINE='ort-cuda' ZENMETRICS_NN_MODELS='pieapp' /home/lilith/.local/bin/just snap-cargo @ test --release -p zenmetrics-nn --features 'model-tests,ort' --test parity -- --nocapture --test-threads=1
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree 226866de8122 (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked test --release -p zenmetrics-nn --features model-tests,ort --test parity -- --nocapture --test-threads=1
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.11s
+     Running tests/parity.rs (/home/lilith/tmp/zenmetrics-lock-snap-pieapp/target/release/deps/parity-97f535eb53637e77)
+
+running 2 tests
+test matches_upstream ... pieapp 1415 1024: first=1.53729758053192556e0 repeated=1.53729758053192556e0
+pieapp 1415 1024: got 1.537297581 want 1.537297566 |d| 1.429e-8
+pieapp 1415 1024x684: first=1.48804567692613254e0 repeated=1.48804567692613254e0
+pieapp 1415 1024x684: got 1.488045677 want 1.488045669 |d| 7.437e-9
+pieapp 1415 128: first=1.65677976490495715e0 repeated=1.65677976490495715e0
+pieapp 1415 128: got 1.656779765 want 1.656779904 |d| 1.395e-7
+pieapp 1415 2048: first=1.56117747241712368e0 repeated=1.56117747241712368e0
+pieapp 1415 2048: got 1.561177472 want 1.561177461 |d| 1.139e-8
+pieapp 1415 256: first=1.67280883512007406e0 repeated=1.67280883512007406e0
+pieapp 1415 256: got 1.672808835 want 1.672808769 |d| 6.661e-8
+pieapp 1415 333x448: first=1.56892199364041973e0 repeated=1.56892199364041973e0
+pieapp 1415 333x448: got 1.568921994 want 1.568921978 |d| 1.579e-8
+pieapp 1415 448x333: first=1.53851054519682751e0 repeated=1.53851054519682751e0
+pieapp 1415 448x333: got 1.538510545 want 1.538510513 |d| 3.181e-8
+pieapp 1415 512: first=1.65565425496877272e0 repeated=1.65565425496877272e0
+pieapp 1415 512: got 1.655654255 want 1.655654258 |d| 2.815e-9
+pieapp 1415 64: first=2.57780671119689941e0 repeated=2.57780671119689941e0
+pieapp 1415 64: got 2.577806711 want 2.577806711 |d| 0.000e0
+pieapp 1415 684x1024: first=1.40624639968649801e0 repeated=1.40624639968649801e0
+pieapp 1415 684x1024: got 1.406246400 want 1.406246399 |d| 7.889e-10
+pieapp 2207 1024: first=3.12216646064774173e0 repeated=3.12216646064774173e0
+pieapp 2207 1024: got 3.122166461 want 3.122166483 |d| 2.193e-8
+pieapp 2207 128: first=2.12077570886669742e0 repeated=2.12077570886669742e0
+pieapp 2207 128: got 2.120775709 want 2.120775703 |d| 5.623e-9
+pieapp 2207 2048: first=2.48289264464714243e0 repeated=2.48289264464714243e0
+pieapp 2207 2048: got 2.482892645 want 2.482892661 |d| 1.627e-8
+pieapp 2207 240x320: first=3.26521559039582288e0 repeated=3.26521559039582288e0
+pieapp 2207 240x320: got 3.265215590 want 3.265215605 |d| 1.478e-8
+pieapp 2207 256: first=2.49829490630641349e0 repeated=2.49829490630641349e0
+pieapp 2207 256: got 2.498294906 want 2.498294978 |d| 7.164e-8
+pieapp 2207 320x240: first=3.34995925126195671e0 repeated=3.34995925126195671e0
+pieapp 2207 320x240: got 3.349959251 want 3.349959341 |d| 8.941e-8
+pieapp 2207 512: first=3.01530435846938794e0 repeated=3.01530435846938794e0
+pieapp 2207 512: got 3.015304358 want 3.015304346 |d| 1.288e-8
+pieapp 2207 64: first=1.81555628776550293e0 repeated=1.81555628776550293e0
+pieapp 2207 64: got 1.815556288 want 1.815556288 |d| 0.000e0
+pieapp 2406 1024: first=1.65357368813080385e0 repeated=1.65357368813080385e0
+pieapp 2406 1024: got 1.653573688 want 1.653573692 |d| 3.592e-9
+pieapp 2406 128: first=2.23019805066551235e0 repeated=2.23019805066551235e0
+pieapp 2406 128: got 2.230198051 want 2.230198089 |d| 3.851e-8
+pieapp 2406 2048: first=9.27181828133350150e-1 repeated=9.27181828133350150e-1
+pieapp 2406 2048: got 0.927181828 want 0.927181877 |d| 4.896e-8
+pieapp 2406 256: first=2.82307492591183529e0 repeated=2.82307492591183529e0
+pieapp 2406 256: got 2.823074926 want 2.823074977 |d| 5.106e-8
+pieapp 2406 512: first=2.42054759803690578e0 repeated=2.42054759803690578e0
+pieapp 2406 512: got 2.420547598 want 2.420547623 |d| 2.448e-8
+pieapp 2406 64: first=1.96205103397369385e0 repeated=1.96205103397369385e0
+pieapp 2406 64: got 1.962051034 want 1.962051034 |d| 0.000e0
+pieapp: 24 pairs, worst |d| 1.395e-7 = 2.69e-7 JND
+ok
+test warm_reference_equals_cold ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 142.50s
+
+run-heavy: done rc=0 144s | peak-RSS 1.46GiB | min-avail 22940MiB | peak-load 2.62

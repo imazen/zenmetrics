@@ -31,6 +31,7 @@ We do not call everything a "port". Terms used below:
 
 | `--metric` | crate | metric paper | reference impl (validation oracle) | provenance | input convention | output |
 |---|---|---|---|---|---|---|
+| `pieapp` | in-tree `zenmetrics-nn` | Prashnani et al., [CVPR 2018](https://arxiv.org/abs/1806.02067) | Official v0.1 public `compute_score`, release `0513613d1f575136ea52418e35f2cebc5a49f783` | Independent paper/checkpoint-metadata reconstruction, black-box qualification | Valid 64-square BGR code-value patches, explicit stride-six grid | Learned error; [card and provenance](../crates/zenmetrics-nn/models/pieapp/PROVENANCE.md); demo CLI sampling differs |
 | `wd` | in-tree `zenmetrics-nn` | Qiu, Wagner, Ballé, Theis, [Wasserstein Distortion, CISS 2024](https://arxiv.org/abs/2310.03629) | [Cool-Chic WassersteinLoss](https://github.com/Orange-OpenSource/Cool-Chic/blob/main/coolchic/training/metrics/wasserstein.py), SHA-256 ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43 | reference reimplementation; RTen/CUDA VGG16 trunk, Rust statistics | raw sRGB8 / 255, four pre-pool taps, no resize/normalization | five nonnegative distances, `wd_s1`…`wd_s5`; [25-pair both-engine gates and 1008-pair JND calibration](../benchmarks/wd_port_2026-10-16/README.md) |
 | `ssim2` | sibling `fast-ssim2` (path `../fast-ssim2/fast-ssim2`, `imgref`) — **not** crates.io `ssimulacra2`, which is a third-party crate we do not maintain; that dep exists only inside `ssim2-gpu` for reference checks | SSIMULACRA 2, Jon Sneyers (Cloudinary) (2022+, no paper) | Cloudinary `ssimulacra2` C++ (v2 lineage) | sibling crate (algorithm reimplemented in that repo, SIMD-native) | sRGB8 | ~0–100, higher better |
 | `ssim2-gpu` | `ssim2-gpu` (in-tree GPU twin) | " | `fast-ssim2` (CPU) + third-party crates.io `ssimulacra2` for parity | in-tree GPU reimplementation | sRGB8 | " |
@@ -294,3 +295,22 @@ Validation probes used for this matrix live at
 `crates/vmaf/examples/aic_probe.rs` (studio-Y YUV420 → `VmafV0Scorer`) and
 `crates/vif/examples/aic_vif.rs` (candidate luma conventions through
 `vif_plane_f32`); both take raw-RGB dumps as argv.
+
+## PieAPP learned port (2026-10-16)
+
+`pieapp` is independently reconstructed from the [CVPR 2018 paper](https://arxiv.org/abs/1806.02067)
+section 3 / figure 4 and official checkpoint tensor names/shapes. The official
+implementation is executed only as an opaque oracle; its source is not read.
+No pyiqa package, source or weights are used. Noncommercial official weights
+require explicit `WeightsConsent` and are not bundled.
+
+The selected reference is official `compute_score` on valid 64×64 patches at
+stride six, with no extra unaligned far-edge origin. The demo CLI differs by
+`0.0230063421179145` native units on `1415_128`; see
+[DIVERGENCES](../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
+The [qualification receipt](../benchmarks/pieapp_2026-10-16.md) records the
+24 official ladder goldens, original-runtime controls, and native pilot
+results. All 1008 KonJND pairs calibrate one operational JND to
+0.5189487912492419 native units. Both engines pass all 24 supported pairs
+and warm/cold checks at 1e-3 JND. The receipt also records the corrected
+qualification wrapper and its separate bookkeeping recheck.

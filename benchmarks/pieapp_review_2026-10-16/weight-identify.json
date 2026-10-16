@@ -1,0 +1,120 @@
+{
+  "checkpoint_sha256": "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0",
+  "torch_version": "2.14.1+cu130",
+  "cuda_version": "13.0",
+  "intervention": "Oracle-only in-memory parameter copies; bias and projection separately controlled; original file and production checkpoint untouched",
+  "rows": [
+    {
+      "mode": "bias",
+      "forced_raw_weight": -2.0,
+      "public_weight": -1.9999990463256836,
+      "public_weight_repeat": -1.9999990463256836,
+      "signed_epsilon": -1.9999990463256836,
+      "abs_epsilon": 2.0000009536743164
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": -1.0,
+      "public_weight": -0.9999989867210388,
+      "public_weight_repeat": -0.9999989867210388,
+      "signed_epsilon": -0.9999989867210388,
+      "abs_epsilon": 1.0000009536743164
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": -0.25,
+      "public_weight": -0.2499990016222,
+      "public_weight_repeat": -0.2499990016222,
+      "signed_epsilon": -0.2499990016222,
+      "abs_epsilon": 0.2500010132789612
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": 0.0,
+      "public_weight": 9.999999974752427e-07,
+      "public_weight_repeat": 9.999999974752427e-07,
+      "signed_epsilon": 9.999999974752427e-07,
+      "abs_epsilon": 9.999999974752427e-07
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": 0.25,
+      "public_weight": 0.2500010132789612,
+      "public_weight_repeat": 0.2500010132789612,
+      "signed_epsilon": 0.2500010132789612,
+      "abs_epsilon": 0.2500010132789612
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": 1.0,
+      "public_weight": 1.0000009536743164,
+      "public_weight_repeat": 1.0000009536743164,
+      "signed_epsilon": 1.0000009536743164,
+      "abs_epsilon": 1.0000009536743164
+    },
+    {
+      "mode": "bias",
+      "forced_raw_weight": 2.0,
+      "public_weight": 2.0000009536743164,
+      "public_weight_repeat": 2.0000009536743164,
+      "signed_epsilon": 2.0000009536743164,
+      "abs_epsilon": 2.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": -2.0,
+      "public_weight": -1.9999990463256836,
+      "public_weight_repeat": -1.9999990463256836,
+      "signed_epsilon": -1.9999990463256836,
+      "abs_epsilon": 2.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": -1.0,
+      "public_weight": -0.9999989867210388,
+      "public_weight_repeat": -0.9999989867210388,
+      "signed_epsilon": -0.9999989867210388,
+      "abs_epsilon": 1.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": -0.25,
+      "public_weight": -0.2499990016222,
+      "public_weight_repeat": -0.2499990016222,
+      "signed_epsilon": -0.2499990016222,
+      "abs_epsilon": 0.2500010132789612
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": 0.0,
+      "public_weight": 9.999999974752427e-07,
+      "public_weight_repeat": 9.999999974752427e-07,
+      "signed_epsilon": 9.999999974752427e-07,
+      "abs_epsilon": 9.999999974752427e-07
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": 0.25,
+      "public_weight": 0.2500010132789612,
+      "public_weight_repeat": 0.2500010132789612,
+      "signed_epsilon": 0.2500010132789612,
+      "abs_epsilon": 0.2500010132789612
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": 1.0,
+      "public_weight": 1.0000009536743164,
+      "public_weight_repeat": 1.0000009536743164,
+      "signed_epsilon": 1.0000009536743164,
+      "abs_epsilon": 1.0000009536743164
+    },
+    {
+      "mode": "projection",
+      "forced_raw_weight": 2.0,
+      "public_weight": 2.0000009536743164,
+      "public_weight_repeat": 2.0000009536743164,
+      "signed_epsilon": 2.0000009536743164,
+      "abs_epsilon": 2.0000009536743164
+    }
+  ]
+}

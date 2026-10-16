@@ -1,0 +1,20 @@
+{
+  "python": "3.12.14",
+  "torch": "2.14.1+cpu",
+  "onnxruntime": "1.31.0",
+  "checkpoint_sha256": "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0",
+  "graph_sha256": "e3905d3625402369174e1d52fa889f7fed0fe982eab1d47ed49498cbdd868653",
+  "flatten": "channels-first",
+  "input_units": "u8",
+  "bgr": true,
+  "host_input": "planar RGB [0,1]",
+  "opset": 17,
+  "batch_sizes_checked": [
+    1,
+    3,
+    32
+  ],
+  "conversion_max_absolute": 0.0001068115234375,
+  "reference_parity_qualified": false,
+  "qualification": "Run nn-pieapp-gates with independent official-release goldens and measured KonJND scale."
+}

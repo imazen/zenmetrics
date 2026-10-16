@@ -1,0 +1,100 @@
+name = "pieapp"
+kind = "full-reference"
+direction = "lower-is-better"
+columns = ["pieapp"]
+score_revision = 3
+paper = "Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018. https://arxiv.org/abs/1806.02067"
+
+[code]
+source = "paper-and-weight-metadata-reconstruction"
+implementation = "Independently written from section 3 / figure 4 and checkpoint tensor names/shapes. Official source files are not read or imported by the reconstruction. The official public entry point and documented CLI are opaque oracles only."
+provenance = "PROVENANCE.md"
+
+[weights]
+licence_class = "noncommercial"
+terms = "Modified BSD-2 for Non-Commercial Use Only, UC Regents"
+terms_url = "https://github.com/prashnani/PerceptualImageError/blob/master/LICENSE.txt"
+checkpoint = "https://web.ece.ucsb.edu/~ekta/projects/PieAPPv0.1/weights/PieAPPv0.1.pth"
+sha256 = "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0"
+consent = "PieApp::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp"
+bundled = false
+
+[input]
+format = "strided RGB8 sRGB"
+graph_input = "NCHW RGB [0,1]"
+network_input = "NCHW BGR code values [0,255]"
+patch_size = 64
+stride = 6
+sampling_source = "Official release README documents deterministic dense stride 6 as the default; paper section 3 instead describes random sampling of 1024 patches."
+min_size = 64
+max_side = 4096
+max_pixels = 9000000
+max_pixels_32bit = 1048576
+
+[execution]
+engines = ["rten", "ort-cuda"]
+batch_bound = 32
+batch_unit = "reference/distorted patch pairs"
+statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row-major order."
+weight_head = "Signed raw weight + 1e-6; identified by opaque bias/projection controls"
+cap_score_revision = 2
+cap_graph_sha256 = "7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322"
+warm_reference = "Caches planar input conversion only; reuses_reference_work() is false because neural features are recomputed."
+maps = false
+
+cap_geometry = [3000, 3000]
+cap_host = "i265; shared box under load"
+cap_ort_cuda_process_wall_seconds = 72.60
+cap_ort_cuda_max_rss_kib = 1293308
+cap_ort_cuda_repeat_bit_identical = true
+cap_rten_first_evaluation_seconds = 845.578715
+cap_rten_interrupted_process_wall_seconds = 1607.74
+cap_rten_max_rss_kib_before_interruption = 744300
+cap_rten_status = "First evaluation completed; coordinator stopped the process during its second evaluation. Repeat identity and complete two-evaluation elapsed time are unmeasured. Do not rerun."
+revision_3_cap_graph_sha256 = "e3905d3625402369174e1d52fa889f7fed0fe982eab1d47ed49498cbdd868653"
+revision_3_cuda_process_wall_seconds = 71.96
+revision_3_cuda_max_rss_kib = 1281836
+revision_3_cuda_start_load_average = [3.96, 3.02, 4.79]
+revision_3_cuda_repeat_bit_identical = true
+revision_3_rten_cap = "Not rerun by coordinator instruction; revision-2 first-call/interrupted-repeat receipt above is historical."
+cap_receipts = "../../../../benchmarks/pieapp_review_2026-10-16/"
+
+[parity]
+onnx_sha256 = "e3905d3625402369174e1d52fa889f7fed0fe982eab1d47ed49498cbdd868653"
+tolerance_jnd = 1e-3
+identical_patch_oracle = -3.72529029846191406e-9
+status = "Revision 3 qualified: 24 unchanged goldens per engine, exact repeats and warm/cold identity, all merged-tree gates pass. All 1008 KonJND scores and input hashes are unchanged."
+qualified_pairs_per_engine = 24
+rten_reported_worst_jnd = 1.84e-6
+ort_cuda_reported_worst_jnd = 2.69e-7
+qualification_receipt = "../../../../benchmarks/pieapp_2026-10-16_qualification.json"
+previous_onnx_sha256 = "7033ea6ec2b0de54c9eb8a2b34002a8f8e026cecf982a4cd51b74a13c2be0322"
+jnd_scale = 0.5189487912492419
+konjnd_pairs = 1008
+jpeg_pairs = 504
+bpg_pairs = 504
+
+[oracle_convention]
+entry_point = "Official PieAPP.compute_score(distorted_patches, reference_patches)"
+grid = "Row-major valid 64x64 patches, origins 0,6,... <= side-64; no unaligned far-edge patch."
+selection = "Canonical parity targets this explicit stride-6 public-entry-point convention."
+cli_divergence_case = "1415_128"
+cli_score = 1.6797861082006782
+entry_point_score = 1.6567797660827637
+cli_absolute_difference = 0.0230063421179145
+cli_equivalence = false
+cli_documented_sparse_flag = "--sampling_mode sparse"
+cli_documented_sparse_score = 1.7122649515845207
+cli_explanation = "No documented option has established equivalence. Official source is not read; wrapper probing is restricted to documented options."
+
+cli_difference_jnd = 0.044332586385898314
+
+cli_panel_pairs = 24
+cli_panel_repetitions = 2
+cli_panel_engine = "Modern compatible official demo on CUDA; values retained at printed precision"
+cli_panel_worst_case = "2207_2048"
+cli_panel_worst_cli_score = 3.4582222
+cli_panel_worst_entry_point_score = 2.4828926609204816
+cli_panel_worst_absolute_difference = 0.9753295390795182
+cli_panel_worst_difference_jnd = 1.879433106938455
+cli_panel_receipt = "../../../../benchmarks/pieapp_review_2026-10-16/cli.json"

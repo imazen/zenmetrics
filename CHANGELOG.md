@@ -21,6 +21,20 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- zenmetrics-nn `PieApp` (PR #81 follow-up, review required) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
+  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
+  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
+  New public surface: `PieApp`, `PieApp::WEIGHTS`, `PieApp::from_dir`, and
+  `MetricKind::Pieapp`.
+  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
+  oracle is official `compute_score`; the measured demo-wrapper difference
+  is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
+  and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
+  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
+  Review correction `94daa378` uses signed weight-head outputs established
+  by opaque parameter controls (score revision 3); requalification is pending.
+
+
 - Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
 - Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
 - Registered source-family FitCell transport retains decoded-checkpoint admission and full-budget/seed/cap bindings (`6b3c2cd4`); public-source program packaging carries opaque external private-contract/data pins (`6cc84648`).

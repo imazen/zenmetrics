@@ -692,7 +692,7 @@ nn-goldens-musiq python ladder upstream npz out sizes="64,128,256,512,1024":
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid,pieapp":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
@@ -818,6 +818,47 @@ nn-paq2piq-small-inputs python ladder nonsquare:
 # Default scheduler, explicitly excluding any inherited legacy override.
 nn-paq2piq-cli-smoke binary models ladder:
     python3 -I crates/zenmetrics-nn/models/paq2piq/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+# Official PieAPP release is executed only as a documented black-box CLI.
+nn-pieapp-oracle python upstream reference distorted log sampling="dense":
+    python3 -I crates/zenmetrics-nn/models/pieapp/oracle_cli.py --python '{{python}}' --upstream '{{upstream}}' --reference '{{reference}}' --distorted '{{distorted}}' --log '{{log}}' --sampling '{{sampling}}'
+
+# Paper/tensor-metadata reconstruction candidates; no official source imports.
+nn-pieapp-probe python checkpoint reference distorted:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/probe.py --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Score a TSV using explicitly accepted NC PieAPP weights; verify repeatability.
+nn-pieapp-score models pairs out engine="rten":
+    just snap-cargo @ run --release -p zenmetrics-nn --features ort --example pieapp_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+# Complete PieAPP landing checks; invoke under run-heavy and the shared lock.
+nn-pieapp-gates models ladder:
+    bash -c "$(cat benchmarks/pieapp_gates_2026-10-16.sh)" -- '{{models}}' '{{ladder}}'
+
+nn-pieapp-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/pieapp/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-pieapp-core-check:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ clippy -p zenmetrics-nn --all-targets --features ort,model-tests -- -D warnings
+
+# Fixed convention qualified through the public oracle.
+nn-pieapp-export python checkpoint out:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/export.py --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+# The release's public patch-error/weight entry point, used only as an opaque oracle.
+nn-pieapp-blackbox-probe python upstream checkpoint reference distorted:
+    {{python}} crates/zenmetrics-nn/models/pieapp/blackbox_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Opaque official entry-point oracle; caller holds the heavy-job lock.
+nn-pieapp-entry-oracle python pairs out device:
+    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream "$HOME/tmp/pieapp-oracle/upstream" --checkpoint "$HOME/tmp/pieapp-oracle/upstream/weights/PieAPPv0.1.pth" --pairs {{pairs}} --out {{out}} --device {{device}}
+
+nn-pieapp-calibration-summary pairs scores out:
+    python3 crates/zenmetrics-nn/models/pieapp/summarize.py '{{pairs}}' '{{scores}}' '{{out}}'
+
+nn-pieapp-goldens pairs oracle out:
+    python3 crates/zenmetrics-nn/models/pieapp/goldens.py '{{pairs}}' '{{oracle}}' '{{out}}'
 
 # WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
 nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
@@ -960,3 +1001,58 @@ iqa-compete-native engine binary rust pairs planes output sizes="cid22,2k":
 
 iqa-compete-native-probe vmaf jxl rust pairs planes output:
     python3 benchmarks/iqa_compete_2026-10-16/native_probe.py '{{vmaf}}' '{{jxl}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}'
+
+# Round 13b public-oracle controls; individual steps use the heavy-job lock.
+nn-pieapp-review-head python upstream checkpoint pairs out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_head_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}'
+
+nn-pieapp-review-cli python upstream pairs entry out logs:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_cli_panel.py --python '{{python}}' --upstream '{{upstream}}' --pairs '{{pairs}}' --entry_scores '{{entry}}' --out '{{out}}' --logs '{{logs}}'
+
+# Run outside the lock: the orchestrator acquires/releases it for each step.
+nn-pieapp-review models ladder output:
+    bash -c "$(cat benchmarks/pieapp_review_2026-10-16.sh)" -- '{{models}}' '{{ladder}}' '{{output}}'
+
+nn-pieapp-review-summary directory log out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_summary.py '{{directory}}' '{{log}}' '{{out}}'
+
+nn-pieapp-review-shards models out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_shards.py '{{models}}' '{{out}}'
+
+nn-pieapp-review-step phase models ladder shards output:
+    bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}' '{{output}}'
+
+nn-pieapp-review-weight-sign python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-weight-joint python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 500
+
+# Public-tensor diagnostic outside RGB code-value range; never native image parity.
+nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 1000 --lower -4096 --upper 4096 --rate 32
+
+nn-pieapp-review-weight-control python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_control.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-weight-identify python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-reexport oldmodels models output:
+    bash -c "$(cat benchmarks/pieapp_reexport_2026-10-16.sh)" -- '{{oldmodels}}' '{{models}}' '{{output}}'
+
+nn-pieapp-review-konjnd-shards pairs output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_shards.py '{{pairs}}' '{{output}}'
+
+nn-pieapp-review-konjnd-compare baseline directory output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_compare.py '{{baseline}}' '{{directory}}' '{{output}}'
+
+# Syntax-check independent probes without importing or executing an oracle.
+nn-pieapp-review-python-check:
+    python3 -I -m compileall -q crates/zenmetrics-nn/models/pieapp
+
+iqa-compete-collect output +ledgers:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py {{ledgers}} --output '{{output}}'
+
+iqa-compete-cuda-i265 binary pairs output models model_map reference qualified mode="nn" sizes="cid22,2k":
+    bash benchmarks/iqa_compete_2026-10-16/run_cuda.sh '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' '{{sizes}}' '{{mode}}' '{{reference}}' '{{qualified}}'

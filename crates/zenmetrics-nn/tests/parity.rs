@@ -7,7 +7,7 @@
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
 //!   `musiq`, `hyperiqa`, `paq2piq`, `wadiqam_fr_live`, `wadiqam_fr_tid`,
-//!   `wadiqam_nr_live`, `wadiqam_nr_tid`.
+//!   `wadiqam_nr_live`, `wadiqam_nr_tid`, `pieapp`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
@@ -18,7 +18,7 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Arniqa, Ckdn, DeepDc, Dists, Dreamsim, Engine, Hyperiqa, Liqe, Lpips, LpipsNet, Maniqa,
-    Musiq, Paq2piq, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
+    Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
 /// Tolerance against the upstream CPU fp32 score, in JND units (owner,
@@ -148,6 +148,13 @@ fn models() -> Vec<(Box<dyn Metric>, &'static str)> {
                     "hyperiqa",
                 );
             }
+            if name == "pieapp" {
+                let consent = WeightsConsent::new().accept(PieApp::WEIGHTS);
+                return (
+                    Box::new(PieApp::from_dir(&dir, engine(), &consent).expect("load pieapp")),
+                    "pieapp",
+                );
+            }
             if name == "paq2piq" {
                 let consent = WeightsConsent::new().accept(Paq2piq::WEIGHTS);
                 return (
@@ -255,6 +262,16 @@ fn matches_upstream() {
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
             let got = score(&*eval, col);
+            let repeat = if col == "pieapp" && engine() != Engine::Rten {
+                let repeated = m
+                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("repeat CUDA evaluation without replacing the first result");
+                let value = score(&*repeated, col);
+                eprintln!("{col} {stem} {size}: first={got:.17e} repeated={value:.17e}");
+                Some(value)
+            } else {
+                None
+            };
             let err = (got - want).abs();
             worst = worst.max(err);
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
@@ -263,6 +280,13 @@ fn matches_upstream() {
                 "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
                 tol(col)
             );
+            if let Some(repeat) = repeat {
+                assert_eq!(
+                    got.to_bits(),
+                    repeat.to_bits(),
+                    "{col} {stem} {size}: CUDA repeat changed"
+                );
+            }
             if nr {
                 // The reference column: golden field 3 under `<col>_ref`.
                 let want_ref: f64 = f[3].parse().unwrap();
@@ -307,15 +331,17 @@ fn warm_reference_equals_cold() {
         // is (0, h, h) — a nonzero "perfect pair" quality — and an NR
         // model's headline on (r, r) is the reference's own quality score.
         // For all of them the identical-pair check below is warm == cold.
-        let cold_same = (nr || matches!(col, "ckdn" | "afine") || col.starts_with("wadiqam_fr"))
-            .then(|| {
-                score(
-                    &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
-                        .unwrap(),
-                    col,
-                )
-            });
+        let cold_same =
+            (nr || matches!(col, "ckdn" | "afine" | "pieapp") || col.starts_with("wadiqam_fr"))
+                .then(|| {
+                    score(
+                        &*m.evaluate(image(&rp, w, h), image(&rp, w, h), EvalOpts::new())
+                            .unwrap(),
+                        col,
+                    )
+                });
         let mut warm = m.warm_reference(image(&rp, w, h), EvalOpts::new()).unwrap();
+        // PieAPP caches only planar conversion on both engines.
         // A trunk engine caches the reference's features; a whole-graph
         // engine (ort-cuda) recomputes them on every candidate. A paired
         // no-reference metric always scores its reference once, and
@@ -323,7 +349,7 @@ fn warm_reference_equals_cold() {
         // features on every engine.
         assert_eq!(
             warm.reuses_reference_work(),
-            nr || engine() == Engine::Rten || col.starts_with("wadiqam_fr"),
+            nr || (engine() == Engine::Rten && col != "pieapp") || col.starts_with("wadiqam_fr"),
             "{col}"
         );
         for _ in 0..2 {
@@ -339,6 +365,10 @@ fn warm_reference_equals_cold() {
         );
         if let Some(cold_same) = cold_same {
             assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
+            if col == "pieapp" {
+                const ORACLE_IDENTICAL: f64 = -3.725_290_298_461_914e-9;
+                assert!((same - ORACLE_IDENTICAL).abs() <= tol(col), "{col}");
+            }
         } else if engine() == Engine::Rten || col != "dists" {
             assert_eq!(same, 0.0, "{col}");
         } else {

@@ -68,6 +68,7 @@ mod maniqa;
 mod musiq;
 mod paq2piq;
 mod par;
+mod pieapp;
 mod preprocess;
 mod resize;
 mod tfresize;
@@ -89,6 +90,7 @@ pub use maniqa::Maniqa;
 pub use musiq::Musiq;
 pub use paq2piq::Paq2piq;
 pub use wadiqam::{WadiqamFr, WadiqamKind, WadiqamNr};
+pub use pieapp::PieApp;
 pub use wd::WassersteinDistortion;
 pub use weights::{WeightsConsent, WeightsLicence, WeightsTerms};
 

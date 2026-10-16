@@ -554,6 +554,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Ssim
             | CliMetricKind::Nlpd
             | CliMetricKind::NlpdIqa
+            // PieAPP uses its learned full-reference adapter directly.
+            | CliMetricKind::Pieapp
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
             // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ,
             // WaDIQaM-NR) are routed through `nr::score`/`nn::score` +
@@ -896,6 +898,20 @@ mod nr_routing_tests {
         assert!(!super::metric_orchestrator_eligible(
             crate::metrics::MetricKind::Paq2piq
         ));
+    }
+}
+
+#[cfg(test)]
+mod pieapp_routing_tests {
+    #[test]
+    fn pieapp_uses_direct_learned_route() {
+        assert!(!super::metric_orchestrator_eligible(
+            crate::metrics::MetricKind::Pieapp
+        ));
+        assert_eq!(
+            crate::metrics::MetricKind::Pieapp.column_names(),
+            &["pieapp"]
+        );
     }
 }
 

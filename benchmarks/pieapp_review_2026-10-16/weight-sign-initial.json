@@ -1,0 +1,17 @@
+{
+  "torch_version": "2.14.1+cu130",
+  "cuda_version": "13.0",
+  "checkpoint_sha256": "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0",
+  "final_weight_min": -0.013727383688092232,
+  "final_weight_max": 0.1148407980799675,
+  "final_bias": 0.6922710537910461,
+  "steps": 100,
+  "rounded_raw_weight": 6.836291790008545,
+  "reference_bgr_nchw_u8_sha256": "373a2c14a5d23931ee32a7194a12d2934465f6369062e53c012ce9af1314a119",
+  "distorted_bgr_nchw_u8_sha256": "e0ad35080079e6339e423eaf5af9123cba1bd2f30d71094990dd446c955684e3",
+  "public_weight": 6.836292743682861,
+  "public_weight_repeat": 6.836292743682861,
+  "signed_epsilon": 6.836292743682861,
+  "abs_epsilon": 6.836292743682861,
+  "conclusion": "Compare retained public output to signed/absolute hypotheses; input search uses only the independently written network."
+}

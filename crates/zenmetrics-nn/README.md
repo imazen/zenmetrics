@@ -74,3 +74,16 @@ patch-row limit (`Error::TooManyPatches`) from a degenerate aspect ratio
 
 [Review qualification receipt](../../benchmarks/nr_learned_review_2026-10-15.meta)
 records the complete exports, rejection controls and both engine parity runs.
+
+### PieAPP
+
+`PieApp` reconstructs the CVPR 2018 network from the paper and checkpoint
+metadata, with official `compute_score` used only as an opaque oracle.
+The weights require explicit noncommercial consent (`PieApp::WEIGHTS`);
+CLI callers set `ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp`. No weights are bundled.
+It scores valid 64×64 patches at stride six, in batches of at most 32, on
+`rten` or `ort-cuda`. Both dimensions must be at least 64. Warm references
+reuse planar conversion only. See the [model card](models/pieapp/card.toml)
+and [sampling divergence](../../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
+Both engines pass 24 pairs at 1e-3 JND using the complete 1008-pair KonJND
+calibration; see the [qualification record](../../benchmarks/pieapp_2026-10-16.md).
