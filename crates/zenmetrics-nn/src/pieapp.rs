@@ -262,7 +262,9 @@ mod tests {
 
     #[test]
     fn normalized_ingress_preserves_every_code_value() {
-        let pixels: Vec<u8> = (0u8..=255).flat_map(|v| [v, v, v]).collect();
+        let pixels: Vec<u8> = (0u8..=255)
+            .flat_map(|v| [v, v.wrapping_add(73), v.wrapping_add(151)])
+            .collect();
         let input = za::Rgb8In {
             pixels: &pixels,
             width: 256,
@@ -270,10 +272,11 @@ mod tests {
             stride: 768,
         };
         let planar = rgb8_to_planar_01(&input);
-        for channel in planar.chunks_exact(256) {
-            for (code, &value) in channel.iter().enumerate() {
-                assert_eq!(value.to_bits(), (code as f32 / 255.0).to_bits());
-                assert_eq!(value * 255.0, code as f32);
+        for (channel_index, channel) in planar.chunks_exact(256).enumerate() {
+            for (position, &value) in channel.iter().enumerate() {
+                let code = f32::from(pixels[position * 3 + channel_index]);
+                assert_eq!(value.to_bits(), (code / 255.0).to_bits());
+                assert_eq!(value * 255.0, code);
             }
         }
     }
