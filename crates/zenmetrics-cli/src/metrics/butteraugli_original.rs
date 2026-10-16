@@ -810,8 +810,8 @@ mod tests {
             assert!(
                 paths
                     .iter()
-                    .flatten()
-                    .all(|&&(x, y)| (-4..=4).contains(&x) && (-4..=4).contains(&y))
+                    .flat_map(|path| path.iter())
+                    .all(|&(x, y)| (-4..=4).contains(&x) && (-4..=4).contains(&y))
             );
             for (w, h) in [
                 (1, 1),
