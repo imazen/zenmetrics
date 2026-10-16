@@ -43,13 +43,23 @@ const PATCH: usize = 32;
 /// Trunk output width per patch.
 const FEAT: usize = 512;
 /// Patch-count bound, applied before the patch tensor allocates
-/// (32,768 patches ≈ 400 MiB of f32; a 4096² image uses 16,384).
+/// (32,768 patches ≈ 400 MiB of f32 input; a 4096² image uses 16,384).
+/// Chunked graph calls keep the per-conv intermediates bounded too —
+/// see [`PATCH_CHUNK`].
 const MAX_PATCHES: usize = 32768;
+
+/// Graph batch size: upstream's evaluate.py scores 2000 patches per
+/// forward call. Without chunking, one `[P,3,32,32]` trunk call
+/// materialises ~2 GiB per conv activation at 4096²; chunking keeps
+/// that ≤ 256 MiB. Per-patch outputs are independent, so chunked
+/// scores equal single-call scores bit for bit.
+const PATCH_CHUNK: usize = 2000;
 
 /// The released checkpoints: `{fr,nr}_{live,tid}_weighted.model`,
 /// trained on the full LIVE or TID2013 database. `patchwise` tops are
 /// fetched alongside but not registered (upstream's documented default
 /// top is `weighted`).
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WadiqamKind {
     /// `fr_live_weighted.model` — full-reference, LIVE-trained.
@@ -82,18 +92,21 @@ impl WadiqamKind {
             // FR checkpoints are distance-like (identical pairs score a
             // nonzero floor but distorted pairs score above it).
             Self::FrLive | Self::FrTid => za::ScoreKind::Difference,
-            // nr_live is LIVE DMOS-trained (higher = worse); nr_tid is
-            // TID MOS-trained (higher = better).
-            Self::NrLive => za::ScoreKind::Distortion,
-            Self::NrTid => za::ScoreKind::Quality,
+            // Measured on a 12-source KonJND JPEG q95..q3 ladder
+            // (benchmarks/wadiqam_port_2026-10-16.md): nr_live and
+            // nr_tid both RISE with distortion — DMOS-like despite
+            // TID2013's MOS labels (nr_tid median rho +0.79).
+            Self::NrLive | Self::NrTid => za::ScoreKind::Distortion,
         }
     }
 }
 
 /// WaDIQaM-FR (pair scorer: distorted against reference). Distance-
 /// like: higher predicts more degradation relative to the reference —
-/// an identical pair scores a nonzero, image-dependent floor (~0.2
-/// live, ~13.7 tid; the `(0, h, h)` concat is not the head's zero).
+/// an identical pair scores a nonzero, image-dependent floor (KonJND
+/// identical-pair medians 0.019 live / 12.5 tid, ranges
+/// −0.29..0.70 / 9.7..20.6; the `(0, h, h)` concat is not the head's
+/// zero).
 /// Input: packed sRGB8 (any stride); both images ≥ 32×32 and equal
 /// size; at most 32,768 grid patches.
 pub struct WadiqamFr {
@@ -104,10 +117,12 @@ pub struct WadiqamFr {
 }
 
 /// WaDIQaM-NR. Same trunk and pooling as FR but trained no-reference;
-/// `nr_live` is DMOS-like (higher = worse), `nr_tid` is MOS-like
-/// (higher = better). Wrapped in [`za::PairedNoReference`] for pair
-/// scoring: `<col>` on the distorted image, `<col>_ref` on the
-/// reference.
+/// both checkpoints are DMOS-like (higher = worse) — `nr_tid` is
+/// TID2013 MOS-trained yet measured rising with distortion (median
+/// Spearman rho +0.79 on a 12-source JPEG q95..q3 ladder;
+/// benchmarks/wadiqam_port_2026-10-16.md). Wrapped in
+/// [`za::PairedNoReference`] for pair scoring: `<col>` on the
+/// distorted image, `<col>_ref` on the reference.
 pub struct WadiqamNr {
     graph: Box<dyn ImageGraph>,
     kind: WadiqamKind,
@@ -201,9 +216,71 @@ fn run(
     Ok(data)
 }
 
+/// Run `graph` on `x` (`n` patches, `in_row` f32 per patch, input name
+/// `input_name`, input shape `in_shape(cn)`) in ≤[`PATCH_CHUNK`]-patch
+/// calls — upstream's evaluate.py batch size — so the conv
+/// intermediates stay bounded. Output must be `ya[2, cn]`; the two
+/// halves of `ya` each concatenate in patch order, so the result is
+/// bit-identical to a single call.
+fn run_patches_ya(
+    graph: &dyn ImageGraph,
+    input_name: &'static str,
+    in_shape: impl Fn(usize) -> Vec<usize>,
+    x: &[f32],
+    n: usize,
+    in_row: usize,
+    what: &str,
+) -> Result<Vec<f32>, Error> {
+    let mut ya = vec![0.0f32; 2 * n];
+    let mut p = 0usize;
+    for chunk in x.chunks(PATCH_CHUNK * in_row) {
+        let cn = chunk.len() / in_row;
+        let out = run(
+            graph,
+            NamedInput {
+                name: input_name,
+                shape: in_shape(cn),
+                data: chunk.to_vec(),
+            },
+            &[2, cn],
+            what,
+        )?;
+        ya[p..p + cn].copy_from_slice(&out[..cn]);
+        ya[n + p..n + p + cn].copy_from_slice(&out[cn..]);
+        p += cn;
+    }
+    Ok(ya)
+}
+
+/// As [`run_patches_ya`] for a `x[cn,3,32,32]` → `h[cn,FEAT]` trunk:
+/// row-major per-patch outputs append in order.
+fn run_patches_rows(
+    graph: &dyn ImageGraph,
+    x: &[f32],
+    n: usize,
+    what: &str,
+) -> Result<Vec<f32>, Error> {
+    let mut h = Vec::with_capacity(n * FEAT);
+    for chunk in x.chunks(PATCH_CHUNK * 3 * PATCH * PATCH) {
+        let cn = chunk.len() / (3 * PATCH * PATCH);
+        h.extend(run(
+            graph,
+            NamedInput {
+                name: "x",
+                shape: vec![cn, 3, PATCH, PATCH],
+                data: chunk.to_vec(),
+            },
+            &[cn, FEAT],
+            what,
+        )?);
+    }
+    Ok(h)
+}
+
 impl WadiqamFr {
     /// The released weights' published terms: the `models/*.model`
-    /// files ship inside the MIT-licensed `dmaniry/deepIQA` repository.
+    /// files ship inside the MIT-licensed `dmaniry/deepIQA` repository
+    /// (upstream licence in `crates/zenmetrics-nn/LICENSE-wadiqam`).
     pub const WEIGHTS: WeightsTerms = WeightsTerms {
         model: "wadiqam_fr",
         licence: WeightsLicence::Permissive,
@@ -214,13 +291,19 @@ impl WadiqamFr {
     /// `dir` on `engine`.
     ///
     /// # Errors
-    /// As [`crate::Lpips::from_dir`].
+    /// As [`crate::Lpips::from_dir`]; `BadModel` when `kind` is an
+    /// `nr_*` checkpoint.
     pub fn from_dir(
         dir: impl AsRef<Path>,
         engine: Engine,
         kind: WadiqamKind,
     ) -> Result<Self, Error> {
-        assert!(kind.is_fr(), "WadiqamFr wants a fr_* kind");
+        if !kind.is_fr() {
+            return Err(Error::BadModel(format!(
+                "WadiqamFr wants a fr_* kind, got {}",
+                kind.column()
+            )));
+        }
         let dir = dir.as_ref();
         let column = kind.column();
         let (_channels, min_size) = read_meta(&dir.join(format!("{column}.meta")))?;
@@ -233,17 +316,14 @@ impl WadiqamFr {
     }
 
     /// Trunk features `[P,512]` for one image — the reference-side
-    /// work `warm_reference` hoists.
+    /// work `warm_reference` hoists. Runs in ≤[`PATCH_CHUNK`]-patch
+    /// calls like upstream's evaluate.py batching.
     fn features(&self, img: &za::Rgb8In<'_>) -> Result<(Vec<f32>, usize), Error> {
         let (x, n) = extract_patches(img, self.min_size)?;
-        let h = run(
+        let h = run_patches_rows(
             &*self.trunk,
-            NamedInput {
-                name: "x",
-                shape: vec![n, 3, PATCH, PATCH],
-                data: x,
-            },
-            &[n, FEAT],
+            &x,
+            n,
             &format!("{} trunk", self.kind.column()),
         )?;
         Ok((h, n))
@@ -265,14 +345,13 @@ impl WadiqamFr {
                 d3[2 * FEAT + i] = r3[i];
             }
         }
-        let ya = run(
+        let ya = run_patches_ya(
             &*self.head,
-            NamedInput {
-                name: "f",
-                shape: vec![n, 3 * FEAT],
-                data: f,
-            },
-            &[2, n],
+            "f",
+            |cn| vec![cn, 3 * FEAT],
+            &f,
+            n,
+            3 * FEAT,
             &format!("{} head", self.kind.column()),
         )?;
         Ok(pool(&ya, n))
@@ -389,13 +468,19 @@ impl WadiqamNr {
     /// Load `wadiqam_nr_{live,tid}.onnx` + `.meta` from `dir` on `engine`.
     ///
     /// # Errors
-    /// As [`crate::Lpips::from_dir`].
+    /// As [`crate::Lpips::from_dir`]; `BadModel` when `kind` is an
+    /// `fr_*` checkpoint.
     pub fn from_dir(
         dir: impl AsRef<Path>,
         engine: Engine,
         kind: WadiqamKind,
     ) -> Result<Self, Error> {
-        assert!(!kind.is_fr(), "WadiqamNr wants an nr_* kind");
+        if kind.is_fr() {
+            return Err(Error::BadModel(format!(
+                "WadiqamNr wants an nr_* kind, got {}",
+                kind.column()
+            )));
+        }
         let dir = dir.as_ref();
         let column = kind.column();
         let (_channels, min_size) = read_meta(&dir.join(format!("{column}.meta")))?;
@@ -408,14 +493,13 @@ impl WadiqamNr {
 
     fn score_image(&self, img: &za::Rgb8In<'_>) -> Result<f64, Error> {
         let (x, n) = extract_patches(img, self.min_size)?;
-        let ya = run(
+        let ya = run_patches_ya(
             &*self.graph,
-            NamedInput {
-                name: "x",
-                shape: vec![n, 3, PATCH, PATCH],
-                data: x,
-            },
-            &[2, n],
+            "x",
+            |cn| vec![cn, 3, PATCH, PATCH],
+            &x,
+            n,
+            3 * PATCH * PATCH,
             self.kind.column(),
         )?;
         Ok(pool(&ya, n))
@@ -514,6 +598,34 @@ mod tests {
         assert_eq!(out[1 * 3 * 1024 + 2 * 1024 + 15 * 32 + 15], 200.0);
     }
 
+    /// A padded-stride view of a wider buffer extracts the same patches
+    /// as the packed view; the stride tail is never read.
+    #[test]
+    fn extract_patches_honours_stride() {
+        let (w, h, stride) = (96usize, 64usize, 96 * 3 + 17);
+        let mut wide = vec![0u8; stride * h];
+        let mut packed = vec![0u8; w * h * 3];
+        for y in 0..h {
+            for x in 0..w {
+                for c in 0..3 {
+                    let v = ((x * 7 + y * 11 + c * 13) % 251) as u8;
+                    wide[y * stride + x * 3 + c] = v;
+                    packed[(y * w + x) * 3 + c] = v;
+                }
+            }
+        }
+        let strided = za::Rgb8In {
+            pixels: &wide,
+            width: w,
+            height: h,
+            stride,
+        };
+        assert_eq!(
+            extract_patches(&strided, 32).unwrap(),
+            extract_patches(&view(&packed, w, h), 32).unwrap()
+        );
+    }
+
     #[test]
     fn size_bounds() {
         let px = vec![0u8; 4096];
@@ -543,5 +655,97 @@ mod tests {
     fn pool_is_weighted_mean() {
         let ya = [1.0f32, 2.0, 3.0, 2.0, 1.0, 1.0]; // y=[1,2,3], a=[2,1,1]
         assert_eq!(pool(&ya, 3), (2.0 + 2.0 + 3.0) / 4.0);
+    }
+
+    /// A fake `x[cn, R]` → `ya[2, cn]` graph whose patch outputs carry
+    /// their index, so a chunked concat can be checked for order and
+    /// completeness. Out[0][p] = in[p][0], Out[1][p] = in[p][R-1].
+    struct FakeYa;
+    impl crate::engine::ImageGraph for FakeYa {
+        fn engine(&self) -> &'static str {
+            "test"
+        }
+        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+            unreachable!()
+        }
+        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            let i = &inputs[0];
+            let cn = i.shape[0];
+            let row = i.data.len() / cn;
+            let mut out = vec![0.0f32; 2 * cn];
+            for p in 0..cn {
+                out[p] = i.data[p * row];
+                out[cn + p] = i.data[p * row + row - 1];
+            }
+            Ok((vec![2, cn], out))
+        }
+    }
+
+    /// A fake `x[cn,3,32,32]` → `h[cn,512]` trunk: row p echoes the
+    /// patch's first FEAT inputs — identical per-patch outputs for any
+    /// batch split (outputs must be input-derived, not index-derived,
+    /// or a chunked call's local `p` would shift the encoding).
+    struct FakeTrunk;
+    impl crate::engine::ImageGraph for FakeTrunk {
+        fn engine(&self) -> &'static str {
+            "test"
+        }
+        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+            unreachable!()
+        }
+        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+            let i = &inputs[0];
+            let cn = i.shape[0];
+            let mut h = vec![0.0f32; cn * FEAT];
+            for p in 0..cn {
+                for j in 0..FEAT {
+                    h[p * FEAT + j] = i.data[p * 3 * PATCH * PATCH + j];
+                }
+            }
+            Ok((vec![cn, FEAT], h))
+        }
+    }
+
+    /// The 2000-patch batching must be a pure re-batch: chunked output
+    /// equals the single-call output bit for bit, in patch order.
+    #[test]
+    fn chunking_preserves_patch_order_and_values() {
+        let n = PATCH_CHUNK + 37; // two chunks: 2000 + 37
+        // ya path (NR graph / FR head): x is [n, in_row].
+        let in_row = 5usize;
+        let x: Vec<f32> = (0..n * in_row)
+            .map(|i| (i * 31 % 977) as f32 - 488.0)
+            .collect();
+        let chunked =
+            run_patches_ya(&FakeYa, "x", |cn| vec![cn, in_row], &x, n, in_row, "t").unwrap();
+        let want: Vec<f32> = (0..n)
+            .map(|p| x[p * in_row])
+            .chain((0..n).map(|p| x[p * in_row + in_row - 1]))
+            .collect();
+        assert_eq!(chunked, want);
+        // h path (FR trunk): x is [n, 3*32*32]; each patch's leading
+        // values encode (global patch, column) so a mis-ordered or
+        // truncated chunk concat fails the equality below.
+        let row = 3 * PATCH * PATCH;
+        let xr: Vec<f32> = (0..n * row)
+            .map(|i| {
+                let (p, j) = (i / row, i % row);
+                if j < FEAT {
+                    (p * 1024 + j) as f32
+                } else {
+                    -7.0
+                }
+            })
+            .collect();
+        let chunked = run_patches_rows(&FakeTrunk, &xr, n, "t").unwrap();
+        let whole = FakeTrunk
+            .tensor(&[NamedInput {
+                name: "x",
+                shape: vec![n, 3, PATCH, PATCH],
+                data: xr.clone(),
+            }])
+            .unwrap()
+            .1;
+        assert_eq!(chunked, whole);
     }
 }

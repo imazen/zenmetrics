@@ -893,3 +893,38 @@ mod wd_routing_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod wadiqam_routing_tests {
+    use crate::metrics::MetricKind;
+
+    #[test]
+    fn wadiqam_nr_uses_direct_route() {
+        // NR variants emit `<col>` + `<col>_ref` through `PairedNoReference`,
+        // which the orchestrator's FR leaves cannot carry — excluded like
+        // the other learned NR kinds. FR variants stay eligible like
+        // lpips/dists (the nn spec errors at build).
+        for kind in [MetricKind::WadiqamNrLive, MetricKind::WadiqamNrTid] {
+            assert!(!super::metric_orchestrator_eligible(kind));
+        }
+        assert!(super::metric_orchestrator_eligible(
+            MetricKind::WadiqamFrLive
+        ));
+        assert!(super::metric_orchestrator_eligible(
+            MetricKind::WadiqamFrTid
+        ));
+        assert_eq!(
+            MetricKind::WadiqamNrLive.column_names(),
+            &["wadiqam_nr_live", "wadiqam_nr_live_ref"]
+        );
+        assert_eq!(
+            MetricKind::WadiqamNrTid.column_names(),
+            &["wadiqam_nr_tid", "wadiqam_nr_tid_ref"]
+        );
+        assert_eq!(
+            MetricKind::WadiqamFrLive.column_names(),
+            &["wadiqam_fr_live"]
+        );
+        assert_eq!(MetricKind::WadiqamFrTid.column_names(), &["wadiqam_fr_tid"]);
+    }
+}

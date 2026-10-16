@@ -300,14 +300,14 @@ pub enum MetricKind {
     /// non-overlapping 32x32 patches + relu-weighted pooling,
     /// `fr_live_weighted.model`); distance-like — **higher** is more
     /// degraded versus the reference (an identical pair scores a
-    /// nonzero image-dependent floor near 0.2). Emits
-    /// `wadiqam_fr_live`. As `arniqa` for
+    /// nonzero image-dependent floor; KonJND median 0.019, range
+    /// -0.29..0.70). Emits `wadiqam_fr_live`. As `arniqa` for
     /// `ZENMETRICS_NN_MODEL_DIR`/`ZENMETRICS_NN_ENGINE`.
     #[value(name = "wadiqam-fr-live")]
     WadiqamFrLive,
     /// WaDIQaM-FR TID — as `wadiqam-fr-live` with the TID2013-trained
-    /// checkpoint (`fr_tid_weighted.model`; identical-pair floor near
-    /// 13.7). Emits `wadiqam_fr_tid`.
+    /// checkpoint (`fr_tid_weighted.model`; identical-pair floor
+    /// median 12.5, range 9.7..20.6). Emits `wadiqam_fr_tid`.
     #[value(name = "wadiqam-fr-tid")]
     WadiqamFrTid,
     /// WaDIQaM-NR LIVE — no-reference learned quality (upstream
@@ -319,8 +319,9 @@ pub enum MetricKind {
     #[value(name = "wadiqam-nr-live")]
     WadiqamNrLive,
     /// WaDIQaM-NR TID — as `wadiqam-nr-live` with the TID2013-trained
-    /// checkpoint (`nr_tid_weighted.model`); MOS-like, **higher** is
-    /// better. Emits `wadiqam_nr_tid` and `wadiqam_nr_tid_ref`.
+    /// checkpoint (`nr_tid_weighted.model`); measured **higher** is
+    /// worse despite TID's MOS labels (median rho +0.79 on a JPEG
+    /// q95..q3 ladder). Emits `wadiqam_nr_tid` and `wadiqam_nr_tid_ref`.
     #[value(name = "wadiqam-nr-tid")]
     WadiqamNrTid,
     /// Cool-Chic Wasserstein Distortion at sigma 2^1 through 2^5.

@@ -20,7 +20,7 @@ h5py; chainer is only needed for the goldens oracle, not the export).
 Usage:
     export.py OUT_DIR --weights DIR [--goldens TSV --ladder DIR ...] [--only COL,COL,...]
 
-Emits wadiqam_<col>.onnx + wadiqam_<col>.meta + wadiqam_export.meta.
+Emits wadiqam_<col>.onnx + wadiqam_<col>.meta + wadiqam_<col>_export.meta.
 """
 
 import argparse
@@ -156,7 +156,6 @@ def main():
     import onnx  # noqa: E402
 
     only = a.only.split(",") if a.only else list(MODELS)
-    written = []
     for col in only:
         mode, fname, sha = MODELS[col]
         src = wdir / fname
@@ -233,17 +232,23 @@ def main():
             "torch": torch.__version__,
         }
         meta_path(out, col).write_text("\n".join(f"{k} {v}" for k, v in meta.items()) + "\n")
-        written.append(col)
 
-    export_meta = {
-        "exported": "wadiqam",
-        "columns": ",".join(written),
-        "torch": torch.__version__,
-        "python": platform.python_version(),
-        "checkpoint_dir": str(wdir),
-    }
-    (out / "wadiqam_export.meta").write_text(
-        "\n".join(f"{k}\t{v}" for k, v in export_meta.items()) + "\n")
+        # <col>_export.meta per ADDING_MODELS.md: environment versions plus
+        # sha256 of every file this column's run wrote. Written inside the
+        # loop so a partial --only run still leaves a matching receipt.
+        def file_sha(p: Path):
+            return hashlib.sha256(p.read_bytes()).hexdigest()
+
+        files = onnx_files + [f"{col}.meta"]
+        gp = out / f"{col}_goldens.tsv"
+        if gp.exists():
+            files.append(gp.name)
+        (out / f"{col}_export.meta").write_text(
+            f"torch {torch.__version__}\n"
+            f"python {platform.python_version()}\n"
+            f"host {platform.node()}\n"
+            f"checkpoint {fname}\ncheckpoint_sha256 {sha}\n"
+            + "".join(f"sha256 {file_sha(out / fn)} {fn}\n" for fn in files))
 
     if a.goldens:
         gsrc = Path(a.goldens)

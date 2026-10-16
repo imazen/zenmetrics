@@ -68,8 +68,9 @@ class StudyTests(unittest.TestCase):
         # 91: +lpips-alex, lpips-vgg, lpips-squeeze, stlpips-alex, stlpips-vgg, dists, deepdc;
         # 96: +ckdn, afine, dreamsim, piqe, niqe; 97: +brisque;
         # 100: +arniqa, maniqa, liqe; 102: +musiq, hyperiqa; 103: +paq2piq;
-        # 104: +wd (five scalar columns in one metric family)).
-        self.assertEqual(len(inv['metrics']), 104)
+        # 104: +wd (five scalar columns in one metric family);
+        # 108: +wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid).
+        self.assertEqual(len(inv['metrics']), 108)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)

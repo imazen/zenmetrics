@@ -633,8 +633,9 @@ nn-goldens-paq2piq python upstream ckpt out ladder:
 
 # Export WaDIQaM (dmaniry/deepIQA `models/{fr,nr}_{live,tid}_weighted.model`,
 # h5py-only — no chainer needed). `weights` is the directory holding the
-# official checkpoints; pass --goldens/--ladder to verify against oracle
-# output after nn-goldens-wadiqam runs.
+# official checkpoints. The recipe does not forward --goldens/--ladder (the
+# oracle-vs-ONNX check); run export.py directly for that after
+# nn-goldens-wadiqam produces the TSVs.
 nn-export-wadiqam python out weights:
     {{python}} -I crates/zenmetrics-nn/models/wadiqam/export.py '{{out}}' --weights '{{weights}}'
 

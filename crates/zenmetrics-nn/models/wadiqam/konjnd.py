@@ -2,18 +2,21 @@
 """WaDIQaM KonJND JND scales.
 
 FR columns have an image-dependent identical-pair floor (the (0,h,h)
-concat is not the head's zero — ~0.2 for fr_live, ~13.7 for fr_tid), so
-the JND is the pooled median |score(pair) - score(ref,ref)| per
-reference: run `zenmetrics batch --metric wadiqam-fr-<live|tid>` once on
+concat is not the head's zero — KonJND medians 0.019 for fr_live and
+12.5 for fr_tid), so the JND is the pooled median
+|score(pair) - score(ref,ref)| per reference: run
+`zenmetrics batch --metric wadiqam-fr-<live|tid>` once on
 pairs_abs.tsv and once on pairs_identical.tsv, pass both TSVs.
 
 NR columns score dist and ref in one run (`PairedNoReference` emits
 <col> and <col>_ref), so the JND is the pooled median
-|score(dist)-score(ref)|: pass the single pairs_abs.tsv run.
+|score(dist)-score(ref)|: pass the single pairs_abs.tsv run. NOTE:
+nr_tid's median |delta| is a noise floor (the distorted image outscores
+its reference in ~55% of pairs), not a JND.
 
 usage: konjnd.py <pairs.tsv> [<identical.tsv>] <out.tsv>
-  one arg   -> NR column (paired columns inside pairs.tsv)
-  two args  -> FR column (pairs_abs + pairs_identical)
+  two args   -> NR column (paired columns inside pairs.tsv)
+  three args -> FR column (pairs_abs + pairs_identical)
 """
 import csv
 import statistics

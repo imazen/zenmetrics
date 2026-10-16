@@ -9,7 +9,7 @@
 # ships; see [input]).
 name = "wadiqam"
 kind = "full-reference and no-reference checkpoints"
-direction = "per checkpoint: fr_* are distance-like (higher = more degraded vs reference; an identical pair scores a nonzero image-dependent floor, ~0.2 live / ~13.7 tid, since the (0,h,h) concat is not the head's zero); nr_live is DMOS-like (higher = worse); nr_tid is MOS-like (higher = better)"
+direction = "per checkpoint, measured on a 12-source KonJND JPEG q95..q3 ladder (benchmarks/wadiqam_port_2026-10-16.md): fr_* are distance-like (higher = more degraded vs reference; an identical pair scores a nonzero image-dependent floor — KonJND medians 0.019 live / 12.5 tid, ranges -0.29..0.70 / 9.7..20.6 — since the (0,h,h) concat is not the head's zero); nr_live and nr_tid are both DMOS-like (higher = worse; median rho +0.98 / +0.79). nr_tid is TID2013 MOS-trained but rises with distortion anyway — the MOS labels do not transfer to this head's direction"
 columns = ["wadiqam_fr_live", "wadiqam_fr_tid",
            "wadiqam_nr_live", "wadiqam_nr_live_ref",
            "wadiqam_nr_tid", "wadiqam_nr_tid_ref"]
@@ -35,11 +35,11 @@ normalisation = "none — raw u8 -> f32 (evaluate.py feeds imageio.imread output
 resize = "none — fully convolutional at native resolution"
 patches = "non-overlapping 32x32 stride-32 grid, row-major (evaluate.py's extract_patches; partial edge patches dropped). README documents this as the eval protocol; the paper's randomly-sampled overlapping patch scheme is the training protocol, not eval"
 min_size = 32                       # one full patch required on both axes
-max_patches = 32768                 # grid patches per image, checked before allocating (~400 MiB f32; a 4096x4096 image uses 16,384)
+max_patches = 32768                 # grid patches per image, checked before allocating (~400 MiB f32 input; a 4096x4096 image uses 16,384). Trunk/NR graph calls run in <=2000-patch batches like evaluate.py, capping conv intermediates near 256 MiB. Measured peak RSS (/usr/bin/time -v, whole `score` process): 4096^2 fr_live rten 943 MiB / ort-cuda 1.42 GiB, nr_live rten 875 MiB / ort-cuda 1.42 GiB; at the 32,768-patch cap fr_live rten 1.26 GiB / ort-cuda 1.71 GiB, nr_live rten 1.14 GiB / ort-cuda 1.71 GiB (ort-cuda's ~1.4 GiB floor is ORT+CUDA provider overhead)
 
 [export]
 script = "export.py"
-outputs = "wadiqam_fr_{live,tid}_{trunk,head}.onnx, wadiqam_nr_{live,tid}.onnx, wadiqam_{col}.meta, wadiqam_export.meta; oracle goldens copied to wadiqam_{col}_goldens.tsv"
+outputs = "wadiqam_fr_{live,tid}_{trunk,head}.onnx, wadiqam_nr_{live,tid}.onnx, wadiqam_{col}.meta, wadiqam_{col}_export.meta; oracle goldens copied to wadiqam_{col}_goldens.tsv"
 opset = 17
 notes = "FR ships split — trunk: x[P,3,32,32] -> h[P,512], head: f[P,1536] -> ya[2,P] — so the runtime caches the reference's patch features under warm_reference (the host owns the (h-h_ref,h,h_ref) concat). NR ships whole: x[P,3,32,32] -> ya[2,P]. Self-check inside export.py: ONNX-vs-torch ya bound 1e-2, pooled-score bound 1e-4 (elementwise ya error is f32 reduction-order noise at y~100, a~10 magnitudes; the pooled score is what ships)."
 
