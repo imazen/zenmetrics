@@ -29,3 +29,4 @@ liqe	0.393781
 musiq	1.968925
 hyperiqa	4.461776
 paq2piq	1.229401	JPEG 1.762009, BPG 0.726505; pooled median |paq2piq-paq2piq_ref| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+pieapp	5.18948791249241870e-01	Pooled median raw error over 1008 KonJND pairs (ort-cuda, 2026-10-16); benchmarks/pieapp_2026-10-16_konjnd.json

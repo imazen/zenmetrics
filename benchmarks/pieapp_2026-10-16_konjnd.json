@@ -1,0 +1,21 @@
+{
+  "column": "pieapp",
+  "jnd": 0.5189487912492419,
+  "count": 1008,
+  "codecs": {
+    "jpeg": {
+      "count": 504,
+      "median": 0.5259769048559877
+    },
+    "bpg": {
+      "count": 504,
+      "median": 0.5116622073043251
+    }
+  },
+  "pairs_sha256": "79d16bd9a2323ad1ef81c639fc8d37ab66db7baa15c47a7b87e3e186acc44508",
+  "scores_sha256": "99b9726a804bd29c507546ee4a2b7693eb6530563a38ef232f9d6a172d6df82e",
+  "images": 2016,
+  "image_manifest_sha256": "edb16fb4504659e3211a54c2d7656dad4af755134b64c7fb42e9e7541117b71d",
+  "scores_path": "/home/lilith/tmp/pieapp-port/konjnd.tsv",
+  "method": "Pooled median at round-half-up mean PJND, all 1008 KonJND pairs"
+}
