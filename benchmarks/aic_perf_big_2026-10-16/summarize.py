@@ -59,9 +59,10 @@ for dataset,expected_count in [('ladder',27),('aic',61)]:
  if dataset=='aic':assert len(scored)==61
  cambi[dataset]=dict(scored=len(scored),matching_refusals=len(refused),maximum_oracle_error=max(r['oracle_error'] for r in scored))
 residual=json.loads((a.scratch/'round14-residuals.json').read_text());assert residual['numeric_residual_rows']==122
-summary=dict(schema=1,host='i265',method='Base,new,base,new; each new process averages five calls; median of two process means per role. No confidence interval or cross-host extrapolation.',threading='Both metric implementations remain serial within one image; 16 denotes the requested Rayon thread budget.',target_cpu_native=False,cells=cells,gates=gates,oracle=dict(butter_ladder_maximum_error=max(r['oracle_error'] for r in ladder),butter_ladder_unchanged_bound=4.8e-7,butter_aic_maximum_error=max(r['oracle_error'] for r in aic),cambi=cambi),residual_audit=residual,full_measurements=rows)
-with a.output.with_suffix('.json').open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
+summary=dict(schema=1,host='i265',method='Base,new,base,new; each new process averages five calls; median of two process means per role. No confidence interval or cross-host extrapolation.',threading='Both metric implementations remain serial within one image; 16 denotes the requested Rayon thread budget.',target_cpu_native=False,cells=cells,gates=gates,oracle=dict(butter_ladder_maximum_error=max(r['oracle_error'] for r in ladder),butter_ladder_unchanged_bound=4.8e-7,butter_aic_maximum_error=max(r['oracle_error'] for r in aic),cambi=cambi),residual_audit=residual,full_measurements_path=str(a.output.with_suffix('.tsv')))
 with a.output.with_suffix('.tsv').open('x',newline='') as f:
  writer=csv.DictWriter(f,fieldnames=list(rows[0]),delimiter='\t');writer.writeheader();writer.writerows(rows)
+summary['full_measurements_sha256']=sha(a.output.with_suffix('.tsv'))
+with a.output.with_suffix('.json').open('x') as f:json.dump(summary,f,indent=2);f.write('\n')
 for cell in cells:print(cell['key'],cell['median_base_ms'],cell['median_new_ms'],cell['base_over_new'])
 print(json.dumps(dict(gates=gates,oracle=summary['oracle']),indent=2))
