@@ -21,7 +21,7 @@ RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir \
     chmod 0755 /usr/local/bin/python3 && ln -s python3 /usr/local/bin/python
 COPY --from=workerbase /usr/local/bin/s5cmd /usr/local/bin/s5cmd
 COPY --from=workerbase /usr/local/aws-cli /usr/local/aws-cli
-COPY --from=workerbase /usr/local/bin/aws /usr/local/bin/aws
+RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
 COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
 COPY --chmod=0755 fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
 COPY --chmod=0755 tmpdir_discipline.sh /usr/local/bin/tmpdir_discipline.sh
