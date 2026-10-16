@@ -62,6 +62,13 @@ fn ingress(rgb: &[u8], w: usize, h: usize, stride: usize) -> Result<[Vec<f32>; 3
     Ok(out)
 }
 fn reflect(mut i: isize, n: usize) -> usize {
+    // BORDER_REFLECT_101 is only defined for n >= 2; with a single row or
+    // column every tap maps to index 0. Without this, n = 1 makes the loop
+    // oscillate between +/-i forever. `blur` is only reached with n >= 8 in
+    // `score`, so this guard changes no production result.
+    if n < 2 {
+        return 0;
+    }
     while i < 0 || i >= n as isize {
         i = if i < 0 { -i } else { 2 * n as isize - 2 - i };
     }
@@ -79,24 +86,45 @@ fn blur(a: &[f32], w: usize, h: usize) -> Vec<f32> {
     let mut tmp = vec![0.0; w * h];
     let mut out = vec![0.0; w * h];
     // OpenCV's 11-tap row filter, symmetric column filter, BORDER_REFLECT_101.
+    // Interior pixels touch no reflected border, so their tap indices are
+    // contiguous; only the 5-pixel edge uses `reflect`. Both paths emit the
+    // same ordered `mul_add` chain.
     for y in 0..h {
+        let row = &a[y * w..y * w + w];
+        let trow = &mut tmp[y * w..y * w + w];
         for x in 0..w {
-            let mut value = a[y * w + reflect(x as isize - 5, w)] * k[0];
-            for (j, &weight) in k.iter().enumerate().skip(1) {
-                value = a[y * w + reflect(x as isize + j as isize - 5, w)].mul_add(weight, value);
+            let mut value;
+            if x >= 5 && x + 5 < w {
+                value = row[x - 5] * k[0];
+                for (j, &weight) in k.iter().enumerate().skip(1) {
+                    value = row[x + j - 5].mul_add(weight, value);
+                }
+            } else {
+                value = a[y * w + reflect(x as isize - 5, w)] * k[0];
+                for (j, &weight) in k.iter().enumerate().skip(1) {
+                    value =
+                        a[y * w + reflect(x as isize + j as isize - 5, w)].mul_add(weight, value);
+                }
             }
-            tmp[y * w + x] = value;
+            trow[x] = value;
         }
     }
     for y in 0..h {
+        let ybase = y * w;
         for x in 0..w {
-            let mut value = tmp[y * w + x] * k[5];
-            for j in 1..=5 {
-                value = (tmp[reflect(y as isize - j as isize, h) * w + x]
-                    + tmp[reflect(y as isize + j as isize, h) * w + x])
-                    .mul_add(k[5 + j], value);
+            let mut value = tmp[ybase + x] * k[5];
+            if y >= 5 && y + 5 < h {
+                for j in 1..=5 {
+                    value = (tmp[(y - j) * w + x] + tmp[(y + j) * w + x]).mul_add(k[5 + j], value);
+                }
+            } else {
+                for j in 1..=5 {
+                    value = (tmp[reflect(y as isize - j as isize, h) * w + x]
+                        + tmp[reflect(y as isize + j as isize, h) * w + x])
+                        .mul_add(k[5 + j], value);
+                }
             }
-            out[y * w + x] = value;
+            out[ybase + x] = value;
         }
     }
     out
@@ -213,6 +241,80 @@ pub(super) fn score(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pre-optimization `blur`, kept as an independent bit oracle.
+    fn blur_ordered_ref(a: &[f32], w: usize, h: usize) -> Vec<f32> {
+        let mut kernel = [0.0f64; 11];
+        let mut sum = 0.0;
+        for (i, k) in kernel.iter_mut().enumerate() {
+            let x = i as f64 - 5.0;
+            *k = (-x * x / (2.0 * 1.5 * 1.5)).exp();
+            sum += *k;
+        }
+        let k = kernel.map(|v| (v / sum) as f32);
+        let mut tmp = vec![0.0; w * h];
+        let mut out = vec![0.0; w * h];
+        for y in 0..h {
+            for x in 0..w {
+                let mut value = a[y * w + reflect(x as isize - 5, w)] * k[0];
+                for (j, &weight) in k.iter().enumerate().skip(1) {
+                    value =
+                        a[y * w + reflect(x as isize + j as isize - 5, w)].mul_add(weight, value);
+                }
+                tmp[y * w + x] = value;
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                let mut value = tmp[y * w + x] * k[5];
+                for j in 1..=5 {
+                    value = (tmp[reflect(y as isize - j as isize, h) * w + x]
+                        + tmp[reflect(y as isize + j as isize, h) * w + x])
+                        .mul_add(k[5 + j], value);
+                }
+                out[y * w + x] = value;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn blur_interior_fast_path_matches_ordered_reference() {
+        let geoms = [
+            (8, 8),
+            (9, 8),
+            (8, 9),
+            (10, 10),
+            (11, 11),
+            (13, 10),
+            (31, 29),
+            (37, 41),
+        ];
+        for &(w, h) in &geoms {
+            let n = w * h;
+            let pat: Vec<f32> = (0..n)
+                .map(|i| ((i * 37 + i / 5) % 101) as f32 * 0.01 - 0.5)
+                .collect();
+            assert_eq!(
+                blur(&pat, w, h),
+                blur_ordered_ref(&pat, w, h),
+                "pattern {w}x{h}"
+            );
+            let ramp: Vec<f32> = (0..n).map(|i| i as f32 * 0.001).collect();
+            assert_eq!(
+                blur(&ramp, w, h),
+                blur_ordered_ref(&ramp, w, h),
+                "ramp {w}x{h}"
+            );
+            let consts = vec![-1.0f32; n];
+            assert_eq!(
+                blur(&consts, w, h),
+                blur_ordered_ref(&consts, w, h),
+                "const {w}x{h}"
+            );
+        }
+    }
+
     #[test]
     fn stride_and_dimensions() {
         let (w, h) = (37, 41);
