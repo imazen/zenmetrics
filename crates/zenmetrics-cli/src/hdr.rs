@@ -5,7 +5,7 @@
 //!   - **Primary path**: [`score_via_hdr_scorer`] hands absolute nits to the
 //!     umbrella's `HdrScorer`, which applies the per-metric feeding from
 //!     `zenmetrics_api::hdr::hdr_feeding` — cvvdp/butter linear planes, ssim2
-//!     + zensim integrated PU21 on every backend, iwssim
+//!     and zensim integrated PU21 on every backend, iwssim
 //!     float PU(luma) on every backend; dssim is refused. No umbrella row
 //!     routes the u8 shell any more (zenmetrics#25), so `--hdr-transfer` is a
 //!     no-op on this path (it cannot override the integrated/float feedings)

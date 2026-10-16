@@ -245,11 +245,13 @@ impl CpuMetricState {
                 // the GPU `butter` feature is on, and an HDR butter scorer can only be
                 // constructed in that case anyway (build_hdr_metric needs it). In a
                 // pure `cpu-butter` build the native `new()` default (80 cd/m²) stands.
-                let mut native = butteraugli::ButteraugliParams::new();
+                let native = butteraugli::ButteraugliParams::new();
                 #[cfg(feature = "butter")]
-                if let MetricParams::Butter(gpu) = params {
-                    native = native.with_intensity_target(gpu.intensity_target);
-                }
+                let native = if let MetricParams::Butter(gpu) = params {
+                    native.with_intensity_target(gpu.intensity_target)
+                } else {
+                    native
+                };
                 Ok(CpuMetricState::Butter {
                     params: native,
                     width,

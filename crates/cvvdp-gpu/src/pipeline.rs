@@ -7494,6 +7494,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///   f32 precision).
     /// - **Metal (via `cubecl-wgpu`)** silently no-oped the float
     ///   add (JOD = 10 for every input).
+    ///
     /// [`Cvvdp::compute_dkl_jod_host_pool`] is the verified route on
     /// both until someone runs this path there.
     ///
