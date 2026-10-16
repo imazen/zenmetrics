@@ -23,3 +23,10 @@ skipping a pair. Both drivers also provide procedural wall inputs; generation
 and CAMBI luma construction are outside the timed scoring loop.
 
 Measurements and optimization qualification are pending.
+
+The initial noise scout returns exactly zero CAMBI at 1024 square. Its
+receipts and binary remain a separate control. Before changing metric code,
+the CAMBI wall fixture is extended from the original-author pinned 10-bit
+block-eight, one-code-value staircase. The banded baseline uses the updated
+driver and a separate preserved binary; comparisons use that same driver
+on both sides. The 61-pair path and its studio-601 ingress are unchanged.
