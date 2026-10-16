@@ -626,6 +626,12 @@ crate docs — this file links, it does not duplicate.
   [receipt](benchmarks/wd_port_2026-10-16/README.md).
 - **EXTENSION:** native strided RGB8 and warm-reference feature reuse; explicit
   size/area errors. Spatial maps are unsupported.
+- **EXTENSION:** `wd_s3` is Cool-Chic's default `WassersteinLoss` (`log2_sigma=3`);
+  `wd_s1`, `wd_s2`, `wd_s4` and `wd_s5` run the same code at `log2_sigma` 1, 2, 4
+  and 5, which Cool-Chic does not expose.
+- **MATCHES (on purpose):** local variance is `E[x²] − μ²` in f32, then clamped
+  to 5e-7, as upstream. It cancels in smooth regions; a centred variance would
+  be more stable but would break parity with Cool-Chic.
 - **DIVERGES:** the published AIC preprocessing remains unidentified. A separate
   time-boxed search selected raw post-pool taps with feature-rescaled sigma on
   three pairs; all-61 verification gives column median site errors

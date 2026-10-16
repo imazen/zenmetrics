@@ -25,7 +25,8 @@ including the largest 3355×2516 pair.
 All 25 pairs pass on both engines: 250 comparisons across five columns,
 including 32², 64²–2048² and portrait/landscape odd sizes. Aligned padded rows,
 warm/cold identity and the zero identical-pair score are checked. The oracle
-calls the unmodified Cool-Chic functions; large planes use channel chunks to
+calls Cool-Chic's unmodified `wasserstein_distortion` per tap and rebuilds
+`multi_wasserstein_distortion`'s constant sigma map and f32 per-tap sum around it; large planes use channel chunks to
 bound oracle memory, combining each mean by its channel count. All 1,008
 KonJND pairs were scored with repeated identical results; no mismatches were
 reported. The pooled median is one JND because the identical-pair WD is zero.
@@ -144,3 +145,12 @@ exit 0 (`~/tmp/wd-port/aic-round12/largest-rten.time`). All five scores agree
 with retained CUDA controls within 1.1046152371067653e-7 KonJND;
 [full-precision comparison](largest_engine_parity.tsv). This is a two-engine
 capacity/parity control, separate from the timed convention search.
+
+At the 9,000,000-pixel area cap itself (3000×3000, coordinator rerun after
+review), maximum RSS is 12,346,372 KiB on RTen (50.43 s) and 11,880,128 KiB on
+ONNX Runtime CUDA (36.43 s), both under the 16-GiB cap; the two engines agree to
+1.5e-8 in every column ([cap_memory.tsv](cap_memory.tsv)). Most of it is the two
+images' four VGG16 taps, held at once (3000×3000 taps are 4.0 GiB per image from
+their shapes: 64·9 M + 128·2.25 M + 256·0.56 M + 512·0.14 M floats). Running
+the statistics head per tap would bound it by the largest tap pair instead; not
+done here.

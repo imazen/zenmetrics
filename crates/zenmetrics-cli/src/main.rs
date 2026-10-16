@@ -1586,8 +1586,11 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // A-FINE is an unbounded signed quality score; no characterised
         // mean bounds or constant identity exist for this check.
         MetricKind::Afine => None,
-        // WD is a nonnegative, unbounded feature distortion.
-        MetricKind::Wd => None,
+        // WD is a nonnegative, unbounded feature distortion; identical
+        // inputs score exactly 0 in every column. Measured maxima: 1.50
+        // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens
+        // (zenmetrics-nn models/wd/wd_goldens.tsv); a mean above 50 is bogus.
+        MetricKind::Wd => Some((-0.001, 50.0, 0.0)),
     }
 }
 

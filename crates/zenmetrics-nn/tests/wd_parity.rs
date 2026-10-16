@@ -59,6 +59,8 @@ fn coolchic_five_column_ladder_and_warm_stride() {
     };
     let mut wd = WassersteinDistortion::from_dir(&models, engine).unwrap();
     let goldens = std::fs::read_to_string(models.join("wd_goldens.tsv")).unwrap();
+    // The model directory's goldens must be the committed ones.
+    assert_eq!(goldens, include_str!("../models/wd/wd_goldens.tsv"));
     let mut lines = goldens.lines();
     assert_eq!(
         lines.next(),
@@ -66,6 +68,7 @@ fn coolchic_five_column_ladder_and_warm_stride() {
     );
     let mut worst = [0.0f64; 5];
     let mut count = 0;
+    let mut warm_stride_checked = false;
     for line in lines {
         let f: Vec<_> = line.split('\t').collect();
         assert_eq!(f.len(), 7);
@@ -84,20 +87,17 @@ fn coolchic_five_column_ladder_and_warm_stride() {
             .map(|(_, v)| v)
             .collect()
         };
-        let mut actual = evaluate(&mut wd);
-        let mismatches = |values: &[f64]| {
-            values.iter().zip(&want).enumerate().any(|(k, (a, b))| {
-                !a.is_finite() || (a - b).abs() > 1e-3 * jnd(&format!("wd_s{}", k + 1))
-            })
-        };
-        if mismatches(&actual) {
-            let retry = evaluate(&mut wd);
-            eprintln!(
-                "WD mismatch {} {} initial={actual:?} retry={retry:?}",
-                f[0], f[1]
-            );
-            actual = retry;
-        }
+        let actual = evaluate(&mut wd);
+        // The gate is on the first evaluation; a second one must reproduce it
+        // bit for bit, so engine nondeterminism fails instead of retrying.
+        let again = evaluate(&mut wd);
+        assert_eq!(
+            actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            again.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            "WD repeat mismatch {} {}",
+            f[0],
+            f[1]
+        );
         for k in 0..5 {
             let error = (actual[k] - want[k]).abs();
             worst[k] = worst[k].max(error);
@@ -135,10 +135,15 @@ fn coolchic_five_column_ladder_and_warm_stride() {
                 .evaluate(image(&r, w, h, w * 3), EvalOpts::new())
                 .unwrap();
             assert!(same.scores().all(|(_, v)| v == 0.0));
+            warm_stride_checked = true;
         }
         count += 1;
     }
     assert!(count > 0);
+    assert!(
+        warm_stride_checked,
+        "goldens lack the 1415/64 row the warm-reference and stride controls use"
+    );
     for (k, error) in worst.into_iter().enumerate() {
         eprintln!(
             "WD_s{}: {count} pairs worst {error:.9e} = {:.9e} JND",

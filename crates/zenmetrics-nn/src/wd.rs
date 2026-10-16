@@ -28,6 +28,10 @@ const VAR_MIN: f32 = 5e-7;
 /// Input is strided sRGB8, with each dimension in 8..=4096 and at most
 /// 9,000,000 pixels (1,048,576 pixels on 32-bit targets).
 ///
+/// Memory: both images' four VGG16 feature taps are held at once. Measured
+/// peak RSS at the 9,000,000-pixel cap (3000×3000) is 11.8 GiB on RTen and
+/// 11.3 GiB on ONNX Runtime CUDA (`benchmarks/wd_port_2026-10-16/cap_memory.tsv`).
+///
 /// VGG16 IMAGENET1K_V1 weights are permissive and are not bundled.
 pub struct WassersteinDistortion {
     trunk: Box<dyn Trunk>,
