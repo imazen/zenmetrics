@@ -14,6 +14,7 @@ import subprocess
 import time
 import uuid
 from chunks import combine
+from admission_recovery import recover
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
@@ -95,7 +96,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
     pieces={mode:[] for mode in MODES}
     completed={}
     chunk_ledger=args.root/'chunk-attempts.jsonl'
-    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','chunk_budget_ms','sample_target_ns']
+    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns']
     def retain(value):
         mode=value['mode']
         if value['status']=='partial':
@@ -134,12 +135,18 @@ def run_cell(args, row, models, *, restore_chunks=True):
         command = ['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),
                    str(Path.home()/'work/claudehints/scripts/run-heavy'),
                    '--mem',memory,'--jobs',str(max(1,(os.cpu_count() or 1)-4)),
-                   '--',timeout,'--kill-after=20s','1100s',*command]
+                   '--',timeout,'--kill-after=20s',f'{args.scope_seconds}s',*command]
         print('SUBMIT', stem, attempt, flush=True)
         with log.open('x') as f:
             process = subprocess.run(command, env=env, stdout=f, stderr=subprocess.STDOUT,
                                      check=False)
         text = log.read_text()
+        recovery=[]
+        if process.returncode and platform.system()=='Linux':
+            proofs=[json.loads(line[len('IQA_PROCESS '):]) for line in text.splitlines() if line.startswith('IQA_PROCESS ')]
+            if len(proofs)>1:raise ValueError('Multiple process proofs in one Rust cell')
+            if proofs:recovery=recover(proofs[0],args.root/'recovered-admission')
+            for record in recovery:append(args.root/'admission-recovery.jsonl',record)
         if 'busy load' in text or 'IQA_BUSY ' in text:
             append(args.root / 'admission.jsonl', dict(metric=name, size=row['size_name'],
                    threads=count, attempt=attempt, log=str(log), log_sha256=sha(log),
@@ -154,13 +161,14 @@ def run_cell(args, row, models, *, restore_chunks=True):
         modes={value['mode'] for value in rows}
         if len(rows)!=len(modes) or modes-set(MODES):raise ValueError(f'invalid emitted modes: {log}')
         if process.returncode or modes!=set(MODES):
-            reason={124:'timeout_1100s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
+            reason={124:f'timeout_{args.scope_seconds}s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
             for mode in set(MODES)-modes:
                 rows.append(dict(row,mode=mode,status=f'skipped:{reason}',n=0,
                                  notes=f'No completed timing; retained attempt log {log}'))
         chunked=any(value['status']=='partial' for value in rows) or any(pieces.values())
         for value in rows:
             value['initialization_diagnostics']=[json.loads(s[len('IQA_WARMUP '):]) for s in text.splitlines() if s.startswith('IQA_WARMUP ')]
+            value['admission_recovery']=recovery
             value['resource']=resource(text)
             value['resource_memory_method']=('macOS monitored process-tree RSS; no hard cgroup cap; availability is free+inactive+speculative page proxy' if platform.system()=='Darwin' else 'Linux run-heavy cgroup MemoryMax=16G when available; wrapper log states actual scope support')
             value['log_sha256']=sha(log);value['log_path']=str(log)
@@ -187,12 +195,14 @@ def main():
     p.add_argument('--threads', default='1,all')
     p.add_argument('--model-root', type=Path)
     p.add_argument('--models-json', type=Path)
+    p.add_argument('--scope-seconds', type=int, default=1100, help='1..1100; shorter scopes support timeout-recovery controls')
     p.add_argument('--chunk-budget-ms', type=int, default=850000)
     p.add_argument('--sample-target-ns', type=int, default=1000000)
     p.add_argument('--python-package')
     p.add_argument('--python-executable', type=Path)
     p.add_argument('--reference-jsonl', action='append', type=Path, default=[])
     args = p.parse_args()
+    if not 1 <= args.scope_seconds <= 1100:raise ValueError('scope must be within 1..1100 seconds')
     args.root.mkdir(exist_ok=True, parents=True)
     for directory in ['cells', 'logs']:
         (args.root / directory).mkdir(exist_ok=True)
@@ -293,7 +303,7 @@ def main():
                     continue
                 if all((name, pair['size_name'], count, mode, meta['device']) in done for mode in MODES):
                     continue
-                row = dict(meta | pair | paths, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
+                row = dict(meta | pair | paths, scope_seconds=args.scope_seconds, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
                            threads=count, mode='score', pair_sha256=pair_sha, input_sha256=hashes)
                 if not args.python_package:
                     row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')

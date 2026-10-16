@@ -4,7 +4,7 @@ MIN_ROUNDS=10
 
 def combine(pieces):
     if not pieces:raise ValueError('no chunks')
-    identity=['metric_name','mode','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','chunk_budget_ms','sample_target_ns']
+    identity=['metric_name','mode','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns']
     for row in pieces:
         if any(row.get(k)!=pieces[0].get(k) for k in identity):raise ValueError('chunk identity mismatch')
         if len(row['round_means_ns'])!=row['n']:raise ValueError('chunk sample count mismatch')

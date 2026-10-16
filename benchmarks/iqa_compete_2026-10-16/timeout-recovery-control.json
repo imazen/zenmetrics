@@ -1,0 +1,22 @@
+{
+  "scope": "Real Linux timeout/recovery control; not a metric timing result",
+  "status": "passed",
+  "process": {
+    "pgid": 2228539,
+    "pid": 2228540,
+    "unix_s": 1792194820
+  },
+  "reservation_sequence": 755,
+  "record_sha256": "6fe87ab0ec909bcab503d224f774670c18fe28365d474f3dd46b63ecd4dbb44c",
+  "resource": {
+    "exit_code": 124,
+    "min_available_mib": 23567,
+    "peak_load": 1.56,
+    "peak_rss_gib": 0.03,
+    "seconds": 1
+  },
+  "log_path": "/home/lilith/tmp/iqa-compete/timeout-control-v12/logs/psnr-cid22-1t-e8d1111135b1.log",
+  "log_sha256": "667cf90d30c7472eeff13a0ccdf4d6b75d09cd12551efaa75fc746fba75966d2",
+  "impl_binary_sha": "667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c",
+  "os_guard_controls_passed": 7
+}

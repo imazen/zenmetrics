@@ -972,8 +972,8 @@ iqa-compete-prepare binary reference distorted output:
 iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --threads '{{threads}}'
 
-iqa-compete-charts raw output:
-    python3 benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}'
+iqa-compete-charts raw output python=(env_var_or_default("IQA_COMPETE_PYTHON", env_var("HOME") + "/tmp/iqa-compete/python-venv/bin/python")):
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}'
 
 iqa-compete-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
@@ -1081,4 +1081,14 @@ iqa-compete-python-deps python:
 
 # Force multiple short holds while preserving the production ten-round criterion.
 iqa-compete-chunk-e2e binary pairs output:
-    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --chunk-budget-ms 200 --sample-target-ns 20000000
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --chunk-budget-ms 3000 --sample-target-ns 500000000
+    python3 benchmarks/iqa_compete_2026-10-16/check_chunk_control.py '{{output}}'
+
+# Linux-only reservation recovery uses actual process liveness and flock guards.
+iqa-compete-linux-admission-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_admission_recovery.py
+
+# One-second interruption control; production scopes still default to 1100 seconds.
+iqa-compete-linux-timeout-control binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --scope-seconds 1 --sample-target-ns 2000000000
+    python3 benchmarks/iqa_compete_2026-10-16/check_timeout_control.py '{{output}}'

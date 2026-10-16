@@ -191,6 +191,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let admitted_unix_ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
+    #[cfg(target_os = "linux")]
+    {
+        let stat = fs::read_to_string("/proc/self/stat")?;
+        let pgid: u32 = stat
+            .rsplit_once(')')
+            .ok_or("invalid process stat")?
+            .1
+            .split_whitespace()
+            .nth(2)
+            .ok_or("missing process group")?
+            .parse()?;
+        println!(
+            "IQA_PROCESS {}",
+            json!({"pid":std::process::id(),"pgid":pgid,"unix_s":admitted_unix_ns / 1_000_000_000})
+        );
+        std::io::Write::flush(&mut std::io::stdout())?;
+    }
     let before = load();
     if !config["probe_only"].as_bool().unwrap_or(false) && before.first().is_some_and(|v| *v > 4.) {
         return Err(format!("busy load {before:?}").into());
