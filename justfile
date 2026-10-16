@@ -881,3 +881,7 @@ aic-review-pin-sensitivity:
 
 aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
+
+# Round 14 preserved CPU baseline and profiles; caller owns heavy-job lock.
+aic-perf-big-baseline:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline.sh)"
