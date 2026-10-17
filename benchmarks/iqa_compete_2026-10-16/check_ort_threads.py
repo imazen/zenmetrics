@@ -12,16 +12,22 @@ if a.child:
     model=helper.make_model(graph,opset_imports=[helper.make_opsetid('',17)],ir_version=10)
     options=ort.SessionOptions()
     if a.child!='default':options.intra_op_num_threads=int(a.child);options.inter_op_num_threads=1
+    baseline=[]
+    for status in sorted(P('/proc/self/task').glob('*/status')):
+        fields=dict(line.split(':',1) for line in status.read_text().splitlines() if ':' in line)
+        baseline.append(dict(tid=int(status.parent.name),name=fields['Name'].strip(),affinity=fields['Cpus_allowed_list'].strip()))
     session=ort.InferenceSession(model.SerializeToString(),options,providers=['CPUExecutionProvider'])
     session.run(None,{'x':np.ones((1,16),dtype=np.float32)})
-    masks=[]
+    masks=[];tasks=[]
     for status in sorted(P('/proc/self/task').glob('*/status')):
         line=next(line for line in status.read_text().splitlines() if line.startswith('Cpus_allowed_list:'))
         masks.append(line.split(':',1)[1].strip())
+        fields=dict(line.split(':',1) for line in status.read_text().splitlines() if ':' in line)
+        tasks.append(dict(tid=int(status.parent.name),name=fields['Name'].strip(),affinity=fields['Cpus_allowed_list'].strip(),stat=(status.parent/'stat').read_text(),wchan=(status.parent/'wchan').read_text()))
     print(json.dumps(dict(configuration=a.child,package_version=ort.__version__,
                          requested_intra_threads=options.intra_op_num_threads,
                          requested_inter_threads=options.inter_op_num_threads,
-                         worker_affinity_masks=masks,providers=session.get_providers())))
+                         worker_affinity_masks=masks,baseline_threads=baseline,native_threads=tasks,providers=session.get_providers())))
 else:
     assert not a.output.exists(),'Preserve earlier observations'
     rows=[]
@@ -32,6 +38,7 @@ else:
         env=os.environ|{key:'1' for key in ['OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS']}
         result=subprocess.run(command,env=env,check=True,capture_output=True,text=True)
         row=json.loads(result.stdout);row['stderr']=result.stderr;rows.append(row)
+        a.output.with_name(a.output.stem+'-cases.json').write_text(json.dumps(dict(cases=rows),indent=2)+'\n')
     assert all(mask=='2' for mask in rows[1]['worker_affinity_masks']),'Explicit one-thread session escaped the caller affinity'
     assert len(rows[1]['worker_affinity_masks'])==1,'Explicit one-thread control created additional native workers'
     assert len(rows[2]['worker_affinity_masks'])==20,'Explicit twenty-thread control did not create the requested native pool'
