@@ -26,7 +26,7 @@ def combine(pieces):
         out['contention_peak_cores']=out['contention']['max_competing_interval_cores']
         out['timing_quality']='contaminated' if out['contention']['contaminated'] else 'clean'
     else:out['timing_quality']='legacy_unmonitored'
-    out['chunks']=[{k:row.get(k) for k in ['attempt','n','score','log_path','log_sha256','load_before','load_after','resource']} for row in pieces]
+    out['chunks']=[{k:row.get(k) for k in ['attempt','n','score','log_path','log_sha256','load_before','load_after','resource','timing_quality','contention_peak_cores','contention_receipt']} for row in pieces]
     out['zenbench_chunk_samples']=[dict(arm_index=row['zenbench_arm_index'],samples=row['zenbench_samples']) for row in pieces]
     receipts=[row['resource'] for row in pieces if row.get('resource')]
     if len(receipts)==len(pieces):
