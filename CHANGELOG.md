@@ -30,7 +30,7 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
-- Bound DMM image geometry and cached allocations, poll cancellation per channel, and correct the LAPACK epsilon, small-matrix scaling and reflector multiplication order (score revision 2, `1e67c476`).
+- Bound DMM image geometry and cached allocations, poll cancellation per channel, and correct the LAPACK epsilon, small-matrix scaling and reflector multiplication order (score revision 2, `1e67c476`, `4ed04e9c`; frozen-panel qualification remains unresolved).
 
 ### QUEUED BREAKING CHANGES
 

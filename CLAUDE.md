@@ -1673,3 +1673,19 @@ controls fail before the fix and pass after it without assertion changes.
 Column regions also borrow disjoint output-row slices instead of allocating
 and copying a second c-value plane (`24fe54f8`). Review measurements belong in
 [the perf receipt](benchmarks/aic_perf_big_2026-10-16/README.md).
+
+### Known Bugs: DMM solver revision qualification (2026-10-17)
+
+The LAPACK audit found an epsilon twice the reference value, scaling before
+its small-N early return, and reflector products grouped differently from
+SGER. The initial three corrections preserve all six rten JND rows but exceed
+four existing pinned limits. Neither the f64 norm nor reference three-accumulator
+norm experiments qualify against the frozen panels. Their measurements and
+captured source identities are retained in
+[the audit receipt](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md).
+Do not regenerate floors or demote JND rows to make a solver revision pass.
+
+The follow-up classic-norm candidate, including SLARTG, direct SORM2R and
+right-SGER ordering, fails nine rten and twelve CUDA limits. Two rten and
+four CUDA failures are existing JND rows. Every CUDA mismatch reproduces
+bit-for-bit on its automatic repeat. No failing JND row is demoted.

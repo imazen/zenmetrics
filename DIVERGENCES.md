@@ -616,12 +616,13 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
 
 ### `dmm` (`zenmetrics-nn`) — vs Baoliang93/DMM `DMM_PyTorch` 0.1.2
 
-- **DIVERGES** — the score is *implementation-defined*: `wt` weights each
+- **DIVERGES** — the recorded port scores differ from upstream: `wt` weights each
   patch's singular-value distance by the spread of elementwise products
   of the two SVD bases, and ~90% of tap elements are exact zeros
   post-ReLU, so most patches sit in degenerate singular clusters whose
-  orthonormal basis is chosen by the LAPACK build's deflation path, not
-  by the math. Upstream's oracle is MKL `sgesdd` (`torch.svd` CPU);
+  orthonormal basis depends on the LAPACK build's numerical path.
+  This does not establish that the upstream basis cannot be reproduced.
+  Upstream's oracle is MKL `sgesdd` (`torch.svd` CPU);
   our port is a pure-Rust f32 transliteration of the netlib
   `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` path in score revision 1;
   agreement on one patch is not whole-panel parity —
@@ -631,8 +632,8 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   ours vs MKL-goldens: rten median 1.67336e-3 / max 5.7e-2, ort-cuda median
   7.33735e-4 / max 0.176. Upstream's *own* CPU-vs-CUDA (`torch.svd` MKL vs
   cuSolver, same pipeline): up to **1.73 absolute (~9 JND)** on
-  `2207_128`, +1.7% on `2207_256`, +3.3% on `2406_128` — the published
-  variation is larger than any port gap we introduce.
+  `2207_128`, +1.7% on `2207_256`, +3.3% on `2406_128`. These historical
+  observations do not establish acceptance for a different solver revision.
 - Gate: `dmm` is out of the default `nn-parity` model set;
   `just nn-parity-dmm` asserts the port against per-engine
   netlib-`sgesdd` goldens (`dmm_goldens_netlib_{rten,ort_cuda}.tsv`,
@@ -642,9 +643,15 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   there; rows whose netlib-vs-port draws drift past the gate are pinned
   at their measured residual +5% (`kind=pinned` in the TSV) — a
   regression floor, not a parity claim. The MKL comparison is printed
-  per row, not asserted. Measured 2026-10-17: rten 6 jnd + 18 pinned
+  per row, not asserted. Historical revision-1 classification: rten 6 jnd + 18 pinned
   (worst jnd-row err 1.09e-4), ort-cuda 7 jnd + 17 pinned (worst
-  1.81e-4). See `models/dmm/card.toml`, `benchmarks/dmm_aic_probe/`.
+  1.81e-4). Revision 2 currently fails nine frozen rten limits and twelve
+  CUDA limits, including two/four existing JND rows respectively. Actual
+  canonical-JND coverage is 5/24 rten and 3/24 CUDA; this revision is not
+  qualified by the frozen panels. One newly qualifying rten row is promoted;
+  no limit is increased and no failing JND row is demoted. See
+  [the correction audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md),
+  `models/dmm/card.toml`, and `benchmarks/dmm_aic_probe/`.
 
 ## PieAPP sampling and official entry point (2026-10-16)
 
