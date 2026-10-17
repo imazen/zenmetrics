@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -165,7 +166,8 @@ def main():
     model_files = {}
     if a.model_root:
         model_files = {str(f.relative_to(a.model_root)): sha(f) for f in sorted(a.model_root.rglob('*')) if f.is_file()}
-    identity = dict(commit=commit, host=a.host, os=platform.platform(), input_manifest_sha256=sha(BASE / 'inputs.meta.json'),
+    hardware = metadata(rust)
+    identity = dict(commit=commit, host=a.host, os=platform.platform(), hardware={k:hardware[k] for k in ['cpu_model','arch','gpu','simd_tier']}, input_manifest_sha256=sha(BASE / 'inputs.meta.json'),
                     binaries={k:sha(v) for k,v in binaries.items()}, gpu_runtime=a.gpu_runtime,
                     python_lock=None if a.skip_python else sha(BASE / 'python-env/uv.lock'), models=model_files,
                     sampling='5 below 2K; 3 AIC-large/2K/4K; 1 8K; 1/all threads; both modes')
@@ -175,8 +177,10 @@ def main():
     if meta.exists() and json.loads(meta.read_text())['identity'] != identity:
         raise ValueError('Output content key differs; choose another --output')
     command_line = ['just', 'bench-iqa', *sys.argv[1:]]
-    record = dict(identity=identity, content_key=key(identity), command=command_line,
-                  host=metadata(rust) | dict(host=a.host), sizes=a.sizes, metrics=sorted(selected),
+    record = dict(identity=identity, build_commit=commit, content_key=key(identity), command=command_line,
+                  host=a.host, hardware=hardware, sizes=a.sizes, metrics=sorted(selected),
+                  compiler_flags='--cfg iqa_compete_ingress --cfg iqa_compete_cached; release LTO thin; runtime dispatch',
+                  competitor_versions={'libjxl':'v0.12.0 a7a9c787', 'libvmaf':'3.2.0 from vmaf-head-sys 0.2.0'},
                   resource_wrapper=str(Path.home() / 'work/claudehints/scripts/run-heavy'),
                   resource_wrapper_present=(Path.home() / 'work/claudehints/scripts/run-heavy').is_file(),
                   toolchains={cmd:subprocess.check_output([cmd, '--version'], text=True).strip() for cmd in ['rustc','cargo','cmake','c++']},
@@ -226,7 +230,7 @@ def export(root, destination, cohort, meta):
     out.mkdir(parents=True, exist_ok=True)
     for i in range(0,len(rows),8):
         (out / f'cells-{i//8:04}.json').write_text(json.dumps(rows[i:i+8],indent=2,allow_nan=False)+'\n')
-    (out / 'run.meta').write_text(json.dumps(meta,indent=2)+'\n')
+    (out / 'run.meta').write_text('commit = '+meta['identity']['commit']+'\nhost = '+meta['identity']['host']+'\nos = '+platform.system()+'\ncommand = '+shlex.join(meta['command'])+'\n'+json.dumps(meta,indent=2)+'\n')
     sys.path.insert(0,str(REPO/'scripts/dashboard'))
     import build
     count = sum(len(list(build.adapt(path,spec))) for path in sorted(out.glob('cells-*.json')))

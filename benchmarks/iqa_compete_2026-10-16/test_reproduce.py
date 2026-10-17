@@ -29,6 +29,16 @@ class Reproduce(unittest.TestCase):
             self.assertEqual(command[-3:],['timeout','4','example'])
             self.assertNotIn('run-heavy',' '.join(command))
 
+    def test_portable_lock_descriptor_reaches_contention_and_timeout(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root=Path(directory);base=Path(__file__).parent
+            command=[sys.executable,str(base/'resources.py'),'lock',str(root/'lock'),sys.executable,str(base/'contention.py'),str(root/'receipt.json'),str(root/'log'),'--',
+                     sys.executable,str(base/'resources.py'),'timeout','3',sys.executable,'-c',"import os;os.fstat(int(os.environ['IQA_HEAVY_LOCK_FD']))"]
+            env=dict(os.environ,IQA_HEAVY_LOCK_PATH=str(root/'lock'));env.pop('IQA_HEAVY_LOCK_FD',None)
+            result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertTrue(json.loads((root/'receipt.json').read_text())['inherited_lock_descriptors'])
+
     def test_timeout_reaps_real_child(self):
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root:
             pid=Path(root)/'pid'

@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- Add `just bench-iqa` to rebuild the checked-out IQA harness and pinned competitors, verify corpus hashes, resume content-keyed cells and export registered dashboard rows.
+- Add `just bench-iqa` to rebuild the checked-out IQA harness and pinned competitors, verify corpus hashes, resume content-keyed cells and export registered dashboard rows (`7ef1c4b1`).
 
 - Register reviewed RTEN/CUDA/WebGPU LPIPS timings and exported-golden outcomes, preserving default-thread uncertainty and LOADFAIL/OOM rows; land dashboard regeneration on master (`8ecda1d2`).
 

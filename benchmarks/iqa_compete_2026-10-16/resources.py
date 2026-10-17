@@ -32,8 +32,9 @@ def main():
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('a') as guard:
             fcntl.flock(guard, fcntl.LOCK_EX)
-            raise SystemExit(subprocess.call(a.command))
-    child = subprocess.Popen(a.command, start_new_session=True)
+            raise SystemExit(subprocess.call(a.command, pass_fds=(guard.fileno(),)))
+    inherited = tuple(int(v) for v in os.environ.get("IQA_HEAVY_LOCK_FD", "").split(",") if v)
+    child = subprocess.Popen(a.command, start_new_session=True, pass_fds=inherited)
     try:
         raise SystemExit(child.wait(timeout=float(a.value)))
     except subprocess.TimeoutExpired:
