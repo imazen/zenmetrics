@@ -37,3 +37,13 @@ assert(versionBars.includes('build-a')&&versionBars.includes('build-b'));
 const {slope}=await import('../../web/dashboard/ranking.js');
 assert(slope([versioned[0],{...versioned[1],width:1024}], '512×512','1024×512').includes('0 shared entries'));
 console.log('Implementation versions remain distinct in scaling, fits, labels and rank changes');
+
+const {bars:barChart,speed:speedChart}=await import('../../web/dashboard/plots.js');
+const barSvg=barChart([{label:'slow',value:10,lo:8,hi:12,n:3},{label:'fast',value:1,lo:1,hi:1,n:1},{label:'zero',value:0}],{whiskers:true,label:'Time'});
+assert(barSvg.indexOf('data-label="fast"')<barSvg.indexOf('data-label="slow"'));
+assert.equal((barSvg.match(/class="whisker"/g)||[]).length,1);
+assert(barSvg.includes('Exact zero (1)')&&!barSvg.includes('<circle'));
+assert(!barChart([{label:'a',value:2,lo:1,hi:3}],{whiskers:false}).includes('whisker"'));
+const sp=speedChart([{metric:'m',implementation:'z',width:1000,height:1000,threads:1,mode:'lat',phase:'na',host:'i265',ms:2,source:'s'},{metric:'m',implementation:'z',width:1000,height:1000,threads:1,mode:'lat',phase:'na',host:'i265',ms:4,source:'s'}],'metric',{whiskers:true});
+assert(sp.includes('1000×1000')&&sp.includes('3.00')&&sp.includes('n=2')&&!sp.includes('<circle'));
+console.log('Bars sort ascending, whiskers only on spread, exact zeros labelled, speed bars use real dimensions');

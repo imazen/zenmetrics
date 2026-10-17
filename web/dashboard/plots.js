@@ -5,43 +5,41 @@ const palette=['#12775f','#bf5825','#675bc4','#2179ac','#b34e83','#66822c','#775
 const color = value => palette[[...String(value)].reduce((s,c)=>s+c.charCodeAt(0),0)%palette.length];
 const median = values => {const a=values.toSorted((a,b)=>a-b),m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2};
 const key = (row,fields) => fields.map(k=>row[k]??'missing').join(' / ');
-function mark(x,y,row,shade){
- const title='<title>'+escape(Object.entries(row).map(([k,v])=>`${k}: ${v}`).join('\n'))+'</title>';
- const warm=String(row.phase||row.mode||row.series).includes('warm');
- const hollow=String(row.series).includes('published');
- const attrs=`fill="${hollow?'none':shade}" stroke="${shade}" stroke-width="1.4" opacity=".7"`;
- return warm?`<rect x="${x-3}" y="${y-3}" width="6" height="6" ${attrs}>${title}</rect>`:`<circle cx="${x}" cy="${y}" r="3.5" ${attrs}>${title}</circle>`;
+export function bars(items,{unit='',log=true,whiskers=false,label='Value',caption=''}={}){
+ const valid=items.filter(i=>finite(i.value)&&(!log||i.value>0)).sort((a,b)=>a.value-b.value);
+ const zeros=log?items.filter(i=>i.value===0):[],missing=items.filter(i=>!finite(i.value)).length;
+ if(!valid.length&&!zeros.length)return '<p class="chart-caption">Missing: no finite observations for this selection.</p>';
+ const spread=i=>whiskers&&finite(i.lo)&&finite(i.hi)&&i.hi>i.lo&&(!log||i.lo>0);
+ const vals=valid.flatMap(i=>spread(i)?[i.value,i.lo,i.hi]:[i.value]);
+ let low=log?Math.min(...vals)/1.3:Math.min(0,...vals),high=Math.max(...vals,low+1e-300)*(log?1.3:1.05);if(high===low)high=low+1;
+ const x=v=>310+430*(log?(Math.log(v)-Math.log(low))/(Math.log(high)-Math.log(low)):(v-low)/(high-low));
+ const rowH=26,h=45+(valid.length+(zeros.length?1:0))*rowH+zeros.length*rowH;
+ const ticks=[0,.25,.5,.75,1].map(t=>log?Math.exp(Math.log(low)+t*(Math.log(high)-Math.log(low))):low+t*(high-low));
+ const body=valid.map((i,k)=>{const y=40+k*rowH;return `<g class="bar" data-label="${escape(i.label)}" data-value="${i.value}"><title>${escape(i.title||i.label)}</title><text x="0" y="${y+13}">${escape(i.label.length>46?i.label.slice(0,45)+'…':i.label)}</text><rect x="310" y="${y}" width="${Math.max(1,x(i.value)-310)}" height="17" fill="${i.color||color(i.label)}"/>${spread(i)?`<path class="whisker" d="M${x(i.lo)} ${y+8}H${x(i.hi)}m0 -5v10M${x(i.lo)} ${y+3}v10" stroke="currentColor" fill="none"/>`:''}<text x="${Math.min(800,x(spread(i)?i.hi:i.value)+5)}" y="${y+13}">${i.value.toPrecision(3)}${i.n>1?' · n='+i.n:''}</text></g>`}).join('');
+ const zeroLane=zeros.length?`<text x="0" y="${52+valid.length*rowH}">Exact zero (${zeros.length})</text>`+zeros.map((i,k)=>`<g class="bar zero"><title>${escape(i.title||i.label)}</title><text x="310" y="${52+(valid.length+1+k)*rowH}">${escape(i.label)} = 0</text></g>`).join(''):'';
+ return `<svg viewBox="0 0 850 ${h}" style="min-width:700px" role="img" aria-label="${escape(label)} bar chart${log?', logarithmic axis':''}"><text x="310" y="14">${escape(label)}${unit?' ('+escape(unit)+')':''} · ${log?'log scale':'linear scale'} →</text>${ticks.map(v=>`<path d="M${x(v)} 22V${40+valid.length*rowH}" stroke="currentColor" opacity=".15"/><text x="${x(v)}" y="32">${v.toPrecision(2)}</text>`).join('')}${body}${zeroLane}</svg><p class="chart-caption">${caption} ${whiskers?'Whiskers: observed minimum to maximum across repeats and sources within the exact condition.':'Bars only; switch to “Bars + whiskers” to show the spread.'} ${missing} missing values are not drawn.</p>`;
 }
-export function plot(rows,xKey,yKey,{logX=false,logY=false,categorical=false,colorBy='threads'}={}){
- const valid=rows.filter(r=>(categorical?r[xKey]!=null:finite(r[xKey])&&(!logX||r[xKey]>0))&&finite(r[yKey])&&(!logY||r[yKey]>0));
- const zeroRows=logY?rows.filter(r=>r[yKey]===0):[];
- if(!valid.length&&!zeroRows.length)return '<p class="chart-caption">Missing: no finite nonzero observations for this plot selection.</p>';
- const categories=[...new Set(rows.map(r=>String(r[xKey])))];
- const xv=r=>categorical?categories.indexOf(String(r[xKey])):logX?Math.log10(r[xKey]):r[xKey];
- const yv=r=>logY?Math.log10(r[yKey]):r[yKey];
- const xs=(valid.length?valid:zeroRows).map(xv),ys=valid.map(yv);let minX=Math.min(...xs),maxX=Math.max(...xs),minY=ys.length?(logY?Math.min(...ys):Math.min(0,...ys)):0,maxY=ys.length?Math.max(...ys):1;
- if(minX===maxX){minX-=.5;maxX+=.5}if(minY===maxY)maxY+=1;
- const x=v=>80+(v-minX)/(maxX-minX)*750,y=v=>280-(v-minY)/(maxY-minY)*240;
- const xTicks=categorical?categories.filter((_,i)=>i%Math.max(1,Math.ceil(categories.length/6))===0).map(label=>({v:categories.indexOf(label),label})):Array.from({length:5},(_,i)=>({v:minX+(maxX-minX)*i/4,label:fmt(logX?10**(minX+(maxX-minX)*i/4):minX+(maxX-minX)*i/4)}));
- const svg=`<svg viewBox="0 0 900 365" role="img" aria-label="${escape(yKey)} versus ${escape(xKey)}"><path class="axis" fill="none" d="M80 35V280H840"/>
- ${(valid.length?[0,.25,.5,.75,1]:[]).map(t=>`<text x="0" y="${284-240*t}">${fmt(logY?10**(minY+(maxY-minY)*t):minY+(maxY-minY)*t)}</text>`).join('')}
- ${xTicks.map(t=>`<text x="${x(t.v)}" y="302">${escape(t.label)}</text>`).join('')}
- <text x="80" y="18">${escape(yKey)} · ${valid.length?(logY?'logarithmic':'linear'):'exact zeros only; no nonzero range'} y scale, local to this group</text><text x="320" y="355">${escape(xKey)}${logX?' (log pixels)':''} →</text>
- ${valid.map(r=>mark(x(xv(r)),y(yv(r)),r,color(r[colorBy]))).join('')}
- ${zeroRows.length?`<text x="0" y="330">Exact zero</text>`+zeroRows.map(r=>mark(x(xv(r)),326,r,color(r[colorBy]))).join(''):''}</svg>`;
- const values=[...new Set(valid.map(r=>String(r[colorBy]??'missing')))];
- return svg+`<p class="chart-caption">Color: ${escape(colorBy)} · ${values.map(v=>`<span style="color:${color(v)}">${escape(v)}</span>`).join(' · ')}. Circle: cold/unspecified; square: warm. Published comparisons use hollow marks. ${zeroRows.length} exact zeros occupy the labelled separate lane; ${rows.filter(r=>!finite(r[yKey])).length} missing values are not plotted.</p>`;
+const quantiles=values=>{const a=values.toSorted((a,b)=>a-b);return {median:median(a),lo:a[0],hi:a.at(-1),n:a.length}};
+export function aggregate(rows,keyFields,valueOf){
+ const groups=new Map();for(const r of rows){const v=valueOf(r);if(!finite(v))continue;const k=keyFields.map(f=>r[f]).filter(v=>v!=null&&v!=='missing'&&v!=='').join(' · ')||'not recorded';if(!groups.has(k))groups.set(k,{rows:[],values:[]});const g=groups.get(k);g.rows.push(r);g.values.push(v)}
+ return [...groups].map(([k,g])=>{const q=quantiles(g.values);return {label:k,value:q.median,lo:q.lo,hi:q.hi,n:q.n,rows:g.rows,title:k+'\nmedian '+q.median.toPrecision(4)+' · min '+q.lo.toPrecision(4)+' · max '+q.hi.toPrecision(4)+' · n='+q.n+'\nsources: '+[...new Set(g.rows.map(r=>r.source))].join(', ')}});
 }
-export function speed(rows,group){
+export const dims=r=>finite(Number(r.width))&&finite(Number(r.height))?`${Number(r.width)}×${Number(r.height)}`:'size not recorded';
+export function speed(rows,group,{whiskers=false,unit='ms/MP'}={}){
  const groups=new Map();for(const r of rows){const k=String(r[group]??'missing');if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)}
- return `<p class="chart-caption">Grouped by ${escape(group)}; each group has its own labelled y scale. Thread count determines color; cold and warm observations have distinct marks. Expand any group.</p>`+[...groups].map(([k,rs],i)=>`<details ${i<3?'open':''}><summary>${escape(k)} · ${rs.length} observations</summary>${plot(rs.map(r=>({...r,pixels:r.width*r.height,ms_per_MP:finite(r.ms)?r.ms/(r.width*r.height/1e6):null})),'pixels','ms_per_MP',{logX:true})}</details>`).join('');
+ const value=r=>finite(r.ms)&&r.width>0&&r.height>0?(unit==='ms/MP'?r.ms/(r.width*r.height/1e6):r.ms):null;
+ return `<p class="chart-caption">Grouped by ${escape(group)}. Each bar is the median of one exact condition (metric · implementation · resolution · threads · mode · phase · host). Timings are provisional; final numbers are pending cleaner controlled runs.</p>`+[...groups].map(([k,rs],i)=>`<details ${i<3?'open':''}><summary>${escape(k)} · ${rs.length} observations</summary>${bars(aggregate(rs.map(r=>({...r,size_dims:dims(r)})),['metric','implementation','size_dims','threads','mode','phase','host'],value),{unit,whiskers,label:'Time'})}</details>`).join('');
 }
-export function agreement(rows){
+export function agreement(rows,{whiskers=false}={}){
  const unconfirmed=[...new Set(rows.filter(r=>r.reproduction==='reproduction unconfirmed').map(r=>r.metric))];
  const precision=[...new Set(rows.map(r=>r.oracle_precision).filter(Boolean))];
+ const items=field=>aggregate(rows,['metric','series'],r=>r[field]).map(i=>({...i,label:i.label+' · median over '+i.n+' pairs'}));
  return (unconfirmed.length?`<p class="warning">Published reproduction unconfirmed: ${unconfirmed.map(escape).join(', ')}.</p>`:'')+
- `<p class="chart-caption">Oracle print precision: ${precision.map(escape).join(' · ')||'not recorded'}. A delta from a rounded oracle is limited by its printed precision; small residuals do not establish algorithmic agreement.</p>`+
- plot(rows,'pair','abs_delta',{logY:true,categorical:true,colorBy:'metric'})+plot(rows,'pair','relative_delta',{logY:true,categorical:true,colorBy:'metric'});
+ `<p class="chart-caption">Oracle print precision: ${precision.map(escape).join(' · ')||'not recorded'}. A delta from a rounded oracle is limited by its printed precision; small residuals do not establish algorithmic agreement. Bars show the median delta per metric and series; exact zeros are listed in a separate lane.</p>`+
+ '<h3>Absolute delta</h3>'+bars(items('abs_delta'),{whiskers,label:'|ours − reference|'})+'<h3>Relative delta</h3>'+bars(items('relative_delta'),{whiskers,label:'relative delta'});
+}
+export function scalingBars(rows,{whiskers=false}={}){
+ return bars(threadScaling(rows).map(r=>({label:r.group.split(' / ').filter(x=>x!=='missing').join(' · ')+' · '+r.threads+'T',value:r.speedup,n:r.samples,title:r.group+'\n'+r.threads+' threads: speedup '+r.speedup.toPrecision(4)+' vs 1 thread (medians)\n'+r.source})).filter(i=>!i.label.endsWith(' 1T')),{log:false,whiskers:false,label:'Speedup vs one thread',caption:'Median time at one thread divided by median time at N threads, within one exact workload and size.'});
 }
 const workFields=['metric','implementation','implementation_version','host','os','backend','engine','mode','phase','content','dtype','tf32_conv'];
 export function threadScaling(rows){

@@ -57,3 +57,25 @@ class ModelCards(unittest.TestCase):
         self.assertEqual(HISTORICAL_QUALITY_FAMILY['score_zensim_v0_16'],'zensim')
         self.assertEqual(HISTORICAL_QUALITY_FAMILY['score_cvvdp'],'cvvdp')
         self.assertNotIn('score_zensim_future',HISTORICAL_QUALITY_FAMILY)
+
+
+class ReproAndUnimplemented(unittest.TestCase):
+    def test_repro_features_come_from_cli_source(self):
+        import repro
+        from catalog import rows
+        by_metric = {r['metric']: r for r in rows()}
+        self.assertNotIn('--features', repro.commands('ssim2', by_metric['ssim2'], {})['lines'][2])
+        lpips = repro.commands('lpips-alex', by_metric['lpips-alex'], {'_card_dir': 'lpips'})
+        self.assertIn('--features nn', lpips['lines'][2])
+        self.assertTrue(any('ZENMETRICS_NN_MODEL_DIR' in line for line in lpips['lines']))
+        self.assertIn('--display-model', repro.commands('cvvdp', by_metric['cvvdp'], {})['lines'][-1])
+
+    def test_unimplemented_methods_are_not_in_the_catalog(self):
+        from build import unimplemented_methods
+        from catalog import rows
+        names = {r['metric'] for r in rows()}
+        methods = unimplemented_methods()
+        self.assertTrue(methods)
+        for m in methods:
+            self.assertNotIn(m['name'].lower(), names)
+            self.assertTrue(m['url'].startswith('https://github.com/imazen/zenmetrics/blob/master/docs/'))

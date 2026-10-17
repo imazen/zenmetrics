@@ -48,6 +48,17 @@ lower is better). Needs feature nn; its weights carry
 noncommercial terms (trained on DiffIQA data), so
 ZENMETRICS_NN_ACCEPT_WEIGHTS=afine as for ckdn.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/afine/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric afine --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -126,6 +137,17 @@ code; ViT-B/8 + ResNet-50 taps, deformable fusion, mean of nine
 224×224 crops, higher is better). Needs feature nn; its
 weights state no licence, so ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric ahiq --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -203,6 +225,17 @@ PIL-bilinear half scale, kadid10k Ridge regressor); higher is
 better, [0, 1]. Scored through PairedNoReference: emits arniqa
 (distorted) and arniqa_ref (reference). As lpips-alex for
 ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/arniqa/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric arniqa --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -288,6 +321,17 @@ evaluator (in-tree brisque crate, port of piq 0.8.0 brisque()
 with LIVE's released SVM model). SVR distance; higher is worse.
 Scored through PairedNoReference: emits brisque (distorted)
 and brisque_ref (reference). Needs nr.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric brisque --reference ref.png --distorted dist.png
+```
+
+No-reference: the score describes the distorted image; the CLI still takes both paths.
 
 **Weights:**
 
@@ -448,6 +492,15 @@ butteraugli_pnorm3 (ButteraugliResult::pnorm_3, the libjxl-style
 CID22 paper by Sneyers, Ben Baruch & Vaxman, Cloudinary). One compute() call yields both numbers,
 so emitting both is free.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric butteraugli --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -510,6 +563,17 @@ FR · Classical · GPU · Not documented
 **Cli contract:** Butteraugli — GPU implementation via the butteraugli-gpu crate.
 Emits two columns: butteraugli_max_gpu and butteraugli_pnorm3_gpu.
 Same single-compute() rationale as the CPU variant.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features gpu-butteraugli
+target/release/zenmetrics score --metric butteraugli-gpu --reference ref.png --distorted dist.png
+```
+
+Requires a GPU backend at run time.
 
 **Weights:**
 
@@ -691,6 +755,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** Original Google Butteraugli (revision 2019-03-19); lower is better.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric butteraugli-original --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -763,6 +836,15 @@ NR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Contrast-aware multiscale banding index, studio-swing BT.601 ingress.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric cambi --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -837,6 +919,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** Mean CIEDE2000 colour difference (ΔE00) — sRGB → linear → XYZ D65
 → CIELAB → ΔE00 per pixel → mean. Matches JPEG AIC-4 CIEDE2000
 column. 61-pair median|Δ|=3.0e-5, max|Δ|=2.96e-4 (target ≤ 1e-3).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ciede2000 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -914,6 +1005,17 @@ cat(dist, ref, dist, ref) → dr; upstream eval transform:
 short side →329 then centre-crop 288, bicubic for the distorted
 image, nearest for the reference); higher is better —
 it is a sigmoid quality score, not a distance. As lpips-alex.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/ckdn/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric ckdn --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -1006,6 +1108,17 @@ This is the unsuffixed default, matching the ssim2/dssim/zensim
 convention (unsuffixed = CPU); use cvvdp-gpu for the GPU backend.
 Emits the CPU column name (cvvdp_cpu_imazen_v), distinct from the
 GPU column so sidecars don't collide.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric cvvdp --reference ref.png --distorted dist.png --display-model standard_fhd
+```
+
+Choose the display model that matches your viewing condition; standard_fhd is an example, not a default.
 
 **Weights:**
 
@@ -1236,6 +1349,18 @@ GPU implementation via the cvvdp-gpu crate (dispatched through the
 umbrella by default; score-pairs uses the typed CvvdpBatchScorer
 for instance reuse across pairs). Emits the versioned GPU column
 (cvvdp_imazen_v).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features gpu-cvvdp
+target/release/zenmetrics score --metric cvvdp-gpu --reference ref.png --distorted dist.png --display-model standard_fhd
+```
+
+Requires a GPU backend at run time.
+Choose the display model that matches your viewing condition; standard_fhd is an example, not a default.
 
 **Weights:**
 
@@ -1810,6 +1935,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** Complex-wavelet SSIM: four levels, eight orientations, coarse 7x7 windows.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric cw-ssim --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -1884,6 +2018,17 @@ FR · Learned · CPU · Reported results
 **Cli contract:** DeepDC (upstream DeepDC_PyTorch 0.2 with its ImageNet input
 normalisation on, as the JPEG AIC-4 DeepDC column; no resize); lower
 is better. As lpips-alex.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/deepdc/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric deepdc --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -1966,6 +2111,17 @@ FR · Learned · CPU · Reported results
 **Cli contract:** DISTS (upstream DISTS_pytorch 0.1, no resize); lower is better.
 As lpips-alex.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/dists/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric dists --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -2037,6 +2193,17 @@ FR · Learned · CPU · Not documented
 VGG16 L2-pooled taps, per-patch SVD head, lower is better).
 Needs feature nn; its only weights are torchvision VGG16
 (permissive), so no consent gate.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric dmm --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -2114,6 +2281,17 @@ FR · Learned · CPU · Reported results
 ViT-B/16 ensemble, 1 - cosine, lower is better). Needs
 feature nn; its weights state no licence, so
 ZENMETRICS_NN_ACCEPT_WEIGHTS=dreamsim.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/dreamsim/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric dreamsim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -2201,6 +2379,15 @@ FR · Classical · CPU · Reported results
 
 **Cli contract:** DSSIM — CPU implementation via the dssim-core crate. Distance metric: 0 = identical.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric dssim --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -2274,6 +2461,17 @@ FR · Classical · GPU · Not documented
 **Cli contract:** DSSIM — GPU implementation via the dssim-gpu crate
 (dispatched through the zenmetrics-api umbrella).
 Distance metric: 0 = identical.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features gpu-dssim
+target/release/zenmetrics score --metric dssim-gpu --reference ref.png --distorted dist.png
+```
+
+Requires a GPU backend at run time.
 
 **Weights:**
 
@@ -2482,6 +2680,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** NVIDIA LDR-FLIP with default viewing conditions (lower is better);
 the error map's mean summed in f64, as NVlabs FLIP computes it.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric flip --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -2555,6 +2762,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** LDR-FLIP pooled as flip-evaluator 1.7 does (row-major f32 sum), which
 reproduces the JPEG AIC-4 FLIP column exactly. Reads low against
 flip on large images (about 0.1% at 2048², 1.7% at 4096²).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric flip-v17 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -2634,6 +2850,15 @@ gradient similarity, I/Q chroma term). Similarity on ~[0, 1]:
 reference). One call emits both fsim_imazen_v and
 fsimc_imazen_v. Not routed through the umbrella or the
 orchestrator (CPU-only, no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -2759,6 +2984,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** FSIM/FSIMc with fixed factor 2.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim-k2 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -2830,6 +3064,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** FSIM/FSIMc with fixed factor 3.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim-k3 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -2903,6 +3146,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** FSIM/FSIMc with fixed factor 4.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim-k4 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -2974,6 +3226,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** FSIM/FSIMc with fixed factor 1.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim-nodownscale --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -3047,6 +3308,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** FSIM on unrounded BT.601 luma only (the grayscale path — no I/Q
 chroma term). Emits fsimy_imazen_v.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric fsim-y --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -3124,6 +3394,15 @@ libgmsd). Distance: 0 = identical, larger = worse; typical values
 0..0.35. Scored on BT.601 8-bit luma at half resolution, as the
 reference does. Emits gmsd_cpu_imazen_v. Not routed through the
 umbrella or the orchestrator (CPU-only, no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric gmsd --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -3341,6 +3620,15 @@ sRGB pair through the reference's YIQ color path with the default
 subsampled preprocessing. Emits haarpsi_imazen_v. Not routed
 through the umbrella or the orchestrator (CPU-only, no GPU twin).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric haarpsi --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -3484,6 +3772,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** HaarPSI on unrounded BT.601 luma only (the grayscale path — no
 I/Q color similarity). Emits haarpsiy_imazen_v.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric haarpsi-y --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -3564,6 +3861,15 @@ ColorEncoding::RgbBt709 inside), so plain sRGB8 pairs error with a
 (or the umbrella Metric + compute_pu_nits_interleaved_multi).
 Viewing geometry defaults to DEFAULT_PIX_PER_DEG (30 — the measured
 UPIQ protocol). Emits hdrvdp_imazen_v. No GPU twin.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric hdrvdp --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -3834,6 +4140,15 @@ upstream parameter surface (defaults match the jpeg-ai-qaf
 metrics.py harness: task=quality, rgb-bt.709, led-lcd-srgb,
 age=24, surround=none). Emits hdrvdp3_jod_imazen_v. No GPU twin.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric hdrvdp3 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -3912,6 +4227,17 @@ koniq_pretrained.pkl); higher is better, MOS-scale
 (distorted) and hyperiqa_ref (reference). As arniqa for
 ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE, plus
 ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/hyperiqa/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric hyperiqa --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4001,6 +4327,15 @@ iwssim-gpu for the GPU backend. Score in [0, 1] where 1 =
 identical. Requires min(W, H) >= 176 per the paper's 5-level
 pyramid + 11×11 valid-mode SSIM stats constraint; smaller images
 return an error. Emits the CPU column name (iwssim_cpu_imazen_v).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric iwssim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4144,6 +4479,17 @@ FR · Classical · GPU · Not documented
 (dispatched through the zenmetrics-api umbrella).
 Range [0, 1]; 1.0 = identical.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features gpu-iwssim
+target/release/zenmetrics score --metric iwssim-gpu --reference ref.png --distorted dist.png
+```
+
+Requires a GPU backend at run time.
+
 **Weights:**
 
 ```json
@@ -4224,6 +4570,15 @@ published AIC-4 IW-SSIM column was computed under
 2026-09-25). Emits iwssim_piq_imazen_v so it never mixes
 with iwssim's column in a join. CPU-only.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric iwssim-piq --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -4302,6 +4657,17 @@ is better, MOS [1, 5]. Scored through PairedNoReference:
 emits liqe (distorted) and liqe_ref (reference). As arniqa
 for ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE, plus
 ZENMETRICS_NN_ACCEPT_WEIGHTS=liqe.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/liqe/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric liqe --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4387,6 +4753,17 @@ FR · Learned · CPU · Reported results
 better. Needs the nn feature and an exported model directory in
 ZENMETRICS_NN_MODEL_DIR (see crates/zenmetrics-nn).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric lpips-alex --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -4471,6 +4848,17 @@ FR · Learned · CPU · Reported results
 
 **Cli contract:** LPIPS v0.1, SqueezeNet 1.1 trunk; as lpips-alex.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric lpips-squeeze --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -4554,6 +4942,17 @@ FR · Learned · CPU · Reported results
 **Direction:** lower-is-closer
 
 **Cli contract:** LPIPS v0.1, VGG16 trunk; as lpips-alex.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric lpips-vgg --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4645,6 +5044,15 @@ mad_imazen_v plus mad_hi_imazen_v / mad_lo_imazen_v
 (the two strategy indices). CPU-only — not routed through the
 umbrella or the orchestrator.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric mad --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -4723,6 +5131,17 @@ ckpt_koniq10k); higher is better, normalized [0, 1]
 through PairedNoReference: emits
 maniqa (distorted) and maniqa_ref (reference). As arniqa
 for ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/maniqa/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric maniqa --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4812,6 +5231,15 @@ identical. Scored on the decoded sRGB pair through the
 reference's linear-BT.601 YCbCr + sliding-8×8-DCT masking
 pipeline. Emits mdctpsnr_imazen_v. Not routed through the
 umbrella or the orchestrator (CPU-only, no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric mdctpsnr --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -4969,6 +5397,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** MDSI default summation model (Nafchi et al. 2016), CPU, f64 L/H/M.
 Distance: smaller is better. Uses the cpu-gmsd build feature.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric mdsi --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5040,6 +5477,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Paper-derived four-scale masked GMSD, with declared numerical conventions.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-gmsd --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5113,6 +5559,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** Paper-derived colour MS-GMSDc; not author-software parity.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-gmsdc --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5184,6 +5639,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5257,6 +5721,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5328,6 +5801,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k2 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k2 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5401,6 +5883,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k3 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k3 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5472,6 +5963,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k4 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k4 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5545,6 +6045,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k5 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k5 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5616,6 +6125,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k6 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k6 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5693,6 +6211,15 @@ SSIM, weighted geometric mean of per-level means). Similarity
 on ~[0, 1]: 1 = identical (constant inputs also score 1.0 —
 no NaN). Emits msssim_imazen_v. Not routed through the
 umbrella or the orchestrator (CPU-only, no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric msssim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5825,6 +6352,15 @@ f85a8536. Same studio-601 luma ingress as ssim-libvmaf; the
 JPEG AIC-4 MS-SSIM column. NOT the Wang-MATLAB msssim
 variant (different pyramid, luma, and window handling).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric msssim-libvmaf --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -5903,6 +6439,17 @@ koniq_ckpt.npz; multi-scale transformer over 32x32 patches at
 Scored through PairedNoReference: emits musiq (distorted) and
 musiq_ref (reference). As arniqa for
 ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/musiq/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric musiq --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -5989,6 +6536,17 @@ crate, port of BasicSR niqe.py with LIVE's pristine-model params).
 Mahalanobis distance to the pristine MVG; higher is worse. Scored
 through PairedNoReference: emits niqe (distorted) and niqe_ref
 (reference). Needs nr.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric niqe --reference ref.png --distorted dist.png
+```
+
+No-reference: the score describes the distorted image; the CLI still takes both paths.
 
 **Weights:**
 
@@ -6137,6 +6695,15 @@ FR · Classical · CPU · Reported results
 
 **Cli contract:** Normalized Laplacian Pyramid Distance; lower is better.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric nlpd --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -6219,6 +6786,15 @@ med|Δ| = 0.0026 vs metrics_fullres.csv (53 pairs, 2026-09-26).
 Emits nlpd_iqa so it never mixes with nlpd's column.
 CPU-only.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric nlpd-iqa --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -6298,6 +6874,17 @@ PairedNoReference: emits paq2piq (distorted) and
 paq2piq_ref (reference). As arniqa for
 ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE, plus
 ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/paq2piq/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric paq2piq --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -6381,6 +6968,17 @@ FR · Learned · CPU · Reported results
 **Direction:** lower-is-better
 
 **Cli contract:** PieAPP v0.1, dense patches; noncommercial weights require consent.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/pieapp/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric pieapp --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -6509,6 +7107,17 @@ piqe crate, port of pypiqe 1.2 / MATLAB piqe). Score in
 [0, 100]; higher is worse. Scored through PairedNoReference:
 emits piqe (distorted) and piqe_ref (reference). Needs nr.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric piqe --reference ref.png --distorted dist.png
+```
+
+No-reference: the score describes the distorted image; the CLI still takes both paths.
+
 **Weights:**
 
 ```json
@@ -6632,6 +7241,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** Peak signal-to-noise ratio on encoded RGB8, in decibels.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -6694,6 +7312,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** PSNR of the studio-swing BT.601 Cb plane at full resolution (4:4:4),
 the psnr-ycbcr611 conversion. JPEG AIC-4 PSNR-Cb: 61 pairs
 median |Δ| 1.9e-3 dB, max 1.7e-2 dB (max 2.0e-3 JND).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-cb --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -6758,6 +7385,15 @@ FR · Classical · CPU · Not documented
 the psnr-ycbcr611 conversion. JPEG AIC-4 PSNR-Cr: 61 pairs
 median |Δ| 2.1e-3 dB, max 5.7e-2 dB (max 8.8e-3 JND).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-cr --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -6818,6 +7454,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Peak signal-to-noise ratio on full-range BT.709 luma.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-y --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -6884,6 +7529,15 @@ convention the CLI feeds the in-tree vmaf crate, i.e. what
 libvmaf's psnr aux feature reported under the removed exec
 adapter.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-y-libvmaf --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -6949,6 +7603,15 @@ convention and the JPEG AIC-4 PSNR-Y column (the same plane
 ssim-libvmaf/msssim-libvmaf/psnrhvs-daala build internally;
 equal to --metric psnr-y --luma-ingress yuv601-studio).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-y-studio601 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -7011,6 +7674,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** PSNR-Y on full-range BT.601 luma (the MATLAB rgb2gray weights
 0.299/0.587/0.114) — the most common "PSNR-Y" convention in the
 literature; NOT the same numbers as psnr-y (BT.709).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-y601 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7077,6 +7749,15 @@ PSNR-YCbCr611 column. Studio-swing conversion per pixel:
 Y=round(16+(65.481R+128.553G+24.966B)/255),
 Cb=round(128+(-37.797R-74.203G+112B)/255),
 Cr=round(128+(112R-93.786G-18.214B)/255).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnr-ycbcr611 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7146,6 +7827,15 @@ codec harnesses report). Emits both psnrhvs_imazen_v and
 psnrhvsm_imazen_v — the masked score is a byproduct of the same
 pass. Not routed through the umbrella or the orchestrator (CPU-only,
 no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnrhvs --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7294,6 +7984,15 @@ psnrhvs metric (floating DCT, different CSF + masking —
 ~7.6 dB stricter scoring). Emits four columns:
 psnrhvs_daala_{y,cb,cr} + combined psnrhvs_daala.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnrhvs-daala --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -7356,6 +8055,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** PSNR-HVS-Y — the same metric on BT.601 luma only (the codec-benchmark
 staple; comparable to psnr_hvs_y in Daala/AV1-style reports).
 Emits psnrhvsy_imazen_v and psnrhvsym_imazen_v.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric psnrhvs-y --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7428,6 +8136,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Single-scale structural similarity.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7510,6 +8227,15 @@ MATLAB rgb2gray luma msssim/ssim metrics use. This is the
 metric behind the JPEG AIC-4 SSIM column. --luma-ingress
 does not apply: the variant always builds its own studio-601 Y.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-libvmaf --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -7581,6 +8307,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssim-pyiqa convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7654,6 +8389,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -7725,6 +8469,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32-k2 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32-k2 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7798,6 +8551,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32-k3 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32-k3 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -7869,6 +8631,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32-k4 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32-k4 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -7942,6 +8713,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32-k5 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32-k5 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8014,6 +8794,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssim-pyiqa-f32-k6 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim-pyiqa-f32-k6 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8074,6 +8863,15 @@ FR · Classical · CPU · Reported results
 **Direction:** not recorded
 
 **Cli contract:** SSIMULACRA2 — CPU implementation via Imazen's fast-ssim2 crate.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssim2 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8136,6 +8934,17 @@ FR · Classical · GPU · Not documented
 
 **Cli contract:** SSIMULACRA2 — GPU implementation via the ssim2-gpu crate
 (dispatched through the zenmetrics-api umbrella).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features gpu-ssim2
+target/release/zenmetrics score --metric ssim2-gpu --reference ref.png --distorted dist.png
+```
+
+Requires a GPU backend at run time.
 
 **Weights:**
 
@@ -8314,6 +9123,15 @@ sigma 1.5, valid region, no downsampling, contrast-structure term
 clipped at 0), averaged. Not the same as ssim (reflected borders,
 no clipping).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8385,6 +9203,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8458,6 +9285,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32-k2 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32-k2 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8529,6 +9365,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32-k3 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32-k3 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8602,6 +9447,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32-k4 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32-k4 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8673,6 +9527,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32-k5 convention.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32-k5 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8746,6 +9609,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** AIC2026 ssimc-pyiqa-f32-k6 convention.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimc-pyiqa-f32-k6 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -8806,6 +9678,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Original Cloudinary SSIMULACRA; lower is better.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ssimulacra1 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8880,6 +9761,17 @@ FR · Learned · CPU · Reported results
 
 **Cli contract:** ST-LPIPS, AlexNet (upstream stlpips_pytorch 0.0.2,
 shift-tolerant); lower is better. As lpips-alex.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric stlpips-alex --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -8960,6 +9852,17 @@ FR · Learned · CPU · Reported results
 **Direction:** lower-is-closer
 
 **Cli contract:** ST-LPIPS, VGG16; as stlpips-alex.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric stlpips-vgg --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9044,6 +9947,15 @@ crate, port of the authors' vifp_mscale.m): ratio score
 references yield NaN (denominator = 0 — matching the
 reference). Emits vif_imazen_v. CPU-only — not routed
 through the umbrella or the orchestrator.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vif --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9214,6 +10126,15 @@ is the implementation the JPEG AIC-4 VIF column was computed
 with (u8-rounded round(0.299R+0.587G+0.114B) luma; Δ ≤ 5e-5
 vs GNU Octave vifvec.m). Emits vifvec_imazen_v. CPU-only.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vifvec --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -9274,6 +10195,15 @@ FR · Classical · CPU · Reported results
 **Direction:** not recorded
 
 **Cli contract:** VMAF v0.6.1 (in-tree pure-Rust vmaf crate, libvmaf v3.2.1 match).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9336,6 +10266,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** VMAF v0.6.1 4K model (in-tree vmaf crate).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf-4k --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -9397,6 +10336,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** VMAF v0.6.1neg, with enhancement gain disabled (in-tree vmaf crate).
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf-neg --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -9457,6 +10405,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** vmaf-neg on studio-swing BT.601 YUV (JPEG AIC-4 VMAF-neg).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf-neg-studio601 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9520,6 +10477,15 @@ FR · Classical · CPU · Not documented
 **Cli contract:** vmaf on studio-swing BT.601 YUV (the psnr-y-studio601 luma), the
 convention behind the JPEG AIC-4 VMAF column.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf-studio601 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -9580,6 +10546,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** VMAF v1.0.16 3d0h model (in-tree vmaf crate).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vmaf-v1 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9658,6 +10633,15 @@ Scharr gradients, saliency-weighted pooling). Similarity on
 ~[0, 1]: 1 = identical (flat inputs return NaN, like the
 reference). Emits vsi_imazen_v. Not routed through the
 umbrella or the orchestrator (CPU-only, no GPU twin).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vsi --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9789,6 +10773,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** VSI with fixed factor 2.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vsi-k2 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -9860,6 +10853,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** VSI with fixed factor 3.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vsi-k3 --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -9933,6 +10935,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** VSI with fixed factor 4.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vsi-k4 --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -10004,6 +11015,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** VSI with fixed factor 1.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric vsi-nodownscale --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -10084,6 +11104,17 @@ degraded versus the reference (an identical pair scores a
 nonzero image-dependent floor; KonJND median 0.019, range
 -0.29..0.70). Emits wadiqam_fr_live. As arniqa for
 ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wadiqam-fr-live --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -10169,6 +11200,17 @@ FR · Learned · CPU · Reported results
 **Cli contract:** WaDIQaM-FR TID — as wadiqam-fr-live with the TID2013-trained
 checkpoint (fr_tid_weighted.model; identical-pair floor
 median 12.5, range 9.7..20.6). Emits wadiqam_fr_tid.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wadiqam-fr-tid --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -10258,6 +11300,17 @@ Scored through PairedNoReference: emits wadiqam_nr_live
 (distorted) and wadiqam_nr_live_ref (reference). As arniqa
 for ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wadiqam-nr-live --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -10344,6 +11397,17 @@ checkpoint (nr_tid_weighted.model); measured higher is
 worse despite TID's MOS labels (median rho +0.79 on a JPEG
 q95..q3 ladder). Emits wadiqam_nr_tid and wadiqam_nr_tid_ref.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wadiqam-nr-tid --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -10428,6 +11492,17 @@ FR · Learned · CPU · Reported results
 **Cli contract:** Cool-Chic Wasserstein Distortion at sigma 2^1 through 2^5.
 Raw sRGB VGG16 pre-pool features; lower is closer. Emits five columns.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features nn
+# export the model once (see crates/zenmetrics-nn/models/wd/card.toml for weight terms)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wd --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -10509,6 +11584,15 @@ FR · Classical · CPU · Not documented
 
 **Cli contract:** Wavelet horizontal/vertical similarity; higher is better.
 
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric ws-hv --reference ref.png --distorted dist.png
+```
+
 **Weights:**
 
 ```json
@@ -10569,6 +11653,15 @@ FR · Classical · CPU · Not documented
 **Direction:** not recorded
 
 **Cli contract:** Zensim — CPU implementation via the zensim crate.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric zensim --reference ref.png --distorted dist.png
+```
 
 **Weights:**
 
@@ -10631,6 +11724,17 @@ FR · Classical · GPU · Not documented
 
 **Cli contract:** Zensim — GPU implementation via the zensim-gpu crate
 (dispatched through the zenmetrics-api umbrella).
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric zensim-gpu --reference ref.png --distorted dist.png
+```
+
+Requires a GPU backend at run time.
 
 **Weights:**
 

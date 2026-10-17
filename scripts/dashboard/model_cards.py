@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import tomllib
 from catalog import ROOT, rows as catalog_rows, md_tables, plain, function
+import repro
 
 SITE='https://imazen.github.io/zenmetrics/'
 REPO='https://github.com/imazen/zenmetrics/blob/master/'
@@ -131,6 +132,7 @@ def cards():
              evidence=list(dict.fromkeys(evidence+(['crates/zenmetrics-cli/src/metrics/mod.rs'] if not model else []))),
              divergences=related,conventions={k:model[k] for k in ['aic4','oracle_convention','convention'] if k in model},
              source=record_path,readme_evidence=readme_evidence,columns=row['columns'],
+             repro=repro.commands(metric,row,{'_card_dir':path.parent.name} if path else {}),
              links={'speed':SITE+'#speed?metric='+metric,'quality':SITE+'#quality?metric='+metric,'agreement':SITE+'#agreement?metric='+metric} ))
 
 
@@ -174,6 +176,7 @@ def documentation(items):
         else:out+=['**Paper: citation needed.**','']
         for key in ['recorded_paper','reference_implementation','reference_identity','reference_code_license','rust_license','weights_license','display','output_range','direction','cli_contract']:
             out+=['**'+key.replace('_',' ').capitalize()+':** '+str(c[key]),'']
+        out+=['**Reproduce from the CLI:**','','```sh',*c['repro']['lines'],'```','',*[n+'' for n in c['repro']['notes']],*([''] if c['repro']['notes'] else [])]
         for key in ['weights','inputs','parity','conventions']:
             out+=['**'+key.capitalize()+':**','', '```json',json.dumps(c[key],ensure_ascii=False,indent=2),'```','']
         if c['readme_evidence']:out+=['**Crate documentation:** ['+c['readme_evidence']['source']+']('+REPO+c['readme_evidence']['source']+')', '', c['readme_evidence']['text'],'']

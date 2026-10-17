@@ -224,7 +224,7 @@ HISTORICAL_QUALITY_FAMILY = {
 
 def build(output):
     registry = tomllib.loads((ROOT/'benchmarks/dashboard/datasets.toml').read_text())
-    families = {k: [] for k in ['speed', 'agreement', 'quality', 'catalog', 'coverage', 'scales']}
+    families = {k: [] for k in ['speed', 'agreement', 'quality', 'catalog', 'coverage', 'scales', 'complexity']}
     sources = {}; registered = set(); matches=[];source_counts={};source_mode_counts={}
     aliases={c:r['metric'] for r in catalog_rows() for c in r['columns'].split(';') if c};aliases['butter']='butteraugli';aliases['ms-ssim']='msssim'
     for spec in registry['dataset']:
@@ -290,6 +290,7 @@ def build(output):
     for family, rows in families.items():
         (data/f'{family}.json').write_text(json.dumps(rows, allow_nan=False, separators=(',', ':')))
     for name,content in card_exports(families['models']).items():(data/name).write_text(content)
+    (data/'unimplemented.json').write_text(json.dumps(unimplemented_methods(), separators=(',', ':')))
     unregistered=validate_inventory(ROOT,registered)
     manifest = dict(schema=2, counts={k:len(v) for k,v in families.items()}, sources=sources,
                     quality_correlation_count=sum(r.get('srocc') is not None for r in families['quality']),
@@ -300,6 +301,18 @@ def build(output):
     scan_output(output)
     print(json.dumps(manifest['counts']))
     return manifest
+
+
+def unimplemented_methods(root=ROOT):
+    # Planned, held or declined methods that the CLI does not implement; each cites its source line.
+    methods = tomllib.loads((root/'benchmarks/dashboard/unimplemented.toml').read_text())['method']
+    for m in methods:
+        if set(m) != {'name', 'status', 'source'}: raise ValueError(f'unimplemented method fields: {m}')
+        path, line = m['source'].rsplit(':', 1)
+        lines = (root/path).read_text().splitlines()
+        if not 1 <= int(line) <= len(lines): raise ValueError(f'unimplemented source line missing: {m}')
+        m['url'] = 'https://github.com/imazen/zenmetrics/blob/master/' + path + '#L' + line
+    return methods
 
 
 if __name__ == '__main__':

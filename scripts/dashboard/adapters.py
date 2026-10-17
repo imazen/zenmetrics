@@ -1,6 +1,7 @@
 """Schema-specific measurement normalization. No implied units or score conventions."""
 import json
 import csv
+from pathlib import Path
 import math
 import re
 import struct
@@ -28,6 +29,24 @@ def normalize(path,spec,table,number):
     strict_number=number
     number=lambda value:None if missing(value) else strict_number(value)
     adapter=spec['adapter']
+    if adapter=='complexity':
+        # Source-code operation tallies (not measurements); docs/IQA_COMPLEXITY.md.
+        import importlib.util
+        spec_=importlib.util.spec_from_file_location('complexity_evaluate',Path(__file__).resolve().parents[1]/'complexity/evaluate.py')
+        ev=importlib.util.module_from_spec(spec_);spec_.loader.exec_module(ev)
+        tally=json.loads(path.read_text());errors=ev.validate(tally)
+        if errors:raise ValueError(f'{path}: invalid tally: {errors}')
+        for shape in spec.get('shapes',['256x256','1024x1024','1920x1080','3840x2160']):
+            w,h=ev.parse_shape(shape);r=ev.evaluate(tally,w,h)
+            row=dict(metric=tally['metric'],counter=tally['counter'],kind=tally['kind'],width=w,height=h,shape=f'{w}×{h}',
+                     flops_per_px=r['flops_per_px'],arith_ops_per_px=r['arith_ops_per_px'],bytes_per_px=r['bytes_per_px'],
+                     flops_per_byte=r['flops_per_byte'],halo_px=r['halo_px'],span=r['span'],work_over_span=r['work_over_span'],
+                     min_stage_width=r['min_stage_width'],barriers=r['barriers'],serial_stages=r['serial_stages'],
+                     stages=len(tally['stages']),source_commit=tally['source_commit'],status='provisional tally')
+            for op,by_precision in r['ops_per_px'].items():
+                for precision,value in by_precision.items():row[f'{op}_{precision}']=value
+            yield row
+        return
     if adapter=='model-scales':
         lines=[line for line in path.read_text().splitlines() if line and not line.startswith('#')]
         parsed=list(csv.reader(lines,delimiter='\t'))

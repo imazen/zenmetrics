@@ -1,0 +1,85 @@
+# Methods named in the repository's plans or ledgers that the zenmetrics CLI
+# does not implement. The dashboard lists them flagged "Not implemented".
+# Each entry cites the document line that names it; status words come from
+# that source. Remove an entry when its metric appears in the CLI catalog
+# (scripts/dashboard/test_build.py checks there is no overlap).
+
+[[method]]
+name = "TOPIQ (FR, FR-PIPAL, NR)"
+status = "planned, non-commercial weights opt-in"
+source = "docs/PYIQA_PORT_PLAN.md:243"
+
+[[method]]
+name = "LPIPS+"
+status = "planned (reimplemented from the TOPIQ paper)"
+source = "docs/PYIQA_PORT_PLAN.md:240"
+
+[[method]]
+name = "FGResQ"
+status = "planned"
+source = "docs/PYIQA_PORT_PLAN.md:241"
+
+[[method]]
+name = "NIMA"
+status = "planned, weights licence unknown"
+source = "docs/PYIQA_PORT_PLAN.md:242"
+
+[[method]]
+name = "UNIQUE"
+status = "planned, weights licence unknown"
+source = "docs/PYIQA_PORT_PLAN.md:242"
+
+[[method]]
+name = "DBCNN"
+status = "planned, non-commercial weights opt-in"
+source = "docs/PYIQA_PORT_PLAN.md:243"
+
+[[method]]
+name = "CLIP-IQA / CLIP-IQA+"
+status = "planned, non-commercial weights opt-in"
+source = "docs/PYIQA_PORT_PLAN.md:243"
+
+[[method]]
+name = "QualiCLIP"
+status = "planned, non-commercial weights opt-in"
+source = "docs/PYIQA_PORT_PLAN.md:243"
+
+[[method]]
+name = "Q-Align / Q-ReAlign / Compare2Score"
+status = "on hold (2-19 GB language models)"
+source = "docs/PYIQA_PORT_PLAN.md:245"
+
+[[method]]
+name = "FID"
+status = "on hold"
+source = "docs/PYIQA_PORT_PLAN.md:245"
+
+[[method]]
+name = "TOPIQ face variants"
+status = "on hold (needs a face detector)"
+source = "docs/PYIQA_PORT_PLAN.md:245"
+
+[[method]]
+name = "MS-SWD"
+status = "on hold (no upstream licence; weights only via pyiqa)"
+source = "docs/PYIQA_PORT_PLAN.md:264"
+
+[[method]]
+name = "IDFIQA (AIC-4 proposal)"
+status = "not implemented: no licensed code; planned from the paper"
+source = "docs/AIC2026_METRICS_AND_FITTING.md:264"
+
+[[method]]
+name = "DVIFM (AIC-4 proposal)"
+status = "not reproduced in zenmetrics"
+source = "docs/AIC2026_METRICS_AND_FITTING.md:263"
+
+[[method]]
+name = "AIMOS"
+status = "not identified publicly"
+source = "docs/PYIQA_PORT_PLAN.md:268"
+
+[[method]]
+name = "TReS, CNNIQA, IQT, MA-CLIP, MetaIQA"
+status = "not planned (licence or distribution terms)"
+source = "docs/PYIQA_PORT_PLAN.md:246"

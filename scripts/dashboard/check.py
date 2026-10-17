@@ -24,13 +24,22 @@ def check(directory, screenshots, port=3387):
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.on('console',lambda m:errors.append(m.text) if m.type=='error' else None)
             page.on('response',lambda r:errors.append(f'HTTP {r.status}: {r.url}') if r.status>=400 else None)
-            for view in ['speed','agreement','quality','catalog']:
+            for view in ['speed','agreement','quality','complexity','catalog']:
                 page.goto(f'http://127.0.0.1:{port}/#'+view)
                 page.wait_for_function('(v)=>window.dashboardReady===v',arg=view)
                 assert page.locator('#table tbody tr').count()==min(2000,manifest['quality_correlation_count'] if view=='quality' else manifest['counts'][view]), view
                 if view=='quality' and manifest['quality_point_count']:
-                    assert page.locator('#secondary svg').count()>0, 'real per-image scatter missing'
+                    assert 'scatter was removed' in page.locator('#secondary').inner_text(), 'per-image note missing'
                 if view!='catalog':assert page.locator('#chart svg').count()>0,view
+                assert page.locator('#chart circle, #secondary circle').count()==0, view+': scatter marks remain'
+                assert 'pending cleaner controlled runs' in page.locator('#provisional').inner_text()
+                if view in ['speed','agreement']:
+                    assert page.locator('#chart-mode [data-mode]').count()==2, view
+                    assert page.locator('#chart .bar').count()>0, view+': bars missing'
+                    assert page.locator('#chart .whisker').count()==0, view+': default must be plain bars'
+                    page.locator('#chart-mode [data-mode="whiskers"]').click()
+                    page.wait_for_function('(v)=>window.dashboardReady===v && location.hash.includes("chart=whiskers")',arg=view)
+                    assert page.locator('#chart-mode [aria-pressed="true"]').inner_text()=='Bars + whiskers'
                 assert page.locator('#provenance').inner_text(),view
                 page.locator('th button').first.click()
                 if screenshots:
@@ -42,22 +51,40 @@ def check(directory, screenshots, port=3387):
             assert page.locator('#missing-ranking').count()==1
             assert 'size=' in page.url
             if screenshots:page.screenshot(path=str(screenshots/'ranking.png'),full_page=True)
-            page.locator('[data-ranking="layout"]').select_option('all sizes')
+            assert page.locator('.rank-bar .whisker').count()==0
+            page.locator('#chart-mode [data-mode="whiskers"]').click()
+            page.wait_for_function('window.dashboardReady==="ranking" && location.hash.includes("layout=whiskers")')
+            page.locator('#chart-mode [data-mode="all sizes"]').click()
             page.wait_for_function('window.dashboardReady==="ranking" && document.querySelector(".rank-multiples")')
             assert page.locator('.rank-multiples>section').count()>=14
             if screenshots:page.screenshot(path=str(screenshots/'ranking-all-sizes.png'),full_page=True)
-            page.locator('[data-ranking="layout"]').select_option('rank change')
+            page.locator('#chart-mode [data-mode="rank change"]').click()
             page.locator('svg[aria-label="Rank change between resolutions"]').wait_for()
             if screenshots:page.screenshot(path=str(screenshots/'ranking-slope.png'),full_page=True)
             page.goto(f'http://127.0.0.1:{port}/#models')
             page.wait_for_function('window.dashboardReady==="models"')
-            assert page.locator('.model-card').count()==manifest['counts']['models']
+            assert page.locator('.model-cell .model-card').count()==manifest['counts']['models']
+            unimplemented=json.loads((directory/'data/unimplemented.json').read_text())
+            assert unimplemented and page.locator('.unimplemented-card').count()==len(unimplemented)
+            assert page.locator('.unimplemented-card .model-badge.unimplemented').count()==len(unimplemented)
+            implemented={c['metric'] for c in json.loads((directory/'data/models.json').read_text())}
+            assert not any(m['name'] in implemented for m in unimplemented)
+            page.locator('.model-cell [data-star="ssim2"]').click()
+            assert page.locator('.model-cell [data-star="ssim2"]').get_attribute('aria-pressed')=='true'
+            page.goto(f'http://127.0.0.1:{port}/#models?starred=1')
+            page.wait_for_function('window.dashboardReady==="models" && location.hash.includes("starred=1")')
+            assert page.locator('.model-cell .model-card').count()==1 and page.locator('.unimplemented-card').count()==0
+            page.locator('.model-cell [data-star="ssim2"]').click()
+            page.wait_for_function('document.querySelectorAll(".model-cell .model-card").length===0')
+            page.goto(f'http://127.0.0.1:{port}/#models');page.wait_for_function('window.dashboardReady==="models"')
             assert page.locator('.model-export a').count()==3
             if screenshots:page.screenshot(path=str(screenshots/'models.png'))
             page.locator('[data-model="lpips-alex"]').click()
             page.locator('#model-detail').wait_for()
             assert page.locator('#model-detail').evaluate('(d)=>d.open')
             assert 'Richard' in page.locator('#model-detail').inner_text()
+            repro=page.locator('#repro-text').inner_text()
+            assert 'zenmetrics score --metric lpips-alex' in repro and '--features nn' in repro and 'ZENMETRICS_NN_MODEL_DIR' in repro
             assert 'BSD-2-Clause' in page.locator('#model-detail').inner_text()
             page.locator('#model-detail summary').filter(has_text='BibTeX').click()
             assert page.locator('#model-detail .bibtex').inner_text().startswith('@misc{')
@@ -87,7 +114,7 @@ def check(directory, screenshots, port=3387):
             page.locator('#close-model').click()
             page.set_viewport_size({'width':1440,'height':1000})
             from urllib.parse import urlencode
-            ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs',impl='competitors',source='',size='512×512',unit='ms/MP',layout='single')
+            ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs',impl='competitors',source='',size='512×512',unit='ms/MP',layout='whiskers')
             page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(ranking_params))
             page.wait_for_function('window.dashboardReady==="ranking"')
             assert page.locator('.whisker').count()>0
@@ -145,7 +172,7 @@ def check(directory, screenshots, port=3387):
             page.goto(f'http://127.0.0.1:{port}/#quality?'+urlencode(dict(dataset=dataset)))
             page.wait_for_function('window.dashboardReady==="quality"')
             assert page.locator('#table tbody tr').count()==manifest['source_counts'][source]
-            assert page.locator('#secondary svg').count()>0
+            assert page.locator('#chart svg').count()>0
             if screenshots:page.screenshot(path=str(screenshots/'quality-cid22.png'),full_page=True)
             page.goto(f'http://127.0.0.1:{port}/#quality?q=no-such-measured-metric')
             page.wait_for_function('window.dashboardReady==="quality"')
