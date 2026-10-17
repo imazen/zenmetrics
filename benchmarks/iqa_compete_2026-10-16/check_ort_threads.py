@@ -28,7 +28,8 @@ else:
     for setting in ['default','1','20']:
         command=[sys.executable,str(P(__file__).resolve()),str(a.output),'--child',setting]
         if setting!='20':command=['taskset','-c','2',*command]
-        env=os.environ|{key:('20' if setting=='20' else '1') for key in ['OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS']}
+        # Isolate the native ORT pool from numpy's independent BLAS pool.
+        env=os.environ|{key:'1' for key in ['OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS']}
         result=subprocess.run(command,env=env,check=True,capture_output=True,text=True)
         row=json.loads(result.stdout);row['stderr']=result.stderr;rows.append(row)
     assert all(mask=='2' for mask in rows[1]['worker_affinity_masks']),'Explicit one-thread session escaped the caller affinity'
