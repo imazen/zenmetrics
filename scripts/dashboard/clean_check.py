@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix='dashboard-clean-',dir=Path.home()/'tmp'
     archive=base/'source.tar'
     with archive.open('wb') as f:
         subprocess.run(['git','--git-dir='+git_dir,'archive',revision,'scripts/dashboard','web/dashboard',
-                        'benchmarks','README.md','docs/MODEL_CARDS.md','docs/METRIC_PROVENANCE.md','scripts/ci/check_hygiene.py','scripts/lib/hygiene_patterns.txt','Cargo.toml','DIVERGENCES.md','docs/AIC2026_METRICS_AND_FITTING.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','docs/PYIQA_PORT_PLAN.md','docs/IQA_COMPLEXITY.md','scripts/complexity','crates'],stdout=f,check=True)
+                        'benchmarks','README.md','docs/MODEL_CARDS.md','docs/METRIC_PROVENANCE.md','scripts/ci/check_hygiene.py','scripts/lib/hygiene_patterns.txt','Cargo.toml','DIVERGENCES.md','docs/AIC2026_METRICS_AND_FITTING.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','docs/PYIQA_PORT_PLAN.md','docs/IQA_COMPLEXITY.md','scripts/complexity','web/metrics/coverage.json','crates'],stdout=f,check=True)
     with tarfile.open(archive) as f:f.extractall(source,filter='data')
     subprocess.run([sys.executable,str(source/'scripts/dashboard/regenerate.py')],check=True)
     subprocess.run([sys.executable,str(source/'scripts/dashboard/build.py'),'--output',str(base/'site')],check=True)

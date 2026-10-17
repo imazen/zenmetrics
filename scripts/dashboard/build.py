@@ -274,6 +274,14 @@ def build(output):
                             families['agreement'].append(dict(metric=spec['metric'],pair=raw['key'],series=series,ours=a,reference=b,abs_delta=abs(a-b),relative_delta=abs((a-b)/b) if b else None,source=key,status='historical'))
     families['catalog'] = list(catalog())
     families['models'] = list(model_cards())
+    # Browser workbench status per CLI name (web/metrics/coverage.json, owned by the workbench).
+    coverage = json.loads((ROOT/'web/metrics/coverage.json').read_text())
+    if coverage.get('schema') != 1: raise ValueError('workbench coverage schema')
+    browser = {m['name']: m for m in coverage['metrics']}
+    for card in families['models']:
+        entry = browser.get(card['metric'])
+        card['workbench'] = dict(status=entry['status'], maps=entry['maps'], reason=entry['reason'], module=entry['module']) \
+            if entry else dict(status='not listed', maps=[], reason='absent from the workbench coverage file', module=None)
     for card in families['models']:
         names={card['metric'],*card['columns'].split(';')}
         match=lambda row:row.get('metric') in names or str(row.get('metric','')).replace('_','-')==card['metric']

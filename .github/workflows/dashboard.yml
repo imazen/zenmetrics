@@ -6,6 +6,7 @@ on:
       - 'README.md'
       - 'benchmarks/**'
       - 'web/dashboard/**'
+      - 'web/metrics/coverage.json'
       - 'scripts/dashboard/**'
       - 'docs/**'
       - 'docs/AIC2026_METRICS_AND_FITTING.md'

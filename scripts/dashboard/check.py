@@ -91,7 +91,13 @@ def check(directory, screenshots, port=3387):
             page.locator('#model-detail').wait_for()
             assert page.locator('#model-detail').evaluate('(d)=>d.open')
             assert 'Richard' in page.locator('#model-detail').inner_text()
+            models_data={c['metric']:c for c in json.loads((directory/'data/models.json').read_text())}
+            assert 'Browser: '+models_data['lpips-alex']['workbench']['status'] in page.locator('#model-detail .workbench-link').inner_text()
             repro=page.locator('#repro-text').inner_text()
+            page.goto(f'http://127.0.0.1:{port}/#models?metric=ssim2');page.locator('#model-detail').wait_for()
+            assert models_data['ssim2']['workbench']['status'] in ['score+map','score-only']
+            assert page.locator('#model-detail .workbench-link a').get_attribute('href')=='https://metrics.imazen.org/?metric=ssim2'
+            page.goto(f'http://127.0.0.1:{port}/#models?metric=lpips-alex');page.locator('#model-detail').wait_for()
             assert 'zenmetrics score --metric lpips-alex' in repro and '--features nn' in repro and 'ZENMETRICS_NN_MODEL_DIR' in repro
             assert 'BSD-2-Clause' in page.locator('#model-detail').inner_text()
             page.locator('#model-detail summary').filter(has_text='BibTeX').click()
