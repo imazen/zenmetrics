@@ -78,6 +78,7 @@ def rows():
             f=line.split('\t');
             if f[0] not in ['column','metric']:scales[f[0]]=f[1]
     ledgers=md_tables(ROOT/'docs/METRIC_PROVENANCE.md')
+    parity_rows=[r for t in ledgers if 'golden parity gate' in t[0] for r in t[1:]]
     refs={};last=[]
     for table in ledgers:
         if 'reference impl (validation oracle)' not in ' '.join(table[0]):continue
@@ -106,7 +107,9 @@ def rows():
                 if isinstance(lic,dict):lic=tomllib.loads((ROOT/'Cargo.toml').read_text())['workspace']['package'].get('license','no evidence')
                 license_name=lic or 'no evidence'
             if 'not yet' in oracle.lower() or 'not compared' in oracle.lower():parity='not compared (ledger)'
-            else:parity='reference named; gate evidence in ledger'
+            else:
+                match=next((r for r in parity_rows if re.search(r'(?<![\w-])'+re.escape(name)+r'(?![\w-])',plain(r[0]))),None)
+                parity=('reported gate: '+plain(match[2])+'; observed: '+plain(match[3])) if match else 'no evidence'
             evidence='docs/METRIC_PROVENANCE.md';paper=plain(entry[2])
         yield dict(metric=name,backend='GPU' if kind in gpu else 'CPU',requires_gpu=str(kind in gpu).lower(),needs_display=str(kind in display).lower(),luma_only=str(kind in luma).lower(),columns=columns[kind],column_expression=expressions[kind],nn=str(kind in nn).lower(),nr=str(kind in nr).lower(),kind=card_kind,direction=direction,license=plain(license_name),paper=plain(paper),reference=plain(str(oracle)),parity=parity,evidence=evidence or 'no evidence',jnd_scale=';'.join(c+'='+scales[c] for c in cols if c in scales),column_scope='static feature-off names; enabled implementations may version columns' if not card else 'model output columns')
 
