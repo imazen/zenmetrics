@@ -1,0 +1,129 @@
+{
+  "present": 1684,
+  "expected": 2996,
+  "missing": 1312,
+  "per_size": {
+    "cid22": {
+      "present": 428,
+      "expected": 428,
+      "minimum_n": 5,
+      "timed_minimum_met": 260,
+      "timed_source_contaminated": 80,
+      "source_unsupported": 146,
+      "adapter_omissions": 6,
+      "refused_or_short": 22,
+      "actual_n_counts": {
+        "0": 168,
+        "10": 260
+      }
+    },
+    "aic-small": {
+      "present": 428,
+      "expected": 428,
+      "minimum_n": 5,
+      "timed_minimum_met": 139,
+      "timed_source_contaminated": 4,
+      "source_unsupported": 107,
+      "adapter_omissions": 3,
+      "refused_or_short": 182,
+      "actual_n_counts": {
+        "0": 289,
+        "5": 139
+      }
+    },
+    "aic-medium": {
+      "present": 428,
+      "expected": 428,
+      "minimum_n": 5,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 150,
+      "adapter_omissions": 6,
+      "refused_or_short": 278,
+      "actual_n_counts": {
+        "0": 176,
+        "3": 252
+      }
+    },
+    "aic-large": {
+      "present": 400,
+      "expected": 428,
+      "minimum_n": 3,
+      "timed_minimum_met": 241,
+      "timed_source_contaminated": 9,
+      "source_unsupported": 145,
+      "adapter_omissions": 6,
+      "refused_or_short": 14,
+      "actual_n_counts": {
+        "0": 159,
+        "3": 241
+      }
+    },
+    "2k": {
+      "present": 0,
+      "expected": 428,
+      "minimum_n": 3,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 0,
+      "adapter_omissions": 0,
+      "refused_or_short": 0,
+      "actual_n_counts": {}
+    },
+    "4k": {
+      "present": 0,
+      "expected": 428,
+      "minimum_n": 3,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 0,
+      "adapter_omissions": 0,
+      "refused_or_short": 0,
+      "actual_n_counts": {}
+    },
+    "8k": {
+      "present": 0,
+      "expected": 428,
+      "minimum_n": 1,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 0,
+      "adapter_omissions": 0,
+      "refused_or_short": 0,
+      "actual_n_counts": {}
+    }
+  },
+  "created_utc": "2026-10-17T10:12:54.262852+00:00",
+  "host": "r7900x",
+  "cpu": "AMD Ryzen 9 7900X 12-Core Processor",
+  "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "raw_archive": "/home/lilith/tmp/iqa-compete/task4/receipt-snapshots/r7900x-29499294e84fd837.jsonl",
+  "raw_sha256": "29499294e84fd8376c132dc07a8b2ef6757261a69b407ca1d4f4f4e5ce6dca7a",
+  "raw_bytes": 8225280,
+  "incomplete_trailing_bytes": 0,
+  "source_commits": [
+    "d6b18bbfb880474849b603e9d7300ee5d32608b9"
+  ],
+  "binary_row_counts": {
+    "0561e28b6df0fa724259e2520e7d1f858865bd54755174bb778488131f6d3751": 424,
+    "0a36a76f31cb28113d54eaddfce768c83c2c561e6b1a3e79486bfc418e21e53e": 456,
+    "fd037760f7bd451cb676cc030de36b3c69b0877b89bedc8e7138dc46395b3747": 804
+  },
+  "statuses": {
+    "unsupported": 548,
+    "ok": 892,
+    "skipped:hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)": 7,
+    "skipped:score-path-refused; map capability not qualified on this input": 21,
+    "skipped:hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding": 7,
+    "skipped:SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)": 2,
+    "skipped:SSIM-pyiqa: scale 5 is 7x7; valid 11x11 window requires at least 11x11 (fixed factor 5)": 2,
+    "skipped:SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 6)": 2,
+    "skipped:process_exit_1": 193,
+    "skipped:SSIM-pyiqa: scale 5 is 9x10; valid 11x11 window requires at least 11x11 (fixed factor 6)": 1,
+    "skipped:timeout_1100s": 4,
+    "skipped:process_exit_143": 3,
+    "skipped:musiq: invalid_input: image exceeds the metric's 8192-patch-row intermediate bound": 2
+  },
+  "sample_policy": "Five at CID22/AIC-small/AIC-medium; three at AIC-large/2K/4K; one at 8K. Actual n retained.",
+  "limits": "Partial historical cohort. Source contamination labels are preserved; final assessment also considers resource-interruption receipts. Unsupported rows with known adapter omissions do not establish map unavailability. No new metric or parity evaluations."
+}

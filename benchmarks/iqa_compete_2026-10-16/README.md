@@ -208,3 +208,23 @@ master's NN WebGPU changes, both provider builders across three constructors,
 14 feature-matrix rows, CLI/driver clippy and the full harness controls.
 At each round end, including data updates, merge current master and provide
 the verified branch landing SHA to the coordinator.
+
+## Remote coverage snapshot (2026-10-17)
+
+The retained historical cohort has [1,684/2,996 r7900x rows](task4-r7900x-progress-20261017-1016.json)
+and [2,258/3,164 Mac rows](task4-mac-progress-20261017-1016.json). These are
+recorded attempts, including unsupported routes and refusals. Per-size receipts
+separate timings meeting the requested minimum from short samples. In particular,
+the external controller requested three AIC-medium samples; the policy requires
+five. Actual observations remain unchanged and count as short. Known native-map
+adapter omissions are counted separately from metric map unavailability.
+
+Both queues continue. These observations retain frozen source `d6b18bbf` and
+their actual executable hashes; merging the harness does not relabel them as
+measurements of current master. The immutable raw prefixes remain external,
+with SHA256 pointers in the compact receipts.
+
+The [Mac containment control](task4-mac-supervision-control-20261017.json)
+records a real child terminated by the resource guard with `gtimeout --foreground`.
+The tracked launcher now retains that option. This is process containment
+evidence, not a metric or score-parity qualification.

@@ -81,7 +81,7 @@ def normalize(path,spec,table,number):
                     base['threads']=r['mode'][3:];base['mode']='parallel pairs per-pair normalized'
                 yield base
             elif adapter=='cpu-full':yield dict(base,ms=number(r['wall_ms']),peak_heap_bytes=number(r['peak_heap_bytes']))
-            elif adapter=='nn-speed':yield dict(base,ms=number(r['median_ms']),backend=r.get('device','CUDA' if 'cuda' in r.get('engine','') else 'CPU'),mode=r['mode'],phase='warm' if r['mode']=='warm' else 'not recorded',dtype=r.get('dtype','native'),tf32_conv=r.get('tf32_conv','missing'),library_version=r.get('torch','missing'),min_ms=number(r.get('min_ms')),notes=r.get('note',''))
+            elif adapter=='nn-speed':yield dict(base,ms=number(r['median_ms']),backend=r.get('device',spec.get('backend','CUDA' if 'cuda' in r.get('engine','') else 'CPU')),mode=r['mode'],phase='warm' if r['mode']=='warm' else 'not recorded',dtype=r.get('dtype','native'),tf32_conv=r.get('tf32_conv','missing'),library_version=r.get('torch','missing'),min_ms=number(r.get('min_ms')),notes=r.get('note',''))
             elif adapter=='gpu-cold':
                 for phase,col in [('cold','cold_total_ms'),('warm','warm_per_call_ms')]:yield dict(base,backend=r['backend'],phase=phase,ms=number(r[col]))
             elif adapter=='gpu-sweep':yield dict(base,backend=r['backend'],ms=number(r['wall_median_ms']),peak_vram_bytes=number(r['peak_vram_bytes']),phase='measured wall median')
@@ -92,6 +92,14 @@ def normalize(path,spec,table,number):
             elif adapter=='backend-ab':
                 for backend,prefix in [('CUDA','cuda'),('Vulkan','vk')]:
                     value=r[prefix+'_med_ms'];yield dict(base,backend=backend,ms=None if missing(value) else number(value),p90_ms=None if missing(r[prefix+'_p90_ms']) else number(r[prefix+'_p90_ms']),status='unavailable' if missing(value) else 'historical',phase='warm')
+        elif adapter=='nn-goldens':
+            if r['status'] not in ['PASS','LOADFAIL','OOM']:raise ValueError('unknown golden status')
+            ours=number(r['got']);reference=number(r['want'])
+            yield dict(metric=r['model'],pair=r['stem']+':'+r['size'],size=r['size'],engine=r['engine'],
+                       host=spec['host'],commit=r['commit'],series='exported upstream goldens',
+                       ours=ours,reference=reference,abs_delta=number(r['abs_err']),jnd_delta=number(r['jnd_err']),
+                       status='historical' if r['status']=='PASS' else 'failed',details=r['status'],
+                       oracle_precision='recorded decimal scores and residuals',reproduction='exported golden panel; consult source scope')
         elif adapter=='parity-wide':
             for measurement in spec['measurements']:
                 ours=number(r[measurement['ours']]);ref=number(r[measurement['reference']]);prefix=measurement.get('delta_prefix','')

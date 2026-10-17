@@ -1728,3 +1728,23 @@ complete with one retained sample each and clean contention receipts. The
 records 8–9-second scopes and 9.22–9.23 GiB peak host RSS; these are not VRAM measurements.
 The original attempt logs remain under `~/tmp/iqa-compete/coverage-rust-v16/cuda/logs/`.
 No metric algorithm or allocation limit is changed.
+
+### Known Bugs: dashboard derived-copy staleness (2026-10-17)
+
+The Pages workflow's committed-copy checks failed after a source-document
+change without refreshed markdown extracts. Deployment now regenerates the
+catalog and extracts and reports copy drift in its build summary. Local
+`--check` recipes remain strict. Malformed sources and unclassified benchmark
+uploads still fail. Regeneration handles added/obsolete owned shards without
+removing unrelated files; controls cover drift, idempotence, malformed-source
+refusal and the retained inventory gate.
+
+### Known Bugs: macOS IQA timeout process containment (2026-10-17)
+
+A timed A-FINE scope survived its resource wrapper's pressure-triggered exit
+because gtimeout created a separate process group. The owned group was
+terminated and its attempt logs retained. The benchmark launcher now uses
+`gtimeout --foreground`; a real-child guard control confirms the child exits.
+The [receipt](benchmarks/iqa_compete_2026-10-16/task4-mac-supervision-control-20261017.json)
+binds that control and the earlier interruption record. This does not claim a
+macOS hard memory cap or establish a metric's peak memory usage.
