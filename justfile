@@ -1166,3 +1166,10 @@ iqa-compete-learned-cpu binary pairs output models model_map sizes="cid22,2k" th
 # Audit the owner-requested 113-name inventory, independent of any old build ledger.
 iqa-compete-coverage-i265 raw pairs output sizes="cid22,2k":
     python3 benchmarks/iqa_compete_2026-10-16/coverage.py '{{raw}}' benchmarks/iqa_compete_2026-10-16/frozen-inventory.json '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda
+
+# Freeze data outside git before extending a long-running multi-host matrix.
+iqa-compete-freeze-models default overrides manifest output:
+    python3 benchmarks/iqa_compete_2026-10-16/freeze_models.py '{{default}}' '{{overrides}}' '{{manifest}}' '{{output}}'
+
+iqa-compete-freeze-model-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_freeze_models.py
