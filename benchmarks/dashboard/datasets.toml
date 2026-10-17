@@ -637,6 +637,10 @@ note = "Historical wall observation; parallel-pair modes are per-pair normalized
 
 [[dataset]]
 glob = "benchmarks/cpu_metrics_full_table_2026-05-28.tsv"
+metadata = ["docs/CPU_BENCHMARK_TABLE_2026-05-28.md"]
+commit = "884c2722ab102367a5634de0987caa2b4f99cde4"
+os = "Linux (WSL2)"
+command = "python3 benchmarks/heaptrack/refresh_2026-05-28/assemble_table.py"
 family = "speed"
 adapter = "cpu-full"
 columns = ["metric", "mode", "size_label", "size_w", "size_h", "size_mp", "cold_or_warm", "wall_ms", "peak_heap_bytes", "peak_heap_human", "score", "notes"]
@@ -707,6 +711,9 @@ host = "r7950x"
 
 [[dataset]]
 glob = "benchmarks/gpu_metrics_sweep_2026-05-28.tsv"
+metadata = ["docs/GPU_METRICS_SWEEP_2026-05-28.md"]
+gpu = "NVIDIA GeForce RTX 5070"
+command = "python3 scripts/memory_audit/sweep_gpu_metrics_2026-05-28.py --metrics all --backends cuda,wgpu --sizes 1mp,4mp,16mp,40mp --reps 2 --out-base benchmarks/gpu_metrics_sweep_2026-05-28"
 family = "speed"
 adapter = "gpu-sweep"
 columns = ["crate", "size_mp", "size_w", "size_h", "mode", "backend", "peak_vram_bytes", "peak_vram_human", "wall_median_ms", "warm_ms", "score", "notes"]
@@ -1363,3 +1370,115 @@ family = "coverage"
 adapter = "scales"
 columns = ["image", "size", "lpips", "tap0", "tap1", "tap2", "tap3", "tap4"]
 note = "Golden or fixture identity; not a measured port-vs-oracle residual."
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/kadid-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/tid-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-02.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/kadid-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/tid-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]

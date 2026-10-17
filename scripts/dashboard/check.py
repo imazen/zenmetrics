@@ -27,7 +27,9 @@ def check(directory, screenshots, port=3387):
             for view in ['speed','agreement','quality','catalog']:
                 page.goto(f'http://127.0.0.1:{port}/#'+view)
                 page.wait_for_function('(v)=>window.dashboardReady===v',arg=view)
-                assert page.locator('#table tbody tr').count()==min(2000,manifest['counts'][view]), view
+                assert page.locator('#table tbody tr').count()==min(2000,manifest['quality_correlation_count'] if view=='quality' else manifest['counts'][view]), view
+                if view=='quality' and manifest['quality_point_count']:
+                    assert page.locator('#secondary svg').count()>0, 'real per-image scatter missing'
                 if view!='catalog':assert page.locator('#chart svg').count()>0,view
                 assert page.locator('#provenance').inner_text(),view
                 page.locator('th button').first.click()
@@ -56,6 +58,14 @@ def check(directory, screenshots, port=3387):
             page.locator('#theme').click();assert page.locator('body').get_attribute('class')=='dark'
             page.reload();page.wait_for_function('window.dashboardReady==="speed"')
             assert page.locator('body').get_attribute('class')=='dark'
+            source=next(s for s in manifest['source_counts'] if s.startswith('benchmarks/dashboard/quality/cid22-correlations-'))
+            quality=json.loads((directory/'data/quality.json').read_text())
+            dataset=next(row['dataset'] for row in quality if row.get('source')==source)
+            page.goto(f'http://127.0.0.1:{port}/#quality?'+urlencode(dict(dataset=dataset)))
+            page.wait_for_function('window.dashboardReady==="quality"')
+            assert page.locator('#table tbody tr').count()==manifest['source_counts'][source]
+            assert page.locator('#secondary svg').count()>0
+            if screenshots:page.screenshot(path=str(screenshots/'quality-cid22.png'),full_page=True)
             page.goto(f'http://127.0.0.1:{port}/#quality?q=no-such-measured-metric')
             page.wait_for_function('window.dashboardReady==="quality"')
             assert page.locator('#table tbody tr').count()==0

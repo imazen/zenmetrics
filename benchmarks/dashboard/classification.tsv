@@ -150,6 +150,20 @@ benchmarks/cvvdp_shared_math_2026-10-11.tsv	ignored	Historical experiment schema
 benchmarks/cvvdp_walker_round2_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/cvvdp_walker_round2_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dashboard/extracts/sources.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/dashboard/quality/aic3_ctc_epfl-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic3_ctc_epfl-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic3_ctc_epfl-points-01.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic4_sample-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic4_sample-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic4_sample-points-01.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/aic4_sample-points-02.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/cid22-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/cid22-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/cid22-points-01.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/kadid-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/kadid-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/tid-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/quality/tid-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dense_corpus_2026-06-25.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fleet-fits_v9_tier_timing_2026-09-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.

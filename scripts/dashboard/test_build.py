@@ -84,6 +84,13 @@ class Contracts(unittest.TestCase):
             path.write_text('path\tclassification\treason\nbenchmarks/new.csv\tignored\tControlled nonmeasurement fixture\n')
             self.assertEqual(validate_inventory(root,set()),{'benchmarks/new.csv'})
 
+    def test_registry_host_labels_are_cpu_derived(self):
+        from build import valid_host
+        for name in ['i265','r7900x','r5900xt','r5600g','mac','dev','tower']:
+            self.assertTrue(valid_host(name))
+        for name in ['node-7','r123desk','arbitrary-label']:
+            self.assertFalse(valid_host(name))
+
     def test_catalog_names_unique(self):
         rows=list(catalog());self.assertGreater(len(rows),100)
         self.assertEqual(len(rows),len({r['metric'] for r in rows}))

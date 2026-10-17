@@ -56,12 +56,15 @@ def provenance(path, spec):
     if path.parent.parent.name.startswith('cpu_metrics_1t8t'): paths += [path.parent.parent/'run.meta']
     existing = list(dict.fromkeys(p for p in paths if p.is_file()))
     evidence = '\n'.join(p.read_text(errors='strict') for p in existing)
-    commits = re.findall(r'(?:build_commit|repo_commit[^:\n]*|commit_sha|base_commit|^commit)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence,re.MULTILINE|re.IGNORECASE)
+    commits = re.findall(r'(?<![A-Za-z0-9_])(?:build_commit|repo_commit[^:\n]*|commit_sha|base_commit|git_sha|git_commit|^commit)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence,re.MULTILINE|re.IGNORECASE)
     commands = re.findall(r'^(?:run|command|reproduce)\s*[:=]\s*(.+)$', evidence, re.MULTILINE)
+    recorded_date=None
     for metadata in existing:
         if metadata.suffix=='.json':
             obj=json.loads(metadata.read_text())
-            if isinstance(obj,dict) and isinstance(obj.get('command'),str):commands.insert(0,obj['command'])
+            if isinstance(obj,dict):
+                if isinstance(obj.get('command'),str):commands.insert(0,obj['command'])
+                recorded_date=obj.get('generated_date_utc',recorded_date)
     host=spec.get('host','missing')
     if host=='missing':
         found=re.search(r'^host\s*[:=]\s*([a-z0-9]+)',evidence,re.MULTILINE|re.IGNORECASE)
@@ -70,10 +73,14 @@ def provenance(path, spec):
         elif '7900X' in evidence:host='r7900x'
         elif 'Apple M4' in evidence:host='mac'
     if host!='missing' and not valid_host(host):raise ValueError('noncanonical registry host')
+    os_name=spec.get('os','missing')
+    os_match=re.search(r'^os\s*[:=]\s*(.+)',evidence,re.MULTILINE|re.IGNORECASE)
+    if os_name=='missing' and os_match:
+        line=os_match[1].lower();os_name='Linux (WSL2)' if 'wsl' in line else 'macOS' if 'darwin' in line or 'macos' in line else 'Linux' if 'linux' in line else 'Windows' if 'windows' in line else 'missing'
     dates = re.findall(r'20\d\d-\d\d-\d\d', str(path))
     return dict(source=path.relative_to(ROOT).as_posix(), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                commit=commits[0] if commits else 'missing', host=host,
-                date=dates[0] if dates else 'missing', command=safe_text(spec.get('command', commands[0] if commands else 'missing')),
+                commit=spec.get('commit',commits[0] if commits else 'missing'), host=host, os=os_name,
+                date=recorded_date or (dates[0] if dates else 'missing'), command=safe_text(spec.get('command', commands[0] if commands else 'missing')),
                 metadata=[p.relative_to(ROOT).as_posix() for p in existing],
                 note=spec.get('note', 'Historical observation; consult source conditions.'))
 
@@ -149,7 +156,7 @@ def catalog():
 
 
 def valid_host(host):
-    return host in {'dev','tower','mac'} or bool(re.fullmatch(r'[ri]\d+[a-z0-9]*',str(host)))
+    return host in {'dev','tower','mac'} or bool(re.fullmatch(r'(?:r\d{4,5}(?:x3d|xt|x|g|ge|hx|h|u)?|i\d{3,5}(?:kf|k|f|hx|h|u)?)',str(host)))
 
 
 def scan_output(output):
@@ -195,9 +202,11 @@ def build(output):
                 raise ValueError(f'duplicate registration: {key}')
             registered.add(key); sources[key] = provenance(path, spec)
             source_counts[key]=0;source_mode_counts[key]={}
-            runtime=dict(spec,host=sources[key]['host'])
+            runtime=dict(spec,host=sources[key]['host'],os=sources[key]['os'])
             for row in adapt(path, runtime):
                 row['source'] = key
+                if spec['family']=='quality' and 'mos' in row:
+                    row['human_label']=row.pop('mos');row.setdefault('target','MOS')
                 if spec['family']=='speed' and row.get('metric') in aliases:
                     row['metric_recorded']=row['metric'];row['metric']=aliases[row['metric']]
                 if 'status' in row:
@@ -235,6 +244,8 @@ def build(output):
         (data/f'{family}.json').write_text(json.dumps(rows, allow_nan=False, separators=(',', ':')))
     unregistered=validate_inventory(ROOT,registered)
     manifest = dict(schema=2, counts={k:len(v) for k,v in families.items()}, sources=sources,
+                    quality_correlation_count=sum(r.get('srocc') is not None for r in families['quality']),
+                    quality_point_count=sum(r.get('human_label') is not None and r.get('score') is not None for r in families['quality']),
                     registered=sorted(registered),unregistered_count=len(unregistered),
                     glob_matches=matches,source_counts=source_counts,source_mode_counts=source_mode_counts)
     (data/'manifest.json').write_text(json.dumps(manifest, indent=2))
