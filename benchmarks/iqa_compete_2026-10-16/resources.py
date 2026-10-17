@@ -5,14 +5,28 @@ import fcntl
 import os
 from pathlib import Path
 import signal
+import platform
+import shutil
+from supervision import resource_wrapper, timeout_command
 import subprocess
 import sys
 
 
-def scoped(command, *, seconds, memory, jobs):
+def resource_executable():
+    if os.environ.get('IQA_RUN_HEAVY') or shutil.which('run-heavy'):
+        return Path(resource_wrapper())
     wrapper = Path.home() / 'work/claudehints/scripts/run-heavy'
-    command = [sys.executable, str(Path(__file__).resolve()), 'timeout', str(seconds), *command]
-    if wrapper.is_file():
+    return wrapper if wrapper.is_file() and os.access(wrapper, os.X_OK) else None
+
+
+def scoped(command, *, seconds, memory, jobs):
+    wrapper = resource_executable()
+    if platform.system() == 'Darwin' and wrapper is not None:
+        # The macOS RSS guard owns the process group; preserve that containment.
+        command = [*timeout_command('Darwin', seconds), *command]
+    else:
+        command = [sys.executable, str(Path(__file__).resolve()), 'timeout', str(seconds), *command]
+    if wrapper is not None:
         command = [str(wrapper), '--mem', memory, '--jobs', str(jobs), '--', *command]
     return command
 

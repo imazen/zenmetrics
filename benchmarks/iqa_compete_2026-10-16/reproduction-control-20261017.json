@@ -158,5 +158,32 @@
       "sha256": "ecedabca1dd99183ab232bda157314e899025d0ff4f6d1d450d8c0e37a62c672",
       "resource": null
     }
-  ]
+  ],
+  "remote_receipt_merge": {
+    "remote_tip": "5a7bb3cfda4b521f5c9634c929631ae94ec9d8d4",
+    "harness_tests": 108,
+    "dashboard_tests": 19,
+    "inventory_tests": 10,
+    "no_benchmark_cells_restarted": true,
+    "containment": "Configured wrapper lookup retained; macOS wrapper timeout stays foreground; plain fallback remains explicit",
+    "rust_sources_manifests_lock": "Unchanged from the passing Round 16 fmt/CLI-clippy/14-row feature matrix",
+    "logs": [
+      {
+        "path": "/home/lilith/tmp/iqa-compete/round17-merged-harness-final.log",
+        "sha256": "628f0cf93d48e66b1225b67fd00a7702fd8ad2303e64f9eea413fb384f38909a"
+      },
+      {
+        "path": "/home/lilith/tmp/iqa-compete/round17-dashboard-merged-tests.log",
+        "sha256": "97ff3b6b0d04087ed3e05bc602776a9aaaa4bc3bd169437086a0d3ad3082e5c3"
+      },
+      {
+        "path": "/home/lilith/tmp/iqa-compete/round17-dashboard-merged-final.log",
+        "sha256": "7633cef189006cf071fa987a3e4faf7d6f1ad4a99b11b33f83ab6fa708f3c4ba"
+      },
+      {
+        "path": "/home/lilith/tmp/iqa-compete/round17-merged-study.log",
+        "sha256": "80e65c684fde068a981853ae1337412235a7265390f95fb656751e43732572f7"
+      }
+    ]
+  }
 }

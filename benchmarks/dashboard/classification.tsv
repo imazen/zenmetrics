@@ -945,3 +945,9 @@ benchmarks/iqa_compete_2026-10-16/untimed-reference-chart-control.json	ignored	H
 benchmarks/iqa_compete_2026-10-16/v13-preparation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/warmup-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/reproduction-control-20261017.json	ignored	Clean-checkout/resume control and raw receipt hashes; timing shards are registered separately.
+benchmarks/iqa_compete_2026-10-16/task4-mac-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-mac-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-mac-supervision-control-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-owner-stop-20261017.meta.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-r7900x-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-r7900x-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.

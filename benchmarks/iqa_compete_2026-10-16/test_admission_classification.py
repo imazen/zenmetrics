@@ -10,6 +10,8 @@ class Classification(unittest.TestCase):
   self.assertEqual(admission_reason('run-heavy: only 1914 MiB available — refusing to launch (free memory first)\n'),'host_memory')
  def test_load_refusal_is_admission(self):
   self.assertEqual(admission_reason('Error: "busy load [24.28, 6.39, 3.98]"'),'host_load')
+ def test_mac_proxy_refusal_is_admission(self):
+  self.assertEqual(admission_reason('run-heavy: only 4065 MiB reclaimable-page proxy available; refusing'),'host_memory')
  def test_orphaned_state_is_not_a_metric_outcome(self):
   self.assertEqual(admission_reason('benchmark admission failed: orphaned running reservation 746'),'zenbench_orphaned_reservation')
  def test_executed_metric_error_is_not_admission(self):

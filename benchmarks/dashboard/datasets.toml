@@ -1534,3 +1534,11 @@ adapter = "competition-meta"
 allow_absent = true
 columns = []
 note = "Content identity and reproduction metadata; not additional timing samples."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/task4-owner-stop-cells-20261017/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["abs_delta", "adapter_sha256", "arch", "comparison_status", "contention_attempts", "contention_peak_cores", "contention_receipt", "coverage_first", "coverage_sample_requirement_met", "cpu_affinity", "cpu_model", "declared_columns", "device", "diagnostic_source_status", "engine", "gpu", "headline_declared_column", "height", "host", "host_observation_receipts", "host_protocol", "impl", "impl_binary_sha", "impl_version", "load_after", "load_before", "log_path", "log_sha256", "mean_ns", "median_ns", "metric_family", "metric_name", "mode", "n", "native_api_note", "ort_disable_telemetry", "ort_inter_threads_configured", "ort_intra_threads_configured", "ort_shared_library_sha256", "os", "p10_ns", "p90_ns", "pair_sha256", "parity_abs_bound", "parity_checked", "parity_rel_bound", "parity_source", "ref_score", "reference_binary_sha", "reference_declared_columns", "reference_kind", "reference_log_sha256", "reference_pair_sha256", "reference_source_status", "reference_threads", "relative_delta", "reproduction_required", "required_samples", "resource", "resource_memory_method", "scalar_comparison_status", "score", "self_warmup_score", "simd_tier", "size_name", "source_raw_sha256", "source_row", "source_status", "status", "threads", "timing_quality", "width"]
+note = "Owner-stop snapshots from the separate-host lane; retain original contamination, refusal and sampling labels."

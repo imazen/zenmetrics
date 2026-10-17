@@ -24,7 +24,7 @@ class Reproduce(unittest.TestCase):
                 checked(path,'0'*64)
 
     def test_missing_wrapper_runs_plain_with_timeout(self):
-        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root,patch('resources.Path.home',return_value=Path(root)):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root,patch('resources.Path.home',return_value=Path(root)),patch('resources.shutil.which',return_value=None),patch.dict(os.environ,{},clear=True):
             command=scoped(['example'],seconds=4,memory='1G',jobs=1)
             self.assertEqual(command[-3:],['timeout','4','example'])
             self.assertNotIn('run-heavy',' '.join(command))
@@ -38,6 +38,13 @@ class Reproduce(unittest.TestCase):
             result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=5)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertTrue(json.loads((root/'receipt.json').read_text())['inherited_lock_descriptors'])
+
+    def test_mac_wrapper_preserves_foreground_process_group(self):
+        with patch('resources.resource_executable',return_value=Path('/bin/sh')),patch('resources.platform.system',return_value='Darwin'):
+            command=scoped(['example'],seconds=4,memory='1G',jobs=1)
+            self.assertIn('--foreground',command)
+            self.assertNotIn('timeout',command)
+            self.assertEqual(command[-1],'example')
 
     def test_timeout_reaps_real_child(self):
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root:

@@ -15,7 +15,7 @@ import tarfile
 import tomllib
 import urllib.request
 
-from resources import locked, scoped
+from resources import locked, scoped, resource_executable
 from run import LEARNED, PYTHON_METRICS, metadata, sha
 from native_run import ADAPTERS
 
@@ -181,8 +181,8 @@ def main():
                   host=a.host, hardware=hardware, sizes=a.sizes, metrics=sorted(selected),
                   compiler_flags='--cfg iqa_compete_ingress --cfg iqa_compete_cached; release LTO thin; runtime dispatch',
                   competitor_versions={'libjxl':'v0.12.0 a7a9c787', 'libvmaf':'3.2.0 from vmaf-head-sys 0.2.0'},
-                  resource_wrapper=str(Path.home() / 'work/claudehints/scripts/run-heavy'),
-                  resource_wrapper_present=(Path.home() / 'work/claudehints/scripts/run-heavy').is_file(),
+                  resource_wrapper=str(resource_executable()) if resource_executable() else None,
+                  resource_wrapper_present=resource_executable() is not None,
                   toolchains={cmd:subprocess.check_output([cmd, '--version'], text=True).strip() for cmd in ['rustc','cargo','cmake','c++']},
                   competitors={k:dict(url=v[0],sha256=v[1]) for k,v in SOURCES.items()},
                   python_explicitly_skipped=a.skip_python)

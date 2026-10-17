@@ -62,7 +62,7 @@ def normalize_nomap(row):
 def admission_reason(text):
     if 'busy load' in text or 'IQA_BUSY ' in text:
         return 'host_load'
-    if re.search(r'run-heavy: only [0-9]+ MiB [^\n]*refusing to launch', text):
+    if re.search(r'run-heavy: only [0-9]+ MiB [^\n]*(?:refusing to launch|reclaimable-page proxy available; refusing)', text):
         return 'host_memory'
     if 'benchmark admission failed' in text and 'orphaned running reservation' in text:
         return 'zenbench_orphaned_reservation'

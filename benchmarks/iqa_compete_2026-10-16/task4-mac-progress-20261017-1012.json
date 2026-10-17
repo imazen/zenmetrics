@@ -1,0 +1,137 @@
+{
+  "present": 2258,
+  "expected": 3164,
+  "missing": 906,
+  "per_size": {
+    "cid22": {
+      "present": 452,
+      "expected": 452,
+      "minimum_n": 5,
+      "timed_minimum_met": 276,
+      "timed_source_contaminated": 234,
+      "source_unsupported": 152,
+      "adapter_omissions": 6,
+      "refused_or_short": 24,
+      "actual_n_counts": {
+        "0": 176,
+        "10": 260,
+        "5": 16
+      }
+    },
+    "aic-small": {
+      "present": 452,
+      "expected": 452,
+      "minimum_n": 5,
+      "timed_minimum_met": 196,
+      "timed_source_contaminated": 89,
+      "source_unsupported": 156,
+      "adapter_omissions": 6,
+      "refused_or_short": 100,
+      "actual_n_counts": {
+        "0": 256,
+        "5": 196
+      }
+    },
+    "aic-medium": {
+      "present": 452,
+      "expected": 452,
+      "minimum_n": 5,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 158,
+      "adapter_omissions": 6,
+      "refused_or_short": 294,
+      "actual_n_counts": {
+        "0": 172,
+        "3": 280
+      }
+    },
+    "aic-large": {
+      "present": 452,
+      "expected": 452,
+      "minimum_n": 3,
+      "timed_minimum_met": 186,
+      "timed_source_contaminated": 8,
+      "source_unsupported": 130,
+      "adapter_omissions": 3,
+      "refused_or_short": 136,
+      "actual_n_counts": {
+        "0": 266,
+        "3": 186
+      }
+    },
+    "2k": {
+      "present": 450,
+      "expected": 452,
+      "minimum_n": 3,
+      "timed_minimum_met": 280,
+      "timed_source_contaminated": 11,
+      "source_unsupported": 157,
+      "adapter_omissions": 6,
+      "refused_or_short": 13,
+      "actual_n_counts": {
+        "0": 170,
+        "10": 46,
+        "3": 234
+      }
+    },
+    "4k": {
+      "present": 0,
+      "expected": 452,
+      "minimum_n": 3,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 0,
+      "adapter_omissions": 0,
+      "refused_or_short": 0,
+      "actual_n_counts": {}
+    },
+    "8k": {
+      "present": 0,
+      "expected": 452,
+      "minimum_n": 1,
+      "timed_minimum_met": 0,
+      "timed_source_contaminated": 0,
+      "source_unsupported": 0,
+      "adapter_omissions": 0,
+      "refused_or_short": 0,
+      "actual_n_counts": {}
+    }
+  },
+  "created_utc": "2026-10-17T10:12:54.365583+00:00",
+  "host": "mac",
+  "cpu": "Apple M4 Pro",
+  "os": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "raw_archive": "/home/lilith/tmp/iqa-compete/task4/receipt-snapshots/mac-2586187e54bbed70.jsonl",
+  "raw_sha256": "2586187e54bbed706b74444cb08151a9dc2c21e0c40dbf12cd5be2a094bc2a42",
+  "raw_bytes": 10252161,
+  "incomplete_trailing_bytes": 0,
+  "source_commits": [
+    "d6b18bbfb880474849b603e9d7300ee5d32608b9"
+  ],
+  "binary_row_counts": {
+    "217e7f0744df3210eec6fb94ba1c02388fcbd46bd3c64240bcdc37da4f2cb68b": 234,
+    "71694d2dd2b570700993b2aa6d897d0bc3968916ea02ea6dc6dd4e4b938a80ee": 1766,
+    "032c30b16d9b801c391ac651faf53157169ae241b10d01a1ad04b71bfa071e9e": 258
+  },
+  "statuses": {
+    "unsupported": 753,
+    "ok": 1215,
+    "variant_mismatch": 3,
+    "skipped:hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)": 9,
+    "skipped:score-path-refused; map capability not qualified on this input": 36,
+    "skipped:hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding": 9,
+    "skipped:SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)": 2,
+    "skipped:SSIM-pyiqa: scale 5 is 7x7; valid 11x11 window requires at least 11x11 (fixed factor 5)": 2,
+    "skipped:SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 6)": 2,
+    "skipped:GPU zensim scoring is disabled pending v2 validation": 10,
+    "skipped:SSIM-pyiqa: scale 5 is 9x10; valid 11x11 window requires at least 11x11 (fixed factor 6)": 2,
+    "skipped:timeout_1100s": 6,
+    "skipped:process_exit_101": 83,
+    "skipped:memory_guard_or_limit": 13,
+    "skipped:process_exit_3": 111,
+    "skipped:musiq: invalid_input: image exceeds the metric's 8192-patch-row intermediate bound": 2
+  },
+  "sample_policy": "Five at CID22/AIC-small/AIC-medium; three at AIC-large/2K/4K; one at 8K. Actual n retained.",
+  "limits": "Partial historical cohort. Source contamination labels are preserved; final assessment also considers resource-interruption receipts. Unsupported rows with known adapter omissions do not establish map unavailability. No new metric or parity evaluations."
+}

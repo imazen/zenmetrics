@@ -2,6 +2,7 @@
 """Run landing gates in separate bounded shared-lock holds, retaining full logs."""
 import argparse,datetime,json,os,pathlib,subprocess,sys
 from batch import yield_after_release
+from supervision import resource_wrapper
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('output',type=P);p.add_argument('snapshot',type=P)
@@ -17,7 +18,7 @@ commands={
  'driver':['env','IQA_GPU_RUNTIME=cuda','just','iqa-compete-clippy'],
 }
 for stage in a.stages.split(','):
- command=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s','1100s',*commands[stage]]
+ command=['flock',str(P.home()/'tmp/i265-heavy.lock'),resource_wrapper(),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s','1100s',*commands[stage]]
  print('START',stage,flush=True)
  with (a.output/f'{stage}.log').open('x') as log:result=subprocess.run(command,env=env,stdout=log,stderr=subprocess.STDOUT)
  record=dict(stage=stage,command=command,returncode=result.returncode,finished_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())

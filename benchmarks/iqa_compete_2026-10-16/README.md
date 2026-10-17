@@ -32,7 +32,7 @@ to this benchmark harness.
 ## Reproduce on the current host
 
 From a clean jj checkout, install Rust, just, Python 3.12+, uv, CMake, Ninja,
-Meson, pkg-config, a C++17 compiler and Highway/Brotli/LittleCMS2 development
+Meson, pkg-config, GNU coreutils for a macOS resource wrapper, a C++17 compiler and Highway/Brotli/LittleCMS2 development
 packages (Homebrew on macOS). The command below builds this commit and pinned
 native competitors, verifies the named AIC2026 S67 pair and every derivative
 against [the checksum manifest](inputs.meta.json), then measures 1/all threads,
@@ -166,6 +166,10 @@ Split compact observations: [CID22 progress v2](cid22-cpu-progress-v2/).
 
 ## Owner coverage pass (2026-10-17)
 
+For one source revision across hosts and preserved historical results, follow
+the [fresh-run procedure](RESTART.md). Set `IQA_RUN_HEAVY` to the resource wrapper
+before launching controllers or landing gates.
+
 The coverage-first pass supersedes the earlier depth requirements for new cells.
 It uses the existing single pair per resolution: five actual samples at CID22,
 AIC-small and AIC-medium; three at AIC-large/2K/4K; and one at 8K. Rows record
@@ -228,3 +232,50 @@ master's NN WebGPU changes, both provider builders across three constructors,
 14 feature-matrix rows, CLI/driver clippy and the full harness controls.
 At each round end, including data updates, merge current master and provide
 the verified branch landing SHA to the coordinator.
+
+## Remote coverage snapshot (2026-10-17)
+
+The retained historical cohort has [1,684/2,996 r7900x rows](task4-r7900x-progress-20261017-1012.json)
+and [2,258/3,164 Mac rows](task4-mac-progress-20261017-1012.json). These are
+recorded attempts, including unsupported routes and refusals. Per-size receipts
+separate timings meeting the requested minimum from short samples. In particular,
+the external controller requested three AIC-medium samples; the policy requires
+five. Actual observations remain unchanged and count as short. Known native-map
+adapter omissions are counted separately from metric map unavailability.
+
+The queues continued after that snapshot and were then stopped by the owner.
+These observations retain frozen source `d6b18bbf` and
+their actual executable hashes; merging the harness does not relabel them as
+measurements of current master. The immutable raw prefixes remain external,
+with SHA256 pointers in the compact receipts.
+
+The [Mac containment control](task4-mac-supervision-control-20261017.json)
+records a real child terminated by the resource guard with `gtimeout --foreground`.
+The tracked launcher now retains that option. This is process containment
+evidence, not a metric or score-parity qualification.
+
+## Owner stop (2026-10-17)
+
+Missing rows: 1,216 on r7900x and 876 on Mac. Neither host reached 8K.
+AIC-medium's three-sample observations remain short against the five-sample
+requirement; the planned repair was not started. Further measurements wait for
+the separately developed reproducible launcher.
+
+The queues stopped after their active cells, with no subsequent cell started.
+The [closing receipt](task4-owner-stop-20261017.meta.json) binds all
+4,068 saved observations: [1,780/2,996 on r7900x](task4-r7900x-owner-stop-20261017.json)
+and [2,288/3,164 on Mac](task4-mac-owner-stop-20261017.json).
+[Compact cell receipts](task4-owner-stop-cells-20261017/) retain every row,
+including refusals and short samples. Their n, timing and score fields match
+the archived raw values bit for bit. Each generated JSON file is below 30 KB.
+
+Both remote integrity checks and the copied log/config hash checks pass.
+Four older Mac logs acquired late output during the earlier guard escape.
+The exact originally hashed prefixes and complete logs are both retained;
+late output remains diagnostic. No additional metric evaluation, parity
+qualification or reboot was performed during closing collection.
+
+The closing checks pass 102 Python harness controls and 10 inventory controls.
+The inherited formatter findings were corrected and the six affected files
+pass rustfmt check. Remaining queued build gates were cancelled before
+admission at the owner's stop directive; they are not claimed as passing.
