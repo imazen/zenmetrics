@@ -1117,3 +1117,9 @@ lan-entrypoint-test:
 
 dashboard-speed-coverage site="target/dashboard" output="target/dashboard-speed-coverage.md":
     python3 scripts/dashboard/coverage.py {{quote(site)}} --output {{quote(output)}}
+
+# Metadata-only E36 mask/TV bindings and legacy checkpoint refusal checks.
+e36-fit-contract-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_e36_fit_contract.py'
+    just registered-fit-check
+    python3 -m unittest discover -s scripts/jobsys -p 'test_e33_wall_cap.py'

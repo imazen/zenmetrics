@@ -83,11 +83,14 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
         from registered_fit_contract import load
         meta = json.loads((program / "build_meta.json").read_text())
         return load(argv,data_sha,meta)["wall_cap_sec"]
-    path = program / E33_CONTRACT
+    e36_path = program / "benchmarks/e36_fit_contract_2026-10-17.json"
+    if e36_path.is_file() and (program / E33_CONTRACT).is_file():
+        raise ValueError("ambiguous fit packages")
+    path = e36_path if e36_path.is_file() else program / E33_CONTRACT
     if not path.is_file():
         return None
     package = json.loads(path.read_text())
-    if package.get("schema") != "e33-research-fit-package-v1":
+    if package.get("schema") != ("e36-research-fit-package-v1" if path == e36_path else "e33-research-fit-package-v1"):
         raise ValueError("E33 program carries an unregistered package")
 
     def arg(key):
@@ -95,9 +98,14 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
 
     route = arg("--heldout") if argv[0] == "v2_lodo_mlp.py" else "production"
     matches = [v for v in package["variants"] if v["root"] == arg("--root") and v["spec"] == arg("--spec")
-               and v["data_sha"] == data_sha and route in v["routes"]]
+               and v["data_sha"] == data_sha and route in v["routes"]
+               and ("e36" not in v or v["e36"]["arm"] == arg("--e36-arm"))]
     if len(matches) != 1:
         raise ValueError("E33 program: the cell matches no single registered variant")
+    if path == e36_path:
+        from e36_fit_contract import bind
+        meta = json.loads((program / "build_meta.json").read_text())
+        bind(argv, matches[0], meta["files"])
     cap = matches[0].get("wall_cap_sec")
     if type(cap) is not int or cap <= 0:
         raise ValueError("E33 variant lacks a registered positive wall cap")

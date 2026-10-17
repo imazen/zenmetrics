@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add a private E36 program-pack and harvest adapter for exact unchanged-target family masks, matched TV configuration and arm-specific full-budget watchdogs; retain existing checkpoint admission ([transport](docs/E36_FIT_TRANSPORT.md)).
+
 - Add eight paired zenmetrics/libjxl butteraugli timing cells at 2K and 4K, with retained sample identities and explicit sampling-method caveats (`04c8cac2`).
 
 - Add exact-resolution cross-metric speed rankings, comparable workload filters, source-marked all-size and rank-change charts, ranking CSV and libjxl v0.12 timing samples (`7cf90d30`).
