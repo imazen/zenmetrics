@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """One resident numpy/torch metric cell. Import/model/tensor setup is untimed."""
 import argparse,importlib.metadata,json,os,pathlib,statistics,subprocess,sys,time
+
+# Owner constraint: fail before any direct or transitive PyIQA import.
+class _NoPyIQA:
+ def find_spec(self,fullname,path=None,target=None):
+  if fullname.partition('.')[0].lower()=='pyiqa':
+   raise ModuleNotFoundError('PyIQA is excluded from this benchmark')
+if any(name.partition('.')[0].lower()=='pyiqa' for name in sys.modules):
+ raise RuntimeError('Excluded PyIQA module was already loaded at process startup')
+sys.meta_path.insert(0,_NoPyIQA())
+
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('config',type=P);p.add_argument('--mode',choices=['score','score+map']);a=p.parse_args();c=json.loads(a.config.read_text())
 if a.mode is None:
@@ -16,7 +26,7 @@ package=c['package'];metric=c['metric_name'];mode=c['mode'];device=c.get('device
 import numpy as np
 r=np.fromfile(c['reference'],dtype=np.uint8).reshape(c['height'],c['width'],3);d=np.fromfile(c['distorted'],dtype=np.uint8).reshape(r.shape)
 version=importlib.metadata.version(package)
-row=dict(c,impl=package,impl_version=version,venv=str(P(os.sys.executable).parent.parent),package_versions={'numpy':np.__version__},n=0)
+row=dict(c,impl=package,impl_version=version,venv=str(P(os.sys.executable).parent.parent),package_versions={'numpy':np.__version__},pyiqa_import_blocked=True,n=0)
 sync=lambda:None
 if package=='flip-evaluator':
  import flip_evaluator
