@@ -573,7 +573,7 @@ packed-sRGB-u8 sweep shape and answers a different question.
   arena at pair 40/61 (S46) of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
   intermediate). WD's trunk had the same class fixed in `ae582a3b`
   (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
-  is now shared by every ort session in `engine::ort_engine::cuda_session`
+  is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
   — `OrtGpuPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
   `OrtGpuImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
   `OrtGpuTrunk` (wd) — plus `take_output` move-consume on the pair/image

@@ -32,7 +32,7 @@ max_pixels = 9000000
 max_pixels_32bit = 1048576
 
 [execution]
-engines = ["rten", "ort-cuda"]
+engines = ["rten", "ort-cuda", "ort-webgpu"]
 batch_bound = 32
 batch_unit = "reference/distorted patch pairs"
 statistics = "Host f64 weighted pooling of graph patch errors/weights; fixed row-major order."

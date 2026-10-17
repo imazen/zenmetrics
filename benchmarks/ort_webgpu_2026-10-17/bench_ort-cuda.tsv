@@ -1,3 +1,6 @@
+# nn_bench lpips_vgg, image 1415, sizes 256/1024/2048, budget 3 s/mode·size
+# commit 107edec1006e827ff630108617a5abe6f540c173
+# command: ZENMETRICS_NN_ENGINE=ort-cuda ZENMETRICS_NN_MODEL=lpips_vgg just snap-cargo @ run --release -p zenmetrics-nn --features model-tests,ort-webgpu --example nn_bench -- ~/tmp/nn-opt2/models-all ~/tmp/nn-phase0/ladder bench_ort-cuda.tsv 1415 256,1024,2048 3
 host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
 i265	ort-cuda	default	lpips_vgg	compute	256	50	3.821	3.535	3.23270022869110107e-1
 i265	ort-cuda	default	lpips_vgg	warm	256	50	3.517	3.504	3.23270022869110107e-1

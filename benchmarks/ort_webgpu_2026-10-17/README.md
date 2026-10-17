@@ -2,11 +2,11 @@
 
 `Engine::OrtWebgpu` (feature `ort-webgpu`, implies `ort`): the same exported
 ONNX graphs on ONNX Runtime's **WebGPU plugin execution provider**. Sessions
-keep the shared builder's deterministic-compute setting; CPU fallback is
-forbidden (`with_disable_cpu_fallback`), so any graph that leaves a node on
+set deterministic compute and forbid CPU fallback
+(`with_disable_cpu_fallback`), so any graph that leaves a node on
 the CPU EP fails to commit. The WebGPU EP keeps memory patterns ON (the CUDA
 BFCArena retention bug does not apply; peak device memory is unchanged
-either way).
+either way — measured, see below).
 
 ## Provider provenance (live-checked 2026-10-16)
 
@@ -22,7 +22,7 @@ either way).
   `libonnxruntime_providers_webgpu.so`; registered at run time via
   `Environment::register_ep_library` from `ZENMETRICS_NN_WEBGPU_EP_LIB`.
   After registration `get_ep_devices()` reports two GPU adapters:
-  Intel iGPU (`0x8086`, pci 00:02.0) and RTX 4080 (`0x10de`, pci 02:00.0,
+  Intel iGPU (vendor id `0x8086`) and RTX 4080 (vendor id `0x10de`,
   metadata `Discrete:1`); real inference verified on both.
 - ORT plugin-EP/device API reference (ort crate 2.0.0-rc.14):
   `Environment::devices()` + `SessionBuilder::with_devices` +
@@ -37,10 +37,10 @@ All runs `just nn-parity <model-dir> <ladder> ort-webgpu model-tests,ort-webgpu 
 |---|---|---|
 | lpips_alex | PASS | 2.28e-6 |
 | lpips_squeeze | PASS | 1.50e-6 |
-| lpips_vgg | PASS at ≤1024²; OOM at 2048² | 3.1e-7 (scored) |
+| lpips_vgg | **PARTIAL** (≤1024² pass; OOM 2048²) | 3.1e-7 (scored pairs) |
 | stlpips_alex | PASS | 2.57e-6 |
-| stlpips_vgg | PASS at ≤1024²; OOM at 2048² | 4.5e-7 (scored) |
-| dists | PASS at ≤1024²; OOM at 2048² | 1.20e-5 (scored) |
+| stlpips_vgg | **PARTIAL** (≤1024² pass; OOM 2048²) | 4.5e-7 (scored pairs) |
+| dists | **PARTIAL** (≤1024² pass; OOM 2048²) | 1.20e-5 (scored pairs) |
 | dreamsim | PASS | 1.35e-5 |
 | maniqa | PASS | 8.35e-6 |
 | liqe | PASS | 4.42e-5 |
@@ -54,23 +54,51 @@ All runs `just nn-parity <model-dir> <ladder> ort-webgpu model-tests,ort-webgpu 
 **Load failures (capability, not a bug):** those five graphs carry
 CPU-assigned host ops — `Cast`, `ConstantOfShape`, `EyeLike`, `Gather`,
 `SequenceAt` dynamic-shape housekeeping that ORT will not place on the
-WebGPU EP. With fallback forbidden the session refuses to commit; the
-metric reports `Error::BadModel` at `from_dir`, same as an unregistered
-EP. On ort-cuda these nodes land on the CPU EP silently.
+WebGPU EP. With fallback forbidden the session refuses to commit;
+`from_dir` reports `Error::BadModel` (environment/registration problems
+report `Error::Engine` — e.g. `ZENMETRICS_NN_WEBGPU_EP_LIB` unset or not a
+file). On ort-cuda these nodes land on the CPU EP silently.
 
 **2048² OOM (capacity):** `vkAllocateMemory` → `VK_ERROR_OUT_OF_DEVICE_MEMORY`
-inside the fused pair graphs' `Sub` bind group on the 16 GB adapter. Every
-scored pair at ≤1024² matches the goldens. The same graphs complete the
-full 64–2048² ladder on ort-cuda.
+inside the fused pair graphs' `Sub` bind group on the 16 GB adapter
+(device-VRAM peak 15,690 MiB sampled by nvidia-smi during the attempt).
+Every scored pair at ≤1024² matches the goldens. The same graphs complete
+the full 64–2048² ladder on ort-cuda.
+
+**OOM behavior — measured in-process** (`webgpu_probe`, DISTS on device 1,
+memory pattern ON): 256² ok → 2048² returns `Err(MetricError{kind:Backend,
+Engine("WebGPU validation failed … CreateBuffer … OOM")})` — no abort, no
+panic → 256² ok again with a **bit-identical** score (session not
+poisoned) → alternating 256²↔512² ×3 in one session, all bit-identical
+repeats. No size guard added: the failure is a returned error and the
+session stays usable, matching the brief's "guard only if it aborts or
+poisons".
+
+**Memory pattern ON vs OFF — measured** (same probe, DISTS, device 1,
+nvidia-smi `memory.used` @ 200–250 ms): identical. Peak during the 2048²
+attempt 15,690 MiB both ways; isolated 1024² run (40 evals, one session)
+peaks at 5,298 MiB and holds it as a plateau; ≤512² steady-state ≤ 400
+MiB both ways; identical Err-not-poisoned-stable-alternation. The CUDA
+BFCArena retention bug it is disabled for on the CUDA path does not
+exist in this EP, so ON stays.
 
 ## Adapter selection
 
-`ZENMETRICS_NN_WEBGPU_DEVICE` = index into the EP's GPU list, else a
-discrete-vendor name preference (NVIDIA/AMD/ATI in `vendor()`), else the
-last enumerated GPU (iGPU enumerates first on this box); the choice is
-logged once. The safe ort API exposes no vendor-id/discreteness metadata
-and the crate forbids `unsafe`, so `ZENMETRICS_NN_WEBGPU_DEVICE` is the
-deterministic pin.
+`ZENMETRICS_NN_WEBGPU_DEVICE` = index into the EP's GPU list, else the
+best vendor-name rank (NVIDIA > AMD/ATI > other); more than one
+equally-ranked GPU without the pin is an `Error::Engine` naming every
+candidate. The safe ort API exposes no vendor-id/discreteness metadata
+and the crate forbids `unsafe`, so the rank and the env pin are the
+resolution.
+
+**Measured on i265:** `vendor()` returns `""` for both adapters (the
+`Discrete` flag and vendor id live in metadata the safe API does not
+wrap), so both rank "other" and the unset case errors —
+`ambiguous WebGPU adapter: 2 equally-ranked GPUs; set
+ZENMETRICS_NN_WEBGPU_DEVICE to one of: 0 (vendor "", id 32103, type GPU),
+1 (vendor "", id 9988, type GPU)`. The parity/bench data above ran under
+the earlier last-enumerated auto-pick on the same adapter (index 1); the
+OOM/memory-pattern probes below ran with `ZENMETRICS_NN_WEBGPU_DEVICE=1`.
 
 ## nn_bench: lpips_vgg @ 256/1024/2048, budget 3 s/size·mode
 

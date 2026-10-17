@@ -525,7 +525,10 @@ pub(crate) mod ort_engine {
     /// comes from `ZENMETRICS_NN_WEBGPU_EP_LIB` — the
     /// `libonnxruntime_providers_webgpu.so` shipped by the
     /// `onnxruntime-ep-webgpu` pip package / `Microsoft.ML.OnnxRuntime.EP.WebGpu`
-    /// NuGet, version-matched to the loaded onnxruntime core.
+    /// NuGet, version-matched to the loaded onnxruntime core. Like
+    /// `ORT_DYLIB_PATH`, the variable names trusted code that is dlopen'd
+    /// into this process — it is part of the trusted configuration
+    /// surface, not a data input.
     #[cfg(feature = "ort-webgpu")]
     fn webgpu_library(env: &Environment) -> Result<(), Error> {
         static REG: OnceLock<Result<(), String>> = OnceLock::new();
@@ -536,6 +539,12 @@ pub(crate) mod ort_engine {
                  onnxruntime-ep-webgpu matched to the loaded onnxruntime)"
                     .to_string()
             })?;
+            if !Path::new(&lib).is_file() {
+                return Err(format!(
+                    "ZENMETRICS_NN_WEBGPU_EP_LIB={lib}: not a file — expected \
+                     libonnxruntime_providers_webgpu.so"
+                ));
+            }
             env.register_ep_library("webgpu", lib)
                 .map(|_| ())
                 .map_err(|e| format!("registering the WebGPU EP library: {e}"))
@@ -552,36 +561,76 @@ pub(crate) mod ort_engine {
             && d.hardware_device().ty() == ort::memory::DeviceType::GPU
     }
 
+    /// Auto-selection rank for a WebGPU EP GPU device: discrete-vendor
+    /// adapters first — NVIDIA, then AMD/ATI — then anything else the EP
+    /// offers. The safe ort API exposes no per-adapter discreteness flag,
+    /// so the vendor-name rank and `ZENMETRICS_NN_WEBGPU_DEVICE` are the
+    /// resolution; an AMD iGPU must not win over an NVIDIA dGPU.
+    #[cfg(feature = "ort-webgpu")]
+    fn webgpu_rank(d: &ort::device::Device) -> u8 {
+        match d.hardware_device().vendor() {
+            Ok(v) if v.contains("NVIDIA") => 0,
+            Ok(v) if v.contains("AMD") || v.contains("ATI") => 1,
+            _ => 2,
+        }
+    }
+
     /// Index into the WebGPU EP's GPU-device list of the adapter to run
-    /// on. `ZENMETRICS_NN_WEBGPU_DEVICE` pins an index; otherwise a device
-    /// whose vendor name marks it discrete (NVIDIA/AMD/ATI) wins, else the
-    /// last GPU the EP enumerates. The safe ort API exposes no per-adapter
-    /// discreteness flag — the vendor-name preference and the pin are the
-    /// resolution; the choice is logged once per process so a wrong pick
-    /// is observable.
+    /// on. `ZENMETRICS_NN_WEBGPU_DEVICE` pins an index; otherwise the
+    /// lowest-[`webgpu_rank`] GPU wins and more than one top-ranked
+    /// candidate is an error that names every GPU, since a silent pick
+    /// between equals is not reproducible. The index is cached for the
+    /// process; the choice is reported through errors (below, and the
+    /// session-commit path) rather than printed.
     #[cfg(feature = "ort-webgpu")]
     fn webgpu_device_index(env: &Environment) -> Result<usize, Error> {
         static IDX: OnceLock<Result<usize, String>> = OnceLock::new();
         IDX.get_or_init(|| {
-            let n = env.devices().filter(is_webgpu_gpu).count();
-            let discrete = env.devices().filter(is_webgpu_gpu).position(|d| {
-                match d.hardware_device().vendor() {
-                    Ok(v) => v.contains("NVIDIA") || v.contains("AMD") || v.contains("ATI"),
-                    Err(_) => false,
-                }
-            });
+            let gpus: Vec<_> = env.devices().filter(is_webgpu_gpu).collect();
+            if gpus.is_empty() {
+                return Err("the WebGPU EP exposes no GPU device".into());
+            }
+            let names: Vec<String> = gpus
+                .iter()
+                .enumerate()
+                .map(|(i, d)| {
+                    let hw = d.hardware_device();
+                    format!(
+                        "{i} (vendor {:?}, id {}, type {:?})",
+                        hw.vendor().unwrap_or("<unknown>"),
+                        hw.id(),
+                        hw.ty()
+                    )
+                })
+                .collect();
             let i = if let Ok(v) = std::env::var("ZENMETRICS_NN_WEBGPU_DEVICE") {
                 v.parse::<usize>()
                     .map_err(|_| format!("ZENMETRICS_NN_WEBGPU_DEVICE={v}: expected an index"))?
             } else {
-                discrete.unwrap_or_else(|| n.saturating_sub(1))
+                let best = gpus.iter().map(webgpu_rank).min().unwrap_or(u8::MAX);
+                let top: Vec<usize> = gpus
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, d)| webgpu_rank(d) == best)
+                    .map(|(i, _)| i)
+                    .collect();
+                if top.len() > 1 {
+                    return Err(format!(
+                        "ambiguous WebGPU adapter: {} equally-ranked GPUs; set \
+                         ZENMETRICS_NN_WEBGPU_DEVICE to one of: {}",
+                        top.len(),
+                        names.join(", ")
+                    ));
+                }
+                top[0]
             };
-            if i >= n {
+            if i >= gpus.len() {
                 return Err(format!(
-                    "the WebGPU EP exposes {n} GPU device(s), index {i} out of range"
+                    "the WebGPU EP exposes {} GPU device(s) ({}), index {i} out of range",
+                    gpus.len(),
+                    names.join(", ")
                 ));
             }
-            eprintln!("ort-webgpu: using WebGPU EP GPU device {i} of {n}");
             Ok(i)
         })
         .as_ref()
@@ -603,19 +652,26 @@ pub(crate) mod ort_engine {
     /// API (plugin EPs are not named providers) and CPU fallback is
     /// disabled — a graph that leaves a node on the CPU fails to commit.
     /// Memory pattern stays ON here: the CUDA-side arena-retention bug it
-    /// is disabled for does not exist in the WebGPU EP, and without buffer
-    /// planning every intermediate takes a dedicated device allocation —
-    /// DISTS at 2048² exhausts 16 GB that way.
+    /// is disabled for does not exist in the WebGPU EP; measured
+    /// (`benchmarks/ort_webgpu_2026-10-17/`): identical peaks on and off
+    /// (5,298 MiB at DISTS 1024², 15,690 at the 2048² OOM attempt), and
+    /// alternating shapes in one session are stable.
     #[cfg(feature = "ort-webgpu")]
     fn webgpu_session(env: &Environment, path: &Path) -> Result<Session, Error> {
         webgpu_library(env)?;
+        let i = webgpu_device_index(env)?;
         let device = webgpu_device(env)?;
         Session::builder(env)
             .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
             .and_then(|b| b.with_disable_cpu_fallback().map_err(Into::into))
             .and_then(|b| b.with_devices([device], None).map_err(Into::into))
             .and_then(|mut b| b.commit_from_file(path))
-            .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))
+            .map_err(|e| {
+                Error::BadModel(format!(
+                    "{} (WebGPU EP GPU device {i}): {e}",
+                    path.display()
+                ))
+            })
     }
 
     /// Extract the one named output from a session run, consuming each

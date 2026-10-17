@@ -341,9 +341,10 @@ cli-feature-matrix:
         fi
     }
     for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
-             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu nn-webgpu; do
         run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
     done
+    run_combo "zenmetrics-nn/ort-webgpu" -p zenmetrics-nn --features ort-webgpu
     run_combo bare -p zenmetrics-cli --no-default-features
     run_combo default -p zenmetrics-cli
     printf '%s\n' "---- $((total - fails))/$total combinations passed ----"

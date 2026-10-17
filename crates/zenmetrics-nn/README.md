@@ -18,7 +18,7 @@ each model's upstream reference implementation. Plan and licensing:
 | LIQE (`Liqe`, no-reference, consent-gated) | `liqe`, `liqe_ref` | rten, ort-cuda, ort-webgpu | `zwx8981/LIQE` `LIQE.forward`, 495-prompt text bank, top-left-224-patch×15 quirk | 0.3938 | rten 1.25e-5, ort-cuda 4.96e-5, ort-webgpu 4.4e-5 |
 | MUSIQ (`Musiq`, no-reference) | `musiq`, `musiq_ref` | rten, ort-cuda | `google-research/musiq` `run_predict_image.py`, koniq_ckpt.npz, 3-scale TF-gaussian 32² patches → transformer, MOS-scale | 1.969 | rten 1.20e-4, ort-cuda 6.98e-5 |
 | HyperIQA (`Hyperiqa`, no-reference) | `hyperiqa`, `hyperiqa_ref` | rten, ort-cuda, ort-webgpu | `SSL92/hyperIQA` `demo.py` model on a documented deterministic 5x5 crop grid (upstream crops at random), koniq_pretrained.pkl, ResNet-50 hypernetwork, trained on 0–100 MOS with an unbounded linear output | 4.462 | rten 3.42e-6, ort-cuda 3.42e-6, ort-webgpu 6.0e-6 |
-| PaQ-2-PiQ (`Paq2piq`, no-reference) | `paq2piq`, `paq2piq_ref` | rten, ort-cuda, ort-webgpu | `baidut/paq2piq` `InferenceModel.predict` (MIT code; CC-BY-NC weights, consent-gated), RoIPoolModel-fit.10.bs.120.pth, ResNet-18 + 1+20x20 RoIPool grid, ~0-100 MOS | 1.229 | rten 2.51e-5, ort-cuda 1.28e-5, ort-webgpu 3.2e-5 |
+| PaQ-2-PiQ (`Paq2piq`, no-reference) | `paq2piq`, `paq2piq_ref` | rten, ort-cuda, ort-webgpu | `baidut/paq2piq` `InferenceModel.predict` (MIT code; CC-BY-NC weights, consent-gated), RoIPoolModel-fit.10.bs.120.pth, ResNet-18 + 1+20x20 RoIPool grid, ~0-100 MOS | 1.229 | rten 2.51e-5, ort-cuda 1.28e-5, ort-webgpu 3.13e-5 |
 | WD (`WassersteinDistortion`, full-reference) | `wd_s1` … `wd_s5` | rten, ort-cuda, ort-webgpu | Cool-Chic raw RGB VGG16 pre-pool, five sigma maps; [validation](../../benchmarks/wd_port_2026-10-16/README.md) | 0.3822 / 0.2477 / 0.1602 / 0.1038 / 0.06745 | rten ≤1.93e-6, ort-cuda ≤3.45e-6, ort-webgpu ≤2.5e-6 (25 pairs, including non-square and 2048²) |
 | WaDIQaM (`WadiqamFr`, `WadiqamNr` no-reference) | `wadiqam_fr_live`, `wadiqam_fr_tid`, `wadiqam_nr_live(_ref)`, `wadiqam_nr_tid(_ref)` | rten, ort-cuda, ort-webgpu | `dmaniry/deepIQA` `evaluate.py` CPU fp32, `top="weighted"`, non-overlapping 32² stride-32 patches at native res, raw u8→f32; MIT code + weights | 29.93¹ / 5.21¹ / 23.55 / 2.76 | rten ≤ 7.8e-6, ort-cuda ≤ 5.5e-6, ort-webgpu ≤ 6.9e-6 (29 pairs incl. non-square + 4096²) |
 
@@ -41,10 +41,12 @@ loaded at run time from `ORT_DYLIB_PATH`. `ort-webgpu` feature (implies
 `ort`): the same graphs on ONNX Runtime's WebGPU plugin execution provider
 — the `libonnxruntime_providers_webgpu.so` from the version-matched
 `onnxruntime-ep-webgpu` pip package, registered at run time from
-`ZENMETRICS_NN_WEBGPU_EP_LIB`. CPU fallback is forbidden: a graph that
+`ZENMETRICS_NN_WEBGPU_EP_LIB` (like `ORT_DYLIB_PATH`, it names trusted code
+dlopen'd into the process). CPU fallback is forbidden: a graph that
 leaves a node on the CPU fails to commit. The adapter is
-`ZENMETRICS_NN_WEBGPU_DEVICE` (index into the EP's GPU-device list), else a
-discrete-vendor preference then the last enumerated GPU. Timings:
+`ZENMETRICS_NN_WEBGPU_DEVICE` (index into the EP's GPU-device list), else
+the best vendor-name rank (NVIDIA > AMD/ATI > other); two equally-ranked
+GPUs without the pin are an error naming the candidates. Timings:
 [`benchmarks/nn_lpips_phase0_2026-10-15.md`](../../benchmarks/nn_lpips_phase0_2026-10-15.md).
 
 PaQ-2-PiQ accepts native-resolution inputs up to 4096 pixels per axis. Its

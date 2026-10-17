@@ -34,16 +34,20 @@ fn engine() -> Result<Engine, Box<dyn std::error::Error>> {
         #[cfg(feature = "nn-webgpu")]
         Ok("ort-webgpu") => Ok(Engine::OrtWebgpu),
         Ok(other) => Err(format!(
-            "ZENMETRICS_NN_ENGINE={other}: expected `rten`{}{}",
-            if cfg!(feature = "nn-ort") {
-                " or `ort-cuda`"
-            } else {
-                " (build with `nn-ort` for `ort-cuda`)"
-            },
-            if cfg!(feature = "nn-webgpu") {
-                ", `ort-webgpu`"
-            } else {
+            "ZENMETRICS_NN_ENGINE={other}: expected {}{}",
+            [
+                Some("`rten`"),
+                cfg!(feature = "nn-ort").then_some("`ort-cuda`"),
+                cfg!(feature = "nn-webgpu").then_some("`ort-webgpu`"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" or "),
+            if cfg!(feature = "nn-ort") || cfg!(feature = "nn-webgpu") {
                 ""
+            } else {
+                " (build with `nn-ort` or `nn-webgpu` for the ORT engines)"
             }
         )
         .into()),
