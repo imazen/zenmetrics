@@ -33,5 +33,7 @@ else:
         result=subprocess.run(command,env=env,check=True,capture_output=True,text=True)
         row=json.loads(result.stdout);row['stderr']=result.stderr;rows.append(row)
     assert all(mask=='2' for mask in rows[1]['worker_affinity_masks']),'Explicit one-thread session escaped the caller affinity'
+    assert len(rows[1]['worker_affinity_masks'])==1,'Explicit one-thread control created additional native workers'
+    assert len(rows[2]['worker_affinity_masks'])==20,'Explicit twenty-thread control did not create the requested native pool'
     a.output.write_text(json.dumps(dict(cases=rows,scope='Correctness/configuration probe, CPU execution provider of the installed ORT distribution; not a performance measurement'),indent=2)+'\n')
     print(json.dumps(dict(cases=[dict(configuration=row['configuration'],native_threads=len(row['worker_affinity_masks']),affinity_masks=sorted(set(row['worker_affinity_masks']))) for row in rows])))
