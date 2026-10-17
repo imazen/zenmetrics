@@ -1113,3 +1113,9 @@ iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20"
 
 iqa-compete-reference-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_references.py
+
+iqa-compete-requalify raw inventory output +references:
+    python3 benchmarks/iqa_compete_2026-10-16/requalify.py '{{raw}}' '{{inventory}}' --output '{{output}}' {{references}}
+
+iqa-compete-parity-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_parity.py

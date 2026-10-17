@@ -15,7 +15,8 @@ import time
 import uuid
 from chunks import combine
 from admission_recovery import recover
-from references import load_references, same_pair_reference
+from references import load_references
+from parity import qualify_rows
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
@@ -253,41 +254,8 @@ def main():
         column,value,*_=line.split('\t');scales[column]=float(value)
     def qualify(results):
         # CPU controllers can append new references while this controller runs.
-        references=load_references(args.reference_jsonl)
-        mismatch=False
-        for value in results:
-            if value['status']=='skipped:nonfinite_score':mismatch=True;continue
-            if value['status'] not in ['ok','variant_mismatch']:continue
-            if value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:
-                value['status']='variant_mismatch';mismatch=True
-            if value.get('score') is None:
-                if value.get('n',0)>0:
-                    value.update(status='variant_mismatch',score_nonfinite=True);mismatch=True
-                continue
-            name=value['metric_name'];base=name.removesuffix('-gpu')
-            ref=same_pair_reference(references,value)
-            if ref is None:
-                value.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status='unavailable:no qualified same-pair CPU reference',notes=value.get('notes','')+'; Native timing retained without a CPU reference')
-                if args.python_package:value['status']='skipped:missing_same-pair_Rust_reference'
-                continue
-            reference=ref['score'];delta=abs(value['score']-reference)
-            if name.endswith('-gpu'):
-                bounds={'ssim2-gpu':max(.1,abs(reference)*.005),'dssim-gpu':abs(reference)*.01,
-                        'butteraugli-gpu':abs(reference)*.002,'iwssim-gpu':.001,'cvvdp-gpu':.001}
-                bound=bounds.get(name,0.)
-                source='GPU crate parity_lock/opaque parity gates; CVVDP/IW-SSIM 1e-3 absolute'
-            elif args.python_package and name not in {'lpips-alex','lpips-vgg','lpips-squeeze','dists','stlpips-alex','stlpips-vgg','deepdc'}:
-                bound={'psnr':1e-10,'ssimc':7.5e-7,'ssimc-pyiqa-f32':7.5e-7,'ms-ssim-pyiqa-f32':1.9e-6,'gmsd':1e-14,'fsim':5e-5,'fsimc':5e-5,'vsi':1e-4,'haarpsi':5e-5,'flip-v17':1e-6,'cvvdp':1e-3,'vif':5e-13,'iwssim-piq':1e-4,'mdsi':0.,'ms-gmsd':0.,'ms-gmsdc':0.,'brisque':15.138428e-3}.get(name,0.)
-                source='docs/METRIC_PROVENANCE.md; exact comparison for variants without a documented cross-package bound'
-            else:
-                column=next(m['columns'][0] for m in inventory if m['metric_name']==name)
-                bound=scales[column]*1e-3
-                source='zenmetrics-nn/models/jnd_scale.tsv; 1e-3 JND unchanged parity gate'
-            value.update(ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,
-                         parity_abs_bound=bound,parity_source=source,reference_binary_sha=ref['impl_binary_sha'],
-                         reference_pair_sha256=ref['pair_sha256'],reference_threads=ref['threads'])
-            if delta>bound or value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:value['status']='variant_mismatch';mismatch=True
-        return mismatch
+        return qualify_rows(results,load_references(args.reference_jsonl),
+                            inventory,scales,args.python_package)
 
     if args.ort_library:
         os.environ['ORT_DYLIB_PATH'] = str(args.ort_library.resolve())

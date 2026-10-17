@@ -137,3 +137,11 @@ its supplied CPU ledgers, so references appended by a concurrent CPU controller
 can qualify subsequent cells. A different pixel hash never qualifies even if
 the size label matches. Existing saved rows without a reference remain explicitly
 uncompared until a separate comparison is recorded; this does not retime them.
+
+`just iqa-compete-requalify` records a separate saved-row comparison receipt.
+It shares the live controller's parity gates and asserts that sample count,
+statistics, observed score, load and resource fields do not change. Inputs and
+reference ledgers are hashed; a ledger changing during reference selection
+refuses the receipt. Any newly discovered GPU mismatch without a linked earlier
+repeat is listed as requiring reproduction. Updating a comparison never supplies
+new timing samples or substitutes for that repeat.
