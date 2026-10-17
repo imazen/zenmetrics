@@ -317,6 +317,7 @@ def main():
             r = json.loads(line)
             if not prior_admission_reason(r):done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device'],r['os']))
     selected = set(args.metrics.split(',')) if args.metrics else {r['metric_name'] for r in inventory}
+    if args.metrics=='learned':selected=set(LEARNED)
     excluded=set(filter(None,args.exclude_metrics.split(',')))
     if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
     if args.python_package and not args.metrics:

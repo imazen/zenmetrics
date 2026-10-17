@@ -1158,3 +1158,7 @@ iqa-compete-batch-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics psnr,gmsd --sizes cid22 --threads 1 --batch-seconds 1100
 
 iqa-compete-controller-tests: iqa-compete-chunk-tests iqa-compete-linux-admission-tests iqa-compete-capability-tests iqa-compete-admission-classification-tests iqa-compete-reference-tests iqa-compete-parity-tests iqa-compete-ort-patch-tests iqa-compete-coverage-tests iqa-compete-dispatch-tests iqa-compete-platform-tests iqa-compete-batch-tests
+
+# Learned CPU continuation shares prior observations; classical repairs have a separate lane.
+iqa-compete-learned-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics learned --exclude-metrics pieapp --batch-seconds 1100
