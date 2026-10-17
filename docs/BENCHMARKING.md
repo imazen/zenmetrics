@@ -132,3 +132,21 @@ thread-scaling baselines and rank-change identities separate implementation
 versions, including different compiler/build binaries of the same method.
 Unversioned historical rows retain an unspecified version. External measurement
 registration remains separate from version support.
+
+## DVIFM baseline and native panel
+
+`benchmarks/iqa_compete_2026-10-16/repro-results/e0ef9addd08fb6f40ac566fe1f1e28912a1e77c62b70742cb55e7193579688f1/` holds a published
+DVIFM comparison: seven sizes, one and 24 threads, one host. DVIFM is by Maciej
+Pedzisz (Nokia Technologies); `dvifm-cpp` rows are the author's C++ reference
+implementations, built and timed by us; `dvifmish` is our independent Rust
+reimplementation. The headline comparison is baseline against baseline:
+`dvifm-cpp baseline` (portable x86-64, `-O3 -flto=auto`, IEEE-strict) against
+the default Rust build (runtime SIMD dispatch, x86-64-v3 on the timing host).
+The same rows also carry `fast-math`, `native` and `native+fast-math` C++ builds
+(the last is the kit's own Release flags) and a Rust `-C target-cpu=native`
+build, each with exact flags in `notes`. `dvifm-rs` marks a Rust port whose raw
+f64 bits equal the strict-float C++ on every pair, size and thread count
+(lap-v0.2, lap-v0.3); `dvifmish-port` marks the rest (min-v0.2, 2d-v0.2).
+C++ 24-thread cells are bimodal run to run, so these rows pool the samples of
+two identical runs. C++ has no spatial-map endpoint, so score+map C++ rows are
+`unsupported`.
