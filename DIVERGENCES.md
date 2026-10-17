@@ -612,13 +612,6 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   the new ports' parity
   because the diffmap path still runs a CPU fallback (§2b/§9).
 
-## Maintenance rule
-
-Every metric port or reference-version bump updates this file **in the
-same commit**: a ledger row (or delta refresh) plus a per-metric entry
-for anything that isn't pure float noise. Crate-level depth stays in the
-crate docs — this file links, it does not duplicate.
-
 ## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
 
 - **RESOLVED:** RTen and CUDA VGG16 trunk plus Rust statistics pass 25 upstream
@@ -638,6 +631,26 @@ crate docs — this file links, it does not duplicate.
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## `afine` — A-FINE (zenmetrics-nn, 2026-10-16)
+
+- **DIVERGES (unresolved, upstream-side):** the published AIC-4 `A-FINE`
+  column is **not** upstream `afine_all` under any convention found. The
+  black-box search ([receipt](benchmarks/afine_aic_2026-10-16/README.md))
+  dumped every internal sub-score (`n_r`/`n_d`/`fid`/`s_r`/`s_d`/`s_f`/`λ`)
+  under the native convention on 60 of 61 pairs and evaluated ~700
+  recombinations plus ref/dist order against them; the other five
+  preprocessing variants (BGR, no-norm, 224/384/512 resizes) were compared
+  on `afine_all` only, over the 39 pairs the pre-fix sweep reached.
+  Best raw candidate `s_f + (s_d − s_r)` still misses at 0.106 JND median /
+  0.59 max vs the ≤0.01/≤0.05 gate; fitted forms cap SRCC ≈0.92 — the column
+  is no monotone transform of any searched candidate. Likely a different
+  checkpoint or pipeline step on the site side; the shipped metric stays the
+  upstream-verified `afine_all` (rten parity 1.42e-5, ort-cuda 1.94e-5 JND).
+- **Resource note:** the rten path's activation demand on the 8.4 MP pair
+  (S67 3355×2516) OOM-kills on this ~30 GB box — measured peaks 22.3 GB
+  (8 threads) and 27.2 GB (4 threads) before the kill; ort-cuda scores the
+  pair's `afine_all` in VRAM instead.
 
 ## `wadiqam` — deepIQA WaDIQaM FR+NR (2026-10-16)
 
@@ -659,3 +672,10 @@ crate docs — this file links, it does not duplicate.
 - **EXTENSION:** inference chunking at 2,000 patches per graph call matches
   upstream's batch size; chunk-vs-whole equivalence is unit-tested, scores are
   bit-identical by construction (concatenated inputs, per-patch outputs).
+
+## Maintenance rule
+
+Every metric port or reference-version bump updates this file **in the
+same commit**: a ledger row (or delta refresh) plus a per-metric entry
+for anything that isn't pure float noise. Crate-level depth stays in the
+crate docs — this file links, it does not duplicate.
