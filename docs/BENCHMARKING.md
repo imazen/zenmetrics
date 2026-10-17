@@ -39,6 +39,8 @@ bash scripts/ci/clone-siblings.sh
 just bench-iqa smoke ssim2,gmsd --host i265 --fixture synthetic-v1 --skip-native
 ```
 
+The `ubuntu-latest` job in [run 39029766690](https://github.com/imazen/zenmetrics/actions/runs/39029766690), source `f95192aaa39986cc5438fda68716a1d95cee706c`, also passed on 2026-10-17. Its downloaded artifact contains one content key and 8 timed n>=5 rows; the workflow's repeat check passed. This validates the runner setup, not a fresh apt/rustup manual install.
+
 ## macOS ARM64
 
 Tested on mac (Apple M4 Pro, ARM64) 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: the documented two-metric smoke and repeat passed with 8 rows, then `added=0 skipped=8`. Rust 1.99.0, just 1.57.0 and CMake 4.4.3 were present. The 12 GiB wrapper recorded 0.95 GiB peak RSS over the complete clone/build/two-run command. This was not a clean Homebrew installation test.
