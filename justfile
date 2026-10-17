@@ -724,8 +724,24 @@ nn-dmm-netlib-goldens python model_dir ladder tapdir engine="rten" features="mod
     '{{python}}' crates/zenmetrics-nn/models/dmm/gen_netlib_goldens.py '{{model_dir}}' '{{tapdir}}' "$(echo '{{engine}}' | tr - _)" --owner-approved-floors
 
 # Diagnostic subset only; nn-parity-dmm always validates the full panel.
-nn-dmm-probe model_dir ladder output rows engine="rten" features="model-tests":
-    ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features '{{features}}' --example dmm_tap_dump -- "$(realpath '{{model_dir}}')" "$(realpath '{{ladder}}')" "$(realpath -m '{{output}}')" '{{rows}}' scores-only
+nn-dmm-probe model_dir ladder output rows engine="rten" features="model-tests" mode="scores-only":
+    ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features '{{features}}' --example dmm_tap_dump -- "$(realpath '{{model_dir}}')" "$(realpath '{{ladder}}')" "$(realpath -m '{{output}}')" '{{rows}}' '{{mode}}'
+
+# Compare current small-row trunk inputs to the original oracle's tap dump.
+# Every output directory must be fresh; mismatch/missing files fail explicitly.
+nn-dmm-tap-identity model_dir ladder baseline output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{just_executable()}} nn-dmm-probe '{{model_dir}}' '{{ladder}}' '{{output}}/rten' '1415:128' rten model-tests,ort taps
+    {{just_executable()}} nn-dmm-probe '{{model_dir}}' '{{ladder}}' '{{output}}/ort_cuda' '1415:128' ort-cuda model-tests,ort taps
+    for engine in rten ort_cuda; do
+        for side in ref dist; do
+            for tap in 0 1; do
+                cmp '{{baseline}}'/$engine/1415_128_${side}_tap${tap}.npy '{{output}}'/$engine/1415_128_${side}_tap${tap}.npy
+            done
+        done
+    done
+    echo 'DMM tap identity: all eight NPY files are byte-identical'
 
 nn-dmm-oracle-info python:
     '{{python}}' -I benchmarks/nn_port_2026-10-15/dmm_oracle_info.py
@@ -768,6 +784,21 @@ nn-port-compile-gate:
     gate benchmark-study python3 scripts/jobsys/test_benchmark_study.py
     gate matrix {{just_executable()}} cli-feature-matrix
     exit "$failed"
+
+# Syntax-check portable Python probes without importing their model dependencies.
+nn-port-python-check:
+    PYTHONPYCACHEPREFIX="$HOME/tmp/nn-port-scratch/pycache" python3 -m py_compile benchmarks/ahiq_aic_probe/ahiq_aic_probe.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants2.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench_gpu.py benchmarks/dmm_aic_probe/dmm_aic_probe.py benchmarks/nn_port_2026-10-15/dmm_fix_summary.py benchmarks/nn_port_2026-10-15/dmm_oracle_info.py crates/zenmetrics-nn/models/dmm/gen_netlib_goldens.py
+
+# Advisory quality scan against pinned siblings, using the installed ignored kit.
+# Run under the same shared lock and bounded run-heavy wrapper as compile gates.
+nn-port-quality:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{just_executable()}} snap-cargo @ metadata --no-deps --format-version 1 > /dev/null
+    export ZENUTILS="{{justfile_directory()}}/.quality-kit"
+    export CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target"
+    cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics"
+    {{just_executable()}} quality --jobs "${CARGO_BUILD_JOBS:-16}"
 
 # Crate-scoped statistical API validation in the pinned dependency snapshot.
 stats-helpers-check:
