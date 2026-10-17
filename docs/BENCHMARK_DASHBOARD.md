@@ -1,93 +1,126 @@
 # Benchmark dashboard
 
-The [GitHub Pages dashboard](https://imazen.github.io/zenmetrics/) is a static
-observation browser. The Cloudflare scoring viewer and its workflow are separate.
-The dashboard deploys after reviewed changes reach `master`.
+The [GitHub Pages dashboard](https://imazen.github.io/zenmetrics/) rebuilds from
+registered measurements after reviewed changes reach `master`. Its workflow and
+hosting are separate from the Cloudflare scoring viewer.
 
-## Add observations
+## Coverage and limits
 
-1. Commit the measured table and its metadata under `benchmarks/`. Keep generated
-   source files within repository size limits; large external pointer targets are
-   inventoried but are not fetched automatically.
-2. Add a `[[dataset]]` entry in
-   [the registry](../benchmarks/dashboard/datasets.toml): `glob`, `family`,
-   `adapter`, and the exact permitted `columns`. An empty glob fails unless
-   `allow_absent = true` explicitly declares an incoming dataset. Never use that
-   flag to conceal a missing required input.
-3. Run `just dashboard-data-check` and `just dashboard-build`. Install the pinned
-   browser dependency with `python -m pip install -r scripts/dashboard/requirements.txt`
-   and `python -m playwright install chromium`, then `just dashboard-smoke`.
-4. Push the reviewed change to `master`. The dashboard workflow builds and checks
-   the artifact before deploying it. Branch dispatch builds do not deploy.
+The catalog follows the current CLI source; pending metric ports appear when
+those changes land. Timing includes historical CPU, GPU, backend and NN panels.
+Agreement includes both reference-oracle and published-score residuals. Coverage
+is an inventory of observations, not a claim that every metric, platform or size
+has been qualified.
 
-Unknown columns, malformed rows, invalid numbers, missing required registered
-inputs, and unknown adapters fail the build. New schemas require an adapter and
-rejection controls. Public per-image quality observations can use the registered
-`benchmarks/dashboard/quality-points/*.tsv` contract: exactly `metric`, `dataset`,
-`pair`, `mos`, `score`. Its measured rows populate the MOS scatter; the adapter
-does not invent aggregate correlations. Competitor progress schemas are registered in anticipation of
-that lane landing; no other lane's unreviewed data is copied into this branch.
+Full-resolution AIC2026 scored sources are unavailable on the dashboard build
+host. Reachable historical scored snapshots support CID22, KADID, TID and AIC
+sample panels; an AIC sample is never labelled the full AIC2026 corpus. Original
+metric-scoring commits are not recoverable from those parquets. Their hashes,
+recorded columns and bootstrap method qualify the historical observations only.
 
-## Stack and publication boundary
+The quality view also includes all Margarine tables with SROCC/PLCC/KROCC,
+retaining experiment, normalization, arm, scope and subset. These are distinct
+conditions. Heatmap cells with conflicting values say `multiple scopes`; filter
+before ranking. Per-image scatter points retain the recorded target field,
+including JND or DMOS where applicable; the axis title does not relabel them MOS.
 
-Python 3.13 standard library adapters emit compact per-family JSON. HTML, CSS and
-native ES modules render SVG and tables without a package install, CDN or third
-party browser runtime. Faceted filtering and grouping suffice for the current
-size; each family loads only when opened. This keeps builds reproducible and
-avoids loading the entire benchmark archive into a browser. No parquet is loaded
-because the selected source families are small TSV/JSON inputs; add a pinned
-columnar adapter if a future registered family requires it.
+## Add or classify an upload
 
-The build copies only dashboard assets and normalized public fields. Raw metadata
-and image paths are not copied. Source hashes and links bind observations to
-tracked files. Missing commit, host, date or command fields stay `missing` rather
-than being inferred from an unrelated hash. In particular an oracle commit in a
-README is not a build commit. Metadata links preserve access to original evidence.
+1. Add measured files and metadata under `benchmarks/`. Register an exact schema
+   in [datasets.toml](../benchmarks/dashboard/datasets.toml), with family, adapter
+   and glob. `allow_absent` declares an expected incoming family; its match count
+   appears in Coverage, including zero. Versioned competitor progress directories
+   match explicit `-progress-v*` globs.
+2. Every otherwise unregistered data/metadata/pointer file must have an explicit
+   `ignored` entry and reason in
+   [classification.tsv](../benchmarks/dashboard/classification.tsv). This is a
+   reviewed configuration, not a blanket glob. New unclassified files fail CI.
+   The site publishes the excluded count only, not excluded filenames.
+3. Run `just dashboard-data-check`, `just dashboard-plot-check`,
+   `just dashboard-generated-check` and `just dashboard-build`. Unknown columns,
+   malformed numeric observations or missing required files fail the build.
+4. Install [browser dependencies](../scripts/dashboard/requirements.txt), then
+   run `just dashboard-smoke` and `just dashboard-clean-check`. The smoke port is
+   configurable with `DASHBOARD_PORT` or `--port`, restricted to 3000–3999.
+5. Land reviewed changes to `master`. The workflow builds, tests and deploys the
+   artifact. Concurrency is per ref and never cancels an in-progress deployment.
 
-Every selection lists its source, SHA-256, available build identity and metadata
-links. Competition rows retain host, OS, implementation, engine, device, threads,
-mode, status, comparison status and reproduction requirement. Unsupported rows
-remain in the table with missing timings. They do not become zero-cost points.
-Repeated runs and distinct sources are never averaged together.
+Public per-image TSVs may use the `quality-points` adapter with exactly `metric`,
+`dataset`, `pair`, `mos`, `score`. Do not infer correlations or intervals from a
+small scatter preview.
 
-## Reading the views
+## Statistical and display contracts
 
-- Speed plots individual timing observations in ms/MP against pixels, grouped by a
-  selected dimension. Hover reveals each observation's conditions. The second
-  plot exposes thread count. Use host/OS/backend/mode filters for comparisons.
-  Missing crop sizes, 2K, 4K, 8K or Windows/Linux pairs stay absent until measured.
-  The encoder-loop data uses planar linear input and is labelled separately from
-  competitor score and score+map cells.
-- The cost model reports **α** from an OLS fit on measured sizes ≤512², and **β**
-  from a separate OLS fit on sizes ≥1024². Each needs at least two distinct sizes.
-  Fits are grouped by source and every workload dimension, and are descriptive;
-  the interface never plots fabricated or extrapolated samples.
-- Agreement displays log absolute and relative delta, reports exact zeros
-  separately and preserves missing size and JND fields. The initial AIC panels
-  are historical observations, not claims of current parity qualification.
-- Quality displays the reported SROCC/PLCC/KROCC and sample count, retaining
-  dataset, scope, subset, arm and normalization. Heatmap cells with several
-  differing observations say `multiple scopes`; filter before ranking. The
-  initial panels cover historical Margarine experiments on AIC-4 samples, CID22,
-  KADID and CSIQ. They do not compare all metrics. No confidence intervals or
-  per-image MOS rows are available in the selected inputs; the scatter explicitly
-  reports missing data. Broader human-quality tables need registration.
-- Catalog extracts the current CLI names (113 at the initial snapshot; pending
-  AHIQ and DMM are not invented as available). Reference evidence joins exact
-  ledger entries; missing entries and license fields stay explicit. CPU/GPU
-  labels reflect CLI routing, not an exhaustive NN runtime support matrix.
+Timing dots retain source, host, OS, implementation, backend, engine, threads,
+mode and phase. Pixel axes are logarithmic. Every group labels its own y scale;
+color identifies thread count and square marks identify warm calls. Competition
+adapters retain sample count, p10/p90, peak RSS, CPU/GPU/SIMD identity and parity
+status. Status is an enum plus details; failed or unsupported observations remain
+rows with missing timings. Historical NaN/refusal tokens are explicit missing
+measurements, not zero-cost points.
 
-URL hashes retain the selected view and filters. Tables sort by any displayed
-column, CSV downloads contain the entire filtered selection, and theme choice
-persists locally. Only the first 2,000 rows render in the table; charts and CSV
-use the full selection. Missing inventory is visible in the coverage panel.
+Cost fits group by metric, implementation, host, OS, backend, engine, threads,
+mode, phase and content across sources. Repeated observations at each measured
+size reduce to one median before OLS. α is the intercept from sizes ≤512²; β is
+the slope from sizes ≥1024². Both ranges show distinct-size n and R², require at
+least two distinct sizes and flag negative α. These describe the selected
+historical observations; no interpolated or extrapolated points are drawn.
+Thread speedup uses the median one-thread baseline within the same metric,
+size and workload, divided by that thread count's median. Different sizes are
+never pooled into a scaling ratio.
 
-## Gates
+Agreement uses real pair IDs on the x axis, color by metric and distinct
+oracle/published series. Exact zeros occupy a separate labelled lane, including
+all-zero selections. Missing observations are counted separately. A small error
+against a seven-digit printed oracle does not establish algorithmic agreement.
+CAMBI, SSIMULACRA1 and WS-HV published reproduction remains visibly unconfirmed.
+The `aic_review` SSIMULACRA1 panel is canonical here because it is the later
+Round 5 reviewed scoring run; the differing `aic_more` Round 4 file is retained
+and explicitly classified as historical. Neither establishes published parity.
 
-The workflow runs strict adapter controls, builds from the checked-out sources,
-and serves that exact artifact for headless browser tests. Tests load all four
-views, require populated tables and numeric charts where applicable, reject
-console/HTTP errors, and exercise filters, sorting, CSV download, URL restore,
-theme persistence, an empty selection and phone width. Screenshots can be saved
-with `python scripts/dashboard/check.py target/dashboard --screenshots <directory>`.
-No Cargo or sibling checkout is needed.
+Quality regeneration uses raw Spearman, Pearson and Kendall tau-b without fitting
+an output remap. Magnitudes appear in the leaderboard and signed coefficients
+remain available. Fixed-seed reference-image cluster resampling yields percentile
+95% intervals; this is not observer-level uncertainty. Each metric has explicit
+finite-row/exclusion counts. A deterministic preview contains at most 24 actual
+rows per metric; its source identity is hashed and no local image paths are
+published. Install `requirements-quality.txt` and run `just dashboard-correlations`
+with the hash-matched read-only source to regenerate the aggregate shards.
+
+## Catalog, extracts and provenance
+
+`catalog.py` generates committed TSV shards from CLI names, backend/GPU/display/
+luma flags, output columns, NN/NR membership, model cards joined by their output
+columns, crate licenses and JND scales. Static fallback column names are labelled
+as such because enabled features can version them. Model directions and weight
+terms stay separate from code licenses. Parity cells distinguish a declared gate,
+a reference named in a ledger and no evidence; they link to the actual evidence.
+Reference prose renders as text with Markdown decoration removed. Ditto entries
+resolve to the preceding ledger row.
+
+`extract_markdown.py` produces machine-readable, source-linked extracts of the
+provenance tables, DIVERGENCES ledger, AIC fitted-JND and residual tables, coverage
+audit and NN AIC crosscheck. CI checks both sets of committed extracts against
+current inputs. Shards stay below 30 KB. The build scans its output with the same
+shared hygiene patterns as the repository check, including private local patterns
+when installed. Only canonical CPU-derived host labels are accepted.
+
+Source SHA-256, available commit/date/host/command and metadata links accompany
+every selection. Missing provenance fields remain missing. Oracle hashes are not
+substituted for build commits. Raw metadata, paths and excluded inventories are
+not copied into the published artifact.
+
+## Implementation and verification
+
+Python 3.13 standard-library adapters emit per-family JSON. Native browser modules
+render SVG, filters and tables; no CDN or browser package dependency is required.
+Families load on demand. URL hashes preserve view and filters; CSV contains the
+full sorted selection, while tables render up to 2,000 rows. Theme persists.
+
+Rejection controls cover unknown schemas, nonfinite numbers, new unclassified
+uploads, shared hygiene, card-column joins, hex residuals and distinct published
+comparisons. Numeric plot controls check across-source median fits and per-size
+speedup. Browser checks load every view, require data and charts, reject console
+and HTTP errors, and verify source counts against the manifest, CSV, URL restore,
+empty selections, theme persistence and phone width. The clean check builds and
+serves a tracked-source archive independently of ignored local files.
