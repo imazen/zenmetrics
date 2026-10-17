@@ -1173,3 +1173,7 @@ iqa-compete-freeze-models default overrides manifest output:
 
 iqa-compete-freeze-model-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_freeze_models.py
+
+# No metric execution: fresh exact-pair comparisons, immutable receipts and audit.
+iqa-compete-refresh-i265 raw pairs output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/refresh.py '{{raw}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda
