@@ -1272,56 +1272,13 @@ columns = ["butter_aic.oracle_error.max", "butter_aic.oracle_error.median", "but
 note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
 
 [[dataset]]
-glob = "benchmarks/dashboard/catalog/catalog-00.tsv"
+glob = "benchmarks/dashboard/catalog/catalog-*.tsv"
 family = "catalog"
 adapter = "scales"
 columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
 
 [[dataset]]
-glob = "benchmarks/dashboard/catalog/catalog-01.tsv"
-family = "catalog"
-adapter = "scales"
-columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
-metric = "flip"
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-00.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-01.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-02.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-03.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-04.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-05.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-06.tsv"
+glob = "benchmarks/dashboard/extracts/tables-*.tsv"
 family = "coverage"
 adapter = "scales"
 columns = ["document", "table", "row", "column", "value"]
