@@ -33,6 +33,9 @@ jobs:
         run: bash scripts/ci/clone-siblings.sh
       - name: Build and run two CPU metrics
         run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native
+      - name: Preserve first Windows executable
+        if: runner.os == 'Windows'
+        run: cp target/release/iqa-compete.exe "$HOME/tmp/bench-smoke/first.exe"
       - name: Verify resume
         run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native | tee "$HOME/tmp/bench-smoke/resume.log"
       - name: Require no new timed cells
@@ -46,6 +49,8 @@ jobs:
         with:
           name: bench-smoke-${{ matrix.os }}
           path: |
+            ~/tmp/bench-smoke/first.exe
+            target/release/iqa-compete.exe
             target/bench-iqa/**
             benchmarks/iqa_compete_2026-10-16/repro-results/**
           if-no-files-found: warn
