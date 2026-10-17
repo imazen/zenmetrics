@@ -33,10 +33,10 @@ import importlib.util
 from timm.models.resnet import Bottleneck
 from timm.models.vision_transformer import Block
 
-AHQ = os.environ.get('AHIQ_SRC', '/home/lilith/tmp/nn-port-scratch/ahiq')
+AHQ = os.environ.get('AHIQ_SRC', os.path.expanduser('~/tmp/nn-port-scratch/ahiq'))
 CKPT = os.environ.get(
     'AHIQ_CKPT',
-    '/home/lilith/tmp/nn-port-scratch/ahiq-ckpt/1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W.pth')
+    os.path.expanduser('~/tmp/nn-port-scratch/ahiq-ckpt/1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W.pth'))
 IMG, CSV, OUT = sys.argv[1:4]
 CONVS = sys.argv[4:] or ['s9', 'stream20']
 # AHIQ's KonJND-1k pooled median |d| scale (crates/zenmetrics-nn/models/
