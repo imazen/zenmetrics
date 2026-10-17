@@ -1,0 +1,16 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/gpu-cid22-2k-progress-v1.jsonl",
+  "raw_sha256": "7755e314d4479c3b88b29d61fe1669ec2f1ad87dd0df3848c5e02b47bc9ee451",
+  "rows": 48,
+  "summary_files": 3,
+  "parsed_svg_files": 16,
+  "resource_log": "/home/lilith/tmp/iqa-compete/charts-gpu-cid22-2k-v1.log",
+  "resource": {
+    "exit_code": 0,
+    "seconds": 1,
+    "peak_rss_gib": 0.07,
+    "min_available_mib": 26229,
+    "peak_load": 1.62
+  },
+  "limitation": "2K cells have no CPU reference in this historical snapshot. Existing CID22 Butteraugli mismatch repeats are retained. This is not a completed matrix."
+}

@@ -1125,3 +1125,8 @@ iqa-compete-ort-thread-control python output:
 
 iqa-compete-ort-patch-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_ort_patch.py
+
+# Scope the formatter to workspace packages; path-dependency repositories are separate.
+iqa-compete-fmt-check:
+    bash scripts/ci/lock.sh --check
+    cd "$LOCK_SNAP_DIR/work/zenmetrics" && just fmt-check
