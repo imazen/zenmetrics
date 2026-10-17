@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "13959364608 MACs/image @224^2 (wd_trunk.onnx; single-image graph, runs twice); elems 18866176/img"
  ],
@@ -30,11 +30,12 @@
    "class": "intrinsic",
    "span": "1",
    "bytes_read": 3,
-   "bytes_written": 12
+   "bytes_written": 12,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "wd_trunk VGG-front conv stack per image (x2)",
+   "id": "trunk_conv",
+   "name": "wd_trunk VGG-front conv stack per image (x2) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/wd.rs:100-395",
     "crates/zenmetrics-nn/models/wd/card.toml:20-35"
@@ -43,13 +44,35 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "fma": 278208.0,
+    "fma": 278208.0
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['wd'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "wd_trunk VGG-front conv stack per image (x2) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/wd.rs:100-395",
+    "crates/zenmetrics-nn/models/wd/card.toml:20-35"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "cmp": 375.99999999999994,
     "add": 376.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -66,7 +89,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

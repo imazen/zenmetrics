@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk = 105379934208 MACs pair at fixed 224^2 (dreamsim_full.onnx via onnxsim; external consts restored from the nn-phase0 export dir)",
   "exp estimate = softmax share; resize ~8 fma/out-px approximation"
@@ -32,11 +32,12 @@
    "axis": "xy",
    "class": "intrinsic",
    "span": "2",
-   "radius": 2
+   "radius": 2,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "3x ViT ensemble pair graph at fixed 224x224",
+   "id": "trunk_conv",
+   "name": "3x ViT ensemble pair graph at fixed 224x224 [conv]",
    "source": [
     "crates/zenmetrics-nn/src/dreamsim.rs:120-300",
     "crates/zenmetrics-nn/models/dreamsim/card.toml:25-45"
@@ -45,15 +46,58 @@
    "elements": "50176",
    "precision": "f32",
    "ops": {
-    "fma": 1050102.9795918367,
-    "add": 6281.006429368622,
-    "mul": 3140.503214684311,
-    "exp": 1046.8344048947704
+    "fma": 6912.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "224"
+   "span": "224",
+   "materialize": "full",
+   "notes": "op-type split from ['dreamsim_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_matmul",
+   "name": "3x ViT ensemble pair graph at fixed 224x224 [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/dreamsim.rs:120-300",
+    "crates/zenmetrics-nn/models/dreamsim/card.toml:25-45"
+   ],
+   "images": 1,
+   "elements": "50176",
+   "precision": "f32",
+   "ops": {
+    "fma": 1043190.9795918367
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224",
+   "materialize": "full",
+   "notes": "op-type split from ['dreamsim_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "3x ViT ensemble pair graph at fixed 224x224 [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/dreamsim.rs:120-300",
+    "crates/zenmetrics-nn/models/dreamsim/card.toml:25-45"
+   ],
+   "images": 1,
+   "elements": "50176",
+   "precision": "f32",
+   "ops": {
+    "add": 7779.618714126274,
+    "div": 295.5051020408163,
+    "exp": 1815.172096221301,
+    "mul": 4572.226289461097,
+    "sqrt": 1.992984693877551e-05
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -70,7 +114,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

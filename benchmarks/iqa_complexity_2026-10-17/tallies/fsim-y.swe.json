@@ -42,7 +42,8 @@
    "radius": 0,
    "scale": 1,
    "axis": "none",
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "decim",
@@ -69,7 +70,8 @@
    "depends_on": [
     "luma"
    ],
-   "notes": "Separable running sums + normalize; retained cols only."
+   "notes": "Separable running sums + normalize; retained cols only.",
+   "materialize": "full"
   },
   {
    "id": "bank_build",
@@ -90,7 +92,7 @@
    },
    "bytes_read": 64,
    "bytes_written": 64,
-   "access": "pointwise",
+   "access": "transform",
    "radius": 0,
    "scale": "F",
    "axis": "none",
@@ -99,7 +101,8 @@
     "decim"
    ],
    "barrier": true,
-   "notes": "Size-cached (amortized); per-el: ifft ~5log2(n) + filter mul + em_n/sa2/saij f64 accs."
+   "notes": "Size-cached (amortized); per-el: ifft ~5log2(n) + filter mul + em_n/sa2/saij f64 accs.",
+   "materialize": "full"
   },
   {
    "id": "fft2",
@@ -119,7 +122,7 @@
    },
    "bytes_read": 8,
    "bytes_written": 8,
-   "access": "pointwise",
+   "access": "transform",
    "radius": 0,
    "scale": "F",
    "axis": "none",
@@ -128,7 +131,8 @@
     "decim"
    ],
    "barrier": true,
-   "notes": "5*n*log2(n) model: row FFTs + col FFTs."
+   "notes": "5*n*log2(n) model: row FFTs + col FFTs.",
+   "materialize": "full"
   },
   {
    "id": "ifft_bank",
@@ -147,7 +151,7 @@
    },
    "bytes_read": 12,
    "bytes_written": 8,
-   "access": "pointwise",
+   "access": "transform",
    "radius": 0,
    "scale": "F",
    "axis": "none",
@@ -157,7 +161,8 @@
     "bank_build"
    ],
    "barrier": true,
-   "notes": "Per (o,s): yf*filter (2 mul) + inverse FFT."
+   "notes": "Per (o,s): yf*filter (2 mul) + inverse FFT.",
+   "materialize": "full"
   },
   {
    "id": "anacc",
@@ -184,7 +189,8 @@
    "span": "1",
    "depends_on": [
     "ifft_bank"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "xenergy",
@@ -212,7 +218,8 @@
    "span": "1",
    "depends_on": [
     "anacc"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "energy",
@@ -240,7 +247,8 @@
    "span": "1",
    "depends_on": [
     "xenergy"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "noise_med",
@@ -269,7 +277,8 @@
     "ifft_bank"
    ],
    "barrier": true,
-   "notes": "Median via partial sort (~8 cmp/el approx) + scalar Rayleigh math once."
+   "notes": "Median via partial sort (~8 cmp/el approx) + scalar Rayleigh math once.",
+   "materialize": "fused"
   },
   {
    "id": "ethr",
@@ -296,7 +305,8 @@
    "depends_on": [
     "energy",
     "noise_med"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "pcdiv",
@@ -321,7 +331,8 @@
    "span": "1",
    "depends_on": [
     "ethr"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "grad_conv",
@@ -346,7 +357,8 @@
    "span": "1",
    "depends_on": [
     "decim"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "grad_mag",
@@ -373,7 +385,8 @@
    "span": "1",
    "depends_on": [
     "grad_conv"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "pool",
@@ -404,7 +417,8 @@
     "grad_mag"
    ],
    "barrier": true,
-   "notes": "2 rational sims (~11 flops) + gp mul + max + num+=gp*pcm, den+=pcm (cvt+add x2). Score=num/den once."
+   "notes": "2 rational sims (~11 flops) + gp mul + max + num+=gp*pcm, den+=pcm (cvt+add x2). Score=num/den once.",
+   "materialize": "fused"
   }
  ]
 }

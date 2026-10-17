@@ -29,11 +29,12 @@
     "load": 2,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
-   "id": "graph",
-   "name": "hyperiqa ResNet50 x25 + head",
+   "id": "graph_conv",
+   "name": "hyperiqa ResNet50 x25 + head [conv]",
    "source": [
     "crates/zenmetrics-nn/src/hyperiqa.rs:1-140"
    ],
@@ -41,11 +42,46 @@
    "elements": "1",
    "precision": "f32",
    "ops": {
-    "fma": 107263979474,
-    "add": 215957758,
-    "mul": 215957758
+    "fma": 107262960000.0
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['hyperiqa'] by_op: conv MACs"
+  },
+  {
+   "id": "graph_matmul",
+   "name": "hyperiqa ResNet50 x25 + head [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/hyperiqa.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 1019474.0
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['hyperiqa'] by_op: matmul MACs"
+  },
+  {
+   "id": "graph_pointwise",
+   "name": "hyperiqa ResNet50 x25 + head [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/hyperiqa.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 359474234.0,
+    "cmp": 287394800.0,
+    "exp": 5250.0,
+    "mul": 215957758.0
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   }
  ]
 }

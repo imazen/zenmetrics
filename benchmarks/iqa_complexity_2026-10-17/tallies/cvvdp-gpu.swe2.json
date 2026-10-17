@@ -1,0 +1,385 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "cvvdp-gpu",
+ "cli_names": [
+  "cvvdp-gpu"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "NL": 6
+ },
+ "assumptions": [
+  "GPU implementation (CubeCL kernels; CUDA/WGPU/HIP dispatch). Same ColorVideoVDP algorithm as crates/cvvdp CPU port.",
+  "4 gauss pyramid chains per side (3 channels + 1 l_bkg) like the CPU shared-l structure; subtract_weber_3ch reads per-channel upscales + shared expanded_lbkg (pyramid.rs:1570-1670).",
+  "csf_apply_6ch fuses all 6 (3ch x ref/dist) applications, sharing the LUT bracket per pixel (csf.rs:220+).",
+  "Masking: min_abs_3ch -> pu_blur_h/v_3ch (13-tap sigma3) -> mult_mutual_3ch_with_blurred; baseband -> diff_abs_3ch (pipeline.rs:34-42).",
+  "NL=6 levels matching the CPU tally convention; baseband is level NL-1.",
+  "GPU implementation"
+ ],
+ "stages": [
+  {
+   "id": "srgb_dkl",
+   "name": "sRGB->DKL planar x2img",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/color.rs:260-318"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 4,
+    "cvt": 3,
+    "mul": 12,
+    "add": 9,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "LUT + DKL matrix, planar out"
+  },
+  {
+   "id": "gauss_down",
+   "name": "5x5 Gaussian downscale x4 chains x2img",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pyramid.rs:113-175"
+   ],
+   "images": 1,
+   "elements": "8*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 25,
+    "mul": 25,
+    "add": 24,
+    "int": 10,
+    "store": 1
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**(l+1)",
+   "notes": "fused 2D 5-tap [0.05,0.25,0.4,0.25,0.05]^2, symmetric reflect; 4 chains/side x2imgs"
+  },
+  {
+   "id": "l_upscale",
+   "name": "5-tap upscale v+h l_bkg chain",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pyramid.rs:728-870,1077-1205"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 5,
+    "add": 4,
+    "int": 5,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**(l+1)",
+   "notes": "expanded_lbkg for weber; x2 axes passes folded"
+  },
+  {
+   "id": "ch_upscale",
+   "name": "5-tap upscale v+h x3ch x2img",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pyramid.rs:728-870,1077-1205"
+   ],
+   "images": 2,
+   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 5,
+    "add": 4,
+    "int": 5,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**(l+1)",
+   "notes": "upsc_a/rg/vy inputs to subtract_weber_3ch"
+  },
+  {
+   "id": "weber_3ch",
+   "name": "subtract+weber contrast 3ch fused",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pyramid.rs:1570-1670"
+   ],
+   "images": 2,
+   "elements": "3*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "add": 1,
+    "div": 1,
+    "cmp": 3,
+    "store": 1.33
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**(l+1)",
+   "notes": "per ch: fine-upsc, /max(lbkg,0.01), clamp+-1000; log_l_bkg store ref side amortized"
+  },
+  {
+   "id": "baseband",
+   "name": "baseband divide + bypass",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pyramid.rs:1890-1960"
+   ],
+   "images": 2,
+   "elements": "3*ceil(W/(2**(NL-1)))*ceil(H/(2**(NL-1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "div": 1,
+    "cmp": 2,
+    "store": 1.33
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "baseband bypasses weber contrast"
+  },
+  {
+   "id": "csf_6ch",
+   "name": "CSF apply 6ch fused",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/csf.rs:220-275,55-125"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 8,
+    "mul": 14,
+    "add": 9,
+    "fma": 6,
+    "exp": 6,
+    "int": 6,
+    "cmp": 3,
+    "store": 6
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**l",
+   "notes": "shared LUT bracket (~12) + 6x (interp+exp+gain); baseband uses csf diffs variant cost-similar"
+  },
+  {
+   "id": "min_abs",
+   "name": "min(|T|,|R|) 3ch",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/masking.rs:870-995"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "abs": 2,
+    "cmp": 1,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**l",
+   "notes": "feeds pu_blur input"
+  },
+  {
+   "id": "pu_blur_h",
+   "name": "13-tap sigma3 blur h x3ch",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/masking.rs:93-160,191-305"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 13,
+    "mul": 13,
+    "add": 12,
+    "int": 13,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 6,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**l",
+   "notes": "PU_BLUR_KERNEL_1D 13 taps, reflect indexing"
+  },
+  {
+   "id": "pu_blur_v",
+   "name": "13-tap sigma3 blur v + scale x3ch",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/masking.rs:456-520,521-658"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 13,
+    "mul": 14,
+    "add": 12,
+    "int": 13,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 6,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**l",
+   "notes": "v pass folds mask_c_lin scale"
+  },
+  {
+   "id": "mult_mutual",
+   "name": "mult_mutual fold x3ch",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/masking.rs:1138-1195"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 15,
+    "mul": 12,
+    "add": 24,
+    "pow": 6,
+    "div": 6,
+    "abs": 3,
+    "cmp": 6,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 5,
+   "scale": "2**l",
+   "notes": "MASK_Q pow terms + XCM_3X3 + CH_GAIN; masked-difference d out"
+  },
+  {
+   "id": "diff_base",
+   "name": "baseband diff_abs 3ch",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/masking.rs:159-190"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**(NL-1)))*ceil(H/(2**(NL-1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "abs": 1,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "baseband bypass: |T-R|"
+  },
+  {
+   "id": "pool_rows",
+   "name": "pool_rows_3ch + finalize",
+   "source": [
+    "crates/cvvdp-gpu/src/kernels/pool.rs:392-604"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "abs": 1,
+    "add": 3,
+    "pow": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "row tree reduce + host pool_band_finalize per (level,ch)"
+  },
+  {
+   "id": "jod",
+   "name": "Minkowski + met2jod host",
+   "source": [
+    "crates/cvvdp-gpu/src/pipeline.rs:46-52"
+   ],
+   "images": 1,
+   "elements": "3*NL",
+   "precision": "f64",
+   "ops": {
+    "mul": 2,
+    "add": 2,
+    "pow": 2,
+    "div": 1,
+    "cmp": 2
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "3-stage Minkowski + piecewise JOD"
+  }
+ ]
+}

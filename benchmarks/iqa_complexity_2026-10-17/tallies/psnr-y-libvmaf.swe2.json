@@ -1,0 +1,71 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "psnr-y-libvmaf",
+ "cli_names": [
+  "psnr-y-libvmaf"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "psnr-y-libvmaf = Kind::PsnrYLibvmaf: studio-swing BT.709 Y (normalized-RGB lum, 219 scale, clamp 16..235) matching the vmaf crate's to_yuv420 Y plane (classical.rs:95-106).",
+  "Luma is computed inline per pixel for both images inside one fold (no Y plane materialized); the stage models the joint loop with images=1 and 6 u8 loads per pixel-pair.",
+  "psnr() tail: mse==0 cmp, then 10*log10(255*255/mse); the sum/n division from luma_mse is counted in to_db."
+ ],
+ "stages": [
+  {
+   "id": "luma_sqerr",
+   "name": "BT.709 luma both images + squared error accumulate",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:27-38",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:95-106"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "cvt": 6,
+    "mul": 8,
+    "add": 6,
+    "div": 6,
+    "load": 6,
+    "int": 2,
+    "cmp": 4
+   },
+   "bytes_read": 6,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "span": "log2(W*H)",
+   "barrier": true,
+   "notes": "studio-swing BT.709 Y u8-rounded per image: x/255 per channel (3 div), 0.2126R+0.7152G+0.0722B, then (16+219*L).round().clamp(16,235) as u8.",
+   "materialize": "fused"
+  },
+  {
+   "id": "to_db",
+   "name": "mse to dB",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:35-36",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:135-141"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 2,
+    "log": 1,
+    "mul": 2,
+    "cmp": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "luma_sqerr"
+   ],
+   "notes": "sum/n, 255*255 (written), /mse, log10, *10, mse==0 cmp",
+   "materialize": "fused"
+  }
+ ]
+}

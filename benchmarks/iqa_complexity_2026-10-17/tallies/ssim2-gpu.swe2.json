@@ -1,0 +1,282 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ssim2-gpu",
+ "cli_names": [
+  "ssim2-gpu"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "NSCALE": 6
+ },
+ "assumptions": [
+  "GPU implementation (CubeCL kernels; CUDA/WGPU/HIP dispatch). Sibling CPU reference: fast-ssim2 pipeline (pinned-equivalent math), but THIS tally counts the ssim2-gpu kernels.",
+  "NUM_SCALES=6 (pipeline.rs NUM_SLOTS=54 = 6x3x3).",
+  "Blur: blur_pass_kernel is a 3-tap IIR recursive gaussian with per-thread ring buffer (blur.rs:125-190); each plane blur = v pass + transposed h pass; 5 quantities x 3ch = 15 blurs x2 passes = 30 launches per scale.",
+  "Product planes ARE materialized on GPU (pointwise_mul kernels) unlike the fused CPU SIMD path.",
+  "XYB uses powf(_,1/3) not cbrt/Newton (xyb.rs:18-24).",
+  "Per-element op counts are source-derived; ring/shared-memory bookkeeping folded into stage estimates."
+ ],
+ "stages": [
+  {
+   "id": "srgb_lin",
+   "name": "u8 sRGB->linear planar x2img",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/srgb.rs:1-90"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 4,
+    "cvt": 3,
+    "mul": 3,
+    "pow": 3,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "packed u32 + per-channel pow/linear branch"
+  },
+  {
+   "id": "downscale",
+   "name": "linear pyramid 2x downscale x3ch x2img",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/downscale.rs:1-120"
+   ],
+   "images": 1,
+   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "cmp": 4,
+    "store": 1
+   },
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**(l+1)",
+   "notes": "includes tail downsample after last scored scale"
+  },
+  {
+   "id": "xyb",
+   "name": "linear->positive XYB (powf cbrt) x2img",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/xyb.rs:40-163"
+   ],
+   "images": 2,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "fma": 12,
+    "mul": 9,
+    "add": 9,
+    "pow": 3,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "opsin mat + 3x powf(1/3) + positive squash (~45/px)"
+  },
+  {
+   "id": "mul_products",
+   "name": "sigma product planes x1^2,x2^2,x1x2",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/error_maps.rs:21-40"
+   ],
+   "images": 1,
+   "elements": "9*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 1,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "GPU materializes product planes before blur (unlike fused CPU path)"
+  },
+  {
+   "id": "blur_v",
+   "name": "IIR blur v-pass 15 jobs",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/blur.rs:125-220"
+   ],
+   "images": 1,
+   "elements": "15*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 3,
+    "fma": 6,
+    "add": 4,
+    "load": 2,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 8,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "3 IIR taps: out_i=sum*MUL_IN+prev2*MUL_PREV2+prev*MUL_PREV per elem; ring-buffer smem read folded into load"
+  },
+  {
+   "id": "blur_h",
+   "name": "IIR blur h-pass via transpose 15 jobs",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/blur.rs:232-355"
+   ],
+   "images": 1,
+   "elements": "15*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 3,
+    "fma": 6,
+    "add": 4,
+    "load": 2,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 8,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "same kernel on transposed plane + transpose read/write amortized"
+  },
+  {
+   "id": "transposes",
+   "name": "transpose passes for h-blur + error_maps",
+   "source": [
+    "crates/ssim2-gpu/src/pipeline.rs:18-21"
+   ],
+   "images": 1,
+   "elements": "18*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 2,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "stage estimate: transpose traffic folded per blurred plane + raw ref/dis transposes"
+  },
+  {
+   "id": "error_maps",
+   "name": "ssim+artifact+detail_loss x3ch",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/error_maps.rs:42-120"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 7,
+    "mul": 9,
+    "add": 10,
+    "div": 3,
+    "abs": 2,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "7 inputs -> 3 maps per channel"
+  },
+  {
+   "id": "reduction",
+   "name": "Sigma+Sigma4 per (scale,ch,map)",
+   "source": [
+    "crates/ssim2-gpu/src/kernels/reduction.rs:1-120"
+   ],
+   "images": 1,
+   "elements": "9*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "add": 2,
+    "fma": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 6,
+   "scale": "2**l",
+   "notes": "3 maps x 3ch: value + fourth-power accum"
+  },
+  {
+   "id": "final",
+   "name": "108-weight combine + sigmoid remap",
+   "source": [
+    "crates/ssim2-gpu/src/pipeline.rs:22-26"
+   ],
+   "images": 1,
+   "elements": "108",
+   "precision": "f64",
+   "ops": {
+    "mul": 6,
+    "add": 5,
+    "pow": 1,
+    "fma": 108,
+    "abs": 108,
+    "div": 1,
+    "cmp": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "3ch x 6scales x 2norms x 3terms + remap"
+  }
+ ]
+}

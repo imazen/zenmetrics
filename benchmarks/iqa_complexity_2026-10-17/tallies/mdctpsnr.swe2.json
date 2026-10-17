@@ -1,12 +1,19 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "mdctpsnr",
- "cli_names": ["mdctpsnr"],
+ "cli_names": [
+  "mdctpsnr"
+ ],
  "counter": "swe2",
  "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
  "kind": "classic-fr",
  "params": {},
- "derived": {"W8": "W-8", "H7": "H-7", "W13": "W-13", "H12": "H-12"},
+ "derived": {
+  "W8": "W-8",
+  "H7": "H-7",
+  "W13": "W-13",
+  "H12": "H-12"
+ },
  "assumptions": [
   "mdctpsnr = mdctpsnr::mdct_psnr_srgb8 (lib.rs:1990-2003 -> score_impl 2003-2360). LINEAR build: sRGB8 -> exact EOTF LUT -> linear BT.601 YCbCr, gamma knee on Y only.",
   "Ingress per px (lib.rs:1959-1989): 3 LUT gathers + 3 fma (Y) + 3 fma/mul (Cb) + 3 (Cr) + cmp + pow knee on Y (~high path) + 3 stores.",
@@ -18,57 +25,225 @@
   "Errorline reset + per-line sum folds counted in measure stage's add."
  ],
  "stages": [
-  {"id": "ingress", "name": "EOTF LUT + linear BT.601 YCbCr + Y knee",
-   "source": ["crates/mdctpsnr/src/lib.rs:1959-1989", "crates/mdctpsnr/src/lib.rs:2037-2056"],
-   "images": 2, "elements": "W*H", "precision": "f32",
-   "ops": {"load": 3, "fma": 9, "mul": 2, "pow": 1, "cmp": 1, "store": 3},
-   "bytes_read": 3, "bytes_written": 12, "access": "pointwise", "radius": 0, "span": "1"},
-
-  {"id": "dct", "name": "sliding windowed 8x8 AAN DCT, 3 comps",
-   "source": ["crates/mdctpsnr/src/lib.rs:1231-1381", "crates/mdctpsnr/src/lib.rs:1382-1457", "crates/mdctpsnr/src/lib.rs:1475-1525"],
-   "images": 2, "elements": "3*W8*H7", "precision": "f32",
-   "ops": {"add": 511, "fma": 160, "mul": 16, "div": 1, "load": 64, "store": 65},
-   "bytes_read": 4, "bytes_written": 256, "access": "transform", "axis": "xy", "radius": 4, "span": "8",
-   "notes": "per pos: block gather 64 + col-mean 63add+div + window 64x(mul2+add1->counted mul in ingress of stage)... conservatively: 16 aan_1d (add384 fma96 mul16) + window (add64 mul128) + sums (add63) + div1 + copies"},
-
-  {"id": "band_map", "name": "per-band |in|*vis^expon + 5-tap sym h-conv (192 bands)",
-   "source": ["crates/mdctpsnr/src/lib.rs:983-1058", "crates/mdctpsnr/src/lib.rs:690-700"],
-   "images": 2, "elements": "192*W8*H7", "precision": "f32",
-   "ops": {"pow": 1, "mul": 2, "abs": 1, "add": 2, "fma": 2, "load": 6, "store": 2},
-   "bytes_read": 24, "bytes_written": 8, "access": "sep_stencil", "axis": "x", "radius": 2, "span": "5",
-   "depends_on": ["dct"], "notes": "pow counted on all bands (e=1 shortcut is a minority)"},
-  {"id": "band_mask", "name": "5x5 mask: v-sum + rcp-NR + coeff (192 bands)",
-   "source": ["crates/mdctpsnr/src/lib.rs:515-548", "crates/mdctpsnr/src/lib.rs:1060-1130"],
-   "images": 2, "elements": "192*W13*H12", "precision": "f32",
-   "ops": {"add": 2, "fma": 3, "mul": 6, "rcp": 1, "load": 6, "store": 2},
-   "bytes_read": 24, "bytes_written": 8, "access": "sep_stencil", "axis": "y", "radius": 2, "span": "5",
-   "depends_on": ["band_map"]},
-  {"id": "dc_lowpass", "name": "Y-DC EXTENDED_FILTER 4x 5x5 low/high",
-   "source": ["crates/mdctpsnr/src/lib.rs:640-700", "crates/mdctpsnr/src/lib.rs:1089-1130"],
-   "images": 2, "elements": "4*W13*H12", "precision": "f32",
-   "ops": {"mul": 10, "fma": 15, "add": 9, "load": 25, "store": 1},
-   "bytes_read": 100, "bytes_written": 4, "access": "stencil2d", "axis": "xy", "radius": 2, "span": "25",
-   "depends_on": ["band_map"]},
-  {"id": "dc_fixup", "name": "Y-DC mask = 0.5*(m01+m10) fma 0.25*m11",
-   "source": ["crates/mdctpsnr/src/lib.rs:1807-1836"],
-   "images": 2, "elements": "W13*H12", "precision": "f32",
-   "ops": {"add": 1, "fma": 2, "load": 4, "store": 1},
-   "bytes_read": 16, "bytes_written": 4, "access": "pointwise", "radius": 0, "span": "1",
-   "depends_on": ["band_mask"]},
-
-  {"id": "measure", "name": "errorline *= exp(-(|r-d|*vis*max(mask))^3.5), 195 terms",
-   "source": ["crates/mdctpsnr/src/lib.rs:1775-1807", "crates/mdctpsnr/src/lib.rs:1851-1906"],
-   "images": 1, "elements": "W13*H12", "precision": "f32",
-   "ops": {"mul": 1365, "add": 195, "abs": 195, "cmp": 390, "exp": 195, "load": 780},
-   "bytes_read": 3120, "bytes_written": 0, "access": "reduction", "radius": 0,
-   "span": "log2(W13*H12)", "barrier": true,
-   "depends_on": ["band_mask", "dc_lowpass", "dc_fixup"],
-   "notes": "195 terms x (sub+abs+2mul+cmp / mul4+exp+mul): product accumulation into errorline then line-sum adds folded in"},
-
-  {"id": "final", "name": "-20*log10(error/((W-13)*(H-13)*3))",
-   "source": ["crates/mdctpsnr/src/lib.rs:41-43", "crates/mdctpsnr/src/lib.rs:2300-2360"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"div": 1, "log": 1, "mul": 1}, "access": "pointwise", "span": "1",
-   "depends_on": ["measure"]}
+  {
+   "id": "ingress",
+   "name": "EOTF LUT + linear BT.601 YCbCr + Y knee",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:1959-1989",
+    "crates/mdctpsnr/src/lib.rs:2037-2056"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "fma": 9,
+    "mul": 2,
+    "pow": 1,
+    "cmp": 1,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "dct",
+   "name": "sliding windowed 8x8 AAN DCT, 3 comps",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:1231-1381",
+    "crates/mdctpsnr/src/lib.rs:1382-1457",
+    "crates/mdctpsnr/src/lib.rs:1475-1525"
+   ],
+   "images": 2,
+   "elements": "3*W8*H7",
+   "precision": "f32",
+   "ops": {
+    "add": 511,
+    "fma": 160,
+    "mul": 16,
+    "div": 1,
+    "load": 64,
+    "store": 65
+   },
+   "bytes_read": 4,
+   "bytes_written": 256,
+   "access": "transform",
+   "axis": "xy",
+   "radius": 4,
+   "span": "8",
+   "notes": "per pos: block gather 64 + col-mean 63add+div + window 64x(mul2+add1->counted mul in ingress of stage)... conservatively: 16 aan_1d (add384 fma96 mul16) + window (add64 mul128) + sums (add63) + div1 + copies",
+   "materialize": "full"
+  },
+  {
+   "id": "band_map",
+   "name": "per-band |in|*vis^expon + 5-tap sym h-conv (192 bands)",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:983-1058",
+    "crates/mdctpsnr/src/lib.rs:690-700"
+   ],
+   "images": 2,
+   "elements": "192*W8*H7",
+   "precision": "f32",
+   "ops": {
+    "pow": 1,
+    "mul": 2,
+    "abs": 1,
+    "add": 2,
+    "fma": 2,
+    "load": 6,
+    "store": 2
+   },
+   "bytes_read": 24,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 2,
+   "span": "5",
+   "depends_on": [
+    "dct"
+   ],
+   "notes": "pow counted on all bands (e=1 shortcut is a minority)",
+   "materialize": "full"
+  },
+  {
+   "id": "band_mask",
+   "name": "5x5 mask: v-sum + rcp-NR + coeff (192 bands)",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:515-548",
+    "crates/mdctpsnr/src/lib.rs:1060-1130"
+   ],
+   "images": 2,
+   "elements": "192*W13*H12",
+   "precision": "f32",
+   "ops": {
+    "add": 2,
+    "fma": 3,
+    "mul": 6,
+    "rcp": 1,
+    "load": 6,
+    "store": 2
+   },
+   "bytes_read": 24,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 2,
+   "span": "5",
+   "depends_on": [
+    "band_map"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "dc_lowpass",
+   "name": "Y-DC EXTENDED_FILTER 4x 5x5 low/high",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:640-700",
+    "crates/mdctpsnr/src/lib.rs:1089-1130"
+   ],
+   "images": 2,
+   "elements": "4*W13*H12",
+   "precision": "f32",
+   "ops": {
+    "mul": 10,
+    "fma": 15,
+    "add": 9,
+    "load": 25,
+    "store": 1
+   },
+   "bytes_read": 100,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 2,
+   "span": "25",
+   "depends_on": [
+    "band_map"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "dc_fixup",
+   "name": "Y-DC mask = 0.5*(m01+m10) fma 0.25*m11",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:1807-1836"
+   ],
+   "images": 2,
+   "elements": "W13*H12",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "fma": 2,
+    "load": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "depends_on": [
+    "band_mask"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "measure",
+   "name": "errorline *= exp(-(|r-d|*vis*max(mask))^3.5), 195 terms",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:1775-1807",
+    "crates/mdctpsnr/src/lib.rs:1851-1906"
+   ],
+   "images": 1,
+   "elements": "W13*H12",
+   "precision": "f32",
+   "ops": {
+    "mul": 1365,
+    "add": 195,
+    "abs": 195,
+    "cmp": 390,
+    "exp": 195,
+    "load": 780
+   },
+   "bytes_read": 3120,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "span": "log2(W13*H12)",
+   "barrier": true,
+   "depends_on": [
+    "band_mask",
+    "dc_lowpass",
+    "dc_fixup"
+   ],
+   "notes": "195 terms x (sub+abs+2mul+cmp / mul4+exp+mul): product accumulation into errorline then line-sum adds folded in",
+   "materialize": "fused"
+  },
+  {
+   "id": "final",
+   "name": "-20*log10(error/((W-13)*(H-13)*3))",
+   "source": [
+    "crates/mdctpsnr/src/lib.rs:41-43",
+    "crates/mdctpsnr/src/lib.rs:2300-2360"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1,
+    "log": 1,
+    "mul": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "measure"
+   ],
+   "materialize": "fused"
+  }
  ]
 }

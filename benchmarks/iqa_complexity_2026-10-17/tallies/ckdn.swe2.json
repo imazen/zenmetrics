@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk = 10308753408 MACs for the 288x288 pair (ckdn_full.onnx via onnxsim; component encoders dte/qse = 1,299,234,816 MACs each at 288^2, tail 6,457,344)",
   "always 288x288 after the eval transform; resize ~8 fma/out-px approximation flagged"
@@ -32,11 +32,12 @@
    "axis": "xy",
    "class": "intrinsic",
    "span": "2",
-   "radius": 2
+   "radius": 2,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "qse+dte encoders + tail at fixed 288x288 (pair)",
+   "id": "trunk_conv",
+   "name": "qse+dte encoders + tail at fixed 288x288 (pair) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/ckdn.rs:150-330",
     "crates/zenmetrics-nn/models/ckdn/card.toml:20-40"
@@ -45,13 +46,59 @@
    "elements": "82944",
    "precision": "f32",
    "ops": {
-    "fma": 62142.851851851854,
-    "add": 541.0895604263118
+    "fma": 9638.305324541829
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "288"
+   "span": "288",
+   "materialize": "full",
+   "notes": "op-type split from ['ckdn_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_matmul",
+   "name": "qse+dte encoders + tail at fixed 288x288 (pair) [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/ckdn.rs:150-330",
+    "crates/zenmetrics-nn/models/ckdn/card.toml:20-40"
+   ],
+   "images": 1,
+   "elements": "82944",
+   "precision": "f32",
+   "ops": {
+    "fma": 52504.54652731003
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "288",
+   "materialize": "full",
+   "notes": "op-type split from ['ckdn_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "qse+dte encoders + tail at fixed 288x288 (pair) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/ckdn.rs:150-330",
+    "crates/zenmetrics-nn/models/ckdn/card.toml:20-40"
+   ],
+   "images": 1,
+   "elements": "82944",
+   "precision": "f32",
+   "ops": {
+    "add": 3893.1079103680527,
+    "div": 3321.2626430097475,
+    "cmp": 84.5690177372721,
+    "mul": 0.020021074274922373,
+    "pow": 0.8542325023966879,
+    "exp": 0.010010537137461186
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "288",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -68,7 +115,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

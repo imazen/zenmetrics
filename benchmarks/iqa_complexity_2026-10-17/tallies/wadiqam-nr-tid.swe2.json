@@ -27,11 +27,12 @@
     "load": 3,
     "store": 3
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
-   "id": "trunk_head",
-   "name": "patch trunk+head graph",
+   "id": "trunk_conv",
+   "name": "patch trunk convs (10 conv)",
    "source": [
     "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
    ],
@@ -39,9 +40,58 @@
    "elements": "floor(W/32)*floor(H/32)",
    "precision": "f32",
    "ops": {
-    "fma": 67470336,
-    "add": 192012
+    "fma": 66945024
    },
+   "materialize": "full",
+   "notes": "66,945,024 = total 67,470,336 - head 525,312; trunk nodes /trunk/* in wadiqam_nr_tid.onnx",
+   "access": "block"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "trunk Relu/MaxPool",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "cmp": 142848,
+    "add": 48127
+   },
+   "materialize": "full",
+   "access": "pointwise"
+  },
+  {
+   "id": "head_matmul",
+   "name": "head fc1/fc2/fc1_a/fc2_a",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 525312
+   },
+   "materialize": "full",
+   "notes": "4 Gemm 512x512+512x1 x2 paths",
+   "access": "block"
+  },
+  {
+   "id": "head_pointwise",
+   "name": "head Relu/Add",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "cmp": 1025,
+    "add": 12
+   },
+   "materialize": "full",
    "access": "pointwise"
   },
   {
@@ -57,7 +107,8 @@
     "add": 1,
     "div": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   }
  ]
 }

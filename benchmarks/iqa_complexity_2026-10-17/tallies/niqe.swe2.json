@@ -31,7 +31,8 @@
     "cvt": 1,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "conv",
@@ -49,7 +50,8 @@
     "store": 2
    },
    "access": "stencil2d",
-   "radius": 3
+   "radius": 3,
+   "materialize": "full"
   },
   {
    "id": "mscn",
@@ -68,7 +70,8 @@
     "load": 3,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "fits",
@@ -83,7 +86,8 @@
     "cmp": 1,
     "load": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   },
   {
    "id": "mvg",
@@ -98,7 +102,8 @@
     "fma": 1,
     "add": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   },
   {
    "id": "pinv",
@@ -115,7 +120,8 @@
     "sqrt": 36,
     "cmp": 1296
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "fused"
   }
  ]
 }

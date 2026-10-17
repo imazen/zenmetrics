@@ -1,0 +1,371 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "vmaf-4k",
+ "cli_names": [
+  "vmaf-4k"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "In-tree `vmaf` crate (pure-Rust libvmaf v3.2.1 match) via metrics/vmaf.rs score() with model V061FourK / Ingress::Bt709 (mod.rs:2305-2309).",
+  "Single still frame: motion2=0 (validation scan only, lib.rs:1037-1078).",
+  "SVM support-vector count is model data, not source; per-SV cost documented, counted at 1.",
+  "VIF uses u16/u32 integer pipeline (FILTERS=[17,9,5,3] at vif.rs:17-24) with log2 LUT finalize; per-elem tap counts are exact from FILTERS, interior bookkeeping is a stage estimate.",
+  "ADM is 4-scale 4-tap DWT2 (adm.rs:139-217 indices, 353-547 kernels) + decouple/csf/cm per scale; per-elem op splits are stage estimates from kernel loop structure.",
+  "Written before reading swe's vmaf/vmaf-neg tallies (read-after-write rule)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8 -> YUV420 u8 planes (709)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/vmaf.rs:171-208"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 3,
+    "div": 3,
+    "mul": 10,
+    "add": 8,
+    "int": 2,
+    "cmp": 3,
+    "store": 1.5
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "BT.709 path: r/255 div x3, lum 3mul+2add, (16+219L).round().clamp(16,235); chroma: 2 sums x(3mul+2add)/px, 224*u/4 + 128 round clamp(16,240) per 2x2. Stage estimate over fused per-2x2-block loop."
+  },
+  {
+   "id": "vif_s0",
+   "name": "VIF scale0 stats (F=17) + finalize",
+   "source": [
+    "crates/vmaf/src/vif.rs:3510-3560,2942-3010"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "i32",
+   "ops": {
+    "load": 170,
+    "int": 348,
+    "div": 1,
+    "store": 10
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 8,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "5acc x 17taps x(mul+add) vertical + horizontal + finalize (mean-sq, sigmas, gain div, 2-3 log2 LUT gathers). stage estimate. (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_sub1",
+   "name": "VIF subsample s0->s1",
+   "source": [
+    "crates/vmaf/src/vif.rs:84-140"
+   ],
+   "images": 1,
+   "elements": "(W/2)*(H/2)",
+   "precision": "i32",
+   "ops": {
+    "load": 36,
+    "store": 4,
+    "int": 72
+   },
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 4,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "2accs x F1=9 taps v+h per out px (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_s1",
+   "name": "VIF scale1 stats (F=9) + finalize",
+   "source": [
+    "crates/vmaf/src/vif.rs:3510-3560,2942-3010"
+   ],
+   "images": 1,
+   "elements": "(W/2)*(H/2)",
+   "precision": "i32",
+   "ops": {
+    "load": 90,
+    "int": 188,
+    "div": 1,
+    "store": 10
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 4,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": " (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_sub2",
+   "name": "VIF subsample s1->s2",
+   "source": [
+    "crates/vmaf/src/vif.rs:84-140"
+   ],
+   "images": 1,
+   "elements": "(W/4)*(H/4)",
+   "precision": "i32",
+   "ops": {
+    "load": 20,
+    "store": 4,
+    "int": 40
+   },
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "F2=5 (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_s2",
+   "name": "VIF scale2 stats (F=5) + finalize",
+   "source": [
+    "crates/vmaf/src/vif.rs:3510-3560,2942-3010"
+   ],
+   "images": 1,
+   "elements": "(W/4)*(H/4)",
+   "precision": "i32",
+   "ops": {
+    "load": 50,
+    "int": 108,
+    "div": 1,
+    "store": 10
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": " (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_sub3",
+   "name": "VIF subsample s2->s3",
+   "source": [
+    "crates/vmaf/src/vif.rs:84-140"
+   ],
+   "images": 1,
+   "elements": "(W/8)*(H/8)",
+   "precision": "i32",
+   "ops": {
+    "load": 12,
+    "store": 4,
+    "int": 24
+   },
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "F3=3 (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "vif_s3",
+   "name": "VIF scale3 stats (F=3) + finalize",
+   "source": [
+    "crates/vmaf/src/vif.rs:3510-3560,2942-3010"
+   ],
+   "images": 1,
+   "elements": "(W/8)*(H/8)",
+   "precision": "i32",
+   "ops": {
+    "load": 30,
+    "int": 68,
+    "div": 1,
+    "store": 10
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": " (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_dwt_s0",
+   "name": "ADM DWT2 scale0 x2img",
+   "source": [
+    "crates/vmaf/src/adm.rs:353-430,472-547,139-217"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "i32",
+   "ops": {
+    "int": 28,
+    "load": 10,
+    "store": 2
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "4-tap lo/hi vertical (2x(4mul+3add+shift) per col) + horizontal 4 outputs x(4mul+3add); stage estimate (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_dwt_s123",
+   "name": "ADM DWT2 scales1-3 combined x2img",
+   "source": [
+    "crates/vmaf/src/adm.rs:5229-5400"
+   ],
+   "images": 2,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 28,
+    "load": 10,
+    "store": 2
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 3,
+   "scale": "2**(l+1)",
+   "notes": "i32 a-band -> h/v/d bands + next a; same 4-tap structure (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_decouple",
+   "name": "ADM decouple r/a x4scales x3bands",
+   "source": [
+    "crates/vmaf/src/adm.rs:836-1020,2884-3060"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 40,
+    "div": 1,
+    "cmp": 6,
+    "load": 9,
+    "store": 6
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "per band-px: ot_dp/o_mag/t_mag i64 dots, angle flag, div LUT + gain, r/a writes; stage estimate (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_csf",
+   "name": "ADM csf_i16 x3bands x4scales",
+   "source": [
+    "crates/vmaf/src/adm.rs:3069-3140"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 12,
+    "load": 3,
+    "store": 6
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "rfactor mul+shift per band -> dst + flt (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_cm_den",
+   "name": "ADM cm_i16 + den_scale x4scales",
+   "source": [
+    "crates/vmaf/src/adm.rs:3489-3650,3652-3900"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 32,
+    "load": 12,
+    "store": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "3-row window sums + xsq/xcub shifted accum + den estimate; stage estimate (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "motion2",
+   "name": "motion2 single-frame (zero)",
+   "source": [
+    "crates/vmaf/src/lib.rs:1037-1078"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "i32",
+   "ops": {
+    "load": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "notes": "single frame: validation scan only; SAD loop never runs, motion2=0 (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "svm",
+   "name": "v0 SVM predict + clip",
+   "source": [
+    "crates/vmaf/src/v0.rs:124-164"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 7,
+    "add": 8,
+    "exp": 1,
+    "div": 1,
+    "cmp": 2
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "notes": "6-feature RBF SVM: slopes*raw+intercepts (12), then NSV x (6 sub+mul+add + mul+exp+add) \u2014 NSV is model data, counted at 1 SV; slope/clip tail"
+  }
+ ]
+}

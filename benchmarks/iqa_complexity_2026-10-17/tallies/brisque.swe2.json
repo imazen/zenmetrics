@@ -29,7 +29,8 @@
     "load": 3,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "conv7",
@@ -49,7 +50,8 @@
    "levels": 2,
    "scale": "2**l",
    "access": "stencil2d",
-   "radius": 3
+   "radius": 3,
+   "materialize": "full"
   },
   {
    "id": "mscn",
@@ -70,7 +72,8 @@
    },
    "levels": 2,
    "scale": "2**l",
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "fits",
@@ -90,7 +93,8 @@
    },
    "levels": 2,
    "scale": "2**l",
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   },
   {
    "id": "argmin",
@@ -105,7 +109,8 @@
     "cmp": 1,
     "load": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   },
   {
    "id": "svm",
@@ -120,7 +125,8 @@
     "fma": 1,
     "exp": 0.028
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   }
  ]
 }

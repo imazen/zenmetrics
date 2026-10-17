@@ -39,10 +39,11 @@
    "access": "pointwise",
    "radius": 0,
    "span": "1",
-   "notes": "3 gathers from 256-entry f32 LUT"
+   "notes": "3 gathers from 256-entry f32 LUT",
+   "materialize": "full"
   },
   {
-   "id": "xyb_blur",
+   "id": "xyb_blur_h",
    "name": "3x blur sigma1.2 (7 taps, 2 passes)",
    "source": [
     "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:65-72",
@@ -52,20 +53,49 @@
    "elements": "3*W*H",
    "precision": "f32",
    "ops": {
-    "mul": 14,
-    "add": 12,
-    "load": 14,
+    "mul": 7,
+    "add": 6,
+    "load": 7,
     "store": 2
    },
    "bytes_read": 56,
    "bytes_written": 8,
    "access": "sep_stencil",
-   "axis": "xy",
+   "axis": "x",
    "radius": 3,
    "span": "14",
    "depends_on": [
     "ingress"
-   ]
+   ],
+   "materialize": "full",
+   "notes": "h pass; intermediate plane materialized"
+  },
+  {
+   "id": "xyb_blur_v",
+   "name": "3x blur sigma1.2 (7 taps, 2 passes)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:65-72",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:112-124"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 7,
+    "add": 6,
+    "load": 7,
+    "store": 2
+   },
+   "bytes_read": 56,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 3,
+   "span": "14",
+   "depends_on": [
+    "xyb_blur_h"
+   ],
+   "materialize": "full"
   },
   {
    "id": "xyb_pt",
@@ -90,12 +120,13 @@
    "radius": 3,
    "span": "1",
    "depends_on": [
-    "xyb_blur"
+    "xyb_blur_v"
    ],
-   "notes": "2 opsin + 3 gamma (f64 eval) + 3 mul + 3 div + 2 add"
+   "notes": "2 opsin + 3 gamma (f64 eval) + 3 mul + 3 div + 2 add",
+   "materialize": "full"
   },
   {
-   "id": "sep_blurs",
+   "id": "sep_blurs_h",
    "name": "LF blur33t x3 + MF blur17t x3 + HF blur9t x2",
    "source": [
     "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:158-199"
@@ -104,21 +135,49 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "mul": 134,
-    "add": 126,
-    "load": 134,
-    "store": 8
+    "mul": 67,
+    "add": 63,
+    "load": 67,
+    "store": 4
    },
    "bytes_read": 536,
    "bytes_written": 32,
    "access": "sep_stencil",
-   "axis": "xy",
+   "axis": "x",
    "radius": 16,
    "span": "66",
    "depends_on": [
     "xyb_pt"
    ],
-   "notes": "3*(66+34) + 2*18 tap ops over 8 plane-passes"
+   "notes": "3*(66+34) + 2*18 tap ops over 8 plane-passes h pass; intermediate plane materialized",
+   "materialize": "full"
+  },
+  {
+   "id": "sep_blurs_v",
+   "name": "LF blur33t x3 + MF blur17t x3 + HF blur9t x2",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:158-199"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 67,
+    "add": 63,
+    "load": 67,
+    "store": 4
+   },
+   "bytes_read": 536,
+   "bytes_written": 32,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 16,
+   "span": "66",
+   "depends_on": [
+    "sep_blurs_h"
+   ],
+   "notes": "3*(66+34) + 2*18 tap ops over 8 plane-passes",
+   "materialize": "full"
   },
   {
    "id": "sep_pt",
@@ -144,9 +203,10 @@
    "radius": 16,
    "span": "1",
    "depends_on": [
-    "sep_blurs"
+    "sep_blurs_v"
    ],
-   "notes": "mf sub x3 + y-scale + uhf sub + reg mul/div x2 + lf rescale"
+   "notes": "mf sub x3 + y-scale + uhf sub + reg mul/div x2 + lf rescale",
+   "materialize": "full"
   },
   {
    "id": "malta",
@@ -177,10 +237,11 @@
    "depends_on": [
     "sep_pt"
    ],
-   "notes": "accum: 4*(80+36)+2*(128+36) add+mul; dif ~24 ops x6"
+   "notes": "accum: 4*(80+36)+2*(128+36) add+mul; dif ~24 ops x6",
+   "materialize": "full"
   },
   {
-   "id": "noise_asym",
+   "id": "noise_asym_h",
    "name": "noise (min-diff + blur49t) + asymmetric + l2 x2",
    "source": [
     "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:351-401",
@@ -190,27 +251,56 @@
    "elements": "W*H",
    "precision": "mixed",
    "ops": {
-    "mul": 104,
-    "add": 102,
-    "cmp": 7,
-    "abs": 2,
-    "cvt": 6,
-    "load": 102,
-    "store": 3
+    "mul": 49,
+    "add": 48,
+    "load": 49,
+    "store": 1
    },
    "bytes_read": 408,
    "bytes_written": 12,
    "access": "sep_stencil",
-   "axis": "xy",
+   "axis": "x",
    "radius": 24,
    "span": "98",
    "depends_on": [
     "sep_pt"
    ],
-   "notes": "blur sigma10.67 r24 2 passes = 98 taps"
+   "notes": "blur sigma10.67 r24 2 passes = 98 taps h pass; intermediate plane materialized",
+   "materialize": "full"
   },
   {
-   "id": "masks",
+   "id": "noise_asym_v",
+   "name": "noise (min-diff + blur49t) + asymmetric + l2 x2",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:351-401",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:574-578"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 55,
+    "add": 54,
+    "cmp": 7,
+    "abs": 2,
+    "cvt": 6,
+    "load": 53,
+    "store": 2
+   },
+   "bytes_read": 408,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 24,
+   "span": "98",
+   "depends_on": [
+    "noise_asym_h"
+   ],
+   "notes": "blur sigma10.67 r24 2 passes = 98 taps",
+   "materialize": "full"
+  },
+  {
+   "id": "masks_h",
    "name": "mix x4 + diffpre x2 + 3 blurs (41+11+41 taps) + LUT lookups",
    "source": [
     "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:402-508"
@@ -219,24 +309,52 @@
    "elements": "W*H",
    "precision": "mixed",
    "ops": {
-    "mul": 203,
-    "add": 196,
-    "cmp": 10,
-    "abs": 8,
-    "cvt": 10,
-    "load": 200,
-    "store": 8
+    "mul": 94,
+    "add": 88,
+    "load": 93,
+    "store": 4
    },
    "bytes_read": 800,
    "bytes_written": 32,
    "access": "sep_stencil",
-   "axis": "xy",
+   "axis": "x",
    "radius": 20,
    "span": "82",
    "depends_on": [
     "sep_pt"
    ],
-   "notes": "3 blurs 186 tap-ops + mix/diffpre/luts ~35"
+   "notes": "3 blurs 186 tap-ops + mix/diffpre/luts ~35 h pass; intermediate plane materialized",
+   "materialize": "full"
+  },
+  {
+   "id": "masks_v",
+   "name": "mix x4 + diffpre x2 + 3 blurs (41+11+41 taps) + LUT lookups",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:402-508"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 109,
+    "add": 108,
+    "cmp": 10,
+    "abs": 8,
+    "cvt": 10,
+    "load": 107,
+    "store": 4
+   },
+   "bytes_read": 800,
+   "bytes_written": 32,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 20,
+   "span": "82",
+   "depends_on": [
+    "masks_h"
+   ],
+   "notes": "3 blurs 186 tap-ops + mix/diffpre/luts ~35",
+   "materialize": "full"
   },
   {
    "id": "final",
@@ -262,10 +380,11 @@
    "span": "log2(W*H)",
    "depends_on": [
     "malta",
-    "noise_asym",
-    "masks"
+    "noise_asym_v",
+    "masks_v"
    ],
-   "barrier": true
+   "barrier": true,
+   "materialize": "fused"
   }
  ]
 }

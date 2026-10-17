@@ -29,7 +29,8 @@
     "load": 3,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "gauss7",
@@ -47,7 +48,8 @@
    },
    "levels": 2,
    "scale": "1",
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
    "id": "blocks",
@@ -66,7 +68,8 @@
     "cmp": 2,
     "load": 3
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "full"
   },
   {
    "id": "pool",
@@ -82,7 +85,8 @@
     "mul": 1,
     "div": 2
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "fused"
   }
  ]
 }

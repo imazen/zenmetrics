@@ -1,14 +1,18 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "butteraugli",
- "cli_names": ["butteraugli"],
+ "cli_names": [
+  "butteraugli"
+ ],
  "counter": "swe",
  "source_commit": "a2ce2135f5aacb7e28056ecbc883a4e4d475bed0",
  "kind": "classic-fr",
- "derived": {"R": 2},
+ "derived": {
+  "R": 2
+ },
  "assumptions": [
   "CLI route `--metric butteraugli` -> zenmetrics-api compute_butter_multi (cpu_dispatch.rs:1523-1549) -> butteraugli::butteraugli (lib.rs:695) ONE-SHOT path: both images fully processed per call (warm ButteraugliReference caching exists but the umbrella's multi-column emit uses the stateless entry).",
-  "Source = sibling path dep ~/work/butteraugli/butteraugli @ a2ce2135 (workspace patch in Cargo.toml:479; declared version 0.9.4).",
+  "Source = sibling path dep ~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli @ CI-pinned 791d08d7 at ~/tmp/iqa-cx-lead/snap/butteraugli (local ~/tmp/iqa-cx-lead/snap/butteraugli head a2ce2135 differs only by Stop-token plumbing, pub(crate) visibility and the linear_planes.rs extraction - arithmetic identical, verified by diff) (workspace patch in Cargo.toml:479; declared version 0.9.4).",
   "Structure (diff.rs:819-860,724-760): sRGB->linear LUT, then at TWO resolutions (full + half when W,H>=15; MIN_SIZE_FOR_SUBSAMPLE diff.rs:733) : opsin XYB conversion + separate_frequencies + malta diffs + mask + combine; add_supersampled_2x folds half-res diffmap into full-res; single-pass max + 3-norm score. levels=2 with elements scaled by 2**l models the half-res repeat (ceil dims).",
   "sRGB->linear is a 256-entry LUT lookup per byte (imgref_srgb_to_linear_f32 diff.rs:890): counted as gather loads, no arithmetic.",
   "Opsin dynamics (opsin.rs:175-277): 3 planes blurred with sigma=1.2 5-tap mirrored separable (blur_mirrored_5x5), then per-pixel: 6 intensity muls, 3x opsin_absorbance (3mul+3add+2cmp) on blurred, 3x gamma = fast_log2f (opsin.rs:54-87: bit-extract int ops + 2 Horner fma chains + div) + K_RET muladd, 3x sens div+clamp, 3x absorbance*sens on unblurred, X/Y/B emit. Counted as written.",
@@ -23,169 +27,891 @@
   "Halo: dominated by LF blur radius 16 (scale 2^l per level); Malta radius 4; mask blur 6; fuzzy 3. depends_on chains accumulate conservatively across resolutions (level-uniform stages share dep lists)."
  ],
  "stages": [
-  {"id": "srgb2lin", "name": "sRGB8 -> linear f32 via 256-entry LUT (3 ch)", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:890-905", "~/work/butteraugli/butteraugli/src/lib.rs:766-792"],
-   "images": 2, "elements": "W*H", "precision": "f32",
-   "ops": {"load": 6, "store": 3},
-   "bytes_read": 3, "bytes_written": 12, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
+  {
+   "id": "srgb2lin",
+   "name": "sRGB8 -> linear f32 via 256-entry LUT (3 ch)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:819-861",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/lib.rs:663-760"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 6,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
    "span": "1",
-   "notes": "3 u8 loads + 3 f32 LUT gathers + 3 plane stores per px."},
-  {"id": "subsample2x", "name": "2x2 box mean in linear RGB -> half-res", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:593-670"],
-   "images": 2, "elements": "3*ceil(W/2)*ceil(H/2)", "precision": "f32",
-   "ops": {"load": 4, "add": 3, "mul": 1, "store": 1},
-   "bytes_read": 16, "bytes_written": 4, "access": "downsample", "radius": 1, "scale": 1, "axis": "xy",
-   "span": "1", "depends_on": ["srgb2lin"],
-   "notes": "Interior blocks only; edge columns use 0.5-scaled pairs (~equal ops)."},
-  {"id": "opsin_blur5", "name": "sigma=1.2 5-tap mirrored separable blur, 3 RGB planes", "source": ["~/work/butteraugli/butteraugli/src/opsin.rs:186-192", "~/work/butteraugli/butteraugli/src/blur.rs:1482-1560"],
+   "notes": "3 u8 loads + 3 f32 LUT gathers + 3 plane stores per px.",
+   "materialize": "full"
+  },
+  {
+   "id": "subsample2x",
+   "name": "2x2 box mean in linear RGB -> half-res",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:551-625",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:666-695"
+   ],
+   "images": 2,
+   "elements": "3*ceil(W/2)*ceil(H/2)",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 1,
+   "scale": 1,
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "srgb2lin"
+   ],
+   "notes": "Interior blocks only; edge columns use 0.5-scaled pairs (~equal ops).",
+   "materialize": "full"
+  },
+  {
+   "id": "opsin_blur5_h",
+   "name": "sigma=1.2 5-tap mirrored separable blur, 3 RGB planes [h pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/opsin.rs:166-176",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:1260-1600"
+   ],
    "levels": "R",
-   "images": 2, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 10, "fma": 10, "store": 2},
-   "bytes_read": 12, "bytes_written": 12, "access": "sep_stencil", "radius": 2, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["srgb2lin", "subsample2x"],
-   "notes": "5 fma+5 ld per axis per el; mirrored borders same count."},
-  {"id": "opsin_xform", "name": "per-pixel opsin dynamics: absorbance + gamma + XYB emit", "source": ["~/work/butteraugli/butteraugli/src/opsin.rs:194-271"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5.0,
+    "fma": 5.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "srgb2lin",
+    "subsample2x"
+   ],
+   "notes": "5 fma+5 ld per axis per el; mirrored borders same count. h-pass writes the full temp plane (blur.rs:1289-1290).",
+   "materialize": "full"
+  },
+  {
+   "id": "opsin_blur5_v",
+   "name": "sigma=1.2 5-tap mirrored separable blur, 3 RGB planes [v pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/opsin.rs:166-176",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:1260-1600"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 6, "mul": 33, "add": 28, "fma": 15, "div": 6, "cmp": 12, "int": 12, "store": 3},
-   "bytes_read": 24, "bytes_written": 12, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["opsin_blur5"],
-   "notes": "6 intensity mul + 9mul/9add blurred absorbance + 3x fast_log2f (4fma+div+2add+~4int bit-ops+cmp) + 3 sens div/cmp + 12mul/9add cur + XYB sub/add."},
-  {"id": "blur_lf", "name": "sigma 7.156 33-tap separable blur x3 -> LF planes", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:367-419", "~/work/butteraugli/butteraugli/src/blur.rs:61-80,1016-1198"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5.0,
+    "fma": 5.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "opsin_blur5_h"
+   ],
+   "notes": "5 fma+5 ld per axis per el; mirrored borders same count. v-pass reads the temp plane, writes the output plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "opsin_xform",
+   "name": "per-pixel opsin dynamics: absorbance + gamma + XYB emit",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/opsin.rs:176-262",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/opsin.rs:346-393"
+   ],
    "levels": "R",
-   "images": 2, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 66, "fma": 66, "store": 2},
-   "bytes_read": 12, "bytes_written": 12, "access": "sep_stencil", "radius": 16, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["opsin_xform"],
-   "notes": "33 taps x h + v per plane. Border pixels use renormalized kernels (same count)."},
-  {"id": "lfmf_split", "name": "MF = XYB - LF (3 ch subtract)", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:393-418", "~/work/butteraugli/butteraugli/src/psycho.rs:257-271"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 6,
+    "mul": 33,
+    "add": 28,
+    "fma": 15,
+    "div": 6,
+    "cmp": 12,
+    "int": 12,
+    "store": 3
+   },
+   "bytes_read": 24,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "opsin_blur5_v"
+   ],
+   "notes": "6 intensity mul + 9mul/9add blurred absorbance + 3x fast_log2f (4fma+div+2add+~4int bit-ops+cmp) + 3 sens div/cmp + 12mul/9add cur + XYB sub/add.",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_lf_h",
+   "name": "sigma 7.156 33-tap separable blur x3 -> LF planes [h pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:351-398",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 2, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 2, "add": 1, "store": 1},
-   "bytes_read": 8, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["blur_lf"],
-   "notes": "subtract_images per plane."},
-  {"id": "lf_vals", "name": "LF -> vals space (xmul/ymul/y_to_b fma)", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:166-186"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 33.0,
+    "fma": 33.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 16,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "opsin_xform"
+   ],
+   "notes": "33 taps x h + v per plane. Border pixels use renormalized kernels (same count). h-pass writes the full temp plane (blur.rs:1289-1290).",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_lf_v",
+   "name": "sigma 7.156 33-tap separable blur x3 -> LF planes [v pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:351-398",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 2, "fma": 1, "mul": 3, "store": 3},
-   "bytes_read": 8, "bytes_written": 12, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["blur_lf"],
-   "notes": "b = y_to_b.fma(y, b)*bmul; x *= xmul; y *= ymul."},
-  {"id": "blur_mf", "name": "sigma 3.225 15-tap separable blur x3 (MF->HF split)", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:430-456,459-532", "~/work/butteraugli/butteraugli/src/blur.rs:61-80"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 33.0,
+    "fma": 33.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 16,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "blur_lf_h"
+   ],
+   "notes": "33 taps x h + v per plane. Border pixels use renormalized kernels (same count). v-pass reads the temp plane, writes the output plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "lfmf_split",
+   "name": "MF = XYB - LF (3 ch subtract)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:351-398"
+   ],
    "levels": "R",
-   "images": 2, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 30, "fma": 30, "store": 2},
-   "bytes_read": 12, "bytes_written": 12, "access": "sep_stencil", "radius": 7, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["lfmf_split"],
-   "notes": "15 taps x2 axes on mf_x, mf_y, mf_b."},
-  {"id": "mfhf_proc", "name": "HF subtract + MF range ops + suppress_x_by_y", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:430-531"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "blur_lf_v"
+   ],
+   "notes": "subtract_images per plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "lf_vals",
+   "name": "LF -> vals space (xmul/ymul/y_to_b fma)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:165-191"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 9, "add": 4, "mul": 1, "fma": 2, "abs": 2, "cmp": 3, "div": 1, "int": 2, "store": 4},
-   "bytes_read": 36, "bytes_written": 16, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["blur_mf", "lfmf_split"],
-   "notes": "Per px: hf_x/hf_y subtract (2 add + 4 ld + 2 st), remove_range mf_x, amplify_range mf_y, suppress_x_by_y (fma+div+fma+mul + 2ld + st)."},
-  {"id": "blur_uhf", "name": "sigma 1.564 7-tap separable blur on hf_x, hf_y", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:535-582", "~/work/butteraugli/butteraugli/src/blur.rs:61-80"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "fma": 1,
+    "mul": 3,
+    "store": 3
+   },
+   "bytes_read": 8,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "blur_lf_v"
+   ],
+   "notes": "b = y_to_b.fma(y, b)*bmul; x *= xmul; y *= ymul.",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_mf_h",
+   "name": "sigma 3.225 15-tap separable blur x3 (MF->HF split) [h pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:424-477",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 2, "elements": "2*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 14, "fma": 14, "store": 2},
-   "bytes_read": 8, "bytes_written": 8, "access": "sep_stencil", "radius": 3, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["mfhf_proc"],
-   "notes": "B channel has no UHF split."},
-  {"id": "uhf_proc", "name": "process_uhf_hf_x (2x remove_range) + _y (clamp chain)", "source": ["~/work/butteraugli/butteraugli/src/psycho.rs:283-360"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 15.0,
+    "fma": 15.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 7,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "lfmf_split"
+   ],
+   "notes": "15 taps x2 axes on mf_x, mf_y, mf_b. h-pass writes the full temp plane (blur.rs:1289-1290).",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_mf_v",
+   "name": "sigma 3.225 15-tap separable blur x3 (MF->HF split) [v pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:424-477",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 4, "add": 6, "mul": 3, "fma": 2, "abs": 3, "cmp": 6, "int": 3, "store": 4},
-   "bytes_read": 16, "bytes_written": 16, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["blur_uhf", "mfhf_proc"],
-   "notes": "X: sub+abs+cmp+copysign per band x2. Y: 2x maximum_clamp (min,max,sub,fma) + muls + amplify_range."},
-  {"id": "malta_pre", "name": "scaled asymmetric diffs into zero-padded plane, 6 bands", "source": ["~/work/butteraugli/butteraugli/src/malta.rs:1344-1451"],
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 15.0,
+    "fma": 15.0,
+    "store": 1.0
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "radius": 7,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "blur_mf_h"
+   ],
+   "notes": "15 taps x2 axes on mf_x, mf_y, mf_b. v-pass reads the temp plane, writes the output plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "mfhf_proc",
+   "name": "HF subtract + MF range ops + suppress_x_by_y",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:213-266",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:424-519"
+   ],
    "levels": "R",
-   "images": 1, "elements": "6*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 2, "abs": 2, "add": 3, "mul": 4, "div": 1, "cmp": 3, "int": 1, "store": 1},
-   "bytes_read": 8, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["uhf_proc", "mfhf_proc"],
-   "notes": "malta_compute_scaled_diffs per band pair (uhf x,y + hf x,y + mf x,y): absval, inv_norm div, scaled_diff + branch-free below/above penalty. Padded plane border zero-fill ~0.1 st/el extra."},
-  {"id": "malta_hfuhf", "name": "Malta 16-pattern 132-tap filter on uhf/hf x,y (4 planes)", "source": ["~/work/butteraugli/butteraugli/src/malta.rs:107-331,553-789"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 9,
+    "add": 4,
+    "mul": 1,
+    "fma": 2,
+    "abs": 2,
+    "cmp": 3,
+    "div": 1,
+    "int": 2,
+    "store": 4
+   },
+   "bytes_read": 36,
+   "bytes_written": 16,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "blur_mf_v",
+    "lfmf_split"
+   ],
+   "notes": "Per px: hf_x/hf_y subtract (2 add + 4 ld + 2 st), remove_range mf_x, amplify_range mf_y, suppress_x_by_y (fma+div+fma+mul + 2ld + st).",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_uhf_h",
+   "name": "sigma 1.564 7-tap separable blur on hf_x, hf_y [h pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:478-519",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 1, "elements": "4*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 132, "add": 148, "mul": 16, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "stencil2d", "radius": 4, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["malta_pre"],
-   "notes": "16 patterns: 10 x 9-sample + 6 x 7-sample sums (128+16 adds) + 16 sum^2 mul + 16 accumulate adds."},
-  {"id": "malta_mf", "name": "Malta LF variant 5-sample patterns on mf x,y (2 planes)", "source": ["~/work/butteraugli/butteraugli/src/malta.rs:338-508,794-920"],
+   "images": 2,
+   "elements": "2*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 7.0,
+    "fma": 7.0,
+    "store": 1.0
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 3,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "mfhf_proc"
+   ],
+   "notes": "B channel has no UHF split. h-pass writes the full temp plane (blur.rs:1289-1290).",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_uhf_v",
+   "name": "sigma 1.564 7-tap separable blur on hf_x, hf_y [v pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:478-519",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1255"
+   ],
    "levels": "R",
-   "images": 1, "elements": "2*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 80, "add": 80, "mul": 16, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "stencil2d", "radius": 4, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["malta_pre"],
-   "notes": "16 patterns x 5 taps: 64 add + 16 mul + 16 add."},
-  {"id": "acc_fold", "name": "plane_x/y += hf + mf malta diffs", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:369-375,122-137"],
+   "images": 2,
+   "elements": "2*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 7.0,
+    "fma": 7.0,
+    "store": 1.0
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 3,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "blur_uhf_h"
+   ],
+   "notes": "B channel has no UHF split. v-pass reads the temp plane, writes the output plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "uhf_proc",
+   "name": "process_uhf_hf_x (2x remove_range) + _y (clamp chain)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/psycho.rs:267-350"
+   ],
    "levels": "R",
-   "images": 1, "elements": "2*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 3, "add": 2, "store": 1},
-   "bytes_read": 12, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["malta_hfuhf", "malta_mf"],
-   "notes": "accumulate_two: d += a + b."},
-  {"id": "l2asym_hf", "name": "L2DiffAsymmetric on hf x,y", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:202-242,377-391"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 6,
+    "mul": 3,
+    "fma": 2,
+    "abs": 3,
+    "cmp": 6,
+    "int": 3,
+    "store": 4
+   },
+   "bytes_read": 16,
+   "bytes_written": 16,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "blur_uhf_v",
+    "mfhf_proc"
+   ],
+   "notes": "X: sub+abs+cmp+copysign per band x2. Y: 2x maximum_clamp (min,max,sub,fma) + muls + amplify_range.",
+   "materialize": "full"
+  },
+  {
+   "id": "malta_pre",
+   "name": "scaled asymmetric diffs into zero-padded plane, 6 bands",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:1290-1331"
+   ],
    "levels": "R",
-   "images": 1, "elements": "2*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 3, "add": 3, "mul": 4, "fma": 2, "abs": 1, "cmp": 2, "int": 1, "store": 1},
-   "bytes_read": 12, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["acc_fold", "uhf_proc"],
-   "notes": "diff^2*w0gt1 accumulate + branch-free 0.4/1.05 asymmetry term."},
-  {"id": "l2_mf", "name": "L2Diff mf x,y + write-only mf_b", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:143-188,394-415"],
+   "images": 1,
+   "elements": "6*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "abs": 2,
+    "add": 3,
+    "mul": 4,
+    "div": 1,
+    "cmp": 3,
+    "int": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "uhf_proc",
+    "mfhf_proc"
+   ],
+   "notes": "malta_compute_scaled_diffs per band pair (uhf x,y + hf x,y + mf x,y): absval, inv_norm div, scaled_diff + branch-free below/above penalty. Padded plane border zero-fill ~0.1 st/el extra.",
+   "materialize": "full"
+  },
+  {
+   "id": "malta_hfuhf",
+   "name": "Malta 16-pattern 132-tap filter on uhf/hf x,y (4 planes)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:89-313",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:529-1422"
+   ],
    "levels": "R",
-   "images": 1, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 2.67, "add": 1, "mul": 1.33, "fma": 0.67, "store": 1},
-   "bytes_read": 10.67, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["acc_fold", "mfhf_proc"],
-   "notes": "x,y accumulate (sub+mul+fma, 3ld); b write (sub+2mul, 2ld)."},
-  {"id": "mask_combine", "name": "fused combine_channels_for_masking + diff_precompute", "source": ["~/work/butteraugli/butteraugli/src/mask.rs:314-343,382-388"],
+   "images": 1,
+   "elements": "4*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 132,
+    "add": 148,
+    "mul": 16,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "malta_pre"
+   ],
+   "notes": "16 patterns: 10 x 9-sample + 6 x 7-sample sums (128+16 adds) + 16 sum^2 mul + 16 accumulate adds.",
+   "materialize": "full"
+  },
+  {
+   "id": "malta_mf",
+   "name": "Malta LF variant 5-sample patterns on mf x,y (2 planes)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:314-528",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:770-906"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 4, "add": 2, "mul": 2, "fma": 3, "sqrt": 2, "store": 1},
-   "bytes_read": 16, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["uhf_proc", "mfhf_proc"],
-   "notes": "sqrt(xdiff^2 + ydiff^2) then sqrt(MASK_MUL*v + bias) - sqrt_bias; hf+uhf of each image."},
-  {"id": "mask_blur", "name": "gaussian_blur MASK_RADIUS 2.7 (13-tap) on diff0,diff1", "source": ["~/work/butteraugli/butteraugli/src/mask.rs:391-393", "~/work/butteraugli/butteraugli/src/blur.rs:61-80"],
+   "images": 1,
+   "elements": "2*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 80,
+    "add": 80,
+    "mul": 16,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "malta_pre"
+   ],
+   "notes": "16 patterns x 5 taps: 64 add + 16 mul + 16 add.",
+   "materialize": "full"
+  },
+  {
+   "id": "acc_fold",
+   "name": "plane_x/y += hf + mf malta diffs",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:116-131",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/malta.rs:1332-1422"
+   ],
    "levels": "R",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 26, "fma": 26, "store": 2},
-   "bytes_read": 4, "bytes_written": 4, "access": "sep_stencil", "radius": 6, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["mask_combine"],
-   "notes": "diff=max(2.25*2.7,1)=6 -> 13 taps per axis."},
-  {"id": "fuzzy", "name": "fuzzy_erosion K=3 weighted min3 (ref side only)", "source": ["~/work/butteraugli/butteraugli/src/mask.rs:111-244"],
+   "images": 1,
+   "elements": "2*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "malta_hfuhf",
+    "malta_mf"
+   ],
+   "notes": "accumulate_two: d += a + b.",
+   "materialize": "full"
+  },
+  {
+   "id": "l2asym_hf",
+   "name": "L2DiffAsymmetric on hf x,y",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:185-237",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:238-390"
+   ],
    "levels": "R",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 9, "mul": 1, "fma": 2, "cmp": 17, "int": 8, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "stencil2d", "radius": 3, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["mask_blur"],
-   "notes": "8x update_min3 (~2-3 cmp each + selects) + init 2*c + out = 0.45*m0 + 0.3*m1 + 0.25*m2. Border rows similar count."},
-  {"id": "mask_err", "name": "accumulate_mask_to_error into diff_ac[1]", "source": ["~/work/butteraugli/butteraugli/src/mask.rs:403-405,414-429"],
+   "images": 1,
+   "elements": "2*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "add": 3,
+    "mul": 4,
+    "fma": 2,
+    "abs": 1,
+    "cmp": 2,
+    "int": 1,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "acc_fold",
+    "uhf_proc"
+   ],
+   "notes": "diff^2*w0gt1 accumulate + branch-free 0.4/1.05 asymmetry term.",
+   "materialize": "full"
+  },
+  {
+   "id": "l2_mf",
+   "name": "L2Diff mf x,y + write-only mf_b",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:132-184",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:238-390"
+   ],
    "levels": "R",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 3, "add": 1, "mul": 1, "fma": 1, "store": 1},
-   "bytes_read": 12, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["mask_blur", "l2_mf"],
-   "notes": "ac += 10*(b0-b1)^2."},
-  {"id": "combine_dm", "name": "mask-weighted AC + DC fold -> diffmap (sqrt)", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:440-511"],
+   "images": 1,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2.67,
+    "add": 1,
+    "mul": 1.33,
+    "fma": 0.67,
+    "store": 1
+   },
+   "bytes_read": 10.67,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "acc_fold",
+    "mfhf_proc"
+   ],
+   "notes": "x,y accumulate (sub+mul+fma, 3ld); b write (sub+2mul, 2ld).",
+   "materialize": "full"
+  },
+  {
+   "id": "mask_combine",
+   "name": "fused combine_channels_for_masking + diff_precompute",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:29-88",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:313-347"
+   ],
    "levels": "R",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 10, "mul": 12, "fma": 8, "add": 4, "div": 2, "sqrt": 1, "store": 1},
-   "bytes_read": 40, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["fuzzy", "mask_err", "lf_vals"],
-   "notes": "mask_y + mask_dc_y rational (fma+div+fma+mul each), 3-ch masked dc diff (3 sub + ~6 mul + 2 fma), ac fold (2 mul + 2 fma), add + sqrt."},
-  {"id": "supersample", "name": "add_supersampled_2x sub-diffmap -> full-res (w=0.5)", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:82-118,755"],
-   "images": 1, "elements": "W*H", "precision": "f32",
-   "ops": {"load": 2, "mul": 1, "fma": 1, "store": 1},
-   "bytes_read": 6, "bytes_written": 4, "access": "upsample", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["combine_dm"],
-   "notes": "d = d*blend + 0.5*src[y/2][x/2]; sub-diffmap read at quarter density."},
-  {"id": "score", "name": "max-norm + f64 3/6/12-power sums -> score & pnorm3", "source": ["~/work/butteraugli/butteraugli/src/diff.rs:524-590"],
-   "images": 1, "elements": "W*H", "precision": "f32",
-   "ops": {"load": 1, "cmp": 1, "cvt": 1, "mul": 4, "add": 3},
-   "bytes_read": 4, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": 1, "axis": "none",
-   "span": "log2(W*H)", "depends_on": ["supersample"], "barrier": true,
-   "notes": "Per px: max cmp + f64 d3 (2 mul) d6 (1) d12 (1) + 3 acc adds. Finalize: 3 powf + mean div + 2 add (constant, ~9 flops total)."}
- ]
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 2,
+    "mul": 2,
+    "fma": 3,
+    "sqrt": 2,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "uhf_proc",
+    "mfhf_proc"
+   ],
+   "notes": "sqrt(xdiff^2 + ydiff^2) then sqrt(MASK_MUL*v + bias) - sqrt_bias; hf+uhf of each image.",
+   "materialize": "full"
+  },
+  {
+   "id": "mask_blur_h",
+   "name": "gaussian_blur MASK_RADIUS 2.7 (13-tap) on diff0,diff1 [h pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:348-390",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1040"
+   ],
+   "levels": "R",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 13.0,
+    "fma": 13.0,
+    "store": 1.0
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "mask_combine"
+   ],
+   "notes": "diff=max(2.25*2.7,1)=6 -> 13 taps per axis. h-pass writes the full temp plane (blur.rs:1289-1290).",
+   "materialize": "full"
+  },
+  {
+   "id": "mask_blur_v",
+   "name": "gaussian_blur MASK_RADIUS 2.7 (13-tap) on diff0,diff1 [v pass]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:348-390",
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/blur.rs:866-1040"
+   ],
+   "levels": "R",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 13.0,
+    "fma": 13.0,
+    "store": 1.0
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "mask_blur_h"
+   ],
+   "notes": "diff=max(2.25*2.7,1)=6 -> 13 taps per axis. v-pass reads the temp plane, writes the output plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "fuzzy",
+   "name": "fuzzy_erosion K=3 weighted min3 (ref side only)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:110-291"
+   ],
+   "levels": "R",
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 9,
+    "mul": 1,
+    "fma": 2,
+    "cmp": 17,
+    "int": 8,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 3,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "mask_blur_v"
+   ],
+   "notes": "8x update_min3 (~2-3 cmp each + selects) + init 2*c + out = 0.45*m0 + 0.3*m1 + 0.25*m2. Border rows similar count.",
+   "materialize": "full"
+  },
+  {
+   "id": "mask_err",
+   "name": "accumulate_mask_to_error into diff_ac[1]",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/mask.rs:389-430"
+   ],
+   "levels": "R",
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "add": 1,
+    "mul": 1,
+    "fma": 1,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "mask_blur_v",
+    "l2_mf"
+   ],
+   "notes": "ac += 10*(b0-b1)^2.",
+   "materialize": "full"
+  },
+  {
+   "id": "combine_dm",
+   "name": "mask-weighted AC + DC fold -> diffmap (sqrt)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:405-484"
+   ],
+   "levels": "R",
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "mul": 12,
+    "fma": 8,
+    "add": 4,
+    "div": 2,
+    "sqrt": 1,
+    "store": 1
+   },
+   "bytes_read": 40,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "fuzzy",
+    "mask_err",
+    "lf_vals"
+   ],
+   "notes": "mask_y + mask_dc_y rational (fma+div+fma+mul each), 3-ch masked dc diff (3 sub + ~6 mul + 2 fma), ac fold (2 mul + 2 fma), add + sqrt.",
+   "materialize": "full"
+  },
+  {
+   "id": "supersample",
+   "name": "add_supersampled_2x sub-diffmap -> full-res (w=0.5)",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:82-115"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 1,
+    "fma": 1,
+    "store": 1
+   },
+   "bytes_read": 6,
+   "bytes_written": 4,
+   "access": "upsample",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "combine_dm"
+   ],
+   "notes": "d = d*blend + 0.5*src[y/2][x/2]; sub-diffmap read at quarter density.",
+   "materialize": "full"
+  },
+  {
+   "id": "score",
+   "name": "max-norm + f64 3/6/12-power sums -> score & pnorm3",
+   "source": [
+    "~/tmp/iqa-cx-lead/snap/butteraugli/butteraugli/src/diff.rs:485-550"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cmp": 1,
+    "cvt": 1,
+    "mul": 4,
+    "add": 3
+   },
+   "bytes_read": 4,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "log2(W*H)",
+   "depends_on": [
+    "supersample"
+   ],
+   "barrier": true,
+   "notes": "Per px: max cmp + f64 d3 (2 mul) d6 (1) d12 (1) + 3 acc adds. Finalize: 3 powf + mean div + 2 add (constant, ~9 flops total).",
+   "materialize": "fused"
+  }
+ ],
+ "sibling_commits": {
+  "butteraugli": "791d08d725f27b5331ef7b96e73aad89ed895f45"
+ }
 }

@@ -31,11 +31,12 @@
     "load": 2,
     "store": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
-   "id": "graph",
-   "name": "10x224^2 ResNet50x2 + regressor",
+   "id": "graph_conv",
+   "name": "10x224^2 ResNet50x2 + regressor [conv]",
    "source": [
     "crates/zenmetrics-nn/src/arniqa.rs:1-120"
    ],
@@ -43,11 +44,47 @@
    "elements": "1",
    "precision": "f32",
    "ops": {
-    "fma": 20435681281,
-    "add": 98448477,
-    "mul": 98448477
+    "fma": 20435681280.0
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['arniqa_full'] by_op: conv MACs"
+  },
+  {
+   "id": "graph_matmul",
+   "name": "10x224^2 ResNet50x2 + regressor [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/arniqa.rs:1-120"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 1.0
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['arniqa_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "graph_pointwise",
+   "name": "10x224^2 ResNet50x2 + regressor [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/arniqa.rs:1-120"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 156150878.0,
+    "cmp": 114150410.0,
+    "div": 1525760.0,
+    "sqrt": 10.0,
+    "mul": 98448477.0
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   }
  ]
 }

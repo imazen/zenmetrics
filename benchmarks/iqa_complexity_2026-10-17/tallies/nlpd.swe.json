@@ -1,0 +1,201 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "nlpd",
+ "cli_names": [
+  "nlpd"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "S": 6
+ },
+ "assumptions": [
+  "CLI route `--metric nlpd` -> crates/nlpd score_rgb_u8 (lib.rs:52-79): deinterleave u8->3x f32 planes then score_planes (lib.rs:138-207), maps=None (score path, not score_rgb_u8_maps). Requires min(W,H) >= 96 (lib.rs:209-217).",
+  "LEVELS = 6 (lib.rs:135). Per level l, per channel c, per image: level_transform (lib.rs:718-749) = downsample -> fused normalize_filtered -> scratch.normalized plane. Level dims ceil(W/2^l) x ceil(H/2^l) (div_ceil chains, lib.rs:382-384, score_planes w.div_ceil(2)).",
+  "downsample (lib.rs:381-391): filter5_horizontal at stride 2 writes tmp_h[out_w*h] (full intermediate plane), then simd::filter5_vertical writes out[out_w*out_h]. The stride-2 horizontal path (filter5_horizontal_decimate, lib.rs:470-490) computes the FULL stride-1 conv G[j]=sum_k w_k*row[j+k] then keeps G[2ox-pad] -> ~2x the taps per output element; that overcompute is intrinsic here (it is the production path, not optional).",
+  "simd::normalize_filtered (simd.rs:390-614) runs upsample -> 5-tap H conv -> 5-tap V smooth -> lap (original - smooth) -> divisive normalize as ONE row-ring pass: neither up nor H nor smooth nor a materialized lap plane exists; rings hold 5 h-rows + 3 lap-rows of uw width -> materialize strip. On the RGB path uw==w, uh==h (identity crop map, simd.rs:406-414).",
+  "Per out el of the fused chain: bilinear lerp (x0/x1/tx tables, ~4 ld + 2 fma + 1 mul), h5 conv (5 fma + 5 ld into ring row), v5 smooth (5 fma + 5 ld), lap = orig - smooth (1 ld + 1 add + ld smooth already counted), normalize denom = sigma + sum4 w_k*|lap_neighbor| (4 abs + 4 fma) + 1 div + store.",
+  "squared_difference (simd.rs:4-21) folds (a-b)^2 into f64 per channel per level; maps path (score_rgb_u8_maps) NOT counted - CLI score path passes maps=None.",
+  "Level-5 downsample produces level-6 planes that score_planes drops unused (small implementation overcompute, ~1/4^5 of the downsample stage) - noted, kept intrinsic.",
+  "Laparra 0.6-norm aggregation: rms=sqrt(ss/(w*h*3)), weighted_sum += rms^0.6 per level, final ^(1/0.6) - scalar per level."
+ ],
+ "stages": [
+  {
+   "id": "deinterleave",
+   "name": "RGB8 -> 3 planar f32 in [0,1]",
+   "source": [
+    "crates/nlpd/src/lib.rs:219-235",
+    "crates/nlpd/src/lib.rs:69-71"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "materialize": "full",
+   "notes": "u8->f32/255 fused into planar deinterleave; no interleaved f32 copies (lib.rs:69-70)."
+  },
+  {
+   "id": "down_h",
+   "name": "5-tap lowpass horizontal + stride-2 decimate (full conv then subsample)",
+   "source": [
+    "crates/nlpd/src/lib.rs:381-391",
+    "crates/nlpd/src/lib.rs:401-448",
+    "crates/nlpd/src/lib.rs:470-527"
+   ],
+   "levels": "S",
+   "chain": true,
+   "images": 2,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "fma": 10,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "depends_on": [
+    "deinterleave"
+   ],
+   "materialize": "full",
+   "notes": "Decimate path computes stride-1 conv at every interior j then takes even outputs (lib.rs:472-490): 2x taps/output counted. Writes tmp_h[out_w*h] full plane scratch."
+  },
+  {
+   "id": "down_v",
+   "name": "5-tap lowpass vertical + stride-2 decimate",
+   "source": [
+    "crates/nlpd/src/lib.rs:381-391",
+    "crates/nlpd/src/simd.rs:29-75"
+   ],
+   "levels": "S",
+   "chain": true,
+   "images": 2,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "fma": 5,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "depends_on": [
+    "down_h"
+   ],
+   "materialize": "full",
+   "notes": "Direct 5-tap on tmp_h (out_w x h) -> low[out_w*out_h]. Low plane feeds both the fused lap/norm at THIS level and the next level's planes."
+  },
+  {
+   "id": "lap_norm_fused",
+   "name": "fused ring: bilinear up + h5 + v5 smooth + lap + divisive normalize",
+   "source": [
+    "crates/nlpd/src/simd.rs:390-614",
+    "crates/nlpd/src/lib.rs:657-718",
+    "crates/nlpd/src/lib.rs:540-647"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 21,
+    "mul": 1,
+    "fma": 16,
+    "add": 1,
+    "abs": 4,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "xy",
+   "depends_on": [
+    "down_v"
+   ],
+   "materialize": "strip",
+   "notes": "Row-ring fusion (simd.rs:414-480): per output row, 3 lap rows materialized from ring of 5 h-rows, each filtered off freshly lerped up rows; up/H/smooth/lap planes never exist (strip). Denominator uses 4-reflect lap neighbors + sigma (DN[level], SIGMAS[level]). Output written to level-0 slab subregion (full extent of this level)."
+  },
+  {
+   "id": "sq_diff",
+   "name": "per-channel squared-difference f64 fold",
+   "source": [
+    "crates/nlpd/src/simd.rs:4-21",
+    "crates/nlpd/src/lib.rs:168-171"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "fma": 1,
+    "cvt": 1,
+    "abs": 0,
+    "mul": 0,
+    "store": 0
+   },
+   "bytes_read": 8,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2(3*ceil(W/2**l)*ceil(H/2**l))",
+   "barrier": true,
+   "depends_on": [
+    "lap_norm_fused"
+   ],
+   "materialize": "fused",
+   "notes": "sum((a-b)^2) over 3 channels per level; feeds rms=(ss/(w*h*3))^0.5 weighted by ^0.6."
+  },
+  {
+   "id": "aggregate",
+   "name": "rms^0.6 accumulate + final ^(1/0.6)",
+   "source": [
+    "crates/nlpd/src/lib.rs:184-186",
+    "crates/nlpd/src/lib.rs:203"
+   ],
+   "images": 1,
+   "elements": "S",
+   "precision": "f64",
+   "ops": {
+    "sqrt": 1,
+    "pow": 2,
+    "add": 1,
+    "div": 1
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "sq_diff"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

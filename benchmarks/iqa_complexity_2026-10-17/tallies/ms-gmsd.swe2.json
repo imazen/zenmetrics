@@ -40,7 +40,8 @@
    "bytes_written": 24,
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "l0_sim",
@@ -68,7 +69,8 @@
    "span": "9",
    "depends_on": [
     "l0_fill"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "var0",
@@ -92,7 +94,8 @@
    "depends_on": [
     "l0_sim"
    ],
-   "notes": "pass1 add, pass2 sub+fma counted as add1 fma1"
+   "notes": "pass1 add, pass2 sub+fma counted as add1 fma1",
+   "materialize": "fused"
   },
   {
    "id": "half1",
@@ -120,7 +123,8 @@
    "span": "4",
    "depends_on": [
     "l0_fill"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "l1_sim",
@@ -148,7 +152,8 @@
    "span": "9",
    "depends_on": [
     "half1"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "var1",
@@ -172,7 +177,8 @@
    "barrier": true,
    "depends_on": [
     "l1_sim"
-   ]
+   ],
+   "materialize": "fused"
   },
   {
    "id": "half2",
@@ -199,7 +205,8 @@
    "span": "4",
    "depends_on": [
     "half1"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "l2_sim",
@@ -227,7 +234,8 @@
    "span": "9",
    "depends_on": [
     "half2"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "var2",
@@ -251,7 +259,8 @@
    "barrier": true,
    "depends_on": [
     "l2_sim"
-   ]
+   ],
+   "materialize": "fused"
   },
   {
    "id": "half3",
@@ -278,7 +287,8 @@
    "span": "4",
    "depends_on": [
     "half2"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "l3_sim",
@@ -306,7 +316,8 @@
    "span": "9",
    "depends_on": [
     "half3"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "var3",
@@ -330,7 +341,8 @@
    "barrier": true,
    "depends_on": [
     "l3_sim"
-   ]
+   ],
+   "materialize": "fused"
   },
   {
    "id": "chroma_l3",
@@ -355,7 +367,8 @@
    "depends_on": [
     "half3"
    ],
-   "notes": "computed by run() for both outputs"
+   "notes": "computed by run() for both outputs",
+   "materialize": "fused"
   },
   {
    "id": "final",
@@ -381,7 +394,8 @@
     "var2",
     "var3",
     "chroma_l3"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

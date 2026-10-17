@@ -1,0 +1,341 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "vmaf-v1",
+ "cli_names": [
+  "vmaf-v1"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "In-tree `vmaf` crate score_v1_420: features = cambi_v1_from_luma (distorted only) + speed_v1_chroma_420 + adm3_v1_from_luma + motion3(=0) (score.rs:95-135).",
+  "Single still frame: motion3=0.",
+  "CAMBI runs 5 scales with in-place even decimation + 3x3 mode filter + histogram-windowed c_values (cambi.rs:5917-5985); per-elem splits are stage estimates (window_size<=65, num_diffs=4).",
+  "SpEED chroma at quarter res x2 planes; stage estimate.",
+  "v0 (vif/adm2) features are NOT part of v1; adm3 shares compute_adm structure.",
+  "Written before reading swe's vmaf tallies (read-after-write rule)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8 -> YUV420 u8 planes (709)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/vmaf.rs:171-208"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 3,
+    "div": 3,
+    "mul": 10,
+    "add": 8,
+    "int": 2,
+    "cmp": 3,
+    "store": 1.5
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "BT.709 path: r/255 div x3, lum 3mul+2add, (16+219L).round().clamp(16,235); chroma: 2 sums x(3mul+2add)/px, 224*u/4 + 128 round clamp(16,240) per 2x2. Stage estimate over fused per-2x2-block loop."
+  },
+  {
+   "id": "adm_dwt_s0",
+   "name": "ADM DWT2 scale0 x2img",
+   "source": [
+    "crates/vmaf/src/adm.rs:353-430,472-547,139-217"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "i32",
+   "ops": {
+    "int": 28,
+    "load": 10,
+    "store": 2
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "4-tap lo/hi vertical (2x(4mul+3add+shift) per col) + horizontal 4 outputs x(4mul+3add); stage estimate [adm3_v1: same compute_adm, v1 settings] (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_dwt_s123",
+   "name": "ADM DWT2 scales1-3 combined x2img",
+   "source": [
+    "crates/vmaf/src/adm.rs:5229-5400"
+   ],
+   "images": 2,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 28,
+    "load": 10,
+    "store": 2
+   },
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 3,
+   "scale": "2**(l+1)",
+   "notes": "i32 a-band -> h/v/d bands + next a; same 4-tap structure [adm3_v1: same compute_adm, v1 settings] (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_decouple",
+   "name": "ADM decouple r/a x4scales x3bands",
+   "source": [
+    "crates/vmaf/src/adm.rs:836-1020,2884-3060"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 40,
+    "div": 1,
+    "cmp": 6,
+    "load": 9,
+    "store": 6
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "per band-px: ot_dp/o_mag/t_mag i64 dots, angle flag, div LUT + gain, r/a writes; stage estimate [adm3_v1: same compute_adm, v1 settings] (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_csf",
+   "name": "ADM csf_i16 x3bands x4scales",
+   "source": [
+    "crates/vmaf/src/adm.rs:3069-3140"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 12,
+    "load": 3,
+    "store": 6
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "rfactor mul+shift per band -> dst + flt [adm3_v1: same compute_adm, v1 settings] (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "adm_cm_den",
+   "name": "ADM cm_i16 + den_scale x4scales",
+   "source": [
+    "crates/vmaf/src/adm.rs:3489-3650,3652-3900"
+   ],
+   "images": 1,
+   "elements": "(W/(2**(l+1)))*(H/(2**(l+1)))",
+   "precision": "i32",
+   "ops": {
+    "int": 32,
+    "load": 12,
+    "store": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "notes": "3-row window sums + xsq/xcub shifted accum + den estimate; stage estimate [adm3_v1: same compute_adm, v1 settings] (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "cambi_ingress",
+   "name": "u8->10bit luma copy",
+   "source": [
+    "crates/vmaf/src/cambi.rs:5886-5912"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "u16",
+   "ops": {
+    "load": 1,
+    "int": 2,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": "shift to 10-bit into pooled buffer (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "cambi_antidither",
+   "name": "2x2 box anti-dither (in-place)",
+   "source": [
+    "crates/vmaf/src/cambi.rs:4422-4460"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "u16",
+   "ops": {
+    "load": 4,
+    "int": 4,
+    "store": 1
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "cambi_ingress"
+   ],
+   "notes": "sum 4 taps >>2 in place (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "cambi_mask",
+   "name": "spatial mask: deriv+DP+compare (7x7)",
+   "source": [
+    "crates/vmaf/src/cambi.rs:5116-5190,4856-4900,5035-5095"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "u16",
+   "ops": {
+    "load": 3,
+    "cmp": 3,
+    "store": 1,
+    "int": 6
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 3,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "cambi_antidither"
+   ],
+   "notes": "derivative_row cmp + compute_dp_row prefix (2 adds) + compute_mask_row window-sum compare (4 adds+cmp); MASK_FILTER_SIZE=7 (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "cambi_scales",
+   "name": "per-scale decimate+mode3+c_values+pool (5 scales)",
+   "source": [
+    "crates/vmaf/src/cambi.rs:5917-5985,4493-4802,5409-5728,5729-5759"
+   ],
+   "images": 1,
+   "elements": "(W/(2**l))*(H/(2**l))",
+   "precision": "f32",
+   "levels": 5,
+   "scale": "2**l",
+   "ops": {
+    "load": 10,
+    "cmp": 7,
+    "add": 70,
+    "mul": 9,
+    "int": 5,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 32,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "cambi_mask"
+   ],
+   "notes": "stage estimate: decimate x2 (~2) + filter_mode 3x3 mode3 (~6) + histogram window update ~65 adds/masked px (window_size<=65) + c_value_pixel 4 diffs x ~10 (tvi cmp, 2 hist loads, mul, LUT recip, max) + top-60% spatial pooling ~5"
+  },
+  {
+   "id": "speed",
+   "name": "SpEED chroma u+v (quarter res)",
+   "source": [
+    "crates/vmaf/src/speed.rs:1434-1560"
+   ],
+   "images": 1,
+   "elements": "2*(W/2)*(H/2)",
+   "precision": "f64",
+   "ops": {
+    "load": 8,
+    "mul": 14,
+    "add": 16,
+    "cvt": 2,
+    "store": 2
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": "per chroma plane: antialiased prescale + 5x5-block covariance stats + per-block eigen solve; stage estimate at quarter res x2 planes"
+  },
+  {
+   "id": "motion3",
+   "name": "motion3 single-frame (zero)",
+   "source": [
+    "crates/vmaf/src/lib.rs:1037-1078,1101-1130"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "u16",
+   "ops": {
+    "load": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "notes": "single frame: validation scan only; motion3=0 (mul/add folded into int: fixed-point pipeline)"
+  },
+  {
+   "id": "svm",
+   "name": "v1 SVM predict + clip",
+   "source": [
+    "crates/vmaf/src/lib.rs (VmafModel::predict)"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 8,
+    "add": 8,
+    "exp": 1,
+    "div": 1,
+    "cmp": 2
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [],
+   "notes": "v1 feature vector (cambi,speed_u? combined speed_uv,adm3,motion3); per-SV RBF cost NSV x (dim sub+mul+add + mul+exp+add) \u2014 NSV is model data, counted at 1 SV"
+  }
+ ]
+}

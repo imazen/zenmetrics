@@ -1,0 +1,267 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dssim-gpu",
+ "cli_names": [
+  "dssim-gpu"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "NSCALE": 5
+ },
+ "assumptions": [
+  "GPU implementation (CubeCL single-source kernels dispatched to CUDA/WGPU/HIP); logical ops counted from kernel source, not the CPU port.",
+  "5 scales, dims div_ceil(2) per level (pipeline.rs NUM_SCALES).",
+  "Chroma pre-blur runs once at level 0: 2 passes x a,b x 2 images (pipeline.rs doc lines 14-15).",
+  "Per scale per channel: mu=blur(blur) x2img + sq=blur(blur_squared) x2img + cross=blur(blur_product) = 10 passes; x3ch = 30 blur launches/scale (pipeline.rs:10-24 doc).",
+  "Reduction kernels are per-elem load+add; host mean/avg ops folded into final."
+ ],
+ "stages": [
+  {
+   "id": "srgb_lin",
+   "name": "u8 sRGB->linear planar x2img",
+   "source": [
+    "crates/dssim-gpu/src/kernels/srgb.rs:1-56"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 4,
+    "cvt": 3,
+    "mul": 3,
+    "add": 1,
+    "pow": 3,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "notes": "packed u32 + 3x (mul 1/255, branch, /12.92 or powf 2.4)"
+  },
+  {
+   "id": "to_lab",
+   "name": "linear->custom Lab x2img",
+   "source": [
+    "crates/dssim-gpu/src/kernels/lab.rs:41-93"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 15,
+    "add": 12,
+    "div": 6,
+    "pow": 3,
+    "cmp": 3,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "srgb_lin"
+   ],
+   "notes": "3x3 mat (9mul+6add) /D65 (3div) + 3x lab_f (pow or toe) + scaling (~6)"
+  },
+  {
+   "id": "chroma_preblur",
+   "name": "chroma pre-blur 2x a,b x2img",
+   "source": [
+    "crates/dssim-gpu/src/kernels/blur.rs:36-93",
+    "crates/dssim-gpu/src/pipeline.rs:14-15"
+   ],
+   "images": 1,
+   "elements": "8*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 9,
+    "add": 8,
+    "mul": 3,
+    "store": 1
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "to_lab"
+   ],
+   "notes": "8 blur_3x3 passes at level-0 dims"
+  },
+  {
+   "id": "downscale",
+   "name": "2x2 downscale x3ch x2img per level",
+   "source": [
+    "crates/dssim-gpu/src/kernels/downscale.rs:10-45"
+   ],
+   "images": 1,
+   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "levels": 4,
+   "scale": "2**(l+1)",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "cmp": 4,
+    "store": 1
+   },
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "chroma_preblur"
+   ],
+   "notes": "edge-clamped 2x2 mean"
+  },
+  {
+   "id": "stats_blur",
+   "name": "30x blur_3x3 passes per scale (mu/sq/cross x3ch)",
+   "source": [
+    "crates/dssim-gpu/src/kernels/blur.rs:36-140",
+    "crates/dssim-gpu/src/pipeline.rs:10-24"
+   ],
+   "images": 1,
+   "elements": "30*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": 5,
+   "scale": "2**l",
+   "ops": {
+    "load": 9,
+    "add": 8,
+    "mul": 3,
+    "store": 1
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "downscale"
+   ],
+   "notes": "3ch x (mu1,mu2,sq1,sq2,cross) x 2 sequential passes; blur_squared/blur_product fold the product into tap reads"
+  },
+  {
+   "id": "ssim_map",
+   "name": "15-input Lab SSIM map",
+   "source": [
+    "crates/dssim-gpu/src/kernels/ssim.rs:14-78"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": 5,
+   "scale": "2**l",
+   "ops": {
+    "load": 15,
+    "mul": 14,
+    "add": 11,
+    "div": 1,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "stats_blur"
+   ],
+   "notes": "mu/sq/cross averaged over 3ch then standard SSIM num/den"
+  },
+  {
+   "id": "mean_reduce",
+   "name": "Sigma ssim reduce",
+   "source": [
+    "crates/dssim-gpu/src/kernels/reduction.rs:1-60"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": 5,
+   "scale": "2**l",
+   "ops": {
+    "load": 1,
+    "add": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
+   "materialize": "fused",
+   "depends_on": [
+    "ssim_map"
+   ],
+   "notes": "block-parallel reduction to host scalar"
+  },
+  {
+   "id": "mad_map",
+   "name": "|ssim - avg| + MAD reduce",
+   "source": [
+    "crates/dssim-gpu/src/kernels/ssim.rs:80-91",
+    "crates/dssim-gpu/src/kernels/reduction.rs:60-120"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": 5,
+   "scale": "2**l",
+   "ops": {
+    "load": 1,
+    "add": 1,
+    "abs": 1,
+    "cmp": 1,
+    "store": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
+   "materialize": "full",
+   "depends_on": [
+    "mean_reduce"
+   ],
+   "notes": "abs_diff_scalar_kernel then second reduction"
+  },
+  {
+   "id": "final",
+   "name": "scale combine + 1/ssim-1",
+   "source": [
+    "crates/dssim-gpu/src/pipeline.rs:21-24"
+   ],
+   "images": 1,
+   "elements": "NSCALE",
+   "precision": "f64",
+   "ops": {
+    "pow": 5,
+    "mul": 5,
+    "add": 6,
+    "div": 1,
+    "cmp": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [
+    "mad_map"
+   ],
+   "notes": "avg=mean^(0.5^s), 1-mad per scale, weighted sum, 1/ssim-1"
+  }
+ ]
+}

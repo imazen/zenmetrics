@@ -14,8 +14,8 @@
  ],
  "stages": [
   {
-   "id": "graph",
-   "name": "liqe ViT-B/32 x15 + 495-prompt head",
+   "id": "graph_conv",
+   "name": "liqe ViT-B/32 x15 + 495-prompt head [conv]",
    "source": [
     "crates/zenmetrics-nn/src/liqe.rs:1-140"
    ],
@@ -23,11 +23,48 @@
    "elements": "1",
    "precision": "f32",
    "ops": {
-    "fma": 66135974400,
-    "add": 201363955,
-    "mul": 201363955
+    "fma": 1734082560.0
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['liqe_full'] by_op: conv MACs"
+  },
+  {
+   "id": "graph_matmul",
+   "name": "liqe ViT-B/32 x15 + 495-prompt head [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 64401891839.99999
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "op-type split from ['liqe_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "graph_pointwise",
+   "name": "liqe ViT-B/32 x15 + 495-prompt head [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 273318433.0,
+    "cmp": 15.0,
+    "div": 2265612.0,
+    "mul": 284903160.0,
+    "sqrt": 51.0,
+    "exp": 33048495.0
+   },
+   "access": "block",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   }
  ]
 }

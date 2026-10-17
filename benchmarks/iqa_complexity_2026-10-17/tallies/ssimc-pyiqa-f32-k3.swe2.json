@@ -38,7 +38,8 @@
    "access": "sep_stencil",
    "axis": "x",
    "radius": 5,
-   "span": "11"
+   "span": "11",
+   "materialize": "full"
   },
   {
    "id": "decimate",
@@ -61,7 +62,8 @@
    "notes": "3x3 box mean then strided pick",
    "depends_on": [
     "hfilter"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "vfilter_ssim",
@@ -86,7 +88,8 @@
    "span": "11",
    "depends_on": [
     "hfilter"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "final",
@@ -106,7 +109,8 @@
    "barrier": true,
    "depends_on": [
     "vfilter_ssim"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

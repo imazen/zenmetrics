@@ -1,14 +1,17 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "mdsi",
- "cli_names": ["mdsi"],
+ "cli_names": [
+  "mdsi"
+ ],
  "counter": "swe2",
  "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
  "kind": "classic-fr",
  "params": {},
  "derived": {
   "M": "max(1,int(round(min(W,H)/256)))",
-  "OW": "ceil(W/M)", "OH": "ceil(H/M)"
+  "OW": "ceil(W/M)",
+  "OH": "ceil(H/M)"
  },
  "assumptions": [
   "mdsi = gmsd::mdsi_rgb8 -> mdsi::run -> score_with (mdsi.rs:758-790, lib.rs:499-505). Paper-transcription; all similarity work f64.",
@@ -20,37 +23,146 @@
   "Map dims OW x OH at the M-decimated grid; halo from 3x3 gradients is 1 in map-px = M original px."
  ],
  "stages": [
-  {"id": "box_v", "name": "integer vertical window sums (u16/u32), 3 ch",
-   "source": ["crates/gmsd/src/mdsi.rs:372-388", "crates/gmsd/src/mdsi.rs:388-427"],
-   "images": 2, "elements": "3*W*H", "precision": "u32",
-   "ops": {"int": 1, "load": 1},
-   "bytes_read": 1, "access": "sep_stencil", "axis": "y", "radius": "M/2", "scale": 1, "span": "M",
-   "notes": "each input px enters one out row's column sums (windowed)"},
-  {"id": "box_h", "name": "horizontal window sums + /M^2 + colour planes",
-   "source": ["crates/gmsd/src/mdsi.rs:388-497", "crates/gmsd/src/mdsi.rs:86-98"],
-   "images": 2, "elements": "3*OW*OH", "precision": "f64",
-   "ops": {"int": "M", "div": 1, "cvt": 1, "mul": 3, "add": 3, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "sep_stencil", "axis": "x", "radius": "M/2", "scale": "M", "span": "M",
-   "depends_on": ["box_v"],
-   "notes": "per out px per ch: M int adds + div; then L/H/M colour (mul3 add3 cvt1 folded) — L needs all 3 ch so transform counted once here"},
-  {"id": "fuse_f", "name": "F = (L_R + L_D)/2 plane",
-   "source": ["crates/gmsd/src/mdsi.rs:18-23", "crates/gmsd/src/mdsi.rs:531-563"],
-   "images": 1, "elements": "OW*OH", "precision": "f64",
-   "ops": {"add": 1, "mul": 1, "load": 2, "store": 1},
-   "bytes_read": 16, "bytes_written": 8, "access": "pointwise", "scale": "M", "span": "1",
-   "depends_on": ["box_h"]},
-  {"id": "sim", "name": "3x Prewitt + gs/gs_rf/gs_df + chromaticity + gcs",
-   "source": ["crates/gmsd/src/mdsi.rs:564-628", "crates/gmsd/src/mdsi.rs:207-233"],
-   "images": 1, "elements": "OW*OH", "precision": "f64",
-   "ops": {"mul": 30, "add": 50, "div": 4, "sqrt": 3, "load": 34, "store": 2},
-   "bytes_read": 272, "bytes_written": 16, "access": "stencil2d", "axis": "xy", "radius": 1, "scale": "M", "span": "9",
-   "depends_on": ["box_h", "fuse_f"]},
-  {"id": "pool", "name": "complex fourth-root deviation pooling",
-   "source": ["crates/gmsd/src/mdsi.rs:701-756", "crates/gmsd/src/mdsi.rs:103-163"],
-   "images": 1, "elements": "OW*OH", "precision": "f64",
-   "ops": {"sqrt": 3, "mul": 4, "add": 5, "load": 3, "store": 2, "div": "3/(OW*OH)"},
-   "bytes_read": 24, "bytes_written": 16, "access": "reduction", "scale": "M", "span": "log2(OW*OH)", "barrier": true,
-   "depends_on": ["sim"],
-   "notes": "fourth_root -> (re,im) 2 sqrt + trig-const fold ~4; means 2 adds; deviation sub2+mul2+add1+sqrt; final quarter_pow once"}
+  {
+   "id": "box_v",
+   "name": "integer vertical window sums (u16/u32), 3 ch",
+   "source": [
+    "crates/gmsd/src/mdsi.rs:372-388",
+    "crates/gmsd/src/mdsi.rs:388-427"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "u32",
+   "ops": {
+    "int": 1,
+    "load": 1
+   },
+   "bytes_read": 1,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": "M/2",
+   "scale": 1,
+   "span": "M",
+   "notes": "each input px enters one out row's column sums (windowed)",
+   "materialize": "full"
+  },
+  {
+   "id": "box_h",
+   "name": "horizontal window sums + /M^2 + colour planes",
+   "source": [
+    "crates/gmsd/src/mdsi.rs:388-497",
+    "crates/gmsd/src/mdsi.rs:86-98"
+   ],
+   "images": 2,
+   "elements": "3*OW*OH",
+   "precision": "f64",
+   "ops": {
+    "int": "M",
+    "div": 1,
+    "cvt": 1,
+    "mul": 3,
+    "add": 3,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": "M/2",
+   "scale": "M",
+   "span": "M",
+   "depends_on": [
+    "box_v"
+   ],
+   "notes": "per out px per ch: M int adds + div; then L/H/M colour (mul3 add3 cvt1 folded) \u2014 L needs all 3 ch so transform counted once here",
+   "materialize": "full"
+  },
+  {
+   "id": "fuse_f",
+   "name": "F = (L_R + L_D)/2 plane",
+   "source": [
+    "crates/gmsd/src/mdsi.rs:18-23",
+    "crates/gmsd/src/mdsi.rs:531-563"
+   ],
+   "images": 1,
+   "elements": "OW*OH",
+   "precision": "f64",
+   "ops": {
+    "add": 1,
+    "mul": 1,
+    "load": 2,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "scale": "M",
+   "span": "1",
+   "depends_on": [
+    "box_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "sim",
+   "name": "3x Prewitt + gs/gs_rf/gs_df + chromaticity + gcs",
+   "source": [
+    "crates/gmsd/src/mdsi.rs:564-628",
+    "crates/gmsd/src/mdsi.rs:207-233"
+   ],
+   "images": 1,
+   "elements": "OW*OH",
+   "precision": "f64",
+   "ops": {
+    "mul": 30,
+    "add": 50,
+    "div": 4,
+    "sqrt": 3,
+    "load": 34,
+    "store": 2
+   },
+   "bytes_read": 272,
+   "bytes_written": 16,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "scale": "M",
+   "span": "9",
+   "depends_on": [
+    "box_h",
+    "fuse_f"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "pool",
+   "name": "complex fourth-root deviation pooling",
+   "source": [
+    "crates/gmsd/src/mdsi.rs:701-756",
+    "crates/gmsd/src/mdsi.rs:103-163"
+   ],
+   "images": 1,
+   "elements": "OW*OH",
+   "precision": "f64",
+   "ops": {
+    "sqrt": 3,
+    "mul": 4,
+    "add": 5,
+    "load": 3,
+    "store": 2,
+    "div": "3/(OW*OH)"
+   },
+   "bytes_read": 24,
+   "bytes_written": 16,
+   "access": "reduction",
+   "scale": "M",
+   "span": "log2(OW*OH)",
+   "barrier": true,
+   "depends_on": [
+    "sim"
+   ],
+   "notes": "fourth_root -> (re,im) 2 sqrt + trig-const fold ~4; means 2 adds; deviation sub2+mul2+add1+sqrt; final quarter_pow once",
+   "materialize": "fused"
+  }
  ]
 }

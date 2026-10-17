@@ -1,0 +1,450 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "hdrvdp",
+ "cli_names": [
+  "hdrvdp"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "SPYRH": "max(1,floor(log2(min(W,H)/17))+1)"
+ },
+ "assumptions": [
+  "CLI route `--metric hdrvdp` -> cpu_dispatch.rs:670 hdrvdp::score (NOT hdrvdp()): prepare() (metric.rs:255-330) -> masking::run_terms (masking.rs:188) -> quality_correlate (pool.rs:133) -> 100-Q. The full `hdrvdp()` visibility reconstruction (P_map/P_det inverse pyramid) is NOT on this path (metric.rs:226-244).",
+  "prepare(): to_nits per channel (display.rs:127) -> surround geometric-mean per channel over the REFERENCE (pathway.rs:236-260) -> visual_pathway_with_filter per image (pathway.rs:132-190): (1) optical MTF via conv_fft_real on a 2W x 2H padded plane per channel (fft.rs:1042), (2) LMSR accumulation 4 planes x 3 channels (pathway.rs:157-165), (3) l_adapt = L+M, (4) photoreceptor nonlinear cones L,M + rods R (photoreceptor.rs), (5) remove_mean x2 (global reductions) + cones+rods add -> achromatic plane.",
+  "spyr::build (spyr.rs:653-740) on the achromatic plane per image: hi0 corr_dn 15x15 stride1, lo0 9x9 stride1, then per level: 4 orientation BFILTS 9x9 stride1 + LOFILT 17x17 stride-2 decimate. Filters are FULL 2-D FIR kernels (sp3_filters.rs:25,284,387,716 flattened via flat()) - corr_dn is direct 2-D correlation over a materialized reflect1-padded plane (spyr.rs:396-430), NOT separable.",
+  "max_pyr_height (spyr.rs:128-136): halves floor(w),floor(h) while both >=17 -> n = floor(log2(min(W,H)/17))+1 approx (exact while halving is sequential floor; modelled as such). Level dims use ceil halving in outputs (div_ceil in corr_dn: out_w=width.div_ceil(step)).",
+  "FFT conv cost model: 2W x 2H padded real FFT fwd + pointwise spectral mul + inverse, ~20*log2(4*W*H)+24 flops per ORIGINAL pixel per channel per image (real FFT ~2.5*4N*log2(4N) real flops x2 FFTs + 4N complex mults), plus pad/crop copies.",
+  "masking::run_terms (masking.rs:188-400): per band-pair per orientation - mutual_masking magnitudes, cross-orientation mask_xo sum, log10(l_adapt) resize + CSF LUT lerp, mask_xn from neighboring band resamples (imresize32), transducer-shaped difference d, masked_sq_sum fold -> per-band quality term (ln(msre+eps)-ln(eps))*w_f. Total band-plane elements ~ (4*4/3 + residual) * W*H ~ 5.33*W*H.",
+  "bands test+ref share band geometry; masking folds produce one f64 term per band pair (b_count = 4*SPYRH + 2).",
+  "Parallelism notes: join2 over images, collect_indexed over orientations/bands; per-scale/per-band folds are the barriers."
+ ],
+ "stages": [
+  {
+   "id": "to_nits",
+   "name": "encoding -> absolute nits per channel",
+   "source": [
+    "crates/hdrvdp/src/display.rs:127-240",
+    "crates/hdrvdp/src/metric.rs:276-278"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "mul": 3,
+    "add": 2,
+    "div": 1,
+    "pow": 1,
+    "cmp": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "materialize": "full",
+   "notes": "sRGB/EOTF decode + scale to cd/m^2 (piecewise transfer ~9 flops/el). Input arrives as f64 channels."
+  },
+  {
+   "id": "surround_geo",
+   "name": "per-channel geometric mean of reference (log-domain)",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:236-280",
+    "crates/hdrvdp/src/metric.rs:280-281"
+   ],
+   "images": 1,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 1,
+    "log": 1,
+    "cmp": 1,
+    "add": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "axis": "none",
+   "span": "log2(3*W*H)",
+   "barrier": true,
+   "depends_on": [
+    "to_nits"
+   ],
+   "materialize": "fused",
+   "notes": "Reference only; non-positive samples skipped; per-channel exp(sum/n)."
+  },
+  {
+   "id": "mtf_fft_conv",
+   "name": "optical MTF via padded real-FFT conv per channel",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:99-131",
+    "crates/hdrvdp/src/pathway.rs:154-170",
+    "crates/hdrvdp/src/fft.rs:1042-1100"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "store": 10,
+    "mul": "10*log2(4*W*H)+12",
+    "add": "10*log2(4*W*H)+12",
+    "cmp": 2,
+    "cvt": 2
+   },
+   "bytes_read": 20,
+   "bytes_written": 20,
+   "access": "transform",
+   "radius": "W/2",
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "to_nits",
+    "surround_geo"
+   ],
+   "materialize": "full",
+   "notes": "Pad to 2W x 2H with surround fill (global dependency radius ~W/2), RFFT + spectral multiply + IRFFT + crop; filter shared across pair (pathway.rs:283-289). ~440 flops/px/ch at 1024^2."
+  },
+  {
+   "id": "lmsr_accum",
+   "name": "spectral -> L,M,S,R accumulation (4 planes x 3 ch)",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:157-165"
+   ],
+   "images": 2,
+   "elements": "4*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "fma": 3,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "mtf_fft_conv"
+   ],
+   "materialize": "full",
+   "notes": "R[k][i] += lmsr[c][k]*optical[c][i]; S plane computed then dropped (upstream parity, pathway.rs:151-153)."
+  },
+  {
+   "id": "l_adapt",
+   "name": "adapting luminance L+M",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:167-171"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "lmsr_accum"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "photoreceptor",
+   "name": "cone/rod nonlinear response (p_l, p_m, p_r)",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:173-180",
+    "crates/hdrvdp/src/photoreceptor.rs:193-220"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 4,
+    "add": 3,
+    "div": 1,
+    "pow": 1,
+    "cmp": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "lmsr_accum"
+   ],
+   "materialize": "full",
+   "notes": "Photoreceptor::cone32_plane x2 + rod32_plane (Naka-Rushton-style gain response ~10 flops/el)."
+  },
+  {
+   "id": "dc_remove_achrom",
+   "name": "remove_mean x2 + cones+rods achromatic",
+   "source": [
+    "crates/hdrvdp/src/pathway.rs:182-190"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "add": 3,
+    "cvt": 1,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "reduction",
+   "radius": 0,
+   "axis": "none",
+   "span": "log2(W*H)",
+   "barrier": true,
+   "depends_on": [
+    "photoreceptor"
+   ],
+   "materialize": "full",
+   "notes": "Two global mean folds (cones, rods) + subtract + achromatic add; element ops folded into one stage."
+  },
+  {
+   "id": "spyr_hi0",
+   "name": "steerable pyr: HI0FILT 15x15 stride-1 corr",
+   "source": [
+    "crates/hdrvdp/src/spyr.rs:671-674",
+    "crates/hdrvdp/src/spyr.rs:380-430",
+    "crates/hdrvdp/src/sp3_filters.rs:25-28"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 225,
+    "fma": 225,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 8,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "dc_remove_achrom"
+   ],
+   "materialize": "full",
+   "notes": "Direct 2-D correlation, 225 taps/output; reflect1 padding materialized as (w+2c)-padded plane (spyr.rs:417-430). Hi-pass at full res."
+  },
+  {
+   "id": "spyr_lo0",
+   "name": "steerable pyr: LO0FILT 9x9 stride-1 corr",
+   "source": [
+    "crates/hdrvdp/src/spyr.rs:671-674",
+    "crates/hdrvdp/src/spyr.rs:380-430",
+    "crates/hdrvdp/src/sp3_filters.rs:284-287"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 81,
+    "fma": 81,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "dc_remove_achrom"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "spyr_bands",
+   "name": "steerable pyr: BFILTS 9x9 x4 orientations per level",
+   "source": [
+    "crates/hdrvdp/src/spyr.rs:678-695",
+    "crates/hdrvdp/src/sp3_filters.rs:716-720"
+   ],
+   "levels": "SPYRH",
+   "images": 2,
+   "elements": "4*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 81,
+    "fma": 81,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": "2**l",
+   "axis": "xy",
+   "depends_on": [
+    "spyr_lo0"
+   ],
+   "materialize": "full",
+   "notes": "Four orientation bands at level dims (no decimation within a level), 81 taps each."
+  },
+  {
+   "id": "spyr_lofilt_decim",
+   "name": "steerable pyr: LOFILT 17x17 stride-2 decimate",
+   "source": [
+    "crates/hdrvdp/src/spyr.rs:697-700",
+    "crates/hdrvdp/src/spyr.rs:380-430",
+    "crates/hdrvdp/src/sp3_filters.rs:387-390"
+   ],
+   "levels": "SPYRH",
+   "chain": true,
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 289,
+    "fma": 289,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 8,
+   "scale": "2**l",
+   "axis": "xy",
+   "depends_on": [
+    "spyr_lo0"
+   ],
+   "materialize": "full",
+   "notes": "289 taps per OUTPUT at half dims; feeds next level's band corrs and ends as low-pass residual."
+  },
+  {
+   "id": "mask_mutual",
+   "name": "mutual masking magnitudes + cross-orientation sums",
+   "source": [
+    "crates/hdrvdp/src/masking.rs:280-300"
+   ],
+   "images": 1,
+   "elements": "16*W*H/3",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "abs": 2,
+    "mul": 2,
+    "add": 1,
+    "cmp": 2,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "spyr_bands",
+    "spyr_hi0",
+    "spyr_lo0"
+   ],
+   "materialize": "full",
+   "notes": "mm[b][o] per band-pair (test vs ref); mask_xo_total accumulates over orientations. Total band-plane elements ~5.33*W*H (4 orientations x geometric series + hi/lo)."
+  },
+  {
+   "id": "mask_core",
+   "name": "CSF LUT lerp + neighbor resample + transducer + diff",
+   "source": [
+    "crates/hdrvdp/src/masking.rs:300-400"
+   ],
+   "images": 1,
+   "elements": "16*W*H/3",
+   "precision": "f32",
+   "ops": {
+    "load": 8,
+    "mul": 6,
+    "add": 6,
+    "div": 2,
+    "pow": 1,
+    "cmp": 2,
+    "log": 1,
+    "store": 2
+   },
+   "bytes_read": 24,
+   "bytes_written": 8,
+   "access": "resample",
+   "radius": 1,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "mask_mutual",
+    "l_adapt"
+   ],
+   "materialize": "full",
+   "notes": "Per band el: log10(l_adapt) imresize32 + CSF LUT linear lerp + mask_xn (neighbor-band resample) + transducer p/q/pf shaping + |test-ref| band diff."
+  },
+  {
+   "id": "masked_sq_sum",
+   "name": "masked_sq_sum fold + per-band quality term",
+   "source": [
+    "crates/hdrvdp/src/masking.rs:375-385",
+    "crates/hdrvdp/src/simd_kernels.rs:273-300"
+   ],
+   "images": 1,
+   "elements": "16*W*H/3",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 1,
+    "add": 1,
+    "cmp": 1,
+    "cvt": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "axis": "none",
+   "span": "log2(W*H)",
+   "barrier": true,
+   "depends_on": [
+    "mask_core"
+   ],
+   "materialize": "fused",
+   "notes": "msre = sqrt(masked sum d^2)/(bw*bh) then (ln(msre+eps)-ln(eps))*w_f once per band."
+  },
+  {
+   "id": "quality_terms",
+   "name": "per-band ln + weight + aggregate",
+   "source": [
+    "crates/hdrvdp/src/masking.rs:380-385",
+    "crates/hdrvdp/src/pool.rs:133-160"
+   ],
+   "images": 1,
+   "elements": "4*SPYRH+2",
+   "precision": "f64",
+   "ops": {
+    "log": 2,
+    "mul": 1,
+    "add": 1
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "masked_sq_sum"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

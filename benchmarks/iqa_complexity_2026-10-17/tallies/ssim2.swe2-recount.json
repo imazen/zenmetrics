@@ -7,7 +7,7 @@
  "counter": "swe2-recount",
  "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
  "sibling_commits": {
-  "fast-ssim2": "99b98cb96928caf37f93aa837180988520b09430"
+  "fast-ssim2": "54fabca919230767ba0944cbec0a37d7eb3a2a7a (ci/sibling-pins.tsv)"
  },
  "kind": "classic-fr",
  "params": {},
@@ -19,157 +19,208 @@
   "FastGaussian recursive (gauss.rs:155-): per px per 1D pass: 2 loads + 1 add (sum) + per 3 pole-outputs (mul + 2 fma) + 2 add out => mul3 fma6 add5 load2 store1; x2 passes per channel-blur => mul6 fma12 add10 load4 store2; x15 blurs/scale.",
   "SIMD path fuses product reads: 3 of 5 jobs add +1 mul per px; scalar materializes mul planes (same flops).",
   "maps_fused (maps.rs:30-146,149-): per px per ch ssim: mu products 3mul + dm/num_m (sub+fma) + num_s (mul+sub+add) + denom (2sub+add) + q (mul+div) + f64 (sub+max+2add) + tothe4th 2mul => mul9 add8 fma1 div1 cmp1 cvt1; edge: 2sub+2abs+2add+div+d1sub + 2cmp + 4 f64add + 2x tothe4th 4mul => mul4 add7 div1 abs2 cmp2. Combined ~ mul14 add15 div2 abs2 cmp3 fma1 cvt1 per px-ch.",
-  "score (score.rs:30-54): 3ch x scales x 2 norms x 3 weighted-abs fma (f64) + polynomial + powf \u2014 scalar."
+  "score (score.rs:30-54): 3ch x scales x 2 norms x 3 weighted-abs fma (f64) + polynomial + powf \u2014 scalar.",
+  "sibling check vs CI pin 54fabca9 (counted tree was 99b98cb9): gauss.rs+xyb.rs identical; mod.rs differences are the spatial-maps feature + weighted_sum/transform refactor; maps.rs identical over the counted range 30-146; score.rs identical math refactored. No-alpha RGB8 path = single eval(0.5) in both revs (mod.rs alpha branch unchanged), so counts are pin-equivalent."
  ],
  "stages": [
   {
-   "id": "linearize",
-   "name": "sRGB->linear lcms LUT x3ch",
+   "id": "funnel_copy",
+   "name": "RGB8 funnel copy",
    "source": [
-    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:187-220"
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:60-100"
    ],
    "images": 2,
    "elements": "W*H",
    "precision": "f32",
    "ops": {
     "load": 3,
-    "cvt": 3,
     "store": 3
    },
-   "bytes_read": 3,
-   "bytes_written": 12,
    "access": "pointwise",
+   "materialize": "full",
+   "notes": "source::funnel row-wise extend_from_slice into EncodedSrgb",
    "radius": 0,
    "span": "1",
-   "notes": "3 LUT gathers/px"
+   "axis": "none"
   },
   {
-   "id": "down",
-   "name": "2x2 box downsample, levels 0-5",
+   "id": "pad_clone",
+   "name": "reflect_padded clone (>=min dims)",
    "source": [
-    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-356",
-    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:701-704"
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:104-138"
    ],
    "images": 2,
-   "levels": 6,
-   "elements": "3*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "elements": "max(W,8)*max(H,8)",
    "precision": "f32",
    "ops": {
-    "add": 3,
-    "mul": 1,
-    "load": 4,
-    "store": 1
-   },
-   "bytes_read": 16,
-   "bytes_written": 4,
-   "access": "downsample",
-   "axis": "xy",
-   "radius": 1,
-   "scale": "2**l",
-   "chain": true,
-   "span": "4",
-   "depends_on": [
-    "linearize"
-   ],
-   "notes": "edge-clamped indices"
-  },
-  {
-   "id": "xyb",
-   "name": "linear->XYB CubeRootAndAdd, per scale",
-   "source": [
-    "../fast-ssim2/fast-ssim2/src/pipeline/xyb.rs:36-116",
-    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:707-712"
-   ],
-   "images": 2,
-   "levels": 6,
-   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
-   "precision": "f32",
-   "ops": {
-    "mul": 45,
-    "add": 20,
-    "fma": 12,
     "load": 3,
     "store": 3
    },
-   "bytes_read": 12,
-   "bytes_written": 12,
    "access": "pointwise",
+   "materialize": "full",
+   "notes": "clone_shallow() does a real Vec clone when dims >= min(8); pad path only for smaller inputs",
    "radius": 0,
-   "scale": "2**l",
    "span": "1",
-   "depends_on": [
-    "linearize",
-    "down"
-   ],
-   "notes": "opsin 3x3 + 3 cbrt (3 Newton fma each) + bias"
+   "axis": "none"
   },
   {
-   "id": "blur15",
-   "name": "15 channel-blurs FastGaussian sigma1.5 (h+v)",
+   "id": "linearize",
+   "name": "u8->linear LUT",
    "source": [
-    "../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:155-320",
-    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:714-780"
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:187-220"
    ],
-   "images": 1,
-   "levels": 6,
-   "elements": "5*ceil(W/(2**l))*ceil(H/(2**l))",
+   "images": 2,
+   "elements": "max(W,8)*max(H,8)",
    "precision": "f32",
    "ops": {
-    "mul": 19,
-    "add": 31,
-    "fma": 24,
-    "load": 8,
-    "store": 4
+    "load": 2,
+    "int": 1,
+    "store": 1
    },
-   "bytes_read": 32,
-   "bytes_written": 16,
-   "access": "sep_stencil",
-   "axis": "xy",
-   "radius": 5,
-   "scale": "2**l",
-   "span": "W*2",
-   "depends_on": [
-    "xyb"
+   "access": "gather",
+   "materialize": "full",
+   "notes": "LINEAR_LUT_U8 gather per channel-sample; bg/alpha unused",
+   "radius": 0,
+   "span": "1",
+   "axis": "none"
+  },
+  {
+   "id": "down",
+   "name": "6x 2x2 downsample (incl. tail)",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-356,756-766"
    ],
-   "notes": "per ch-blur per px: 2 passes x (3mul+6fma+5add+2load) + 3/5 jobs +1 fused product mul; elements cover both imgs' xyb planes + products"
+   "images": 2,
+   "elements": "3*ceil(max(W,8)/(2**(l+1)))*ceil(max(H,8)/(2**(l+1)))",
+   "precision": "f32",
+   "levels": 6,
+   "scale": "2**l",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "cmp": 4,
+    "store": 1
+   },
+   "access": "downsample",
+   "materialize": "full",
+   "notes": "(p00+p01+p10+p11)*0.25; 4 edge min()-clamps per elem; loop always downsamples after last scored level",
+   "radius": 1,
+   "span": "1",
+   "axis": "xy"
+  },
+  {
+   "id": "xyb",
+   "name": "linear->XYB cbrt",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/xyb.rs:36-116"
+   ],
+   "images": 2,
+   "elements": "ceil(max(W,8)/(2**l))*ceil(max(H,8)/(2**l))",
+   "precision": "f32",
+   "levels": 6,
+   "scale": "2**l",
+   "ops": {
+    "load": 3,
+    "fma": 27,
+    "mul": 42,
+    "add": 18,
+    "int": 15,
+    "cmp": 6,
+    "store": 3
+   },
+   "access": "pointwise",
+   "materialize": "full",
+   "notes": "opsin 9 fma + 3x cube_root_and_add (mul13 fma6 add4 int5 cmp1) + make_positive; swe's per-channel internals adopted \u2014 my earlier ~mul45/add20 undercounted",
+   "radius": 0,
+   "span": "1",
+   "axis": "none"
+  },
+  {
+   "id": "blur15_h",
+   "name": "15 blur jobs h pass (IIR 4-unroll interior)",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:458-575",
+    "../fast-ssim2/fast-ssim2/src/pipeline/precompute.rs:95-176"
+   ],
+   "images": 1,
+   "elements": "15*ceil(max(W,8)/(2**l))*ceil(max(H,8)/(2**l))",
+   "precision": "f32",
+   "levels": 6,
+   "scale": "2**l",
+   "ops": {
+    "mul": 3.6,
+    "fma": 10.5,
+    "add": 3,
+    "load": 3.2,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "materialize": "full",
+   "notes": "15 plane-jobs = 5 quantities x 3ch. Interior per elem: 2 gathers (product jobs +1.2 load +0.6 mul), 1 sum add, 3 coeff iters x (1 mul + avg 3.5 fma), 2 combine adds, 1 store.",
+   "radius": 5,
+   "span": "ceil(max(W,8)/(2**l))"
+  },
+  {
+   "id": "blur15_v",
+   "name": "15 blur jobs v pass",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:575-720",
+    "../fast-ssim2/fast-ssim2/src/pipeline/precompute.rs:95-176"
+   ],
+   "images": 1,
+   "elements": "15*ceil(max(W,8)/(2**l))*ceil(max(H,8)/(2**l))",
+   "precision": "f32",
+   "levels": 6,
+   "scale": "2**l",
+   "ops": {
+    "mul": 0.6,
+    "fma": 6,
+    "add": 6,
+    "load": 3.2,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "y",
+   "materialize": "full",
+   "notes": "vertical IIR: per elem 2 gathers (+product 0.6 mul +1.2 ld), sum add, 3 terms x (2 fma + neg), combine adds, store.",
+   "radius": 5,
+   "span": "ceil(max(H,8)/(2**l))"
   },
   {
    "id": "maps",
-   "name": "ssim+edge fused map sums, per scale",
+   "name": "ssim maps + norm",
    "source": [
     "../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:30-146"
    ],
    "images": 1,
+   "elements": "3*ceil(max(W,8)/(2**l))*ceil(max(H,8)/(2**l))",
+   "precision": "f32",
    "levels": 6,
-   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
-   "precision": "mixed",
-   "ops": {
-    "mul": 14,
-    "add": 15,
-    "div": 2,
-    "abs": 2,
-    "cmp": 3,
-    "fma": 1,
-    "cvt": 1,
-    "load": 7
-   },
-   "bytes_read": 28,
-   "access": "reduction",
-   "radius": 5,
    "scale": "2**l",
-   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
-   "barrier": true,
-   "depends_on": [
-    "blur15",
-    "xyb"
-   ],
-   "notes": "f32 quotient, f64 sums; tothe4th = 2 mul each x3 terms"
+   "ops": {
+    "load": 9,
+    "mul": 11,
+    "add": 20,
+    "fma": 1,
+    "div": 2,
+    "cvt": 3,
+    "cmp": 3,
+    "abs": 2
+   },
+   "access": "reduction",
+   "materialize": "full",
+   "notes": "adopted swe's richer decomposition (f32 quotient + f64 accum + edge norm); matches maps.rs loop structure",
+   "radius": 0,
+   "span": "log2(W*H)",
+   "axis": "none"
   },
   {
    "id": "final",
-   "name": "weighted-abs walk + polynomial + powf",
+   "name": "scale norms + 108-weight sum + transform",
    "source": [
-    "../fast-ssim2/fast-ssim2/src/pipeline/score.rs:30-54"
+    "../fast-ssim2/fast-ssim2/src/pipeline/score.rs:30-90"
    ],
    "images": 1,
    "elements": "1",
@@ -180,14 +231,16 @@
     "mul": 6,
     "add": 2,
     "pow": 1,
-    "cmp": 1
+    "cmp": 1,
+    "sqrt": 36,
+    "div": 6
    },
    "access": "pointwise",
+   "materialize": "fused",
+   "notes": "3ch x 6scales x 2norms x 3 terms (score_walk); scale_norm sqrt/div folded in; final poly + powf",
+   "radius": 0,
    "span": "1",
-   "depends_on": [
-    "maps"
-   ],
-   "notes": "3ch x 6scales x 2norms x 3 weighted terms"
+   "axis": "none"
   }
  ]
 }

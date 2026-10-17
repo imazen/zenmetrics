@@ -43,7 +43,8 @@
    },
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "decimate",
@@ -63,7 +64,8 @@
    },
    "access": "downsample",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "fft",
@@ -83,7 +85,8 @@
    "access": "resample",
    "radius": 0,
    "span": "D",
-   "axis": "xy"
+   "axis": "xy",
+   "materialize": "full"
   },
   {
    "id": "filterbank",
@@ -104,7 +107,8 @@
    "access": "resample",
    "radius": 0,
    "span": "D",
-   "axis": "xy"
+   "axis": "xy",
+   "materialize": "full"
   },
   {
    "id": "pc_assembly",
@@ -126,7 +130,8 @@
    },
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "thresh",
@@ -147,7 +152,8 @@
    },
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "grad",
@@ -168,7 +174,8 @@
    },
    "access": "stencil2d",
    "radius": 1,
-   "span": "3"
+   "span": "3",
+   "materialize": "full"
   },
   {
    "id": "sim",
@@ -188,7 +195,8 @@
    },
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   },
   {
    "id": "pool",
@@ -207,7 +215,8 @@
    },
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

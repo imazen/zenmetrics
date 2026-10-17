@@ -7,7 +7,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk 66945024 MACs + head 5242880 MACs per 32x32 patch-pair (wadiqam_fr_live_{trunk,head}.onnx)",
   "partial edge patches dropped (upstream extract_patches)"
@@ -30,43 +30,72 @@
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "32"
+   "span": "32",
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "per-patch conv trunk (6ch)",
+   "id": "trunk_conv",
+   "name": "patch trunk convs",
    "source": [
-    "crates/zenmetrics-nn/src/wadiqam.rs:200-450"
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
    ],
    "images": 1,
    "elements": "floor(W/32)*floor(H/32)",
    "precision": "f32",
    "ops": {
-    "fma": 66945024,
-    "add": 190000
+    "fma": 66945024
    },
-   "access": "block",
-   "axis": "xy",
-   "class": "intrinsic",
-   "span": "32"
+   "materialize": "full",
+   "notes": "Conv MACs from wadiqam_live_trunk.onnx by_op",
+   "access": "block"
   },
   {
-   "id": "head",
-   "name": "per-patch head 2048->512->1",
+   "id": "trunk_pointwise",
+   "name": "trunk activations/pool",
    "source": [
-    "crates/zenmetrics-nn/src/wadiqam.rs:400-520"
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
    ],
    "images": 1,
    "elements": "floor(W/32)*floor(H/32)",
    "precision": "f32",
    "ops": {
-    "fma": 5242880,
-    "add": 1036
+    "cmp": 190464
    },
-   "access": "block",
-   "axis": "xy",
-   "class": "intrinsic",
-   "span": "1"
+   "materialize": "full",
+   "notes": "Relu/MaxPool elems from trunk graph; rten materializes activations",
+   "access": "pointwise"
+  },
+  {
+   "id": "head_matmul",
+   "name": "head fc1/fc2 x2 paths",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 5242880
+   },
+   "materialize": "full",
+   "notes": "Gemm MACs from wadiqam_live_head.onnx",
+   "access": "block"
+  },
+  {
+   "id": "head_pointwise",
+   "name": "head activations",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:80-160"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "cmp": 1025
+   },
+   "materialize": "full",
+   "access": "pointwise"
   },
   {
    "id": "pool",
@@ -84,7 +113,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "fused"
   }
  ]
 }

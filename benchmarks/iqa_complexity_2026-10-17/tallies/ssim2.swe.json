@@ -1,12 +1,18 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "ssim2",
- "cli_names": ["ssim2"],
+ "cli_names": [
+  "ssim2"
+ ],
  "counter": "swe",
  "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
- "sibling_commits": {"fast-ssim2": "99b98cb96928caf37f93aa837180988520b09430"},
+ "sibling_commits": {
+  "fast-ssim2": "54fabca919230767ba0944cbec0a37d7eb3a2a7a"
+ },
  "kind": "classic-fr",
- "params": {"C": 3},
+ "params": {
+  "C": 3
+ },
  "derived": {
   "PW": "max(W,8)",
   "PH": "max(H,8)",
@@ -26,94 +32,401 @@
   "Final score: 18*S weighted |aggregate| terms + polynomial + powf.",
   "Kernel/config one-time setup (recursive-gaussian coefficients, WEIGHT table, lcms LUT capture) excluded. The Ssimulacra2Reference cached path (score-pairs) does identical per-element work split across set_reference/compare calls.",
   "Alpha absent (RGB8_SRGB) -> single evaluation; has_alpha would run the whole planar pipeline twice (bg 0.1/0.9) and take min.",
-  "bytes_* = compulsory traffic (input planes read once, output written once); per-tap stencil reads are only in 'load'."
+  "bytes_* = compulsory traffic (input planes read once, output written once); per-tap stencil reads are only in 'load'.",
+  "Sibling rule: counted revision is the CI-pinned fast-ssim2 54fabca9 (snap/work/fast-ssim2), not local 99b98cb9. Diff of the two on the counted score path: additive spatial-maps API (scale_maps_stop, compare_*_maps, pick_alpha_maps) + mechanical magetypes-0.9.30 renames in simd.rs (splat->splat_t, mul_add->mul_add_portable, ...); gauss.rs/xyb.rs identical. No arithmetic change.",
+  "Products fuse into the blur input read on the counted Kernel::Simd path: blur_channel(a, Some(b)) -> simd::fast_gaussian_simd multiplies during the gather (precompute.rs:489-505,786-798); the scalar path materializes product planes instead (precompute.rs:800-807)."
  ],
  "stages": [
-  {"id": "funnel_copy", "name": "input marshal: strided RGB8 rows -> packed Vec<u8>", "source": ["../fast-ssim2/fast-ssim2/src/source.rs:139-151"],
-   "class": "implementation", "images": 2, "elements": "W*H*C", "precision": "u8",
-   "ops": {"load": 1, "store": 1},
-   "bytes_read": 1, "bytes_written": 1, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1",
-   "notes": "Rgb8 arm of source::funnel: row-wise extend_from_slice copy, no conversion."},
-  {"id": "pad_clone", "name": "reflect_padded(8): clone_shallow memcpy at >=8px", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:104-138"],
-   "class": "implementation", "images": 2, "elements": "PW*PH*C", "precision": "u8",
-   "ops": {"load": 1, "store": 1},
-   "bytes_read": 1, "bytes_written": 1, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["funnel_copy"],
-   "notes": "For W,H>=8 reflect_padded returns clone_shallow = full Vec clone (a real 3WH-byte copy per image). Sub-8 inputs take pad_px gather-mirroring instead."},
-  {"id": "linearize", "name": "sRGB u8 -> linear f32 via captured lcms 256-LUT", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:266-278", "../fast-ssim2/fast-ssim2/src/pipeline/lut8.rs:1-72"],
-   "images": 2, "elements": "PW*PH*C", "precision": "f32",
-   "ops": {"load": 2, "int": 1, "store": 1},
-   "bytes_read": 5, "bytes_written": 4, "access": "gather", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["pad_clone"],
-   "notes": "Per channel-sample: load u8, LINEAR_LUT_U8[idx] f32 load, store to planar. int = index form. bg/alpha blends unused (no alpha)."},
-  {"id": "downsample", "name": "2x2 box decimate linear RGB -> pyramid levels 1..S-1", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-364"],
-   "levels": "S-1", "chain": true,
-   "images": 2, "elements": "3*ceil(PW/2**(l+1))*ceil(PH/2**(l+1))", "precision": "f32",
-   "ops": {"load": 4, "add": 3, "mul": 1, "cmp": 4, "store": 1},
-   "bytes_read": 16, "bytes_written": 4, "access": "downsample", "radius": 1, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["linearize"],
-   "notes": "Iteration l produces level l+1: (p00+p01+p10+p11)*0.25; 4 min() edge clamps counted per element as written. Level-S output (last iteration) is unused - see downsample_tail."},
-  {"id": "downsample_tail", "name": "2x2 decimate into never-read level S", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-364", "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:780-808"],
+  {
+   "id": "funnel_copy",
+   "name": "input marshal: strided RGB8 rows -> packed Vec<u8>",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/source.rs:139-151"
+   ],
    "class": "implementation",
-   "images": 2, "elements": "3*ceil(PW/2**S)*ceil(PH/2**S)", "precision": "f32",
-   "ops": {"load": 4, "add": 3, "mul": 1, "cmp": 4, "store": 1},
-   "bytes_read": 16, "bytes_written": 4, "access": "downsample", "radius": 1, "scale": "2**S", "axis": "xy",
-   "span": "1", "depends_on": ["downsample"],
-   "notes": "The NUM_SCALES loop always downsamples after the last scored level; the output plane is dropped."},
-  {"id": "xyb", "name": "linear RGB -> positive XYB (opsin + CubeRootAndAdd)", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/xyb.rs:36-115", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:216-274", "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:491-508"],
+   "images": 2,
+   "elements": "W*H*C",
+   "precision": "u8",
+   "ops": {
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 1,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "notes": "Rgb8 arm of source::funnel: row-wise extend_from_slice copy, no conversion.",
+   "materialize": "full"
+  },
+  {
+   "id": "pad_clone",
+   "name": "reflect_padded(8): clone_shallow memcpy at >=8px",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:104-138"
+   ],
+   "class": "implementation",
+   "images": 2,
+   "elements": "PW*PH*C",
+   "precision": "u8",
+   "ops": {
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 1,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "funnel_copy"
+   ],
+   "notes": "For W,H>=8 reflect_padded returns clone_shallow = full Vec clone (a real 3WH-byte copy per image). Sub-8 inputs take pad_px gather-mirroring instead.",
+   "materialize": "full"
+  },
+  {
+   "id": "linearize",
+   "name": "sRGB u8 -> linear f32 via captured lcms 256-LUT",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:266-278",
+    "../fast-ssim2/fast-ssim2/src/pipeline/lut8.rs:1-72"
+   ],
+   "images": 2,
+   "elements": "PW*PH*C",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "int": 1,
+    "store": 1
+   },
+   "bytes_read": 5,
+   "bytes_written": 4,
+   "access": "gather",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "pad_clone"
+   ],
+   "notes": "Per channel-sample: load u8, LINEAR_LUT_U8[idx] f32 load, store to planar. int = index form. bg/alpha blends unused (no alpha).",
+   "materialize": "full"
+  },
+  {
+   "id": "downsample",
+   "name": "2x2 box decimate linear RGB -> pyramid levels 1..S-1",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-364"
+   ],
+   "levels": "S-1",
+   "chain": true,
+   "images": 2,
+   "elements": "3*ceil(PW/2**(l+1))*ceil(PH/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "cmp": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 1,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "linearize"
+   ],
+   "notes": "Iteration l produces level l+1: (p00+p01+p10+p11)*0.25; 4 min() edge clamps counted per element as written. Level-S output (last iteration) is unused - see downsample_tail.",
+   "materialize": "full"
+  },
+  {
+   "id": "downsample_tail",
+   "name": "2x2 decimate into never-read level S",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-364",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:780-808"
+   ],
+   "class": "implementation",
+   "images": 2,
+   "elements": "3*ceil(PW/2**S)*ceil(PH/2**S)",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "cmp": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 1,
+   "scale": "2**S",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "downsample"
+   ],
+   "notes": "The NUM_SCALES loop always downsamples after the last scored level; the output plane is dropped.",
+   "materialize": "full"
+  },
+  {
+   "id": "xyb",
+   "name": "linear RGB -> positive XYB (opsin + CubeRootAndAdd)",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/xyb.rs:36-115",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:216-274",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:491-508"
+   ],
    "levels": "S",
-   "images": 2, "elements": "ceil(PW/2**l)*ceil(PH/2**l)", "precision": "f32",
-   "ops": {"load": 3, "fma": 27, "mul": 42, "add": 18, "int": 15, "cmp": 6, "store": 3},
-   "bytes_read": 12, "bytes_written": 12, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["downsample"],
-   "notes": "Per pixel: 9 opsin fma + 3x cube_root_and_add (mul 13, fma 6, add/neg 4, int 5, cmp 1 + input max cmp) + StoreXYB/MakePositive (mul 3, add 6). Level-0 xyb reads linearize output; deeper levels read the downsample chain - depends_on picks the max path."},
-  {"id": "mul_planes", "name": "product planes x1^2, x2^2, x1*x2", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:320-325", "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:799-805"],
+   "images": 2,
+   "elements": "ceil(PW/2**l)*ceil(PH/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "fma": 27,
+    "mul": 42,
+    "add": 18,
+    "int": 15,
+    "cmp": 6,
+    "store": 3
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "downsample"
+   ],
+   "notes": "Per pixel: 9 opsin fma + 3x cube_root_and_add (mul 13, fma 6, add/neg 4, int 5, cmp 1 + input max cmp) + StoreXYB/MakePositive (mul 3, add 6). Level-0 xyb reads linearize output; deeper levels read the downsample chain - depends_on picks the max path.",
+   "materialize": "full"
+  },
+  {
+   "id": "mul_planes",
+   "name": "product planes x1^2, x2^2, x1*x2",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:320-325",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:799-805"
+   ],
    "levels": "S",
-   "images": 1, "elements": "9*ceil(PW/2**l)*ceil(PH/2**l)", "precision": "f32",
-   "ops": {"load": 2, "mul": 1, "store": 1},
-   "bytes_read": 8, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["xyb"],
-   "notes": "3 products x 3 channels. Products are method work (sigma12 needs blur(x1*x2)); scalar form materializes them, the SIMD path recomputes a*b inside blur gathers - counted once here."},
-  {"id": "blur_h", "name": "FastGaussian horizontal IIR pass, 15 planes", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:155-247", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:458-572", "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:725-808"],
+   "images": 1,
+   "elements": "9*ceil(PW/2**l)*ceil(PH/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "xyb"
+   ],
+   "notes": "3 products x 3 channels (x1*x1, x2*x2, x1*x2). SIMD path: no product plane materialized - the mul + second-operand load fuse into blur_h's input gather (precompute.rs:489-505 fast_gaussian_simd; scalar fallback materializes them, precompute.rs:800-807 - not the counted path).",
+   "materialize": "fused"
+  },
+  {
+   "id": "blur_h",
+   "name": "FastGaussian horizontal IIR pass, 15 planes",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:155-247",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:458-572",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:725-808"
+   ],
    "levels": "S",
-   "images": 1, "elements": "15*ceil(PW/2**l)*ceil(PH/2**l)", "precision": "f32",
-   "ops": {"load": 2, "mul": 3, "fma": 10.5, "add": 3, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "sep_stencil", "radius": 6, "scale": "2**l", "axis": "x",
-   "span": "ceil(PW/2**l)", "depends_on": ["mul_planes", "xyb"], "serial": true,
-   "notes": "15 = 5 jobs (x1^2, x2^2, x1x2, x1, x2) x 3 channels. Interior 4-unrolled: per output 3 mul + 10.5 fma + 3 add (1 sum-add + 2 combine) + 2 loads + 1 store. IIR serial scan along the row; radius=6 = direct input window (n-radius-1..n+radius-1), true reach is the full row."},
-  {"id": "blur_v", "name": "FastGaussian vertical IIR pass, 15 planes", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:254-316", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:576-643"],
+   "images": 1,
+   "elements": "15*ceil(PW/2**l)*ceil(PH/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 3,
+    "fma": 10.5,
+    "add": 3,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "ceil(PW/2**l)",
+   "depends_on": [
+    "mul_planes",
+    "xyb"
+   ],
+   "serial": true,
+   "notes": "15 = 5 jobs (x1^2, x2^2, x1x2, x1, x2) x 3 channels. Interior 4-unrolled: per output 3 mul + 10.5 fma + 3 add (1 sum-add + 2 combine) + 2 loads + 1 store. IIR serial scan along the row; radius=6 = direct input window (n-radius-1..n+radius-1), true reach is the full row.",
+   "materialize": "full"
+  },
+  {
+   "id": "blur_v",
+   "name": "FastGaussian vertical IIR pass, 15 planes",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:254-316",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:576-643"
+   ],
    "levels": "S",
-   "images": 1, "elements": "15*ceil(PW/2**l)*ceil(PH/2**l)", "precision": "f32",
-   "ops": {"load": 2, "fma": 6, "add": 6, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "sep_stencil", "radius": 6, "scale": "2**l", "axis": "y",
-   "span": "ceil(PH/2**l)", "depends_on": ["blur_h"], "serial": true,
-   "notes": "Per element: sum = in[top]+in[bottom] (2 loads + 1 add); 3 terms x fma(n2,sum, fma(-d1,y_n1,-y_n2)) = 2 fma + 1 neg; combine y1+(y3+y5) = 2 add; 1 store. ~radius warmup iterations per column produce no output (a few % at eval shapes), not counted."},
-  {"id": "maps_fused", "name": "SSIMMap + EdgeDiffMap fused, f32 terms -> f64 sums", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:182-237", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:869-927", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:102-164", "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:1050-1130", "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:813-871"],
+   "images": 1,
+   "elements": "15*ceil(PW/2**l)*ceil(PH/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "fma": 6,
+    "add": 6,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "ceil(PH/2**l)",
+   "depends_on": [
+    "blur_h"
+   ],
+   "serial": true,
+   "notes": "Per element: sum = in[top]+in[bottom] (2 loads + 1 add); 3 terms x fma(n2,sum, fma(-d1,y_n1,-y_n2)) = 2 fma + 1 neg; combine y1+(y3+y5) = 2 add; 1 store. ~radius warmup iterations per column produce no output (a few % at eval shapes), not counted.",
+   "materialize": "full"
+  },
+  {
+   "id": "maps_fused",
+   "name": "SSIMMap + EdgeDiffMap fused, f32 terms -> f64 sums",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:182-237",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:869-927",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:102-164",
+    "../fast-ssim2/fast-ssim2/src/pipeline/simd.rs:1050-1130",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:813-871"
+   ],
    "levels": "S",
-   "images": 1, "elements": "3*ceil(PW/2**l)*ceil(PH/2**l)", "precision": "mixed",
-   "ops": {"load": 9, "mul": 11, "add": 20, "fma": 1, "div": 2, "cvt": 3, "cmp": 3, "abs": 2},
-   "bytes_read": 36, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "log2(ceil(PW/2**l)*ceil(PH/2**l))", "depends_on": ["blur_v", "xyb"], "barrier": true,
-   "notes": "Per element (3 channels): ssim f32 part mul 5 add 7 fma 1 div 1 (5 loads); ssim f64 accum cvt 1 add 3 mul 2 cmp 1; edge f32 add 2 abs 2 (4 loads, shares m1/m2 in fused path -> default rayon path loads 9 total); edge f64 cvt 2 add 8 mul 4 div 1 cmp 2. Reduction = per-channel sum/sum-of-4th; barrier per level."},
-  {"id": "scale_norm", "name": "per-channel L1/L4 normalization", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:818-856", "../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:230-235"],
+   "images": 1,
+   "elements": "3*ceil(PW/2**l)*ceil(PH/2**l)",
+   "precision": "mixed",
+   "ops": {
+    "load": 9,
+    "mul": 11,
+    "add": 20,
+    "fma": 1,
+    "div": 2,
+    "cvt": 3,
+    "cmp": 3,
+    "abs": 2
+   },
+   "bytes_read": 36,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2(ceil(PW/2**l)*ceil(PH/2**l))",
+   "depends_on": [
+    "blur_v",
+    "xyb"
+   ],
+   "barrier": true,
+   "notes": "Per element (3 channels): ssim f32 part mul 5 add 7 fma 1 div 1 (5 loads); ssim f64 accum cvt 1 add 3 mul 2 cmp 1; edge f32 add 2 abs 2 (4 loads, shares m1/m2 in fused path -> default rayon path loads 9 total); edge f64 cvt 2 add 8 mul 4 div 1 cmp 2. Reduction = per-channel sum/sum-of-4th; barrier per level.",
+   "materialize": "fused"
+  },
+  {
+   "id": "scale_norm",
+   "name": "per-channel L1/L4 normalization",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:818-856",
+    "../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:230-235"
+   ],
    "levels": "S",
-   "images": 1, "elements": "3", "precision": "f64",
-   "ops": {"mul": 6, "sqrt": 6, "div": 1, "cvt": 1},
-   "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["maps_fused"],
-   "notes": "Per channel: opp*s0, sqrt(sqrt(opp*s1)), opp*e0, sqrt(sqrt(opp*e1)), opp*e2, sqrt(sqrt(opp*e3)). div+cvt run once per scale (opp = 1/n), not per channel - 3x overcounted here, negligible."},
-  {"id": "score_walk", "name": "108-weight accumulation over scales/channels/norms", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/score.rs:30-44", "../fast-ssim2/fast-ssim2/src/weights.rs:1-134"],
-   "images": 1, "elements": "18*S", "precision": "f64",
-   "ops": {"load": 2, "abs": 1, "mul": 1, "add": 1},
-   "bytes_read": 16, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": 1, "axis": "none",
-   "span": "log2(18*S)", "depends_on": ["scale_norm"],
-   "notes": "ssim += WEIGHT[i]*|v| for 3ch x S scales x 2 norms x 3 entries."},
-  {"id": "score_final", "name": "polynomial + powf to [0,100]", "source": ["../fast-ssim2/fast-ssim2/src/pipeline/score.rs:46-53"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"mul": 7, "add": 3, "cmp": 1, "pow": 1},
-   "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["score_walk"],
-   "notes": "s*0.9562; 2.3267*s - 0.0209*s^2 + 6.25e-5*s^3; 100 - 10*s^0.6276 (powf) if s>0."}
+   "images": 1,
+   "elements": "3",
+   "precision": "f64",
+   "ops": {
+    "mul": 6,
+    "sqrt": 6,
+    "div": 1,
+    "cvt": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "maps_fused"
+   ],
+   "notes": "Per channel: opp*s0, sqrt(sqrt(opp*s1)), opp*e0, sqrt(sqrt(opp*e1)), opp*e2, sqrt(sqrt(opp*e3)). div+cvt run once per scale (opp = 1/n), not per channel - 3x overcounted here, negligible.",
+   "materialize": "fused"
+  },
+  {
+   "id": "score_walk",
+   "name": "108-weight accumulation over scales/channels/norms",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/score.rs:30-44",
+    "../fast-ssim2/fast-ssim2/src/weights.rs:1-134"
+   ],
+   "images": 1,
+   "elements": "18*S",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "abs": 1,
+    "mul": 1,
+    "add": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "log2(18*S)",
+   "depends_on": [
+    "scale_norm"
+   ],
+   "notes": "ssim += WEIGHT[i]*|v| for 3ch x S scales x 2 norms x 3 entries.",
+   "materialize": "fused"
+  },
+  {
+   "id": "score_final",
+   "name": "polynomial + powf to [0,100]",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/score.rs:46-53"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 7,
+    "add": 3,
+    "cmp": 1,
+    "pow": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "score_walk"
+   ],
+   "notes": "s*0.9562; 2.3267*s - 0.0209*s^2 + 6.25e-5*s^3; 100 - 10*s^0.6276 (powf) if s>0.",
+   "materialize": "fused"
+  }
  ]
 }

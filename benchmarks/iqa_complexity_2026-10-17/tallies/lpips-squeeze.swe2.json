@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk fma = 1311618048 MACs / 50176 px pair at 224x224, from onnx_macs.py over lpips_squeeze_full.onnx (Conv+Gemm); element ops 5931497 split ~add/mul",
   "conv MAC/px is resolution-invariant for the stride-1 stack; edge padding ignored",
@@ -33,11 +33,12 @@
    "class": "intrinsic",
    "span": "1",
    "bytes_read": 3,
-   "bytes_written": 12
+   "bytes_written": 12,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "SqueezeNet trunk feature stack (lpips_squeeze_full.onnx)",
+   "id": "trunk_conv",
+   "name": "SqueezeNet trunk feature stack (lpips_squeeze_full.onnx) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/lpips.rs:201-297",
     "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
@@ -46,14 +47,39 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "fma": 10501.297193877552,
-    "add": 242.9328065210459,
+    "fma": 10501.297193877552
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['lpips_squeeze_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "SqueezeNet trunk feature stack (lpips_squeeze_full.onnx) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-297",
+    "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "add": 283.4559650031888,
+    "div": 72.375,
+    "cmp": 214.92091836734696,
+    "pow": 99.56250000000001,
+    "sqrt": 0.6676897321428572,
     "mul": 242.9328065210459
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -71,7 +97,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

@@ -45,11 +45,12 @@
    "scale": 1,
    "axis": "none",
    "span": "1",
-   "notes": "Y per px + U/V at N/4 each (folded: ~1.5x luma cost amortized to 1 el); chroma discarded by features."
+   "notes": "Y per px + U/V at N/4 each (folded: ~1.5x luma cost amortized to 1 el); chroma discarded by features.",
+   "materialize": "full"
   },
   {
-   "id": "adm_dwt2",
-   "name": "4-tap int DWT (v + h passes) -> h/v/d bands + i4",
+   "id": "adm_dwt2_v",
+   "name": "ADM DWT vertical pass (lo/hi rows)",
    "source": [
     "crates/vmaf/src/adm.rs:353-380,788-808"
    ],
@@ -58,21 +59,50 @@
    "elements": "ceil(W/2**l)*ceil(H/2**l)",
    "precision": "i32",
    "ops": {
-    "load": 8,
-    "int": 20,
-    "store": 4
+    "load": 4,
+    "int": 10,
+    "store": 1.5
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "yuv_in"
+   ],
+   "notes": "Fixed-point 1-D vertical wavelet pass emitting lo/hi row planes (adm_dwt2.cpp vertical filtering); intermediate planes are full image size.",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_dwt2_h",
+   "name": "ADM DWT horizontal pass (3 bands + decimated a_out)",
+   "source": [
+    "crates/vmaf/src/adm.rs:353-380,788-808"
+   ],
+   "levels": "ADMSCALE",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "i32",
+   "ops": {
+    "load": 4,
+    "int": 10,
+    "store": 2.5
    },
    "bytes_read": 8,
    "bytes_written": 14,
    "access": "sep_stencil",
    "radius": 2,
    "scale": "2**l",
-   "axis": "xy",
+   "axis": "x",
    "span": "1",
    "depends_on": [
-    "yuv_in"
+    "adm_dwt2_v"
    ],
-   "notes": "Vertical produces lo/hi rows; horizontal emits 3 band els + a_out per 2 cols (~20 int ops per input el avg). Scale 0 input u16, 1-3 i32."
+   "notes": "Horizontal 1-D pass: 4 half-width outputs (3 band planes + a_out) per input pair; emits ~2 stores per input element.",
+   "materialize": "full"
   },
   {
    "id": "adm_decouple",
@@ -99,9 +129,10 @@
    "axis": "xy",
    "span": "1",
    "depends_on": [
-    "adm_dwt2"
+    "adm_dwt2_h"
    ],
-   "notes": "Orientation decoupling: inner products, div_lookup rcp, sign/angle masks; ~26 int ops per band el (avg over i16 s0 / i32 s123 paths)."
+   "notes": "Orientation decoupling: inner products, div_lookup rcp, sign/angle masks; ~26 int ops per band el (avg over i16 s0 / i32 s123 paths).",
+   "materialize": "full"
   },
   {
    "id": "adm_csf",
@@ -129,7 +160,8 @@
    "depends_on": [
     "adm_decouple"
    ],
-   "notes": "mul + shift + add + clamp per el + flt copy."
+   "notes": "mul + shift + add + clamp per el + flt copy.",
+   "materialize": "full"
   },
   {
    "id": "adm_cm",
@@ -159,7 +191,8 @@
     "adm_csf"
    ],
    "barrier": true,
-   "notes": "Watson inner-product accumulation per band via row-window buffers; rfactor shifts; sums folded to scalar num/den per scale."
+   "notes": "Watson inner-product accumulation per band via row-window buffers; rfactor shifts; sums folded to scalar num/den per scale.",
+   "materialize": "fused"
   },
   {
    "id": "adm_denom",
@@ -187,11 +220,12 @@
    "depends_on": [
     "adm_decouple"
    ],
-   "notes": "csf_f denominator path; per-scale reduce into aim_num/den accumulators."
+   "notes": "csf_f denominator path; per-scale reduce into aim_num/den accumulators.",
+   "materialize": "fused"
   },
   {
-   "id": "vif_sub",
-   "name": "subsample to next VIF scale (sep filter, both imgs)",
+   "id": "vif_sub_h",
+   "name": "VIF decimation horizontal pass",
    "source": [
     "crates/vmaf/src/vif.rs:84,967-1274"
    ],
@@ -200,8 +234,8 @@
    "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
    "precision": "u32",
    "ops": {
-    "load": 12,
-    "int": 12,
+    "load": 6,
+    "int": 6,
     "store": 1
    },
    "bytes_read": 8,
@@ -209,12 +243,41 @@
    "access": "sep_stencil",
    "radius": 8,
    "scale": "2**(l+1)",
-   "axis": "xy",
+   "axis": "x",
    "span": "1",
    "depends_on": [
     "yuv_in"
    ],
-   "notes": "FILTERS[l+1] taps avg ~6 per axis (9,5,3): 2T int madd + 2T ld per out el, folded to 12."
+   "notes": "Separable FIR horizontal pass writing a full intermediate plane (vif_filter1d h-pass).",
+   "materialize": "full"
+  },
+  {
+   "id": "vif_sub_v",
+   "name": "VIF decimation vertical pass",
+   "source": [
+    "crates/vmaf/src/vif.rs:84,967-1274"
+   ],
+   "levels": "VIFSCALE-1",
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "u32",
+   "ops": {
+    "load": 6,
+    "int": 6,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 8,
+   "scale": "2**(l+1)",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "vif_sub_h"
+   ],
+   "notes": "Vertical pass producing the decimated plane (full).",
+   "materialize": "full"
   },
   {
    "id": "vif_vert",
@@ -233,16 +296,17 @@
    },
    "bytes_read": 34,
    "bytes_written": 20,
-   "access": "stencil2d",
+   "access": "sep_stencil",
    "radius": 8,
    "scale": "2**l",
    "axis": "y",
    "span": "1",
    "depends_on": [
     "yuv_in",
-    "vif_sub"
+    "vif_sub_v"
    ],
-   "notes": "T={17,9,5,3} per scale avg 8.5: 2T loads + 5T madd -> folded avg ld 17 int 42."
+   "notes": "T={17,9,5,3} per scale avg 8.5: 2T loads + 5T madd -> folded avg ld 17 int 42.",
+   "materialize": "full"
   },
   {
    "id": "vif_horiz",
@@ -261,7 +325,7 @@
    },
    "bytes_read": 20,
    "bytes_written": 20,
-   "access": "stencil2d",
+   "access": "sep_stencil",
    "radius": 8,
    "scale": "2**l",
    "axis": "x",
@@ -269,7 +333,8 @@
    "depends_on": [
     "vif_vert"
    ],
-   "notes": "5 column accumulators x T taps."
+   "notes": "5 column accumulators x T taps.",
+   "materialize": "full"
   },
   {
    "id": "vif_final",
@@ -298,7 +363,8 @@
     "vif_horiz"
    ],
    "barrier": true,
-   "notes": "SIGMA_NSQ clamps, g = min(1, sv_sq/sigma_nsq), num/den accumulate via log2 LUT (power-of-2 int ops counted as log)."
+   "notes": "SIGMA_NSQ clamps, g = min(1, sv_sq/sigma_nsq), num/den accumulate via log2 LUT (power-of-2 int ops counted as log).",
+   "materialize": "fused"
   },
   {
    "id": "svm_pred",
@@ -329,7 +395,8 @@
     "vif_final"
    ],
    "barrier": true,
-   "notes": "Per SV: dist2 = 6 sub+6 mul+5 add, exp(-g*d2), alpha fma. Model rescale/clip ~20 flops once (folded)."
+   "notes": "Per SV: dist2 = 6 sub+6 mul+5 add, exp(-g*d2), alpha fma. Model rescale/clip ~20 flops once (folded).",
+   "materialize": "fused"
   }
  ]
 }

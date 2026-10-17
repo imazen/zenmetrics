@@ -1,0 +1,436 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dssim",
+ "cli_names": [
+  "dssim"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "sibling_commits": {
+  "dssim": "eec33f556d7ee991c4b906198c3a1b74f6f6063d"
+ },
+ "kind": "classic-fr",
+ "derived": {
+  "S": 5
+ },
+ "assumptions": [
+  "CLI route `--metric dssim` -> native CPU umbrella (metrics/mod.rs:2547-2553) -> cpu_dispatch.rs:1450-1469: dssim.create_image_rgb(RGB<u8>) for both images then dssim.compare(&ref, dist). Pinned sibling dssim @ eec33f55 (~/tmp/iqa-cx-lead/snap/work/dssim, dssim-core).",
+  "Dssim::new() defaults: scale_weights = DEFAULT_WEIGHTS (5 scales, dssim.rs:85,156) and save_maps_scales = 0 -> SsimMap structs are dropped in compare_inner; the map fold still runs, but no map storage cost beyond the transient ImgVec.",
+  "Scale pyramid: make_scales_recursive (dssim.rs:219-275) calls to_lab on the CURRENT RGBLU image at every scale and recursively downsamples the RGBLU image (image.rs:204-228) with 2x2 Average4 box (average4 impls image.rs:129-153). Recursion stops when width<8 or height<8; tally assumes all S=5 levels exist (min(W,H) >= 256). Dims use floor(W/2) per level.",
+  "Preprocess per channel per scale (dssim.rs:118-140): chroma channels (a,b) get blur_in_place first; then EVERY channel gets blur() -> mu and blur_mul(img,img) -> img_sq_blur. Blur is a fused H5+V5 double-3-tap equivalent 5-tap separable pass (blur.rs:7-9,40,110,288); each pass materializes a full tmp/dst plane.",
+  "blur_mul (blur.rs:202,344) fuses the elementwise product INTO the 5-tap gather: per tap it loads a[i] and b[i] and multiplies -> 10 loads + 5 mul + 4 fma + 1 store per element per 1-D pass (no product plane is materialized).",
+  "Compare (compare_inner dssim.rs:268-335): per scale, 3 fused blur_mul cross-blurs (img1*img2 per channel, 3 parallel H5V5) then compare_scale_3ch (dssim.rs:335-395) computes the 3-channel-combined SSIM map pointwise, then two scalar folds (mean, mean |dev|) + powf reweight per scale. Scales run under par_bridge -> per-scale work is parallel; barrier per scale only for the scalar fold.",
+  "to_lab per px (tolab.rs:29-47): 3x fma_matrix (r,g,b -> X,Y,Z), 3x cbrt_poly (tolab.rs:66-81: ~4 int bit ops + 2 Halley steps of ~2 mul + 2 fma + 1 div each) + piecewise cmp + Lab assembly muls/fmas.",
+  "to_rgblu (linear.rs:194-197): per-pixel u8 -> linear f32 via gamma LUT (P::make_lut + px.to_linear) - 3 LUT loads + 3 stores, no arithmetic.",
+  "Edge handling: blur_h5/v5 use clamped replicated taps at edges with identical op counts to interior (blur.rs:36-40). No padding copies.",
+  "bytes_read/written are unique-footprint bytes per element (input planes touched once in cache), not per-tap traffic."
+ ],
+ "stages": [
+  {
+   "id": "rgb8_to_rgblu",
+   "name": "RGB8 -> RGBLU via gamma LUT",
+   "source": [
+    "dssim-core/src/linear.rs:194-197",
+    "dssim-core/src/dssim.rs:187-203"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "int": 3,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "materialize": "full",
+   "notes": "Vec<RGBLU> collected at full res; LUT gather, no arithmetic (linear.rs:190-197)."
+  },
+  {
+   "id": "downsample_rgb",
+   "name": "RGBLU 2x2 box downsample (average4)",
+   "source": [
+    "dssim-core/src/image.rs:204-228",
+    "dssim-core/src/image.rs:146-153"
+   ],
+   "levels": "S-1",
+   "chain": true,
+   "images": 2,
+   "elements": "floor(W/2**(l+1))*floor(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 12,
+    "add": 9,
+    "mul": 3,
+    "store": 3
+   },
+   "bytes_read": 48,
+   "bytes_written": 12,
+   "access": "downsample",
+   "radius": 1,
+   "scale": "2**(l+1)",
+   "axis": "xy",
+   "depends_on": [
+    "rgb8_to_rgblu"
+   ],
+   "materialize": "full",
+   "notes": "Average4 over RGBLU = 4px x 3ch loads, (a+b+c+d)*0.25 per ch. Produces level l+1 RGB image consumed by to_lab and the next downsample (dssim.rs:219-260)."
+  },
+  {
+   "id": "rgblu_to_lab",
+   "name": "RGBLU -> L*a*b* planes (per scale)",
+   "source": [
+    "dssim-core/src/tolab.rs:29-47",
+    "dssim-core/src/tolab.rs:66-81",
+    "dssim-core/src/dssim.rs:219-245"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 16,
+    "fma": 14,
+    "div": 6,
+    "add": 5,
+    "cmp": 3,
+    "int": 12,
+    "store": 3
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "depends_on": [
+    "downsample_rgb"
+   ],
+   "materialize": "full",
+   "notes": "to_lab returns Vec<GBitmap> of 3 full planes per scale. Level 0 reads the to_rgblu image directly (dep conservatively charges downsample halo at l>=1)."
+  },
+  {
+   "id": "chroma_blur_h",
+   "name": "chroma in-place blur, horizontal 5-tap (a,b)",
+   "source": [
+    "dssim-core/src/dssim.rs:118-135",
+    "dssim-core/src/blur.rs:40-106",
+    "dssim-core/src/blur.rs:312-341"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "2*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 1,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "depends_on": [
+    "rgblu_to_lab"
+   ],
+   "materialize": "full",
+   "notes": "blur_in_place on a and b only (is_chroma, dssim.rs:132-134); fused H5V5 double-3-tap kernel, full tmp scratch between passes."
+  },
+  {
+   "id": "chroma_blur_v",
+   "name": "chroma in-place blur, vertical 5-tap (a,b)",
+   "source": [
+    "dssim-core/src/dssim.rs:118-135",
+    "dssim-core/src/blur.rs:110-196"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "2*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 1,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "depends_on": [
+    "chroma_blur_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "mu_blur_h",
+   "name": "mu blur, horizontal 5-tap (L,a,b)",
+   "source": [
+    "dssim-core/src/dssim.rs:135-136",
+    "dssim-core/src/blur.rs:40-106",
+    "dssim-core/src/blur.rs:288-310"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 1,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "depends_on": [
+    "chroma_blur_v"
+   ],
+   "materialize": "full",
+   "notes": "blur() -> mu Vec (full plane). Chroma channels read the in-place-blurred a,b (chain r2+r2); L reads the unblurred plane."
+  },
+  {
+   "id": "mu_blur_v",
+   "name": "mu blur, vertical 5-tap (L,a,b)",
+   "source": [
+    "dssim-core/src/dssim.rs:135-136",
+    "dssim-core/src/blur.rs:110-196"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 1,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "depends_on": [
+    "mu_blur_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "sq_blur_h",
+   "name": "img_sq blur_mul(img,img), horizontal fused 5-tap",
+   "source": [
+    "dssim-core/src/dssim.rs:139-143",
+    "dssim-core/src/blur.rs:202-286",
+    "dssim-core/src/blur.rs:344-370"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "mul": 5,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "depends_on": [
+    "chroma_blur_v"
+   ],
+   "materialize": "full",
+   "notes": "Fused multiply inside the tap loop (blur.rs:198-200): no product plane materialized; a==b so unique read footprint is one plane."
+  },
+  {
+   "id": "sq_blur_v",
+   "name": "img_sq blur_mul(img,img), vertical fused 5-tap",
+   "source": [
+    "dssim-core/src/dssim.rs:139-143",
+    "dssim-core/src/blur.rs:202-286"
+   ],
+   "levels": "S",
+   "images": 2,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "mul": 5,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "depends_on": [
+    "sq_blur_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "x_blur_h",
+   "name": "img1*img2 cross blur_mul, horizontal (3ch, once per pair)",
+   "source": [
+    "dssim-core/src/dssim.rs:278-296",
+    "dssim-core/src/blur.rs:202-286",
+    "dssim-core/src/blur.rs:344-370"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "mul": 5,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "depends_on": [
+    "chroma_blur_v"
+   ],
+   "materialize": "full",
+   "notes": "img1_img2_blur per channel (dssim.rs:144-151 -> blur_mul(src,modified)); reads both images' post-in-place-blur planes. Runs once per image pair, not per image."
+  },
+  {
+   "id": "x_blur_v",
+   "name": "img1*img2 cross blur_mul, vertical (3ch)",
+   "source": [
+    "dssim-core/src/dssim.rs:278-296",
+    "dssim-core/src/blur.rs:202-286"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "3*floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "mul": 5,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "depends_on": [
+    "x_blur_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ssim_map_3ch",
+   "name": "3-channel combined SSIM map pointwise",
+   "source": [
+    "dssim-core/src/dssim.rs:335-395"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "floor(W/2**l)*floor(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 15,
+    "mul": 17,
+    "add": 25,
+    "fma": 2,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 60,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "depends_on": [
+    "mu_blur_v",
+    "sq_blur_v",
+    "x_blur_v"
+   ],
+   "materialize": "full",
+   "notes": "compare_scale_3ch: 15 plane reads (mu o/m x3, img_sq o/m x3, i12 x3), channel-averaged mu products and sigmas, single SSIM quotient per pixel. map_out collected as full ImgVec even though maps are discarded."
+  },
+  {
+   "id": "scale_pool",
+   "name": "per-scale score folds (mean, mean |dev|, powf reweight)",
+   "source": [
+    "dssim-core/src/dssim.rs:300-306"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "floor(W/2**l)*floor(H/2**l)",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "cvt": 1,
+    "add": 3,
+    "abs": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2(floor(W/2**l)*floor(H/2**l))",
+   "barrier": true,
+   "depends_on": [
+    "ssim_map_3ch"
+   ],
+   "materialize": "fused",
+   "notes": "Two sequential folds over the map (sum -> avg, sum|avg-i| -> score) plus a per-scale powf(0.5^n) once per level (folded into level scalar). log2 span for parallel fold."
+  },
+  {
+   "id": "aggregate",
+   "name": "weighted score sum + to_dssim",
+   "source": [
+    "dssim-core/src/dssim.rs:318-328",
+    "dssim-core/src/dssim.rs:444-446"
+   ],
+   "images": 1,
+   "elements": "S",
+   "precision": "f64",
+   "ops": {
+    "fma": 1,
+    "add": 1,
+    "div": 1
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "scale_pool"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

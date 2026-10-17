@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "65812593664 MACs per 224^2 crop-pair (ahiq_full.onnx) x9; min(W,H)>=224 required"
  ],
@@ -30,11 +30,12 @@
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "224"
+   "span": "224",
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "ahiq_full pair graph per crop",
+   "id": "trunk_conv",
+   "name": "ahiq_full pair graph per crop [conv]",
    "source": [
     "crates/zenmetrics-nn/src/ahiq.rs:300-600"
    ],
@@ -42,13 +43,57 @@
    "elements": "9*50176",
    "precision": "f32",
    "ops": {
-    "fma": 1311634.918367347,
-    "add": 12391.207051179847
+    "fma": 15664.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "224"
+   "span": "224",
+   "materialize": "full",
+   "notes": "op-type split from ['ahiq_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_matmul",
+   "name": "ahiq_full pair graph per crop [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/ahiq.rs:300-600"
+   ],
+   "images": 1,
+   "elements": "9*50176",
+   "precision": "f32",
+   "ops": {
+    "fma": 1295970.918367347
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224",
+   "materialize": "full",
+   "notes": "op-type split from ['ahiq_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "ahiq_full pair graph per crop [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/ahiq.rs:300-600"
+   ],
+   "images": 1,
+   "elements": "9*50176",
+   "precision": "f32",
+   "ops": {
+    "add": 14324.909737723214,
+    "div": 482.86246412627554,
+    "exp": 1954.380261479592,
+    "mul": 1444.1024792729593,
+    "cmp": 284.0,
+    "sqrt": 0.0005978954081632653
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "pool",
@@ -66,7 +111,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

@@ -40,7 +40,8 @@
    "bytes_written": 4,
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "down_h",
@@ -69,7 +70,8 @@
    "depends_on": [
     "ingress"
    ],
-   "notes": "elements = ow*h = ceil(W/2^(l+1)) * H/2^l"
+   "notes": "elements = ow*h = ceil(W/2^(l+1)) * H/2^l",
+   "materialize": "full"
   },
   {
    "id": "down_v",
@@ -97,7 +99,8 @@
    "span": "5",
    "depends_on": [
     "down_h"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "normfilt",
@@ -129,7 +132,8 @@
    "depends_on": [
     "down_v"
    ],
-   "notes": "lerp(mul3 add2) + h5(mul5 add4) + v5(fma5) + sub1 + denom(abs4 mul4 add4) + div1"
+   "notes": "lerp(mul3 add2) + h5(mul5 add4) + v5(fma5) + sub1 + denom(abs4 mul4 add4) + div1",
+   "materialize": "full"
   },
   {
    "id": "rms",
@@ -157,7 +161,8 @@
    "barrier": true,
    "depends_on": [
     "normfilt"
-   ]
+   ],
+   "materialize": "fused"
   },
   {
    "id": "final",
@@ -175,7 +180,8 @@
    "span": "1",
    "depends_on": [
     "rms"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

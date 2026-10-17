@@ -1,0 +1,259 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "vsi",
+ "cli_names": [
+  "vsi"
+ ],
+ "counter": "swe-recount",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "F": "max(1, round(min(W,H)/256))"
+ },
+ "assumptions": [
+  "BLIND RECOUNT (swe lane, swap check A) \u2014 written before reading any swe2 tally.",
+  "CLI `vsi` -> vsi_planes -> prepare_with_downscale (kernel.rs:1381-1418): sdsp saliency map per image at FIXED 256x256 (SDSP_N:14), then decimation_factor F = max(1, round(min/256)) (kernel.rs:30-33) box-decimates L/a/b + both sm planes; scharr_mag on decimated L; pool_body sums.",
+  "Ingress: Input holds rgb f32 planes + Lab planes (srgb_to_lab kernel.rs:981-1015: XYZ linear -> Lab f()/kappa, ~30 flops/px incl 3x8 matmul).",
+  "sdsp (kernel.rs:1068-1196): per image: 3x imresize (w,h)->256^2 (tri kernel, axis_taps ~ratio+2 taps per out el), 3x (fft2 256^2 + LG mul + ifft2), sf=sum sq combine, Gaussian center prior (65536 exp once per size \u2014 counted), min/max scan of a,b, arg/e = exp(-(dist a,b)^2/(2 sigma^2)) per el, imresize 256^2 -> (w,h). SDSP cost is ~CONSTANT in input size (65536-el domain) plus the two resizes which scale with W*H/F-in ratio.",
+  "imresize (kernel.rs:534-614): antialiased tri-window per-axis; per out el ~ (in/out)+2 taps per axis -> modeled ~2*min(in/out+2) fma; for sdsp-in (min->256) it's input-ratio taps; folded to ~30 flops/el on the 65536-el domain + the sm upsample out to (w,h) ~ 4 taps/el out.",
+  "scharr_mag (kernel.rs:1309-1330): DX/DY 3x3 convs + sqrt(ix^2+iy^2) on decimated L.",
+  "pool (kernel.rs:1451-1544): per el vssim+gsim+isim+qsim rationals (4x7 flops + 4 div), gsim^0.4 powf, iq=isim*qsim sign-corrected pow^0.02, w=max(sm1,sm2), contrib=gp*vs*iqreal*w, f64 num/den."
+ ],
+ "stages": [
+  {
+   "id": "rgb2lab",
+   "name": "sRGB8 -> f32 rgb planes + Lab",
+   "source": [
+    "crates/vsi/src/kernel.rs:731-1015"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 3,
+    "mul": 12,
+    "add": 9,
+    "div": 3,
+    "cmp": 6,
+    "store": 4
+   },
+   "bytes_read": 3,
+   "bytes_written": 16,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "notes": "rgb planes for sdsp + Lab (linearize + XYZ matmul + Lab f(t) piecewise).",
+   "materialize": "full"
+  },
+  {
+   "id": "sdsp_in",
+   "name": "lab 3ch resize (w,h)->256^2 (tri kernel)",
+   "source": [
+    "crates/vsi/src/kernel.rs:225-614,1068-1090"
+   ],
+   "images": 2,
+   "elements": "3*65536",
+   "precision": "f32",
+   "ops": {
+    "load": "2*(min(W,H)/256+2)",
+    "fma": "2*(min(W,H)/256+2)",
+    "store": 1
+   },
+   "bytes_read": "8*(min(W,H)/256+2)",
+   "bytes_written": 4,
+   "access": "resample",
+   "radius": "min(W,H)/256",
+   "scale": "min(W,H)/256",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "rgb2lab"
+   ],
+   "notes": "Antialiased resize; taps ~ input/output ratio per axis.",
+   "materialize": "full"
+  },
+  {
+   "id": "sdsp_fft",
+   "name": "3ch fft2+LG+ifft2 on 256^2",
+   "source": [
+    "crates/vsi/src/kernel.rs:1096-1128",
+    "crates/vsi/src/fft.rs:352-400"
+   ],
+   "images": 2,
+   "elements": "3*65536",
+   "precision": "f32",
+   "ops": {
+    "mul": "2*log2(65536)+2",
+    "add": "3*log2(65536)+1",
+    "load": 3,
+    "store": 3
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "transform",
+   "radius": 0,
+   "scale": "min(W,H)/256",
+   "axis": "none",
+   "span": "16",
+   "depends_on": [
+    "sdsp_in"
+   ],
+   "notes": "5*n*log2(n) per transform, 6 total + LG complex mults + sf sq-accum (2mul+add).",
+   "materialize": "full"
+  },
+  {
+   "id": "sdsp_prior",
+   "name": "gaussian center prior + chroma dist exp",
+   "source": [
+    "crates/vsi/src/kernel.rs:1130-1196"
+   ],
+   "images": 2,
+   "elements": "65536",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 4,
+    "add": 4,
+    "exp": 2,
+    "cmp": 2,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "min(W,H)/256",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "sdsp_fft"
+   ],
+   "notes": "gw prior + ab min/max + arg/e exp fold.",
+   "materialize": "full"
+  },
+  {
+   "id": "sdsp_out",
+   "name": "sm resize 256^2 -> (w,h)",
+   "source": [
+    "crates/vsi/src/kernel.rs:1196"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "fma": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "resample",
+   "radius": 0,
+   "scale": "256/min(W,H)+1",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "sdsp_prior"
+   ],
+   "notes": "Upscaling: ~4 tri taps/el.",
+   "materialize": "full"
+  },
+  {
+   "id": "decim4",
+   "name": "box decimate L,a,b + sm by F, 4 planes x2 img",
+   "source": [
+    "crates/vsi/src/kernel.rs:1198-1242,1392-1407"
+   ],
+   "images": 1,
+   "elements": "8*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": "F*F",
+    "add": "F*F",
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": "4*F*F",
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": "F//2",
+   "scale": "F",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "rgb2lab",
+    "sdsp_out"
+   ],
+   "notes": "F^2 box + normalize per out el per plane (l,m,n,sm x2).",
+   "materialize": "full"
+  },
+  {
+   "id": "scharr",
+   "name": "DX/DY 3x3 + magnitude on decimated L",
+   "source": [
+    "crates/vsi/src/kernel.rs:1284-1330,1408"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 9,
+    "fma": 9,
+    "mul": 2,
+    "add": 1,
+    "sqrt": 0.5,
+    "store": 0.5
+   },
+   "bytes_read": 36,
+   "bytes_written": 2,
+   "access": "stencil2d",
+   "radius": 1,
+   "scale": "F",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "decim4"
+   ],
+   "notes": "Two convs per el + mag sqrt folded (0.5/el amortized).",
+   "materialize": "full"
+  },
+  {
+   "id": "pool",
+   "name": "4 sims + 2 powf + weight + f64 pool",
+   "source": [
+    "crates/vsi/src/kernel.rs:1451-1544"
+   ],
+   "images": 1,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 8,
+    "mul": 17,
+    "add": 9,
+    "div": 4,
+    "pow": 2,
+    "cmp": 4,
+    "cvt": 2,
+    "int": 2
+   },
+   "bytes_read": 32,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "decim4",
+    "scharr"
+   ],
+   "barrier": true,
+   "notes": "vssim/gsim/isim/qsim + powf(gsim,0.4) + powf(|iq|,0.02)*sign + max weight + 2 f64 adds. score=num/den once.",
+   "materialize": "fused"
+  }
+ ]
+}

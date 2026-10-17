@@ -43,7 +43,8 @@
    "bytes_written": 12,
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "colors_h",
@@ -69,7 +70,8 @@
    "span": "21",
    "depends_on": [
     "ingress"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "colors_v_lab",
@@ -99,10 +101,11 @@
    "depends_on": [
     "colors_h"
    ],
-   "notes": "v conv 84mul+84add + filtered_lab ~20mul+12add+3div+3pow+6cmp"
+   "notes": "v conv 84mul+84add + filtered_lab ~20mul+12add+3div+3pow+6cmp",
+   "materialize": "full"
   },
   {
-   "id": "features",
+   "id": "features_h",
    "name": "feature convs (h 3ch x19, v 4ch x19) + mags",
    "source": [
     "crates/zenmetrics-cli/src/metrics/flip.rs:125-150",
@@ -112,22 +115,51 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "mul": 138,
-    "add": 137,
-    "load": 133,
-    "store": 2,
-    "sqrt": 2
+    "mul": 69,
+    "add": 68,
+    "load": 66,
+    "store": 1
    },
    "bytes_read": 532,
    "bytes_written": 8,
    "access": "sep_stencil",
-   "axis": "xy",
+   "axis": "x",
    "radius": 9,
    "span": "38",
    "depends_on": [
     "ingress"
    ],
-   "notes": "radius 9 -> 19 taps; y-const mul+add + 57 + 76 tap-ops + 2 sqrt mags"
+   "notes": "radius 9 -> 19 taps; y-const mul+add + 57 + 76 tap-ops + 2 sqrt mags h pass; intermediate plane materialized",
+   "materialize": "full"
+  },
+  {
+   "id": "features_v",
+   "name": "feature convs (h 3ch x19, v 4ch x19) + mags",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:125-150",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:195-218"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 69,
+    "add": 69,
+    "sqrt": 2,
+    "load": 67,
+    "store": 1
+   },
+   "bytes_read": 532,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 9,
+   "span": "38",
+   "depends_on": [
+    "features_h"
+   ],
+   "notes": "radius 9 -> 19 taps; y-const mul+add + 57 + 76 tap-ops + 2 sqrt mags",
+   "materialize": "full"
   },
   {
    "id": "emap",
@@ -156,8 +188,9 @@
    "span": "1",
    "depends_on": [
     "colors_v_lab",
-    "features"
-   ]
+    "features_v"
+   ],
+   "materialize": "full"
   },
   {
    "id": "final",
@@ -179,7 +212,8 @@
    "barrier": true,
    "depends_on": [
     "emap"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

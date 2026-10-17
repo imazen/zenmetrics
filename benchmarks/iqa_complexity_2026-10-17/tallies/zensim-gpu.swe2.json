@@ -1,0 +1,179 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "zensim-gpu",
+ "cli_names": [
+  "zensim-gpu"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "SCALES": 4
+ },
+ "assumptions": [
+  "GPU implementation (CubeCL kernels; crates/zensim-gpu). Default ZensimFeatureRegime::Basic: srgb->positive-XYB -> mirror pad -> 2x box downscale pyramid (4 scales) -> fused_features_kernel per (strip-block, strip, channel) -> host fold of 17 f64 + 3 peak partials -> 228-feature vector + MLP score (pipeline.rs:14-27).",
+  "fused_features_kernel is tile-fused: cooperative row loads into shared memory, 11-tap (DIAM=11, R=5) H-blur per row, sliding-window V-blur (subtract old + add new row), per-pixel SSIM + 17 moment accumulators + 3 peaks (fused.rs:83-88, 296-490). Shared-memory taps counted as load ops.",
+  "H-blur cost per output px: 11 taps for nm1/nm2 adds + 11 fma for nsq + 11 fma for ns12 + 4 INV_DIAM muls + 4 add/sub slide updates (fused.rs:420-460); cooperative row load ~2.3 loads/px x2 images.",
+  "Per-pixel feature body (fused.rs:296-365): ~8 flops ssim + mask mul, 4 mul sd moments, ~27 flops ed/artifact/detail block, ~13 flops vs/vd/pd block, 3 peak cmps.",
+  "XYB conversion uses Halley cbrtf_fast (color.rs:42+) ~30 flops + opsin mix ~15.",
+  "Extended regime (masked_iw_strip) is a separate opt-in path; not modelled (regime=Basic default, pipeline.rs:479-522).",
+  "GPU implementation"
+ ],
+ "stages": [
+  {
+   "id": "xyb",
+   "name": "sRGB u8 -> positive XYB planar x2img",
+   "source": [
+    "crates/zensim-gpu/src/kernels/color.rs:137-231,42-136"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 4,
+    "cvt": 3,
+    "mul": 12,
+    "add": 9,
+    "fma": 6,
+    "div": 3,
+    "pow": 1,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "Halley cbrtf + opsin mix + absorbance bias"
+  },
+  {
+   "id": "mirror_pad",
+   "name": "SIMD-pad mirror fill x3ch x2img",
+   "source": [
+    "crates/zensim-gpu/src/pipeline.rs:14-27"
+   ],
+   "images": 2,
+   "elements": "6*W",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "int": 4,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "notes": "pad columns [w..padded_w); rows shared"
+  },
+  {
+   "id": "downscale",
+   "name": "2x box downscale 3ch pyramid x2img",
+   "source": [
+    "crates/zensim-gpu/src/kernels/downscale.rs:11-49"
+   ],
+   "images": 2,
+   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "add": 3,
+    "mul": 1,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 3,
+   "scale": "2**(l+1)",
+   "notes": "downscale_2x_3ch for scales 1..3"
+  },
+  {
+   "id": "fused_feats",
+   "name": "fused H-blur + sliding V-blur + 17acc + 3peaks x3ch",
+   "source": [
+    "crates/zensim-gpu/src/kernels/fused.rs:95-512"
+   ],
+   "images": 2,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "load": 32,
+    "add": 38,
+    "mul": 16,
+    "fma": 26,
+    "div": 2,
+    "abs": 3,
+    "cmp": 8,
+    "int": 8,
+    "store": 4
+   },
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 5,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "scale": "2**l",
+   "notes": "shared-mem 11-tap H-blur + sliding V + ssim + moments; strip-column kernel per channel"
+  },
+  {
+   "id": "reduce_partials",
+   "name": "reduce partials across strips/cols",
+   "source": [
+    "crates/zensim-gpu/src/kernels/reduce.rs:23-151"
+   ],
+   "images": 1,
+   "elements": "3*W",
+   "precision": "f32",
+   "ops": {
+    "load": 17,
+    "add": 17,
+    "cmp": 3,
+    "store": 17
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "levels": 4,
+   "notes": "reduce_scale_kernel folds partial planes to per-channel rows; element count approx"
+  },
+  {
+   "id": "host_fold",
+   "name": "host fold + 228-feature pack + MLP",
+   "source": [
+    "crates/zensim-gpu/src/pipeline.rs:8-27,44-90"
+   ],
+   "images": 1,
+   "elements": "3*4*20",
+   "precision": "f64",
+   "ops": {
+    "mul": 4,
+    "add": 4,
+    "fma": 4,
+    "exp": 1,
+    "cmp": 2
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": "feature finalize + weights.rs MLP (~228->hidden->1)"
+  }
+ ]
+}

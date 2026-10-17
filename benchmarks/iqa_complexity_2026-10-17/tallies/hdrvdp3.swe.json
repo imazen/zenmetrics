@@ -1,0 +1,335 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "hdrvdp3",
+ "cli_names": [
+  "hdrvdp3"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "SPYRH3": "max(1,floor(log2(min(W,H)/13))+1)"
+ },
+ "assumptions": [
+  "CLI route `--metric hdrvdp3` -> cpu_dispatch HDR -> hdrvdp3 score/hdrvdp3_run (v3/metric.rs:151-190). Default sweep path = score() (want_maps=false): skips pyramid reconstruct + s_map + P_map sweeps (metric.rs:445-460).",
+  "v3 works in f64 throughout (fft64/trans64). Per image: ingress to nits (v3/ingress.rs), determine_pad, visual_pathway (v3/pathway.rs:98-350): cycdeg_image grid, MTF conv via fft64::conv_fft_pad_into on 2x-padded planes PER CHANNEL (pathway.rs:146-200, filter cached per dims), spectral aging optical-density filter (pathway.rs:217), photoreceptor-like transforms (trans64.rs), then Spyr0 pyramid (v3/spyr0.rs:601+).",
+  "Spyr0 = isotropic Laplacian-style stack (spyr0.rs:4-22): hi0filt 9x9 stride-1 (spyr0.rs:254), lo0filt 7x7 stride-1 (spyr0.rs:201), per level bfilt 9x9 stride-1 (spyr0.rs:512) + lofilt 13x13 stride-2 (spyr0.rs:339). Direct 2-D corr_dn64, reflect1 padding, f64. band_count = levels+2; level dims ceil halving; levels ~ while min dim >=13 -> floor(log2(min/13))+1.",
+  "Masking (metric.rs:386-470): per band-pair - band_diff (sub), for the BASE band an FFT2 dominant-frequency estimate (one fft64 per pair, metric.rs:400-415), ex_diff = sign_pow(diff,p) per el (trans64), apply_band division by (csf*(1+k*mask)) normaliser, masked sum fold -> q_err accumulate. csf_b built per band from log_la resample + CSF LUT lerp (256-entry).",
+  "l_mean_adapt/log_la/diff_mask pointwise over W*H (metric.rs:322-340): mean of both l_adapt planes, log10, per-pixel any-channel diff flag ~3*channels ops.",
+  "Per-band costs are f64; FFT conv is the only global-radius stage. Band-pair elements total ~ (1 + 1/4*(4/3)) * W*H ~ 1.33*W*H for oriented-level bands + hi0/lo0 residual at N -> ~2.4*W*H."
+ ],
+ "stages": [
+  {
+   "id": "ingress_nits",
+   "name": "encoding -> nits f64 per channel + pad determination",
+   "source": [
+    "crates/hdrvdp/src/v3/ingress.rs:25-100",
+    "crates/hdrvdp/src/v3/metric.rs:240-264"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 1,
+    "mul": 3,
+    "add": 2,
+    "div": 1,
+    "pow": 1,
+    "cmp": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "materialize": "full",
+   "notes": "Pad/mean computations folded into this stage's loads."
+  },
+  {
+   "id": "mtf_conv64",
+   "name": "optical MTF padded FFT conv per channel (f64)",
+   "source": [
+    "crates/hdrvdp/src/v3/pathway.rs:146-200",
+    "crates/hdrvdp/src/v3/fft64.rs:1963-2010"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 10,
+    "store": 10,
+    "mul": "10*log2(4*W*H)+12",
+    "add": "10*log2(4*W*H)+12",
+    "cmp": 2,
+    "cvt": 2
+   },
+   "bytes_read": 40,
+   "bytes_written": 40,
+   "access": "transform",
+   "radius": "W/2",
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "ingress_nits"
+   ],
+   "materialize": "full",
+   "notes": "2x lattice padding, conv_fft_pad_into per channel; rho grid + mtf_filter cached per (dims,ppd,a,b). Same cost model as v2."
+  },
+  {
+   "id": "pathway_trans",
+   "name": "spectral aging + photoreceptor transform chain",
+   "source": [
+    "crates/hdrvdp/src/v3/pathway.rs:210-330",
+    "crates/hdrvdp/src/v3/trans64.rs:145-200"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "mul": 4,
+    "add": 3,
+    "div": 1,
+    "pow": 2,
+    "cmp": 1,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "mtf_conv64"
+   ],
+   "materialize": "full",
+   "notes": "aging_optical_density_filter + cone/rod analog transforms (~12 flops/el)."
+  },
+  {
+   "id": "sp0_hi0",
+   "name": "sp0 hi0filt 9x9 stride-1 (f64)",
+   "source": [
+    "crates/hdrvdp/src/v3/spyr0.rs:254-338",
+    "crates/hdrvdp/src/v3/spyr0.rs:601-660"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 81,
+    "fma": 81,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "pathway_trans"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "sp0_lo0",
+   "name": "sp0 lo0filt 7x7 stride-1 (f64)",
+   "source": [
+    "crates/hdrvdp/src/v3/spyr0.rs:201-253",
+    "crates/hdrvdp/src/v3/spyr0.rs:601-660"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 49,
+    "fma": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "radius": 3,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "pathway_trans"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "sp0_bfilt",
+   "name": "sp0 bfilt 9x9 per level (1 isotropic band, f64)",
+   "source": [
+    "crates/hdrvdp/src/v3/spyr0.rs:512-600",
+    "crates/hdrvdp/src/v3/spyr0.rs:601-660"
+   ],
+   "levels": "SPYRH3",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f64",
+   "ops": {
+    "load": 81,
+    "fma": 81,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": "2**l",
+   "axis": "xy",
+   "depends_on": [
+    "sp0_lo0"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "sp0_lofilt_decim",
+   "name": "sp0 lofilt 13x13 stride-2 decimate (f64)",
+   "source": [
+    "crates/hdrvdp/src/v3/spyr0.rs:339-511",
+    "crates/hdrvdp/src/v3/spyr0.rs:601-660"
+   ],
+   "levels": "SPYRH3",
+   "chain": true,
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f64",
+   "ops": {
+    "load": 169,
+    "fma": 169,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "downsample",
+   "radius": 6,
+   "scale": "2**l",
+   "axis": "xy",
+   "depends_on": [
+    "sp0_lo0"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "adapt_maps",
+   "name": "l_mean_adapt + log_la + diff_mask pointwise",
+   "source": [
+    "crates/hdrvdp/src/v3/metric.rs:322-340"
+   ],
+   "images": 1,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "add": 2,
+    "log": 1,
+    "cmp": 2,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "axis": "none",
+   "depends_on": [
+    "pathway_trans"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "band_mask_core",
+   "name": "band_diff + sign_pow + apply_band normalisation + csf lerp",
+   "source": [
+    "crates/hdrvdp/src/v3/metric.rs:400-470"
+   ],
+   "images": 1,
+   "elements": "12*W*H/5",
+   "precision": "f64",
+   "ops": {
+    "load": 6,
+    "mul": 5,
+    "add": 4,
+    "div": 2,
+    "pow": 1,
+    "cmp": 2,
+    "store": 2
+   },
+   "bytes_read": 32,
+   "bytes_written": 16,
+   "access": "resample",
+   "radius": 1,
+   "scale": 1,
+   "axis": "xy",
+   "depends_on": [
+    "sp0_hi0",
+    "sp0_bfilt",
+    "sp0_lofilt_decim",
+    "adapt_maps"
+   ],
+   "materialize": "full",
+   "notes": "Per band-pair el: tb-rb diff, sign_pow^p, mask normaliser division, csf_b LUT lerp on resampled log10(l_adapt), mask_xn neighbours. ~2.4 band planes per input px."
+  },
+  {
+   "id": "baseband_fft",
+   "name": "baseband FFT2 dominant-frequency estimate (once per pair)",
+   "source": [
+    "crates/hdrvdp/src/v3/metric.rs:400-415",
+    "crates/hdrvdp/src/v3/fft64.rs:205-260"
+   ],
+   "images": 1,
+   "elements": "W*H/4**SPYRH3",
+   "precision": "f64",
+   "ops": {
+    "mul": "5*log2(W*H)",
+    "add": "5*log2(W*H)",
+    "sqrt": 1,
+    "fma": 1,
+    "load": 4,
+    "store": 4
+   },
+   "bytes_read": 32,
+   "bytes_written": 32,
+   "access": "transform",
+   "radius": 0,
+   "scale": "2**SPYRH3",
+   "axis": "none",
+   "depends_on": [
+    "sp0_lofilt_decim"
+   ],
+   "materialize": "full",
+   "notes": "One FFT2 over the smallest band + argmax magnitude scan; only for the base band."
+  },
+  {
+   "id": "q_err_fold",
+   "name": "per-band masked energy fold -> q_err -> q_jod",
+   "source": [
+    "crates/hdrvdp/src/v3/metric.rs:430-470"
+   ],
+   "images": 1,
+   "elements": "12*W*H/5",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "mul": 1,
+    "add": 2,
+    "cvt": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "axis": "none",
+   "span": "log2(W*H)",
+   "barrier": true,
+   "depends_on": [
+    "band_mask_core",
+    "baseband_fft"
+   ],
+   "materialize": "fused",
+   "notes": "Masked sum of d^2-ish normalised terms per band; scalar logistic -> q_jod folded into aggregate."
+  }
+ ]
+}

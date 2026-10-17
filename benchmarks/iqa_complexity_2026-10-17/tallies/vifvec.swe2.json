@@ -1,19 +1,28 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "vifvec",
- "cli_names": ["vifvec"],
+ "cli_names": [
+  "vifvec"
+ ],
  "counter": "swe2",
  "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
  "kind": "classic-fr",
  "params": {},
  "derived": {
-  "W2": "ceil(W/2)", "H2": "ceil(H/2)",
-  "W3": "ceil(W/4)", "H3": "ceil(H/4)",
-  "W4": "ceil(W/8)", "H4": "ceil(H/8)",
-  "NB1": "int(W/3)*int(H/3)", "NB2": "int(W2/3)*int(H2/3)",
-  "NB3": "int(W3/3)*int(H3/3)", "NB4": "int(W4/3)*int(H4/3)",
-  "IP1": "(int(W/3)-6)*(int(H/3)-6)", "IP2": "(int(W2/3)-4)*(int(H2/3)-4)",
-  "IP3": "(int(W3/3)-2)*(int(H3/3)-2)", "IP4": "(int(W4/3)-2)*(int(H4/3)-2)"
+  "W2": "ceil(W/2)",
+  "H2": "ceil(H/2)",
+  "W3": "ceil(W/4)",
+  "H3": "ceil(H/4)",
+  "W4": "ceil(W/8)",
+  "H4": "ceil(H/8)",
+  "NB1": "int(W/3)*int(H/3)",
+  "NB2": "int(W2/3)*int(H2/3)",
+  "NB3": "int(W3/3)*int(H3/3)",
+  "NB4": "int(W4/3)*int(H4/3)",
+  "IP1": "(int(W/3)-6)*(int(H/3)-6)",
+  "IP2": "(int(W2/3)-4)*(int(H2/3)-4)",
+  "IP3": "(int(W3/3)-2)*(int(H3/3)-2)",
+  "IP4": "(int(W4/3)-2)*(int(H4/3)-2)"
  },
  "assumptions": [
   "vifvec = vif::vifvec_rgb8 (lib.rs:530-544): u8-rounded round(0.299R+0.587G+0.114B) luma, f64 throughout (lib.rs:627-657). Requires min(W,H)>=72.",
@@ -26,167 +35,716 @@
   "M=3 blocks (vifvec.rs:39); SIGMA_NSQ=0.4, TOL=1e-15."
  ],
  "stages": [
-  {"id": "ingress", "name": "u8-rounded 0.299/0.587/0.114 luma f64",
-   "source": ["crates/vif/src/lib.rs:527-544", "crates/vif/src/lib.rs:627-657"],
-   "images": 2, "elements": "W*H", "precision": "f64",
-   "ops": {"load": 3, "cvt": 5, "mul": 3, "add": 2, "store": 1},
-   "bytes_read": 3, "bytes_written": 8, "access": "pointwise", "radius": 0, "span": "1"},
-
-  {"id": "lo0", "name": "lofilt 5x5 corrDn step1 (LO0)",
-   "source": ["crates/vif/src/vifvec.rs:99", "crates/vif/src/vifvec.rs:507-560", "crates/vif/src/vifvec.rs:921-923"],
-   "images": 2, "elements": "W*H", "precision": "f64",
-   "ops": {"mul": 25, "add": 25, "load": 25, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 2, "span": "25",
-   "depends_on": ["ingress"]},
-
-  {"id": "bands_l1", "name": "level1 band1+band4 corr 7x7 on lo0",
-   "source": ["crates/vif/src/vifvec.rs:939-965"],
-   "images": 2, "elements": "2*W*H", "precision": "f64",
-   "ops": {"mul": 49, "add": 49, "load": 49, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 3, "span": "49",
-   "depends_on": ["lo0"]},
-  {"id": "ds1", "name": "lo0 -> lo1: corrDn 9x9 step2",
-   "source": ["crates/vif/src/vifvec.rs:966-972"],
-   "images": 2, "elements": "W2*H2", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "load": 81, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "downsample", "axis": "xy", "radius": 4, "scale": 1, "span": "81",
-   "depends_on": ["lo0"]},
-  {"id": "bands_l2", "name": "level2 band1+band4 corr 7x7",
-   "source": ["crates/vif/src/vifvec.rs:939-965"],
-   "images": 2, "elements": "2*W2*H2", "precision": "f64",
-   "ops": {"mul": 49, "add": 49, "load": 49, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 3, "scale": 2, "span": "49",
-   "depends_on": ["ds1"]},
-  {"id": "ds2", "name": "lo1 -> lo2: corrDn 9x9 step2",
-   "source": ["crates/vif/src/vifvec.rs:966-972"],
-   "images": 2, "elements": "W3*H3", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "load": 81, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "downsample", "axis": "xy", "radius": 4, "scale": 2, "span": "81",
-   "depends_on": ["ds1"]},
-  {"id": "bands_l3", "name": "level3 band1+band4 corr 7x7",
-   "source": ["crates/vif/src/vifvec.rs:939-965"],
-   "images": 2, "elements": "2*W3*H3", "precision": "f64",
-   "ops": {"mul": 49, "add": 49, "load": 49, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 3, "scale": 4, "span": "49",
-   "depends_on": ["ds2"]},
-  {"id": "ds3", "name": "lo2 -> lo3: corrDn 9x9 step2",
-   "source": ["crates/vif/src/vifvec.rs:966-972"],
-   "images": 2, "elements": "W4*H4", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "load": 81, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "downsample", "axis": "xy", "radius": 4, "scale": 4, "span": "81",
-   "depends_on": ["ds2"]},
-  {"id": "bands_l4", "name": "level4 band1+band4 corr 7x7",
-   "source": ["crates/vif/src/vifvec.rs:939-965"],
-   "images": 2, "elements": "2*W4*H4", "precision": "f64",
-   "ops": {"mul": 49, "add": 49, "load": 49, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 3, "scale": 8, "span": "49",
-   "depends_on": ["ds3"]},
-
-  {"id": "gsm_l1", "name": "level1 2 subs: refparams mean+cu+eig+ss (ref only)",
-   "source": ["crates/vif/src/vifvec.rs:1088-1248"],
-   "images": 1, "elements": "2*(W-2)*(H-2)", "precision": "f64",
-   "ops": {"mul": 45, "add": 63, "load": 18, "div": "0.15"},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 1, "scale": 1, "span": "9",
-   "depends_on": ["bands_l1"],
-   "notes": "per pos: mean 9add+9ld, cu v-subs 9add + 45 pairs mul+add; eig ~5400/band amortized; ~1e-15 tol masks"},
-  {"id": "ss_l1", "name": "level1 2 subs: LU apply per 3x3 block (ss)",
-   "source": ["crates/vif/src/vifvec.rs:1200-1248", "crates/vif/src/vifvec.rs:1007-1028"],
-   "images": 1, "elements": "2*NB1", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "div": 10, "load": 9, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "block", "axis": "xy", "scale": 1, "span": "1",
-   "depends_on": ["gsm_l1"]},
-  {"id": "est_l1", "name": "level1 2 subs: winsize17 sliding-window GSM est",
-   "source": ["crates/vif/src/vifvec.rs:1458-1500", "crates/vif/src/vifvec.rs:1318-1440"],
-   "images": 1, "elements": "2*NB1", "precision": "f64",
-   "ops": {"mul": 873, "add": 1453, "load": 578, "div": 2, "cmp": 6, "store": 2},
-   "bytes_read": 8, "bytes_written": 16, "access": "block", "axis": "xy", "radius": 8, "scale": 1, "span": "289",
-   "depends_on": ["bands_l1"], "notes": "289-tap window: 3mul+5add+2ld per tap + channel_gain"},
-  {"id": "pool_l1", "name": "level1 2 subs: log2 pool x 9 eigenvalues (crop off=3)",
-   "source": ["crates/vif/src/vifvec.rs:1545-1700", "crates/vif/src/vifvec.rs:1983-2054"],
-   "images": 1, "elements": "2*IP1", "precision": "f64",
-   "ops": {"mul": 36, "add": 36, "div": 9, "log": 18, "load": 27},
-   "bytes_read": 24, "access": "reduction", "axis": "xy", "scale": 1, "span": "log2(NB1)", "barrier": true,
-   "depends_on": ["est_l1", "ss_l1"]},
-
-  {"id": "gsm_l2", "name": "level2 2 subs: refparams",
-   "source": ["crates/vif/src/vifvec.rs:1088-1248"],
-   "images": 1, "elements": "2*(W2-2)*(H2-2)", "precision": "f64",
-   "ops": {"mul": 45, "add": 63, "load": 18, "div": "0.15"},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 1, "scale": 2, "span": "9",
-   "depends_on": ["bands_l2"]},
-  {"id": "ss_l2", "name": "level2 2 subs: ss LU blocks",
-   "source": ["crates/vif/src/vifvec.rs:1200-1248"],
-   "images": 1, "elements": "2*NB2", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "div": 10, "load": 9, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "block", "axis": "xy", "scale": 2, "span": "1",
-   "depends_on": ["gsm_l2"]},
-  {"id": "est_l2", "name": "level2 2 subs: winsize9 GSM est",
-   "source": ["crates/vif/src/vifvec.rs:1458-1500"],
-   "images": 1, "elements": "2*NB2", "precision": "f64",
-   "ops": {"mul": 249, "add": 413, "load": 162, "div": 2, "cmp": 6, "store": 2},
-   "bytes_read": 8, "bytes_written": 16, "access": "block", "axis": "xy", "radius": 4, "scale": 2, "span": "81",
-   "depends_on": ["bands_l2"]},
-  {"id": "pool_l2", "name": "level2 2 subs: log2 pool x9 (crop off=2)",
-   "source": ["crates/vif/src/vifvec.rs:1545-1700"],
-   "images": 1, "elements": "2*IP2", "precision": "f64",
-   "ops": {"mul": 36, "add": 36, "div": 9, "log": 18, "load": 27},
-   "bytes_read": 24, "access": "reduction", "axis": "xy", "scale": 2, "span": "log2(NB2)", "barrier": true,
-   "depends_on": ["est_l2", "ss_l2"]},
-
-  {"id": "gsm_l3", "name": "level3 2 subs: refparams",
-   "source": ["crates/vif/src/vifvec.rs:1088-1248"],
-   "images": 1, "elements": "2*(W3-2)*(H3-2)", "precision": "f64",
-   "ops": {"mul": 45, "add": 63, "load": 18, "div": "0.15"},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 1, "scale": 4, "span": "9",
-   "depends_on": ["bands_l3"]},
-  {"id": "ss_l3", "name": "level3 2 subs: ss LU blocks",
-   "source": ["crates/vif/src/vifvec.rs:1200-1248"],
-   "images": 1, "elements": "2*NB3", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "div": 10, "load": 9, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "block", "axis": "xy", "scale": 4, "span": "1",
-   "depends_on": ["gsm_l3"]},
-  {"id": "est_l3", "name": "level3 2 subs: winsize5 GSM est",
-   "source": ["crates/vif/src/vifvec.rs:1458-1500"],
-   "images": 1, "elements": "2*NB3", "precision": "f64",
-   "ops": {"mul": 81, "add": 133, "load": 50, "div": 2, "cmp": 6, "store": 2},
-   "bytes_read": 8, "bytes_written": 16, "access": "block", "axis": "xy", "radius": 2, "scale": 4, "span": "25",
-   "depends_on": ["bands_l3"]},
-  {"id": "pool_l3", "name": "level3 2 subs: log2 pool x9 (crop off=1)",
-   "source": ["crates/vif/src/vifvec.rs:1545-1700"],
-   "images": 1, "elements": "2*IP3", "precision": "f64",
-   "ops": {"mul": 36, "add": 36, "div": 9, "log": 18, "load": 27},
-   "bytes_read": 24, "access": "reduction", "axis": "xy", "scale": 4, "span": "log2(NB3)", "barrier": true,
-   "depends_on": ["est_l3", "ss_l3"]},
-
-  {"id": "gsm_l4", "name": "level4 2 subs: refparams",
-   "source": ["crates/vif/src/vifvec.rs:1088-1248"],
-   "images": 1, "elements": "2*(W4-2)*(H4-2)", "precision": "f64",
-   "ops": {"mul": 45, "add": 63, "load": 18, "div": "0.15"},
-   "bytes_read": 8, "bytes_written": 8, "access": "stencil2d", "axis": "xy", "radius": 1, "scale": 8, "span": "9",
-   "depends_on": ["bands_l4"]},
-  {"id": "ss_l4", "name": "level4 2 subs: ss LU blocks",
-   "source": ["crates/vif/src/vifvec.rs:1200-1248"],
-   "images": 1, "elements": "2*NB4", "precision": "f64",
-   "ops": {"mul": 81, "add": 81, "div": 10, "load": 9, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "block", "axis": "xy", "scale": 8, "span": "1",
-   "depends_on": ["gsm_l4"]},
-  {"id": "est_l4", "name": "level4 2 subs: winsize3 GSM est",
-   "source": ["crates/vif/src/vifvec.rs:1458-1500"],
-   "images": 1, "elements": "2*NB4", "precision": "f64",
-   "ops": {"mul": 33, "add": 53, "load": 18, "div": 2, "cmp": 6, "store": 2},
-   "bytes_read": 8, "bytes_written": 16, "access": "block", "axis": "xy", "radius": 1, "scale": 8, "span": "9",
-   "depends_on": ["bands_l4"]},
-  {"id": "pool_l4", "name": "level4 2 subs: log2 pool x9 (crop off=1)",
-   "source": ["crates/vif/src/vifvec.rs:1545-1700"],
-   "images": 1, "elements": "2*IP4", "precision": "f64",
-   "ops": {"mul": 36, "add": 36, "div": 9, "log": 18, "load": 27},
-   "bytes_read": 24, "access": "reduction", "axis": "xy", "scale": 8, "span": "log2(NB4)", "barrier": true,
-   "depends_on": ["est_l4", "ss_l4"]},
-
-  {"id": "final", "name": "score = num/den over 8 subs x 9 lams",
-   "source": ["crates/vif/src/vifvec.rs:2043-2054"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"div": 1}, "access": "pointwise", "span": "1",
-   "depends_on": ["pool_l1", "pool_l2", "pool_l3", "pool_l4"]}
+  {
+   "id": "ingress",
+   "name": "u8-rounded 0.299/0.587/0.114 luma f64",
+   "source": [
+    "crates/vif/src/lib.rs:527-544",
+    "crates/vif/src/lib.rs:627-657"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 5,
+    "mul": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "lo0",
+   "name": "lofilt 5x5 corrDn step1 (LO0)",
+   "source": [
+    "crates/vif/src/vifvec.rs:99",
+    "crates/vif/src/vifvec.rs:507-560",
+    "crates/vif/src/vifvec.rs:921-923"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": 25,
+    "add": 25,
+    "load": 25,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 2,
+   "span": "25",
+   "depends_on": [
+    "ingress"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "bands_l1",
+   "name": "level1 band1+band4 corr 7x7 on lo0",
+   "source": [
+    "crates/vif/src/vifvec.rs:939-965"
+   ],
+   "images": 2,
+   "elements": "2*W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": 49,
+    "add": 49,
+    "load": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 3,
+   "span": "49",
+   "depends_on": [
+    "lo0"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ds1",
+   "name": "lo0 -> lo1: corrDn 9x9 step2",
+   "source": [
+    "crates/vif/src/vifvec.rs:966-972"
+   ],
+   "images": 2,
+   "elements": "W2*H2",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "load": 81,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 4,
+   "scale": 1,
+   "span": "81",
+   "depends_on": [
+    "lo0"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "bands_l2",
+   "name": "level2 band1+band4 corr 7x7",
+   "source": [
+    "crates/vif/src/vifvec.rs:939-965"
+   ],
+   "images": 2,
+   "elements": "2*W2*H2",
+   "precision": "f64",
+   "ops": {
+    "mul": 49,
+    "add": 49,
+    "load": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 3,
+   "scale": 2,
+   "span": "49",
+   "depends_on": [
+    "ds1"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ds2",
+   "name": "lo1 -> lo2: corrDn 9x9 step2",
+   "source": [
+    "crates/vif/src/vifvec.rs:966-972"
+   ],
+   "images": 2,
+   "elements": "W3*H3",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "load": 81,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 4,
+   "scale": 2,
+   "span": "81",
+   "depends_on": [
+    "ds1"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "bands_l3",
+   "name": "level3 band1+band4 corr 7x7",
+   "source": [
+    "crates/vif/src/vifvec.rs:939-965"
+   ],
+   "images": 2,
+   "elements": "2*W3*H3",
+   "precision": "f64",
+   "ops": {
+    "mul": 49,
+    "add": 49,
+    "load": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 3,
+   "scale": 4,
+   "span": "49",
+   "depends_on": [
+    "ds2"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ds3",
+   "name": "lo2 -> lo3: corrDn 9x9 step2",
+   "source": [
+    "crates/vif/src/vifvec.rs:966-972"
+   ],
+   "images": 2,
+   "elements": "W4*H4",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "load": 81,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 4,
+   "scale": 4,
+   "span": "81",
+   "depends_on": [
+    "ds2"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "bands_l4",
+   "name": "level4 band1+band4 corr 7x7",
+   "source": [
+    "crates/vif/src/vifvec.rs:939-965"
+   ],
+   "images": 2,
+   "elements": "2*W4*H4",
+   "precision": "f64",
+   "ops": {
+    "mul": 49,
+    "add": 49,
+    "load": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 3,
+   "scale": 8,
+   "span": "49",
+   "depends_on": [
+    "ds3"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "gsm_l1",
+   "name": "level1 2 subs: refparams mean+cu+eig+ss (ref only)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1088-1248"
+   ],
+   "images": 1,
+   "elements": "2*(W-2)*(H-2)",
+   "precision": "f64",
+   "ops": {
+    "mul": 45,
+    "add": 63,
+    "load": 18,
+    "div": "0.15"
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "scale": 1,
+   "span": "9",
+   "depends_on": [
+    "bands_l1"
+   ],
+   "notes": "per pos: mean 9add+9ld, cu v-subs 9add + 45 pairs mul+add; eig ~5400/band amortized; ~1e-15 tol masks",
+   "materialize": "full"
+  },
+  {
+   "id": "ss_l1",
+   "name": "level1 2 subs: LU apply per 3x3 block (ss)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1200-1248",
+    "crates/vif/src/vifvec.rs:1007-1028"
+   ],
+   "images": 1,
+   "elements": "2*NB1",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "div": 10,
+    "load": 9,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "block",
+   "axis": "xy",
+   "scale": 1,
+   "span": "1",
+   "depends_on": [
+    "gsm_l1"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "est_l1",
+   "name": "level1 2 subs: winsize17 sliding-window GSM est",
+   "source": [
+    "crates/vif/src/vifvec.rs:1458-1500",
+    "crates/vif/src/vifvec.rs:1318-1440"
+   ],
+   "images": 1,
+   "elements": "2*NB1",
+   "precision": "f64",
+   "ops": {
+    "mul": 873,
+    "add": 1453,
+    "load": 578,
+    "div": 2,
+    "cmp": 6,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 16,
+   "access": "block",
+   "axis": "xy",
+   "radius": 8,
+   "scale": 1,
+   "span": "289",
+   "depends_on": [
+    "bands_l1"
+   ],
+   "notes": "289-tap window: 3mul+5add+2ld per tap + channel_gain",
+   "materialize": "full"
+  },
+  {
+   "id": "pool_l1",
+   "name": "level1 2 subs: log2 pool x 9 eigenvalues (crop off=3)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1545-1700",
+    "crates/vif/src/vifvec.rs:1983-2054"
+   ],
+   "images": 1,
+   "elements": "2*IP1",
+   "precision": "f64",
+   "ops": {
+    "mul": 36,
+    "add": 36,
+    "div": 9,
+    "log": 18,
+    "load": 27
+   },
+   "bytes_read": 24,
+   "access": "reduction",
+   "axis": "xy",
+   "scale": 1,
+   "span": "log2(NB1)",
+   "barrier": true,
+   "depends_on": [
+    "est_l1",
+    "ss_l1"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "gsm_l2",
+   "name": "level2 2 subs: refparams",
+   "source": [
+    "crates/vif/src/vifvec.rs:1088-1248"
+   ],
+   "images": 1,
+   "elements": "2*(W2-2)*(H2-2)",
+   "precision": "f64",
+   "ops": {
+    "mul": 45,
+    "add": 63,
+    "load": 18,
+    "div": "0.15"
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "scale": 2,
+   "span": "9",
+   "depends_on": [
+    "bands_l2"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ss_l2",
+   "name": "level2 2 subs: ss LU blocks",
+   "source": [
+    "crates/vif/src/vifvec.rs:1200-1248"
+   ],
+   "images": 1,
+   "elements": "2*NB2",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "div": 10,
+    "load": 9,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "block",
+   "axis": "xy",
+   "scale": 2,
+   "span": "1",
+   "depends_on": [
+    "gsm_l2"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "est_l2",
+   "name": "level2 2 subs: winsize9 GSM est",
+   "source": [
+    "crates/vif/src/vifvec.rs:1458-1500"
+   ],
+   "images": 1,
+   "elements": "2*NB2",
+   "precision": "f64",
+   "ops": {
+    "mul": 249,
+    "add": 413,
+    "load": 162,
+    "div": 2,
+    "cmp": 6,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 16,
+   "access": "block",
+   "axis": "xy",
+   "radius": 4,
+   "scale": 2,
+   "span": "81",
+   "depends_on": [
+    "bands_l2"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "pool_l2",
+   "name": "level2 2 subs: log2 pool x9 (crop off=2)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1545-1700"
+   ],
+   "images": 1,
+   "elements": "2*IP2",
+   "precision": "f64",
+   "ops": {
+    "mul": 36,
+    "add": 36,
+    "div": 9,
+    "log": 18,
+    "load": 27
+   },
+   "bytes_read": 24,
+   "access": "reduction",
+   "axis": "xy",
+   "scale": 2,
+   "span": "log2(NB2)",
+   "barrier": true,
+   "depends_on": [
+    "est_l2",
+    "ss_l2"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "gsm_l3",
+   "name": "level3 2 subs: refparams",
+   "source": [
+    "crates/vif/src/vifvec.rs:1088-1248"
+   ],
+   "images": 1,
+   "elements": "2*(W3-2)*(H3-2)",
+   "precision": "f64",
+   "ops": {
+    "mul": 45,
+    "add": 63,
+    "load": 18,
+    "div": "0.15"
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "scale": 4,
+   "span": "9",
+   "depends_on": [
+    "bands_l3"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ss_l3",
+   "name": "level3 2 subs: ss LU blocks",
+   "source": [
+    "crates/vif/src/vifvec.rs:1200-1248"
+   ],
+   "images": 1,
+   "elements": "2*NB3",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "div": 10,
+    "load": 9,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "block",
+   "axis": "xy",
+   "scale": 4,
+   "span": "1",
+   "depends_on": [
+    "gsm_l3"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "est_l3",
+   "name": "level3 2 subs: winsize5 GSM est",
+   "source": [
+    "crates/vif/src/vifvec.rs:1458-1500"
+   ],
+   "images": 1,
+   "elements": "2*NB3",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 133,
+    "load": 50,
+    "div": 2,
+    "cmp": 6,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 16,
+   "access": "block",
+   "axis": "xy",
+   "radius": 2,
+   "scale": 4,
+   "span": "25",
+   "depends_on": [
+    "bands_l3"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "pool_l3",
+   "name": "level3 2 subs: log2 pool x9 (crop off=1)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1545-1700"
+   ],
+   "images": 1,
+   "elements": "2*IP3",
+   "precision": "f64",
+   "ops": {
+    "mul": 36,
+    "add": 36,
+    "div": 9,
+    "log": 18,
+    "load": 27
+   },
+   "bytes_read": 24,
+   "access": "reduction",
+   "axis": "xy",
+   "scale": 4,
+   "span": "log2(NB3)",
+   "barrier": true,
+   "depends_on": [
+    "est_l3",
+    "ss_l3"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "gsm_l4",
+   "name": "level4 2 subs: refparams",
+   "source": [
+    "crates/vif/src/vifvec.rs:1088-1248"
+   ],
+   "images": 1,
+   "elements": "2*(W4-2)*(H4-2)",
+   "precision": "f64",
+   "ops": {
+    "mul": 45,
+    "add": 63,
+    "load": 18,
+    "div": "0.15"
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 1,
+   "scale": 8,
+   "span": "9",
+   "depends_on": [
+    "bands_l4"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ss_l4",
+   "name": "level4 2 subs: ss LU blocks",
+   "source": [
+    "crates/vif/src/vifvec.rs:1200-1248"
+   ],
+   "images": 1,
+   "elements": "2*NB4",
+   "precision": "f64",
+   "ops": {
+    "mul": 81,
+    "add": 81,
+    "div": 10,
+    "load": 9,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "block",
+   "axis": "xy",
+   "scale": 8,
+   "span": "1",
+   "depends_on": [
+    "gsm_l4"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "est_l4",
+   "name": "level4 2 subs: winsize3 GSM est",
+   "source": [
+    "crates/vif/src/vifvec.rs:1458-1500"
+   ],
+   "images": 1,
+   "elements": "2*NB4",
+   "precision": "f64",
+   "ops": {
+    "mul": 33,
+    "add": 53,
+    "load": 18,
+    "div": 2,
+    "cmp": 6,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 16,
+   "access": "block",
+   "axis": "xy",
+   "radius": 1,
+   "scale": 8,
+   "span": "9",
+   "depends_on": [
+    "bands_l4"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "pool_l4",
+   "name": "level4 2 subs: log2 pool x9 (crop off=1)",
+   "source": [
+    "crates/vif/src/vifvec.rs:1545-1700"
+   ],
+   "images": 1,
+   "elements": "2*IP4",
+   "precision": "f64",
+   "ops": {
+    "mul": 36,
+    "add": 36,
+    "div": 9,
+    "log": 18,
+    "load": 27
+   },
+   "bytes_read": 24,
+   "access": "reduction",
+   "axis": "xy",
+   "scale": 8,
+   "span": "log2(NB4)",
+   "barrier": true,
+   "depends_on": [
+    "est_l4",
+    "ss_l4"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "final",
+   "name": "score = num/den over 8 subs x 9 lams",
+   "source": [
+    "crates/vif/src/vifvec.rs:2043-2054"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "pool_l1",
+    "pool_l2",
+    "pool_l3",
+    "pool_l4"
+   ],
+   "materialize": "fused"
+  }
  ]
 }

@@ -7,7 +7,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk fma = 3905358080 MACs/pair @224^2 (stlpips_vgg_full.onnx; internal shift replication included); elems 58501418"
  ],
@@ -32,11 +32,12 @@
    "class": "intrinsic",
    "span": "1",
    "bytes_read": 3,
-   "bytes_written": 12
+   "bytes_written": 12,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "st-LPIPS trunk pair graph (shift-tolerant evals + taps)",
+   "id": "trunk_conv",
+   "name": "st-LPIPS trunk pair graph (shift-tolerant evals + taps) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/lpips.rs:201-297"
    ],
@@ -44,13 +45,37 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "fma": 77833.1887755102,
-    "add": 1165.9243064413265
+    "fma": 77833.18877551019
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['stlpips_vgg_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "st-LPIPS trunk pair graph (shift-tolerant evals + taps) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-297"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "add": 1239.9528659119899,
+    "div": 134.0561224489796,
+    "cmp": 763.7448979591837,
+    "pow": 192.0841836734694,
+    "sqrt": 2.00015943877551
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -67,7 +92,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

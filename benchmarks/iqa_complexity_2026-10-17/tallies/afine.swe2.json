@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "CLIP ViT-B/32 trunk: 12 blocks x (qkv 2304 + proj 768 + mlp 2x3072) x768/token + 2 attn matmuls (12 heads x 64) \u2014 afine.rs:43-51",
   "cross-check: onnx_macs counted 231,211,008 MACs for the two patch convs @224^2 = 49 tokens x 2,359,296 x 2 imgs exactly",
@@ -33,11 +33,12 @@
    "axis": "xy",
    "class": "intrinsic",
    "span": "2",
-   "radius": 2
+   "radius": 2,
+   "materialize": "full"
   },
   {
-   "id": "patch_embed",
-   "name": "ViT-B/32 patch conv 32x32x3->768 per token (pair)",
+   "id": "patch_embed_conv",
+   "name": "patch conv 32x32 (Conv)",
    "source": [
     "crates/zenmetrics-nn/src/afine.rs:43-70"
    ],
@@ -47,16 +48,15 @@
    "ops": {
     "fma": 2359296
    },
-   "access": "block",
-   "axis": "xy",
-   "class": "intrinsic",
-   "span": "W"
+   "materialize": "full",
+   "notes": "single Conv per token",
+   "access": "block"
   },
   {
-   "id": "blocks",
-   "name": "12 ViT-B blocks: qkv+proj+mlp linear, per token (pair)",
+   "id": "blocks_matmul",
+   "name": "12 transformer blocks QKV/MLP (MatMul+Gemm)",
    "source": [
-    "crates/zenmetrics-nn/src/afine.rs:43-120"
+    "crates/zenmetrics-nn/src/afine.rs:43-70"
    ],
    "images": 1,
    "elements": "2*ceil(W/32)*ceil(H/32)",
@@ -64,14 +64,12 @@
    "ops": {
     "fma": 84934656
    },
-   "access": "block",
-   "axis": "xy",
-   "class": "intrinsic",
-   "span": "W"
+   "materialize": "full",
+   "access": "block"
   },
   {
-   "id": "attn",
-   "name": "attention matmuls 24*64*S^2 per img, S=token count",
+   "id": "attn_matmul",
+   "name": "attention score/value MatMuls (T^2)",
    "source": [
     "crates/zenmetrics-nn/src/afine.rs:43-70"
    ],
@@ -81,16 +79,14 @@
    "ops": {
     "fma": 18432
    },
-   "access": "block",
-   "axis": "xy",
-   "class": "intrinsic",
-   "span": "W"
+   "materialize": "full",
+   "access": "block"
   },
   {
-   "id": "heads",
-   "name": "Rust heads: proj_head 768x1542 + dhead weights",
+   "id": "heads_matmul",
+   "name": "projection heads (Gemm)",
    "source": [
-    "crates/zenmetrics-nn/src/afine.rs:104-160"
+    "crates/zenmetrics-nn/src/afine.rs:43-120"
    ],
    "images": 1,
    "elements": "1",
@@ -99,10 +95,29 @@
     "fma": 1193472,
     "add": 200
    },
-   "access": "pointwise",
-   "axis": "none",
-   "class": "intrinsic",
-   "span": "1"
+   "materialize": "full",
+   "access": "block"
+  },
+  {
+   "id": "pointwise",
+   "name": "activations/norm/elem (LN,Erf,Softmax,Add)",
+   "source": [
+    "crates/zenmetrics-nn/models/afine/export.py:1-80"
+   ],
+   "images": 1,
+   "elements": "2*ceil(W/32)*ceil(H/32)",
+   "precision": "f32",
+   "ops": {
+    "add": 3103.8878,
+    "div": 16.0,
+    "exp": 15.9694,
+    "mul": 3104.0306,
+    "pow": 0.0408,
+    "sqrt": 0.7347
+   },
+   "materialize": "full",
+   "notes": "global elem totals /98 tokens; movement ops excluded; rten materializes activations",
+   "access": "pointwise"
   }
  ]
 }

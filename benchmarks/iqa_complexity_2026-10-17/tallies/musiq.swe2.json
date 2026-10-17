@@ -27,11 +27,12 @@
     "load": 3075,
     "store": 3075
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
-   "id": "graph",
-   "name": "musiq transformer",
+   "id": "graph_conv",
+   "name": "musiq transformer [conv]",
    "source": [
     "crates/zenmetrics-nn/src/musiq.rs:120-240"
    ],
@@ -39,10 +40,47 @@
    "elements": "49+144+ceil(W/32)*ceil(H/32)",
    "precision": "f32",
    "ops": {
-    "fma": 129325,
-    "add": 1156
+    "fma": 430.7545610475966
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full",
+   "notes": "op-type split from ['musiq'] by_op: conv MACs"
+  },
+  {
+   "id": "graph_matmul",
+   "name": "musiq transformer [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+   ],
+   "images": 1,
+   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 128894.2454389524
+   },
+   "access": "pointwise",
+   "materialize": "full",
+   "notes": "op-type split from ['musiq'] by_op: matmul MACs"
+  },
+  {
+   "id": "graph_pointwise",
+   "name": "musiq transformer [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+   ],
+   "images": 1,
+   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "precision": "f32",
+   "ops": {
+    "add": 1610.7078223991537,
+    "div": 0.07253853751282661,
+    "mul": 563.5674419094742,
+    "cmp": 2.367865117382983,
+    "exp": 83.63693375228908
+   },
+   "access": "pointwise",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   }
  ]
 }

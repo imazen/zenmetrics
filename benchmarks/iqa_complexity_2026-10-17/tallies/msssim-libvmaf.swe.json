@@ -1,7 +1,9 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "msssim-libvmaf",
- "cli_names": ["msssim-libvmaf"],
+ "cli_names": [
+  "msssim-libvmaf"
+ ],
  "counter": "swe",
  "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
  "kind": "classic-fr",
@@ -11,51 +13,204 @@
   "float_ms_ssim_scales (libvmaf.rs:631-693): FIVE fixed levels; per level iqa_ssim (identical kernel to ssim-libvmaf tally) then decimate with LPF9 (9x9 2D 9/7-biorthogonal kernel, libvmaf.rs:44-54,106-212) factor 2, symmetric boundary extension.",
   "LPF9 decimate is a full 2D 9x9 convolution at quarter output density: 81 fma + ~81 ld per out el (interior path; borders pad via sym()).",
   "iqa_ssim per level: 3 product planes (r2,d2,rd muls) + 5 separable 11-tap Gaussian convs (h+v) + per-valid-el l/c/s rationals + 4 f64 accumulations. Valid region (w-10)x(h-10) modeled as W*H.",
-  "ms product: pow(mssim,a5)*prod over levels of c^beta*s^gamma — ~15 f64 flops once.",
+  "ms product: pow(mssim,a5)*prod over levels of c^beta*s^gamma \u2014 ~15 f64 flops once.",
   "Level dims halve exactly (w/2 + w&1 style, libvmaf.rs:111-112) ~ ceil; modeled ceil(W/2**l)."
  ],
  "stages": [
-  {"id": "studio601", "name": "RGB8 -> studio-swing BT.601 u8 Y -> f32", "source": ["crates/zenmetrics-cli/src/metrics/mod.rs:3196-3216", "crates/msssim/src/libvmaf.rs:515-535"],
-   "images": 2, "elements": "W*H", "precision": "u8",
-   "ops": {"load": 3, "mul": 3, "add": 4, "cvt": 3, "cmp": 2, "store": 1},
-   "bytes_read": 3, "bytes_written": 1, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1"},
-  {"id": "lpf_decim", "name": "9x9 2D 9/7-lpf decimate to next level", "source": ["crates/msssim/src/libvmaf.rs:44-54,106-212"],
+  {
+   "id": "studio601",
+   "name": "RGB8 -> studio-swing BT.601 u8 Y -> f32",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/mod.rs:3196-3216",
+    "crates/msssim/src/libvmaf.rs:515-535"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "u8",
+   "ops": {
+    "load": 3,
+    "mul": 3,
+    "add": 4,
+    "cvt": 3,
+    "cmp": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 1,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "lpf_decim",
+   "name": "9x9 2D 9/7-lpf decimate to next level",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:44-54,106-212"
+   ],
    "levels": "4",
-   "images": 2, "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "f32",
-   "ops": {"load": 81, "fma": 81, "store": 1},
-   "bytes_read": 324, "bytes_written": 4, "access": "downsample", "radius": 4, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["studio601"],
-   "notes": "81-tap full 2D kernel per out el; border taps via sym() same count."},
-  {"id": "sqmul", "name": "r^2, d^2, r*d product planes", "source": ["crates/msssim/src/libvmaf.rs:464-490"],
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 81,
+    "fma": 81,
+    "store": 1
+   },
+   "bytes_read": 324,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 4,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "studio601"
+   ],
+   "notes": "81-tap full 2D kernel per out el; border taps via sym() same count.",
+   "materialize": "full"
+  },
+  {
+   "id": "sqmul",
+   "name": "r^2, d^2, r*d product planes",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:464-490"
+   ],
    "levels": "5",
-   "images": 1, "elements": "3*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 2, "mul": 1, "store": 1},
-   "bytes_read": 8, "bytes_written": 4, "access": "pointwise", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "1", "depends_on": ["studio601", "lpf_decim"]},
-  {"id": "gauss_h", "name": "11-tap Gaussian horizontal x5 planes", "source": ["crates/msssim/src/libvmaf.rs:214-287,36-40"],
+   "images": 1,
+   "elements": "3*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "studio601",
+    "lpf_decim"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "gauss_h",
+   "name": "11-tap Gaussian horizontal x5 planes",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:214-287,36-40"
+   ],
    "levels": "5",
-   "images": 1, "elements": "5*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 11, "fma": 11, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "sep_stencil", "radius": 5, "scale": "2**l", "axis": "x",
-   "span": "1", "depends_on": ["studio601", "lpf_decim", "sqmul"]},
-  {"id": "gauss_v", "name": "11-tap Gaussian vertical x5 planes", "source": ["crates/msssim/src/libvmaf.rs:214-287"],
+   "images": 1,
+   "elements": "5*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 11,
+    "fma": 11,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "studio601",
+    "lpf_decim",
+    "sqmul"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "gauss_v",
+   "name": "11-tap Gaussian vertical x5 planes",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:214-287"
+   ],
    "levels": "5",
-   "images": 1, "elements": "5*ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 11, "fma": 11, "store": 1},
-   "bytes_read": 4, "bytes_written": 4, "access": "sep_stencil", "radius": 5, "scale": "2**l", "axis": "y",
-   "span": "1", "depends_on": ["gauss_h"]},
-  {"id": "lcs_fold", "name": "per-el l/c/s + f64 accumulate per level", "source": ["crates/msssim/src/libvmaf.rs:309-431,493-513"],
+   "images": 1,
+   "elements": "5*ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 11,
+    "fma": 11,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "gauss_h"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "lcs_fold",
+   "name": "per-el l/c/s + f64 accumulate per level",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:309-431,493-513"
+   ],
    "levels": "5",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "f32",
-   "ops": {"load": 5, "mul": 9, "add": 10, "div": 3, "cvt": 4},
-   "bytes_read": 20, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "log2(W*H/4**l)", "depends_on": ["gauss_v"], "barrier": true},
-  {"id": "prod", "name": "ms-ssim weighted product over 5 level means", "source": ["crates/msssim/src/libvmaf.rs:56-58,640-693"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"pow": 10, "mul": 9},
-   "bytes_read": 80, "bytes_written": 8, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["lcs_fold"],
-   "notes": "alphas only at level 4; betas=gammas all levels -> ~5 pow + products."}
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "mul": 9,
+    "add": 10,
+    "div": 3,
+    "cvt": 4
+   },
+   "bytes_read": 20,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2(W*H/4**l)",
+   "depends_on": [
+    "gauss_v"
+   ],
+   "barrier": true,
+   "materialize": "fused"
+  },
+  {
+   "id": "prod",
+   "name": "ms-ssim weighted product over 5 level means",
+   "source": [
+    "crates/msssim/src/libvmaf.rs:56-58,640-693"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "pow": 10,
+    "mul": 9
+   },
+   "bytes_read": 80,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "lcs_fold"
+   ],
+   "notes": "alphas only at level 4; betas=gammas all levels -> ~5 pow + products.",
+   "materialize": "fused"
+  }
  ]
 }

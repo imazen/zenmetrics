@@ -47,7 +47,8 @@
    "scale": 1,
    "axis": "none",
    "span": "1",
-   "notes": "0.2989R+0.5870G+0.1140B + round_half_to_even (cvt)."
+   "notes": "0.2989R+0.5870G+0.1140B + round_half_to_even (cvt).",
+   "materialize": "full"
   },
   {
    "id": "pad_copy",
@@ -70,11 +71,42 @@
    "scale": 1,
    "axis": "none",
    "span": "1",
-   "notes": "sw==work_w at all default eval shapes -> copy_from_slice only."
+   "notes": "sw==work_w at all default eval shapes -> copy_from_slice only.",
+   "materialize": "full"
   },
   {
-   "id": "gauss_reduce",
-   "name": "binom5 reduce: corr_dn h+v intrinsic taps -> G[l+1]",
+   "id": "gauss_reduce_h",
+   "name": "binom5 reduce: horizontal correlate + decimate",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:271-278",
+    "crates/iwssim/src/simd_kernels.rs:1180-1265"
+   ],
+   "levels": "S-1",
+   "chain": true,
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 5,
+    "fma": 5,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "pad_copy"
+   ],
+   "notes": "corr_dn_h writes scratch = h_cur*w_nxt, a FULL intermediate plane (pyramid.rs:272-276,579-583) - each output row correlates full-width into corr_row then keeps even cols (waste in gauss_h_waste).",
+   "materialize": "full"
+  },
+  {
+   "id": "gauss_reduce_v",
+   "name": "binom5 reduce: vertical pass",
    "source": [
     "crates/iwssim/src/pyramid.rs:271-278",
     "crates/iwssim/src/simd_kernels.rs:1180-1265"
@@ -85,8 +117,8 @@
    "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
    "precision": "f32",
    "ops": {
-    "load": 10,
-    "fma": 10,
+    "load": 5,
+    "fma": 5,
     "store": 1
    },
    "bytes_read": 4,
@@ -94,12 +126,13 @@
    "access": "downsample",
    "radius": 2,
    "scale": "2**l",
-   "axis": "xy",
+   "axis": "y",
    "span": "1",
    "depends_on": [
-    "pad_copy"
+    "gauss_reduce_h"
    ],
-   "notes": "Per out el: h 5 fma+5 ld (needed even positions) + v 5 fma+5 ld + 1 st. radius 2 at scale-l grid; chain accumulates pyramid halo."
+   "notes": "corr_dn_v over the scratch plane emits the decimated level (full).",
+   "materialize": "full"
   },
   {
    "id": "gauss_h_waste",
@@ -124,11 +157,41 @@
    "scale": "2**l",
    "axis": "x",
    "span": "1",
-   "notes": "Full-width correlate + decimate: 1 unused corr el per output (5 fma + 5 ld + ~2 corr_row st) + decimate gather (1 ld + 1 st)."
+   "notes": "Full-width correlate + decimate: 1 unused corr el per output (5 fma + 5 ld + ~2 corr_row st) + decimate gather (1 ld + 1 st).",
+   "materialize": "strip"
   },
   {
-   "id": "expand",
-   "name": "up_conv h+v of G[l+1] to level-l dims (zero-insert + binom5)",
+   "id": "expand_h",
+   "name": "LP expand: horizontal upconv",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:244-249",
+    "crates/iwssim/src/simd_kernels.rs:1267-1560"
+   ],
+   "levels": "S-1",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 2.5,
+    "fma": 2.5,
+    "store": 0.5
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "upsample",
+   "radius": 1,
+   "scale": "2**(l+1)",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "gauss_reduce_v"
+   ],
+   "notes": "h-pass: ~N_l/2 elements (half-height rows, full upsampled width); parity-split taps avg 2.5 fma; writes the row-expanded intermediate plane.",
+   "materialize": "full"
+  },
+  {
+   "id": "expand_v",
+   "name": "LP expand: vertical upconv",
    "source": [
     "crates/iwssim/src/pyramid.rs:244-249",
     "crates/iwssim/src/simd_kernels.rs:1267-1560"
@@ -138,21 +201,22 @@
    "elements": "ceil(W/2**l)*ceil(H/2**l)",
    "precision": "f32",
    "ops": {
-    "load": 3.75,
-    "fma": 3.75,
-    "store": 1.5
+    "load": 2.5,
+    "fma": 2.5,
+    "store": 1
    },
-   "bytes_read": 1,
+   "bytes_read": 4,
    "bytes_written": 4,
    "access": "upsample",
    "radius": 1,
    "scale": "2**(l+1)",
-   "axis": "xy",
+   "axis": "y",
    "span": "1",
    "depends_on": [
-    "gauss_reduce"
+    "expand_h"
    ],
-   "notes": "Parity split: even outs 3 fma, odd 2 fma per pass; h-pass covers h[l+1] (~half) -> 1.25, v 2.5 -> ~3.75 fma/ld per fine el; +hscratch 0.5 st."
+   "notes": "v-pass writes the full expanded plane read by lp_sub.",
+   "materialize": "full"
   },
   {
    "id": "lp_sub",
@@ -177,14 +241,45 @@
    "axis": "none",
    "span": "1",
    "depends_on": [
-    "gauss_reduce",
-    "expand"
+    "gauss_reduce_v",
+    "expand_v"
    ],
-   "notes": "Coarsest level's lp IS the Gaussian residual (no subtract) -> counted anyway, ~1/256 overcount."
+   "notes": "Coarsest level's lp IS the Gaussian residual (no subtract) -> counted anyway, ~1/256 overcount.",
+   "materialize": "full"
   },
   {
-   "id": "cs_stats",
-   "name": "11x11-valid Gaussian moments + cs combine per scale",
+   "id": "cs_stats_h",
+   "name": "cs stats: 11-tap horizontal pass on 5 planes",
+   "source": [
+    "crates/iwssim/src/ssim.rs:31-139",
+    "crates/iwssim/src/simd_kernels.rs:503-743,116-206"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-10)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 55,
+    "fma": 55,
+    "mul": 3,
+    "store": 5
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "lp_sub"
+   ],
+   "notes": "h-pass on (w_l-10) x h_l per plane writes h_scratch = h*cs_w, a full intermediate plane (ssim.rs:94-127); the 3 product muls fuse into its input gather (ssim_gauss_product_h_pass).",
+   "materialize": "full"
+  },
+  {
+   "id": "cs_stats_v",
+   "name": "cs stats: vertical pass + combine",
    "source": [
     "crates/iwssim/src/ssim.rs:31-139",
     "crates/iwssim/src/simd_kernels.rs:503-743,116-206"
@@ -194,25 +289,26 @@
    "elements": "(ceil(W/2**l)-10)*(ceil(H/2**l)-10)",
    "precision": "f32",
    "ops": {
-    "load": 121,
-    "fma": 110,
-    "mul": 8,
+    "load": 66,
+    "fma": 55,
+    "mul": 5,
     "add": 5,
     "rcp": 1,
     "cmp": 2,
-    "store": 11
+    "store": 6
    },
-   "bytes_read": 8,
+   "bytes_read": 4,
    "bytes_written": 4,
    "access": "sep_stencil",
    "radius": 5,
    "scale": "2**l",
-   "axis": "xy",
+   "axis": "y",
    "span": "1",
    "depends_on": [
-    "lp_sub"
+    "cs_stats_h"
    ],
-   "notes": "5 planes x (h 11fma + v 11fma) + 3 product muls + combine (5mul 5add rcp 2cmp). h-pass runs on (h_l, w_l-10) ~1.01x cs els. Coarsest scale's lp = residual G (depends gauss_reduce transitively via lp_sub at l<4; stage dep covers it)."
+   "notes": "v-pass over the 5 intermediates (valid window h_l-10) + combine (5mul 5add rcp 2cmp) writing the 6 stat planes.",
+   "materialize": "full"
   },
   {
    "id": "cs_lum",
@@ -239,9 +335,10 @@
    "axis": "none",
    "span": "1",
    "depends_on": [
-    "cs_stats"
+    "cs_stats_v"
    ],
-   "notes": "l = (2 m1 m2 + C1)/(m1^2+m2^2+C1) fused into cs_combine at s=4 only; in-place (no extra traffic)."
+   "notes": "l = (2 m1 m2 + C1)/(m1^2+m2^2+C1) fused into cs_combine at s=4 only; in-place (no extra traffic).",
+   "materialize": "fused"
   },
   {
    "id": "iw_box_gain",
@@ -273,7 +370,8 @@
    "depends_on": [
     "lp_sub"
    ],
-   "notes": "Per el: 9 taps x (2 ld + 2 add + 3 fma) then gain: 8 mul + 4 add + div + fma + 4 cmp + 2 st. Reads lp_ref+lp_dis."
+   "notes": "Per el: 9 taps x (2 ld + 2 add + 3 fma) then gain: 8 mul + 4 add + div + fma + 4 cmp + 2 st. Reads lp_ref+lp_dis.",
+   "materialize": "full"
   },
   {
    "id": "iw_parent",
@@ -302,7 +400,8 @@
    "depends_on": [
     "lp_sub"
    ],
-   "notes": "Fused bilinear t1 cells: v0+wx(v1-v0) twice + wy lerp -> 3 fma + 2 sub per out el; borders/corners negligible; crop to (w_l,h_l)."
+   "notes": "Fused bilinear t1 cells: v0+wx(v1-v0) twice + wy lerp -> 3 fma + 2 sub per out el; borders/corners negligible; crop to (w_l,h_l).",
+   "materialize": "full"
   },
   {
    "id": "iw_gram",
@@ -332,7 +431,8 @@
     "iw_parent"
    ],
    "barrier": true,
-   "notes": "55 mul+add pairs per px (big_n=10; s=3 is 45 - counted at parent-ful). Taps read lp_ref stencil + parent band. Global Gram per scale."
+   "notes": "55 mul+add pairs per px (big_n=10; s=3 is 45 - counted at parent-ful). Taps read lp_ref stencil + parent band. Global Gram per scale.",
+   "materialize": "fused"
   },
   {
    "id": "iw_eig",
@@ -362,7 +462,8 @@
    "depends_on": [
     "iw_gram"
    ],
-   "notes": "Constant per scale: ~45 Jacobi rotations x ~5 sweeps (rot ~ 4 trig-class + 2n row ops each side) + 10x10 invert ~ n^3/3 + mirror/normalize ~200 ops. Rough constant estimate."
+   "notes": "Constant per scale: ~45 Jacobi rotations x ~5 sweeps (rot ~ 4 trig-class + 2n row ops each side) + 10x10 invert ~ n^3/3 + mirror/normalize ~200 ops. Rough constant estimate.",
+   "materialize": "fused"
   },
   {
    "id": "iw_quadform",
@@ -391,7 +492,8 @@
    "depends_on": [
     "iw_eig"
    ],
-   "notes": "inner big_n^2=100 fma + outer big_n=10 fma + /N div; 9 taps + parent load."
+   "notes": "inner big_n^2=100 fma + outer big_n=10 fma + /N div; 9 taps + parent load.",
+   "materialize": "full"
   },
   {
    "id": "iw_infow",
@@ -424,7 +526,8 @@
     "iw_box_gain",
     "iw_quadform"
    ],
-   "notes": "Per px: opg fma + (vv+opg*s2)*ss fma+mul + s2*vv mul; lambda loop (10 for s<3, 9 at s=3): fma+mul+add+log2 each; tol clamp cmp+blend."
+   "notes": "Per px: opg fma + (vv+opg*s2)*ss fma+mul + s2*vv mul; lambda loop (10 for s<3, 9 at s=3): fma+mul+add+log2 each; tol clamp cmp+blend.",
+   "materialize": "full"
   },
   {
    "id": "iw_pool",
@@ -450,11 +553,12 @@
    "axis": "none",
    "span": "log2((ceil(W/2**l)-10)*(ceil(H/2**l)-10))",
    "depends_on": [
-    "cs_stats",
+    "cs_stats_v",
     "iw_infow"
    ],
    "barrier": true,
-   "notes": "Per cs el: cs*iw fma + iw add + strided iw gather + cs load; per-scale div + cvt to f64 amortized to ~0."
+   "notes": "Per cs el: cs*iw fma + iw add + strided iw gather + cs load; per-scale div + cvt to f64 amortized to ~0.",
+   "materialize": "fused"
   },
   {
    "id": "pool_top",
@@ -480,7 +584,8 @@
     "cs_lum"
    ],
    "barrier": true,
-   "notes": "sum += v as f64 per element; one div at end."
+   "notes": "sum += v as f64 per element; one div at end.",
+   "materialize": "fused"
   },
   {
    "id": "score_final",
@@ -508,7 +613,8 @@
     "iw_pool",
     "pool_top"
    ],
-   "notes": "SCALE_WEIGHTS beta = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333} applied as f64 powf."
+   "notes": "SCALE_WEIGHTS beta = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333} applied as f64 powf.",
+   "materialize": "fused"
   }
  ]
 }

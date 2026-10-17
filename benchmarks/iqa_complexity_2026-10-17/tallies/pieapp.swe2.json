@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "15487467520 MACs per 64x64 patch-pair (pieapp.onnx; the 120832->512 weight Gemm ~14.6G dominates)",
   "stride-6 dense grid per card.toml"
@@ -29,11 +29,12 @@
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "64"
+   "span": "64",
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "per-patch-pair conv stack + weight gemms",
+   "id": "trunk_conv",
+   "name": "per-patch-pair conv stack + weight gemms [conv]",
    "source": [
     "crates/zenmetrics-nn/src/pieapp.rs:200-423"
    ],
@@ -41,13 +42,55 @@
    "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)",
    "precision": "f32",
    "ops": {
-    "fma": 15487467520,
-    "add": 3208201
+    "fma": 882376704.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "64"
+   "span": "64",
+   "materialize": "full",
+   "notes": "op-type split from ['pieapp'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_matmul",
+   "name": "per-patch-pair conv stack + weight gemms [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/pieapp.rs:200-423"
+   ],
+   "images": 1,
+   "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)",
+   "precision": "f32",
+   "ops": {
+    "fma": 14605090816.0
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "64",
+   "materialize": "full",
+   "notes": "op-type split from ['pieapp'] by_op: matmul MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "per-patch-pair conv stack + weight gemms [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/pieapp.rs:200-423"
+   ],
+   "images": 1,
+   "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)",
+   "precision": "f32",
+   "ops": {
+    "add": 3331083.0,
+    "div": 1.0,
+    "cmp": 2569216.0,
+    "mul": 8193.0
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "64",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "pool",
@@ -66,7 +109,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "fused"
   }
  ]
 }

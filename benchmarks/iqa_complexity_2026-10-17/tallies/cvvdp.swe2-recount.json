@@ -29,200 +29,430 @@
  ],
  "stages": [
   {
-   "id": "dkl",
-   "name": "sRGB8 -> display DKL planes",
+   "id": "srgb_dkl",
+   "name": "sRGB->DKL planar x2",
    "source": [
-    "crates/cvvdp/src/kernels/color.rs:125-156",
-    "crates/cvvdp/src/kernels/color.rs:240-252"
+    "crates/cvvdp/src/color.rs:176-230"
    ],
    "images": 2,
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "load": 3,
-    "mul": 12,
-    "add": 9,
+    "load": 6,
+    "int": 3,
     "fma": 3,
+    "mul": 9,
+    "add": 6,
     "store": 3
    },
-   "bytes_read": 3,
-   "bytes_written": 12,
    "access": "pointwise",
+   "axis": "none",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full",
+   "notes": "LUT linearize + DKL matrix per channel",
+   "depends_on": []
   },
   {
-   "id": "pyr_reduce",
-   "name": "6 pyramids (img+luma x3ch) 5-tap reduce",
+   "id": "gauss_reduce_v",
+   "name": "gauss pyr reduce v-pass (3 chains/side)",
    "source": [
-    "crates/cvvdp/src/kernels/pyramid.rs:57-140",
-    "crates/cvvdp/src/kernels/pyramid.rs:428-455"
+    "crates/cvvdp/src/pyramid.rs:152-172",
+    "crates/cvvdp/src/pipeline.rs:3052-3117"
    ],
    "images": 2,
-   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**(l+1)))",
    "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
    "ops": {
-    "mul": 10,
-    "add": 9,
-    "load": 10,
+    "load": 5,
+    "mul": 5,
+    "add": 4,
     "store": 1
    },
-   "bytes_read": 40,
-   "bytes_written": 4,
-   "access": "downsample",
-   "axis": "xy",
+   "access": "sep_stencil",
+   "axis": "y",
    "radius": 2,
-   "scale": "2**l",
+   "span": "1",
+   "materialize": "full",
+   "notes": "build_one_side_recycle: 3 chains/side (achro->gauss_l shared, rg, vy) NOT per-channel img+l; fused kernel but v-phase work counted at input column positions",
    "chain": true,
-   "span": "10",
-   "depends_on": [
-    "dkl"
-   ],
-   "notes": "elems = sum over levels of 2*3*(wl*hl next-level) = 6*WH*(1/3)",
-   "levels": "NL-1"
+   "depends_on": []
   },
   {
-   "id": "pyr_expand_contrast",
-   "name": "per-level: 2x expands + Weber contrast + log_l",
+   "id": "gauss_reduce_h",
+   "name": "gauss pyr reduce h-pass",
    "source": [
-    "crates/cvvdp/src/kernels/pyramid.rs:180-230",
-    "crates/cvvdp/src/kernels/pyramid.rs:455-505"
+    "crates/cvvdp/src/pyramid.rs:152-172"
    ],
    "images": 2,
-   "elements": "6*ceil(W/(2**l))*ceil(H/(2**l))",
+   "elements": "3*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
    "precision": "f32",
-   "ops": {
-    "mul": 22,
-    "add": 19,
-    "div": 1,
-    "log": 1,
-    "cmp": 3,
-    "load": 11,
-    "store": 3
-   },
-   "bytes_read": 44,
-   "bytes_written": 12,
-   "access": "upsample",
-   "axis": "xy",
-   "radius": 2,
+   "levels": "NL-1",
    "scale": "2**l",
-   "span": "10",
+   "ops": {
+    "load": 5,
+    "mul": 5,
+    "add": 4,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "notes": "5-tap h at output size; writes pyramid level",
+   "chain": true,
    "depends_on": [
-    "pyr_reduce"
-   ],
-   "notes": "expand x2 only non-baseband; contrast ops all levels (overcount ~1/Nl for expand)",
-   "levels": "NL"
+    "gauss_reduce_v"
+   ]
   },
   {
-   "id": "csf_scale",
-   "name": "per-band sensitivity LUT interp x3 + t/r scaling",
+   "id": "l_expand_v",
+   "name": "shared gauss_l expand v",
    "source": [
-    "crates/cvvdp/src/kernels/csf.rs:167-224",
-    "crates/cvvdp/src/host_scalar.rs:196-212",
-    "crates/cvvdp/src/pipeline.rs:55-108"
+    "crates/cvvdp/src/pyramid.rs:180-215,700-721"
+   ],
+   "images": 2,
+   "elements": "ceil(W/(2**(l+1)))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**(l+1)",
+   "ops": {
+    "load": 5,
+    "mul": 6,
+    "add": 4,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "notes": "fill_l_expands: ONE expand chain per side shared by all 3 channels (pipeline.rs:3120+)",
+   "depends_on": [
+    "gauss_reduce_h"
+   ]
+  },
+  {
+   "id": "l_expand_h",
+   "name": "shared gauss_l expand h",
+   "source": [
+    "crates/cvvdp/src/pyramid.rs:700-721"
+   ],
+   "images": 2,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**(l+1)",
+   "ops": {
+    "load": 5,
+    "mul": 6,
+    "add": 4,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "notes": "writes l_exp[k] at level-k shape",
+   "depends_on": [
+    "l_expand_v"
+   ]
+  },
+  {
+   "id": "weber_achro",
+   "name": "achro weber band + log_l_bkg",
+   "source": [
+    "crates/cvvdp/src/pyramid.rs:763-820"
+   ],
+   "images": 2,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
+   "ops": {
+    "load": 3,
+    "add": 1,
+    "div": 1,
+    "cmp": 3,
+    "log": 0.5,
+    "store": 1.5
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "notes": "same_img_l: no img expand; band=(fine-exp_l)/max(l_bkg,0.01) clamp \u00b11000; log_l_bkg written ref side only (map2_3/vweber_band_into)",
+   "depends_on": [
+    "l_expand_h"
+   ]
+  },
+  {
+   "id": "weber_chroma_fused",
+   "name": "chroma fused expand+weber x2ch",
+   "source": [
+    "crates/cvvdp/src/pyramid.rs:220-260,790-810"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**(l+1)",
+   "ops": {
+    "load": 9,
+    "mul": 9,
+    "add": 7,
+    "div": 1,
+    "cmp": 3,
+    "store": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 2,
+   "span": "1",
+   "materialize": "full",
+   "notes": "gausspyr_expand_weber: expand taps fused + (fine-e)/max(exp_l,0.01) clamp; expanded img plane never materialized (write_log=false branch)",
+   "depends_on": [
+    "gauss_reduce_h",
+    "l_expand_h"
+   ]
+  },
+  {
+   "id": "weber_base",
+   "name": "baseband fine/mean + ref log fill",
+   "source": [
+    "crates/cvvdp/src/pyramid.rs:774-792"
+   ],
+   "images": 2,
+   "elements": "3*ceil(W/(2**(NL-1)))*ceil(H/(2**(NL-1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "cmp": 1,
+    "div": 1,
+    "store": 1.33
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "log2(ceil(W/(2**(NL-1)))*ceil(H/(2**(NL-1))))",
+   "materialize": "full",
+   "notes": "l_bkg_mean = sum(max(l,0.01))/n then fine/mean; ref fills log band",
+   "scale": "2**(NL-1)",
+   "depends_on": [
+    "gauss_reduce_h"
+   ]
+  },
+  {
+   "id": "csf_apply",
+   "name": "apply_csf_pairs per level",
+   "source": [
+    "crates/cvvdp/src/pipeline.rs:62-107,1838-1860"
    ],
    "images": 1,
    "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
    "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
    "ops": {
-    "mul": 15,
-    "add": 10,
+    "load": 13,
+    "mul": 10,
+    "add": 8,
+    "fma": 3,
     "exp": 3,
-    "cmp": 1,
-    "cvt": 1,
-    "load": 8,
+    "cmp": 2,
+    "cvt": 2,
+    "int": 1,
     "store": 6
    },
-   "bytes_read": 32,
-   "bytes_written": 24,
    "access": "pointwise",
+   "axis": "none",
    "radius": 0,
-   "scale": "2**l",
    "span": "1",
+   "materialize": "full",
+   "notes": "3ch x ref/dist pairs; logs_row rho-axis table hoisted per band (precompute_logs_row); shared log_l bracket",
    "depends_on": [
-    "pyr_expand_contrast"
+    "weber_achro",
+    "weber_chroma_fused",
+    "weber_base"
+   ]
+  },
+  {
+   "id": "csf_diffs",
+   "name": "apply_csf_diffs baseband only",
+   "source": [
+    "crates/cvvdp/src/pipeline.rs:108-135,1862-1872"
    ],
-   "notes": "logs_row (rho-axis interp over N_L_BKG=32) hoisted per band via precompute_logs_row; per px: shared bracket (~9) + 3x(lerp+fma+exp+2 mul-pairs) \u2014 gather_lerp_exp3_apply_into (pipeline.rs:62-108)",
-   "levels": "NL"
+   "images": 1,
+   "elements": "ceil(W/(2**(NL-1)))*ceil(H/(2**(NL-1)))",
+   "precision": "f32",
+   "ops": {
+    "load": 13,
+    "add": 15,
+    "mul": 9,
+    "fma": 3,
+    "exp": 3,
+    "abs": 3,
+    "cmp": 6,
+    "cvt": 6,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "notes": "baseband diffs path instead of pairs",
+   "scale": "2**(NL-1)",
+   "depends_on": [
+    "weber_base"
+   ]
+  },
+  {
+   "id": "mask_blur_h",
+   "name": "sigma3 13-tap mask blur h (min|T|,|R|+scale fused)",
+   "source": [
+    "crates/cvvdp/src/masking.rs:107-130",
+    "crates/cvvdp/src/kernels/masking.rs:182"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
+   "ops": {
+    "load": 15,
+    "mul": 13,
+    "add": 12,
+    "abs": 2,
+    "cmp": 1,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 6,
+   "span": "1",
+   "materialize": "full",
+   "notes": "gaussian_blur_sigma3_minabs_scaled: min(|T|,|R|) folded into h-pass read + mask_c_lin scale; per channel",
+   "depends_on": [
+    "csf_apply"
+   ]
+  },
+  {
+   "id": "mask_blur_v",
+   "name": "sigma3 13-tap mask blur v",
+   "source": [
+    "crates/cvvdp/src/masking.rs:107-130"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
+   "ops": {
+    "load": 13,
+    "mul": 14,
+    "add": 12,
+    "store": 1
+   },
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 6,
+   "span": "1",
+   "materialize": "full",
+   "notes": "v pass writes scaled blur into term_* scratch",
+   "depends_on": [
+    "mask_blur_h"
+   ]
   },
   {
    "id": "mask_fold",
-   "name": "min|T||R| blur13t x3 + mask fold + diff norm",
+   "name": "mutual masking fold",
    "source": [
-    "crates/cvvdp/src/masking.rs:46-230"
+    "crates/cvvdp/src/masking.rs:184-230"
    ],
    "images": 1,
-   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
    "precision": "f32",
+   "levels": "NL-1",
+   "scale": "2**l",
    "ops": {
-    "mul": 90,
-    "add": 90,
+    "load": 15,
+    "mul": 12,
+    "add": 24,
     "pow": 6,
     "div": 6,
     "abs": 3,
-    "load": 80,
+    "cmp": 6,
     "store": 3
    },
-   "bytes_read": 320,
-   "bytes_written": 12,
-   "access": "sep_stencil",
-   "axis": "xy",
-   "radius": 6,
-   "scale": "2**l",
-   "span": "26",
-   "depends_on": [
-    "csf_scale"
-   ],
-   "notes": "13-tap sigma3 blur x2 passes x3ch + fold pow/div terms",
-   "levels": "NL"
-  },
-  {
-   "id": "band_pool",
-   "name": "lp_norm(BETA_SPATIAL=2) per band x3 ch",
-   "source": [
-    "crates/cvvdp/src/kernels/pool.rs:120-148",
-    "crates/cvvdp/src/host_scalar.rs:244-246"
-   ],
-   "images": 1,
-   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
-   "precision": "f32",
-   "ops": {
-    "pow": 3,
-    "add": 6,
-    "abs": 3,
-    "load": 3
-   },
-   "bytes_read": 12,
-   "access": "reduction",
+   "access": "pointwise",
+   "axis": "none",
    "radius": 0,
-   "scale": "2**l",
-   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
-   "barrier": true,
+   "span": "1",
+   "materialize": "full",
+   "notes": "MASK_Q pow terms + XCM_3X3 cross-channel + CH_GAIN; d_* written per channel",
    "depends_on": [
-    "mask_fold"
-   ],
-   "notes": "safe_pow_lp per elem x3ch + running sum",
-   "levels": "NL"
+    "mask_blur_v",
+    "csf_apply"
+   ]
   },
   {
-   "id": "final",
-   "name": "band/ch lp_norm weights + met2jod",
+   "id": "pool",
+   "name": "pool_band_3ch",
    "source": [
-    "crates/cvvdp/src/kernels/pool.rs:267-292"
+    "crates/cvvdp/src/pipeline.rs:2610"
    ],
    "images": 1,
-   "elements": "1",
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
    "precision": "f32",
+   "levels": "NL",
+   "scale": "2**l",
    "ops": {
-    "mul": 30,
-    "add": 30,
-    "pow": 30,
-    "div": 3
+    "load": 1,
+    "abs": 1,
+    "add": 3,
+    "pow": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
+   "materialize": "fused",
+   "notes": "safe_pow_lp accumulation per channel incl. baseband",
+   "depends_on": [
+    "mask_fold",
+    "csf_diffs"
+   ]
+  },
+  {
+   "id": "jod",
+   "name": "JOD combine 3ch x NL",
+   "source": [
+    "crates/cvvdp/src/pool.rs:81-110"
+   ],
+   "images": 1,
+   "elements": "3*NL",
+   "precision": "f64",
+   "ops": {
+    "load": 1,
+    "mul": 2,
+    "add": 1,
+    "pow": 1
    },
    "access": "pointwise",
-   "span": "1",
+   "axis": "none",
+   "radius": 0,
+   "span": "log2(3*NL)",
+   "materialize": "fused",
+   "notes": "PER_CH_W/BASEBAND_W weighted JOD",
    "depends_on": [
-    "band_pool"
+    "pool"
    ]
   }
  ]

@@ -1,0 +1,167 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "haarpsi-y",
+ "cli_names": [
+  "haarpsi-y"
+ ],
+ "counter": "swe-recount",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {},
+ "assumptions": [
+  "BLIND RECOUNT (swe lane, swap check A) \u2014 written before reading any swe2 tally.",
+  "CLI `haarpsi-y` -> haarpsi_luma8 (lib.rs:288-313): plane_from_rgb8 subsample=TRUE \u2014 fused 2x box-mean in f64 + Y dot (kernel.rs:225-259) -> work at W2=ceil(W/2) x H2=ceil(H/2) on PAD=8 zero-framed planes.",
+  "Ingress per out el: 4 px x 3 ch f64 add-mean (12 add + 3 mul... folded) + Y dot 3 mul + 2 add + cvt, -> ~20 ops per half-res el.",
+  "Haar filters (kernel.rs:750-824): 2 orientations x 3 scales (hk=1,2,4) x 2 images, all on the W2xH2 padded plane. o=0 vertical: CS column box-sums hk taps over h+hk rows (~hk add+ld per el) then coeff = 2^-k sum of 2hk CS row diffs (2hk add+2ld+mul). o=1 horizontal: RS row box hk + rowdiff 2hk. Per (o,k,img) ~ 3hk adds + 3hk loads + 1 mul + 2 st per el.",
+  "Fold per orientation: k=0 sim=(2|a||b|+C)/(|a|^2+|b|^2+C) (~7 flops+div), k=1 simavg (avg of sims, +1 add+mul), k=2 wmax=max(|a|,|b|) weight map (2 abs + cmp). haarpsi-y: no I/Q third map (iq=None).",
+  "Pooling (kernel.rs:864-908,571-613): per map per el logistic_block = full expf-class body (~14 flops: range-reduce + poly + div) * w + 2 f64 accumulates; 2 maps; then m=s_t/s_w, logit log + square once.",
+  "Zero pad frame + scratch planes counted as implementation where materialized (cs/rs/ca/cb/ls/wm planes are scratch reuse)."
+ ],
+ "stages": [
+  {
+   "id": "y_sub2",
+   "name": "RGB8 -> f64 2x2 mean + Y dot -> f32 half-res padded",
+   "source": [
+    "crates/haarpsi/src/kernel.rs:200-259",
+    "crates/haarpsi/src/lib.rs:288-313"
+   ],
+   "images": 2,
+   "elements": "ceil(W/2)*ceil(H/2)",
+   "precision": "f64",
+   "ops": {
+    "load": 12,
+    "add": 15,
+    "mul": 6,
+    "cvt": 4,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 1,
+   "scale": 2,
+   "axis": "xy",
+   "span": "1",
+   "notes": "4-px box mean per channel (f64) then Y dot; pad frame is scratch.",
+   "materialize": "full"
+  },
+  {
+   "id": "haar_cs",
+   "name": "box-sum rows/cols per (o,k): hk taps",
+   "source": [
+    "crates/haarpsi/src/kernel.rs:764-803"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/2)*ceil(H/2)",
+   "precision": "f32",
+   "ops": {
+    "load": 21,
+    "add": 21,
+    "store": 7
+   },
+   "bytes_read": 84,
+   "bytes_written": 28,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": 2,
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "y_sub2"
+   ],
+   "notes": "Sum over k=0..2 of hk={1,2,4}: 7 add+7 ld+~2.3 st per el per (o,img). CS extra rows h+hk folded (~+1% at 4K).",
+   "materialize": "full"
+  },
+  {
+   "id": "haar_coeff",
+   "name": "2^-k strip/row diffs of 2hk taps -> coeff planes",
+   "source": [
+    "crates/haarpsi/src/kernel.rs:778-802"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/2)*ceil(H/2)",
+   "precision": "f32",
+   "ops": {
+    "load": 28,
+    "add": 14,
+    "mul": 3,
+    "store": 6
+   },
+   "bytes_read": 112,
+   "bytes_written": 24,
+   "access": "stencil2d",
+   "radius": 4,
+   "scale": 2,
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "haar_cs"
+   ],
+   "notes": "Per (o,k): 2hk diffs+sum; summed over k: 14 add + 3 mul + ~2 ld per el per (o,img).",
+   "materialize": "full"
+  },
+  {
+   "id": "fold_maps",
+   "name": "sim(k=0), simavg(k=1), wmax(k=2) per orientation",
+   "source": [
+    "crates/haarpsi/src/kernel.rs:805-822,465-505"
+   ],
+   "images": 1,
+   "elements": "2*ceil(W/2)*ceil(H/2)",
+   "precision": "f32",
+   "ops": {
+    "load": 6,
+    "mul": 8,
+    "add": 6,
+    "div": 2,
+    "abs": 4,
+    "cmp": 2,
+    "store": 3
+   },
+   "bytes_read": 24,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 2,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "haar_coeff"
+   ],
+   "notes": "Per orientation: sim ~7 flops+div + simavg + wmax (2abs+cmp) -> ls[o], wm[o].",
+   "materialize": "full"
+  },
+  {
+   "id": "pool",
+   "name": "weighted logistic pool over 2 maps",
+   "source": [
+    "crates/haarpsi/src/kernel.rs:516-613,864-875"
+   ],
+   "images": 1,
+   "elements": "2*ceil(W/2)*ceil(H/2)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 8,
+    "add": 8,
+    "div": 2,
+    "cmp": 4,
+    "cvt": 2,
+    "int": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 2,
+   "axis": "none",
+   "span": "log2(W*H/4)",
+   "depends_on": [
+    "fold_maps"
+   ],
+   "barrier": true,
+   "notes": "logistic_block ~14 flops (expf body: mul+ceil+2polyfma+div+scale) + w*l + 2 f64 acc. Final logit log+square once.",
+   "materialize": "fused"
+  }
+ ]
+}

@@ -38,7 +38,8 @@
    "access": "pointwise",
    "radius": 0,
    "span": "1",
-   "notes": "3 linear terms counted; compiler likely drops 2 (see source comment)"
+   "notes": "3 linear terms counted; compiler likely drops 2 (see source comment)",
+   "materialize": "full"
   },
   {
    "id": "final",
@@ -58,7 +59,8 @@
    "span": "1",
    "depends_on": [
     "mse"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

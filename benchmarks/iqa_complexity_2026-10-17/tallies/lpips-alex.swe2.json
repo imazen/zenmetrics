@@ -7,7 +7,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk fma = 1311618048 MACs / 50176 px pair at 224x224, from onnx_macs.py over lpips_alex_full.onnx (Conv+Gemm); element ops 5931497 split ~add/mul",
   "conv MAC/px is resolution-invariant for the stride-1 stack; edge padding ignored",
@@ -34,11 +34,12 @@
    "class": "intrinsic",
    "span": "1",
    "bytes_read": 3,
-   "bytes_written": 12
+   "bytes_written": 12,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "backbone + ScalingLayer + 1x1 lin heads + taps (ONNX pair graph)",
+   "id": "trunk_conv",
+   "name": "backbone + ScalingLayer + 1x1 lin heads + taps (ONNX pair graph) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/lpips.rs:201-297",
     "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
@@ -47,14 +48,39 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "fma": 26140.34693877551,
-    "add": 59.106913663903065,
+    "fma": 26140.34693877551
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['lpips_alex_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "backbone + ScalingLayer + 1x1 lin heads + taps (ONNX pair graph) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-297",
+    "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "add": 75.11261360012756,
+    "div": 25.331632653061227,
+    "cmp": 47.70918367346939,
+    "pow": 28.99744897959184,
+    "sqrt": 0.16984215561224492,
     "mul": 59.106913663903065
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -72,7 +98,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

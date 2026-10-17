@@ -33,10 +33,11 @@
     "store": 1,
     "cvt": 1
    },
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "full"
   },
   {
-   "id": "moments",
+   "id": "moments_h",
    "name": "fused 11-tap H moments x4 + 4 V blurs + activity",
    "source": [
     "../../zensim/zensim/src/feature_v2.rs:4185-4450"
@@ -45,17 +46,45 @@
    "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
    "precision": "f32",
    "ops": {
-    "mul": 88,
-    "add": 84,
-    "load": 40,
-    "store": 16,
-    "fma": 8
+    "mul": 44,
+    "add": 44,
+    "fma": 8,
+    "load": 20,
+    "store": 8
    },
    "levels": 4,
    "scale": "2**l",
    "access": "sep_stencil",
    "axis": "x",
-   "radius": 5
+   "radius": 5,
+   "materialize": "strip",
+   "notes": "fused_blur_h_ssim_banded: 4 moment planes in one 11-tap H pass (feature_v2.rs:4185-4450)"
+  },
+  {
+   "id": "moments_v",
+   "name": "fused 11-tap H moments x4 + 4 V blurs + activity",
+   "source": [
+    "../../zensim/zensim/src/feature_v2.rs:4185-4450"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 44,
+    "add": 40,
+    "load": 20,
+    "store": 8
+   },
+   "levels": 4,
+   "scale": "2**l",
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 5,
+   "materialize": "strip",
+   "notes": "4x box_blur_v_from_copy + activity chain (feature_v2.rs:4185-4450); strip scratch",
+   "depends_on": [
+    "moments_h"
+   ]
   },
   {
    "id": "dense",
@@ -78,7 +107,8 @@
    },
    "levels": 4,
    "scale": "2**l",
-   "access": "pointwise"
+   "access": "pointwise",
+   "materialize": "strip"
   },
   {
    "id": "gradient",
@@ -101,7 +131,8 @@
    "levels": 4,
    "scale": "2**l",
    "access": "stencil2d",
-   "radius": 1
+   "radius": 1,
+   "materialize": "strip"
   },
   {
    "id": "mlp",
@@ -116,7 +147,11 @@
     "fma": 100000,
     "add": 1000
    },
-   "access": "block"
+   "access": "block",
+   "materialize": "fused"
   }
- ]
+ ],
+ "sibling_commits": {
+  "zensim": "96c3c9bb900b580a4d9c0266a0a0b50203757528 (ci/sibling-pins.tsv; counted tree == pin)"
+ }
 }

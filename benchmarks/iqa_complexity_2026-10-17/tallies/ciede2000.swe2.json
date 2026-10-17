@@ -1,7 +1,9 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "ciede2000",
- "cli_names": ["ciede2000"],
+ "cli_names": [
+  "ciede2000"
+ ],
  "counter": "swe2",
  "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
  "kind": "classic-fr",
@@ -15,22 +17,78 @@
   "Score: sum_de / n (1 div + 1 add/elem fold)."
  ],
  "stages": [
-  {"id": "ingress_lab", "name": "LUT sRGB->linear + XYZ + Lab per image",
-   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:335-422"],
-   "images": 1, "elements": "W*H", "precision": "f64",
-   "ops": {"load": 6, "mul": 26, "add": 18, "div": 6, "cmp": 6, "pow": 6},
-   "bytes_read": 6, "access": "pointwise", "radius": 0, "span": "1",
-   "notes": "2 images x (9mul+6add XYZ + 3div+3cmp+3pow f_lab + 3mul+3add Lab) + 6 gathers"},
-  {"id": "de00", "name": "CIEDE2000 per-pixel + accumulate",
-   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:424-520"],
-   "images": 1, "elements": "W*H", "precision": "f64",
-   "ops": {"mul": 40, "add": 30, "div": 6, "sqrt": 5, "pow": 3, "trig": 9, "exp": 1, "cmp": 10, "load": 6},
-   "bytes_read": 48, "access": "pointwise", "radius": 0, "span": "1",
-   "depends_on": ["ingress_lab"]},
-  {"id": "final", "name": "mean = sum/n",
-   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:385-387"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"div": 1}, "access": "pointwise", "span": "1", "barrier": true,
-   "depends_on": ["de00"]}
+  {
+   "id": "ingress_lab",
+   "name": "LUT sRGB->linear + XYZ + Lab per image",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:335-422"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 6,
+    "mul": 26,
+    "add": 18,
+    "div": 6,
+    "cmp": 6,
+    "pow": 6
+   },
+   "bytes_read": 6,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "notes": "2 images x (9mul+6add XYZ + 3div+3cmp+3pow f_lab + 3mul+3add Lab) + 6 gathers",
+   "materialize": "full"
+  },
+  {
+   "id": "de00",
+   "name": "CIEDE2000 per-pixel + accumulate",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:424-520"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": 40,
+    "add": 30,
+    "div": 6,
+    "sqrt": 5,
+    "pow": 3,
+    "trig": 9,
+    "exp": 1,
+    "cmp": 10,
+    "load": 6
+   },
+   "bytes_read": 48,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "depends_on": [
+    "ingress_lab"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "final",
+   "name": "mean = sum/n",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:385-387"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "barrier": true,
+   "depends_on": [
+    "de00"
+   ],
+   "materialize": "fused"
+  }
  ]
 }

@@ -1,12 +1,18 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "ssim",
- "cli_names": ["ssim"],
+ "cli_names": [
+  "ssim"
+ ],
  "counter": "swe",
  "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
  "kind": "classic-fr",
- "params": {"C": 3},
- "derived": {"NB": "ceil(H/64)"},
+ "params": {
+  "C": 3
+ },
+ "derived": {
+  "NB": "ceil(H/64)"
+ },
  "assumptions": [
   "Path: metrics/mod.rs:2416-2419 -> classical::score(Kind::Ssim) -> ssim_streamed, classical.rs:746-768 + band_ssim:773-854. sRGB8 RGB interleaved, per channel independently, mean over W*H*C.",
   "v2 conventions: streaming band overlap (SSIM_BAND=64, RING=11) recomputes xform + horizontal blur on the 10 shared rows per band boundary: overlap elements = W*10*(NB-1)*C, NB=ceil(H/64) - counted as separate class 'implementation' stages (xform_ovr, hblur_ovr).",
@@ -18,53 +24,230 @@
   "bytes_* = compulsory traffic (input planes read once, output written once); per-tap stencil reads are only in 'load'."
  ],
  "stages": [
-  {"id": "xform", "name": "u8->f64 normalize + a2/b2/ab product rows", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:794-802"],
-   "images": 1, "elements": "W*H*C", "precision": "f64",
-   "ops": {"load": 2, "cvt": 2, "div": 2, "mul": 3, "store": 5},
-   "bytes_read": 2, "bytes_written": 40, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
+  {
+   "id": "xform",
+   "name": "u8->f64 normalize + a2/b2/ab product rows",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:794-802"
+   ],
+   "images": 1,
+   "elements": "W*H*C",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "cvt": 2,
+    "div": 2,
+    "mul": 3,
+    "store": 5
+   },
+   "bytes_read": 2,
+   "bytes_written": 40,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
    "span": "1",
-   "notes": "av,bv = px/255 (u8->f64 cvt + div each); a2=av*av, b2=bv*bv, ab=av*bv (3 mul); 5 f64 row-buffer stores. Joint stage over both images (images=1: ops already cover both)."},
-  {"id": "xform_ovr", "name": "xform recomputed on 10-row band overlaps", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:794-802"],
-   "class": "implementation", "images": 1, "elements": "W*10*(NB-1)*C", "precision": "f64",
-   "ops": {"load": 2, "cvt": 2, "div": 2, "mul": 3, "store": 5},
-   "bytes_read": 2, "bytes_written": 40, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
+   "notes": "av,bv = px/255 (u8->f64 cvt + div each); a2=av*av, b2=bv*bv, ab=av*bv (3 mul); 5 f64 row-buffer stores. Joint stage over both images (images=1: ops already cover both).",
+   "materialize": "strip"
+  },
+  {
+   "id": "xform_ovr",
+   "name": "xform recomputed on 10-row band overlaps",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:794-802"
+   ],
+   "class": "implementation",
+   "images": 1,
+   "elements": "W*10*(NB-1)*C",
+   "precision": "f64",
+   "ops": {
+    "load": 2,
+    "cvt": 2,
+    "div": 2,
+    "mul": 3,
+    "store": 5
+   },
+   "bytes_read": 2,
+   "bytes_written": 40,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
    "span": "1",
-   "notes": "Same per-element ops as xform, on rows shared by adjacent bands (ring warm-up). No depends_on: reads the original input grid, not xform output."},
-  {"id": "hblur", "name": "11-tap Gaussian, horizontal, 5 planes", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:804-816", "crates/zenmetrics-cli/src/metrics/classical.rs:693-716", "crates/zenmetrics-cli/src/metrics/classical.rs:718-724"],
-   "images": 1, "elements": "5*W*H*C", "precision": "f64",
-   "ops": {"load": 11, "mul": 11, "add": 10, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "sep_stencil", "radius": 5, "scale": 1, "axis": "x",
-   "span": "1", "depends_on": ["xform", "xform_ovr"],
-   "notes": "gaussian_interior writes acc = src[k0]*k0 then 10 taps acc += src*ki -> 11 mul + 10 add; htap border form is 11 mul + 11 add + reflect() indexing (not counted)."},
-  {"id": "hblur_ovr", "name": "hblur recomputed on 10-row band overlaps", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:804-816"],
-   "class": "implementation", "images": 1, "elements": "5*W*10*(NB-1)*C", "precision": "f64",
-   "ops": {"load": 11, "mul": 11, "add": 10, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "sep_stencil", "radius": 5, "scale": 1, "axis": "x",
-   "span": "1", "depends_on": ["xform_ovr"],
-   "notes": "Same taps as hblur, on overlap rows."},
-  {"id": "vblur", "name": "11-tap Gaussian, vertical, 5 planes", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:817-836"],
-   "images": 1, "elements": "5*W*H*C", "precision": "f64",
-   "ops": {"load": 11, "mul": 11, "add": 10, "store": 1},
-   "bytes_read": 8, "bytes_written": 8, "access": "sep_stencil", "radius": 5, "scale": 1, "axis": "y",
-   "span": "1", "depends_on": ["hblur", "hblur_ovr"],
-   "notes": "accumulate into acc[5*w] row buffers: per output element per plane acc = k0*v then 10x acc += ki*v. Counted as logical FIR; border rows selected via reflected ring slots (same per-element cost)."},
-  {"id": "map_fold", "name": "l*c SSIM terms + per-(band,channel) partial sum", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:837-849"],
-   "images": 1, "elements": "W*H*C", "precision": "f64",
-   "ops": {"load": 5, "mul": 9, "add": 10, "div": 2, "cmp": 2},
-   "bytes_read": 40, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": 1, "axis": "none",
-   "span": "log2(W*H*C)", "depends_on": ["vblur"], "barrier": true,
-   "notes": "va=(aa-ma^2).max(0), vb likewise, cov=ab-ma*mb, l=(2*ma*mb+c1)/(ma^2+mb^2+c1), c=(2*cov+c2)/(va+vb+c2), partial += l*c. mul 9, add 10, div 2, cmp 2, load 5."},
-  {"id": "band_combine", "name": "sum 3 channel partials per band, /n", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:762-766"],
-   "images": 1, "elements": "NB", "precision": "f64",
-   "ops": {"load": 3, "add": 3, "div": 1, "store": 3},
-   "bytes_read": 24, "bytes_written": 24, "access": "reduction", "radius": 0, "scale": 1, "axis": "none",
-   "span": "log2(NB)", "depends_on": ["map_fold"],
-   "notes": "sum += (p0+p1+p2)/n per band; the 3 stores are the band's channel partials written by band_ssim."},
-  {"id": "final", "name": "sum/3 -> mean over channels", "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:123", "crates/zenmetrics-cli/src/metrics/classical.rs:762"],
-   "images": 1, "elements": "1", "precision": "f64",
-   "ops": {"div": 1, "cvt": 1},
-   "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "1", "depends_on": ["band_combine"],
-   "notes": "score()/3.0 at the call site; cvt is the one-time (w*h) as f64."}
+   "notes": "Same per-element ops as xform, on rows shared by adjacent bands (ring warm-up). No depends_on: reads the original input grid, not xform output.",
+   "materialize": "strip"
+  },
+  {
+   "id": "hblur",
+   "name": "11-tap Gaussian, horizontal, 5 planes",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:804-816",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:693-716",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:718-724"
+   ],
+   "images": 1,
+   "elements": "5*W*H*C",
+   "precision": "f64",
+   "ops": {
+    "load": 11,
+    "mul": 11,
+    "add": 10,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": 1,
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "xform",
+    "xform_ovr"
+   ],
+   "notes": "gaussian_interior writes acc = src[k0]*k0 then 10 taps acc += src*ki -> 11 mul + 10 add; htap border form is 11 mul + 11 add + reflect() indexing (not counted).",
+   "materialize": "strip"
+  },
+  {
+   "id": "hblur_ovr",
+   "name": "hblur recomputed on 10-row band overlaps",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:804-816"
+   ],
+   "class": "implementation",
+   "images": 1,
+   "elements": "5*W*10*(NB-1)*C",
+   "precision": "f64",
+   "ops": {
+    "load": 11,
+    "mul": 11,
+    "add": 10,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": 1,
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "xform_ovr"
+   ],
+   "notes": "Same taps as hblur, on overlap rows.",
+   "materialize": "strip"
+  },
+  {
+   "id": "vblur",
+   "name": "11-tap Gaussian, vertical, 5 planes",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:817-836"
+   ],
+   "images": 1,
+   "elements": "5*W*H*C",
+   "precision": "f64",
+   "ops": {
+    "load": 11,
+    "mul": 11,
+    "add": 10,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": 1,
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "hblur",
+    "hblur_ovr"
+   ],
+   "notes": "accumulate into acc[5*w] row buffers: per output element per plane acc = k0*v then 10x acc += ki*v. Counted as logical FIR; border rows selected via reflected ring slots (same per-element cost).",
+   "materialize": "strip"
+  },
+  {
+   "id": "map_fold",
+   "name": "l*c SSIM terms + per-(band,channel) partial sum",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:837-849"
+   ],
+   "images": 1,
+   "elements": "W*H*C",
+   "precision": "f64",
+   "ops": {
+    "load": 5,
+    "mul": 9,
+    "add": 10,
+    "div": 2,
+    "cmp": 2
+   },
+   "bytes_read": 40,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "log2(W*H*C)",
+   "depends_on": [
+    "vblur"
+   ],
+   "barrier": true,
+   "notes": "va=(aa-ma^2).max(0), vb likewise, cov=ab-ma*mb, l=(2*ma*mb+c1)/(ma^2+mb^2+c1), c=(2*cov+c2)/(va+vb+c2), partial += l*c. mul 9, add 10, div 2, cmp 2, load 5.",
+   "materialize": "strip"
+  },
+  {
+   "id": "band_combine",
+   "name": "sum 3 channel partials per band, /n",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:762-766"
+   ],
+   "images": 1,
+   "elements": "NB",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "add": 3,
+    "div": 1,
+    "store": 3
+   },
+   "bytes_read": 24,
+   "bytes_written": 24,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "log2(NB)",
+   "depends_on": [
+    "map_fold"
+   ],
+   "notes": "sum += (p0+p1+p2)/n per band; the 3 stores are the band's channel partials written by band_ssim.",
+   "materialize": "fused"
+  },
+  {
+   "id": "final",
+   "name": "sum/3 -> mean over channels",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:123",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:762"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1,
+    "cvt": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "band_combine"
+   ],
+   "notes": "score()/3.0 at the call site; cvt is the one-time (w*h) as f64.",
+   "materialize": "fused"
+  }
  ]
 }

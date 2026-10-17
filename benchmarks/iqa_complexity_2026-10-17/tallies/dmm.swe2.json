@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "13972008960 MACs per resized image at 224^2 basis (dmm_trunk.onnx)",
   "resized px = short'^2 * aspect, short'=max(floor(min/48)*32,128); assumes min>192 (smaller pass through)"
@@ -32,11 +32,12 @@
    "axis": "xy",
    "class": "intrinsic",
    "span": "2",
-   "radius": 1
+   "radius": 1,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "dmm_trunk conv stack per resized image (x2)",
+   "id": "trunk_conv",
+   "name": "dmm_trunk conv stack per resized image (x2) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/dmm.rs:700-1200"
    ],
@@ -44,13 +45,36 @@
    "elements": "2*max(floor(min(W,H)/48)*32,128)*max(floor(min(W,H)/48)*32,128)*max(W,H)/min(W,H)",
    "precision": "f32",
    "ops": {
-    "fma": 278460.0,
-    "add": 584.25
+    "fma": 278460.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['dmm_trunk'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "dmm_trunk conv stack per resized image (x2) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/dmm.rs:700-1200"
+   ],
+   "images": 1,
+   "elements": "2*max(floor(min(W,H)/48)*32,128)*max(floor(min(W,H)/48)*32,128)*max(W,H)/min(W,H)",
+   "precision": "f32",
+   "ops": {
+    "add": 612.25,
+    "pow": 111.99999999999999,
+    "cmp": 264.0,
+    "sqrt": 27.999999999999996
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -67,7 +91,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

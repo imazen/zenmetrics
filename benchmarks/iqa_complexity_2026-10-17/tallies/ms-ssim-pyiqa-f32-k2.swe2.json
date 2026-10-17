@@ -37,7 +37,8 @@
    "bytes_written": 8,
    "access": "pointwise",
    "radius": 0,
-   "span": "1"
+   "span": "1",
+   "materialize": "full"
   },
   {
    "id": "decimate",
@@ -60,7 +61,8 @@
    "notes": "2x2 box mean then strided pick",
    "depends_on": [
     "plane"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "hfilter",
@@ -87,7 +89,8 @@
    "span": "11",
    "depends_on": [
     "plane"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "vfilter_ssim",
@@ -114,7 +117,8 @@
    "span": "11",
    "depends_on": [
     "hfilter"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "pool2",
@@ -144,7 +148,8 @@
    "span": "4",
    "depends_on": [
     "hfilter"
-   ]
+   ],
+   "materialize": "full"
   },
   {
    "id": "final",
@@ -166,7 +171,8 @@
    "span": "1",
    "depends_on": [
     "vfilter_ssim"
-   ]
+   ],
+   "materialize": "fused"
   }
  ]
 }

@@ -6,7 +6,7 @@
  ],
  "counter": "swe2",
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
- "kind": "full-reference",
+ "kind": "nn-fr",
  "assumptions": [
   "trunk fma = 39016857610 MACs/pair @224^2 (deepdc_full.onnx); elems 42148477"
  ],
@@ -30,11 +30,12 @@
    "class": "intrinsic",
    "span": "1",
    "bytes_read": 3,
-   "bytes_written": 12
+   "bytes_written": 12,
+   "materialize": "full"
   },
   {
-   "id": "trunk",
-   "name": "DeepDC pair graph (trunk + head)",
+   "id": "trunk_conv",
+   "name": "DeepDC pair graph (trunk + head) [conv]",
    "source": [
     "crates/zenmetrics-nn/src/deepdc.rs:150-267",
     "crates/zenmetrics-nn/models/deepdc/card.toml:1-30"
@@ -43,14 +44,57 @@
    "elements": "W*H",
    "precision": "f32",
    "ops": {
-    "fma": 777600.0001992985,
-    "add": 420.00634765625,
-    "mul": 420.00634765625
+    "fma": 777600.0
    },
    "access": "block",
    "axis": "xy",
    "class": "intrinsic",
-   "span": "W"
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['deepdc_full'] by_op: conv MACs"
+  },
+  {
+   "id": "trunk_matmul",
+   "name": "DeepDC pair graph (trunk + head) [matmul]",
+   "source": [
+    "crates/zenmetrics-nn/src/deepdc.rs:150-267",
+    "crates/zenmetrics-nn/models/deepdc/card.toml:1-30"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 0.0001992984693877551
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "op-type split from ['deepdc_full'] by_op: matmul MACs"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "DeepDC pair graph (trunk + head) [activations/norm/elem]",
+   "source": [
+    "crates/zenmetrics-nn/src/deepdc.rs:150-267",
+    "crates/zenmetrics-nn/models/deepdc/card.toml:1-30"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "div": 6.000000000000001,
+    "cmp": 828.0000000000001,
+    "mul": 420.0065469547194,
+    "add": 426.00634765625
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W",
+   "materialize": "full",
+   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
   },
   {
    "id": "score",
@@ -67,7 +111,8 @@
    "access": "pointwise",
    "axis": "none",
    "class": "intrinsic",
-   "span": "1"
+   "span": "1",
+   "materialize": "fused"
   }
  ]
 }

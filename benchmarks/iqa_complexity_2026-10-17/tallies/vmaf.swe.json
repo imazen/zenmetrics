@@ -1,11 +1,20 @@
 {
  "schema": "iqa-complexity-tally/1",
  "metric": "vmaf",
- "cli_names": ["vmaf", "vmaf-neg", "vmaf-4k", "vmaf-studio601", "vmaf-neg-studio601"],
+ "cli_names": [
+  "vmaf",
+  "vmaf-neg",
+  "vmaf-4k",
+  "vmaf-studio601",
+  "vmaf-neg-studio601"
+ ],
  "counter": "swe",
  "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
  "kind": "classic-fr",
- "derived": {"ADMSCALE": 4, "VIFSCALE": 4},
+ "derived": {
+  "ADMSCALE": 4,
+  "VIFSCALE": 4
+ },
  "assumptions": [
   "CLI `vmaf`/`vmaf-neg` -> crates/vmaf VmafV0Scorer (v0_score.rs:103-129) on U8 planar YUV420 luma only. Per-pair features: adm2 (4-scale ADM), vif_scales[4], motion2 = 0 for a single frame pair (v0_score.rs:119; score() only computes motion across consecutive frames).",
   "Ingress: api requires Planar YUV420 U8 (metric.rs:123-145); rgb8 input is converted by shared ingress to YUV420 -> counted as 5-mul luma + quarter-res chroma (chroma planes unused by compute but materialized).",
@@ -16,80 +25,382 @@
   "vmaf-neg tally: identical compute, StandardNeg model (v0.rs:37) - same 211-SV structure."
  ],
  "stages": [
-  {"id": "yuv_in", "name": "RGB8 -> YUV420 u16 (luma + quarter chroma)", "source": ["crates/vmaf/src/metric.rs:123-165", "crates/vmaf/src/metric.rs:185-260"],
-   "images": 2, "elements": "W*H", "precision": "u16",
-   "ops": {"load": 3, "mul": 3, "add": 3, "cvt": 1, "store": 1},
-   "bytes_read": 3, "bytes_written": 2, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
+  {
+   "id": "yuv_in",
+   "name": "RGB8 -> YUV420 u16 (luma + quarter chroma)",
+   "source": [
+    "crates/vmaf/src/metric.rs:123-165",
+    "crates/vmaf/src/metric.rs:185-260"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "u16",
+   "ops": {
+    "load": 3,
+    "mul": 3,
+    "add": 3,
+    "cvt": 1,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 2,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
    "span": "1",
-   "notes": "Y per px + U/V at N/4 each (folded: ~1.5x luma cost amortized to 1 el); chroma discarded by features."},
-  {"id": "adm_dwt2", "name": "4-tap int DWT (v + h passes) -> h/v/d bands + i4", "source": ["crates/vmaf/src/adm.rs:353-380,788-808"],
+   "notes": "Y per px + U/V at N/4 each (folded: ~1.5x luma cost amortized to 1 el); chroma discarded by features.",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_dwt2_v",
+   "name": "ADM DWT vertical pass (lo/hi rows)",
+   "source": [
+    "crates/vmaf/src/adm.rs:353-380,788-808"
+   ],
    "levels": "ADMSCALE",
-   "images": 2, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "i32",
-   "ops": {"load": 8, "int": 20, "store": 4},
-   "bytes_read": 8, "bytes_written": 14, "access": "sep_stencil", "radius": 2, "scale": "2**l", "axis": "xy",
-   "span": "1", "depends_on": ["yuv_in"],
-   "notes": "Vertical produces lo/hi rows; horizontal emits 3 band els + a_out per 2 cols (~20 int ops per input el avg). Scale 0 input u16, 1-3 i32."},
-  {"id": "adm_decouple", "name": "Watson decouple ref/dis bands (a, r)", "source": ["crates/vmaf/src/adm.rs:836-1795,2884-3069"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "i32",
+   "ops": {
+    "load": 4,
+    "int": 10,
+    "store": 1.5
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "yuv_in"
+   ],
+   "notes": "Fixed-point 1-D vertical wavelet pass emitting lo/hi row planes (adm_dwt2.cpp vertical filtering); intermediate planes are full image size.",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_dwt2_h",
+   "name": "ADM DWT horizontal pass (3 bands + decimated a_out)",
+   "source": [
+    "crates/vmaf/src/adm.rs:353-380,788-808"
+   ],
    "levels": "ADMSCALE",
-   "images": 1, "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "i32",
-   "ops": {"load": 3, "int": 26, "rcp": 1, "cmp": 3, "store": 2},
-   "bytes_read": 12, "bytes_written": 8, "access": "pointwise", "radius": 1, "scale": "2**(l+1)", "axis": "xy",
-   "span": "1", "depends_on": ["adm_dwt2"],
-   "notes": "Orientation decoupling: inner products, div_lookup rcp, sign/angle masks; ~26 int ops per band el (avg over i16 s0 / i32 s123 paths)."},
-  {"id": "adm_csf", "name": "CSF rfactor scaling + flt, 3 bands", "source": ["crates/vmaf/src/adm.rs:3069-3419"],
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "i32",
+   "ops": {
+    "load": 4,
+    "int": 10,
+    "store": 2.5
+   },
+   "bytes_read": 8,
+   "bytes_written": 14,
+   "access": "sep_stencil",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "adm_dwt2_v"
+   ],
+   "notes": "Horizontal 1-D pass: 4 half-width outputs (3 band planes + a_out) per input pair; emits ~2 stores per input element.",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_decouple",
+   "name": "Watson decouple ref/dis bands (a, r)",
+   "source": [
+    "crates/vmaf/src/adm.rs:836-1795,2884-3069"
+   ],
    "levels": "ADMSCALE",
-   "images": 1, "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "i32",
-   "ops": {"load": 2, "int": 9, "cmp": 1, "store": 2},
-   "bytes_read": 8, "bytes_written": 8, "access": "pointwise", "radius": 0, "scale": "2**(l+1)", "axis": "none",
-   "span": "1", "depends_on": ["adm_decouple"],
-   "notes": "mul + shift + add + clamp per el + flt copy."},
-  {"id": "adm_cm", "name": "contrast masking num/den accumulation, 3 bands", "source": ["crates/vmaf/src/adm.rs:3652-4257,4609-4770"],
+   "images": 1,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "i32",
+   "ops": {
+    "load": 3,
+    "int": 26,
+    "rcp": 1,
+    "cmp": 3,
+    "store": 2
+   },
+   "bytes_read": 12,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 1,
+   "scale": "2**(l+1)",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "adm_dwt2_h"
+   ],
+   "notes": "Orientation decoupling: inner products, div_lookup rcp, sign/angle masks; ~26 int ops per band el (avg over i16 s0 / i32 s123 paths).",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_csf",
+   "name": "CSF rfactor scaling + flt, 3 bands",
+   "source": [
+    "crates/vmaf/src/adm.rs:3069-3419"
+   ],
    "levels": "ADMSCALE",
-   "images": 1, "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "i32",
-   "ops": {"load": 3, "int": 11, "rcp": 1, "cmp": 2, "store": 1},
-   "bytes_read": 12, "bytes_written": 4, "access": "reduction", "radius": 0, "scale": "2**(l+1)", "axis": "none",
-   "span": "log2(W*H/4**l)", "depends_on": ["adm_csf"], "barrier": true,
-   "notes": "Watson inner-product accumulation per band via row-window buffers; rfactor shifts; sums folded to scalar num/den per scale."},
-  {"id": "adm_denom", "name": "csf_f + den scale + final num/den per scale", "source": ["crates/vmaf/src/adm.rs:3489-3636,4814-5090"],
+   "images": 1,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "i32",
+   "ops": {
+    "load": 2,
+    "int": 9,
+    "cmp": 1,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**(l+1)",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "adm_decouple"
+   ],
+   "notes": "mul + shift + add + clamp per el + flt copy.",
+   "materialize": "full"
+  },
+  {
+   "id": "adm_cm",
+   "name": "contrast masking num/den accumulation, 3 bands",
+   "source": [
+    "crates/vmaf/src/adm.rs:3652-4257,4609-4770"
+   ],
    "levels": "ADMSCALE",
-   "images": 1, "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "i32",
-   "ops": {"load": 3, "int": 10, "rcp": 1, "store": 2},
-   "bytes_read": 12, "bytes_written": 8, "access": "reduction", "radius": 0, "scale": "2**(l+1)", "axis": "none",
-   "span": "log2(W*H/4**l)", "depends_on": ["adm_decouple"],
-   "notes": "csf_f denominator path; per-scale reduce into aim_num/den accumulators."},
-  {"id": "vif_sub", "name": "subsample to next VIF scale (sep filter, both imgs)", "source": ["crates/vmaf/src/vif.rs:84,967-1274"],
+   "images": 1,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "i32",
+   "ops": {
+    "load": 3,
+    "int": 11,
+    "rcp": 1,
+    "cmp": 2,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**(l+1)",
+   "axis": "none",
+   "span": "log2(W*H/4**l)",
+   "depends_on": [
+    "adm_csf"
+   ],
+   "barrier": true,
+   "notes": "Watson inner-product accumulation per band via row-window buffers; rfactor shifts; sums folded to scalar num/den per scale.",
+   "materialize": "fused"
+  },
+  {
+   "id": "adm_denom",
+   "name": "csf_f + den scale + final num/den per scale",
+   "source": [
+    "crates/vmaf/src/adm.rs:3489-3636,4814-5090"
+   ],
+   "levels": "ADMSCALE",
+   "images": 1,
+   "elements": "3*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "i32",
+   "ops": {
+    "load": 3,
+    "int": 10,
+    "rcp": 1,
+    "store": 2
+   },
+   "bytes_read": 12,
+   "bytes_written": 8,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**(l+1)",
+   "axis": "none",
+   "span": "log2(W*H/4**l)",
+   "depends_on": [
+    "adm_decouple"
+   ],
+   "notes": "csf_f denominator path; per-scale reduce into aim_num/den accumulators.",
+   "materialize": "fused"
+  },
+  {
+   "id": "vif_sub_h",
+   "name": "VIF decimation horizontal pass",
+   "source": [
+    "crates/vmaf/src/vif.rs:84,967-1274"
+   ],
    "levels": "VIFSCALE-1",
-   "images": 2, "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))", "precision": "u32",
-   "ops": {"load": 12, "int": 12, "store": 1},
-   "bytes_read": 8, "bytes_written": 4, "access": "sep_stencil", "radius": 8, "scale": "2**(l+1)", "axis": "xy",
-   "span": "1", "depends_on": ["yuv_in"],
-   "notes": "FILTERS[l+1] taps avg ~6 per axis (9,5,3): 2T int madd + 2T ld per out el, folded to 12."},
-  {"id": "vif_vert", "name": "vertical 5-stat accumulation (T taps)", "source": ["crates/vmaf/src/vif.rs:3510-3618"],
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "u32",
+   "ops": {
+    "load": 6,
+    "int": 6,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 8,
+   "scale": "2**(l+1)",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "yuv_in"
+   ],
+   "notes": "Separable FIR horizontal pass writing a full intermediate plane (vif_filter1d h-pass).",
+   "materialize": "full"
+  },
+  {
+   "id": "vif_sub_v",
+   "name": "VIF decimation vertical pass",
+   "source": [
+    "crates/vmaf/src/vif.rs:84,967-1274"
+   ],
+   "levels": "VIFSCALE-1",
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "u32",
+   "ops": {
+    "load": 6,
+    "int": 6,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 8,
+   "scale": "2**(l+1)",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "vif_sub_h"
+   ],
+   "notes": "Vertical pass producing the decimated plane (full).",
+   "materialize": "full"
+  },
+  {
+   "id": "vif_vert",
+   "name": "vertical 5-stat accumulation (T taps)",
+   "source": [
+    "crates/vmaf/src/vif.rs:3510-3618"
+   ],
    "levels": "VIFSCALE",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "u32",
-   "ops": {"load": 17, "int": 42, "store": 5},
-   "bytes_read": 34, "bytes_written": 20, "access": "stencil2d", "radius": 8, "scale": "2**l", "axis": "y",
-   "span": "1", "depends_on": ["yuv_in", "vif_sub"],
-   "notes": "T={17,9,5,3} per scale avg 8.5: 2T loads + 5T madd -> folded avg ld 17 int 42."},
-  {"id": "vif_horiz", "name": "horizontal 5-stat reduce (T taps)", "source": ["crates/vmaf/src/vif.rs:816-967"],
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "u32",
+   "ops": {
+    "load": 17,
+    "int": 42,
+    "store": 5
+   },
+   "bytes_read": 34,
+   "bytes_written": 20,
+   "access": "sep_stencil",
+   "radius": 8,
+   "scale": "2**l",
+   "axis": "y",
+   "span": "1",
+   "depends_on": [
+    "yuv_in",
+    "vif_sub_v"
+   ],
+   "notes": "T={17,9,5,3} per scale avg 8.5: 2T loads + 5T madd -> folded avg ld 17 int 42.",
+   "materialize": "full"
+  },
+  {
+   "id": "vif_horiz",
+   "name": "horizontal 5-stat reduce (T taps)",
+   "source": [
+    "crates/vmaf/src/vif.rs:816-967"
+   ],
    "levels": "VIFSCALE",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "u32",
-   "ops": {"load": 42, "int": 42, "store": 5},
-   "bytes_read": 20, "bytes_written": 20, "access": "stencil2d", "radius": 8, "scale": "2**l", "axis": "x",
-   "span": "1", "depends_on": ["vif_vert"],
-   "notes": "5 column accumulators x T taps."},
-  {"id": "vif_final", "name": "sigma clamp + num/den log-accumulate per px", "source": ["crates/vmaf/src/vif.rs:2942-3150"],
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "u32",
+   "ops": {
+    "load": 42,
+    "int": 42,
+    "store": 5
+   },
+   "bytes_read": 20,
+   "bytes_written": 20,
+   "access": "sep_stencil",
+   "radius": 8,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "depends_on": [
+    "vif_vert"
+   ],
+   "notes": "5 column accumulators x T taps.",
+   "materialize": "full"
+  },
+  {
+   "id": "vif_final",
+   "name": "sigma clamp + num/den log-accumulate per px",
+   "source": [
+    "crates/vmaf/src/vif.rs:2942-3150"
+   ],
    "levels": "VIFSCALE",
-   "images": 1, "elements": "ceil(W/2**l)*ceil(H/2**l)", "precision": "i64",
-   "ops": {"load": 5, "int": 14, "cmp": 6, "log": 2},
-   "bytes_read": 20, "bytes_written": 0, "access": "reduction", "radius": 0, "scale": "2**l", "axis": "none",
-   "span": "log2(W*H/4**l)", "depends_on": ["vif_horiz"], "barrier": true,
-   "notes": "SIGMA_NSQ clamps, g = min(1, sv_sq/sigma_nsq), num/den accumulate via log2 LUT (power-of-2 int ops counted as log)."},
-  {"id": "svm_pred", "name": "nu-SVR RBF predict: 6 rescale + 211 SVs", "source": ["crates/vmaf/src/v0.rs:36-95", "crates/vmaf/src/lib.rs:276-330"],
-   "images": 1, "elements": "211", "precision": "f64",
-   "ops": {"load": 7, "add": 11, "mul": 7, "exp": 1, "fma": 1},
-   "bytes_read": 56, "bytes_written": 0, "access": "pointwise", "radius": 0, "scale": 1, "axis": "none",
-   "span": "log2(211)", "depends_on": ["adm_cm", "vif_final"], "barrier": true,
-   "notes": "Per SV: dist2 = 6 sub+6 mul+5 add, exp(-g*d2), alpha fma. Model rescale/clip ~20 flops once (folded)."}
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "i64",
+   "ops": {
+    "load": 5,
+    "int": 14,
+    "cmp": 6,
+    "log": 2
+   },
+   "bytes_read": 20,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2(W*H/4**l)",
+   "depends_on": [
+    "vif_horiz"
+   ],
+   "barrier": true,
+   "notes": "SIGMA_NSQ clamps, g = min(1, sv_sq/sigma_nsq), num/den accumulate via log2 LUT (power-of-2 int ops counted as log).",
+   "materialize": "fused"
+  },
+  {
+   "id": "svm_pred",
+   "name": "nu-SVR RBF predict: 6 rescale + 211 SVs",
+   "source": [
+    "crates/vmaf/src/v0.rs:36-95",
+    "crates/vmaf/src/lib.rs:276-330"
+   ],
+   "images": 1,
+   "elements": "211",
+   "precision": "f64",
+   "ops": {
+    "load": 7,
+    "add": 11,
+    "mul": 7,
+    "exp": 1,
+    "fma": 1
+   },
+   "bytes_read": 56,
+   "bytes_written": 0,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "log2(211)",
+   "depends_on": [
+    "adm_cm",
+    "vif_final"
+   ],
+   "barrier": true,
+   "notes": "Per SV: dist2 = 6 sub+6 mul+5 add, exp(-g*d2), alpha fma. Model rescale/clip ~20 flops once (folded).",
+   "materialize": "fused"
+  }
  ]
 }
