@@ -1,0 +1,16 @@
+v2_ppd36 v=2 ppd=36
+v2_ppd37 v=2 ppd=37
+v2_ppd37.84 v=2 ppd=37.84
+v2_ppd38.61 v=2 ppd=38.61
+v2_ppd40 v=2 ppd=40
+v2_ppd42 v=2 ppd=42
+v2_ppd37.84_black0 v=2 black=0
+v2_ppd37.84_amb0 v=2 amb=0
+v2_ppd37.84_black0_amb0 v=2 black=0 amb=0
+v2_ppd37.84_bits0 v=2 bits=0
+v2_ppd37.84_bits8 v=2 bits=8
+v2_ppd37.84_peak100_black0.1 v=2 peak=100 black=0.1
+v2_ppd37.84_peak300_black0.3 v=2 peak=300 black=0.3
+v2_ppd37.84_peak250_black0.25 v=2 peak=250 black=0.25
+v2_ppd37.84_peak200_black0.2_amb250_rho0.01 v=2 peak=200 black=0.2 amb=250 rho=0.01
+v2_ppd37.84_black0.5 v=2 black=0.5

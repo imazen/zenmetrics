@@ -1,0 +1,60 @@
+VDP3_pq_bits10 version=VDP3 eotf=pq bits=10 stride=3
+VDP3_pq_bits8 version=VDP3 eotf=pq bits=8 stride=3
+VDP3_pq_bits0 version=VDP3 eotf=pq bits=0 stride=3
+VDP3_pq_refl0 version=VDP3 eotf=pq refl=0 stride=3
+VDP3_srgb_peak100 version=VDP3 eotf=srgb peak=100 stride=3
+VDP3_srgb_peak200 version=VDP3 eotf=srgb peak=200 stride=3
+VDP3_srgb_peak300 version=VDP3 eotf=srgb peak=300 stride=3
+VDP3_srgb_peak500 version=VDP3 eotf=srgb peak=500 stride=3
+VDP3_srgb_peak1000 version=VDP3 eotf=srgb peak=1000 stride=3
+VDP3_srgb_peak4000 version=VDP3 eotf=srgb peak=4000 stride=3
+VDP3_srgb_peak10000 version=VDP3 eotf=srgb peak=10000 stride=3
+VDP3_g22_peak100 version=VDP3 eotf=g22 peak=100 stride=3
+VDP3_g22_peak300 version=VDP3 eotf=g22 peak=300 stride=3
+VDP3_g22_peak1000 version=VDP3 eotf=g22 peak=1000 stride=3
+VDP3_none version=VDP3 eotf=none stride=3
+VDP3_none_scale255 version=VDP3 eotf=none scale=255 stride=3
+VDP3_none_scale1023 version=VDP3 eotf=none scale=1023 stride=3
+VDP3_none_scale10000 version=VDP3 eotf=none scale=10000 stride=3
+VDP3_encsrgb-display_none version=VDP3 eotf=none refl=0 enc=srgb-display stride=3
+VDP3_encluma-display_none version=VDP3 eotf=none refl=0 enc=luma-display stride=3
+VDP3_pq_ppd15 version=VDP3 ppd=15 stride=3
+VDP3_pq_ppd20 version=VDP3 ppd=20 stride=3
+VDP3_pq_ppd30 version=VDP3 ppd=30 stride=3
+VDP3_pq_ppd40 version=VDP3 ppd=40 stride=3
+VDP3_pq_ppd50 version=VDP3 ppd=50 stride=3
+VDP3_pq_ppd80 version=VDP3 ppd=80 stride=3
+VDP3_pq_ppd100 version=VDP3 ppd=100 stride=3
+VDP3_pq_ppd128 version=VDP3 ppd=128 stride=3
+VDP3_pq_swap version=VDP3 swap=1 stride=3
+VDP2_pq_bits10 version=VDP2 eotf=pq bits=10 stride=3
+VDP2_pq_bits8 version=VDP2 eotf=pq bits=8 stride=3
+VDP2_pq_bits0 version=VDP2 eotf=pq bits=0 stride=3
+VDP2_pq_refl0 version=VDP2 eotf=pq refl=0 stride=3
+VDP2_srgb_peak100 version=VDP2 eotf=srgb peak=100 stride=3
+VDP2_srgb_peak200 version=VDP2 eotf=srgb peak=200 stride=3
+VDP2_srgb_peak300 version=VDP2 eotf=srgb peak=300 stride=3
+VDP2_srgb_peak500 version=VDP2 eotf=srgb peak=500 stride=3
+VDP2_srgb_peak1000 version=VDP2 eotf=srgb peak=1000 stride=3
+VDP2_srgb_peak4000 version=VDP2 eotf=srgb peak=4000 stride=3
+VDP2_srgb_peak10000 version=VDP2 eotf=srgb peak=10000 stride=3
+VDP2_g22_peak100 version=VDP2 eotf=g22 peak=100 stride=3
+VDP2_g22_peak300 version=VDP2 eotf=g22 peak=300 stride=3
+VDP2_g22_peak1000 version=VDP2 eotf=g22 peak=1000 stride=3
+VDP2_none version=VDP2 eotf=none stride=3
+VDP2_none_scale255 version=VDP2 eotf=none scale=255 stride=3
+VDP2_none_scale1023 version=VDP2 eotf=none scale=1023 stride=3
+VDP2_none_scale10000 version=VDP2 eotf=none scale=10000 stride=3
+VDP2_encsrgb-display_none version=VDP2 eotf=none refl=0 enc=srgb-display stride=3
+VDP2_encluma-display_none version=VDP2 eotf=none refl=0 enc=luma-display stride=3
+VDP2_pq_ppd15 version=VDP2 ppd=15 stride=3
+VDP2_pq_ppd20 version=VDP2 ppd=20 stride=3
+VDP2_pq_ppd30 version=VDP2 ppd=30 stride=3
+VDP2_pq_ppd40 version=VDP2 ppd=40 stride=3
+VDP2_pq_ppd50 version=VDP2 ppd=50 stride=3
+VDP2_pq_ppd80 version=VDP2 ppd=80 stride=3
+VDP2_pq_ppd100 version=VDP2 ppd=100 stride=3
+VDP2_pq_ppd128 version=VDP2 ppd=128 stride=3
+VDP2_pq_swap version=VDP2 swap=1 stride=3
+VDP3_pq_taskside-by-side version=VDP3 task=side-by-side stride=3
+VDP3_pq_taskflicker version=VDP3 task=flicker stride=3

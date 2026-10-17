@@ -1,0 +1,13 @@
+v2b_eotfg22 v=2 black=0 amb=0 eotf=g22
+v2b_bits0 v=2 black=0 amb=0 bits=0
+v2b_bits8 v=2 black=0 amb=0 bits=8
+v2b_eotfg22_bits0 v=2 black=0 amb=0 eotf=g22 bits=0
+v2b_ppd37.5 v=2 black=0 amb=0 ppd=37.5
+v2b_ppd38.0 v=2 black=0 amb=0 ppd=38.0
+v2b_ppd38.2 v=2 black=0 amb=0 ppd=38.2
+v2b_ppd38.61 v=2 black=0 amb=0 ppd=38.61
+v2b_peak190 v=2 black=0 amb=0 peak=190
+v2b_peak210 v=2 black=0 amb=0 peak=210
+v2b_peak180 v=2 black=0 amb=0 peak=180
+v2b_peak220 v=2 black=0 amb=0 peak=220
+v2b_lmax200 v=2 black=0 amb=0 lmax=200

@@ -1,0 +1,8 @@
+[package]
+name = "vdpprobe"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+[dependencies]
+hdrvdp = { path = "../hdrvdp", features = ["parallel"] }
+image = { workspace = true }

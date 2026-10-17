@@ -1,0 +1,12 @@
+v3_fhd_srgb_p200_b02_r250_ppd3784 version=VDP3 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84
+v3_fhd_srgb_p200_b02_r250_ppd3861 version=VDP3 eotf=srgb peak=200 black=0.2 amb=250 diag=24 w=1920 h=1080 dist=0.6
+v3_fhd_srgb_p200_b02_r250_ppd3784_bits0 version=VDP3 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84 bits=0
+v3_fhd_srgb_p200_b0_r0_ppd3784 version=VDP3 eotf=srgb peak=200 black=0 refl=0 ppd=37.84
+v3_fhd_srgb_p200_b02_r250_ppd3784_sbs version=VDP3 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84 task=side-by-side
+v3_fhd_srgb_p200_b02_r250_ppd3784_flicker version=VDP3 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84 task=flicker
+v3_fhd_srgb_p200_b02_r250_ppd64 version=VDP3 eotf=srgb peak=200 black=0.2 amb=250
+v2_fhd_srgb_p200_b02_r250_ppd3784 version=VDP2 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84
+v2_fhd_srgb_p200_b02_r250_ppd3861 version=VDP2 eotf=srgb peak=200 black=0.2 amb=250 diag=24 w=1920 h=1080 dist=0.6
+v2_fhd_srgb_p200_b02_r250_ppd3784_bits0 version=VDP2 eotf=srgb peak=200 black=0.2 amb=250 ppd=37.84 bits=0
+v2_fhd_srgb_p200_b0_r0_ppd3784 version=VDP2 eotf=srgb peak=200 black=0 refl=0 ppd=37.84
+v2_fhd_srgb_p200_b02_r250_ppd64 version=VDP2 eotf=srgb peak=200 black=0.2 amb=250

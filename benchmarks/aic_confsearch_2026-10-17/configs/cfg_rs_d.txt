@@ -1,0 +1,9 @@
+d_v3_encxyz black=0 amb=0 v=3 enc=xyz
+d_v3_encrgb2020 black=0 amb=0 v=3 enc=rgb2020
+d_v3_encxyz_emisled-lcd-srgb black=0 amb=0 v=3 enc=xyz emis=led-lcd-srgb
+d_v2_encxyz black=0 amb=0 v=2 enc=xyz
+d_v2_encxyz_bits0 black=0 amb=0 v=2 enc=xyz bits=0
+d_v3_encxyz_bits0 black=0 amb=0 v=3 enc=xyz bits=0
+d_v3_emisoled_bits0 black=0 amb=0 v=3 emis=oled bits=0
+d_v23_encxyz_bits0_ppd37.7 black=0 amb=0 v=23 enc=xyz bits=0 ppd=37.7
+d_v23_encxyz_bits0_ppd38.0 black=0 amb=0 v=23 enc=xyz bits=0 ppd=38.0

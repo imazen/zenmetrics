@@ -1,0 +1,3 @@
+tag	col	n	med_abs	max_abs	med_jnd	max_jnd	pearson	spearman	aff_slope	aff_icpt	aff_med_jnd	aff_max_jnd
+mapped_pnorm3	proposal-Butteraugli	61	6.5724e-08	0.000102665	3.21807e-08	5.06232e-05	1	1	0.999999	3.63403e-06	6.14981e-07	4.98451e-05
+raw_pnorm3	proposal-Butteraugli	61	1.05181	3.42304	0.467555	1.22089	0.999939	1	2.08212	-1.07663	0.00214175	0.140879

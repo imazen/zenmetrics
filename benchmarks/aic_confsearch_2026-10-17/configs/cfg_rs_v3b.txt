@@ -1,0 +1,16 @@
+v3b_base v=3 black=0 amb=0 
+v3b_emisccfl-lcd v=3 black=0 amb=0 emis=ccfl-lcd
+v3b_emisled-lcd v=3 black=0 amb=0 emis=led-lcd
+v3b_emiscrt v=3 black=0 amb=0 emis=crt
+v3b_emisoled v=3 black=0 amb=0 emis=oled
+v3b_age30 v=3 black=0 amb=0 age=30
+v3b_age40 v=3 black=0 amb=0 age=40
+v3b_age60 v=3 black=0 amb=0 age=60
+v3b_surroundmean v=3 black=0 amb=0 surround=mean
+v3b_taskflicker v=3 black=0 amb=0 task=flicker
+v3b_taskside-by-side v=3 black=0 amb=0 task=side-by-side
+v3b_ppd64.0634 v=3 black=0 amb=0 ppd=64.0634
+v3b_ppd30 v=3 black=0 amb=0 ppd=30
+v3b_peak100 v=3 black=0 amb=0 peak=100
+v3b_aesl0 v=3 black=0 amb=0 aesl=0
+v3b_masking0 v=3 black=0 amb=0 masking=0
