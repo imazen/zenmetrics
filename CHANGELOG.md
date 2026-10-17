@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Regenerate dashboard catalog and markdown extracts during deployment, report committed-copy drift, and retain strict local currentness and unclassified-upload gates (`9a24096b`).
+
 - Require E36 native decoded-checkpoint qualification before export, retain its program archive/resource receipts, and refuse owner-blocked or mixed-smoke variants before launch.
 
 - Add a private E36 program-pack and harvest adapter for exact unchanged-target family masks, matched TV configuration and arm-specific full-budget watchdogs; retain existing checkpoint admission ([transport](docs/E36_FIT_TRANSPORT.md)).
