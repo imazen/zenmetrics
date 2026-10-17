@@ -48,7 +48,7 @@ def svg_lines(title,rows):
     return plot_svg(figure)
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('raw',nargs='+',type=P);p.add_argument('--output',type=P,required=True);a=p.parse_args();a.output.mkdir(exist_ok=False)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('raw',nargs='+',type=P);p.add_argument('--output',type=P,required=True);p.add_argument('--summaries-only',action='store_true',help='Retain all compact cell receipts without rendering plots');a=p.parse_args();a.output.mkdir(exist_ok=False)
     rows=[];seen=set()
     for path in a.raw:
         for line in path.read_text().splitlines():
@@ -65,6 +65,7 @@ def main():
             rows.append(r)
     fields=['host_protocol','host_observation_receipts','timing_quality','contention_peak_cores','contention_receipt','contention_attempts','host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','declared_columns','reference_declared_columns','native_api_note','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_kind','reference_source_status','reference_log_sha256','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
     fields+=['coverage_first','required_samples','parity_checked','self_warmup_score','scalar_comparison_status']
+    fields+=['source_status','source_row','source_raw_sha256','log_path','log_sha256','cpu_affinity','headline_declared_column','coverage_sample_requirement_met']
     byhost=collections.defaultdict(list)
     for r in rows:byhost[(r['host'],r['os'])].append({k:r.get(k) for k in fields})
     for (host,system),values in byhost.items():
@@ -77,6 +78,9 @@ def main():
                 (a.output/f'{host}-{index:03}.json').write_text(json.dumps(chunk,indent=2)+'\n');chunk=[];index+=1
             chunk.append(r)
         if chunk:(a.output/f'{host}-{index:03}.json').write_text(json.dumps(chunk,indent=2)+'\n')
+    if a.summaries_only:
+        print(json.dumps(dict(rows=len(rows),files=len(list(a.output.glob('*.json'))),mode='summaries-only')))
+        return
     panels=collections.defaultdict(list);families=collections.defaultdict(list);metrics=collections.defaultdict(list)
     for r in rows:
         if r['status'] not in ['ok','variant_mismatch']:continue

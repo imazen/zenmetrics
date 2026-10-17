@@ -219,7 +219,8 @@ the external controller requested three AIC-medium samples; the policy requires
 five. Actual observations remain unchanged and count as short. Known native-map
 adapter omissions are counted separately from metric map unavailability.
 
-Both queues continue. These observations retain frozen source `d6b18bbf` and
+The queues continued after that snapshot and were then stopped by the owner.
+These observations retain frozen source `d6b18bbf` and
 their actual executable hashes; merging the harness does not relabel them as
 measurements of current master. The immutable raw prefixes remain external,
 with SHA256 pointers in the compact receipts.
@@ -228,3 +229,29 @@ The [Mac containment control](task4-mac-supervision-control-20261017.json)
 records a real child terminated by the resource guard with `gtimeout --foreground`.
 The tracked launcher now retains that option. This is process containment
 evidence, not a metric or score-parity qualification.
+
+## Owner stop (2026-10-17)
+
+Missing rows: 1,216 on r7900x and 876 on Mac. Neither host reached 8K.
+AIC-medium's three-sample observations remain short against the five-sample
+requirement; the planned repair was not started. Further measurements wait for
+the separately developed reproducible launcher.
+
+The queues stopped after their active cells, with no subsequent cell started.
+The [closing receipt](task4-owner-stop-20261017.meta.json) binds all
+4,068 saved observations: [1,780/2,996 on r7900x](task4-r7900x-owner-stop-20261017.json)
+and [2,288/3,164 on Mac](task4-mac-owner-stop-20261017.json).
+[Compact cell receipts](task4-owner-stop-cells-20261017/) retain every row,
+including refusals and short samples. Their n, timing and score fields match
+the archived raw values bit for bit. Each generated JSON file is below 30 KB.
+
+Both remote integrity checks and the copied log/config hash checks pass.
+Four older Mac logs acquired late output during the earlier guard escape.
+The exact originally hashed prefixes and complete logs are both retained;
+late output remains diagnostic. No additional metric evaluation, parity
+qualification or reboot was performed during closing collection.
+
+The closing checks pass 102 Python harness controls and 10 inventory controls.
+The inherited formatter findings were corrected and the six affected files
+pass rustfmt check. Remaining queued build gates were cancelled before
+admission at the owner's stop directive; they are not claimed as passing.
