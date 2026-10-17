@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add eight paired zenmetrics/libjxl butteraugli timing cells at 2K and 4K, with retained sample identities and explicit sampling-method caveats (`04c8cac2`).
+
 - Add exact-resolution cross-metric speed rankings, comparable workload filters, source-marked all-size and rank-change charts, ranking CSV and libjxl v0.12 timing samples (`7cf90d30`).
 
 - Qualify dashboard oracle/published comparisons, derive catalog evidence, classify uploads and normalize historical timing/parity panels (`e0ef83c7`, `844fb671`).
