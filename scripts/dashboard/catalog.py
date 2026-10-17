@@ -13,6 +13,7 @@ def plain(text):
     text=re.sub(r'(?<!!)\[([^\]]+)\]\(([^)]+)\)',r'\1 (\2)',text)
     text=re.sub(r'[`*]', '', text).replace('\\|','|')
     text=re.sub(r'(?:/(?:home|mnt|Users|tmp)/[^\s)]+|~/[^\s)]+)','[local path]',text)
+    text=re.sub(r'(?<![\w/])@([0-9a-f]{7,40})\b',r'revision \1',text)
     return text.strip()
 
 

@@ -6,6 +6,7 @@ real, deterministically selected scatter observations per metric. No remap is fi
 """
 import argparse
 import csv
+from datetime import datetime, timezone
 import hashlib
 import json
 import io
@@ -62,7 +63,7 @@ def compute(source,output,draws,seed):
             file=output/(source.stem+'-'+suffix+f'-{index:02}.tsv')
             file.write_text(encode(chunk));outputs.append(file)
     commit=subprocess.check_output(['jj','log','-r','@-','--no-graph','-T','commit_id'],text=True).strip()
-    meta=dict(source_basename=source.name,source_sha256=sha,generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),host='i265',build_commit=commit,seed=seed,draws=draws,target=target,input_rows=len(y),metrics=len(result),method='Raw unremapped Spearman, Pearson, Kendall tau-b; magnitudes in leaderboard, signed statistics retained. 95% percentile intervals from resampling reference-image clusters with replacement. Fixed images; not observer uncertainty. Historical snapshot; original scoring commits are not recoverable from this parquet.',command=f'python scripts/dashboard/correlate.py --source <read-only-source> --output-dir benchmarks/dashboard/quality --draws {draws} --seed {seed}',scatter='24 finite actual rows per metric, selected by SHA-256(row index + source hash); identity hashes only, original paths are not published')
+    meta=dict(generated_date_utc=datetime.now(timezone.utc).date().isoformat(),source_basename=source.name,source_sha256=sha,generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),host='i265',build_commit=commit,seed=seed,draws=draws,target=target,input_rows=len(y),metrics=len(result),method='Raw unremapped Spearman, Pearson, Kendall tau-b; magnitudes in leaderboard, signed statistics retained. 95% percentile intervals from resampling reference-image clusters with replacement. Fixed images; not observer uncertainty. Historical snapshot; original scoring commits are not recoverable from this parquet.',command=f'python scripts/dashboard/correlate.py --source <read-only-source> --output-dir benchmarks/dashboard/quality --draws {draws} --seed {seed}',scatter='24 finite actual rows per metric, selected by SHA-256(row index + source hash); identity hashes only, original paths are not published')
     for file in outputs:file.with_suffix('.meta.json').write_text(json.dumps(meta,indent=2)+'\n')
     print(json.dumps(dict(dataset=source.stem,metrics=len(result),input_rows=len(y),draws=draws)))
 
