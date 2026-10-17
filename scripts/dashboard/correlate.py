@@ -8,6 +8,7 @@ import argparse
 import csv
 import hashlib
 import json
+import io
 from pathlib import Path
 import subprocess
 import numpy as np
@@ -47,14 +48,22 @@ def compute(source,output,draws,seed):
         for i in chosen:
             points.append(dict(metric=metric,dataset=dataset,pair=hashlib.sha256((sha+str(i)).encode()).hexdigest()[:16],mos=y[i],score=x[i],target=target,scope='deterministic 24-observation preview'))
     output.mkdir(parents=True,exist_ok=True)
+    outputs=[]
+    def encode(rows):
+        f=io.StringIO();w=csv.DictWriter(f,fieldnames=list(rows[0]),delimiter='\t',lineterminator='\n');w.writeheader();w.writerows(rows);return f.getvalue()
     for suffix,rows in [('correlations',result),('points',points)]:
-        file=output/(source.stem+'-'+suffix+'.tsv')
-        with file.open('w') as f:
-            w=csv.DictWriter(f,fieldnames=list(rows[0]),delimiter='\t',lineterminator='\n');w.writeheader();w.writerows(rows)
-        if file.stat().st_size>30000:raise ValueError('split output before committing: '+file.name)
-    commit=subprocess.check_output(['jj','log','-r','@','--no-graph','-T','commit_id'],text=True).strip()
-    meta=dict(source_basename=source.name,source_sha256=sha,host='i265',build_commit=commit,seed=seed,draws=draws,target=target,input_rows=len(y),metrics=len(result),method='Raw unremapped Spearman, Pearson, Kendall tau-b; magnitudes in leaderboard, signed statistics retained. 95% percentile intervals from resampling reference-image clusters with replacement. Fixed images; not observer uncertainty. Historical snapshot; original scoring commits are not recoverable from this parquet.',command=f'python scripts/dashboard/correlate.py --source <read-only-source> --output-dir benchmarks/dashboard/quality --draws {draws} --seed {seed}',scatter='24 finite actual rows per metric, selected by SHA-256(source hash + row index); identity hashes only, original paths are not published')
-    for suffix in ['correlations','points']:(output/(source.stem+'-'+suffix+'.meta.json')).write_text(json.dumps(meta,indent=2)+'\n')
+        chunk=[];index=0
+        for row in rows:
+            if chunk and len(encode(chunk+[row]).encode())>29000:
+                file=output/(source.stem+'-'+suffix+f'-{index:02}.tsv')
+                file.write_text(encode(chunk));outputs.append(file);index+=1;chunk=[]
+            chunk.append(row)
+        if chunk:
+            file=output/(source.stem+'-'+suffix+f'-{index:02}.tsv')
+            file.write_text(encode(chunk));outputs.append(file)
+    commit=subprocess.check_output(['jj','log','-r','@-','--no-graph','-T','commit_id'],text=True).strip()
+    meta=dict(source_basename=source.name,source_sha256=sha,generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),host='i265',build_commit=commit,seed=seed,draws=draws,target=target,input_rows=len(y),metrics=len(result),method='Raw unremapped Spearman, Pearson, Kendall tau-b; magnitudes in leaderboard, signed statistics retained. 95% percentile intervals from resampling reference-image clusters with replacement. Fixed images; not observer uncertainty. Historical snapshot; original scoring commits are not recoverable from this parquet.',command=f'python scripts/dashboard/correlate.py --source <read-only-source> --output-dir benchmarks/dashboard/quality --draws {draws} --seed {seed}',scatter='24 finite actual rows per metric, selected by SHA-256(row index + source hash); identity hashes only, original paths are not published')
+    for file in outputs:file.with_suffix('.meta.json').write_text(json.dumps(meta,indent=2)+'\n')
     print(json.dumps(dict(dataset=source.stem,metrics=len(result),input_rows=len(y),draws=draws)))
 
 
