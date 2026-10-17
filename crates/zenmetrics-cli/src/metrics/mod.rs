@@ -1021,6 +1021,7 @@ impl MetricKind {
                 | MetricKind::WadiqamFrTid
                 | MetricKind::WadiqamNrLive
                 | MetricKind::WadiqamNrTid
+                | MetricKind::Pieapp
                 | MetricKind::Wd
         );
         let nr = matches!(
