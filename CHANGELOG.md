@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add exact-resolution cross-metric speed rankings, comparable workload filters, source-marked all-size and rank-change charts, ranking CSV and libjxl v0.12 timing samples (`7cf90d30`).
+
 - Qualify dashboard oracle/published comparisons, derive catalog evidence, classify uploads and normalize historical timing/parity panels (`e0ef83c7`, `844fb671`).
 
 - Add a registry-driven GitHub Pages benchmark dashboard with timing, agreement, historical human-quality panels and a CLI metric catalog (`97732303`).
