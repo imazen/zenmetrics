@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Source: 3ed5c251 f64-norm experiment; exact exported commit ba4e4b22677e
+Command: just nn-parity-dmm <models> <ladder> ort-cuda model-tests,ort
+Inputs: unchanged dmm_goldens.tsv and committed same-engine netlib panel.
+Derivation: dmm_fix_summary.py; full precision scores from parity stdout.
+Outcome: existing limits fail; no tolerance or golden score changes. CUDA mismatches are provisional until reproduced on i265.
+Log: ~/tmp/nn-port-scratch/fix-dmm-ort2.log
+lock.sh: exported tracked tree ba4e4b22677e (Cargo output excluded)
+run-heavy: done rc=101 229s | peak-RSS 3.01GiB | min-avail 20595MiB | peak-load 3.09
+TSV SHA256: 20ed2696f838ed47da801b4fb3ea2bcd22799de551da6cea68b3fd2f5af65054

@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Source: 3ed5c251
+Command: just nn-parity-dmm <models> <ladder> rten model-tests
+Inputs: unchanged dmm_goldens.tsv and committed same-engine netlib panel.
+Derivation: dmm_fix_summary.py; full precision scores from parity stdout.
+Outcome: existing limits fail; no tolerance or golden score changes. CUDA mismatches are provisional until reproduced on i265.
+Log: ~/tmp/nn-port-scratch/fix-dmm-rten3.log
+lock.sh: exported tracked tree 4755b3835ad7 (Cargo output excluded)
+run-heavy: done rc=101 253s | peak-RSS 8.27GiB | min-avail 14834MiB | peak-load 5.98
+TSV SHA256: 8baa03b685e25aa136cb9f68483f8895b9ac7db015f5feba0a7668e9f7296e78
