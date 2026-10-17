@@ -1,12 +1,13 @@
+from pathlib import Path
 # Interleaved CPU timing: torch eager vs onnxruntime vs tract (python bindings), same ONNX graphs.
 import sys, time, statistics, numpy as np, torch, onnxruntime as ort, tract, onnx
 from onnx import numpy_helper
 models_dir, threads, rounds = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 torch.set_num_threads(threads)
 names = ["vgg16lpips_256", "vgg16lpips_512", "resnet50_224", "resnet50_384"]
-sys.path.insert(0, "/home/lilith/tmp/nnrt-research/scripts")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import importlib.util
-spec = importlib.util.spec_from_file_location("exp", "/home/lilith/tmp/nnrt-research/scripts/export_mods.py"); exp = importlib.util.module_from_spec(spec); spec.loader.exec_module(exp)
+spec = importlib.util.spec_from_file_location("exp", Path(__file__).resolve().with_name("export_mods.py")); exp = importlib.util.module_from_spec(spec); spec.loader.exec_module(exp)
 print(f"# torch {torch.__version__} ort {ort.__version__} tract {tract.version()} threads={threads} rounds={rounds}")
 for name in names:
     path = f"{models_dir}/{name}.onnx"

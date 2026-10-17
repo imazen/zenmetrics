@@ -1,7 +1,8 @@
+from pathlib import Path
 # GPU timing: torch eager (fp32 default cudnn [TF32 off], fp32+TF32, fp16 autocast, channels_last fp16) and ORT CUDA EP,
 # timer = forward + device-side sum per output + scalar .item() (matches burnbench). fresh random input per iter.
 import sys, time, statistics, importlib.util, numpy as np, torch
-spec = importlib.util.spec_from_file_location("exp", "/home/lilith/tmp/nnrt-research/scripts/export_mods.py"); exp = importlib.util.module_from_spec(spec); spec.loader.exec_module(exp)
+spec = importlib.util.spec_from_file_location("exp", Path(__file__).resolve().with_name("export_mods.py")); exp = importlib.util.module_from_spec(spec); spec.loader.exec_module(exp)
 import onnxruntime as ort
 try: ort.preload_dlls()
 except Exception as e: print("preload_dlls:", e)
