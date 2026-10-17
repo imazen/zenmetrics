@@ -135,6 +135,7 @@ def resource(text):
                 min_available_mib=int(match[4]), peak_load=float(match[5]))
 
 def _run_cell(args, row, models, *, restore_chunks=True):
+    expected_modes=[row["only_mode"]] if row.get("only_mode") else MODES
     if getattr(args,"coverage_first",False):
         row.update(coverage_first=True, required_samples=coverage_samples(row["size_name"]))
         restore_chunks=False
@@ -162,10 +163,10 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         chosen = None
         row['placement_policy'] = 'unrestricted descriptive study; no uniform-class certification'
     stem = f"{name}-{row['size_name']}-{count}t"
-    pieces={mode:[] for mode in MODES}
+    pieces={mode:[] for mode in expected_modes}
     completed={}
     chunk_ledger=args.root/'chunk-attempts.jsonl'
-    identity=['host','os','metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256','ort_disable_telemetry']
+    identity=['host','os','metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','only_mode','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256','ort_disable_telemetry']
     def retain(value):
         mode=value['mode']
         if value['status'] not in ['ok','partial','variant_mismatch']:
@@ -184,7 +185,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         for line in chunk_ledger.read_text().splitlines():
             value=json.loads(line)
             if all(value.get(k)==row.get(k) for k in identity) and not prior_admission_reason(value):retain(value)
-    if set(completed)==set(MODES):return list(completed.values())
+    if set(completed)==set(expected_modes):return list(completed.values())
     while True:
         lease=getattr(args,'batch_lease',None)
         if lease:
@@ -237,7 +238,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         if lease and admission:lease.close()
         if admission and getattr(args,"coverage_first",False):
             refused=[]
-            for mode in MODES:
+            for mode in expected_modes:
                 value=dict(row,mode=mode,status='skipped:admission_'+admission,n=0,log_path=str(log),log_sha256=sha(log),resource=resource(text),notes='Coverage pass: resource admission refused this bounded cell')
                 normalize_nomap(value);refused.append(value)
             return refused
@@ -264,10 +265,10 @@ def _run_cell(args, row, models, *, restore_chunks=True):
             value['ort_intra_threads_configured']=ort_budgets or None
             value['ort_inter_threads_configured']=1 if ort_budgets else None
         modes={value['mode'] for value in rows}
-        if len(rows)!=len(modes) or modes-set(MODES):raise ValueError(f'invalid emitted modes: {log}')
-        if process.returncode or modes!=set(MODES):
+        if len(rows)!=len(modes) or modes-set(expected_modes):raise ValueError(f'invalid emitted modes: {log}')
+        if process.returncode or modes!=set(expected_modes):
             reason={124:f'timeout_{actual_scope}s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
-            for mode in set(MODES)-modes:
+            for mode in set(expected_modes)-modes:
                 rows.append(dict(row,mode=mode,status=f'skipped:{reason}',n=0,
                                  notes=f'No completed timing; retained attempt log {log}'))
         for value in rows:normalize_nomap(value)
@@ -286,12 +287,14 @@ def _run_cell(args, row, models, *, restore_chunks=True):
             if chunked:append(chunk_ledger,value)
             retain(value)
         print('RESULT',stem,[(v['mode'],v['status'],v.get('n')) for v in rows],flush=True)
-        if set(completed)==set(MODES):return list(completed.values())
+        if set(completed)==set(expected_modes):return list(completed.values())
         print('CHUNK_CONTINUE',stem,{mode:sum(v['n'] for v in values) for mode,values in pieces.items()},flush=True)
         # The scope and lock have both ended. A fresh admitted, warmed process
         # contributes further actual rounds; no duration is extrapolated.
 
 def run_cell(args, row, models, *, restore_chunks=True):
+    if getattr(args,"isolate_modes",False) and not row.get("only_mode"):
+        return [value for mode in MODES for value in run_cell(args,dict(row,mode=mode,only_mode=mode),models,restore_chunks=restore_chunks)]
     attempts=[]
     for index in range(1 if getattr(args,"coverage_first",False) else 3):
         rows=_run_cell(args,dict(row),models,restore_chunks=restore_chunks if index==0 else False)
@@ -320,6 +323,7 @@ def main():
     p.add_argument('--sizes', default='cid22,2k')
     p.add_argument('--metrics')
     p.add_argument('--exclude-metrics',default='')
+    p.add_argument('--isolate-modes',action='store_true',help='GPU score and score+map run in separate bounded processes')
     p.add_argument('--gpu-runtime', choices=['cuda','wgpu'])
     p.add_argument('--engine', choices=['rten','ort-cuda'], default='rten')
     p.add_argument('--ort-library', type=Path)
@@ -336,6 +340,7 @@ def main():
     p.add_argument('--python-executable', type=Path)
     p.add_argument('--reference-jsonl', action='append', type=Path, default=[])
     args = p.parse_args()
+    if args.isolate_modes and not args.gpu_runtime:raise ValueError('--isolate-modes requires --gpu-runtime')
     if not 0<=args.batch_seconds<=1100:raise ValueError('batch hold must be within 0..1100 seconds')
     if not 1<=args.batch_reserve_seconds<=1100:raise ValueError('batch reserve must be within 1..1100 seconds')
     if not 1 <= args.scope_seconds <= 1100:raise ValueError('scope must be within 1..1100 seconds')
@@ -436,6 +441,8 @@ def main():
                     for result in results:
                         if getattr(args,"coverage_first",False):
                             result["parity_checked"] = bool((meta["device"]!="cpu" or args.python_package) and pair["size_name"]=="cid22" and count==threads[0])
+                            if not result["parity_checked"] and (meta["device"]!="cpu" or args.python_package):
+                                result.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status="Not requalified in coverage-first pass; self_warmup_score is separate")
                         append(output, result)
                         done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
                     if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):

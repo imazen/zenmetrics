@@ -169,3 +169,10 @@ queue overhead between short cells. PieAPP keeps its independent per-cell lock.
 The permitted cgroup CPU set in zenbench's metadata is separate from process
 CPU affinity. The [live one-thread snapshot](coverage-active-pinning-control.json)
 records every thread restricted to CPU 2, without another metric invocation.
+
+The optional GPU `--isolate-modes` path gives score and score+map separate
+processes and resource scopes. It avoids holding independent GPU scorers at
+the same time. The missing 8K Butteraugli cells use this path after the grouped
+scorers hit device allocation failures; completed observations are retained.
+For coverage rows without a repeated CPU comparison, collection clears
+`ref_score` and deltas; `self_warmup_score` remains separate.

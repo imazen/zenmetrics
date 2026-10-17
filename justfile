@@ -1229,7 +1229,7 @@ iqa-compete-publish-binary snapshot log binary metadata:
     python3 benchmarks/iqa_compete_2026-10-16/publish_binary.py '{{snapshot}}' '{{log}}' '{{binary}}' '{{metadata}}'
 
 iqa-compete-coverage-progress:
-    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16'
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-butter8k-isolated-v17'
 
 iqa-compete-stop-idle-controller pid script root proof *options:
     python3 benchmarks/iqa_compete_2026-10-16/stop_idle_controller.py '{{pid}}' '{{script}}' '{{root}}' '{{proof}}' {{options}}
@@ -1238,4 +1238,8 @@ iqa-compete-resume-coverage manifest output label:
     python3 benchmarks/iqa_compete_2026-10-16/resume_coverage.py '{{manifest}}' '{{output}}' --label '{{label}}'
 
 iqa-compete-coverage-snapshot output:
-    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' --freeze-dir '{{output}}' --save '{{output}}/progress.json'
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-butter8k-isolated-v17' --freeze-dir '{{output}}' --save '{{output}}/progress.json'
+
+# Only missing 8K Butteraugli cells; avoid co-resident score/map scorers.
+iqa-compete-butter8k-isolated binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics butteraugli-gpu --sizes 8k --threads 1,all --gpu-runtime cuda --coverage-first --isolate-modes --batch-seconds 1100 --batch-reserve-seconds 1000

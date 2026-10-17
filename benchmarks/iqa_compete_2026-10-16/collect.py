@@ -18,6 +18,8 @@ for ledger in a.ledgers:
    quality=row['contamination_classification']
    if quality not in ['clean','contaminated'] or row.get('contaminated')!=(quality=='contaminated'):raise ValueError('Inconsistent external host protocol quality')
    row['timing_quality']=quality
+  if row.get('coverage_first') and row.get('parity_checked') is False and (row['impl']!='zenmetrics' or row['device']!='cpu'):
+   row.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status='Not requalified in coverage-first pass; self_warmup_score is separate')
   normalize_nomap(row);key=tuple(row.get(k) for k in ['host','os','metric_name','impl','device','threads','mode','size_name'])
   if row['impl']=='zenmetrics':
    row['original_engine']=row.get('engine')

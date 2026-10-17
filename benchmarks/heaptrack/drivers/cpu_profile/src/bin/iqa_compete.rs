@@ -182,6 +182,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let r: &'static Rgb8Image = Box::leak(Box::new(read("reference")?));
     let d: &'static Rgb8Image = Box::leak(Box::new(read("distorted")?));
     let name = config["metric_name"].as_str().ok_or("metric name")?;
+    let only_mode = config["only_mode"].as_str();
+    if only_mode.is_some_and(|mode| !["score", "score+map"].contains(&mode)) {
+        return Err("unknown isolated mode".into());
+    }
+    if only_mode.is_some() && !name.ends_with("-gpu") {
+        return Err("isolated modes currently require a GPU metric".into());
+    }
+    let only_map = only_mode == Some("score+map");
+    let primary_mode = if only_map { "score+map" } else { "score" };
+    let primary_arm = usize::from(only_map);
     let kind = *MetricKind::all()
         .iter()
         .find(|k| k.name() == name)
@@ -226,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             config["gpu_runtime"]
                 .as_str()
                 .unwrap_or("explicit-runtime-required"),
-            false,
+            only_map,
         );
         #[cfg(not(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu")))]
         let call: Result<maps::Call, String> =
@@ -267,6 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"initialization_and_warmup_ns":warmup_start.elapsed().as_nanos(),"completed":true,"score_bits":first.as_ref().ok().map(|v|format!("{:016x}",v.to_bits()))})
     );
     let mut row = config.clone();
+    row["mode"] = json!(primary_mode);
     row["load_before"] = json!(before);
     row["admitted_unix_ns"] = json!(admitted_unix_ns);
     row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
@@ -277,10 +288,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["n"] = json!(0);
         row["load_after"] = json!(load());
         println!("IQA_ROW {}", serde_json::to_string(&row)?);
-        row["mode"] = json!("score+map");
-        row["status"] =
-            json!("skipped:score-path-refused; map capability not qualified on this input");
-        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        if only_mode.is_none() {
+            row["mode"] = json!("score+map");
+            row["status"] =
+                json!("skipped:score-path-refused; map capability not qualified on this input");
+            println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        }
         return Ok(());
     }
     let first = first?;
@@ -290,14 +303,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["score_bits"] = json!(format!("{:016x}", first.to_bits()));
         row["load_after"] = json!(load());
         println!("IQA_ROW {}", serde_json::to_string(&row)?);
-        row["mode"] = json!("score+map");
-        row["status"] = json!("skipped:nonfinite_score");
-        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        if only_mode.is_none() {
+            row["mode"] = json!("score+map");
+            row["status"] = json!("skipped:nonfinite_score");
+            println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        }
         return Ok(());
     }
-    let mut map_call = maps::native(name, r, d);
+    let mut map_call = if only_mode.is_none() {
+        maps::native(name, r, d)
+    } else {
+        None
+    };
     #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
-    if name.ends_with("-gpu") {
+    if only_mode.is_none() && name.ends_with("-gpu") {
         map_call = maps::gpu_score(
             name,
             r,
@@ -313,19 +332,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut unsupported = row.clone();
     unsupported["mode"] = json!("score+map");
     unsupported["n"] = json!(0);
-    match &map_first {
-        None => {
-            unsupported["status"] = json!("unsupported");
-            unsupported["notes"] =
-                json!("No qualified native-map adapter for this metric; see coverage inventory");
-            println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
+    if only_mode.is_none() {
+        match &map_first {
+            None => {
+                unsupported["status"] = json!("unsupported");
+                unsupported["notes"] = json!(
+                    "No qualified native-map adapter for this metric; see coverage inventory"
+                );
+                println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
+            }
+            Some(Err(e)) => {
+                unsupported["status"] = json!(format!("skipped:map-input:{e}"));
+                println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
+                map_call = None;
+            }
+            Some(Ok(_)) => {}
         }
-        Some(Err(e)) => {
-            unsupported["status"] = json!(format!("skipped:map-input:{e}"));
-            println!("IQA_ROW {}", serde_json::to_string(&unsupported)?);
-            map_call = None;
-        }
-        Some(Ok(_)) => {}
     }
     let chunk_budget_ms = config["chunk_budget_ms"].as_u64().unwrap_or(850_000);
     if !(1..=850_000).contains(&chunk_budget_ms) {
@@ -362,12 +384,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .sample_target_ns(sample_target_ns)
                 .max_time(Duration::from_millis(chunk_budget_ms))
                 .max_wall_time(Duration::from_millis(chunk_budget_ms));
-            g.bench("score", move |b| {
+            g.bench(primary_mode, move |b| {
                 if inspect_gpu {
                     // Deferred Drop checks every returned score AFTER the clock.
                     b.iter_deferred_drop(|| ObservedScore {
                         value: score().expect("metric failed after warmup"),
-                        observations: &observations[0],
+                        observations: &observations[primary_arm],
                     });
                 } else {
                     b.iter(|| black_box(score().expect("metric failed after warmup")));
@@ -463,7 +485,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         row["score"] = json!(measured);
         row["score_bits"] = json!(format!("{:016x}", measured.to_bits()));
-        row["map_score_matches_scalar_bits"] = json!(measured.to_bits() == first.to_bits());
+        row["map_score_matches_scalar_bits"] = if only_map {
+            Value::Null
+        } else {
+            json!(measured.to_bits() == first.to_bits())
+        };
+        if only_map {
+            row["scalar_comparison_status"] = json!("Not repeated in isolated map process");
+        }
         row["ref_score"] = json!(first);
         row["self_warmup_score"] = json!(first);
         row["abs_delta"] = json!((measured - first).abs());
