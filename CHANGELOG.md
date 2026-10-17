@@ -15,7 +15,7 @@ Workspace conventions per the global rules:
 
 - Browser workbench: the page starts a 4.7 MB core module and loads the full CPU-metric module on demand (first-load bytes 13.6 MB → 4.8 MB), adds PIQE/NIQE/BRISQUE, publishes `coverage.json` with every CLI metric's measured browser status, opens from `?metric=…` links (`docs/BROWSER_WORKBENCH_LINKS.md`), links back to the dashboard and sweeps JPEG XL distances for any metric (`2039016c`, `9fabecd2`, `be033244`).
 
-- Browser learned metrics: 14 of the CLI's 24 run on onnxruntime-web WebGPU and MUSIQ on its WASM provider, each within its card's 1e-3 JND gate against native rten; weights served from R2, preprocessing from zenmetrics-nn's own sources; licence-blocked models and DMM stay unavailable with stated reasons ([workbench doc](docs/BROWSER_VIEWER_2026-10-17_WORKBENCH.md)).
+- Browser learned metrics: 14 of the CLI's 24 run on onnxruntime-web WebGPU and MUSIQ on its WASM provider, each within its card's 1e-3 JND gate against native rten; weights served from R2, preprocessing from zenmetrics-nn's own sources; licence-blocked models and DMM stay unavailable with stated reasons (`a632f3cb`; [workbench doc](docs/BROWSER_VIEWER_2026-10-17_WORKBENCH.md)).
 
 - Add an opt-in Linux local queue with memory-aware backfill, checked atomic singleton publication, retained failure reconciliation and unchanged default/distributed execution (`52634234e395`).
 
