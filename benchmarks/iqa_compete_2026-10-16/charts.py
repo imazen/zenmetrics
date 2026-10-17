@@ -56,7 +56,7 @@ def main():
                     if not isinstance(r[k],(int,float)) or not math.isfinite(r[k]) or r[k]<=0:raise ValueError((key,k))
                 if r['n']<10 and r.get('timed_seconds',0)<3:raise ValueError((key,'insufficient sampling'))
             rows.append(r)
-    fields=['host','os','metric_name','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
+    fields=['host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
     byhost=collections.defaultdict(list)
     for r in rows:byhost[(r['host'],r['os'])].append({k:r.get(k) for k in fields})
     for (host,system),values in byhost.items():
@@ -68,15 +68,16 @@ def main():
                 (a.output/f'{host}-{index:03}.json').write_text(json.dumps(chunk,indent=2)+'\n');chunk=[];index+=1
             chunk.append(r)
         if chunk:(a.output/f'{host}-{index:03}.json').write_text(json.dumps(chunk,indent=2)+'\n')
-    panels=collections.defaultdict(list);families=collections.defaultdict(list)
+    panels=collections.defaultdict(list);families=collections.defaultdict(list);metrics=collections.defaultdict(list)
     for r in rows:
         if r['status'] not in ['ok','variant_mismatch']:continue
         category=r['status']
         if r.get('comparison_status','').startswith('unavailable:'):category+='-comparison-unavailable'
         if r.get('reproduction_required'):category+='-reproduction-required'
+        metrics[(r['host'],r['os'],r['size_name'],r['metric_name'],r['mode'],category)].append(r)
         panels[(r['host'],r['os'],r['size_name'],r['mode'],category)].append(r);families[(r['host'],r['os'],r['metric_family'],category)].append(r)
     links=[]
-    for prefix,groups,draw in [('bars',panels,svg_bars),('lines',families,svg_lines)]:
+    for prefix,groups,draw in [('bars',panels,svg_bars),('metric-bars',metrics,svg_bars),('lines',families,svg_lines)]:
         for key,values in sorted(groups.items()):
             name=re.sub(r'[^A-Za-z0-9._-]','_',prefix+'-'+'-'.join(key))+'.svg';(a.output/name).write_text(draw(' / '.join(key),sorted(values,key=lambda r:(r['metric_name'],r['threads'],r['impl']))));links.append(name)
     status=collections.Counter(r['status'] for r in rows)

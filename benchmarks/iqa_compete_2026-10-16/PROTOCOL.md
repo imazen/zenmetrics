@@ -98,6 +98,10 @@ Static charts use Matplotlib from the owned competitor environment. Pass its
 Python executable as the optional third argument to `just iqa-compete-charts`.
 The script writes standalone SVGs and an HTML index. Markers represent observed
 sizes; connecting lines join measured points without fitting or extrapolation.
+Each size also has per-metric bar panels, separated by score/map and
+qualification status, so each competitor comparison retains its own scale.
+Compact summaries retain CPU model, architecture, SIMD tier and GPU identity
+from the raw rows.
 
 Linux scope failures can leave zenbench admission records. The driver emits its
 PID, process group and timestamp before warmup. Recovery is limited to that
