@@ -1,0 +1,9 @@
+commit=b4421b8a (lead tree at run time; HDR-VDP metric source identical to master)
+binary=zenmetrics (zenmetrics-cli --features nn,nr) sha256=cd46c18bebfabd5b6447cede169b847c92dcff37316ff9e68e60ae9b45f4044c
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+method=zenmetrics batch --hdr --metric {hdrvdp,hdrvdp3} (hdrvdp3 with --hdrvdp3-ppd 30); per call = (T(4 rows) - T(1 row)) / 3, so the three extra rows' PNG decode is included (perf_deltas.py's complexity-reps driver has no HDR route)
+runs=threads 1 pinned cpu 6; threads 8 pinned cpus 0-7 (P-cores); 3 repeats each
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled to 1024x1024, sRGB -> linear -> 203 cd/m^2 white -> PQ, 16-bit PNG with cICP (make_hdr_pq.py); timing input only, not a colorimetric HDR rendition
+end_utc=2026-10-17T18:51:54Z
+run_heavy=run-heavy: done rc=0 40s | peak-RSS 1.34GiB | min-avail 16275MiB | peak-load 6.62
+command=flock ~/tmp/i265-heavy.lock run-heavy --mem 8G --jobs 8 -- measured/time_hdr.sh

@@ -40,6 +40,8 @@
 <circle cx="296.1" cy="51.8" r="3.2" fill="#2179ac"><title>psnrhvs-daala</title></circle><text x="301.1" y="47.8" font-size="9" fill="#444">psnrhvs-daala</text>
 <path d="M581.6 58.6V49.8" stroke="#9ab"/>
 <circle cx="581.6" cy="54.0" r="3.2" fill="#2179ac"><title>dmm</title></circle><text x="586.6" y="50.0" font-size="9" fill="#444">dmm</text>
+<path d="M462.3 66.7V49.7" stroke="#9ab"/>
+<circle cx="462.3" cy="57.4" r="3.2" fill="#2179ac"><title>hdrvdp</title></circle><text x="467.3" y="53.4" font-size="9" fill="#444">hdrvdp</text>
 <path d="M195.9 67.8V49.5" stroke="#9ab"/>
 <circle cx="195.9" cy="57.6" r="4.5" fill="#bf5825"><title>nlpd-iqa</title></circle><text x="200.9" y="53.6" font-size="9" fill="#444">nlpd-iqa</text>
 <path d="M385.8 63.8V53.4" stroke="#9ab"/>
@@ -48,6 +50,8 @@
 <circle cx="91.3" cy="60.1" r="4.5" fill="#bf5825"><title>gmsd</title></circle><text x="96.3" y="56.1" font-size="9" fill="#444">gmsd</text>
 <path d="M256.5 67.0V54.8" stroke="#9ab"/>
 <circle cx="256.5" cy="60.5" r="3.2" fill="#2179ac"><title>fsim</title></circle><text x="261.5" y="56.5" font-size="9" fill="#444">fsim</text>
+<path d="M472.7 71.2V51.6" stroke="#9ab"/>
+<circle cx="472.7" cy="60.6" r="3.2" fill="#2179ac"><title>hdrvdp3</title></circle><text x="477.7" y="56.6" font-size="9" fill="#444">hdrvdp3</text>
 <path d="M295.9 72.2V52.1" stroke="#9ab"/>
 <circle cx="295.9" cy="61.4" r="3.2" fill="#2179ac"><title>iwssim-piq</title></circle><text x="300.9" y="57.4" font-size="9" fill="#444">iwssim-piq</text>
 <path d="M339.1 73.0V51.5" stroke="#9ab"/>

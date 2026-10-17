@@ -132,8 +132,8 @@
    "lo": 0.8956,
    "hi": 0.9412,
    "overall": 0.8128,
-   "cpu_1t": null,
-   "cpu_8t": null,
+   "cpu_1t": 791.8453216552734,
+   "cpu_8t": 1024.2589314778645,
    "estimate": 2358.3424443166728,
    "kind": "classic-fr",
    "on_front": {
@@ -217,8 +217,8 @@
    "lo": 0.8833,
    "hi": 0.936,
    "overall": 0.6547,
-   "cpu_1t": null,
-   "cpu_8t": null,
+   "cpu_1t": 964.8958841959635,
+   "cpu_8t": 1564.2452239990234,
    "estimate": 2102.4855346899417,
    "kind": "classic-fr",
    "on_front": {

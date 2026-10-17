@@ -245,7 +245,9 @@ def main():
         f'- Tallies: {n_tally} of 115 CLI metric names, counted from zenmetrics source; measured on {len(m1)} metrics.',
         '- Measurements: i265 (Intel Core Ultra 7 265K), per-call deltas under `perf stat`, decode and setup excluded, '
         '1024×1024, one content pair, three repeats; 1 thread pinned to a P-core, and 8 threads on P-cores 0-7 from a '
-        'build with each metric crate\'s threading enabled.',
+        'build with each metric crate\'s threading enabled. Exception: HDR-VDP 2 and 3 have no route in the timing driver; '
+        'they are timed through `zenmetrics batch --hdr` as (T(4 rows) − T(1 row))/3, which includes the extra rows\' '
+        '16-bit PNG decode (`measured/i265_hdr_1024.meta`).',
         '- Weight tables: flop count; the draft\'s declared weights; measured scalar throughput and latency on the '
         'i265 P-core; LLVM 22 cost model (`print<cost-model>`) for arrowlake and, as a different-CPU control, znver5; '
         'llvm-mca per-instruction throughput (`-mcpu=arrowlake` uses the Alder Lake model).',

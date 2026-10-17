@@ -582,6 +582,48 @@
    "wall_8t": 2.2818565368652344
   },
   {
+   "metric": "hdrvdp",
+   "counter": "swe",
+   "kind": "classic-fr",
+   "flops_per_px": 6402.8175,
+   "halo_px": 1020.0,
+   "estimate": {
+    "flops": 6402.817482,
+    "pedzisz_2026_draft": 7414.818424,
+    "i265_P_rthroughput": 2358.342444,
+    "i265_P_latency": 15805.98185,
+    "llvm_tti_arrowlake_throughput": 7220.148495,
+    "llvm_tti_arrowlake_latency": 23629.708076,
+    "llvm_mca_arrowlake_rthroughput": 2407.391037,
+    "llvm_tti_znver5_throughput": 7129.481828
+   },
+   "cpu_1t": 791.8453216552734,
+   "wall_1t": 793.1489861806234,
+   "cpu_8t": 1024.2589314778645,
+   "wall_8t": 256.0310128529867
+  },
+  {
+   "metric": "hdrvdp3",
+   "counter": "swe",
+   "kind": "classic-fr",
+   "flops_per_px": 4108.3056,
+   "halo_px": 1278.0,
+   "estimate": {
+    "flops": 4108.305603,
+    "pedzisz_2026_draft": 5079.705786,
+    "i265_P_rthroughput": 2102.485535,
+    "i265_P_latency": 11003.926164,
+    "llvm_tti_arrowlake_throughput": 4811.639954,
+    "llvm_tti_arrowlake_latency": 17282.823657,
+    "llvm_mca_arrowlake_rthroughput": 1788.329498,
+    "llvm_tti_znver5_throughput": 4643.639465
+   },
+   "cpu_1t": 964.8958841959635,
+   "wall_1t": 964.576003074646,
+   "cpu_8t": 1564.2452239990234,
+   "wall_8t": 326.81085173288983
+  },
+  {
    "metric": "hyperiqa",
    "counter": "swe2",
    "kind": "nn-nr",

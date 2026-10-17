@@ -359,6 +359,8 @@ benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggr
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.tsv	ignored	Complexity-study timing table consumed by scripts/complexity/paper.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
