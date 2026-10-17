@@ -979,8 +979,8 @@ iqa-compete-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
 
 # PieAPP uses its own slow-cell lane; both lanes contribute to the full inventory.
-iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k" threads="1,20":
-    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --exclude-metrics pieapp
+iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k" threads="1,20" batch="1100":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --exclude-metrics pieapp --batch-seconds '{{batch}}'
 
 iqa-compete-libvmaf-build source output:
     bash benchmarks/iqa_compete_2026-10-16/build_libvmaf.sh '{{source}}' '{{output}}'
@@ -1108,8 +1108,8 @@ iqa-compete-pieapp-cpu binary pairs output models model_map sizes="cid22,2k" thr
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics pieapp --chunk-budget-ms 600000
 
 # Explicit metric subset for isolated admission repairs; preserves old ledgers.
-iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20":
-    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics '{{metrics}}' --sizes '{{sizes}}' --threads '{{threads}}'
+iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20" batch="1100":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics '{{metrics}}' --sizes '{{sizes}}' --threads '{{threads}}' --batch-seconds '{{batch}}'
 
 iqa-compete-reference-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_references.py

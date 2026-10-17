@@ -1,0 +1,70 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/batch-smoke-v1/i265.jsonl",
+  "raw_sha256": "aa9b30f26d73866f29b09d0321bbc77db4ac105ef6f52769f6e0e645e20015f8",
+  "references": "/home/lilith/tmp/iqa-compete/i265-progress-20261017-0136.jsonl",
+  "holds": [
+    {
+      "event": "acquired",
+      "pid": 2353774,
+      "configured_hold_seconds": 1100,
+      "observed_parent_hold_seconds": 0.00012801599223166704,
+      "cells_submitted": 0
+    },
+    {
+      "event": "parent_reference_closed",
+      "pid": 2353774,
+      "configured_hold_seconds": 1100,
+      "observed_parent_hold_seconds": 2.0265863810200244,
+      "cells_submitted": 2
+    }
+  ],
+  "comparisons": [
+    {
+      "metric": "psnr",
+      "mode": "score",
+      "n": 10,
+      "score": 48.25860830672113,
+      "abs_delta": 0.0,
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 25147,
+        "peak_load": 1.18,
+        "peak_rss_gib": 0.03,
+        "seconds": 1
+      },
+      "actual_scope_seconds": 1099
+    },
+    {
+      "metric": "gmsd",
+      "mode": "score",
+      "n": 10,
+      "score": 0.0009864770445797344,
+      "abs_delta": 0.0,
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 25149,
+        "peak_load": 1.18,
+        "peak_rss_gib": 0.03,
+        "seconds": 1
+      },
+      "actual_scope_seconds": 1099
+    },
+    {
+      "metric": "gmsd",
+      "mode": "score+map",
+      "n": 10,
+      "score": 0.0009864770445797344,
+      "abs_delta": 0.0,
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 25149,
+        "peak_load": 1.18,
+        "peak_rss_gib": 0.03,
+        "seconds": 1
+      },
+      "actual_scope_seconds": 1099
+    }
+  ],
+  "unsupported_rows": 1,
+  "scope": "Actual PSNR/GMSD calls through the native resource wrapper under one bounded host lock; no metric/source arithmetic changed"
+}
