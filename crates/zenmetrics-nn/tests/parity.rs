@@ -291,7 +291,7 @@ fn matches_upstream() {
             eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
             // A mismatch on this CUDA host needs a diagnostic rerun. Preserve
             // and gate the first result even if the diagnostic happens to pass.
-            if col == "pieapp" && engine() != Engine::Rten && (!err.is_finite() || err > tol(col)) {
+            if engine() != Engine::Rten && (!err.is_finite() || err > tol(col)) {
                 let diagnostic = m
                     .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                     .expect("diagnostic CUDA evaluation after first-score mismatch");
@@ -443,6 +443,7 @@ fn dmm_netlib_goldens() {
         other => panic!("no reviewed DMM goldens for {other:?}"),
     };
     // Same row set as the netlib file: MKL draws are the recorded oracle.
+    let mut mkl_keys = std::collections::HashSet::new();
     let mkl: std::collections::HashMap<(String, String), f64> =
         std::fs::read_to_string(model_dir.join("dmm_goldens.tsv"))
             .unwrap_or_else(|e| panic!("dmm_goldens.tsv: {e}"))
@@ -451,7 +452,14 @@ fn dmm_netlib_goldens() {
             .filter(|l| !l.is_empty())
             .map(|l| {
                 let f: Vec<&str> = l.split('\t').collect();
-                ((f[0].to_string(), f[1].to_string()), f[2].parse().unwrap())
+                let key = (f[0].to_string(), f[1].to_string());
+                assert!(
+                    mkl_keys.insert(key.clone()),
+                    "duplicate upstream DMM golden row"
+                );
+                let value: f64 = f[2].parse().unwrap();
+                assert!(value.is_finite(), "nonfinite upstream DMM golden");
+                (key, value)
             })
             .collect();
     // Rows: image size dmm_netlib tol kind — `jnd` rows hold the true
@@ -464,6 +472,7 @@ fn dmm_netlib_goldens() {
     let mut failures = Vec::new();
     let mut pinned = 0;
     let mut worst_jnd = 0.0f64;
+    let mut within_jnd = 0;
     let mut mkl_errors = Vec::new();
     for line in validate_dmm_panel(netlib, &mkl) {
         let f: Vec<&str> = line.split('\t').collect();
@@ -508,7 +517,22 @@ fn dmm_netlib_goldens() {
                 .expect("evaluate"),
             "dmm",
         );
+        // The qualification host requires repeating CUDA disagreements. Keep
+        // both observations visible; the first retains its frozen row limit.
+        #[cfg(feature = "ort")]
+        if matches!(engine(), Engine::OrtCuda) && (!got.is_finite() || (got - want).abs() > row_tol)
+        {
+            let repeated = score(
+                &*m.evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("repeat CUDA disagreement"),
+                "dmm",
+            );
+            eprintln!(
+                "dmm CUDA repeat {stem} {size}: first {got:.17e}, repeat {repeated:.17e}, target {want:.17e}, unchanged limit {row_tol:.17e}"
+            );
+        }
         let err = (got - want).abs();
+        within_jnd += usize::from(err <= 1e-3 * jnd("dmm"));
         let mkl_err = mkl
             .get(&(stem.to_string(), size.to_string()))
             .map(|m| (got - m).abs());
@@ -542,7 +566,7 @@ fn dmm_netlib_goldens() {
         mkl_errors[checked - 1]
     );
     eprintln!(
-        "dmm: {checked} pairs vs netlib-sgesdd — {} at 1e-3 JND (worst {worst_jnd:.3e} = {:.3e} JND), {pinned} pinned solver-drift rows",
+        "dmm: {checked} pairs vs netlib-sgesdd — {within_jnd} inside 1e-3 JND; {} classified jnd (worst {worst_jnd:.3e} = {:.3e} JND), {pinned} pinned solver-drift rows",
         checked - pinned,
         worst_jnd / jnd("dmm")
     );
