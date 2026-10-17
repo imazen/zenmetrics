@@ -2863,7 +2863,12 @@ fn cmd_score(
     }
     require_display_model(&[args.metric], args.display_model.as_ref(), false, "score")?;
     let alpha_policy = zenmetrics_api::alpha::AlphaPolicy::from_str_loose(&args.alpha_policy)
-        .ok_or_else(|| format!("unknown alpha policy '{}'; valid: noise, white, black, min_wb, discard, opaque", args.alpha_policy))?;
+        .ok_or_else(|| {
+            format!(
+                "unknown alpha policy '{}'; valid: noise, white, black, min_wb, discard, opaque",
+                args.alpha_policy
+            )
+        })?;
     let reference = decode::decode_image_with_alpha_policy(&args.reference, alpha_policy)?;
     let distorted = decode::decode_image_with_alpha_policy(&args.distorted, alpha_policy)?;
     if reference.width != distorted.width || reference.height != distorted.height {
@@ -2922,11 +2927,26 @@ fn is_image_file(p: &std::path::Path) -> bool {
     };
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "png" | "jpg" | "jpeg" | "webp" | "avif" | "jxl" | "gif" | "tiff" | "tif" | "bmp" | "exr" | "y4m" | "heic"
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "webp"
+            | "avif"
+            | "jxl"
+            | "gif"
+            | "tiff"
+            | "tif"
+            | "bmp"
+            | "exr"
+            | "y4m"
+            | "heic"
     )
 }
 
-fn scan_dir_images(root: &std::path::Path, recursive: bool) -> Result<Vec<PathBuf>, std::io::Error> {
+fn scan_dir_images(
+    root: &std::path::Path,
+    recursive: bool,
+) -> Result<Vec<PathBuf>, std::io::Error> {
     let mut files = Vec::new();
     scan_dir_inner(root, root, recursive, &mut files)?;
     files.sort();
@@ -2966,9 +2986,11 @@ fn find_image_pairs(
     // 1. Exact relative paths
     let mut exact_refs = std::collections::HashSet::new();
     // 2. Relative paths without extension
-    let mut stem_rel_refs: std::collections::HashMap<PathBuf, PathBuf> = std::collections::HashMap::new();
+    let mut stem_rel_refs: std::collections::HashMap<PathBuf, PathBuf> =
+        std::collections::HashMap::new();
     // 3. Basenames without extension
-    let mut basename_refs: std::collections::HashMap<String, PathBuf> = std::collections::HashMap::new();
+    let mut basename_refs: std::collections::HashMap<String, PathBuf> =
+        std::collections::HashMap::new();
     let mut duplicate_basenames = std::collections::HashSet::new();
 
     for r in &ref_rels {
@@ -3055,13 +3077,14 @@ fn cmd_score_folder(
     let pairs = find_image_pairs(&args.reference, &args.distorted, args.recursive)?;
 
     #[cfg(feature = "orchestrator")]
-    let mut orch = if use_orchestrator && orchestrator_runner::metric_orchestrator_eligible(args.metric) {
-        let mut o = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
-        orchestrator_runner::print_capability_summary(&o);
-        Some(o)
-    } else {
-        None
-    };
+    let mut orch =
+        if use_orchestrator && orchestrator_runner::metric_orchestrator_eligible(args.metric) {
+            let mut o = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+            orchestrator_runner::print_capability_summary(&o);
+            Some(o)
+        } else {
+            None
+        };
 
     let mut rows = Vec::with_capacity(pairs.len());
     let mut failed_count = 0usize;
@@ -3153,7 +3176,6 @@ fn cmd_score_folder(
 
     Ok(())
 }
-
 
 fn cmd_batch(
     args: BatchArgs,

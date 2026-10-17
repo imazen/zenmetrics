@@ -147,16 +147,25 @@ pub enum AlphaError {
 impl fmt::Display for AlphaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AlphaNotOpaque { non_opaque_count, max_transparency } => {
+            Self::AlphaNotOpaque {
+                non_opaque_count,
+                max_transparency,
+            } => {
                 write!(
                     f,
                     "Image contains non-opaque alpha: {non_opaque_count} non-opaque pixels (max transparency: {max_transparency}/255). Image quality metrics operate on opaque RGB. Specify an explicit alpha_policy (e.g. 'noise', 'matte_white', 'matte_black', 'discard_unchecked') to evaluate."
                 )
             }
             Self::BufferLengthMismatch { expected, actual } => {
-                write!(f, "buffer length mismatch: expected {expected} bytes, got {actual}")
+                write!(
+                    f,
+                    "buffer length mismatch: expected {expected} bytes, got {actual}"
+                )
             }
-            Self::DimensionMismatch { ref_dims, dist_dims } => {
+            Self::DimensionMismatch {
+                ref_dims,
+                dist_dims,
+            } => {
                 write!(
                     f,
                     "dimension mismatch: reference is {}x{}, distorted is {}x{}",
@@ -249,7 +258,10 @@ pub fn compute_alpha_stats(ref_alpha: &[u8], dist_alpha: &[u8]) -> Result<AlphaS
 }
 
 /// Compute fidelity statistics between two flat 4-channel RGBA buffers.
-pub fn compute_rgba_alpha_stats(ref_rgba: &[u8], dist_rgba: &[u8]) -> Result<AlphaStats, AlphaError> {
+pub fn compute_rgba_alpha_stats(
+    ref_rgba: &[u8],
+    dist_rgba: &[u8],
+) -> Result<AlphaStats, AlphaError> {
     if ref_rgba.len() != dist_rgba.len() {
         return Err(AlphaError::BufferLengthMismatch {
             expected: ref_rgba.len(),
@@ -433,12 +445,7 @@ fn composite_over_solid_linear(
 }
 
 /// Composite RGBA over the deterministic linear noise background table.
-fn composite_over_noise_linear(
-    rgba: &[u8],
-    width: u32,
-    _height: u32,
-    out: &mut [u8],
-) {
+fn composite_over_noise_linear(rgba: &[u8], width: u32, _height: u32, out: &mut [u8]) {
     let w = width as usize;
     for (i, px) in rgba.chunks_exact(4).enumerate() {
         let x = i % w;
@@ -506,7 +513,13 @@ mod tests {
     fn test_non_opaque_errors_under_require_opaque() {
         let rgba = vec![128, 64, 32, 255, 200, 100, 50, 200];
         let err = composite_rgba_srgb8(&rgba, 2, 1, AlphaPolicy::RequireOpaque).unwrap_err();
-        assert!(matches!(err, AlphaError::AlphaNotOpaque { non_opaque_count: 1, .. }));
+        assert!(matches!(
+            err,
+            AlphaError::AlphaNotOpaque {
+                non_opaque_count: 1,
+                ..
+            }
+        ));
     }
 
     #[test]
