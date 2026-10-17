@@ -88,6 +88,11 @@ Results are content-addressed under `target/bench-iqa/<key>/`, or `--output DIR`
 `rows.jsonl`, per-cell logs, input hashes and `run.meta` retain the commit,
 binary SHA-256, OS, explicit host label, thread budgets and toolchain versions.
 A repeated command skips completed modes within the same content identity.
+On Windows, the resume identity ignores PE COFF/debug timestamps and the RSDS
+PDB GUID, which change when MSVC relinks identical code. All other executable
+bytes remain significant. Exact file SHA-256s remain in rows and `run.meta`;
+`identity.binary_sha256` is the normalized hash, labelled
+`pe-relink-metadata-v1`. ELF and Mach-O hashes remain byte exact.
 Dashboard projections are written to the registered ignored directory
 `benchmarks/iqa_compete_2026-10-16/repro-results/<key>/`. The dashboard lane's
 existing build ingests those shards; retain or submit the generated shards

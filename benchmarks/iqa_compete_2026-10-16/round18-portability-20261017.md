@@ -29,3 +29,37 @@ Private raw retention: `~/tmp/iqa-compete/round18-linux-final/`, `~/tmp/iqa-comp
 ## Windows result and correction
 
 Downloaded Windows artifact: two cohorts, each with 8 successful n>=5 rows, source f95192aa. Worker hashes: `2eb19ac32026cc46f7cddccfc02e91754ea3804a5c8e894b50a055e676feadbd` and `257b7c1247d3bd0122bb5075cc86ed325906c1f146c52b11306d5f218f9368c6`. The resume gate failed and remains recorded as failure. The recipe correction invokes the built executable directly after one Cargo build configuration, preserving the strict binary-hash content key and unchanged zero-new-cells assertion. Windows rerun pending.
+
+## Windows resume investigation
+
+The single-build recipe correction did not fix Windows resume: run
+[39030620635](https://github.com/imazen/zenmetrics/actions/runs/39030620635)
+also produced two executable hashes. The original completed log shows
+`zenmetrics-cli` recompilation and worker relinking during the repeat.
+Identity fields other than the executable hash were identical.
+
+Run [39032428725](https://github.com/imazen/zenmetrics/actions/runs/39032428725)
+retained both Windows executables. Each is 17,592,320 bytes. Exactly 20 bytes
+differ: one byte in each of four timestamp fields and the 16-byte RSDS PDB
+GUID. The COFF timestamp starts at file offset 240; debug timestamps start at
+15003396, 15003424 and 15003452; the GUID occupies 15003756–15003771.
+No code or other data differs. Normalizing the four full timestamp fields and
+GUID makes the complete files identical, verified with the Rust normalizer.
+
+| Identity | First executable | Rebuilt executable |
+| --- | --- | --- |
+| Full SHA-256 | `ff69e6b4de4385aed88a9cb407aa441a9444be84e285b2142a1193166299cb81` | `21b4f1f01139fbfc2de047b9bcc7fe7929064b74b3b2e20e284f1cf4e93609fc` |
+| Normalized SHA-256 | `e3d9cf66dea537617c34128d2fb529cc5fd1cc3032a875f864aa3bf505538798` | `e3d9cf66dea537617c34128d2fb529cc5fd1cc3032a875f864aa3bf505538798` |
+
+The parser follows the [Microsoft PE layout](https://learn.microsoft.com/windows/win32/debug/pe-format),
+supports PE32/PE32+, and retains all other bytes, including code, machine,
+section layout, PDB path/age and unknown debug data. Unit controls require
+those changes to invalidate the identity and reject truncated directories.
+Non-PE files remain byte exact. Raw timing rows retain exact executable hashes;
+`run.meta` labels the normalized identity and records the exact current file
+hash separately. The zero-new-timed-cells assertion remains unchanged.
+
+The timestamp-only candidate failed the Windows repeat; that failure led to
+the complete byte comparison above. The first diagnostic capture also failed
+artifact upload because it mixed Windows drives; subsequent captures keep all
+files beneath the checkout.
