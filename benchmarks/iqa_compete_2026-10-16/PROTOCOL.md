@@ -118,3 +118,8 @@ warmup loads the selected model; later timed calls use that model directly.
 The `IQA_WARMUP` duration measures that first score callable after persistent
 scorer construction. Earlier input loading and eager constructor work are also
 untimed but are outside that diagnostic duration.
+
+Learned and no-reference CLI routes without native maps record `unsupported`
+for that mode independently of score startup, consent, geometry or scope
+failures. Reclassification retains the original status in raw metadata.
+Competitor map capabilities remain specific to each public entry point.

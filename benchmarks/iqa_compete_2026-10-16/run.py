@@ -23,6 +23,20 @@ TIMING = ['n', 'median_ns', 'p10_ns', 'p90_ns', 'mean_ns', 'score', 'ref_score',
 MODES = ['score', 'score+map']
 LEARNED = {'lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg','dists','deepdc','ckdn','afine','dreamsim','arniqa','maniqa','liqe','musiq','hyperiqa','paq2piq','wadiqam-fr-live','wadiqam-fr-tid','wadiqam-nr-live','wadiqam-nr-tid','wd','pieapp'}
 
+
+# These frozen CLI routes have no native-map API, independently of score startup.
+NO_MAPS = LEARNED | {'brisque', 'niqe', 'ilniqe', 'cambi'}
+
+def normalize_nomap(row):
+    if (row.get('impl') != 'zenmetrics' or row.get('metric_name') not in NO_MAPS
+            or row.get('mode') != 'score+map' or row.get('status') == 'unsupported'):
+        return
+    if row.get('n', 0):
+        raise ValueError('A frozen no-map route unexpectedly returned timed maps')
+    row['source_status'] = row['status']
+    row.update(status='unsupported', notes=row.get('notes', '') +
+               '; This learned/NR CLI route has no native-map API; score startup outcome is separate')
+
 def sha(path):
     h = hashlib.sha256()
     with Path(path).open('rb') as f:
@@ -165,6 +179,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
             for mode in set(MODES)-modes:
                 rows.append(dict(row,mode=mode,status=f'skipped:{reason}',n=0,
                                  notes=f'No completed timing; retained attempt log {log}'))
+        for value in rows:normalize_nomap(value)
         chunked=any(value['status']=='partial' for value in rows) or any(pieces.values())
         for value in rows:
             value['initialization_diagnostics']=[json.loads(s[len('IQA_WARMUP '):]) for s in text.splitlines() if s.startswith('IQA_WARMUP ')]

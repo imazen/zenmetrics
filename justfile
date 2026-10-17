@@ -1092,3 +1092,7 @@ iqa-compete-linux-admission-tests:
 iqa-compete-linux-timeout-control binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --scope-seconds 1 --sample-target-ns 2000000000
     python3 benchmarks/iqa_compete_2026-10-16/check_timeout_control.py '{{output}}'
+
+# Capability metadata is independent of a model's startup or scope outcome.
+iqa-compete-capability-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_nomap_metadata.py

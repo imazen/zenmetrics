@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Choose explicitly ordered qualified attempts; never discard source ledgers."""
 import argparse,hashlib,json,pathlib,collections
-from run import family, LEARNED
+from run import family, LEARNED, normalize_nomap
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('ledgers',nargs='+',type=P);p.add_argument('--output',type=P,required=True);a=p.parse_args()
 assert not a.output.exists(),'Choose a new output or preserve the prior collection first'
@@ -9,7 +9,7 @@ selected={};sources=[]
 for ledger in a.ledgers:
  digest=hashlib.sha256(ledger.read_bytes()).hexdigest();sources.append(dict(path=str(ledger),sha256=digest))
  for index,line in enumerate(ledger.read_text().splitlines(),1):
-  row=json.loads(line);key=tuple(row.get(k) for k in ['host','metric_name','impl','device','threads','mode','size_name'])
+  row=json.loads(line);normalize_nomap(row);key=tuple(row.get(k) for k in ['host','metric_name','impl','device','threads','mode','size_name'])
   if row['impl']=='zenmetrics':
    row['original_engine']=row.get('engine')
    row['engine']='cubecl' if row.get('gpu_runtime') and row['metric_name'].endswith('-gpu') else ('rten' if row['metric_name'] in LEARNED and row['device']=='cpu' else ('ort-cuda' if row['metric_name'] in LEARNED else 'native'))
