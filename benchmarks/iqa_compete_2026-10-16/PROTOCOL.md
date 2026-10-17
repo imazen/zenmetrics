@@ -277,3 +277,8 @@ interval peak; an unsuccessful cleanup remains explicitly contaminated.
 One-thread cells retain their explicit CPU affinity. Historical cells without
 this accounting remain historical measurements; they are not relabeled clean.
 The monitor is process accounting, not a metric hotspot profiler.
+
+Literal before/after process snapshots use `ps` lifetime CPU percentages,
+explicitly labeled as such. Retry decisions use sampled CPU-tick deltas during
+the cell, not those lifetime percentages. Processes that start and exit wholly
+between samples may escape observation; the sampling interval is one second.

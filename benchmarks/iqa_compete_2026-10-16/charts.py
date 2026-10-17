@@ -61,7 +61,13 @@ def main():
             rows.append(r)
     fields=['host_protocol','host_observation_receipts','host_protocol_attempts','timing_quality','contention','contention_receipt','contention_attempts','host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','declared_columns','reference_declared_columns','native_api_note','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_kind','reference_source_status','reference_log_sha256','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
     byhost=collections.defaultdict(list)
-    for r in rows:byhost[(r['host'],r['os'])].append({k:r.get(k) for k in fields})
+    for r in rows:
+        compact={k:r.get(k) for k in fields}
+        if r.get('contention'):
+            compact['contention']={k:v for k,v in r['contention'].items() if k not in ['top_competing_processes','top_competing_processes_first_interval','top_competing_processes_last_interval','interval_peak_cores']}
+            for key in ['top_competing_processes_before','top_competing_processes_after']:
+                compact['contention'][key]=compact['contention'].get(key,[])[:5]
+        byhost[(r['host'],r['os'])].append(compact)
     for (host,system),values in byhost.items():
         host=host+'-'+system.split('-')[0]+'-'+hashlib.sha256(system.encode()).hexdigest()[:8]
         chunk=[];index=0

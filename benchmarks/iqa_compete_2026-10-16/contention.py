@@ -16,6 +16,15 @@ def snapshot():
     return time.monotonic(),processes
 
 
+def process_view():
+    raw=subprocess.check_output(['ps','-eo','pid=,ppid=,pgid=,pcpu=,comm='],text=True)
+    rows=[]
+    for line in raw.splitlines():
+        fields=line.strip().split(None,4)
+        if len(fields)==5:
+            rows.append(dict(pid=int(fields[0]),ppid=int(fields[1]),pgid=int(fields[2]),lifetime_cpu_percent=float(fields[3]),name=fields[4]))
+    return rows
+
 def interval(first,last,hz):
     elapsed=last[0]-first[0]
     return [dict(value,cores=max(0,value['ticks']-first[1][key]['ticks'])/hz/elapsed)
@@ -27,7 +36,7 @@ def main():
     parser.add_argument('receipt',type=Path);parser.add_argument('log',type=Path)
     parser.add_argument('command',nargs=argparse.REMAINDER);args=parser.parse_args()
     command=args.command[1:] if args.command[:1]==['--'] else args.command
-    hz=os.sysconf('SC_CLK_TCK');before=snapshot();load_before=list(os.getloadavg())
+    hz=os.sysconf('SC_CLK_TCK');view_before=process_view();before=snapshot();load_before=list(os.getloadavg())
     owned={os.getpid()};samples=[];durations=[];previous=before
     process=subprocess.Popen(command)
     while True:
@@ -40,6 +49,7 @@ def main():
             changed=bool(additions);owned.update(additions)
         samples.append(interval(previous,current,hz));durations.append(current[0]-previous[0]);previous=current
         if code is not None:break
+    load_after=list(os.getloadavg());view_after=process_view()
     # systemd scope children may be reparented; the driver publishes its identity.
     groups=set()
     if args.log.exists():
@@ -61,9 +71,11 @@ def main():
     total=sorted(accumulated.values(),key=lambda v:v['cores'],reverse=True)
     # Retry if a competitor exceeds one core in any sampled interval.
     worst=max((v['cores'] for v in total),default=0)
-    result=dict(protocol='locked-process-accounting-v1',supervisor_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),load_before=load_before,load_after=list(os.getloadavg()),
+    result=dict(protocol='locked-process-accounting-v1',supervisor_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),load_before=load_before,load_after=load_after,
         elapsed_seconds=previous[0]-before[0],cpu_tick_hz=hz,top_competing_processes=total[:20],
-        top_competing_processes_before=competing(samples[0])[:20],top_competing_processes_after=competing(samples[-1])[:20],
+        top_competing_processes_before=sorted((v for v in view_before if v['pid'] not in owned and v['pgid'] not in groups),key=lambda v:v['lifetime_cpu_percent'],reverse=True)[:20],
+        top_competing_processes_after=sorted((v for v in view_after if v['pid'] not in owned and v['pgid'] not in groups),key=lambda v:v['lifetime_cpu_percent'],reverse=True)[:20],
+        top_competing_processes_first_interval=competing(samples[0])[:20],top_competing_processes_last_interval=competing(samples[-1])[:20],
         interval_peak_cores=[dict(pid=k[0],name=k[1],cores=v) for k,v in sorted(peaks.items(),key=lambda item:item[1],reverse=True)[:20]],
         max_competing_mean_cores=worst,max_competing_interval_cores=max(peaks.values(),default=0),contaminated=max(peaks.values(),default=0)>1,exit_code=code)
     args.receipt.write_text(json.dumps(result,sort_keys=True)+'\n')
