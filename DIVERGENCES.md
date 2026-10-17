@@ -616,21 +616,18 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
 
 ### `dmm` (`zenmetrics-nn`) — vs Baoliang93/DMM `DMM_PyTorch` 0.1.2
 
-- **DIVERGES** — the recorded port scores differ from upstream: `wt` weights each
-  patch's singular-value distance by the spread of elementwise products
-  of the two SVD bases, and ~90% of tap elements are exact zeros
-  post-ReLU, so most patches sit in degenerate singular clusters whose
-  orthonormal basis depends on the LAPACK build's numerical path.
-  This does not establish that the upstream basis cannot be reproduced.
-  Upstream's oracle is MKL `sgesdd` (`torch.svd` CPU);
-  our port is a pure-Rust f32 transliteration of the netlib
-  `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` path in score revision 1;
-  agreement on one patch is not whole-panel parity —
-  on the worst degenerate ladder patch (rank-1, 15-dim null space) MKL
-  draws `wt=3.090`, scipy `sgesdd` 3.8179, ours 3.8181.
-- Historical score-revision-1 spreads on the 24-row ladder (score units; 1 JND = 0.191420):
-  ours vs MKL-goldens: rten median 1.67336e-3 / max 5.7e-2, ort-cuda median
-  7.33735e-4 / max 0.176. Upstream's *own* CPU-vs-CUDA (`torch.svd` MKL vs
+- **DIVERGES** — `wt` weights each patch's singular-value distance by
+  the spread of elementwise products of its two SVD bases. Degenerate
+  singular clusters permit different orthonormal bases, and numerical paths
+  can change the score. The host head is based on LAPACK stages in f32;
+  source correspondence alone does not establish whole-panel parity.
+- Native score-revision-1 comparisons against upstream MKL on all 24 ladder
+  rows per engine (score units; 1 JND = 0.191420): rten median
+  1.673475654e-3 / maximum 5.674371081e-2; ort-cuda median
+  7.338384395e-4 / maximum 1.764253188e-1. The full 24-row CUDA repeat
+  is bit-identical. Original rounded TSV measurements are retained in
+  [the audit receipt](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md).
+  Historical upstream CPU-vs-CUDA (`torch.svd` MKL vs
   cuSolver, same pipeline): up to **1.73 absolute (~9 JND)** on
   `2207_128`, +1.7% on `2207_256`, +3.3% on `2406_128`. These historical
   observations do not establish acceptance for a different solver revision.
@@ -643,7 +640,8 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   there; rows whose netlib-vs-port draws drift past the gate are pinned
   at their measured residual +5% (`kind=pinned` in the TSV) — a
   regression floor, not a parity claim. The MKL comparison is printed
-  per row, not asserted. Historical revision-1 classification: rten 6 jnd + 18 pinned
+  per row, not asserted. All 48 frozen row limits pass on the restored solver.
+  Current revision-1 classification: rten 6 jnd + 18 pinned
   (worst jnd-row err 1.09e-4), ort-cuda 7 jnd + 17 pinned (worst
   1.81e-4). The combined revision-2 experiment failed nine frozen rten limits and twelve
   CUDA limits, including two/four existing JND rows respectively. Actual

@@ -1676,23 +1676,22 @@ and copying a second c-value plane (`24fe54f8`). Review measurements belong in
 
 ### Known Bugs: DMM solver revision qualification (2026-10-17)
 
-The LAPACK audit found an epsilon twice the reference value, scaling before
-its small-N early return, and reflector products grouped differently from
-SGER. The initial three corrections preserve all six rten JND rows but exceed
-four existing pinned limits. Neither the f64 norm nor reference three-accumulator
-norm experiments qualify against the frozen panels. Their measurements and
-captured source identities are retained in
-[the audit receipt](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md).
-Do not regenerate floors or demote JND rows to make a solver revision pass.
+The restored DMM solver passes all 48 frozen same-tap SGESDD row limits.
+Canonical JND coverage is 6/24 rten and 7/24 CUDA; the remaining rows have
+owner-approved residual floors. The full CUDA repeat is bit-identical.
+These floors do not establish canonical parity on the pinned rows.
 
-The follow-up classic-norm candidate, including SLARTG, direct SORM2R and
-right-SGER ordering, fails nine rten and twelve CUDA limits. Two rten and
-four CUDA failures are existing JND rows. Every CUDA mismatch reproduces
-bit-for-bit on its automatic repeat. No failing JND row is demoted.
+Reference-source correspondence does not qualify an arithmetic change.
+The rejected combined candidate fails nine rten and twelve CUDA limits,
+including two/four existing JND rows. Every above-limit CUDA score reproduces.
+Its proposed floor increases were rejected and its temporary promotion reverted.
 
-Owner direction 2026-10-17: the frozen netlib-sgesdd panels are the
-acceptance oracle. Restore the original solver and test each arithmetic
-change independently on all 48 rows. Keep only a change that passes every
-frozen limit and does not increase any measured row residual. Reference-source
-correspondence alone does not qualify a change. The original arithmetic and
-row classifications have been restored; the individual-change study is running.
+Owner direction 2026-10-17: retain every frozen limit and classification.
+Measure each arithmetic change independently on all 48 rows; retain it only
+if every limit and native control passes and no row residual increases.
+Epsilon and ORG2R-order changes pass all limits but worsen 18/24 residuals
+respectively; removing small-N scaling fails eight frozen limits. Those
+three changes are rejected; five isolated candidates remain unmeasured.
+Source identities, complete rows, resource receipts and historical experiments
+are linked from [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md)
+and [the per-change table](benchmarks/nn_port_2026-10-15/dmm_bisect_results_2026-10-17.md).

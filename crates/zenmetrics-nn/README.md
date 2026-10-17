@@ -35,7 +35,8 @@ for CKDN, AHIQ and WaDIQaM-FR, signed for A-FINE.
 can depend on the solver and floating-point operation order. `nn-parity-dmm`
 compares against SciPy SGESDD on the engine's own taps. Each reviewed row
 has either the canonical JND limit or an owner-approved pinned residual
-limit; these are distinct forms of evidence. Upstream MKL comparisons are
+limit; these are distinct forms of evidence. The frozen baseline passes all
+48 row limits, with canonical JND coverage of 6/24 rten and 7/24 CUDA. Upstream MKL comparisons are
 recorded separately. Counts and measurements: [`DIVERGENCES.md`](../../DIVERGENCES.md)
 `### dmm` and the [model card](models/dmm/card.toml).
 
