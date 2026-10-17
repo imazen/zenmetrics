@@ -1224,3 +1224,6 @@ iqa-compete-adopt-scope config log contention output:
 
 iqa-compete-coverage-competitors rust jxl pairs planes python flip_python reference vmaf_ledger output wait_pid:
     python3 benchmarks/iqa_compete_2026-10-16/coverage_competitors.py '{{rust}}' '{{jxl}}' '{{pairs}}' '{{planes}}' '{{python}}' '{{flip_python}}' '{{reference}}' '{{vmaf_ledger}}' '{{output}}' --wait-pid '{{wait_pid}}'
+
+iqa-compete-publish-binary snapshot log binary metadata:
+    python3 benchmarks/iqa_compete_2026-10-16/publish_binary.py '{{snapshot}}' '{{log}}' '{{binary}}' '{{metadata}}'
