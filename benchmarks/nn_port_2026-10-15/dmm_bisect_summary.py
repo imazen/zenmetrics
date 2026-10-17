@@ -52,6 +52,7 @@ lines = ['# DMM individual-change acceptance, 2026-10-17', '',
 pending = []
 baseline = None
 resources = []
+notes = []
 for entry in sources:
     name, revision = entry['change'], entry['commit']
     try:
@@ -87,11 +88,13 @@ for entry in sources:
     lines.append(f'| {name} | `{revision[:12]}` | {passed}/48 | {improved} / {equal} / {worse} | '
                  f'{statistics.median(errors):.9e} / {max(errors):.9e} | {24-len(unstable)}/24 identical | {decision} |')
     if unstable:
-        lines.extend(['', f'Unstable CUDA observations for {name}: {unstable!r}. Repeat before treating them as findings.', ''])
+        notes.append(f'Unstable CUDA observations for {name}: {unstable!r}. Repeat before treating them as findings.')
     if not controls_pass:
-        lines.extend(['', f'{name}: native panel controls did not all pass; this candidate cannot be retained.', ''])
+        notes.append(f'{name}: native panel controls did not all pass; this candidate cannot be retained.')
 if pending:
     lines[2:2] = ['**Missing:** ' + ', '.join(pending) + '.', '']
+for note in notes:
+    lines.extend(['', note])
 lines.extend(['', 'Resource receipts for the complete three-panel runs (parity, not speed benchmarks):',
               '', '```text', *resources, '```'])
 args.output.write_text('\n'.join(lines) + '\n')
