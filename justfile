@@ -1103,3 +1103,14 @@ dashboard-generated-check:
 
 dashboard-correlations source output="benchmarks/dashboard/quality":
     python3 scripts/dashboard/correlate.py --source {{quote(source)}} --output-dir {{quote(output)}} --draws 1000 --seed 20261017
+
+# Private derived-data executor admission; no fitting or new public Rust API.
+e36-tools-check source target:
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-ctl --bin zenfleet-ctl derived_declare --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-worker --lib e36_ladder_deadline_tests --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo clippy --locked --release -p zenfleet-ctl -p zenfleet-worker --bins --target-dir {{quote(target)}} -- -D warnings
+    cd {{quote(source)}} && cargo build --locked --release -p zenfleet-ctl --bin zenfleet-ctl -p zenfleet-worker --bin zenfleet-worker --target-dir {{quote(target)}}
+
+# Verify optional entrypoint hash/path admission without network or workers.
+lan-entrypoint-test:
+    python3 -m unittest discover -s scripts/jobsys -p test_lan_entrypoint_binding.py
