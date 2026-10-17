@@ -1,0 +1,36 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ciede2000",
+ "cli_names": ["ciede2000"],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "ciede2000 = classical::score(Kind::Ciede2000) -> ciede2000_mean (classical.rs:126-133, 335-388). Mean of per-pixel dE00, f64.",
+  "Ingress per pixel (both images, joint loop): 6 LUT gathers (256-entry f64 sRGB->linear table, classical.rs:345), 2x sRGB->XYZ 3x3 (9 mul + 6 add each), 2x xyz_to_lab: 3 div (x/XN etc) + 3 f_lab (cmp + cbrt -> pow; linear-branch is rare) + L/a/b (mul3+add3) each (classical.rs:399-422).",
+  "CIEDE2000 (classical.rs:424-520) counted on the common branches: c1/c2 (2mul+1add+sqrt each), g (powi7=pow + div + sqrt + ~4 ops), a'p (2mul+2add), c'p (4mul+2add+2sqrt), h' atan2 x2 + 2 wrap cmp/add, dl/dc/dh (3 sub + c1p*c2p cmp + 2 branch cmps + wrap add), dh = 2*sqrt(c1p*c2p)*sin(dh/2) (mul3+sqrt+trig), bars (3 add-mul), h_bar branch (2 cmp + add + mul), T (4 cos + 4 mul + 5 add), SL/SC/SH (mul4+add3+div1+sqrt), RT (exp + powi7x2->pow2 + div + sqrt + mul + sin + trig+mul), terms (3 div + 3 powi2->pow/mul + mul2 + add3 + sqrt).",
+  "powi(7) counted as pow 1; cbrt as pow 1; atan2/sin/cos as trig.",
+  "Score: sum_de / n (1 div + 1 add/elem fold)."
+ ],
+ "stages": [
+  {"id": "ingress_lab", "name": "LUT sRGB->linear + XYZ + Lab per image",
+   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:335-422"],
+   "images": 1, "elements": "W*H", "precision": "f64",
+   "ops": {"load": 6, "mul": 26, "add": 18, "div": 6, "cmp": 6, "pow": 6},
+   "bytes_read": 6, "access": "pointwise", "radius": 0, "span": "1",
+   "notes": "2 images x (9mul+6add XYZ + 3div+3cmp+3pow f_lab + 3mul+3add Lab) + 6 gathers"},
+  {"id": "de00", "name": "CIEDE2000 per-pixel + accumulate",
+   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:424-520"],
+   "images": 1, "elements": "W*H", "precision": "f64",
+   "ops": {"mul": 40, "add": 30, "div": 6, "sqrt": 5, "pow": 3, "trig": 9, "exp": 1, "cmp": 10, "load": 6},
+   "bytes_read": 48, "access": "pointwise", "radius": 0, "span": "1",
+   "depends_on": ["ingress_lab"]},
+  {"id": "final", "name": "mean = sum/n",
+   "source": ["crates/zenmetrics-cli/src/metrics/classical.rs:385-387"],
+   "images": 1, "elements": "1", "precision": "f64",
+   "ops": {"div": 1}, "access": "pointwise", "span": "1", "barrier": true,
+   "depends_on": ["de00"]}
+ ]
+}

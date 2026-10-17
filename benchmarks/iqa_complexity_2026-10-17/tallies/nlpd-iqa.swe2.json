@@ -1,0 +1,181 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "nlpd-iqa",
+ "cli_names": [
+  "nlpd-iqa"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "nlpd-iqa = nlpd::iqa::score_rgb_u8 (iqa.rs:41-72 -> score_planes 122-148, iqa_level 156-185). Requires W,H >= 96. BT.709 Y on [0,1] quantized to the u8 grid (round(Y*255)/255).",
+  "Ingress per px per img (iqa.rs:113-119 + simd::y709_grid): 3 cvt + mul3 + add2 + round/quantize (~2 ops: mul+round+div -> fma+cvt) + store.",
+  "6 pyramid levels; level dims ceil/2 per axis. Per level per image: downsample = reflect-pad2 + stride-2 LOWPASS [0.05,0.25,0.4,0.25,0.05] 5-tap: h pass 5 mul + 4 add per out elem over (ow x h), v pass 5 mul + 4 add over ow x oh (iqa.rs:163-168, lib.rs:401-537).",
+  "normalize_filtered (simd.rs:390-596): fused per-row ring computing bilinear-upsample->5x5-smooth->nearest-crop->subtract->divisive-normalize with no materialized planes. Per output elem (level grid): upsample lerp ~ mul3 add2 (hlerp + row blend amortized), h5 filter mul5 add4, v5 fma5, subtract 1, normalize denom = sigma + sum(4 DN taps x |lap|) -> abs4 + mul4 + add4, final div 1; loads ~17.",
+  "Odd-dim overshoot path (uw>w) materializes smooth row + gather; counted via same per-elem class (nearest gather adds ~1 load).",
+  "Per level joint: squared_difference f64 fma-accum over w*h (iqa.rs:132-136, simd.rs:4-27): sub+fma+2 loads per elem, then sqrt(sq/n) once per level.",
+  "Score = mean of 6 per-level RMS values."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "BT.709 Y on [0,1] quantized to u8 grid",
+   "source": [
+    "crates/nlpd/src/iqa.rs:111-119",
+    "crates/nlpd/src/simd.rs:325-361"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 3,
+    "mul": 4,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "down_h",
+   "name": "5-tap h decimate (reflect pad2, stride2)",
+   "source": [
+    "crates/nlpd/src/iqa.rs:163-168",
+    "crates/nlpd/src/lib.rs:401-537"
+   ],
+   "images": 2,
+   "levels": 6,
+   "elements": "ceil(W/(2**(l+1)))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 5,
+    "add": 4,
+    "load": 5,
+    "store": 1
+   },
+   "bytes_read": 20,
+   "bytes_written": 4,
+   "access": "downsample",
+   "axis": "x",
+   "radius": 2,
+   "scale": "2**l",
+   "span": "5",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": "elements = ow*h = ceil(W/2^(l+1)) * H/2^l"
+  },
+  {
+   "id": "down_v",
+   "name": "5-tap v decimate -> low band",
+   "source": [
+    "crates/nlpd/src/iqa.rs:168",
+    "crates/nlpd/src/simd.rs:29-87"
+   ],
+   "images": 2,
+   "levels": 6,
+   "elements": "ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "fma": 5,
+    "load": 5,
+    "store": 1
+   },
+   "bytes_read": 20,
+   "bytes_written": 4,
+   "access": "downsample",
+   "axis": "y",
+   "radius": 2,
+   "scale": "2**l",
+   "chain": true,
+   "span": "5",
+   "depends_on": [
+    "down_h"
+   ]
+  },
+  {
+   "id": "normfilt",
+   "name": "fused upsample+5x5 smooth+crop+sub+normalize",
+   "source": [
+    "crates/nlpd/src/simd.rs:390-596",
+    "crates/nlpd/src/iqa.rs:169-182"
+   ],
+   "images": 2,
+   "levels": 6,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 12,
+    "add": 11,
+    "fma": 5,
+    "abs": 4,
+    "div": 1,
+    "load": 17,
+    "store": 1
+   },
+   "bytes_read": 20,
+   "bytes_written": 4,
+   "access": "upsample",
+   "axis": "xy",
+   "radius": 3,
+   "scale": "2**l",
+   "span": "25",
+   "depends_on": [
+    "down_v"
+   ],
+   "notes": "lerp(mul3 add2) + h5(mul5 add4) + v5(fma5) + sub1 + denom(abs4 mul4 add4) + div1"
+  },
+  {
+   "id": "rms",
+   "name": "squared difference sum -> per-level RMS",
+   "source": [
+    "crates/nlpd/src/iqa.rs:132-136",
+    "crates/nlpd/src/simd.rs:4-27"
+   ],
+   "images": 1,
+   "levels": 6,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f64",
+   "ops": {
+    "add": 1,
+    "fma": 1,
+    "load": 2,
+    "div": "1/(W*H*0.25**l)",
+    "sqrt": "1/(W*H*0.25**l)"
+   },
+   "bytes_read": 8,
+   "access": "reduction",
+   "radius": 3,
+   "scale": "2**l",
+   "span": "log2(W*H*0.25**l)",
+   "barrier": true,
+   "depends_on": [
+    "normfilt"
+   ]
+  },
+  {
+   "id": "final",
+   "name": "mean of 6 RMS",
+   "source": [
+    "crates/nlpd/src/iqa.rs:147"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "rms"
+   ]
+  }
+ ]
+}
