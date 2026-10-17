@@ -230,3 +230,185 @@ fn render_compare_tsv(
     }
     Ok(())
 }
+
+/// One (reference, distorted) row of a folder scoring run.
+pub struct FolderScoreRow {
+    pub reference: String,
+    pub distorted: String,
+    pub scores: Result<Vec<(&'static str, f64)>, String>,
+}
+
+/// Render the results of a folder scoring run to stdout according to `format`.
+pub fn print_folder_scores(
+    format: OutputFormat,
+    kind: MetricKind,
+    rows: &[FolderScoreRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
+) {
+    let mut stdout = io::stdout().lock();
+    let _ = render_folder_scores(&mut stdout, format, kind, rows, display);
+}
+
+/// Render the results of a folder scoring run to `w`.
+pub fn render_folder_scores(
+    w: &mut dyn Write,
+    format: OutputFormat,
+    kind: MetricKind,
+    rows: &[FolderScoreRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
+) -> io::Result<()> {
+    match format {
+        OutputFormat::Plain => render_folder_scores_plain(w, kind, rows),
+        OutputFormat::Json => render_folder_scores_json(w, kind, rows),
+        OutputFormat::Tsv => render_folder_scores_tsv(w, kind, rows, display),
+    }
+}
+
+fn render_folder_scores_plain(
+    w: &mut dyn Write,
+    kind: MetricKind,
+    rows: &[FolderScoreRow],
+) -> io::Result<()> {
+    let mut col_stats: std::collections::BTreeMap<&'static str, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    let mut failed_count = 0usize;
+
+    for row in rows {
+        write!(w, "metric={}", kind.name())?;
+        write!(w, " ref={} dist={}", row.reference, row.distorted)?;
+        match &row.scores {
+            Ok(scores) => {
+                for (col, v) in scores {
+                    write!(w, " {col}={v:.6}")?;
+                    col_stats.entry(*col).or_default().push(*v);
+                }
+            }
+            Err(e) => {
+                write!(w, " ERROR: {e}")?;
+                failed_count += 1;
+            }
+        }
+        writeln!(w)?;
+    }
+
+    writeln!(w, "--- Summary ---")?;
+    writeln!(w, "Total pairs: {}", rows.len())?;
+    writeln!(w, "Successful: {}", rows.len() - failed_count)?;
+    if failed_count > 0 {
+        writeln!(w, "Failed: {}", failed_count)?;
+    }
+    for (col, vals) in &col_stats {
+        if !vals.is_empty() {
+            let sum: f64 = vals.iter().sum();
+            let mean = sum / vals.len() as f64;
+            let min = vals.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            writeln!(
+                w,
+                "{col}: count={} mean={mean:.6} min={min:.6} max={max:.6}",
+                vals.len()
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn render_folder_scores_tsv(
+    w: &mut dyn Write,
+    kind: MetricKind,
+    rows: &[FolderScoreRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
+) -> io::Result<()> {
+    let cols = kind.columns_for(display);
+    write!(w, "reference\tdistorted")?;
+    for col in cols {
+        write!(w, "\t{col}")?;
+    }
+    writeln!(w)?;
+
+    for row in rows {
+        write!(w, "{}\t{}", row.reference, row.distorted)?;
+        match &row.scores {
+            Ok(scores) => {
+                for (_, v) in scores {
+                    write!(w, "\t{v:.6}")?;
+                }
+            }
+            Err(_) => {
+                for _ in cols {
+                    write!(w, "\tNaN")?;
+                }
+            }
+        }
+        writeln!(w)?;
+    }
+    Ok(())
+}
+
+fn render_folder_scores_json(
+    w: &mut dyn Write,
+    kind: MetricKind,
+    rows: &[FolderScoreRow],
+) -> io::Result<()> {
+    let mut col_stats: std::collections::BTreeMap<&'static str, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    let mut results = Vec::with_capacity(rows.len());
+    let mut failed_count = 0usize;
+
+    for row in rows {
+        match &row.scores {
+            Ok(scores) => {
+                let mut score_map = serde_json::Map::with_capacity(scores.len());
+                for (col, v) in scores {
+                    score_map.insert((*col).to_string(), serde_json::Value::from(*v));
+                    col_stats.entry(*col).or_default().push(*v);
+                }
+                results.push(serde_json::json!({
+                    "reference": row.reference,
+                    "distorted": row.distorted,
+                    "scores": score_map,
+                }));
+            }
+            Err(e) => {
+                failed_count += 1;
+                results.push(serde_json::json!({
+                    "reference": row.reference,
+                    "distorted": row.distorted,
+                    "error": e,
+                }));
+            }
+        }
+    }
+
+    let mut summary_map = serde_json::Map::new();
+    for (col, vals) in &col_stats {
+        if !vals.is_empty() {
+            let sum: f64 = vals.iter().sum();
+            let mean = sum / vals.len() as f64;
+            let min = vals.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            summary_map.insert(
+                (*col).to_string(),
+                serde_json::json!({
+                    "count": vals.len(),
+                    "mean": mean,
+                    "min": min,
+                    "max": max,
+                }),
+            );
+        }
+    }
+
+    let doc = serde_json::json!({
+        "metric": kind.name(),
+        "total_pairs": rows.len(),
+        "successful_pairs": rows.len() - failed_count,
+        "failed_pairs": failed_count,
+        "summary": summary_map,
+        "results": results,
+    });
+    serde_json::to_writer_pretty(&mut *w, &doc)?;
+    writeln!(w)?;
+    Ok(())
+}
+

@@ -1,0 +1,37 @@
+[package]
+name = "zenmetrics-py"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings and Jupyter integration for zenmetrics"
+authors = ["Lilith River <support@imazen.io>"]
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[workspace]
+
+[lib]
+name = "_zenmetrics"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+zenmetrics-api = { path = "../zenmetrics-api" }
+zenmetrics-cli = { path = "../zenmetrics-cli", default-features = false, features = ["default"] }
+zenmetrics-stats = { path = "../zenmetrics-stats" }
+serde_json = "1.0"
+
+[patch.crates-io]
+zensim = { path = "../../../zensim/zensim" }
+zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
+zenanalyze = { path = "../../../zenanalyze" }
+zenpng = { path = "../../../zenpng" }
+zenwebp = { path = "../../../zenwebp" }
+zenavif = { path = "../../../zenavif" }
+zenrav1e = { path = "../../../zenrav1e" }
+zenavif-serialize = { path = "../../../zenavif/zenavif-serialize" }
+zenjxl = { path = "../../../zenjxl" }
+jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f1faec70e41b0c1f31e9db3d2142071bf02d08d5" }
+butteraugli = { path = "../../../../butteraugli/butteraugli" }
+fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2" }
+

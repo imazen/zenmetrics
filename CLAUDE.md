@@ -1728,3 +1728,13 @@ complete with one retained sample each and clean contention receipts. The
 records 8–9-second scopes and 9.22–9.23 GiB peak host RSS; these are not VRAM measurements.
 The original attempt logs remain under `~/tmp/iqa-compete/coverage-rust-v16/cuda/logs/`.
 No metric algorithm or allocation limit is changed.
+
+### Known Bugs: dashboard derived-copy staleness (2026-10-17)
+
+The Pages workflow's committed-copy checks failed after a source-document
+change without refreshed markdown extracts. Deployment now regenerates the
+catalog and extracts and reports copy drift in its build summary. Local
+`--check` recipes remain strict. Malformed sources and unclassified benchmark
+uploads still fail. Regeneration handles added/obsolete owned shards without
+removing unrelated files; controls cover drift, idempotence, malformed-source
+refusal and the retained inventory gate.

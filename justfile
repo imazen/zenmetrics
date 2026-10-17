@@ -1370,3 +1370,7 @@ iqa-compete-butter8k-isolated binary pairs output:
 
 iqa-compete-landing-gates output snapshot *options:
     python3 benchmarks/iqa_compete_2026-10-16/landing_gates.py '{{output}}' '{{snapshot}}' {{options}}
+
+# Match deploy assembly without requiring committed derived copies to be current.
+dashboard-regenerate:
+    python3 scripts/dashboard/regenerate.py
