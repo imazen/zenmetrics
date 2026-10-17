@@ -1,0 +1,20 @@
+# probes_i265.meta
+date_utc: 2026-10-17T12:55:26Z
+host: i265
+workspace_commit: 27979b23aff0f6e11be8866f6429c67d48beac89
+lscpu: Intel(R) Core(TM) Ultra 7 265K
+cpus: P-core=2 (cpu_core, cpus 0-7), E-core=12 (cpu_atom, cpus 8-19)
+kernel: 7.0.0-38-generic
+gcc: gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+llvm-mca: Ubuntu LLVM version 22.1.2   Optimized build. 
+libm/libc: ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+perf: perf version 7.0.14
+perf_event_paranoid: -1
+loadavg_at_start: 3.32 2.14 1.96 2/2597 3727043
+free_at_start: avail=13Gi used=16Gi
+build: gcc -O2 -static -o ~/tmp/iqa-cx-swe2/op_probe scripts/complexity/probes/op_probe.c -lm
+reps: 5 separate perf stat invocations per (probe,kind,cpu,iter-point); per-iter cycles = slope(hi,lo)/(hi-lo); tp additionally subtracts loop_empty slope and divides by tp_n accumulators
+iters: see TSV iterations column (hi point; lo = hi/16)
+exact commands: taskset -c <cpu> perf stat -x, -e <event> -- op_probe <probe> <lat|tp> <iters>   (x5 per point)
+events: P-core cpu_core/cycles/, E-core cpu_atom/cycles/
+overlap_note: the lead's complexity-reps build (12:53-12:55Z, 4 jobs) and 1-thread sweep (12:56-12:59Z, pinned cpu 6) overlapped these probes; per-point min/max spread stayed within ~5%.
