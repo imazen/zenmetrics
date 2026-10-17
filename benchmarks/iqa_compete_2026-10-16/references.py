@@ -23,7 +23,9 @@ def load_references(paths):
         for line in path.read_text().splitlines():
             value=json.loads(line)
             if (value['impl']=='zenmetrics' and value['device']=='cpu' and value['mode']=='score'):
-                if value['status']!='ok':
+                if value['status']=='ok':
+                    if value.get('n',0)<10 or not isinstance(value.get('score'),(int,float)) or not math.isfinite(value['score']):continue
+                else:
                     value=completed_warmup(value)
                     if value is None:continue
                 key=(value['host'],value['os'],value['metric_name'],value['size_name'],value['threads'],value['pair_sha256'])

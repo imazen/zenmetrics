@@ -8,7 +8,7 @@ class References(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path=pathlib.Path(self.directory.name)/'cpu.jsonl'
         self.cpu=dict(host='fixture',os='Linux-fixture',impl='zenmetrics',device='cpu',mode='score',status='ok',
-                      metric_name='ssim2',size_name='cid22',threads=1,pair_sha256='pair-a',score=91.)
+                      metric_name='ssim2',size_name='cid22',threads=1,pair_sha256='pair-a',score=91.,n=10)
         self.path.write_text(json.dumps(self.cpu)+'\n')
         self.gpu=self.cpu|dict(metric_name='ssim2-gpu',device='cuda')
     def test_same_pair_matches(self):
@@ -53,4 +53,12 @@ class References(unittest.TestCase):
     def test_warmup_does_not_replace_timed_reference(self):
         with self.path.open('a') as f:f.write(json.dumps(self.warmup())+'\n')
         self.assertEqual(same_pair_reference(load_references([self.path]),self.gpu),self.cpu)
+    def test_ok_without_sufficient_rounds_is_not_a_timed_reference(self):
+        for count in [0,1,9]:
+            self.path.write_text(json.dumps(self.cpu|dict(n=count))+'\n')
+            self.assertIsNone(same_pair_reference(load_references([self.path]),self.gpu))
+    def test_nonfinite_ok_score_is_not_a_timed_reference(self):
+        for score in [None,float('inf'),float('nan')]:
+            self.path.write_text(json.dumps(self.cpu|dict(score=score))+'\n')
+            self.assertIsNone(same_pair_reference(load_references([self.path]),self.gpu))
 if __name__=='__main__':unittest.main()
