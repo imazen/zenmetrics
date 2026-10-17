@@ -36,7 +36,35 @@ def check(directory, screenshots, port=3387):
                 if screenshots:
                     screenshots.mkdir(parents=True,exist_ok=True)
                     page.screenshot(path=str(screenshots/(view+'.png')),full_page=True)
+            page.goto(f'http://127.0.0.1:{port}/#ranking')
+            page.wait_for_function('window.dashboardReady==="ranking"')
+            assert page.locator('.rank-bar').count()>0
+            assert page.locator('#missing-ranking').count()==1
+            assert 'size=' in page.url
+            if screenshots:page.screenshot(path=str(screenshots/'ranking.png'),full_page=True)
+            page.locator('[data-ranking="layout"]').select_option('all sizes')
+            page.wait_for_function('window.dashboardReady==="ranking" && document.querySelector(".rank-multiples")')
+            assert page.locator('.rank-multiples>section').count()>=14
+            if screenshots:page.screenshot(path=str(screenshots/'ranking-all-sizes.png'),full_page=True)
+            page.locator('[data-ranking="layout"]').select_option('rank change')
+            page.locator('svg[aria-label="Rank change between resolutions"]').wait_for()
+            if screenshots:page.screenshot(path=str(screenshots/'ranking-slope.png'),full_page=True)
             from urllib.parse import urlencode
+            ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='os=Linux · backend=CPU',impl='competitors',source='',size='512×512',unit='ms/MP',layout='single')
+            page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(ranking_params))
+            page.wait_for_function('window.dashboardReady==="ranking"')
+            assert page.locator('.whisker').count()>0
+            assert 'libjxl v0.12' in page.locator('#chart').inner_text()
+            with page.expect_download() as rank_download:page.locator('#download').click()
+            assert 'libjxl v0.12' in Path(rank_download.value.path()).read_text()
+            page.reload();page.wait_for_function('window.dashboardReady==="ranking"')
+            assert page.locator('[data-ranking="unit"]').input_value()=='ms/MP'
+            if screenshots:page.screenshot(path=str(screenshots/'ranking-competitor.png'),full_page=True)
+            mixed=dict(host='r7950x',device='CPU',threads='missing',mode='full',workload='os=Linux (WSL2) · backend=CPU · phase=cold · engine=native · content=missing',impl='zenmetrics',source='',size='512×512')
+            page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(mixed))
+            page.wait_for_function('window.dashboardReady==="ranking"')
+            assert page.locator('#chart .warning').count()==1
+            if screenshots:page.screenshot(path=str(screenshots/'ranking-mixed-source.png'),full_page=True)
             source='benchmarks/metric_loop_st_2026-08-30.tsv'
             params=urlencode(dict(source=source,threads='1'))
             page.goto(f'http://127.0.0.1:{port}/#speed?'+params)
@@ -75,7 +103,7 @@ def check(directory, screenshots, port=3387):
             if screenshots:page.screenshot(path=str(screenshots/'mobile.png'),full_page=True)
             browser.close()
         assert not errors, errors
-        print(json.dumps({'pages':4,'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
+        print(json.dumps({'pages':5,'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
     except Exception:
         print(json.dumps({'browser_errors':errors}),flush=True)
         raise

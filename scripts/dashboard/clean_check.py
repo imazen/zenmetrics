@@ -20,5 +20,5 @@ with tempfile.TemporaryDirectory(prefix='dashboard-clean-',dir=Path.home()/'tmp'
     subprocess.run([sys.executable,str(source/'scripts/dashboard/catalog.py'),'--check'],check=True)
     subprocess.run([sys.executable,str(source/'scripts/dashboard/extract_markdown.py'),'--check'],check=True)
     subprocess.run([sys.executable,str(source/'scripts/dashboard/build.py'),'--output',str(base/'site')],check=True)
-    subprocess.run([sys.executable,str(source/'scripts/dashboard/check.py'),str(base/'site')],check=True)
+    subprocess.run([sys.executable,str(source/'scripts/dashboard/check.py'),str(base/'site')]+(['--screenshots',os.environ['DASHBOARD_SCREENSHOTS']] if os.environ.get('DASHBOARD_SCREENSHOTS') else []),check=True)
     print('Clean tracked-source build and browser verification passed:',revision)

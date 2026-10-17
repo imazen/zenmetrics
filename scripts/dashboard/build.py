@@ -88,7 +88,19 @@ def provenance(path, spec):
 
 def adapt(path, spec):
     adapter = spec['adapter']
-    if adapter == 'loop':
+    if adapter == 'libjxl-samples':
+        import statistics
+        for row in table(path, spec['columns']):
+            samples=sorted(number(v)/1e6 for v in row['samples_ns'].rstrip(',').split(','))
+            if len(samples)<2 or any(v<=0 for v in samples):raise ValueError('invalid libjxl samples')
+            def quantile(p):
+                index=(len(samples)-1)*p;lo=int(index);hi=min(lo+1,len(samples)-1)
+                return samples[lo]+(samples[hi]-samples[lo])*(index-lo)
+            yield dict(metric='butteraugli',implementation='libjxl v0.12',backend='CPU',
+                       host=spec['host'],os=spec['os'],threads=int(row['threads']),mode=row['mode'],
+                       width=int(row['w']),height=int(row['h']),size=row['size'],ms=statistics.median(samples),
+                       p10_ms=quantile(.1),p90_ms=quantile(.9),n=len(samples),status='ok')
+    elif adapter == 'loop':
         for row in table(path, spec['columns']):
             for mode, col in [('cold', 'oneshot_ms'), ('warm reference', 'warm_per_cand_ms')]:
                 yield dict(metric=row['metric'], implementation='zenmetrics', backend='CPU',

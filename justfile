@@ -1114,3 +1114,6 @@ e36-tools-check source target:
 # Verify optional entrypoint hash/path admission without network or workers.
 lan-entrypoint-test:
     python3 -m unittest discover -s scripts/jobsys -p test_lan_entrypoint_binding.py
+
+dashboard-speed-coverage site="target/dashboard" output="target/dashboard-speed-coverage.md":
+    python3 scripts/dashboard/coverage.py {{quote(site)}} --output {{quote(output)}}

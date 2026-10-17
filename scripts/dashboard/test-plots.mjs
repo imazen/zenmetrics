@@ -12,3 +12,15 @@ assert.deepEqual(scaling.filter(r=>r.threads===8).map(r=>r.speedup).sort((a,b)=>
 const panel=agreement([{metric:'m',pair:'real-pair',series:'oracle',abs_delta:0,relative_delta:0,reproduction:'reproduction unconfirmed',oracle_precision:'7 digits'}]);
 assert.ok(panel.includes('unconfirmed'));assert.ok(panel.includes('7 digits'));assert.ok(panel.includes('Exact zero'));assert.ok(!panel.includes('Missing:'));
 console.log('Cross-source size medians, coefficients, R², per-size scaling and agreement annotations pass');
+
+const {selectRanking,chooseDefault,rankingBars}=await import('../../web/dashboard/ranking.js');
+const timing=(metric,ms,extra={})=>({metric,ms,width:512,height:512,host:'i265',backend:'CPU',threads:1,mode:'score',implementation:'zenmetrics',source:'one',...extra});
+const rankRows=[timing('a',4),timing('b',2),timing('a',1,{threads:8}),timing('c',.5,{width:1024}),timing('d',0),timing('e',5,{implementation:'libjxl v0.12',source:'two',p10_ms:4,p90_ms:6})];
+const params=new URLSearchParams({host:'i265',device:'CPU',threads:'1',mode:'score-only',workload:'backend=CPU',impl:'competitors',source:''});
+assert.equal(selectRanking(rankRows,params).length,4);
+assert.equal(chooseDefault(rankRows,{one:{date:'2026-10-17'}}).width,512);
+const bars=rankingBars(selectRanking(rankRows,params).filter(r=>r.width===512),'ms',{});
+assert(bars.indexOf('data-metric="b"')<bars.indexOf('data-metric="a"'));
+assert(bars.includes('whisker')&&bars.includes('◆')&&bars.includes('log scale'));
+assert(!bars.includes('data-metric="c"')&&!bars.includes('data-metric="d"'));
+console.log('Exact-cell ranking, sorting, competitor marks and whiskers pass');

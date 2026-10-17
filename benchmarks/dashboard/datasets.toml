@@ -1482,3 +1482,12 @@ family = "quality"
 adapter = "normalized"
 columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
 numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/libjxl_butter_2026-10-17.tsv"
+family = "speed"
+adapter = "libjxl-samples"
+host = "i265"
+os = "Linux"
+columns = ["size", "w", "h", "threads", "mode", "samples_ns"]
+note = "Static Release libjxl v0.12.0 a7a9c787; RGB8 in memory, 80 nits; all 5–9 samples, including first invocation; 1T pinned CPU 2."

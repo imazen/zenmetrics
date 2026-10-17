@@ -53,6 +53,30 @@ small scatter preview.
 
 ## Statistical and display contracts
 
+The first view ranks all positive measured timings at one exact width × height,
+fastest first, on a logarithmic millisecond axis (or ms/MP). The default chooses
+the single source and exact workload cell with most distinct zenmetrics metrics;
+newest source date breaks ties. Host, device, reported thread count, mode, OS,
+backend, phase, engine, content and precision flags remain separate. Historical
+workload names stay visible; `score` is labelled `score-only`. Unknown threads
+are explicitly `missing`, never assumed single-threaded or all-core.
+
+Source numbers accompany bars; selecting multiple sources shows a warning.
+No source averages or size interpolation are used. Competitors have diamond
+marks and dashed outlines. Whiskers show reported p10–p90, when available.
+The libjxl v0.12 panel retains all supplied samples, including first calls;
+median and linearly interpolated percentiles are computed from those samples.
+It is a timing panel, not a parity qualification.
+
+All-size columns retain identical workload filters; changing layout clears the
+single-file source restriction and displays the mixed-source warning. The two-size slope chart ranks the
+fastest selected observation per metric / implementation, and omits missing
+endpoints. URL state records every selector; CSV exports the displayed rows.
+Missing metrics include catalog entries with no timing. Generate the separate
+coverage inventory with `just dashboard-speed-coverage`: counts are unions over
+modes and implementations, useful for finding absent cells, not speed rankings.
+
+
 Timing dots retain source, host, OS, implementation, backend, engine, threads,
 mode and phase. Pixel axes are logarithmic. Every group labels its own y scale;
 color identifies thread count and square marks identify warm calls. Competition
