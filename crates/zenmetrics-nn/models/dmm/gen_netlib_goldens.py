@@ -10,8 +10,8 @@
 # solver draws inside degenerate singular clusters — implementation-defined
 # per LAPACK build — and the head amplifies tap noise ~100x into score
 # units, so goldens on upstream's torch taps sit several gate-widths off.
-# The port transliterates netlib `gebd2->bdsdc(lasdq/bdsqr)->orm2r`
-# in f32; even so, on deep-null-heavy rows its draws drift past the
+# The frozen host head uses `gebd2`, `org2r`, and `bdsdc(lasdq/bdsqr)`
+# stages in f32; even so, on deep-null-heavy rows its draws drift past the
 # 1e-3 JND gate vs scipy's compiled sgesdd (measured: 2207_128 ort-cuda
 # port 31.689 vs scipy-on-same-taps 31.634).
 #

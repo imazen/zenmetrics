@@ -1689,3 +1689,10 @@ The follow-up classic-norm candidate, including SLARTG, direct SORM2R and
 right-SGER ordering, fails nine rten and twelve CUDA limits. Two rten and
 four CUDA failures are existing JND rows. Every CUDA mismatch reproduces
 bit-for-bit on its automatic repeat. No failing JND row is demoted.
+
+Owner direction 2026-10-17: the frozen netlib-sgesdd panels are the
+acceptance oracle. Restore the original solver and test each arithmetic
+change independently on all 48 rows. Keep only a change that passes every
+frozen limit and does not increase any measured row residual. Reference-source
+correspondence alone does not qualify a change. The original arithmetic and
+row classifications have been restored; the individual-change study is running.

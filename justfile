@@ -821,10 +821,10 @@ nn-port-python-check:
 
 # Advisory quality scan against pinned siblings, using the installed ignored kit.
 # Run under the same shared lock and bounded run-heavy wrapper as compile gates.
-nn-port-quality:
+nn-port-quality revision="@":
     #!/usr/bin/env bash
     set -euo pipefail
-    {{just_executable()}} snap-cargo @ metadata --no-deps --format-version 1 > /dev/null
+    {{just_executable()}} snap-cargo '{{revision}}' metadata --no-deps --format-version 1 > /dev/null
     export ZENUTILS="{{justfile_directory()}}/.quality-kit"
     export CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target"
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics"

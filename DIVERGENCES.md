@@ -645,11 +645,13 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   regression floor, not a parity claim. The MKL comparison is printed
   per row, not asserted. Historical revision-1 classification: rten 6 jnd + 18 pinned
   (worst jnd-row err 1.09e-4), ort-cuda 7 jnd + 17 pinned (worst
-  1.81e-4). Revision 2 currently fails nine frozen rten limits and twelve
+  1.81e-4). The combined revision-2 experiment failed nine frozen rten limits and twelve
   CUDA limits, including two/four existing JND rows respectively. Actual
-  canonical-JND coverage is 5/24 rten and 3/24 CUDA; this revision is not
-  qualified by the frozen panels. One newly qualifying rten row is promoted;
-  no limit is increased and no failing JND row is demoted. See
+  canonical-JND coverage is 5/24 rten and 3/24 CUDA; that candidate was not
+  qualified by the frozen panels. Its proposed row promotion is reverted
+  with the candidate. The active arithmetic and classifications are restored
+  to the frozen revision-1 baseline; individual changes are being measured.
+  No original limit is increased and no original JND row is demoted. See
   [the correction audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md),
   `models/dmm/card.toml`, and `benchmarks/dmm_aic_probe/`.
 
