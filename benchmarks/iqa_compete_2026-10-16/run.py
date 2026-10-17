@@ -270,6 +270,9 @@ def main():
         os.environ['LD_LIBRARY_PATH'] = args.cuda_libraries + ':' + os.environ.get('LD_LIBRARY_PATH','')
     meta = metadata(args.binary)
     meta.update(device=args.gpu_runtime or ('cuda' if args.engine == 'ort-cuda' else 'cpu'), engine=args.engine, gpu_runtime=args.gpu_runtime)
+    if args.ort_library:
+        meta.update(ort_shared_library=str(args.ort_library.resolve()),ort_shared_library_sha256=sha(args.ort_library))
+    if args.cuda_libraries:meta['cuda_library_dirs']=args.cuda_libraries.split(':')
     if args.host:
         meta["host"] = args.host
     if args.python_package:
