@@ -1106,3 +1106,7 @@ iqa-compete-admission-classification-tests:
 # Shorter group budget reserves room for slow model warmup and batch overrun.
 iqa-compete-pieapp-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics pieapp --chunk-budget-ms 600000
+
+# Explicit metric subset for isolated admission repairs; preserves old ledgers.
+iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics '{{metrics}}' --sizes '{{sizes}}' --threads '{{threads}}'
