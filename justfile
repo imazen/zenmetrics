@@ -706,9 +706,8 @@ nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_al
 
 # DMM parity has its own lane: the metric's `wt` term consumes the
 # orthonormal basis its SVD solver draws inside degenerate singular
-# clusters — implementation-defined per LAPACK build (MKL != netlib !=
-# cuSolver; upstream torch itself spreads up to ~9 JND across CPU/CUDA —
-# see crates/zenmetrics-nn/models/dmm/card.toml). This recipe gates the
+# clusters. Historical CPU/CUDA observations differ; see
+# crates/zenmetrics-nn/models/dmm/card.toml. This recipe gates the
 # port against netlib-sgesdd-f32 goldens scored on the SAME engine's taps
 # (models/dmm/dmm_goldens_netlib_<engine>.tsv via examples/dmm_tap_dump +
 # models/dmm/gen_netlib_goldens.py); the MKL-draw dmm_goldens.tsv deltas
@@ -716,6 +715,56 @@ nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_al
 nn-parity-dmm model_dir ladder engine="rten" features="model-tests":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='dmm' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
+
+# Produces candidate floors in model_dir; reviewing/committing a replacement
+# of models/dmm/dmm_goldens_netlib_*.tsv requires owner approval.
+nn-dmm-netlib-goldens python model_dir ladder tapdir engine="rten" features="model-tests" approval="":
+    test '{{approval}}' = 'owner-approved-floors'
+    ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features '{{features}}' --example dmm_tap_dump -- "$(realpath '{{model_dir}}')" "$(realpath '{{ladder}}')" "$(realpath -m '{{tapdir}}')/$(echo '{{engine}}' | tr - _)"
+    '{{python}}' crates/zenmetrics-nn/models/dmm/gen_netlib_goldens.py '{{model_dir}}' '{{tapdir}}' "$(echo '{{engine}}' | tr - _)" --owner-approved-floors
+
+# Diagnostic subset only; nn-parity-dmm always validates the full panel.
+nn-dmm-probe model_dir ladder output rows engine="rten" features="model-tests":
+    ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features '{{features}}' --example dmm_tap_dump -- "$(realpath '{{model_dir}}')" "$(realpath '{{ladder}}')" "$(realpath -m '{{output}}')" '{{rows}}' scores-only
+
+nn-dmm-fix-summary log model_dir engine output:
+    python3 benchmarks/nn_port_2026-10-15/dmm_fix_summary.py '{{log}}' '{{model_dir}}/dmm_goldens.tsv' "crates/zenmetrics-nn/models/dmm/dmm_goldens_netlib_$(echo '{{engine}}' | tr - _).tsv" '{{output}}'
+
+# Run under the shared heavy lock and run-heavy with an outer <20-minute
+# deadline. Group short checks to avoid repeated admission waits.
+nn-port-compile-gate:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    failed=0
+    gate() {
+        local name="$1"
+        shift
+        if "$@"; then echo "GATE_PASS $name"; else echo "GATE_FAIL $name"; failed=1; fi
+    }
+    gate lock bash scripts/ci/lock.sh --check
+    # Dev sibling versions differ from CI pins. fmt-check's metadata command
+    # can rewrite the dev lock; preserve its exact input before the next gate.
+    format_check() {
+        local saved result
+        saved=$(mktemp "$TMPDIR/nn-port-fmt-lock.XXXXXXXXXX") || return
+        cp Cargo.lock "$saved" || return
+        {{just_executable()}} fmt-check
+        result=$?
+        if ! cmp -s "$saved" Cargo.lock; then
+            cp "$saved" Cargo.lock || return
+        fi
+        return "$result"
+    }
+    gate fmt format_check
+    gate ci-clippy {{just_executable()}} snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
+    gate cli-clippy {{just_executable()}} snap-cargo @ clippy --keep-going -p zenmetrics-cli --features sweep,orchestrator,nn,nr -- -D warnings
+    gate nn-clippy {{just_executable()}} snap-cargo @ clippy -p zenmetrics-nn --all-targets --features model-tests,ort -- -D warnings
+    gate browser {{just_executable()}} snap-cargo @ check -p zenmetrics-browser --all-targets
+    gate nn-test timeout --kill-after=10 900 {{just_executable()}} snap-cargo @ test -p zenmetrics-nn
+    gate browser-list {{just_executable()}} snap-cargo @ test -p zenmetrics-browser --lib listed_metrics_are_compiled_in
+    gate benchmark-study python3 scripts/jobsys/test_benchmark_study.py
+    gate matrix {{just_executable()}} cli-feature-matrix
+    exit "$failed"
 
 # Crate-scoped statistical API validation in the pinned dependency snapshot.
 stats-helpers-check:

@@ -2,32 +2,43 @@
 # on the *same* ONNX taps the gated engine produces.
 #
 #   ZENMETRICS_NN_ENGINE=<eng> \
-#   cargo run --release -p zenmetrics-nn --example dmm_tap_dump -- \
+#   cargo run --release -p zenmetrics-nn --features model-tests --example dmm_tap_dump -- \
 #       <model_dir> <ladder_dir> <tapdir>/<engine-tag>
-#   python gen_netlib_goldens.py <model_dir> <tapdir> <engine-tag>...
+#   python gen_netlib_goldens.py <model_dir> <tapdir> <engine-tag>... --owner-approved-floors
 #
 # Why same-taps: DMM's `wt` term consumes the orthonormal basis the SVD
 # solver draws inside degenerate singular clusters — implementation-defined
 # per LAPACK build — and the head amplifies tap noise ~100x into score
 # units, so goldens on upstream's torch taps sit several gate-widths off.
-# The port transliterates netlib `dgebd2->dorg2r->dbdsqr->dlasdq->dbdsdc`
+# The port transliterates netlib `gebd2->bdsdc(lasdq/bdsqr)->orm2r`
 # in f32; even so, on deep-null-heavy rows its draws drift past the
 # 1e-3 JND gate vs scipy's compiled sgesdd (measured: 2207_128 ort-cuda
 # port 31.689 vs scipy-on-same-taps 31.634).
 #
 # Output <model_dir>/dmm_goldens_netlib_<tag>.tsv columns:
-#   image  size  dmm  tol  kind
+#   image  size  dmm  tol  kind  residual
 # `dmm` is the scipy netlib score. `kind` is `jnd` where the port's own
 # score (dumped beside the taps as port.tsv) met the 1e-3 JND gate, else
 # `pinned` — `tol` is the measured |port - netlib| +5%, i.e. a regression
 # floor, not a parity claim. The parity test prints the breakdown.
-import os, sys
+import argparse
+import os
+import time
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('models')
+parser.add_argument('tapdir')
+parser.add_argument('tags', nargs='+', choices=['rten', 'ort_cuda'])
+parser.add_argument('--owner-approved-floors', action='store_true',
+                    help='Confirm owner approval to generate or regenerate regression floors')
+args = parser.parse_args()
+if not args.owner_approved_floors:
+    parser.error('Regenerating DMM regression floors requires owner approval; see card.toml')
+MODELS, TAPDIR, TAGS = args.models, args.tapdir, args.tags
+
 import numpy as np
 import scipy.linalg
 from numpy.lib.stride_tricks import sliding_window_view
-
-MODELS, TAPDIR = sys.argv[1], sys.argv[2]
-TAGS = sys.argv[3:]
 
 JND = None
 for ln in open(os.path.join(os.path.dirname(__file__), '..', 'jnd_scale.tsv')):
@@ -93,18 +104,20 @@ for tag in TAGS:
                 stem, size = ln.split('\t')[:2]
                 rows.append((stem, size, score(tapdir, stem, size)))
     npin = 0
-    with open(out, 'w') as o:
+    if os.path.exists(out):
+        os.rename(out, f'{out}.{time.time_ns()}.bak')
+    with open(out, 'x') as o:
         o.write('# netlib sgesdd-f32 head on this engine\'s taps '
                 '(gen_netlib_goldens.py). kind=pinned rows: tol is the\n')
         o.write('# measured |port-netlib| +5% — a regression floor, not a '
                 '1e-3 JND parity claim (solver drift in degenerate clusters).\n')
-        o.write('image\tsize\tdmm\ttol\tkind\n')
+        o.write('image\tsize\tdmm\ttol\tkind\tresidual\n')
         for stem, size, s in rows:
             d = abs(port[f'{stem}_{size}'] - s)
             if d <= GATE:
-                o.write(f'{stem}\t{size}\t{s:.9e}\t{GATE:.3e}\tjnd\n')
+                o.write(f'{stem}\t{size}\t{s:.17e}\t{GATE:.17e}\tjnd\t{d:.17e}\n')
             else:
                 npin += 1
-                o.write(f'{stem}\t{size}\t{s:.9e}\t{d * 1.05:.3e}\tpinned\n')
+                o.write(f'{stem}\t{size}\t{s:.17e}\t{d * 1.05:.17e}\tpinned\t{d:.17e}\n')
         print(f'{tag}: {len(rows)} rows, {npin} pinned', flush=True)
 print('netlib goldens complete')

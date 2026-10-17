@@ -9,7 +9,7 @@
 //!
 //! ```text
 //! ZENMETRICS_NN_ENGINE={rten|ort-cuda} \
-//! cargo run --release -p zenmetrics-nn --example dmm_tap_dump -- \
+//! cargo run --release -p zenmetrics-nn --features model-tests --example dmm_tap_dump -- \
 //!     <model_dir> <ladder_dir> <out_dir>
 //! ```
 
@@ -72,7 +72,11 @@ fn main() {
         "{}-nonsquare",
         ladder.file_name().unwrap().to_str().unwrap()
     ));
-    std::fs::create_dir_all(out_dir).unwrap();
+    if let Some(parent) = out_dir.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    // Preserve prior tap/score artifacts. Use a fresh destination for a rerun.
+    std::fs::create_dir(out_dir).expect("output directory must be new");
     let engine = match std::env::var("ZENMETRICS_NN_ENGINE").as_deref() {
         Err(_) | Ok("rten") => Engine::Rten,
         #[cfg(feature = "ort")]
@@ -84,12 +88,21 @@ fn main() {
         std::fs::read_to_string(model_dir.join("dmm_goldens.tsv")).expect("dmm_goldens.tsv");
     let mut port = std::fs::File::create(out_dir.join("port.tsv")).expect("port.tsv");
     writeln!(port, "image\tsize\tdmm").unwrap();
+    let mut checked = 0;
     for line in goldens.lines().skip(1) {
         if line.is_empty() {
             continue;
         }
         let f: Vec<&str> = line.split('\t').collect();
         let (stem, size) = (f[0], f[1]);
+        // Optional diagnostic subset, independent of the full parity gate.
+        if args
+            .get(4)
+            .is_some_and(|rows| !rows.split(',').any(|row| row == format!("{stem}:{size}")))
+        {
+            continue;
+        }
+        checked += 1;
         let dir = if size.contains('x') {
             &ladder_ns
         } else {
@@ -107,17 +120,19 @@ fn main() {
                 height: h,
                 stride: w * 3,
             };
-            let taps = m
-                .taps_for_export(&img)
-                .unwrap_or_else(|e| panic!("{name}: {e}"));
-            for (i, (c, th, tw, data)) in taps.iter().enumerate() {
-                write_npy(
-                    &out_dir.join(format!("{name}_tap{i}.npy")),
-                    *c,
-                    *th,
-                    *tw,
-                    data,
-                );
+            if !args.get(5).is_some_and(|mode| mode == "scores-only") {
+                let taps = m
+                    .taps_for_export(&img)
+                    .unwrap_or_else(|e| panic!("{name}: {e}"));
+                for (i, (c, th, tw, data)) in taps.iter().enumerate() {
+                    write_npy(
+                        &out_dir.join(format!("{name}_tap{i}.npy")),
+                        *c,
+                        *th,
+                        *tw,
+                        data,
+                    );
+                }
             }
             pair[s] = px;
         }
@@ -139,8 +154,9 @@ fn main() {
             .find(|(k, _)| k == "dmm")
             .unwrap()
             .1;
-        writeln!(port, "{stem}\t{size}\t{s:.9e}").unwrap();
+        writeln!(port, "{stem}\t{size}\t{s:.17e}").unwrap();
         port.flush().unwrap();
-        eprintln!("{stem} {size}: {s:.9e}");
+        eprintln!("{stem} {size}: {s:.17e}");
     }
+    assert!(checked > 0, "no golden rows selected");
 }
