@@ -1,0 +1,57 @@
+{
+ "name": "Pedzisz 2026 declared weights (preliminary draft)",
+ "source": "M. Pedzisz (Nokia), \"Complexity Assessment of Full-Reference Image Quality Metrics\", JPEG AIC-4 contribution, preliminary draft dated 2026-10-07, Table 1 (cited with the owner's permission). Mapping here: fma = mul + add = 2; rcp and rsqrt take the division and square-root weights; softplus (25) has no class in our tallies; int ops take weight 1 as baseline scalar operations; loads, stores and conversions 0 (the draft gives element copies weight 0).",
+ "weights": {
+  "add": {
+   "*": 1
+  },
+  "mul": {
+   "*": 1
+  },
+  "fma": {
+   "*": 2
+  },
+  "cmp": {
+   "*": 1
+  },
+  "abs": {
+   "*": 1
+  },
+  "sqrt": {
+   "*": 4
+  },
+  "rsqrt": {
+   "*": 4
+  },
+  "div": {
+   "*": 6
+  },
+  "rcp": {
+   "*": 6
+  },
+  "exp": {
+   "*": 20
+  },
+  "log": {
+   "*": 20
+  },
+  "trig": {
+   "*": 20
+  },
+  "pow": {
+   "*": 40
+  },
+  "load": {
+   "*": 0
+  },
+  "store": {
+   "*": 0
+  },
+  "cvt": {
+   "*": 0
+  },
+  "int": {
+   "*": 1
+  }
+ }
+}

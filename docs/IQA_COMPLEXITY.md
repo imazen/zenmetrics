@@ -10,10 +10,28 @@ cleaner controlled runs.
 Wall-clock rankings mostly measure how much optimization effort a metric has
 received. This analysis describes the work a method's definition asks for, so
 that metrics can be compared independently of how far each implementation has
-been tuned. The owner described the approach (attributed by the owner to
-Maciej; no written source for it was found in our repositories, so the
-formulation here is ours): weighted operations per pixel, plus halo radius and
-memory access pattern.
+been tuned.
+
+The approach follows M. Pedzisz (Nokia), *Complexity Assessment of
+Full-Reference Image Quality Metrics*, a JPEG AIC-4 contribution circulated
+as a preliminary draft dated 2026-10-07 (cited with the owner's permission;
+later revisions may differ). That draft counts primitive scalar operations
+along each metric's source-grounded path from input pair to score, before
+SIMD, FMA fusion, threading and compiler transforms, weights them by
+declared relative costs (add/sub/mul 1, comparison/abs/negation 1, sqrt 4,
+division 6, exp/log/trig 20, softplus 25, general power 40, element copies
+0), and normalizes per input pixel at 840×944, the AIC-4 test resolution. It
+reports from about 3 weighted operations per pixel (PSNR-Y) to about 4,265
+(Butteraugli, RGB), and recommends weighted counts tied to identified
+implementations over runtime for comparing complexity. Its declared weights
+are available here as `scripts/complexity/weights_pedzisz_2026_draft.json`.
+
+This repository extends that approach with halo radius and access pattern
+(the owner's request), per-precision classes, a work/span view of parallel
+structure, operation weights measured on a named CPU, and a comparison with
+measured CPU and wall time. Counts are of zenmetrics' implementations, not
+of the reference implementations the draft used, so per-metric values are
+not expected to match it.
 
 It does not produce a hardware-independent runtime. Operation weights belong
 to one microarchitecture, ISA tier and precision. Measured time also depends on
@@ -185,6 +203,7 @@ single-thread 1024×1024 run, `analysis/correlation_1t_1024_*.tsv`:
 | flop count | 0.93 (0.74–0.99) | 0.91 | 17.6× | ciede2000, mdctpsnr, nlpd-iqa, ssimulacra1 |
 | i265 P-core scalar reciprocal throughput | 0.94 (0.73–0.99) | 0.93 | 26.4× | mdctpsnr, ssimulacra1 |
 | i265 P-core scalar latency | 0.93 (0.75–1.00) | 0.92 | 20.4× | ciede2000, ssimulacra1 |
+| Pedzisz 2026 draft declared weights | 0.91 (0.69–0.98) | 0.93 | 24.0× | mdctpsnr, ssimulacra1 |
 
 CPU time and wall time agree at one thread, as they should. The high rank
 correlation comes mostly from the three-decade spread in cost between PSNR
