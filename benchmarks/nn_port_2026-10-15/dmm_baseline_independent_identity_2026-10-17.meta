@@ -1,0 +1,8 @@
+Independent comparison of existing baseline receipts, 2026-10-17
+Command: just nn-dmm-baseline-gate-identity <landing-gate-log> <bisection-directory>
+Compared 24 keys and exact f64 score bits per engine; no inference rerun.
+Full-gate source trees: rten 16af89c1fb81, ort-cuda 27f91990c2a9.
+Independent bisection baseline source: 66bb98605c838a1c78302a6fe35df8cdb4b5f64e.
+Inputs: ~/tmp/nnport_land_gate.log and ~/tmp/nn-port-scratch/dmm-bisect-2026-10-17/baseline-{rten,ort-cuda}.tsv on the qualification host.
+Result: all 48 score bit patterns are identical across these independent native runs.
+The bisection baseline also has its separate complete 24-row CUDA repeat.

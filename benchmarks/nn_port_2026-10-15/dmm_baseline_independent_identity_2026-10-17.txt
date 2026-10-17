@@ -1,0 +1,2 @@
+rten: independent full gate vs bisection baseline, 24/24 score bits identical
+ort-cuda: independent full gate vs bisection baseline, 24/24 score bits identical

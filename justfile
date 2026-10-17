@@ -822,6 +822,30 @@ nn-dmm-bisect-pack directory output cases:
 nn-dmm-bisect-copy archive destination:
     rsync -a --ignore-existing -- '{{archive}}' '{{destination}}'
 
+# Compare independent existing receipts without running inference again.
+nn-dmm-baseline-gate-identity gate directory:
+    #!/usr/bin/env python3
+    import csv
+    from pathlib import Path
+    import re
+    segments = re.split(r'(?m)^\+ G ', Path('{{gate}}').read_text())
+    pattern = re.compile(r'dmm (\S+) (\S+): got (\S+) netlib ')
+    for label, engine in [('rten', 'rten'), ('cuda', 'ort-cuda')]:
+        selected = [part for part in segments if part.startswith(f'parity-dmm-{label} ')]
+        assert len(selected) == 1, (engine, 'ambiguous or missing gate segment')
+        observations = pattern.findall(selected[0])
+        assert len(observations) == 24, (engine, 'incomplete gate panel')
+        actual = {(image, size): float(value) for image, size, value in observations}
+        with (Path('{{directory}}') / f'baseline-{engine}.tsv').open() as stream:
+            rows = list(csv.DictReader(stream, delimiter='\t'))
+        assert len(rows) == 24, (engine, 'incomplete baseline panel')
+        expected = {(row['image'], row['size']): float(row['dmm']) for row in rows}
+        assert len(actual) == len(expected) == 24
+        assert actual.keys() == expected.keys()
+        differences = [key for key in actual if actual[key].hex() != expected[key].hex()]
+        assert not differences, (engine, 'independent baseline scores differ', differences)
+        print(f'{engine}: independent full gate vs bisection baseline, 24/24 score bits identical')
+
 nn-dmm-bisect-isolation:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_isolation.py
 
