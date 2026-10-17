@@ -372,14 +372,14 @@ mod rten_engine {
             "rten"
         }
 
-        fn score(&self, inputs: &[super::NamedInput]) -> Result<f64, Error> {
+        fn score(&self, inputs: Vec<super::NamedInput>) -> Result<f64, Error> {
             let (_, d) = self.tensor(inputs)?;
             d.first()
                 .map(|&s| f64::from(s))
                 .ok_or_else(|| Error::Engine("empty score output".into()))
         }
 
-        fn tensor(&self, inputs: &[super::NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+        fn tensor(&self, inputs: Vec<super::NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error> {
             if inputs.len() != self.inputs.len() {
                 return Err(Error::BadModel(format!(
                     "graph takes {} inputs, got {}",
@@ -388,12 +388,12 @@ mod rten_engine {
                 )));
             }
             let feeds: Vec<(NodeId, _)> = inputs
-                .iter()
+                .into_iter()
                 .enumerate()
                 .map(|(i, x)| {
                     (
                         self.inputs[i],
-                        rten_tensor::Tensor::from_data(&x.shape, x.data.clone()).into(),
+                        rten_tensor::Tensor::from_data(&x.shape, x.data).into(),
                     )
                 })
                 .collect();
@@ -441,13 +441,15 @@ pub(crate) struct NamedInput {
 pub(crate) trait ImageGraph: Send + Sync {
     /// Engine name, recorded in the score's implementation tag.
     fn engine(&self) -> &'static str;
-    /// Score the inputs.
-    fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error>;
+    /// Score the inputs. Owned: rten's in-place-capable operators reuse an
+    /// input buffer as scratch — a borrowed view would force an internal
+    /// copy instead (same reason [`Trunk::run`] is owned).
+    fn score(&self, inputs: Vec<NamedInput>) -> Result<f64, Error>;
 
     /// Run the inputs and return the first output tensor's `(shape,
     /// row-major data)`. For graphs whose intermediate features feed
     /// host-side logic (paq2piq's RoIPool) — `score` is `tensor().1[0]`.
-    fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error>;
+    fn tensor(&self, inputs: Vec<NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error>;
 }
 
 #[cfg(feature = "ort")]
@@ -806,11 +808,11 @@ pub(crate) mod ort_engine {
             self.ep.name()
         }
 
-        fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error> {
+        fn score(&self, inputs: Vec<NamedInput>) -> Result<f64, Error> {
             let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
-                .iter()
+                .into_iter()
                 .map(|i| {
-                    Tensor::from_array((i.shape.clone(), i.data.clone()))
+                    Tensor::from_array((i.shape, i.data))
                         .map(|t| (i.name, t))
                         .map_err(|e| Error::Engine(e.to_string()))
                 })
@@ -829,11 +831,11 @@ pub(crate) mod ort_engine {
             })
         }
 
-        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+        fn tensor(&self, inputs: Vec<NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error> {
             let feeds: Vec<(&'static str, Tensor<f32>)> = inputs
-                .iter()
+                .into_iter()
                 .map(|i| {
-                    Tensor::from_array((i.shape.clone(), i.data.clone()))
+                    Tensor::from_array((i.shape, i.data))
                         .map(|t| (i.name, t))
                         .map_err(|e| Error::Engine(e.to_string()))
                 })

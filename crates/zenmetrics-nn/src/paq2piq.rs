@@ -203,7 +203,7 @@ impl Paq2piq {
     /// Score one prepared image: body → host RoIPool → head → `t[0]`.
     fn score_image(&self, img: &za::Rgb8In<'_>) -> Result<f64, Error> {
         let x = Self::prep(img, self.min_size)?;
-        let (fshape, feats) = self.body.tensor(&[NamedInput {
+        let (fshape, feats) = self.body.tensor(vec![NamedInput {
             name: "x",
             shape: vec![1, 3, img.height, img.width],
             data: x,
@@ -220,7 +220,7 @@ impl Paq2piq {
         }
         let rois = Self::rois(img.height, img.width);
         let pooled = Self::roi_pool(&feats, hf, wf, &rois);
-        self.head.score(&[NamedInput {
+        self.head.score(vec![NamedInput {
             name: "pooled",
             shape: vec![N_ROIS, C, 2, 2],
             data: pooled,

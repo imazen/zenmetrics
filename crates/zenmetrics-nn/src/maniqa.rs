@@ -128,7 +128,7 @@ impl Maniqa {
                 }
                 Ok(f64::from(tap.data[0]))
             }
-            Backend::Image(g) => g.score(&[NamedInput {
+            Backend::Image(g) => g.score(vec![NamedInput {
                 name: "x",
                 shape: vec![1, 3, SIDE, SIDE],
                 data: x,

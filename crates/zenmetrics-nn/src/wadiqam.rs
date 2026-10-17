@@ -207,7 +207,7 @@ fn run(
     want: &[usize],
     what: &str,
 ) -> Result<Vec<f32>, Error> {
-    let (shape, data) = graph.tensor(&[input])?;
+    let (shape, data) = graph.tensor(vec![input])?;
     if shape != want {
         return Err(Error::BadModel(format!(
             "{what}: want {want:?}, got {shape:?}"
@@ -665,10 +665,10 @@ mod tests {
         fn engine(&self) -> &'static str {
             "test"
         }
-        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+        fn score(&self, _: Vec<NamedInput>) -> Result<f64, Error> {
             unreachable!()
         }
-        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+        fn tensor(&self, inputs: Vec<NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error> {
             let i = &inputs[0];
             let cn = i.shape[0];
             let row = i.data.len() / cn;
@@ -690,10 +690,10 @@ mod tests {
         fn engine(&self) -> &'static str {
             "test"
         }
-        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+        fn score(&self, _: Vec<NamedInput>) -> Result<f64, Error> {
             unreachable!()
         }
-        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+        fn tensor(&self, inputs: Vec<NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error> {
             let i = &inputs[0];
             let cn = i.shape[0];
             let mut h = vec![0.0f32; cn * FEAT];
@@ -739,7 +739,7 @@ mod tests {
             .collect();
         let chunked = run_patches_rows(&FakeTrunk, &xr, n, "t").unwrap();
         let whole = FakeTrunk
-            .tensor(&[NamedInput {
+            .tensor(vec![NamedInput {
                 name: "x",
                 shape: vec![n, 3, PATCH, PATCH],
                 data: xr.clone(),

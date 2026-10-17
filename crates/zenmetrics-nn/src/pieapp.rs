@@ -87,7 +87,7 @@ impl PieApp {
             let n = positions.len();
             let (shape, result) = self
                 .graph
-                .tensor(&[
+                .tensor(vec![
                     NamedInput {
                         name: "reference",
                         shape: vec![n, 3, PATCH, PATCH],
@@ -259,10 +259,10 @@ mod tests {
         fn engine(&self) -> &'static str {
             "controlled-oracle-weights"
         }
-        fn score(&self, _: &[NamedInput]) -> Result<f64, Error> {
+        fn score(&self, _: Vec<NamedInput>) -> Result<f64, Error> {
             Err(Error::Engine("tensor-only test graph".into()))
         }
-        fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
+        fn tensor(&self, inputs: Vec<NamedInput>) -> Result<(Vec<usize>, Vec<f32>), Error> {
             assert_eq!(inputs[0].shape[0], 2);
             Ok((vec![2, 2], vec![1.0, self.0[0], 1.0, self.0[1]]))
         }

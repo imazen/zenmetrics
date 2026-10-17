@@ -198,7 +198,7 @@ impl Liqe {
                 let emb = Self::embed(&**t, &x)?;
                 Ok(Self::head(&self.head, &vec![emb; NUM_PATCH]))
             }
-            Backend::Image(g) => g.score(&[NamedInput {
+            Backend::Image(g) => g.score(vec![NamedInput {
                 name: "x",
                 shape: vec![NUM_PATCH, 3, CROP, CROP],
                 // The full graph takes the 15 selected patches explicitly.

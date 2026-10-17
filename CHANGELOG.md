@@ -80,6 +80,8 @@ Workspace conventions per the global rules:
 
 - WD's per-channel pyramid borrows its full-resolution input planes instead of copying them; scores bit-identical, 2048² −6.5 % and 3000² −3.9 % wall at 16 threads (rten). Measured in benchmarks/nn_opt5_2026-10-16/.
 
+- Feed engine graphs owned input buffers instead of cloning them: `ImageGraph` takes `Vec<NamedInput>` and each backend moves the data into its tensor type (rten can additionally reuse the buffer for PieAPP's in-place leading multiply). Removes ~2.5 GB of per-call input clones at 1024². i265 8-thread per-call task-clock: pieapp ort-cuda 3833 → 3703 ms, wd ort-cuda -0.9%, rten within noise; scores bit-identical.
+
 ### Fixed
 
 - Bound DMM image geometry and cached allocations and poll cancellation per channel. Retain the frozen solver arithmetic after all eight isolated reference-source hypotheses regress against the frozen oracle; complete per-change results and CUDA repeats are recorded (`1e67c476`, `66bb9860`, `a8491811`).

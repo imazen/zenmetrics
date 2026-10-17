@@ -207,7 +207,7 @@ impl Arniqa {
                 }
                 Ok(f64::from(scores.iter().sum::<f32>() / 5.0))
             }
-            Backend::Image(g) => g.score(&[
+            Backend::Image(g) => g.score(vec![
                 NamedInput {
                     name: "x",
                     shape: vec![5, 3, CROP, CROP],

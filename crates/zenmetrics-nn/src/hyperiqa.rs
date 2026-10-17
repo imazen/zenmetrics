@@ -137,7 +137,7 @@ impl Hyperiqa {
     fn score_image(&self, img: &za::Rgb8In<'_>) -> Result<f64, Error> {
         let x = Self::prep(img, self.min_size)?;
         match &self.backend {
-            Backend::Image(g) => g.score(&[NamedInput {
+            Backend::Image(g) => g.score(vec![NamedInput {
                 name: "x",
                 shape: vec![25, 3, CROP, CROP],
                 data: x,

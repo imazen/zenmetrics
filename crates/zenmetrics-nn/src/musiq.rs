@@ -192,7 +192,7 @@ impl Musiq {
         let x = Self::prep(img, self.min_size)?;
         let l = x.len() / ROW;
         match &self.backend {
-            Backend::Image(g) => g.score(&[NamedInput {
+            Backend::Image(g) => g.score(vec![NamedInput {
                 name: "x",
                 shape: vec![1, l, ROW],
                 data: x,
