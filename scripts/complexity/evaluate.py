@@ -22,7 +22,8 @@ ACCESS = {'pointwise', 'sep_stencil', 'stencil2d', 'block', 'downsample', 'upsam
           'transform', 'reduction', 'gather', 'histogram', 'sort', 'data_dependent', 'matmul', 'conv'}
 STAGE_KEYS = {'id', 'name', 'source', 'images', 'elements', 'levels', 'precision', 'ops',
               'bytes_read', 'bytes_written', 'access', 'radius', 'scale', 'chain', 'span',
-              'depends_on', 'barrier', 'serial', 'shared_with', 'notes', 'logical_layer', 'axis', 'class'}
+              'depends_on', 'barrier', 'serial', 'shared_with', 'notes', 'logical_layer', 'axis', 'class', 'materialize'}
+MATERIALIZE = {'full', 'strip', 'fused'}  # full planes/levels in memory; bounded row strips or rings; no buffer
 CLASSES = {'intrinsic', 'implementation'}  # implementation: work the method does not require (strip overlap recompute, padding copies)
 SAFE = {k: getattr(math, k) for k in ('ceil', 'floor', 'log2', 'log', 'sqrt', 'exp', 'pi')}
 SAFE.update(min=min, max=max, abs=abs, round=round, int=int, sum=sum, range=range)
@@ -75,6 +76,8 @@ def validate(tally):
             errs.append(f"{sid}: precision {s.get('precision')!r}")
         if s.get('axis', 'xy') not in ('x', 'y', 'xy', 'none'):
             errs.append(f"{sid}: axis {s.get('axis')!r}")
+        if 'materialize' in s and s['materialize'] not in MATERIALIZE:
+            errs.append(f"{sid}: materialize {s.get('materialize')!r}")
         if s.get('class', 'intrinsic') not in CLASSES:
             errs.append(f"{sid}: class {s.get('class')!r}")
         if s.get('access') not in ACCESS:
@@ -103,6 +106,7 @@ def evaluate(tally, w, h):
     stages = {s['id']: s for s in tally['stages']}
     totals = {(op, s['precision']): 0.0 for s in tally['stages'] for op in OPS}
     by_class = {c: 0.0 for c in CLASSES}
+    by_access, written_by_mat, elems_by_mat = {}, {}, {}
     per_stage, bytes_rw = [], [0.0, 0.0]
     span_of, halo_of, min_width = {}, {}, math.inf
     barriers = serial = 0
@@ -133,6 +137,13 @@ def evaluate(tally, w, h):
         barriers += bool(s.get('barrier'))
         serial += bool(s.get('serial'))
         cls = s.get('class', 'intrinsic')
+        mat = s.get('materialize', 'unknown')
+        stage_flops = sum(FLOP_WEIGHT.get(op, 0) * work[op] for op in OPS)
+        by_access[s['access']] = by_access.get(s['access'], 0.0) + stage_flops
+        stage_written = sum(imgs * ev(s['elements'], {**env, 'l': l}) * ev(s.get('bytes_written', 0), {**env, 'l': l})
+                            for l in levels_of(s, env))
+        written_by_mat[mat] = written_by_mat.get(mat, 0.0) + stage_written
+        elems_by_mat[mat] = elems_by_mat.get(mat, 0.0) + elems_total
         for op in OPS:
             totals[(op, s['precision'])] += work[op]
             by_class[cls] += FLOP_WEIGHT.get(op, 0) * work[op]
@@ -156,6 +167,9 @@ def evaluate(tally, w, h):
             'halo_y_px': max((h[1] for h in halo_of.values()), default=0.0),
             'intrinsic_flops_per_px': by_class['intrinsic'] / P,
             'implementation_flops_per_px': by_class['implementation'] / P, 'span': span_total,
+            'flops_per_px_by_access': {k: v / P for k, v in by_access.items()},
+            'bytes_written_per_px_by_materialize': {k: v / P for k, v in written_by_mat.items()},
+            'elements_per_px_by_materialize': {k: v / P for k, v in elems_by_mat.items()},
             'work_over_span': arith / span_total if span_total else None,
             'min_stage_width': min_width, 'barriers': barriers, 'serial_stages': serial,
             'stages': per_stage}

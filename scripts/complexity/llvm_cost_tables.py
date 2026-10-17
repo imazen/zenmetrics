@@ -34,6 +34,10 @@ MCA = {'add': ('vaddss', 'vaddsd'), 'mul': ('vmulss', 'vmulsd'), 'fma': ('vfmadd
        'rsqrt': ('vrsqrtss', None), 'cmp': ('vminss', 'vminsd'), 'abs': ('vandps_x', 'vandpd_x'),
        'cvt': ('vcvtss2sd', 'vcvtsd2ss')}
 
+INT_TTI = {'add': '%r = add i32 %i, %j', 'mul': '%r = mul i32 %i, %j', 'cmp': '%r = icmp slt i32 %i, %j',
+           'abs': '%r = call i32 @llvm.abs.i32(i32 %i, i1 false)', 'cvt': '%r = zext i32 %i to i64'}
+MCA_INT = {'add': 'vpaddd', 'cmp': 'vpaddd', 'int': 'vpaddd', 'abs': 'vpaddd', 'mul': 'vpmulld', 'cvt': 'vpmovzxbd'}
+
 
 def tti(opt, cpu, kind, line, t='float'):
     ir = f'define void @f({t} %a, {t} %b, {t} %c, ptr %p, i32 %i, i32 %j) {{\n  {line}\n  ret void\n}}\n'
@@ -63,8 +67,11 @@ def main():
             for op, by in EXTRA.items():
                 for prec, line in by.items():
                     w.setdefault(op, {})[prec] = tti(a.opt, cpu, kind, line, 'float' if prec != 'f64' else 'double')
+            for op, line in INT_TTI.items():
+                w.setdefault(op, {})['int'] = tti(a.opt, cpu, kind, line, 'float')
             for op in w:
                 w[op].setdefault('mixed', w[op].get('f32', next(iter(w[op].values()))))
+                w[op].setdefault('*', w[op].get('f32', next(iter(w[op].values()))))
             (HERE/f'weights_llvm_tti_{cpu}_{kind}.json').write_text(json.dumps({
                 'name': f'LLVM cost model ({ver}) -mcpu={cpu} {kind}',
                 'source': f"opt -passes='print<cost-model>' -cost-kind={kind}, one scalar instruction per class "
@@ -80,8 +87,13 @@ def main():
                     hit = [r for r in rows if r['instruction'] == inst and r[col] not in ('', 'NA')]
                     if inst and hit:
                         w.setdefault(op, {})[prec] = float(hit[0][col])
+            for op, inst in MCA_INT.items():
+                hit = [r for r in rows if r['instruction'] == inst and r[col] not in ('', 'NA')]
+                if hit:
+                    w.setdefault(op, {})['int'] = float(hit[0][col])
             for op in w:
                 w[op].setdefault('mixed', w[op].get('f32', next(iter(w[op].values()))))
+                w[op].setdefault('*', w[op].get('f32', next(iter(w[op].values()))))
             model = rows[0].get('sched_model', cpu)
             (HERE/f'weights_llvm_mca_{cpu}_{kind}.json').write_text(json.dumps({
                 'name': f'llvm-mca -mcpu={cpu} ({model} model) {kind}',

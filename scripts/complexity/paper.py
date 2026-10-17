@@ -197,6 +197,40 @@ def main():
                   f"typical error {dstats['mad']:.2f}×, spread {dstats['spread']:.1f}×. The draft counted other "
                   'implementations at 840×944, so this compares two independent things: his counts of reference '
                   'code, and our runtime of our code.', '']
+    # Where the work is: separable vs 2D stencils, transforms, network layers; and full materialization.
+    groups = {'separable passes': ('sep_stencil',), '2D stencils': ('stencil2d',), 'transforms': ('transform',),
+              'network layers': ('conv', 'matmul'), 'pointwise / reductions': ('pointwise', 'reduction'),
+              'resampling': ('downsample', 'upsample', 'resample')}
+    lines += ['## Where the work is', '',
+              'Share of each metric\'s flops by access class (separable 1-D passes vs 2D windows computed directly, '
+              'transforms, network layers), and bytes written per pixel to fully materialized planes (`materialize` = '
+              '`full`; "unknown" until the tally records it). From the tallies at 1024×1024.', '',
+              '| metric | flops/px | ' + ' | '.join(groups) + ' | other | full-materialized B/px | unannotated B/px |',
+              '|---|---:|' + '---:|' * (len(groups) + 3)]
+    rpts = []
+    wt_res = json.loads((HERE/'weights_i265_P_rthroughput.json').read_text())['weights']
+    resid = []
+    for m, (t, r) in sorted(tal.items(), key=lambda kv: -kv[1][1]['flops_per_px']):
+        tot = r['flops_per_px'] or 1
+        acc = r['flops_per_px_by_access']
+        shares = [sum(acc.get(k, 0) for k in ks) / tot for ks in groups.values()]
+        other = max(0.0, 1 - sum(shares))
+        mat = r['bytes_written_per_px_by_materialize']
+        lines.append(f"| {m} | {r['flops_per_px']:.4g} | " + ' | '.join(f'{x:.0%}' for x in shares) +
+                     f" | {other:.0%} | {mat.get('full', 0):.4g} | {mat.get('unknown', 0):.4g} |")
+        if m in m1 and 'full' in mat:
+            est = weighted(r, wt_res)[0]
+            if est > 0:
+                resid.append((m, mat['full'], m1[m][0] / est))
+    if len(resid) >= 4:
+        k = statistics.median(r for _, _, r in resid)
+        files['fig/residual_vs_materialized.svg'] = svg_scatter(
+            [(max(b, 0.1), r / k, m) for m, b, r in resid], 'Measured / estimated CPU time vs fully materialized bytes',
+            'bytes written to full planes per pixel (0 shown at 0.1)', 'residual (measured / estimate, median 1)', 1.0)
+        lines += ['', '![residual vs materialized](fig/residual_vs_materialized.svg)', '']
+    else:
+        lines += ['', f'Materialization is annotated for {len(resid)} measured metrics so far; the residual-vs-materialization '
+                  'figure appears once at least four are annotated.', '']
     lines += ['## Limits', '',
               '- One host, one shape, one content pair. Nothing here ranks metrics across hosts.',
               '- The rank correlations are dominated by the three-decade spread between the cheapest and most expensive '

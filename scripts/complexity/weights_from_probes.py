@@ -23,6 +23,9 @@ MAP = {  # op class -> {precision: probe}
     'pow': {'f32': 'powf', 'f64': 'pow'}, 'trig': {'f32': 'cosf'},
 }
 
+INT_MAP = {'add': 'vpaddd_x', 'cmp': 'vpaddd_x', 'int': 'vpaddd_x', 'abs': 'vpaddd_x', 'mul': 'vpmulld_x',
+           'cvt': 'vpmovzxbd_xx'}
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -40,8 +43,16 @@ def main():
             if v is not None:
                 weights.setdefault(op, {})[prec] = v
                 used.append(f'{op}/{prec}={probe}')
-    for op in weights:  # mixed-precision stages use the f32 cost when present
+    # Integer arithmetic (fixed-point paths such as libvmaf's) costs the measured vector-integer
+    # instruction per operation; any other unmapped precision falls back to the f32 cost ('*').
+    for op, probe in INT_MAP.items():
+        v = rows.get((probe, a.core, a.kind))
+        if v is not None:
+            weights.setdefault(op, {})['int'] = v
+            used.append(f'{op}/integer={probe}')
+    for op in weights:
         weights[op].setdefault('mixed', weights[op].get('f32', next(iter(weights[op].values()))))
+        weights[op].setdefault('*', weights[op].get('f32', next(iter(weights[op].values()))))
     Path(a.out).write_text(json.dumps({
         'name': f'i265 {a.core}-core scalar {a.kind} (measured cycles)',
         'source': f'{a.probes}; median of 5 perf cycle slopes; mapping ' + ', '.join(used),

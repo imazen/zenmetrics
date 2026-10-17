@@ -55,12 +55,17 @@ def boot(x, y, f, n=2000, seed=20261017):
     return (vals[int(0.025 * len(vals))], vals[int(0.975 * len(vals)) - 1]) if vals else (float('nan'),) * 2
 
 
+INTEGER = {'i8', 'u8', 'i16', 'u16', 'i32', 'u32', 'i64'}
+
+
 def weighted(result, weights):
     total, unweighted = 0.0, set()
     for op, by_prec in result['ops_per_px'].items():
         for prec, count in by_prec.items():
             w = weights.get(op, {})
-            cost = w.get(prec, w.get('*'))
+            cost = w.get(prec, w.get('int') if prec in INTEGER else None)
+            if cost is None:
+                cost = w.get('*')
             if cost is None:
                 if count:
                     unweighted.add(f'{op}/{prec}')
