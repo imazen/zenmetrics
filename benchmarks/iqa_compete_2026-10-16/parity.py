@@ -37,3 +37,13 @@ def qualify_rows(results,references,inventory,scales,python_package=None):
                      reference_pair_sha256=ref['pair_sha256'],reference_threads=ref['threads'])
         if delta>bound or value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:value['status']='variant_mismatch';mismatch=True
     return mismatch
+
+def reproduced_residual(row):
+    """A previous rerun must reproduce this residual against the current reference."""
+    reference=row.get('ref_score');bound=row.get('parity_abs_bound')
+    if reference is None or bound is None:return False
+    if row.get('abs_delta',0)<=bound:return False
+    for first in row.get('mismatch_first_attempt',[]):
+        if first.get('mode')==row['mode'] and first.get('score') is not None:
+            if abs(first['score']-reference)>bound:return True
+    return False

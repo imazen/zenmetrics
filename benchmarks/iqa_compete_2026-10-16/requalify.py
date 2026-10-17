@@ -2,7 +2,7 @@
 """Attach fresh exact-pair CPU comparisons without changing saved measurements."""
 import argparse,copy,hashlib,json,pathlib
 from references import load_references
-from parity import qualify_rows
+from parity import qualify_rows, reproduced_residual
 P=pathlib.Path
 
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -31,7 +31,7 @@ def main():
             raise ValueError('This receipt handles zenmetrics GPU observations only')
         mismatch=qualify_rows([row],references,inventory,scales)
         if mismatch:
-            row['reproduction_required']=not bool(row.get('mismatch_first_attempt'))
+            row['reproduction_required']=not reproduced_residual(row)
             if row['reproduction_required']:
                 reproductions.append({k:row[k] for k in ['metric_name','size_name','threads','mode','pair_sha256']})
         for key in ['n','median_ns','mean_ns','p10_ns','p90_ns','score','load_before','load_after','resource']:

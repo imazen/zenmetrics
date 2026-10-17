@@ -1,6 +1,6 @@
 """Exercise unchanged numeric gates and exact-pair comparison of saved rows."""
 import copy,unittest
-from parity import qualify_rows
+from parity import qualify_rows, reproduced_residual
 
 class Parity(unittest.TestCase):
     def setUp(self):
@@ -26,6 +26,12 @@ class Parity(unittest.TestCase):
         original=copy.deepcopy(self.row)
         qualify_rows([self.row],self.references,[],{})
         for key in ['score','n','median_ns']:self.assertEqual(self.row[key],original[key])
+    def test_saved_repeat_must_reproduce_the_current_residual(self):
+        self.row.update(mode='score',score=1.21,mismatch_first_attempt=[dict(mode='score',score=1.2)])
+        qualify_rows([self.row],self.references,[],{})
+        self.assertFalse(reproduced_residual(self.row))
+        self.row['mismatch_first_attempt'][0]['score']=1.21
+        self.assertTrue(reproduced_residual(self.row))
     def test_bit_variation_remains_a_mismatch_at_zero_delta(self):
         self.row['gpu_call_bit_variation_count']=1
         self.assertTrue(qualify_rows([self.row],self.references,[],{}))
