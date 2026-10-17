@@ -130,3 +130,10 @@ partial rounds. Resume and collection inspect retained failure logs, including
 legacy log pointers, to exclude those attempts from completed cells. A real
 control resumed four saved rounds across an admission refusal and combined
 4 + 5 + 5 actual rounds; the ten-round minimum remains unchanged.
+
+Reference selection keys include the combined raw-pixel SHA-256, metric,
+size label and thread budget. Each newly completed competitor cell reloads
+its supplied CPU ledgers, so references appended by a concurrent CPU controller
+can qualify subsequent cells. A different pixel hash never qualifies even if
+the size label matches. Existing saved rows without a reference remain explicitly
+uncompared until a separate comparison is recorded; this does not retime them.

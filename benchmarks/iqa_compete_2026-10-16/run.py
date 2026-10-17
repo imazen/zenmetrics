@@ -15,6 +15,7 @@ import time
 import uuid
 from chunks import combine
 from admission_recovery import recover
+from references import load_references, same_pair_reference
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
@@ -245,18 +246,14 @@ def main():
     for directory in ['cells', 'logs']:
         (args.root / directory).mkdir(exist_ok=True)
     models = json.loads(args.models_json.read_text()) if args.models_json else {}
-    references = {}
-    for path in args.reference_jsonl:
-        for line in path.read_text().splitlines():
-            value = json.loads(line)
-            if value['device']=='cpu' and value['mode']=='score' and value['status']=='ok':
-                references[(value['metric_name'],value['size_name'],value['threads'])]=value
     scales = {}
     scale_path=Path(__file__).resolve().parents[2]/'crates/zenmetrics-nn/models/jnd_scale.tsv'
     for line in scale_path.read_text().splitlines():
         if not line or line.startswith('#') or line.startswith('column\t'):continue
         column,value,*_=line.split('\t');scales[column]=float(value)
     def qualify(results):
+        # CPU controllers can append new references while this controller runs.
+        references=load_references(args.reference_jsonl)
         mismatch=False
         for value in results:
             if value['status']=='skipped:nonfinite_score':mismatch=True;continue
@@ -268,7 +265,7 @@ def main():
                     value.update(status='variant_mismatch',score_nonfinite=True);mismatch=True
                 continue
             name=value['metric_name'];base=name.removesuffix('-gpu')
-            ref=references.get((base,value['size_name'],value['threads']))
+            ref=same_pair_reference(references,value)
             if ref is None:
                 value.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status='unavailable:no qualified same-pair CPU reference',notes=value.get('notes','')+'; Native timing retained without a CPU reference')
                 if args.python_package:value['status']='skipped:missing_same-pair_Rust_reference'
@@ -287,7 +284,8 @@ def main():
                 bound=scales[column]*1e-3
                 source='zenmetrics-nn/models/jnd_scale.tsv; 1e-3 JND unchanged parity gate'
             value.update(ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,
-                         parity_abs_bound=bound,parity_source=source,reference_binary_sha=ref['impl_binary_sha'])
+                         parity_abs_bound=bound,parity_source=source,reference_binary_sha=ref['impl_binary_sha'],
+                         reference_pair_sha256=ref['pair_sha256'],reference_threads=ref['threads'])
             if delta>bound or value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:value['status']='variant_mismatch';mismatch=True
         return mismatch
 
