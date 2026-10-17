@@ -43,7 +43,7 @@ export function agreement(rows){
  `<p class="chart-caption">Oracle print precision: ${precision.map(escape).join(' · ')||'not recorded'}. A delta from a rounded oracle is limited by its printed precision; small residuals do not establish algorithmic agreement.</p>`+
  plot(rows,'pair','abs_delta',{logY:true,categorical:true,colorBy:'metric'})+plot(rows,'pair','relative_delta',{logY:true,categorical:true,colorBy:'metric'});
 }
-const workFields=['metric','implementation','host','os','backend','engine','mode','phase','content','dtype','tf32_conv'];
+const workFields=['metric','implementation','implementation_version','host','os','backend','engine','mode','phase','content','dtype','tf32_conv'];
 export function threadScaling(rows){
  const groups=new Map();for(const row of rows.filter(r=>finite(r.ms)&&r.ms>0&&Number(r.threads)>0)){
   const group=key(row,[...workFields,'width','height']);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(row)

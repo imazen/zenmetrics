@@ -156,7 +156,7 @@ def adapt(path, spec):
                 raise ValueError('nonpositive timing')
             if row['status'] == 'ok' and row.get('median_ns') is None:
                 raise ValueError('successful timing row has no measurement')
-            result = dict(metric=row['metric_name'], implementation=row['impl'], backend=row['device'],
+            result = dict(metric=row['metric_name'], implementation=row['impl'], implementation_version=row.get('impl_version'), backend=row['device'],
                           host=row['host'], os=row.get('os', 'missing'), threads=row['threads'], mode=row['mode'],
                           width=row['width'], height=row['height'], ms=None if row.get('median_ns') is None else number(row['median_ns'])/1e6,
                           status=row['status'], size=row.get('size_name', f"{row['width']}×{row['height']}"), engine=row.get('engine', 'missing'),

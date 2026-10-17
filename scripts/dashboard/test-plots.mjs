@@ -27,3 +27,13 @@ console.log('Exact-cell ranking, sorting, competitor marks and whiskers pass');
 
 const pairedRows=[timing('butteraugli',3,{comparison_group:'Shared RGB8 pairs',os:'Linux-7',backend:'cpu',engine:'native'}),timing('butteraugli',4,{comparison_group:'Shared RGB8 pairs',implementation:'libjxl v0.12',os:'Linux',backend:'CPU'})];
 assert.equal(selectRanking(pairedRows,new URLSearchParams({...Object.fromEntries(params),workload:'Shared RGB8 pairs'})).length,2);
+
+// Build versions must not share scaling baselines, fits or rank identities.
+const versioned=[timing('versioned',10,{implementation_version:'build-a'}),timing('versioned',2,{threads:8,implementation_version:'build-b'})];
+assert.equal(threadScaling(versioned).length,0);
+assert.equal(costFits(versioned).length,2);
+const versionBars=rankingBars(versioned,'ms',{});
+assert(versionBars.includes('build-a')&&versionBars.includes('build-b'));
+const {slope}=await import('../../web/dashboard/ranking.js');
+assert(slope([versioned[0],{...versioned[1],width:1024}], '512×512','1024×512').includes('0 shared entries'));
+console.log('Implementation versions remain distinct in scaling, fits, labels and rank changes');

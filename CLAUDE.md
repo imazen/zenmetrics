@@ -1790,3 +1790,11 @@ terminated and its attempt logs retained. The benchmark launcher now uses
 The [receipt](benchmarks/iqa_compete_2026-10-16/task4-mac-supervision-control-20261017.json)
 binds that control and the earlier interruption record. This does not claim a
 macOS hard memory cap or establish a metric's peak memory usage.
+
+### Known Bugs: portable dashboard projection notes (2026-10-17)
+
+The portable coordinator projects `notes`, but the registered reproduction
+competition schemas omitted that supported field. A generated smoke shard
+therefore failed strict dashboard ingestion. Both reproduction schemas now
+accept `notes`; unknown columns still fail. This preserves per-row workload and
+agreement qualifications in versioned observations.

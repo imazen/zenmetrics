@@ -46,6 +46,35 @@ class Contracts(unittest.TestCase):
             row['unexpected']=1;p.write_text(json.dumps([row]))
             with self.assertRaisesRegex(ValueError,'unknown competition'):list(adapt(p,dict(adapter='competition',columns=[k for k in row if k!='unexpected'])))
 
+    def test_registered_reproduction_schema_accepts_notes(self):
+        import tomllib
+        registry=Path(__file__).resolve().parents[2]/'benchmarks/dashboard/datasets.toml'
+        specs=[s for s in tomllib.loads(registry.read_text())['dataset']
+               if s['glob'].endswith(('repro-results/*/*.json','repro-evidence/*/*.json'))]
+        self.assertEqual(len(specs),2)
+        row=dict(host='test',metric_name='metric',impl='reference',impl_version='build-a',
+                 device='cpu',threads=1,mode='score',width=64,height=64,
+                 status='ok',median_ns=1000,notes='Scoped agreement qualification')
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'rows.json';p.write_text(json.dumps([row]))
+            for spec in specs:
+                result=list(adapt(p,spec))[0]
+                self.assertEqual(result['notes'],row['notes'])
+                self.assertEqual(result['implementation_version'],'build-a')
+
+    def test_competition_preserves_implementation_version(self):
+        row=dict(host='test',metric_name='metric-v0.2',impl='reference strict-float',
+                 impl_version='0.2+build-a',device='cpu',threads=1,mode='score',
+                 width=64,height=64,status='ok',median_ns=1000)
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'rows.json';p.write_text(json.dumps([row]))
+            result=list(adapt(p,dict(adapter='competition',columns=list(row))))[0]
+            self.assertEqual(result['implementation_version'],'0.2+build-a')
+            self.assertEqual(result['implementation'],'reference strict-float')
+            del row['impl_version'];p.write_text(json.dumps([row]))
+            result=list(adapt(p,dict(adapter='competition',columns=list(row))))[0]
+            self.assertIsNone(result['implementation_version'])
+
     def test_quality_scatter_uses_measured_values(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'points.tsv'

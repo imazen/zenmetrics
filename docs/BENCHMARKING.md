@@ -123,3 +123,12 @@ The panel requires Python 3 and runs under the configured resource wrapper when
 available. It writes a separate `private-dvifm` directory within the raw output;
 its results and optional metadata never enter dashboard projections. Keep that
 raw output private. The default command does not invoke the optional panel.
+
+## Dashboard build versions
+
+Competition ingestion preserves `impl_version` as `implementation_version`.
+Speed filters and table exports expose it; ranking labels include it. Cost fits,
+thread-scaling baselines and rank-change identities separate implementation
+versions, including different compiler/build binaries of the same method.
+Unversioned historical rows retain an unspecified version. External measurement
+registration remains separate from version support.
