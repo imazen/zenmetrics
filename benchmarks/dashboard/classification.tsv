@@ -8,6 +8,10 @@ benchmarks/afine_aic_2026-10-16/dump_ort_full.tsv	ignored	Historical experiment 
 benchmarks/afine_aic_2026-10-16/dump_ort_partial.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/afine_aic_2026-10-16/dump_ort_prefix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/ahiq_aic_probe/aic_ahiq.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
+benchmarks/aic2026_repro_2026-10-17/wadiqam-fr-live.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
+benchmarks/aic2026_repro_2026-10-17/wadiqam-fr-tid.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
+benchmarks/aic2026_repro_2026-10-17/wadiqam-nr-live.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
+benchmarks/aic2026_repro_2026-10-17/wadiqam-nr-tid.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
 benchmarks/aic_flip_2026-10-15/cw_grid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/cw_pyramid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/input_hashes.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
@@ -343,15 +347,18 @@ benchmarks/iqa_compete_2026-10-16/untimed-reference-chart-control.json	ignored	H
 benchmarks/iqa_compete_2026-10-16/v13-preparation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/warmup-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/wrapup-coverage-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
+benchmarks/iqa_complexity_2026-10-17/analysis/aic2026_agreement.json	ignored	Per-metric agreement aggregates against the preliminary AIC2026 subjective JND (no per-image labels); used by docs/paper, not a dashboard table.
 benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_flops.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_latency.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_rthroughput.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_pedzisz_2026_draft.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_dev.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_i265.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
@@ -991,6 +998,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_pedzisz_2026_draft.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/analysis/aic2026_agreement.json	ignored	Per-metric agreement aggregates against the preliminary AIC2026 subjective JND (no per-image labels); used by docs/paper, not a dashboard table.
-benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.

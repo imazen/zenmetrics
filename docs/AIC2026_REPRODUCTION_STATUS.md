@@ -27,6 +27,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `proposal-Butteraugli` | `butteraugli` (3-norm column) | tracks our libjxl 3-norm with Pearson 0.99997 after an affine map (pub ≈ 2.09·ours − 1.10); exact values not recovered | libjxl revision, intensity target, aggregation and any JND mapping applied | AIC2026_METRICS_AND_FITTING.md |
 | `CAMBI` | `cambi` | native median 1.3e-4, max 0.178; settings unresolved | CAMBI options (window, top-k, thresholds, EOTF, bit depth, any scaling or crop) | [aic_more_2026-10-15](../benchmarks/aic_more_2026-10-15/README.md) |
 | `CW-SSIM` | `cw-ssim` | median 2.9e-7, max 1.1e-4, but no pair matches exactly (20 of 61 off by more than 1e-6); variant chosen in-sample | implementation (pyrtools version), levels, orientations, K, window | AIC2026_METRICS_AND_FITTING.md |
+| `WaDIQaM` | `wadiqam-fr-live`, `-fr-tid`, `-nr-live`, `-nr-tid` (official deepIQA weights) | none of the four checkpoints reproduces the column: published values lie in −0.039…0.018, ours on the checkpoints' own DMOS scales; best rank agreement is FR-LIVE at Spearman −0.74 (sign expected, ours is higher-is-worse); NR variants and NR dist−ref differences are weaker (61 crop pairs, 2026-10-17) | which WaDIQaM model and implementation produced the column (a retrained model such as pyiqa's?), its training set and output normalisation | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
 
 ## Close but not exact (minor; ask only if convenient)
 
@@ -35,7 +36,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `SSIMULACRA1` | `ssimulacra1` | native max 1.9e-5 | exact published convention |
 | `WS-HV` | `ws-hv` | native max 0.021 | exact published convention |
 | `FSIM`, `FSIMc` | `fsim-y`, `fsim` | one JPEG tail pair at 0.3 JND | downscale factor used |
-| `CKDN` | `ckdn` | median 4.0e-5, max 1.4e-4 (0.026 JND) | resize implementation |
+| `CKDN` | `ckdn` | median 4.0e-5, max 1.4e-4 (0.026 JND) | resize implementation. The published column itself shows no agreement with the AIC2026 subjective JND (within-source Spearman −0.005); our port reproduces it, so that is a property of the method on this data, not of the port |
 | `NLPD` | `nlpd-iqa` | median 2.6e-3, 2.6 % relative (f32 order and bilinear edges) | none needed |
 | `PSNR-Cb`, `PSNR-Cr` | `psnr-cb`, `psnr-cr` | max 1.7e-2 / 5.7e-2 dB | chroma conversion details |
 | `PSNR-YCbCr611` | `psnr-ycbcr611` | max 3.5e-3 dB | none needed |
@@ -44,8 +45,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 
 | Column | Ours | Status |
 |---|---|---|
-| `PieAPP` | `pieapp` | implemented and qualified against upstream; comparison against the column is being run (2026-10-17) |
-| `WaDIQaM` | `wadiqam-fr-live`, `-fr-tid`, `-nr-live`, `-nr-tid` | implemented; which checkpoint the column used is unknown; all four are being compared (2026-10-17). Ask: FR or NR, LIVE or TID weights |
+| `PieAPP` | `pieapp` | implemented and qualified against upstream; comparison against the column is running (2026-10-17) |
 
 ## Not implemented: what we would need
 
