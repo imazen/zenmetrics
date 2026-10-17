@@ -762,6 +762,9 @@ nn-dmm-bisect-panel revision output model_dir ladder:
     done
     exit "$failed"
 
+nn-dmm-bisect-sources output:
+    python3 benchmarks/nn_port_2026-10-15/dmm_bisect_sources.py '{{output}}'
+
 nn-dmm-oracle-info python:
     '{{python}}' -I benchmarks/nn_port_2026-10-15/dmm_oracle_info.py
 
