@@ -91,6 +91,19 @@ class Contracts(unittest.TestCase):
         for name in ['node-7','r123desk','arbitrary-label']:
             self.assertFalse(valid_host(name))
 
+    def test_json_metadata_preserves_host_and_calculation_identity(self):
+        from build import provenance
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);folder=root/'benchmarks/quality';folder.mkdir(parents=True)
+            source=folder/'rows.tsv';source.write_text('metric\tvalue\nm\t1\n')
+            source.with_suffix('.meta.json').write_text(json.dumps(dict(host='i265',build_commit='a'*40,command='calculate',generated_date_utc='2026-10-17')))
+            with patch('build.ROOT',root):result=provenance(source,{})
+            self.assertEqual(result['host'],'i265')
+            self.assertEqual(result['date'],'2026-10-17')
+            self.assertEqual(result['commit'],'a'*40)
+            self.assertEqual(result['command'],'calculate')
+
     def test_catalog_names_unique(self):
         rows=list(catalog());self.assertGreater(len(rows),100)
         self.assertEqual(len(rows),len({r['metric'] for r in rows}))

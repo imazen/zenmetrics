@@ -58,14 +58,15 @@ def provenance(path, spec):
     evidence = '\n'.join(p.read_text(errors='strict') for p in existing)
     commits = re.findall(r'(?<![A-Za-z0-9_])(?:build_commit|repo_commit[^:\n]*|commit_sha|base_commit|git_sha|git_commit|^commit)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence,re.MULTILINE|re.IGNORECASE)
     commands = re.findall(r'^(?:run|command|reproduce)\s*[:=]\s*(.+)$', evidence, re.MULTILINE)
-    recorded_date=None
+    recorded_date=None;recorded_host=None
     for metadata in existing:
         if metadata.suffix=='.json':
             obj=json.loads(metadata.read_text())
             if isinstance(obj,dict):
                 if isinstance(obj.get('command'),str):commands.insert(0,obj['command'])
                 recorded_date=obj.get('generated_date_utc',recorded_date)
-    host=spec.get('host','missing')
+                if obj.get('host') and valid_host(obj['host']):recorded_host=obj['host']
+    host=spec.get('host',recorded_host or 'missing')
     if host=='missing':
         found=re.search(r'^host\s*[:=]\s*([a-z0-9]+)',evidence,re.MULTILINE|re.IGNORECASE)
         if found and valid_host(found[1]):host=found[1]
