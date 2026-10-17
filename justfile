@@ -1233,3 +1233,6 @@ iqa-compete-coverage-progress:
 
 iqa-compete-stop-idle-controller pid script root proof *options:
     python3 benchmarks/iqa_compete_2026-10-16/stop_idle_controller.py '{{pid}}' '{{script}}' '{{root}}' '{{proof}}' {{options}}
+
+iqa-compete-resume-coverage manifest output label:
+    python3 benchmarks/iqa_compete_2026-10-16/resume_coverage.py '{{manifest}}' '{{output}}' --label '{{label}}'
