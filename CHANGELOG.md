@@ -58,6 +58,10 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-cli
 
+### Fixed
+
+- Keep decoder alpha policy available without default/scoring features; retain the alpha flag and resolve merged alpha/folder-scoring clippy errors (`84072828`).
+
 ### Added
 
 - Native job execution accepts absolute `file://` variant inputs named `<sha256>.<ext>`, verifies their bytes and borrows them without deleting the artifact (`3594eff9`).

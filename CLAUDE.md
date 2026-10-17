@@ -1721,3 +1721,14 @@ catalog and extracts and reports copy drift in its build summary. Local
 uploads still fail. Regeneration handles added/obsolete owned shards without
 removing unrelated files; controls cover drift, idempotence, malformed-source
 refusal and the retained inventory gate.
+
+### Known Bugs: alpha policy in lean CLI builds (2026-10-17)
+
+The decoder's unconditional alpha-policy signatures require `zenmetrics-api`
+even when scoring and default features are disabled. Making that dependency
+unconditional fixes the bare, jobexec and nn-webgpu feature builds; `alpha`
+remains a compatibility flag for its existing re-export. The same decoder and
+manifest were present on master; a default-feature check enabled alpha and
+did not exercise these lean shapes. Workspace patch, lock and sibling pins
+are unchanged. Strict clippy also requires the merged alpha/folder-scoring
+lint fixes. The complete final gate and seven existing decoder tests pass.
