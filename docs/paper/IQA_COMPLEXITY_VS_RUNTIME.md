@@ -105,9 +105,69 @@ Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of F
 
 ![fig/scatter_pedzisz_draft_totals.svg](fig/scatter_pedzisz_draft_totals.svg)
 
+![pareto.json](pareto.json)
+
+![points.json](points.json)
+
 ### The draft's own totals against our measured time
 
 10 metrics overlap. Spearman 0.83 (0.38–0.99), typical error 1.51×, spread 127.9×. The draft counted third-party reference or production implementations (libvmaf, Google butteraugli, the FSIM MATLAB code, HaarPSI Python, ColorVideoVDP PyTorch) at 840×944; DVIFM, the only one written by its author, has no zenmetrics counterpart here. So this compares two independent things: counts of reference code, and the runtime of zenmetrics code.
+
+## Pareto front: complexity vs agreement with subjective scores
+
+Agreement: mean within-source Spearman correlation between each published AIC2026 metric column and the preliminary subjective JND reconstruction for the public split (5,768 images, 42 sources), with a bootstrap interval over sources. Within-source correlation avoids rewarding a metric for ranking different contents against each other. These scores come from the implementations the dataset authors ran; the complexity axis is our implementation of the same method (mapping: `scripts/complexity/aic2026_columns.json`). The subjective data is preliminary. Application classes are not formally defined; the front only shows which metrics no other metric beats on both axes.
+
+Pareto-optimal against single-thread CPU time: gmsd, nlpd-iqa, haarpsi, ssim2.
+Against 8-thread CPU time: gmsd, nlpd-iqa, haarpsi, ssim2.
+Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nlpd-iqa, haarpsi, ssim2.
+
+![Pareto front](fig/pareto_cpu_1t.svg)
+
+| metric | AIC column | agreement (95 %) | pooled abs. Spearman | CPU ns/px 1t | CPU ns/px 8t | tallied cost | front |
+|---|---|---|---:|---:|---:|---:|---|
+| ssim2 | SSIMULACRA2 | 0.948 (0.937–0.957) | 0.898 | 97.79 | 162.5 | 452.5 | ★ |
+| haarpsi | HaarPSI | 0.941 (0.924–0.954) | 0.911 | 13.85 | 20.93 | 57.68 | ★ |
+| butteraugli | proposal-Butteraugli | 0.936 (0.921–0.948) | 0.926 | 136.2 | 198 | 1161 |  |
+| dssim | DSSIM | 0.936 (0.916–0.952) | 0.848 | 26.06 | 34.52 | – |  |
+| psnrhvs-daala | PSNR-HVS | 0.936 (0.918–0.951) | 0.878 | 33.55 | 34.12 | 131.4 |  |
+| dmm | DMM | 0.930 (0.917–0.941) | 0.846 | – | – | 1.041e+05 |  |
+| hdrvdp | HDR_VDP_2 | 0.920 (0.896–0.941) | 0.813 | – | – | – |  |
+| nlpd-iqa | NLPD | 0.920 (0.893–0.942) | 0.706 | 4.989 | 7.793 | 54.81 | ★ |
+| flip-v17 | FLIP | 0.918 (0.903–0.931) | 0.742 | 184.8 | 186.9 | 726.2 |  |
+| gmsd | GMSD | 0.913 (0.889–0.932) | 0.889 | 0.6821 | 0.8448 | 22.66 | ★ |
+| fsim | FSIMc | 0.912 (0.895–0.927) | 0.706 | 15.79 | 25.71 | 103 |  |
+| hdrvdp3 | HDR_VDP_3 | 0.912 (0.883–0.936) | 0.655 | – | – | – |  |
+| iwssim-piq | IW-SSIM | 0.910 (0.881–0.935) | 0.809 | 33.42 | 47.53 | 353 |  |
+| cvvdp | CVVDP | 0.909 (0.878–0.936) | 0.824 | 75.95 | 98.67 | 739.6 |  |
+| vsi | VSI | 0.909 (0.887–0.926) | 0.726 | 43.01 | 59.13 | 111.2 |  |
+| mdctpsnr | mDCT-PSNR | 0.908 (0.882–0.929) | 0.767 | 639.4 | 1193 | 1.208e+04 |  |
+| ssim-pyiqa | SSIM-pyiqa | 0.906 (0.876–0.930) | 0.547 | 24.56 | 23.66 | 191.7 |  |
+| msssim-libvmaf | MS-SSIM | 0.904 (0.875–0.929) | 0.709 | 38.29 | 53.92 | 120.2 |  |
+| fsim-y | FSIM | 0.903 (0.884–0.920) | 0.697 | 14.44 | 33.13 | 160.1 |  |
+| pieapp | PieAPP | 0.903 (0.881–0.921) | 0.855 | – | – | 1.658e+08 |  |
+| ms-ssim-pyiqa | MS-SSIM-pyiqa | 0.901 (0.871–0.927) | 0.711 | 30.39 | 29.38 | 253.9 |  |
+| vmaf-neg | VMAF-neg | 0.901 (0.883–0.916) | 0.874 | 29.48 | 29.44 | 74.79 |  |
+| ssimc | SSIMc | 0.897 (0.871–0.920) | 0.553 | 48.3 | 47.97 | 622.3 |  |
+| vmaf | VMAF | 0.892 (0.873–0.908) | 0.865 | 28.7 | 28.77 | 74.79 |  |
+| ssim-libvmaf | SSIM | 0.891 (0.864–0.914) | 0.591 | 8.464 | 11.11 | 14.46 |  |
+| stlpips-alex | STLPIPS | 0.891 (0.871–0.910) | 0.746 | – | – | 3.822e+04 |  |
+| lpips-alex | LPIPS-alex | 0.890 (0.864–0.914) | 0.616 | – | – | 2.274e+04 |  |
+| psnr-ycbcr611 | PSNR-YCbCr611 | 0.888 (0.855–0.917) | 0.610 | 9.869 | 9.702 | 86.76 |  |
+| vifvec | VIF | 0.888 (0.848–0.923) | 0.833 | 109.4 | 159.2 | 768.1 |  |
+| psnr-y-studio601 | PSNR-Y | 0.885 (0.849–0.915) | 0.608 | 5.556 | 5.48 | – |  |
+| stlpips-vgg | STLPIPS-VGG | 0.883 (0.856–0.905) | 0.588 | – | – | 6.84e+04 |  |
+| ciede2000 | CIEDE2000 | 0.878 (0.862–0.892) | 0.452 | 104.5 | 104.9 | 412.8 |  |
+| psnr | PSNR | 0.877 (0.850–0.901) | 0.592 | 1.502 | 1.48 | 7.344 |  |
+| dists | DISTS | 0.875 (0.848–0.899) | 0.758 | – | – | 5.394e+05 |  |
+| lpips-vgg | LPIPS-VGG | 0.868 (0.835–0.899) | 0.636 | – | – | 5.313e+05 |  |
+| deepdc | DeepDC | 0.856 (0.825–0.883) | 0.676 | – | – | 6.743e+05 |  |
+| ahiq | AHIQ | 0.795 (0.736–0.845) | 0.507 | – | – | 2.469e+05 |  |
+| cw-ssim | CW-SSIM | 0.784 (0.737–0.823) | 0.489 | 93.02 | 89.84 | 276 |  |
+| psnr-cr | PSNR-Cr | 0.767 (0.737–0.794) | 0.483 | 3.768 | 3.723 | 44.8 |  |
+| dreamsim | DreamSim | 0.753 (0.724–0.782) | 0.637 | – | – | 2.231e+04 |  |
+| psnr-cb | PSNR-Cb | 0.727 (0.697–0.756) | 0.413 | 3.93 | 3.932 | 44.8 |  |
+| cambi | CAMBI | 0.371 (0.280–0.458) | 0.252 | 11.73 | 15.73 | – |  |
+| ckdn | CKDN | -0.005 (-0.106–0.100) | 0.054 | – | – | 2160 |  |
 
 ## Where the work is
 

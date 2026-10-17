@@ -38,6 +38,8 @@ TABLES = [  # file stem, short label
     ('llvm_mca_arrowlake_rthroughput', 'llvm-mca arrowlake (ADLP) throughput'),
     ('llvm_tti_znver5_throughput', 'LLVM cost model znver5 throughput (other CPU)'),
 ]
+NN_NAMES = {'lpips-alex', 'lpips-vgg', 'lpips-squeeze', 'dists', 'stlpips-alex', 'stlpips-vgg', 'deepdc', 'ckdn', 'dreamsim',
+            'afine', 'pieapp', 'ahiq', 'dmm', 'wd', 'arniqa', 'musiq', 'maniqa', 'liqe', 'hyperiqa', 'paq2piq'}
 HALO = {'none': lambda r: 1.0,
         'pad': lambda r: (W + 2 * r['halo_x_px']) * (H + 2 * r['halo_y_px']) / (W * H),
         'strip64': lambda r: 1 + 2 * r['halo_y_px'] / 64}
@@ -116,6 +118,39 @@ def svg_scatter(points, title, xlabel, ylabel, scale):
     return '\n'.join(parts) + '\n'
 
 
+def svg_pareto(pts, front_names):
+    xs = [p['cpu_1t'] for p in pts]
+    lox, hix = min(xs) / 1.5, max(xs) * 1.5
+    ys = [p['agreement'] for p in pts]
+    loy, hiy = max(0.0, min(min(ys), min(p['lo'] for p in pts)) - 0.02), min(1.0, max(p['hi'] for p in pts) + 0.01)
+    X = lambda v: 70 + 560 * (math.log(v) - math.log(lox)) / (math.log(hix) - math.log(lox))
+    Y = lambda v: 400 - 360 * (v - loy) / (hiy - loy)
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 460" font-family="sans-serif" font-size="11">',
+           '<rect width="700" height="460" fill="white"/>',
+           '<text x="350" y="20" text-anchor="middle" font-size="13">Agreement with subjective JND (AIC2026, preliminary) vs CPU time (i265, 1 thread, 1024²)</text>',
+           '<path d="M70 40V400H630" fill="none" stroke="#333"/>']
+    e = math.floor(math.log10(lox))
+    while 10 ** e <= hix:
+        if 10 ** e >= lox:
+            out.append(f'<path d="M{X(10**e):.1f} 400v5" stroke="#333"/><text x="{X(10**e):.1f}" y="418" text-anchor="middle">{10**e:g}</text>')
+        e += 1
+    t = math.ceil(loy * 20) / 20
+    while t <= hiy:
+        out.append(f'<path d="M65 {Y(t):.1f}h5" stroke="#333"/><text x="62" y="{Y(t)+4:.1f}" text-anchor="end">{t:.2f}</text>')
+        t = round(t + 0.05, 2)
+    fp = sorted((p for p in pts if p['metric'] in front_names), key=lambda p: p['cpu_1t'])
+    out.append('<path d="' + ''.join(('M' if i == 0 else 'L') + f"{X(p['cpu_1t']):.1f} {Y(p['agreement']):.1f}" for i, p in enumerate(fp))
+               + '" fill="none" stroke="#bf5825" stroke-width="1.5"/>')
+    for p in pts:
+        on = p['metric'] in front_names
+        out.append(f"<path d=\"M{X(p['cpu_1t']):.1f} {Y(p['lo']):.1f}V{Y(p['hi']):.1f}\" stroke=\"#9ab\"/>")
+        out.append(f"<circle cx=\"{X(p['cpu_1t']):.1f}\" cy=\"{Y(p['agreement']):.1f}\" r=\"{4.5 if on else 3.2}\" fill=\"{'#bf5825' if on else '#2179ac'}\"><title>{p['metric']}</title></circle>"
+                   f"<text x=\"{X(p['cpu_1t'])+5:.1f}\" y=\"{Y(p['agreement'])-4:.1f}\" font-size=\"9\" fill=\"#444\">{p['metric']}</text>")
+    out.append('<text x="350" y="448" text-anchor="middle">measured CPU ns per pixel (log)</text>')
+    out.append('<text x="18" y="220" text-anchor="middle" transform="rotate(-90 18 220)">within-source Spearman with subjective JND</text></svg>')
+    return '\n'.join(out) + '\n'
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true')
@@ -146,6 +181,20 @@ def main():
                                               f'{label}, halo {halo}: estimate vs CPU time (i265, 1 thread, 1024²)',
                                               'estimated cost per pixel (table units)', 'measured CPU ns per pixel',
                                               s_cpu['scale'])
+    # Points for the interactive chart: every tallied metric with any measurement, per weight table.
+    points = {'shape': f'{W}x{H}', 'tables': [], 'metrics': []}
+    weights_all = {stem: json.loads((HERE/f'weights_{stem}.json').read_text())['weights'] for stem, _ in TABLES}
+    points['tables'] = [{'id': stem, 'label': label} for stem, label in TABLES]
+    for m, (t, r) in sorted(tal.items()):
+        if m not in m1 and m not in m8:
+            continue
+        points['metrics'].append({
+            'metric': m, 'counter': t['counter'], 'kind': t['kind'],
+            'flops_per_px': round(r['flops_per_px'], 4), 'halo_px': r['halo_px'],
+            'estimate': {stem: round(weighted(r, w)[0], 6) for stem, w in weights_all.items()},
+            'cpu_1t': m1[m][0] if m in m1 else None, 'wall_1t': m1[m][1] if m in m1 else None,
+            'cpu_8t': m8[m][0] if m in m8 else None, 'wall_8t': m8[m][1] if m in m8 else None})
+    files['points.json'] = json.dumps(points, indent=1) + '\n'
     draft = json.loads((HERE/'pedzisz_2026_draft_values.json').read_text())
     dpts = [(v['value'], m1[v['zenmetrics']][0], v['zenmetrics']) for v in draft['values']
             if v['zenmetrics'] and v['zenmetrics'] in m1]
@@ -154,6 +203,29 @@ def main():
         files['fig/scatter_pedzisz_draft_totals.svg'] = svg_scatter(
             dpts, 'Pedzisz draft totals (840x944, reference implementations) vs our CPU time', 'draft weighted ops per pixel',
             'measured CPU ns per pixel (zenmetrics, i265, 1 thread, 1024²)', dstats['scale'])
+    # Pareto front: subjective agreement (AIC2026 preliminary JND, within-source Spearman) vs complexity.
+    agreement = json.loads((B/'analysis/aic2026_agreement.json').read_text())
+    colmap = json.loads((HERE/'aic2026_columns.json').read_text())['map']
+    pareto_pts = []
+    for d in agreement['metrics']:
+        m = colmap.get(d['column'])
+        if not m:
+            continue
+        x_cpu = m1.get(m, (None, None))[0]
+        est = weighted(tal[m][1], json.loads((HERE/'weights_i265_P_rthroughput.json').read_text())['weights'])[0] if m in tal else None
+        pareto_pts.append(dict(column=d['column'], metric=m, agreement=d['within_source_srcc'], lo=d['ci_lo'], hi=d['ci_hi'],
+                               overall=d['overall_abs_srcc'], cpu_1t=x_cpu, cpu_8t=m8.get(m, (None, None))[0], estimate=est,
+                               kind=tal[m][0]['kind'] if m in tal else ('nn' if m in NN_NAMES else 'classic')))
+    def front(pts, key):
+        f, best = [], -1.0
+        for p_ in sorted((p_ for p_ in pts if p_.get(key)), key=lambda q: q[key]):
+            if p_['agreement'] > best:
+                f.append(p_['metric']); best = p_['agreement']
+        return f
+    fronts = {k: front(pareto_pts, k) for k in ('cpu_1t', 'cpu_8t', 'estimate')}
+    for p_ in pareto_pts:
+        p_['on_front'] = {k: p_['metric'] in v for k, v in fronts.items()}
+    files['pareto.json'] = json.dumps({'source': agreement['source'], 'fronts': fronts, 'points': pareto_pts}, indent=1) + '\n'
     n_tally = len(tal)
     lines = [
         '# Counted cost versus measured runtime for image-quality metrics (draft)', '',
@@ -203,6 +275,29 @@ def main():
     groups = {'separable passes': ('sep_stencil',), '2D stencils': ('stencil2d',), 'transforms': ('transform',),
               'network layers': ('conv', 'matmul'), 'pointwise / reductions': ('pointwise', 'reduction'),
               'resampling': ('downsample', 'upsample', 'resample')}
+    meas_pp = [p_ for p_ in pareto_pts if p_['cpu_1t']]
+    if len(meas_pp) >= 4:
+        fr = fronts['cpu_1t']
+        files['fig/pareto_cpu_1t.svg'] = svg_pareto(meas_pp, fr)
+    lines += ['## Pareto front: complexity vs agreement with subjective scores', '',
+              'Agreement: mean within-source Spearman correlation between each published AIC2026 metric column and the '
+              'preliminary subjective JND reconstruction for the public split (5,768 images, 42 sources), with a '
+              'bootstrap interval over sources. Within-source correlation avoids rewarding a metric for ranking '
+              'different contents against each other. These scores come from the implementations the dataset authors '
+              'ran; the complexity axis is our implementation of the same method (mapping: '
+              '`scripts/complexity/aic2026_columns.json`). The subjective data is preliminary. Application classes are '
+              'not formally defined; the front only shows which metrics no other metric beats on both axes.', '',
+              f"Pareto-optimal against single-thread CPU time: {', '.join(fronts['cpu_1t'])}.",
+              f"Against 8-thread CPU time: {', '.join(fronts['cpu_8t'])}.",
+              f"Against tallied cost (measured-throughput weights): {', '.join(fronts['estimate'])}.", '',
+              '![Pareto front](fig/pareto_cpu_1t.svg)', '',
+              '| metric | AIC column | agreement (95 %) | pooled abs. Spearman | CPU ns/px 1t | CPU ns/px 8t | tallied cost | front |',
+              '|---|---|---|---:|---:|---:|---:|---|']
+    for p_ in sorted(pareto_pts, key=lambda q: -q['agreement']):
+        f = lambda v: f'{v:.4g}' if v else '–'
+        lines.append(f"| {p_['metric']} | {p_['column']} | {p_['agreement']:.3f} ({p_['lo']:.3f}–{p_['hi']:.3f}) | {p_['overall']:.3f} | "
+                     f"{f(p_['cpu_1t'])} | {f(p_['cpu_8t'])} | {f(p_['estimate'])} | {'★' if p_['on_front']['cpu_1t'] else ''} |")
+    lines.append('')
     lines += ['## Where the work is', '',
               'Share of each metric\'s flops by access class (separable 1-D passes vs 2D windows computed directly, '
               'transforms, network layers), and bytes written per pixel to fully materialized planes (`materialize` = '

@@ -238,6 +238,27 @@ fixed tables with one scale; division, power and memory weights came out zero
 (not identifiable). At this sample size fitting overfits. It will be rerun on
 the reconciled inventory with the effort axis from the git iteration tally.
 
+## Pareto front: complexity vs agreement with subjective scores
+
+The target, as described by the AIC-4 complexity work, is a reliable Pareto
+front with complexity on one axis and agreement with subjective scores on the
+other, so that metrics can be chosen per application: fast enough for an
+encoder's rate-distortion loop, or slower but closer to human judgement for
+periodic offline evaluation. Those application classes are not formally
+defined yet.
+
+`scripts/complexity/aic2026_agreement.py` computes, for each published
+AIC2026 metric column, the mean within-source Spearman correlation with the
+preliminary subjective JND reconstruction for the public split (5,768 images,
+42 sources), with a bootstrap interval over sources; only per-metric
+aggregates are committed (`analysis/aic2026_agreement.json`). Columns map to
+our implementations through `scripts/complexity/aic2026_columns.json`, which
+omits columns whose variant the AIC2026 mapping doc does not settle. The
+paper draws the front against measured single- and 8-thread CPU time and
+against tallied cost. First result: GMSD, NLPD (iqa), HaarPSI and
+SSIMULACRA2 are on the single-thread front; near the top the bootstrap
+intervals overlap.
+
 ## Optimization effort
 
 Question: how many optimization iterations, and how much agent time, went

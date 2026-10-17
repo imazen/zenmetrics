@@ -1,0 +1,14 @@
+{"source": "docs/AIC2026_METRICS_AND_FITTING.md mapping tables (published column -> zenmetrics CLI implementation). Columns whose variant the doc does not settle are omitted rather than guessed.",
+ "map": {
+  "CVVDP": "cvvdp", "SSIMULACRA2": "ssim2", "PSNR-Y": "psnr-y-studio601", "SSIM": "ssim-libvmaf", "MS-SSIM": "msssim-libvmaf",
+  "PSNR-HVS": "psnrhvs-daala", "VMAF-neg": "vmaf-neg", "VMAF": "vmaf", "proposal-Butteraugli": "butteraugli",
+  "DSSIM": "dssim", "HaarPSI": "haarpsi", "GMSD": "gmsd", "NLPD": "nlpd-iqa", "IW-SSIM": "iwssim-piq", "VIF": "vifvec",
+  "FSIM": "fsim-y", "FSIMc": "fsim", "VSI": "vsi", "mDCT-PSNR": "mdctpsnr", "SSIM-pyiqa": "ssim-pyiqa",
+  "MS-SSIM-pyiqa": "ms-ssim-pyiqa", "SSIMc": "ssimc", "PSNR": "psnr", "PSNR-YCbCr611": "psnr-ycbcr611",
+  "PSNR-Cb": "psnr-cb", "PSNR-Cr": "psnr-cr", "CIEDE2000": "ciede2000", "FLIP": "flip-v17", "CW-SSIM": "cw-ssim",
+  "CAMBI": "cambi", "LPIPS-alex": "lpips-alex", "LPIPS-VGG": "lpips-vgg", "DISTS": "dists", "STLPIPS": "stlpips-alex",
+  "STLPIPS-VGG": "stlpips-vgg", "DeepDC": "deepdc", "CKDN": "ckdn", "DreamSim": "dreamsim", "PieAPP": "pieapp",
+  "AHIQ": "ahiq", "DMM": "dmm", "HDR_VDP_2": "hdrvdp", "HDR_VDP_3": "hdrvdp3"},
+ "notes": {"proposal-Butteraugli": "submission tracks the libjxl 3-norm family (Pearson 0.99997 with our pnorm_3); not identity-reproduced",
+           "A-FINE": "omitted: our upstream-verified afine sits 0.5-1.4 below the published column",
+           "PSNR-HVS": "psnrhvs-daala is the FFI-verified Daala port of the published column"}}

@@ -992,3 +992,4 @@ benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experimen
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_pedzisz_2026_draft.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/aic2026_agreement.json	ignored	Per-metric agreement aggregates against the preliminary AIC2026 subjective JND (no per-image labels); used by docs/paper, not a dashboard table.
