@@ -8,6 +8,7 @@ from build import adapt, number, table, catalog
 
 class Contracts(unittest.TestCase):
     def test_competition_metadata_registers_without_timing_rows(self):
+        (Path.home()/'tmp').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as d:
             p=Path(d)/'run.meta'
             metadata=dict(identity={'commit':'abc'},build_commit='abc',command=['just','bench-iqa'],host='i265',hardware={},toolchains={},competitors={})
