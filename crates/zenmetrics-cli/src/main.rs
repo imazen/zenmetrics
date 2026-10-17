@@ -2963,10 +2963,10 @@ fn scan_dir_inner(
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
-            if is_image_file(&path) {
-                if let Ok(rel) = path.strip_prefix(root) {
-                    out.push(rel.to_path_buf());
-                }
+            if is_image_file(&path)
+                && let Ok(rel) = path.strip_prefix(root)
+            {
+                out.push(rel.to_path_buf());
             }
         } else if recursive && path.is_dir() {
             scan_dir_inner(root, &path, recursive, out)?;
@@ -2999,10 +2999,13 @@ fn find_image_pairs(
         stem_rel_refs.insert(stem_rel, r.clone());
         if let Some(stem) = r.file_stem().and_then(|s| s.to_str()) {
             let stem_lower = stem.to_ascii_lowercase();
-            if basename_refs.contains_key(&stem_lower) {
-                duplicate_basenames.insert(stem_lower);
-            } else {
-                basename_refs.insert(stem_lower, r.clone());
+            match basename_refs.entry(stem_lower) {
+                std::collections::hash_map::Entry::Occupied(entry) => {
+                    duplicate_basenames.insert(entry.key().clone());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(r.clone());
+                }
             }
         }
     }
@@ -3021,11 +3024,11 @@ fn find_image_pairs(
         }
         if let Some(stem) = d.file_stem().and_then(|s| s.to_str()) {
             let stem_lower = stem.to_ascii_lowercase();
-            if !duplicate_basenames.contains(&stem_lower) {
-                if let Some(r) = basename_refs.get(&stem_lower) {
-                    pairs.push((ref_dir.join(r), full_dist));
-                    continue;
-                }
+            if !duplicate_basenames.contains(&stem_lower)
+                && let Some(r) = basename_refs.get(&stem_lower)
+            {
+                pairs.push((ref_dir.join(r), full_dist));
+                continue;
             }
         }
         eprintln!(
@@ -3079,7 +3082,7 @@ fn cmd_score_folder(
     #[cfg(feature = "orchestrator")]
     let mut orch =
         if use_orchestrator && orchestrator_runner::metric_orchestrator_eligible(args.metric) {
-            let mut o = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+            let o = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
             orchestrator_runner::print_capability_summary(&o);
             Some(o)
         } else {

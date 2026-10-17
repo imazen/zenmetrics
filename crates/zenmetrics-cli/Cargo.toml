@@ -51,8 +51,9 @@ nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
 nr = ["dep:piqe", "dep:niqe", "dep:brisque", "dep:zenmetrics-abstractions"]
 
-# Alpha channel handling and compositing via the fundamental zenmetrics-api layer
-alpha = ["dep:zenmetrics-api"]
+# Compatibility feature: alpha policy is fundamental to every decoder build.
+# Keep this flag for existing callers; the API dependency is unconditional.
+alpha = []
 
 # Decoder feature flags
 # zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette
@@ -119,7 +120,7 @@ bmp = ["dep:zenbitmaps", "zenbitmaps/bmp"]
 # source decoders — those are `hdr-gainmap` (below), kept opt-in so a default
 # build stays portable (no `heic`/`ultrahdr` on i686 / windows-arm / macos).
 # `zenflate` gzips the Diffmap executor's PFM blobs (HDR-corpus B2).
-hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics", "dep:cvvdp", "dep:zenflate"]
+hdr = ["dep:image", "dep:bytemuck", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics", "dep:cvvdp", "dep:zenflate"]
 
 # HDR gain-map source decoders (opt-in): Ultra HDR JPEG (`ultrahdr-rs`) +
 # gain-map HEIC (`heic` + `ultrahdr-core`) → nits, for `score`/`batch --hdr` on
@@ -228,9 +229,9 @@ cpu-metrics = [
 # Standalone (no orchestrator dependency) — `zenmetrics-api/cpu-cvvdp` is just
 # `["dep:cvvdp","cvvdp/std"]`. Enabling these makes `Metric::new(kind,
 # Backend::Cpu, …)` build the native `cpu_dispatch` scorer for that metric.
-cpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-cvvdp"]
-cpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/cpu-iwssim"]
-cpu-hdrvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-hdrvdp"]
+cpu-cvvdp = ["zenmetrics-api/cpu-cvvdp"]
+cpu-iwssim = ["zenmetrics-api/cpu-iwssim"]
+cpu-hdrvdp = ["zenmetrics-api/cpu-hdrvdp"]
 cpu-gmsd = ["dep:gmsd"]
 cpu-psnrhvs = ["dep:psnrhvs"]
 cpu-haarpsi = ["dep:haarpsi"]
@@ -263,19 +264,19 @@ gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "
 # Both go through `zenmetrics-api/cubecl-types` to keep a single
 # umbrella dep line; the CLI does not depend on `cubecl`, `cvvdp-gpu`,
 # or `butteraugli-gpu` directly.
-gpu-butteraugli = ["dep:zenmetrics-api", "zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl", "dep:butteraugli-gpu"]
-gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
-gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
-gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
-gpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/iwssim"]
+gpu-butteraugli = ["zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl", "dep:butteraugli-gpu"]
+gpu-ssim2 = ["zenmetrics-api/ssim2"]
+gpu-dssim = ["zenmetrics-api/dssim"]
+gpu-cvvdp = ["zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
+gpu-iwssim = ["zenmetrics-api/iwssim"]
 # `cpu-metrics` is pulled so the dispatcher can route min_dim<64 images (which
 # can't form the GPU 4-scale pyramid) to the CPU zensim — see the ZensimGpu arm
 # in metrics/cache.rs. Cheap: it only adds the CPU zensim scorer to the build.
-gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim", "cpu-metrics"]
+gpu-zensim = ["zenmetrics-api/zensim", "cpu-metrics"]
 # Pick CubeCL backends. Forward through the umbrella so every enabled
 # per-crate gets the right backend feature.
-gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]
-gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
+gpu-cuda = ["zenmetrics-api/cuda", "cubecl?/cuda"]
+gpu-wgpu = ["zenmetrics-api/wgpu", "cubecl?/wgpu"]
 # Opt-in: compile the wgpu backend's kernels through cubecl's NATIVE SPIR-V
 # codegen (cubecl-spirv) instead of the default WGSL -> naga -> SPIR-V path.
 # Vulkan only; cubecl-wgpu documents `msl` and `spirv` as mutually exclusive, so
@@ -297,8 +298,8 @@ gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
 # `gpu-ssim2,gpu-wgpu-spirv`) — you would get the WGSL path while believing you
 # had SPIR-V. Verified with `cargo tree -e features -i zenforks-cubecl-wgpu`.
 gpu-wgpu-spirv = ["gpu-wgpu", "dep:cubecl", "cubecl/vulkan"]
-gpu-hip = ["zenmetrics-api?/hip", "cubecl?/hip"]
-gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
+gpu-hip = ["zenmetrics-api/hip", "cubecl?/hip"]
+gpu-cpu = ["zenmetrics-api/cpu", "cubecl?/cpu"]
 
 # `jobexec` enables the `zenmetrics jobexec` subcommand — the ZEN_EXEC reference
 # executor for the zen job system — WITHOUT the codec-encode stack. A jobexec-only
@@ -398,8 +399,8 @@ sweep = [
 # `--features sweep,orchestrator,orchestrator-cuda,orchestrator-cpu-all`
 # so the image build is opt-in. CI checks both shapes (without and with
 # orchestrator) to keep the legacy path healthy.
-orchestrator = ["dep:zenmetrics-orchestrator", "dep:zenmetrics-api"]
-orchestrator-cuda = ["zenmetrics-orchestrator?/cuda", "zenmetrics-api?/cuda", "orchestrator"]
+orchestrator = ["dep:zenmetrics-orchestrator"]
+orchestrator-cuda = ["zenmetrics-orchestrator?/cuda", "zenmetrics-api/cuda", "orchestrator"]
 orchestrator-cpu-all = ["zenmetrics-orchestrator?/cpu-all", "orchestrator"]
 orchestrator-cpu-cvvdp = ["zenmetrics-orchestrator?/cpu-cvvdp", "orchestrator"]
 orchestrator-cpu-ssim2 = ["zenmetrics-orchestrator?/cpu-ssim2", "orchestrator"]
@@ -604,7 +605,8 @@ imgref = { version = "1", optional = true }
 # / `gpu-cvvdp`. Keeping it optional means a CLI build with neither of
 # those two metrics enabled (e.g. ssim2-only worker) still avoids the
 # cubecl dependency entirely.
-zenmetrics-api = { workspace = true, optional = true, default-features = false }
+# Decoder alpha-policy types are required even with no scoring features.
+zenmetrics-api = { workspace = true, default-features = false }
 # Direct dep for hdr.rs's HLG→nits path (`cvvdp::params::hlg_*` — BT.2100
 # inverse-OETF + system gamma; the in-repo reference implementation). The
 # `gpu-cvvdp` feature links cvvdp only THROUGH zenmetrics-api, which doesn't

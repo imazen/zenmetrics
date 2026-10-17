@@ -66,7 +66,7 @@ pub fn linear_to_srgb_u8(v: f32) -> u8 {
 }
 
 /// Policy for handling images with an alpha channel during perceptual metric evaluation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AlphaPolicy {
     /// Composite over a deterministic pseudo-random linear noise background in $[0.2, 0.8]$.
     ///
@@ -93,13 +93,8 @@ pub enum AlphaPolicy {
     DiscardUnchecked,
     /// Require all pixels in the alpha channel to be fully opaque ($255$).
     /// Returns [`AlphaError::AlphaNotOpaque`] if any non-opaque pixels exist.
+    #[default]
     RequireOpaque,
-}
-
-impl Default for AlphaPolicy {
-    fn default() -> Self {
-        Self::RequireOpaque
-    }
 }
 
 impl AlphaPolicy {
@@ -195,12 +190,12 @@ pub struct AlphaStats {
 
 /// Check if an RGBA buffer is fully opaque (every alpha byte is 255).
 pub fn is_fully_opaque_rgba(rgba: &[u8]) -> bool {
-    rgba.chunks_exact(4).all(|px| px[3] == 255)
+    rgba.as_chunks::<4>().0.iter().all(|px| px[3] == 255)
 }
 
 /// Extract alpha channel bytes into a flat vector.
 pub fn extract_alpha_channel(rgba: &[u8]) -> Vec<u8> {
-    rgba.chunks_exact(4).map(|px| px[3]).collect()
+    rgba.as_chunks::<4>().0.iter().map(|px| px[3]).collect()
 }
 
 /// Compute fidelity statistics between two flat 1-channel alpha buffers.
@@ -268,7 +263,7 @@ pub fn compute_rgba_alpha_stats(
             actual: dist_rgba.len(),
         });
     }
-    if ref_rgba.len() % 4 != 0 {
+    if !ref_rgba.len().is_multiple_of(4) {
         return Err(AlphaError::BufferLengthMismatch {
             expected: (ref_rgba.len() / 4) * 4,
             actual: ref_rgba.len(),
@@ -281,7 +276,12 @@ pub fn compute_rgba_alpha_stats(
     let mut sum_sq_diff = 0u64;
     let total_pixels = (ref_rgba.len() / 4) as u64;
 
-    for (r_px, d_px) in ref_rgba.chunks_exact(4).zip(dist_rgba.chunks_exact(4)) {
+    for (r_px, d_px) in ref_rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(dist_rgba.as_chunks::<4>().0.iter())
+    {
         let r = r_px[3];
         let d = d_px[3];
         let delta = r.abs_diff(d);
@@ -345,7 +345,7 @@ pub fn composite_rgba_srgb8(
 
     // Fast path: if the image is 100% opaque, strip alpha directly without math
     if is_fully_opaque_rgba(rgba) {
-        for (i, px) in rgba.chunks_exact(4).enumerate() {
+        for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
             out[i * 3] = px[0];
             out[i * 3 + 1] = px[1];
             out[i * 3 + 2] = px[2];
@@ -358,7 +358,7 @@ pub fn composite_rgba_srgb8(
         AlphaPolicy::RequireOpaque => {
             let mut non_opaque_count = 0usize;
             let mut max_transparency = 0u8;
-            for px in rgba.chunks_exact(4) {
+            for px in rgba.as_chunks::<4>().0 {
                 let a = px[3];
                 if a < 255 {
                     non_opaque_count += 1;
@@ -374,7 +374,7 @@ pub fn composite_rgba_srgb8(
             })
         }
         AlphaPolicy::DiscardUnchecked => {
-            for (i, px) in rgba.chunks_exact(4).enumerate() {
+            for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
                 out[i * 3] = px[0];
                 out[i * 3 + 1] = px[1];
                 out[i * 3 + 2] = px[2];
@@ -419,7 +419,7 @@ fn composite_over_solid_linear(
     bg_linear: [f32; 3],
     out: &mut [u8],
 ) {
-    for (i, px) in rgba.chunks_exact(4).enumerate() {
+    for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
         let a = px[3];
         let out_idx = i * 3;
         if a == 255 {
@@ -447,7 +447,7 @@ fn composite_over_solid_linear(
 /// Composite RGBA over the deterministic linear noise background table.
 fn composite_over_noise_linear(rgba: &[u8], width: u32, _height: u32, out: &mut [u8]) {
     let w = width as usize;
-    for (i, px) in rgba.chunks_exact(4).enumerate() {
+    for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
         let x = i % w;
         let y = i / w;
         let a = px[3];
