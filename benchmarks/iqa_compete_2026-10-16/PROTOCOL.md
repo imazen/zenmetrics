@@ -154,3 +154,8 @@ Each constructed session reports its configured budget outside timing. The
 collector keeps earlier ORT observations without that receipt as diagnostics,
 not qualified 1T/all-core timings. A separate native-worker affinity probe checks
 the installed runtime. See [ORT thread management](https://onnxruntime.ai/docs/performance/tune-performance/threading.html).
+
+Compact summaries retain comparison availability, parity bound/source, reference
+identity and configured ORT budgets. Charts put measurements lacking CPU
+comparisons, and mismatches still requiring reproduction, in separate panels.
+A valid timing alone does not establish same-score parity.
