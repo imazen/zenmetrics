@@ -1,0 +1,746 @@
+{
+  "ColorVideoVDP": {
+    "metrics": [
+      "cvvdp",
+      "--display-model",
+      "cvvdp-gpu",
+      "score-video"
+    ],
+    "url": "https://doi.org/10.1145/3658144",
+    "full_name": "ColorVideoVDP",
+    "title": "ColorVideoVDP: A visual difference predictor for image, video and display distortions",
+    "authors": [
+      "Rafal K. Mantiuk",
+      "Param Hanji",
+      "Maliha Ashraf",
+      "Yuta Asano",
+      "Alexandre Chapiro"
+    ],
+    "venue": "ACM Transactions on Graphics",
+    "year": "2024",
+    "metadata_url": "https://api.crossref.org/works/10.1145/3658144",
+    "verified_date": "2026-10-17"
+  },
+  "FSIM": {
+    "metrics": [
+      "fsim",
+      "fsim-y"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2011.2109730",
+    "full_name": "FSIM",
+    "title": "FSIM: A Feature Similarity Index for Image Quality Assessment",
+    "authors": [
+      "Lin Zhang",
+      "Lei Zhang",
+      "Xuanqin Mou",
+      "D. Zhang"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2011",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2011.2109730",
+    "verified_date": "2026-10-17"
+  },
+  "GMSD": {
+    "metrics": [
+      "gmsd"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2013.2293423",
+    "full_name": "GMSD",
+    "title": "Gradient Magnitude Similarity Deviation: A Highly Efficient Perceptual Image Quality Index",
+    "authors": [
+      "Wufeng Xue",
+      "Lei Zhang",
+      "Xuanqin Mou",
+      "Alan C. Bovik"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2014",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2013.2293423",
+    "verified_date": "2026-10-17"
+  },
+  "HaarPSI": {
+    "metrics": [
+      "haarpsi",
+      "haarpsi-y"
+    ],
+    "url": "https://doi.org/10.1016/j.image.2017.11.001",
+    "full_name": "HaarPSI",
+    "title": "A Haar wavelet-based perceptual similarity index for image quality assessment",
+    "authors": [
+      "Rafael Reisenhofer",
+      "Sebastian Bosse",
+      "Gitta Kutyniok",
+      "Thomas Wiegand"
+    ],
+    "venue": "Signal Processing: Image Communication",
+    "year": "2018",
+    "metadata_url": "https://api.crossref.org/works/10.1016/j.image.2017.11.001",
+    "verified_date": "2026-10-17"
+  },
+  "HDR-VDP-2": {
+    "metrics": [
+      "hdrvdp",
+      "--hdr"
+    ],
+    "url": "https://doi.org/10.1145/1964921.1964935",
+    "full_name": "HDR-VDP-2",
+    "title": "HDR-VDP-2: a calibrated visual metric for visibility and quality predictions in all luminance conditions",
+    "authors": [
+      "Rafat Mantiuk",
+      "Kil Joong Kim",
+      "Allan G. Rempel",
+      "Wolfgang Heidrich"
+    ],
+    "venue": "ACM SIGGRAPH 2011 papers",
+    "year": "2011",
+    "metadata_url": "https://api.crossref.org/works/10.1145/1964921.1964935",
+    "verified_date": "2026-10-17"
+  },
+  "HDR-VDP-3": {
+    "metrics": [
+      "hdrvdp3",
+      "--hdr"
+    ],
+    "url": "https://arxiv.org/abs/2304.13625",
+    "full_name": "HDR-VDP-3",
+    "title": "HDR-VDP-3: A multi-metric for predicting image differences, quality and contrast distortions in high dynamic range and regular content",
+    "authors": [
+      "Mantiuk, Rafal K.",
+      "Hammou, Dounia",
+      "Hanji, Param"
+    ],
+    "year": "2023",
+    "metadata_url": "https://arxiv.org/abs/2304.13625",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17",
+    "venue": "arXiv preprint"
+  },
+  "IW-SSIM": {
+    "metrics": [
+      "iwssim",
+      "iwssim-gpu",
+      "iwssim-piq"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2010.2092435",
+    "full_name": "IW-SSIM",
+    "title": "Information Content Weighting for Perceptual Image Quality Assessment",
+    "authors": [
+      "Zhou Wang",
+      "Qiang Li"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2011",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2010.2092435",
+    "verified_date": "2026-10-17"
+  },
+  "MAD": {
+    "metrics": [
+      "mad"
+    ],
+    "url": "https://doi.org/10.1117/1.3267105",
+    "full_name": "MAD",
+    "title": "Most apparent distortion: full-reference image quality assessment and the role of strategy",
+    "authors": [
+      "Eric C. Larson",
+      "Damon M. Chandler"
+    ],
+    "venue": "Journal of Electronic Imaging",
+    "year": "2010",
+    "metadata_url": "https://api.crossref.org/works/10.1117/1.3267105",
+    "verified_date": "2026-10-17"
+  },
+  "mDCT-PSNR": {
+    "metrics": [
+      "mdctpsnr"
+    ],
+    "url": "https://doi.org/10.1109/QOMEX.2009.5246978",
+    "full_name": "mDCT-PSNR",
+    "title": "On the mDCT-PSNR image quality index",
+    "authors": [
+      "Thomas Richter"
+    ],
+    "venue": "2009 International Workshop on Quality of Multimedia Experience",
+    "year": "2009",
+    "metadata_url": "https://api.crossref.org/works/10.1109/QOMEX.2009.5246978",
+    "verified_date": "2026-10-17"
+  },
+  "MDSI": {
+    "metrics": [
+      "mdsi"
+    ],
+    "url": "https://doi.org/10.1109/ACCESS.2016.2604042",
+    "full_name": "MDSI",
+    "title": "Mean Deviation Similarity Index: Efficient and Reliable Full-Reference Image Quality Evaluator",
+    "authors": [
+      "Hossein Ziaei Nafchi",
+      "Atena Shahkolaei",
+      "Rachid Hedjam",
+      "Mohamed Cheriet"
+    ],
+    "venue": "IEEE Access",
+    "year": "2016",
+    "metadata_url": "https://api.crossref.org/works/10.1109/ACCESS.2016.2604042",
+    "verified_date": "2026-10-17"
+  },
+  "MS-GMSD": {
+    "metrics": [
+      "ms-gmsd",
+      "ms-gmsdc"
+    ],
+    "url": "https://doi.org/10.1109/ICASSP.2017.7952357",
+    "full_name": "MS-GMSD",
+    "title": "Gradient magnitude similarity deviation on multiple scales for color image quality assessment",
+    "authors": [
+      "Bo Zhang",
+      "Pedro V. Sander",
+      "Amine Bermak"
+    ],
+    "venue": "2017 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+    "year": "2017",
+    "metadata_url": "https://api.crossref.org/works/10.1109/ICASSP.2017.7952357",
+    "verified_date": "2026-10-17"
+  },
+  "MS-SSIM": {
+    "metrics": [
+      "msssim",
+      "msssim-libvmaf",
+      "float_ms_ssim",
+      "ms-ssim-pyiqa",
+      "dssim",
+      "dssim-gpu"
+    ],
+    "url": "https://doi.org/10.1109/ACSSC.2003.1292216",
+    "full_name": "MS-SSIM",
+    "title": "Multiscale structural similarity for image quality assessment",
+    "authors": [
+      "Z. Wang",
+      "E.P. Simoncelli",
+      "A.C. Bovik"
+    ],
+    "venue": "The Thrity-Seventh Asilomar Conference on Signals, Systems &amp; Computers, 2003",
+    "year": "None",
+    "metadata_url": "https://api.crossref.org/works/10.1109/ACSSC.2003.1292216",
+    "verified_date": "2026-10-17"
+  },
+  "NLPD": {
+    "metrics": [
+      "nlpd",
+      "nlpd-iqa"
+    ],
+    "url": "https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103",
+    "full_name": "NLPD",
+    "title": "Perceptual image quality assessment using a normalized Laplacian pyramid",
+    "authors": [
+      "Valero Laparra",
+      "Johannes Ballé",
+      "Alexander Berardino",
+      "Eero P Simoncelli"
+    ],
+    "venue": "Electronic Imaging",
+    "year": "2016",
+    "metadata_url": "https://api.crossref.org/works/10.2352/ISSN.2470-1173.2016.16.HVEI-103",
+    "verified_date": "2026-10-17"
+  },
+  "SSIM": {
+    "metrics": [
+      "ssim",
+      "ssim-libvmaf",
+      "float_ssim",
+      "ssimc"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2003.819861",
+    "full_name": "SSIM",
+    "title": "Image quality assessment: from error visibility to structural similarity",
+    "authors": [
+      "Zhou Wang",
+      "A.C. Bovik",
+      "H.R. Sheikh",
+      "E.P. Simoncelli"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2004",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2003.819861",
+    "verified_date": "2026-10-17"
+  },
+  "VIF": {
+    "metrics": [
+      "vifvec",
+      "vif"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2005.859378",
+    "full_name": "VIF",
+    "title": "Image information and visual quality",
+    "authors": [
+      "H.R. Sheikh",
+      "A.C. Bovik"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2006",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2005.859378",
+    "verified_date": "2026-10-17"
+  },
+  "VSI": {
+    "metrics": [
+      "vsi"
+    ],
+    "url": "https://doi.org/10.1109/TIP.2014.2346028",
+    "full_name": "VSI",
+    "title": "VSI: A Visual Saliency-Induced Index for Perceptual Image Quality Assessment",
+    "authors": [
+      "Lin Zhang",
+      "Ying Shen",
+      "Hongyu Li"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2014",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2014.2346028",
+    "verified_date": "2026-10-17"
+  },
+  "afine": {
+    "metrics": [
+      "afine"
+    ],
+    "url": "https://arxiv.org/abs/2503.11221",
+    "venue": "CVPR 2025",
+    "full_name": "A-FINE",
+    "title": "Toward Generalized Image Quality Assessment: Relaxing the Perfect Reference Quality Assumption",
+    "authors": [
+      "Chen, Du",
+      "Wu, Tianhe",
+      "Ma, Kede",
+      "Zhang, Lei"
+    ],
+    "year": "2025",
+    "metadata_url": "https://arxiv.org/abs/2503.11221",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "arniqa": {
+    "metrics": [
+      "arniqa"
+    ],
+    "url": "https://arxiv.org/abs/2310.14918",
+    "venue": "WACV 2024",
+    "full_name": "ARNIQA",
+    "title": "ARNIQA: Learning Distortion Manifold for Image Quality Assessment",
+    "authors": [
+      "Agnolucci, Lorenzo",
+      "Galteri, Leonardo",
+      "Bertini, Marco",
+      "Del Bimbo, Alberto"
+    ],
+    "year": "2023",
+    "metadata_url": "https://arxiv.org/abs/2310.14918",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "ckdn": {
+    "metrics": [
+      "ckdn"
+    ],
+    "url": "https://arxiv.org/abs/2108.07948",
+    "venue": "ICCV 2021",
+    "full_name": "CKDN",
+    "title": "Learning Conditional Knowledge Distillation for Degraded-Reference Image Quality Assessment",
+    "authors": [
+      "Zheng, Heliang",
+      "Yang, Huan",
+      "Fu, Jianlong",
+      "Zha, Zheng-Jun",
+      "Luo, Jiebo"
+    ],
+    "year": "2021",
+    "metadata_url": "https://arxiv.org/abs/2108.07948",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "deepdc": {
+    "metrics": [
+      "deepdc"
+    ],
+    "url": "https://arxiv.org/abs/2211.04927",
+    "venue": "arXiv preprint",
+    "full_name": "DeepDC",
+    "title": "DeepDC: Deep Distance Correlation as a Perceptual Image Quality Evaluator",
+    "authors": [
+      "Zhu, Hanwei",
+      "Chen, Baoliang",
+      "Zhu, Lingyu",
+      "Wang, Shiqi",
+      "Lin, Weisi"
+    ],
+    "year": "2022",
+    "metadata_url": "https://arxiv.org/abs/2211.04927",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "dists": {
+    "metrics": [
+      "dists"
+    ],
+    "url": "https://arxiv.org/abs/2004.07728",
+    "venue": "IEEE TPAMI; preprint 2020",
+    "full_name": "DISTS",
+    "title": "Image Quality Assessment: Unifying Structure and Texture Similarity",
+    "authors": [
+      "Ding, Keyan",
+      "Ma, Kede",
+      "Wang, Shiqi",
+      "Simoncelli, Eero P."
+    ],
+    "year": "2020",
+    "metadata_url": "https://arxiv.org/abs/2004.07728",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "dreamsim": {
+    "metrics": [
+      "dreamsim"
+    ],
+    "url": "https://arxiv.org/abs/2306.09344",
+    "venue": "NeurIPS 2023",
+    "full_name": "DreamSim",
+    "title": "DreamSim: Learning New Dimensions of Human Visual Similarity using Synthetic Data",
+    "authors": [
+      "Fu, Stephanie",
+      "Tamir, Netanel",
+      "Sundaram, Shobhita",
+      "Chai, Lucy",
+      "Zhang, Richard",
+      "Dekel, Tali",
+      "Isola, Phillip"
+    ],
+    "year": "2023",
+    "metadata_url": "https://arxiv.org/abs/2306.09344",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "hyperiqa": {
+    "metrics": [
+      "hyperiqa"
+    ],
+    "url": "https://doi.org/10.1109/CVPR42600.2020.00372",
+    "venue": "CVPR 2020",
+    "full_name": "HyperIQA",
+    "title": "Blindly Assess Image Quality in the Wild Guided by a Self-Adaptive Hyper Network",
+    "authors": [
+      "Su, Shaolin",
+      "Yan, Qingsen",
+      "Zhu, Yu",
+      "Zhang, Cheng",
+      "Ge, Xin",
+      "Sun, Jinqiu",
+      "Zhang, Yanning"
+    ],
+    "year": "2020",
+    "metadata_url": "https://openaccess.thecvf.com/content_CVPR_2020/html/Su_Blindly_Assess_Image_Quality_in_the_Wild_Guided_by_a_CVPR_2020_paper.html",
+    "verified_date": "2026-10-17"
+  },
+  "liqe": {
+    "metrics": [
+      "liqe"
+    ],
+    "url": "https://arxiv.org/abs/2303.14968",
+    "venue": "CVPR 2023",
+    "full_name": "LIQE",
+    "title": "Blind Image Quality Assessment via Vision-Language Correspondence: A Multitask Learning Perspective",
+    "authors": [
+      "Zhang, Weixia",
+      "Zhai, Guangtao",
+      "Wei, Ying",
+      "Yang, Xiaokang",
+      "Ma, Kede"
+    ],
+    "year": "2023",
+    "metadata_url": "https://arxiv.org/abs/2303.14968",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "lpips": {
+    "metrics": [
+      "lpips"
+    ],
+    "url": "https://arxiv.org/abs/1801.03924",
+    "venue": "CVPR 2018",
+    "full_name": "LPIPS",
+    "title": "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric",
+    "authors": [
+      "Zhang, Richard",
+      "Isola, Phillip",
+      "Efros, Alexei A.",
+      "Shechtman, Eli",
+      "Wang, Oliver"
+    ],
+    "year": "2018",
+    "metadata_url": "https://arxiv.org/abs/1801.03924",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "maniqa": {
+    "metrics": [
+      "maniqa"
+    ],
+    "url": "https://arxiv.org/abs/2204.08958",
+    "venue": "CVPR Workshops 2022",
+    "full_name": "MANIQA",
+    "title": "MANIQA: Multi-dimension Attention Network for No-Reference Image Quality Assessment",
+    "authors": [
+      "Yang, Sidi",
+      "Wu, Tianhe",
+      "Shi, Shuwei",
+      "Lao, Shanshan",
+      "Gong, Yuan",
+      "Cao, Mingdeng",
+      "Wang, Jiahao",
+      "Yang, Yujiu"
+    ],
+    "year": "2022",
+    "metadata_url": "https://arxiv.org/abs/2204.08958",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "musiq": {
+    "metrics": [
+      "musiq"
+    ],
+    "url": "https://arxiv.org/abs/2108.05997",
+    "venue": "ICCV 2021",
+    "full_name": "MUSIQ",
+    "title": "MUSIQ: Multi-scale Image Quality Transformer",
+    "authors": [
+      "Ke, Junjie",
+      "Wang, Qifei",
+      "Wang, Yilin",
+      "Milanfar, Peyman",
+      "Yang, Feng"
+    ],
+    "year": "2021",
+    "metadata_url": "https://arxiv.org/abs/2108.05997",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "paq2piq": {
+    "metrics": [
+      "paq2piq"
+    ],
+    "url": "https://arxiv.org/abs/1912.10088",
+    "venue": "CVPR 2020",
+    "full_name": "PaQ-2-PiQ",
+    "title": "From Patches to Pictures (PaQ-2-PiQ): Mapping the Perceptual Space of Picture Quality",
+    "authors": [
+      "Ying, Zhenqiang",
+      "Niu, Haoran",
+      "Gupta, Praful",
+      "Mahajan, Dhruv",
+      "Ghadiyaram, Deepti",
+      "Bovik, Alan"
+    ],
+    "year": "2019",
+    "metadata_url": "https://arxiv.org/abs/1912.10088",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "pieapp": {
+    "metrics": [
+      "pieapp"
+    ],
+    "url": "https://arxiv.org/abs/1806.02067",
+    "venue": "CVPR 2018",
+    "full_name": "PieAPP",
+    "title": "PieAPP: Perceptual Image-Error Assessment through Pairwise Preference",
+    "authors": [
+      "Prashnani, Ekta",
+      "Cai, Hong",
+      "Mostofi, Yasamin",
+      "Sen, Pradeep"
+    ],
+    "year": "2018",
+    "metadata_url": "https://arxiv.org/abs/1806.02067",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "stlpips": {
+    "metrics": [
+      "stlpips"
+    ],
+    "url": "https://arxiv.org/abs/2207.13686",
+    "venue": "ECCV 2022",
+    "full_name": "ST-LPIPS",
+    "title": "Shift-tolerant Perceptual Similarity Metric",
+    "authors": [
+      "Ghildyal, Abhijay",
+      "Liu, Feng"
+    ],
+    "year": "2022",
+    "metadata_url": "https://arxiv.org/abs/2207.13686",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "wadiqam": {
+    "metrics": [
+      "wadiqam"
+    ],
+    "url": "https://arxiv.org/abs/1612.01697",
+    "venue": "IEEE TIP 2018",
+    "full_name": "WaDIQaM",
+    "title": "Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment",
+    "authors": [
+      "Bosse, Sebastian",
+      "Maniry, Dominique",
+      "Müller, Klaus-Robert",
+      "Wiegand, Thomas",
+      "Samek, Wojciech"
+    ],
+    "year": "2016",
+    "metadata_url": "https://arxiv.org/abs/1612.01697",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "wd": {
+    "metrics": [
+      "wd"
+    ],
+    "url": "https://arxiv.org/abs/2310.03629",
+    "venue": "CISS 2024",
+    "full_name": "WD",
+    "title": "Wasserstein Distortion: Unifying Fidelity and Realism",
+    "authors": [
+      "Qiu, Yang",
+      "Wagner, Aaron B.",
+      "Ballé, Johannes",
+      "Theis, Lucas"
+    ],
+    "year": "2023",
+    "metadata_url": "https://arxiv.org/abs/2310.03629",
+    "year_note": "arXiv submission year; publication venue may be later",
+    "verified_date": "2026-10-17"
+  },
+  "BRISQUE": {
+    "metrics": [
+      "brisque"
+    ],
+    "full_name": "BRISQUE",
+    "url": "https://doi.org/10.1109/TIP.2012.2214050",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2012.2214050",
+    "title": "No-Reference Image Quality Assessment in the Spatial Domain",
+    "authors": [
+      "A. Mittal",
+      "A. K. Moorthy",
+      "A. C. Bovik"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2012",
+    "verified_date": "2026-10-17"
+  },
+  "NIQE": {
+    "metrics": [
+      "niqe"
+    ],
+    "full_name": "NIQE",
+    "url": "https://doi.org/10.1109/LSP.2012.2227726",
+    "metadata_url": "https://api.crossref.org/works/10.1109/LSP.2012.2227726",
+    "title": "Making a “Completely Blind” Image Quality Analyzer",
+    "authors": [
+      "A. Mittal",
+      "R. Soundararajan",
+      "A. C. Bovik"
+    ],
+    "venue": "IEEE Signal Processing Letters",
+    "year": "2013",
+    "verified_date": "2026-10-17"
+  },
+  "PIQE": {
+    "metrics": [
+      "piqe"
+    ],
+    "full_name": "PIQE",
+    "url": "https://doi.org/10.1109/NCC.2015.7084843",
+    "metadata_url": "https://api.crossref.org/works/10.1109/NCC.2015.7084843",
+    "title": "Blind image quality evaluation using perception based features",
+    "authors": [
+      "Venkatanath N",
+      "Praneeth D",
+      "Maruthi Chandrasekhar Bh",
+      "Sumohana S. Channappayya",
+      "Swarup S. Medasani"
+    ],
+    "venue": "2015 Twenty First National Conference on Communications (NCC)",
+    "year": "2015",
+    "verified_date": "2026-10-17"
+  },
+  "CW-SSIM": {
+    "metrics": [
+      "cw-ssim"
+    ],
+    "full_name": "CW-SSIM",
+    "url": "https://doi.org/10.1109/TIP.2009.2025923",
+    "metadata_url": "https://api.crossref.org/works/10.1109/TIP.2009.2025923",
+    "title": "Complex Wavelet Structural Similarity: A New Image Similarity Index",
+    "authors": [
+      "M.P. Sampat",
+      "Zhou Wang",
+      "S. Gupta",
+      "A.C. Bovik",
+      "M.K. Markey"
+    ],
+    "venue": "IEEE Transactions on Image Processing",
+    "year": "2009",
+    "verified_date": "2026-10-17"
+  },
+  "CIEDE2000": {
+    "metrics": [
+      "ciede2000"
+    ],
+    "full_name": "CIEDE2000",
+    "url": "https://doi.org/10.1002/col.20070",
+    "metadata_url": "https://api.crossref.org/works/10.1002/col.20070",
+    "title": "The CIEDE2000 color-difference formula: Implementation notes, supplementary test data, and mathematical observations",
+    "authors": [
+      "Gaurav Sharma",
+      "Wencheng Wu",
+      "Edul N. Dalal"
+    ],
+    "venue": "Color Research &amp; Application",
+    "year": "2004",
+    "verified_date": "2026-10-17"
+  },
+  "FLIP": {
+    "metrics": [
+      "flip",
+      "flip-v17"
+    ],
+    "full_name": "FLIP",
+    "url": "https://doi.org/10.1145/3406183",
+    "metadata_url": "https://api.crossref.org/works/10.1145/3406183",
+    "title": "FLIP: A Difference Evaluator for Alternating Images",
+    "authors": [
+      "Pontus Andersson",
+      "Jim Nilsson",
+      "Tomas Akenine-Möller",
+      "Magnus Oskarsson",
+      "Kalle Åström",
+      "Mark D. Fairchild"
+    ],
+    "venue": "Proceedings of the ACM on Computer Graphics and Interactive Techniques",
+    "year": "2020",
+    "verified_date": "2026-10-17"
+  },
+  "CAMBI": {
+    "metrics": [
+      "cambi"
+    ],
+    "full_name": "CAMBI",
+    "url": "https://arxiv.org/abs/2102.00079",
+    "metadata_url": "https://arxiv.org/abs/2102.00079",
+    "title": "CAMBI: Contrast-aware Multiscale Banding Index",
+    "authors": [
+      "Tandon, Pulkit",
+      "Afonso, Mariana",
+      "Sole, Joel",
+      "Krasula, Lukáš"
+    ],
+    "venue": "arXiv preprint",
+    "year": "2021",
+    "verified_date": "2026-10-17"
+  }
+}

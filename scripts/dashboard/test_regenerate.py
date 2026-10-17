@@ -36,7 +36,7 @@ class Regeneration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
             summary = root / 'summary.md'
-            with patch('regenerate.ROOT', root), \
+            with patch('regenerate.generate_model_cards'), patch('regenerate.ROOT', root), \
                  patch('regenerate.catalog_render', return_value={'catalog-00.tsv': 'catalog'}), \
                  patch('regenerate.markdown_render', return_value={'tables-00.tsv': 'table', 'sources.json': '{}'}), \
                  patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}):
@@ -55,7 +55,7 @@ class Regeneration(unittest.TestCase):
             directory = root / 'benchmarks/dashboard/catalog'
             directory.mkdir(parents=True)
             (directory / 'catalog-00.tsv').write_text('committed copy')
-            with patch('regenerate.ROOT', root), \
+            with patch('regenerate.generate_model_cards'), patch('regenerate.ROOT', root), \
                  patch('regenerate.catalog_render', return_value={'catalog-00.tsv': 'fresh'}), \
                  patch('regenerate.markdown_render', side_effect=ValueError('malformed source')):
                 with self.assertRaisesRegex(ValueError, 'malformed source'):

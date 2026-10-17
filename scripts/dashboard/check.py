@@ -49,6 +49,43 @@ def check(directory, screenshots, port=3387):
             page.locator('[data-ranking="layout"]').select_option('rank change')
             page.locator('svg[aria-label="Rank change between resolutions"]').wait_for()
             if screenshots:page.screenshot(path=str(screenshots/'ranking-slope.png'),full_page=True)
+            page.goto(f'http://127.0.0.1:{port}/#models')
+            page.wait_for_function('window.dashboardReady==="models"')
+            assert page.locator('.model-card').count()==manifest['counts']['models']
+            assert page.locator('.model-export a').count()==3
+            if screenshots:page.screenshot(path=str(screenshots/'models.png'))
+            page.locator('[data-model="lpips-alex"]').click()
+            page.locator('#model-detail').wait_for()
+            assert page.locator('#model-detail').evaluate('(d)=>d.open')
+            assert 'Richard' in page.locator('#model-detail').inner_text()
+            assert 'BSD-2-Clause' in page.locator('#model-detail').inner_text()
+            page.locator('#model-detail summary').filter(has_text='BibTeX').click()
+            assert page.locator('#model-detail .bibtex').inner_text().startswith('@misc{')
+            page.context.grant_permissions(['clipboard-read','clipboard-write'])
+            page.locator('#copy-bib').click()
+            page.wait_for_function('document.querySelector("#copy-result").textContent==="Copied."')
+            if screenshots:page.screenshot(path=str(screenshots/'model-lpips.png'))
+            page.locator('#close-model').click()
+            page.wait_for_function('!document.querySelector("#model-detail")')
+            for suffix in ['json','csv','bib']:
+                with page.expect_download() as cards_download:
+                    page.locator(f'.model-export a[href$=".{suffix}"]').click()
+                content=Path(cards_download.value.path()).read_text()
+                assert 'lpips' in content.lower()
+                if suffix=='json':assert len(json.loads(content))==manifest['counts']['models']
+            page.locator('[data-model-filter="kind"]').select_option('NR')
+            page.wait_for_function('window.dashboardReady==="models" && location.hash.includes("kind=NR")')
+            assert 0<page.locator('.model-card').count()<manifest['counts']['models']
+            assert all(x=='NR' for x in page.locator('.model-kind').all_text_contents())
+            page.set_viewport_size({'width':390,'height':844})
+            page.goto(f'http://127.0.0.1:{port}/#models?metric=pieapp')
+            page.wait_for_function('window.dashboardReady==="models"')
+            assert 'Non-Commercial' in page.locator('#model-detail').inner_text()
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            assert page.locator('#model-detail').evaluate('(d)=>d.scrollWidth<=d.clientWidth+2')
+            if screenshots:page.screenshot(path=str(screenshots/'model-mobile.png'))
+            page.locator('#close-model').click()
+            page.set_viewport_size({'width':1440,'height':1000})
             from urllib.parse import urlencode
             ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs',impl='competitors',source='',size='512×512',unit='ms/MP',layout='single')
             page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(ranking_params))
@@ -119,7 +156,7 @@ def check(directory, screenshots, port=3387):
             if screenshots:page.screenshot(path=str(screenshots/'mobile.png'),full_page=True)
             browser.close()
         assert not errors, errors
-        print(json.dumps({'pages':5,'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
+        print(json.dumps({'pages':6,'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
     except Exception:
         print(json.dumps({'browser_errors':errors}),flush=True)
         raise

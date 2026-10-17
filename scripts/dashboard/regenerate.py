@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from catalog import ROOT, render as catalog_render
 from extract_markdown import render as markdown_render
+from model_cards import generate as generate_model_cards
 
 
 def refresh(directory, expected, pattern):
@@ -38,6 +39,8 @@ def regenerate():
         counts = refresh(directory, expected, pattern)
         summary.append(f'| {label} | {"yes" if any(counts) else "no"} | '+
                        ' | '.join(str(n) for n in counts) + ' |')
+    generate_model_cards()
+    summary += ['', 'README Metrics and docs/MODEL_CARDS.md regenerated from the same card model.']
     text = '\n'.join(summary) + '\n'
     print(text, end='')
     if os.environ.get('GITHUB_STEP_SUMMARY'):

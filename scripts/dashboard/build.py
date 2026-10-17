@@ -11,6 +11,7 @@ import shutil
 import tomllib
 from adapters import normalize, normalize_status, strict_json
 from catalog import rows as catalog_rows
+from model_cards import cards as model_cards, exports as card_exports
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_SUFFIXES = {'.csv', '.tsv', '.json', '.jsonl', '.parquet', '.meta'}
@@ -260,12 +261,23 @@ def build(output):
                             a=number(raw['ours']);b=number(raw[series])
                             families['agreement'].append(dict(metric=spec['metric'],pair=raw['key'],series=series,ours=a,reference=b,abs_delta=abs(a-b),relative_delta=abs((a-b)/b) if b else None,source=key,status='historical'))
     families['catalog'] = list(catalog())
+    families['models'] = list(model_cards())
+    for card in families['models']:
+        names={card['metric'],*card['columns'].split(';')}
+        match=lambda row:row.get('metric') in names or str(row.get('metric','')).replace('_','-')==card['metric']
+        card['speed_observations']=sum(match(row) for row in families['speed'] if row.get('ms') is not None)
+        card['agreement_observations']=sum(match(row) for row in families['agreement'])
+        card['quality_panels']=[{k:row.get(k) for k in ['metric','dataset','scope','n','srocc','srocc_lo','srocc_hi','source']}
+                                for row in families['quality'] if match(row) and row.get('srocc') is not None
+                                and any(name in str(row.get('dataset','')).lower() for name in ['aic','cid22'])]
+
     output.mkdir(parents=True, exist_ok=True)
     for path in (ROOT/'web/dashboard').iterdir():
         if path.is_file(): shutil.copyfile(path, output/path.name)
     data = output/'data'; data.mkdir(exist_ok=True)
     for family, rows in families.items():
         (data/f'{family}.json').write_text(json.dumps(rows, allow_nan=False, separators=(',', ':')))
+    for name,content in card_exports(families['models']).items():(data/name).write_text(content)
     unregistered=validate_inventory(ROOT,registered)
     manifest = dict(schema=2, counts={k:len(v) for k,v in families.items()}, sources=sources,
                     quality_correlation_count=sum(r.get('srocc') is not None for r in families['quality']),
