@@ -1665,3 +1665,14 @@ and background I/O from this study. The original exact one/twenty-worker control
 pass without assertion changes. Earlier ORT rows remain diagnostics; corrected
 runs have their own ledger and configured-session receipts. See the
 [measured control](benchmarks/iqa_compete_2026-10-16/ort-budget-control.json).
+
+### Known Bugs: IQA competition native-map adapter omissions (2026-10-17)
+
+The initial competition harness recorded `fsim-y`, `haarpsi-y` and
+`iwssim-piq` maps as unsupported despite existing native-map kernels. Those
+historical rows remain preserved and do not establish map unavailability. The
+coverage gate now treats unsupported rows for known native CPU map routes as
+pending adapter work. Snapshot adapters and replacement attempts are pending
+runtime qualification; the [audit receipt](benchmarks/iqa_compete_2026-10-16/coverage-known-map-omissions.json)
+records the affected first-panel cells. No metric arithmetic or shipped API is
+changed by this benchmark work.
