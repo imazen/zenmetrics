@@ -1162,3 +1162,7 @@ iqa-compete-controller-tests: iqa-compete-chunk-tests iqa-compete-linux-admissio
 # Learned CPU continuation shares prior observations; classical repairs have a separate lane.
 iqa-compete-learned-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics learned --exclude-metrics pieapp --batch-seconds 1100
+
+# Audit the owner-requested 113-name inventory, independent of any old build ledger.
+iqa-compete-coverage-i265 raw pairs output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/coverage.py '{{raw}}' benchmarks/iqa_compete_2026-10-16/frozen-inventory.json '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda

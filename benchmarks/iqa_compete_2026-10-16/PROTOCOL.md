@@ -212,3 +212,9 @@ See [PIQ class APIs](https://piq.readthedocs.io/en/latest/modules.html).
 PIQ's FSIM scalar call and the Rust CLI call have different output workloads:
 the latter also computes FSIMc. Rows retain that distinction explicitly instead
 of substituting an implementation with a different public interface.
+
+The requested matrix uses [the frozen 113-name inventory](frozen-inventory.json),
+SHA-256 `0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63`.
+Use `just iqa-compete-coverage-i265` for the full CPU/CUDA audit. An initial
+CPU-only build's inventory can omit GPU names and must not define completion.
+Per-run inventories remain provenance for their individual executables.
