@@ -1214,3 +1214,7 @@ iqa-compete-coverage-native engine binary rust pairs planes output:
 
 iqa-compete-coverage-python package python binary pairs output reference:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads 1,all --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --coverage-first
+
+# Light controller orchestration; each child acquires the heavy lock per cell.
+iqa-compete-coverage-pass binary pairs output models model_map ort cuda:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_pass.py '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' --ort-library '{{ort}}' --cuda-libraries '{{cuda}}'
