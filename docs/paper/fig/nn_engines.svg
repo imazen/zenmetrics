@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 544" font-family="sans-serif" font-size="11">
+<rect width="760" height="544" fill="white"/>
+<text x="380.0" y="20" text-anchor="middle" font-size="13">Wall time per call by engine (i265, 1024², same models and input)</text>
+<path d="M130.0 44V489" stroke="#ddd"/><text x="130.0" y="502" text-anchor="middle">1 ms</text>
+<path d="M241.3 44V489" stroke="#ddd"/><text x="241.3" y="502" text-anchor="middle">10 ms</text>
+<path d="M352.6 44V489" stroke="#ddd"/><text x="352.6" y="502" text-anchor="middle">100 ms</text>
+<path d="M463.9 44V489" stroke="#ddd"/><text x="463.9" y="502" text-anchor="middle">1000 ms</text>
+<path d="M575.2 44V489" stroke="#ddd"/><text x="575.2" y="502" text-anchor="middle">10000 ms</text>
+<path d="M686.5 44V489" stroke="#ddd"/><text x="686.5" y="502" text-anchor="middle">100000 ms</text>
+<text x="122" y="63.0" text-anchor="end">pieapp</text>
+<path d="M529.1 59.0H685.4" stroke="#bbb"/>
+<circle cx="685.4" cy="59.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>pieapp rten (CPU, 8 threads): 97831.2 ms</title></circle>
+<rect x="525.1" y="55.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>pieapp ORT CUDA (RTX 4080): 3853.2 ms (CPU 3853 ms)</title></rect>
+<path d="M580.0 54.0L585.0 63.0H575.0Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>pieapp ORT WebGPU (RTX 4080): 11043.5 ms (CPU 2844 ms)</title></path>
+<text x="122" y="81.0" text-anchor="end">dmm</text>
+<path d="M532.4 77.0H538.8" stroke="#bbb"/>
+<circle cx="538.8" cy="77.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>dmm rten (CPU, 8 threads): 4708.0 ms</title></circle>
+<rect x="528.4" y="73.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>dmm ORT CUDA (RTX 4080): 4124.7 ms (CPU 4120 ms)</title></rect>
+<path d="M534.4 72.0L539.4 81.0H529.4Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>dmm ORT WebGPU (RTX 4080): 4302.0 ms (CPU 4150 ms)</title></path>
+<text x="122" y="99.0" text-anchor="end">wd</text>
+<path d="M488.9 95.0H508.2" stroke="#bbb"/>
+<circle cx="508.2" cy="95.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>wd rten (CPU, 8 threads): 2500.1 ms</title></circle>
+<rect x="487.0" y="91.0" width="8" height="8" fill="white" stroke="#c44e52" stroke-width="1.5"><title>wd ORT CUDA (RTX 4080): 1751.1 ms (CPU 4804 ms)</title></rect>
+<path d="M488.9 90.0L493.9 99.0H483.9Z" fill="white" stroke="#8172b2" stroke-width="1.5"><title>wd ORT WebGPU (RTX 4080): 1676.4 ms (CPU 4669 ms)</title></path>
+<text x="122" y="117.0" text-anchor="end">hyperiqa</text>
+<path d="M318.5 113.0H503.0" stroke="#bbb"/>
+<circle cx="503.0" cy="113.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>hyperiqa rten (CPU, 8 threads): 2244.5 ms</title></circle>
+<rect x="314.5" y="109.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>hyperiqa ORT CUDA (RTX 4080): 49.4 ms (CPU 59 ms)</title></rect>
+<path d="M334.4 108.0L339.4 117.0H329.4Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>hyperiqa ORT WebGPU (RTX 4080): 68.6 ms (CPU 43 ms)</title></path>
+<text x="122" y="135.0" text-anchor="end">stlpips-vgg</text>
+<path d="M340.0 131.0H501.9" stroke="#bbb"/>
+<circle cx="501.9" cy="131.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>stlpips-vgg rten (CPU, 8 threads): 2195.6 ms</title></circle>
+<rect x="336.0" y="127.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>stlpips-vgg ORT CUDA (RTX 4080): 77.0 ms (CPU 84 ms)</title></rect>
+<path d="M380.5 126.0L385.5 135.0H375.5Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>stlpips-vgg ORT WebGPU (RTX 4080): 177.9 ms (CPU 94 ms)</title></path>
+<text x="122" y="153.0" text-anchor="end">deepdc</text>
+<path d="M328.6 149.0H501.0" stroke="#bbb"/>
+<circle cx="501.0" cy="149.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>deepdc rten (CPU, 8 threads): 2153.0 ms</title></circle>
+<rect x="324.6" y="145.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>deepdc ORT CUDA (RTX 4080): 60.9 ms (CPU 64 ms)</title></rect>
+<text x="122" y="171.0" text-anchor="end">dists</text>
+<path d="M345.9 167.0H495.3" stroke="#bbb"/>
+<circle cx="495.3" cy="167.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>dists rten (CPU, 8 threads): 1913.0 ms</title></circle>
+<rect x="341.9" y="163.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>dists ORT CUDA (RTX 4080): 87.0 ms (CPU 90 ms)</title></rect>
+<path d="M384.4 162.0L389.4 171.0H379.4Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>dists ORT WebGPU (RTX 4080): 193.2 ms (CPU 98 ms)</title></path>
+<text x="122" y="189.0" text-anchor="end">lpips-vgg</text>
+<path d="M330.2 185.0H488.3" stroke="#bbb"/>
+<circle cx="488.3" cy="185.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>lpips-vgg rten (CPU, 8 threads): 1655.2 ms</title></circle>
+<rect x="326.2" y="181.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>lpips-vgg ORT CUDA (RTX 4080): 62.9 ms (CPU 66 ms)</title></rect>
+<path d="M367.7 180.0L372.7 189.0H362.7Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>lpips-vgg ORT WebGPU (RTX 4080): 136.6 ms (CPU 85 ms)</title></path>
+<text x="122" y="207.0" text-anchor="end">wadiqam-nr-live</text>
+<path d="M295.2 203.0H482.8" stroke="#bbb"/>
+<circle cx="482.8" cy="203.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>wadiqam-nr-live rten (CPU, 8 threads): 1479.8 ms</title></circle>
+<rect x="291.2" y="199.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>wadiqam-nr-live ORT CUDA (RTX 4080): 30.5 ms (CPU 30 ms)</title></rect>
+<path d="M335.1 198.0L340.1 207.0H330.1Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>wadiqam-nr-live ORT WebGPU (RTX 4080): 69.6 ms (CPU 36 ms)</title></path>
+<text x="122" y="225.0" text-anchor="end">wadiqam-fr-live</text>
+<path d="M327.2 221.0H470.7" stroke="#bbb"/>
+<circle cx="470.7" cy="221.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>wadiqam-fr-live rten (CPU, 8 threads): 1150.1 ms</title></circle>
+<rect x="323.2" y="217.0" width="8" height="8" fill="white" stroke="#c44e52" stroke-width="1.5"><title>wadiqam-fr-live ORT CUDA (RTX 4080): 59.1 ms (CPU 1056 ms)</title></rect>
+<path d="M338.6 216.0L343.6 225.0H333.6Z" fill="white" stroke="#8172b2" stroke-width="1.5"><title>wadiqam-fr-live ORT WebGPU (RTX 4080): 74.9 ms (CPU 1155 ms)</title></path>
+<text x="122" y="243.0" text-anchor="end">wadiqam-nr-tid</text>
+<path d="M295.8 239.0H462.0" stroke="#bbb"/>
+<circle cx="462.0" cy="239.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>wadiqam-nr-tid rten (CPU, 8 threads): 962.2 ms</title></circle>
+<rect x="291.8" y="235.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>wadiqam-nr-tid ORT CUDA (RTX 4080): 30.9 ms (CPU 31 ms)</title></rect>
+<path d="M335.4 234.0L340.4 243.0H330.4Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>wadiqam-nr-tid ORT WebGPU (RTX 4080): 70.1 ms (CPU 37 ms)</title></path>
+<text x="122" y="261.0" text-anchor="end">wadiqam-fr-tid</text>
+<path d="M314.1 257.0H452.3" stroke="#bbb"/>
+<circle cx="452.3" cy="257.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>wadiqam-fr-tid rten (CPU, 8 threads): 787.0 ms</title></circle>
+<rect x="310.1" y="253.0" width="8" height="8" fill="white" stroke="#c44e52" stroke-width="1.5"><title>wadiqam-fr-tid ORT CUDA (RTX 4080): 45.1 ms (CPU 675 ms)</title></rect>
+<path d="M332.4 252.0L337.4 261.0H327.4Z" fill="white" stroke="#8172b2" stroke-width="1.5"><title>wadiqam-fr-tid ORT WebGPU (RTX 4080): 65.8 ms (CPU 933 ms)</title></path>
+<text x="122" y="279.0" text-anchor="end">stlpips-alex</text>
+<path d="M294.2 275.0H452.0" stroke="#bbb"/>
+<circle cx="452.0" cy="275.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>stlpips-alex rten (CPU, 8 threads): 781.8 ms</title></circle>
+<rect x="290.2" y="271.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>stlpips-alex ORT CUDA (RTX 4080): 29.9 ms (CPU 38 ms)</title></rect>
+<path d="M328.3 270.0L333.3 279.0H323.3Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>stlpips-alex ORT WebGPU (RTX 4080): 60.5 ms (CPU 42 ms)</title></path>
+<text x="122" y="297.0" text-anchor="end">musiq</text>
+<path d="M320.6 293.0H447.7" stroke="#bbb"/>
+<circle cx="447.7" cy="293.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>musiq rten (CPU, 8 threads): 715.2 ms</title></circle>
+<rect x="316.6" y="289.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>musiq ORT CUDA (RTX 4080): 51.5 ms (CPU 54 ms)</title></rect>
+<text x="122" y="315.0" text-anchor="end">maniqa</text>
+<path d="M302.5 311.0H447.2" stroke="#bbb"/>
+<circle cx="447.2" cy="311.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>maniqa rten (CPU, 8 threads): 707.5 ms</title></circle>
+<rect x="298.5" y="307.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>maniqa ORT CUDA (RTX 4080): 35.5 ms (CPU 39 ms)</title></rect>
+<path d="M318.5 306.0L323.5 315.0H313.5Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>maniqa ORT WebGPU (RTX 4080): 49.4 ms (CPU 16 ms)</title></path>
+<text x="122" y="333.0" text-anchor="end">afine</text>
+<path d="M388.8 329.0H440.7" stroke="#bbb"/>
+<circle cx="440.7" cy="329.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>afine rten (CPU, 8 threads): 619.1 ms</title></circle>
+<rect x="384.8" y="325.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>afine ORT CUDA (RTX 4080): 211.3 ms (CPU 221 ms)</title></rect>
+<text x="122" y="351.0" text-anchor="end">dreamsim</text>
+<path d="M279.5 347.0H397.8" stroke="#bbb"/>
+<circle cx="397.8" cy="347.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>dreamsim rten (CPU, 8 threads): 255.0 ms</title></circle>
+<rect x="275.5" y="343.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>dreamsim ORT CUDA (RTX 4080): 22.0 ms (CPU 34 ms)</title></rect>
+<path d="M295.9 342.0L300.9 351.0H290.9Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>dreamsim ORT WebGPU (RTX 4080): 30.9 ms (CPU 26 ms)</title></path>
+<text x="122" y="369.0" text-anchor="end">paq2piq</text>
+<path d="M307.3 365.0H396.2" stroke="#bbb"/>
+<circle cx="396.2" cy="365.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>paq2piq rten (CPU, 8 threads): 246.2 ms</title></circle>
+<rect x="303.3" y="361.0" width="8" height="8" fill="white" stroke="#c44e52" stroke-width="1.5"><title>paq2piq ORT CUDA (RTX 4080): 39.2 ms (CPU 689 ms)</title></rect>
+<path d="M326.8 360.0L331.8 369.0H321.8Z" fill="white" stroke="#8172b2" stroke-width="1.5"><title>paq2piq ORT WebGPU (RTX 4080): 58.6 ms (CPU 952 ms)</title></path>
+<text x="122" y="387.0" text-anchor="end">arniqa</text>
+<path d="M282.2 383.0H395.9" stroke="#bbb"/>
+<circle cx="395.9" cy="383.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>arniqa rten (CPU, 8 threads): 244.9 ms</title></circle>
+<rect x="278.2" y="379.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>arniqa ORT CUDA (RTX 4080): 23.3 ms (CPU 35 ms)</title></rect>
+<text x="122" y="405.0" text-anchor="end">lpips-squeeze</text>
+<path d="M257.4 401.0H375.6" stroke="#bbb"/>
+<circle cx="375.6" cy="401.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>lpips-squeeze rten (CPU, 8 threads): 161.0 ms</title></circle>
+<rect x="253.4" y="397.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>lpips-squeeze ORT CUDA (RTX 4080): 13.9 ms (CPU 21 ms)</title></rect>
+<path d="M277.2 396.0L282.2 405.0H272.2Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>lpips-squeeze ORT WebGPU (RTX 4080): 21.0 ms (CPU 24 ms)</title></path>
+<text x="122" y="423.0" text-anchor="end">lpips-alex</text>
+<path d="M232.0 419.0H341.1" stroke="#bbb"/>
+<circle cx="341.1" cy="419.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>lpips-alex rten (CPU, 8 threads): 78.9 ms</title></circle>
+<rect x="228.0" y="415.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>lpips-alex ORT CUDA (RTX 4080): 8.2 ms (CPU 11 ms)</title></rect>
+<path d="M276.7 414.0L281.7 423.0H271.7Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>lpips-alex ORT WebGPU (RTX 4080): 20.8 ms (CPU 27 ms)</title></path>
+<text x="122" y="441.0" text-anchor="end">liqe</text>
+<path d="M262.8 437.0H296.0" stroke="#bbb"/>
+<circle cx="285.5" cy="437.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>liqe rten (CPU, 8 threads): 24.9 ms</title></circle>
+<rect x="258.8" y="433.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>liqe ORT CUDA (RTX 4080): 15.6 ms (CPU 16 ms)</title></rect>
+<path d="M296.0 432.0L301.0 441.0H291.0Z" fill="#8172b2" stroke="#8172b2" stroke-width="1.5"><title>liqe ORT WebGPU (RTX 4080): 31.0 ms (CPU 13 ms)</title></path>
+<text x="122" y="459.0" text-anchor="end">ckdn</text>
+<path d="M232.7 455.0H278.0" stroke="#bbb"/>
+<circle cx="278.0" cy="455.0" r="4" fill="#4c72b0" stroke="#4c72b0" stroke-width="1.5"><title>ckdn rten (CPU, 8 threads): 21.4 ms</title></circle>
+<rect x="228.7" y="451.0" width="8" height="8" fill="#c44e52" stroke="#c44e52" stroke-width="1.5"><title>ckdn ORT CUDA (RTX 4080): 8.4 ms (CPU 13 ms)</title></rect>
+<circle cx="130" cy="518" r="4" fill="#4c72b0"/>
+<text x="140" y="522">rten (CPU, 8 threads)</text>
+<rect x="326" y="514" width="8" height="8" fill="#c44e52"/>
+<text x="340" y="522">ORT CUDA (RTX 4080)</text>
+<path d="M530 513L535 522H525Z" fill="#8172b2"/>
+<text x="540" y="522">ORT WebGPU (RTX 4080)</text>
+<text x="120" y="538">hollow: GPU run whose host CPU time exceeds 2× its wall time</text>
+</svg>
