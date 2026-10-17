@@ -30,6 +30,14 @@ LEARNED = {'lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg'
 # These frozen CLI routes have no native-map API, independently of score startup.
 NO_MAPS = LEARNED | {'brisque', 'niqe', 'ilniqe', 'cambi'}
 
+# Existing native-map routes must be measured or explicitly refuse the input;
+# missing adapter wiring cannot count as a metric with no map API.
+NATIVE_CPU_MAPS = {'cvvdp','flip','flip-v17','butteraugli-original','butteraugli',
+    'zensim','dssim','vmaf-v1','ssim2','gmsd','haarpsi','haarpsi-y','fsim-y',
+    'fsim-nodownscale','fsim','fsimc','fsim-k2','fsim-k3','fsim-k4',
+    'fsimc-k2','fsimc-k3','fsimc-k4','vsi-nodownscale','vsi','vsi-k2','vsi-k3','vsi-k4',
+    'msssim','nlpd','psnrhvs','mdctpsnr','mad','iwssim','iwssim-piq','vif','vifvec'}
+
 PYTHON_METRICS = {'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque','lpips-vgg','dists'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}
 PYTHON_MAPS = {
     "scikit-image": {"ssimc"}, "torchmetrics": {"ssimc-pyiqa-f32"},

@@ -28,4 +28,9 @@ class Coverage(unittest.TestCase):
         result,receipt=self.run_gate();self.assertEqual(result.returncode,1);self.assertEqual(receipt['pending_qualification'][0]['reason'],'same-pair CPU comparison missing')
     def test_unexpected_process_failure_fails(self):
         self.rows[0]['status']='skipped:process_exit_101';result,receipt=self.run_gate();self.assertEqual(result.returncode,1)
+    def test_existing_native_map_cannot_be_marked_unsupported(self):
+        (self.root/'inventory.json').write_text(json.dumps([dict(metric_name='fsim-y',gpu=False)]))
+        for row in self.rows:row['metric_name']='fsim-y'
+        result,receipt=self.run_gate();self.assertEqual(result.returncode,1)
+        self.assertEqual(receipt['pending_qualification'][0]['reason'],'supported native-map route lacks an adapter measurement')
 if __name__=='__main__':unittest.main()

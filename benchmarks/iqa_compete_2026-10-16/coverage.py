@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit requested Rust cells against the frozen inventory; never infer completion."""
 import argparse,collections,hashlib,itertools,json,pathlib
-from run import LEARNED
+from run import LEARNED,NATIVE_CPU_MAPS
 P=pathlib.Path
 
 def main():
@@ -48,6 +48,7 @@ def main():
         elif status=='partial':reason='sampling incomplete'
         elif status.startswith('skipped:process_exit_'):reason='unexpected process failure requires investigation'
         elif 'diagnostic_' in status:reason='diagnostic adapter does not qualify'
+        elif status=='unsupported' and key[1]=='cpu' and key[-1]=='score+map' and key[0] in NATIVE_CPU_MAPS:reason='supported native-map route lacks an adapter measurement'
         elif status=='unsupported' and not row.get('notes'):reason='unsupported route lacks reason'
         elif not status.startswith('skipped:') and status!='unsupported':reason='unknown status'
         if reason:pending.append(dict(cell=list(key),reason=reason))

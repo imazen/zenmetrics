@@ -248,3 +248,9 @@ insufficient samples, missing Rust comparisons and unexpected adapter failures
 remain explicit. Refusals count as attempts, never as compute latency. Python
 package versions come from the child adapter; startup failures retain an unknown
 package version rather than inheriting the Rust CLI version.
+
+The Rust coverage gate has an explicit inventory of supported native CPU map
+routes. An unsupported row for one of these routes remains pending adapter
+wiring/measurement; it cannot qualify as a metric without maps. The
+[known omissions receipt](coverage-known-map-omissions.json) preserves the audit
+that identified the fsim-y, haarpsi-y and iwssim-piq repair work.

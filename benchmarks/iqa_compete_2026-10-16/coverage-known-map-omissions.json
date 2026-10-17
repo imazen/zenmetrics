@@ -1,0 +1,282 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/refresh-0347/raw.jsonl",
+  "raw_sha256": "192b280e9f144f3153108ceee1458eb97f4ed1776e22f6505029ed1f545fa1fd",
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+  "expected_cells": 1080,
+  "present_requested_cells": 1054,
+  "pending_qualification": [
+    {
+      "cell": [
+        "afine",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "arniqa",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "ckdn",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "dreamsim",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "fsim-y",
+        "cpu",
+        "2k",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "fsim-y",
+        "cpu",
+        "2k",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "fsim-y",
+        "cpu",
+        "cid22",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "fsim-y",
+        "cpu",
+        "cid22",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "haarpsi-y",
+        "cpu",
+        "2k",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "haarpsi-y",
+        "cpu",
+        "2k",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "haarpsi-y",
+        "cpu",
+        "cid22",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "haarpsi-y",
+        "cpu",
+        "cid22",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "hyperiqa",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "iwssim-piq",
+        "cpu",
+        "2k",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "iwssim-piq",
+        "cpu",
+        "2k",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "iwssim-piq",
+        "cpu",
+        "cid22",
+        1,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "iwssim-piq",
+        "cpu",
+        "cid22",
+        20,
+        "score+map"
+      ],
+      "reason": "supported native-map route lacks an adapter measurement"
+    },
+    {
+      "cell": [
+        "liqe",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "maniqa",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "musiq",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "pieapp",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "wadiqam-fr-live",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "wadiqam-fr-tid",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "wadiqam-nr-live",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "wadiqam-nr-tid",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    },
+    {
+      "cell": [
+        "wd",
+        "cuda",
+        "2k",
+        20,
+        "score"
+      ],
+      "reason": "same-pair CPU comparison missing"
+    }
+  ],
+  "status_counts": {
+    "ok": 627,
+    "unsupported": 385,
+    "variant_mismatch": 4,
+    "skipped": 38
+  },
+  "extra_cells": 48,
+  "complete": false,
+  "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+  "missing_count": 26,
+  "pending_count": 26,
+  "controller_log": "/home/lilith/tmp/iqa-compete/controller-tests-native-map-gate-v1.log"
+}
