@@ -12,10 +12,10 @@ if not a.binary.is_file():raise FileNotFoundError(a.binary)
 a.root.mkdir(parents=True,exist_ok=True)
 script=P(__file__).with_name('run.py').resolve()
 base=[sys.executable,str(script),str(a.binary.resolve()),str(a.pairs.resolve())]
-common=['--host','i265','--sizes',a.sizes,'--threads','1,all','--model-root',str(a.models.resolve()),'--models-json',str(a.model_map.resolve()),'--coverage-first']
+common=['--host','i265','--sizes',a.sizes,'--threads','1,all','--model-root',str(a.models.resolve()),'--models-json',str(a.model_map.resolve()),'--coverage-first','--batch-seconds','1100','--batch-reserve-seconds','1000']
 lanes={
  'cpu':base+[str((a.root/'cpu').resolve())]+common+['--exclude-metrics','pieapp'],
- 'pieapp':base+[str((a.root/'pieapp').resolve())]+common+['--metrics','pieapp'],
+ 'pieapp':base+[str((a.root/'pieapp').resolve())]+common+['--metrics','pieapp','--batch-seconds','0'],
  'cuda':base+[str((a.root/'cuda').resolve())]+common+['--gpu-runtime','cuda'],
  'nn-cuda':base+[str((a.root/'nn-cuda').resolve())]+common+['--engine','ort-cuda','--ort-library',str(a.ort_library.resolve()),'--cuda-libraries',a.cuda_libraries],
 }

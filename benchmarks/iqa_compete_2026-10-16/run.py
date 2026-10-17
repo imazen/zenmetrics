@@ -232,7 +232,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
             if proofs:recovery=recover(proofs[0],args.root/'recovered-admission')
             for record in recovery:append(args.root/'admission-recovery.jsonl',record)
         admission=admission_reason(text)
-        if lease and process.returncode==124 and not fresh_hold:
+        if lease and process.returncode==124 and not fresh_hold and not getattr(args,"coverage_first",False):
             admission='batch_budget_exhausted'
         if lease and admission:lease.close()
         if admission and getattr(args,"coverage_first",False):
@@ -328,6 +328,7 @@ def main():
     p.add_argument('--model-root', type=Path)
     p.add_argument('--models-json', type=Path)
     p.add_argument('--batch-seconds',type=int,default=0,help='Optional 1..1100-second holds spanning multiple cells; per-cell resource wrappers remain enabled')
+    p.add_argument('--batch-reserve-seconds',type=int,default=120,help='Close a batch before a new cell when less than this budget remains')
     p.add_argument('--scope-seconds', type=int, default=1100, help='1..1100; shorter scopes support timeout-recovery controls')
     p.add_argument('--chunk-budget-ms', type=int, default=850000)
     p.add_argument('--sample-target-ns', type=int, default=1000000)
@@ -336,6 +337,7 @@ def main():
     p.add_argument('--reference-jsonl', action='append', type=Path, default=[])
     args = p.parse_args()
     if not 0<=args.batch_seconds<=1100:raise ValueError('batch hold must be within 0..1100 seconds')
+    if not 1<=args.batch_reserve_seconds<=1100:raise ValueError('batch reserve must be within 1..1100 seconds')
     if not 1 <= args.scope_seconds <= 1100:raise ValueError('scope must be within 1..1100 seconds')
     args.root.mkdir(exist_ok=True, parents=True)
     for directory in ['cells', 'logs']:
@@ -400,7 +402,7 @@ def main():
     args.batch_lease=None
     if args.batch_seconds:
         host=args.host or socket.gethostname().split('.')[0]
-        args.batch_lease=BatchLease(Path.home()/f'tmp/{host}-heavy.lock',args.batch_seconds,args.root/'batch-holds.jsonl')
+        args.batch_lease=BatchLease(Path.home()/f'tmp/{host}-heavy.lock',args.batch_seconds,args.root/'batch-holds.jsonl',reserve=args.batch_reserve_seconds)
     try:
         for pair in json.loads(args.pairs.read_text()):
             if pair['size_name'] not in args.sizes.split(','):
