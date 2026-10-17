@@ -117,7 +117,7 @@ def metadata(binary):
                 impl_binary_sha=sha(binary), device='cpu', simd_tier=tier)
 
 def coverage_samples(size):
-    return 1 if size == "8k" else (3 if size in {"2k", "4k"} else 5)
+    return 1 if size == "8k" else (3 if size in {"aic-large", "2k", "4k"} else 5)
 
 def family(name):
     for prefix in ['ms-ssim', 'ms-gmsd', 'stlpips', 'lpips', 'cw-ssim', 'vmaf', 'psnrhvs',

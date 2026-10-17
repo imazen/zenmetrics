@@ -143,8 +143,8 @@ Split compact observations: [CID22 progress v2](cid22-cpu-progress-v2/).
 ## Owner coverage pass (2026-10-17)
 
 The coverage-first pass supersedes the earlier depth requirements for new cells.
-It uses the existing single pair per resolution: five actual samples at CID22
-and the three AIC sizes, three at 2K/4K, and one at 8K. Rows record
+It uses the existing single pair per resolution: five actual samples at CID22,
+AIC-small and AIC-medium; three at AIC-large/2K/4K; and one at 8K. Rows record
 `coverage_first` and `required_samples`; the legacy controller default stays ten.
 The explicit first score/map call warms each route, with no additional zenbench
 warmup interval in this pass. Partial cells do not continue in another scope.
