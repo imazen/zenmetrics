@@ -1080,3 +1080,13 @@ e36-native-build snapshot target:
 
 e36-native-local-test snapshot target:
     cd {{quote(snapshot)}} && cargo test --release --locked -p zenmetrics-cli --no-default-features --features png,jpeg,webp,avif,avif-svt,jxl,cpu-metrics,cpu-cvvdp,sweep,jobexec --target-dir {{quote(target)}} --bin zenmetrics local_variant_requires_content_hash_and_remains_borrowed
+
+# Static GitHub Pages benchmark dashboard; stdlib data adapters, no Cargo build.
+dashboard-build output="target/dashboard":
+    python3 scripts/dashboard/build.py --output {{quote(output)}}
+
+dashboard-data-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s scripts/dashboard -p 'test_*.py'
+
+dashboard-smoke output="target/dashboard":
+    python3 scripts/dashboard/check.py {{quote(output)}}

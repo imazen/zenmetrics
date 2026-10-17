@@ -1,0 +1,94 @@
+# Explicit schema contracts. Additional columns require adapter review.
+
+[[dataset]]
+glob = "benchmarks/metric_loop_st_2026-08-30.tsv"
+family = "speed"
+adapter = "loop"
+host = "mac"
+threads = 1
+metadata = ["benchmarks/metric_loop_2026-08-30.meta"]
+columns = ["metric", "size_label", "w", "h", "mp", "oneshot_ms", "precompute_ms", "warm_per_cand_ms", "ingress_ms", "ingress_pct_of_warm", "warm_alt_ms", "warm_over_oneshot", "loop_n5_measured_ms", "loop_n5_predicted_ms", "loop_n5_model_err_pct", "breakeven_candidates", "n_runs"]
+note = "Encoder-search loop, planar linear f32; macOS ARM64; not sweep ingress."
+
+[[dataset]]
+glob = "benchmarks/metric_loop_mt_2026-08-30.tsv"
+family = "speed"
+adapter = "loop"
+host = "mac"
+threads = 12
+metadata = ["benchmarks/metric_loop_2026-08-30.meta"]
+columns = ["metric", "size_label", "w", "h", "mp", "oneshot_ms", "precompute_ms", "warm_per_cand_ms", "ingress_ms", "ingress_pct_of_warm", "warm_alt_ms", "warm_over_oneshot", "loop_n5_measured_ms", "loop_n5_predicted_ms", "loop_n5_model_err_pct", "breakeven_candidates", "n_runs"]
+note = "Encoder-search loop, planar linear f32; macOS ARM64; not sweep ingress."
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/butter_aic.tsv"
+metric = "butteraugli-original"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/cambi_aic.tsv"
+metric = "cambi"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/ssim1_aic.tsv"
+metric = "ssimulacra1"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_kadid_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_csiq_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress-v2/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/gpu-cid22-2k-progress-v1/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/nn-cuda-cid22-2k-progress-v1/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
