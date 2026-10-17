@@ -1218,3 +1218,6 @@ iqa-compete-coverage-python package python binary pairs output reference:
 # Light controller orchestration; each child acquires the heavy lock per cell.
 iqa-compete-coverage-pass binary pairs output models model_map ort cuda:
     python3 benchmarks/iqa_compete_2026-10-16/coverage_pass.py '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' --ort-library '{{ort}}' --cuda-libraries '{{cuda}}'
+
+iqa-compete-adopt-scope config log contention output:
+    python3 benchmarks/iqa_compete_2026-10-16/adopt_scope.py '{{config}}' '{{log}}' '{{contention}}' '{{output}}'
