@@ -770,6 +770,28 @@ nn-dmm-bisect-all model_dir ladder output:
 nn-dmm-bisect-summary directory output *flags:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_summary.py '{{directory}}' '{{output}}' {{flags}}
 
+# Read-only progress; completed score counts do not imply a passing gate.
+nn-dmm-bisect-progress directory:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    while IFS=$'\t' read -r change revision; do
+        [ "$change" = change ] && continue
+        log='{{directory}}'/$change.runner.log
+        echo "$change $revision"
+        if [ -s "$log" ]; then
+            rg '^(PANEL_|run-heavy: done)' "$log" || true
+            for engine in rten ort-cuda ort-cuda-repeat; do
+                panel='{{directory}}'/$change-$engine.log
+                if [ -f "$panel" ]; then
+                    count=$(rg -c 'dmm .*: got ' "$panel" || true)
+                    echo "  $engine: ${count:-0}/24 score observations"
+                fi
+            done
+        else
+            echo '  not started'
+        fi
+    done < benchmarks/nn_port_2026-10-15/dmm_bisect_sources_2026-10-17.tsv
+
 nn-dmm-bisect-isolation:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_isolation.py
 
