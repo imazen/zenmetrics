@@ -20,6 +20,9 @@ for ledger in a.ledgers:
   row.update(metric_family=family(row['metric_name']),source_ledger=str(ledger),source_ledger_sha256=digest,source_line=index)
   if row['impl']=='zenmetrics' and row['metric_name'].startswith('vmaf') and row['status']=='ok' and not row.get('model_preload_adapter'):
    row['status']='skipped:diagnostic_model_parsing_inside_timer'
+  if row['impl']=='zenmetrics' and row.get('engine')=='ort-cuda' and row['status'] in ['ok','variant_mismatch'] and not row.get('ort_intra_threads_configured'):
+   row['diagnostic_source_status']=row['status']
+   row['status']='skipped:diagnostic_unverified_ort_thread_budget'
   selected[key]=row
 with a.output.open('x') as f:
  for key,row in sorted(selected.items()):f.write(json.dumps(row,sort_keys=True,allow_nan=False)+'\n')

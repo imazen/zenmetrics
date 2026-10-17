@@ -145,3 +145,12 @@ reference ledgers are hashed; a ledger changing during reference selection
 refuses the receipt. Any newly discovered GPU mismatch without a linked earlier
 repeat is listed as requiring reproduction. Updating a comparison never supplies
 new timing samples or substitutes for that repeat.
+
+ORT sessions require explicit thread configuration in addition to the environment.
+The benchmark snapshot adapter sets intra-op threads to the cell's
+`RTEN_NUM_THREADS` budget and inter-op threads to one in each image, pair and
+trunk builder. It retains deterministic compute and all provider/graph settings.
+Each constructed session reports its configured budget outside timing. The
+collector keeps earlier ORT observations without that receipt as diagnostics,
+not qualified 1T/all-core timings. A separate native-worker affinity probe checks
+the installed runtime. See [ORT thread management](https://onnxruntime.ai/docs/performance/tune-performance/threading.html).

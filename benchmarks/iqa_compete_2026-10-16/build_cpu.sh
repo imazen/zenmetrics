@@ -8,6 +8,7 @@ mode=${1:-cached}
 args=()
 if [ "$mode" = reference ]; then args+=(--reference); fi
 python3 benchmarks/iqa_compete_2026-10-16/patch_model_load.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/model-preload.meta.json" "${args[@]}"
+python3 benchmarks/iqa_compete_2026-10-16/patch_ort_threads.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/ort-threads.meta.json"
 cd "$LOCK_SNAP_DIR/work/zenmetrics"
 export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg iqa_compete_ingress"
 if [ "$mode" = cached ]; then RUSTFLAGS+=" --cfg iqa_compete_cached"; fi

@@ -192,10 +192,17 @@ def run_cell(args, row, models, *, restore_chunks=True):
             print('ADMISSION_WAIT', stem, log, flush=True)
             time.sleep(30)
             continue
+        ort_budgets=[int(line.split()[1]) for line in text.splitlines() if line.startswith('IQA_ORT_THREADS ')]
+        if any(value!=count for value in ort_budgets):raise ValueError('ORT session budget differs from cell budget')
+        row['ort_intra_threads_configured']=ort_budgets or None
+        row['ort_inter_threads_configured']=1 if ort_budgets else None
         rows=[]
         for line in text.splitlines():
             if line.startswith('IQA_ROW '):rows.append(json.loads(line[8:]))
             elif line.startswith('IQA_PARTIAL '):rows.append(json.loads(line[len('IQA_PARTIAL '):]))
+        for value in rows:
+            value['ort_intra_threads_configured']=ort_budgets or None
+            value['ort_inter_threads_configured']=1 if ort_budgets else None
         modes={value['mode'] for value in rows}
         if len(rows)!=len(modes) or modes-set(MODES):raise ValueError(f'invalid emitted modes: {log}')
         if process.returncode or modes!=set(MODES):

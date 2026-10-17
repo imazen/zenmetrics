@@ -1119,3 +1119,9 @@ iqa-compete-requalify raw inventory output +references:
 
 iqa-compete-parity-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_parity.py
+
+iqa-compete-ort-thread-control python output:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/check_ort_threads.py '{{output}}'
+
+iqa-compete-ort-patch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_ort_patch.py
