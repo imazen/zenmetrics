@@ -648,7 +648,10 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   canonical-JND coverage is 5/24 rten and 3/24 CUDA; that candidate was not
   qualified by the frozen panels. Its proposed row promotion is reverted
   with the candidate. The active arithmetic and classifications are restored
-  to the frozen revision-1 baseline; individual changes are being measured.
+  to the frozen revision-1 baseline. All eight isolated arithmetic changes
+  were rejected after complete 48-row comparisons: each worsens at least
+  one residual, and five also fail frozen limits. Every 24-row CUDA repeat
+  is bit-identical.
   No original limit is increased and no original JND row is demoted. See
   [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md),
   `models/dmm/card.toml`, and `benchmarks/dmm_aic_probe/`.

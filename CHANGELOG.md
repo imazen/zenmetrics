@@ -30,7 +30,7 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
-- Bound DMM image geometry and cached allocations and poll cancellation per channel. Retain the frozen solver arithmetic while reference-source hypotheses are tested individually against every original row limit (`1e67c476`, `66bb9860`).
+- Bound DMM image geometry and cached allocations and poll cancellation per channel. Retain the frozen solver arithmetic after all eight isolated reference-source hypotheses regress against the frozen oracle; complete per-change results and CUDA repeats are recorded (`1e67c476`, `66bb9860`, `a8491811`).
 
 ### QUEUED BREAKING CHANGES
 

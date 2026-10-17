@@ -1696,8 +1696,11 @@ the 48 residuals and is also rejected. Direct SORM2R fails eight limits
 and worsens 25 residuals; it is rejected. Right-SGER order fails twenty
 limits, including five original JND rows, and worsens 26 residuals. It is
 also rejected. F64 norm fails nineteen limits, including six original JND
-rows, and worsens 22 residuals; it is rejected. Only the reference-f32 norm
-remains unmeasured.
+rows, and worsens 22 residuals; it is rejected. Reference-f32 norm fails
+seventeen limits, including three original JND rows, and worsens 24
+residuals; it is also rejected. All eight isolated changes are rejected.
+Every complete CUDA repeat is bit-identical on all 24 rows; the original
+numerical section, SVD assertions and frozen golden TSVs remain unchanged.
 Source identities, complete rows, resource receipts and historical experiments
 are linked from [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md)
 and [the per-change table](benchmarks/nn_port_2026-10-15/dmm_bisect_results_2026-10-17.md).
