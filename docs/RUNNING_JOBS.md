@@ -848,3 +848,14 @@ source/build validation and the worker owns scheduling, results and retries.
 If an executor returns a small receipt for separately persisted expensive
 artifacts, that receipt must bind their canonical content hashes and verified
 locations; receipt regenerability never authorizes deleting those artifacts.
+
+### Separately bound entrypoint
+
+`lan_score_launch.sh` accepts paired `ZEN_ENTRYPOINT_HOST_PATH` and
+`ZEN_ENTRYPOINT_SHA256` for an explicitly approved execution amendment. The
+remote launcher verifies a canonical absolute executable regular file and its
+SHA-256 before any Docker mutation, then mounts it read-only at
+`/usr/local/bin/fleet-entrypoint.sh`. The image reference is unchanged. An
+operator must bind the amendment separately and verify the created container
+before releasing paused work. `just lan-entrypoint-test` exercises admission
+and rejects missing, changed, non-executable and symlink inputs.
