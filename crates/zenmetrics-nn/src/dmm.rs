@@ -1,3 +1,4 @@
+//! Isolated bisection experiment: epsilon; not qualified for shipping.
 //! DMM (Chen et al., "Debiased Mapping for Full-Reference Image Quality
 //! Assessment", IEEE TIP 2025; upstream `Baoliang93/DMM`, MIT, pip
 //! `DMM_PyTorch`). Parity target: the upstream package, CPU, fp32.
@@ -28,7 +29,7 @@ use crate::{Engine, Error, za};
 use za::ResultMetricExt as _;
 
 const COLUMN: &str = "dmm";
-const SCORE_REVISION: u32 = 1;
+const SCORE_REVISION: u32 = 2;
 /// Patch kernel and stride of upstream's `nn.Unfold(16, stride=4)`.
 const PATCH: usize = 16;
 const STRIDE: usize = 4;
@@ -527,7 +528,7 @@ fn s1_gate(means_r: &[f32], means_d: &[f32]) -> f64 {
 // `transpose(2,4)`) and returns `u` of the transposed patch.
 
 // Frozen solver constant; changing it requires passing the full panels.
-const D_EPS: f32 = f32::EPSILON;
+const D_EPS: f32 = f32::EPSILON * 0.5;
 const D_SAFMIN: f32 = f32::MIN_POSITIVE;
 
 fn dlapy2(x: f32, y: f32) -> f32 {
