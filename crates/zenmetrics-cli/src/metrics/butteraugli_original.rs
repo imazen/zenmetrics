@@ -5,38 +5,63 @@
 #![allow(clippy::excessive_precision)]
 type Planes = [Vec<f32>; 3];
 fn convolve(a: &[f32], w: usize, h: usize, k: &[f32], border: f32) -> Vec<f32> {
+    const TILE: usize = 32;
     let radius = k.len() / 2;
     let sum = k.iter().sum::<f32>();
     let scaled: Vec<_> = k.iter().map(|&v| v * (1.0 / sum)).collect();
     let mut out = vec![0.0; w * h];
-    for x in 0..w {
+    let start = radius.min(w);
+    let end = w.saturating_sub(radius).max(start);
+    let mut border_column = |x: usize| {
         let lo = x.saturating_sub(radius);
         let hi = (x + radius).min(w - 1);
-        let interior = x >= radius && x + radius < w;
-        let weight = if interior {
-            1.0
-        } else {
-            let mut z = 0.0;
-            for j in lo..=hi {
-                z += k[j + radius - x];
-            }
-            1.0 / ((1.0 - border) * z + border * sum)
-        };
+        let mut z = 0.0;
+        for j in lo..=hi {
+            z += k[j + radius - x];
+        }
+        let weight = 1.0 / ((1.0 - border) * z + border * sum);
         for y in 0..h {
             let mut v = 0.0;
             for j in lo..=hi {
-                v += a[y * w + j]
-                    * if interior {
-                        scaled[j + radius - x]
-                    } else {
-                        k[j + radius - x]
-                    };
+                v += a[y * w + j] * k[j + radius - x];
             }
             out[x * h + y] = v * weight;
+        }
+    };
+    for x in 0..start {
+        border_column(x);
+    }
+    for x in end..w {
+        border_column(x);
+    }
+    // Every lane retains the original left-to-right tap sequence. Tiles
+    // keep source rows and the transposed output local; they do not combine
+    // or reassociate a pixel's sum with any other pixel.
+    for y0 in (0..h).step_by(TILE) {
+        let rows = (h - y0).min(TILE);
+        for x0 in (start..end).step_by(TILE) {
+            let columns = (end - x0).min(TILE);
+            let mut tile = [[0.0f32; TILE]; TILE];
+            for (y, accum) in tile[..rows].iter_mut().enumerate() {
+                let source = &a[(y0 + y) * w..(y0 + y + 1) * w];
+                for (tap, &weight) in scaled.iter().enumerate() {
+                    let lo = x0 + tap - radius;
+                    for (v, &sample) in accum[..columns].iter_mut().zip(&source[lo..lo + columns]) {
+                        *v += sample * weight;
+                    }
+                }
+            }
+            for x in 0..columns {
+                let lo = (x0 + x) * h + y0;
+                for (dst, row) in out[lo..lo + rows].iter_mut().zip(&tile[..rows]) {
+                    *dst = row[x] * 1.0;
+                }
+            }
         }
     }
     out
 }
+
 fn blur(a: &[f32], w: usize, h: usize, sigma: f32, border: f32) -> Vec<f32> {
     let r = (2.25 * sigma.abs()).max(1.0) as i32;
     let scale = -1.0 / (2.0 * sigma * sigma);
@@ -220,6 +245,90 @@ fn malta(
         dif.push(value);
     }
     let paths = if low { MALTA_LOW } else { MALTA_HIGH };
+    malta_accumulate(&dif, w, h, paths, out);
+}
+fn malta_accumulate(dif: &[f32], w: usize, h: usize, paths: &[&[(i8, i8)]], out: &mut [f32]) {
+    let scalar = |x: usize, y: usize| {
+        let mut value = 0.0;
+        for path in paths {
+            let mut sum = 0.0;
+            for &(dx, dy) in *path {
+                let xx = x as isize + isize::from(dx);
+                let yy = y as isize + isize::from(dy);
+                if xx >= 0 && yy >= 0 && xx < w as isize && yy < h as isize {
+                    sum += dif[yy as usize * w + xx as usize];
+                }
+            }
+            value += sum * sum;
+        }
+        value
+    };
+    for y in 0..h {
+        let mut x = 0;
+        if y >= 4 && y + 4 < h {
+            for xx in 0..w.min(4) {
+                out[y * w + xx] += scalar(xx, y);
+            }
+            x = w.min(4);
+            // Both fixed path sets have radius four. A contiguous eight-
+            // sample load handles eight independent sums in the same order
+            // as the scalar traversal, with one bounds check per neighbor.
+            while x + 8 <= w.saturating_sub(4) {
+                let mut value = [0.0f32; 8];
+                for path in paths {
+                    let mut sum = [0.0f32; 8];
+                    for &(dx, dy) in *path {
+                        let lo = (y as isize + isize::from(dy)) as usize * w
+                            + (x as isize + isize::from(dx)) as usize;
+                        let samples: &[f32; 8] = dif[lo..lo + 8].try_into().unwrap();
+                        for i in 0..8 {
+                            sum[i] += samples[i];
+                        }
+                    }
+                    for i in 0..8 {
+                        value[i] += sum[i] * sum[i];
+                    }
+                }
+                let dst: &mut [f32; 8] = (&mut out[y * w + x..y * w + x + 8]).try_into().unwrap();
+                for i in 0..8 {
+                    dst[i] += value[i];
+                }
+                x += 8;
+            }
+        }
+        for xx in x..w {
+            out[y * w + xx] += scalar(xx, y);
+        }
+    }
+}
+
+// Interior Malta traversal reserves a four-pixel halo on every side.
+const _: () = {
+    let banks = [MALTA_LOW, MALTA_HIGH];
+    let mut bank = 0;
+    while bank < banks.len() {
+        let mut path = 0;
+        while path < banks[bank].len() {
+            let mut step = 0;
+            while step < banks[bank][path].len() {
+                let (x, y) = banks[bank][path][step];
+                assert!(x >= -4 && x <= 4 && y >= -4 && y <= 4);
+                step += 1;
+            }
+            path += 1;
+        }
+        bank += 1;
+    }
+};
+
+#[cfg(test)]
+fn malta_accumulate_ordered(
+    dif: &[f32],
+    w: usize,
+    h: usize,
+    paths: &[&[(i8, i8)]],
+    out: &mut [f32],
+) {
     for y in 0..h {
         for x in 0..w {
             let mut value = 0.0;
@@ -238,6 +347,7 @@ fn malta(
         }
     }
 }
+
 fn l2(a: &[f32], b: &[f32], weight: f64, out: &mut [f32]) {
     if weight == 0.0 {
         return;
@@ -676,8 +786,114 @@ const MALTA_HIGH: &[&[(i8, i8)]] = &[
 ];
 
 #[cfg(test)]
+fn convolve_ordered(a: &[f32], w: usize, h: usize, k: &[f32], border: f32) -> Vec<f32> {
+    let radius = k.len() / 2;
+    let sum = k.iter().sum::<f32>();
+    let scaled: Vec<_> = k.iter().map(|&v| v * (1.0 / sum)).collect();
+    let mut out = vec![0.0; w * h];
+    for x in 0..w {
+        let lo = x.saturating_sub(radius);
+        let hi = (x + radius).min(w - 1);
+        let interior = x >= radius && x + radius < w;
+        let weight = if interior {
+            1.0
+        } else {
+            let mut z = 0.0;
+            for j in lo..=hi {
+                z += k[j + radius - x];
+            }
+            1.0 / ((1.0 - border) * z + border * sum)
+        };
+        for y in 0..h {
+            let mut v = 0.0;
+            for j in lo..=hi {
+                v += a[y * w + j]
+                    * if interior {
+                        scaled[j + radius - x]
+                    } else {
+                        k[j + radius - x]
+                    };
+            }
+            out[x * h + y] = v * weight;
+        }
+    }
+    out
+}
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malta_blocks_match_ordered_paths_at_borders_and_tails() {
+        for paths in [MALTA_LOW, MALTA_HIGH] {
+            assert!(
+                paths
+                    .iter()
+                    .flat_map(|path| path.iter())
+                    .all(|&(x, y)| (-4..=4).contains(&x) && (-4..=4).contains(&y))
+            );
+            for (w, h) in [
+                (1, 1),
+                (7, 5),
+                (8, 9),
+                (16, 9),
+                (17, 15),
+                (31, 19),
+                (32, 33),
+                (65, 35),
+                (129, 67),
+            ] {
+                let dif: Vec<f32> = (0..w * h)
+                    .map(|i| (((i * 7919 + i / w * 13) % 8191) as i32 - 4095) as f32 * 0.0625)
+                    .collect();
+                let mut expected: Vec<f32> =
+                    (0..w * h).map(|i| (i % 19) as f32 * 0.015625).collect();
+                let mut actual = expected.clone();
+                malta_accumulate_ordered(&dif, w, h, paths, &mut expected);
+                malta_accumulate(&dif, w, h, paths, &mut actual);
+                for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(a.to_bits(), b.to_bits(), "{w}x{h} pixel{index}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tiled_convolution_matches_ordered_taps_at_borders_and_tails() {
+        for (w, h) in [
+            (1, 1),
+            (1, 5),
+            (2, 3),
+            (7, 2),
+            (9, 17),
+            (31, 19),
+            (32, 33),
+            (65, 35),
+            (129, 67),
+        ] {
+            let mut input: Vec<f32> = (0..w * h)
+                .map(|i| (((i * 7919 + i / w * 13) % 8191) as i32 - 4095) as f32 * 0.0625)
+                .collect();
+            input[0] = -0.0;
+            for radius in [0, 1, 3, 7, 15] {
+                let kernel: Vec<f32> = (0..2 * radius + 1)
+                    .map(|i| ((i * 7 + 3) % 17 + 1) as f32 * 0.03125)
+                    .collect();
+                for border in [0.0, 0.25, 1.0] {
+                    let expected = convolve_ordered(&input, w, h, &kernel, border);
+                    let actual = convolve(&input, w, h, &kernel, border);
+                    for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                        assert_eq!(
+                            a.to_bits(),
+                            b.to_bits(),
+                            "{w}x{h} r{radius} border{border} pixel{index}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn stride_identity_and_tiny_padding() {
         for (w, h) in [(1, 1), (7, 5), (37, 41)] {

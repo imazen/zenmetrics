@@ -1,0 +1,104 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23363MiB :: bash -c ORT_DYLIB_PATH=/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime.so.1.31.0 LD_LIBRARY_PATH="/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cublas/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cudnn/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cufft/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/curand/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cusolver/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cusparse/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cusparselt/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/cufile/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/nvidia/nvjitlink/lib:/home/lilith/tmp/nnrt-research/venv-cu/lib/python3.12/site-packages/onnxruntime/capi" /usr/bin/time -v /home/lilith/tmp/afine_aic_dump_prefix /home/lilith/tmp/nn-opt2/models-all /home/lilith/tmp/aic-sub/pairs.tsv /home/lilith/tmp/dump_prefix.tsv ort-cuda
+done S01_AVIF_01.png
+done S02_CCM_01.png
+done S03_JAIB_01.png
+done S04_JAI_01.png
+done S05_JAI_01.png
+done S06_JXL_01.png
+done S07_JXL_01.png
+done S09_AVIF_01.png
+done S10_CCW_01.png
+done S11_J2K_01.png
+done S12_JAI_15.png
+done S13_JPG_15.png
+done S14_VVC_15.png
+done S15_PNG_15.png
+done S17_AVIFQ_15.png
+done S18_CCM_15.png
+done S19_J2K_15.png
+done S20_JPG_15.png
+done S21_JXLM_09.png
+done S22_JXL_09.png
+done S24_AVIF_09.png
+done S25_J2K_17.png
+done S26_JPGL_17.png
+done S27_JPG_17.png
+done S28_JXLM_17.png
+done S29_WEBP_17.png
+done S31_AVIF_17.png
+done S32_J2K_17.png
+done S33_J2K_17.png
+done S34_J2K_17.png
+done S35_JPG_17.png
+done S36_JXL_17.png
+done S38_AVIF_11.png
+done S39_AVIF_11.png
+done S40_JAIB_05.png
+done S41_JPG_19.png
+done S42_JPG_19.png
+done S43_JXL_19.png
+done S45_AVIF_19.png
+[1;31m2026-10-16 11:59:25.895200817 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+[1;31m2026-10-16 11:59:26.195097151 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+[1;31m2026-10-16 11:59:26.295584588 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+done S46_AVIF_19.png
+done S47_J2K_19.png
+done S48_JAI_13.png
+done S49_JXL_07.png
+done S51_AVIF_07.png
+done S52_HEVC_07.png
+done S53_JAIB_07.png
+[1;31m2026-10-16 11:59:36.916365828 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+[1;31m2026-10-16 11:59:37.221168002 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+[1;31m2026-10-16 11:59:37.334717760 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 2373553152
+[m
+done S54_JPG_07.png
+done S55_JPG_07.png
+done S56_JXL_01.png
+done S58_AVIF_01.png
+done S59_HEVC_01.png
+done S60_FTIC_01.png
+done S61_JAIB_15.png
+done S62_JPGL_15.png
+done S63_JPG_15.png
+done S64_VVC_15.png
+done S66_AVIF_15.png
+[1;31m2026-10-16 11:59:51.914625527 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 3303533568
+[m
+[1;31m2026-10-16 11:59:52.231102428 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 3303533568
+[m
+[1;31m2026-10-16 11:59:52.352779515 [E:onnxruntime:, sequential_executor.cc:677 ExecuteKernel] Non-zero status code returned while running Softmax node. Name:'/Softmax_12' Status Message: /onnxruntime_src/onnxruntime/core/framework/bfc_arena.cc:360 void* onnxruntime::BFCArena::AllocateRawInternal(size_t, bool, onnxruntime::Stream*) Failed to allocate memory for requested buffer of size 3303533568
+[m
+done S67_CCM_15.png
+done S68_JAIB_15.png
+done S69_JAI_09.png
+done S70_VVC_03.png
+	Command being timed: "/home/lilith/tmp/afine_aic_dump_prefix /home/lilith/tmp/nn-opt2/models-all /home/lilith/tmp/aic-sub/pairs.tsv /home/lilith/tmp/dump_prefix.tsv ort-cuda"
+	User time (seconds): 103.56
+	System time (seconds): 37.01
+	Percent of CPU this job got: 134%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:44.73
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2048296
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 69
+	Minor (reclaiming a frame) page faults: 5831546
+	Voluntary context switches: 31632
+	Involuntary context switches: 6949
+	Swaps: 0
+	File system inputs: 2000632
+	File system outputs: 360
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 105s | peak-RSS 1.95GiB | min-avail 21995MiB | peak-load 12.36

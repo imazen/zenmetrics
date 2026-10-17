@@ -1,0 +1,15 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=12/20 avail=24105MiB :: timeout --kill-after=20s 1150s just cli-feature-matrix
+PASS  cpu-metrics
+PASS  sweep
+PASS  sweep,png
+PASS  sweep,hdr
+PASS  jobexec
+PASS  jobexec,hdr
+PASS  orchestrator
+PASS  gpu,gpu-cuda
+PASS  sweep,png,gpu,gpu-cuda
+PASS  gpu,gpu-wgpu
+PASS  bare
+PASS  default
+---- 12/12 combinations passed ----
+run-heavy: done rc=0 24s | peak-RSS 0.36GiB | min-avail 23554MiB | peak-load 1.90

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Diagnostic probes, not a parity gate. Keep every attempted CLI result.
 set -u
 oracle=$HOME/tmp/pieapp-oracle

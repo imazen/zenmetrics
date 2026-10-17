@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 set -euo pipefail
 root=$HOME/tmp/pieapp-oracle
 for size in 64 128; do

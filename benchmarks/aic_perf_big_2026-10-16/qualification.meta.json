@@ -1,0 +1,52 @@
+{
+  "baseline_production_commit": "849ea8da",
+  "production_changes": [
+    "0ffb7674",
+    "6ced5b29",
+    "50acada6",
+    "1ab9cb0d"
+  ],
+  "unchanged_cambi_function_sha256": {
+    "calculate_c_values": "49f953437c3b655aa892948fddebfb4ca1f29e311bd931dc3ec175cb9425dec7",
+    "c_value_pixel": "5312283d9f99825ad85318efc1a05f3dd39fe3abafdbf7af1ea7cc2ae11c665e",
+    "calculate_c_values_row_v3_t": "0e92272c6a710a992f6bab60eafd5e2ca32cee4e6eaa7f4e4319b3591ee37632",
+    "spatial_pooling": "71a07c141c43f6b4387ff6ded38bd9f8a188d893b07a55d022b652106281e010"
+  },
+  "candidate_binaries": {
+    "/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/cambi-candidate": "eda1ddb2d0cd349aa68d1bc5c5d36a96746071b23b368aa39808356d685a76fd",
+    "/home/lilith/tmp/aic-variants-scratch/round14-thread-final-bins/butter-candidate": "dd4bfbd9cf8389c874a6fcd52152f623937b64bf62b64c9f0450392c36d2c37c"
+  },
+  "reference_binaries": {
+    "/home/lilith/tmp/aic-variants-scratch/round4/oracles/butteraugli-71b18b636b9c7d1ae0c1d3730b85b3c127eb4511/butteraugli/butteraugli": "7ce5e8cdfc3126070d48a0e4ae0e96ef6b7f5122119242bf251c130d79b1f680",
+    "/home/lilith/tmp/aic-variants-scratch/round4/oracles/vmaf-3.2.1/libvmaf/build-aic/tools/vmaf": "1e4ea931b880d57310ab296dbd19bc6e5cdebf498329a835ee1fd239f72ebc11"
+  },
+  "oracle_python": {
+    "path": "/home/lilith/tmp/aic-variants-scratch/flip-venv/bin/python",
+    "opencv": "5.0.0",
+    "numpy": "2.5.4",
+    "pywavelets": "1.8.0"
+  },
+  "rustflags": null,
+  "cargo_encoded_rustflags": null,
+  "host": "i265",
+  "superseded_integer_grouping_not_in_production": true,
+  "current_source_file_sha256": {
+    "crates/vmaf/src/cambi.rs": "35e3bf5372e2080b4628eef1e4dafb38bc5cf1d2e84cbfff119f18b63fe789ff",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "6410ad74c99a51bdd38f04b53f7a4b64f84ac958c0b8b8d0897a48b94cf81860",
+    "crates/vmaf/src/score.rs": "20553d0eac7e2ca9be6b49bb76315d3649eb6bfb5490b92c7d8d6adb1b0d9809"
+  },
+  "retained_production_function_sha256": {
+    "calculate_c_values_columns": "56014c983a45ae3e608658694896a382f8a406c8a19c4579ed5fe9d27650ecb7",
+    "calculate_c_values_scheduled": "128a1a2b27d09319da4df1abcf95d5ab55d918ce48848daa404de251d25c8434",
+    "cambi_impl": "47f15a0a0132e7c0df70252edce0f4c07bc8acec72411b3cc0a192b2b46ecc6f",
+    "convolve": "e5c60026fde845445e94c8e1bb49f611e0407b4f59f978effd8fb8a535b4daae",
+    "malta": "36851c228d55a8a1e135bb2aca78ecf1f5cc1e56e8fd9188c8f460ee70415e45",
+    "malta_accumulate": "3ca8950aa6dc969c03d17d3aaeb7356577490be1787c9ddcd2d8a275a7975b4a"
+  },
+  "compiled_source_file_sha256": {
+    "crates/vmaf/src/cambi.rs": "35e3bf5372e2080b4628eef1e4dafb38bc5cf1d2e84cbfff119f18b63fe789ff",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs": "6410ad74c99a51bdd38f04b53f7a4b64f84ac958c0b8b8d0897a48b94cf81860",
+    "crates/vmaf/src/score.rs": "20553d0eac7e2ca9be6b49bb76315d3649eb6bfb5490b92c7d8d6adb1b0d9809"
+  },
+  "scorer_thread_budget": "Default/one-thread scorer calls the serial instantiation; configured private pools install standalone CAMBI even for one frame. Regression covers a nested foreign pool."
+}

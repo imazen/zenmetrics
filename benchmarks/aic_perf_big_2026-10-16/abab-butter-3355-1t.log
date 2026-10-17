@@ -1,0 +1,157 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23912MiB :: timeout --kill-after=20s 1150s just aic-perf-big-interleave-step /home/lilith/tmp/aic-variants-scratch/round14/butter-base /home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate /home/lilith/tmp/aic-variants-scratch/round14-abab/butter-3355x2516-1t 3355 2516 1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave_step.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14/butter-base' '/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate' '/home/lilith/tmp/aic-variants-scratch/round14-abab/butter-3355x2516-1t' '3355' '2516' '1'
+6b41d757f2a1cf5dc8ae0a270a5d1b78d29b13c539d20f69f1ce6bc56228745f  /home/lilith/tmp/aic-variants-scratch/round14/butter-base
+dd4bfbd9cf8389c874a6fcd52152f623937b64bf62b64c9f0450392c36d2c37c  /home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14/butter-base' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14/butter-base threads=1 dimensions=3355x2516 load=5.92 4.03 4.06 1/1521 1596723
+3355x2516 5 reps: 7963.637214 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5"
+	User time (seconds): 35.39
+	System time (seconds): 4.45
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:39.87
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437364
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505442
+	Voluntary context switches: 1
+	Involuntary context switches: 807
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5':
+
+     1141666731853      cpu_core/instructions/                                                
+      212667493071      cpu_core/cycles/                                                      
+
+      39.874908574 seconds time elapsed
+
+      35.393558000 seconds user
+       4.459320000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate threads=1 dimensions=3355x2516 load=3.82 3.73 3.96 2/1536 1597191
+3355x2516 5 reps: 3010.482715 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate 3355 2516 5"
+	User time (seconds): 10.72
+	System time (seconds): 4.38
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:15.10
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437428
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505442
+	Voluntary context switches: 1
+	Involuntary context switches: 145
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate 3355 2516 5':
+
+      262155748406      cpu_core/instructions/                                                
+       80581955874      cpu_core/cycles/                                                      
+
+      15.108811224 seconds time elapsed
+
+      10.724129000 seconds user
+       4.381918000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14/butter-base' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14/butter-base threads=1 dimensions=3355x2516 load=3.27 3.61 3.92 2/1546 1597345
+3355x2516 5 reps: 7953.702307 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5"
+	User time (seconds): 35.38
+	System time (seconds): 4.43
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:39.82
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437516
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505440
+	Voluntary context switches: 1
+	Involuntary context switches: 373
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5':
+
+     1141659041161      cpu_core/instructions/                                                
+      212579886904      cpu_core/cycles/                                                      
+
+      39.824971947 seconds time elapsed
+
+      35.383316000 seconds user
+       4.434895000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate threads=1 dimensions=3355x2516 load=2.64 3.41 3.84 2/1546 1597676
+3355x2516 5 reps: 3000.308784 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate 3355 2516 5"
+	User time (seconds): 10.67
+	System time (seconds): 4.38
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:15.05
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437516
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505442
+	Voluntary context switches: 1
+	Involuntary context switches: 141
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-final-bins/butter-candidate 3355 2516 5':
+
+      262154584808      cpu_core/instructions/                                                
+       80347193882      cpu_core/cycles/                                                      
+
+      15.058529238 seconds time elapsed
+
+      10.673730000 seconds user
+       4.382164000 seconds sys
+
+
+run-heavy: done rc=0 110s | peak-RSS 1.37GiB | min-avail 23092MiB | peak-load 5.92

@@ -1,0 +1,149 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24437MiB :: timeout --kill-after=20s 1150s just aic-perf-big-cambi-scout /home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/cambi_scout.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered'
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree 4bd58ee50f00 (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked build --release -p vmaf --features parallel,simd,avx512 --example cambi_wall
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+   Compiling vmaf v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/crates/vmaf)
+    Finished `release` profile [optimized + debuginfo] target(s) in 3.23s
+37297ecf698aeff27f3c67e580ded18627ae9f3c16799f13fd19949b99cfa832  /home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new
+e749f6db3e48f6364f101e232989d4c7d698efdc0d9bf52f03b244a1cd4d25bd  crates/vmaf/src/cambi.rs
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new' '1024' '1024' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new threads=1 dimensions=1024x1024 load=1.54 3.98 4.17 2/1654 1606823
+banded-10bit 1024x1024 5 reps: 22.381151 ms/call score 3.69270144037024650 bits 400d8aa70d824228
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 1024 1024 5"
+	User time (seconds): 0.10
+	System time (seconds): 0.00
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.11
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 16656
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3511
+	Voluntary context switches: 2
+	Involuntary context switches: 64
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 1024 1024 5':
+
+        2815958815      cpu_core/instructions/                                                
+         606426208      cpu_core/cycles/                                                      
+
+       0.115646456 seconds time elapsed
+
+       0.106737000 seconds user
+       0.008917000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new' '1024' '1024' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new threads=16 dimensions=1024x1024 load=1.54 3.98 4.17 1/1665 1606846
+banded-10bit 1024x1024 5 reps: 9.637578 ms/call score 3.69270144037024650 bits 400d8aa70d824228
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 1024 1024 5"
+	User time (seconds): 0.17
+	System time (seconds): 0.01
+	Percent of CPU this job got: 369%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.05
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 20808
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 5922
+	Voluntary context switches: 460
+	Involuntary context switches: 232
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new' '3355' '2516' '1' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new threads=1 dimensions=3355x2516 load=1.54 3.98 4.17 1/1665 1606870
+banded-10bit 3355x2516 5 reps: 162.091014 ms/call score 4.78097355665335577 bits 40131fb7883377c6
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 3355 2516 5"
+	User time (seconds): 0.78
+	System time (seconds): 0.03
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.82
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 105964
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 25807
+	Voluntary context switches: 2
+	Involuntary context switches: 70
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 3355 2516 5':
+
+       20656441038      cpu_core/instructions/                                                
+        4358864164      cpu_core/cycles/                                                      
+
+       0.823372824 seconds time elapsed
+
+       0.783744000 seconds user
+       0.039575000 seconds sys
+
+
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new' '3355' '2516' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new threads=16 dimensions=3355x2516 load=1.54 3.98 4.17 1/1643 1606893
+banded-10bit 3355x2516 5 reps: 66.280499 ms/call score 4.78097355665335577 bits 40131fb7883377c6
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-cambi-ordered/cambi-new 3355 2516 5"
+	User time (seconds): 1.43
+	System time (seconds): 0.05
+	Percent of CPU this job got: 425%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.35
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 140348
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 42827
+	Voluntary context switches: 570
+	Involuntary context switches: 23
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 6s | peak-RSS 0.46GiB | min-avail 23825MiB | peak-load 1.54

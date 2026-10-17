@@ -190,7 +190,8 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `NLPD` | ~0.03–0.22 | `IQA_pytorch` `NLPD(channels=1)` (dingkeyan93, not pyiqa) — BT.709 Y `[0,1]` 8-bit-gridded, mean-of-RMS pooling | ✅ implemented — `nlpd-iqa` (med 2.6e-3 / max 6.7e-3, med-rel 2.63%, n=53; `nlpd` is the RGB/Laparra variant — ≈20.5× off, deliberately distinct) |
 | `CW-SSIM`, `CIEDE2000`, `FLIP` | — | pyiqa / colour metrics | ⬜ |
 | `DISTS`, `LPIPS`, `DeepDC`, `DreamSim`, `STLPIPS`×2 | `zenmetrics-nn` | ONNX exports of the upstream packages on rten / ONNX Runtime | ✅ implemented ([crosscheck](../benchmarks/nn_aic2026_crosscheck_2026-10-15.md)) |
-| `PieAPP`, `TOPIQ`×2, `AHIQ` | — | torch models | ⬜ not on master (PieAPP and AHIQ in progress; TOPIQ weights only via pyiqa) |
+| `PieAPP` | `zenmetrics-nn` | Official v0.1 `compute_score` | ✅ implemented — independent reconstruction; revision 3 qualified on both engines (see the implementation ledger and PieAPP section below); demo CLI sampling differs |
+| `TOPIQ`×2, `AHIQ` | — | torch models | ⬜ not on master (AHIQ in progress; TOPIQ weights only via pyiqa) |
 | `WaDIQaM` | — | `dmaniry/deepIQA` @ `51dece99` (chainer), `top="weighted"` checkpoints | ✅ implemented — `wadiqam_{fr,nr}_{live,tid}` in zenmetrics-nn (chainer CPU oracle parity ≤ 7.8e-6 JND on both engines; see DIVERGENCES) |
 | `proposal-*` (Butteraugli, DVIFM, IDFIQA) | — | AIC-4 **submitted** metrics; DVIFM is by Maciej Pedzisz (Nokia); IDFIQA is by Khakpour, Yademellat & Mansouri (ICCKE 2025, PyTorch, CNN features) | ⬜ not reproduced |
 | `proposal-mDCTPSNR` | — | mDCT-PSNR's reference `-jnd` remap `0.000475997802·max(0, 80 − dB)^2.3182` (fits all 9,618 rows to 5e-9 from the `mDCT-PSNR` column) | ✅ reproducible via `mdctpsnr::mdct_psnr_jnd`; ≤3e-6 JND |
@@ -314,3 +315,7 @@ results. All 1008 KonJND pairs calibrate one operational JND to
 0.5189487912492419 native units. Both engines pass all 24 supported pairs
 and warm/cold checks at 1e-3 JND. The receipt also records the corrected
 qualification wrapper and its separate bookkeeping recheck.
+
+The 24-pair PieAPP demo CLI comparison has a worst gap of 1.88 JND
+(`2207_2048`), median 0.44 JND, with 10/24 pairs exceeding 1 JND; see the
+[panel](../benchmarks/pieapp_review_2026-10-16/cli.json).

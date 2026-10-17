@@ -568,6 +568,23 @@ packed-sRGB-u8 sweep shape and answers a different question.
   Original goldens, calibration scale and JND gates are unchanged.
   Evidence: `benchmarks/pieapp_review_2026-10-16/weight-identify.json`.
 
+- **2026-10-16 — ORT CUDA arena/memory-pattern accumulation across changing
+  input shapes. FIXED (`f48b71a0`).** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
+  arena at pair 40/61 (S46) of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
+  intermediate). WD's trunk had the same class fixed in `ae582a3b`
+  (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
+  is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
+  — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
+  `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
+  `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
+  paths. afine sweep scores are bit-identical before/after (357/357
+  shared rows) and ort-cuda ladder parity re-verified on afine,
+  lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim,
+  arniqa, maniqa, liqe, musiq, hyperiqa, paq2piq, wadiqam and wd;
+  lpips_vgg covered by the fixed-size nn_bench A/B in the same receipt
+  (lpips_squeeze shares lpips_alex's `OrtCudaPair` graph shape, weights
+  only — not separately probed). RSS numbers are in
+  `benchmarks/afine_aic_2026-10-16/README.md`.
 
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
   A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
@@ -1641,6 +1658,28 @@ Identity and constant-output checks previously rejected valid zero batches.
 CAMBI now has no identity range and is exempt from the constant-output check;
 empty/nonfinite checks remain active. The sweep-feature binary regression
 `cambi_zero_distribution_is_not_bogus` covers the all-zero batch.
+
+### Known Bugs: CAMBI active-band rows and nested frame work (2026-10-16)
+
+A direct nine-column row control found AVX2 bits `402aaaab` for an active
+pixel below the histogram band, while `c_value_pixel` returned zero. Gather
+index clamping now has a separate in-band output mask (`3b3e81de`). The row
+control covers vector groups, scalar tails and masked pixels; only the low
+band edge has a predicate-true out-of-band pixel.
+A two-frame 512×512 control observed two column splits inside parallel frame
+workers. Those workers now keep CAMBI serial; the single-frame control still
+uses columns, and all feature/score bits match the serial scorer. Both new
+controls fail before the fix and pass after it without assertion changes.
+Column regions also borrow disjoint output-row slices instead of allocating
+and copying a second c-value plane (`24fe54f8`). Review measurements belong in
+[the perf receipt](benchmarks/aic_perf_big_2026-10-16/README.md).
+
+### E36 fit qualification (2026-10-17)
+
+The private E36 mask changes base table identities. Do not qualify these with an
+unchanged E34 package. Use the native E36 profile and exact metadata derivation
+before the existing checkpoint gate; see [transport](docs/E36_FIT_TRANSPORT.md).
+`just e36-fit-contract-check` uses invented metadata and never trains.
 
 ### Known Bugs: Linux IQA benchmark timeout admission (2026-10-17)
 

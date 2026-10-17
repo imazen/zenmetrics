@@ -35,6 +35,17 @@ fn hash(bytes: &[u8]) -> String {
         .collect()
 }
 
+fn dispatch_json(r: &zenquant::EffectiveDispatch) -> Value {
+    json!({"schema":"zenquant-effective-dispatch-v1","format":format!("{:?}",r.format),
+        "quality":format!("{:?}",r.quality),"run_priority":r.run_priority,"target_tier":r.target_tier,
+        "dither":r.dither,"dither_used":r.dither_used,"dither_strength":r.dither_strength,"alpha":r.alpha,
+        "palette_sort":r.palette_sort,"frequency_reorder":r.frequency_reorder,"exact_palette":r.exact_palette,
+        "masking":r.masking,"kmeans_iterations":r.kmeans_iterations,"kmeans_sample_cap":r.kmeans_sample_cap,
+        "run_lambda":r.run_lambda,"run_refinement":r.run_refinement,"joint_available":r.joint_available,
+        "joint_used":r.joint_used,"joint_tolerance":r.joint_tolerance,"joint_deflate_effort_used":r.joint_deflate_effort_used,
+        "metric":r.metric})
+}
+
 impl Config {
     fn resolve(&self) -> Result<zenquant::QuantizeConfig, Box<dyn Error>> {
         if self.schema != "indexed-ladder-v1" || self.joint != cfg!(feature = "palette-joint") {
@@ -143,32 +154,64 @@ pub(crate) fn execute(
         .iter()
         .map(|p| rgb::Rgba::new(p[0], p[1], p[2], 255))
         .collect();
-    let quantizer = zenpng::ZenquantQuantizer::from_config(config);
+    let requested_debug = format!("{config:?}");
     let started = Instant::now();
-    let output = match quantizer.quantize_rgba(
+    let (native, dispatch) = match zenquant::quantize_rgba_with_dispatch(
+        &pixels,
+        w,
+        h,
+        &config,
+        &enough::Unstoppable,
+    ) {
+        Ok(value) => value,
+        Err(failure) => {
+            if let zenquant::QuantizeError::QualityNotMet {
+                min_ssim2,
+                achieved_ssim2,
+            } = failure.error
+                && c.minimum.is_some()
+            {
+                let report = failure
+                    .dispatch
+                    .as_deref()
+                    .ok_or("quality-floor dispatch observation missing")?;
+                return Ok((
+                    None,
+                    json!({"schema":"indexed-receipt-v1","status":"quality-floor","requested":value,
+                    "minimum":min_ssim2,"achieved":achieved_ssim2,"effective_dispatch":dispatch_json(report),
+                        "build_commit":env!("ZEN_METRICS_COMMIT"),
+                    "quantize_seconds":started.elapsed().as_secs_f64(),"quantize_passes":1,
+                    "resolved_requested_config_debug":requested_debug}),
+                ));
+            }
+            return Err(failure.into());
+        }
+    };
+    let dispatch_quantize_seconds = started.elapsed().as_secs_f64();
+    // QuantizeOutput is non-exhaustive with no external constructor. Keep the
+    // existing PNG adapter and verify its complete output against the reported
+    // native call. Both passes are explicit in receipts and preflight cost.
+    let adapter_started = Instant::now();
+    let quantizer = zenpng::ZenquantQuantizer::from_config(config);
+    let output = quantizer.quantize_rgba(
         &pixels
             .iter()
             .map(|p| [p.r, p.g, p.b, p.a])
             .collect::<Vec<_>>(),
         w,
         h,
-    ) {
-        Ok(v) => v,
-        Err(zenpng::PngError::Quantize(zenquant::QuantizeError::QualityNotMet {
-            min_ssim2,
-            achieved_ssim2,
-        })) if c.minimum.is_some() => {
-            return Ok((
-                None,
-                json!({
-                    "schema":"indexed-receipt-v1", "status":"quality-floor", "requested":value,
-                    "minimum":min_ssim2, "achieved":achieved_ssim2,
-                    "quantize_seconds":started.elapsed().as_secs_f64()
-                }),
-            ));
-        }
-        Err(e) => return Err(e.into()),
-    };
+    )?;
+    if output.palette_rgba != native.palette_rgba()
+        || output.indices != native.indices()
+        || output.mpe_score.map(f32::to_bits) != native.mpe_score().map(f32::to_bits)
+        || output.ssim2_estimate.map(f32::to_bits)
+            != native.ssimulacra2_estimate().map(f32::to_bits)
+        || output.butteraugli_estimate.map(f32::to_bits)
+            != native.butteraugli_estimate().map(f32::to_bits)
+    {
+        return Err("reported quantizer and PNG adapter disagree".into());
+    }
+    let adapter_quantize_seconds = adapter_started.elapsed().as_secs_f64();
     let quantize_seconds = started.elapsed().as_secs_f64();
     let decoded: Vec<u8> = output
         .indices
@@ -183,7 +226,9 @@ pub(crate) fn execute(
         "indices":output.indices, "quantize_seconds":quantize_seconds,
         "mpe":output.mpe_score,"ssim2_estimate":output.ssim2_estimate,
         "butteraugli_estimate":output.butteraugli_estimate,
-        "resolved_requested_config_debug":format!("{:?}", quantizer.config()),
+        "resolved_requested_config_debug":requested_debug,
+        "effective_dispatch":dispatch_json(&dispatch),"dispatch_output_equal":true,
+        "quantize_passes":2,"dispatch_quantize_seconds":dispatch_quantize_seconds,"adapter_quantize_seconds":adapter_quantize_seconds,
         "build_commit":env!("ZEN_METRICS_COMMIT")
     });
     let started = Instant::now();
@@ -286,5 +331,79 @@ mod tests {
         let (bb, br) = execute(&source, &b).unwrap();
         assert_eq!(ab, bb);
         assert_ne!(ar["requested"], br["requested"]);
+    }
+    #[test]
+    fn effective_dispatch_receipts_match_native_and_png_outputs() {
+        let source = Rgb8Image {
+            width: 16,
+            height: 8,
+            pixels: (0..128)
+                .flat_map(|i| [(i * 17) as u8, (i * 53) as u8, (i * 101) as u8])
+                .collect(),
+        };
+        let mut cases = vec![];
+        let mut fast = config();
+        fast["quality"] = json!("fast");
+        cases.push(("fast", fast));
+        let mut target = config();
+        target["target"] = json!(50.);
+        target["strength"] = json!(0.5);
+        if cfg!(feature = "palette-joint") {
+            target["format"] = json!("joint");
+        }
+        cases.push(("target", target));
+        let mut floor = config();
+        floor["minimum"] = json!(100.);
+        cases.push(("floor", floor));
+        for (name, value) in cases {
+            let (bytes, receipt) = execute(&source, &value).unwrap();
+            let dispatch = &receipt["effective_dispatch"];
+            assert_eq!(receipt["build_commit"], env!("ZEN_METRICS_COMMIT"));
+            assert_eq!(dispatch["schema"], "zenquant-effective-dispatch-v1");
+            assert_eq!(dispatch["joint_available"], cfg!(feature = "palette-joint"));
+            assert_eq!(dispatch["joint_deflate_effort_used"], false);
+            match name {
+                "fast" => {
+                    assert_eq!(dispatch["dither"], "Ordered");
+                    assert_eq!(dispatch["dither_used"], true);
+                }
+                "target" => {
+                    assert_eq!(dispatch["target_tier"], "fast-compression");
+                    assert_eq!(dispatch["dither"], "Ordered");
+                    assert_eq!(dispatch["dither_strength"], json!(0.3f32));
+                    assert_eq!(dispatch["joint_used"], cfg!(feature = "palette-joint"));
+                }
+                "floor" => {
+                    assert_eq!(receipt["status"], "quality-floor");
+                    assert!(bytes.is_none());
+                    assert_eq!(dispatch["metric"], true);
+                    assert_eq!(dispatch["joint_used"], false);
+                }
+                _ => unreachable!(),
+            }
+            if bytes.is_some() {
+                assert_eq!(receipt["dispatch_output_equal"], true);
+                assert_eq!(receipt["quantize_passes"], 2);
+            }
+            // Optional artifact export is controlled by the recipe, never a
+            // substitute for the assertions above.
+            if let Ok(root) = std::env::var("ZEN_PALETTE_RECEIPT_DIR") {
+                std::fs::create_dir_all(&root).unwrap();
+                let path = std::path::Path::new(&root).join(format!(
+                    "{}-{name}.json",
+                    if cfg!(feature = "palette-joint") {
+                        "joint"
+                    } else {
+                        "plain"
+                    }
+                ));
+                let file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path)
+                    .unwrap();
+                serde_json::to_writer_pretty(file, &receipt).unwrap();
+            }
+        }
     }
 }

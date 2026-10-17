@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "metric": "pieapp",
+  "merged_inventory_metric_kinds": 113,
   "host": "i265",
   "cap_geometry": [
     3000,

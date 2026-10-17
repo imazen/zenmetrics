@@ -11,8 +11,8 @@ its output receipt before `encode_items` emits EncodeDeclareItem rows for
 only for opaque SDR zenpng inputs. `palette-joint` enables the separate
 joint-present binary; the absent build must have no transitive zenquant/joint
 activation. Freeze cargo feature trees, compiler, lock, source and binary
-hashes with each execution program. The direct dependency pins the same
-zenquant 0.1.3 used by zenpng; there is one resolved quantizer version.
+hashes with each execution program. The direct dependency and zenpng share one resolved quantizer version; the
+local dispatch patch and its review status are recorded below.
 
 The ordinary Encode output remains PNG bytes for canonical blob addressing.
 A corresponding Metric job named `palette-receipt`, carrying identical knobs,
@@ -56,15 +56,54 @@ product declaration. A self-consistent source inventory that omits one of
 these required owners refuses packaging. Additional dependencies of the final
 program remain part of its independently reviewed source closure.
 
-## Remaining receipt qualification
+## Reviewed dispatch integration
 
-The current executor records the requested configuration, its Debug rendering,
-palette/indices and decoded output. In zenquant 0.1.3, the result does not expose
-the effective automatic dither, target-tier overrides or selected joint
-candidate. The Debug rendering is the requested config, not a trace of these
-internal decisions. This is an implementation gap against the complete
-requested/effective-knob receipt requirement. Do not treat these receipts as
-freeze-qualified. Closing the gap requires instrumentation in the quantizer
-owner and review of any additional API; byte/pixel parity alone cannot certify
-internal dispatch provenance. No throughput or experiment-readiness claim is
-made by the current generator.
+The executor pins the merged [zenquant PR14](https://github.com/imazen/zenquant/pull/14)
+revision `8ec37ee21f0216cf9b138e407eecc470ee620493` through a root Cargo patch.
+The direct requirement is 0.1.4, with one resolved quantizer shared by zenpng
+and the executor. Release publishing remains a separate owner decision.
+
+`effective_dispatch` now records the native report, including Fast/Adaptive
+promotion, target-tier quality/priority/strength, format defaults, exact-palette
+bypass, refinement and joint use/availability. Quality-floor outcomes retain
+the partial observation. The requested-config Debug field stays separately
+labelled; it is not used as an effective report.
+
+The PNG adapter's `QuantizeOutput` is non-exhaustive and has no external
+constructor. The local bridge therefore performs the reported native call and
+the existing adapter call, and requires identical palette, indices and metric
+bits before encoding. Successful receipts explicitly record `quantize_passes=2`,
+`dispatch_output_equal=true`, both stage durations and their total. A quality
+floor returns before the adapter pass and records one call. This overhead is
+part of later measured preparation cost; there is no throughput claim or
+implicit compute deduplication.
+
+`just palette-dispatch-receipts <new-output-dir>` asserts and exports generated
+Fast/Adaptive, target-tier/joint and quality-floor receipts in both build
+variants. All ordinary palette and independent decoder tests still run through
+`just palette-check`. These tests do not invoke job execution or a fleet.
+
+## Palette pool authority
+
+The source inventory includes a `pool` object with schema `e35-palette-pool-v2`,
+`certified_clean=true`, all five classes' complete `available_families`, and an
+`authority_sha256`. The caller supplies the approved, frozen authority. The
+validator recomputes SHA-256 from every field except `authority_sha256`, encoded
+as JSON with sorted object keys, compact separators, ASCII escapes, finite
+numbers, UTF-8 bytes and no trailing newline. Array order is retained. Additional
+provenance fields are hashed too. A stale or invented digest is refused.
+
+Each class supplies 64 families, or every clean family if fewer are available.
+Development counts round 14n/64 to the nearest integer, bounded to 1..n-1;
+64 retains 50 fit and 14 development. A class below two clean families is
+incomplete. The complete authority prevents a selected subset from declaring
+its own scarcity. The pair builder divides nominal mass equally between
+classes and then between the actual families in each class/role, before the
+existing acceptance correction.
+
+The registration names a frozen family-hash order without defining its hash
+algorithm, string encoding, sort direction or tie-breaks. Role order therefore
+remains an external freeze binding; these validators check role counts and
+family disjointness. `just palette-pool-check` runs invented metadata checks,
+including pruning with the old digest, without opening datasets or executing
+preflight work.

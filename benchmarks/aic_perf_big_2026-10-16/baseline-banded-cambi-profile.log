@@ -1,0 +1,83 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24051MiB :: timeout --kill-after=20s 1150s just aic-perf-big-baseline-step profile /home/lilith/tmp/aic-variants-scratch/round14-banded cambi 3355 2516 1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- 'profile' '/home/lilith/tmp/aic-variants-scratch/round14-banded' 'cambi' '3355' '2516' '1'
+metric=cambi profile dimensions=3355x2516 load=4.12 5.51 4.51 1/1954 1516641
+banded-10bit 3355x2516 5 reps: 164.353094 ms/call score 4.78097355665335577 bits 40131fb7883377c6
+[ perf record: Woken up 6 times to write data ]
+[ perf record: Captured and wrote 1.397 MB /home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base.data (169 samples) ]
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 169  of event 'cpu_core/cycles/'
+# Event count (approx.): 4380060914
+#
+# Overhead  Command     Shared Object      Symbol                                                                                                                                                                                                                                                                                                                
+# ........  ..........  .................  ......................................................................................................................................................................................................................................................................................................................
+#
+    62.36%  cambi-base  cambi-base         [.] vmaf::cambi::__attune_calculate_c_values_v3::{closure#0}
+            |
+            ---vmaf::cambi::__attune_calculate_c_values_v3::{closure#0}
+
+    16.31%  cambi-base  cambi-base         [.] vmaf::cambi::__arcane_calculate_c_values_row_v3_t
+            |
+            ---vmaf::cambi::__arcane_calculate_c_values_row_v3_t
+               |          
+                --15.10%--0x400000003
+
+     6.04%  cambi-base  cambi-base         [.] core::slice::sort::select::partition_at_index::<f32, <[f32]>::select_nth_unstable_by<vmaf::cambi::spatial_pooling::{closure#0}>::{closure#0}>
+            |
+            ---core::slice::sort::select::partition_at_index::<f32, <[f32]>::select_nth_unstable_by<vmaf::cambi::spatial_pooling::{closure#0}>::{closure#0}>
+
+     2.44%  cambi-base  cambi-base         [.] vmaf::cambi::cambi_impl
+            |
+            ---vmaf::cambi::cambi_impl
+               |          
+               |--1.22%--cambi_wall::main
+               |          
+                --1.22%--0xd1a
+
+     2.42%  cambi-base  cambi-base         [.] vmaf::cambi::__arcane_filter_mode_kernel
+            |
+            ---vmaf::cambi::__arcane_filter_mode_kernel
+               0x80cd5b
+
+     1.79%  cambi-base  cambi-base         [.] vmaf::cambi::__arcane_decimate_rows_v3_t
+            |
+            ---vmaf::cambi::__arcane_decimate_rows_v3_t
+
+     1.21%  cambi-base  cambi-base         [.] vmaf::cambi::__arcane_compute_dp_row_v3_t
+            |
+            ---vmaf::cambi::__arcane_compute_dp_row_v3_t
+
+     1.20%  cambi-base  libc.so.6          [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               vmaf::cambi::cambi_impl
+               cambi_wall::main
+
+     1.20%  cambi-base  [kernel.kallsyms]  [k] asm_exc_page_fault
+            |
+            ---asm_exc_page_fault
+               __memset_avx2_unaligned_erms
+               vmaf::pool::take_f32
+
+     1.16%  cambi-base  [kernel.kallsyms]  [k] _raw_spin_lock
+            |
+            ---_raw_spin_lock
+               do_anonymous_page
+               handle_pte_fault
+               __handle_mm_fault
+               handle_mm_fault
+               do_user_addr_fault
+               exc_page_fault
+               asm_exc_page_fault
+               __memset_avx2_unaligned_erms
+               vmaf::pool::take_u16
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
+run-heavy: done rc=0 1s | peak-RSS 0.10GiB | min-avail 24051MiB | peak-load 4.12

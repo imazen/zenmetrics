@@ -6,7 +6,7 @@ h=pathlib.Path.home();s=h/'tmp/aic-variants-scratch/round4';m=json.load(open(h/'
 results=pathlib.Path(os.environ.get('AIC_RESULTS_DIR',str(s)));binary=pathlib.Path(os.environ.get('AIC_CAMBI_PROBE',str(s/'aic-more-final-probe')))
 def jnd(x):return m['a']*max(0,x-m['b'])**m['c']
 for dataset in ['ladder','aic']:
- oracle={r['key']:r for r in json.load(open(s/f'cambi-precise-settings-{dataset}.json'))}
+ oracle={r['key']:r for r in json.load(open(pathlib.Path(os.environ.get('AIC_CAMBI_ORACLE_DIR',str(s)))/f'cambi-precise-settings-{dataset}.json'))}
  pairs=[dict(distorted=p.stem,ref_path=str(p),dist_path=str(p).replace('_ref.png','_dist.png')) for p in sorted((h/'tmp/nn-phase0/ladder').glob('*_ref.png'))] if dataset=='ladder' else list(csv.DictReader(open(h/'tmp/aic-audit/pairs.tsv'),delimiter='\t'))
  rows=[]
  for p in pairs:

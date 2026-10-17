@@ -665,6 +665,26 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
 }
 
 fn fetch_variant_raw(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    // Local single-host jobs use the same executor as object-store jobs. A
+    // file URI must name a content-addressed artifact, and its bytes must match
+    // the basename before it can enter scoring. Borrow it; never delete it.
+    if let Some(local) = sha.strip_prefix("file://") {
+        use sha2::{Digest, Sha256};
+        let path = PathBuf::from(local);
+        if !path.is_absolute() {
+            return Err("local variant URI must be absolute".into());
+        }
+        let expected = path
+            .file_stem()
+            .and_then(|v| v.to_str())
+            .filter(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()))
+            .ok_or("local variant filename must be SHA256.ext")?;
+        let actual = hex::encode(Sha256::digest(std::fs::read(&path)?));
+        if actual != expected {
+            return Err(format!("local variant hash mismatch: {path:?}").into());
+        }
+        return Ok((path, false));
+    }
     // FULL-URI input: the declare put the variant's whole `s3://bucket/key` as the job
     // input — GET it in-process. Lets ONE run/fleet span many codecs (each variant is
     // self-locating; no per-box ZEN_ENCODES_PREFIX). No tar, no index, no spawn.
@@ -2929,6 +2949,36 @@ mod tests {
         assert_eq!(n, 0, "a touched entry is no longer stale");
         assert!(p.exists());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn local_variant_requires_content_hash_and_remains_borrowed() {
+        use sha2::{Digest, Sha256};
+        let dir = std::env::temp_dir().join(format!(
+            "jobexec_local_{}_{}",
+            std::process::id(),
+            SRC_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let digest = hex::encode(Sha256::digest(b"native-variant"));
+        let path = dir.join(format!("{digest}.png"));
+        std::fs::write(&path, b"native-variant").unwrap();
+        let uri = format!("file://{}", path.display());
+        let (actual, owned) = fetch_variant_raw(&uri, "png").unwrap();
+        assert_eq!(actual, path);
+        assert!(!owned);
+        std::fs::write(&path, b"changed").unwrap();
+        assert!(
+            fetch_variant_raw(&uri, "png")
+                .unwrap_err()
+                .to_string()
+                .contains("hash mismatch")
+        );
+        assert!(fetch_variant_raw("file://relative.png", "png").is_err());
+        let bad = dir.join("unhashed.png");
+        std::fs::write(&bad, b"native-variant").unwrap();
+        assert!(fetch_variant_raw(&format!("file://{}", bad.display()), "png").is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

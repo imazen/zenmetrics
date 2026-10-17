@@ -191,3 +191,10 @@ After releasing the shared i265 lock, controllers sleep 45 seconds whenever
 `pgrep -x flock` reports more than one process. This applies to batch and
 per-cell releases. [Controls](lock-cooldown-control.json) verify that the wait
 happens after unlocking and is omitted without multiple flock processes.
+
+The [master merge validation](landing-master-20261017.json) retains each gate
+log hash and resource receipt. The ORT snapshot adapter covers both three
+independent builders and master's shared builder across three constructors.
+Its tests recover the source byte for byte after removing the adapter edits.
+Existing timing rows retain their frozen binary and source provenance across
+master merges; merged-source validation has its own receipt.

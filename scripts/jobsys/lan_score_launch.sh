@@ -24,6 +24,8 @@
 #        unless hand-run).
 #        ZEN_MAX_MIN -> worker wall budget (default 1400 minutes); long fit runs
 #        may raise it without changing the default for score jobs.
+#        ZEN_ENTRYPOINT_HOST_PATH + ZEN_ENTRYPOINT_SHA256 optionally bind an operator-approved
+#        executable read-only at the image entrypoint; both are required and verified remotely.
 #        ZEN_FORMULA_REV=1|2 -> the zensim formula revision this worker extracts at. A Feature
 #        manifest declared with --revision N is REFUSED by every executor whose environment
 #        disagrees, so a rev2 wave MUST set this or every cell fails. One wave, one revision.
@@ -95,6 +97,14 @@ esac
 IMG="${5:-$DEF_IMG}"
 CTR="zen-score-${ROLE}"
 
+# Validate before SSH: its environment assignments are parsed by a remote shell.
+if [ -n "${ZEN_ENTRYPOINT_HOST_PATH:-}${ZEN_ENTRYPOINT_SHA256:-}" ]; then
+  [[ "${ZEN_ENTRYPOINT_HOST_PATH:-}" =~ ^/[a-zA-Z0-9_./-]+$ ]] &&
+    [[ "${ZEN_ENTRYPOINT_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || {
+      echo "invalid entrypoint path/hash pair" >&2; exit 3;
+    }
+fi
+
 # The box resolves the store by sourcing the CANONICAL s3env.sh (never a copy of
 # its logic). Creds are read on the box (~/.config/zen/lanstore.env for the LAN
 # store, ~/.config/cloudflare/r2-credentials for R2), never sent over the wire.
@@ -104,6 +114,8 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
     ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" ZM_CLAIM_ORDER="${ZEN_CLAIM_ORDER:-}" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
+    ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
+    ZM_ENTRYPOINT_PATH="${ZEN_ENTRYPOINT_HOST_PATH:-}" ZM_ENTRYPOINT_SHA="${ZEN_ENTRYPOINT_SHA256:-}" \
   ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
@@ -128,6 +140,23 @@ else
 fi
 mkdir -p "$SCRATCH_HOST_DIR"
 TMPDIR_ARGS=(-e TMPDIR=/scratch -v "$SCRATCH_HOST_DIR:/scratch")
+
+# BEGIN verified entrypoint binding
+ENTRYPOINT_ARGS=()
+if [ -n "${ZM_ENTRYPOINT_PATH:-}${ZM_ENTRYPOINT_SHA:-}" ]; then
+  [[ "${ZM_ENTRYPOINT_PATH:-}" =~ ^/[a-zA-Z0-9_./-]+$ ]] &&
+    [[ "${ZM_ENTRYPOINT_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || {
+      echo "invalid entrypoint path/hash pair" >&2; exit 3;
+    }
+  [ ! -L "$ZM_ENTRYPOINT_PATH" ] && [ -f "$ZM_ENTRYPOINT_PATH" ] &&
+    [ -x "$ZM_ENTRYPOINT_PATH" ] &&
+    [ "$(realpath "$ZM_ENTRYPOINT_PATH")" = "$ZM_ENTRYPOINT_PATH" ] &&
+    [ "$(sha256sum "$ZM_ENTRYPOINT_PATH" | cut -d ' ' -f 1)" = "$ZM_ENTRYPOINT_SHA" ] || {
+      echo "entrypoint binding verification failed" >&2; exit 3;
+    }
+  ENTRYPOINT_ARGS=(-v "$ZM_ENTRYPOINT_PATH:/usr/local/bin/fleet-entrypoint.sh:ro")
+fi
+# END verified entrypoint binding
 
 # docker via passwordless sudo when the box has it, else the invoking user's docker group
 if sudo -n true 2>/dev/null; then DK="sudo -n docker"; else DK="docker"; fi
@@ -158,6 +187,7 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 # would let other workers re-claim a live cell, because lease renewal only fires on completions.
 [ -n "${ZM_CLAIM_TTL:-}" ] && ENCP+=(-e "ZEN_CLAIM_TTL_SECS=$ZM_CLAIM_TTL")
 [ -n "${ZM_STALE_CLAIM:-}" ] && ENCP+=(-e "ZEN_STALE_CLAIM_SEC=$ZM_STALE_CLAIM")
+[ -n "${ZM_NO_NEW_AFTER:-}" ] && ENCP+=(-e "ZEN_NO_NEW_AFTER_EPOCH=$ZM_NO_NEW_AFTER")
 # The zensim FORMULA REVISION is a LAUNCH-level pin, not a per-job setting: zensim reads
 # ZENSIM_FORMULA_REV once per process into a OnceLock, and the worker reuses one warm child
 # across jobs, so a child that has already resolved the variable cannot serve the other
@@ -184,7 +214,7 @@ CAPS=()
 
 $DK pull "$ZM_IMG" >/dev/null 2>&1 || true
 $DK rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-$DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" \
+$DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" "${ENTRYPOINT_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \

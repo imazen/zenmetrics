@@ -615,48 +615,11 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
 
 ## PieAPP sampling and official entry point (2026-10-16)
 
-PieAPP uses valid 64×64 patches on a deterministic stride-6 grid, in row-major
-order. Origins are `0, 6, … <= side - 64`; an unaligned far-edge origin is not
-added. The [official README](https://github.com/prashnani/PerceptualImageError/blob/master/README.md)
-documents dense stride 6. The port targets the official `compute_score`
-entry point as the parity oracle for this explicit grid.
-
-On `1415_128`, the original demo CLI returns `1.6797861082006782`, while
-`compute_score` on the regular 121-patch grid returns `1.6567797660827637`:
-absolute difference `0.0230063421179145` native units. The independent network
-returns `1.65677956601148813` on that grid. Thus this port does not claim
-numerical equivalence to the demo CLI wrapper. Its documented `--sampling_mode sparse` option
-also changes the CLI score (`1.7122649515845207`); it does not explain the dense
-result. No documented option has established equivalence. Official source is
-not read, and any further wrapper probes are restricted to documented options.
-
-
-The [full 24-pair demo panel](benchmarks/pieapp_review_2026-10-16/cli.json)
-runs the documented dense CUDA CLI twice per pair; all printed scores repeat
-exactly. The worst difference is `2207_2048`: demo `3.4582222` versus explicit
-entry-point grid `2.4828926609204816`, or `0.9753295390795182` native units
-(`1.879433106938455` operational JND). This modern compatible CUDA demo panel
-retains values at their printed precision; the earlier original-runtime
-128-square control above remains a separate observation. Neither panel
-establishes equivalence between the demo's sub-image wrapper and the selected
-full-image stride-six entry-point grid.
-
-**RESOLVED — weight-head reconstruction:** the initial `abs(weight)+1e-6`
-hypothesis matched the positive observed weights, but controlled public
-bias/projection probes return negative values for negative raw heads. Revision
-3 uses signed `weight+1e-6`; original checkpoint files and oracle goldens stay
-unchanged. [Controlled measurements and provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md#head-convention-evidence).
-
-Input is strided RGB8; the exported graph converts to BGR code values. Neural
-patch errors and finite signed weights are pooled in fixed row-major order with
-f64 accumulation, with at most 32 patch pairs materialized per batch. Warm references
-cache planar conversion only. Both dimensions must be 64–4096 pixels, with
-at most 9,000,000 pixels total (1,048,576 on 32-bit).
-Revision 3 passes all 24 supported pairs on both engines at the unchanged
-1e-3 JND gate, with exact repeat and warm/cold identity. See the
-[qualification record](benchmarks/pieapp_2026-10-16.md).
-The KonJND scale is 0.5189487912492419 native units per operational JND, so the
-original CLI/entry-point control divergence is 0.04433258638589831 JND.
+The port targets official `compute_score` on a regular stride-six patch grid.
+It does not reproduce the demo CLI's sub-image sampling: in the 24-pair
+panel the worst gap is 1.88 JND (`2207_2048`), median 0.44 JND, and 10/24
+pairs exceed 1 JND. See [model provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md)
+and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
 
 ## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
 
@@ -677,6 +640,26 @@ original CLI/entry-point control divergence is 0.04433258638589831 JND.
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
+
+## `afine` — A-FINE (zenmetrics-nn, 2026-10-16)
+
+- **DIVERGES (unresolved, upstream-side):** the published AIC-4 `A-FINE`
+  column is **not** upstream `afine_all` under any convention found. The
+  black-box search ([receipt](benchmarks/afine_aic_2026-10-16/README.md))
+  dumped every internal sub-score (`n_r`/`n_d`/`fid`/`s_r`/`s_d`/`s_f`/`λ`)
+  under the native convention on 60 of 61 pairs and evaluated ~700
+  recombinations plus ref/dist order against them; the other five
+  preprocessing variants (BGR, no-norm, 224/384/512 resizes) were compared
+  on `afine_all` only, over the 39 pairs the pre-fix sweep reached.
+  Best raw candidate `s_f + (s_d − s_r)` still misses at 0.106 JND median /
+  0.59 max vs the ≤0.01/≤0.05 gate; fitted forms cap SRCC ≈0.92 — the column
+  is no monotone transform of any searched candidate. Likely a different
+  checkpoint or pipeline step on the site side; the shipped metric stays the
+  upstream-verified `afine_all` (rten parity 1.42e-5, ort-cuda 1.94e-5 JND).
+- **Resource note:** the rten path's activation demand on the 8.4 MP pair
+  (S67 3355×2516) OOM-kills on this ~30 GB box — measured peaks 22.3 GB
+  (8 threads) and 27.2 GB (4 threads) before the kill; ort-cuda scores the
+  pair's `afine_all` in VRAM instead.
 
 ## `wadiqam` — deepIQA WaDIQaM FR+NR (2026-10-16)
 
@@ -705,4 +688,3 @@ Every metric port or reference-version bump updates this file **in the
 same commit**: a ledger row (or delta refresh) plus a per-metric entry
 for anything that isn't pure float noise. Crate-level depth stays in the
 crate docs — this file links, it does not duplicate.
-

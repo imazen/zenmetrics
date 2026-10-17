@@ -22,6 +22,8 @@ class SnapshotPatch(unittest.TestCase):
             println!("IQA_ORT_THREADS {budget}");
 '''
         stripped=patched.replace(additions,'').replace('                .and_then(|b| b.with_intra_threads(budget).map_err(Into::into))\n','').replace('                .and_then(|b| b.with_inter_threads(1).map_err(Into::into))\n','')
+        stripped=stripped.replace('            .and_then(|b| b.with_intra_threads(budget).map_err(Into::into))\n','').replace('            .and_then(|b| b.with_inter_threads(1).map_err(Into::into))\n','')
+        stripped=stripped.replace('path: &Path, budget: usize','path: &Path').replace('cuda_session(environment()?, path, budget)?','cuda_session(environment()?, path)?')
         self.assertEqual(stripped.encode(),self.bytes)
         self.assertEqual((self.source/self.relative).read_bytes(),self.bytes)
     def test_source_checkout_is_refused(self):
@@ -29,7 +31,10 @@ class SnapshotPatch(unittest.TestCase):
         self.assertIn('aliases the source',result.stderr)
         self.assertEqual((self.source/self.relative).read_bytes(),self.bytes)
     def test_changed_builder_inventory_is_refused(self):
-        target=self.snapshot/self.relative;target.write_text(target.read_text().replace('let session = Session::builder(env)','let session = another_builder(env)',1))
+        target=self.snapshot/self.relative;text=target.read_text()
+        before='let session = cuda_session(environment()?, path)?;' if 'fn cuda_session(' in text else 'let session = Session::builder(env)'
+        self.assertIn(before,text)
+        target.write_text(text.replace(before,'let session = another_builder(env)',1))
         result=self.run_patch(self.snapshot);self.assertNotEqual(result.returncode,0)
         self.assertIn('Every ORT',result.stderr)
 if __name__=='__main__':unittest.main()

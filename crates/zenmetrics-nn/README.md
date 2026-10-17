@@ -87,3 +87,7 @@ reuse planar conversion only. See the [model card](models/pieapp/card.toml)
 and [sampling divergence](../../DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16).
 Both engines pass 24 pairs at 1e-3 JND using the complete 1008-pair KonJND
 calibration; see the [qualification record](../../benchmarks/pieapp_2026-10-16.md).
+
+The 24-pair PieAPP demo CLI comparison has a worst gap of 1.88 JND
+(`2207_2048`), median 0.44 JND, with 10/24 pairs exceeding 1 JND; see the
+[panel](../../benchmarks/pieapp_review_2026-10-16/cli.json).

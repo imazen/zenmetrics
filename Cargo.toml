@@ -287,6 +287,8 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
+# Reviewed effective-dispatch API; publishing remains a separate decision.
+zenquant = { git = "https://github.com/imazen/zenquant", rev = "8ec37ee21f0216cf9b138e407eecc470ee620493" }
 # Temporary until zenpixels-convert >=0.2.17 publishes; then bump the
 # minimum and drop these patches. The 0.2.16 registry release predates the
 # exact U16->U8 narrowing fix already on zenpixels main at e56f626b.

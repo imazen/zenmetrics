@@ -1,0 +1,294 @@
+document	table	row	column	value
+docs/AIC2026_METRICS_AND_FITTING.md	2	20	Space	raw
+docs/AIC2026_METRICS_AND_FITTING.md	2	20	med |ΔJND|	1.9e-6
+docs/AIC2026_METRICS_AND_FITTING.md	2	20	max |ΔJND|	6.3e-6
+docs/AIC2026_METRICS_AND_FITTING.md	2	20	Verdict	implemented — SP5 vecGSM, u8-rounded luma ingress, ~exact (n=54)
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	Ours	psnrhvs (Ponomarenko-Y)
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	Column	PSNR-HVS-Y
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	Space	A
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	med |ΔJND|	1.90
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	max |ΔJND|	6.38
+docs/AIC2026_METRICS_AND_FITTING.md	2	21	Verdict	wrong algorithm family — superseded by psnrhvs-daala
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	Ours	psnrhvs
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	Column	PSNR-HVS
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	med |ΔJND|	1.82
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	max |ΔJND|	3.63
+docs/AIC2026_METRICS_AND_FITTING.md	2	22	Verdict	wrong algorithm family
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	Ours	psnrhvsm
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	Column	PSNR-HVS
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	med |ΔJND|	0.83
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	max |ΔJND|	2.60
+docs/AIC2026_METRICS_AND_FITTING.md	2	23	Verdict	closer but still wrong family
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	Ours	psnrhvs-daala
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	Column	PSNR-HVS
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	med |ΔJND|	0.0002
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	max |ΔJND|	0.0032
+docs/AIC2026_METRICS_AND_FITTING.md	2	24	Verdict	implemented — FFI-verified Daala port on studio-601 YUV444 (raw med 1.1e-3 / max 4.5e-2 dB)
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	Ours	SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	Column	—
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	Space	—
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	med |ΔJND|	—
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	max |ΔJND|	—
+docs/AIC2026_METRICS_AND_FITTING.md	2	25	Verdict	superseded — see ssim-libvmaf row
+docs/AIC2026_METRICS_AND_FITTING.md	3	0	Tier	Reproduction-grade
+docs/AIC2026_METRICS_AND_FITTING.md	3	0	med |ΔJND|	≤0.01
+docs/AIC2026_METRICS_AND_FITTING.md	3	0	max |ΔJND|	≤0.05
+docs/AIC2026_METRICS_AND_FITTING.md	3	0	Meaning	convention + implementation identified
+docs/AIC2026_METRICS_AND_FITTING.md	3	1	Tier	Acceptable
+docs/AIC2026_METRICS_AND_FITTING.md	3	1	med |ΔJND|	≤0.1
+docs/AIC2026_METRICS_AND_FITTING.md	3	1	max |ΔJND|	≤0.5
+docs/AIC2026_METRICS_AND_FITTING.md	3	1	Meaning	tracks the published column; residual impl-variant drift
+docs/AIC2026_METRICS_AND_FITTING.md	3	2	Tier	Gap
+docs/AIC2026_METRICS_AND_FITTING.md	3	2	med |ΔJND|	>0.1 or >0.5
+docs/AIC2026_METRICS_AND_FITTING.md	3	2	max |ΔJND|	—
+docs/AIC2026_METRICS_AND_FITTING.md	3	2	Meaning	wrong variant/family; new implementation needed
+docs/AIC2026_METRICS_AND_FITTING.md	4	0	AIC-4 column	PSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	0	Actual implementation (identified)	RGB mean-MSE PSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	0	Ours	psnr
+docs/AIC2026_METRICS_AND_FITTING.md	4	0	Qualification	✅ reproduced — 61 pairs: median 9.09e-05, max 0.00128 dB, max 5.48e-05 JND
+docs/AIC2026_METRICS_AND_FITTING.md	4	1	AIC-4 column	PSNR-Y
+docs/AIC2026_METRICS_AND_FITTING.md	4	1	Actual implementation (identified)	PSNR on round(16+(65.481R+128.553G+24.966B)/255) (JPEG studio-601)
+docs/AIC2026_METRICS_AND_FITTING.md	4	1	Ours	psnr-y-studio601 (or --luma-ingress yuv601-studio + psnr-y)
+docs/AIC2026_METRICS_AND_FITTING.md	4	1	Qualification	exact convention identified
+docs/AIC2026_METRICS_AND_FITTING.md	4	2	AIC-4 column	PSNR-YCbCr611
+docs/AIC2026_METRICS_AND_FITTING.md	4	2	Actual implementation (identified)	6:1:1 YCbCr composite PSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	2	Ours	psnr-ycbcr611
+docs/AIC2026_METRICS_AND_FITTING.md	4	2	Qualification	✅ identified + implemented — 61 pairs median 3.1e-4 dB, max 3.5e-3 dB, above the 1e-3 target
+docs/AIC2026_METRICS_AND_FITTING.md	4	3	AIC-4 column	PSNR-Cb (excluded on the site)
+docs/AIC2026_METRICS_AND_FITTING.md	4	3	Actual implementation (identified)	PSNR of the full-resolution studio-swing BT.601 chroma planes (the psnr-ycbcr611 conversion)
+docs/AIC2026_METRICS_AND_FITTING.md	4	3	Ours	psnr-cb
+docs/AIC2026_METRICS_AND_FITTING.md	4	3	Qualification	✅ 61 pairs: median 1.9e-3 dB, max 1.7e-2 dB (median 2.2e-4, max 2.0e-3 JND); no tested convention gets closer
+docs/AIC2026_METRICS_AND_FITTING.md	4	4	AIC-4 column	PSNR-Cr (excluded on the site)
+docs/AIC2026_METRICS_AND_FITTING.md	4	4	Actual implementation (identified)	as PSNR-Cb
+docs/AIC2026_METRICS_AND_FITTING.md	4	4	Ours	psnr-cr
+docs/AIC2026_METRICS_AND_FITTING.md	4	4	Qualification	✅ 61 pairs: median 2.1e-3 dB, max 5.7e-2 dB (median 3.3e-4, max 8.8e-3 JND); one pair 5.7e-2 dB off
+docs/AIC2026_METRICS_AND_FITTING.md	4	5	AIC-4 column	PSNR-HVS, -Y, -Cb, -Cr
+docs/AIC2026_METRICS_AND_FITTING.md	4	5	Actual implementation (identified)	Daala/Xiph dump_psnrhvs (7×7 CSF-weighted, per-plane + combined)
+docs/AIC2026_METRICS_AND_FITTING.md	4	5	Ours	psnrhvs-daala
+docs/AIC2026_METRICS_AND_FITTING.md	4	5	Qualification	✅ FFI-verified port — studio-601 YUV444 chroma; psnrhvs/psnrhvsm remain the Ponomarenko MATLAB variant (different algorithm family)
+docs/AIC2026_METRICS_AND_FITTING.md	4	6	AIC-4 column	SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	6	Actual implementation (identified)	libvmaf float_ssim (auto-scale round(min_dim/256) box decimate, 11×11 Gaussian, zli l·c·s, L=255)
+docs/AIC2026_METRICS_AND_FITTING.md	4	6	Ours	ssim-libvmaf
+docs/AIC2026_METRICS_AND_FITTING.md	4	6	Qualification	✅ FFI-verified port
+docs/AIC2026_METRICS_AND_FITTING.md	4	7	AIC-4 column	SSIM-pyiqa
+docs/AIC2026_METRICS_AND_FITTING.md	4	7	Actual implementation (identified)	pyiqa SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	7	Ours	ssim-pyiqa (plus ssim-pyiqa-f32 and k2–k6 fixed-factor variants)
+docs/AIC2026_METRICS_AND_FITTING.md	4	7	Qualification	✅ published 61-pair gate: SSIM-pyiqa max 3.8e-6
+docs/AIC2026_METRICS_AND_FITTING.md	4	8	AIC-4 column	SSIMc
+docs/AIC2026_METRICS_AND_FITTING.md	4	8	Actual implementation (identified)	MATLAB ssim() per-RGB-channel mean
+docs/AIC2026_METRICS_AND_FITTING.md	4	8	Ours	ssimc (also ssimc-pyiqa)
+docs/AIC2026_METRICS_AND_FITTING.md	4	8	Qualification	✅ max 7.5e-7 at the CLI's print precision
+docs/AIC2026_METRICS_AND_FITTING.md	4	9	AIC-4 column	MS-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	9	Actual implementation (identified)	libvmaf float_ms_ssim
+docs/AIC2026_METRICS_AND_FITTING.md	4	9	Ours	msssim-libvmaf
+docs/AIC2026_METRICS_AND_FITTING.md	4	9	Qualification	✅ FFI-verified port; msssim remains the Wang-MATLAB variant
+docs/AIC2026_METRICS_AND_FITTING.md	4	10	AIC-4 column	MS-SSIM-pyiqa
+docs/AIC2026_METRICS_AND_FITTING.md	4	10	Actual implementation (identified)	pyiqa ms_ssim (matched by ours to 3e-7 on one point)
+docs/AIC2026_METRICS_AND_FITTING.md	4	10	Ours	ms-ssim-pyiqa (plus ms-ssim-pyiqa-f32 and k2–k6 fixed-factor variants); supersedes the msssim proxy
+docs/AIC2026_METRICS_AND_FITTING.md	4	10	Qualification	✅ published 61-pair gate: MS-SSIM-pyiqa max 1.9e-6
+docs/AIC2026_METRICS_AND_FITTING.md	4	11	AIC-4 column	VIF
+docs/AIC2026_METRICS_AND_FITTING.md	4	11	Actual implementation (identified)	wavelet vifvec family (SP5 steerable pyramid vecGSM; IQA_pytorch.VIFs/vifvec.m) on u8-rounded round(0.299R+0.587G+0.114B) luma
+docs/AIC2026_METRICS_AND_FITTING.md	4	11	Ours	vifvec
+docs/AIC2026_METRICS_AND_FITTING.md	4	11	Qualification	✅ implemented — med 1.9e-6 / max 6.3e-6 (n=54); vif remains pixel-domain vifp_mscale (different algorithm family)
+docs/AIC2026_METRICS_AND_FITTING.md	4	12	AIC-4 column	VIF_vmaf
+docs/AIC2026_METRICS_AND_FITTING.md	4	12	Actual implementation (identified)	libvmaf vif feature, Σ4 scales
+docs/AIC2026_METRICS_AND_FITTING.md	4	12	Ours	vmaf crate vif_scales
+docs/AIC2026_METRICS_AND_FITTING.md	4	12	Qualification	matches
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	AIC-4 column	VMAF / VMAF-neg / ADM2
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Actual implementation (identified)	libvmaf 3.2.1 vmaf_v0.6.1[neg] + adm2
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Ours	vmaf crate
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Qualification	reproduction-grade
+docs/AIC2026_METRICS_AND_FITTING.md	4	14	AIC-4 column	CVVDP
+docs/AIC2026_METRICS_AND_FITTING.md	4	14	Actual implementation (identified)	pycvvdp standard_fhd
+docs/AIC2026_METRICS_AND_FITTING.md	4	14	Ours	cvvdp + --display-model
+docs/AIC2026_METRICS_AND_FITTING.md	4	14	Qualification	reproduction-grade
+docs/AIC2026_METRICS_AND_FITTING.md	4	15	AIC-4 column	SSIMULACRA2
+docs/AIC2026_METRICS_AND_FITTING.md	4	15	Actual implementation (identified)	"""SSIMULACRA v2.1"""
+docs/AIC2026_METRICS_AND_FITTING.md	4	15	Ours	ssim2 → sibling fast-ssim2
+docs/AIC2026_METRICS_AND_FITTING.md	4	15	Qualification	current lineage; JND delta ≤0.004
+docs/AIC2026_METRICS_AND_FITTING.md	4	16	AIC-4 column	GMSD
+docs/AIC2026_METRICS_AND_FITTING.md	4	16	Actual implementation (identified)	standard GMSD
+docs/AIC2026_METRICS_AND_FITTING.md	4	16	Ours	gmsd
+docs/AIC2026_METRICS_AND_FITTING.md	4	16	Qualification	exact
+docs/AIC2026_METRICS_AND_FITTING.md	4	17	AIC-4 column	HaarPSI
+docs/AIC2026_METRICS_AND_FITTING.md	4	17	Actual implementation (identified)	HaarPSI
+docs/AIC2026_METRICS_AND_FITTING.md	4	17	Ours	haarpsi
+docs/AIC2026_METRICS_AND_FITTING.md	4	17	Qualification	reproduction-grade
+docs/AIC2026_METRICS_AND_FITTING.md	4	18	AIC-4 column	VSI
+docs/AIC2026_METRICS_AND_FITTING.md	4	18	Actual implementation (identified)	VSI, k3/k4 weight variants in fit set
+docs/AIC2026_METRICS_AND_FITTING.md	4	18	Ours	vsi (plus vsi-k2/k3/k4/nodownscale)
+docs/AIC2026_METRICS_AND_FITTING.md	4	18	Qualification	our port = paper weights; the site fit used the k3 values, and the published full-res CSV columns are the automatic factor (our auto-factor ports match them)
+docs/AIC2026_METRICS_AND_FITTING.md	4	19	AIC-4 column	FSIM/FSIMc
+docs/AIC2026_METRICS_AND_FITTING.md	4	19	Actual implementation (identified)	FSIM/FSIMc, k4 variant in fit
+docs/AIC2026_METRICS_AND_FITTING.md	4	19	Ours	fsim, fsimc
+docs/AIC2026_METRICS_AND_FITTING.md	4	19	Qualification	acceptable; JPG-16 tail 0.3 JND
+docs/AIC2026_METRICS_AND_FITTING.md	4	20	AIC-4 column	DSSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	20	Actual implementation (identified)	dssim-core ^3.4
+docs/AIC2026_METRICS_AND_FITTING.md	4	20	Ours	dssim
+docs/AIC2026_METRICS_AND_FITTING.md	4	20	Qualification	exact
+docs/AIC2026_METRICS_AND_FITTING.md	4	21	AIC-4 column	IW-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	21	Actual implementation (identified)	jpeg-ai-qaf IW_SSIM (Jack-guo torch port) on unrounded 0–255 Y (0.299/0.587/0.114, kornia-matrix YUV)
+docs/AIC2026_METRICS_AND_FITTING.md	4	21	Ours	iwssim-piq
+docs/AIC2026_METRICS_AND_FITTING.md	4	21	Qualification	✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); iwssim keeps the Python-IW-SSIM rounded-BT.601 oracle convention
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	AIC-4 column	proposal-Butteraugli
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Actual implementation (identified)	AIC-4 submission — measured vs ours 2026-09-26: tracks pnorm_3 (libjxl 3-norm) with Pearson 0.99997, affine pub ≈ 2.09·ours − 1.10 resid-rms 0.011; score (max-norm) fits far worse (Pearson 0.957) and every other aggregation probed (pnorm p∈{1,2,2.5,4,5,6,8,10,12,16}, single-exponent norms, 8×8-blockmax norms) is worse still. So the submission is a pnorm-3-family butteraugli over a different diffmap (version/ingress — intensity_target 250 fits worse than default 80), not a different norm. Not identity-reproducible from the shipped artifacts
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Ours	butteraugli (butteraugli_pnorm3 column)
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Qualification	family identified; exact upstream config unrecovered
+docs/AIC2026_METRICS_AND_FITTING.md	4	23	AIC-4 column	proposal-mDCTPSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	23	Actual implementation (identified)	mDCT-PSNR in JND units: the reference tool's -jnd remap, 0.000475997802·max(0, 80 − dB)^2.3182 — fits all 9,618 published rows to 5e-9 when applied to the mDCT-PSNR column (2026-10-09)
+docs/AIC2026_METRICS_AND_FITTING.md	4	23	Ours	mdctpsnr + mdct_psnr_jnd
+docs/AIC2026_METRICS_AND_FITTING.md	4	23	Qualification	✅ reproducible: our dB max error 1.13e-5 propagates to ≤3e-6 JND; not exposed as a CLI --metric
+docs/AIC2026_METRICS_AND_FITTING.md	4	24	AIC-4 column	proposal-DVIFM
+docs/AIC2026_METRICS_AND_FITTING.md	4	24	Actual implementation (identified)	AIC-4 submission; DVIFM (Distortion Visibility Image Fidelity Measure) is by Maciej Pedzisz, Nokia
+docs/AIC2026_METRICS_AND_FITTING.md	4	24	Ours	—
+docs/AIC2026_METRICS_AND_FITTING.md	4	24	Qualification	cannot reproduce
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	AIC-4 column	proposal-IDFIQA
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Actual implementation (identified)	AIC-4 submission; variance-guided deep feature correlation (Khakpour, Yademellat, Mansouri, ICCKE 2025); PyTorch + torchvision pretrained backbone; code public on GitHub without a license
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Ours	—
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Qualification	"not implemented — no licensed code (the CNN runtime now exists in zenmetrics-nn); planned as ""IDFIQA from the paper"" in PYIQA_PORT_PLAN.md"
+docs/AIC2026_METRICS_AND_FITTING.md	4	26	AIC-4 column	HDR_VDP_2
+docs/AIC2026_METRICS_AND_FITTING.md	4	26	Actual implementation (identified)	HDR-VDP-2.x, display config TBD
+docs/AIC2026_METRICS_AND_FITTING.md	4	26	Ours	hdrvdp
+docs/AIC2026_METRICS_AND_FITTING.md	4	26	Qualification	needs absolute-nits ingress config
+docs/AIC2026_METRICS_AND_FITTING.md	4	27	AIC-4 column	HDR_VDP_3
+docs/AIC2026_METRICS_AND_FITTING.md	4	27	Actual implementation (identified)	HDR-VDP-3.0.7 lineage (jpeg-ai-qaf VDP3/ port @ 0628a6b — verified == official MATLAB 3.0.7)
+docs/AIC2026_METRICS_AND_FITTING.md	4	27	Ours	hdrvdp3
+docs/AIC2026_METRICS_AND_FITTING.md	4	27	Qualification	✅ implemented + bit-faithful to MATLAB 3.0.7; ⚠️ published column unreproduced — different upstream run config (see DIVERGENCES)
+docs/AIC2026_METRICS_AND_FITTING.md	4	28	AIC-4 column	mDCT-PSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	28	Actual implementation (identified)	Richter QoMEX-2009 mDCT-PSNR
+docs/AIC2026_METRICS_AND_FITTING.md	4	28	Ours	mdctpsnr
+docs/AIC2026_METRICS_AND_FITTING.md	4	28	Qualification	✅ port of official C++ ref (thorfdbg/mDCTpsnr); med 4.0e-7 / max 1.13e-5 dB vs column
+docs/AIC2026_METRICS_AND_FITTING.md	4	29	AIC-4 column	NLPD
+docs/AIC2026_METRICS_AND_FITTING.md	4	29	Actual implementation (identified)	IQA_pytorch NLPD(channels=1) — the dingkeyan93 IQA-optimization package (not pyiqa): BT.709 Y plane in [0,1] on the 8-bit grid, reflect-pad downsample, bilinear(×2, align_corners) upsample, unrotated DN kernels, 6 loop-levels (no residual band), mean of per-level RMS
+docs/AIC2026_METRICS_AND_FITTING.md	4	29	Ours	nlpd-iqa (crates/nlpd/src/iqa.rs)
+docs/AIC2026_METRICS_AND_FITTING.md	4	29	Qualification	✅ implemented — med 2.6e-3 / max 6.7e-3, med-rel 2.63% (n=53; residual = f32 op-order vs torch + bilinear edge detail). nlpd stays the Laparra-official RGB variant (≈20.5× the column — ≈6^(1/0.6)=19.8 pooling factor + RGB energy)
+docs/AIC2026_METRICS_AND_FITTING.md	4	30	AIC-4 column	CAMBI
+docs/AIC2026_METRICS_AND_FITTING.md	4	30	Actual implementation (identified)	libvmaf 3.2.1 standalone defaults; distorted-only studio-swing BT.601, even crop
+docs/AIC2026_METRICS_AND_FITTING.md	4	30	Ours	cambi
+docs/AIC2026_METRICS_AND_FITTING.md	4	30	Qualification	61 pairs: native med/max 1.318e-4 / 0.1781; fitted JND 1.570e-4 / 0.06485; published settings unresolved
+docs/AIC2026_METRICS_AND_FITTING.md	4	31	AIC-4 column	Butteraugli-original
+docs/AIC2026_METRICS_AND_FITTING.md	4	31	Actual implementation (identified)	Google revision 71b18b63 (2019-03-19), maximum pooling
+docs/AIC2026_METRICS_AND_FITTING.md	4	31	Ours	butteraugli-original
+docs/AIC2026_METRICS_AND_FITTING.md	4	31	Qualification	61 pairs: native med/max 2.699e-6 / 4.947e-5; fitted JND 5.933e-7 / 8.943e-6
+docs/AIC2026_METRICS_AND_FITTING.md	4	32	AIC-4 column	SSIMULACRA1
+docs/AIC2026_METRICS_AND_FITTING.md	4	32	Actual implementation (identified)	Cloudinary original Lab/six-scale/grid/edge pooling
+docs/AIC2026_METRICS_AND_FITTING.md	4	32	Ours	ssimulacra1
+docs/AIC2026_METRICS_AND_FITTING.md	4	32	Qualification	61 pairs: native med/max 2.285e-7 / 1.861e-5; fitted JND 5.585e-6 / 5.370e-4; exact published convention unresolved
+docs/AIC2026_METRICS_AND_FITTING.md	4	33	AIC-4 column	WS-HV
+docs/AIC2026_METRICS_AND_FITTING.md	4	33	Actual implementation (identified)	three Haar levels, RGB BT.601, diagonal-saliency pooling
+docs/AIC2026_METRICS_AND_FITTING.md	4	33	Ours	ws-hv
+docs/AIC2026_METRICS_AND_FITTING.md	4	33	Qualification	61 pairs: native med/max 8.942e-4 / 0.02076; fitted JND 0.004920 / 0.1393; exact published convention unresolved
+docs/AIC2026_METRICS_AND_FITTING.md	4	34	AIC-4 column	FLIP
+docs/AIC2026_METRICS_AND_FITTING.md	4	34	Actual implementation (identified)	NVIDIA LDR-FLIP; the AIC-4 column is flip-evaluator 1.7's row-major f32 sum
+docs/AIC2026_METRICS_AND_FITTING.md	4	34	Ours	flip-v17 (column convention) and flip (f64 sum, as NVlabs FLIP.h at the pinned revision)
+docs/AIC2026_METRICS_AND_FITTING.md	4	34	Qualification	✅ flip-v17 reproduces all 61 AIC-4 FLIP values exactly; 21 ladder maps within 2.98e-8 of the oracle. flip sums in f64 — the f32 sum reads low on large images (uniform 0.075 map: 1.0e-3 relative at 2048², 1.7e-2 at 4096²)
+docs/AIC2026_METRICS_AND_FITTING.md	4	35	AIC-4 column	CW-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	4	35	Actual implementation (identified)	Wang and Simoncelli (2005) + Sampat et al. (2009) complex steerable pyramid (pyrtools-derived conventions)
+docs/AIC2026_METRICS_AND_FITTING.md	4	35	Ours	cw-ssim
+docs/AIC2026_METRICS_AND_FITTING.md	4	35	Qualification	port — against the published column: median 2.9e-7, max 1.1e-4; the variant was selected on those same 61 pairs (in-sample) and no pair reproduces exactly (20 of 61 are off by more than 1e-6), so the published pyramid is not confirmed
+docs/AIC2026_METRICS_AND_FITTING.md	4	36	AIC-4 column	CIEDE2000
+docs/AIC2026_METRICS_AND_FITTING.md	4	36	Actual implementation (identified)	mean ΔE00, sRGB → CIELAB D65
+docs/AIC2026_METRICS_AND_FITTING.md	4	36	Ours	ciede2000
+docs/AIC2026_METRICS_AND_FITTING.md	4	36	Qualification	✅ median 3.0e-5, max 3.0e-4
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	AIC-4 column	MSSWD
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Actual implementation (identified)	learned MS-SWD
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Ours	—
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Qualification	not implemented — see the not-implemented table below
+docs/AIC2026_METRICS_AND_FITTING.md	4	38	AIC-4 column	LPIPS-alex, LPIPS-VGG, DISTS, STLPIPS, STLPIPS-VGG, DeepDC
+docs/AIC2026_METRICS_AND_FITTING.md	4	38	Actual implementation (identified)	upstream packages (lpips 0.1.4, DISTS_pytorch 0.1, stlpips_pytorch 0.0.2, DeepDC_PyTorch 0.2 with ImageNet input normalisation), native resolution
+docs/AIC2026_METRICS_AND_FITTING.md	4	38	Ours	zenmetrics-nn (--features nn): lpips-alex, lpips-vgg, dists, stlpips-alex, stlpips-vgg, deepdc
+docs/AIC2026_METRICS_AND_FITTING.md	4	38	Qualification	✅ implemented — vs the cropped-set columns (n=61) max |Δ| 4.9e-7 / 1.0e-4 / 2.5e-5 / 9.3e-5 / 6.0e-5 / 3.0e-5 (nn_aic2026_crosscheck_2026-10-15.md (../benchmarks/nn_aic2026_crosscheck_2026-10-15.md))
+docs/AIC2026_METRICS_AND_FITTING.md	4	39	AIC-4 column	CKDN
+docs/AIC2026_METRICS_AND_FITTING.md	4	39	Actual implementation (identified)	upstream's own eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288)
+docs/AIC2026_METRICS_AND_FITTING.md	4	39	Ours	zenmetrics-nn ckdn
+docs/AIC2026_METRICS_AND_FITTING.md	4	39	Qualification	✅ published column: median 4.0e-05, max 1.4e-04 (0.026 JND, not exact)
+docs/AIC2026_METRICS_AND_FITTING.md	4	40	AIC-4 column	DreamSim
+docs/AIC2026_METRICS_AND_FITTING.md	4	40	Actual implementation (identified)	upstream package's default preprocess (Pillow BICUBIC to 224×224)
+docs/AIC2026_METRICS_AND_FITTING.md	4	40	Ours	zenmetrics-nn dreamsim
+docs/AIC2026_METRICS_AND_FITTING.md	4	40	Qualification	✅ published column: max 6.1e-07
+docs/AIC2026_METRICS_AND_FITTING.md	4	41	AIC-4 column	A-FINE
+docs/AIC2026_METRICS_AND_FITTING.md	4	41	Actual implementation (identified)	upstream-verified afine_all
+docs/AIC2026_METRICS_AND_FITTING.md	4	41	Ours	zenmetrics-nn afine
+docs/AIC2026_METRICS_AND_FITTING.md	4	41	Qualification	port verified against upstream; published column not reproduced — afine_all sits 0.5–1.4 below the column (median 0.75)
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	AIC-4 column	WaDIQaM
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Actual implementation (identified)	"official dmaniry/deepIQA top=""weighted"" checkpoints (MIT), FR+NR × {live,tid}"
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Ours	wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Qualification	implemented — 29 chainer-oracle pairs pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); agreement with the published AIC column: not measured
+docs/AIC2026_METRICS_AND_FITTING.md	4	43	AIC-4 column	WD_s1–WD_s5
+docs/AIC2026_METRICS_AND_FITTING.md	4	43	Actual implementation (identified)	Wasserstein Distortion on VGG-16 features (Cool-Chic), five KonJND scales
+docs/AIC2026_METRICS_AND_FITTING.md	4	43	Ours	wd (wd_s1–wd_s5)
+docs/AIC2026_METRICS_AND_FITTING.md	4	43	Qualification	implemented — 25 upstream pairs pass the 1e-3-JND gate on both engines; published column convention unmatched: best of a bounded convention search still errs by median 0.23–0.37 site JND per column (receipt (../benchmarks/wd_port_2026-10-16/README.md))
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	AIC-4 column	PieAPP, TOPIQ, TOPIQ-PIPAL, AHIQ, DMM, MSSWD, AIMOS
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Actual implementation (identified)	deep metrics
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Ours	—
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Qualification	not on master — PieAPP, AHIQ and DMM are in progress on branches; the others are on hold or unidentified (reasons below)
+docs/AIC2026_METRICS_AND_FITTING.md	5	0	Column(s)	TOPIQ, TOPIQ-PIPAL
+docs/AIC2026_METRICS_AND_FITTING.md	5	0	Documented reason (verbatim where quoted)	"""NC weights: opt-in""; weights are NC (""TOPIQ, DBCNN and PaQ-2-PiQ weights are NC"")"
+docs/AIC2026_METRICS_AND_FITTING.md	5	0	Source on master@origin	docs/PYIQA_PORT_PLAN.md:262; :41
+docs/AIC2026_METRICS_AND_FITTING.md	5	1	Column(s)	PieAPP
+docs/AIC2026_METRICS_AND_FITTING.md	5	1	Documented reason (verbatim where quoted)	"in progress on branch pieapp-port (review fixes); ""NC weights: opt-in""; ""PieAPP, CLIP-IQA, QualiCLIP and URanker are NC upstream"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	1	Source on master@origin	docs/PYIQA_PORT_PLAN.md:262; :42
+docs/AIC2026_METRICS_AND_FITTING.md	5	2	Column(s)	AHIQ
+docs/AIC2026_METRICS_AND_FITTING.md	5	2	Documented reason (verbatim where quoted)	"in progress on branch nn-port; still in the AIC-4 deep-FR queue behind the three that landed (""CKDN, A-FINE, DreamSim, AHIQ, DMM""); ""AHIQ, CKDN, HyperIQA, LIQE, NIMA and UNIQUE publish weights with no stated terms"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	2	Source on master@origin	docs/PYIQA_PORT_PLAN.md:261; :40
+docs/AIC2026_METRICS_AND_FITTING.md	5	3	Column(s)	DMM
+docs/AIC2026_METRICS_AND_FITTING.md	5	3	Documented reason (verbatim where quoted)	"in progress on branch nn-port; in the AIC-4 deep-FR queue (:261) and on the hold row (:245: ""FID, DMM, TOPIQ face variants (need a face detector)"")"
+docs/AIC2026_METRICS_AND_FITTING.md	5	3	Source on master@origin	docs/PYIQA_PORT_PLAN.md:261; :245
+docs/AIC2026_METRICS_AND_FITTING.md	5	4	Column(s)	MSSWD
+docs/AIC2026_METRICS_AND_FITTING.md	5	4	Documented reason (verbatim where quoted)	"""MSSWD on hold (no upstream licence, weights only via pyiqa)""; ""on hold: weights only via pyiqa (noncommercial)"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	4	Source on master@origin	docs/PYIQA_PORT_PLAN.md:264; docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:196
+docs/AIC2026_METRICS_AND_FITTING.md	5	5	Column(s)	AIMOS
+docs/AIC2026_METRICS_AND_FITTING.md	5	5	Documented reason (verbatim where quoted)	"""not identified anywhere public; ask the dataset contacts""; ""unidentified"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	5	Source on master@origin	docs/PYIQA_PORT_PLAN.md:268; docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:197
+docs/AIC2026_METRICS_AND_FITTING.md	5	6	Column(s)	proposal-IDFIQA
+docs/AIC2026_METRICS_AND_FITTING.md	5	6	Documented reason (verbatim where quoted)	"""no licensed code""; ""IDFIQA from the paper"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	6	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:205; docs/PYIQA_PORT_PLAN.md:264
+docs/AIC2026_METRICS_AND_FITTING.md	5	7	Column(s)	proposal-DVIFM (13 site/screenshot names)
+docs/AIC2026_METRICS_AND_FITTING.md	5	7	Documented reason (verbatim where quoted)	"""dvifmish (dev [local path] publish=false) already ports the author's v0.2/v0.3 builds under exactly these preset names; not wired into zenmetrics and not compared to these columns here""; ledger's own wording: ""cannot reproduce"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	7	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:45-48, :206; docs/AIC2026_METRICS_AND_FITTING.md:261
+docs/AIC2026_METRICS_AND_FITTING.md	5	8	Column(s)	HaarXYB-/HaarY-/HaarYCoCg- -deltaL1248 (11 names, all excluded, no values)
+docs/AIC2026_METRICS_AND_FITTING.md	5	8	Documented reason (verbatim where quoted)	"""unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)""; ""unidentified"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	8	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:140-150; :49
+docs/AIC2026_METRICS_AND_FITTING.md	5	9	Column(s)	PSNR-HVS-vqmt, PSNR-HVS-M-vqmt (excluded, no values)
+docs/AIC2026_METRICS_AND_FITTING.md	5	9	Documented reason (verbatim where quoted)	"""missing (MSU VQMT implementation)""; ""excluded; no values"""
+docs/AIC2026_METRICS_AND_FITTING.md	5	9	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:139; :60
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	0	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	0	rows	27
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	1	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	1	rows	13
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	2	status	differs
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	2	rows	6
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	3	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	3	rows	48
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	4	status	variant-needed
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	4	rows	25
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	5	status	unverified (no published values)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	5	rows	6
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	6	status	n/a (JND display columns)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	6	rows	6
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	name	PSNR
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	zenmetrics metric	psnr
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	median |Δ|	9.09e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	max |Δ|	0.00128
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	max |Δ| in JND	5.48e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	0	note	RGB mean-MSE PSNR
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	name	PSNR-Y / pyiqa-PSNR-Y
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	zenmetrics metric	psnr-y-studio601
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	median |Δ|	0.000313
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	max |Δ|	0.00328
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	max |Δ| in JND	0.000576
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	note	studio-swing BT.601 Y, u8-rounded; psnr-y (BT.709) and psnr-y601 (full-range) are 1.3 dB off
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	name	PSNR-YCbCr611
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	zenmetrics metric	missing on master (lane commit 94574b8b psnr-ycbcr611, unlanded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	median |Δ|	0.000311

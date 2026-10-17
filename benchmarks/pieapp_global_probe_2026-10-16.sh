@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Probe a missing legacy configuration global, preserving all reference operations.
 set -u
 root=$HOME/tmp/pieapp-oracle

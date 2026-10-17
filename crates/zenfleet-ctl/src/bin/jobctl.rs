@@ -24,6 +24,7 @@
 
 use std::path::PathBuf;
 mod benchmark_declare;
+mod derived_declare;
 
 use clap::{Parser, Subcommand};
 
@@ -54,6 +55,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Declare hash-bound derived-data views with explicit capability/resource admission.
+    DeclareViews {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Declare planned benchmark observations, retaining machine/domain/replicate identity.
     DeclareBenchmarks {
         #[arg(long)]
@@ -547,6 +555,11 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match Cli::parse().cmd {
+        Cmd::DeclareViews { spec, out } => {
+            let jobs = derived_declare::declare(&std::fs::read(spec)?)?;
+            std::fs::write(out, serde_json::to_vec(&jobs)?)?;
+            eprintln!("declared {} derived-data views", jobs.len());
+        }
         Cmd::DeclareBenchmarks { spec, out } => {
             let bytes = std::fs::read(spec)?;
             let jobs = benchmark_declare::declare(&bytes)?;

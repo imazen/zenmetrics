@@ -8175,11 +8175,11 @@ dependencies = [
 
 [[package]]
 name = "zenquant"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440257260e03abacc233712332cd164f59afb98e8385e49ca5a0581ef0c7269d"
+version = "0.1.4"
+source = "git+https://github.com/imazen/zenquant?rev=8ec37ee21f0216cf9b138e407eecc470ee620493#8ec37ee21f0216cf9b138e407eecc470ee620493"
 dependencies = [
  "archmage 0.9.30",
+ "enough",
  "imgref",
  "linear-srgb",
  "magetypes 0.9.30",

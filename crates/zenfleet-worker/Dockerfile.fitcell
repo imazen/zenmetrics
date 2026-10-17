@@ -21,7 +21,7 @@ RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir \
     chmod 0755 /usr/local/bin/python3 && ln -s python3 /usr/local/bin/python
 COPY --from=workerbase /usr/local/bin/s5cmd /usr/local/bin/s5cmd
 COPY --from=workerbase /usr/local/aws-cli /usr/local/aws-cli
-COPY --from=workerbase /usr/local/bin/aws /usr/local/bin/aws
+RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
 COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
 COPY --chmod=0755 fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
 COPY --chmod=0755 tmpdir_discipline.sh /usr/local/bin/tmpdir_discipline.sh
@@ -31,7 +31,7 @@ RUN echo "${FIT_PROGRAM_SHA}  /opt/fleet-fits/program.tar.gz" | sha256sum -c - &
     mkdir -p /opt/fleet-fits/program && \
     tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program && \
     install -m 0755 /opt/fleet-fits/program/fit_cell_exec.py /usr/local/bin/fit-cell-exec && \
-    rm /opt/fleet-fits/program.tar.gz
+    if [ ! -f /opt/fleet-fits/program/benchmarks/e36_fit_contract_2026-10-17.json ]; then rm /opt/fleet-fits/program.tar.gz; fi
 ENV ZEN_EXEC=/usr/local/bin/fit-cell-exec
 ENV ZEN_FIT_PROGRAM_SHA=${FIT_PROGRAM_SHA}
 ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]

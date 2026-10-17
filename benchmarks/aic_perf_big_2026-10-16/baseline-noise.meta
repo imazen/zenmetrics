@@ -1,0 +1,14 @@
+Fri Oct 16 13:16:46 UTC 2026
+i265
+rustc 1.99.0 (b940084d7 2026-09-28)
+binary: rustc
+commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+commit-date: 2026-09-28
+host: x86_64-unknown-linux-gnu
+release: 1.99.0
+LLVM version: 23.1.1
+7c2f8b24d4828925e419ec617b73b47903aef88d
+c4947df6bb15527abc17c1279dc327d843a2c7b09943358fa4ce45ffe4465ce1  crates/vmaf/src/cambi.rs
+8518622bc800d68c7c0d618d7b7fb897abcf15ce8fe4c45a2b8b467516f429a0  crates/zenmetrics-cli/src/metrics/butteraugli_original.rs
+31c25ffb8f6c8373426181c44e4d4419d711ffb2db122ffc9d4422cf31bce01b  /home/lilith/tmp/aic-variants-scratch/round14/cambi-base
+6b41d757f2a1cf5dc8ae0a270a5d1b78d29b13c539d20f69f1ce6bc56228745f  /home/lilith/tmp/aic-variants-scratch/round14/butter-base

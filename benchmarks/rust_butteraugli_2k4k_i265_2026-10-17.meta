@@ -1,0 +1,10 @@
+host=i265
+os=Linux
+command=run.py (iqa-compete bookmark), iqa-compete-cuda-v12 binary, shared pairs.json inputs with libjxl panel
+source=rust_butteraugli_2k4k_i265.jsonl
+source_sha256=721b7054b24a63205fdc0ba568c420d4ba1077f088c8f8faf9d4e217fec8ab80
+binary_sha256=667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c
+extract=Original fields except machine-local input/log paths and verbose zenbench gate snapshots; retain per-round gate_clean flags, input/log hashes, round means and resource receipts.
+method=RGB8 resident, 80 nits, same pairs.json as libjxl; n=10 zenbench round batch means, initialization/warmup excluded. Percentiles are round-mean percentiles, not individual-call percentiles.
+caveat=1 of 10 rounds per 2K cell and 2 of 10 rounds per 4K cell reported gate_clean=false (HeavyProcesses); retained without filtering. Supplied libjxl summaries include first-call samples; cross-source timing methods differ.
+provenance=run.py and binary from iqa-compete lane; binary hash identifies the measured implementation. Source does not record its repository commit.

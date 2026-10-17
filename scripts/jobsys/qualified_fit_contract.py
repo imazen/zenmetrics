@@ -14,6 +14,7 @@ E33_CONTRACT = 'benchmarks/e33_fit_contract_2026-10-10.json'
 PACKAGES = {
     V40_CONTRACT: ('v40-research-fit-package-v1', 'v40-research-fit-contract-v1'),
     E33_CONTRACT: ('e33-research-fit-package-v1', 'e33-research-fit-contract-v1'),
+    'benchmarks/e36_fit_contract_2026-10-17.json': ('e36-research-fit-package-v1', 'e36-research-fit-contract-v1'),
 }
 VARIANT_SCHEMAS = (*tuple(variant for _, variant in PACKAGES.values()), "registered-fit-contract-v1")
 
@@ -60,7 +61,8 @@ def trusted_contract(kind, program_archive, inspector):
             cell_route = argument(argv, '--heldout') if argv[0] == 'v2_lodo_mlp.py' else 'production'
             matches = [c for c in package['variants'] if c['root'] == argument(argv, '--root')
                        and c['spec'] == argument(argv, '--spec') and c['data_sha'] == kind['data_sha']
-                       and cell_route in c['routes']]
+                       and cell_route in c['routes']
+                       and ('e36' not in c or c['e36']['arm'] == argument(argv, '--e36-arm'))]
             if len(matches) != 1 or matches[0].get('launchable') is not True:
                 raise ValueError('unregistered or owner-blocked V40 variant')
             contract = matches[0]
@@ -109,6 +111,11 @@ def trusted_contract(kind, program_archive, inspector):
     if [int(v) for v in argument(argv, '--columns').split(',')] != contract['columns']:
         raise ValueError('columns differ from pinned recipe')
     contract['execution_contract'] = 'registered-fit'
+    if meta.get('steer_scientific') and 'steer_activation' not in contract:
+        raise ValueError('scientific STEER requires an archive-bound activation declaration')
+    if contract.get('schema') == 'e36-research-fit-contract-v1':
+        from e36_fit_contract import bind
+        bind(argv, contract, meta['files'])
     if '--local-smoke-budget' in argv:
         epochs, pairs = map(int, argument(argv, '--local-smoke-budget').split(':'))
         if not (0 < epochs < contract['epochs'] and 0 < pairs < contract['pairs_per_epoch']):
@@ -116,6 +123,29 @@ def trusted_contract(kind, program_archive, inspector):
         contract.update(epochs=epochs, pairs_per_epoch=pairs, selected_epoch=epochs-1,
                         execution_contract='local-smoke')
     return contract
+
+
+def verify_bounded_smoke_activation(decoded, expected):
+    activation = expected.get('bounded_smoke_activation')
+    if activation is None:
+        return
+    if (activation != 'smooth_hinge_tau_1_8'
+            or expected.get('execution_contract') != 'local-smoke'
+            or ':sh1' not in expected.get('spec', '')
+            or decoded.get('hidden_activation') != 'SmoothHinge'):
+        raise ValueError('bounded S smoke activation differs from its archive-bound contract')
+
+
+def verify_steer_activation(decoded, expected):
+    declaration = expected.get('steer_activation')
+    if declaration is None:
+        return
+    smooth = ':sh1' in expected.get('spec', '')
+    wanted = dict(schema='steer-hidden-activation-v1', kind='smooth_hinge' if smooth else 'relu',
+                  tau=0.125 if smooth else None)
+    if (declaration != wanted or expected.get('execution_contract') != 'registered-fit'
+            or decoded.get('hidden_activation') != ('SmoothHinge' if smooth else 'Relu')):
+        raise ValueError('scientific STEER native activation differs from its archive-bound contract')
 
 
 def verify_training(result, checkpoint, kind, expected, inspector):
@@ -134,11 +164,16 @@ def verify_training(result, checkpoint, kind, expected, inspector):
     selection = result.get('selection', {})
     if selection.get('epoch_rule') != 'last' or selection.get('selected_epoch') != expected['selected_epoch']:
         refuse('selected epoch differs from trusted budget')
+    decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e31-research'] if expected.get('research_upiq') else ['--e29-research'] if expected.get('research_hdr') else [])], check=True,
+                                        capture_output=True, text=True).stdout)
+    if expected.get('schema') == 'e36-research-fit-contract-v1':
+        from e36_fit_contract import derive
+        expected = derive(result, decoded, expected)
     tables = selection.get('strict_table_admission', [])
     if sorted(tables, key=lambda t: t.get('name', '')) != expected['table_admission']:
         refuse('table admission differs from pinned inputs')
-    decoded = json.loads(subprocess.run([str(inspector), str(checkpoint), *(['--e31-research'] if expected.get('research_upiq') else ['--e29-research'] if expected.get('research_hdr') else [])], check=True,
-                                        capture_output=True, text=True).stdout)
+    verify_bounded_smoke_activation(decoded, expected)
+    verify_steer_activation(decoded, expected)
     repro = decoded['repro']
     if (decoded['formula_revision'] != 5 or decoded['qualified_provenance'] is not (not (expected.get('research_hdr', False) or expected.get('research_upiq', False)))
             or decoded['feature_set_id'] != expected['feature_set_id']

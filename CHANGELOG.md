@@ -13,6 +13,26 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Require E36 native decoded-checkpoint qualification before export, retain its program archive/resource receipts, and refuse owner-blocked or mixed-smoke variants before launch.
+
+- Add a private E36 program-pack and harvest adapter for exact unchanged-target family masks, matched TV configuration and arm-specific full-budget watchdogs; retain existing checkpoint admission ([transport](docs/E36_FIT_TRANSPORT.md)).
+
+- Add eight paired zenmetrics/libjxl butteraugli timing cells at 2K and 4K, with retained sample identities and explicit sampling-method caveats (`04c8cac2`).
+
+- Add exact-resolution cross-metric speed rankings, comparable workload filters, source-marked all-size and rank-change charts, ranking CSV and libjxl v0.12 timing samples (`7cf90d30`).
+
+- Qualify dashboard oracle/published comparisons, derive catalog evidence, classify uploads and normalize historical timing/parity panels (`e0ef83c7`, `844fb671`).
+
+- Add a registry-driven GitHub Pages benchmark dashboard with timing, agreement, historical human-quality panels and a CLI metric catalog (`97732303`).
+
+- Declare hash-bound derived-data views through a strict private CLI adapter; bound versioned E36 ladder watchdogs without changing existing job identities or public Rust types.
+
+- Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits (`afd81b53`).
+
+- Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
+
+- Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
+
 - Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
 
 - Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
@@ -21,19 +41,11 @@ Workspace conventions per the global rules:
 
 ### Added
 
-- zenmetrics-nn `PieApp` (PR #81 follow-up, review required) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
-  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
-  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
-  New public surface: `PieApp`, `PieApp::WEIGHTS`, `PieApp::from_dir`, and
-  `MetricKind::Pieapp`.
-  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
-  oracle is official `compute_score`; the measured demo-wrapper difference
-  is documented in `DIVERGENCES.md` (`0ced8ab7`). Both engines pass 24 supported pairs
-  and warm/cold checks at 1e-3 JND (`3112abc9`); full results and workflow
-  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
-  Review correction `94daa378` uses signed weight-head outputs established
-  by opaque parameter controls (score revision 3); requalification is pending.
+- Native job execution accepts absolute `file://` variant inputs named `<sha256>.<ext>`, verifies their bytes and borrows them without deleting the artifact (`3594eff9`).
 
+- Apply the owner-authorized question 15 short-class contract with canonical pool-authority verification, role/count guards and a bound declaration digest (`98a0edca`).
+
+- Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).
 
 - Internal indexed palette job execution and palette/indices/hash receipts, separate joint builds, dense metadata declarations and independent PNG decoder tests (`e322c415`). [Contract](docs/PALETTE_LADDER.md).
 - Host-bound budget-preflight declarations with native-size omissions, full-budget mock fit routes and missing-cap/budget refusal (`0aa11b80`). No jobs or measurements are launched by the generator.
@@ -46,6 +58,13 @@ None.
 ## vmaf
 
 ### Changed
+
+- VMAF frame and streaming scorers retain their CAMBI thread budget, including single-frame private-pool calls (`1ab9cb0d`).
+- CAMBI schedules independent column regions (`0ffb7674`), preserving every original histogram update and floating-point pooling order; each non-final region ends with eight scalar `c_value_pixel` columns; [CPU and bit-parity evidence](benchmarks/aic_perf_big_2026-10-16/README.md).
+- With `parallel` enabled, `cambi_from_luma`, `cambi_v1_from_luma`, and `cambi_v1_maps` use the caller’s current Rayon pool (the global pool outside an installed pool), including the metric map path; this changes scheduling behavior (`0ffb7674`).
+- VMAF multi-frame scoring keeps CAMBI column work serial inside frame workers; a private-pool call with two frames on 16 workers uses two threads for CAMBI. This avoids nested column scheduling but leaves other workers unused during that work. Single-frame and streaming calls retain their private-pool column budget (`3b3e81de`).
+- CAMBI AVX2 rows zero active out-of-band lanes, matching the scalar point evaluator; the mask changes no score or map for any real input because the production bands are `[67,564)` for VMAF v1 and `[0,564)` for standalone CAMBI. Only direct row-kernel calls with a narrower band differ. Direct row and 512-square frame-scheduling controls cover the review findings (`3b3e81de`).
+- CAMBI column regions borrow disjoint output-row slices, removing the temporary c-value plane and copy (`24fe54f8`).
 
 - CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
 - Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
@@ -73,6 +92,23 @@ None.
 
 ### Added
 
+- Compute-only IQA competition harness with separate score/map cells, recorded sample counts, bounded resource scopes, explicit refusals and retained per-host observations (`6bedb666`); [protocol and current coverage](benchmarks/iqa_compete_2026-10-16/README.md).
+
+- zenmetrics-nn `PieApp` (PR #81 follow-up, reviewed) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
+  reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
+  CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).
+  New public surface: `PieApp`, `PieApp::WEIGHTS`, `PieApp::from_dir`, and
+  `MetricKind::Pieapp`.
+  KonJND calibration covers all 1,008 pairs (`88797e99`). The selected
+  oracle is official `compute_score`; the measured demo-wrapper difference
+  is documented in `DIVERGENCES.md` (`0ced8ab7`). The revision-2 claim of
+  24 supported pairs and warm/cold checks at 1e-3 JND (`3112abc9`) is
+  superseded by revision 3 below; full results and workflow
+  validation are recorded in `benchmarks/pieapp_2026-10-16.md`.
+  Revision 3 uses signed weight-head outputs established by opaque parameter
+  controls (`94daa378`, `3fe10a21`, `5950f341`, `ca8ec197`); both engines
+  pass the 24-pair requalification and warm/cold checks at 1e-3 JND.
+
 - hdrvdp `v3::score()`, a score-only HDR-VDP-3 entry point that skips map reconstruction (`6e5e62e0`, PR #76); `q_jod` is bit-identical to `hdrvdp3()` (test `score_matches_q_jod_bitwise`), and the integrated-PU-nits CPU dispatch path uses it.
 - zenmetrics-nn Cool-Chic Wasserstein Distortion (PR #81, review required): `WassersteinDistortion` and CLI `wd`, five `wd_s1`–`wd_s5` outputs on RTen/CUDA trunks with Rust statistics (`18d1875d`, `0e89c64a`). All five KonJND scales are measured and 25 upstream pairs pass the 1e-3-JND gate on both engines (`65bd274b`, `419c040c`). [Conventions and validation](benchmarks/wd_port_2026-10-16/README.md).
 
@@ -84,6 +120,8 @@ None.
 - zenmetrics-cli `nn` / `nn-ort` features (`3f937da6`, `cfa8a95f`): metrics `lpips-alex`, `lpips-vgg`, `lpips-squeeze`, `stlpips-alex`, `stlpips-vgg`, `dists`, `deepdc`, reading `ZENMETRICS_NN_MODEL_DIR` and `ZENMETRICS_NN_ENGINE`.
 
 ### Changed
+
+- Original Butteraugli tiles convolution (`6ced5b29`) and processes independent Malta pixels in ordered blocks (`50acada6`), preserving all 61 AIC error maps and score bits; [validation](benchmarks/aic_perf_big_2026-10-16/README.md).
 
 - CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
 - CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.
@@ -3642,7 +3680,8 @@ All five are the Nomad-migration ADR's stated preconditions
 - zenmetrics-nn learned no-reference metrics ARNIQA, MANIQA and LIQE (rten and ort-cuda), CLI `arniqa`, `maniqa`, `liqe` via PairedNoReference. Parity against the authors' code (rten): ARNIQA 6.7e-6, MANIQA 8.4e-6, LIQE 1.3e-5 JND against the 1e-3 gate (MANIQA's resize follows OpenCV's scalar INTER_CUBIC with IPP disabled, unfused as in the pinned SSE build). Weights: ARNIQA and MANIQA `Permissive`, LIQE `Unknown` (consent-gated). The OpenCV and Pillow resize conventions carry `LICENSE-opencv` / `LICENSE-pillow` until zenresize grows those modes.
 - `brisque` crate, CLI metric `brisque` behind `nr` (PairedNoReference): port of piq's BRISQUE with LIVE's SVR model, stored as a 232 KB aligned little-endian binary. 170 goldens within JND/1000 (worst 5.2e-4 JND; 6.8e-4 JND on 200 extra KonJND images). Inputs under 8 px return `TooSmall`.
 - zenmetrics-nn CPU speed (nn-opt lane; i265, 16 threads, rten; `62b38654`, `e8db1bf5`, `3effa389`, `a4a891e9`): trunk outputs move out instead of copying (DISTS 2048² peak RSS 8.0 → 6.4 GiB), DISTS head statistics fused into lane-parallel f64 sums, and the Rust-side metric heads threaded with a hard threads cap. Measured, two A/B runs each: DISTS 1024² compute 1941/1689 → 1293/1304 ms, 2048² warm 3735/3736 → 2639/2615 ms; LPIPS-alex 1024² warm 58.0/61.5 → 44.2/45.4 ms. Scores bit-identical. Splitting the DeepDC head was measured and rejected (0.12% of cycles). Data: `benchmarks/nn_opt_2026-10-15/`.
-- zenmetrics-nn CKDN, A-FINE and DreamSim on rten and ort-cuda (`5bd1f468`, `0de4d5b7`, `8af0d0ae`, `fba8bec7`; review fixes `1081dddc`, `43c62165`, `47d4d306`, `13f4c151`, `3d6f1d89`, `9ae32815`). Parity against the upstream code: worst 5.65e-5 / 1.42e-5 / 1.17e-5 JND on rten, 5.09e-5 / 1.94e-5 / 2.03e-5 on ort-cuda (gate 1e-3). CKDN applies upstream's eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288) and refuses inputs whose resized long side exceeds 32,768 px. AIC-4 columns: CKDN median 4.0e-5 / max 1.4e-4 (0.026 JND, not exact); DreamSim max 6.1e-7; A-FINE not reproduced (`afine_all` sits 0.5–1.4 below the column). Weights are consent-gated: CKDN and DreamSim `Unknown`, A-FINE `NonCommercial` (trained on DiffIQA). Upstream notices in `crates/zenmetrics-nn/LICENSE-*`.
+- zenmetrics-nn CKDN, A-FINE and DreamSim on rten and ort-cuda (`5bd1f468`, `0de4d5b7`, `8af0d0ae`, `fba8bec7`; review fixes `1081dddc`, `43c62165`, `47d4d306`, `13f4c151`, `3d6f1d89`, `9ae32815`). Parity against the upstream code: worst 5.65e-5 / 1.42e-5 / 1.17e-5 JND on rten, 5.09e-5 / 1.94e-5 / 2.03e-5 on ort-cuda (gate 1e-3). CKDN applies upstream's eval transform (short side to 329, distorted bicubic, reference nearest, centre crop 288) and refuses inputs whose resized long side exceeds 32,768 px. AIC-4 columns: CKDN median 4.0e-5 / max 1.4e-4 (0.026 JND, not exact); DreamSim max 6.1e-7; A-FINE not reproduced (`afine_all` sits 0.5–1.4 below the column; the 61-pair sub-score convention search in `benchmarks/afine_aic_2026-10-16/` found no *unfitted* convention inside 10× of the acceptance gate (best fitted form: 0.038 median / 0.46 max JND)). Weights are consent-gated: CKDN and DreamSim `Unknown`, A-FINE `NonCommercial` (trained on DiffIQA). Upstream notices in `crates/zenmetrics-nn/LICENSE-*`.
+- zenmetrics-nn ort-cuda: bound arena retention for shape-varying inputs (`f48b71a0`). All CUDA sessions share one builder with ORT memory-pattern disabled and the CPU provider arena off, and session outputs are consumed by move — previously the 61-pair AIC sweep accumulated per-shape blocks until BFCArena allocs failed (A-FINE fused graph, 9 rows on the three largest pairs). A-FINE sweep scores bit-identical before/after on all 357 shared rows; ort-cuda ladder parity unchanged on afine (1.94e-5), lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim, arniqa, maniqa, liqe, musiq, paq2piq, hyperiqa, wadiqam and wd; lpips_vgg covered by a fixed-size nn_bench A/B (lpips_squeeze not separately probed — same `OrtCudaPair` graph as lpips_alex, weights only). Receipt: `benchmarks/afine_aic_2026-10-16/` "ort-cuda arena fix".
 - `piqe` and `niqe` crates, CLI metrics `piqe` and `niqe` behind the `nr` feature (`91962eb0`, `78add1c4`, `3b62e82a`): no-reference ports of pypiqe and BasicSR's NIQE (LIVE pristine model as generated constants, `crates/niqe/src/params.rs`, approved). Scored through `PairedNoReference` (`<m>` distorted, `<m>_ref` reference). 170 goldens each, worst 2.9e-12 (PIQE) and 7.3e-12 (NIQE). Inputs under two complete blocks return `TooSmall`; flat NIQE inputs return `Degenerate` instead of NaN. `no_std` builds route float maths through libm.
 - **deps: migrate to published `zencodec` 0.1.24 estimate API; drop the path
   patch; bump CI codec clone pins to the migrated revs.** Removed the

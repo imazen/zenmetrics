@@ -132,7 +132,7 @@
       "all_repeats_bit_identical": true
     }
   },
-  "inventory_metric_kinds": 109,
+  "inventory_metric_kinds": 113,
   "review_v3_receipt": {
     "path": "benchmarks/pieapp_review_2026-10-16/summary-v3.json",
     "sha256": "3c546228c9eb38bf8d488a3a228cf40413ed44f88259855f9b695d5ecb8f22ff",
@@ -179,7 +179,7 @@
     "strict NN all-target clippy, model-tests+ort",
     "CLI sweep,png,gpu,gpu-cuda",
     "CLI sweep,orchestrator,nn,nr",
-    "inventory 109",
+    "inventory 113",
     "CLI routing unit",
     "real default-scheduler CLI consent refusal and oracle score"
   ]

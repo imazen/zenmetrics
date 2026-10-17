@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Historical probe: records the original dated environment, not a portable recipe.
 # Isolated official runtime, executed as a black box. Never read model source.
 set -euo pipefail
 root=$HOME/tmp/pieapp-oracle

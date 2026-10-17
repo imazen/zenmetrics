@@ -1,0 +1,28 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24046MiB :: timeout --kill-after=20s 1150s just aic-perf-big-baseline-step wall /home/lilith/tmp/aic-variants-scratch/round14 butter 3355 2516 16
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- 'wall' '/home/lilith/tmp/aic-variants-scratch/round14' 'butter' '3355' '2516' '16'
+metric=butter threads=16 dimensions=3355x2516 load=4.12 5.51 4.51 1/1935 1516756
+3355x2516 5 reps: 8004.046023 ms/call score 7.99973535537719727 bits 40fffdd5
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14/butter-base 3355 2516 5"
+	User time (seconds): 35.65
+	System time (seconds): 4.41
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:40.09
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1437356
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 4505442
+	Voluntary context switches: 1
+	Involuntary context switches: 765
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 40s | peak-RSS 1.37GiB | min-avail 23006MiB | peak-load 4.12

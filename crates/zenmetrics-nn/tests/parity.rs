@@ -6,11 +6,14 @@
 //! - `ZENMETRICS_NN_MODELS`: comma-separated models to check:
 //!   `lpips_alex`, `lpips_vgg`, `lpips_squeeze`, `stlpips_alex`, `stlpips_vgg`,
 //!   `dists`, `deepdc`, `ckdn`, `afine`, `dreamsim`, `arniqa`, `maniqa`, `liqe`,
-//!   `musiq`, `hyperiqa`, `paq2piq`, `wadiqam_fr_live`, `wadiqam_fr_tid`,
-//!   `wadiqam_nr_live`, `wadiqam_nr_tid`, `pieapp`.
+//!   `musiq`, `hyperiqa`, `paq2piq`, `pieapp`, `wadiqam_fr_live`, `wadiqam_fr_tid`,
+//!   `wadiqam_nr_live`, `wadiqam_nr_tid`.
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
+//!
+//! PieAPP goldens use the official CUDA model with TF32 disabled; the CPU
+//! control differs by at most 4.8e-7 native units. Other models use CPU fp32.
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +24,7 @@ use zenmetrics_nn::{
     Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
-/// Tolerance against the upstream CPU fp32 score, in JND units (owner,
+/// Tolerance in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
 /// model may differ from upstream by 1/1000 of its estimated just-noticeable
 /// difference. The engines differ from PyTorch in summation order, and
@@ -262,6 +265,25 @@ fn matches_upstream() {
                 .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
                 .expect("evaluate");
             let got = score(&*eval, col);
+            let err = (got - want).abs();
+            worst = worst.max(err);
+            eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
+            // A mismatch on this CUDA host needs a diagnostic rerun. Preserve
+            // and gate the first result even if the diagnostic happens to pass.
+            if col == "pieapp" && engine() != Engine::Rten && (!err.is_finite() || err > tol(col)) {
+                let diagnostic = m
+                    .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
+                    .expect("diagnostic CUDA evaluation after first-score mismatch");
+                eprintln!(
+                    "{col} {stem} {size}: first mismatch={got:.17e} diagnostic={:.17e}",
+                    score(&*diagnostic, col)
+                );
+            }
+            assert!(
+                err <= tol(col),
+                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
+                tol(col)
+            );
             let repeat = if col == "pieapp" && engine() != Engine::Rten {
                 let repeated = m
                     .evaluate(image(&rp, w, h), image(&dp, w, h), EvalOpts::new())
@@ -272,14 +294,6 @@ fn matches_upstream() {
             } else {
                 None
             };
-            let err = (got - want).abs();
-            worst = worst.max(err);
-            eprintln!("{col} {stem} {size}: got {got:.9} want {want:.9} |d| {err:.3e}");
-            assert!(
-                err <= tol(col),
-                "{col} {stem} {size}: |{got} - {want}| = {err:e} > {:e} ({TOL_JND} JND)",
-                tol(col)
-            );
             if let Some(repeat) = repeat {
                 assert_eq!(
                     got.to_bits(),
@@ -366,6 +380,7 @@ fn warm_reference_equals_cold() {
         if let Some(cold_same) = cold_same {
             assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
             if col == "pieapp" {
+                // Recorded as parity.identical_patch_oracle in models/pieapp/card.toml.
                 const ORACLE_IDENTICAL: f64 = -3.725_290_298_461_914e-9;
                 assert!((same - ORACLE_IDENTICAL).abs() <= tol(col), "{col}");
             }

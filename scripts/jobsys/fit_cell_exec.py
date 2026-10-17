@@ -60,6 +60,10 @@ class WallCapExceeded(RuntimeError):
 
 def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
     """The registered per-cell wall cap in seconds, or None for a program with no E33 package."""
+    e36_path = program / "benchmarks/e36_fit_contract_2026-10-17.json"
+    if e36_path.is_file() and ("--local-smoke-budget" in argv or (program / "bounded_smoke_policy.json").exists()
+                               or argv[0] not in ("v2_lodo_mlp.py", "v2_confirm_fit.py")):
+        raise ValueError("E36 mixed smoke policy/request refused before launch")
     policy_path = program / "bounded_smoke_policy.json"
     if "--local-smoke-budget" in argv and policy_path.is_file():
         policy = json.loads(policy_path.read_text())
@@ -83,11 +87,13 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
         from registered_fit_contract import load
         meta = json.loads((program / "build_meta.json").read_text())
         return load(argv,data_sha,meta)["wall_cap_sec"]
-    path = program / E33_CONTRACT
+    if e36_path.is_file() and (program / E33_CONTRACT).is_file():
+        raise ValueError("ambiguous fit packages")
+    path = e36_path if e36_path.is_file() else program / E33_CONTRACT
     if not path.is_file():
         return None
     package = json.loads(path.read_text())
-    if package.get("schema") != "e33-research-fit-package-v1":
+    if package.get("schema") != ("e36-research-fit-package-v1" if path == e36_path else "e33-research-fit-package-v1"):
         raise ValueError("E33 program carries an unregistered package")
 
     def arg(key):
@@ -95,13 +101,36 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
 
     route = arg("--heldout") if argv[0] == "v2_lodo_mlp.py" else "production"
     matches = [v for v in package["variants"] if v["root"] == arg("--root") and v["spec"] == arg("--spec")
-               and v["data_sha"] == data_sha and route in v["routes"]]
+               and v["data_sha"] == data_sha and route in v["routes"]
+               and ("e36" not in v or v["e36"]["arm"] == arg("--e36-arm"))]
     if len(matches) != 1:
         raise ValueError("E33 program: the cell matches no single registered variant")
+    if path == e36_path:
+        if matches[0].get("schema") != "e36-research-fit-contract-v1" or matches[0].get("launchable") is not True:
+            raise ValueError("E36 unregistered/owner-blocked variant refused before launch")
+        from e36_fit_contract import bind
+        meta = json.loads((program / "build_meta.json").read_text())
+        bind(argv, matches[0], meta["files"])
     cap = matches[0].get("wall_cap_sec")
     if type(cap) is not int or cap <= 0:
         raise ValueError("E33 variant lacks a registered positive wall cap")
     return cap
+
+
+def measure_resources(argv: list, program: Path) -> bool:
+    if argv[0] == 'steer_exact_smoke.py' or '--local-smoke-budget' in argv:
+        return True
+    path = program / 'build_meta.json'
+    if not path.is_file():
+        return False
+    if (program / 'benchmarks/e36_fit_contract_2026-10-17.json').is_file():
+        return True
+    policy = json.loads(path.read_text()).get('steer_scientific')
+    if policy is None:
+        return False
+    if policy != {'schema': 'steer-scientific-fit-v1', 'epochs': 120, 'pairs_per_epoch': 50000}:
+        raise ValueError('invalid archive-bound scientific STEER resource policy')
+    return True
 
 
 def run_capped(command: list, env: dict, cap: int, dest: Path, name: Path) -> str:
@@ -335,10 +364,12 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    if measure_resources(argv, PROGRAM) and argv[0] != 'steer_exact_smoke.py' and '--local-smoke-budget' not in argv:
+        env['ZEN_E36_ARGV_SHA' if (PROGRAM / 'benchmarks/e36_fit_contract_2026-10-17.json').is_file() else 'ZEN_STEER_ARGV_SHA'] = argv_sha
     command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
     cap = registered_wall_cap(argv, kind["data_sha"])
     resource = None
-    if argv[0] == "steer_exact_smoke.py" or "--local-smoke-budget" in argv:
+    if measure_resources(argv, PROGRAM):
         # The strict driver owns creation of its fresh destination. Stage timing
         # beside it, retaining failed-run timing separately, and export on success.
         resource = dest.parent / f".{name.name}.resources-{time.time_ns()}.txt"
@@ -373,6 +404,9 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     selected = Path(value["selected_bake"])
     if selected != dest / "refit" / selected.name or digest(selected) != value["selected_bake_sha256"]:
         raise ValueError("selected checkpoint receipt mismatch")
+    if (PROGRAM / "benchmarks/e36_fit_contract_2026-10-17.json").is_file():
+        from e36_fit_contract import qualify_output
+        qualify_output(PROGRAM, dest, kind, str(name), value)
     files = {str(path.relative_to(dest)): digest(path) for path in sorted(dest.rglob("*")) if path.is_file()}
     receipt = {"schema": "zenfleet-fit-cell-receipt-v1",
                "program_sha": program_sha, "data_sha": kind["data_sha"], "argv_sha": argv_sha,
