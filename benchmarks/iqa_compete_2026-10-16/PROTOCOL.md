@@ -218,3 +218,9 @@ SHA-256 `0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63`.
 Use `just iqa-compete-coverage-i265` for the full CPU/CUDA audit. An initial
 CPU-only build's inventory can omit GPU names and must not define completion.
 Per-run inventories remain provenance for their individual executables.
+
+Map capability metadata is independent of score startup. For the selected Python
+entry points, a failed or timed-out score preserves its failure receipt while a
+known absent map route remains `unsupported`. Supported map routes keep their
+actual failure status. Returning a timed map from a declared absent route is an
+error; it is never silently reclassified.

@@ -30,15 +30,23 @@ LEARNED = {'lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg'
 # These frozen CLI routes have no native-map API, independently of score startup.
 NO_MAPS = LEARNED | {'brisque', 'niqe', 'ilniqe', 'cambi'}
 
+PYTHON_METRICS = {'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque','lpips-vgg','dists'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}
+PYTHON_MAPS = {
+    "scikit-image": {"ssimc"}, "torchmetrics": {"ssimc-pyiqa-f32"},
+    "flip-evaluator": {"flip-v17"}, "cvvdp": {"cvvdp"},
+}
+
 def normalize_nomap(row):
-    if (row.get('impl') != 'zenmetrics' or row.get('metric_name') not in NO_MAPS
-            or row.get('mode') != 'score+map' or row.get('status') == 'unsupported'):
+    impl, metric = row.get('impl'), row.get('metric_name')
+    unavailable = (metric in NO_MAPS if impl == 'zenmetrics' else
+        metric in PYTHON_METRICS.get(impl, ()) and metric not in PYTHON_MAPS.get(impl, ()))
+    if (not unavailable or row.get('mode') != 'score+map' or row.get('status') == 'unsupported'):
         return
     if row.get('n', 0):
         raise ValueError('A frozen no-map route unexpectedly returned timed maps')
     row['source_status'] = row['status']
     row.update(status='unsupported', notes=row.get('notes', '') +
-               '; This learned/NR CLI route has no native-map API; score startup outcome is separate')
+               '; This selected adapter route has no qualified native-map API; score startup outcome is separate')
 
 
 def admission_reason(text):
@@ -321,7 +329,7 @@ def main():
     excluded=set(filter(None,args.exclude_metrics.split(',')))
     if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
     if args.python_package and not args.metrics:
-        selected = set({'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque','lpips-vgg','dists'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}[args.python_package])
+        selected = set(PYTHON_METRICS[args.python_package])
     if args.gpu_runtime and not args.metrics:
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:

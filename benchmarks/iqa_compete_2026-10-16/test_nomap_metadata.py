@@ -16,4 +16,13 @@ class Capabilities(unittest.TestCase):
   row=self.row(metric='cvvdp');original=copy.deepcopy(row);normalize_nomap(row);self.assertEqual(row,original)
  def test_unexpected_native_maps_require_investigation(self):
   with self.assertRaisesRegex(ValueError,'unexpectedly'):normalize_nomap(self.row(n=10,status='ok'))
+ def test_python_no_map_route_keeps_failure_evidence(self):
+  for impl,metric in [('piq','lpips-vgg'),('lpips','lpips-alex'),('torchmetrics','psnr')]:
+   row=self.row(metric=metric,impl=impl);normalize_nomap(row)
+   self.assertEqual(row['status'],'unsupported');self.assertEqual(row['source_status'],'skipped:timeout_1100s')
+ def test_python_native_map_route_failure_is_preserved(self):
+  for impl,metric in [('scikit-image','ssimc'),('torchmetrics','ssimc-pyiqa-f32'),('cvvdp','cvvdp'),('flip-evaluator','flip-v17')]:
+   row=self.row(metric=metric,impl=impl);original=copy.deepcopy(row);normalize_nomap(row);self.assertEqual(row,original)
+ def test_python_unexpected_timed_map_is_rejected(self):
+  with self.assertRaisesRegex(ValueError,'unexpectedly'):normalize_nomap(self.row(metric='dists',impl='piq',n=10,status='ok'))
 if __name__=='__main__':unittest.main()
