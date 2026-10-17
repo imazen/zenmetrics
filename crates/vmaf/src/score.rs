@@ -1,7 +1,7 @@
 use crate::adm::ADM_MIN_DIM;
 use crate::{
-    Error, MOTION_MAX_VAL, ModelVariant, VmafFeatures, VmafModel, adm3_v1_from_luma,
-    cambi_v1_from_luma, motion_sad, motion3_from_luma, speed_v1_chroma_420,
+    Error, MOTION_MAX_VAL, ModelVariant, VmafFeatures, VmafModel, adm3_v1_from_luma, motion_sad,
+    motion3_from_luma, speed_v1_chroma_420,
 };
 use std::collections::VecDeque;
 
@@ -85,8 +85,9 @@ impl VmafV1Scorer {
         reference: &Yuv420Frame<'_>,
         distorted: &Yuv420Frame<'_>,
         motion3: f64,
+        parallel_cambi: bool,
     ) -> Result<VmafFrameResult, Error> {
-        let mut features = self.extract_features(reference, distorted)?;
+        let mut features = self.extract_features(reference, distorted, parallel_cambi)?;
         features.motion3 = motion3;
         self.predict_features(features)
     }
@@ -95,9 +96,23 @@ impl VmafV1Scorer {
         &self,
         reference: &Yuv420Frame<'_>,
         distorted: &Yuv420Frame<'_>,
+        parallel_cambi: bool,
     ) -> Result<VmafFeatures, Error> {
+        #[cfg(feature = "parallel")]
+        let cambi = self.with_cambi_threads(parallel_cambi, |parallel| {
+            if parallel {
+                crate::cambi_v1_from_luma(distorted.y, self.width, self.height, self.bit_depth)
+            } else {
+                crate::cambi::cambi_v1_serial(distorted.y, self.width, self.height, self.bit_depth)
+            }
+        })?;
+        #[cfg(not(feature = "parallel"))]
+        let _ = parallel_cambi;
+        #[cfg(not(feature = "parallel"))]
+        let cambi =
+            crate::cambi::cambi_v1_serial(distorted.y, self.width, self.height, self.bit_depth)?;
         Ok(VmafFeatures {
-            cambi: cambi_v1_from_luma(distorted.y, self.width, self.height, self.bit_depth)?,
+            cambi,
             speed_chroma_uv: speed_v1_chroma_420(
                 reference.u,
                 reference.v,
@@ -118,6 +133,19 @@ impl VmafV1Scorer {
             )?,
             motion3: 0.0,
         })
+    }
+
+    #[cfg(feature = "parallel")]
+    fn with_cambi_threads<T: Send>(
+        &self,
+        allow_parallel: bool,
+        compute: impl FnOnce(bool) -> T + Send,
+    ) -> T {
+        if allow_parallel && let Some(pool) = &self.pool {
+            pool.install(|| compute(true))
+        } else {
+            compute(false)
+        }
     }
 
     fn predict_features(&self, features: VmafFeatures) -> Result<VmafFrameResult, Error> {
@@ -162,7 +190,8 @@ impl VmafV1Scorer {
                     .zip(distorted.par_iter())
                     .zip(motion.par_iter())
                     .map(|((reference, distorted), &motion3)| {
-                        self.score_frame(reference, distorted, motion3)
+                        // Frame workers own the pool; CAMBI stays serial here.
+                        self.score_frame(reference, distorted, motion3, false)
                     })
                     .collect()
             });
@@ -172,7 +201,7 @@ impl VmafV1Scorer {
             .zip(distorted)
             .zip(motion)
             .map(|((reference, distorted), motion3)| {
-                self.score_frame(reference, distorted, motion3)
+                self.score_frame(reference, distorted, motion3, true)
             })
             .collect()
     }
@@ -227,7 +256,7 @@ impl VmafV1Stream {
         let next = index
             .checked_add(1)
             .ok_or(Error::InvalidInput("frame count overflow"))?;
-        let features = self.scorer.extract_features(&reference, &distorted)?;
+        let features = self.scorer.extract_features(&reference, &distorted, true)?;
         let hfr = matches!(
             self.scorer.variant,
             ModelVariant::HfrStandard1080p
@@ -359,4 +388,125 @@ pub fn pool_v1_scores(scores: &[f64], method: PoolingMethod) -> Result<f64, Erro
         PoolingMethod::Max => max,
         PoolingMethod::HarmonicMean => scores.len() as f64 / reciprocal_sum - 1.0,
     })
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod cambi_thread_tests {
+    use super::*;
+
+    #[test]
+    fn review_parallel_frames_keep_cambi_serial_at_512_square() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let counter = Arc::new(AtomicUsize::new(0));
+        let observed = counter.clone();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .start_handler(move |_| {
+                crate::cambi::TEST_COLUMN_SPLITS.with(|slot| {
+                    *slot.borrow_mut() = Some(observed.clone());
+                });
+            })
+            .build()
+            .unwrap();
+        let (width, height) = (512, 512);
+        let reference: Vec<u16> = (0..width * height)
+            .map(|i| (256 + (i % width) / 4 + (i / width) / 16) as u16)
+            .collect();
+        let distorted: Vec<u16> = (0..width * height)
+            .map(|i| (256 + ((i % width) / 16) * 4) as u16)
+            .collect();
+        let chroma = vec![512; width * height / 4];
+        let references = [Yuv420Frame {
+            y: &reference,
+            u: &chroma,
+            v: &chroma,
+        }; 2];
+        let distortions = [Yuv420Frame {
+            y: &distorted,
+            u: &chroma,
+            v: &chroma,
+        }; 2];
+        let serial = VmafV1Scorer::new(width, height, 10, ModelVariant::Standard1080p).unwrap();
+        let parallel = VmafV1Scorer {
+            pool: Some(pool),
+            ..VmafV1Scorer::new(width, height, 10, ModelVariant::Standard1080p).unwrap()
+        };
+        for count in [1, 2] {
+            counter.store(0, Ordering::SeqCst);
+            let expected = serial
+                .score(&references[..count], &distortions[..count])
+                .unwrap();
+            let actual = parallel
+                .score(&references[..count], &distortions[..count])
+                .unwrap();
+            assert!(actual[0].features.cambi > 0.0);
+            for (got, want) in actual.iter().zip(&expected) {
+                for (a, b) in [
+                    (got.score, want.score),
+                    (got.features.cambi, want.features.cambi),
+                    (got.features.adm3, want.features.adm3),
+                    (got.features.motion3, want.features.motion3),
+                    (got.features.speed_chroma_uv, want.features.speed_chroma_uv),
+                ] {
+                    assert_eq!(a.to_bits(), b.to_bits());
+                }
+            }
+            if count == 1 {
+                assert!(
+                    counter.load(Ordering::SeqCst) > 0,
+                    "single frame uses columns"
+                );
+            } else {
+                assert_eq!(
+                    counter.load(Ordering::SeqCst),
+                    0,
+                    "frame workers must not split columns"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn frame_and_stream_cambi_use_the_scorer_budget() {
+        let outer = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+        let scorer = VmafV1Scorer::new(1024, 1024, 10, ModelVariant::Standard1080p).unwrap();
+        outer.install(|| {
+            let y: Vec<u16> = (0..512 * 512)
+                .map(|i| 256 + ((i % 512) / 8) as u16)
+                .collect();
+            assert_eq!(
+                crate::cambi::cambi_v1_serial(&y, 512, 512, 10)
+                    .unwrap()
+                    .to_bits(),
+                crate::cambi_v1_from_luma(&y, 512, 512, 10)
+                    .unwrap()
+                    .to_bits(),
+            );
+            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
+            let scorer = scorer.with_threads(1).unwrap();
+            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
+            // A one-worker private pool is valid on every test host and must
+            // override the unrelated four-worker caller pool.
+            let scorer = VmafV1Scorer {
+                pool: Some(
+                    rayon::ThreadPoolBuilder::new()
+                        .num_threads(1)
+                        .build()
+                        .unwrap(),
+                ),
+                ..scorer
+            };
+            assert_eq!(
+                scorer
+                    .with_cambi_threads(true, |parallel| (parallel, rayon::current_num_threads())),
+                (true, 1)
+            );
+        });
+    }
 }

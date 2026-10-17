@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
+
 - Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
 
 - Stage bounded-smoke resource timing outside the strict driver’s fresh destination, then include it in successful exports.
@@ -38,6 +40,13 @@ None.
 ## vmaf
 
 ### Changed
+
+- VMAF frame and streaming scorers retain their CAMBI thread budget, including single-frame private-pool calls (`1ab9cb0d`).
+- CAMBI schedules independent column regions (`0ffb7674`), preserving every original histogram update and floating-point pooling order; each non-final region ends with eight scalar `c_value_pixel` columns; [CPU and bit-parity evidence](benchmarks/aic_perf_big_2026-10-16/README.md).
+- With `parallel` enabled, `cambi_from_luma`, `cambi_v1_from_luma`, and `cambi_v1_maps` use the caller’s current Rayon pool (the global pool outside an installed pool), including the metric map path; this changes scheduling behavior (`0ffb7674`).
+- VMAF multi-frame scoring keeps CAMBI column work serial inside frame workers; a private-pool call with two frames on 16 workers uses two threads for CAMBI. This avoids nested column scheduling but leaves other workers unused during that work. Single-frame and streaming calls retain their private-pool column budget (`3b3e81de`).
+- CAMBI AVX2 rows zero active out-of-band lanes, matching the scalar point evaluator; the mask changes no score or map for any real input because the production bands are `[67,564)` for VMAF v1 and `[0,564)` for standalone CAMBI. Only direct row-kernel calls with a narrower band differ. Direct row and 512-square frame-scheduling controls cover the review findings (`3b3e81de`).
+- CAMBI column regions borrow disjoint output-row slices, removing the temporary c-value plane and copy (`24fe54f8`).
 
 - CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.
 - Standalone CAMBI stride validation runs without SIMD (`d237d567`), and two nonzero original-author values are pinned (`d0aa705a`).
@@ -91,6 +100,8 @@ None.
 - zenmetrics-cli `nn` / `nn-ort` features (`3f937da6`, `cfa8a95f`): metrics `lpips-alex`, `lpips-vgg`, `lpips-squeeze`, `stlpips-alex`, `stlpips-vgg`, `dists`, `deepdc`, reading `ZENMETRICS_NN_MODEL_DIR` and `ZENMETRICS_NN_ENGINE`.
 
 ### Changed
+
+- Original Butteraugli tiles convolution (`6ced5b29`) and processes independent Malta pixels in ordered blocks (`50acada6`), preserving all 61 AIC error maps and score bits; [validation](benchmarks/aic_perf_big_2026-10-16/README.md).
 
 - CLI `cambi`, `butteraugli-original`, `ssimulacra1`, and `ws-hv` (`34e963b3`; ports `3c6bbec3`, `77b37e0a`, `0cf97a8a`): [pinned-author and published AIC comparisons](benchmarks/aic_more_2026-10-15/README.md).
 - CAMBI accepts valid zero-valued photo batches under `--fail-on-bogus` (`9094650e`); empty and nonfinite checks remain active.

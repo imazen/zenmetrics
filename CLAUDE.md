@@ -1658,3 +1658,18 @@ Identity and constant-output checks previously rejected valid zero batches.
 CAMBI now has no identity range and is exempt from the constant-output check;
 empty/nonfinite checks remain active. The sweep-feature binary regression
 `cambi_zero_distribution_is_not_bogus` covers the all-zero batch.
+
+### Known Bugs: CAMBI active-band rows and nested frame work (2026-10-16)
+
+A direct nine-column row control found AVX2 bits `402aaaab` for an active
+pixel below the histogram band, while `c_value_pixel` returned zero. Gather
+index clamping now has a separate in-band output mask (`3b3e81de`). The row
+control covers vector groups, scalar tails and masked pixels; only the low
+band edge has a predicate-true out-of-band pixel.
+A two-frame 512×512 control observed two column splits inside parallel frame
+workers. Those workers now keep CAMBI serial; the single-frame control still
+uses columns, and all feature/score bits match the serial scorer. Both new
+controls fail before the fix and pass after it without assertion changes.
+Column regions also borrow disjoint output-row slices instead of allocating
+and copying a second c-value plane (`24fe54f8`). Review measurements belong in
+[the perf receipt](benchmarks/aic_perf_big_2026-10-16/README.md).

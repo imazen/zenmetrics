@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "host": "i265",
+  "method": "Base,new,base,new; each new process averages five calls; mean of two process means per role. No confidence interval or cross-host extrapolation.",
+  "threading": "CAMBI uses ordered column regions with the existing Rayon pool above its per-scale size threshold; its one-worker and small-scale paths use the original serial kernel. Butteraugli remains serial within one image. 16 is the requested thread budget.",
+  "target_cpu_native": false,
+  "cells": [
+    {
+      "key": "cambi-1024x1024-1t",
+      "base_ms": [
+        22.433376,
+        21.982811
+      ],
+      "new_ms": [
+        22.238153,
+        22.168177
+      ],
+      "median_base_ms": 22.2080935,
+      "median_new_ms": 22.203165,
+      "base_over_new": 1.000221972858374,
+      "base_peak_rss_kib": 16508,
+      "new_peak_rss_kib": 16664,
+      "resource": {
+        "seconds": 0,
+        "peak_rss_gib": 0.02,
+        "min_available_mib": 23945,
+        "peak_load": 3.76,
+        "log_sha256": "1f2d05c3e50b17de88e332f51edcb5cc218a0200202dfc0f491c873c7ac162fe"
+      }
+    },
+    {
+      "key": "cambi-1024x1024-16t",
+      "base_ms": [
+        26.007246,
+        26.050448
+      ],
+      "new_ms": [
+        8.712285,
+        9.194553
+      ],
+      "median_base_ms": 26.028847,
+      "median_new_ms": 8.953419,
+      "base_over_new": 2.9071405012990006,
+      "base_peak_rss_kib": 16516,
+      "new_peak_rss_kib": 19816,
+      "resource": {
+        "seconds": 0,
+        "peak_rss_gib": 0.02,
+        "min_available_mib": 24018,
+        "peak_load": 3.46,
+        "log_sha256": "0b70cad49a0cca8c1f52ff2a080ed1684fec7ae882d19f9547c2bd920a34730f"
+      }
+    },
+    {
+      "key": "cambi-3355x2516-1t",
+      "base_ms": [
+        160.610477,
+        160.906546
+      ],
+      "new_ms": [
+        160.787205,
+        160.869538
+      ],
+      "median_base_ms": 160.7585115,
+      "median_new_ms": 160.8283715,
+      "base_over_new": 0.9995656239048594,
+      "base_peak_rss_kib": 105772,
+      "new_peak_rss_kib": 105948,
+      "resource": {
+        "seconds": 3,
+        "peak_rss_gib": 0.1,
+        "min_available_mib": 24096,
+        "peak_load": 3.46,
+        "log_sha256": "6d1c068d98b67f336b30e5715d589b5d5979204a377c0053bf4706036e2a26c4"
+      }
+    },
+    {
+      "key": "cambi-3355x2516-16t",
+      "base_ms": [
+        166.235095,
+        163.366187
+      ],
+      "new_ms": [
+        65.932267,
+        60.632104
+      ],
+      "median_base_ms": 164.80064099999998,
+      "median_new_ms": 63.2821855,
+      "base_over_new": 2.604218544253659,
+      "base_peak_rss_kib": 105824,
+      "new_peak_rss_kib": 140060,
+      "resource": {
+        "seconds": 2,
+        "peak_rss_gib": 0.13,
+        "min_available_mib": 24187,
+        "peak_load": 1.68,
+        "log_sha256": "5f9331fc5d699f11bb768e185a034125f2cd2d8b4ce2ec11b7f56c9086ac0a7b"
+      }
+    },
+    {
+      "key": "butter-1024x1024-1t",
+      "base_ms": [
+        1036.971679,
+        1031.818461
+      ],
+      "new_ms": [
+        307.575806,
+        309.008128
+      ],
+      "median_base_ms": 1034.39507,
+      "median_new_ms": 308.291967,
+      "base_over_new": 3.3552449649134064,
+      "base_peak_rss_kib": 189544,
+      "new_peak_rss_kib": 189480,
+      "resource": {
+        "seconds": 14,
+        "peak_rss_gib": 0.18,
+        "min_available_mib": 23657,
+        "peak_load": 5.01,
+        "log_sha256": "b6d4faaccae62d01dfb029b8907a909e7e7ae5e298746f41f23917b947151472"
+      }
+    },
+    {
+      "key": "butter-1024x1024-16t",
+      "base_ms": [
+        1071.476322,
+        1077.410289
+      ],
+      "new_ms": [
+        310.608056,
+        316.176808
+      ],
+      "median_base_ms": 1074.4433055,
+      "median_new_ms": 313.392432,
+      "base_over_new": 3.428427734017521,
+      "base_peak_rss_kib": 189512,
+      "new_peak_rss_kib": 189500,
+      "resource": {
+        "seconds": 14,
+        "peak_rss_gib": 0.18,
+        "min_available_mib": 23909,
+        "peak_load": 4.47,
+        "log_sha256": "3c5d630ca45c8863a04996508cd7a38981ee5555cbcd7b9c5345617b3bbd34f1"
+      }
+    },
+    {
+      "key": "butter-3355x2516-1t",
+      "base_ms": [
+        7963.637214,
+        7953.702307
+      ],
+      "new_ms": [
+        3010.482715,
+        3000.308784
+      ],
+      "median_base_ms": 7958.6697605,
+      "median_new_ms": 3005.3957495,
+      "base_over_new": 2.648127043443135,
+      "base_peak_rss_kib": 1437516,
+      "new_peak_rss_kib": 1437516,
+      "resource": {
+        "seconds": 110,
+        "peak_rss_gib": 1.37,
+        "min_available_mib": 23092,
+        "peak_load": 5.92,
+        "log_sha256": "2d47415ab2760b1b290b224ceba311a21213d2833e12a7c61939397491dbbae3"
+      }
+    },
+    {
+      "key": "butter-3355x2516-16t",
+      "base_ms": [
+        7933.403656,
+        8007.683621
+      ],
+      "new_ms": [
+        3017.604593,
+        3012.837144
+      ],
+      "median_base_ms": 7970.5436385,
+      "median_new_ms": 3015.2208685,
+      "base_over_new": 2.643436081836736,
+      "base_peak_rss_kib": 1437432,
+      "new_peak_rss_kib": 1437512,
+      "resource": {
+        "seconds": 110,
+        "peak_rss_gib": 1.37,
+        "min_available_mib": 22989,
+        "peak_load": 5.33,
+        "log_sha256": "b79de3e9e8bffc82598fcf4ae5bd81454ab1f6383bab676ae80caff266857994"
+      }
+    }
+  ],
+  "gates": {
+    "ci-thread": {
+      "seconds": 19,
+      "peak_rss_gib": 2.31,
+      "min_available_mib": 23855,
+      "peak_load": 3.74,
+      "log_sha256": "af31d59eaa5ec1d08d4a6c95c5723440244649ac8c265f8d8ce802f39247237e"
+    },
+    "feature-matrix-thread": {
+      "seconds": 24,
+      "peak_rss_gib": 0.36,
+      "min_available_mib": 23554,
+      "peak_load": 1.9,
+      "log_sha256": "fbffa856598123b453d6fc5c8b844ff7a931cf0ff4cdf4656c948f8c386bf00c"
+    },
+    "oracles-thread": {
+      "seconds": 402,
+      "peak_rss_gib": 2.97,
+      "min_available_mib": 21494,
+      "peak_load": 3.34,
+      "log_sha256": "a207fda58354f2a49859216dc6e07ddc385a4b237c6867e19ad7f2f1ec3bf87f"
+    },
+    "parity-thread": {
+      "seconds": 166,
+      "peak_rss_gib": 1.37,
+      "min_available_mib": 23036,
+      "peak_load": 3.53,
+      "log_sha256": "20e7ae69a443cd66623ed83e95ccdf46f6fd08a75f2269a3f60f289984472c51"
+    },
+    "residuals-thread": {
+      "seconds": 0,
+      "peak_rss_gib": 0.02,
+      "min_available_mib": 24096,
+      "peak_load": 1.58,
+      "log_sha256": "00d4f540fe9ac0def08aa11a069e97c1ee8abd85b3dce006109aee80e3e7d9c5"
+    }
+  },
+  "oracle": {
+    "butter_ladder_maximum_error": 4.790954593048014e-07,
+    "butter_ladder_unchanged_bound": 4.8e-07,
+    "butter_aic_maximum_error": 4.7357177734852485e-07,
+    "cambi": {
+      "ladder": {
+        "scored": 18,
+        "matching_refusals": 9,
+        "maximum_oracle_error": 0.0
+      },
+      "aic": {
+        "scored": 61,
+        "matching_refusals": 0,
+        "maximum_oracle_error": 6.938893903907228e-18
+      }
+    }
+  },
+  "residual_audit": {
+    "pairs_per_metric": 61,
+    "metrics": [
+      "butter",
+      "cambi"
+    ],
+    "numeric_residual_rows": 122,
+    "residuals_unchanged_by_exact_score_identity": true,
+    "common_residual_table_sha256": "f1ae615f5819d26816d9842c4de4f52f087bfec7d1332165f935dc06be769f6a",
+    "input_images": 122,
+    "input_image_manifest_sha256": "a865f7ba00aaa12d6186ca2bdcb08260fec5d8e6cdcf0332ddbfbcfb13340452",
+    "input_files": {
+      "/home/lilith/tmp/aic-variants-scratch/round14-aic-parity-thread.tsv": "a302ba74e72676dc529442bd8b7a720805ae9215446f7827e3929957386cbd52",
+      "/home/lilith/tmp/aic-audit/pairs.tsv": "5888a1dae6a1358609c643cfec5e4ffe725caa7e3b1acd6815d67bfb96cfc762",
+      "/home/lilith/tmp/aic-site/site_fullres_subset61.csv": "094a5d77ea72ddd744301f4ce2f55dd2d207d12c6311c019cea7cac65e897e8d",
+      "/home/lilith/tmp/aic-site/config.json": "fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447"
+    }
+  },
+  "full_measurements_path": "/home/lilith/tmp/aic-variants-scratch/round14-thread-summary.tsv",
+  "full_measurements_sha256": "3a71dcdbaf0000ad0d4a4c14d813140dbb1dc240e1d9f075920963d5e644edc8"
+}

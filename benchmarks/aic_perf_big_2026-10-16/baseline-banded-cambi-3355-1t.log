@@ -1,0 +1,40 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23152MiB :: timeout --kill-after=20s 1150s just aic-perf-big-baseline-step wall /home/lilith/tmp/aic-variants-scratch/round14-banded cambi 3355 2516 1
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- 'wall' '/home/lilith/tmp/aic-variants-scratch/round14-banded' 'cambi' '3355' '2516' '1'
+metric=cambi threads=1 dimensions=3355x2516 load=7.47 6.05 4.46 5/2226 1508682
+banded-10bit 3355x2516 5 reps: 162.389637 ms/call score 4.78097355665335577 bits 40131fb7883377c6
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base 3355 2516 5"
+	User time (seconds): 0.78
+	System time (seconds): 0.03
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.82
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 105812
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 25800
+	Voluntary context switches: 1
+	Involuntary context switches: 9
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+
+ Performance counter stats for 'env RAYON_NUM_THREADS=1 /usr/bin/time -v /home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base 3355 2516 5':
+
+       20688652912      cpu_core/instructions/                                                
+        4361063682      cpu_core/cycles/                                                      
+
+       0.825247504 seconds time elapsed
+
+       0.785322000 seconds user
+       0.039707000 seconds sys
+
+
+run-heavy: done rc=0 1s | peak-RSS 0.10GiB | min-avail 23152MiB | peak-load 7.47

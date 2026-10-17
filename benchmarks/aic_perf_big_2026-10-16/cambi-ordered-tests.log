@@ -1,0 +1,51 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=12/20 avail=24259MiB :: timeout --kill-after=20s 1150s just snap-cargo @ test -p vmaf --features parallel,simd,avx512 --lib cambi
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree 5a8510566913 (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked test -p vmaf --features parallel,simd,avx512 --lib cambi
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+   Compiling libm v0.2.16
+   Compiling bytemuck v1.25.2
+   Compiling either v1.19.0
+   Compiling rayon v1.12.0
+   Compiling zenpixels v0.2.16 (https://github.com/imazen/zenpixels?rev=e56f626b14e6f0211e020159d30b3a48616e88e0#e56f626b)
+   Compiling zenmetrics-abstractions v0.0.1 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/crates/zenmetrics-abstractions)
+   Compiling magetypes v0.9.31-beta.1 (https://github.com/imazen/archmage?rev=da0ed5deca40ac60df32dcf4f6e7602658b2f959#da0ed5de)
+   Compiling vmaf v0.1.0 (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/work/zenmetrics/crates/vmaf)
+warning: variable does not need to be mutable
+    --> crates/vmaf/src/adm.rs:6595:9
+     |
+6595 |     let mut f = |rng: &mut dyn FnMut() -> i32| BandI32 {
+     |         ----^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `vmaf` (lib test) generated 1 warning (run `cargo fix --lib -p vmaf --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.51s
+     Running unittests src/lib.rs (/home/lilith/tmp/zenmetrics-lock-snap-aicperfbig/target/debug/deps/vmaf-b6174fde566f08e0)
+
+running 9 tests
+test metric::size_tests::below_cambi_minimum_is_too_small ... ok
+test cambi::tests::v3_decimate_and_filter_mode_match_fallback ... ok
+test cambi::standalone_tests::histogram_runs_match_ordered_pixel_windows ... ok
+test cambi::tests::v3_c_values_match_fallback ... ok
+test cambi::tests::spatial_mask_matches_direct_window ... ok
+test cambi::standalone_tests::original_author_banded_pins ... ok
+test cambi::standalone_tests::standalone_stride_and_input_validation ... ok
+test cambi::standalone_tests::scheduled_columns_preserve_ordered_c_value_bits_and_stride ... ok
+test cambi::map_tests::cambi_maps_fold_to_the_score ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.28s
+
+run-heavy: done rc=0 5s | peak-RSS 0.49GiB | min-avail 23935MiB | peak-load 4.99
