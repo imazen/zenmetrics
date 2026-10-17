@@ -829,6 +829,46 @@ existing contracts. This uses the same `jobexec` scoring/map owners as stored
 object inputs (`3594eff9`).
 
 
+### Single-owner local backfill
+
+On Linux with local blobs and a local ledger, `ZEN_LOCAL_FAIR_SCHEDULER=1`
+opts the native chunked path into a single queue, capped at24concurrent jobs
+and the existing box budget. Larger reservations receive alternating queue
+opportunities among small jobs; admissibility can backfill past them. Jobs
+retain their native identities, handler, content-addressed output and retry
+policy. The default path and distributed claims keep their existing owners.
+Do not use this option with multiple owners of one local ledger.
+
+Supply measured resource hints. A hint that cannot fit the fixed memory,
+core or configured VRAM budget is a configuration error. If
+`ZEN_LOCAL_RESERVE_BYTES` is positive, admission additionally requires existing
+reservations plus the candidate to fit current `MemAvailable` minus that
+reserve. This deliberately double-counts already allocated memory; hints are
+reservations, not universal allocation bounds. Keep an enclosing hard memory
+scope and low priority. A temporary lack of headroom waits and rechecks.
+
+Each completed row is written through the native Parquet serializer to an
+adjacent temporary file, synced, atomically renamed to a full-digest `.cell-`
+sidecar, then its directory synced. Publication retries the same row up to
+three times without rerunning its producer. Counts advance after publication;
+unrecoverable failure closes admission under the queue mutex and drains
+already admitted jobs. Exact unresolved rows remain in synced
+`.unpublished-` diagnostics. If storage also refuses those diagnostics, full
+identities and the marker failure appear in the retained command log; reconcile
+that failure before restarting. Interrupted temporary files remain evidence.
+
+Restart refuses malformed or unresolved diagnostics. Supply their exact rows
+through the native ledger after reconciliation; successful publication or
+exact reconciliation archives the marker outside the active veto namespace,
+preserving its contents. Existing eight-hex `.chunk-` files remain valid ledger
+inputs. Include every retained sidecar in `--ledger-in`; the full-digest
+namespace prevents new singleton rows from overwriting truncated names.
+
+A frozen experiment that binds an earlier worker must retain its own binary
+and acceptance evidence. This implementation does not retroactively upgrade
+an already-running worker or its durability claims.
+
+
 ### Derived-data view declarations
 
 `zenfleet-ctl declare-views --spec views.json --out manifest.json` uses the

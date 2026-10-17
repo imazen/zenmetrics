@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 
+#[cfg(target_os = "linux")]
+mod local_fair;
 mod s3io;
 
 use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, ShardDecision};
@@ -3157,17 +3159,48 @@ fn run_chunked(
         (None, _) => {
             let store = LocalBlobStore::new(cfg.blobs.clone())
                 .map_err(|e| WorkerRunError::Io(e.to_string()))?;
-            execute_gap_chunked(
-                desired,
-                view,
-                policy,
-                handler,
-                &store,
-                |_| true,
-                params.clone(),
-                &mut flush,
-                ctx,
-            )
+            if std::env::var("ZEN_LOCAL_FAIR_SCHEDULER").ok().as_deref() == Some("1") {
+                #[cfg(not(target_os = "linux"))]
+                {
+                    return Err(WorkerRunError::Config(
+                        "local fair scheduler requires Linux local ledger storage".into(),
+                    ));
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    if ledger_out_uri.starts_with("s3://") {
+                        return Err(WorkerRunError::Config(
+                            "local fair scheduler requires a local ledger".into(),
+                        ));
+                    }
+                    local_fair::require_reconciled_publication(&cfg.ledger_out, view)?;
+                    let mut checked = |id: &str, rows: &[LedgerRow]| {
+                        local_fair::flush_checked(&cfg.ledger_out, id, rows)
+                    };
+                    local_fair::execute(
+                        desired,
+                        view,
+                        policy,
+                        &handler,
+                        &store,
+                        &params,
+                        &mut checked,
+                        ctx,
+                    )?
+                }
+            } else {
+                execute_gap_chunked(
+                    desired,
+                    view,
+                    policy,
+                    handler,
+                    &store,
+                    |_| true,
+                    params.clone(),
+                    &mut flush,
+                    ctx,
+                )
+            }
         }
     };
     Ok(out)
@@ -3815,7 +3848,7 @@ mod tests {
     }
 
     static N: AtomicU64 = AtomicU64::new(0);
-    fn tmp() -> PathBuf {
+    pub(super) fn tmp() -> PathBuf {
         let n = N.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("zenjobworker_{}_{}", std::process::id(), n))
     }
@@ -4767,7 +4800,7 @@ mod tests {
 
     /// A distinct, cheap encode cell (4 MB / 1 thread → packs many per chunk). Distinct `inputs`
     /// give each a distinct content-addressed `JobId`.
-    fn cheap_cell(i: u8) -> DesiredJob {
+    pub(super) fn cheap_cell(i: u8) -> DesiredJob {
         DesiredJob {
             requires: vec![],
             kind: JobKind::Encode {
@@ -4791,7 +4824,7 @@ mod tests {
         }
     }
 
-    fn test_params() -> ChunkParams {
+    pub(super) fn test_params() -> ChunkParams {
         ChunkParams {
             budget: BoxBudget::new(24 << 30, 2), // 24 GiB, 2 cores
             chunk_wall_sec: 2.0,
