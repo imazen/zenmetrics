@@ -50,7 +50,7 @@ def check(directory, screenshots, port=3387):
             page.locator('svg[aria-label="Rank change between resolutions"]').wait_for()
             if screenshots:page.screenshot(path=str(screenshots/'ranking-slope.png'),full_page=True)
             from urllib.parse import urlencode
-            ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='os=Linux · backend=CPU',impl='competitors',source='',size='512×512',unit='ms/MP',layout='single')
+            ranking_params=dict(host='i265',device='CPU',threads='1',mode='score-only',workload='Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs',impl='competitors',source='',size='512×512',unit='ms/MP',layout='single')
             page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(ranking_params))
             page.wait_for_function('window.dashboardReady==="ranking"')
             assert page.locator('.whisker').count()>0
@@ -60,6 +60,22 @@ def check(directory, screenshots, port=3387):
             page.reload();page.wait_for_function('window.dashboardReady==="ranking"')
             assert page.locator('[data-ranking="unit"]').input_value()=='ms/MP'
             if screenshots:page.screenshot(path=str(screenshots/'ranking-competitor.png'),full_page=True)
+            # Both supplied implementations must coexist in all eight paired cells.
+            speed_rows=json.loads((directory/'data/speed.json').read_text())
+            for resolution in ['2048×1080','3840×2160']:
+                for threads in ['1','20']:
+                    for mode in ['score-only','score+map']:
+                        paired=dict(ranking_params,size=resolution,threads=threads,mode=mode,unit='ms')
+                        page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(paired))
+                        page.wait_for_function('window.dashboardReady==="ranking"')
+                        assert page.locator('.rank-bar').count()==2,(resolution,threads,mode)
+                        assert page.locator('.whisker').count()==2
+                        assert page.locator('#chart .warning').count()==1
+                        assert 'zenmetrics' in page.locator('#chart').inner_text()
+                        assert 'libjxl v0.12' in page.locator('#chart').inner_text()
+                        expected=sorted(r['ms'] for r in speed_rows if r.get('comparison_group')==paired['workload'] and f"{int(r['width'])}×{int(r['height'])}"==resolution and str(r['threads'])==threads and r['mode']==('score' if mode=='score-only' else mode))
+                        assert page.locator('.rank-bar').evaluate_all('(bars)=>bars.map(b=>Number(b.dataset.ms))')==expected
+                        if screenshots and threads=='1' and mode=='score-only':page.screenshot(path=str(screenshots/('paired-'+resolution+'.png')),full_page=True)
             mixed=dict(host='r7950x',device='CPU',threads='missing',mode='full',workload='os=Linux (WSL2) · backend=CPU · phase=cold · engine=native · content=missing',impl='zenmetrics',source='',size='512×512')
             page.goto(f'http://127.0.0.1:{port}/#ranking?'+urlencode(mixed))
             page.wait_for_function('window.dashboardReady==="ranking"')

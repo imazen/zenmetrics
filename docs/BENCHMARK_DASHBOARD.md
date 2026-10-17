@@ -67,6 +67,16 @@ marks and dashed outlines. Whiskers show reported p10–p90, when available.
 The libjxl v0.12 panel retains all supplied samples, including first calls;
 median and linearly interpolated percentiles are computed from those samples.
 It is a timing panel, not a parity qualification.
+The paired Rust 2K/4K extract shares the supplied libjxl input pairs and a
+registry-declared RGB8 / 80-nit native-CPU comparison group. This group binds
+those two named sources; it does not merge other historical workloads. Host,
+device, threads, mode and exact size still filter separately. The source warning
+remains: Rust excludes initialization/warmup and reports ten zenbench round
+means, whereas libjxl includes first-call samples. All reported rounds remain,
+including gate-clean false observations (one of ten at 2K, two of ten at 4K).
+Input and binary hashes identify the Rust measurements; their repository commit
+was not recorded. No current commit is substituted for it.
+
 
 All-size columns retain identical workload filters; changing layout clears the
 single-file source restriction and displays the mixed-source warning. The two-size slope chart ranks the

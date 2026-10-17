@@ -6,7 +6,7 @@ export const device=r=>String(r.backend).toLowerCase()==='cpu'?'CPU':'GPU';
 // measurements cannot be promoted to the same score-only contract.
 export const mode=r=>r.mode==='score'?'score-only':r.mode;
 const dimensions=['os','backend','phase','engine','content','dtype','tf32_conv'];
-export const workload=r=>dimensions.filter(k=>r[k]!=null).map(k=>`${k}=${r[k]}`).join(' · ')||'not recorded';
+export const workload=r=>r.comparison_group||dimensions.filter(k=>r[k]!=null).map(k=>`${k}=${r[k]}`).join(' · ')||'not recorded';
 export const measured=rows=>rows.filter(r=>Number.isFinite(r.ms)&&r.ms>0&&r.width>0&&r.height>0);
 export const family=m=>/lpips|dists|dream|arniqa|musiq|hyper|maniqa|paq|liqe|deep|ckdn|afine|wadi|pieapp|topiq|ahiq|wadiqam|wd$/.test(m)?'Learned':/ssim|psnr|gmsd|vif|fsim|haar|vsi/.test(m)?'Structural':'Perceptual / other';
 const colors={'Learned':'#a97bcc','Structural':'#3c9bc0','Perceptual / other':'#36a582'};

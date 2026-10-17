@@ -156,7 +156,7 @@ def adapt(path, spec):
                           pair=row.get('pair_sha256','missing'),series='competition reference',
                           p10_ms=number(row.get('p10_ns'))/1e6 if row.get('p10_ns') is not None else None,
                           p90_ms=number(row.get('p90_ns'))/1e6 if row.get('p90_ns') is not None else None,
-                          n=row.get('n'),peak_rss_gib=(row.get('resource') or {}).get('peak_rss_gib'),
+                          n=row.get('n'),notes=safe_text(row.get('notes','')),sample_gate_clean=row.get('sample_gate_clean'),impl_binary_sha=row.get('impl_binary_sha'),input_sha256=row.get('input_sha256'),peak_rss_gib=(row.get('resource') or {}).get('peak_rss_gib'),
                           cpu=row.get('cpu_model'),gpu=row.get('gpu'),simd_tier=row.get('simd_tier'),
                           parity_status=row.get('parity_status','missing'))
             yield result
@@ -218,6 +218,7 @@ def build(output):
             runtime=dict(spec,host=sources[key]['host'],os=sources[key]['os'])
             for row in adapt(path, runtime):
                 row['source'] = key
+                if spec.get('comparison_group'):row['comparison_group']=spec['comparison_group']
                 if spec['family']=='quality' and 'mos' in row:
                     row['human_label']=row.pop('mos');row.setdefault('target','MOS')
                 if spec['family']=='speed' and row.get('metric') in aliases:

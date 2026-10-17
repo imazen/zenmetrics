@@ -24,3 +24,6 @@ assert(bars.indexOf('data-metric="b"')<bars.indexOf('data-metric="a"'));
 assert(bars.includes('whisker')&&bars.includes('◆')&&bars.includes('log scale'));
 assert(!bars.includes('data-metric="c"')&&!bars.includes('data-metric="d"'));
 console.log('Exact-cell ranking, sorting, competitor marks and whiskers pass');
+
+const pairedRows=[timing('butteraugli',3,{comparison_group:'Shared RGB8 pairs',os:'Linux-7',backend:'cpu',engine:'native'}),timing('butteraugli',4,{comparison_group:'Shared RGB8 pairs',implementation:'libjxl v0.12',os:'Linux',backend:'CPU'})];
+assert.equal(selectRanking(pairedRows,new URLSearchParams({...Object.fromEntries(params),workload:'Shared RGB8 pairs'})).length,2);
