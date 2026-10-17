@@ -211,8 +211,8 @@ the verified branch landing SHA to the coordinator.
 
 ## Remote coverage snapshot (2026-10-17)
 
-The retained historical cohort has [1,684/2,996 r7900x rows](task4-r7900x-progress-20261017-1016.json)
-and [2,258/3,164 Mac rows](task4-mac-progress-20261017-1016.json). These are
+The retained historical cohort has [1,684/2,996 r7900x rows](task4-r7900x-progress-20261017-1012.json)
+and [2,258/3,164 Mac rows](task4-mac-progress-20261017-1012.json). These are
 recorded attempts, including unsupported routes and refusals. Per-size receipts
 separate timings meeting the requested minimum from short samples. In particular,
 the external controller requested three AIC-medium samples; the policy requires
