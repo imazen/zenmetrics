@@ -13,6 +13,22 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Require E36 native decoded-checkpoint qualification before export, retain its program archive/resource receipts, and refuse owner-blocked or mixed-smoke variants before launch.
+
+- Add a private E36 program-pack and harvest adapter for exact unchanged-target family masks, matched TV configuration and arm-specific full-budget watchdogs; retain existing checkpoint admission ([transport](docs/E36_FIT_TRANSPORT.md)).
+
+- Add eight paired zenmetrics/libjxl butteraugli timing cells at 2K and 4K, with retained sample identities and explicit sampling-method caveats (`04c8cac2`).
+
+- Add exact-resolution cross-metric speed rankings, comparable workload filters, source-marked all-size and rank-change charts, ranking CSV and libjxl v0.12 timing samples (`7cf90d30`).
+
+- Qualify dashboard oracle/published comparisons, derive catalog evidence, classify uploads and normalize historical timing/parity panels (`e0ef83c7`, `844fb671`).
+
+- Add a registry-driven GitHub Pages benchmark dashboard with timing, agreement, historical human-quality panels and a CLI metric catalog (`97732303`).
+
+- Declare hash-bound derived-data views through a strict private CLI adapter; bound versioned E36 ladder watchdogs without changing existing job identities or public Rust types.
+
+- Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits (`afd81b53`).
+
 - Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
 
 - Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.

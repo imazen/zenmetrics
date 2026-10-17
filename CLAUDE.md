@@ -1704,3 +1704,10 @@ numerical section, SVD assertions and frozen golden TSVs remain unchanged.
 Source identities, complete rows, resource receipts and historical experiments
 are linked from [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md)
 and [the per-change table](benchmarks/nn_port_2026-10-15/dmm_bisect_results_2026-10-17.md).
+
+### E36 fit qualification (2026-10-17)
+
+The private E36 mask changes base table identities. Do not qualify these with an
+unchanged E34 package. Use the native E36 profile and exact metadata derivation
+before the existing checkpoint gate; see [transport](docs/E36_FIT_TRANSPORT.md).
+`just e36-fit-contract-check` uses invented metadata and never trains.

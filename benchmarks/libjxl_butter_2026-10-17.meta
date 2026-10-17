@@ -1,0 +1,8 @@
+host=i265
+os=Linux
+commit=a7a9c787
+libjxl_version=v0.12.0
+command=libjxl-compute (iqa_compete_2026-10-16 harness), static Release, RGB8 in memory, 80 nits
+harness_bookmark=iqa-compete
+samples=5-9; all samples retained including first invocation; 1T pinned CPU 2
+summary=median; p10/p90 linear interpolation at (n-1)*p over sorted samples, nanoseconds converted to milliseconds

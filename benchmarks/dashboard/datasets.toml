@@ -1,0 +1,1504 @@
+# Reviewed dataset schemas; unclassified uploads fail the dashboard build.
+
+[[dataset]]
+glob = "benchmarks/metric_loop_st_2026-08-30.tsv"
+family = "speed"
+adapter = "loop"
+host = "mac"
+threads = 1
+metadata = ["benchmarks/metric_loop_2026-08-30.meta"]
+columns = ["metric", "size_label", "w", "h", "mp", "oneshot_ms", "precompute_ms", "warm_per_cand_ms", "ingress_ms", "ingress_pct_of_warm", "warm_alt_ms", "warm_over_oneshot", "loop_n5_measured_ms", "loop_n5_predicted_ms", "loop_n5_model_err_pct", "breakeven_candidates", "n_runs"]
+note = "Encoder-search loop, planar linear f32; macOS ARM64; not sweep ingress."
+
+[[dataset]]
+glob = "benchmarks/metric_loop_mt_2026-08-30.tsv"
+family = "speed"
+adapter = "loop"
+host = "mac"
+threads = 12
+metadata = ["benchmarks/metric_loop_2026-08-30.meta"]
+columns = ["metric", "size_label", "w", "h", "mp", "oneshot_ms", "precompute_ms", "warm_per_cand_ms", "ingress_ms", "ingress_pct_of_warm", "warm_alt_ms", "warm_over_oneshot", "loop_n5_measured_ms", "loop_n5_predicted_ms", "loop_n5_model_err_pct", "breakeven_candidates", "n_runs"]
+note = "Encoder-search loop, planar linear f32; macOS ARM64; not sweep ingress."
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/butter_aic.tsv"
+metric = "butteraugli-original"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+oracle_precision = "7 significant digits"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/cambi_aic.tsv"
+metric = "cambi"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+oracle_precision = "rounded decimal text; source precision applies"
+reproduction = "reproduction unconfirmed"
+
+[[dataset]]
+glob = "benchmarks/aic_review_2026-10-15/ssim1_aic.tsv"
+metric = "ssimulacra1"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "published", "published_error", "published_jnd_error"]
+oracle_precision = "rounded decimal text; source precision applies"
+reproduction = "reproduction unconfirmed"
+note = "Canonical later Round 5 reviewed scoring; earlier Round 4 file remains historical. Published reproduction unconfirmed."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_kadid_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_csiq_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical Margarine candidate/teacher experiment; these are scoped subsets, not a general metric leaderboard."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress-v*/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/gpu-cid22-2k-progress-v*/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/nn-cuda-cid22-2k-progress-v*/*.json"
+family = "speed"
+adapter = "competition"
+allow_absent = true
+columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
+note = "Progress snapshot; missing and refused cells retained."
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality-points/*.tsv"
+family = "quality"
+adapter = "quality-points"
+allow_absent = true
+columns = ["metric", "dataset", "pair", "mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/cpu_wall_all_metrics_2026-05-29.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = ["benchmarks/cpu_wall_all_metrics_2026-05-29.meta"]
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/mt8_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/mt8_photo_3354x2516.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/mt8_photo_3355x2516.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/serial_batch_2026-10-12/wall.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["build", "rev_desc", "size", "wall_ms", "score_hi", "score_lo"]
+note = "Serial-batch aggregate; cannot infer per-metric time from total wall time."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/st_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/iso_zenbench_8cores_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/iso_zenbench_pinned_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/par_8t_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/par_8t_3354x2516_vmaf.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/par_8t_3355x2516.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/serial_1t_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-09/threading_recheck/serial_8t_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-11-i265/analysis.tsv"
+family = "coverage"
+adapter = "rounded-analysis"
+columns = ["metric", "1t 1MP ms", "8t 1MP ms", "8t speedup 1MP", "1t 8.4MP ms", "8t 8.4MP ms", "8t speedup 8.4MP", "1t ms/MP @8.4MP", "1t scaling vs linear", "1t 8.4MP maxRSS MiB", ""]
+note = "Rounded analytical summary; underlying observations are separately registered."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-11-i265/mt8_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-11-i265/mt8_photo_3355x2516.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-11-i265/st_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265/mt8_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265/st_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/mt8_photo_1024.tsv"
+leading_metric_label = true
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/mt8_photo_3355x2516.tsv"
+leading_metric_label = true
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_mt8_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_mt8_3355.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_st_1024_gmsd.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_st_1024_mdsi.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_st_1024_ms-gmsd.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/patch_st_1024_ms-gmsdc.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/st_photo_1024.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score", "content", "rayon_threads", "cpus"]
+metadata = []
+host = "missing"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_class2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_ms-ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_nlpd2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_psnr-y_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_psnr_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/1024_yuv420_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_class2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_ms-ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_nlpd2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_psnr-y_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_psnr_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/4K_yuv420_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_class2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_ms-ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_nlpd2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_psnr-y_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_psnr_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/512_yuv420_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_class2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_ms-ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_nlpd2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_psnr-y_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_psnr_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_ssim_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/8K_yuv420_2.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/new_metrics_wall_2026-09-24.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/new_metrics_wall_optimized_2026-09-24.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/new_metrics_2026-09-24/nlpd_opt_2026-09-24.tsv"
+family = "speed"
+adapter = "cpu-wall"
+columns = ["size_label", "metric", "mode", "cold_or_warm", "w", "h", "mean_ns", "mean_ms", "n_rounds", "score"]
+metadata = []
+host = "r7900x"
+note = "Historical wall observation; parallel-pair modes are per-pair normalized. Source/build/content filters apply."
+
+[[dataset]]
+glob = "benchmarks/cpu_metrics_full_table_2026-05-28.tsv"
+metadata = ["docs/CPU_BENCHMARK_TABLE_2026-05-28.md"]
+commit = "884c2722ab102367a5634de0987caa2b4f99cde4"
+os = "Linux (WSL2)"
+command = "python3 benchmarks/heaptrack/refresh_2026-05-28/assemble_table.py"
+family = "speed"
+adapter = "cpu-full"
+columns = ["metric", "mode", "size_label", "size_w", "size_h", "size_mp", "cold_or_warm", "wall_ms", "peak_heap_bytes", "peak_heap_human", "score", "notes"]
+host = "r7950x"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/bar_cpu_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "device", "device_name", "torch", "threads", "tf32_conv", "metric", "dtype", "mode", "size", "n", "median_ms", "min_ms", "score", "note"]
+implementation = "torch reference"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/bar_gpu_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "device", "device_name", "torch", "threads", "tf32_conv", "metric", "dtype", "mode", "size", "n", "median_ms", "min_ms", "score", "note"]
+implementation = "torch reference"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/baseline_all_models_rten_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/ort_cuda_rust_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/rten_cpu_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/rten_cpu_prepack_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/rten_pair_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/rten_threads_i265.tsv"
+family = "speed"
+adapter = "nn-speed"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+implementation = "zenmetrics"
+
+[[dataset]]
+glob = "benchmarks/gpu_coldstart_2026-05-29.tsv"
+family = "speed"
+adapter = "gpu-cold"
+columns = ["crate", "size_mp", "size_w", "size_h", "backend", "cold_first_call_ms", "warm_per_call_ms", "coldstart_overhead_ms", "client_init_ms", "metric_new_ms", "first_compute_ms", "cold_total_ms", "n_samples", "score", "disk_cache_state", "notes"]
+host = "r7950x"
+
+[[dataset]]
+glob = "benchmarks/gpu_metrics_sweep_2026-05-28.tsv"
+metadata = ["docs/GPU_METRICS_SWEEP_2026-05-28.md"]
+gpu = "NVIDIA GeForce RTX 5070"
+command = "python3 scripts/memory_audit/sweep_gpu_metrics_2026-05-28.py --metrics all --backends cuda,wgpu --sizes 1mp,4mp,16mp,40mp --reps 2 --out-base benchmarks/gpu_metrics_sweep_2026-05-28"
+family = "speed"
+adapter = "gpu-sweep"
+columns = ["crate", "size_mp", "size_w", "size_h", "mode", "backend", "peak_vram_bytes", "peak_vram_human", "wall_median_ms", "warm_ms", "score", "notes"]
+host = "r7950x"
+
+[[dataset]]
+glob = "benchmarks/cpu_gpu_crossover_2026-05-29.tsv"
+family = "speed"
+adapter = "crossover"
+columns = ["metric", "size_label", "w", "h", "mp", "cpu_full_ms", "gpu_cold_total_ms", "gpu_warm_ms", "one_shot_winner", "batch_winner"]
+host = "r7950x"
+
+[[dataset]]
+glob = "benchmarks/metric_loop_gpu_metal_2026-08-30.tsv"
+family = "speed"
+adapter = "metal-loop"
+columns = ["metric", "memory_mode", "w", "h", "metric_new_ms", "first_compute_ms", "setup_total_ms", "set_reference_ms", "cold_per_cand_ms", "warm_per_cand_ms", "warm_over_cold", "cpu_precompute_ms", "cpu_per_cand_ms", "breakeven_candidates_vs_cpu", "score_cold", "score_warm"]
+host = "mac"
+metadata = ["benchmarks/metric_loop_2026-08-30.meta"]
+
+[[dataset]]
+glob = "benchmarks/ssim2_backend_ab_2026-08-07_lianli.csv"
+family = "speed"
+adapter = "backend-ab"
+columns = ["size", "pixels", "cuda_med_ms", "vk_med_ms", "cuda_min_ms", "vk_min_ms", "cuda_p90_ms", "vk_p90_ms", "ratio_vk_over_cuda", "cuda_create_ms", "vk_create_ms", "cuda_score", "vk_score", "score_abs_delta"]
+metric = "ssim2-gpu"
+host = "missing"
+note = "Historical backend A/B; unknown CPU host stays missing; absent backend observations remain unavailable."
+also_agreement = true
+
+[[dataset]]
+glob = "benchmarks/ssim2_backend_ab_2026-08-07_lianli_cuda.csv"
+family = "speed"
+adapter = "backend-ab"
+columns = ["size", "pixels", "cuda_med_ms", "vk_med_ms", "cuda_min_ms", "vk_min_ms", "cuda_p90_ms", "vk_p90_ms", "ratio_vk_over_cuda", "cuda_create_ms", "vk_create_ms", "cuda_score", "vk_score", "score_abs_delta"]
+metric = "ssim2-gpu"
+host = "missing"
+note = "Historical backend A/B; unknown CPU host stays missing; absent backend observations remain unavailable."
+also_agreement = true
+
+[[dataset]]
+glob = "benchmarks/ssim2_backend_ab_2026-08-07_wsl_cuda.csv"
+family = "speed"
+adapter = "backend-ab"
+columns = ["size", "pixels", "cuda_med_ms", "vk_med_ms", "cuda_min_ms", "vk_min_ms", "cuda_p90_ms", "vk_p90_ms", "ratio_vk_over_cuda", "cuda_create_ms", "vk_create_ms", "cuda_score", "vk_score", "score_abs_delta"]
+metric = "ssim2-gpu"
+host = "missing"
+note = "Historical backend A/B; unknown CPU host stays missing; absent backend observations remain unavailable."
+also_agreement = true
+
+[[dataset]]
+glob = "benchmarks/ssim2_backend_ab_2026-08-21_idle_spirv.csv"
+family = "speed"
+adapter = "backend-ab"
+columns = ["size", "pixels", "cuda_med_ms", "vk_med_ms", "cuda_min_ms", "vk_min_ms", "cuda_p90_ms", "vk_p90_ms", "ratio_vk_over_cuda", "cuda_create_ms", "vk_create_ms", "cuda_score", "vk_score", "score_abs_delta"]
+metric = "ssim2-gpu"
+host = "missing"
+note = "Historical backend A/B; unknown CPU host stays missing; absent backend observations remain unavailable."
+also_agreement = true
+
+[[dataset]]
+glob = "benchmarks/ssim2_backend_ab_2026-08-21_idle_wgsl.csv"
+family = "speed"
+adapter = "backend-ab"
+columns = ["size", "pixels", "cuda_med_ms", "vk_med_ms", "cuda_min_ms", "vk_min_ms", "cuda_p90_ms", "vk_p90_ms", "ratio_vk_over_cuda", "cuda_create_ms", "vk_create_ms", "cuda_score", "vk_score", "score_abs_delta"]
+metric = "ssim2-gpu"
+host = "missing"
+note = "Historical backend A/B; unknown CPU host stays missing; absent backend observations remain unavailable."
+also_agreement = true
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/butter_ladder.tsv"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error"]
+metric = "butteraugli-original"
+reproduction = "not qualified by ladder"
+oracle_precision = "7 significant digits"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/cambi_ladder.tsv"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error", "ours_error"]
+metric = "cambi"
+reproduction = "reproduction unconfirmed"
+oracle_precision = "rounded decimal text; source precision applies"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/ssim1_ladder.tsv"
+family = "agreement"
+adapter = "parity"
+columns = ["key", "ours", "oracle", "oracle_error", "oracle_jnd_error"]
+metric = "ssimulacra1"
+reproduction = "reproduction unconfirmed"
+oracle_precision = "rounded decimal text; source precision applies"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/ws_ladder.tsv"
+family = "agreement"
+adapter = "parity-wide"
+columns = ["key", "rgb", "rgb_oracle", "rgb_oracle_error", "rgb_oracle_jnd_error", "swapped", "swapped_oracle", "swapped_oracle_error", "swapped_oracle_jnd_error"]
+metric = "ws-hv"
+measurements = [{ours = "rgb", reference = "rgb_oracle", series = "rgb vs oracle", jnd = "rgb_oracle_jnd_error"}, {ours = "swapped", reference = "swapped_oracle", series = "swapped vs oracle", jnd = "swapped_oracle_jnd_error"}]
+reproduction = "reproduction unconfirmed"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/ws_aic.tsv"
+family = "agreement"
+adapter = "parity-wide"
+columns = ["key", "rgb", "rgb_oracle", "rgb_oracle_error", "rgb_oracle_jnd_error", "published", "rgb_published_error", "rgb_published_jnd_error", "swapped", "swapped_oracle", "swapped_oracle_error", "swapped_oracle_jnd_error", "swapped_published_error", "swapped_published_jnd_error"]
+metric = "ws-hv"
+measurements = [{ours = "rgb", reference = "rgb_oracle", series = "rgb vs oracle", jnd = "rgb_oracle_jnd_error"}, {ours = "rgb", reference = "published", series = "rgb vs published", jnd = "rgb_published_jnd_error"}, {ours = "swapped", reference = "swapped_oracle", series = "swapped vs oracle", jnd = "swapped_oracle_jnd_error"}, {ours = "swapped", reference = "published", series = "swapped vs published", jnd = "swapped_published_jnd_error"}]
+reproduction = "reproduction unconfirmed"
+
+[[dataset]]
+glob = "benchmarks/aic_variants_2026-10-15/fsim_summary.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["metric", "column", "site_mapping", "n", "max_published_abs_delta", "median_jnd_offset", "max_abs_jnd_offset", "mapping_available"]
+absolute = "max_published_abs_delta"
+jnd = "max_abs_jnd_offset"
+series = "published"
+statistic = "max over panel; JND max may have a different pair"
+
+[[dataset]]
+glob = "benchmarks/aic_variants_2026-10-15/ssim_summary.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["metric", "column", "site_mapping", "n", "max_published_abs_delta", "median_jnd_offset", "max_abs_jnd_offset", "mapping_available", "rejected_geometry"]
+absolute = "max_published_abs_delta"
+jnd = "max_abs_jnd_offset"
+series = "published"
+statistic = "max over panel; JND max may have a different pair"
+
+[[dataset]]
+glob = "benchmarks/aic_variants_2026-10-15/vsi_summary.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["metric", "column", "site_mapping", "n", "max_published_abs_delta", "median_jnd_offset", "max_abs_jnd_offset", "mapping_available"]
+absolute = "max_published_abs_delta"
+jnd = "max_abs_jnd_offset"
+series = "published"
+statistic = "max over panel; JND max may have a different pair"
+
+[[dataset]]
+glob = "benchmarks/aic_variants_2026-10-15/round2_gates.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["metric", "n", "max_abs_delta", "worst_pair", "oracle", "tolerance"]
+absolute = "max_abs_delta"
+series = "published"
+
+[[dataset]]
+glob = "benchmarks/wd_port_2026-10-16/ladder_parity.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["engine", "column", "pairs", "worst_absolute_error", "worst_jnd_error"]
+absolute = "worst_absolute_error"
+jnd = "worst_jnd_error"
+series = "engine vs oracle"
+statistic = "worst panel error"
+
+[[dataset]]
+glob = "benchmarks/wd_port_2026-10-16/largest_engine_parity.tsv"
+family = "agreement"
+adapter = "parity-wide"
+columns = ["column", "rten", "ort_cuda", "absolute_error", "konjnd_error"]
+measurements = [{ours = "rten", reference = "ort_cuda", series = "RTen vs ORT CUDA", jnd = "konjnd_error"}]
+
+[[dataset]]
+glob = "benchmarks/wd_port_2026-10-16/aic_predictions.tsv"
+family = "agreement"
+adapter = "parity-wide"
+columns = ["image", "native_s1", "native_s2", "native_s3", "native_s4", "native_s5", "winner_s1", "winner_s2", "winner_s3", "winner_s4", "winner_s5", "published_s1", "published_s2", "published_s3", "published_s4", "published_s5"]
+measurements = [{ours = "native_s1", reference = "published_s1", series = "native vs published", metric = "wd_s1"}, {ours = "native_s2", reference = "published_s2", series = "native vs published", metric = "wd_s2"}, {ours = "native_s3", reference = "published_s3", series = "native vs published", metric = "wd_s3"}, {ours = "native_s4", reference = "published_s4", series = "native vs published", metric = "wd_s4"}, {ours = "native_s5", reference = "published_s5", series = "native vs published", metric = "wd_s5"}, {ours = "winner_s1", reference = "published_s1", series = "diagnostic winner vs published", metric = "wd_s1"}, {ours = "winner_s2", reference = "published_s2", series = "diagnostic winner vs published", metric = "wd_s2"}, {ours = "winner_s3", reference = "published_s3", series = "diagnostic winner vs published", metric = "wd_s3"}, {ours = "winner_s4", reference = "published_s4", series = "diagnostic winner vs published", metric = "wd_s4"}, {ours = "winner_s5", reference = "published_s5", series = "diagnostic winner vs published", metric = "wd_s5"}]
+
+[[dataset]]
+glob = "benchmarks/wd_port_2026-10-16/aic_residuals.tsv"
+family = "agreement"
+adapter = "parity-summary"
+columns = ["convention", "column", "pairs", "median_absolute", "max_absolute", "median_site_jnd", "max_site_jnd"]
+absolute = "max_absolute"
+jnd = "max_site_jnd"
+series = "published"
+statistic = "panel max residual; JND max separately pooled"
+
+[[dataset]]
+glob = "benchmarks/aic_perf_big_2026-10-16/residuals.tsv"
+family = "agreement"
+adapter = "hex-residual"
+columns = ["key", "metric", "common_score_bits", "common_native_residual_bits", "common_jnd_residual_bits"]
+
+[[dataset]]
+glob = "benchmarks/hdrvdp_upiq_2026-09-24.tsv"
+family = "agreement"
+adapter = "parity-wide"
+columns = ["condition_id", "test_file", "reference_file", "official_hdrvdp2_2", "jod", "hdrvdp"]
+metric = "hdrvdp"
+measurements = [{ours = "hdrvdp", reference = "official_hdrvdp2_2", series = "official HDRVDP2.2"}]
+
+[[dataset]]
+glob = "benchmarks/nn_konjnd_scale_2026-10-15.tsv"
+numeric = ["n", "p25", "median", "p75", "mean", "p75_over_p25"]
+family = "scales"
+adapter = "scales"
+columns = ["metric", "codec", "n", "p25", "median", "p75", "mean", "p75_over_p25"]
+
+[[dataset]]
+glob = "benchmarks/wd_port_2026-10-16/konjnd_scales.tsv"
+numeric = ["pooled_median", "JPEG_median", "BPG_median", "pairs"]
+family = "scales"
+adapter = "scales"
+columns = ["column", "pooled_median", "JPEG_median", "BPG_median", "pairs"]
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_anchored_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_box3_aic4_2026-09-25.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["pooling", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_coarse_gaussian_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_compact4_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_compact_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_composites_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["pooling", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_composites_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["pooling", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_full_malta_live1_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_lattice_kadid_distortion15_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_live1_ablation_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["candidate", "norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_live1_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["candidate", "norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_malta_controls_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["candidate", "norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_malta_uniform_cid22_kadid_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_multirate_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_multirate_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_native_gaussian_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_native_mask_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_native_uhf_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_native_uhf_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_native_uhf_live1_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_peak_stratified_live1_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_perceptual_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_physical_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_pooled_rejected_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_reference_regions_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_refined1_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_refined2_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_refined2_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_refined_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_simd_coarse_full_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_sparse_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stable_peak_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stratified_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stratified_cid22_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stratified_csiq_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stratified_kadid_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_stream_blur_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_vector_expand_row_aic4_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_vector_expand_row_kadid_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_vector_expand_row_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_vector_row_aic3_live2_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_vector_row_pipal_quality_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/margarine/margarine_zero_sigma_panels_2026-09-26.tsv"
+family = "quality"
+adapter = "quality"
+columns = ["candidate", "norm", "scope", "dataset", "key", "arm", "n", "status", "signed_srocc", "srocc", "plcc", "krocc", "or", "pwrc", "z_rmse", "geomean3", "harmean3", "min3"]
+note = "Historical candidate/teacher experiment. Experiment, normalization and subset are distinct scientific conditions."
+
+[[dataset]]
+glob = "benchmarks/aic_flip_2026-10-15/cw_aic.json"
+family = "coverage"
+adapter = "json-summary"
+columns = ["[].blas_luma_different_dist", "[].blas_luma_different_ref", "[].key", "[].oracle", "[].oracle_delta", "[].ours", "[].published", "[].published_delta"]
+note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
+also_pairs = true
+metric = "cw-ssim"
+
+[[dataset]]
+glob = "benchmarks/aic_flip_2026-10-15/cw_diagnostic_grid_search.json"
+family = "coverage"
+adapter = "json-summary"
+columns = ["[].fftfreq_False_crop", "[].fftfreq_False_full", "[].fftfreq_True_crop", "[].fftfreq_True_full", "[].inclusive_False_crop", "[].inclusive_False_full", "[].inclusive_True_crop", "[].inclusive_True_full", "[].key", "[].published", "[].pyrtools_False_crop", "[].pyrtools_False_full", "[].pyrtools_True_crop", "[].pyrtools_True_full"]
+note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
+
+[[dataset]]
+glob = "benchmarks/aic_flip_2026-10-15/flip_aic.json"
+family = "coverage"
+adapter = "json-summary"
+columns = ["[].key", "[].map_max", "[].mean_delta", "[].oracle", "[].oracle_published_delta", "[].ours", "[].published", "[].published_delta"]
+note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
+also_pairs = true
+metric = "flip"
+
+[[dataset]]
+glob = "benchmarks/aic_flip_2026-10-15/flip_ladder.json"
+family = "coverage"
+adapter = "json-summary"
+columns = ["[].key", "[].map_max", "[].mean_delta", "[].oracle", "[].oracle_published_delta", "[].ours", "[].published", "[].published_delta"]
+note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
+also_pairs = true
+metric = "flip"
+
+[[dataset]]
+glob = "benchmarks/aic_more_2026-10-15/summary.json"
+family = "coverage"
+adapter = "json-summary"
+columns = ["butter_aic.oracle_error.max", "butter_aic.oracle_error.median", "butter_aic.oracle_jnd_error.max", "butter_aic.oracle_jnd_error.median", "butter_aic.published_error.max", "butter_aic.published_error.median", "butter_aic.published_jnd_error.max", "butter_aic.published_jnd_error.median", "butter_ladder.oracle_error.max", "butter_ladder.oracle_error.median", "butter_ladder.oracle_jnd_error.max", "butter_ladder.oracle_jnd_error.median", "cambi_aic.oracle_error.max", "cambi_aic.oracle_error.median", "cambi_aic.oracle_jnd_error.max", "cambi_aic.oracle_jnd_error.median", "cambi_aic.published_error.max", "cambi_aic.published_error.median", "cambi_aic.published_jnd_error.max", "cambi_aic.published_jnd_error.median", "cambi_ladder.oracle_error.max", "cambi_ladder.oracle_error.median", "cambi_ladder.oracle_jnd_error.max", "cambi_ladder.oracle_jnd_error.median", "ssim1_aic.oracle_error.max", "ssim1_aic.oracle_error.median", "ssim1_aic.oracle_jnd_error.max", "ssim1_aic.oracle_jnd_error.median", "ssim1_aic.published_error.max", "ssim1_aic.published_error.median", "ssim1_aic.published_jnd_error.max", "ssim1_aic.published_jnd_error.median", "ssim1_ladder.oracle_error.max", "ssim1_ladder.oracle_error.median", "ssim1_ladder.oracle_jnd_error.max", "ssim1_ladder.oracle_jnd_error.median", "ws_aic.rgb_oracle_error.max", "ws_aic.rgb_oracle_error.median", "ws_aic.rgb_oracle_jnd_error.max", "ws_aic.rgb_oracle_jnd_error.median", "ws_aic.rgb_published_error.max", "ws_aic.rgb_published_error.median", "ws_aic.rgb_published_jnd_error.max", "ws_aic.rgb_published_jnd_error.median", "ws_aic.swapped_oracle_error.max", "ws_aic.swapped_oracle_error.median", "ws_aic.swapped_oracle_jnd_error.max", "ws_aic.swapped_oracle_jnd_error.median", "ws_aic.swapped_published_error.max", "ws_aic.swapped_published_error.median", "ws_aic.swapped_published_jnd_error.max", "ws_aic.swapped_published_jnd_error.median", "ws_ladder.rgb_oracle_error.max", "ws_ladder.rgb_oracle_error.median", "ws_ladder.rgb_oracle_jnd_error.max", "ws_ladder.rgb_oracle_jnd_error.median", "ws_ladder.swapped_oracle_error.max", "ws_ladder.swapped_oracle_error.median", "ws_ladder.swapped_oracle_jnd_error.max", "ws_ladder.swapped_oracle_jnd_error.median"]
+note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
+
+[[dataset]]
+glob = "benchmarks/dashboard/catalog/catalog-00.tsv"
+family = "catalog"
+adapter = "scales"
+columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/catalog/catalog-01.tsv"
+family = "catalog"
+adapter = "scales"
+columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
+metric = "flip"
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-00.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-01.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-02.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-03.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-04.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-05.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/extracts/tables-06.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["document", "table", "row", "column", "value"]
+
+[[dataset]]
+glob = "crates/zenmetrics-nn/models/jnd_scale.tsv"
+family = "scales"
+adapter = "model-scales"
+columns = ["column", "jnd"]
+metric = "flip"
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/coverage*.json"
+family = "coverage"
+adapter = "json-summary"
+allow_absent = true
+columns = ["complete", "contract", "expected_cells", "extra_cells", "full_receipt", "full_receipt_sha256", "inventory_sha256", "missing_count", "nn_cuda.coverage", "nn_cuda.cpu_reference_missing", "nn_cuda.map_unsupported", "nn_cuda.qualified_thread_budget", "nn_cuda.raw", "nn_cuda.score_timings", "nn_cuda.sha256", "pairs_manifest_sha256", "pending_count", "policy", "present_requested_cells", "raw", "raw_sha256", "refreshed_gpu_rows", "reproductions_requested", "scope", "source", "source_sha256", "status_counts.ok", "status_counts.skipped", "status_counts.unsupported", "status_counts.variant_mismatch"]
+note = "Incoming competitor coverage or qualification receipt; numeric diagnostics retain original field names. Refusals do not count as timing measurements."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/competitor-coverage*.json"
+family = "coverage"
+adapter = "json-summary"
+allow_absent = true
+columns = ["audits[].adapter_inventory_sha256", "audits[].complete", "audits[].contract", "audits[].expected_cells", "audits[].extra_cells", "audits[].full_receipt", "audits[].missing_count", "audits[].pairs", "audits[].pairs_sha256", "audits[].pending_count", "audits[].present_requested_cells", "audits[].raw", "audits[].raw_sha256", "audits[].requested_sizes[]", "audits[].requested_threads[]", "control_log", "controls", "qualification"]
+note = "Incoming competitor coverage or qualification receipt; numeric diagnostics retain original field names. Refusals do not count as timing measurements."
+
+[[dataset]]
+glob = "benchmarks/iqa_compete_2026-10-16/qualification*.json"
+family = "coverage"
+adapter = "json-summary"
+allow_absent = true
+columns = ["build_command", "compiler", "host", "raw_cpu_in_progress", "raw_smoke_paths[]", "receipts.build-maps-cvvdp.exit_code", "receipts.build-maps-cvvdp.min_available_mib", "receipts.build-maps-cvvdp.path", "receipts.build-maps-cvvdp.peak_load", "receipts.build-maps-cvvdp.peak_rss_gib", "receipts.build-maps-cvvdp.seconds", "receipts.build-maps-cvvdp.sha256", "receipts.build-maps-third.exit_code", "receipts.build-maps-third.min_available_mib", "receipts.build-maps-third.path", "receipts.build-maps-third.peak_load", "receipts.build-maps-third.peak_rss_gib", "receipts.build-maps-third.seconds", "receipts.build-maps-third.sha256", "receipts.build-third.exit_code", "receipts.build-third.min_available_mib", "receipts.build-third.path", "receipts.build-third.peak_load", "receipts.build-third.peak_rss_gib", "receipts.build-third.seconds", "receipts.build-third.sha256", "receipts.clippy-native.exit_code", "receipts.clippy-native.min_available_mib", "receipts.clippy-native.path", "receipts.clippy-native.peak_load", "receipts.clippy-native.peak_rss_gib", "receipts.clippy-native.seconds", "receipts.clippy-native.sha256", "receipts.prepare.exit_code", "receipts.prepare.min_available_mib", "receipts.prepare.path", "receipts.prepare.peak_load", "receipts.prepare.peak_rss_gib", "receipts.prepare.seconds", "receipts.prepare.sha256", "rustflags"]
+note = "Incoming competitor coverage or qualification receipt; numeric diagnostics retain original field names. Refusals do not count as timing measurements."
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/ladder_manifest.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["image", "size", "kind", "file", "sha256"]
+note = "Golden or fixture identity; not a measured port-vs-oracle residual."
+
+[[dataset]]
+glob = "benchmarks/nn_lpips_phase0_2026-10-15/lpips_vgg_goldens.tsv"
+family = "coverage"
+adapter = "scales"
+columns = ["image", "size", "lpips", "tap0", "tap1", "tap2", "tap3", "tap4"]
+note = "Golden or fixture identity; not a measured port-vs-oracle residual."
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/kadid-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/tid-correlations-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "target", "scope", "subset", "n", "excluded", "reference_groups", "status", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "ci", "draws", "seed"]
+numeric = ["n", "excluded", "reference_groups", "srocc", "plcc", "krocc", "signed_srocc", "signed_plcc", "signed_krocc", "srocc_lo", "srocc_hi", "plcc_lo", "plcc_hi", "krocc_lo", "krocc_hi", "draws", "seed"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic3_ctc_epfl-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/aic4_sample-points-02.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/cid22-points-01.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/kadid-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/dashboard/quality/tid-points-00.tsv"
+note = "Historical scored snapshot: the commit identifies correlation calculation code, not the original metric scoring build. Metadata records the source hash, signed values and bootstrap protocol."
+family = "quality"
+adapter = "normalized"
+columns = ["metric", "dataset", "pair", "mos", "score", "target", "scope"]
+numeric = ["mos", "score"]
+
+[[dataset]]
+glob = "benchmarks/libjxl_butter_2026-10-17.tsv"
+family = "speed"
+adapter = "libjxl-samples"
+comparison_group = "Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs"
+host = "i265"
+os = "Linux"
+columns = ["size", "w", "h", "threads", "mode", "samples_ns"]
+note = "Static Release libjxl v0.12.0 a7a9c787; RGB8 in memory, 80 nits; all 5–9 samples, including first invocation; 1T pinned CPU 2."
+
+[[dataset]]
+glob = "benchmarks/rust_butteraugli_2k4k_i265_2026-10-17.jsonl"
+family = "speed"
+adapter = "competition"
+host = "i265"
+os = "Linux"
+comparison_group = "Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs"
+columns = ["abs_delta", "actual_scope_seconds", "admission_recovery", "admitted_unix_ns", "arch", "attempt", "chunk_budget_ms", "cpu_affinity", "cpu_model", "created_utc", "declared_columns", "device", "engine", "gpu", "gpu_runtime", "headline_declared_column", "height", "host", "impl", "impl_binary_sha", "impl_version", "initialization_diagnostics", "input_sha256", "load_after", "load_before", "log_sha256", "map_score_matches_scalar_bits", "mean_ns", "median_ns", "method", "metric_family", "metric_name", "mode", "model_dir", "model_preload_adapter", "n", "notes", "ort_inter_threads_configured", "ort_intra_threads_configured", "os", "p10_ns", "p90_ns", "pair_sha256", "placement_policy", "rayon_threads_observed", "ref_score", "relative_delta", "resource", "resource_memory_method", "round_means_ns", "sample_gate_clean", "sample_target_ns", "scope_seconds", "score", "score_bits", "self_warmup_score", "simd_tier", "size_name", "status", "threads", "width", "zenbench_arm_index"]
+note = "Shared input pairs with libjxl. n=10 warmed zenbench round means; libjxl retains first-call samples. Timing methods differ. Gate_clean=false rounds retained (1/10 at 2K, 2/10 at 4K). Binary identity and input hashes in the source; repository commit unrecorded."

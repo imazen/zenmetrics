@@ -316,6 +316,15 @@ snap-cargo rev +args:
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 
+# Metadata-only operator tool; scientific worker images remain unchanged.
+stopped-claim-release-check:
+    just snap-cargo @ test -p zenfleet-worker --example release_owned_claim
+    just snap-cargo @ test -p zenfleet-worker --lib release
+    just snap-cargo @ clippy -p zenfleet-worker --example release_owned_claim -- -D warnings
+
+stopped-claim-release-build:
+    just snap-cargo @ build -p zenfleet-worker --example release_owned_claim
+
 # zenmetrics-cli feature-combination matrix: 12 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
 # `--no-default-features` build, plus the default build. Prints a PASS/FAIL
@@ -1286,3 +1295,46 @@ e36-native-build snapshot target:
 
 e36-native-local-test snapshot target:
     cd {{quote(snapshot)}} && cargo test --release --locked -p zenmetrics-cli --no-default-features --features png,jpeg,webp,avif,avif-svt,jxl,cpu-metrics,cpu-cvvdp,sweep,jobexec --target-dir {{quote(target)}} --bin zenmetrics local_variant_requires_content_hash_and_remains_borrowed
+
+# Static GitHub Pages benchmark dashboard; stdlib data adapters, no Cargo build.
+dashboard-build output="target/dashboard":
+    python3 scripts/dashboard/build.py --output {{quote(output)}}
+
+dashboard-data-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s scripts/dashboard -p 'test_*.py'
+
+dashboard-smoke output="target/dashboard":
+    python3 scripts/dashboard/check.py {{quote(output)}}
+
+dashboard-clean-check:
+    TMPDIR="$HOME/tmp" python3 scripts/dashboard/clean_check.py
+
+dashboard-plot-check:
+    node scripts/dashboard/test-plots.mjs
+
+dashboard-generated-check:
+    python3 scripts/dashboard/catalog.py --check
+    python3 scripts/dashboard/extract_markdown.py --check
+
+dashboard-correlations source output="benchmarks/dashboard/quality":
+    python3 scripts/dashboard/correlate.py --source {{quote(source)}} --output-dir {{quote(output)}} --draws 1000 --seed 20261017
+
+# Private derived-data executor admission; no fitting or new public Rust API.
+e36-tools-check source target:
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-ctl --bin zenfleet-ctl derived_declare --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-worker --lib e36_ladder_deadline_tests --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo clippy --locked --release -p zenfleet-ctl -p zenfleet-worker --bins --target-dir {{quote(target)}} -- -D warnings
+    cd {{quote(source)}} && cargo build --locked --release -p zenfleet-ctl --bin zenfleet-ctl -p zenfleet-worker --bin zenfleet-worker --target-dir {{quote(target)}}
+
+# Verify optional entrypoint hash/path admission without network or workers.
+lan-entrypoint-test:
+    python3 -m unittest discover -s scripts/jobsys -p test_lan_entrypoint_binding.py
+
+dashboard-speed-coverage site="target/dashboard" output="target/dashboard-speed-coverage.md":
+    python3 scripts/dashboard/coverage.py {{quote(site)}} --output {{quote(output)}}
+
+# Metadata-only E36 mask/TV bindings and legacy checkpoint refusal checks.
+e36-fit-contract-check:
+    python3 -m unittest discover -s scripts/jobsys -p 'test_e36_fit_contract.py'
+    just registered-fit-check
+    python3 -m unittest discover -s scripts/jobsys -p 'test_e33_wall_cap.py'

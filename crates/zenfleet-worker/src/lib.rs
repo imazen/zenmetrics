@@ -1790,6 +1790,18 @@ where
 /// cost model, floored high enough that spawn/fetch jitter never clips a real cell. The
 /// watchdog stops INFINITE holds; it does not police slow-but-working cells.
 fn cell_deadline_secs(job: &DesiredJob) -> u64 {
+    // Versioned derived-data ladders can contain many bounded encodes. This
+    // private protocol keeps their declared watchdog separate from a scalar
+    // bake's cost hint; it changes no existing kind or content address.
+    if let JobKind::Bake { view } = &job.kind
+        && let Some(json) = view.strip_prefix("e36-native-ladder-v1:")
+    {
+        return serde_json::from_str::<serde_json::Value>(json)
+            .ok()
+            .and_then(|v| v["deadline_seconds"].as_u64())
+            .filter(|&n| (120..=4 * 3600).contains(&n))
+            .unwrap_or(120);
+    }
     if let JobKind::Benchmark {
         timeout_seconds,
         admission_seconds,
@@ -1812,6 +1824,32 @@ fn cell_deadline_secs(job: &DesiredJob) -> u64 {
     let mem = job.hint.map(|h| h.peak_mem_bytes).unwrap_or(2 << 30);
     let est = job.kind.estimate_cost_sec(mem);
     ((est * 20.0).ceil() as u64).clamp(120, 4 * 3600)
+}
+
+#[cfg(test)]
+mod e36_ladder_deadline_tests {
+    use super::*;
+    #[test]
+    fn derived_ladder_watchdog_is_explicit_bounded_and_versioned() {
+        for (prefix, value, expected) in [
+            ("e36-native-ladder-v1:", 14400, 14400),
+            ("e36-native-ladder-v1:", 14401, 120),
+            ("e36-native-ladder-v1:", 0, 120),
+        ] {
+            let view = format!("{prefix}{{\"deadline_seconds\":{value}}}");
+            let job = DesiredJob::new(
+                JobKind::Bake { view },
+                vec![],
+                zenfleet_core::CellId {
+                    image_path: "ref.png".into(),
+                    codec: "zenjpeg".into(),
+                    q: -1,
+                    knob_tuple_json: "{}".into(),
+                },
+            );
+            assert_eq!(cell_deadline_secs(&job), expected);
+        }
+    }
 }
 
 /// [`exec_command`] under a hard per-cell deadline (anti-wedge invariant 2, 2026-08-26): no
