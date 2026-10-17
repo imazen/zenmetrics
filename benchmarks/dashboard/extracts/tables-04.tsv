@@ -1,4 +1,11 @@
 document	table	row	column	value
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	name	HaarY-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	max |Δ| in JND	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	status	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
@@ -391,10 +398,3 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	2	status	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	2	note	CNN features (Khakpour et al.); no licensed code
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	name	proposal-DVIFM-0.2 / DVIFM-0.2.0
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	in CSV?	site+dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	zenmetrics metric	missing (dvifmish, outside zenmetrics)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	note	dvifmish (dev [local path] publish=false) has port presets of the author's v0.2/v0.3 builds; not compared to these columns here

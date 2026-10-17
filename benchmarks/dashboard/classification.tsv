@@ -7,6 +7,7 @@ benchmarks/afine_aic_2026-10-16/dump_native.tsv	ignored	Historical experiment sc
 benchmarks/afine_aic_2026-10-16/dump_ort_full.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/afine_aic_2026-10-16/dump_ort_partial.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/afine_aic_2026-10-16/dump_ort_prefix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ahiq_aic_probe/aic_ahiq.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
 benchmarks/aic_flip_2026-10-15/cw_grid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/cw_pyramid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/input_hashes.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
@@ -165,6 +166,9 @@ benchmarks/dashboard/quality/kadid-points-00.meta.json	ignored	Provenance or ext
 benchmarks/dashboard/quality/tid-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dashboard/quality/tid-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dense_corpus_2026-06-25.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dmm_aic_probe/aic_dmm.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
+benchmarks/dmm_aic_probe/dmm_ladder_ort.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
+benchmarks/dmm_aic_probe/dmm_ladder_rten.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
 benchmarks/dssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fleet-fits_v9_tier_timing_2026-09-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fsim_fusion_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -201,6 +205,141 @@ benchmarks/heaptrack/baseline_phase9x/summary.tsv	ignored	Historical experiment 
 benchmarks/heaptrack/gmsd_peak_2026-09-22.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/gmsd_peak_v2_2026-09-23.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/refresh_2026-05-28/heaptrack_peaks.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_compete_2026-10-16/adapter-build-v11.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/batch-runtime-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/butter8k-isolated-v17-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/chart-projection-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/chunk-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress-v2.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-000.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-001.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-002.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-003.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-004.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-005.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-006.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-007.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-008.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-009.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-010.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-011.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-012.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-013.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-014.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-015.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
+benchmarks/iqa_compete_2026-10-16/controller-controls-v3.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/controller-preparation-v4.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cpu-accounting-runtime-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cuda-v15-build-quality-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cuda-v15-flags-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cuda-v15-inventory-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cuda-v16-build-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/cuda-v17-build-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/extra-map-smoke.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/frozen-inventory.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/fsim-chart-columns-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/gpu-cid22-2k-progress-v1.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/gpu-qualified-cid22.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/inputs.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/landing-master-20261017-current.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/landing-master-20261017.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/landing-wrapup-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
+benchmarks/iqa_compete_2026-10-16/lock-cooldown-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/map-repairs-runtime-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/metric-chart-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/model-adapter-parity.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/model-freeze-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/models.pointer.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-builds.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-inputs.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-probe-intensity.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-probe-v3.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-probe.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-smoke-2k.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/native-smoke-cid22.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/nn-cuda-cid22-2k-progress-v1.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/ort-budget-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/pieapp-2k20-partial-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/pieapp-2k20-partial-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/pieapp-aic-small1-coverage-refusal.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/pieapp-coverage-transition-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/python-import-preflight.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/renderer-validation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/reproduction-control-20261017.json	ignored	Clean-checkout/resume control and raw receipt hashes; timing shards are registered separately.
+benchmarks/iqa_compete_2026-10-16/sampling-controls-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/saved-comparison-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/smoke.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/strict-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-chart-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-mac-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-mac-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-mac-supervision-control-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-owner-stop-20261017.meta.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-partial-coverage-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-partial-merge-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-r7900x-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-r7900x-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
+benchmarks/iqa_compete_2026-10-16/task4-scope-binding-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-scope-binding-control-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-000.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-001.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-002.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-003.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-004.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-005.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-006.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-007.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-008.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-009.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-010.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-011.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-012.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-013.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-014.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-015.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-016.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-017.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-018.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-019.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-020.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-021.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-022.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-023.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-024.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-025.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-000.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-001.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-002.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-003.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-004.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-005.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-006.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-007.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-008.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-009.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-010.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-011.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-012.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-013.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-014.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-015.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-016.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-017.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-018.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-019.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-020.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-021.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-022.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-023.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-024.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-025.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
+benchmarks/iqa_compete_2026-10-16/task4-v7-coverage-progress.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/timeout-recovery-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/untimed-reference-chart-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/v13-preparation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/warmup-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
+benchmarks/iqa_compete_2026-10-16/wrapup-coverage-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
 benchmarks/iqa_cuda_deployment_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_cuda_deployment_i134_partial_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -256,6 +395,7 @@ benchmarks/jxl_phone_highfreq_phase2_2026-05-26.meta	ignored	Provenance or exter
 benchmarks/jxl_phone_highfreq_phase2_2026-05-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/jxl_phone_vs_desktop_rd_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/jxl_phone_vs_desktop_rd_2026-05-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/libjxl_butter_2026-10-17.meta	ignored	Provenance for registered libjxl sample table
 benchmarks/loo-2026-06-29/loo_zenjpeg_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/loo-2026-06-29/loo_zenjxl_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/loo-2026-06-29/loo_zenwebp_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -724,6 +864,25 @@ benchmarks/nn_opt_2026-10-15/v4_alex_r16.tsv	ignored	Historical experiment schem
 benchmarks/nn_opt_2026-10-15/v4_dists_1t.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt_2026-10-15/v4_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt_2026-10-15/v4_vgg_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_port_2026-10-15/dmm_baseline_independent_identity_2026-10-17.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_bisect_archive_2026-10-17.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_bisect_sources_2026-10-17.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_corrected_ort_cuda.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_corrected_ort_cuda.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_corrected_rten.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_corrected_rten.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_openblas_norm_ort_cuda.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_openblas_norm_ort_cuda.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_openblas_norm_rten.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_openblas_norm_rten.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_reference_norm_ort_cuda.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_reference_norm_ort_cuda.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_reference_norm_rten.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_reference_norm_rten.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_tap_identity_2026-10-17.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_tap_identity_2026-10-17.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_three_corrections_rten.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
+benchmarks/nn_port_2026-10-15/dmm_three_corrections_rten.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
 benchmarks/nr_learned_review_2026-10-15.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/orchestrator_parity_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/orchestrator_parity_2026-05-27_phase771_run1.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -785,6 +944,7 @@ benchmarks/psnrhvs_pair_2026-10-12.meta	ignored	Provenance or external-artifact 
 benchmarks/psnrhvs_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/rav1d_pin_66f58fa6_2026-08-29.tsv.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/router_models_2026-06-30.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/rust_butteraugli_2k4k_i265_2026-10-17.meta	ignored	Provenance for registered paired butteraugli timings
 benchmarks/setref_clean_all_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/setref_clean_all_2026-05-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/ssim2_after_3ch_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -814,140 +974,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/libjxl_butter_2026-10-17.meta	ignored	Provenance for registered libjxl sample table
-benchmarks/rust_butteraugli_2k4k_i265_2026-10-17.meta	ignored	Provenance for registered paired butteraugli timings
-benchmarks/iqa_compete_2026-10-16/landing-wrapup-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
-benchmarks/iqa_compete_2026-10-16/wrapup-coverage-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
-benchmarks/iqa_compete_2026-10-16/adapter-build-v11.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/batch-runtime-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/butter8k-isolated-v17-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/chart-projection-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/chunk-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress-v2.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-000.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-001.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-002.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-003.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-004.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-005.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-006.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-007.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-008.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-009.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-010.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-011.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-012.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-013.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-014.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/cid22-cpu-progress/i265-015.json	ignored	Superseded initial competition snapshot; the registered CID22 v2 panel retains the later inventory.
-benchmarks/iqa_compete_2026-10-16/controller-controls-v3.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/controller-preparation-v4.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cpu-accounting-runtime-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cuda-v15-build-quality-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cuda-v15-flags-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cuda-v15-inventory-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cuda-v16-build-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/cuda-v17-build-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/extra-map-smoke.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/frozen-inventory.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/fsim-chart-columns-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/gpu-cid22-2k-progress-v1.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/gpu-qualified-cid22.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/inputs.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/landing-master-20261017-current.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/landing-master-20261017.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/lock-cooldown-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/map-repairs-runtime-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/metric-chart-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/model-adapter-parity.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/model-freeze-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/models.pointer.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-builds.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-inputs.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-probe-intensity.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-probe-v3.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-probe.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-smoke-2k.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/native-smoke-cid22.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/nn-cuda-cid22-2k-progress-v1.meta.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/ort-budget-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/pieapp-2k20-partial-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/pieapp-2k20-partial-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/pieapp-aic-small1-coverage-refusal.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/pieapp-coverage-transition-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/python-import-preflight.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/renderer-validation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/sampling-controls-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/saved-comparison-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/smoke.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/strict-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-chart-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-partial-coverage-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-partial-merge-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-scope-binding-control-v1.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-scope-binding-control-v2.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-000.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-001.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-002.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-003.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-004.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-005.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-006.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-007.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-008.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-009.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-010.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-011.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-012.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-013.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-014.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-015.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-016.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-017.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-018.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-019.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-020.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-021.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-022.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-023.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-024.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/mac-macOS-8a696d1c-025.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-000.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-001.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-002.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-003.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-004.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-005.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-006.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-007.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-008.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-009.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-010.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-011.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-012.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-013.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-014.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-015.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-016.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-017.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-018.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-019.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-020.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-021.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-022.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-023.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-024.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-summary-v1/r7900x-Linux-d7417c39-025.json	ignored	Historical separate-host snapshot; retained outside the current-host reproducible verification panel.
-benchmarks/iqa_compete_2026-10-16/task4-v7-coverage-progress.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/timeout-recovery-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/untimed-reference-chart-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/v13-preparation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/warmup-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
-benchmarks/iqa_compete_2026-10-16/reproduction-control-20261017.json	ignored	Clean-checkout/resume control and raw receipt hashes; timing shards are registered separately.
-benchmarks/iqa_compete_2026-10-16/task4-mac-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
-benchmarks/iqa_compete_2026-10-16/task4-mac-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
-benchmarks/iqa_compete_2026-10-16/task4-mac-supervision-control-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
-benchmarks/iqa_compete_2026-10-16/task4-owner-stop-20261017.meta.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
-benchmarks/iqa_compete_2026-10-16/task4-r7900x-owner-stop-20261017.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.
-benchmarks/iqa_compete_2026-10-16/task4-r7900x-progress-20261017-1012.json	ignored	Separate-host owner-stop/progress control; the accompanying cell shards are registered as competition observations.

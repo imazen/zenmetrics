@@ -1,4 +1,11 @@
 document	table	row	column	value
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	zenmetrics metric	missing (dvifmish, outside zenmetrics)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	note	dvifmish (dev [local path] publish=false) has port presets of the author's v0.2/v0.3 builds; not compared to these columns here
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	name	proposal-DVIFM-0.2-use_chroma / DVIFM-0.2.0-use_chroma
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	in CSV?	dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	zenmetrics metric	missing (dvifmish)
@@ -356,11 +363,3 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	zenmetrics metric	fixed remap of t
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	status	n/a
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	note	deterministic function of its metric; follows the base metric row
-benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	our column	lpips_alex
-benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	AIC-4 column	LPIPS-alex
-benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	n	61
-benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	median |Δ|	2.3e-07
-benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	max |Δ|	4.9e-07

@@ -1,4 +1,12 @@
 document	table	row	column	value
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	status	n/a
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	note	deterministic function of its metric; follows the base metric row
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	our column	lpips_alex
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	AIC-4 column	LPIPS-alex
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	median |Δ|	2.3e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	max |Δ|	4.9e-07
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	our column	lpips_vgg
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	AIC-4 column	LPIPS-VGG
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	n	61
@@ -69,3 +77,13 @@ benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	engine	ort-cuda
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	pairs	21
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst |Δ|	3.577e-07
 benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst JND	2.03e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst |Δ|	5.295e-08
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst JND	2.13e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst |Δ|	2.582e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst JND	1.04e-05

@@ -22,7 +22,8 @@ path = "src/bin/cpu_wall.rs"
 # reaches the CLI's copies, so `new-metrics-wall` then measures the same
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
-compete = ["zenmetrics-cli/nn-ort", "zenmetrics-cli/nr", "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
+compete-nn = ["compete", "zenmetrics-cli/nn-ort", "zenmetrics-cli/nr"]
+compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
 heap-phases = ["zenbench/heap-profiling"]
 study-gpu-wgpu = ["zenmetrics-api/all-metrics", "zenmetrics-api/wgpu", "dep:cubecl", "cubecl/wgpu"]
 study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc", "dep:cubecl", "cubecl/cuda"]
@@ -36,6 +37,7 @@ metrics-parallel = [
 ]
 
 [dependencies]
+sha2 = "0.11.0"
 nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel"] }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
 zenmetrics-abstractions = { path = "../../../../crates/zenmetrics-abstractions", optional = true }
@@ -134,4 +136,9 @@ workspace = true
 [[bin]]
 name = "iqa-compete"
 path = "src/bin/iqa_compete.rs"
+required-features = ["compete"]
+
+[[bin]]
+name = "bench-iqa"
+path = "src/bin/bench_iqa.rs"
 required-features = ["compete"]

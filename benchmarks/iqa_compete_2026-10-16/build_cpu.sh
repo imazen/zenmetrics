@@ -15,7 +15,7 @@ python3 benchmarks/iqa_compete_2026-10-16/patch_luma_maps.py "$LOCK_SNAP_DIR/wor
 cd "$LOCK_SNAP_DIR/work/zenmetrics"
 export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg iqa_compete_ingress"
 if [ "$mode" = cached ]; then RUSTFLAGS+=" --cfg iqa_compete_cached"; fi
-features=compete,metrics-parallel
+features=compete,compete-nn,metrics-parallel
 if [ "${IQA_GPU_RUNTIME:-}" = cuda ]; then features+=,study-gpu-cuda; fi
 if [ "${IQA_GPU_RUNTIME:-}" = wgpu ]; then features+=,study-gpu-wgpu; fi
 action=${2:-build}

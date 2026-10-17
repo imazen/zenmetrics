@@ -233,6 +233,10 @@ DIVERGENCES.md	0	31	Crate	wadiqam (zenmetrics-nn)
 DIVERGENCES.md	0	31	Reference implementation + version	"dmaniry/deepIQA @ 51dece99 (MIT code + weights), top=""weighted"" checkpoints"
 DIVERGENCES.md	0	31	Oracle for goldens/parity	chainer CPU oracle (models/wadiqam/oracle.py)
 DIVERGENCES.md	0	31	Worst observed delta	4.2e-5 worst export-check score delta; both-engine parity ≤ 7.8e-6 JND — see entry
+DIVERGENCES.md	0	32	Crate	zenmetrics-nn dmm
+DIVERGENCES.md	0	32	Reference implementation + version	Baoliang93/DMM DMM_PyTorch 0.1.2 (MIT), CPU fp32 torch.svd
+DIVERGENCES.md	0	32	Oracle for goldens/parity	netlib-sgesdd goldens on the engine's own taps (dmm_goldens_netlib_<engine>.tsv); MKL goldens recorded, not gated
+DIVERGENCES.md	0	32	Worst observed delta	score is solver-draw-dependent in degenerate patches — see ### dmm
 docs/AIC2026_METRICS_AND_FITTING.md	0	0	Metric	Butteraugli
 docs/AIC2026_METRICS_AND_FITTING.md	0	0	Fitted JND mapping	0.7624 · max(0, x)^0.7387
 docs/AIC2026_METRICS_AND_FITTING.md	0	1	Metric	Butteraugli-3norm
@@ -389,10 +393,3 @@ docs/AIC2026_METRICS_AND_FITTING.md	2	18	med |ΔJND|	0.0001
 docs/AIC2026_METRICS_AND_FITTING.md	2	18	max |ΔJND|	0.0022
 docs/AIC2026_METRICS_AND_FITTING.md	2	18	Verdict	implemented — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.6e-5)
 docs/AIC2026_METRICS_AND_FITTING.md	2	19	Ours	vif (studio-Y)
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	Column	VIF
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	Space	C
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	med |ΔJND|	0.26
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	max |ΔJND|	5.85
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	Verdict	superseded by vifvec — different algorithm
-docs/AIC2026_METRICS_AND_FITTING.md	2	20	Ours	vifvec
-docs/AIC2026_METRICS_AND_FITTING.md	2	20	Column	VIF
