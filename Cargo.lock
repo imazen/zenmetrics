@@ -8084,6 +8084,9 @@ dependencies = [
 name = "zenmetrics-pyiqa-ports"
 version = "0.1.0"
 dependencies = [
+ "ort",
+ "rten",
+ "rten-tensor",
  "zenmetrics-abstractions",
  "zenmetrics-nn",
 ]
