@@ -35,6 +35,9 @@ def qualify_rows(results,references,inventory,scales,python_package=None):
                      ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,
                      parity_abs_bound=bound,parity_source=source,reference_binary_sha=ref['impl_binary_sha'],
                      reference_pair_sha256=ref['pair_sha256'],reference_threads=ref['threads'])
+        value.update(reference_kind=ref.get('reference_kind','qualified_cpu_timing'),
+                     reference_source_status=ref.get('reference_source_status',ref.get('status')),
+                     reference_log_sha256=ref.get('log_sha256'))
         if delta>bound or value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:value['status']='variant_mismatch';mismatch=True
     return mismatch
 
