@@ -42,8 +42,9 @@ def function(source,name):
 def rows():
     source=(ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
     names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',function(source,'name')))
-    columns={}
+    columns={};expressions={}
     for kind,expr in re.findall(r'MetricKind::(\w+)\s*=>\s*(.*?)(?=,\s*(?:MetricKind|\n\s*}))',function(source,'column_names'),re.S):
+        expressions[kind]=' '.join(expr.split())
         literals=re.findall(r'"([^"]+)"',expr)
         if expr.strip().startswith('&['):
             if literals:columns[kind]=';'.join(literals)
@@ -107,7 +108,7 @@ def rows():
             if 'not yet' in oracle.lower() or 'not compared' in oracle.lower():parity='not compared (ledger)'
             else:parity='reference named; gate evidence in ledger'
             evidence='docs/METRIC_PROVENANCE.md';paper=plain(entry[2])
-        yield dict(metric=name,backend='GPU' if kind in gpu else 'CPU',requires_gpu=str(kind in gpu).lower(),needs_display=str(kind in display).lower(),luma_only=str(kind in luma).lower(),columns=columns[kind],nn=str(kind in nn).lower(),nr=str(kind in nr).lower(),kind=card_kind,direction=direction,license=plain(license_name),paper=plain(paper),reference=plain(str(oracle)),parity=parity,evidence=evidence or 'no evidence',jnd_scale=';'.join(c+'='+scales[c] for c in cols if c in scales),column_scope='static feature-off names; enabled implementations may version columns' if not card else 'model output columns')
+        yield dict(metric=name,backend='GPU' if kind in gpu else 'CPU',requires_gpu=str(kind in gpu).lower(),needs_display=str(kind in display).lower(),luma_only=str(kind in luma).lower(),columns=columns[kind],column_expression=expressions[kind],nn=str(kind in nn).lower(),nr=str(kind in nr).lower(),kind=card_kind,direction=direction,license=plain(license_name),paper=plain(paper),reference=plain(str(oracle)),parity=parity,evidence=evidence or 'no evidence',jnd_scale=';'.join(c+'='+scales[c] for c in cols if c in scales),column_scope='static feature-off names; enabled implementations may version columns' if not card else 'model output columns')
 
 
 def render():

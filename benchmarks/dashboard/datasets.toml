@@ -1275,13 +1275,13 @@ note = "Historical structured diagnostic summary; numeric values keep their orig
 glob = "benchmarks/dashboard/catalog/catalog-00.tsv"
 family = "catalog"
 adapter = "scales"
-columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
+columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
 
 [[dataset]]
 glob = "benchmarks/dashboard/catalog/catalog-01.tsv"
 family = "catalog"
 adapter = "scales"
-columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
+columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
 metric = "flip"
 
 [[dataset]]
