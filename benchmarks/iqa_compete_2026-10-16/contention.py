@@ -22,6 +22,7 @@ def process_view():
     for line in raw.splitlines():
         fields=line.strip().split(None,4)
         if len(fields)==5:
+            if int(fields[1])==os.getpid():continue
             rows.append(dict(pid=int(fields[0]),ppid=int(fields[1]),pgid=int(fields[2]),lifetime_cpu_percent=float(fields[3]),name=fields[4]))
     return rows
 
