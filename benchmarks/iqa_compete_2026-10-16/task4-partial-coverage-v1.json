@@ -1,0 +1,111 @@
+{
+  "mac": {
+    "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v1/mac.jsonl",
+    "raw_sha256": "c76b86520bd81208aa591796580a3363e896d076b3423ba9665078dfaab918e0",
+    "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+    "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+    "expected_cells": 904,
+    "present_requested_cells": 234,
+    "pending_qualification": [
+      {
+        "cell": [
+          "fsim-y",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      },
+      {
+        "cell": [
+          "haarpsi-y",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      },
+      {
+        "cell": [
+          "iwssim-piq",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      }
+    ],
+    "status_counts": {
+      "ok": 144,
+      "unsupported": 80,
+      "skipped": 10
+    },
+    "timing_quality_counts": {
+      "contaminated": 234
+    },
+    "extra_cells": 0,
+    "complete": false,
+    "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+    "missing_count": 670,
+    "full_receipt": "/home/lilith/tmp/iqa-compete/task4-merge-v1/mac-coverage.json",
+    "full_receipt_sha256": "64de93e861eceb6776f12d175f018a83c3e677dd4cdb68fff1a51cf668695f3e"
+  },
+  "r7900x": {
+    "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v1/r7900x.jsonl",
+    "raw_sha256": "2ab04462230a79776ccbe8fce87a69e5c72a6e60225fd21168a32ff7dbab44b6",
+    "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+    "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+    "expected_cells": 904,
+    "present_requested_cells": 206,
+    "pending_qualification": [
+      {
+        "cell": [
+          "fsim-y",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      },
+      {
+        "cell": [
+          "haarpsi-y",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      },
+      {
+        "cell": [
+          "iwssim-piq",
+          "cpu",
+          "cid22",
+          1,
+          "score+map"
+        ],
+        "reason": "supported native-map route lacks an adapter measurement"
+      }
+    ],
+    "status_counts": {
+      "ok": 126,
+      "unsupported": 70,
+      "skipped": 10
+    },
+    "timing_quality_counts": {
+      "clean": 126,
+      "contaminated": 80
+    },
+    "extra_cells": 0,
+    "complete": false,
+    "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+    "missing_count": 698,
+    "full_receipt": "/home/lilith/tmp/iqa-compete/task4-merge-v1/r7900x-coverage.json",
+    "full_receipt_sha256": "9cc7d5bee122e1178b2a67a159119d5fa9eaf5ce5bcfa6b84b62cc1616c48e94"
+  }
+}
