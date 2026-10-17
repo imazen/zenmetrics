@@ -17,6 +17,7 @@ from chunks import combine
 from admission_recovery import recover
 from references import load_references
 from parity import qualify_rows
+from batch import BatchLease
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
@@ -157,6 +158,11 @@ def run_cell(args, row, models, *, restore_chunks=True):
             if all(value.get(k)==row.get(k) for k in identity) and not prior_admission_reason(value):retain(value)
     if set(completed)==set(MODES):return list(completed.values())
     while True:
+        lease=getattr(args,'batch_lease',None)
+        if lease:
+            actual_scope,fresh_hold=lease.prepare(args.scope_seconds)
+        else:actual_scope,fresh_hold=args.scope_seconds,True
+        row['actual_scope_seconds']=actual_scope
         attempt = uuid.uuid4().hex[:12]
         config = args.root / 'cells' / f'{stem}-{attempt}.json'
         log = args.root / 'logs' / f'{stem}-{attempt}.log'
@@ -177,14 +183,14 @@ def run_cell(args, row, models, *, restore_chunks=True):
         timeout='gtimeout' if system=='Darwin' else 'timeout'
         memory='12G' if system=='Darwin' else '16G'
         host=args.host or socket.gethostname().split('.')[0]
-        command = ['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),
-                   str(Path.home()/'work/claudehints/scripts/run-heavy'),
+        command = [str(Path.home()/'work/claudehints/scripts/run-heavy'),
                    '--mem',memory,'--jobs',str(max(1,(os.cpu_count() or 1)-4)),
-                   '--',timeout,'--kill-after=20s',f'{args.scope_seconds}s',*command]
+                   '--',timeout,'--kill-after=20s',f'{actual_scope}s',*command]
+        if not lease:command=['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),*command]
         print('SUBMIT', stem, attempt, flush=True)
         with log.open('x') as f:
             process = subprocess.run(command, env=env, stdout=f, stderr=subprocess.STDOUT,
-                                     check=False)
+                                     check=False,pass_fds=(lease.fd,) if lease else ())
         text = log.read_text()
         recovery=[]
         if process.returncode and platform.system()=='Linux':
@@ -193,6 +199,9 @@ def run_cell(args, row, models, *, restore_chunks=True):
             if proofs:recovery=recover(proofs[0],args.root/'recovered-admission')
             for record in recovery:append(args.root/'admission-recovery.jsonl',record)
         admission=admission_reason(text)
+        if lease and process.returncode==124 and not fresh_hold:
+            admission='batch_budget_exhausted'
+        if lease and admission:lease.close()
         if admission:
             append(args.root / 'admission.jsonl', dict(metric=name, size=row['size_name'],
                    threads=count, attempt=attempt, log=str(log), log_sha256=sha(log),
@@ -218,7 +227,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
         modes={value['mode'] for value in rows}
         if len(rows)!=len(modes) or modes-set(MODES):raise ValueError(f'invalid emitted modes: {log}')
         if process.returncode or modes!=set(MODES):
-            reason={124:f'timeout_{args.scope_seconds}s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
+            reason={124:f'timeout_{actual_scope}s',137:'memory_guard_or_limit'}.get(process.returncode,f'process_exit_{process.returncode}')
             for mode in set(MODES)-modes:
                 rows.append(dict(row,mode=mode,status=f'skipped:{reason}',n=0,
                                  notes=f'No completed timing; retained attempt log {log}'))
@@ -254,6 +263,7 @@ def main():
     p.add_argument('--threads', default='1,all')
     p.add_argument('--model-root', type=Path)
     p.add_argument('--models-json', type=Path)
+    p.add_argument('--batch-seconds',type=int,default=0,help='Optional 1..1100-second holds spanning multiple cells; per-cell resource wrappers remain enabled')
     p.add_argument('--scope-seconds', type=int, default=1100, help='1..1100; shorter scopes support timeout-recovery controls')
     p.add_argument('--chunk-budget-ms', type=int, default=850000)
     p.add_argument('--sample-target-ns', type=int, default=1000000)
@@ -261,6 +271,7 @@ def main():
     p.add_argument('--python-executable', type=Path)
     p.add_argument('--reference-jsonl', action='append', type=Path, default=[])
     args = p.parse_args()
+    if not 0<=args.batch_seconds<=1100:raise ValueError('batch hold must be within 0..1100 seconds')
     if not 1 <= args.scope_seconds <= 1100:raise ValueError('scope must be within 1..1100 seconds')
     args.root.mkdir(exist_ok=True, parents=True)
     for directory in ['cells', 'logs']:
@@ -319,40 +330,47 @@ def main():
         raise ValueError('selected metric absent from executable inventory')
     available = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
     threads = [available if value == 'all' else int(value) for value in args.threads.split(',')]
-    for pair in json.loads(args.pairs.read_text()):
-        if pair['size_name'] not in args.sizes.split(','):
-            continue
-        paths = {key: str((args.pairs.parent / pair[key]).resolve())
-                 for key in ['reference', 'distorted']}
-        hashes = {key: sha(path) for key, path in paths.items()}
-        pair_sha = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
-        for count in threads:
-            for metric in inventory:
-                name = metric['metric_name']
-                if name not in selected:
-                    continue
-                if all((name, pair['size_name'], count, mode, meta['device'],meta['os']) in done for mode in MODES):
-                    continue
-                row = dict(meta | pair | paths, scope_seconds=args.scope_seconds, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
-                           threads=count, mode='score', pair_sha256=pair_sha, input_sha256=hashes)
-                if not args.python_package:
-                    row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')
-                row.update({key: None for key in TIMING})
-                results=run_cell(args, row, models)
-                mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) else False
-                if meta['device']!='cpu' and mismatch:
-                    # i265 requires reproduction: preserve the entire first
-                    # attempt and rerun the same bounded cell, including timing.
-                    for value in results:append(args.root/'gpu-mismatch-attempts.jsonl',value)
-                    first_attempts=[{k:v.get(k) for k in ['mode','score','abs_delta','status','log_path','log_sha256']} for v in results]
-                    results=run_cell(args,row,models,restore_chunks=False)
-                    qualify(results)
-                    for value in results:value['mismatch_first_attempt']=first_attempts
-                for result in results:
-                    append(output, result)
-                    done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
-                if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):
-                    raise RuntimeError('Competitor adapter failed; inspect retained logs before proceeding')
+    args.batch_lease=None
+    if args.batch_seconds:
+        host=args.host or socket.gethostname().split('.')[0]
+        args.batch_lease=BatchLease(Path.home()/f'tmp/{host}-heavy.lock',args.batch_seconds,args.root/'batch-holds.jsonl')
+    try:
+        for pair in json.loads(args.pairs.read_text()):
+            if pair['size_name'] not in args.sizes.split(','):
+                continue
+            paths = {key: str((args.pairs.parent / pair[key]).resolve())
+                     for key in ['reference', 'distorted']}
+            hashes = {key: sha(path) for key, path in paths.items()}
+            pair_sha = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+            for count in threads:
+                for metric in inventory:
+                    name = metric['metric_name']
+                    if name not in selected:
+                        continue
+                    if all((name, pair['size_name'], count, mode, meta['device'],meta['os']) in done for mode in MODES):
+                        continue
+                    row = dict(meta | pair | paths, scope_seconds=args.scope_seconds, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
+                               threads=count, mode='score', pair_sha256=pair_sha, input_sha256=hashes)
+                    if not args.python_package:
+                        row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')
+                    row.update({key: None for key in TIMING})
+                    results=run_cell(args, row, models)
+                    mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) else False
+                    if meta['device']!='cpu' and mismatch:
+                        # i265 requires reproduction: preserve the entire first
+                        # attempt and rerun the same bounded cell, including timing.
+                        for value in results:append(args.root/'gpu-mismatch-attempts.jsonl',value)
+                        first_attempts=[{k:v.get(k) for k in ['mode','score','abs_delta','status','log_path','log_sha256']} for v in results]
+                        results=run_cell(args,row,models,restore_chunks=False)
+                        qualify(results)
+                        for value in results:value['mismatch_first_attempt']=first_attempts
+                    for result in results:
+                        append(output, result)
+                        done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
+                    if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):
+                        raise RuntimeError('Competitor adapter failed; inspect retained logs before proceeding')
+    finally:
+        if args.batch_lease:args.batch_lease.close()
 
 if __name__ == '__main__':
     main()

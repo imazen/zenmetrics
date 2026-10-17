@@ -190,3 +190,13 @@ matching, resume keys and chunk identity. Windows/Linux observations on the same
 machine cannot replace one another. Coverage audits handle one host/OS at a time;
 charts and compact summary names retain the distinction. Remaining native-host
 supervisor and qualification work is described in [portability](PORTABILITY.md).
+
+Optional bounded batches hold the host lock across several separately supervised
+cells. They retain the same native child timers and per-cell run-heavy receipts;
+no process setup or waiting enters the samples. Each child receives the remaining
+hold deadline, with at most 1100 seconds plus bounded termination cleanup.
+If the remaining batch budget interrupts a later cell, that attempt is retained
+as scheduling evidence and retried in a fresh hold. Load/memory admission refusals
+release the hold before waiting. The lock descriptor is inherited by supervised
+children, so losing the controller cannot release the lock around a live child.
+Explicit one/twenty-thread budgets and the ten-round minimum are unchanged.

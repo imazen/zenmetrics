@@ -1145,3 +1145,16 @@ iqa-compete-ort-thread-control-no-telemetry python output:
 
 iqa-compete-platform-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_collect_platforms.py
+
+# Reuse qualified smoke/maps and retain every diagnostic attempt in its source ledger.
+iqa-compete-collect-i265 output:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py --output '{{output}}' "$HOME/tmp/iqa-compete/native-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/smoke-placement/i265.jsonl" "$HOME/tmp/iqa-compete/cvvdp-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-first/i265.jsonl" "$HOME/tmp/iqa-compete/extra-map-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-first/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-cpu-bounded/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-admission-repairs/i265.jsonl" "$HOME/tmp/iqa-compete/gpu-extended/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-first/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-budgeted/i265.jsonl"
+
+iqa-compete-batch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_batch.py
+
+# Individual cells keep their run-heavy/time limits; this controller owns bounded holds.
+iqa-compete-batch-smoke binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics psnr,gmsd --sizes cid22 --threads 1 --batch-seconds 1100
+
+iqa-compete-controller-tests: iqa-compete-chunk-tests iqa-compete-linux-admission-tests iqa-compete-capability-tests iqa-compete-admission-classification-tests iqa-compete-reference-tests iqa-compete-parity-tests iqa-compete-ort-patch-tests iqa-compete-coverage-tests iqa-compete-dispatch-tests iqa-compete-platform-tests iqa-compete-batch-tests
