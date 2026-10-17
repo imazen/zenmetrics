@@ -299,6 +299,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
         for value in rows:
             append(args.root/'contention-attempts.jsonl',dict(value,contention_try=index+1))
         if all(value.get('timing_quality')!='contaminated' for value in rows):break
+        if args.coverage_first and not any(value['status'] in ['ok','variant_mismatch'] and value.get('n',0)>=value.get('required_samples',10) for value in rows):break
         print('CONTENTION_RETRY',row['metric_name'],row['size_name'],index+1,flush=True)
         lease=getattr(args,'batch_lease',None)
         if lease:lease.close()
