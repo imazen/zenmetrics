@@ -378,6 +378,7 @@ mod tests {
         feature = "cpu-mdctpsnr",
         feature = "cpu-mad",
         feature = "cpu-iwssim",
+        feature = "cpu-iwssim-piq",
         feature = "cpu-vif",
         feature = "cpu-vifvec",
         feature = "cpu-vmaf"
@@ -404,12 +405,15 @@ mod tests {
             )
         };
         let mut iw = iwssim::Iwssim::new(w, h).unwrap();
-        let routes: [(&str, &mut dyn za::Metric); 7] = [
+        let mut iw_piq =
+            iwssim::Iwssim::with_params(w, h, iwssim::IwssimParams::piq_luma()).unwrap();
+        let routes: [(&str, &mut dyn za::Metric); 8] = [
             ("nlpd", &mut nlpd::Nlpd),
             ("psnrhvs", &mut psnrhvs::Psnrhvs),
             ("mdctpsnr", &mut mdctpsnr::MdctPsnr),
             ("mad", &mut mad_iqa::Mad),
             ("iwssim", &mut iw),
+            ("iwssim-piq", &mut iw_piq),
             ("vif", &mut vif::Vif),
             ("vifvec", &mut vif::Vifvec),
         ];
@@ -649,6 +653,50 @@ mod tests {
                 _ => assert_eq!((lo, hi), (0.0, 0.0), "{name}"),
             }
         }
+    }
+
+    /// The `iwssim-piq` map route evaluates the metric the CLI scores: its
+    /// evaluation's score equals `score_json("iwssim-piq")` exactly.
+    #[cfg(all(feature = "cpu-metrics", feature = "cpu-iwssim-piq"))]
+    #[test]
+    fn iwssim_piq_map_route_scores_the_cli_metric() {
+        use zenmetrics_abstractions::{self as za, Metric as _, zenpixels};
+        let (w, h) = (224u32, 180u32);
+        let (a, b) = (
+            za::conformance::textured_rgb8(w as usize, h as usize, 5),
+            za::conformance::textured_rgb8(w as usize, h as usize, 6),
+        );
+        let ((ra, stride), (rb, _)) = (rgba(&a, w, 0), rgba(&b, w, 0));
+        let cli: serde_json::Value = serde_json::from_str(
+            &super::score_json("iwssim-piq", &ra, &rb, w, h, stride, "").unwrap(),
+        )
+        .unwrap();
+        let image = |px| {
+            za::Image::from(
+                zenpixels::PixelSlice::new(
+                    px,
+                    w,
+                    h,
+                    w as usize * 3,
+                    zenpixels::PixelDescriptor::RGB8_SRGB,
+                )
+                .unwrap(),
+            )
+        };
+        let mut metric =
+            iwssim::Iwssim::with_params(w, h, iwssim::IwssimParams::piq_luma()).unwrap();
+        let e = metric
+            .evaluate(
+                image(&a),
+                image(&b),
+                za::EvalOpts::SCORE_ONLY.with_native_map(),
+            )
+            .unwrap();
+        assert_eq!(cli["values"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            e.score().to_bits(),
+            cli["values"][0]["value"].as_f64().unwrap().to_bits()
+        );
     }
 }
 
@@ -1234,6 +1282,8 @@ pub fn available_spatial_maps() -> String {
     names.push("mad");
     #[cfg(feature = "cpu-iwssim")]
     names.push("iwssim");
+    #[cfg(feature = "cpu-iwssim-piq")]
+    names.push("iwssim-piq");
     #[cfg(feature = "cpu-vif")]
     names.push("vif");
     #[cfg(feature = "cpu-vifvec")]
@@ -1334,6 +1384,15 @@ fn compute_maps(
         #[cfg(feature = "cpu-iwssim")]
         "iwssim" => {
             let mut metric = iwssim::Iwssim::new(width, height).map_err(|e| fail(e.to_string()))?;
+            evaluate_spatial_map(&mut metric, &r, &d, width, height)?
+        }
+        // The CLI's `iwssim-piq` score: the same metric with piq's
+        // unrounded-YIQ luma (`run_cpu_iwssim_piq`).
+        #[cfg(feature = "cpu-iwssim-piq")]
+        "iwssim-piq" => {
+            let mut metric =
+                iwssim::Iwssim::with_params(width, height, iwssim::IwssimParams::piq_luma())
+                    .map_err(|e| fail(e.to_string()))?;
             evaluate_spatial_map(&mut metric, &r, &d, width, height)?
         }
         #[cfg(feature = "cpu-vif")]

@@ -67,7 +67,7 @@
     {"name": "cvvdp", "status": "score+map", "module": "full", "maps": ["diffmap"], "reason": null},
     {"name": "cvvdp-gpu", "status": "unavailable", "module": null, "maps": [], "reason": "GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric cvvdp here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable"},
     {"name": "iwssim", "status": "score+map", "module": "full", "maps": ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4", "iw_0", "iw_1", "iw_2", "iw_3", "diffmap"], "reason": null},
-    {"name": "iwssim-piq", "status": "score-only", "module": "full", "maps": [], "reason": null},
+    {"name": "iwssim-piq", "status": "score+map", "module": "full", "maps": ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4", "iw_0", "iw_1", "iw_2", "iw_3", "diffmap"], "reason": null},
     {"name": "gmsd", "status": "score+map", "module": "full", "maps": ["gms"], "reason": null},
     {"name": "mdsi", "status": "score-only", "module": "full", "maps": [], "reason": null},
     {"name": "ms-gmsd", "status": "score-only", "module": "full", "maps": [], "reason": null},

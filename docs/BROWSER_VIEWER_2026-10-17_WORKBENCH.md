@@ -25,7 +25,19 @@ shipped file disagrees:
   reason quotes the refusal), or, for a learned metric, the reason states
   its weights licence class or the missing route.
 
-Counts at this commit: 19 score+map, 64 score-only, 14 nn-webgpu, 1 nn-cpu-wasm and 17 unavailable.
+Counts at this commit: 20 score+map, 63 score-only, 14 nn-webgpu, 1 nn-cpu-wasm and 17 unavailable.
+
+`iwssim-piq` serves the map of the metric its score names
+(`Iwssim::with_params(.., IwssimParams::piq_luma())`); a native test requires
+that evaluation's score to equal the browser's `iwssim-piq` score bit for bit.
+`fsim-y` and `haarpsi-y` stay score-only. Their crates publish luma scores
+(`fsim_luma8`, `haarpsi_luma8`) but no luma map. The public plane map routes
+are not the same arithmetic: `haarpsi_luma8` averages each 2×2 block in f64
+RGB before the luma dot product, while `haarpsi_plane_f32_with_diffmap`
+averages an f32 luma plane; `fsim_luma8` fuses luma into its f32 decimation
+window. A browser map built from either plane route would come from a
+different computation than the score it sits beside. Serving one needs a luma
+map entry point in those crates.
 
 ## Native comparison of every browser score
 
@@ -270,7 +282,7 @@ name and requires its reason with no score, and requires refusals naming
 | `cvvdp` | score+map | full | diffmap | – |
 | `cvvdp-gpu` | unavailable | – | – | GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric cvvdp here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable |
 | `iwssim` | score+map | full | cs_0, cs_1, cs_2 (+7) | – |
-| `iwssim-piq` | score-only | full | – | – |
+| `iwssim-piq` | score+map | full | cs_0, cs_1, cs_2 (+7) | – |
 | `gmsd` | score+map | full | gms | – |
 | `mdsi` | score-only | full | – | – |
 | `ms-gmsd` | score-only | full | – | – |
