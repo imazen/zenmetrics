@@ -159,3 +159,12 @@ Compact summaries retain comparison availability, parity bound/source, reference
 identity and configured ORT budgets. Charts put measurements lacking CPU
 comparisons, and mismatches still requiring reproduction, in separate panels.
 A valid timing alone does not establish same-score parity.
+
+`just iqa-compete-coverage` audits the collected Rust rows against the frozen
+inventory, requested sizes and thread budgets. GPU-name routes and learned
+ORT-CUDA routes are requested explicitly for the host. Its completeness gate
+refuses missing cells, insufficient sampling, diagnostic adapters, unexpected
+process failures, missing GPU/CPU comparisons and pending reproductions.
+Explicit supported input/build/resource refusals count as attempts, never as
+timings. The receipt lists all missing/pending cells and reports extra routes
+separately; testing this audit does not establish matrix completion.
