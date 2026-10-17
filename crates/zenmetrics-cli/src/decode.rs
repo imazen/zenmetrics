@@ -158,7 +158,11 @@ fn decode_bytes_to_rgb8(
     data: &[u8],
     format: Option<ImageFormat>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    decode_bytes_to_rgb8_with_policy(data, format, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+    decode_bytes_to_rgb8_with_policy(
+        data,
+        format,
+        zenmetrics_api::alpha::AlphaPolicy::RequireOpaque,
+    )
 }
 
 /// Directory holding the upstream JPEG AI checkpoints (`VM_common/`,
@@ -666,7 +670,13 @@ fn decode_bmp_with_policy(
     // the same way the other arms funnel their native `PixelBuffer`.
     let output = zenbitmaps::decode_bmp(data, enough::Unstoppable)
         .map_err(|e| format!("zenbitmaps: {e}"))?;
-    bmp_layout_to_rgb8_with_policy(output.pixels(), output.width, output.height, output.layout, policy)
+    bmp_layout_to_rgb8_with_policy(
+        output.pixels(),
+        output.width,
+        output.height,
+        output.layout,
+        policy,
+    )
 }
 
 #[cfg(feature = "bmp")]
@@ -676,7 +686,13 @@ fn bmp_layout_to_rgb8(
     height: u32,
     layout: zenbitmaps::PixelLayout,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    bmp_layout_to_rgb8_with_policy(pixels, width, height, layout, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
+    bmp_layout_to_rgb8_with_policy(
+        pixels,
+        width,
+        height,
+        layout,
+        zenmetrics_api::alpha::AlphaPolicy::RequireOpaque,
+    )
 }
 
 #[cfg(feature = "bmp")]
@@ -691,7 +707,12 @@ fn bmp_layout_to_rgb8_with_policy(
     let n = (width as usize) * (height as usize);
     match layout {
         PixelLayout::Rgba8 => {
-            let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&pixels[..n * 4], width, height, policy)?;
+            let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(
+                &pixels[..n * 4],
+                width,
+                height,
+                policy,
+            )?;
             Ok(Rgb8Image {
                 pixels: rgb,
                 width,
@@ -762,7 +783,8 @@ fn bmp_layout_to_rgb8_with_policy(
                         d[2] = (u16::from_ne_bytes([s[4], s[5]]) >> 8) as u8;
                         d[3] = (u16::from_ne_bytes([s[6], s[7]]) >> 8) as u8;
                     }
-                    let rgb = zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, policy)?;
+                    let rgb =
+                        zenmetrics_api::alpha::composite_rgba_srgb8(&rgba, width, height, policy)?;
                     return Ok(Rgb8Image {
                         pixels: rgb,
                         width,
@@ -781,9 +803,13 @@ fn bmp_layout_to_rgb8_with_policy(
                 PixelLayout::RgbF32 => {
                     fill!(12, |s, d: &mut [u8]| {
                         for c in 0..3 {
-                            let v =
-                                f32::from_ne_bytes([s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3]])
-                                    .clamp(0.0, 1.0);
+                            let v = f32::from_ne_bytes([
+                                s[c * 4],
+                                s[c * 4 + 1],
+                                s[c * 4 + 2],
+                                s[c * 4 + 3],
+                            ])
+                            .clamp(0.0, 1.0);
                             d[c] = (v * 255.0 + 0.5) as u8;
                         }
                     });
@@ -900,7 +926,8 @@ pub fn pixel_slice_to_rgb8_with_policy(
         let mut rgba = vec![0u8; (width as usize * 4) * height as usize];
         for y in 0..height {
             let src_row = slice.row(y);
-            let dst_row = &mut rgba[y as usize * width as usize * 4..(y as usize + 1) * width as usize * 4];
+            let dst_row =
+                &mut rgba[y as usize * width as usize * 4..(y as usize + 1) * width as usize * 4];
             dst_row.copy_from_slice(src_row);
         }
 
@@ -928,7 +955,8 @@ pub fn pixel_slice_to_rgb8_with_policy(
         let mut dst = vec![0u8; (width as usize * 3) * height as usize];
         for y in 0..height {
             let src_row = slice.row(y);
-            let dst_row = &mut dst[y as usize * width as usize * 3..(y as usize + 1) * width as usize * 3];
+            let dst_row =
+                &mut dst[y as usize * width as usize * 3..(y as usize + 1) * width as usize * 3];
             dst_row.copy_from_slice(src_row);
         }
 
