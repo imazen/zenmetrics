@@ -720,8 +720,11 @@ Full receipt:
   wadiqam_nr_live 2.02e-7, wadiqam_nr_tid 6.81e-6, pieapp 9.19e-7,
   wd_s1..s5 ≤ 2.5e-6 JND (2026-10-17, i265, RTX 4080 via Vulkan).
   Together with the three PARTIAL columns and five LOADFAIL columns that
-  is the full 26-column inventory; per-pair receipts:
-  [`parity.tsv`](benchmarks/ort_webgpu_2026-10-17/parity.tsv).
+  is the full 26-column inventory; per-pair receipts live off-repo
+  (generated data >30 KB) — [`parity.pointer.md`](benchmarks/ort_webgpu_2026-10-17/parity.pointer.md)
+  has the host/path/sha256, and
+  [`parity_summary.tsv`](benchmarks/ort_webgpu_2026-10-17/parity_summary.tsv)
+  is the committed per-model × size rollup.
 - **DIVERGES (selection):** the adapter is `ZENMETRICS_NN_WEBGPU_DEVICE`
   (index into the EP's GPU-device list) else the best vendor-name rank
   (NVIDIA > AMD/ATI > other); more than one equally-ranked GPU without
