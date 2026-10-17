@@ -44,6 +44,7 @@ def audit(rows,pairs,sizes,threads,implementations):
         requested_sizes=sizes,requested_threads=threads,
         adapter_inventory_sha256=hashlib.sha256(json.dumps({k:available[k] for k in implementations},sort_keys=True).encode()).hexdigest(),
         missing_cells=missing,pending_qualification=pending,status_counts=dict(counts),
+        timing_quality_counts=dict(collections.Counter(r.get("timing_quality","legacy_unmonitored") for k,r in actual.items() if k in expected)),
         extra_cells=len(actual.keys()-expected),complete=not missing and not pending,
         contract='Selected public CPU competitor adapters; refusals are attempts, not latency measurements')
 

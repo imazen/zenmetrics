@@ -75,6 +75,7 @@ def main():
     for r in rows:
         if r['status'] not in ['ok','variant_mismatch']:continue
         category=r['status']
+        if r.get('timing_quality')=='contaminated':category+='-contaminated'
         if r.get('comparison_status','').startswith('unavailable:'):category+='-comparison-unavailable'
         if r.get('reproduction_required'):category+='-reproduction-required'
         metrics[(r['host'],r['os'],r['size_name'],r['metric_name'],r['mode'],category)].append(r)

@@ -54,7 +54,8 @@ def main():
         if reason:pending.append(dict(cell=list(key),reason=reason))
     receipt=dict(raw=str(a.raw),raw_sha256=hashlib.sha256(raw).hexdigest(),inventory_sha256=hashlib.sha256(a.inventory.read_bytes()).hexdigest(),
         pairs_manifest_sha256=hashlib.sha256(a.pairs.read_bytes()).hexdigest(),expected_cells=len(expected),present_requested_cells=len(expected&actual.keys()),
-        missing_cells=missing,pending_qualification=pending,status_counts=dict(counts),extra_cells=len(actual.keys()-expected),
+        missing_cells=missing,pending_qualification=pending,status_counts=dict(counts),
+        timing_quality_counts=dict(collections.Counter(r.get("timing_quality","legacy_unmonitored") for k,r in actual.items() if k in expected)),extra_cells=len(actual.keys()-expected),
         complete=not missing and not pending,
         contract='CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings')
     a.output.write_text(json.dumps(receipt,indent=2)+'\n')
