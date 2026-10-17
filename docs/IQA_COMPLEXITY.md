@@ -144,6 +144,37 @@ follow the repository's convention: intercept from small sizes, per-pixel slope
 from large sizes, never one line across the whole range. Poor correlations
 and large residuals are reported, not removed.
 
+## Measured runs (controlled, provisional)
+
+`benchmarks/iqa_complexity_2026-10-17/measured/` holds one controlled series
+per file: one host (i265, Core Ultra 7 265K), one binary, one pinned set of
+P-cores, one shape (1024×1024), one content pair (zenmetrics-corpus photo vs
+its q20 JPEG), warm calls in one process. `scripts/complexity/perf_deltas.py`
+runs `complexity-reps` under `perf stat` at 1 and 1+K calls and reports the
+difference per call, so decode, setup and process start are excluded; three
+repeats per metric are kept. CPU time (`task-clock`) and wall time are
+separate columns. These are still single-host, single-shape numbers; they are
+not a ranking across hosts.
+
+**Measured thread scaling is a property of the implementation, not of the
+method.** From one build with each metric crate's own threading enabled
+(`i265_par_1024.tsv`), the 8-thread speedup over 1 thread on P-cores was:
+
+| speedup at 8 threads | metrics |
+|---|---:|
+| below 1.2× (not threaded on this path) | 47 |
+| 1.2–2× | 12 |
+| 2–4× | 18 |
+| 4–6× | 4 |
+| 6–9× | 2 (gmsd, ssim) |
+
+Median 1.03× over 83 metrics. The PSNR family, VMAF, CAMBI, FLIP, CIEDE2000
+and the pyiqa-convention SSIM/MS-SSIM variants do not thread in this build, so
+their 1.0× says nothing about what the method allows. Intrinsic parallelism
+is instead bounded by the tallies' work/span and barrier counts (section
+"Halo, span and parallel structure"); the two answer different questions and
+are reported side by side, never substituted.
+
 ## Optimization effort
 
 Question: how many optimization iterations, and how much agent time, went
