@@ -2,6 +2,8 @@
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
 import argparse, atexit, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
 from batch import BatchLease,yield_after_release
+from resources import scoped,locked
+import platform
 from references import load_references, same_pair_reference
 from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, native_input_refusal, admission_reason, prior_admission_reason
 P=pathlib.Path
@@ -20,11 +22,11 @@ RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity
 def percentile(s,p):
  s=sorted(s);i=(len(s)-1)*p;lo=int(i);hi=min(lo+1,len(s)-1);return s[lo]+(s[hi]-s[lo])*(i-lo)
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--reference-jsonl',type=P);p.add_argument('--batch-seconds',type=int,default=0);p.add_argument('--batch-reserve-seconds',type=int,default=120);p.add_argument('--host',default='i265');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--reference-jsonl',type=P);p.add_argument('--batch-seconds',type=int,default=0);p.add_argument('--batch-reserve-seconds',type=int,default=120);p.add_argument('--host',default='i265');p.add_argument('--metrics');a=p.parse_args()
  a.root.mkdir(parents=True,exist_ok=True);(a.root/'logs').mkdir(exist_ok=True);(a.root/'cells').mkdir(exist_ok=True)
  meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine,impl_version={'libvmaf':'3.2.0 (vmaf-head-sys 0.2.0 vendored source)','libjxl':'0.12.0'}[a.engine])
  if a.coverage_first and not a.reference_jsonl:raise ValueError('Coverage pass requires retained CPU references; no new Rust reference calls')
- lease=BatchLease(P.home()/'tmp/i265-heavy.lock',a.batch_seconds,a.root/'batch-holds.jsonl',reserve=a.batch_reserve_seconds) if a.batch_seconds else None
+ lease=BatchLease(P.home()/f'tmp/{a.host}-heavy.lock',a.batch_seconds,a.root/'batch-holds.jsonl',reserve=a.batch_reserve_seconds) if a.batch_seconds else None
  if lease:atexit.register(lease.close)
  references=load_references([a.reference_jsonl]) if a.reference_jsonl else {}
  output=a.root/f'{a.host}.jsonl';done=set()
@@ -33,11 +35,14 @@ def main():
    r=json.loads(s)
    if not prior_admission_reason(r):done.add((r['metric_name'],r['size_name'],r['threads'],r['mode']))
  planes=json.loads(a.planes.read_text());pairs=json.loads(a.pairs.read_text())
+ available=len(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else os.cpu_count()
+ a.threads=','.join(str(available) if n=='all' else n for n in a.threads.split(','))
  for pair in pairs:
   if pair['size_name'] not in a.sizes.split(','):continue
   paths={k:str((a.pairs.parent/pair[k]).resolve()) for k in ['reference','distorted']};hashes={k:sha(v) for k,v in paths.items()};pair_hash=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
   for threads in map(int,a.threads.split(',')):
    for metric,adapter,convention,bound in ADAPTERS[a.engine]:
+    if a.metrics and metric not in a.metrics.split(','):continue
     for mode in ['score','score+map']:
      key=(metric,pair['size_name'],threads,mode)
      if key in done:continue
@@ -57,7 +62,7 @@ def main():
      command+=([mode,str(target)] if a.engine=='libjxl' else [str(target),'400' if convention.endswith('-y') else ('444' if convention.endswith('-444') else '420')])
      # One bounded process warms/times the native implementation, then probes
      # Rust outside its timer. Neither process start nor reference scoring is timed.
-     env=os.environ.copy();env['IQA_HEAVY_LOCK_PATH']=str(P.home()/'tmp/i265-heavy.lock');env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
+     env=os.environ.copy();env['IQA_HEAVY_LOCK_PATH']=str(P.home()/f'tmp/{a.host}-heavy.lock');env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
      commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,*([[str(a.rust.resolve()),str(config.resolve())]] if compare and not a.coverage_first else [])]))
      contention_tries=[]
      while True:
@@ -66,28 +71,32 @@ def main():
       if lease:env['IQA_HEAVY_LOCK_FD']=str(lease.fd)
       before=os.getloadavg()
       child=[sys.executable,str(P(__file__).resolve()),'--child',str(commands_file.resolve())]
-      cpus=sorted(os.sched_getaffinity(0));chosen=[2 if 2 in cpus else cpus[0]] if threads==1 else cpus
-      cmd=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s',f'{actual_scope}s','taskset','-c',','.join(map(str,chosen)),'env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
+      if hasattr(os,'sched_getaffinity'):
+       cpus=sorted(os.sched_getaffinity(0));chosen=[2 if 2 in cpus else cpus[0]] if threads==1 else cpus
+       child=['taskset','-c',','.join(map(str,chosen)),*child]
+      child=['env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
+      cmd=scoped(child,seconds=actual_scope,memory='12G' if platform.system()=='Darwin' else '16G',jobs=max(1,(os.cpu_count() or 1)-4))
       attempt_id=uuid.uuid4().hex[:12]
       monitor=a.root/'logs'/f'{stem}-{attempt_id}.contention.json'
       attempt_log=a.root/'logs'/f'{stem}-{attempt_id}.log'
-      cmd=cmd[:2]+[sys.executable,str(P(__file__).with_name('contention.py').resolve()),str(monitor.resolve()),str(attempt_log.resolve()),'--']+cmd[2:]
-      if lease:cmd=cmd[2:]
+      if platform.system()=='Linux':
+       cmd=[sys.executable,str(P(__file__).with_name('contention.py').resolve()),str(monitor.resolve()),str(attempt_log.resolve()),'--',*cmd]
+      if not lease:cmd=locked(cmd,P.home()/f'tmp/{a.host}-heavy.lock')
       with attempt_log.open('x') as output_log:
        completed=subprocess.run(cmd,env=env,stdout=output_log,stderr=subprocess.STDOUT,pass_fds=(lease.fd,) if lease else ())
-      if not lease:yield_after_release(P.home()/'tmp/i265-heavy.lock')
+      if not lease:yield_after_release(P.home()/f'tmp/{a.host}-heavy.lock')
       result=subprocess.CompletedProcess(cmd,completed.returncode,attempt_log.read_text(),'')
       if admission_reason(result.stdout+result.stderr):
        if lease:lease.close()
        if a.coverage_first:
-        accounting=json.loads(monitor.read_text());contention_tries.append((accounting,result,attempt_log));break
+        accounting=json.loads(monitor.read_text()) if monitor.exists() else dict(contaminated=False,max_competing_interval_cores=None,method='not measured on this OS');contention_tries.append((accounting,result,attempt_log));break
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
-      accounting=json.loads(monitor.read_text());accounting['actual_scope_seconds']=actual_scope
+      accounting=json.loads(monitor.read_text()) if monitor.exists() else dict(contaminated=False,max_competing_interval_cores=None,method='not measured on this OS');accounting['actual_scope_seconds']=actual_scope
       contention_tries.append((accounting,result,attempt_log))
       if accounting['contaminated'] and len(contention_tries)<(1 if a.coverage_first else 3) and (not a.coverage_first or result.returncode==0):continue
-      accounting,result,selected_log=min(contention_tries,key=lambda item:(int(item[1].returncode!=0 or sum(s.startswith('SAMPLE ') for s in item[1].stdout.splitlines())<target) if a.coverage_first else 0,item[0]['max_competing_interval_cores']))
+      accounting,result,selected_log=min(contention_tries,key=lambda item:(int(item[1].returncode!=0 or sum(s.startswith('SAMPLE ') for s in item[1].stdout.splitlines())<target) if a.coverage_first else 0,item[0]['max_competing_interval_cores'] or 0))
       row['actual_scope_seconds']=accounting['actual_scope_seconds']
-      row.update(contention=accounting,contention_peak_cores=accounting['max_competing_interval_cores'],contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
+      row.update(contention=accounting,contention_peak_cores=accounting['max_competing_interval_cores'],contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='unmeasured' if accounting['max_competing_interval_cores'] is None else ('contaminated' if accounting['contaminated'] else 'clean'),contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
       break
      log=a.root/'logs'/f'{stem}.log';log.write_text(result.stdout+result.stderr)
      native_loads={s.split(' ',1)[0]:json.loads(s.split(' ',1)[1]) for s in result.stdout.splitlines() if s.startswith(('IQA_LOAD_BEFORE ','IQA_LOAD_AFTER '))}

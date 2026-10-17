@@ -816,3 +816,5 @@ benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment sch
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/libjxl_butter_2026-10-17.meta	ignored	Provenance for registered libjxl sample table
 benchmarks/rust_butteraugli_2k4k_i265_2026-10-17.meta	ignored	Provenance for registered paired butteraugli timings
+benchmarks/iqa_compete_2026-10-16/landing-wrapup-20261017.json\tignored\tCoverage/landing control with external immutable receipt pointers; not a latency row.
+benchmarks/iqa_compete_2026-10-16/wrapup-coverage-20261017.json\tignored\tCoverage/landing control with external immutable receipt pointers; not a latency row.

@@ -28,6 +28,30 @@ individual lock holds have a hard bound below twenty minutes. No codec or file
 read belongs inside a measured region. Third-party dependencies remain confined
 to this benchmark harness.
 
+
+## Reproduce on the current host
+
+From a clean jj checkout, install Rust, just, Python 3.12+, uv, CMake, Ninja,
+Meson, pkg-config, a C++17 compiler and Highway/Brotli/LittleCMS2 development
+packages (Homebrew on macOS). The command below builds this commit and pinned
+native competitors, verifies the named AIC2026 S67 pair and every derivative
+against [the checksum manifest](inputs.meta.json), then measures 1/all threads,
+both modes and 5/3/1 samples. Python competitors use [uv.lock](python-env/uv.lock);
+only explicit `--skip-python` omits them. CPU is the default; select GPU routes
+with `--gpu-runtime cuda|wgpu` and supply licensed learned weights with
+`--model-root`. `--cache`, `--build-cache` and `--output` choose owned cache and
+result directories. Content-keyed completed cells resume; differing provenance
+in an explicit output directory fails. Raw receipts and `run.meta` retain source,
+binary, host, toolchain and competitor identities; ignored `repro-results/`
+shards pass the registered dashboard adapter. Installed host resource caps are
+used, otherwise execution is plain with a portable timeout and lock, explicitly
+recorded in metadata. Linux pins 1T; macOS uses its documented unrestricted
+placement. Windows still needs the [Job-object supervisor](PORTABILITY.md).
+
+```sh
+just bench-iqa cid22,aic-small ssim2,gmsd --host i265 --corpus /path/to/AIC2026/img --skip-python
+```
+
 ## Initial qualification
 
 The pinned release build and driver clippy pass. The initial CID22/2K

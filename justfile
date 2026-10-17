@@ -1374,3 +1374,7 @@ iqa-compete-landing-gates output snapshot *options:
 # Match deploy assembly without requiring committed derived copies to be current.
 dashboard-regenerate:
     python3 scripts/dashboard/regenerate.py
+
+# Rebuild this commit, verify AIC inputs, run selected cells, and resume by content key.
+bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
+    python3 benchmarks/iqa_compete_2026-10-16/bench.py '{{sizes}}' '{{metrics}}' {{options}}

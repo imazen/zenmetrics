@@ -14,6 +14,7 @@ import subprocess
 import time
 import uuid
 import sys
+from resources import scoped, locked
 from chunks import combine
 from admission_recovery import recover
 from references import load_references
@@ -214,16 +215,14 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         system=platform.system()
         if system not in ['Linux','Darwin']:
             raise RuntimeError('A qualified native resource wrapper must be configured before running on '+system)
-        timeout='gtimeout' if system=='Darwin' else 'timeout'
         memory='12G' if system=='Darwin' else '16G'
         host=args.host or socket.gethostname().split('.')[0]
-        command = [str(Path.home()/'work/claudehints/scripts/run-heavy'),
-                   '--mem',memory,'--jobs',str(max(1,(os.cpu_count() or 1)-4)),
-                   '--',timeout,'--kill-after=20s',f'{actual_scope}s',*command]
+        command = scoped(command, seconds=actual_scope, memory=memory,
+                         jobs=max(1,(os.cpu_count() or 1)-4))
         contention_receipt=args.root/'logs'/f'{stem}-{attempt}.contention.json'
         if system=='Linux':
             command=[sys.executable,str(Path(__file__).with_name('contention.py').resolve()),str(contention_receipt.resolve()),str(log.resolve()),'--',*command]
-        if not lease:command=['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),*command]
+        if not lease:command=locked(command, Path.home()/f'tmp/{host}-heavy.lock')
         if lease:env['IQA_HEAVY_LOCK_FD']=str(lease.fd)
         else:env.pop('IQA_HEAVY_LOCK_FD',None)
         print('SUBMIT', stem, attempt, flush=True)

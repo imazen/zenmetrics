@@ -73,3 +73,5 @@ target-bookworm/
 
 # Local deployment state
 .wrangler/
+
+/benchmarks/iqa_compete_2026-10-16/repro-results/
