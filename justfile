@@ -975,6 +975,9 @@ iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
 iqa-compete-charts raw output python=(env_var_or_default("IQA_COMPETE_PYTHON", env_var("HOME") + "/tmp/iqa-compete/python-venv/bin/python")):
     '{{python}}' benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}'
 
+iqa-compete-check-charts raw directory rows svgs label="":
+    python3 benchmarks/iqa_compete_2026-10-16/check_charts.py '{{raw}}' '{{directory}}' --expected-rows '{{rows}}' --expected-svgs '{{svgs}}' --bar-label '{{label}}'
+
 iqa-compete-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
 
