@@ -220,6 +220,24 @@ path are both on the recount list). Weighting by measured instruction costs
 does not change the picture. The comparison will be redone when all tallies
 are reconciled; n = 15 of 115 CLI names.
 
+### Fitting weights instead of declaring them
+
+`scripts/complexity/fit_weights.py` fits non-negative weights for grouped
+operation classes (simple arithmetic, division, roots, transcendentals,
+powers, memory, conversion/integer) to measured time, validates by holding
+out whole metric families (variants share code), and compares against each
+fixed weight table given one fitted scale factor. With an effort table it
+also reports held-out error per optimization-effort tier, which is the test
+of whether heavily optimized implementations sit systematically below the
+fit. Fitted weights include each implementation's vectorization and are
+host-specific; they are not intrinsic method costs.
+
+First run (n = 15 metrics, 12 families, single-thread 1024×1024): held-out
+median error 1.90× (worst 14.6×) for the free fit, against 1.38–1.72× for the
+fixed tables with one scale; division, power and memory weights came out zero
+(not identifiable). At this sample size fitting overfits. It will be rerun on
+the reconciled inventory with the effort axis from the git iteration tally.
+
 ## Optimization effort
 
 Question: how many optimization iterations, and how much agent time, went
