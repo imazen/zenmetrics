@@ -14,7 +14,7 @@ import csv
 import sys
 
 ours_path = sys.argv[1] if len(sys.argv) > 1 else 'aic_dmm.tsv'
-pub_path = sys.argv[2] if len(sys.argv) > 2 else '/home/lilith/tmp/aic-sub-crop/metrics_subset.csv'
+pub_path = sys.argv[2] if len(sys.argv) > 2 else 'metrics_subset.csv'
 
 ours = {}
 with open(ours_path) as f:
