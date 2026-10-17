@@ -119,10 +119,9 @@ else:
   import types,sys
   sys.modules.setdefault('imp',types.ModuleType('imp'))
   from DeepDC_PyTorch import DeepDC
-  model=DeepDC().to(device).eval();features=model.features_extractor;features.use_input_norm=True
-  features.register_buffer('mean',torch.tensor([.485,.456,.406],device=device).view(1,3,1,1));features.register_buffer('std',torch.tensor([.229,.224,.225],device=device).view(1,3,1,1))
+  model=DeepDC().to(device).eval()
   fn=lambda:model(x,y)
-  row['native_api_note']='Upstream use_input_norm=True, matching the Rust port; no resize. Python-3.12 unused imp import receives an empty compatibility module.'
+  row['native_api_note']='Official README DeepDC() call on resident RGB [0,1], default model configuration and no resize. Python-3.12 unused imp import receives an empty compatibility module.'
  elif package=='cvvdp':
   import pycvvdp
   model=pycvvdp.cvvdp(display_name='standard_fhd',heatmap='raw' if mode=='score+map' else None,device=torch.device(device))

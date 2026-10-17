@@ -254,3 +254,10 @@ routes. An unsupported row for one of these routes remains pending adapter
 wiring/measurement; it cannot qualify as a metric without maps. The
 [known omissions receipt](coverage-known-map-omissions.json) preserves the audit
 that identified the fsim-y, haarpsi-y and iwssim-piq repair work.
+
+DeepDC uses the author’s documented `DeepDC()` call on RGB `[0,1]` tensors,
+with the default model configuration ([official README](https://github.com/h4nwei/DeepDC)).
+The adapter does not change feature-extractor attributes or register replacement
+normalization buffers. Any difference from the Rust port’s normalization
+convention is retained under the existing variant-mismatch gate. This replaces
+an unmeasured adapter configuration; no Python timing rows were changed.
