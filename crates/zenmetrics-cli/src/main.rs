@@ -306,12 +306,20 @@ struct ScoreArgs {
     /// uses the reference-peak HDR target). Other metrics ignore it.
     #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
     display_model: Option<crate::metrics::CvvdpDisplay>,
-    /// Reference image path.
-    #[arg(long)]
+    /// Reference image path or directory.
+    #[arg(long, alias = "reference-dir")]
     reference: PathBuf,
-    /// Distorted image path.
-    #[arg(long)]
+    /// Distorted image path or directory.
+    #[arg(long, alias = "distorted-dir")]
     distorted: PathBuf,
+    /// Recursively scan directories when scoring folders.
+    #[arg(long, default_value_t = false)]
+    recursive: bool,
+    /// Alpha channel handling policy: `noise` (deterministic linear noise bg,
+    /// identical to zensim), `white`, `black`, `min_wb` (worst of white and black),
+    /// `discard` (drop alpha unchecked), `opaque` (require 100% opacity, default).
+    #[arg(long, default_value = "opaque")]
+    alpha_policy: String,
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
@@ -2781,6 +2789,20 @@ fn cmd_score(
     #[cfg(feature = "orchestrator")] use_orchestrator: bool,
     #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if args.reference.is_dir() && args.distorted.is_dir() {
+        return cmd_score_folder(
+            args,
+            #[cfg(feature = "orchestrator")]
+            use_orchestrator,
+            #[cfg(feature = "orchestrator")]
+            orchestrator_opts,
+        );
+    } else if args.reference.is_dir() || args.distorted.is_dir() {
+        return Err(
+            "both --reference and --distorted must be files, or both must be directories".into(),
+        );
+    }
+
     // HDR path: decode to absolute luminance, then prep per metric. cvvdp gets
     // the faithful native linear-planes path (no u8 clamp); the SDR kernels get
     // PU21→sRGB8. Short-circuits the SDR decode + orchestrator routing — both
@@ -2840,8 +2862,10 @@ fn cmd_score(
         return Ok(());
     }
     require_display_model(&[args.metric], args.display_model.as_ref(), false, "score")?;
-    let reference = decode::decode_image_to_rgb8(&args.reference)?;
-    let distorted = decode::decode_image_to_rgb8(&args.distorted)?;
+    let alpha_policy = zenmetrics_api::alpha::AlphaPolicy::from_str_loose(&args.alpha_policy)
+        .ok_or_else(|| format!("unknown alpha policy '{}'; valid: noise, white, black, min_wb, discard, opaque", args.alpha_policy))?;
+    let reference = decode::decode_image_with_alpha_policy(&args.reference, alpha_policy)?;
+    let distorted = decode::decode_image_with_alpha_policy(&args.distorted, alpha_policy)?;
     if reference.width != distorted.width || reference.height != distorted.height {
         return Err(format!(
             "dimension mismatch: reference is {}x{}, distorted is {}x{}",
@@ -2891,6 +2915,245 @@ fn cmd_score(
     print_score(args.output, args.metric, &scores);
     Ok(())
 }
+
+fn is_image_file(p: &std::path::Path) -> bool {
+    let Some(ext) = p.extension().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "webp" | "avif" | "jxl" | "gif" | "tiff" | "tif" | "bmp" | "exr" | "y4m" | "heic"
+    )
+}
+
+fn scan_dir_images(root: &std::path::Path, recursive: bool) -> Result<Vec<PathBuf>, std::io::Error> {
+    let mut files = Vec::new();
+    scan_dir_inner(root, root, recursive, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn scan_dir_inner(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    recursive: bool,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), std::io::Error> {
+    for entry in std::fs::read_dir(current)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            if is_image_file(&path) {
+                if let Ok(rel) = path.strip_prefix(root) {
+                    out.push(rel.to_path_buf());
+                }
+            }
+        } else if recursive && path.is_dir() {
+            scan_dir_inner(root, &path, recursive, out)?;
+        }
+    }
+    Ok(())
+}
+
+fn find_image_pairs(
+    ref_dir: &std::path::Path,
+    dist_dir: &std::path::Path,
+    recursive: bool,
+) -> Result<Vec<(PathBuf, PathBuf)>, Box<dyn std::error::Error>> {
+    let dist_rels = scan_dir_images(dist_dir, recursive)?;
+    let ref_rels = scan_dir_images(ref_dir, recursive)?;
+
+    // 1. Exact relative paths
+    let mut exact_refs = std::collections::HashSet::new();
+    // 2. Relative paths without extension
+    let mut stem_rel_refs: std::collections::HashMap<PathBuf, PathBuf> = std::collections::HashMap::new();
+    // 3. Basenames without extension
+    let mut basename_refs: std::collections::HashMap<String, PathBuf> = std::collections::HashMap::new();
+    let mut duplicate_basenames = std::collections::HashSet::new();
+
+    for r in &ref_rels {
+        exact_refs.insert(r.clone());
+        let stem_rel = r.with_extension("");
+        stem_rel_refs.insert(stem_rel, r.clone());
+        if let Some(stem) = r.file_stem().and_then(|s| s.to_str()) {
+            let stem_lower = stem.to_ascii_lowercase();
+            if basename_refs.contains_key(&stem_lower) {
+                duplicate_basenames.insert(stem_lower);
+            } else {
+                basename_refs.insert(stem_lower, r.clone());
+            }
+        }
+    }
+
+    let mut pairs = Vec::new();
+    for d in &dist_rels {
+        let full_dist = dist_dir.join(d);
+        if exact_refs.contains(d) {
+            pairs.push((ref_dir.join(d), full_dist));
+            continue;
+        }
+        let d_stem_rel = d.with_extension("");
+        if let Some(r) = stem_rel_refs.get(&d_stem_rel) {
+            pairs.push((ref_dir.join(r), full_dist));
+            continue;
+        }
+        if let Some(stem) = d.file_stem().and_then(|s| s.to_str()) {
+            let stem_lower = stem.to_ascii_lowercase();
+            if !duplicate_basenames.contains(&stem_lower) {
+                if let Some(r) = basename_refs.get(&stem_lower) {
+                    pairs.push((ref_dir.join(r), full_dist));
+                    continue;
+                }
+            }
+        }
+        eprintln!(
+            "warning: no matching reference image found for distorted file: {}",
+            full_dist.display()
+        );
+    }
+
+    if pairs.is_empty() {
+        return Err(format!(
+            "no matching image pairs found between reference directory '{}' ({} images found) and distorted directory '{}' ({} images found)",
+            ref_dir.display(),
+            ref_rels.len(),
+            dist_dir.display(),
+            dist_rels.len()
+        )
+        .into());
+    }
+
+    Ok(pairs)
+}
+
+fn cmd_score_folder(
+    args: ScoreArgs,
+    #[cfg(feature = "orchestrator")] use_orchestrator: bool,
+    #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
+) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+
+    #[cfg(feature = "hdr")]
+    if args.hdr && args.display_model.is_some() && args.metric.needs_display() {
+        return Err(
+            "score: --display-model is SDR-only; the --hdr cvvdp route uses the \
+                    reference-peak HDR target"
+                .into(),
+        );
+    }
+
+    #[cfg(not(feature = "hdr"))]
+    let is_hdr = false;
+    #[cfg(feature = "hdr")]
+    let is_hdr = args.hdr;
+
+    if !is_hdr {
+        require_display_model(&[args.metric], args.display_model.as_ref(), false, "score")?;
+    }
+
+    let pairs = find_image_pairs(&args.reference, &args.distorted, args.recursive)?;
+
+    #[cfg(feature = "orchestrator")]
+    let mut orch = if use_orchestrator && orchestrator_runner::metric_orchestrator_eligible(args.metric) {
+        let mut o = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+        orchestrator_runner::print_capability_summary(&o);
+        Some(o)
+    } else {
+        None
+    };
+
+    let mut rows = Vec::with_capacity(pairs.len());
+    let mut failed_count = 0usize;
+
+    for (ref_path, dist_path) in pairs {
+        let ref_str = ref_path.display().to_string();
+        let dist_str = dist_path.display().to_string();
+
+        let score_res: Result<Vec<(&'static str, f64)>, String> = (|| -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+            #[cfg(feature = "hdr")]
+            if args.hdr {
+                let r = hdr::decode_to_nits(&ref_path)?;
+                let d = hdr::decode_to_nits(&dist_path)?;
+                if r.width != d.width || r.height != d.height {
+                    return Err(format!(
+                        "dimension mismatch: reference is {}x{}, distorted is {}x{}",
+                        r.width, r.height, d.width, d.height
+                    ).into());
+                }
+                if let Some(result) = hdr::score_via_hdr_scorer(args.metric, &r, &d, args.hdr_transfer, args.gpu_runtime) {
+                    return result;
+                }
+                let (rr, dd) = if matches!(args.metric, metrics::MetricKind::Cvvdp | metrics::MetricKind::CvvdpGpu) {
+                    let peak = hdr::measured_cvvdp_u8_peak(&r);
+                    (hdr::to_cvvdp_rgb8(&r, peak), hdr::to_cvvdp_rgb8(&d, peak))
+                } else {
+                    (hdr::to_sdr_rgb8(&r, args.hdr_transfer), hdr::to_sdr_rgb8(&d, args.hdr_transfer))
+                };
+                return metrics::run_metric_hdr_u8(args.metric, &rr, &dd, args.gpu_runtime);
+            }
+
+            let alpha_policy = zenmetrics_api::alpha::AlphaPolicy::from_str_loose(&args.alpha_policy)
+                .ok_or_else(|| format!("unknown alpha policy '{}'; valid: noise, white, black, min_wb, discard, opaque", args.alpha_policy))?;
+            let reference = decode::decode_image_with_alpha_policy(&ref_path, alpha_policy)?;
+            let distorted = decode::decode_image_with_alpha_policy(&dist_path, alpha_policy)?;
+            if reference.width != distorted.width || reference.height != distorted.height {
+                return Err(format!(
+                    "dimension mismatch: reference is {}x{}, distorted is {}x{}",
+                    reference.width, reference.height, distorted.width, distorted.height
+                ).into());
+            }
+
+            #[cfg(feature = "orchestrator")]
+            if let Some(ref mut o) = orch {
+                let o_rows = orchestrator_runner::orchestrator_score_one(
+                    o,
+                    args.metric,
+                    &reference,
+                    &distorted,
+                    args.display_model.as_ref(),
+                )?;
+                let scores: Vec<(&'static str, f64)> = o_rows
+                    .into_iter()
+                    .map(|r| (String::leak(r.column) as &'static str, r.value))
+                    .collect();
+                return Ok(scores);
+            }
+
+            let (r_ing, d_ing) = metrics::luma_ingress_pair(args.metric, args.luma_ingress, &reference, &distorted);
+            let scores = metrics::run_metric_display(
+                args.metric,
+                r_ing.as_ref().unwrap_or(&reference),
+                d_ing.as_ref().unwrap_or(&distorted),
+                args.gpu_runtime,
+                args.display_model.as_ref(),
+            )?;
+            Ok(scores)
+        })().map_err(|e| e.to_string());
+
+        if score_res.is_err() {
+            failed_count += 1;
+        }
+
+        rows.push(output::FolderScoreRow {
+            reference: ref_str,
+            distorted: dist_str,
+            scores: score_res,
+        });
+    }
+
+    output::print_folder_scores(args.output, args.metric, &rows, args.display_model.as_ref());
+
+    if failed_count == rows.len() {
+        return Err(format!("all {} pairs failed to score", rows.len()).into());
+    }
+    if failed_count > 0 {
+        return Err(format!("{failed_count} of {} pairs failed", rows.len()).into());
+    }
+
+    Ok(())
+}
+
 
 fn cmd_batch(
     args: BatchArgs,

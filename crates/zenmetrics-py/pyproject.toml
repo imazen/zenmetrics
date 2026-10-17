@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "zenmetrics"
+version = "0.1.0"
+description = "Perceptual image quality metrics with Python & Jupyter integration"
+authors = [{ name = "Lilith River", email = "support@imazen.io" }]
+license = { text = "AGPL-3.0-only OR Commercial" }
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "zenmetrics._zenmetrics"

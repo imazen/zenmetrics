@@ -77,6 +77,7 @@
     allow(unused_variables, unused_imports, dead_code, unreachable_code)
 )]
 
+pub mod alpha;
 mod capability;
 /// Optimized native-CPU dispatch backing `Backend::Cpu` (task #159 phase 2).
 #[cfg(any(
@@ -117,6 +118,7 @@ pub mod context;
 /// form) — re-exported so callers can name the trait without a direct
 /// dependency (zenmetrics#30).
 pub use enough;
+pub use alpha::{AlphaError, AlphaPolicy, AlphaStats};
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
 #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]

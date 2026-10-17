@@ -41,8 +41,8 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python -m unittest discover -s scripts/dashboard -p 'test_*.py'
       - run: node scripts/dashboard/test-plots.mjs
-      - run: python scripts/dashboard/catalog.py --check
-      - run: python scripts/dashboard/extract_markdown.py --check
+      - name: Regenerate catalog and markdown extracts (report committed-copy drift)
+        run: python scripts/dashboard/regenerate.py
       - run: python scripts/dashboard/build.py --output _dashboard
       - run: python scripts/dashboard/check.py _dashboard
       - uses: actions/upload-pages-artifact@v5

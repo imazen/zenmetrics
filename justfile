@@ -1342,3 +1342,7 @@ e36-fit-contract-check:
     python3 -m unittest discover -s scripts/jobsys -p 'test_e36_fit_contract.py'
     just registered-fit-check
     python3 -m unittest discover -s scripts/jobsys -p 'test_e33_wall_cap.py'
+
+# Match deploy assembly without requiring committed derived copies to be current.
+dashboard-regenerate:
+    python3 scripts/dashboard/regenerate.py

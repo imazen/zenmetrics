@@ -91,3 +91,6 @@ pub mod orchestrator_glue;
 /// `ZENMETRICS_USE_ORCHESTRATOR=1` (env) is set.
 #[cfg(feature = "orchestrator")]
 pub mod orchestrator_runner;
+
+#[cfg(feature = "alpha")]
+pub use zenmetrics_api::alpha;

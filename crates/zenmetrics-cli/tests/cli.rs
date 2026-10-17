@@ -2628,3 +2628,233 @@ fn score_pairs_hdr_writes_schema_v2_feature_parquet() {
         assert_eq!(score_rows, 2);
     }
 }
+
+#[test]
+fn score_folder_plain_and_summary() {
+    let td = tempfile::tempdir().expect("tempdir");
+    let ref_dir = td.path().join("refs");
+    let dist_dir = td.path().join("dists");
+    std::fs::create_dir_all(&ref_dir).unwrap();
+    std::fs::create_dir_all(&dist_dir).unwrap();
+
+    let fixture = fixtures_dir().join("ref_64.png");
+    std::fs::copy(&fixture, ref_dir.join("image_a.png")).unwrap();
+    std::fs::copy(&fixture, dist_dir.join("image_a.png")).unwrap();
+
+    let out = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim",
+            "--reference",
+            ref_dir.to_str().unwrap(),
+            "--distorted",
+            dist_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let s = String::from_utf8_lossy(&out.stdout);
+    assert!(s.contains("metric=ssim"), "stdout: {s}");
+    assert!(s.contains("ref="), "stdout: {s}");
+    assert!(s.contains("dist="), "stdout: {s}");
+    assert!(s.contains("--- Summary ---"), "stdout: {s}");
+    assert!(s.contains("Total pairs: 1"), "stdout: {s}");
+    assert!(s.contains("Successful: 1"), "stdout: {s}");
+}
+
+#[test]
+fn score_folder_tsv_and_json() {
+    let td = tempfile::tempdir().expect("tempdir");
+    let ref_dir = td.path().join("refs");
+    let dist_dir = td.path().join("dists");
+    std::fs::create_dir_all(&ref_dir).unwrap();
+    std::fs::create_dir_all(&dist_dir).unwrap();
+
+    let fixture_ref = fixtures_dir().join("ref_64.png");
+    let fixture_dist = fixtures_dir().join("dist_noisy_64.png");
+    std::fs::copy(&fixture_ref, ref_dir.join("test_img.png")).unwrap();
+    std::fs::copy(&fixture_dist, dist_dir.join("test_img.png")).unwrap();
+
+    // TSV output
+    let out_tsv = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim",
+            "--reference-dir",
+            ref_dir.to_str().unwrap(),
+            "--distorted-dir",
+            dist_dir.to_str().unwrap(),
+            "--output",
+            "tsv",
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(out_tsv.status.success());
+    let tsv_str = String::from_utf8_lossy(&out_tsv.stdout);
+    assert!(tsv_str.starts_with("reference\tdistorted\tssim"));
+
+    // JSON output
+    let out_json = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim",
+            "--reference",
+            ref_dir.to_str().unwrap(),
+            "--distorted",
+            dist_dir.to_str().unwrap(),
+            "--output",
+            "json",
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(out_json.status.success());
+    let json_val: serde_json::Value =
+        serde_json::from_slice(&out_json.stdout).expect("valid json");
+    assert_eq!(json_val["total_pairs"], 1);
+    assert_eq!(json_val["successful_pairs"], 1);
+    assert!(json_val["summary"]["ssim"]["mean"].is_f64());
+}
+
+#[test]
+fn score_folder_stem_matching_different_extensions() {
+    let td = tempfile::tempdir().expect("tempdir");
+    let ref_dir = td.path().join("refs");
+    let dist_dir = td.path().join("dists");
+    std::fs::create_dir_all(&ref_dir).unwrap();
+    std::fs::create_dir_all(&dist_dir).unwrap();
+
+    // ref is .png, dist is .webp (using webp fixture)
+    let fixture_png = fixtures_dir().join("ref_64.png");
+    let fixture_webp = fixtures_dir().join("ref_64.webp");
+    std::fs::copy(&fixture_png, ref_dir.join("photo.png")).unwrap();
+    std::fs::copy(&fixture_webp, dist_dir.join("photo.webp")).unwrap();
+
+    let out = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim",
+            "--reference",
+            ref_dir.to_str().unwrap(),
+            "--distorted",
+            dist_dir.to_str().unwrap(),
+            "--output",
+            "json",
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let json_val: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("valid json");
+    assert_eq!(json_val["successful_pairs"], 1);
+}
+
+#[test]
+fn score_folder_mismatch_error() {
+    let td = tempfile::tempdir().expect("tempdir");
+    let ref_dir = td.path().join("refs");
+    std::fs::create_dir_all(&ref_dir).unwrap();
+    let fixture = fixtures_dir().join("ref_64.png");
+
+    let out = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim",
+            "--reference",
+            ref_dir.to_str().unwrap(),
+            "--distorted",
+            fixture.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(!out.status.success());
+    let err_str = String::from_utf8_lossy(&out.stderr);
+    assert!(err_str.contains("both --reference and --distorted must be files, or both must be directories"));
+}
+
+#[test]
+fn score_alpha_policy_enforcement_and_compositing() {
+    let transparent = fixtures_dir().join("transparent_64.png");
+
+    // 1. Default (opaque) must fail with explicit error explaining non-opaque pixels
+    let out_default = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim2",
+            "--reference",
+            transparent.to_str().unwrap(),
+            "--distorted",
+            transparent.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(!out_default.status.success());
+    let err_default = String::from_utf8_lossy(&out_default.stderr);
+    assert!(err_default.contains("non-opaque pixels"));
+    assert!(err_default.contains("alpha_policy"));
+
+    // 2. Explicit --alpha-policy noise must succeed
+    let out_noise = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim2",
+            "--alpha-policy",
+            "noise",
+            "--reference",
+            transparent.to_str().unwrap(),
+            "--distorted",
+            transparent.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(
+        out_noise.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out_noise.stderr)
+    );
+    let s_noise = String::from_utf8_lossy(&out_noise.stdout);
+    assert!(s_noise.contains("ssim2="));
+
+    // 3. Explicit --alpha-policy white must succeed
+    let out_white = cli()
+        .args([
+            "score",
+            "--metric",
+            "ssim2",
+            "--alpha-policy",
+            "white",
+            "--reference",
+            transparent.to_str().unwrap(),
+            "--distorted",
+            transparent.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+
+    assert!(
+        out_white.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out_white.stderr)
+    );
+}

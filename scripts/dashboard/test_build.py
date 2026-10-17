@@ -116,3 +116,20 @@ class Contracts(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class NewWebgpuReceipts(unittest.TestCase):
+    def test_explicit_nn_backend_and_refused_goldens(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            path=Path(scratch)/'timing.tsv'
+            columns=['host','engine','rten_threads','metric','mode','size','n','median_ms','min_ms','score']
+            path.write_text('\t'.join(columns)+'\ni265\tort-webgpu\tdefault\tlpips_vgg\tcompute\t256\t50\t8.468\t7.832\t0.3\n')
+            rows=list(adapt(path,dict(adapter='nn-speed',columns=columns,backend='WebGPU',host='i265')))
+            self.assertEqual(rows[0]['backend'],'WebGPU')
+            self.assertEqual(rows[0]['threads'],'default')
+            columns=['commit','engine','model','stem','size','got','want','abs_err','jnd_err','status']
+            path.write_text('\t'.join(columns)+'\n107edec1\tort-webgpu\tafine\t-\t-\t-\t-\t-\t-\tLOADFAIL\n')
+            rows=list(adapt(path,dict(adapter='nn-goldens',columns=columns,host='i265')))
+            self.assertEqual(rows[0]['status'],'failed')
+            self.assertIsNone(rows[0]['ours'])
+            self.assertIsNone(rows[0]['abs_delta'])

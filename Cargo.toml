@@ -65,6 +65,8 @@ exclude = [
     "benchmarks/av1-compare",
     "crates/burn-conv-spike",
     "crates/burn-ranknet-spike",
+    # Python bindings and Jupyter integration (maturin/pyo3)
+    "crates/zenmetrics-py",
     # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
     # `cargo test` and every CI job never compile its dependency tree or run
     # rustdoc. Regenerate via `just api-doc`.

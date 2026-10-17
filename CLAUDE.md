@@ -1711,3 +1711,13 @@ The private E36 mask changes base table identities. Do not qualify these with an
 unchanged E34 package. Use the native E36 profile and exact metadata derivation
 before the existing checkpoint gate; see [transport](docs/E36_FIT_TRANSPORT.md).
 `just e36-fit-contract-check` uses invented metadata and never trains.
+
+### Known Bugs: dashboard derived-copy staleness (2026-10-17)
+
+The Pages workflow's committed-copy checks failed after a source-document
+change without refreshed markdown extracts. Deployment now regenerates the
+catalog and extracts and reports copy drift in its build summary. Local
+`--check` recipes remain strict. Malformed sources and unclassified benchmark
+uploads still fail. Regeneration handles added/obsolete owned shards without
+removing unrelated files; controls cover drift, idempotence, malformed-source
+refusal and the retained inventory gate.

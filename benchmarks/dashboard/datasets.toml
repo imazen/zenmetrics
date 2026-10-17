@@ -1272,56 +1272,13 @@ columns = ["butter_aic.oracle_error.max", "butter_aic.oracle_error.median", "but
 note = "Historical structured diagnostic summary; numeric values keep their original statistic names."
 
 [[dataset]]
-glob = "benchmarks/dashboard/catalog/catalog-00.tsv"
+glob = "benchmarks/dashboard/catalog/catalog-*.tsv"
 family = "catalog"
 adapter = "scales"
 columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
 
 [[dataset]]
-glob = "benchmarks/dashboard/catalog/catalog-01.tsv"
-family = "catalog"
-adapter = "scales"
-columns = ["metric", "backend", "requires_gpu", "needs_display", "luma_only", "columns", "column_expression", "nn", "nr", "kind", "direction", "license", "paper", "reference", "parity", "evidence", "jnd_scale", "column_scope"]
-metric = "flip"
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-00.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-01.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-02.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-03.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-04.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-05.tsv"
-family = "coverage"
-adapter = "scales"
-columns = ["document", "table", "row", "column", "value"]
-
-[[dataset]]
-glob = "benchmarks/dashboard/extracts/tables-06.tsv"
+glob = "benchmarks/dashboard/extracts/tables-*.tsv"
 family = "coverage"
 adapter = "scales"
 columns = ["document", "table", "row", "column", "value"]
@@ -1502,3 +1459,46 @@ os = "Linux"
 comparison_group = "Shared pairs · RGB8 resident · 80 nits · native CPU · sampling differs"
 columns = ["abs_delta", "actual_scope_seconds", "admission_recovery", "admitted_unix_ns", "arch", "attempt", "chunk_budget_ms", "cpu_affinity", "cpu_model", "created_utc", "declared_columns", "device", "engine", "gpu", "gpu_runtime", "headline_declared_column", "height", "host", "impl", "impl_binary_sha", "impl_version", "initialization_diagnostics", "input_sha256", "load_after", "load_before", "log_sha256", "map_score_matches_scalar_bits", "mean_ns", "median_ns", "method", "metric_family", "metric_name", "mode", "model_dir", "model_preload_adapter", "n", "notes", "ort_inter_threads_configured", "ort_intra_threads_configured", "os", "p10_ns", "p90_ns", "pair_sha256", "placement_policy", "rayon_threads_observed", "ref_score", "relative_delta", "resource", "resource_memory_method", "round_means_ns", "sample_gate_clean", "sample_target_ns", "scope_seconds", "score", "score_bits", "self_warmup_score", "simd_tier", "size_name", "status", "threads", "width", "zenbench_arm_index"]
 note = "Shared input pairs with libjxl. n=10 warmed zenbench round means; libjxl retains first-call samples. Timing methods differ. Gate_clean=false rounds retained (1/10 at 2K, 2/10 at 4K). Binary identity and input hashes in the source; repository commit unrecorded."
+
+[[dataset]]
+glob = "benchmarks/ort_webgpu_2026-10-17/bench_ort-cuda.tsv"
+family = "speed"
+adapter = "nn-speed"
+host = "i265"
+os = "Linux"
+backend = "CUDA"
+commit = "107edec1006e827ff630108617a5abe6f540c173"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+note = "LPIPS VGG image 1415; source median of budgeted samples. Reported default threads are unknown, not single-threaded or all-core. WebGPU 2048 squared OOM has no timing row; consult parity and README."
+
+[[dataset]]
+glob = "benchmarks/ort_webgpu_2026-10-17/bench_ort-webgpu.tsv"
+family = "speed"
+adapter = "nn-speed"
+host = "i265"
+os = "Linux"
+backend = "WebGPU"
+commit = "107edec1006e827ff630108617a5abe6f540c173"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+note = "LPIPS VGG image 1415; source median of budgeted samples. Reported default threads are unknown, not single-threaded or all-core. WebGPU 2048 squared OOM has no timing row; consult parity and README."
+
+[[dataset]]
+glob = "benchmarks/ort_webgpu_2026-10-17/bench_rten.tsv"
+family = "speed"
+adapter = "nn-speed"
+host = "i265"
+os = "Linux"
+backend = "CPU"
+commit = "107edec1006e827ff630108617a5abe6f540c173"
+columns = ["host", "engine", "rten_threads", "metric", "mode", "size", "n", "median_ms", "min_ms", "score"]
+note = "LPIPS VGG image 1415; source median of budgeted samples. Reported default threads are unknown, not single-threaded or all-core. WebGPU 2048 squared OOM has no timing row; consult parity and README."
+
+[[dataset]]
+glob = "benchmarks/ort_webgpu_2026-10-17/parity.tsv"
+family = "agreement"
+adapter = "nn-goldens"
+host = "i265"
+os = "Linux"
+commit = "107edec1006e827ff630108617a5abe6f540c173"
+columns = ["commit", "engine", "model", "stem", "size", "got", "want", "abs_err", "jnd_err", "status"]
+note = "Exported upstream-golden panel: retain PASS, LOADFAIL and OOM separately. No full-resolution qualification is inferred from successful smaller sizes."
