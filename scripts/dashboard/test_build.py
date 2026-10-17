@@ -104,6 +104,12 @@ class Contracts(unittest.TestCase):
             self.assertEqual(result['commit'],'a'*40)
             self.assertEqual(result['command'],'calculate')
 
+    def test_nonfinite_json_is_rejected_before_projection(self):
+        from adapters import strict_json
+        for token in ['NaN','Infinity','-Infinity']:
+            with self.assertRaisesRegex(ValueError,'non-finite JSON'):
+                strict_json('{"diagnostic":'+token+'}')
+
     def test_catalog_names_unique(self):
         rows=list(catalog());self.assertGreater(len(rows),100)
         self.assertEqual(len(rows),len({r['metric'] for r in rows}))

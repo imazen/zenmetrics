@@ -99,8 +99,9 @@ luma flags, output columns, NN/NR membership, model cards joined by their output
 columns, crate licenses and JND scales. Static fallback column names are labelled
 as such because enabled features can version them; the exact Rust output-column
 expression is retained alongside those aliases. Model directions and weight
-terms stay separate from code licenses. Parity cells distinguish a declared gate,
-a reference named in a ledger and no evidence; they link to the actual evidence.
+terms stay separate from code licenses. Parity cells distinguish a model card’s declared gate, a ledger’s reported
+gate and observed error, and no evidence; they link to the actual evidence.
+Naming a reference alone does not establish parity.
 Reference prose renders as text with Markdown decoration removed. Ditto entries
 resolve to the preceding ledger row.
 

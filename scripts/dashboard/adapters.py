@@ -6,6 +6,12 @@ import re
 import struct
 
 
+def strict_json(text):
+    def invalid(value):
+        raise ValueError('non-finite JSON token: '+value)
+    return json.loads(text,parse_constant=invalid)
+
+
 def missing(value):
     return value in [None,'','NaN','nan','N/A','NA','--','-','NOT_SUPPORTED','ERR','ERROR']
 
@@ -48,7 +54,7 @@ def normalize(path,spec,table,number):
             if len(fields)==len(parsed[0])+1 and fields[0]==fields[2]:fields=fields[1:]
             if len(fields)!=len(parsed[0]):raise ValueError('malformed labelled timing row')
             records.append(dict(zip(parsed[0],fields)))
-    else:records=list(table(path,spec['columns'])) if path.suffix in ['.tsv','.csv'] else json.loads(path.read_text())
+    else:records=list(table(path,spec['columns'])) if path.suffix in ['.tsv','.csv'] else strict_json(path.read_text())
     if adapter=='json-summary':
         def walk(value,key=''):
             if isinstance(value,dict):

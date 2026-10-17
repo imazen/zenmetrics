@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import tomllib
-from adapters import normalize, normalize_status
+from adapters import normalize, normalize_status, strict_json
 from catalog import rows as catalog_rows
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -116,7 +116,7 @@ def adapt(path, spec):
                        mos=number(row['mos']), score=number(row['score']), status='measured',
                        scope='per-image', subset='all', ci='missing')
     elif adapter == 'competition':
-        rows = json.loads(path.read_text()) if path.suffix == '.json' else [json.loads(l) for l in path.read_text().splitlines()]
+        rows = strict_json(path.read_text()) if path.suffix == '.json' else [strict_json(l) for l in path.read_text().splitlines()]
         if not isinstance(rows, list):
             raise ValueError('competition input must be a row array or JSONL')
         for row in rows:
@@ -231,7 +231,7 @@ def build(output):
                     # This linked panel is emitted once per file, below the row loop.
                     spec['also_agreement']=False
             if spec.get('also_pairs'):
-                for raw in json.loads(path.read_text()):
+                for raw in strict_json(path.read_text()):
                     for series in ['oracle','published']:
                         if raw.get(series) is not None:
                             a=number(raw['ours']);b=number(raw[series])
