@@ -1227,3 +1227,6 @@ iqa-compete-coverage-competitors rust jxl pairs planes python flip_python refere
 
 iqa-compete-publish-binary snapshot log binary metadata:
     python3 benchmarks/iqa_compete_2026-10-16/publish_binary.py '{{snapshot}}' '{{log}}' '{{binary}}' '{{metadata}}'
+
+iqa-compete-coverage-progress:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16'
