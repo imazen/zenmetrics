@@ -39,7 +39,16 @@ def main():
     command=args.command[1:] if args.command[:1]==['--'] else args.command
     hz=os.sysconf('SC_CLK_TCK');view_before=process_view();before=snapshot();load_before=list(os.getloadavg())
     owned={os.getpid()};samples=[];durations=[];previous=before
-    inherited=(int(os.environ['IQA_HEAVY_LOCK_FD']),) if os.environ.get('IQA_HEAVY_LOCK_FD') else ()
+    inherited={int(os.environ['IQA_HEAVY_LOCK_FD'])} if os.environ.get('IQA_HEAVY_LOCK_FD') else set()
+    lock_path=os.environ.get('IQA_HEAVY_LOCK_PATH')
+    if lock_path:
+        for entry in Path('/proc/self/fd').iterdir():
+            try:
+                if int(entry.name)>2 and entry.resolve()==Path(lock_path).resolve():inherited.add(int(entry.name))
+            except OSError:pass
+        if not inherited:raise RuntimeError('Held heavy lock descriptor did not reach supervisor')
+        os.environ['IQA_HEAVY_LOCK_FD']=str(min(inherited))
+    inherited=tuple(sorted(inherited))
     process=subprocess.Popen(command,pass_fds=inherited)
     while True:
         try:code=process.wait(timeout=1)
@@ -74,7 +83,7 @@ def main():
     # Retry if a competitor exceeds one core in any sampled interval.
     worst=max((v['cores'] for v in total),default=0)
     result=dict(protocol='locked-process-accounting-v1',supervisor_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),load_before=load_before,load_after=load_after,
-        elapsed_seconds=previous[0]-before[0],cpu_tick_hz=hz,top_competing_processes=total[:20],
+        elapsed_seconds=previous[0]-before[0],cpu_tick_hz=hz,inherited_lock_descriptors=list(inherited),top_competing_processes=total[:20],
         top_competing_processes_before=sorted((v for v in view_before if v['pid'] not in owned and v['pgid'] not in groups),key=lambda v:v['lifetime_cpu_percent'],reverse=True)[:20],
         top_competing_processes_after=sorted((v for v in view_after if v['pid'] not in owned and v['pgid'] not in groups),key=lambda v:v['lifetime_cpu_percent'],reverse=True)[:20],
         top_competing_processes_first_interval=competing(samples[0])[:20],top_competing_processes_last_interval=competing(samples[-1])[:20],

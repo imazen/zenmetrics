@@ -15,6 +15,15 @@ class Accounting(unittest.TestCase):
  def test_backward_ticks_never_negative(self):
   self.assertEqual(interval((0,{(1,2):{'ticks':5}}),(1,{(1,2):{'ticks':0}}),100)[0]['cores'],0)
 class LockInheritance(unittest.TestCase):
+ def test_flock_descriptor_reaches_supervised_child(self):
+  with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+   root=Path(directory)
+   command=['flock',str(root/'lock'),sys.executable,str(Path(__file__).with_name('contention.py')),str(root/'receipt.json'),str(root/'log'),
+    '--',sys.executable,'-c',"import os;os.fstat(int(os.environ['IQA_HEAVY_LOCK_FD']))"]
+   env=dict(os.environ,IQA_HEAVY_LOCK_PATH=str(root/'lock'));env.pop('IQA_HEAVY_LOCK_FD',None)
+   result=subprocess.run(command,env=env,capture_output=True,text=True)
+   self.assertEqual(result.returncode,0,result.stderr)
+   self.assertTrue(json.loads((root/'receipt.json').read_text())['inherited_lock_descriptors'])
  def test_supervised_child_keeps_inherited_lock_descriptor(self):
   with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
    root=Path(directory);fd=os.open(root/'lock',os.O_CREAT|os.O_RDWR,0o600)

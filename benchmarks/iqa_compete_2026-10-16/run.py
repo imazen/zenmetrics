@@ -136,6 +136,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
     count, name = row['threads'], row['metric_name']
     env = os.environ.copy()
     env.update({key: str(count) for key in THREAD_ENV})
+    env['IQA_HEAVY_LOCK_PATH']=str(Path.home()/f"tmp/{args.host or socket.gethostname().split('.')[0]}-heavy.lock")
     env.update(ZENBENCH_CPU_POLICY='unrestricted', ZENBENCH_NO_SAVE='1',
                TMPDIR=str(args.root / 'scratch'), ZENMETRICS_NN_ENGINE=args.engine,
                ZENMETRICS_NN_ACCEPT_WEIGHTS='ckdn,afine,dreamsim,liqe,hyperiqa,paq2piq,pieapp')

@@ -47,7 +47,7 @@ def main():
      command+=([mode,'10'] if a.engine=='libjxl' else ['10','400' if convention.endswith('-y') else ('444' if convention.endswith('-444') else '420')])
      # One bounded process warms/times the native implementation, then probes
      # Rust outside its timer. Neither process start nor reference scoring is timed.
-     env=os.environ.copy();env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
+     env=os.environ.copy();env['IQA_HEAVY_LOCK_PATH']=str(P.home()/'tmp/i265-heavy.lock');env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
      commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,[str(a.rust.resolve()),str(config.resolve())]]))
      contention_tries=[]
      while True:
