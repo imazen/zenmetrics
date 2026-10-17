@@ -7,6 +7,16 @@ from build import adapt, number, table, catalog
 
 
 class Contracts(unittest.TestCase):
+    def test_competition_metadata_registers_without_timing_rows(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as d:
+            p=Path(d)/'run.meta'
+            metadata=dict(identity={'commit':'abc'},build_commit='abc',command=['just','bench-iqa'],host='i265',hardware={},toolchains={},competitors={})
+            p.write_text('commit = abc\n'+json.dumps(metadata))
+            self.assertEqual(list(adapt(p,{'adapter':'competition-meta'})),[])
+            metadata['build_commit']='different';p.write_text(json.dumps(metadata))
+            with self.assertRaisesRegex(ValueError,'commit differs'):
+                list(adapt(p,{'adapter':'competition-meta'}))
+
     def test_unknown_column_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'rows.tsv';p.write_text('ours\toracle\tnew_column\n1\t2\t3\n')
