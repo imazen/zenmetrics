@@ -11,7 +11,7 @@ expected = {
     'epsilon': set(),
     'small_n_scaling': {'svd16'},
     'org2r_order': {'dorg2r_q'},
-    'lartg': {'dlartgp', 'dlartg', 'dbdsqr', 'dlasdq'},
+    'lartg': {'dlartgp', 'dlartg'},
     'orm2r_order': {'dorg2r_q', 'sorm2r_q', 'svd16'},
     'right_sger_order': {'dlarf_right'},
     'f64_norm': {'dnrm2'},
@@ -19,6 +19,8 @@ expected = {
 }
 base = source(BASE)
 base_names = set(re.findall(r'(?m)^fn (\w+)\(', base))
+expected['lartg'] |= {name for name in base_names if name != 'dlartgp'
+                       and re.search(r'\bdlartgp\(', function(base, name))}
 
 
 def code(text, name):
