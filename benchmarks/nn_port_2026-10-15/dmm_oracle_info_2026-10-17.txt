@@ -1,0 +1,5 @@
+scipy 1.18.1
+LAPACK (3, 12, 0)
+slamch('E') 5.960464477539063e-08 0x1.0000000000000p-24
+scipy_openblas_get_corename Haswell
+scipy_openblas_get_config OpenBLAS 0.3.31.dev DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64

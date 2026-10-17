@@ -727,6 +727,9 @@ nn-dmm-netlib-goldens python model_dir ladder tapdir engine="rten" features="mod
 nn-dmm-probe model_dir ladder output rows engine="rten" features="model-tests":
     ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features '{{features}}' --example dmm_tap_dump -- "$(realpath '{{model_dir}}')" "$(realpath '{{ladder}}')" "$(realpath -m '{{output}}')" '{{rows}}' scores-only
 
+nn-dmm-oracle-info python:
+    '{{python}}' -I benchmarks/nn_port_2026-10-15/dmm_oracle_info.py
+
 nn-dmm-fix-summary log model_dir engine output:
     python3 benchmarks/nn_port_2026-10-15/dmm_fix_summary.py '{{log}}' '{{model_dir}}/dmm_goldens.tsv' "crates/zenmetrics-nn/models/dmm/dmm_goldens_netlib_$(echo '{{engine}}' | tr - _).tsv" '{{output}}'
 
