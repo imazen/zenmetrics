@@ -1,0 +1,95 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 5K of event 'cpu_core/cycles/'
+# Event count (approx.): 142104717199
+#
+# Overhead  Command     Shared Object      Symbol                                                                                                                                                                                                                      
+# ........  ..........  .................  ............................................................................................................................................................................................................................
+#
+    55.32%  butter-new  butter-new         [.] butter_wall::butteraugli_original::malta
+            |          
+            |--28.59%--malta (inlined)
+            |          |          
+            |          |--17.92%--0x80cd5b
+            |          |          
+            |           --8.35%--0xc010a59d53333332
+            |          
+            |--16.11%--eq<(i8, i8)> (inlined)
+            |          next<(i8, i8)> (inlined)
+            |          malta (inlined)
+            |          |          
+            |           --12.92%--0xc010a59d53333332
+            |          
+             --8.97%--index<f32> (inlined)
+                       index<f32, usize> (inlined)
+                       index<f32, usize, alloc::alloc::Global> (inlined)
+                       malta (inlined)
+                       |          
+                        --7.14%--0xc010a59d53333332
+
+    17.39%  butter-new  butter-new         [.] butter_wall::butteraugli_original::convolve
+            |          
+            |--14.77%--convolve (inlined)
+            |          
+             --1.58%--next<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> (inlined)
+                       next<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> (inlined)
+                       convolve (inlined)
+
+     5.03%  butter-new  butter-new         [.] butter_wall::butteraugli_original::separate
+            |          
+            |--1.19%--{closure#0} (inlined)
+            |          |          
+            |           --1.09%--gamma (inlined)
+            |                     {closure#2} (inlined)
+            |                     {closure#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}> (inlined)
+            |                     try_from_fn_erased<core::ops::try_trait::NeverShortCircuit<f32>, core::ops::try_trait::{impl#0}::wrap_mut_1::{closure_env#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}>> (inlined)
+            |                     try_from_fn<core::ops::try_trait::NeverShortCircuit<f32>, 3, core::ops::try_trait::{impl#0}::wrap_mut_1::{closure_env#0}<f32, usize, butter_wall::butteraugli_original::xyb::{closure_env#2}>> (inlined)
+            |                     from_fn<f32, 3, butter_wall::butteraugli_original::xyb::{closure_env#2}> (inlined)
+            |                     xyb (inlined)
+            |                     separate (inlined)
+            |          
+             --1.09%--separate (inlined)
+                       compute (inlined)
+
+     2.62%  butter-new  [kernel.kallsyms]  [k] asm_exc_page_fault
+            |
+            ---asm_exc_page_fault
+               |          
+                --1.04%--convolve (inlined)
+
+     2.21%  butter-new  [kernel.kallsyms]  [k] _raw_spin_lock
+            |
+            ---_raw_spin_lock
+               |          
+                --2.02%--do_anonymous_page
+                          handle_pte_fault
+                          __handle_mm_fault
+                          handle_mm_fault
+                          do_user_addr_fault
+                          exc_page_fault
+                          asm_exc_page_fault
+                          |          
+                           --1.19%--convolve (inlined)
+
+     1.92%  butter-new  butter-new         [.] butter_wall::butteraugli_original::compute
+     1.53%  butter-new  [kernel.kallsyms]  [k] sync_regs
+            |
+            ---sync_regs
+
+     1.13%  butter-new  libc.so.6          [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               copy_nonoverlapping<f32> (inlined)
+               copy_to_nonoverlapping<f32> (inlined)
+               to_vec<f32, alloc::alloc::Global> (inlined)
+               to_vec_in<f32, alloc::alloc::Global> (inlined)
+               clone<f32, alloc::alloc::Global> (inlined)
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

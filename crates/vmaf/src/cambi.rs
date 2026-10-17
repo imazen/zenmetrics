@@ -5316,6 +5316,13 @@ fn calculate_c_values_row_v3_t(
         let value_v = _mm256_add_epi32(_mm256_cvtepu16_epi32(img16), num_diffs_v);
 
         let mut compact_v = _mm256_sub_epi32(value_v, band_offset_v);
+        // Clamping protects gathers; out-of-band active pixels still have
+        // zero c-value, matching c_value_pixel and the scalar row tail.
+        let in_band = _mm256_and_si256(
+            _mm256_cmpgt_epi32(compact_v, _mm256_set1_epi32(-1)),
+            _mm256_cmpgt_epi32(_mm256_set1_epi32(band_size as i32), compact_v),
+        );
+        let mask_active = _mm256_and_si256(mask_active, in_band);
         compact_v = _mm256_max_epi32(compact_v, zero);
         compact_v = _mm256_min_epi32(compact_v, band_max_v);
 
@@ -5505,6 +5512,220 @@ fn calculate_c_values(
     Ok(())
 }
 
+// A column region receives precisely the same per-pixel +/-1 updates,
+// in the same vertical and horizontal order, as the original full-width
+// histogram. Source halos contribute only to this region's target columns.
+#[cfg(feature = "parallel")]
+#[cfg_attr(feature = "simd", attune(dispatch, +v4(cfg(avx512))))]
+fn calculate_c_values_columns(
+    image: &[u16],
+    mask: &[u16],
+    stride: usize,
+    full_width: usize,
+    height: usize,
+    window_size: usize,
+    num_diffs: usize,
+    tvi_for_diff: &[u16],
+    vlt_luma: u16,
+    v_band_base: u16,
+    v_band_size: u16,
+    diff_weights: &[i32],
+    column_start: usize,
+    column_end: usize,
+    c_rows: &mut [&mut [f32]],
+) -> Result<(), Error> {
+    let width = column_end - column_start;
+    let pad = window_size / 2;
+    let v_band_offset_val = v_band_base + num_diffs as u16;
+    // Pooled but zeroed on take: accumulated via += so contents must
+    // start at zero.
+    let mut histograms_acc = pool::take_u16(
+        (v_band_size as usize)
+            .checked_mul(width)
+            .ok_or(Error::InvalidInput("dimension overflow"))?,
+    );
+    histograms_acc.fill(0);
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let token = v3_token();
+
+    let update_row = |histograms: &mut [u16], r: usize, delta: i16| {
+        for j in column_start.saturating_sub(pad)..(column_end + pad).min(full_width) {
+            if mask[r * stride + j] == 0 {
+                continue;
+            }
+            let v = image[r * stride + j];
+            let rel = v.wrapping_sub(v_band_base);
+            if rel >= v_band_size {
+                continue;
+            }
+            let row = &mut histograms[rel as usize * width..(rel as usize + 1) * width];
+            let c_lo = j.saturating_sub(pad).max(column_start) - column_start;
+            let c_hi = (j + pad).min(column_end - 1) - column_start;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(token) = token {
+                cambi_range_update_v3_t(token, &mut row[c_lo..=c_hi], delta < 0);
+                continue;
+            }
+            for v in row[c_lo..=c_hi].iter_mut() {
+                *v = (*v as i16 + delta) as u16;
+            }
+        }
+    };
+
+    for r in 0..=pad.min(height - 1) {
+        update_row(&mut histograms_acc, r, 1);
+    }
+    for i in 0..height {
+        if i > 0 {
+            if i + pad < height {
+                update_row(&mut histograms_acc, i + pad, 1);
+            }
+            if i > pad {
+                update_row(&mut histograms_acc, i - pad - 1, -1);
+            }
+        }
+        let c_row = &mut *c_rows[i];
+        let histograms = &histograms_acc[..];
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(token) = token {
+            calculate_c_values_row_v3_t(
+                token,
+                c_row,
+                histograms,
+                &image[i * stride + column_start..i * stride + column_end],
+                &mask[i * stride + column_start..i * stride + column_end],
+                width,
+                num_diffs,
+                tvi_for_diff,
+                vlt_luma,
+                diff_weights,
+                v_band_offset_val,
+                v_band_size,
+            );
+            continue;
+        }
+        c_row.fill(0.0);
+        for col in 0..width {
+            if mask[i * stride + column_start + col] != 0 {
+                c_row[col] = c_value_pixel(
+                    histograms,
+                    width,
+                    image[i * stride + column_start + col] + num_diffs as u16,
+                    diff_weights,
+                    num_diffs,
+                    tvi_for_diff,
+                    vlt_luma,
+                    v_band_offset_val,
+                    v_band_size,
+                    col,
+                );
+            }
+        }
+    }
+    pool::give_u16(histograms_acc);
+    Ok(())
+}
+
+#[cfg(all(test, feature = "parallel"))]
+std::thread_local! {
+    pub(crate) static TEST_COLUMN_SPLITS: std::cell::RefCell<
+        Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>
+    > = const { std::cell::RefCell::new(None) };
+}
+
+fn calculate_c_values_scheduled(
+    image: &[u16],
+    mask: &[u16],
+    c_values: &mut [f32],
+    stride: usize,
+    width: usize,
+    height: usize,
+    window_size: usize,
+    num_diffs: usize,
+    tvi_for_diff: &[u16],
+    vlt_luma: u16,
+    v_band_base: u16,
+    v_band_size: u16,
+    diff_weights: &[i32],
+) -> Result<(), Error> {
+    #[cfg(feature = "parallel")]
+    if width * height >= 512 * 512 && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        #[cfg(test)]
+        TEST_COLUMN_SPLITS.with(|slot| {
+            if let Some(counter) = slot.borrow().as_ref() {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        });
+        // Align nonfinal regions to eight columns. The last eight columns
+        // of each such region use c_value_pixel because the vector loop
+        // requires col + 8 < width; the row parity control covers both paths.
+        let columns = width.div_ceil(rayon::current_num_threads()).div_ceil(8) * 8;
+        // Borrow disjoint segments of each output row. Regions own only
+        // row descriptors, avoiding a second full c-value plane and copy.
+        let mut regions: Vec<Vec<&mut [f32]>> = Vec::new();
+        regions
+            .try_reserve_exact(width.div_ceil(columns))
+            .map_err(|_| Error::InvalidInput("CAMBI region allocation failed"))?;
+        for _ in 0..width.div_ceil(columns) {
+            let mut rows = Vec::new();
+            rows.try_reserve_exact(height)
+                .map_err(|_| Error::InvalidInput("CAMBI row allocation failed"))?;
+            regions.push(rows);
+        }
+        for row in c_values[..width * height].chunks_exact_mut(width) {
+            let mut remaining = row;
+            for rows in &mut regions {
+                let count = columns.min(remaining.len());
+                let (region, rest) = remaining.split_at_mut(count);
+                rows.push(region);
+                remaining = rest;
+            }
+        }
+        regions
+            .into_par_iter()
+            .enumerate()
+            .try_for_each(|(index, mut rows)| {
+                let start = index * columns;
+                let end = (start + columns).min(width);
+                calculate_c_values_columns(
+                    image,
+                    mask,
+                    stride,
+                    width,
+                    height,
+                    window_size,
+                    num_diffs,
+                    tvi_for_diff,
+                    vlt_luma,
+                    v_band_base,
+                    v_band_size,
+                    diff_weights,
+                    start,
+                    end,
+                    &mut rows,
+                )
+            })?;
+        return Ok(());
+    }
+    calculate_c_values(
+        image,
+        mask,
+        c_values,
+        stride,
+        width,
+        height,
+        window_size,
+        num_diffs,
+        tvi_for_diff,
+        vlt_luma,
+        v_band_base,
+        v_band_size,
+        diff_weights,
+    )
+}
+
 fn spatial_pooling(c_values: &mut [f32], topk: f64, width: usize, height: usize) -> f64 {
     let num_elements = width * height;
     let topk_num = ((topk * num_elements as f64) as usize).clamp(1, num_elements);
@@ -5543,7 +5764,18 @@ pub fn cambi_v1_from_luma(
     height: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, width, bit_depth, None, true)
+    cambi_impl::<true>(dist_y, width, height, width, bit_depth, None, true)
+}
+
+// The frame scorer owns its thread budget. Its default/one-thread path must
+// not enter Rayon's global pool through the standalone CAMBI scheduler.
+pub(crate) fn cambi_v1_serial(
+    dist_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+) -> Result<f64, Error> {
+    cambi_impl::<false>(dist_y, width, height, width, bit_depth, None, true)
 }
 
 /// CAMBI with libvmaf 3.2.1's default standalone feature settings.
@@ -5564,7 +5796,7 @@ pub fn cambi_from_luma(
     stride: usize,
     bit_depth: u8,
 ) -> Result<f64, Error> {
-    cambi_impl(dist_y, width, height, stride, bit_depth, None, false)
+    cambi_impl::<true>(dist_y, width, height, stride, bit_depth, None, false)
 }
 
 /// [`cambi_v1_from_luma`] plus every scale's c-values, copied before the
@@ -5579,7 +5811,7 @@ pub(crate) fn cambi_v1_maps(
         scales: Vec::new(),
         window_size: 0,
     };
-    let score = cambi_impl(
+    let score = cambi_impl::<true>(
         dist_y,
         width,
         height,
@@ -5591,7 +5823,7 @@ pub(crate) fn cambi_v1_maps(
     Ok((score, maps))
 }
 
-fn cambi_impl(
+fn cambi_impl<const PARALLEL: bool>(
     dist_y: &[u16],
     width: usize,
     height: usize,
@@ -5703,7 +5935,12 @@ fn cambi_impl(
             scaled_height,
             &mut filter_buffer,
         );
-        calculate_c_values(
+        let calculate = if PARALLEL {
+            calculate_c_values_scheduled
+        } else {
+            calculate_c_values
+        };
+        calculate(
             &image,
             &mask,
             &mut c_values,
@@ -5747,6 +5984,139 @@ fn cambi_impl(
 #[cfg(test)]
 mod standalone_tests {
     use super::*;
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[test]
+    fn review_row_scalar_avx2_parity_includes_active_out_of_band_pixels() {
+        let token = v3_token().expect("direct AVX2 row control requires AVX2");
+        let (num_diffs, band_offset, band_size) = (3, 103, 32);
+        let thresholds = [115; 3];
+        let weights = [1, 2, 3];
+        for width in [8, 9, 16, 17, 24, 25, 32, 33] {
+            let histograms: Vec<u16> = (0..band_size as usize * width)
+                .map(|i| (1 + ((i / width) * 11 + (i % width) * 7) % 13) as u16)
+                .collect();
+            let image: Vec<u16> = (0..width)
+                .map(|i| [99, 100, 103, 131, 132, 200][i % 6])
+                .collect();
+            let mask: Vec<u16> = (0..width).map(|i| u16::from(i % 7 != 6)).collect();
+            let expected: Vec<f32> = (0..width)
+                .map(|col| {
+                    if mask[col] == 0 {
+                        0.0
+                    } else {
+                        c_value_pixel(
+                            &histograms,
+                            width,
+                            image[col] + num_diffs as u16,
+                            &weights,
+                            num_diffs,
+                            &thresholds,
+                            101,
+                            band_offset,
+                            band_size,
+                            col,
+                        )
+                    }
+                })
+                .collect();
+            assert!(expected.iter().any(|&value| value > 0.0));
+            let mut actual = vec![-1.0; width];
+            calculate_c_values_row_v3_t(
+                token,
+                &mut actual,
+                &histograms,
+                &image,
+                &mask,
+                width,
+                num_diffs,
+                &thresholds,
+                101,
+                &weights,
+                band_offset,
+                band_size,
+            );
+            for (col, (got, want)) in actual.iter().zip(&expected).enumerate() {
+                assert_eq!(got.to_bits(), want.to_bits(), "width={width} col={col}");
+            }
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn scheduled_columns_preserve_ordered_c_value_bits_and_stride() {
+        let (width, height, stride) = (523usize, 517usize, 528usize);
+        let mut image = vec![u16::MAX; stride * height];
+        let mut mask = vec![0u16; stride * height];
+        for y in 0..height {
+            for x in 0..width {
+                image[y * stride + x] = (256 + x / 8 + (y / 32) % 4) as u16;
+                mask[y * stride + x] = u16::from((x + 3 * y) % 7 != 0);
+            }
+        }
+        let num_diffs = 1 << MAX_LOG_CONTRAST;
+        let mut thresholds = [0u16; 32];
+        for (d, value) in thresholds.iter_mut().enumerate().take(num_diffs) {
+            *value = (get_tvi_for_diff((d + 1) as i32, TVI_THRESHOLD) + num_diffs as i32) as u16;
+        }
+        for visibility in [0.0, VIS_LUM_THRESHOLD] {
+            let vlt = get_vlt_luma(visibility);
+            let band_base = (i32::from(vlt) - 3 * num_diffs as i32 + 1).max(0) as u16;
+            let band_size = thresholds[num_diffs - 1] + 1 - band_base;
+            for window in [17, 65] {
+                let mut expected = vec![0.0f32; width * height];
+                calculate_c_values(
+                    &image,
+                    &mask,
+                    &mut expected,
+                    stride,
+                    width,
+                    height,
+                    window,
+                    num_diffs,
+                    &thresholds,
+                    vlt,
+                    band_base,
+                    band_size,
+                    &CONTRAST_WEIGHTS,
+                )
+                .unwrap();
+                assert!(expected.iter().any(|&v| v > 0.0));
+                for threads in [1, 2, 4] {
+                    let pool = rayon::ThreadPoolBuilder::new()
+                        .num_threads(threads)
+                        .build()
+                        .unwrap();
+                    let mut actual = vec![-1.0f32; width * height];
+                    pool.install(|| {
+                        calculate_c_values_scheduled(
+                            &image,
+                            &mask,
+                            &mut actual,
+                            stride,
+                            width,
+                            height,
+                            window,
+                            num_diffs,
+                            &thresholds,
+                            vlt,
+                            band_base,
+                            band_size,
+                            &CONTRAST_WEIGHTS,
+                        )
+                    })
+                    .unwrap();
+                    for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
+                        assert_eq!(
+                            a.to_bits(),
+                            b.to_bits(),
+                            "visibility={visibility} window={window} threads={threads} pixel={index}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn original_author_banded_pins() {

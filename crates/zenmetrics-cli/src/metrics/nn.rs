@@ -15,8 +15,8 @@ use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Ahiq, Arniqa, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Hyperiqa, Liqe, Lpips,
-    LpipsNet, Maniqa, Musiq, Paq2piq, WadiqamFr, WadiqamKind, WadiqamNr, WassersteinDistortion,
-    WeightsConsent,
+    LpipsNet, Maniqa, Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr,
+    WassersteinDistortion, WeightsConsent,
 };
 
 use super::MetricKind;
@@ -57,6 +57,7 @@ fn consent() -> WeightsConsent {
                 "liqe" => Liqe::WEIGHTS,
                 "hyperiqa" => Hyperiqa::WEIGHTS,
                 "paq2piq" => Paq2piq::WEIGHTS,
+                "pieapp" => PieApp::WEIGHTS,
                 _ => continue,
             };
             consent = consent.accept(terms);
@@ -124,6 +125,9 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
             engine,
             &consent(),
         )?)));
+    }
+    if column == "pieapp" {
+        return Ok(Box::new(PieApp::from_dir(&dir, engine, &consent())?));
     }
     if column == "paq2piq" {
         return Ok(Box::new(PairedNoReference::new(Paq2piq::from_dir(

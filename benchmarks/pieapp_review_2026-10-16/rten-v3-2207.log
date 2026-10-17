@@ -1,0 +1,36 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=23452MiB :: timeout --kill-after=20s 1150s just nn-pieapp-review-step rten-2207 /home/lilith/tmp/pieapp-port/models-review /home/lilith/tmp/nn-phase0/ladder /home/lilith/tmp/pieapp-port/review13b-v3/shards /home/lilith/tmp/pieapp-port/review13b-v3
+bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- 'rten-2207' '/home/lilith/tmp/pieapp-port/models-review' '/home/lilith/tmp/nn-phase0/ladder' '/home/lilith/tmp/pieapp-port/review13b-v3/shards' '/home/lilith/tmp/pieapp-port/review13b-v3'
+ZENMETRICS_NN_MODEL_DIR="$(realpath '/home/lilith/tmp/pieapp-port/review13b-v3/shards/2207')" ZENMETRICS_NN_LADDER="$(realpath '/home/lilith/tmp/nn-phase0/ladder')" ZENMETRICS_NN_ENGINE='rten' ZENMETRICS_NN_MODELS='pieapp' /home/lilith/.local/bin/just snap-cargo @ test --release -p zenmetrics-nn --features 'model-tests,ort' --test parity -- --nocapture --test-threads=1
+if [ "@" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev @; fi
+lock.sh: exported tracked tree 288edc3997ef (Cargo output excluded)
+lock.sh --check: PASS — Cargo.lock resolves unchanged against the 23 pinned siblings (working tree).
+cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked test --release -p zenmetrics-nn --features model-tests,ort --test parity -- --nocapture --test-threads=1
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/benchmarks/heaptrack/drivers/gpu_vram_profile/Cargo.toml
+workspace: /home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenmetrics/Cargo.toml
+warning: patch `zenrav1e v0.2.0 (/home/lilith/tmp/zenmetrics-lock-snap-pieapp/work/zenrav1e)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	https://github.com/imazen/zenrav1e
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+     Running tests/parity.rs (/home/lilith/tmp/zenmetrics-lock-snap-pieapp/target/release/deps/parity-97f535eb53637e77)
+
+running 2 tests
+test matches_upstream ... pieapp 2207 1024: got 3.122166319 want 3.122166483 |d| 1.636e-7
+pieapp 2207 128: got 2.120775724 want 2.120775703 |d| 2.080e-8
+pieapp 2207 2048: got 2.482892506 want 2.482892661 |d| 1.550e-7
+pieapp 2207 240x320: got 3.265215392 want 3.265215605 |d| 2.130e-7
+pieapp 2207 256: got 2.498294946 want 2.498294978 |d| 3.242e-8
+pieapp 2207 320x240: got 3.349959096 want 3.349959341 |d| 2.444e-7
+pieapp 2207 512: got 3.015304254 want 3.015304346 |d| 9.138e-8
+pieapp 2207 64: got 1.815556645 want 1.815556288 |d| 3.576e-7
+pieapp: 8 pairs, worst |d| 3.576e-7 = 6.89e-7 JND
+ok
+test warm_reference_equals_cold ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 508.23s
+
+run-heavy: done rc=0 510s | peak-RSS 0.61GiB | min-avail 22404MiB | peak-load 14.48

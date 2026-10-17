@@ -310,6 +310,9 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq`.
     #[value(name = "paq2piq")]
     Paq2piq,
+    /// PieAPP v0.1, dense patches; noncommercial weights require consent.
+    #[value(name = "pieapp")]
+    Pieapp,
     /// WaDIQaM-FR LIVE — full-reference learned quality (upstream
     /// `dmaniry/deepIQA`, MIT code and weights; shared conv trunk over
     /// non-overlapping 32x32 patches + relu-weighted pooling,
@@ -790,6 +793,7 @@ impl MetricKind {
             MetricKind::Musiq,
             MetricKind::Hyperiqa,
             MetricKind::Paq2piq,
+            MetricKind::Pieapp,
             MetricKind::WadiqamFrLive,
             MetricKind::WadiqamFrTid,
             MetricKind::WadiqamNrLive,
@@ -909,6 +913,7 @@ impl MetricKind {
             MetricKind::Musiq => "musiq",
             MetricKind::Hyperiqa => "hyperiqa",
             MetricKind::Paq2piq => "paq2piq",
+            MetricKind::Pieapp => "pieapp",
             MetricKind::WadiqamFrLive => "wadiqam-fr-live",
             MetricKind::WadiqamFrTid => "wadiqam-fr-tid",
             MetricKind::WadiqamNrLive => "wadiqam-nr-live",
@@ -1032,6 +1037,7 @@ impl MetricKind {
                 | MetricKind::WadiqamFrTid
                 | MetricKind::WadiqamNrLive
                 | MetricKind::WadiqamNrTid
+                | MetricKind::Pieapp
                 | MetricKind::Wd
         );
         let nr = matches!(
@@ -1129,6 +1135,7 @@ impl MetricKind {
             MetricKind::Musiq => &["musiq", "musiq_ref"],
             MetricKind::Hyperiqa => &["hyperiqa", "hyperiqa_ref"],
             MetricKind::Paq2piq => &["paq2piq", "paq2piq_ref"],
+            MetricKind::Pieapp => &["pieapp"],
             MetricKind::WadiqamFrLive => &["wadiqam_fr_live"],
             MetricKind::WadiqamFrTid => &["wadiqam_fr_tid"],
             MetricKind::WadiqamNrLive => &["wadiqam_nr_live", "wadiqam_nr_live_ref"],
@@ -2451,6 +2458,7 @@ pub fn run_metric(
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
         | MetricKind::Paq2piq
+        | MetricKind::Pieapp
         | MetricKind::WadiqamFrLive
         | MetricKind::WadiqamFrTid
         | MetricKind::WadiqamNrLive
@@ -2475,6 +2483,7 @@ pub fn run_metric(
         | MetricKind::Musiq
         | MetricKind::Hyperiqa
         | MetricKind::Paq2piq
+        | MetricKind::Pieapp
         | MetricKind::WadiqamFrLive
         | MetricKind::WadiqamFrTid
         | MetricKind::WadiqamNrLive

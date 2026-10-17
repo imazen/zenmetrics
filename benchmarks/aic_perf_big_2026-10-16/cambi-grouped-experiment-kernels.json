@@ -1,0 +1,16 @@
+{
+  "binary": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-candidate1/cambi-new",
+  "binary_sha256": "6e7408a9236e67e59d7fe2b14b17c61e6960df3d9deec45cea11f6a94dbe6f5e",
+  "disassembly_path": "/home/lilith/tmp/aic-variants-scratch/round14-cambi-candidate1/kernels.asm",
+  "disassembly_sha256": "e670afd125fc9d76248722ec1c73132255286408cf965c0bed786882897c79d5",
+  "functions": {
+    "0000000000061540 <vmaf::cambi::update_histogram_run>:": {
+      "packed_arithmetic": {
+        "paddw": 3,
+        "psubw": 3
+      },
+      "fma_instructions": {}
+    }
+  },
+  "counts_are_static_instruction_sites": true
+}

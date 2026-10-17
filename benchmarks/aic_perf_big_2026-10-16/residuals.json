@@ -1,0 +1,18 @@
+{
+  "pairs_per_metric": 61,
+  "metrics": [
+    "butter",
+    "cambi"
+  ],
+  "numeric_residual_rows": 122,
+  "residuals_unchanged_by_exact_score_identity": true,
+  "common_residual_table_sha256": "f1ae615f5819d26816d9842c4de4f52f087bfec7d1332165f935dc06be769f6a",
+  "input_images": 122,
+  "input_image_manifest_sha256": "a865f7ba00aaa12d6186ca2bdcb08260fec5d8e6cdcf0332ddbfbcfb13340452",
+  "input_files": {
+    "/home/lilith/tmp/aic-variants-scratch/round14-aic-parity-thread.tsv": "a302ba74e72676dc529442bd8b7a720805ae9215446f7827e3929957386cbd52",
+    "/home/lilith/tmp/aic-audit/pairs.tsv": "5888a1dae6a1358609c643cfec5e4ffe725caa7e3b1acd6815d67bfb96cfc762",
+    "/home/lilith/tmp/aic-site/site_fullres_subset61.csv": "094a5d77ea72ddd744301f4ce2f55dd2d207d12c6311c019cea7cac65e897e8d",
+    "/home/lilith/tmp/aic-site/config.json": "fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447"
+  }
+}

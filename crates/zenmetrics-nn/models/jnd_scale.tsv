@@ -33,6 +33,7 @@ liqe	0.393781
 musiq	1.968925
 hyperiqa	4.461776
 paq2piq	1.229401	JPEG 1.762009, BPG 0.726505; pooled median |paq2piq-paq2piq_ref| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
+pieapp	5.18948791249241870e-01	Pooled median raw error over 1008 KonJND pairs (ort-cuda, 2026-10-16); benchmarks/pieapp_2026-10-16_konjnd.json
 wadiqam_fr_live	29.932910	JPEG 30.459814, BPG 29.453248; pooled median |score(pair)-score(ref,ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
 wadiqam_fr_tid	5.209576	JPEG 6.383762, BPG 3.720833; pooled median |score(pair)-score(ref,ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)
 wadiqam_nr_live	23.551063	JPEG 24.827529, BPG 21.711020; pooled median |score(dist)-score(ref)| over 1008 KonJND pairs (ort-cuda, 2026-10-16)

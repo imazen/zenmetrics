@@ -481,9 +481,57 @@ pub(crate) mod ort_engine {
         .map_err(|e| Error::Engine(e.clone()))
     }
 
-    /// The CUDA execution provider with TF32 off (PyTorch's
-    /// `allow_tf32 = False`), exhaustive cuDNN algorithm search, deterministic
-    /// compute, and no silent fallback to the CPU provider.
+    /// Shared CUDA session config: TF32 off (PyTorch's
+    /// `allow_tf32 = False`), exhaustive cuDNN algorithm search,
+    /// deterministic compute, bounded arena retention, and no silent
+    /// fallback to the CPU provider.
+    ///
+    /// Two accumulation modes must be bounded for shape-varying inputs
+    /// (61-pair AIC sweep OOM'd the afine fused graph at pair 40/61,
+    /// S46, 2026-10-16): the device-side memory-pattern block retains a
+    /// per-shape intermediate arena, and the CPU arena buckets freed
+    /// host buffers by size without returning them. Memory-pattern is
+    /// off and the CPU provider's arena is disabled (same fix as
+    /// `ae582a3b` for the WD trunk). Deterministic compute stays on:
+    /// without it cuDNN's algorithms return last-bit-different scores
+    /// for identical calls (measured;
+    /// benchmarks/nn_lpips_phase0_2026-10-15/ort_determinism.log), at
+    /// a cost within noise with exhaustive search.
+    fn cuda_session(env: &Environment, path: &Path) -> Result<Session, Error> {
+        let cuda = ep::CUDA::default()
+            .with_tf32(false)
+            .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
+            .build()
+            .error_on_failure();
+        let cpu = ep::CPU::default().with_arena_allocator(false).build();
+        Session::builder(env)
+            .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+            .and_then(|b| b.with_memory_pattern(false).map_err(Into::into))
+            .and_then(|b| b.with_execution_providers([cuda, cpu]).map_err(Into::into))
+            .and_then(|mut b| b.commit_from_file(path))
+            .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))
+    }
+
+    /// Extract the one named output from a session run, consuming each
+    /// [`ort::session::SessionOutputs`] value as it is read so every
+    /// original is released after its copy. Indexing a borrowed
+    /// `SessionOutputs` retains every original until the collection
+    /// drops (`ae582a3b`).
+    fn take_output<T>(
+        out: ort::session::SessionOutputs<'_>,
+        want: &str,
+        get: impl Fn(&ort::value::DynValue) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut found = None;
+        for (name, value) in out {
+            if name == want {
+                found = Some(get(&value)?);
+            }
+        }
+        found.ok_or_else(|| Error::BadModel(format!("missing output {want}")))
+    }
+
+    /// The CUDA execution provider via [`cuda_session`].
     pub(crate) struct OrtCudaPair {
         session: Mutex<Session>,
         output: &'static str,
@@ -491,21 +539,7 @@ pub(crate) mod ort_engine {
 
     impl OrtCudaPair {
         pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
-            let env = environment()?;
-            let cuda = ep::CUDA::default()
-                .with_tf32(false)
-                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
-                .build()
-                .error_on_failure();
-            // Deterministic compute: without it cuDNN's algorithms return
-            // last-bit-different scores for identical calls (measured;
-            // benchmarks/nn_lpips_phase0_2026-10-15/ort_determinism.log), at
-            // a cost within noise with exhaustive search.
-            let session = Session::builder(env)
-                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
-                .and_then(|b| b.with_execution_providers([cuda]).map_err(Into::into))
-                .and_then(|mut b| b.commit_from_file(path))
-                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            let session = cuda_session(environment()?, path)?;
             Ok(Self {
                 session: Mutex::new(session),
                 output,
@@ -530,10 +564,11 @@ pub(crate) mod ort_engine {
             let out = session
                 .run(ort::inputs!["r" => rv, "d" => dv])
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            let s = out[self.output]
-                .try_extract_scalar::<f32>()
-                .map_err(|e| Error::Engine(e.to_string()))?;
-            Ok(f64::from(s))
+            take_output(out, self.output, |v| {
+                v.try_extract_scalar::<f32>()
+                    .map(f64::from)
+                    .map_err(|e| Error::Engine(e.to_string()))
+            })
         }
     }
 
@@ -546,17 +581,7 @@ pub(crate) mod ort_engine {
 
     impl OrtCudaImage {
         pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
-            let env = environment()?;
-            let cuda = ep::CUDA::default()
-                .with_tf32(false)
-                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
-                .build()
-                .error_on_failure();
-            let session = Session::builder(env)
-                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
-                .and_then(|b| b.with_execution_providers([cuda]).map_err(Into::into))
-                .and_then(|mut b| b.commit_from_file(path))
-                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            let session = cuda_session(environment()?, path)?;
             Ok(Self {
                 session: Mutex::new(session),
                 output,
@@ -585,10 +610,11 @@ pub(crate) mod ort_engine {
             let out = session
                 .run(feeds)
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            let s = out[self.output]
-                .try_extract_scalar::<f32>()
-                .map_err(|e| Error::Engine(e.to_string()))?;
-            Ok(f64::from(s))
+            take_output(out, self.output, |v| {
+                v.try_extract_scalar::<f32>()
+                    .map(f64::from)
+                    .map_err(|e| Error::Engine(e.to_string()))
+            })
         }
 
         fn tensor(&self, inputs: &[NamedInput]) -> Result<(Vec<usize>, Vec<f32>), Error> {
@@ -607,10 +633,12 @@ pub(crate) mod ort_engine {
             let out = session
                 .run(feeds)
                 .map_err(|e| Error::Engine(e.to_string()))?;
-            let (shape, data) = out[self.output]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| Error::Engine(e.to_string()))?;
-            Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
+            take_output(out, self.output, |v| {
+                let (shape, data) = v
+                    .try_extract_tensor::<f32>()
+                    .map_err(|e| Error::Engine(e.to_string()))?;
+                Ok((shape.iter().map(|&d| d as usize).collect(), data.to_vec()))
+            })
         }
     }
     /// Multi-output feature graph with bounded host output retention.
@@ -631,21 +659,7 @@ pub(crate) mod ort_engine {
             input: &'static str,
             outputs: Vec<&'static str>,
         ) -> Result<Self, Error> {
-            let env = environment()?;
-            let cuda = ep::CUDA::default()
-                .with_tf32(false)
-                .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Exhaustive)
-                .build()
-                .error_on_failure();
-            // Dynamic full-resolution feature maps must not accumulate in a
-            // host arena after copying into Rust-owned reference buffers.
-            let cpu = ep::CPU::default().with_arena_allocator(false).build();
-            let session = Session::builder(env)
-                .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
-                .and_then(|b| b.with_memory_pattern(false).map_err(Into::into))
-                .and_then(|b| b.with_execution_providers([cuda, cpu]).map_err(Into::into))
-                .and_then(|mut b| b.commit_from_file(path))
-                .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))?;
+            let session = cuda_session(environment()?, path)?;
             Ok(Self {
                 session: Mutex::new(session),
                 input,

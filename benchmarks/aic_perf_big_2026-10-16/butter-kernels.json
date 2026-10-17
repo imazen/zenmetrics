@@ -1,0 +1,27 @@
+{
+  "binary": "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate2/butter-new",
+  "binary_sha256": "dd4bfbd9cf8389c874a6fcd52152f623937b64bf62b64c9f0450392c36d2c37c",
+  "disassembly_path": "/home/lilith/tmp/aic-variants-scratch/round14-butter-candidate2/kernels.asm",
+  "disassembly_sha256": "d4cffc7d52cf1aca57ffdb4671c99c7959625a60384019145d9c6ea3dc6037a0",
+  "functions": {
+    "0000000000019630 <butter_wall::butteraugli_original::convolve::{closure#1}>:": {
+      "packed_arithmetic": {},
+      "fma_instructions": {}
+    },
+    "000000000001a0a0 <butter_wall::butteraugli_original::malta>:": {
+      "packed_arithmetic": {
+        "addps": 5,
+        "mulps": 2
+      },
+      "fma_instructions": {}
+    },
+    "000000000001d8c0 <butter_wall::butteraugli_original::convolve>:": {
+      "packed_arithmetic": {
+        "addps": 2,
+        "mulps": 4
+      },
+      "fma_instructions": {}
+    }
+  },
+  "counts_are_static_instruction_sites": true
+}

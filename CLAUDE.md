@@ -559,6 +559,33 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — PieAPP weight-head reconstruction:** the initial absolute-value
+  hypothesis matched the positive observed weights, but opaque bias/projection
+  controls identify signed `weight+1e-6`. Score revision 3 removes the
+  unsupported absolute value and accepts finite signed weights in pooling.
+  Both native 24-pair panels and exact warm/cold identity pass. All 1008
+  corrected KonJND scores are bit-identical and all input hashes match.
+  Original goldens, calibration scale and JND gates are unchanged.
+  Evidence: `benchmarks/pieapp_review_2026-10-16/weight-identify.json`.
+
+- **2026-10-16 — ORT CUDA arena/memory-pattern accumulation across changing
+  input shapes. FIXED (`f48b71a0`).** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
+  arena at pair 40/61 (S46) of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
+  intermediate). WD's trunk had the same class fixed in `ae582a3b`
+  (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
+  is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
+  — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
+  `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
+  `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
+  paths. afine sweep scores are bit-identical before/after (357/357
+  shared rows) and ort-cuda ladder parity re-verified on afine,
+  lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim,
+  arniqa, maniqa, liqe, musiq, hyperiqa, paq2piq, wadiqam and wd;
+  lpips_vgg covered by the fixed-size nn_bench A/B in the same receipt
+  (lpips_squeeze shares lpips_alex's `OrtCudaPair` graph shape, weights
+  only — not separately probed). RSS numbers are in
+  `benchmarks/afine_aic_2026-10-16/README.md`.
+
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
   A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
   The WD trunk now disables its CPU arena and consumes output tensors individually.
@@ -1631,3 +1658,18 @@ Identity and constant-output checks previously rejected valid zero batches.
 CAMBI now has no identity range and is exempt from the constant-output check;
 empty/nonfinite checks remain active. The sweep-feature binary regression
 `cambi_zero_distribution_is_not_bogus` covers the all-zero batch.
+
+### Known Bugs: CAMBI active-band rows and nested frame work (2026-10-16)
+
+A direct nine-column row control found AVX2 bits `402aaaab` for an active
+pixel below the histogram band, while `c_value_pixel` returned zero. Gather
+index clamping now has a separate in-band output mask (`3b3e81de`). The row
+control covers vector groups, scalar tails and masked pixels; only the low
+band edge has a predicate-true out-of-band pixel.
+A two-frame 512×512 control observed two column splits inside parallel frame
+workers. Those workers now keep CAMBI serial; the single-frame control still
+uses columns, and all feature/score bits match the serial scorer. Both new
+controls fail before the fix and pass after it without assertion changes.
+Column regions also borrow disjoint output-row slices instead of allocating
+and copying a second c-value plane (`24fe54f8`). Review measurements belong in
+[the perf receipt](benchmarks/aic_perf_big_2026-10-16/README.md).

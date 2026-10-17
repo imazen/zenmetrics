@@ -700,7 +700,7 @@ nn-export-dmm python ladder out upstream:
 # the pinned lock snapshot, so the paths are made absolute first.
 # engine: rten | ort-cuda (ort-cuda needs ORT_DYLIB_PATH and the CUDA/cuDNN libs
 # on the library path).
-nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
+nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_alex,lpips_vgg,lpips_squeeze,stlpips_alex,stlpips_vgg,dists,deepdc,ckdn,afine,dreamsim,ahiq,arniqa,maniqa,liqe,musiq,hyperiqa,paq2piq,pieapp,wadiqam_fr_live,wadiqam_fr_tid,wadiqam_nr_live,wadiqam_nr_tid":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='{{models}}' \
         {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
@@ -840,12 +840,59 @@ nn-paq2piq-small-inputs python ladder nonsquare:
 nn-paq2piq-cli-smoke binary models ladder:
     python3 -I crates/zenmetrics-nn/models/paq2piq/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
 
+# Official PieAPP release is executed only as a documented black-box CLI.
+nn-pieapp-oracle python upstream reference distorted log sampling="dense":
+    python3 -I crates/zenmetrics-nn/models/pieapp/oracle_cli.py --python '{{python}}' --upstream '{{upstream}}' --reference '{{reference}}' --distorted '{{distorted}}' --log '{{log}}' --sampling '{{sampling}}'
+
+# Paper/tensor-metadata reconstruction candidates; no official source imports.
+nn-pieapp-probe python checkpoint reference distorted:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/probe.py --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Score a TSV using explicitly accepted NC PieAPP weights; verify repeatability.
+nn-pieapp-score models pairs out engine="rten":
+    just snap-cargo @ run --release -p zenmetrics-nn --features ort --example pieapp_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+# Historical combined qualification; use nn-pieapp-review for bounded steps.
+nn-pieapp-gates models ladder:
+    bash -c "$(cat benchmarks/pieapp_gates_2026-10-16.sh)" -- '{{models}}' '{{ladder}}'
+
+nn-pieapp-cli-smoke binary models ladder:
+    python3 -I crates/zenmetrics-nn/models/pieapp/cli_smoke.py '{{binary}}' '{{models}}' '{{ladder}}'
+
+nn-pieapp-core-check:
+    just snap-cargo @ test -p zenmetrics-nn
+    just snap-cargo @ clippy -p zenmetrics-nn --all-targets --features ort,model-tests -- -D warnings
+
+# Fixed convention qualified through the public oracle.
+nn-pieapp-export python checkpoint out:
+    {{python}} -I crates/zenmetrics-nn/models/pieapp/export.py --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+# The release's public patch-error/weight entry point, used only as an opaque oracle.
+nn-pieapp-blackbox-probe python upstream checkpoint reference distorted:
+    {{python}} crates/zenmetrics-nn/models/pieapp/blackbox_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --reference '{{reference}}' --distorted '{{distorted}}'
+
+# Opaque official entry-point oracle; caller holds the heavy-job lock.
+nn-pieapp-entry-oracle python pairs out device upstream checkpoint:
+    {{python}} crates/zenmetrics-nn/models/pieapp/oracle.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}' --device '{{device}}'
+
+nn-pieapp-calibration-summary pairs scores out:
+    python3 crates/zenmetrics-nn/models/pieapp/summarize.py '{{pairs}}' '{{scores}}' '{{out}}'
+
+nn-pieapp-goldens pairs oracle out:
+    python3 crates/zenmetrics-nn/models/pieapp/goldens.py '{{pairs}}' '{{oracle}}' '{{out}}'
+
 # WD reference work: caller wraps in run-heavy and the shared heavy-job lock.
 nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/ladder") nonsquare=(env("HOME") / "tmp/nn-phase0/ladder-nonsquare"):
     {{python}} -I crates/zenmetrics-nn/models/wd/reference.py '{{stage}}' --reference '{{reference}}' --out '{{out}}' --ladder '{{ladder}}' --ladder '{{nonsquare}}'
 
 nn-wd-score models pairs out engine="rten":
     {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features ort --example wd_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
+
+# A-FINE sub-score dump for the AIC-4 convention search
+# (benchmarks/afine_aic_2026-10-16/). ort-cuda needs ORT_DYLIB_PATH +
+# cuDNN 9.19 libs on LD_LIBRARY_PATH (see benchmarks receipt).
+nn-afine-aic-dump models pairs out engine="rten" variants="":
+    {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features model-tests,ort --example afine_aic_dump -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}' '{{variants}}'
 
 nn-wd-parity models ladder engine="rten":
     ZENMETRICS_NN_MODEL_DIR='{{models}}' ZENMETRICS_NN_LADDER='{{ladder}}' ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests,ort --test wd_parity -- --nocapture --test-threads=1
@@ -869,9 +916,9 @@ nn-wd-aic-report probe native site config out:
 
 # Round 4 oracle panels; caller holds shared heavy lock and run-heavy scope.
 aic-more-verify python:
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/butter-original-probe"
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ssim1-probe"
-    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "$HOME/tmp/aic-variants-scratch/round4/ws-probe"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/butter_original_probe.rs -o "${AIC_BUTTER_PROBE:-$HOME/tmp/aic-variants-scratch/round4/butter-original-probe}"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ssimulacra1_probe.rs -o "${AIC_SSIM1_PROBE:-$HOME/tmp/aic-variants-scratch/round4/ssim1-probe}"
+    TMPDIR="$HOME/tmp/aic-variants-scratch" rustc --edition 2024 -O benchmarks/aic_more_2026-10-15/ws_hv_probe.rs -o "${AIC_WS_PROBE:-$HOME/tmp/aic-variants-scratch/round4/ws-probe}"
     {{python}} benchmarks/aic_more_2026-10-15/verify_butter.py
     {{python}} benchmarks/aic_more_2026-10-15/verify_ssim1.py
     {{python}} benchmarks/aic_more_2026-10-15/verify_ws.py
@@ -917,6 +964,91 @@ aic-review-pin-sensitivity:
 aic-review-cambi-reference python:
     AIC_RESULTS_DIR="$HOME/tmp/aic-variants-scratch/round5/clean-cambi-reference" {{python}} benchmarks/aic_more_2026-10-15/cambi_oracle.py
 
+# Round 14 preserved CPU baseline and profiles; caller owns heavy-job lock.
+aic-perf-big-baseline output metrics="cambi butter":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline.sh)" -- '{{output}}' '{{metrics}}'
+
+aic-perf-big-baseline-step phase output metric width height threads rev="@" label="base":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/baseline_step.sh)" -- '{{phase}}' '{{output}}' '{{metric}}' '{{width}}' '{{height}}' '{{threads}}' '{{rev}}' '{{label}}'
+
+aic-perf-big-parity base candidate output scratch:
+    python3 benchmarks/aic_perf_big_2026-10-16/parity.py '{{base}}' '{{candidate}}' '{{output}}' '{{scratch}}'
+
+# Call under a bounded shared heavy-job scope.
+aic-perf-big-measure binary width height threads reps="5":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '{{binary}}' '{{width}}' '{{height}}' '{{threads}}' '{{reps}}'
+
+aic-perf-big-cambi-scout output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/cambi_scout.sh)" -- '{{output}}'
+
+aic-perf-big-butter-scout output:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/butter_scout.sh)" -- '{{output}}'
+
+aic-perf-big-assembly binary output:
+    python3 -I benchmarks/aic_perf_big_2026-10-16/assembly.py '{{binary}}' '{{output}}'
+
+aic-perf-big-oracles output python="python3":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/oracles.sh)" -- '{{output}}' '{{python}}'
+
+aic-perf-big-interleave cambi_base butter_base candidate output metrics="cambi butter":
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave.sh)" -- '{{cambi_base}}' '{{butter_base}}' '{{candidate}}' '{{output}}' '{{metrics}}'
+
+aic-perf-big-interleave-step base candidate output width height threads:
+    bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave_step.sh)" -- '{{base}}' '{{candidate}}' '{{output}}' '{{width}}' '{{height}}' '{{threads}}'
+
+aic-perf-big-residuals parity pairs published config output:
+    python3 -I benchmarks/aic_perf_big_2026-10-16/residuals.py '{{parity}}' '{{pairs}}' '{{published}}' '{{config}}' '{{output}}'
+
+aic-perf-big-summary scratch output stage="final":
+    python3 -I benchmarks/aic_perf_big_2026-10-16/summarize.py '{{scratch}}' '{{output}}' --stage '{{stage}}'
+
+# Scorer-budget regression and refreshed standalone executable; caller owns heavy lock.
+aic-perf-big-thread-budget output:
+    just snap-cargo @ test -p vmaf --features parallel,simd,avx512 --lib
+    just snap-cargo @ build --release -p vmaf --features parallel,simd,avx512 --example cambi_wall
+    mkdir '{{output}}'
+    cp "$LOCK_SNAP_DIR/target/release/examples/cambi_wall" '{{output}}/cambi-candidate'
+    sha256sum '{{output}}/cambi-candidate'
+# Round 13b public-oracle controls; individual steps use the heavy-job lock.
+nn-pieapp-review-head python upstream checkpoint pairs out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_head_probe.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --pairs '{{pairs}}' --out '{{out}}'
+
+nn-pieapp-review-cli python upstream pairs entry out logs:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_cli_panel.py --python '{{python}}' --upstream '{{upstream}}' --pairs '{{pairs}}' --entry_scores '{{entry}}' --out '{{out}}' --logs '{{logs}}'
+
+# Run outside the lock: the orchestrator acquires/releases it for each step.
+nn-pieapp-review models ladder output:
+    bash -c "$(cat benchmarks/pieapp_review_2026-10-16.sh)" -- '{{models}}' '{{ladder}}' '{{output}}'
+
+nn-pieapp-review-summary directory log out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_summary.py '{{directory}}' '{{log}}' '{{out}}'
+
+nn-pieapp-review-shards models out:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_shards.py '{{models}}' '{{out}}'
+
+nn-pieapp-review-step phase models ladder shards output:
+    bash -c "$(cat benchmarks/pieapp_review_step_2026-10-16.sh)" -- '{{phase}}' '{{models}}' '{{ladder}}' '{{shards}}' '{{output}}'
+
+# Extra documented probe arguments select joint/diagnostic controls.
+# Out-of-range tensors are diagnostics, never native image parity.
+nn-pieapp-review-weight-sign python upstream checkpoint out *args:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' {{args}}
+
+nn-pieapp-review-weight-identify python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_identify.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+nn-pieapp-review-reexport oldmodels models output:
+    bash -c "$(cat benchmarks/pieapp_reexport_2026-10-16.sh)" -- '{{oldmodels}}' '{{models}}' '{{output}}'
+
+nn-pieapp-review-konjnd-shards pairs output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_shards.py '{{pairs}}' '{{output}}'
+
+nn-pieapp-review-konjnd-compare baseline directory output:
+    python3 -I crates/zenmetrics-nn/models/pieapp/review_konjnd_compare.py '{{baseline}}' '{{directory}}' '{{output}}'
+
+# Syntax-check independent probes without importing or executing an oracle.
+nn-pieapp-review-python-check:
+    python3 -I -m compileall -q crates/zenmetrics-nn/models/pieapp
 # Label-free indexed planner/executor checks, including an independent PNG decoder.
 palette-check:
     just palette-pool-check
@@ -938,6 +1070,9 @@ steer-smoke-transport-check:
 # Operator wrappers retain the canonical packer/launcher and caller-supplied caps.
 fit-pack-bounded-smoke source bin_dir build_meta pins contract out:
     python3 scripts/jobsys/pack_fit_program.py --source "{{source}}" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "{{bin_dir}}" --build-meta "{{build_meta}}" --profile bounded-smoke --source-pins "{{pins}}" --source-pins-sha256 "$(sha256sum '{{pins}}' | cut -d' ' -f1)" --data "benchmarks/e33_fit_contract_2026-10-10.json={{contract}}" --out "{{out}}"
+
+fit-pack-steer source bin_dir build_meta pins contract out:
+    python3 scripts/jobsys/pack_fit_program.py --source "{{source}}" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "{{bin_dir}}" --build-meta "{{build_meta}}" --profile steer --source-pins "{{pins}}" --source-pins-sha256 "$(sha256sum '{{pins}}' | cut -d' ' -f1)" --data "benchmarks/e33_fit_contract_2026-10-10.json={{contract}}" --out "{{out}}"
 
 lan-fit-smoke-launch host run role image:
     bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"

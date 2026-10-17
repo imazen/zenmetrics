@@ -1,0 +1,4 @@
+command: just nn-pieapp-review-head ORACLE_PYTHON UPSTREAM CHECKPOINT LADDER_PAIRS NEW_OUTPUT
+source_sha256: 0069eb666b6e56113182c89bd3be008aa463341a39a44921d573b15886aa8f73
+log_sha256: caf215fef525763b6c8cede93aa26700fcf86ebfc5e21e93920f0ad029e1de5d
+run-heavy: done rc=0 4s | peak-RSS 1.38GiB | min-avail 21589MiB | peak-load 17.45

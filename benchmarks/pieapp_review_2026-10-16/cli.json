@@ -1,0 +1,205 @@
+{
+  "pairs": 24,
+  "worst": {
+    "key": "2207_2048_dist",
+    "cli": 3.4582222,
+    "cli_repeat": 3.4582222,
+    "entry": 2.4828926609204816,
+    "absolute_difference": 0.9753295390795182,
+    "jnd_difference": 1.879433106938455
+  },
+  "rows": [
+    {
+      "key": "1415_1024_dist",
+      "cli": 0.9274566,
+      "cli_repeat": 0.9274566,
+      "entry": 1.53729756624435,
+      "absolute_difference": 0.60984096624435,
+      "jnd_difference": 1.1751467129855098
+    },
+    {
+      "key": "1415_1024x684_dist",
+      "cli": 0.82933366,
+      "cli_repeat": 0.82933366,
+      "entry": 1.4880456694890016,
+      "absolute_difference": 0.6587120094890017,
+      "jnd_difference": 1.2693198646889883
+    },
+    {
+      "key": "1415_128_dist",
+      "cli": 1.6797864,
+      "cli_repeat": 1.6797864,
+      "entry": 1.656779904408241,
+      "absolute_difference": 0.023006495591759046,
+      "jnd_difference": 0.04433288212576149
+    },
+    {
+      "key": "1415_2048_dist",
+      "cli": 0.8876392,
+      "cli_repeat": 0.8876392,
+      "entry": 1.5611774610236802,
+      "absolute_difference": 0.6735382610236802,
+      "jnd_difference": 1.2978896422560349
+    },
+    {
+      "key": "1415_256_dist",
+      "cli": 0.7029322,
+      "cli_repeat": 0.7029322,
+      "entry": 1.6728087685137745,
+      "absolute_difference": 0.9698765685137745,
+      "jnd_difference": 1.8689253831366186
+    },
+    {
+      "key": "1415_333x448_dist",
+      "cli": 0.7971702,
+      "cli_repeat": 0.7971702,
+      "entry": 1.5689219778463188,
+      "absolute_difference": 0.7717517778463188,
+      "jnd_difference": 1.487144378905895
+    },
+    {
+      "key": "1415_448x333_dist",
+      "cli": 0.60156894,
+      "cli_repeat": 0.60156894,
+      "entry": 1.5385105133894577,
+      "absolute_difference": 0.9369415733894576,
+      "jnd_difference": 1.805460556395171
+    },
+    {
+      "key": "1415_512_dist",
+      "cli": 0.81167,
+      "cli_repeat": 0.81167,
+      "entry": 1.655654257784265,
+      "absolute_difference": 0.843984257784265,
+      "jnd_difference": 1.6263343744429581
+    },
+    {
+      "key": "1415_64_dist",
+      "cli": 2.5778067,
+      "cli_repeat": 2.5778067,
+      "entry": 2.5778067111968994,
+      "absolute_difference": 1.1196899407650562e-08,
+      "jnd_difference": 2.1576116172651207e-08
+    },
+    {
+      "key": "1415_684x1024_dist",
+      "cli": 0.7225757,
+      "cli_repeat": 0.7225757,
+      "entry": 1.4062463988976401,
+      "absolute_difference": 0.6836706988976401,
+      "jnd_difference": 1.3174145704277886
+    },
+    {
+      "key": "2207_1024_dist",
+      "cli": 3.3428526,
+      "cli_repeat": 3.3428526,
+      "entry": 3.1221664825737974,
+      "absolute_difference": 0.2206861174262027,
+      "jnd_difference": 0.42525605830000107
+    },
+    {
+      "key": "2207_128_dist",
+      "cli": 2.1420636,
+      "cli_repeat": 2.1420636,
+      "entry": 2.120775703243854,
+      "absolute_difference": 0.021287896756146285,
+      "jnd_difference": 0.04102118959541441
+    },
+    {
+      "key": "2207_2048_dist",
+      "cli": 3.4582222,
+      "cli_repeat": 3.4582222,
+      "entry": 2.4828926609204816,
+      "absolute_difference": 0.9753295390795182,
+      "jnd_difference": 1.879433106938455
+    },
+    {
+      "key": "2207_240x320_dist",
+      "cli": 3.4340162,
+      "cli_repeat": 3.4340162,
+      "entry": 3.2652156051783536,
+      "absolute_difference": 0.16880059482164622,
+      "jnd_difference": 0.3252740880565503
+    },
+    {
+      "key": "2207_256_dist",
+      "cli": 2.325136,
+      "cli_repeat": 2.325136,
+      "entry": 2.4982949779464136,
+      "absolute_difference": 0.17315897794641355,
+      "jnd_difference": 0.3336725720654938
+    },
+    {
+      "key": "2207_320x240_dist",
+      "cli": 3.1605878,
+      "cli_repeat": 3.1605878,
+      "entry": 3.349959340671551,
+      "absolute_difference": 0.18937154067155104,
+      "jnd_difference": 0.36491373304037483
+    },
+    {
+      "key": "2207_512_dist",
+      "cli": 2.4611254,
+      "cli_repeat": 2.4611254,
+      "entry": 3.015304345592039,
+      "absolute_difference": 0.5541789455920392,
+      "jnd_difference": 1.0678875352190134
+    },
+    {
+      "key": "2207_64_dist",
+      "cli": 1.8155563,
+      "cli_repeat": 1.8155563,
+      "entry": 1.815556287765503,
+      "absolute_difference": 1.223449697107526e-08,
+      "jnd_difference": 2.3575538044175247e-08
+    },
+    {
+      "key": "2406_1024_dist",
+      "cli": 1.6880493,
+      "cli_repeat": 1.6880493,
+      "entry": 1.6535736917228832,
+      "absolute_difference": 0.03447560827711693,
+      "jnd_difference": 0.06643354577264814
+    },
+    {
+      "key": "2406_128_dist",
+      "cli": 2.236452,
+      "cli_repeat": 2.236452,
+      "entry": 2.230198089179491,
+      "absolute_difference": 0.006253910820508857,
+      "jnd_difference": 0.012051113570289086
+    },
+    {
+      "key": "2406_2048_dist",
+      "cli": 0.77473074,
+      "cli_repeat": 0.77473074,
+      "entry": 0.9271818770928962,
+      "absolute_difference": 0.15245113709289626,
+      "jnd_difference": 0.29376913418741674
+    },
+    {
+      "key": "2406_256_dist",
+      "cli": 2.5876675,
+      "cli_repeat": 2.5876675,
+      "entry": 2.823074976971235,
+      "absolute_difference": 0.23540747697123532,
+      "jnd_difference": 0.4536237118975643
+    },
+    {
+      "key": "2406_512_dist",
+      "cli": 2.8671453,
+      "cli_repeat": 2.8671453,
+      "entry": 2.420547622514079,
+      "absolute_difference": 0.44659767748592083,
+      "jnd_difference": 0.8605814003552191
+    },
+    {
+      "key": "2406_64_dist",
+      "cli": 1.9620509,
+      "cli_repeat": 1.9620509,
+      "entry": 1.9620510339736938,
+      "absolute_difference": 1.339736939165448e-07,
+      "jnd_difference": 2.581636110839299e-07
+    }
+  ]
+}

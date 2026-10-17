@@ -1,0 +1,109 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=16/20 avail=24138MiB :: timeout --kill-after=20s 1150s just aic-perf-big-interleave-step /home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base /home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate /home/lilith/tmp/aic-variants-scratch/round14-threshold-512 512 512 16
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/interleave_step.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base' '/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate' '/home/lilith/tmp/aic-variants-scratch/round14-threshold-512' '512' '512' '16'
+9c782aa3b1d80ec9e3dddf7f452f6fccd719ba515f393a0a5b0fcb81c61808f3  /home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base
+37297ecf698aeff27f3c67e580ded18627ae9f3c16799f13fd19949b99cfa832  /home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base' '512' '512' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base threads=16 dimensions=512x512 load=3.04 2.35 2.86 1/1662 1631139
+banded-10bit 512x512 5 reps: 6.852253 ms/call score 2.01542812626077561 bits 40001f98c80dd427
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base 512 512 5"
+	User time (seconds): 0.03
+	System time (seconds): 0.00
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.03
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6880
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1059
+	Voluntary context switches: 1
+	Involuntary context switches: 0
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate' '512' '512' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate threads=16 dimensions=512x512 load=3.04 2.35 2.86 2/1662 1631148
+banded-10bit 512x512 5 reps: 3.294807 ms/call score 2.01542812626077561 bits 40001f98c80dd427
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate 512 512 5"
+	User time (seconds): 0.04
+	System time (seconds): 0.00
+	Percent of CPU this job got: 276%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.01
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 7888
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1587
+	Voluntary context switches: 261
+	Involuntary context switches: 0
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base' '512' '512' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base threads=16 dimensions=512x512 load=3.04 2.35 2.86 2/1662 1631173
+banded-10bit 512x512 5 reps: 6.824246 ms/call score 2.01542812626077561 bits 40001f98c80dd427
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-banded/cambi-base 512 512 5"
+	User time (seconds): 0.03
+	System time (seconds): 0.00
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.03
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6828
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1060
+	Voluntary context switches: 1
+	Involuntary context switches: 0
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bash -c "$(cat benchmarks/aic_perf_big_2026-10-16/measure.sh)" -- '/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate' '512' '512' '16' '5'
+binary=/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate threads=16 dimensions=512x512 load=3.04 2.35 2.86 1/1662 1631182
+banded-10bit 512x512 5 reps: 3.582352 ms/call score 2.01542812626077561 bits 40001f98c80dd427
+	Command being timed: "/home/lilith/tmp/aic-variants-scratch/round14-final-bins-v2/cambi-candidate 512 512 5"
+	User time (seconds): 0.04
+	System time (seconds): 0.00
+	Percent of CPU this job got: 257%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.01
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6976
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1474
+	Voluntary context switches: 239
+	Involuntary context switches: 2
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+run-heavy: done rc=0 0s | peak-RSS 0.01GiB | min-avail 24137MiB | peak-load 3.04

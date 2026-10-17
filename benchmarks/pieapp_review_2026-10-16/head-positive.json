@@ -1,0 +1,904 @@
+[
+  {
+    "pair": "1415_1024_dist.png",
+    "public_error": 0.9507188200950623,
+    "public_weight": 9.219778060913086,
+    "raw_error": 96.68931579589844,
+    "raw_weight": 9.21977710723877,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 96.67314147949219,
+        "absolute_error": 95.72242265939713
+      },
+      "divisor_10": {
+        "prediction": 9.65275764465332,
+        "absolute_error": 8.702038824558258
+      },
+      "divisor_100": {
+        "prediction": 0.9507188200950623,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.36299946904182434,
+        "absolute_error": 0.5877193510532379
+      },
+      "signed": {
+        "prediction": 9.21977710723877,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "abs": {
+        "prediction": 9.21977710723877,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "signed_epsilon": {
+        "prediction": 9.219778060913086,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 9.219778060913086,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "1415_1024x684_dist.png",
+    "public_error": 0.8404659032821655,
+    "public_weight": 12.684198379516602,
+    "raw_error": 85.66402435302734,
+    "raw_weight": 12.684197425842285,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 85.6478500366211,
+        "absolute_error": 84.80738413333893
+      },
+      "divisor_10": {
+        "prediction": 8.550228118896484,
+        "absolute_error": 7.709762215614319
+      },
+      "divisor_100": {
+        "prediction": 0.8404659032821655,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.31976303458213806,
+        "absolute_error": 0.5207028687000275
+      },
+      "signed": {
+        "prediction": 12.684197425842285,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "abs": {
+        "prediction": 12.684197425842285,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "signed_epsilon": {
+        "prediction": 12.684198379516602,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 12.684198379516602,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "1415_128_dist.png",
+    "public_error": 0.9727289080619812,
+    "public_weight": 21.49980926513672,
+    "raw_error": 98.89032745361328,
+    "raw_weight": 21.499807357788086,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 98.87415313720703,
+        "absolute_error": 97.90142422914505
+      },
+      "divisor_10": {
+        "prediction": 9.872859001159668,
+        "absolute_error": 8.900130093097687
+      },
+      "divisor_100": {
+        "prediction": 0.9727289080619812,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.37163087725639343,
+        "absolute_error": 0.6010980308055878
+      },
+      "signed": {
+        "prediction": 21.499807357788086,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "abs": {
+        "prediction": 21.499807357788086,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "signed_epsilon": {
+        "prediction": 21.49980926513672,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 21.49980926513672,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "identity",
+    "public_error": -3.725290298461914e-09,
+    "public_weight": 7.455242156982422,
+    "raw_error": 1.6174335479736328,
+    "raw_weight": 7.4552412033081055,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 1.6012592315673828,
+        "absolute_error": 1.601259235292673
+      },
+      "divisor_10": {
+        "prediction": 0.14556902647018433,
+        "absolute_error": 0.14556903019547462
+      },
+      "divisor_100": {
+        "prediction": -3.725290298461914e-09,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.009831462055444717,
+        "absolute_error": 0.009831458330154419
+      },
+      "signed": {
+        "prediction": 7.4552412033081055,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "abs": {
+        "prediction": 7.4552412033081055,
+        "absolute_error": 9.5367431640625e-07
+      },
+      "signed_epsilon": {
+        "prediction": 7.455242156982422,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 7.455242156982422,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "black_white",
+    "public_error": 1.85408353805542,
+    "public_weight": 26.170516967773438,
+    "raw_error": 187.02578735351562,
+    "raw_weight": 26.170515060424805,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 187.00961303710938,
+        "absolute_error": 185.15552949905396
+      },
+      "divisor_10": {
+        "prediction": 18.686405181884766,
+        "absolute_error": 16.832321643829346
+      },
+      "divisor_100": {
+        "prediction": 1.85408353805542,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.7172601819038391,
+        "absolute_error": 1.1368233561515808
+      },
+      "signed": {
+        "prediction": 26.170515060424805,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "abs": {
+        "prediction": 26.170515060424805,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "signed_epsilon": {
+        "prediction": 26.170516967773438,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 26.170516967773438,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "white_black",
+    "public_error": 4.646462917327881,
+    "public_weight": 20.670516967773438,
+    "raw_error": 466.26373291015625,
+    "raw_weight": 20.670515060424805,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 466.24755859375,
+        "absolute_error": 461.6010956764221
+      },
+      "divisor_10": {
+        "prediction": 46.610198974609375,
+        "absolute_error": 41.963736057281494
+      },
+      "divisor_100": {
+        "prediction": 4.646462917327881,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 1.812311053276062,
+        "absolute_error": 2.834151864051819
+      },
+      "signed": {
+        "prediction": 20.670515060424805,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "abs": {
+        "prediction": 20.670515060424805,
+        "absolute_error": 1.9073486328125e-06
+      },
+      "signed_epsilon": {
+        "prediction": 20.670516967773438,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 20.670516967773438,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_0",
+    "public_error": 1.134708046913147,
+    "public_weight": 126.33785247802734,
+    "raw_error": 115.08824157714844,
+    "raw_weight": 126.33785247802734,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 115.07206726074219,
+        "absolute_error": 113.93735921382904
+      },
+      "divisor_10": {
+        "prediction": 11.492650032043457,
+        "absolute_error": 10.35794198513031
+      },
+      "divisor_100": {
+        "prediction": 1.134708046913147,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.4351521134376526,
+        "absolute_error": 0.6995559334754944
+      },
+      "signed": {
+        "prediction": 126.33785247802734,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 126.33785247802734,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 126.33785247802734,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 126.33785247802734,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_1",
+    "public_error": 0.49488386511802673,
+    "public_weight": 140.3806610107422,
+    "raw_error": 51.10581970214844,
+    "raw_weight": 140.3806610107422,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 51.08964538574219,
+        "absolute_error": 50.59476152062416
+      },
+      "divisor_10": {
+        "prediction": 5.094407558441162,
+        "absolute_error": 4.599523693323135
+      },
+      "divisor_100": {
+        "prediction": 0.49488386511802673,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.18424063920974731,
+        "absolute_error": 0.3106432259082794
+      },
+      "signed": {
+        "prediction": 140.3806610107422,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 140.3806610107422,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 140.3806610107422,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 140.3806610107422,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_2",
+    "public_error": 0.4865870177745819,
+    "public_weight": 54.69851303100586,
+    "raw_error": 50.27613830566406,
+    "raw_weight": 54.69851303100586,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 50.25996398925781,
+        "absolute_error": 49.77337697148323
+      },
+      "divisor_10": {
+        "prediction": 5.011439800262451,
+        "absolute_error": 4.524852782487869
+      },
+      "divisor_100": {
+        "prediction": 0.4865870177745819,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.18098700046539307,
+        "absolute_error": 0.30560001730918884
+      },
+      "signed": {
+        "prediction": 54.69851303100586,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 54.69851303100586,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 54.69851303100586,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 54.69851303100586,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_3",
+    "public_error": 1.7948178052902222,
+    "public_weight": 134.5977020263672,
+    "raw_error": 181.09921264648438,
+    "raw_weight": 134.5977020263672,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 181.08303833007812,
+        "absolute_error": 179.2882205247879
+      },
+      "divisor_10": {
+        "prediction": 18.093748092651367,
+        "absolute_error": 16.298930287361145
+      },
+      "divisor_100": {
+        "prediction": 1.7948178052902222,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.6940187215805054,
+        "absolute_error": 1.1007990837097168
+      },
+      "signed": {
+        "prediction": 134.5977020263672,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 134.5977020263672,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 134.5977020263672,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 134.5977020263672,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_4",
+    "public_error": 0.013917742297053337,
+    "public_weight": 102.46995544433594,
+    "raw_error": 3.0092082023620605,
+    "raw_weight": 102.46995544433594,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 2.9930338859558105,
+        "absolute_error": 2.979116143658757
+      },
+      "divisor_10": {
+        "prediction": 0.2847464680671692,
+        "absolute_error": 0.27082872577011585
+      },
+      "divisor_100": {
+        "prediction": 0.013917742297053337,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.004373521544039249,
+        "absolute_error": 0.018291263841092587
+      },
+      "signed": {
+        "prediction": 102.46995544433594,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 102.46995544433594,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 102.46995544433594,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 102.46995544433594,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_5",
+    "public_error": -0.1754409372806549,
+    "public_weight": 60.4564323425293,
+    "raw_error": -15.92665958404541,
+    "raw_weight": 60.4564323425293,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": -15.94283390045166,
+        "absolute_error": 15.767392963171005
+      },
+      "divisor_10": {
+        "prediction": -1.6088403463363647,
+        "absolute_error": 1.4333994090557098
+      },
+      "divisor_100": {
+        "prediction": -0.1754409372806549,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.07863183319568634,
+        "absolute_error": 0.09680910408496857
+      },
+      "signed": {
+        "prediction": 60.4564323425293,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 60.4564323425293,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 60.4564323425293,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 60.4564323425293,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_6",
+    "public_error": 0.995010256767273,
+    "public_weight": 81.6651840209961,
+    "raw_error": 101.11845397949219,
+    "raw_weight": 81.6651840209961,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 101.10227966308594,
+        "absolute_error": 100.10726940631866
+      },
+      "divisor_10": {
+        "prediction": 10.095671653747559,
+        "absolute_error": 9.100661396980286
+      },
+      "divisor_100": {
+        "prediction": 0.995010256767273,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.3803686201572418,
+        "absolute_error": 0.6146416366100311
+      },
+      "signed": {
+        "prediction": 81.6651840209961,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 81.6651840209961,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 81.6651840209961,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 81.6651840209961,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_7",
+    "public_error": -0.22803032398223877,
+    "public_weight": 40.378597259521484,
+    "raw_error": -21.185598373413086,
+    "raw_weight": 40.378597259521484,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": -21.201772689819336,
+        "absolute_error": 20.973742365837097
+      },
+      "divisor_10": {
+        "prediction": -2.1347341537475586,
+        "absolute_error": 1.9067038297653198
+      },
+      "divisor_100": {
+        "prediction": -0.22803032398223877,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.09925512224435806,
+        "absolute_error": 0.1287752017378807
+      },
+      "signed": {
+        "prediction": 40.378597259521484,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 40.378597259521484,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 40.378597259521484,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 40.378597259521484,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_8",
+    "public_error": -0.5875775814056396,
+    "public_weight": 57.85470962524414,
+    "raw_error": -57.14032745361328,
+    "raw_weight": 57.85470962524414,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": -57.15650177001953,
+        "absolute_error": 56.56892418861389
+      },
+      "divisor_10": {
+        "prediction": -5.7302069664001465,
+        "absolute_error": 5.142629384994507
+      },
+      "divisor_100": {
+        "prediction": -0.5875775814056396,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.24025407433509827,
+        "absolute_error": 0.3473235070705414
+      },
+      "signed": {
+        "prediction": 57.85470962524414,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 57.85470962524414,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 57.85470962524414,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 57.85470962524414,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_9",
+    "public_error": 0.6099823117256165,
+    "public_weight": 66.79053497314453,
+    "raw_error": 62.615665435791016,
+    "raw_weight": 66.79053497314453,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 62.599491119384766,
+        "absolute_error": 61.98950880765915
+      },
+      "divisor_10": {
+        "prediction": 6.245392322540283,
+        "absolute_error": 5.635410010814667
+      },
+      "divisor_100": {
+        "prediction": 0.6099823117256165,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.22937729954719543,
+        "absolute_error": 0.380605012178421
+      },
+      "signed": {
+        "prediction": 66.79053497314453,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 66.79053497314453,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 66.79053497314453,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 66.79053497314453,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_10",
+    "public_error": 0.13344523310661316,
+    "public_weight": 104.93132781982422,
+    "raw_error": 14.961956977844238,
+    "raw_weight": 104.93132781982422,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 14.945782661437988,
+        "absolute_error": 14.812337428331375
+      },
+      "divisor_10": {
+        "prediction": 1.480021357536316,
+        "absolute_error": 1.3465761244297028
+      },
+      "divisor_100": {
+        "prediction": 0.13344523310661316,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.042500004172325134,
+        "absolute_error": 0.09094522893428802
+      },
+      "signed": {
+        "prediction": 104.93132781982422,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 104.93132781982422,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 104.93132781982422,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 104.93132781982422,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_11",
+    "public_error": 0.6587788462638855,
+    "public_weight": 60.957401275634766,
+    "raw_error": 67.49531555175781,
+    "raw_weight": 60.957401275634766,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 67.47914123535156,
+        "absolute_error": 66.82036238908768
+      },
+      "divisor_10": {
+        "prediction": 6.7333574295043945,
+        "absolute_error": 6.074578583240509
+      },
+      "divisor_100": {
+        "prediction": 0.6587788462638855,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.24851319193840027,
+        "absolute_error": 0.41026565432548523
+      },
+      "signed": {
+        "prediction": 60.957401275634766,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 60.957401275634766,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 60.957401275634766,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 60.957401275634766,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_12",
+    "public_error": -0.12932342290878296,
+    "public_weight": 44.137298583984375,
+    "raw_error": -11.314908027648926,
+    "raw_weight": 44.137298583984375,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": -11.331082344055176,
+        "absolute_error": 11.201758921146393
+      },
+      "divisor_10": {
+        "prediction": -1.1476651430130005,
+        "absolute_error": 1.0183417201042175
+      },
+      "divisor_100": {
+        "prediction": -0.12932342290878296,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": -0.06054652854800224,
+        "absolute_error": 0.06877689436078072
+      },
+      "signed": {
+        "prediction": 44.137298583984375,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 44.137298583984375,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 44.137298583984375,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 44.137298583984375,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_13",
+    "public_error": 0.6068087220191956,
+    "public_weight": 123.93234252929688,
+    "raw_error": 62.29830551147461,
+    "raw_weight": 123.93234252929688,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 62.28213119506836,
+        "absolute_error": 61.675322473049164
+      },
+      "divisor_10": {
+        "prediction": 6.213656425476074,
+        "absolute_error": 5.606847703456879
+      },
+      "divisor_100": {
+        "prediction": 0.6068087220191956,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.22813275456428528,
+        "absolute_error": 0.3786759674549103
+      },
+      "signed": {
+        "prediction": 123.93234252929688,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 123.93234252929688,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 123.93234252929688,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 123.93234252929688,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_14",
+    "public_error": 1.3093457221984863,
+    "public_weight": 70.89287567138672,
+    "raw_error": 132.552001953125,
+    "raw_weight": 70.89287567138672,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 132.53582763671875,
+        "absolute_error": 131.22648191452026
+      },
+      "divisor_10": {
+        "prediction": 13.239026069641113,
+        "absolute_error": 11.929680347442627
+      },
+      "divisor_100": {
+        "prediction": 1.3093457221984863,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.5036374926567078,
+        "absolute_error": 0.8057082295417786
+      },
+      "signed": {
+        "prediction": 70.89287567138672,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 70.89287567138672,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 70.89287567138672,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 70.89287567138672,
+        "absolute_error": 0.0
+      }
+    }
+  },
+  {
+    "pair": "random_15",
+    "public_error": 1.2192318439483643,
+    "public_weight": 67.19717407226562,
+    "raw_error": 123.54061889648438,
+    "raw_weight": 67.19717407226562,
+    "hypotheses": {
+      "divisor_1": {
+        "prediction": 123.52444458007812,
+        "absolute_error": 122.30521273612976
+      },
+      "divisor_10": {
+        "prediction": 12.33788776397705,
+        "absolute_error": 11.118655920028687
+      },
+      "divisor_100": {
+        "prediction": 1.2192318439483643,
+        "absolute_error": 0.0
+      },
+      "divisor_255": {
+        "prediction": 0.46829870343208313,
+        "absolute_error": 0.7509331405162811
+      },
+      "signed": {
+        "prediction": 67.19717407226562,
+        "absolute_error": 0.0
+      },
+      "abs": {
+        "prediction": 67.19717407226562,
+        "absolute_error": 0.0
+      },
+      "signed_epsilon": {
+        "prediction": 67.19717407226562,
+        "absolute_error": 0.0
+      },
+      "abs_epsilon": {
+        "prediction": 67.19717407226562,
+        "absolute_error": 0.0
+      }
+    }
+  }
+]

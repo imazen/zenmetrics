@@ -365,6 +365,11 @@ jobs:
       # pixels.
       - name: hdrvdp reference port (pure CPU)
         run: cargo test -p hdrvdp --release
+      # Every metric the browser build lists must be scoreable by it; a new nn/nr
+      # metric missing from MetricKind::scoring_compiled_in breaks the website
+      # deploy (wadiqam, pieapp did). Native, fast, no browser needed.
+      - name: browser lists only compiled-in metrics
+        run: cargo test -p zenmetrics-browser --lib listed_metrics_are_compiled_in
 
   # Linting + formatting.
   lint:

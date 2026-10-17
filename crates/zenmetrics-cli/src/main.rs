@@ -1599,6 +1599,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Musiq => Some((0.0, 100.5, 0.0)),
         MetricKind::Hyperiqa => Some((0.0, 100.5, 0.0)),
         MetricKind::Paq2piq => Some((0.0, 100.5, 0.0)),
+        // Ladder scores 0.93–3.35; measured KonJND median 0.52 native units.
+        MetricKind::Pieapp => Some((-0.5, 50.0, 0.0)), // Learned error head is unbounded.
         // WaDIQaM: LIVE/TID-trained quality heads on a relu-weighted
         // patch pool; observed ~7–95 on the KonJND corpus (a hair below
         // zero for nr_live references), unbounded in principle. The 0.0
