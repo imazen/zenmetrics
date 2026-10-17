@@ -22,6 +22,14 @@ class Retry(unittest.TestCase):
    with patch.object(run,'_run_cell',side_effect=rows) as execute:
     chosen=run.run_cell(args,dict(metric_name='example',size_name='cid22'),{})
    return chosen,execute.call_count
+ def test_legacy_rows_preserve_finite_json(self):
+  import json
+  with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root:
+   args=SimpleNamespace(root=Path(root))
+   with patch.object(run,'_run_cell',return_value=[dict(attempt='legacy')]):
+    selected=run.run_cell(args,dict(metric_name='example',size_name='cid22'),{})
+   json.dumps(selected,allow_nan=False)
+   self.assertIsNone(selected[0]['contention_attempts'][0]['max_competing_interval_cores'])
  def test_stops_on_clean_attempt(self):
   chosen,count=self.check([3,.5,2]);self.assertEqual(count,2);self.assertEqual(chosen[0]['attempt'],'1')
  def test_three_tries_keep_cleanest_contaminated(self):
