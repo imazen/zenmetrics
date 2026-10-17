@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Captured source: fe4172b9b3aa
+Algorithm source: 4ed04e9c (classic scaled-f32 norm; corrected epsilon, small-N path, SLARTG, SORM2R, left/right SGER products).
+Command: just nn-parity-dmm <models> <ladder> ort-cuda model-tests,ort
+Environment: pinned siblings; shared heavy lock; run-heavy --mem 16G; 1150-second outer timeout.
+Panel: original frozen seven JND / seventeen pinned rows; no tolerance or score changes.
+Outcome: 3/24 inside canonical JND; twelve row-limit failures (four JND, eight pinned). All twelve CUDA mismatch reruns are bit-identical. Warm/cold and identity controls pass.
+Log (i265): ~/tmp/nn-port-scratch/fix-dmm-ort4.log
+TSV SHA256: 5f2dbb77a3e172e1b075071d9baf9c2ec149a7a2ef0861ece213b2721e7c0d21
+Resource receipt: run-heavy: done rc=101 338s | peak-RSS 3.00GiB | min-avail 19833MiB | peak-load 6.02
