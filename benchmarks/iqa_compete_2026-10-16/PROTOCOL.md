@@ -224,3 +224,20 @@ entry points, a failed or timed-out score preserves its failure receipt while a
 known absent map route remains `unsupported`. Supported map routes keep their
 actual failure status. Returning a timed map from a declared absent route is an
 error; it is never silently reclassified.
+
+Charts label calls that return multiple declared metric columns. Compact
+summaries retain those columns and adapter API notes, including FSIM/FSIMc
+workload differences, alongside the measured headline scalar.
+
+[Verified model inputs](model-freeze-v1.json) records 98 independent copies
+containing 5,511,554,194 bytes. Every source matched the initial manifest and
+every destination passed SHA-256 readback. Files in the owned copy are read-only.
+Use its `locations.json` default directory and `models.json` overrides for new
+size/host runs; the original running controllers keep their existing paths.
+The copy recipe refuses changed content, retargeted source links or added
+exports, retaining incomplete preparations instead of replacing them.
+
+A completed CPU first-score warmup can supply an explicitly untimed comparison
+reference after the process exceeds its timing deadline. Its original timeout,
+zero samples and missing timing statistics remain unchanged. Comparisons and
+charts disclose the reference kind; see [the qualification contract](UNTIMED_REFERENCES.md).
