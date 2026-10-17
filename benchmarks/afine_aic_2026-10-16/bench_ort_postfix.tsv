@@ -1,0 +1,4 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	ort-cuda	default	lpips_vgg	compute	1024	50	62.895	61.500	3.56550782918930054e-1
+i265	ort-cuda	default	lpips_vgg	warm	1024	50	67.638	66.341	3.56550782918930054e-1
+i265	ort-cuda	default	lpips_vgg	e2e	1024	50	77.502	72.516	3.56550782918930054e-1

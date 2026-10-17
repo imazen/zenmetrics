@@ -584,6 +584,132 @@ impl Afine {
             Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
         }
     }
+
+    /// Adapter + NLM scaler constants, formatted as the header line of
+    /// the AIC-4 convention-search dump (`#k=… nr=[…] fr=[…]`) — see
+    /// [`Self::aic_dump_scores`].
+    #[doc(hidden)]
+    #[cfg(feature = "model-tests")]
+    pub fn aic_dump_header(&self) -> String {
+        format!(
+            "#k={} nr={:?} fr={:?}",
+            self.heads.k, self.heads.nr, self.heads.fr
+        )
+    }
+
+    /// AIC-4 convention-search sub-score dump — the scoring half of
+    /// `examples/afine_aic_dump.rs` and the reproduction path for
+    /// `benchmarks/afine_aic_2026-10-16/`. A probing interface, not a
+    /// scoring API. `variant` is `native`, `r224`, `r384`, `r512`,
+    /// `nonorm` or `bgr`; `r` and `d` are strided packed sRGB8 at the
+    /// same size. Returns `[n_r, n_d, fid, s_r, s_d, s_f, lambda,
+    /// afine_all]`; the fused pair backend leaves the first seven NaN.
+    ///
+    /// # Errors
+    /// [`Error::BadModel`] on an unknown `variant` or a size mismatch;
+    /// any engine error from the trunk or fused run.
+    #[doc(hidden)]
+    #[cfg(feature = "model-tests")]
+    pub fn aic_dump_scores(
+        &self,
+        r: &za::Rgb8In<'_>,
+        d: &za::Rgb8In<'_>,
+        variant: &str,
+    ) -> Result<[f64; 8], Error> {
+        if r.width != d.width || r.height != d.height {
+            return Err(Error::BadModel(format!(
+                "aic_dump size mismatch {}x{} vs {}x{}",
+                r.width, r.height, d.width, d.height
+            )));
+        }
+        // (forced (th,tw) pre-resize, clip_norm, bgr_swap)
+        let (force, clip_norm, bgr) = match variant {
+            "native" => (None, true, false),
+            "r224" => (Some((224, 224)), true, false),
+            "r384" => (Some((384, 384)), true, false),
+            "r512" => (Some((512, 512)), true, false),
+            "nonorm" => (None, false, false),
+            "bgr" => (None, true, true),
+            _ => return Err(Error::BadModel(format!("aic_dump variant {variant}"))),
+        };
+        let prep = |img: &za::Rgb8In<'_>| -> (Vec<f32>, usize, usize, Vec<f32>) {
+            let (w, h) = (img.width, img.height);
+            let mut planar = rgb8_to_planar_01(img);
+            if bgr {
+                let n = w * h;
+                let (b, rest) = planar.split_at_mut(n);
+                b.swap_with_slice(&mut rest[n..]);
+            }
+            if clip_norm {
+                let n = w * h;
+                for c in 0..3 {
+                    for v in &mut planar[c * n..(c + 1) * n] {
+                        *v = (*v - MEAN[c]) / STD[c];
+                    }
+                }
+            }
+            let (mut cw, mut ch) = (w, h);
+            if let Some((th, tw)) = force {
+                planar = resize_bicubic(&planar, 3, ch, cw, th, tw);
+                ch = th;
+                cw = tw;
+            }
+            let (nh, nw) = (ch + (32 - ch % 32) % 32, cw + (32 - cw % 32) % 32);
+            if nh != ch || nw != cw {
+                planar = resize_bicubic(&planar, 3, ch, cw, nh, nw);
+            }
+            let n_tok = (nh / 32) * (nw / 32) + 1;
+            let pe = resize_bicubic(&self.heads.pos_emb, 1, 50, TAP_C, n_tok, TAP_C);
+            (planar, nh, nw, pe)
+        };
+        let (rn, rh, rw, rpe) = prep(r);
+        let (dn, dh, dw, dpe) = prep(d);
+        match &self.backend {
+            Backend::Pair(p) => {
+                let mut row = [f64::NAN; 8];
+                row[7] = p.score(rn, dn, dh, dw)?;
+                Ok(row)
+            }
+            Backend::Trunk(trunk) => {
+                let plane = rh * rw;
+                let (pix_r, pix_d, cov0) = (
+                    Self::pix_stats(&rn, plane),
+                    Self::pix_stats(&dn, plane),
+                    Self::pix_cov(&dn, &rn, plane),
+                );
+                let (ft_r, ft_d) = trunk.run_pair_aux(
+                    rn,
+                    dn,
+                    rh,
+                    rw,
+                    &[Self::pe_aux(rpe, rh, rw)],
+                    &[Self::pe_aux(dpe, dh, dw)],
+                )?;
+                let s_r = ImgStats {
+                    pix: pix_r,
+                    taps: Self::taps_stats(&ft_r),
+                };
+                let s_d = ImgStats {
+                    pix: pix_d,
+                    taps: Self::taps_stats(&ft_d),
+                };
+                let cov = Self::cross_covs(cov0, &ft_d, &ft_r);
+                let (n_r, n_d, fid) = (
+                    self.heads.qhead(&s_r),
+                    self.heads.qhead(&s_d),
+                    self.heads.dhead(&s_d, &s_r, &cov),
+                );
+                let (sr, sd, sf) = (
+                    nlm(n_r, self.heads.nr),
+                    nlm(n_d, self.heads.nr),
+                    nlm_fr(fid, self.heads.fr),
+                );
+                let lam = (softplus(self.heads.k) * (sr - sd)).exp();
+                Ok([n_r, n_d, fid, sr, sd, sf, lam, lam * sd + sf])
+            }
+            Backend::Image(_) => Err(Error::Engine("image graph on a pair model".into())),
+        }
+    }
 }
 
 impl za::Metric for Afine {

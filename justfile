@@ -867,6 +867,12 @@ nn-wd-reference stage python reference out ladder=(env("HOME") / "tmp/nn-phase0/
 nn-wd-score models pairs out engine="rten":
     {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features ort --example wd_score -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}'
 
+# A-FINE sub-score dump for the AIC-4 convention search
+# (benchmarks/afine_aic_2026-10-16/). ort-cuda needs ORT_DYLIB_PATH +
+# cuDNN 9.19 libs on LD_LIBRARY_PATH (see benchmarks receipt).
+nn-afine-aic-dump models pairs out engine="rten" variants="":
+    {{just_executable()}} snap-cargo @ run --release -p zenmetrics-nn --features model-tests,ort --example afine_aic_dump -- '{{models}}' '{{pairs}}' '{{out}}' '{{engine}}' '{{variants}}'
+
 nn-wd-parity models ladder engine="rten":
     ZENMETRICS_NN_MODEL_DIR='{{models}}' ZENMETRICS_NN_LADDER='{{ladder}}' ZENMETRICS_NN_ENGINE='{{engine}}' {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features model-tests,ort --test wd_parity -- --nocapture --test-threads=1
 
@@ -980,7 +986,7 @@ nn-pieapp-review-python-check:
 
 # Label-free indexed planner/executor checks, including an independent PNG decoder.
 palette-check:
-    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py
+    just palette-pool-check
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder
     just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder
     just snap-cargo @ clippy -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics -- -D warnings
@@ -1007,3 +1013,7 @@ lan-fit-smoke-launch host run role image:
 palette-dispatch-receipts out:
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
     ZEN_PALETTE_RECEIPT_DIR='{{out}}' just snap-cargo @ test -p zenmetrics-cli --no-default-features --features png,sweep,cpu-metrics,palette-joint --bin zenmetrics palette_ladder::tests::effective_dispatch_receipts_match_native_and_png_outputs -- --nocapture
+
+# Invented metadata only: sealed palette pool validation and declaration contracts.
+palette-pool-check:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py scripts/jobsys/test_palette_pool_authority.py scripts/jobsys/test_budget_preflight.py
