@@ -159,7 +159,7 @@ qualification or mismatch rerun. Existing completed observations are retained.
 The final coverage audit reports requested, present and timed cells per size;
 unsupported routes and bounded refusals are counted separately from timings.
 
-The CPU and CUDA coverage controllers can group short cells into an existing
+The CPU, CUDA, native and Python coverage controllers can group short cells into an existing
 1100-second lock hold. They release it before starting another cell whenever
 less than 1000 seconds remain. Each row records its actual scope, between
 1000 and 1100 seconds; partial cells still do not continue. This reduces lock
