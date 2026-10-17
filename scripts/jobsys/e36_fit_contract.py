@@ -6,7 +6,7 @@ from pathlib import Path
 
 PACKAGE = 'benchmarks/e36_fit_contract_2026-10-17.json'
 ARMS = {'tv0-c': 0., 'tv1-c': 1., 'tv10-c': 10.}
-SMOKE = {'schema':'e36-memory-smoke-v1','epochs':2,'pairs_per_epoch':128,'wall_cap_sec':900,'installable':False}
+SMOKE = {'schema':'e36-memory-smoke-v1','epochs':2,'pairs_per_epoch':128,'wall_cap_sec':900,'installable':False,'pack_production':False}
 
 
 def smoke_policy(argv,contract):
@@ -17,7 +17,7 @@ def smoke_policy(argv,contract):
     if policy is None:
         if requested:raise ValueError('E36 full-budget variant refuses smoke')
         return None
-    if policy!=SMOKE or not requested or argument(argv,'--local-smoke-budget')!='2:128':
+    if policy!=SMOKE or not requested or argument(argv,'--local-smoke-budget')!='2:128' or any(flag in argv for flag in ['--pack-production','--e33-output-stage']):
         raise ValueError('E36 diagnostic smoke policy/budget differs')
     return policy
 
@@ -110,7 +110,7 @@ def qualify_output(program, dest, kind, cell, result):
     binding_path = dest/'e36-model-binding.json'
     binding = json.loads(binding_path.read_text())
     packed_sha = result.get('packed_model_sha256')
-    if expected['route'] == 'production':
+    if expected['route'] == 'production' and execution=='registered-fit':
         packed = Path(result['packed_model'])
         if not packed.is_relative_to(dest) or sha(packed) != packed_sha:
             raise ValueError('E36 packed checkpoint path/hash differs')

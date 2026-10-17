@@ -30,6 +30,8 @@ class E36Contract(unittest.TestCase):
             changed=copy.deepcopy(diagnostic);changed['e36_memory_smoke'][field]=bad
             with self.assertRaises(ValueError):e.bind(smoke,changed,files)
         with self.assertRaises(ValueError):e.bind(smoke[:-1]+['1:128'],diagnostic,files)
+        for flag in ['--pack-production','--e33-output-stage']:
+            with self.assertRaises(ValueError):e.bind(smoke+[flag],diagnostic,files)
         # A diagnostic policy does not excuse a different final scientific recipe.
         with self.assertRaises(ValueError):e.bind(smoke,diagnostic|dict(selected_epoch=118),files)
 
