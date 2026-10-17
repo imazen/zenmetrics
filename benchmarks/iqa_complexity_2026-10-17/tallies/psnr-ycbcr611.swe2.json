@@ -1,0 +1,64 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "metric": "psnr-ycbcr611",
+ "cli_names": [
+  "psnr-ycbcr611"
+ ],
+ "assumptions": [
+  "psnr-ycbcr611 -> yuv444_studio601_mse (classical.rs:118-124,183-242): per px per img studio-swing BT.601 YCbCr, each plane = 3mul+2add + /255 div + +offset add + round(cvt) + clamp(cmp): Y,Cb,Cr -> 9mul+9add+3div+3cvt+3cmp per img, x2.",
+  "Per px: 6 cvt u8->f64, 18 mul, 18 add, 6 div, 6 round-cvt, 6 clamp-cmp; then 3 sub + 3 fma + 3 add accumulate (f64).",
+  "Final: (6*mse_y+cb+cr)/8 -> 2mul+2add+1div, then psnr() 255^2 mul + div + log10 + mul (classical.rs:158-163)."
+ ],
+ "stages": [
+  {
+   "id": "mse",
+   "name": "studio601 YCbCr conv + 3 MSE accumulators",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:183-242"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 6,
+    "mul": 18,
+    "add": 18,
+    "div": 6,
+    "cmp": 6,
+    "fma": 3
+   },
+   "bytes_read": 6,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "final",
+   "name": "6:1:1 weighted mse + psnr",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:118-124",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:158-163"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 4,
+    "add": 2,
+    "div": 2,
+    "log": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "mse"
+   ]
+  }
+ ]
+}

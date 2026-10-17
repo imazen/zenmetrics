@@ -1,0 +1,213 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "fsim-k3",
+ "cli_names": [
+  "fsim-k3"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "F": "3",
+  "WD": "ceil(W/F)",
+  "HD": "ceil(H/F)",
+  "D": "WD*HD",
+  "LD": "log2(D)"
+ },
+ "assumptions": [
+  "fsim kernel.rs: NSC=4, NOR=4 constants; phase congruency over 4x4 scale x orientation.",
+  "radix-2 2-D FFT approximated: 5 flops/coeff/log2(N): mul=2*LD,add=3*LD per element per transform.",
+  "per (orient,scale): log-Gabor+angular filter complex mul (4 mul+2 add) + IFFT (5*LD flops).",
+  "pc assembly per orient ~20 ops/elem: even/odd combine, amplitude, weighted mean phase (energy_body/xenergy_body/ethr_body macros kernel.rs:82-223).",
+  "noise threshold from smallest-scale median + ethr fold ~8 ops/elem (kernel.rs:928-1009).",
+  "Scharr gradients: 2 conv3x3 (9 fma each) + sqrt(gx^2+gy^2) + similar ~12 ops.",
+  "luma+chroma similarity (3 planes) ~15 ops/elem + f64 pool ~6.",
+  "fsim-k3 = Downscale::Factor(3)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "rgb->gray+chroma planes",
+   "source": [
+    "crates/fsim/src/kernel.rs:1240-1306"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 9,
+    "add": 8,
+    "store": 3
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "decimate",
+   "name": "F-box decimation",
+   "source": [
+    "crates/fsim/src/kernel.rs:223-232",
+    "crates/fsim/src/lib.rs:1-60"
+   ],
+   "images": 2,
+   "elements": "D",
+   "precision": "f32",
+   "ops": {
+    "mul": 1,
+    "add": "F*F",
+    "load": "F*F",
+    "store": 1
+   },
+   "access": "downsample",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "fft",
+   "name": "forward FFT2 per plane",
+   "source": [
+    "crates/fsim/src/kernel.rs:928-1009"
+   ],
+   "images": 2,
+   "elements": "D",
+   "precision": "f32",
+   "ops": {
+    "mul": "2*LD",
+    "add": "3*LD",
+    "load": "2*LD",
+    "store": "2*LD"
+   },
+   "access": "resample",
+   "radius": 0,
+   "span": "D",
+   "axis": "xy"
+  },
+  {
+   "id": "filterbank",
+   "name": "16x (log-Gabor*angular mul + IFFT2)",
+   "source": [
+    "crates/fsim/src/kernel.rs:928-1009"
+   ],
+   "images": 2,
+   "elements": "16*D",
+   "precision": "f32",
+   "ops": {
+    "fma": 4,
+    "add": "3*LD+2",
+    "mul": "2*LD",
+    "load": "2*LD",
+    "store": "2*LD"
+   },
+   "access": "resample",
+   "radius": 0,
+   "span": "D",
+   "axis": "xy"
+  },
+  {
+   "id": "pc_assembly",
+   "name": "per-orient energy/PC combine",
+   "source": [
+    "crates/fsim/src/kernel.rs:928-1009"
+   ],
+   "images": 2,
+   "elements": "4*D",
+   "precision": "f32",
+   "ops": {
+    "mul": 6,
+    "add": 8,
+    "div": 2,
+    "sqrt": 1,
+    "cmp": 2,
+    "load": 10,
+    "store": 4
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "thresh",
+   "name": "noise threshold + fold",
+   "source": [
+    "crates/fsim/src/kernel.rs:928-1009"
+   ],
+   "images": 2,
+   "elements": "D",
+   "precision": "f32",
+   "ops": {
+    "add": 4,
+    "mul": 2,
+    "cmp": 2,
+    "div": 1,
+    "load": 4,
+    "store": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "grad",
+   "name": "Scharr gradient maps",
+   "source": [
+    "crates/fsim/src/kernel.rs:82-223"
+   ],
+   "images": 2,
+   "elements": "D",
+   "precision": "f32",
+   "ops": {
+    "fma": 18,
+    "mul": 2,
+    "add": 1,
+    "sqrt": 1,
+    "load": 10,
+    "store": 2
+   },
+   "access": "stencil2d",
+   "radius": 1,
+   "span": "3"
+  },
+  {
+   "id": "sim",
+   "name": "luma/chroma similarity maps",
+   "source": [
+    "crates/fsim/src/kernel.rs:1240-1306"
+   ],
+   "images": 1,
+   "elements": "3*D",
+   "precision": "f32",
+   "ops": {
+    "mul": 4,
+    "add": 5,
+    "div": 2,
+    "load": 6,
+    "store": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "pool",
+   "name": "PC-weighted mean",
+   "source": [
+    "crates/fsim/src/kernel.rs:1240-1306"
+   ],
+   "images": 1,
+   "elements": "D",
+   "precision": "f64",
+   "ops": {
+    "fma": 3,
+    "add": 2,
+    "load": 2,
+    "cmp": 1
+   },
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  }
+ ]
+}

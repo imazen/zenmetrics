@@ -1,0 +1,51 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "hyperiqa",
+ "cli_names": [
+  "hyperiqa"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "nn-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "hyperiqa.onnx: 25 deterministic 5x5-grid 224^2 crops after PIL bilinear u8 resize to 384x512; onnx_macs.py at [25,3,224,224] -> 107,263,979,474 MACs + 431,915,515 elems; constant per image."
+ ],
+ "stages": [
+  {
+   "id": "resize",
+   "name": "u8 bilinear to 384x512",
+   "source": [
+    "crates/zenmetrics-nn/src/resize.rs:1-80"
+   ],
+   "images": 1,
+   "elements": "196608",
+   "precision": "f32",
+   "ops": {
+    "mul": 2,
+    "add": 2,
+    "fma": 4,
+    "load": 2,
+    "store": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "graph",
+   "name": "hyperiqa ResNet50 x25 + head",
+   "source": [
+    "crates/zenmetrics-nn/src/hyperiqa.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 107263979474,
+    "add": 215957758,
+    "mul": 215957758
+   },
+   "access": "block"
+  }
+ ]
+}

@@ -1,0 +1,514 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "iwssim",
+ "cli_names": [
+  "iwssim"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "S": 5
+ },
+ "assumptions": [
+  "CLI route `--metric iwssim` -> in-tree crates/iwssim native SIMD port (metrics/mod.rs:419-438); default path is Iwssim::score (pipeline.rs:135-157) -> score_gray_internal -> score_from_gray (pipeline.rs:546-563): cold path, no warm-reference reuse, no strip mode, no diffmap sink.",
+  "Luma: params.luma default Bt601Rounded = round_half_to_even(0.2989R+0.5870G+0.1140B) (lib.rs:255-267); 3 u8->f32 cvt + 3 mul + 2 add + 1 round(cvt). iwssim-piq differs ONLY here (YiqUnrounded, no round).",
+  "Inputs with min(W,H) >= MIN_NATIVE_DIM=176 run natively (lib.rs:111); pad_gray_into is then a plain memcpy (pipeline.rs:516-537) -> counted as implementation-class copy. Smaller inputs are REJECTED by default (allow_small=false); the tiled-pad path is out of scope.",
+  "Laplacian pyramid (pyramid.rs:225-269): S=5 fixed levels; per level: corr_dn_h + corr_dn_v (binom5 5-tap, reflect1, stride-2, simd_kernels.rs corr_dn_h/v) then up_conv_h + up_conv_v expand of G[l+1] and lp[l] = g - expanded. dims halve via ceil.",
+  "corr_dn_h computes the correlation at ALL in_w positions into corr_row then decimates (simd_kernels.rs:1170-1204): the odd-position work (~5 fma + scratch traffic per output) is unused materialized intermediate -> implementation-class stage gauss_h_waste.",
+  "cs_stats (ssim.rs:81-139): 11x11 Gaussian VALID-mode per scale -> cs dims (w_l-10)x(h_l-10). Per cs element (amortized): 5 planes x (11 fma h + 11 fma v) = 110 fma; 3 fused product h-passes ~3 mul; cs_combine = 5 mul + 5 add + 1 rcp + 2 cmp (sigma clamps). Luminance multiply only at top scale (separate cs_lum stage).",
+  "IW maps (weights.rs:302-418), scales s=0..3: fused 3x3 box stats+gain (box_gain_rows) over the full 'same' plane; parent band = imenlarge2(lp[s+1]) for s<3; Gram accumulate upper-triangle 55 f64 fma/px (big_n=10; s=3 is parentless big_n=9 -> counted at 10, ~10% overcount there); eig decompose+invert is a constant ~6k-flop 10x10 Jacobi per scale (eig.rs:49+); quad_form_rows = big_n^2+big_n = 110 fma + 1 div per px; infow = per-px (vv+(1+g^2)s2)ss*lam_k+... summed over big_n lambdas with log2 (simd_kernels.rs:1522-1579).",
+  "Pooling: scales 0..3 weighted_sum_pair_iw_strided (fma+add per cs el); top scale plain mean; final score = prod |wmcs_s|^beta_s (5 pow) constant stage.",
+  "powf/log2 library calls counted as one op of their class; fma=2 flops in evaluator. bytes_* = compulsory plane traffic; stencil taps in load.",
+  "halo: pyramid corr_dn chains per level (radius 2, scale 2^l, axis-split h/v merged into xy since both axes filtered); expand reads the coarse grid (radius 1, scale 2^(l+1)); cs window radius 5 at scale 2^l (valid-mode: receptive field, not edge halo)."
+ ],
+ "stages": [
+  {
+   "id": "rgb2gray",
+   "name": "sRGB8 -> BT.601 rounded luma f32",
+   "source": [
+    "crates/iwssim/src/lib.rs:215-267",
+    "crates/iwssim/src/pipeline.rs:154-155"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 4,
+    "mul": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "notes": "0.2989R+0.5870G+0.1140B + round_half_to_even (cvt)."
+  },
+  {
+   "id": "pad_copy",
+   "name": "gray -> work-size scratch (memcpy when >=176)",
+   "source": [
+    "crates/iwssim/src/pipeline.rs:516-537"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "class": "implementation",
+   "ops": {
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "notes": "sw==work_w at all default eval shapes -> copy_from_slice only."
+  },
+  {
+   "id": "gauss_reduce",
+   "name": "binom5 reduce: corr_dn h+v intrinsic taps -> G[l+1]",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:271-278",
+    "crates/iwssim/src/simd_kernels.rs:1180-1265"
+   ],
+   "levels": "S-1",
+   "chain": true,
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "ops": {
+    "load": 10,
+    "fma": 10,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": 2,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "pad_copy"
+   ],
+   "notes": "Per out el: h 5 fma+5 ld (needed even positions) + v 5 fma+5 ld + 1 st. radius 2 at scale-l grid; chain accumulates pyramid halo."
+  },
+  {
+   "id": "gauss_h_waste",
+   "name": "corr_dn_h odd-position overcompute + corr_row scratch + decimate",
+   "source": [
+    "crates/iwssim/src/simd_kernels.rs:1170-1204"
+   ],
+   "levels": "S-1",
+   "images": 2,
+   "elements": "ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+   "precision": "f32",
+   "class": "implementation",
+   "ops": {
+    "load": 6,
+    "fma": 5,
+    "store": 3
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "stencil2d",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "x",
+   "span": "1",
+   "notes": "Full-width correlate + decimate: 1 unused corr el per output (5 fma + 5 ld + ~2 corr_row st) + decimate gather (1 ld + 1 st)."
+  },
+  {
+   "id": "expand",
+   "name": "up_conv h+v of G[l+1] to level-l dims (zero-insert + binom5)",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:244-249",
+    "crates/iwssim/src/simd_kernels.rs:1267-1560"
+   ],
+   "levels": "S-1",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 3.75,
+    "fma": 3.75,
+    "store": 1.5
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "upsample",
+   "radius": 1,
+   "scale": "2**(l+1)",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "gauss_reduce"
+   ],
+   "notes": "Parity split: even outs 3 fma, odd 2 fma per pass; h-pass covers h[l+1] (~half) -> 1.25, v 2.5 -> ~3.75 fma/ld per fine el; +hscratch 0.5 st."
+  },
+  {
+   "id": "lp_sub",
+   "name": "lp[l] = g[l] - expanded[l]",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:250-254"
+   ],
+   "levels": "S-1",
+   "images": 2,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "gauss_reduce",
+    "expand"
+   ],
+   "notes": "Coarsest level's lp IS the Gaussian residual (no subtract) -> counted anyway, ~1/256 overcount."
+  },
+  {
+   "id": "cs_stats",
+   "name": "11x11-valid Gaussian moments + cs combine per scale",
+   "source": [
+    "crates/iwssim/src/ssim.rs:31-139",
+    "crates/iwssim/src/simd_kernels.rs:503-743,116-206"
+   ],
+   "levels": "S",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-10)*(ceil(H/2**l)-10)",
+   "precision": "f32",
+   "ops": {
+    "load": 121,
+    "fma": 110,
+    "mul": 8,
+    "add": 5,
+    "rcp": 1,
+    "cmp": 2,
+    "store": 11
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": 5,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "lp_sub"
+   ],
+   "notes": "5 planes x (h 11fma + v 11fma) + 3 product muls + combine (5mul 5add rcp 2cmp). h-pass runs on (h_l, w_l-10) ~1.01x cs els. Coarsest scale's lp = residual G (depends gauss_reduce transitively via lp_sub at l<4; stage dep covers it)."
+  },
+  {
+   "id": "cs_lum",
+   "name": "top-scale luminance multiply l*cs",
+   "source": [
+    "crates/iwssim/src/simd_kernels.rs:154-160",
+    "crates/iwssim/src/ssim.rs:117-125"
+   ],
+   "images": 1,
+   "elements": "(ceil(W/16)-10)*(ceil(H/16)-10)",
+   "precision": "f32",
+   "ops": {
+    "load": 0,
+    "mul": 5,
+    "add": 3,
+    "rcp": 1,
+    "store": 0
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 16,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "cs_stats"
+   ],
+   "notes": "l = (2 m1 m2 + C1)/(m1^2+m2^2+C1) fused into cs_combine at s=4 only; in-place (no extra traffic)."
+  },
+  {
+   "id": "iw_box_gain",
+   "name": "fused 3x3 box stats + gain correction -> g, vv (same-pad)",
+   "source": [
+    "crates/iwssim/src/simd_kernels.rs:903-1004",
+    "crates/iwssim/src/weights.rs:322-324"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 18,
+    "fma": 28,
+    "add": 22,
+    "mul": 8,
+    "div": 1,
+    "cmp": 4,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "radius": 1,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "lp_sub"
+   ],
+   "notes": "Per el: 9 taps x (2 ld + 2 add + 3 fma) then gain: 8 mul + 4 add + div + fma + 4 cmp + 2 st. Reads lp_ref+lp_dis."
+  },
+  {
+   "id": "iw_parent",
+   "name": "imenlarge2 lp[s+1] -> parent band (s<3)",
+   "source": [
+    "crates/iwssim/src/pyramid.rs:317-452",
+    "crates/iwssim/src/weights.rs:327-338"
+   ],
+   "levels": "S-2",
+   "images": 1,
+   "elements": "ceil(W/2**l)*ceil(H/2**l)",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "fma": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "upsample",
+   "radius": 2,
+   "scale": "2**(l+1)",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "lp_sub"
+   ],
+   "notes": "Fused bilinear t1 cells: v0+wx(v1-v0) twice + wy lerp -> 3 fma + 2 sub per out el; borders/corners negligible; crop to (w_l,h_l)."
+  },
+  {
+   "id": "iw_gram",
+   "name": "Gram accumulate upper-triangle big_n^2 f64 over valid region",
+   "source": [
+    "crates/iwssim/src/weights.rs:76-164",
+    "crates/iwssim/src/simd_kernels.rs:1713-1955"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-2)*(ceil(H/2**l)-2)",
+   "precision": "f64",
+   "ops": {
+    "load": 11,
+    "cvt": 10,
+    "fma": 55
+   },
+   "bytes_read": 4,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 1,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "log2((ceil(W/2**l)-2)*(ceil(H/2**l)-2))",
+   "depends_on": [
+    "lp_sub",
+    "iw_parent"
+   ],
+   "barrier": true,
+   "notes": "55 mul+add pairs per px (big_n=10; s=3 is 45 - counted at parent-ful). Taps read lp_ref stencil + parent band. Global Gram per scale."
+  },
+  {
+   "id": "iw_eig",
+   "name": "C_u = Gram/nexp; Jacobi eig + PSD clean + invert 10x10",
+   "source": [
+    "crates/iwssim/src/weights.rs:364-371",
+    "crates/iwssim/src/eig.rs:49-190"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 3000,
+    "add": 3000,
+    "div": 120,
+    "sqrt": 60
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "block",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "500",
+   "serial": true,
+   "depends_on": [
+    "iw_gram"
+   ],
+   "notes": "Constant per scale: ~45 Jacobi rotations x ~5 sweeps (rot ~ 4 trig-class + 2n row ops each side) + 10x10 invert ~ n^3/3 + mirror/normalize ~200 ops. Rough constant estimate."
+  },
+  {
+   "id": "iw_quadform",
+   "name": "ss = (Y C_inv) . Y / N dense stencil per px",
+   "source": [
+    "crates/iwssim/src/simd_kernels.rs:374-493",
+    "crates/iwssim/src/weights.rs:373-388"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-2)*(ceil(H/2**l)-2)",
+   "precision": "f32",
+   "ops": {
+    "load": 11,
+    "fma": 110,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 1,
+   "scale": "2**l",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "iw_eig"
+   ],
+   "notes": "inner big_n^2=100 fma + outer big_n=10 fma + /N div; 9 taps + parent load."
+  },
+  {
+   "id": "iw_infow",
+   "name": "infow = sum_k log2(1 + ((vv+(1+g^2)s2)ss lam_k + s2 vv)/s4)",
+   "source": [
+    "crates/iwssim/src/weights.rs:262-292",
+    "crates/iwssim/src/simd_kernels.rs:1522-1579"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-2)*(ceil(H/2**l)-2)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "fma": 12,
+    "mul": 12,
+    "add": 10,
+    "log": 10,
+    "cmp": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "iw_box_gain",
+    "iw_quadform"
+   ],
+   "notes": "Per px: opg fma + (vv+opg*s2)*ss fma+mul + s2*vv mul; lambda loop (10 for s<3, 9 at s=3): fma+mul+add+log2 each; tol clamp cmp+blend."
+  },
+  {
+   "id": "iw_pool",
+   "name": "weighted_sum_pair_iw_strided per scale (cs.iw crop)",
+   "source": [
+    "crates/iwssim/src/pipeline.rs:609-645",
+    "crates/iwssim/src/simd_kernels.rs:244-333"
+   ],
+   "levels": "S-1",
+   "images": 1,
+   "elements": "(ceil(W/2**l)-10)*(ceil(H/2**l)-10)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "fma": 1,
+    "add": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "axis": "none",
+   "span": "log2((ceil(W/2**l)-10)*(ceil(H/2**l)-10))",
+   "depends_on": [
+    "cs_stats",
+    "iw_infow"
+   ],
+   "barrier": true,
+   "notes": "Per cs el: cs*iw fma + iw add + strided iw gather + cs load; per-scale div + cvt to f64 amortized to ~0."
+  },
+  {
+   "id": "pool_top",
+   "name": "top-scale plain mean of cs",
+   "source": [
+    "crates/iwssim/src/pipeline.rs:636-644"
+   ],
+   "images": 1,
+   "elements": "(ceil(W/16)-10)*(ceil(H/16)-10)",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "add": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 16,
+   "axis": "none",
+   "span": "log2((ceil(W/16)-10)*(ceil(H/16)-10))",
+   "depends_on": [
+    "cs_lum"
+   ],
+   "barrier": true,
+   "notes": "sum += v as f64 per element; one div at end."
+  },
+  {
+   "id": "score_final",
+   "name": "score = prod_s |wmcs_s|^beta_s",
+   "source": [
+    "crates/iwssim/src/pipeline.rs:671-680"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "load": 5,
+    "abs": 5,
+    "pow": 5,
+    "mul": 4
+   },
+   "bytes_read": 0,
+   "bytes_written": 0,
+   "access": "block",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "iw_pool",
+    "pool_top"
+   ],
+   "notes": "SCALE_WEIGHTS beta = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333} applied as f64 powf."
+  }
+ ]
+}

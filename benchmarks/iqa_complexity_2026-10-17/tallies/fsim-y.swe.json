@@ -1,0 +1,410 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "fsim-y",
+ "cli_names": [
+  "fsim-y"
+ ],
+ "counter": "swe",
+ "source_commit": "13aa694abd3380c5090831041a8551c77089f828",
+ "kind": "classic-fr",
+ "derived": {
+  "F": "max(1, int((min(W,H)+128)/256))"
+ },
+ "assumptions": [
+  "CLI `fsim-y` -> fsim_luma8 (lib.rs:249) -> plane_from_rgb8 Y (lib.rs:604,621: f32 0.299R+0.587G+0.114B) -> fsim_core via fused decimate (kernel.rs:226-460).",
+  "Downscale factor F = max(1, (min(w,h)+128)/256) (kernel.rs:226-228): F=1 at 256^2, 4 at 1024^2/1080p, 8 at 4K. Box decimate = separable running-sum FxF average (kernel.rs:235-275) ~ F+F adds + mul per out el; then FFT pipeline at w2=W/F x h2=H/F.",
+  "Phase congruency (phasecong2, kernel.rs:928-1014): NSCALE=4 x NORIENT=4 log-Gabor filters (kernel.rs:24-36). Per image: 1 fwd FFT2 + per (o,s) filter-multiply + IFFT2 + anacc; per orientation xenergy + energy fold + noise median + ethr; pcdiv.",
+  "FFT cost modeled as 5*N*log2(N) flops (radix-2 complex, radix-4/mixed similarly): fwd fft per el ~ 2 mul + 3 add per log2 level; written as per-el mul 2*log2(n2), add 3*log2(n2). Filter bank build = 16 extra IFFTs + freq grids + filters, CACHED per size (kernel.rs:905-917): counted once as implementation-class stage (amortized across pairs; for a single pair it is real work).",
+  "anacc per el per (o,s): se+=re, so+=im, sa+=sqrt(re^2+im^2). xenergy per el per o: unit phase vector (sqrt+2div). energy per el per (o,s): An*(cos-dphi-|sin-dphi|) ~9 flops. noise: |eo0|^2 + median estimate. ethr: max(0,E-T) + 2 accumulates.",
+  "Gradients: conv2_same_3x3 with DX/DY Scharr kernels (kernel.rs:578-675; 9 fma incl zeros), grad = sqrt(ix^2+iy^2).",
+  "Pool (kernel.rs:1054-1080): pcsim=(2ab+T1)/(a^2+b^2+T1), gsim, product, pcm=max, num/den f64. fsim-y has no I/Q/chroma terms."
+ ],
+ "stages": [
+  {
+   "id": "luma",
+   "name": "RGB8 -> f32 Y (0.299/0.587/0.114)",
+   "source": [
+    "crates/fsim/src/lib.rs:249-282,604-621"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 3,
+    "add": 2,
+    "cvt": 1,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 1,
+   "axis": "none",
+   "span": "1"
+  },
+  {
+   "id": "decim",
+   "name": "FxF box decimate (F=max(1,(min+128)/256))",
+   "source": [
+    "crates/fsim/src/kernel.rs:226-275,419-465"
+   ],
+   "images": 2,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": "2*F",
+    "add": "2*F",
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": "8*F",
+   "bytes_written": 4,
+   "access": "downsample",
+   "radius": "F//2",
+   "scale": "F",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "luma"
+   ],
+   "notes": "Separable running sums + normalize; retained cols only."
+  },
+  {
+   "id": "bank_build",
+   "name": "FilterBank: freq grids + 16 logGabor*spread + 16 IFFTs + sums",
+   "source": [
+    "crates/fsim/src/kernel.rs:682-900"
+   ],
+   "class": "implementation",
+   "images": 1,
+   "elements": "16*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "mul": "2*log2(W*H/F**2)+3",
+    "add": "3*log2(W*H/F**2)+3",
+    "exp": 1,
+    "div": 1,
+    "log": 1
+   },
+   "bytes_read": 64,
+   "bytes_written": 64,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "decim"
+   ],
+   "barrier": true,
+   "notes": "Size-cached (amortized); per-el: ifft ~5log2(n) + filter mul + em_n/sa2/saij f64 accs."
+  },
+  {
+   "id": "fft2",
+   "name": "forward complex FFT2 per image",
+   "source": [
+    "crates/fsim/src/kernel.rs:988-989",
+    "crates/fsim/src/fft.rs:547-580"
+   ],
+   "images": 2,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "mul": "2*log2(W*H/F**2)",
+    "add": "3*log2(W*H/F**2)",
+    "load": 2,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "decim"
+   ],
+   "barrier": true,
+   "notes": "5*n*log2(n) model: row FFTs + col FFTs."
+  },
+  {
+   "id": "ifft_bank",
+   "name": "16 x (complex mul + IFFT2)",
+   "source": [
+    "crates/fsim/src/kernel.rs:947-958"
+   ],
+   "images": 2,
+   "elements": "16*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "mul": "2*log2(W*H/F**2)+2",
+    "add": "3*log2(W*H/F**2)",
+    "load": 3,
+    "store": 2
+   },
+   "bytes_read": 12,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "fft2",
+    "bank_build"
+   ],
+   "barrier": true,
+   "notes": "Per (o,s): yf*filter (2 mul) + inverse FFT."
+  },
+  {
+   "id": "anacc",
+   "name": "se+=re, so+=im, sa+=|e| per (o,s)",
+   "source": [
+    "crates/fsim/src/kernel.rs:81-96,957"
+   ],
+   "images": 2,
+   "elements": "16*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "add": 3,
+    "mul": 2,
+    "sqrt": 1,
+    "store": 3
+   },
+   "bytes_read": 8,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "ifft_bank"
+   ]
+  },
+  {
+   "id": "xenergy",
+   "name": "unit phase vector per orientation",
+   "source": [
+    "crates/fsim/src/kernel.rs:96-135,961-963"
+   ],
+   "images": 2,
+   "elements": "4*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 2,
+    "add": 1,
+    "sqrt": 1,
+    "div": 2,
+    "store": 2
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "anacc"
+   ]
+  },
+  {
+   "id": "energy",
+   "name": "An*(cos-dphi - |sin-dphi|) per (o,s)",
+   "source": [
+    "crates/fsim/src/kernel.rs:133-157,965-968"
+   ],
+   "images": 2,
+   "elements": "16*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 3,
+    "fma": 3,
+    "add": 2,
+    "abs": 1,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "xenergy"
+   ]
+  },
+  {
+   "id": "noise_med",
+   "name": "|eo0|^2 + median -> Rayleigh noise T",
+   "source": [
+    "crates/fsim/src/kernel.rs:787-797,970-983"
+   ],
+   "images": 2,
+   "elements": "4*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 2,
+    "add": 1,
+    "cmp": 8,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "ifft_bank"
+   ],
+   "barrier": true,
+   "notes": "Median via partial sort (~8 cmp/el approx) + scalar Rayleigh math once."
+  },
+  {
+   "id": "ethr",
+   "name": "threshold E-T + fold 4 orientations",
+   "source": [
+    "crates/fsim/src/kernel.rs:157-181,1008-1010"
+   ],
+   "images": 2,
+   "elements": "4*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "add": 3,
+    "cmp": 1,
+    "store": 2
+   },
+   "bytes_read": 12,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "energy",
+    "noise_med"
+   ]
+  },
+  {
+   "id": "pcdiv",
+   "name": "pc = eall/aall",
+   "source": [
+    "crates/fsim/src/kernel.rs:182-195,1011-1013"
+   ],
+   "images": 2,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "ethr"
+   ]
+  },
+  {
+   "id": "grad_conv",
+   "name": "2x Scharr 3x3 conv2 same",
+   "source": [
+    "crates/fsim/src/kernel.rs:57-77,578-675,1019-1033"
+   ],
+   "images": 2,
+   "elements": "2*ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 9,
+    "fma": 9,
+    "store": 1
+   },
+   "bytes_read": 36,
+   "bytes_written": 4,
+   "access": "stencil2d",
+   "radius": 1,
+   "scale": "F",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "decim"
+   ]
+  },
+  {
+   "id": "grad_mag",
+   "name": "g = sqrt(ix^2+iy^2)",
+   "source": [
+    "crates/fsim/src/kernel.rs:1034-1037"
+   ],
+   "images": 2,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 2,
+    "mul": 2,
+    "add": 1,
+    "sqrt": 1,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "1",
+   "depends_on": [
+    "grad_conv"
+   ]
+  },
+  {
+   "id": "pool",
+   "name": "pcsim,gsim,pcm, num/den f64 accumulate",
+   "source": [
+    "crates/fsim/src/kernel.rs:1054-1104"
+   ],
+   "images": 1,
+   "elements": "ceil(W/F)*ceil(H/F)",
+   "precision": "f32",
+   "ops": {
+    "load": 4,
+    "mul": 9,
+    "add": 4,
+    "div": 2,
+    "cmp": 2,
+    "cvt": 2
+   },
+   "bytes_read": 16,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "F",
+   "axis": "none",
+   "span": "log2(W*H/F**2)",
+   "depends_on": [
+    "pcdiv",
+    "grad_mag"
+   ],
+   "barrier": true,
+   "notes": "2 rational sims (~11 flops) + gp mul + max + num+=gp*pcm, den+=pcm (cvt+add x2). Score=num/den once."
+  }
+ ]
+}

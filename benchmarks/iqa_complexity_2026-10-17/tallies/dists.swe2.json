@@ -1,0 +1,75 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dists",
+ "cli_names": [
+  "dists"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk fma = 30720356352 MACs pair at 224^2 (dists_full.onnx); elem 77155948 split add/mul/pow"
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8->f32 + /255",
+   "source": [
+    "crates/zenmetrics-nn/src/dists.rs:150-260",
+    "crates/zenmetrics-nn/src/preprocess.rs:1-60"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 1,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "1",
+   "bytes_read": 3,
+   "bytes_written": 12
+  },
+  {
+   "id": "trunk",
+   "name": "VGG16 trunk (2 imgs) + per-layer mean/var + alpha/beta pool (ONNX pair graph)",
+   "source": [
+    "crates/zenmetrics-nn/src/dists.rs:150-300",
+    "crates/zenmetrics-nn/models/dists/card.toml:1-40"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 612252.0,
+    "add": 615.082493622449,
+    "mul": 615.082493622449,
+    "pow": 307.5412468112245
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W"
+  },
+  {
+   "id": "score",
+   "name": "sum pooled -> scalar",
+   "source": [
+    "crates/zenmetrics-nn/src/dists.rs:260-330"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 16
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

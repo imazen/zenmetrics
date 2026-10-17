@@ -1,0 +1,101 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "metric": "psnrhvs-daala",
+ "cli_names": [
+  "psnrhvs-daala"
+ ],
+ "derived": {
+  "NB7": "64*(1+floor((W-8)/7))*(1+floor((H-8)/7))"
+ },
+ "assumptions": [
+  "psnrhvs-daala -> run_cpu_psnrhvs_daala (mod.rs:2878, ~3230-3239): studio601_yuv444 planes (f32, +0.5 truncate rounding) then psnrhvs::daala::psnr_hvs_daala_yuv444 -> 3x calc_psnrhvs step=7 (daala.rs:248-282).",
+  "YUV ingress per px per img (mod.rs:1339-1353): 3 cvt + 3x(3mul+2add+div+add+0.5add+cvt trunc) = mul9 add12 div3 cvt6 store3 load3.",
+  "Per block-pair (daala.rs:286-529): block fill 64 u8->i32 + row means ~80 ops; quadrant means/vars: 128 sub + 128 fma + ~150 cvt + folds ~100; integer bin-DCT fdct8x8 x2 imgs: od_bin_fdct8 ~mul9 add+sub+shift ~65 per 8-pt call x 16 x 2 = mul288 add~2080 (subs/shifts in add); mask energy smv/dmv: 16mul+16fma+16cvt+fold14add+2mul+2sqrt+2div+cmp; error loop x8 rows: load16+sub8+abs8+cvt8+mul24+sub8+cmp8+add64.",
+  "Per block-pair totals ~ mul 400, add ~2500, fma 300, cvt 290, div 14, sqrt 2, abs 9, cmp 11, load 210 -> /64 per covered elem. Blocks step 7 -> coverage 64/49 px each.",
+  "Combined: 0.8*mse_y+0.1*(cb+cr) then -10log10."
+ ],
+ "stages": [
+  {
+   "id": "yuv",
+   "name": "studio601 YUV444 planes (f32)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/mod.rs:1339-1353"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 6,
+    "mul": 9,
+    "add": 12,
+    "div": 3,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 3,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "blocks",
+   "name": "7-stepped 8x8: int binDCT + quadrant masking + masked CSF energy (3 planes)",
+   "source": [
+    "crates/psnrhvs/src/daala.rs:80-160",
+    "crates/psnrhvs/src/daala.rs:248-529"
+   ],
+   "images": 1,
+   "elements": "3*NB7",
+   "precision": "mixed",
+   "ops": {
+    "mul": 6.3,
+    "add": 39.0,
+    "fma": 4.7,
+    "cvt": 4.5,
+    "div": 0.22,
+    "sqrt": 0.031,
+    "abs": 0.14,
+    "cmp": 0.17,
+    "load": 3.3,
+    "store": 0.03
+   },
+   "bytes_read": 4.2,
+   "bytes_written": 0.1,
+   "access": "block",
+   "axis": "xy",
+   "radius": 4,
+   "span": "64",
+   "depends_on": [
+    "yuv"
+   ],
+   "notes": "blocks overlap (step 7): each px in ~64/49 blocks; i32 DCT ops folded into mul/add"
+  },
+  {
+   "id": "final",
+   "name": "0.8y+0.1cb+0.1cr mse + log10 x4",
+   "source": [
+    "crates/psnrhvs/src/daala.rs:591-622",
+    "crates/psnrhvs/src/daala.rs:537-541"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 6,
+    "add": 4,
+    "div": 6,
+    "log": 4
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "blocks"
+   ]
+  }
+ ]
+}

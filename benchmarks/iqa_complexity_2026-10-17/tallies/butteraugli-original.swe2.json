@@ -1,0 +1,271 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "butteraugli-original",
+ "cli_names": [
+  "butteraugli-original"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "butteraugli-original -> butteraugli_original::error_map (butteraugli_original.rs:593-645): sRGB->linear 256-LUT on 3 planes, compute() (509-592) per image pair; images <8x8 pad-extended (implementation, ignored at eval shapes).",
+  "Blur kernel radius r = max(1, trunc(2.25*sigma)) (butteraugli_original.rs:65-72), separable h+v convolve; per px per pass: taps mul + taps-1 add + taps load + store. Radii: sigma1.2->r3 (7t), sigma7.47->r16 (33t), sigma3.73->r8 (17t), sigma1.87->r4 (9t), sigma10.67->r24 (49t), sigma9.24->r20 (41t), sigma2.38->r5 (11t), sigma9.04->r20 (41t).",
+  "xyb (112-124): 3x blur sigma1.2 + 2 opsin (9mul+9add) + 3x gamma (rational 6/6 Chebyshev pair ~ mul22 add28 div1 + cvt) + v=p*g/s (3mul+3div) + combine (2add).",
+  "separate (158-206): 3x blur sigma7.47 (lf) + 3 subs + 3x blur sigma3.73 (mf) + hf-=mf & remove/amplify (2ch) + y-dependent scale (f64: mul3 div1 add3 cvt2) + 2x blur sigma1.87 (hf) + uhf-=hf + remove/clamp + lf-regulated scaling (mul4 div2 add4 cmp3 ch<2) + lf rescale (mul3 add1).",
+  "malta x6 (207-249): 4 low-frequency calls (MALTA_LOW 18 paths / 80 neighbour samples) + 2 high (MALTA_HIGH 18 paths / 128 samples); per px: dif (abs2 cvt2 mul1 add3 div2 cmp4 ~ +select) + accumulate (neighbors add + 18 mul + 18 add). LOW accum ~98 ops, HIGH ~146 ops.",
+  "noise (388-401): min-cap subtract + blur sigma10.67 + weighted fma. asymmetric (360-387): ~mul4 add4 cmp4. l2 x2 (351-359): sub+fma+mul ~ mul2 add2 per px each.",
+  "masks (444-508): 4 mix planes (mul2 add1 cvt2), diffpre x2 (each: 4 sub + 4 abs + min + mul + cmp), 3 blurs (sigma9.24, 2.38, 9.04), per-px: y combine (mul3 add2) + p0/p1 (mul4 add2) + 6 lookups (~ mul1 add2 cmp1 each) + 2 scale muls.",
+  "Final combine (580-591): 6 mul + 5 add + cmp + sqrt (or mul if small).",
+  "Ops are per-pixel-per-image unless noted; malta/noise/l2/asymmetric/masks/final operate on plane pairs (images=1)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "sRGB->linear LUT, 3 planes",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:601-624"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "notes": "3 gathers from 256-entry f32 LUT"
+  },
+  {
+   "id": "xyb_blur",
+   "name": "3x blur sigma1.2 (7 taps, 2 passes)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:65-72",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:112-124"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 14,
+    "add": 12,
+    "load": 14,
+    "store": 2
+   },
+   "bytes_read": 56,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 3,
+   "span": "14",
+   "depends_on": [
+    "ingress"
+   ]
+  },
+  {
+   "id": "xyb_pt",
+   "name": "opsin x2 + gamma x3 + combine",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:73-124"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 90,
+    "add": 105,
+    "div": 6,
+    "cvt": 9,
+    "load": 6,
+    "store": 3
+   },
+   "bytes_read": 24,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 3,
+   "span": "1",
+   "depends_on": [
+    "xyb_blur"
+   ],
+   "notes": "2 opsin + 3 gamma (f64 eval) + 3 mul + 3 div + 2 add"
+  },
+  {
+   "id": "sep_blurs",
+   "name": "LF blur33t x3 + MF blur17t x3 + HF blur9t x2",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:158-199"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 134,
+    "add": 126,
+    "load": 134,
+    "store": 8
+   },
+   "bytes_read": 536,
+   "bytes_written": 32,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 16,
+   "span": "66",
+   "depends_on": [
+    "xyb_pt"
+   ],
+   "notes": "3*(66+34) + 2*18 tap ops over 8 plane-passes"
+  },
+  {
+   "id": "sep_pt",
+   "name": "sub/remove/amplify/clamp/lf-scale pointwise",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:163-204"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 11,
+    "add": 12,
+    "div": 3,
+    "cmp": 9,
+    "cvt": 5,
+    "load": 8,
+    "store": 8
+   },
+   "bytes_read": 32,
+   "bytes_written": 32,
+   "access": "pointwise",
+   "radius": 16,
+   "span": "1",
+   "depends_on": [
+    "sep_blurs"
+   ],
+   "notes": "mf sub x3 + y-scale + uhf sub + reg mul/div x2 + lf rescale"
+  },
+  {
+   "id": "malta",
+   "name": "6x Malta dif + path accumulation (4xLOW/80t + 2xHIGH/128t)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:207-322",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:514-573"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 126,
+    "add": 725,
+    "div": 12,
+    "abs": 12,
+    "cmp": 24,
+    "cvt": 12,
+    "load": 624,
+    "store": 6
+   },
+   "bytes_read": 2496,
+   "bytes_written": 24,
+   "access": "data_dependent",
+   "axis": "xy",
+   "radius": 4,
+   "span": "9",
+   "depends_on": [
+    "sep_pt"
+   ],
+   "notes": "accum: 4*(80+36)+2*(128+36) add+mul; dif ~24 ops x6"
+  },
+  {
+   "id": "noise_asym",
+   "name": "noise (min-diff + blur49t) + asymmetric + l2 x2",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:351-401",
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:574-578"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 104,
+    "add": 102,
+    "cmp": 7,
+    "abs": 2,
+    "cvt": 6,
+    "load": 102,
+    "store": 3
+   },
+   "bytes_read": 408,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 24,
+   "span": "98",
+   "depends_on": [
+    "sep_pt"
+   ],
+   "notes": "blur sigma10.67 r24 2 passes = 98 taps"
+  },
+  {
+   "id": "masks",
+   "name": "mix x4 + diffpre x2 + 3 blurs (41+11+41 taps) + LUT lookups",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:402-508"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "mul": 203,
+    "add": 196,
+    "cmp": 10,
+    "abs": 8,
+    "cvt": 10,
+    "load": 200,
+    "store": 8
+   },
+   "bytes_read": 800,
+   "bytes_written": 32,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 20,
+   "span": "82",
+   "depends_on": [
+    "sep_pt"
+   ],
+   "notes": "3 blurs 186 tap-ops + mix/diffpre/luts ~35"
+  },
+  {
+   "id": "final",
+   "name": "masked dc+ac combine + sqrt; caller folds by f32 max (mod.rs:2719-2723)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/butteraugli_original.rs:580-592"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 6,
+    "add": 5,
+    "cmp": 2,
+    "sqrt": 1,
+    "load": 6,
+    "store": 1
+   },
+   "bytes_read": 24,
+   "bytes_written": 4,
+   "access": "reduction",
+   "radius": 20,
+   "span": "log2(W*H)",
+   "depends_on": [
+    "malta",
+    "noise_asym",
+    "masks"
+   ],
+   "barrier": true
+  }
+ ]
+}

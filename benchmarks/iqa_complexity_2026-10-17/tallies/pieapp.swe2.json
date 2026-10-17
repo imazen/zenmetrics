@@ -1,0 +1,72 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "pieapp",
+ "cli_names": [
+  "pieapp"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "15487467520 MACs per 64x64 patch-pair (pieapp.onnx; the 120832->512 weight Gemm ~14.6G dominates)",
+  "stride-6 dense grid per card.toml"
+ ],
+ "stages": [
+  {
+   "id": "patches",
+   "name": "u8->f32 + 64x64 grid stride 6 (both imgs)",
+   "source": [
+    "crates/zenmetrics-nn/src/pieapp.rs:150-300",
+    "crates/zenmetrics-nn/models/pieapp/card.toml:15-30"
+   ],
+   "images": 1,
+   "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)*4096",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "store": 3
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "64"
+  },
+  {
+   "id": "trunk",
+   "name": "per-patch-pair conv stack + weight gemms",
+   "source": [
+    "crates/zenmetrics-nn/src/pieapp.rs:200-423"
+   ],
+   "images": 1,
+   "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)",
+   "precision": "f32",
+   "ops": {
+    "fma": 15487467520,
+    "add": 3208201
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "64"
+  },
+  {
+   "id": "pool",
+   "name": "patch scores -> weighted mean",
+   "source": [
+    "crates/zenmetrics-nn/src/pieapp.rs:350-423"
+   ],
+   "images": 1,
+   "elements": "(floor((W-64)/6)+1)*(floor((H-64)/6)+1)",
+   "precision": "f32",
+   "ops": {
+    "add": 2,
+    "mul": 1,
+    "div": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "W"
+  }
+ ]
+}

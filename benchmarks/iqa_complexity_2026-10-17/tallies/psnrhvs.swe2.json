@@ -1,0 +1,98 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "metric": "psnrhvs",
+ "cli_names": [
+  "psnrhvs"
+ ],
+ "derived": {
+  "NB8": "64*(1+floor((W-8)/8))*(1+floor((H-8)/8))"
+ },
+ "assumptions": [
+  "psnrhvs -> psnrhvs::psnrhvs_rgb8 (lib.rs:369-459): each RGB channel deinterleaved to f32 0-255 plane, scored by plane_step_impl step=8 (kernel.rs:592+ / band_body kernel.rs:259-415), VPQM-06/07 masked DCT energy; combined = mean of 3 planes. Blocks nb_x=1+(w-8)/8 x nb_y=1+(h-8)/8.",
+  "Per block-pair: gather 128 lds; float orthonormal DCT-II 2 passes x 2 imgs: 2048 mul + 2048 add; maskeff x2 (kernel.rs:325-369): per call ~ e-fold 63mul+63fma, whole-block mean/var (64add+div+64sub+64fma+div+mul), 4 quadrant vars (64add+64sub+64fma+8div+4mul), quadsum+blend+sqrt => mul69 add195 sub80 fma191 div12 sqrt1 cmp1; energy fold (kernel.rs:374-409): DC (sub+abs+3mul+2add) + 63x(sub+abs+t2 mul+s2 fma+div+(u-thr)sub+max+t1 mul+s1 fma).",
+  "Per block-pair totals: mul 2315, add+sub 2727, fma 510, div 87, sqrt 2, abs 64, cmp 65, load 128 -> /64 per covered elem.",
+  "finalize (lib.rs:248-): masked/unmasked mse -> two log10 scores per plane."
+ ],
+ "stages": [
+  {
+   "id": "deint",
+   "name": "deinterleave 3 ch u8->f32 planes",
+   "source": [
+    "crates/psnrhvs/src/kernel.rs:437-445",
+    "crates/psnrhvs/src/lib.rs:399-431"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "blocks",
+   "name": "8x8 blocks: DCT2 + maskeff + masked energy (3 planes)",
+   "source": [
+    "crates/psnrhvs/src/kernel.rs:259-415",
+    "crates/psnrhvs/src/lib.rs:320-363"
+   ],
+   "images": 1,
+   "elements": "3*NB8",
+   "precision": "f32",
+   "ops": {
+    "mul": 36.2,
+    "add": 42.6,
+    "fma": 8.0,
+    "div": 1.36,
+    "abs": 1.0,
+    "cmp": 1.02,
+    "sqrt": 0.031,
+    "load": 2.0,
+    "store": 0.03
+   },
+   "bytes_read": 8,
+   "bytes_written": 0.1,
+   "access": "block",
+   "axis": "xy",
+   "radius": 4,
+   "span": "64",
+   "depends_on": [
+    "deint"
+   ],
+   "class": "intrinsic",
+   "notes": "per-elem = per-block-pair totals /64; overlapping none at step 8"
+  },
+  {
+   "id": "final",
+   "name": "per-plane log10 scores + mean",
+   "source": [
+    "crates/psnrhvs/src/lib.rs:248-268",
+    "crates/psnrhvs/src/lib.rs:444-450"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 8,
+    "log": 6,
+    "mul": 6,
+    "add": 4
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "blocks"
+   ]
+  }
+ ]
+}

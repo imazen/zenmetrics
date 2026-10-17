@@ -1,0 +1,76 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dreamsim",
+ "cli_names": [
+  "dreamsim"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk = 105379934208 MACs pair at fixed 224^2 (dreamsim_full.onnx via onnxsim; external consts restored from the nn-phase0 export dir)",
+  "exp estimate = softmax share; resize ~8 fma/out-px approximation"
+ ],
+ "stages": [
+  {
+   "id": "resize",
+   "name": "antialiased bicubic to exactly 224x224 (both imgs)",
+   "source": [
+    "crates/zenmetrics-nn/src/dreamsim.rs:120-220",
+    "crates/zenmetrics-nn/models/dreamsim/card.toml:25-35"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 8,
+    "add": 8,
+    "store": 3
+   },
+   "access": "resample",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "2",
+   "radius": 2
+  },
+  {
+   "id": "trunk",
+   "name": "3x ViT ensemble pair graph at fixed 224x224",
+   "source": [
+    "crates/zenmetrics-nn/src/dreamsim.rs:120-300",
+    "crates/zenmetrics-nn/models/dreamsim/card.toml:25-45"
+   ],
+   "images": 1,
+   "elements": "50176",
+   "precision": "f32",
+   "ops": {
+    "fma": 1050102.9795918367,
+    "add": 6281.006429368622,
+    "mul": 3140.503214684311,
+    "exp": 1046.8344048947704
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224"
+  },
+  {
+   "id": "score",
+   "name": "scalar",
+   "source": [
+    "crates/zenmetrics-nn/src/dreamsim.rs:280-332"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 8
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

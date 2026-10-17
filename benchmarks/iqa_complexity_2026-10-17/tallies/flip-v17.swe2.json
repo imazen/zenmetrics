@@ -1,0 +1,185 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "flip-v17",
+ "cli_names": [
+  "flip-v17"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "SP": "21",
+  "FT": "19"
+ },
+ "assumptions": [
+  "flip = metrics/flip.rs::error_map + mean (flip.rs:220-258): LDR-FLIP at reference defaults (0.7 m / 3840 px / 0.7 m -> ppd = 3840*pi/180 ~ 67.02).",
+  "Ingress per px per img (flip.rs:70-92): 3 sRGB->linear LUT gathers + xyz() 3x3 (9 mul + 6 add) + INV_WHITE mul3 + Lab terms (l: mul+add; a,b: sub+mul) = mul 15, add 9.",
+  "colors() (flip.rs:187-194): per px per img \u2014 pad channel p[2]->p[3] (store), then separable conv of 4-ch pixels with spatial_filter: radius = ceil(3*sqrt(0.04/(2pi^2))*ppd) = 10 -> 21 taps per axis (flip.rs:93-124); convolve per tap per ch: mul+add (flip.rs:152-186) -> per pass per elem: 84 mul + 84 add + 84 loads; two passes. Then filtered_lab (flip.rs:45-57): y reconstruct (add+div), q (2 div/mul + add), 3x3 XYZ->RGB + 3 clamps + hunt_lab: xyz 9mul+6add, 3 mul inv-white, 3 f() (cmp + pow common path) + Lab out (mul+add, 2x(mul+mul+sub)).",
+  "features() (flip.rs:195-218): per px per img \u2014 y reconstruct (mul+add), h conv 3ch x 19 taps (57 mul + 57 add), expand, v conv 4ch x 19 taps (76 mul + 76 add), output: 2x(mul2 add1 sqrt1).",
+  "error map per px (flip.rs:236-251): hyab (2 sub + abs + 2 mul + add + sqrt) + powf(0.7) + low-range clamp branch (cmp + ~3 ops) + feature term (2 sub + 2 abs + max cmp + mul + sqrt-powf(0.5)) + powf(1-f): mul~7 add~8 abs3 sqrt2 pow3 cmp4.",
+  "cmax = hyab(hunt_lab([0,1,0]), hunt_lab([0,0,1]))^0.7 computed once \u2014 negligible.",
+  "mean: f64 running sum (cvt+add per elem) + final div; flip-v17 variant not the default column.",
+  "flip-v17 differs only in pooling: mean_v17 = f32 running sum / n (flip.rs:264-266) vs f64 in pinned flip."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "sRGB->linear LUT + XYZ + Lab (per img)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:11-23",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:70-92"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 15,
+    "add": 9,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "colors_h",
+   "name": "spatial conv h, 4ch x 21 taps",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:93-124",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:152-194"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 84,
+    "add": 84,
+    "load": 84,
+    "store": 4
+   },
+   "bytes_read": 336,
+   "bytes_written": 16,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 10,
+   "span": "21",
+   "depends_on": [
+    "ingress"
+   ]
+  },
+  {
+   "id": "colors_v_lab",
+   "name": "spatial conv v 4ch + filtered_lab",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:45-57",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:152-194"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 104,
+    "add": 96,
+    "load": 84,
+    "store": 3,
+    "div": 3,
+    "cmp": 6,
+    "pow": 3
+   },
+   "bytes_read": 336,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 10,
+   "span": "21",
+   "depends_on": [
+    "colors_h"
+   ],
+   "notes": "v conv 84mul+84add + filtered_lab ~20mul+12add+3div+3pow+6cmp"
+  },
+  {
+   "id": "features",
+   "name": "feature convs (h 3ch x19, v 4ch x19) + mags",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:125-150",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:195-218"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 138,
+    "add": 137,
+    "load": 133,
+    "store": 2,
+    "sqrt": 2
+   },
+   "bytes_read": 532,
+   "bytes_written": 8,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 9,
+   "span": "38",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": "radius 9 -> 19 taps; y-const mul+add + 57 + 76 tap-ops + 2 sqrt mags"
+  },
+  {
+   "id": "emap",
+   "name": "hyab^0.7 + feature term + c^(1-f) per px",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:42-44",
+    "crates/zenmetrics-cli/src/metrics/flip.rs:236-252"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": 7,
+    "add": 8,
+    "abs": 3,
+    "sqrt": 2,
+    "pow": 3,
+    "cmp": 4,
+    "load": 5,
+    "store": 1
+   },
+   "bytes_read": 20,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 10,
+   "span": "1",
+   "depends_on": [
+    "colors_v_lab",
+    "features"
+   ]
+  },
+  {
+   "id": "final",
+   "name": "f64 running mean",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/flip.rs:256-258"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "load": 1,
+    "div": "1/(W*H)"
+   },
+   "bytes_read": 4,
+   "access": "reduction",
+   "span": "log2(W*H)",
+   "barrier": true,
+   "depends_on": [
+    "emap"
+   ]
+  }
+ ]
+}

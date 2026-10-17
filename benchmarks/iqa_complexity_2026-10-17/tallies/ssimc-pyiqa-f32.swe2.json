@@ -1,0 +1,89 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "metric": "ssimc-pyiqa-f32",
+ "cli_names": [
+  "ssimc-pyiqa-f32"
+ ],
+ "assumptions": [
+  "ssimc (classical.rs:146-163,165-240): SSIM per RGB channel on 0-255, 11x11 Gaussian sigma=1.5 taps normalized, K1=.01 K2=.03 L=255, valid region (W-10)x(H-10), cs clipped >=0, mean over channels /3.",
+  "H-pass per output elem per ch (ring slot): 11 taps x [2 cvt + 2 load + m0 g*a (mul+add) + m1 (mul+add) + m2 g*a*a (2mul+add) + m3 (2mul+add) + m4 g*a*b (2mul+add)] = 11*(8mul+5add+2cvt+2load).",
+  "V-pass per output elem: 11 taps x 5 moments x (mul+add+load) = 55 mul+55 add+55 load; then per elem: vx,vy,cov (3mul+3add), lum (4mul+3add+1div), cs (2mul+3add+1div+1cmp), sum+= lum*cs (1mul+1add).",
+  "Per-channel mean = sum/(ow*oh) div; total/3: negligible final ops.",
+  "-f32 CLI variant = unrounded plane input (ssim_pyiqa.rs:6, rounded=false, factor=1); pipeline identical."
+ ],
+ "stages": [
+  {
+   "id": "hfilter",
+   "name": "h Gaussian moments (5 accumulators) into ring",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:178-192"
+   ],
+   "images": 2,
+   "elements": "3*W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": 88,
+    "add": 55,
+    "load": 22,
+    "cvt": 22,
+    "store": 5
+   },
+   "bytes_read": 8,
+   "bytes_written": 40,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 5,
+   "span": "11"
+  },
+  {
+   "id": "vfilter_ssim",
+   "name": "v Gaussian moments + SSIM map + sum",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:195-222"
+   ],
+   "images": 1,
+   "elements": "3*(W-10)*(H-10)",
+   "precision": "f64",
+   "ops": {
+    "mul": 65,
+    "add": 63,
+    "load": 55,
+    "div": 2,
+    "cmp": 1
+   },
+   "bytes_read": 440,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 5,
+   "span": "11",
+   "depends_on": [
+    "hfilter"
+   ]
+  },
+  {
+   "id": "final",
+   "name": "channel means /3",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:223-225"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 4,
+    "add": 2
+   },
+   "access": "reduction",
+   "span": "log2(3*W*H)",
+   "barrier": true,
+   "depends_on": [
+    "vfilter_ssim"
+   ]
+  }
+ ]
+}

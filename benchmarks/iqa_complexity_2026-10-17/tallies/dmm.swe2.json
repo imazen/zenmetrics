@@ -1,0 +1,73 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dmm",
+ "cli_names": [
+  "dmm"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "13972008960 MACs per resized image at 224^2 basis (dmm_trunk.onnx)",
+  "resized px = short'^2 * aspect, short'=max(floor(min/48)*32,128); assumes min>192 (smaller pass through)"
+ ],
+ "stages": [
+  {
+   "id": "resize",
+   "name": "Pillow-exact bilinear: short side -> max(floor(min/48)*32,128) when min>128",
+   "source": [
+    "crates/zenmetrics-nn/src/dmm.rs:300-700",
+    "crates/zenmetrics-nn/models/dmm/card.toml:20-35"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 6,
+    "add": 6,
+    "store": 3
+   },
+   "access": "resample",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "2",
+   "radius": 1
+  },
+  {
+   "id": "trunk",
+   "name": "dmm_trunk conv stack per resized image (x2)",
+   "source": [
+    "crates/zenmetrics-nn/src/dmm.rs:700-1200"
+   ],
+   "images": 1,
+   "elements": "2*max(floor(min(W,H)/48)*32,128)*max(floor(min(W,H)/48)*32,128)*max(W,H)/min(W,H)",
+   "precision": "f32",
+   "ops": {
+    "fma": 278460.0,
+    "add": 584.25
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W"
+  },
+  {
+   "id": "score",
+   "name": "scalar",
+   "source": [
+    "crates/zenmetrics-nn/src/dmm.rs:1200-1544"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 8
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

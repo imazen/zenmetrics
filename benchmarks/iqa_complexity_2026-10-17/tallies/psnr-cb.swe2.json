@@ -1,0 +1,64 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "metric": "psnr-cb",
+ "cli_names": [
+  "psnr-cb"
+ ],
+ "assumptions": [
+  "psnr-cb -> studio601_plane_mse(r,d,1) (classical.rs:125-127,~290-340): per px per img Cb = 3mul+2add + /255 div + +128 add + round(cvt) + clamp(cmp); other two plane terms are computed then dropped by the compiler? No - studio601_linear computes all three then pick() selects; counted per source: the compiler may drop unused, count selected plane only (comment in source says compiler drops unused linear parts).",
+  "Per px: 6 cvt, 9 mul, 6 add, 3 div, 3 round-cvt, 3 clamp-cmp (all 3 linear terms counted, conservative wrt compiler elimination), 1 sub + 1 fma + 1 add.",
+  "psnr() tail: 255^2 mul + div + log10 + mul."
+ ],
+ "stages": [
+  {
+   "id": "mse",
+   "name": "studio601 Cb conv + mse",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:125-127",
+    "crates/zenmetrics-cli/src/metrics/classical.rs:243-340"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 6,
+    "mul": 9,
+    "add": 7,
+    "div": 3,
+    "cmp": 3,
+    "fma": 1
+   },
+   "bytes_read": 6,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "notes": "3 linear terms counted; compiler likely drops 2 (see source comment)"
+  },
+  {
+   "id": "final",
+   "name": "psnr()",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/classical.rs:158-163"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "mul": 2,
+    "div": 1,
+    "log": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "mse"
+   ]
+  }
+ ]
+}

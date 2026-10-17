@@ -1,0 +1,88 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "piqe",
+ "cli_names": [
+  "piqe"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "piqe/src/lib.rs: GRAY u8 luma (3735B+19235G+9798R+16384)>>15; pad to 16-multiple; gauss7 = cv2 GaussianBlur 7x7 sigma 7/6 BORDER_REPLICATE as two 1-D 7-tap f64 passes (lib.rs:216-246).",
+  "per 16x16 block: var1 ddof=1 over 256 px (~4 ops/px), edge_impaired over NSEG edge segments, block_impaired, noise_criterion center/surround std (~256*4 ops) (lib.rs:247-335).",
+  "pool over active blocks."
+ ],
+ "stages": [
+  {
+   "id": "luma",
+   "name": "fixed-point u8 luma",
+   "source": [
+    "crates/piqe/src/lib.rs:26-47,179-210"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 2,
+    "load": 3,
+    "store": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "gauss7",
+   "name": "two 1-D 7-tap f64 blurs",
+   "source": [
+    "crates/piqe/src/lib.rs:216-246"
+   ],
+   "images": 1,
+   "elements": "ceil(W/16)*16*ceil(H/16)*16",
+   "precision": "f32",
+   "ops": {
+    "fma": 7,
+    "load": 7,
+    "store": 1
+   },
+   "levels": 2,
+   "scale": "1",
+   "access": "pointwise"
+  },
+  {
+   "id": "blocks",
+   "name": "per-16x16-block activity/impairment/noise tests",
+   "source": [
+    "crates/piqe/src/lib.rs:247-335"
+   ],
+   "images": 1,
+   "elements": "ceil(W/16)*16*ceil(H/16)*16",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "mul": 2,
+    "div": 1,
+    "sqrt": 0.1,
+    "cmp": 2,
+    "load": 3
+   },
+   "access": "block"
+  },
+  {
+   "id": "pool",
+   "name": "distortion-weighted pool",
+   "source": [
+    "crates/piqe/src/lib.rs:337-380"
+   ],
+   "images": 1,
+   "elements": "ceil(W/16)*ceil(H/16)",
+   "precision": "f32",
+   "ops": {
+    "add": 2,
+    "mul": 1,
+    "div": 2
+   },
+   "access": "pointwise"
+  }
+ ]
+}

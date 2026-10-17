@@ -1,0 +1,121 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "niqe",
+ "cli_names": [
+  "niqe"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "niqe/src/lib.rs: Y luma f64; non-overlap 96x96 blocks scale1 (floor dims), 48x48 scale2; per block conv_gauss (7x7, scipy-nearest) on block + sq -> MSCN -> 18 GGD/AGGD feats (36 total).",
+  "block count NB = floor(W/96)*floor(H/96); per-block work ~ BLOCK^2 * ~120 ops (conv 2*49 fma + mscn + 4 pair feats).",
+  "covariance 36x36 over NB blocks + pinv((cov_pris+cov_dist)/2) (numpy-compatible pseudo-inverse ~36^3) + Mahalanobis q = d'*invcov*d (36^2 fma).",
+  "ESTIMATE markers: pinv counted at 36^3=46656 fma constant; per-block fits reuse same gam-table argmin pattern as brisque (9801 cmp x 18 x 2)."
+ ],
+ "stages": [
+  {
+   "id": "luma",
+   "name": "bt601-ish luma f64",
+   "source": [
+    "crates/niqe/src/lib.rs:253-260"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 1,
+    "load": 3,
+    "cvt": 1,
+    "store": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "conv",
+   "name": "conv_gauss 7x7 mu+sq per block (2 scales)",
+   "source": [
+    "crates/niqe/src/lib.rs:287-330"
+   ],
+   "images": 1,
+   "elements": "floor(W/96)*floor(H/96)*96*96+floor(W/192)*floor(H/192)*48*48",
+   "precision": "f32",
+   "ops": {
+    "fma": 98,
+    "mul": 1,
+    "load": 49,
+    "store": 2
+   },
+   "access": "stencil2d",
+   "radius": 3
+  },
+  {
+   "id": "mscn",
+   "name": "MSCN + 4 AGGD pair maps per block",
+   "source": [
+    "crates/niqe/src/lib.rs:287-341"
+   ],
+   "images": 1,
+   "elements": "(floor(W/96)*floor(H/96)*96*96+floor(W/192)*floor(H/192)*48*48)/2",
+   "precision": "f32",
+   "ops": {
+    "mul": 3,
+    "add": 3,
+    "div": 1,
+    "sqrt": 1,
+    "load": 3,
+    "store": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "fits",
+   "name": "18-feat GGD/AGGD argmin per block x2 scales",
+   "source": [
+    "crates/niqe/src/lib.rs:291-341"
+   ],
+   "images": 1,
+   "elements": "(floor(W/96)*floor(H/96)+floor(W/192)*floor(H/192))*18*9801",
+   "precision": "f32",
+   "ops": {
+    "cmp": 1,
+    "load": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "mvg",
+   "name": "cov + pinv + Mahalanobis",
+   "source": [
+    "crates/niqe/src/lib.rs:341-363"
+   ],
+   "images": 1,
+   "elements": "floor(W/96)*floor(H/96)*36",
+   "precision": "f32",
+   "ops": {
+    "fma": 1,
+    "add": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "pinv",
+   "name": "36x36 pinv + distance",
+   "source": [
+    "crates/niqe/src/lib.rs:343-363"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 47952,
+    "add": 1296,
+    "sqrt": 36,
+    "cmp": 1296
+   },
+   "access": "block"
+  }
+ ]
+}

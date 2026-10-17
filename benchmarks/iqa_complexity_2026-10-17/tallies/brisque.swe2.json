@@ -1,0 +1,126 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "brisque",
+ "cli_names": [
+  "brisque"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "brisque/src/lib.rs: rgb->Y fma luma; nss() per scale: conv7 mu + conv7 on x^2 + MSCN normalize + 4 rolled products; ggd_params/aggd_params = ~6 mean passes over map + 9801-entry gam table argmin each (18 feats x 2 scales); scale2 image = cubic-resize to /2.",
+  "SVM: 774 SVs x 36 dims fma + 774 libm expf + dot (lib.rs:631-646).",
+  "params.bin tables (KERNEL49, R_GGD, R_AGGD, ETA_FACTOR) are fixed constants."
+ ],
+ "stages": [
+  {
+   "id": "luma",
+   "name": "bt601-ish luma",
+   "source": [
+    "crates/brisque/src/lib.rs:28-60"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 1,
+    "load": 3,
+    "store": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "conv7",
+   "name": "mu + std conv7 x2 scales",
+   "source": [
+    "crates/brisque/src/lib.rs:207-230,343-352"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "fma": 98,
+    "mul": 1,
+    "load": 49,
+    "store": 2
+   },
+   "levels": 2,
+   "scale": "2**l",
+   "access": "stencil2d",
+   "radius": 3
+  },
+  {
+   "id": "mscn",
+   "name": "normalize + 4 shifted products",
+   "source": [
+    "crates/brisque/src/lib.rs:349-372"
+   ],
+   "images": 1,
+   "elements": "5*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 2,
+    "add": 2,
+    "div": 1,
+    "sqrt": 0.2,
+    "load": 3,
+    "store": 1
+   },
+   "levels": 2,
+   "scale": "2**l",
+   "access": "pointwise"
+  },
+  {
+   "id": "fits",
+   "name": "GGD/AGGD means + 9801 argmin x18 feats",
+   "source": [
+    "crates/brisque/src/lib.rs:229-330"
+   ],
+   "images": 1,
+   "elements": "18*ceil(W/(2**l))*ceil(H/(2**l))/5",
+   "precision": "f32",
+   "ops": {
+    "mul": 2,
+    "add": 3,
+    "abs": 1,
+    "cmp": 1,
+    "load": 2
+   },
+   "levels": 2,
+   "scale": "2**l",
+   "access": "pointwise"
+  },
+  {
+   "id": "argmin",
+   "name": "gam table argmin scans 18x2",
+   "source": [
+    "crates/brisque/src/lib.rs:301-330"
+   ],
+   "images": 1,
+   "elements": "36*9801",
+   "precision": "f32",
+   "ops": {
+    "cmp": 1,
+    "load": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "svm",
+   "name": "774-SV RBF eval",
+   "source": [
+    "crates/brisque/src/lib.rs:631-646"
+   ],
+   "images": 1,
+   "elements": "774*36",
+   "precision": "f32",
+   "ops": {
+    "fma": 1,
+    "exp": 0.028
+   },
+   "access": "pointwise"
+  }
+ ]
+}

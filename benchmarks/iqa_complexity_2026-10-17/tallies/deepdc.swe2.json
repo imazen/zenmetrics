@@ -1,0 +1,73 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "deepdc",
+ "cli_names": [
+  "deepdc"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk fma = 39016857610 MACs/pair @224^2 (deepdc_full.onnx); elems 42148477"
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8->f32 + ImageNet norm (in-graph)",
+   "source": [
+    "crates/zenmetrics-nn/src/deepdc.rs:150-230"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 1,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "1",
+   "bytes_read": 3,
+   "bytes_written": 12
+  },
+  {
+   "id": "trunk",
+   "name": "DeepDC pair graph (trunk + head)",
+   "source": [
+    "crates/zenmetrics-nn/src/deepdc.rs:150-267",
+    "crates/zenmetrics-nn/models/deepdc/card.toml:1-30"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 777600.0001992985,
+    "add": 420.00634765625,
+    "mul": 420.00634765625
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W"
+  },
+  {
+   "id": "score",
+   "name": "scalar",
+   "source": [
+    "crates/zenmetrics-nn/src/deepdc.rs:230-267"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 8
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

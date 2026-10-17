@@ -1,0 +1,72 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ahiq",
+ "cli_names": [
+  "ahiq"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "65812593664 MACs per 224^2 crop-pair (ahiq_full.onnx) x9; min(W,H)>=224 required"
+ ],
+ "stages": [
+  {
+   "id": "crops",
+   "name": "9 deterministic 224x224 crops + /255 + (x-.5)/.5",
+   "source": [
+    "crates/zenmetrics-nn/src/ahiq.rs:150-400",
+    "crates/zenmetrics-nn/models/ahiq/card.toml:28-40"
+   ],
+   "images": 1,
+   "elements": "9*50176",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 4,
+    "add": 2,
+    "store": 3
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224"
+  },
+  {
+   "id": "trunk",
+   "name": "ahiq_full pair graph per crop",
+   "source": [
+    "crates/zenmetrics-nn/src/ahiq.rs:300-600"
+   ],
+   "images": 1,
+   "elements": "9*50176",
+   "precision": "f32",
+   "ops": {
+    "fma": 1311634.918367347,
+    "add": 12391.207051179847
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "224"
+  },
+  {
+   "id": "pool",
+   "name": "mean over 9 crops",
+   "source": [
+    "crates/zenmetrics-nn/src/ahiq.rs:550-707"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 9,
+    "div": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

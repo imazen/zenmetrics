@@ -1,0 +1,48 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "musiq",
+ "cli_names": [
+  "musiq"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "nn-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "musiq.onnx: transformer over patch-hash rows; onnx_macs.py at L=193 -> 24,959,836 MACs (~129,325/row), 223,143 elems; cost scales with the full-res patch group ceil(W/32)*ceil(H/32) plus fixed 49+144.",
+  "two fixed-scale gaussian-resize views (224,384 longer side) + native; row = 3072 px + hash + scale id + mask."
+ ],
+ "stages": [
+  {
+   "id": "rows",
+   "name": "patch+hash row assembly",
+   "source": [
+    "crates/zenmetrics-nn/src/musiq.rs:1-120"
+   ],
+   "images": 1,
+   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "precision": "f32",
+   "ops": {
+    "load": 3075,
+    "store": 3075
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "graph",
+   "name": "musiq transformer",
+   "source": [
+    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+   ],
+   "images": 1,
+   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 129325,
+    "add": 1156
+   },
+   "access": "pointwise"
+  }
+ ]
+}

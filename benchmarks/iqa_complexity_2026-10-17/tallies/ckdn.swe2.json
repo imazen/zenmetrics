@@ -1,0 +1,74 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ckdn",
+ "cli_names": [
+  "ckdn"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk = 10308753408 MACs for the 288x288 pair (ckdn_full.onnx via onnxsim; component encoders dte/qse = 1,299,234,816 MACs each at 288^2, tail 6,457,344)",
+  "always 288x288 after the eval transform; resize ~8 fma/out-px approximation flagged"
+ ],
+ "stages": [
+  {
+   "id": "resize",
+   "name": "eval transform: bicubic short->329 + crop 288 (dist); NEAREST (ref)",
+   "source": [
+    "crates/zenmetrics-nn/src/ckdn.rs:150-280",
+    "crates/zenmetrics-nn/models/ckdn/card.toml:20-30"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 8,
+    "add": 8,
+    "store": 3
+   },
+   "access": "resample",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "2",
+   "radius": 2
+  },
+  {
+   "id": "trunk",
+   "name": "qse+dte encoders + tail at fixed 288x288 (pair)",
+   "source": [
+    "crates/zenmetrics-nn/src/ckdn.rs:150-330",
+    "crates/zenmetrics-nn/models/ckdn/card.toml:20-40"
+   ],
+   "images": 1,
+   "elements": "82944",
+   "precision": "f32",
+   "ops": {
+    "fma": 62142.851851851854,
+    "add": 541.0895604263118
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "288"
+  },
+  {
+   "id": "score",
+   "name": "scalar",
+   "source": [
+    "crates/zenmetrics-nn/src/ckdn.rs:300-414"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 8
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "stlpips-vgg",
+ "cli_names": [
+  "stlpips-vgg",
+  "stlpips_vgg"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk fma = 3905358080 MACs/pair @224^2 (stlpips_vgg_full.onnx; internal shift replication included); elems 58501418"
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8->f32",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:61-71",
+    "crates/zenmetrics-nn/src/lpips.rs:201-233"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 1,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "1",
+   "bytes_read": 3,
+   "bytes_written": 12
+  },
+  {
+   "id": "trunk",
+   "name": "st-LPIPS trunk pair graph (shift-tolerant evals + taps)",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-297"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 77833.1887755102,
+    "add": 1165.9243064413265
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W"
+  },
+  {
+   "id": "score",
+   "name": "scalar pool",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:244-297"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 64
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

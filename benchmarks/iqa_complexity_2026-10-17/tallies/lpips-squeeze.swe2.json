@@ -1,0 +1,77 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "lpips-squeeze",
+ "cli_names": [
+  "lpips-squeeze"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk fma = 1311618048 MACs / 50176 px pair at 224x224, from onnx_macs.py over lpips_squeeze_full.onnx (Conv+Gemm); element ops 5931497 split ~add/mul",
+  "conv MAC/px is resolution-invariant for the stride-1 stack; edge padding ignored",
+  "oracle gate: lpips_vgg_trunk.onnx at 224^2 = 15,346,630,656 MACs vs published ~15.3 GMAC"
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "RGB8->f32 planar + pack",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-233",
+    "crates/zenmetrics-nn/src/preprocess.rs:1-60"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 1,
+    "store": 3
+   },
+   "access": "pointwise",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "1",
+   "bytes_read": 3,
+   "bytes_written": 12
+  },
+  {
+   "id": "trunk",
+   "name": "SqueezeNet trunk feature stack (lpips_squeeze_full.onnx)",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:201-297",
+    "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "fma": 10501.297193877552,
+    "add": 242.9328065210459,
+    "mul": 242.9328065210459
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "W"
+  },
+  {
+   "id": "score",
+   "name": "scalar taps -> mean",
+   "source": [
+    "crates/zenmetrics-nn/src/lpips.rs:244-297"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 64,
+    "div": 2
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "1"
+  }
+ ]
+}

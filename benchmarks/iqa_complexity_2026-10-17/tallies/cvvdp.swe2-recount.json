@@ -1,0 +1,229 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "cvvdp",
+ "cli_names": [
+  "cvvdp"
+ ],
+ "counter": "swe2-recount",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {
+  "display": "standard_4k",
+  "ppd": 75.4
+ },
+ "derived": {
+  "NL": "min(8,floor(log2(min(W,H)))-1)"
+ },
+ "assumptions": [
+  "cvvdp -> CpuCvvdpDisplayScorer::score (cvvdp_cpu.rs:52-80) -> cvvdp::Cvvdp::score -> score_internal ~ host_scalar::still_3ch_q_per_ch (host_scalar.rs:81-250): sRGB->display-DKL (3 LUT + s*lin+bias fma + 3x3 matrix), 6x Gaussian pyramid builds (img+luma planes x3 ch), Weber contrast bands, per-band CSF sensitivity LUT interp x3 ch, masked mutual difference, lp_norm(2) per band x3, pool betas -> JOD.",
+  "n_levels = min(max_band+1, log2(min(W,H))-1): ~8 at 1024+ for ppd=75.4 (band_frequencies kernels/pyramid.rs:272-297).",
+  "gausspyr_reduce_scalar (pyramid.rs:57-140): 5-tap GAUSS5 separable; per OUT px ~ 5mul+4add h + 5mul+4add v (+ edge fixups) => mul10 add9 load10 store1 per out elem; built for BOTH image and l_bkg planes x3 ch => 6 pyramid chains.",
+  "gausspyr_expand_scalar (~180-226): zero-insert + 5-tap + *2, 2 passes => ~mul11 add9 load5 store1 per out px; 2 expands per non-baseband level per pyramid (img + l_bkg).",
+  "Per-band contrast (pyramid.rs:455-505): layer=fine-expand (sub), l_bkg max0.01 (cmp), div, clamp -1000..1000 (2cmp), log10 -> mul0 add1 div1 cmp3 log1 per px.",
+  "Sensitivity (csf.rs:167-224): per px per band per ch: log10(rho) cached? no - rho scalar per band; per px: N_L_BKG-row interp1 over rho axis (each ~4 ops + row read) + interp1 over l_bkg + powf(10^log_s) + correction mul => ~ mul25 add25 pow1 log1 (log10 rho is per-band). x3 ch.",
+  "t_p/r_p (host_scalar.rs:204-212): 6 muls per px (band_mul*s*CH_GAIN per ch per side).",
+  "mult_mutual_band (masking.rs:46-140,~180-230): per px per ch \u2014 min-abs blur sigma3 13-tap separable (26mul+24add+26load+2store incl fused min/abs/scale) + fold: term=(m+eps)^q-epsq (add+pow+sub), pw=(|t-r|+eps)^p-epsp (sub+abs+add+pow+sub), XCM 3x3 (9mul+6add), du/(1+m) div + D_MAX/(D+du) (mul+add+div) => per px(all 3ch): mul~ 90 add~90 pow6 div6 abs3.",
+  "lp_norm BETA_SPATIAL=2 per band x3 (pool.rs:141-148): safe_pow_lp = abs+add+powf ~ pow3 add4 abs3 per px + f32 sum.",
+  "Baseband: mean log_l + diff.abs()*s x3 (~sens still per-px) \u2014 counted as band stage at level NL-1.",
+  "Final pool (pool.rs:267-292): per-band weights x3 + 2 lp_norm_sum over ~8 + met2jod \u2014 scalar, ~100 ops total."
+ ],
+ "stages": [
+  {
+   "id": "dkl",
+   "name": "sRGB8 -> display DKL planes",
+   "source": [
+    "crates/cvvdp/src/kernels/color.rs:125-156",
+    "crates/cvvdp/src/kernels/color.rs:240-252"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "mul": 12,
+    "add": 9,
+    "fma": 3,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "pyr_reduce",
+   "name": "6 pyramids (img+luma x3ch) 5-tap reduce",
+   "source": [
+    "crates/cvvdp/src/kernels/pyramid.rs:57-140",
+    "crates/cvvdp/src/kernels/pyramid.rs:428-455"
+   ],
+   "images": 2,
+   "elements": "6*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "mul": 10,
+    "add": 9,
+    "load": 10,
+    "store": 1
+   },
+   "bytes_read": 40,
+   "bytes_written": 4,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 2,
+   "scale": "2**l",
+   "chain": true,
+   "span": "10",
+   "depends_on": [
+    "dkl"
+   ],
+   "notes": "elems = sum over levels of 2*3*(wl*hl next-level) = 6*WH*(1/3)",
+   "levels": "NL-1"
+  },
+  {
+   "id": "pyr_expand_contrast",
+   "name": "per-level: 2x expands + Weber contrast + log_l",
+   "source": [
+    "crates/cvvdp/src/kernels/pyramid.rs:180-230",
+    "crates/cvvdp/src/kernels/pyramid.rs:455-505"
+   ],
+   "images": 2,
+   "elements": "6*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 22,
+    "add": 19,
+    "div": 1,
+    "log": 1,
+    "cmp": 3,
+    "load": 11,
+    "store": 3
+   },
+   "bytes_read": 44,
+   "bytes_written": 12,
+   "access": "upsample",
+   "axis": "xy",
+   "radius": 2,
+   "scale": "2**l",
+   "span": "10",
+   "depends_on": [
+    "pyr_reduce"
+   ],
+   "notes": "expand x2 only non-baseband; contrast ops all levels (overcount ~1/Nl for expand)",
+   "levels": "NL"
+  },
+  {
+   "id": "csf_scale",
+   "name": "per-band sensitivity LUT interp x3 + t/r scaling",
+   "source": [
+    "crates/cvvdp/src/kernels/csf.rs:167-224",
+    "crates/cvvdp/src/host_scalar.rs:196-212",
+    "crates/cvvdp/src/pipeline.rs:55-108"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 15,
+    "add": 10,
+    "exp": 3,
+    "cmp": 1,
+    "cvt": 1,
+    "load": 8,
+    "store": 6
+   },
+   "bytes_read": 32,
+   "bytes_written": 24,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "span": "1",
+   "depends_on": [
+    "pyr_expand_contrast"
+   ],
+   "notes": "logs_row (rho-axis interp over N_L_BKG=32) hoisted per band via precompute_logs_row; per px: shared bracket (~9) + 3x(lerp+fma+exp+2 mul-pairs) \u2014 gather_lerp_exp3_apply_into (pipeline.rs:62-108)",
+   "levels": "NL"
+  },
+  {
+   "id": "mask_fold",
+   "name": "min|T||R| blur13t x3 + mask fold + diff norm",
+   "source": [
+    "crates/cvvdp/src/masking.rs:46-230"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 90,
+    "add": 90,
+    "pow": 6,
+    "div": 6,
+    "abs": 3,
+    "load": 80,
+    "store": 3
+   },
+   "bytes_read": 320,
+   "bytes_written": 12,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 6,
+   "scale": "2**l",
+   "span": "26",
+   "depends_on": [
+    "csf_scale"
+   ],
+   "notes": "13-tap sigma3 blur x2 passes x3ch + fold pow/div terms",
+   "levels": "NL"
+  },
+  {
+   "id": "band_pool",
+   "name": "lp_norm(BETA_SPATIAL=2) per band x3 ch",
+   "source": [
+    "crates/cvvdp/src/kernels/pool.rs:120-148",
+    "crates/cvvdp/src/host_scalar.rs:244-246"
+   ],
+   "images": 1,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "pow": 3,
+    "add": 6,
+    "abs": 3,
+    "load": 3
+   },
+   "bytes_read": 12,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "2**l",
+   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
+   "barrier": true,
+   "depends_on": [
+    "mask_fold"
+   ],
+   "notes": "safe_pow_lp per elem x3ch + running sum",
+   "levels": "NL"
+  },
+  {
+   "id": "final",
+   "name": "band/ch lp_norm weights + met2jod",
+   "source": [
+    "crates/cvvdp/src/kernels/pool.rs:267-292"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "mul": 30,
+    "add": 30,
+    "pow": 30,
+    "div": 3
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "band_pool"
+   ]
+  }
+ ]
+}

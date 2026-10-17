@@ -1,0 +1,122 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "zensim",
+ "cli_names": [
+  "zensim"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "zensim sibling repo zensim/src/{metric,profile,feature_v2}.rs; ZensimProfile::B = blur_radius 5, blur_passes 1, num_scales 4, extended+IW features, MLP bake.",
+  "compute_channel_scale_v2 strip pipeline (STRIP_ROWS=128, HALO_P=10): fused_blur_h_ssim_banded computes 4 moment planes (mu1,mu2,ssq,s12) + 4 V box blurs (r=5, 11 taps) + activity chain (abs + extra blur pass).",
+  "APPROXIMATE: dense_block_kernel/gradient_block_kernel are large fused kernels; per-elem op counts here are stage estimates from kernel source structure (feature_v2.rs:4450-4700, 7031-7198) not instruction-exact.",
+  "scale dims: D_s = ceil(W/2^s)*ceil(H/2^s), s=0..3; 3 channels.",
+  "MLP bake: fixed ~600-feature -> hidden MLP; counted as constant 100k fma (estimate; unknowns list exact dims)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "rgb->3ch planes + pad<64",
+   "source": [
+    "../../zensim/zensim/src/feature_v2.rs:1576-1650"
+   ],
+   "images": 1,
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "mul": 2,
+    "add": 1,
+    "store": 1,
+    "cvt": 1
+   },
+   "access": "pointwise"
+  },
+  {
+   "id": "moments",
+   "name": "fused 11-tap H moments x4 + 4 V blurs + activity",
+   "source": [
+    "../../zensim/zensim/src/feature_v2.rs:4185-4450"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 88,
+    "add": 84,
+    "load": 40,
+    "store": 16,
+    "fma": 8
+   },
+   "levels": 4,
+   "scale": "2**l",
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 5
+  },
+  {
+   "id": "dense",
+   "name": "dense_block_kernel (SSIM/art/det/mse/hf/iw terms, ~60 vec ops)",
+   "source": [
+    "../../zensim/zensim/src/feature_v2.rs:4450-4700"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 20,
+    "add": 20,
+    "fma": 15,
+    "abs": 4,
+    "cmp": 6,
+    "div": 2,
+    "load": 12,
+    "store": 8
+   },
+   "levels": 4,
+   "scale": "2**l",
+   "access": "pointwise"
+  },
+  {
+   "id": "gradient",
+   "name": "gradient_block_kernel (gms bank x5 + bandvis + chroma)",
+   "source": [
+    "../../zensim/zensim/src/feature_v2.rs:7031-7198"
+   ],
+   "images": 1,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 15,
+    "add": 15,
+    "abs": 6,
+    "cmp": 10,
+    "sqrt": 1,
+    "load": 8,
+    "store": 5
+   },
+   "levels": 4,
+   "scale": "2**l",
+   "access": "stencil2d",
+   "radius": 1
+  },
+  {
+   "id": "mlp",
+   "name": "feature fold + MLP bake (est)",
+   "source": [
+    "../../zensim/zensim/src/metric.rs:1-200"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 100000,
+    "add": 1000
+   },
+   "access": "block"
+  }
+ ]
+}

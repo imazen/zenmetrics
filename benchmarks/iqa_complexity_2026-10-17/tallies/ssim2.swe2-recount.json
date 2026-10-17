@@ -1,0 +1,193 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ssim2",
+ "cli_names": [
+  "ssim2"
+ ],
+ "counter": "swe2-recount",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "sibling_commits": {
+  "fast-ssim2": "99b98cb96928caf37f93aa837180988520b09430"
+ },
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "ssim2 -> zenmetrics_api::MetricKind::Ssim2 -> fast_ssim2::compute_ssimulacra2 (mod.rs:2497-2502, cpu_dispatch.rs:29-36; ../fast-ssim2/fast-ssim2/src/lib.rs:227-232,420-487): no-alpha u8 path = one eval(0.5) -> linearize x2 -> compute_planar_stop, CubeRoot flavor, SIMD kernel (bit-identical to scalar).",
+  "linearize: 256-entry lcms LUT gather per channel per px (pipeline/mod.rs:187+).",
+  "6 scales gated on PRE-downsample dims >=8 (mod.rs:687-692). Per scale: downsample_planes x2 (4add? 3add+mul0.25+4 clamped loads per out px, pipeline/mod.rs:318-356), XYB convert x2 (opsin 9mul+~9add + 3x CubeRootAndAdd ~ mul8 fma4 intops + bias/mkpositive ~9 add => ~mul45 add20 fma12), 15 channel-blurs FastGaussian sigma1.5 (5 jobs x 3ch covering both imgs, pipeline/mod.rs:714-780).",
+  "FastGaussian recursive (gauss.rs:155-): per px per 1D pass: 2 loads + 1 add (sum) + per 3 pole-outputs (mul + 2 fma) + 2 add out => mul3 fma6 add5 load2 store1; x2 passes per channel-blur => mul6 fma12 add10 load4 store2; x15 blurs/scale.",
+  "SIMD path fuses product reads: 3 of 5 jobs add +1 mul per px; scalar materializes mul planes (same flops).",
+  "maps_fused (maps.rs:30-146,149-): per px per ch ssim: mu products 3mul + dm/num_m (sub+fma) + num_s (mul+sub+add) + denom (2sub+add) + q (mul+div) + f64 (sub+max+2add) + tothe4th 2mul => mul9 add8 fma1 div1 cmp1 cvt1; edge: 2sub+2abs+2add+div+d1sub + 2cmp + 4 f64add + 2x tothe4th 4mul => mul4 add7 div1 abs2 cmp2. Combined ~ mul14 add15 div2 abs2 cmp3 fma1 cvt1 per px-ch.",
+  "score (score.rs:30-54): 3ch x scales x 2 norms x 3 weighted-abs fma (f64) + polynomial + powf \u2014 scalar."
+ ],
+ "stages": [
+  {
+   "id": "linearize",
+   "name": "sRGB->linear lcms LUT x3ch",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:187-220"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 3,
+    "store": 3
+   },
+   "bytes_read": 3,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "notes": "3 LUT gathers/px"
+  },
+  {
+   "id": "down",
+   "name": "2x2 box downsample, levels 0-5",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:318-356",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:701-704"
+   ],
+   "images": 2,
+   "levels": 6,
+   "elements": "3*ceil(W/(2**(l+1)))*ceil(H/(2**(l+1)))",
+   "precision": "f32",
+   "ops": {
+    "add": 3,
+    "mul": 1,
+    "load": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 1,
+   "scale": "2**l",
+   "chain": true,
+   "span": "4",
+   "depends_on": [
+    "linearize"
+   ],
+   "notes": "edge-clamped indices"
+  },
+  {
+   "id": "xyb",
+   "name": "linear->XYB CubeRootAndAdd, per scale",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/xyb.rs:36-116",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:707-712"
+   ],
+   "images": 2,
+   "levels": 6,
+   "elements": "ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 45,
+    "add": 20,
+    "fma": 12,
+    "load": 3,
+    "store": 3
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "2**l",
+   "span": "1",
+   "depends_on": [
+    "linearize",
+    "down"
+   ],
+   "notes": "opsin 3x3 + 3 cbrt (3 Newton fma each) + bias"
+  },
+  {
+   "id": "blur15",
+   "name": "15 channel-blurs FastGaussian sigma1.5 (h+v)",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/gauss.rs:155-320",
+    "../fast-ssim2/fast-ssim2/src/pipeline/mod.rs:714-780"
+   ],
+   "images": 1,
+   "levels": 6,
+   "elements": "5*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "f32",
+   "ops": {
+    "mul": 19,
+    "add": 31,
+    "fma": 24,
+    "load": 8,
+    "store": 4
+   },
+   "bytes_read": 32,
+   "bytes_written": 16,
+   "access": "sep_stencil",
+   "axis": "xy",
+   "radius": 5,
+   "scale": "2**l",
+   "span": "W*2",
+   "depends_on": [
+    "xyb"
+   ],
+   "notes": "per ch-blur per px: 2 passes x (3mul+6fma+5add+2load) + 3/5 jobs +1 fused product mul; elements cover both imgs' xyb planes + products"
+  },
+  {
+   "id": "maps",
+   "name": "ssim+edge fused map sums, per scale",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/maps.rs:30-146"
+   ],
+   "images": 1,
+   "levels": 6,
+   "elements": "3*ceil(W/(2**l))*ceil(H/(2**l))",
+   "precision": "mixed",
+   "ops": {
+    "mul": 14,
+    "add": 15,
+    "div": 2,
+    "abs": 2,
+    "cmp": 3,
+    "fma": 1,
+    "cvt": 1,
+    "load": 7
+   },
+   "bytes_read": 28,
+   "access": "reduction",
+   "radius": 5,
+   "scale": "2**l",
+   "span": "log2(ceil(W/(2**l))*ceil(H/(2**l)))",
+   "barrier": true,
+   "depends_on": [
+    "blur15",
+    "xyb"
+   ],
+   "notes": "f32 quotient, f64 sums; tothe4th = 2 mul each x3 terms"
+  },
+  {
+   "id": "final",
+   "name": "weighted-abs walk + polynomial + powf",
+   "source": [
+    "../fast-ssim2/fast-ssim2/src/pipeline/score.rs:30-54"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "fma": 108,
+    "abs": 108,
+    "mul": 6,
+    "add": 2,
+    "pow": 1,
+    "cmp": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "maps"
+   ],
+   "notes": "3ch x 6scales x 2norms x 3 weighted terms"
+  }
+ ]
+}

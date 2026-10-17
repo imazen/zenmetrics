@@ -1,0 +1,112 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "metric": "ssim-pyiqa",
+ "cli_names": [
+  "ssim-pyiqa"
+ ],
+ "derived": {},
+ "assumptions": [
+  "ssim-pyiqa -> ssim_pyiqa::score(r,d,color=false,multiscale=false,rounded=true,factor=1) (mod.rs:2751-2781,726-749; ssim_pyiqa.rs:13-63): BT.601 luma, round_ties_even, single 11x11 Gaussian scale.",
+  "plane() (ssim_pyiqa.rs:65-93) per px per img: 3 u8->f64 cvt + 3mul+2add + round(cvt) + store.",
+  "boxdown factor 1 = copy (ssim_pyiqa.rs:95-113).",
+  "statistics() (ssim_pyiqa.rs:138-193) h-pass per out elem: 11 taps x (2load + ar*ar,br*br,ar*br 3mul + 5 w*m fma) = 88mul+55add+22load; v-pass per valid elem 11x(5mul+5add+5load) + cs (5mul+4add+1div+1cmp max0) + lum (5mul+3add+1div) + 2 accum adds.",
+  "C1=6.5025 C2=58.5225 (K1=0.01,K2=0.03,L=255). cs clipped >=0."
+ ],
+ "stages": [
+  {
+   "id": "plane",
+   "name": "BT.601 luma round_ties_even -> f64",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:65-93"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 4,
+    "mul": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "hfilter",
+   "name": "h Gaussian moments (5 accums, 11-tap ring)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:150-173"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": 88,
+    "add": 55,
+    "load": 22,
+    "store": 5
+   },
+   "bytes_read": 16,
+   "bytes_written": 40,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 5,
+   "span": "11",
+   "depends_on": [
+    "plane"
+   ]
+  },
+  {
+   "id": "vfilter_ssim",
+   "name": "v moments + cs/ssim terms + sums",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:175-193"
+   ],
+   "images": 1,
+   "elements": "(W-10)*(H-10)",
+   "precision": "f64",
+   "ops": {
+    "mul": 66,
+    "add": 64,
+    "load": 55,
+    "div": 2,
+    "cmp": 2
+   },
+   "bytes_read": 440,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 5,
+   "span": "11",
+   "depends_on": [
+    "hfilter"
+   ]
+  },
+  {
+   "id": "final",
+   "name": "ssim mean only (multiscale=false)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:46-49",
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:192-193"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 2
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "vfilter_ssim"
+   ]
+  }
+ ]
+}

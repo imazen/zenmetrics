@@ -1,0 +1,338 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "vsi-nodownscale",
+ "cli_names": [
+  "vsi-nodownscale"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "F": "1",
+  "WD": "ceil(W/F)",
+  "HD": "ceil(H/F)",
+  "SY": "min(1,256/H)",
+  "SX": "min(1,256/W)",
+  "TY": "ceil(2/SY)+2",
+  "TX": "ceil(2/SX)+2",
+  "UY": "ceil(2/min(1,H/256))+2",
+  "UX": "ceil(2/min(1,W/256))+2"
+ },
+ "assumptions": [
+  "vsi = vsi::vsi_rgb8 -> vsi_planes on rgb8_planes opponent channels L=0.06R+0.63G+0.27B, M=0.30R+0.04G-0.35B, N=0.34R-0.60G+0.17B plus a planar RGB copy for SDSP (kernel.rs:731-783).",
+  "SDSP per image (kernel.rs:1068-1189): antialiased-bilinear imresize of R,G,B to 256x256 (two separable passes, triangle kernel broadened to support 2/scale on shrink, normalized weights), sRGB->Lab D50 (scalar f64: 3 lin() pow paths, 3x3 XYZ matrix, 3 f() cube-root pows, Lab outputs), per-channel fft2 + log-Gabor multiply + ifft2, magnitude accumulate, cached centre prior multiply, warm-colour prior (minmax scan + normalize + expf + fold), imresize back to WxH, mat2gray.",
+  "imresize tap count: shrink support 2/scale rounded up plus the pad window gives ~ceil(2/scale)+2 weighted taps per output (kernel.rs:93-208); each tap is one mul + one add (weights normalized at table build). Upscale taps ~3.",
+  "fft2 per channel (fft.rs): N=256 radix-2; per output element of the 2-D transform ~log2(N) butterflies per axis direction = 8 butterflies x (4 mul + 4 add); counted for both fft2 and ifft2; twiddle table setup is per-process and excluded.",
+  "Log-Gabor grid and Gaussian centre window are LazyLock per-process constants (kernel.rs:1020-1061, 1128-1145) - counted once here as elements=1 stages' worth omitted (constant, not per-image).",
+  "Decimation F=max(1,round(min(w,h)/256)) (kernel.rs:30-32); conv2(ones(F)/F^2,'same') + decimate on L,M,N,SM per image = 5 planes. h-pass keeps only retained columns (w2*h tmp), v-pass F adds + 1 mul (kernel.rs:1198-1236).",
+  "Scharr magnitude on decimated luma: two conv2_same_3x3 (9 mul + 8 add each, zero-padded 'same') + sqrtf(gx^2+gy^2) per image.",
+  "Pool (kernel.rs:1451-1545): per element four similarity terms (2ab+C)/(a^2+b^2+C) [each mul4 add3 div1], powf(gsim,ALPHA), iq=isim*qsim, sign-select + powf(|iq|,LAMBDA) + cos blend, max(sm1,sm2) weight, contrib=gpow*vssim*iqreal*w, f64 accumulate. NaN semantics per reference.",
+  "Span: SDSP fft is a barrier (global); pooling is a barrier reduction. Quality map not emitted by the scored path (map=None).",
+  "vsi-nodownscale = Downscale::Factor(1); pipeline runs at native res."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "opponent L/M/N dots + planar RGB copy",
+   "source": [
+    "crates/vsi/src/kernel.rs:615-731",
+    "crates/vsi/src/kernel.rs:731-783",
+    "crates/vsi/src/lib.rs:129-147"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f32",
+   "ops": {
+    "load": 3,
+    "cvt": 12,
+    "mul": 9,
+    "add": 6,
+    "store": 6
+   },
+   "bytes_read": 3,
+   "bytes_written": 24,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "notes": "3 dots (3 mul + 2 add + 3 cvt each) + 3 rgb cvt/stores"
+  },
+  {
+   "id": "sdsp_resize_in",
+   "name": "SDSP imresize channels -> 256x256 (two separable passes)",
+   "source": [
+    "crates/vsi/src/kernel.rs:1072-1075",
+    "crates/vsi/src/kernel.rs:225-534"
+   ],
+   "images": 2,
+   "elements": "3*(W*256 + 256*256)",
+   "precision": "f32",
+   "ops": {
+    "mul": "TY",
+    "add": "TY",
+    "load": "TY",
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "resample",
+   "radius": "max(TY,TX)/2",
+   "scale": "min(W,H)/256",
+   "span": "1",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": "col pass emits 3*W*256, row pass 3*256*256; taps ~ceil(2/scale)+2",
+   "axis": "xy"
+  },
+  {
+   "id": "sdsp_lab",
+   "name": "sRGB->Lab (D50) on 256x256 per channel set",
+   "source": [
+    "crates/vsi/src/kernel.rs:791-1018",
+    "crates/vsi/src/kernel.rs:1076-1105"
+   ],
+   "images": 2,
+   "elements": "256*256",
+   "precision": "f64",
+   "ops": {
+    "div": 8,
+    "add": 12,
+    "mul": 12,
+    "cmp": 6,
+    "pow": 6,
+    "cvt": 6,
+    "load": 3,
+    "store": 3
+   },
+   "bytes_read": 12,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "256/min(W,H)",
+   "span": "1",
+   "depends_on": [
+    "sdsp_resize_in"
+   ],
+   "notes": "per px: 3 lin() (div+cmp+add+div+pow) + 3x3 XYZ (9mul+6add) + 3 f() (cmp+pow) + Lab out (3mul+3add); common pow path counted"
+  },
+  {
+   "id": "sdsp_gabor",
+   "name": "log-Gabor bandpass per channel: fft2, LG multiply, ifft2",
+   "source": [
+    "crates/vsi/src/kernel.rs:1106-1116"
+   ],
+   "images": 2,
+   "elements": "3*256*256",
+   "precision": "f32",
+   "ops": {
+    "mul": 66,
+    "add": 64,
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 8,
+   "access": "transform",
+   "radius": 0,
+   "scale": "256/min(W,H)",
+   "span": "log2(256)",
+   "barrier": true,
+   "depends_on": [
+    "sdsp_lab"
+   ],
+   "notes": "fft2+ifft2 ~8 butterflies/elem x (4mul+4add) + LG mul2 on the complex pair"
+  },
+  {
+   "id": "sdsp_mag_prior",
+   "name": "magnitude sqrt, centre prior mul, warm-colour prior",
+   "source": [
+    "crates/vsi/src/kernel.rs:1117-1176"
+   ],
+   "images": 2,
+   "elements": "256*256",
+   "precision": "f32",
+   "ops": {
+    "mul": 7,
+    "add": 5,
+    "div": 3,
+    "sqrt": 1,
+    "exp": 1,
+    "cmp": 4,
+    "load": 4,
+    "store": 1
+   },
+   "bytes_read": 12,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": "256/min(W,H)",
+   "span": "1",
+   "depends_on": [
+    "sdsp_gabor"
+   ],
+   "notes": "3x re^2 fma + sqrtf + GW mul + minmax 4cmp + (norm 2sub 2div + d2 2mul 1add + arg div + expf + (1-e)add + mul)"
+  },
+  {
+   "id": "sdsp_resize_out",
+   "name": "imresize 256x256 -> W x H + mat2gray",
+   "source": [
+    "crates/vsi/src/kernel.rs:1177-1188",
+    "crates/vsi/src/kernel.rs:225-534"
+   ],
+   "images": 2,
+   "elements": "256*H + W*H",
+   "precision": "f32",
+   "ops": {
+    "mul": "UY",
+    "add": "UY",
+    "load": "UY",
+    "store": 1,
+    "cmp": "2/(UY+1)",
+    "div": "1/(UY+1)"
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "resample",
+   "radius": "max(UY,UX)/2",
+   "scale": 1,
+   "span": "1",
+   "depends_on": [
+    "sdsp_mag_prior"
+   ],
+   "notes": "upscale taps ~3-4; mat2gray min/max scan (2cmp) + (v-lo)/range amortized over taps",
+   "axis": "xy"
+  },
+  {
+   "id": "decimate_h",
+   "name": "box-filter h-pass on retained cols of L,M,N,SM",
+   "source": [
+    "crates/vsi/src/kernel.rs:1198-1220",
+    "crates/vsi/src/kernel.rs:1392-1407"
+   ],
+   "images": 2,
+   "elements": "5*WD*H",
+   "precision": "f32",
+   "ops": {
+    "add": "F",
+    "load": "F",
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": "F/2",
+   "scale": 1,
+   "span": "F",
+   "depends_on": [
+    "ingress",
+    "sdsp_resize_out"
+   ],
+   "axis": "x"
+  },
+  {
+   "id": "decimate_v",
+   "name": "box-filter v-pass + 1/F^2 scale",
+   "source": [
+    "crates/vsi/src/kernel.rs:1221-1236"
+   ],
+   "images": 2,
+   "elements": "5*WD*HD",
+   "precision": "f32",
+   "ops": {
+    "add": "F",
+    "load": "F",
+    "mul": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "sep_stencil",
+   "radius": "F/2",
+   "scale": "F",
+   "span": "F",
+   "depends_on": [
+    "decimate_h"
+   ],
+   "axis": "y"
+  },
+  {
+   "id": "scharr",
+   "name": "Scharr gx,gy conv2 3x3 + magnitude on decimated luma",
+   "source": [
+    "crates/vsi/src/kernel.rs:1284-1327",
+    "crates/vsi/src/kernel.rs:1408"
+   ],
+   "images": 2,
+   "elements": "2*WD*HD",
+   "precision": "f32",
+   "ops": {
+    "mul": 9,
+    "add": 9,
+    "load": 9,
+    "store": 1,
+    "sqrt": "0.5"
+   },
+   "bytes_read": 4,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "radius": 1,
+   "scale": "F",
+   "span": "1",
+   "depends_on": [
+    "decimate_v"
+   ],
+   "notes": "two 3x3 convs (zero-pad 'same'); sqrt(gx^2+gy^2) costs per luma elem -> half per conv-out elem; mul/add per tap 9 incl accumulate",
+   "axis": "xy"
+  },
+  {
+   "id": "pool",
+   "name": "4-term similarity + powers + weighted pool",
+   "source": [
+    "crates/vsi/src/kernel.rs:1451-1545"
+   ],
+   "images": 1,
+   "elements": "WD*HD",
+   "precision": "mixed",
+   "ops": {
+    "mul": 21,
+    "add": 14,
+    "div": 4,
+    "pow": 2,
+    "cmp": 3,
+    "cvt": 2,
+    "load": 8
+   },
+   "bytes_read": 32,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": "F",
+   "span": "log2(WD*HD)",
+   "barrier": true,
+   "depends_on": [
+    "scharr",
+    "decimate_v"
+   ],
+   "notes": "vssim/gsim/isim/qsim each mul4 add3 div1; powf x2; sign-select ops approx; contrib mul3; f64 adds+cvt"
+  },
+  {
+   "id": "final",
+   "name": "score = num/den",
+   "source": [
+    "crates/vsi/src/kernel.rs:1544"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "pool"
+   ]
+  }
+ ]
+}

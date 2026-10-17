@@ -1,0 +1,172 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "classic-fr",
+ "params": {},
+ "metric": "ms-ssim-pyiqa-f32-k2",
+ "cli_names": [
+  "ms-ssim-pyiqa-f32-k2"
+ ],
+ "derived": {},
+ "assumptions": [
+  "ms-ssim-pyiqa -> ssim_pyiqa::score(r,d,false,true,true,1): same plane+statistics per scale; 5 scales with pool2 (zero-top-left-pad 2x2 avg) between; product = prod cs_i^w_i * ssim_4^w_4 (ssim_pyiqa.rs:39-62).",
+  "pool2 (ssim_pyiqa.rs:117-136) per out elem: up to 4 guarded adds + mul 0.25 + store; ~3add+1mul avg + 4cmp.",
+  "Scale s elements: (ceil(W/2^s))x(ceil(H/2^s)); statistics valid region (w-10)x(h-10); 5 levels.",
+  "Per-scale powf on scalar; final div.",
+  "fixed downscale factor 2 before 5-level pyramid."
+ ],
+ "stages": [
+  {
+   "id": "plane",
+   "name": "BT.601 luma round_ties_even -> f64",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:65-93"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "cvt": 4,
+    "mul": 3,
+    "add": 2,
+    "store": 1
+   },
+   "bytes_read": 3,
+   "bytes_written": 8,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1"
+  },
+  {
+   "id": "decimate",
+   "name": "box decimation factor 2",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:60-90"
+   ],
+   "images": 1,
+   "elements": "ceil(floor(W/2)/2)*ceil(floor(H/2)/2)",
+   "precision": "f32",
+   "ops": {
+    "add": 3,
+    "mul": 1,
+    "load": 4,
+    "store": 1
+   },
+   "access": "downsample",
+   "radius": 0,
+   "span": "1",
+   "notes": "2x2 box mean then strided pick",
+   "depends_on": [
+    "plane"
+   ]
+  },
+  {
+   "id": "hfilter",
+   "name": "h Gaussian moments, levels 5",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:150-173"
+   ],
+   "images": 2,
+   "elements": "ceil(floor(W/2)/(2**l))*ceil(floor(H/2)/(2**l))",
+   "precision": "f64",
+   "levels": 5,
+   "ops": {
+    "mul": 88,
+    "add": 55,
+    "load": 22,
+    "store": 5
+   },
+   "bytes_read": 16,
+   "bytes_written": 40,
+   "access": "sep_stencil",
+   "axis": "x",
+   "radius": 5,
+   "scale": "2**l",
+   "span": "11",
+   "depends_on": [
+    "plane"
+   ]
+  },
+  {
+   "id": "vfilter_ssim",
+   "name": "v moments + cs/ssim + sums, levels 5",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:175-193"
+   ],
+   "images": 1,
+   "elements": "(ceil(floor(W/2)/(2**l))-10)*(ceil(floor(H/2)/(2**l))-10)",
+   "precision": "f64",
+   "levels": 5,
+   "ops": {
+    "mul": 66,
+    "add": 64,
+    "load": 55,
+    "div": 2,
+    "cmp": 2
+   },
+   "bytes_read": 440,
+   "access": "sep_stencil",
+   "axis": "y",
+   "radius": 5,
+   "scale": "2**l",
+   "span": "11",
+   "depends_on": [
+    "hfilter"
+   ]
+  },
+  {
+   "id": "pool2",
+   "name": "2x2 avg pool levels 0-3 (x2 imgs)",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:117-136",
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:52-58"
+   ],
+   "images": 2,
+   "elements": "ceil(floor(W/2)/(2**(l+1)))*ceil(floor(H/2)/(2**(l+1)))",
+   "precision": "f64",
+   "levels": 4,
+   "ops": {
+    "add": 3,
+    "mul": 1,
+    "load": 4,
+    "cmp": 4,
+    "store": 1
+   },
+   "bytes_read": 32,
+   "bytes_written": 8,
+   "access": "downsample",
+   "axis": "xy",
+   "radius": 1,
+   "scale": "2**l",
+   "chain": true,
+   "span": "4",
+   "depends_on": [
+    "hfilter"
+   ]
+  },
+  {
+   "id": "final",
+   "name": "weighted power product + means",
+   "source": [
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:39-62",
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs:192-193"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 10,
+    "pow": 5,
+    "mul": 5,
+    "add": 5
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "vfilter_ssim"
+   ]
+  }
+ ]
+}

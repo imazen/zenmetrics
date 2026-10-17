@@ -1,0 +1,90 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "wadiqam-fr-tid",
+ "cli_names": [
+  "wadiqam-fr-tid",
+  "wadiqam_fr_tid"
+ ],
+ "counter": "swe2",
+ "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
+ "kind": "full-reference",
+ "assumptions": [
+  "trunk 66945024 MACs + head 5242880 MACs per 32x32 patch-pair (wadiqam_fr_tid_{trunk,head}.onnx)",
+  "partial edge patches dropped (upstream extract_patches)"
+ ],
+ "stages": [
+  {
+   "id": "patches",
+   "name": "u8->f32 + 32x32 stride-32 grid, 6ch ref|dist concat",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:200-400",
+    "crates/zenmetrics-nn/models/wadiqam/card.toml:30-45"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)*1024",
+   "precision": "f32",
+   "ops": {
+    "load": 6,
+    "store": 6
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "32"
+  },
+  {
+   "id": "trunk",
+   "name": "per-patch conv trunk (6ch)",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:200-450"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 66945024,
+    "add": 190000
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "32"
+  },
+  {
+   "id": "head",
+   "name": "per-patch head 2048->512->1",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:400-520"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "fma": 5242880,
+    "add": 1036
+   },
+   "access": "block",
+   "axis": "xy",
+   "class": "intrinsic",
+   "span": "1"
+  },
+  {
+   "id": "pool",
+   "name": "mean over patches",
+   "source": [
+    "crates/zenmetrics-nn/src/wadiqam.rs:500-751"
+   ],
+   "images": 1,
+   "elements": "floor(W/32)*floor(H/32)",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "div": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "class": "intrinsic",
+   "span": "W"
+  }
+ ]
+}

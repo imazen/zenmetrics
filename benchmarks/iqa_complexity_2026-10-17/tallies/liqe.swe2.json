@@ -1,0 +1,33 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "liqe",
+ "cli_names": [
+  "liqe"
+ ],
+ "counter": "swe2",
+ "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "kind": "nn-nr",
+ "params": {},
+ "derived": {},
+ "assumptions": [
+  "liqe_full.onnx: CLIP ViT-B/32 over 15 identical top-left 224^2 patches (upstream sel convention); onnx_macs.py at [15,3,224,224] -> 66,135,974,400 MACs + 402,727,909 elems; constant per image."
+ ],
+ "stages": [
+  {
+   "id": "graph",
+   "name": "liqe ViT-B/32 x15 + 495-prompt head",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 66135974400,
+    "add": 201363955,
+    "mul": 201363955
+   },
+   "access": "block"
+  }
+ ]
+}
