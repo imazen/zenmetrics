@@ -212,7 +212,7 @@ def main():
     rpts = []
     wt_res = json.loads((HERE/'weights_i265_P_rthroughput.json').read_text())['weights']
     resid = []
-    for m, (t, r) in sorted(tal.items(), key=lambda kv: -kv[1][1]['flops_per_px']):
+    for m, (t, r) in sorted(tal.items(), key=lambda kv: (-kv[1][1]['flops_per_px'], kv[0])):
         tot = r['flops_per_px'] or 1
         acc = r['flops_per_px_by_access']
         shares = [sum(acc.get(k, 0) for k in ks) / tot for ks in groups.values()]
