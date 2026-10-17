@@ -1689,8 +1689,8 @@ Its proposed floor increases were rejected and its temporary promotion reverted.
 Owner direction 2026-10-17: retain every frozen limit and classification.
 Measure each arithmetic change independently on all 48 rows; retain it only
 if every limit and native control passes and no row residual increases.
-Epsilon and ORG2R-order changes pass all limits but worsen 18/24 residuals
-respectively; removing small-N scaling fails eight frozen limits. Those
+Epsilon and ORG2R-order changes pass all limits but worsen 18 and 24 of the
+48 residuals, respectively; removing small-N scaling fails eight frozen limits. Those
 three changes are rejected; five isolated candidates remain unmeasured.
 Source identities, complete rows, resource receipts and historical experiments
 are linked from [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md)
