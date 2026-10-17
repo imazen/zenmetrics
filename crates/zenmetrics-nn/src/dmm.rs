@@ -1,4 +1,4 @@
-//! Isolated bisection experiment: small_n_scaling; not qualified for shipping.
+//! Isolated bisection experiment: org2r_order; not qualified for shipping.
 //! DMM (Chen et al., "Debiased Mapping for Full-Reference Image Quality
 //! Assessment", IEEE TIP 2025; upstream `Baoliang93/DMM`, MIT, pip
 //! `DMM_PyTorch`). Parity target: the upstream package, CPU, fp32.
@@ -872,9 +872,12 @@ fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
                 for r in (i + 1)..16 {
                     w += a[r * 16 + i] * a[r * 16 + c];
                 }
-                a[i * 16 + c] -= tau * w;
+                // SGER forms TEMP = (-tau) * w before X(r) * TEMP.
+                // Keeping that grouping matters in degenerate SVD clusters.
+                let temp = -tau * w;
+                a[i * 16 + c] += temp;
                 for r in (i + 1)..16 {
-                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
+                    a[r * 16 + c] += a[r * 16 + i] * temp;
                 }
             }
         }
@@ -1291,8 +1294,25 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
     dgebd2(&mut a, &mut d, &mut e, &mut tq);
     // a now holds reflector tails below diag; build Q1 in place
     dorg2r_q(&mut a, &tq); // a <- Q1
-    let mut ds = d;
-    let mut es = e;
+    // dbdsdc scale
+    let orgnrm = d
+        .iter()
+        .fold(0.0f32, |m, &x| m.max(x.abs()))
+        .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
+    if orgnrm == 0.0 {
+        let mut s = [0f32; 16];
+        let u = a; // Q1 (identity for zero matrix)
+        s.copy_from_slice(&d);
+        return (u, s);
+    }
+    let mut ds = [0f32; 16];
+    let mut es = [0f32; 15];
+    for i in 0..16 {
+        ds[i] = d[i] / orgnrm;
+    }
+    for i in 0..15 {
+        es[i] = e[i] / orgnrm;
+    }
     let mut ub = [0f32; 256];
     for i in 0..16 {
         ub[i * 16 + i] = 1.0;
@@ -1316,7 +1336,7 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             }
         }
     }
-    // U = Q1 @ Ub; no small-N bidiagonal scaling
+    // U = Q1 @ Ub ; s = ds * orgnrm
     let mut u = [0f32; 256];
     for i in 0..16 {
         for j in 0..16 {
@@ -1327,7 +1347,11 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             u[i * 16 + j] = acc;
         }
     }
-    (u, ds)
+    let mut s = [0f32; 16];
+    for i in 0..16 {
+        s[i] = ds[i] * orgnrm;
+    }
+    (u, s)
 }
 
 #[cfg(test)]
