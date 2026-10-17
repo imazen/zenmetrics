@@ -1,0 +1,20 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/i265-qualified-progress-0230.jsonl",
+  "raw_sha256": "657e15d14013b7554227dbeb43f6cf0e258dc79723e4343eb936a1a8a813688d",
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+  "expected_cells": 1080,
+  "present_requested_cells": 774,
+  "status_counts": {
+    "ok": 449,
+    "unsupported": 291,
+    "variant_mismatch": 4,
+    "skipped": 30
+  },
+  "extra_cells": 24,
+  "complete": false,
+  "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+  "missing_count": 306,
+  "pending_count": 19,
+  "full_receipt": "/home/lilith/tmp/iqa-compete/coverage-frozen-recipe-0230.json"
+}

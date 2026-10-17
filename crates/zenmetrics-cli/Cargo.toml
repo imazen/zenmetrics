@@ -51,8 +51,7 @@ nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
 nr = ["dep:piqe", "dep:niqe", "dep:brisque", "dep:zenmetrics-abstractions"]
 
-# Compatibility feature: alpha policy is fundamental to every decoder build.
-# Keep this flag for existing callers; the API dependency is unconditional.
+# Alpha channel handling and compositing via the fundamental zenmetrics-api layer
 alpha = []
 
 # Decoder feature flags
@@ -605,7 +604,6 @@ imgref = { version = "1", optional = true }
 # / `gpu-cvvdp`. Keeping it optional means a CLI build with neither of
 # those two metrics enabled (e.g. ssim2-only worker) still avoids the
 # cubecl dependency entirely.
-# Decoder alpha-policy types are required even with no scoring features.
 zenmetrics-api = { workspace = true, default-features = false }
 # Direct dep for hdr.rs's HLG→nits path (`cvvdp::params::hlg_*` — BT.2100
 # inverse-OETF + system gamma; the in-repo reference implementation). The

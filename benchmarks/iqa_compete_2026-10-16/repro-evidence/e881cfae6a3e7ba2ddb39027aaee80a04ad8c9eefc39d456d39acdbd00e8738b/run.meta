@@ -1,0 +1,86 @@
+commit = d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6
+host = i265
+os = Linux
+command = just bench-iqa cid22,aic-small ssim2,gmsd --host i265 --corpus /home/lilith/tmp/aic-sub/img --skip-python --cache /home/lilith/tmp/iqa-compete/round17-cache --build-cache /home/lilith/tmp/zenmetrics-lock-snap-iqa-compete
+{
+  "identity": {
+    "commit": "d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6",
+    "host": "i265",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "hardware": {
+      "cpu_model": "Intel(R) Core(TM) Ultra 7 265K",
+      "arch": "x86_64",
+      "gpu": "NVIDIA GeForce RTX 4080",
+      "simd_tier": "v3-capable"
+    },
+    "input_manifest_sha256": "1d1c2b2f43e8f463dc644fc36a8b9fc2fafb083b59213835ccc9d24e45d77e06",
+    "binaries": {
+      "rust": "6b1bf0928fba530d23f6e849fa5f2d28cf39eef78f5d32b1215a4158323786d5",
+      "libjxl": "f9da3e8b1901e08c31ae3b2cc12c857e510b08ed77a200d144b29c232f6cf8eb",
+      "libvmaf": "e09113acd5a767f8c754d8ea093446a117d16d557fbd203b921177dc9f140374"
+    },
+    "gpu_runtime": "none",
+    "python_lock": null,
+    "models": {},
+    "sampling": "5 below 2K; 3 AIC-large/2K/4K; 1 8K; 1/all threads; both modes"
+  },
+  "build_commit": "d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6",
+  "content_key": "e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b",
+  "command": [
+    "just",
+    "bench-iqa",
+    "cid22,aic-small",
+    "ssim2,gmsd",
+    "--host",
+    "i265",
+    "--corpus",
+    "/home/lilith/tmp/aic-sub/img",
+    "--skip-python",
+    "--cache",
+    "/home/lilith/tmp/iqa-compete/round17-cache",
+    "--build-cache",
+    "/home/lilith/tmp/zenmetrics-lock-snap-iqa-compete"
+  ],
+  "host": "i265",
+  "hardware": {
+    "host": "i265",
+    "cpu_model": "Intel(R) Core(TM) Ultra 7 265K",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "arch": "x86_64",
+    "gpu": "NVIDIA GeForce RTX 4080",
+    "impl": "zenmetrics",
+    "impl_version": "zenmetrics-cli 0.6.0",
+    "impl_binary_sha": "6b1bf0928fba530d23f6e849fa5f2d28cf39eef78f5d32b1215a4158323786d5",
+    "device": "cpu",
+    "simd_tier": "v3-capable"
+  },
+  "sizes": "cid22,aic-small",
+  "metrics": [
+    "gmsd",
+    "ssim2"
+  ],
+  "compiler_flags": "--cfg iqa_compete_ingress --cfg iqa_compete_cached; release LTO thin; runtime dispatch",
+  "competitor_versions": {
+    "libjxl": "v0.12.0 a7a9c787",
+    "libvmaf": "3.2.0 from vmaf-head-sys 0.2.0"
+  },
+  "resource_wrapper": "/home/lilith/work/claudehints/scripts/run-heavy",
+  "resource_wrapper_present": true,
+  "toolchains": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "cmake": "cmake version 4.2.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+    "c++": "c++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "competitors": {
+    "libjxl": {
+      "url": "https://codeload.github.com/libjxl/libjxl/tar.gz/refs/tags/v0.12.0",
+      "sha256": "03e9be69a30be4011f559da75328b6d7cea8ad921fabfbd551ce10bf45cdc992"
+    },
+    "libvmaf": {
+      "url": "https://static.crates.io/crates/vmaf-head-sys/vmaf-head-sys-0.2.0.crate",
+      "sha256": "efe6ac72bb84ea796280e198f1d81454f92974e3fb4d57b021fcd9b0ff640615"
+    }
+  },
+  "python_explicitly_skipped": true
+}

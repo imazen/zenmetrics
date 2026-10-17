@@ -1,0 +1,19 @@
+{
+  "observed_utc": "2026-10-17T08:52:33.605176+00:00",
+  "rule": "After releasing i265-heavy.lock, sleep 45 seconds when pgrep -x flock reports more than one process",
+  "changes": [
+    "Batch release yields after closing its fd",
+    "Nonbatch cell yields after flock exits",
+    "Only idle controllers restarted; completed rows retained"
+  ],
+  "test_command": "just iqa-compete-batch-tests",
+  "tests_passed": 8,
+  "idle_stop_proofs": [
+    "/home/lilith/tmp/iqa-compete/fairness-stop-cpu.json",
+    "/home/lilith/tmp/iqa-compete/fairness-stop-nn-cuda.json",
+    "/home/lilith/tmp/iqa-compete/fairness-stop-pieapp.json",
+    "/home/lilith/tmp/iqa-compete/fairness-stop-libjxl.json"
+  ],
+  "rust_launch_manifest": "/home/lilith/tmp/iqa-compete/coverage-fairness-rust-restarts.json",
+  "competitor_log": "/home/lilith/tmp/iqa-compete/coverage-competitors-fairness.log"
+}

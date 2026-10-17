@@ -1,0 +1,546 @@
+[
+  {
+    "metric_name": "dssim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 4255280.5,
+    "p10_ns": 4194052.9,
+    "p90_ns": 4523871.300000001,
+    "mean_ns": 4627576.133333334,
+    "score": 0.00020119557250852793,
+    "ref_score": 0.00020119557250852793,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      2.57,
+      1.85,
+      1.3
+    ],
+    "load_after": [
+      2.57,
+      1.85,
+      1.3
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23544,
+      "peak_load": 2.57,
+      "peak_rss_gib": 0.03,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 4272791.0,
+    "p10_ns": 4198955.1,
+    "p90_ns": 4505104.2,
+    "mean_ns": 4461686.833333333,
+    "score": 0.00020119557250852793,
+    "ref_score": 0.00020119557250852793,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      2.57,
+      1.85,
+      1.3
+    ],
+    "load_after": [
+      2.57,
+      1.85,
+      1.3
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23544,
+      "peak_load": 2.57,
+      "peak_rss_gib": 0.03,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 11816775.0,
+    "p10_ns": 11099470.1,
+    "p90_ns": 12575542.6,
+    "mean_ns": 12706615.7,
+    "score": 90.66514294629586,
+    "ref_score": 90.66514294629586,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.8,
+      1.75,
+      1.33
+    ],
+    "load_after": [
+      1.8,
+      1.75,
+      1.33
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23604,
+      "peak_load": 1.8,
+      "peak_rss_gib": 0.04,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "cid22",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 12217330.0,
+    "p10_ns": 11711561.4,
+    "p90_ns": 12827238.200000001,
+    "mean_ns": 12765562.399999999,
+    "score": 90.66514294629586,
+    "ref_score": 90.66514294629586,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.8,
+      1.75,
+      1.33
+    ],
+    "load_after": [
+      1.8,
+      1.75,
+      1.33
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23604,
+      "peak_load": 1.8,
+      "peak_rss_gib": 0.04,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 1163212.375,
+    "p10_ns": 1098540.2,
+    "p90_ns": 1229804.2,
+    "mean_ns": 1165994.0666666667,
+    "score": 0.00020119557250852793,
+    "ref_score": 0.00020119557250852793,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.65,
+      1.72,
+      1.32
+    ],
+    "load_after": [
+      1.65,
+      1.72,
+      1.32
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23600,
+      "peak_load": 1.65,
+      "peak_rss_gib": 0.14,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 1137436.875,
+    "p10_ns": 1093993.8,
+    "p90_ns": 1268072.05,
+    "mean_ns": 1162392.5749999995,
+    "score": 0.00020119557250852793,
+    "ref_score": 0.00020119557250852793,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.65,
+      1.72,
+      1.32
+    ],
+    "load_after": [
+      1.65,
+      1.72,
+      1.32
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23600,
+      "peak_load": 1.65,
+      "peak_rss_gib": 0.14,
+      "seconds": 2
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 3007173.0,
+    "p10_ns": 2673286.6,
+    "p90_ns": 3640301.3000000003,
+    "mean_ns": 3101567.5666666664,
+    "score": 90.66514294629586,
+    "ref_score": 90.66514294629586,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.66,
+      1.72,
+      1.34
+    ],
+    "load_after": [
+      1.69,
+      1.72,
+      1.34
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23625,
+      "peak_load": 1.66,
+      "peak_rss_gib": 0.05,
+      "seconds": 1
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "cid22",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 3555102.5,
+    "p10_ns": 3277410.2,
+    "p90_ns": 3994174.7,
+    "mean_ns": 3612039.6,
+    "score": 90.66514294629586,
+    "ref_score": 90.66514294629586,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.66,
+      1.72,
+      1.34
+    ],
+    "load_after": [
+      1.69,
+      1.72,
+      1.34
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23625,
+      "peak_load": 1.66,
+      "peak_rss_gib": 0.05,
+      "seconds": 1
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 47342242.0,
+    "p10_ns": 46408274.2,
+    "p90_ns": 62992929.6,
+    "mean_ns": 50929452.16666668,
+    "score": 0.0010881874536206038,
+    "ref_score": 0.0010881874536206038,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.64,
+      1.71,
+      1.34
+    ],
+    "load_after": [
+      1.59,
+      1.69,
+      1.34
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23498,
+      "peak_load": 1.64,
+      "peak_rss_gib": 0.12,
+      "seconds": 4
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 48096363.5,
+    "p10_ns": 46647799.1,
+    "p90_ns": 63215257.0,
+    "mean_ns": 52093091.4,
+    "score": 0.0010881874536206038,
+    "ref_score": 0.0010881874536206038,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.64,
+      1.71,
+      1.34
+    ],
+    "load_after": [
+      1.59,
+      1.69,
+      1.34
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23498,
+      "peak_load": 1.64,
+      "peak_rss_gib": 0.12,
+      "seconds": 4
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 140056044.0,
+    "p10_ns": 125089455.9,
+    "p90_ns": 141818231.6,
+    "mean_ns": 136922321.3666667,
+    "score": 80.8442638998485,
+    "ref_score": 80.8442638998485,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.6,
+      1.69,
+      1.36
+    ],
+    "load_after": [
+      1.82,
+      1.73,
+      1.37
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23471,
+      "peak_load": 1.71,
+      "peak_rss_gib": 0.13,
+      "seconds": 10
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 142914604.5,
+    "p10_ns": 131770299.3,
+    "p90_ns": 151002303.5,
+    "mean_ns": 142390094.6,
+    "score": 80.8442638998485,
+    "ref_score": 80.8442638998485,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.6,
+      1.69,
+      1.36
+    ],
+    "load_after": [
+      1.82,
+      1.73,
+      1.37
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23471,
+      "peak_load": 1.71,
+      "peak_rss_gib": 0.13,
+      "seconds": 10
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 20370875.5,
+    "p10_ns": 18354906.0,
+    "p90_ns": 22447588.2,
+    "mean_ns": 20308649.900000006,
+    "score": 0.0010881874536206038,
+    "ref_score": 0.0010881874536206038,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.52,
+      1.67,
+      1.36
+    ],
+    "load_after": [
+      1.52,
+      1.67,
+      1.36
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 22681,
+      "peak_load": 1.52,
+      "peak_rss_gib": 0.35,
+      "seconds": 3
+    }
+  },
+  {
+    "metric_name": "dssim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 19638259.0,
+    "p10_ns": 18314336.0,
+    "p90_ns": 21872706.6,
+    "mean_ns": 20098657.200000007,
+    "score": 0.0010881874536206038,
+    "ref_score": 0.0010881874536206038,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.52,
+      1.67,
+      1.36
+    ],
+    "load_after": [
+      1.52,
+      1.67,
+      1.36
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 22681,
+      "peak_load": 1.52,
+      "peak_rss_gib": 0.35,
+      "seconds": 3
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 37042521.0,
+    "p10_ns": 36055026.6,
+    "p90_ns": 39039058.8,
+    "mean_ns": 37431535.866666675,
+    "score": 80.8442638998485,
+    "ref_score": 80.8442638998485,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.53,
+      1.65,
+      1.37
+    ],
+    "load_after": [
+      2.93,
+      1.94,
+      1.47
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23281,
+      "peak_load": 2.93,
+      "peak_rss_gib": 0.22,
+      "seconds": 4
+    }
+  },
+  {
+    "metric_name": "zensim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 53323761.5,
+    "p10_ns": 47958295.6,
+    "p90_ns": 55194538.3,
+    "mean_ns": 52566114.9,
+    "score": 80.8442638998485,
+    "ref_score": 80.8442638998485,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "e0b1f8b1baa5fa128e76b203f0bf0ebfd65675c5026f6094e3acc0f6e8932fc2",
+    "load_before": [
+      1.53,
+      1.65,
+      1.37
+    ],
+    "load_after": [
+      2.93,
+      1.94,
+      1.47
+    ],
+    "resource": {
+      "exit_code": 0,
+      "min_available_mib": 23281,
+      "peak_load": 2.93,
+      "peak_rss_gib": 0.22,
+      "seconds": 4
+    }
+  }
+]

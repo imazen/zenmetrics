@@ -1,0 +1,61 @@
+{
+  "source": "/home/lilith/tmp/iqa-compete/pieapp-cpu-bounded/chunk-attempts.jsonl",
+  "qualification": "Historical v12 partial observations only; not a ten-round timing, not combined across binary identities",
+  "actual_rounds": 4,
+  "chunks": [
+    {
+      "attempt": "cbbe926debf7",
+      "n": 2,
+      "score": 0.2189322806478667,
+      "score_bits": "3fcc05f914b5ec8b",
+      "impl_binary_sha": "667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c",
+      "log_path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-bounded/logs/pieapp-2k-20t-cbbe926debf7.log",
+      "log_sha256": "86926a2340995dc42dbf4310bb17279cb7d346e483965391a11f66c30947b068",
+      "load_before": [
+        2.54,
+        2.43,
+        2.69
+      ],
+      "load_after": [
+        14.01,
+        12.3,
+        8.94
+      ],
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 20733,
+        "peak_load": 18.01,
+        "peak_rss_gib": 0.53,
+        "seconds": 880
+      },
+      "timing_quality": "legacy_unmonitored"
+    },
+    {
+      "attempt": "bcb5ab9d5694",
+      "n": 2,
+      "score": 0.2189322806478667,
+      "score_bits": "3fcc05f914b5ec8b",
+      "impl_binary_sha": "667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c",
+      "log_path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-bounded/logs/pieapp-2k-20t-bcb5ab9d5694.log",
+      "log_sha256": "4692aee54652b456da5d324d198f7d3c56f1cdaf0790f619e7d1633813eb2e37",
+      "load_before": [
+        3.13,
+        5.21,
+        6.91
+      ],
+      "load_after": [
+        12.86,
+        12.73,
+        10.44
+      ],
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 20185,
+        "peak_load": 15.92,
+        "peak_rss_gib": 0.53,
+        "seconds": 777
+      },
+      "timing_quality": "legacy_unmonitored"
+    }
+  ]
+}

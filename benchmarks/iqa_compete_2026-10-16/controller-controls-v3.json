@@ -1,0 +1,30 @@
+{
+  "scope": "Benchmark controller correctness controls; runtime ORT budget probe and v13 build still pending",
+  "logs": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/reference-tests-v2.log",
+      "sha256": "ed2278f6a60e254b8cb78830ccf79811bf1637577eba95ec938154f27b966a63",
+      "output": "python3 benchmarks/iqa_compete_2026-10-16/test_references.py\n.....\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/parity-tests.log",
+      "sha256": "5d27b48bc9fd1dad6e5d448bf1ba3af1196f66544929b6c5c0f9f4fc2f93663c",
+      "output": "python3 benchmarks/iqa_compete_2026-10-16/test_parity.py\n.....\n----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\n"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/ort-patch-tests.log",
+      "sha256": "f958169fb9c6145aef23552a6db861c02fc1f8e1552e602810b8d06da6b8a38e",
+      "output": "python3 benchmarks/iqa_compete_2026-10-16/test_ort_patch.py\n...\n----------------------------------------------------------------------\nRan 3 tests in 0.156s\n\nOK\n"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/admission-classification-tests-v3.log",
+      "sha256": "ed7bb7c7417efd06c6e8e96b3165220c361a285dd7667adcd8235e22748251d7",
+      "output": "python3 benchmarks/iqa_compete_2026-10-16/test_admission_classification.py\n........\n----------------------------------------------------------------------\nRan 8 tests in 0.001s\n\nOK\n"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/capability-tests-v2.log",
+      "sha256": "f3c8ca485f274397d97f3239c6d8b699a46e5bccf43ecb375418cbc936701665",
+      "output": "python3 benchmarks/iqa_compete_2026-10-16/test_nomap_metadata.py\n.....\n----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\n"
+    }
+  ]
+}

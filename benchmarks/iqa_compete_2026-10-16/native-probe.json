@@ -1,0 +1,125 @@
+{
+  "not_a_timing_panel": true,
+  "cases": [
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "score": 96.93782423245081,
+      "ref_score": 96.9375423007055,
+      "abs_delta": 0.00028193174530599663,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-neg",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "score": 95.46284622356977,
+      "ref_score": 95.46259800688875,
+      "abs_delta": 0.0002482166810153785,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-studio601",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "score": 97.00933790260859,
+      "ref_score": 97.0093306376516,
+      "abs_delta": 7.264956991548388e-06,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-neg-studio601",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "score": 95.6430272898061,
+      "ref_score": 95.64302005113838,
+      "abs_delta": 7.238667720343983e-06,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "ssim-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "score": 0.9985487461090088,
+      "ref_score": 0.998548686504364,
+      "abs_delta": 5.960464477539063e-08,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "msssim-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "score": 0.9992085608515893,
+      "ref_score": 0.999208714590978,
+      "abs_delta": 1.537393887751648e-07,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "psnr-y-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 1e-10,
+      "score": 50.18971984535896,
+      "ref_score": 50.18971984535896,
+      "abs_delta": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "psnrhvs-daala",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "score": 51.99053644380571,
+      "ref_score": 51.99053644380571,
+      "abs_delta": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "cambi",
+      "rc": 0,
+      "parity_abs_bound": 0.0001,
+      "score": 0.0,
+      "ref_score": 0.0,
+      "abs_delta": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vif",
+      "rc": 0,
+      "parity_abs_bound": 5e-13,
+      "score": 0.9371014251183368,
+      "ref_score": 0.9366953694121637,
+      "abs_delta": 0.00040605570617313624,
+      "within_bound": false
+    },
+    {
+      "engine": "libjxl",
+      "metric": "butteraugli",
+      "rc": 0,
+      "parity_abs_bound": 0.0,
+      "score": 1.2085671424865723,
+      "ref_score": 1.208517074584961,
+      "abs_delta": 5.0067901611328125e-05,
+      "within_bound": false
+    },
+    {
+      "engine": "libjxl",
+      "metric": "ssim2",
+      "rc": 0,
+      "parity_abs_bound": 0.0,
+      "score": 94.20367548438475,
+      "ref_score": 91.77586213860482,
+      "abs_delta": 2.4278133457799242,
+      "within_bound": false
+    }
+  ]
+}

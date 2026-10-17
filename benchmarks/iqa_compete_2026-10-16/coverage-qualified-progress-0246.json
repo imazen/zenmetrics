@@ -1,0 +1,29 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/i265-qualified-progress-0246.jsonl",
+  "raw_sha256": "3e84acf9853d24fa25b7af674c1f91b4f52af370faf0746c2e21268eff8c163d",
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+  "expected_cells": 1080,
+  "present_requested_cells": 798,
+  "status_counts": {
+    "ok": 461,
+    "unsupported": 303,
+    "variant_mismatch": 4,
+    "skipped": 30
+  },
+  "extra_cells": 24,
+  "complete": false,
+  "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+  "missing_count": 282,
+  "pending_count": 26,
+  "full_receipt": "/home/lilith/tmp/iqa-compete/coverage-qualified-0246.json",
+  "nn_cuda": {
+    "raw": "/home/lilith/tmp/iqa-compete/nn-cuda-cid22-2k-progress-v1.jsonl",
+    "sha256": "562eab84277528ae0de072ad994d66fac4f5893800475673ef3813f3da9c2207",
+    "score_timings": 88,
+    "map_unsupported": 88,
+    "cpu_reference_missing": 16,
+    "qualified_thread_budget": "explicit session intra 1/20; inter 1; full telemetry opt-out; runtime control passed",
+    "coverage": "CID22/2K both budgets only; larger sizes missing"
+  }
+}

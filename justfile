@@ -325,9 +325,9 @@ stopped-claim-release-check:
 stopped-claim-release-build:
     just snap-cargo @ build -p zenfleet-worker --example release_owned_claim
 
-# zenmetrics-cli feature-combination matrix: 12 rows — every supported
+# CLI/NN feature-combination matrix: 14 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
-# `--no-default-features` build, plus the default build. Prints a PASS/FAIL
+# `--no-default-features` build, the default build, and standalone NN WebGPU. Prints a PASS/FAIL
 # row per combination and exits nonzero if any fails. CI runs the same list
 # as plain `cargo --locked check` (ci.yml, `cli-feature-matrix` job) — keep
 # the two lists in sync.
@@ -1343,6 +1343,269 @@ e36-fit-contract-check:
     just registered-fit-check
     python3 -m unittest discover -s scripts/jobsys -p 'test_e33_wall_cap.py'
 
+iqa-compete-build mode="cached":
+    bash benchmarks/iqa_compete_2026-10-16/build_cpu.sh '{{mode}}'
+
+iqa-compete-prepare binary reference distorted output:
+    '{{binary}}' prepare '{{reference}}' '{{distorted}}' '{{output}}'
+
+iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --threads '{{threads}}'
+
+iqa-compete-charts raw output python=(env_var_or_default("IQA_COMPETE_PYTHON", env_var("HOME") + "/tmp/iqa-compete/python-venv/bin/python")):
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}'
+
+iqa-compete-check-charts raw directory rows svgs label="":
+    python3 benchmarks/iqa_compete_2026-10-16/check_charts.py '{{raw}}' '{{directory}}' --expected-rows '{{rows}}' --expected-svgs '{{svgs}}' --bar-label '{{label}}'
+
+iqa-compete-smoke binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
+
+# PieAPP uses its own slow-cell lane; both lanes contribute to the full inventory.
+iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k" threads="1,20" batch="1100":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --exclude-metrics pieapp --batch-seconds '{{batch}}'
+
+iqa-compete-libvmaf-build source output:
+    bash benchmarks/iqa_compete_2026-10-16/build_libvmaf.sh '{{source}}' '{{output}}'
+
+iqa-compete-libjxl-fetch output:
+    python3 benchmarks/iqa_compete_2026-10-16/fetch_libjxl.py '{{output}}'
+
+iqa-compete-libjxl-build source output:
+    bash benchmarks/iqa_compete_2026-10-16/build_libjxl.sh '{{source}}' '{{output}}'
+
+iqa-compete-model-parity reference candidate pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/check_model_adapter.py '{{reference}}' '{{candidate}}' '{{pairs}}' '{{output}}'
+
+iqa-compete-planes binary pairs output:
+    '{{binary}}' prepare-planes '{{pairs}}' '{{output}}'
+
+iqa-compete-native engine binary rust pairs planes output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes '{{sizes}}'
+
+iqa-compete-native-probe vmaf jxl rust pairs planes output:
+    python3 benchmarks/iqa_compete_2026-10-16/native_probe.py '{{vmaf}}' '{{jxl}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}'
+
+# Round 13b public-oracle controls; individual steps use the heavy-job lock.
+nn-pieapp-review-weight-joint python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 500
+
+# Public-tensor diagnostic outside RGB code-value range; never native image parity.
+nn-pieapp-review-weight-diagnostic python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_sign.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}' --joint --steps 1000 --lower -4096 --upper 4096 --rate 32
+
+nn-pieapp-review-weight-control python upstream checkpoint out:
+    {{python}} crates/zenmetrics-nn/models/pieapp/review_weight_control.py --upstream '{{upstream}}' --checkpoint '{{checkpoint}}' --out '{{out}}'
+
+iqa-compete-collect output +ledgers:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py {{ledgers}} --output '{{output}}'
+
+iqa-compete-cuda-i265 binary pairs output models model_map reference qualified mode="nn" sizes="cid22,2k":
+    bash benchmarks/iqa_compete_2026-10-16/run_cuda.sh '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' '{{sizes}}' '{{mode}}' '{{reference}}' '{{qualified}}'
+
+iqa-compete-clippy:
+    bash benchmarks/iqa_compete_2026-10-16/build_cpu.sh cached clippy
+
+iqa-compete-model-manifest default overrides output:
+    python3 benchmarks/iqa_compete_2026-10-16/model_manifest.py '{{default}}' '{{overrides}}' '{{output}}'
+
+iqa-compete-python-setup output:
+    bash benchmarks/iqa_compete_2026-10-16/python_setup.sh '{{output}}'
+
+iqa-compete-python package python binary pairs output reference qualified sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads '{{threads}}' --sizes '{{sizes}}' --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --reference-jsonl '{{qualified}}'
+
+iqa-compete-chunk-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_chunks.py
+
+iqa-compete-python-preflight python:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/python_preflight.py
+
+# Repair only the owned competitor environment; existing oracle sites are read-only.
+iqa-compete-python-deps python:
+    uv pip install --python '{{python}}' --no-deps ffmpeg-python==0.2.0 matplotlib==3.11.2 contourpy==1.4.0 cycler==0.12.1 fonttools==4.67.0 kiwisolver==1.5.1 pyparsing==3.3.3 python-dateutil==2.9.0.post0 six==1.17.0 PyEXR==0.5.0 OpenEXR==3.5.2
+
+# Force multiple short holds while preserving the production ten-round criterion.
+iqa-compete-chunk-e2e binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --chunk-budget-ms 3000 --sample-target-ns 500000000
+    python3 benchmarks/iqa_compete_2026-10-16/check_chunk_control.py '{{output}}'
+
+# Linux-only reservation recovery uses actual process liveness and flock guards.
+iqa-compete-linux-admission-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_admission_recovery.py
+
+# One-second interruption control; production scopes still default to 1100 seconds.
+iqa-compete-linux-timeout-control binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr --sizes cid22 --threads 1 --scope-seconds 1 --sample-target-ns 2000000000
+    python3 benchmarks/iqa_compete_2026-10-16/check_timeout_control.py '{{output}}'
+
+# Capability metadata is independent of a model's startup or scope outcome.
+iqa-compete-capability-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_nomap_metadata.py
+
+# Retry host admission refusals without accepting or discarding partial samples.
+iqa-compete-admission-classification-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_admission_classification.py
+
+
+# Shorter group budget reserves room for slow model warmup and batch overrun.
+iqa-compete-pieapp-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics pieapp --chunk-budget-ms 600000
+
+# Explicit metric subset for isolated admission repairs; preserves old ledgers.
+iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20" batch="1100":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics '{{metrics}}' --sizes '{{sizes}}' --threads '{{threads}}' --batch-seconds '{{batch}}'
+
+iqa-compete-reference-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_references.py
+
+iqa-compete-requalify raw inventory output +references:
+    python3 benchmarks/iqa_compete_2026-10-16/requalify.py '{{raw}}' '{{inventory}}' --output '{{output}}' {{references}}
+
+iqa-compete-parity-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_parity.py
+
+iqa-compete-ort-thread-control python output:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/check_ort_threads.py '{{output}}'
+
+iqa-compete-ort-patch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_ort_patch.py
+
+# Scope the formatter to workspace packages; path-dependency repositories are separate.
+iqa-compete-fmt-check:
+    bash scripts/ci/lock.sh --check
+    cd "$LOCK_SNAP_DIR/work/zenmetrics" && just fmt-check
+
+iqa-compete-coverage raw inventory pairs output *options:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage.py '{{raw}}' '{{inventory}}' '{{pairs}}' '{{output}}' {{options}}
+
+iqa-compete-coverage-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_coverage.py
+
+iqa-compete-dispatch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_dispatch_failure.py
+
+iqa-compete-ort-thread-control-no-telemetry python output:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/check_ort_threads.py '{{output}}' --disable-telemetry
+
+iqa-compete-platform-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_collect_platforms.py
+
+iqa-compete-supervision-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_supervision.py
+
+iqa-compete-host-progress raw inventory archive output threads *options:
+    python3 benchmarks/iqa_compete_2026-10-16/host_progress.py '{{raw}}' '{{inventory}}' '{{archive}}' '{{output}}' --threads '{{threads}}' {{options}}
+
+iqa-compete-cell-receipts raw output:
+    python3 benchmarks/iqa_compete_2026-10-16/charts.py '{{raw}}' --output '{{output}}' --summaries-only
+
+iqa-compete-copy-receipts host files output:
+    mkdir -p '{{output}}'
+    rsync -ar --files-from='{{files}}' -- '{{host}}:tmp/iqa-compete/task4/' '{{output}}/'
+
+# Reuse qualified smoke/maps and retain every diagnostic attempt in its source ledger.
+iqa-compete-collect-i265 output:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py --output '{{output}}' "$HOME/tmp/iqa-compete/native-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/smoke-placement/i265.jsonl" "$HOME/tmp/iqa-compete/cvvdp-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-first/i265.jsonl" "$HOME/tmp/iqa-compete/extra-map-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-first/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-cpu-bounded/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-admission-repairs/i265.jsonl" "$HOME/tmp/iqa-compete/gpu-extended/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-first/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-budgeted/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-accounted-v15/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-map-repairs/i265.jsonl"
+
+iqa-compete-batch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_batch.py
+
+# Individual cells keep their run-heavy/time limits; this controller owns bounded holds.
+iqa-compete-batch-smoke binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics psnr,gmsd --sizes cid22 --threads 1 --batch-seconds 1100
+
+iqa-compete-controller-tests: iqa-compete-chunk-tests iqa-compete-linux-admission-tests iqa-compete-capability-tests iqa-compete-admission-classification-tests iqa-compete-reference-tests iqa-compete-parity-tests iqa-compete-ort-patch-tests iqa-compete-coverage-tests iqa-compete-dispatch-tests iqa-compete-platform-tests iqa-compete-batch-tests
+
+# Learned CPU continuation shares prior observations; classical repairs have a separate lane.
+iqa-compete-learned-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics learned --exclude-metrics pieapp --batch-seconds 1100
+
+# Audit the owner-requested 113-name inventory, independent of any old build ledger.
+iqa-compete-coverage-i265 raw pairs output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/coverage.py '{{raw}}' benchmarks/iqa_compete_2026-10-16/frozen-inventory.json '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda
+
+# Freeze data outside git before extending a long-running multi-host matrix.
+iqa-compete-freeze-models default overrides manifest output:
+    python3 benchmarks/iqa_compete_2026-10-16/freeze_models.py '{{default}}' '{{overrides}}' '{{manifest}}' '{{output}}'
+
+iqa-compete-freeze-model-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_freeze_models.py
+
+# No metric execution: fresh exact-pair comparisons, immutable receipts and audit.
+iqa-compete-refresh-i265 raw pairs output sizes="cid22,2k":
+    python3 benchmarks/iqa_compete_2026-10-16/refresh.py '{{raw}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda
+
+iqa-compete-competitor-coverage raw pairs output sizes="cid22,2k" implementations="libvmaf,libjxl,scikit-image,piq,torchmetrics,pytorch-msssim,lpips,DISTS-pytorch,stlpips-pytorch,DeepDC-PyTorch,flip-evaluator,cvvdp":
+    python3 benchmarks/iqa_compete_2026-10-16/competitor_coverage.py '{{raw}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --implementations '{{implementations}}'
+
+iqa-compete-competitor-coverage-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_competitor_coverage.py
+
+iqa-compete-luma-map-patch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_luma_maps_patch.py
+
+iqa-compete-check-map-repairs raw baseline output:
+    python3 benchmarks/iqa_compete_2026-10-16/check_map_repairs.py '{{raw}}' '{{baseline}}' '{{output}}'
+
+# Process accounting controls for the owner-authorized shared-host protocol.
+iqa-compete-contention-tests:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_contention.py
+
+# Read-only retention of observation files referenced by the other host lane.
+iqa-compete-retain-host-scopes raw output:
+    python3 benchmarks/iqa_compete_2026-10-16/merge_host_scopes.py '{{raw}}' '{{output}}'
+
+# Explicit immutable cohort export before appending newer continuation results.
+iqa-compete-collect-binary raw output binary_sha:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py '{{raw}}' --output '{{output}}' --only-binary-sha '{{binary_sha}}'
+
+# Owner coverage pass: one pair per size, n=5/3/1, one bounded scope per cell.
+iqa-compete-coverage-rust binary pairs output models model_map sizes="aic-small,aic-medium,aic-large,4k,8k":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads 1,all --model-root '{{models}}' --models-json '{{model_map}}' --coverage-first
+
+iqa-compete-coverage-native engine binary rust pairs planes output reference:
+    python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --coverage-first --reference-jsonl '{{reference}}'
+
+iqa-compete-coverage-python package python binary pairs output reference:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads 1,all --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --coverage-first
+
+# Light controller orchestration; each child acquires the heavy lock per cell.
+iqa-compete-coverage-pass binary pairs output models model_map ort cuda:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_pass.py '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' --ort-library '{{ort}}' --cuda-libraries '{{cuda}}'
+
+iqa-compete-adopt-scope config log contention output:
+    python3 benchmarks/iqa_compete_2026-10-16/adopt_scope.py '{{config}}' '{{log}}' '{{contention}}' '{{output}}'
+
+iqa-compete-coverage-competitors rust jxl pairs planes python flip_python reference vmaf_ledger output wait_pid *options:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_competitors.py '{{rust}}' '{{jxl}}' '{{pairs}}' '{{planes}}' '{{python}}' '{{flip_python}}' '{{reference}}' '{{vmaf_ledger}}' '{{output}}' --wait-pid '{{wait_pid}}' {{options}}
+
+iqa-compete-publish-binary snapshot log binary metadata:
+    python3 benchmarks/iqa_compete_2026-10-16/publish_binary.py '{{snapshot}}' '{{log}}' '{{binary}}' '{{metadata}}'
+
+iqa-compete-coverage-progress:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-butter8k-isolated-v17'
+
+iqa-compete-stop-idle-controller pid script root proof *options:
+    python3 benchmarks/iqa_compete_2026-10-16/stop_idle_controller.py '{{pid}}' '{{script}}' '{{root}}' '{{proof}}' {{options}}
+
+iqa-compete-resume-coverage manifest output label:
+    python3 benchmarks/iqa_compete_2026-10-16/resume_coverage.py '{{manifest}}' '{{output}}' --label '{{label}}'
+
+iqa-compete-coverage-snapshot output:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-butter8k-isolated-v17' --freeze-dir '{{output}}' --save '{{output}}/progress.json'
+
+# Only missing 8K Butteraugli cells; avoid co-resident score/map scorers.
+iqa-compete-butter8k-isolated binary pairs output:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics butteraugli-gpu --sizes 8k --threads 1,all --gpu-runtime cuda --coverage-first --isolate-modes --batch-seconds 1100 --batch-reserve-seconds 1000
+
+iqa-compete-landing-gates output snapshot *options:
+    python3 benchmarks/iqa_compete_2026-10-16/landing_gates.py '{{output}}' '{{snapshot}}' {{options}}
+
 # Match deploy assembly without requiring committed derived copies to be current.
 dashboard-regenerate:
     python3 scripts/dashboard/regenerate.py
+
+# Rebuild this commit, verify AIC inputs, run selected cells, and resume by content key.
+bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
+    python3 benchmarks/iqa_compete_2026-10-16/bench.py '{{sizes}}' '{{metrics}}' {{options}}

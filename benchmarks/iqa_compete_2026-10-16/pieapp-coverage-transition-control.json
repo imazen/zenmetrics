@@ -1,0 +1,80 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl",
+  "raw_sha256": "c1ae486c1c2e8f76ef49adf4d0c1a548f6ff46b6784ba46bff8d0189587d6300",
+  "rows": [
+    {
+      "metric_name": "pieapp",
+      "size_name": "2k",
+      "threads": 20,
+      "mode": "score",
+      "status": "skipped:scope_sample_limit",
+      "n": 2,
+      "required_samples": 3,
+      "median_ns": 179168737720.0,
+      "round_means_ns": [
+        179246079446.0,
+        179091395994.0
+      ],
+      "score": 0.2189322806478667,
+      "score_bits": "3fcc05f914b5ec8b",
+      "impl_binary_sha": "cbb127fd96e6561957ee599b59c58e5058c39992b23b39685a29c9bc370d10db",
+      "load_before": [
+        8.81,
+        7.74,
+        5.2
+      ],
+      "load_after": [
+        9.88,
+        11.03,
+        9.18
+      ],
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 20246,
+        "peak_load": 15.8,
+        "peak_rss_gib": 0.53,
+        "seconds": 899
+      },
+      "timing_quality": "contaminated",
+      "contention_peak_cores": 1.4988526372057067,
+      "contention_receipt": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/logs/pieapp-2k-20t-7a02d1e3f98c.contention.json",
+      "log_path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/logs/pieapp-2k-20t-7a02d1e3f98c.log",
+      "log_sha256": "3f94f153c3c892f8d1c718950c1633acd17d822a5cf5fd150edb6572adad3a3f",
+      "source_sampling_protocol": "legacy ten-round scope; interpreted against owner coverage minimum without another metric call"
+    },
+    {
+      "metric_name": "pieapp",
+      "size_name": "2k",
+      "threads": 20,
+      "mode": "score+map",
+      "status": "unsupported",
+      "n": 0,
+      "required_samples": 3,
+      "median_ns": null,
+      "round_means_ns": null,
+      "score": null,
+      "score_bits": null,
+      "impl_binary_sha": "cbb127fd96e6561957ee599b59c58e5058c39992b23b39685a29c9bc370d10db",
+      "load_before": [
+        8.81,
+        7.74,
+        5.2
+      ],
+      "load_after": null,
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 20246,
+        "peak_load": 15.8,
+        "peak_rss_gib": 0.53,
+        "seconds": 899
+      },
+      "timing_quality": "contaminated",
+      "contention_peak_cores": 1.4988526372057067,
+      "contention_receipt": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/logs/pieapp-2k-20t-7a02d1e3f98c.contention.json",
+      "log_path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/logs/pieapp-2k-20t-7a02d1e3f98c.log",
+      "log_sha256": "3f94f153c3c892f8d1c718950c1633acd17d822a5cf5fd150edb6572adad3a3f",
+      "source_sampling_protocol": "legacy ten-round scope; interpreted against owner coverage minimum without another metric call"
+    }
+  ],
+  "note": "Active old scope completed unchanged after controller-only cancellation; retained actual samples meet neither three-sample target nor clean timing classification; no continuation or rerun"
+}

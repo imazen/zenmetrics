@@ -1,0 +1,95 @@
+{
+  "observed_utc": "2026-10-17T09:38:17.097632+00:00",
+  "merged_master": "a72ce47a0e57",
+  "branch_parent": "6bedb666fac8",
+  "gates": {
+    "fmt": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v1/fmt.log",
+      "log_sha256": "1895bd1be4b8dd00cc35e901334d6391a3ba446d5a57b461f95ef431d9e7b1e3",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 75,
+        "peak_rss_gib": 0.15,
+        "min_available_mib": 21596,
+        "peak_load": 8.78
+      },
+      "exported_source_revisions": [
+        "b10f9089f369"
+      ]
+    },
+    "cli_clippy": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v1/clippy.log",
+      "log_sha256": "2bb4bcccec11d6cf8e900ff97442055418dcb6d2da19eb4f726672e13d0afabd",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 16,
+        "peak_rss_gib": 0.77,
+        "min_available_mib": 19643,
+        "peak_load": 4.75
+      },
+      "exported_source_revisions": [
+        "f6a14e86fc45"
+      ]
+    },
+    "cli_feature_matrix": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v1/matrix.log",
+      "log_sha256": "aadbe4dfc4d2b41f5ffd0ec8513c7cb128f70f71c295bac45ae08fc1781233ad",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 86,
+        "peak_rss_gib": 0.83,
+        "min_available_mib": 19100,
+        "peak_load": 3.15
+      },
+      "combinations_passed": 12,
+      "exported_source_revisions": []
+    },
+    "driver_clippy": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/driver-gate-v1/driver.log",
+      "log_sha256": "ff642d8f071a753a79ca122d0b8a59cfd7f17dddd6b26faf99e405c811bdd453",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 77,
+        "peak_rss_gib": 0.54,
+        "min_available_mib": 19607,
+        "peak_load": 3.18
+      },
+      "exported_source_revisions": [
+        "79b227f40fe2"
+      ]
+    },
+    "harness_tests": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/harness-light.log",
+      "log_sha256": "20d4318b72afda18ece606edc0aca3802add09b81a2e5e5289fc196fdfe972d1",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 2,
+        "peak_rss_gib": 0.03,
+        "min_available_mib": 19409,
+        "peak_load": 2.19
+      },
+      "tests_passed": 93,
+      "exported_source_revisions": []
+    },
+    "benchmark_study_tests": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/benchmark-study-check.log",
+      "log_sha256": "217f3a07d68600038b9e448e2543c76088bf067bd6b5538625fea0735b081cb9",
+      "tests_passed": 10,
+      "exported_source_revisions": []
+    }
+  },
+  "ort_adapter": {
+    "adapter_sha256": "28cfd195a9da8a8e5e97d74d198df73b3e6b694c19ef8fba1adeb222af7a9062",
+    "path": "crates/zenmetrics-nn/src/engine.rs",
+    "original_sha256": "5f6815786909f539abcbe2510063ef85814787b98d5991e8bcdcd20626b91bc4",
+    "adapted_sha256": "b909e457698d4bdf744ad3d82e6f19d0eeafb2b3495b74e8db2ca063ec4cd1a9",
+    "builders": 1,
+    "session_call_sites": 3,
+    "scope": "Benchmark snapshot only; explicit intra-op cell budget, inter-op one; graph operations, providers and deterministic-compute options unchanged"
+  },
+  "queue_cancellation": {
+    "proof": "/home/lilith/tmp/iqa-compete/merge-master-20261017/harness-queued-cancel.json",
+    "reason": "Unstarted lock waiter replaced by capped one-job metadata unit suite; no tests skipped"
+  },
+  "timing_cohorts": "Existing rows retain their frozen binary/source provenance; these gates validate the merged source, not a new timing cohort"
+}

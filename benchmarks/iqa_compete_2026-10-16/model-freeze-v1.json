@@ -1,0 +1,23 @@
+{
+  "default": "/home/lilith/tmp/iqa-compete/models-frozen-v1/models-df35ce6e87bbf1af",
+  "overrides": "/home/lilith/tmp/iqa-compete/models-frozen-v1/models.json",
+  "source_manifest": "/home/lilith/tmp/iqa-compete/models-manifest.json",
+  "source_manifest_sha256": "a6acc15f46447b43985327857d24416b2e8246f3bf66a47a66be22db1b9dc884",
+  "files": 98,
+  "bytes": 5511554194,
+  "policy": "Independent copies, initial SHA-256 checked during copy and on destination readback; data files read-only. Original files untouched.",
+  "locations": "/home/lilith/tmp/iqa-compete/models-frozen-v1/locations.json",
+  "locations_sha256": "4da7ee82d1ffa53d554d56875059c677bd0fb1b0239f0fc92ad189a63a4ee60d",
+  "tool_commit": "a38153c07566",
+  "tool_sha256": "c579f7f80a94f216c9d1530500cb4b7385d3e75d479564454ea325ba8c421afe",
+  "log": "/home/lilith/tmp/iqa-compete/model-freeze-v1.log",
+  "log_sha256": "f787dfeca0fe9e1071c0501370498e26865b1ed087313bb64c01f9e3f8b65b04",
+  "resource": {
+    "exit_code": 0,
+    "seconds": 7,
+    "peak_rss_gib": 0.03,
+    "min_available_mib": 22790,
+    "peak_load": 9.09
+  },
+  "qualification": "All source bytes match the initial manifest and every independent destination passes SHA-256 readback. No inference timing performed."
+}

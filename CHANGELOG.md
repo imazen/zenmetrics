@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add `just bench-iqa` to rebuild the checked-out IQA harness and pinned competitors, verify corpus hashes, resume content-keyed cells and export registered dashboard rows (`7ef1c4b1`).
+
 - Register reviewed RTEN/CUDA/WebGPU LPIPS timings and exported-golden outcomes, preserving default-thread uncertainty and LOADFAIL/OOM rows; land dashboard regeneration on master (`8ecda1d2`).
 
 - Regenerate dashboard catalog and markdown extracts during deployment, report committed-copy drift, and retain strict local currentness and unclassified-upload gates (`9a24096b`).
@@ -60,7 +62,6 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
-- Keep decoder alpha policy available without default/scoring features; retain the alpha flag and resolve merged alpha/folder-scoring clippy errors (`84072828`).
 
 ### Added
 
@@ -114,6 +115,8 @@ None.
 ## Workspace
 
 ### Added
+
+- Compute-only IQA competition harness with separate score/map cells, recorded sample counts, bounded resource scopes, explicit refusals and retained per-host observations (`6bedb666`); [protocol and current coverage](benchmarks/iqa_compete_2026-10-16/README.md).
 
 - zenmetrics-nn `PieApp` (PR #81 follow-up, reviewed) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
   reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime

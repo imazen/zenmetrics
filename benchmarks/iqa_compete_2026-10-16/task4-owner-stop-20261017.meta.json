@@ -1,0 +1,52 @@
+{
+  "created_utc": "2026-10-17T10:49:15.288319+00:00",
+  "status": "owner_stopped_partial",
+  "source_commit": "d6b18bbfb880474849b603e9d7300ee5d32608b9",
+  "recorded_rows": 4068,
+  "expected_rows": 6160,
+  "hosts": {
+    "r7900x": {
+      "present": 1780,
+      "expected": 2996,
+      "raw_sha256": "5053ed0be557977d8257146bd878717ae0d79fdb1db833382873a730f8229376",
+      "measurement_end": "2026-10-17T10:39:14.906744+00:00",
+      "host_receipt": "task4-r7900x-owner-stop-20261017.json"
+    },
+    "mac": {
+      "present": 2288,
+      "expected": 3164,
+      "raw_sha256": "b008cdfc95b9f757e13e586d42d1d426f19802dcbce5eb64aa91e01aa13f2cb7",
+      "measurement_end": "2026-10-17T10:42:54.967146+00:00",
+      "host_receipt": "task4-mac-owner-stop-20261017.json"
+    }
+  },
+  "compact_cells": {
+    "directory": "task4-owner-stop-cells-20261017",
+    "rows": 4068,
+    "files": 462,
+    "max_file_bytes": 28992,
+    "retention_manifest": "~/tmp/iqa-compete/task4/owner-stop-20261017/compact-retention-integrity.json",
+    "retention_manifest_sha256": "27707840e0ad191bae3320dc93e4b556aa347dea07633071f9d61a810ff6d5f9"
+  },
+  "archive": "~/tmp/iqa-compete/task4/owner-stop-20261017/",
+  "normalization": "Original raw preserved. Compact rows keep timing/score/n bits unchanged, label samples below the requested minimum, separate GPU warmup from unperformed comparisons and use home-relative artifact paths.",
+  "stop_policy": "Outer queues held immediately; active cells completed; no next cell, admission repair, sample repair or reboot started.",
+  "mac_log_captures": {
+    "count": 4,
+    "receipt": "~/tmp/iqa-compete/task4/owner-stop-20261017/mac/log-capture-recovery.json",
+    "sha256": "962c4b961b73d03e21740b9753d9c587cfcacc0934ad1ae447e6bffddb6ec25d",
+    "policy": "Exact original captured prefixes match ledger hashes; complete late-output logs retained as diagnostics, not promoted timings."
+  },
+  "validation": {
+    "harness_tests": 102,
+    "inventory_tests": 10,
+    "harness_log_sha256": "934b85a69f7f792c74aa066c82415daf28ea973a327547add8056f57901a2bac",
+    "inventory_log_sha256": "7113510254859a25fd51a67566b4a2edd527f7bf5883b8868a9383bb875d9cf9",
+    "strict_remote_integrity": "passed on both hosts",
+    "local_log_config_integrity": "passed",
+    "compact_timing_score_retention": "passed; bit-identical",
+    "rustfmt": "Six inherited formatter findings corrected; focused rustfmt --check passes",
+    "lock": "23 pinned siblings resolved unchanged in the completed first gate; safe_push rechecks the outgoing lock",
+    "not_run": "Remaining queued full formatting/CLI clippy/feature-matrix/driver gates cancelled before admission at owner wrap-up; no new pass claimed"
+  }
+}

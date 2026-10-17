@@ -1,0 +1,20 @@
+[project]
+name = "iqa-compete-python"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "torch==2.14.1", "torchvision==0.29.1", "numpy==2.5.2", "scipy==1.18.1",
+  "scikit-image==0.26.0", "piq==0.8.0", "torchmetrics==1.9.0",
+  "pytorch-msssim==1.0.0", "lpips==0.1.4", "DISTS-pytorch==0.1",
+  "stlpips-pytorch==0.0.2", "DeepDC-PyTorch==0.2", "cvvdp==0.5.7",
+  "flip-evaluator==1.7", "ffmpeg-python==0.2.0", "PyEXR==0.5.0", "OpenEXR==3.5.2",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

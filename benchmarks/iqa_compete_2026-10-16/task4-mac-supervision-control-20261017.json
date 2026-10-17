@@ -1,0 +1,21 @@
+{
+  "host": "mac",
+  "control_utc": "2026-10-17T07:58:11.836245+00:00",
+  "returncode": 137,
+  "child_alive_after_guard": false,
+  "timeout_arguments": [
+    "gtimeout",
+    "--foreground",
+    "30s"
+  ],
+  "control_memory_argument": "1",
+  "prior_owned_group_terminated": true,
+  "evidence_directory": "~/tmp/iqa-compete/task4/mac/",
+  "sha256": {
+    "foreground-control.json": "a3ba1084a391e2f3cc1ea8ce970f2088ecfac17133b1a819e483623297db372f",
+    "foreground-control.log": "0a02206da4b07a85e735b8adc7ec4df74b76af95197c8e7c8dd4709113e93ad7",
+    "mac-afine-resource-interruption.json": "18ba025ceb6d12775417e3df7778fc36387301e3385fb37af413d1970d39ad16",
+    "mac-resource-failure-window.json": "abf15ee0d137c9f1937f5aedbc8c88b2c9333ee0710f1e8b5ae1c813f4f4dfb0"
+  },
+  "scope": "Non-metric real-child process containment control; no score or parity evaluation. The prior timeout created another process group and escaped the wrapper guard; foreground timeout keeps it contained. Mac memory availability is a reclaimable-page proxy, not Linux MemAvailable; no hard-cgroup claim."
+}

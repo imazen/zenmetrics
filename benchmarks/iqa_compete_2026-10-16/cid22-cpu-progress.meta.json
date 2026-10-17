@@ -1,0 +1,120 @@
+{
+  "host": "i265",
+  "inventory_names": 112,
+  "required_with_pieapp": 113,
+  "rows": 448,
+  "statuses": {
+    "ok": 260,
+    "unsupported": 144,
+    "skipped": 44
+  },
+  "raw": "/home/lilith/tmp/iqa-compete/cpu-cid22-progress.jsonl",
+  "raw_sha256": "f406fb6ee3ae72fed48141183ebb5aa309807753119a07181c6324de06999c64",
+  "collection": {
+    "sources": [
+      {
+        "path": "/home/lilith/tmp/iqa-compete/cpu-first/i265.jsonl",
+        "sha256": "f317859b30abd60fa0b7040130db2e4089e7854f0c93209472d46a6bb17eda23"
+      },
+      {
+        "path": "/home/lilith/tmp/iqa-compete/extra-map-smoke/i265.jsonl",
+        "sha256": "07826d528ddf9fc0a7fe1581539537d4ddacee4f527695c7d2391e6deb708f9a"
+      },
+      {
+        "path": "/home/lilith/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl",
+        "sha256": "0add6dd46ec30e813eaa79ed31c7a05a4ae64d61c3cb7e1f72e4ac66c014f741"
+      }
+    ],
+    "selection": "Last supplied ledger wins per cell; last row wins within ledger. Source attempts remain retained.",
+    "rows": 528,
+    "statuses": {
+      "unsupported": 174,
+      "ok": 310,
+      "skipped": 44
+    },
+    "output_sha256": "dc7b97df3bf093a6d6c096f960cb0761ab52b23fd14203b88ac8758c00ef88df"
+  },
+  "summary_files": [
+    {
+      "file": "i265-000.json",
+      "bytes": 28926,
+      "sha256": "48212e8fe17174eaa3374bb6428a30e1c816eab72256099b2d2be43994de2837"
+    },
+    {
+      "file": "i265-001.json",
+      "bytes": 28609,
+      "sha256": "a407ff0f035645167b8a413e8b6b53ac10b5c4138ee1cd80a64d6e677d694227"
+    },
+    {
+      "file": "i265-002.json",
+      "bytes": 28482,
+      "sha256": "392e5ac4f384863f950020f7628b179a357f47e8121d83b50035c52530b1c400"
+    },
+    {
+      "file": "i265-003.json",
+      "bytes": 28509,
+      "sha256": "b643a6b3354c79799f265aa4df300c121d2a7026805b3b04ee1798e77e573f7d"
+    },
+    {
+      "file": "i265-004.json",
+      "bytes": 28485,
+      "sha256": "5ac183f81f485c013364b2e6c1adf0dcd16e6bf34d5bd8e3cd648c56341f8e3a"
+    },
+    {
+      "file": "i265-005.json",
+      "bytes": 28596,
+      "sha256": "f6828912644dd6ebc9a48626cc53118d0d7a4e31692857c5e1b25c83615e98ff"
+    },
+    {
+      "file": "i265-006.json",
+      "bytes": 28082,
+      "sha256": "f5e0db874d6c52a6d94bc08ecab38e55fd659cd124109674e52aa7ff84182f82"
+    },
+    {
+      "file": "i265-007.json",
+      "bytes": 28117,
+      "sha256": "a41d87b13c94df570fb21e105ac2ad25e88f104916465958cfb1184d064359c7"
+    },
+    {
+      "file": "i265-008.json",
+      "bytes": 28252,
+      "sha256": "7b71b90151b996bf32b3b8c713d03cad83627e5bdf51f4aad913bd33a155945b"
+    },
+    {
+      "file": "i265-009.json",
+      "bytes": 28599,
+      "sha256": "be13bb84993d716aaf8367fb53e8522337ca756b53db178464a22175c9b9d4d2"
+    },
+    {
+      "file": "i265-010.json",
+      "bytes": 28557,
+      "sha256": "d8df49fef5247b756e7fa54b23a43d3994f79edc80606f6a8d3d5088fc835a49"
+    },
+    {
+      "file": "i265-011.json",
+      "bytes": 28914,
+      "sha256": "ca66b9e8c76e57395ae573530ca779dad4042c37529bec1350d099a58b1b0642"
+    },
+    {
+      "file": "i265-012.json",
+      "bytes": 28776,
+      "sha256": "f3988ef3dd5477cd76eeaffe7778f95f392bae278cb95a254e4631499cd07fee"
+    },
+    {
+      "file": "i265-013.json",
+      "bytes": 28807,
+      "sha256": "8eb673c6af7c5f43d34d088b1616794134895bb3ee55764cc09472063e377236"
+    },
+    {
+      "file": "i265-014.json",
+      "bytes": 28161,
+      "sha256": "602ec75cadebf972e963158fee5fa6c6e271b94b5adcb33a8f4ec020637dd261"
+    },
+    {
+      "file": "i265-015.json",
+      "bytes": 18396,
+      "sha256": "e0c45d6705d4e093e02ca8a9cec57f72a87b7221bca751db4db920fd3e39e597"
+    }
+  ],
+  "missing": "PieAPP; remaining 2K cells and other sizes; native/Python competitor timings; other hosts"
+}

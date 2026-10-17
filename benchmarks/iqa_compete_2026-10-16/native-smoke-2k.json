@@ -1,0 +1,426 @@
+[
+  {
+    "metric_name": "psnr",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 0,
+    "median_ns": null,
+    "p10_ns": null,
+    "p90_ns": null,
+    "mean_ns": null,
+    "score": null,
+    "ref_score": null,
+    "abs_delta": null,
+    "status": "unsupported",
+    "rayon_threads_observed": null,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": null
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 3264433.5,
+    "p10_ns": 3241792.1,
+    "p90_ns": 6260245.5,
+    "mean_ns": 3803278.9333333336,
+    "score": 42.566362385844045,
+    "ref_score": 42.566362385844045,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.1,
+      1.12,
+      0.79
+    ],
+    "load_after": [
+      1.01,
+      1.1,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 20,
+    "median_ns": 222379735.0,
+    "p10_ns": 221134380.7,
+    "p90_ns": 223662103.5,
+    "mean_ns": 222497694.35,
+    "score": 81.08121437035537,
+    "ref_score": 81.08121437035537,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.01,
+      1.1,
+      0.79
+    ],
+    "load_after": [
+      1.01,
+      1.1,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 20,
+    "median_ns": 283590157.0,
+    "p10_ns": 281091219.4,
+    "p90_ns": 299259246.6,
+    "mean_ns": 286871713.3000001,
+    "score": 81.08121437035537,
+    "ref_score": 81.08121437035537,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      1.01,
+      1.1,
+      0.79
+    ],
+    "load_after": [
+      1.01,
+      1.1,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 1559007.0,
+    "p10_ns": 1524803.9,
+    "p90_ns": 1745501.1,
+    "mean_ns": 1602739.533333333,
+    "score": 0.00481262500346126,
+    "ref_score": 0.00481262500346126,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": [
+      0.93,
+      1.08,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 6376399.5,
+    "p10_ns": 6143557.0,
+    "p90_ns": 7369286.2,
+    "mean_ns": 7026416.166666668,
+    "score": 0.00481262500346126,
+    "ref_score": 0.00481262500346126,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": [
+      0.93,
+      1.08,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 62169604.5,
+    "p10_ns": 60587206.5,
+    "p90_ns": 78348370.3,
+    "mean_ns": 67706768.5,
+    "score": 0.9990487171952573,
+    "ref_score": 0.9990487171952573,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": [
+      0.93,
+      1.08,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "2k",
+    "threads": 1,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 61382004.5,
+    "p10_ns": 60514048.5,
+    "p90_ns": 78133947.6,
+    "mean_ns": 65266212.2,
+    "score": 0.9990487171952573,
+    "ref_score": 0.9990487171952573,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 1,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": [
+      0.93,
+      1.08,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 0,
+    "median_ns": null,
+    "p10_ns": null,
+    "p90_ns": null,
+    "mean_ns": null,
+    "score": null,
+    "ref_score": null,
+    "abs_delta": null,
+    "status": "unsupported",
+    "rayon_threads_observed": null,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": null
+  },
+  {
+    "metric_name": "psnr",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 3220046.5,
+    "p10_ns": 3189874.0,
+    "p90_ns": 3257981.2,
+    "mean_ns": 3221851.033333334,
+    "score": 42.566362385844045,
+    "ref_score": 42.566362385844045,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.93,
+      1.08,
+      0.79
+    ],
+    "load_after": [
+      0.93,
+      1.08,
+      0.79
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 115382329.0,
+    "p10_ns": 112845082.4,
+    "p90_ns": 119799655.0,
+    "mean_ns": 116172665.99999999,
+    "score": 81.08121437035537,
+    "ref_score": 81.08121437035537,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.86,
+      1.06,
+      0.78
+    ],
+    "load_after": [
+      2.48,
+      1.39,
+      0.89
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 173540564.0,
+    "p10_ns": 168330077.1,
+    "p90_ns": 177249956.4,
+    "mean_ns": 173512248.86666664,
+    "score": 81.08121437035537,
+    "ref_score": 81.08121437035537,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      0.86,
+      1.06,
+      0.78
+    ],
+    "load_after": [
+      2.48,
+      1.39,
+      0.89
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 703726.5,
+    "p10_ns": 485025.80000000005,
+    "p90_ns": 938169.6,
+    "mean_ns": 716410.7666666666,
+    "score": 0.00481262500346126,
+    "ref_score": 0.00481262500346126,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      2.48,
+      1.39,
+      0.89
+    ],
+    "load_after": [
+      2.48,
+      1.39,
+      0.89
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 6299481.5,
+    "p10_ns": 6093377.3,
+    "p90_ns": 6796685.7,
+    "mean_ns": 6417633.733333332,
+    "score": 0.00481262500346126,
+    "ref_score": 0.00481262500346126,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      2.48,
+      1.39,
+      0.89
+    ],
+    "load_after": [
+      2.48,
+      1.39,
+      0.89
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score",
+    "n": 30,
+    "median_ns": 17318662.5,
+    "p10_ns": 16300168.6,
+    "p90_ns": 18561311.2,
+    "mean_ns": 17338278.166666668,
+    "score": 0.9990487171952573,
+    "ref_score": 0.9990487171952573,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      2.48,
+      1.39,
+      0.89
+    ],
+    "load_after": [
+      2.36,
+      1.38,
+      0.89
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "size_name": "2k",
+    "threads": 20,
+    "mode": "score+map",
+    "n": 30,
+    "median_ns": 17920964.5,
+    "p10_ns": 16370840.1,
+    "p90_ns": 18542119.5,
+    "mean_ns": 17610799.366666663,
+    "score": 0.9990487171952573,
+    "ref_score": 0.9990487171952573,
+    "abs_delta": 0.0,
+    "status": "ok",
+    "rayon_threads_observed": 20,
+    "impl_binary_sha": "74dd4a8274a06fd374fbae5c06779e7db6208c422b2228b8c04535a7f3350f50",
+    "load_before": [
+      2.48,
+      1.39,
+      0.89
+    ],
+    "load_after": [
+      2.36,
+      1.38,
+      0.89
+    ]
+  }
+]

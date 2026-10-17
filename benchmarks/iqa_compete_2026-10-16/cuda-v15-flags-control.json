@@ -1,0 +1,14 @@
+{
+  "binary_sha256": "cbb127fd96e6561957ee599b59c58e5058c39992b23b39685a29c9bc370d10db",
+  "fingerprint": "/home/lilith/tmp/zenmetrics-lock-snap-iqa-compete/target/release/.fingerprint/cpu-profile-42ef15e8c8bc4fcf/bin-iqa-compete.json",
+  "fingerprint_sha256": "81b6f3a3a14fa8994ed4564886904abce7d23d9fb468a4ade7e3b97a954b908e",
+  "rustflags": [
+    "--cfg",
+    "iqa_compete_ingress",
+    "--cfg",
+    "iqa_compete_cached"
+  ],
+  "no_target_cpu_native": true,
+  "scope": "Cargo build fingerprint retained after the v15 release build; no later driver build has run",
+  "retained_fingerprint": "/home/lilith/tmp/iqa-compete/bin/cuda-v15.cargo-fingerprint.json"
+}

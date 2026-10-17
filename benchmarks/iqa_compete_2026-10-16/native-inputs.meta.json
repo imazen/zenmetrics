@@ -1,0 +1,366 @@
+[
+  {
+    "size_name": "cid22",
+    "width": 512,
+    "height": 512,
+    "reference": "cid22-709-420-reference.yuv",
+    "distorted": "cid22-709-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "4b0dd09d26b76ed27700b05ed7123b0f3668f2b4ba74dc58360128d203f9a706",
+      "distorted": "88eb1562e72211c450300a5489083abbc0345814695c8c60fbdd41fc653bd8e1"
+    }
+  },
+  {
+    "size_name": "cid22",
+    "width": 512,
+    "height": 512,
+    "reference": "cid22-601-420-reference.yuv",
+    "distorted": "cid22-601-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "f231c3bfd378a54dda2cc4a3dd10e8105e98edc30ef61f2e51e372c28ccc22bb",
+      "distorted": "cd74df578d6e88b1c3974d0865ff444c8a4f9308de7e794b2b888913329deaad"
+    }
+  },
+  {
+    "size_name": "cid22",
+    "width": 512,
+    "height": 512,
+    "reference": "cid22-601-y-reference.yuv",
+    "distorted": "cid22-601-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "64ef6e8e3604d938f7dc64cc95408743f3ef2a2b506fcf6a15ba3a68ef56ce86",
+      "distorted": "1824b9c98fbc73592ac25b178444861390d77c8ea8b7a60f8e7eaef47832e6c9"
+    }
+  },
+  {
+    "size_name": "cid22",
+    "width": 512,
+    "height": 512,
+    "reference": "cid22-709-y-reference.yuv",
+    "distorted": "cid22-709-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "40818d2801b5dd7ec34795ff1b28f66b8916a13a8dab7950e6ab7175629f3009",
+      "distorted": "8fdff44e0fefebd6410e61b4b2f9da835be947114a0335ee1eb8855ae47008c7"
+    }
+  },
+  {
+    "size_name": "aic-small",
+    "width": 840,
+    "height": 944,
+    "reference": "aic-small-709-420-reference.yuv",
+    "distorted": "aic-small-709-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "3a2b548252766f9cb2661994e2a628b03be0ae6f818f462b9b8767f125ddb107",
+      "distorted": "5f0d6982c7fbedfe6e9a8131aae3f4c7e684dca44bbb52a3fe30c2bb4364f650"
+    }
+  },
+  {
+    "size_name": "aic-small",
+    "width": 840,
+    "height": 944,
+    "reference": "aic-small-601-420-reference.yuv",
+    "distorted": "aic-small-601-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "cbc5dde9c2ed867caaa8db8cb4910ac4e44d118a2a1f251c98b4a6eaebddc8f8",
+      "distorted": "4512279700eb55d7807e136ab97a61280d4a4939087294db97c7b91fe845580f"
+    }
+  },
+  {
+    "size_name": "aic-small",
+    "width": 840,
+    "height": 944,
+    "reference": "aic-small-601-y-reference.yuv",
+    "distorted": "aic-small-601-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "5d3636764b583e91ac4a475f80a2f806361e8cea65e331fd52fbda25f425614f",
+      "distorted": "c83bb20e7f59902bd55d5d9f3c780844e146e143f452d0b9c1ef7ef9702d0dbc"
+    }
+  },
+  {
+    "size_name": "aic-small",
+    "width": 840,
+    "height": 944,
+    "reference": "aic-small-709-y-reference.yuv",
+    "distorted": "aic-small-709-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "c0d060b8d99a1ef14f34f1902e437dd27be5a640313c0a13d6d1cf4cd77ddb27",
+      "distorted": "64ccb462d1aeeb05f31599c4839d8eb69732969641ca86ce388dc823b23d0909"
+    }
+  },
+  {
+    "size_name": "aic-medium",
+    "width": 1680,
+    "height": 1888,
+    "reference": "aic-medium-709-420-reference.yuv",
+    "distorted": "aic-medium-709-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "daa40b75de2620d6c6da4c146c107accac0b274e21c3956fa0cd8c90de146ceb",
+      "distorted": "392215aa2fc05627095144550e3cf85da610933e81ec83a7790de60be6be7751"
+    }
+  },
+  {
+    "size_name": "aic-medium",
+    "width": 1680,
+    "height": 1888,
+    "reference": "aic-medium-601-420-reference.yuv",
+    "distorted": "aic-medium-601-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "c05a0e9a003971d87ebbfaa953a2d2deff1e0ee016fd73a65f2055f88fd7ad2c",
+      "distorted": "c054b1d61fdf8b7d4bbac8af25cd7aa8583788267932fc64b865800b74efdbfc"
+    }
+  },
+  {
+    "size_name": "aic-medium",
+    "width": 1680,
+    "height": 1888,
+    "reference": "aic-medium-601-y-reference.yuv",
+    "distorted": "aic-medium-601-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "13b50e88d13690cbdf58e4044e6d017f3ac25f90d2e8d02b64f395011746a69f",
+      "distorted": "fe371e8ffccba5b0f82d49f5e7273f64e00aff9e5feba999ab1a01898239a5a2"
+    }
+  },
+  {
+    "size_name": "aic-medium",
+    "width": 1680,
+    "height": 1888,
+    "reference": "aic-medium-709-y-reference.yuv",
+    "distorted": "aic-medium-709-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "aeeb5dcaf53d001d9388c0ed69579cca7694989a93be65bd495aae4f43cca7f9",
+      "distorted": "3f76c2fd56d329d0b0dbf26462138c651c4f7e21b5c63aae8faaf0867ebf35ac"
+    }
+  },
+  {
+    "size_name": "aic-large",
+    "width": 3354,
+    "height": 2516,
+    "reference": "aic-large-709-420-reference.yuv",
+    "distorted": "aic-large-709-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "c45dc5ccaf23d0acd8f19944e5cdc22086732d490b60442e42479248c91ed25a",
+      "distorted": "46478e2b1ecf37aeb520f68491205079c11f3f74d8f46eadf57c30e3706be70a"
+    }
+  },
+  {
+    "size_name": "aic-large",
+    "width": 3354,
+    "height": 2516,
+    "reference": "aic-large-601-420-reference.yuv",
+    "distorted": "aic-large-601-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "7fa8ea3810a15c1774df2ec455013d8a8afe1788b6c6f0d2c2949594d584655d",
+      "distorted": "4308297814660645064d5d23a34d4be76c3c7eeac210a71fe07477bd58b05280"
+    }
+  },
+  {
+    "size_name": "aic-large",
+    "width": 3355,
+    "height": 2516,
+    "reference": "aic-large-601-y-reference.yuv",
+    "distorted": "aic-large-601-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "f3ed7eb9a90a10472af363106b4b44dfe971ebdb2c0e390e85e23e8cff3cf24f",
+      "distorted": "00fc87cfc3c2fbee902fbd1d92c6b90b9d982bf73412eb35916cee05b095bd64"
+    }
+  },
+  {
+    "size_name": "aic-large",
+    "width": 3355,
+    "height": 2516,
+    "reference": "aic-large-709-y-reference.yuv",
+    "distorted": "aic-large-709-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "4f55a2f4bfbdd82f5da04e9b208b5fb3b08287df054c634ddef562303945516c",
+      "distorted": "c6c5348da266cea1265a17f2f986544f76b83f804c67ed76419bdebc9b9b3952"
+    }
+  },
+  {
+    "size_name": "2k",
+    "width": 2048,
+    "height": 1080,
+    "reference": "2k-709-420-reference.yuv",
+    "distorted": "2k-709-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "967c6c6624969db172bf0de921dc3592ac7e778200b6dea0feeb0c98646393aa",
+      "distorted": "16aba1e84dbd8905026bf818cd56e9b915917093dc27d2339b98d386c4e97dd4"
+    }
+  },
+  {
+    "size_name": "2k",
+    "width": 2048,
+    "height": 1080,
+    "reference": "2k-601-420-reference.yuv",
+    "distorted": "2k-601-420-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "f1fe80d955095c333f458b8848898ef40aab1388918bcf1007279ed6a6be48ab",
+      "distorted": "28117ccbf876bb1101add050da388f44646c2fefa009ddcc0b76a3b66058a6fa"
+    }
+  },
+  {
+    "size_name": "2k",
+    "width": 2048,
+    "height": 1080,
+    "reference": "2k-601-y-reference.yuv",
+    "distorted": "2k-601-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "48a935779e271fa3e1410a8f7cdb48a3f08bd22d823e3e2df6ec3d36c3d5f94f",
+      "distorted": "89baf53d99336bd89e53b54281361e1e7d98e7a5d65a49d019061ada90ef0343"
+    }
+  },
+  {
+    "size_name": "2k",
+    "width": 2048,
+    "height": 1080,
+    "reference": "2k-709-y-reference.yuv",
+    "distorted": "2k-709-y-distorted.yuv",
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "fd1894d3c032660975f66e1c633e57dfe7ab33e637a21cf3531183202333e220",
+      "distorted": "1b6bc6915d840e3ccad2aa92d7fe8ca2f3d33fead8a20e31b446aba7436b8559"
+    }
+  },
+  {
+    "size_name": "4k",
+    "width": 3840,
+    "height": 2160,
+    "reference": "4k-709-420-reference.yuv",
+    "distorted": "4k-709-420-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "a69896dc34acf6a805f7c4fc1bc35f8ead366213ca2a4e0f41ea7c68efb65997",
+      "distorted": "edc89083097437656aee5aa38454ecefad9cb5bfab5338c561e484202a4da00f"
+    }
+  },
+  {
+    "size_name": "4k",
+    "width": 3840,
+    "height": 2160,
+    "reference": "4k-601-420-reference.yuv",
+    "distorted": "4k-601-420-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "2dfd2ef4433a0dc28bbd44bd976c7ff38a9afb038da89e45945dfa7ca1851f2d",
+      "distorted": "122d6e92ed81fce22fdabea7d90707aa59f67cad13f8859352983fd971f04d9e"
+    }
+  },
+  {
+    "size_name": "4k",
+    "width": 3840,
+    "height": 2160,
+    "reference": "4k-601-y-reference.yuv",
+    "distorted": "4k-601-y-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "5c7c1ce8930b170948b7f35b1cd5767c41038e1381b395f8cfd8614a9b70545d",
+      "distorted": "fa9d28da07f95c07ff293d2a21f2d567621c4201878a0ece8142a1352fc00a4b"
+    }
+  },
+  {
+    "size_name": "4k",
+    "width": 3840,
+    "height": 2160,
+    "reference": "4k-709-y-reference.yuv",
+    "distorted": "4k-709-y-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "855cc6c5d9d275d4d9e2455861536f1afbd0bc463496b80dbe61ec5289d6df39",
+      "distorted": "62ab6365edda511330755bd67d226b7ae086be0b10d4a975a6127bcf7ba27589"
+    }
+  },
+  {
+    "size_name": "8k",
+    "width": 7680,
+    "height": 4320,
+    "reference": "8k-709-420-reference.yuv",
+    "distorted": "8k-709-420-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "709-420",
+    "sha256": {
+      "reference": "ea93b94d7074ee0637ba6685ea00e7fa60aaba3038c81169ffbdc9dbf49df073",
+      "distorted": "a8a4538ad3c418868eaff32cfdea9c458562070561655d4450fd76d69d73bc47"
+    }
+  },
+  {
+    "size_name": "8k",
+    "width": 7680,
+    "height": 4320,
+    "reference": "8k-601-420-reference.yuv",
+    "distorted": "8k-601-420-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "601-420",
+    "sha256": {
+      "reference": "0472497ed64e5da96137ec1426bbca69cd10cf9731156177741cda0c8353f2e1",
+      "distorted": "3089476cc2bc2b38b52b11d1de3245962b5ff9e269546baeedf945ee4b5e6a76"
+    }
+  },
+  {
+    "size_name": "8k",
+    "width": 7680,
+    "height": 4320,
+    "reference": "8k-601-y-reference.yuv",
+    "distorted": "8k-601-y-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "601-y",
+    "sha256": {
+      "reference": "3d0513b3e1a1ef6509962d543981365c02f57ddd4da7775525e4fa892224bd07",
+      "distorted": "60b2ba0b51c89555ff3c27b14fa47deb1d4f812c303d69ed2c046cd9f969abed"
+    }
+  },
+  {
+    "size_name": "8k",
+    "width": 7680,
+    "height": 4320,
+    "reference": "8k-709-y-reference.yuv",
+    "distorted": "8k-709-y-distorted.yuv",
+    "method": "mirror-tile largest real pair",
+    "convention": "709-y",
+    "sha256": {
+      "reference": "5f0dc6bef93884d7d604c4f09769b653acae1feb6d17021e26d42d109f7bbdaf",
+      "distorted": "651ad14c3d115328589d2c43ef80110f354dae9c49fcebc80149a37ff884a420"
+    }
+  }
+]

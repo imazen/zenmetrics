@@ -358,7 +358,7 @@ pub fn composite_rgba_srgb8(
         AlphaPolicy::RequireOpaque => {
             let mut non_opaque_count = 0usize;
             let mut max_transparency = 0u8;
-            for px in rgba.as_chunks::<4>().0 {
+            for px in rgba.as_chunks::<4>().0.iter() {
                 let a = px[3];
                 if a < 255 {
                     non_opaque_count += 1;

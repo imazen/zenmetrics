@@ -1,0 +1,25 @@
+{
+  "scope": "Actual PSNR multi-chunk sampling control",
+  "status": "passed",
+  "n": 14,
+  "chunks": 3,
+  "chunk_round_counts": [
+    4,
+    5,
+    5
+  ],
+  "score_bits": "4048211a13b5ebac",
+  "impl_binary_sha": "667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c",
+  "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+  "chunk_budget_ms": 3000,
+  "sample_target_ns": 500000000,
+  "resource": {
+    "chunks": 3,
+    "exit_code": 0,
+    "min_available_mib": 23164,
+    "note": "Seconds sum bounded holds; peak RSS is the largest observed per-chunk OS peak, not an aggregate concurrent-memory claim",
+    "peak_load": 2.91,
+    "peak_rss_gib": 0.03,
+    "seconds": 11
+  }
+}

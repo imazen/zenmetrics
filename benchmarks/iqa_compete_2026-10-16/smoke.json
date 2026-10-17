@@ -1,0 +1,104 @@
+[
+  {
+    "abs_delta": 0.0,
+    "arch": "x86_64",
+    "cpu_affinity": [
+      2
+    ],
+    "cpu_model": "Intel(R) Core(TM) Ultra 7 265K",
+    "device": "cpu",
+    "gpu": "NVIDIA GeForce RTX 4080",
+    "height": 512,
+    "host": "i265",
+    "impl": "zenmetrics",
+    "impl_binary_sha": "7b0996b5482f06be34bd701102ff6a08de7b5b9d74386e0cfba8a9d5dc6581c1",
+    "impl_version": "source",
+    "input_sha256": {
+      "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06"
+    },
+    "load_after": [
+      1.3,
+      1.09,
+      0.68
+    ],
+    "load_before": [
+      1.3,
+      1.09,
+      0.68
+    ],
+    "log_sha256": "0b0edbe8e85a8b03e6ee485a8672c296521e10881ff3d73e0b3fab30b0d05376",
+    "mean_ns": 431259.05763458775,
+    "median_ns": 388216.3143939394,
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "metric_family": "psnr",
+    "metric_name": "psnr",
+    "mode": "score",
+    "n": 30,
+    "notes": "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "p10_ns": 384455.9083333333,
+    "p90_ns": 539288.1060606062,
+    "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+    "placement_policy": "unrestricted descriptive hybrid/all-core study; explicit OS thread affinity",
+    "rayon_threads_observed": 1,
+    "ref_score": 48.25860830672113,
+    "score": 48.25860830672113,
+    "simd_tier": "v3-capable",
+    "size_name": "cid22",
+    "status": "ok",
+    "threads": 1,
+    "width": 512
+  },
+  {
+    "abs_delta": 0.0,
+    "arch": "x86_64",
+    "cpu_affinity": [
+      2
+    ],
+    "cpu_model": "Intel(R) Core(TM) Ultra 7 265K",
+    "device": "cpu",
+    "gpu": "NVIDIA GeForce RTX 4080",
+    "height": 1080,
+    "host": "i265",
+    "impl": "zenmetrics",
+    "impl_binary_sha": "7b0996b5482f06be34bd701102ff6a08de7b5b9d74386e0cfba8a9d5dc6581c1",
+    "impl_version": "source",
+    "input_sha256": {
+      "distorted": "0a291f50340712738e04f24369c7494df6fee6dfea25da9eac1ab92c51b4cc76",
+      "reference": "d5d183c7dfe899dc7558625a6551327730ed8b7b38529822f6827454cf954c9a"
+    },
+    "load_after": [
+      1.3,
+      1.09,
+      0.68
+    ],
+    "load_before": [
+      1.3,
+      1.09,
+      0.68
+    ],
+    "log_sha256": "8c5aaf2eb297d9546c4f6629dd94e0791e5ffdb3a16447173b0689d6f2fe45d8",
+    "mean_ns": 3869115.3333333335,
+    "median_ns": 3301342.5,
+    "method": "zenresize Lanczos RGB8 sRGB",
+    "metric_family": "psnr",
+    "metric_name": "psnr",
+    "mode": "score",
+    "n": 30,
+    "notes": "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles",
+    "os": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "p10_ns": 3260696.1,
+    "p90_ns": 6276757.6,
+    "pair_sha256": "8e82fed166c2f1d53719ffbf8abdcdf7dcfddbefeb15d8d272456e1c0f318b37",
+    "placement_policy": "unrestricted descriptive hybrid/all-core study; explicit OS thread affinity",
+    "rayon_threads_observed": 1,
+    "ref_score": 42.566362385844045,
+    "score": 42.566362385844045,
+    "simd_tier": "v3-capable",
+    "size_name": "2k",
+    "status": "ok",
+    "threads": 1,
+    "width": 2048
+  }
+]

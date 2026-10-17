@@ -1185,6 +1185,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "fast-ssim2 0.8.2",
+ "fast-ssim2 0.9.0",
  "fsim",
  "gmsd",
  "haarpsi",
@@ -1193,6 +1194,7 @@ dependencies = [
  "mad-iqa",
  "mdctpsnr",
  "msssim",
+ "nlpd",
  "psnrhvs",
  "rayon",
  "rgb",
@@ -1204,10 +1206,12 @@ dependencies = [
  "vsi",
  "zenbench 0.1.10 (git+https://github.com/imazen/zenbench?rev=ac675d3)",
  "zenforks-cubecl",
+ "zenmetrics-abstractions",
  "zenmetrics-api",
  "zenmetrics-cli",
  "zenmetrics-corpus",
  "zenpixels",
+ "zenresize",
  "zensim 0.3.0",
 ]
 

@@ -1,0 +1,73 @@
+{
+  "observed_utc": "2026-10-17T10:46:58.846895+00:00",
+  "merged_master": "003c2b4b14194cdcf59ac85c1c3ebc45a0c99343",
+  "gates": {
+    "fmt": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/gates-v6/fmt.log",
+      "sha256": "89b3d3d60e69e44af41b1ebb5af650330ae5bbabaf3352d8516a90fa069a6429",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 7,
+        "peak_rss_gib": 0.15,
+        "min_available_mib": 21983,
+        "peak_load": 0.59
+      }
+    },
+    "cli_clippy": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/gates-v6/clippy.log",
+      "sha256": "9476c9e6b2fb10e92ae8b8985a23a8f2e5da9ab7059a62d8ef9ae7779c2fd075",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 3,
+        "peak_rss_gib": 0.41,
+        "min_available_mib": 21798,
+        "peak_load": 0.54
+      }
+    },
+    "cli_feature_matrix": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/gates-v6/matrix.log",
+      "sha256": "ece9b788eddb57ff0e9972a67fbd241888f29f8ba1c4cce830d73cf023b886ec",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 27,
+        "peak_rss_gib": 0.31,
+        "min_available_mib": 21504,
+        "peak_load": 0.92
+      }
+    },
+    "harness": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/harness.log",
+      "sha256": "8999dd82acc9bc9725bd881df6caf1c8bfd84dbc127a35f03b8ecb7aafff81a9",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 2,
+        "peak_rss_gib": 0.03,
+        "min_available_mib": 21360,
+        "peak_load": 9.72
+      }
+    },
+    "alpha_tests": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/alpha-tests.log",
+      "sha256": "50de9f0cf4d9da2d092c21e655ba28fb7554b22ba737edaef7a739060441e185",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 10,
+        "peak_rss_gib": 1.13,
+        "min_available_mib": 20794,
+        "peak_load": 1.54
+      }
+    },
+    "inventory": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017b/benchmark-study.log",
+      "sha256": "210bbec4e251987fb2acb99c964073fb272c5e8ae1a3ceab5b17fb6d396b11fc",
+      "resource": null
+    }
+  },
+  "harness_tests": 93,
+  "alpha_tests": 6,
+  "inventory_tests": 10,
+  "matrix_passed": 14,
+  "coverage": "wrapup-coverage-20261017.json",
+  "controllers": "Stopped after active cells completed; no new benchmark cells or reruns",
+  "initial_failures": "Retained fmt/clippy/matrix logs describe merged-source formatting, alpha lint and minimal-build dependency failures; corrected without assertion changes"
+}

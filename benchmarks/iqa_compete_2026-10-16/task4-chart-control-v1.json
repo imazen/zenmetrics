@@ -1,0 +1,22 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v1/raw.jsonl",
+  "raw_sha256": "1f594f85c72292bb9a4c0a78c14025fd6583e94d642f7dead0d3c9980290df68",
+  "rows_unchanged": 440,
+  "parseable_svgs": 370,
+  "bar_panels": 262,
+  "required_bar_label": null,
+  "chart_directory": "/home/lilith/tmp/iqa-compete/task4-charts-v1",
+  "summary_files": 52,
+  "maximum_summary_bytes": 27680,
+  "contaminated_bar_panels_labeled": 176,
+  "resource": {
+    "exit_code": 0,
+    "seconds": 10,
+    "peak_rss_gib": 0.08,
+    "min_available_mib": 22374,
+    "peak_load": 6.58
+  },
+  "resource_log": "/home/lilith/tmp/iqa-compete/task4-charts-v1.log",
+  "resource_log_sha256": "0f3b3613f5545e6a42391b00dd7d3b01c6dec11c3a7994bb82afa06d37c36c7c",
+  "chart_script_sha256": "43e6ab3e9b69048fd2106cf333f3b356c6da0cf89e31eb7ed069c25e0edb9c22"
+}

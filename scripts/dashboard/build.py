@@ -88,6 +88,16 @@ def provenance(path, spec):
 
 def adapt(path, spec):
     adapter = spec['adapter']
+    if adapter == 'competition-meta':
+        text = path.read_text()
+        start = 0 if text.startswith('{') else text.index('\n{') + 1
+        metadata = json.loads(text[start:])
+        for field in ['identity', 'build_commit', 'command', 'host', 'hardware', 'toolchains', 'competitors']:
+            if field not in metadata:
+                raise ValueError(f'missing competition metadata: {field}')
+        if metadata['build_commit'] != metadata['identity']['commit']:
+            raise ValueError('competition metadata commit differs')
+        return
     if adapter == 'libjxl-samples':
         import statistics
         for row in table(path, spec['columns']):
@@ -158,7 +168,7 @@ def adapt(path, spec):
                           p90_ms=number(row.get('p90_ns'))/1e6 if row.get('p90_ns') is not None else None,
                           n=row.get('n'),notes=safe_text(row.get('notes','')),sample_gate_clean=row.get('sample_gate_clean'),impl_binary_sha=row.get('impl_binary_sha'),input_sha256=row.get('input_sha256'),peak_rss_gib=(row.get('resource') or {}).get('peak_rss_gib'),
                           cpu=row.get('cpu_model'),gpu=row.get('gpu'),simd_tier=row.get('simd_tier'),
-                          parity_status=row.get('parity_status','missing'))
+                          parity_status=row.get('parity_status','missing'),timing_quality=row.get('timing_quality'),contention_peak_cores=row.get('contention_peak_cores'),coverage_first=row.get('coverage_first'),required_samples=row.get('required_samples'),parity_checked=row.get('parity_checked'))
             yield result
     else:
         yield from normalize(path,spec,table,number)

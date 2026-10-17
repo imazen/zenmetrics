@@ -1,0 +1,20 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/nn-cuda-cid22-2k-progress-v1.jsonl",
+  "raw_sha256": "562eab84277528ae0de072ad994d66fac4f5893800475673ef3813f3da9c2207",
+  "rows": 176,
+  "timed_scores": 88,
+  "unsupported_maps": 88,
+  "missing_cpu_references": 16,
+  "parsed_svgs": 89,
+  "svg_directory": "/home/lilith/tmp/iqa-compete/nn-cuda-cid22-2k-progress-v1",
+  "summary_files": 13,
+  "render_log": "/home/lilith/tmp/iqa-compete/charts-nn-cuda-progress-v1.log",
+  "resource": {
+    "exit_code": 0,
+    "seconds": 2,
+    "peak_rss_gib": 0.08,
+    "min_available_mib": 22597,
+    "peak_load": 3.43
+  },
+  "qualification": "Timing coverage for learned CUDA CID22/2K only. Missing CPU comparisons have separate chart panels. Full matrix incomplete."
+}

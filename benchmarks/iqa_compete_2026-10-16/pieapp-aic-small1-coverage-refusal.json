@@ -1,0 +1,98 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/i265.jsonl",
+  "rows": [
+    {
+      "metric_name": "pieapp",
+      "size_name": "aic-small",
+      "threads": 1,
+      "mode": "score+map",
+      "status": "unsupported",
+      "n": 0,
+      "required_samples": 5,
+      "impl_binary_sha": "a29f58057511fb9e40db3fbabadbde1cca3b04a5b0508ab7d7df9c3959dc4376",
+      "cpu_affinity": [
+        2
+      ],
+      "resource": {
+        "exit_code": 124,
+        "min_available_mib": 19736,
+        "peak_load": 2.18,
+        "peak_rss_gib": 0.47,
+        "seconds": 1100
+      },
+      "timing_quality": "contaminated",
+      "contention_peak_cores": 1.3822706756183596,
+      "contention_receipt": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/logs/pieapp-aic-small-1t-23df729ac4cb.contention.json",
+      "log_path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/logs/pieapp-aic-small-1t-23df729ac4cb.log",
+      "log_sha256": "8b9d92690b5cfe7bffa9908faa24e4586c955677bcf9630ca52d39ff8e465b3c",
+      "initialization_diagnostics": [
+        {
+          "completed": true,
+          "initialization_and_warmup_ns": 357774660826,
+          "score_bits": "3fbceb9698e07dcf"
+        }
+      ],
+      "admission_recovery": [
+        {
+          "archive": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/recovered-admission/1140-9b1d13f5d6344a3b9a3bfdda8951dccc.json",
+          "original_sha256": "8e5126c0c58ceb02ac8d20bf5d892c3f52aaf045d1d584f82528ef1ca0db5afe",
+          "preserved": "/home/lilith/.cache/zenbench/admission-v1/1140.json.bak-iqa-2654ab1fb86c48dcbff8d2007b5ca58b",
+          "process": {
+            "pgid": 2891477,
+            "pid": 2891478,
+            "unix_s": 1792216977
+          },
+          "sequence": 1140,
+          "verification": "owner absent, no process-group members, guard acquired"
+        }
+      ]
+    },
+    {
+      "metric_name": "pieapp",
+      "size_name": "aic-small",
+      "threads": 1,
+      "mode": "score",
+      "status": "skipped:timeout_1100s",
+      "n": 0,
+      "required_samples": 5,
+      "impl_binary_sha": "a29f58057511fb9e40db3fbabadbde1cca3b04a5b0508ab7d7df9c3959dc4376",
+      "cpu_affinity": [
+        2
+      ],
+      "resource": {
+        "exit_code": 124,
+        "min_available_mib": 19736,
+        "peak_load": 2.18,
+        "peak_rss_gib": 0.47,
+        "seconds": 1100
+      },
+      "timing_quality": "contaminated",
+      "contention_peak_cores": 1.3822706756183596,
+      "contention_receipt": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/logs/pieapp-aic-small-1t-23df729ac4cb.contention.json",
+      "log_path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/logs/pieapp-aic-small-1t-23df729ac4cb.log",
+      "log_sha256": "8b9d92690b5cfe7bffa9908faa24e4586c955677bcf9630ca52d39ff8e465b3c",
+      "initialization_diagnostics": [
+        {
+          "completed": true,
+          "initialization_and_warmup_ns": 357774660826,
+          "score_bits": "3fbceb9698e07dcf"
+        }
+      ],
+      "admission_recovery": [
+        {
+          "archive": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/recovered-admission/1140-9b1d13f5d6344a3b9a3bfdda8951dccc.json",
+          "original_sha256": "8e5126c0c58ceb02ac8d20bf5d892c3f52aaf045d1d584f82528ef1ca0db5afe",
+          "preserved": "/home/lilith/.cache/zenbench/admission-v1/1140.json.bak-iqa-2654ab1fb86c48dcbff8d2007b5ca58b",
+          "process": {
+            "pgid": 2891477,
+            "pid": 2891478,
+            "unix_s": 1792216977
+          },
+          "sequence": 1140,
+          "verification": "owner absent, no process-group members, guard acquired"
+        }
+      ]
+    }
+  ],
+  "note": "First coverage scope reached its original 1100-second cap; no continuation or contamination rerun; n counts retained timing samples"
+}

@@ -1,0 +1,23 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/gpu-cid22-2k-progress-v1.jsonl",
+  "raw_sha256": "7755e314d4479c3b88b29d61fe1669ec2f1ad87dd0df3848c5e02b47bc9ee451",
+  "rows_unchanged": 48,
+  "parseable_svgs": 30,
+  "per_metric_svgs": 14,
+  "render_log": "/home/lilith/tmp/iqa-compete/charts-metric-panels-v1.log",
+  "resource": {
+    "seconds": 1,
+    "peak_rss_gib": 0.07,
+    "min_available_mib": 24418,
+    "peak_load": 4.5
+  },
+  "python_public_api_preflight": {
+    "log": "/home/lilith/tmp/iqa-compete/python-preflight-learned.log",
+    "sha256": "357b072f181aba88550f3d0154d3168ff79ab6250834249faca7bc4d78af6b90",
+    "seconds": 4,
+    "peak_rss_gib": 0.5,
+    "min_available_mib": 24154,
+    "peak_load": 4.5,
+    "qualification": "Guarded imports and public signatures including PIQ LPIPS/DISTS; no forward/timing claim"
+  }
+}

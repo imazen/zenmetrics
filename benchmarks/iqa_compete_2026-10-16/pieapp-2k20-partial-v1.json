@@ -1,0 +1,32 @@
+{
+  "metric_name": "pieapp",
+  "size_name": "2k",
+  "threads": 20,
+  "status": "partial",
+  "n": 2,
+  "score": 0.2189322806478667,
+  "score_bits": "3fcc05f914b5ec8b",
+  "load_before": [
+    2.54,
+    2.43,
+    2.69
+  ],
+  "load_after": [
+    14.01,
+    12.3,
+    8.94
+  ],
+  "resource": {
+    "exit_code": 0,
+    "min_available_mib": 20733,
+    "peak_load": 18.01,
+    "peak_rss_gib": 0.53,
+    "seconds": 880
+  },
+  "log_path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-bounded/logs/pieapp-2k-20t-cbbe926debf7.log",
+  "log_sha256": "86926a2340995dc42dbf4310bb17279cb7d346e483965391a11f66c30947b068",
+  "pair_sha256": "8e82fed166c2f1d53719ffbf8abdcdf7dcfddbefeb15d8d272456e1c0f318b37",
+  "impl_binary_sha": "667e9448fb8ef9ee45a51e5d064f66880328257d1eade80dfdffc0bf4f32990c",
+  "partial_reason": "chunk time budget reached before ten zenbench rounds",
+  "qualification": "Two actual rounds only; not a ten-round CPU timing. Controller continues bounded chunks; no extrapolated duration."
+}

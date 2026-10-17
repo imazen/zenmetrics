@@ -1,0 +1,97 @@
+{
+  "sources": [
+    {
+      "host": "mac",
+      "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v2/mac-protocol-v7.jsonl",
+      "source": "/home/lilith/tmp/iqa-compete/task4/mac/protocol-v7.jsonl",
+      "raw_sha256": "f16764abd7782526392f2df97b1c9c0e778bf5b98d984e2a13fba080c54a4cc6",
+      "rows": 444,
+      "per_size": {
+        "cid22": {
+          "present": 424,
+          "timed": 260
+        },
+        "aic-small": {
+          "present": 0,
+          "timed": 0
+        },
+        "aic-medium": {
+          "present": 0,
+          "timed": 0
+        },
+        "aic-large": {
+          "present": 0,
+          "timed": 0
+        },
+        "2k": {
+          "present": 20,
+          "timed": 13
+        },
+        "4k": {
+          "present": 0,
+          "timed": 0
+        },
+        "8k": {
+          "present": 0,
+          "timed": 0
+        }
+      },
+      "statuses": {
+        "ok": 273,
+        "unsupported": 151,
+        "skipped": 20
+      },
+      "timing_labels": {
+        "contaminated": 378,
+        "clean": 66
+      }
+    },
+    {
+      "host": "r7900x",
+      "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v2/r7900x-protocol-v7.jsonl",
+      "source": "/home/lilith/tmp/iqa-compete/task4/r7900x/protocol-v7.jsonl",
+      "raw_sha256": "647dbdf78a466f1221fc20f720d27ee9c4fecee216bbc413903d164ea6d0560b",
+      "rows": 444,
+      "per_size": {
+        "cid22": {
+          "present": 424,
+          "timed": 260
+        },
+        "aic-small": {
+          "present": 0,
+          "timed": 0
+        },
+        "aic-medium": {
+          "present": 0,
+          "timed": 0
+        },
+        "aic-large": {
+          "present": 0,
+          "timed": 0
+        },
+        "2k": {
+          "present": 20,
+          "timed": 13
+        },
+        "4k": {
+          "present": 0,
+          "timed": 0
+        },
+        "8k": {
+          "present": 0,
+          "timed": 0
+        }
+      },
+      "statuses": {
+        "ok": 273,
+        "unsupported": 151,
+        "skipped": 20
+      },
+      "timing_labels": {
+        "contaminated": 150,
+        "clean": 294
+      }
+    }
+  ],
+  "note": "New external-lane v7 receipts imported without metric calls, parity reruns, chart work or repeated scope qualification; host lane retains ownership"
+}
