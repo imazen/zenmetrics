@@ -21,6 +21,21 @@ Workspace conventions per the global rules:
 
 - Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
 
+## zenmetrics-nn
+
+### Added
+
+- AHIQ on rten and ort-cuda, using the authors' checkpoint and deterministic nine-crop protocol; weights require consent (`81b5928a`, `157e6612`).
+- DMM on rten and ort-cuda, with a host SVD head and explicit per-row netlib regression floors; MKL score differences remain recorded separately (`fb221d66`, `81b5928a`).
+
+### Fixed
+
+- Bound DMM image geometry and cached allocations, poll cancellation per channel, and correct the LAPACK epsilon, small-matrix scaling and reflector multiplication order (score revision 2, `1e67c476`).
+
+### QUEUED BREAKING CHANGES
+
+- None.
+
 ## zenmetrics-cli
 
 ### Added

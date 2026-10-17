@@ -151,16 +151,16 @@ Scored at native resolution with upstream's protocol (no resize; mean over
 the nine deterministic 224×224 `five_point_crop` crops; the 640×480 KonJND
 images are comfortably ≥224).
 
-The `dmm` rows are likewise scored by the Rust port (`--metric dmm`, engine
+The `dmm` calibration rows were scored by Rust score revision 1 (`--metric dmm`, engine
 ort-cuda, ONNX Runtime 1.31, dev, 2026-10-16, in the commit that adds the
 `dmm` row to `jnd_scale.tsv`). DMM is lower-is-better and its identical-pair
 score is exactly 0 on every reference, so each value is the raw distance
 `score(ref, dist)` and the table entries are its quartiles and median.
 Scored under upstream `prepare_image_adt` (640×480 → Pillow-bilinear
-short-side 416×480). Caveat unique to DMM: the score depends on which
+short-side 320 (426×320)). Caveat unique to DMM: the score depends on which
 orthonormal basis the patch SVD draws inside degenerate singular clusters
 (86–93% of tap elements are exact zeros post-ReLU), so these numbers are
-specific to the shipped solver — an f32 transliteration of LAPACK's
+specific to that revision of the solver — an f32 transliteration of LAPACK's
 `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` (`gesdd` path). A cyclic-Jacobi head
 measured on the same pairs gave pooled 0.218193 (+14%) before it was
 replaced. Even upstream's own `torch.svd` differs by backend: on ladder

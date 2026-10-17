@@ -7,21 +7,28 @@ source = "upstream-port"
 upstream = "https://github.com/Baoliang93/DMM"
 upstream_package = "pip `DMM_PyTorch` (DMM_PyTorch/DMM.py)"
 licence = "MIT (Baoliang Chen 2024)"
-notes = "Debiased Mapping for FR-IQA: VGG16 with every MaxPool2d replaced by L2 pooling (3x3 Hann-window RMS), taps at relu3_3/relu4_3, then an unfold-16/stride-4 per-patch SVD head. The head cannot be expressed in ONNX (torch.svd), so the port keeps it in Rust: svd16 is a faithful f32 transliteration of LAPACK's dgebd2->dorg2r->dbdsqr->dlasdq->dbdsdc (gesdd path for n=16). The score's wt term is draw-sensitive (which orthonormal basis a solver emits inside degenerate singular clusters): a cyclic-Jacobi eigensolver deviated ~+11% vs torch.svd; the LAPACK port tracks MKL's sgesdd draw to ~0.03% on identical taps."
+notes = "Debiased Mapping for FR-IQA: VGG16 with L2 pooling, taps relu3_3/relu4_3 and unfold-16/stride-4 SVD head. The Rust head follows LAPACK's small-N SGESDD path in f32. Its basis-dependent wt term means algorithm correspondence alone does not establish score parity; per-row JND and pinned-floor coverage are recorded below."
 
 [weights]
 # VGG16 'IMAGENET1K_V1' via torchvision — permissive (BSD-3 torchvision /
-# ImageNet backbone weights as distributed by torchvision). There is NO
+# ImageNet backbone weights as distributed by torchvision). ImageNet terms
+# may apply to the weights (counsel item: docs/PYIQA_PORT_PLAN.md section 9).
+# There is NO
 # trained DMM checkpoint: the metric is parameter-free past the backbone,
 # so no WeightsConsent gate.
 licence_class = "permissive"
 checkpoint = "torchvision vgg16 IMAGENET1K_V1 (fetched by torchvision)"
+trunk_url = "https://download.pytorch.org/models/vgg16-397923af.pth"
 trained_on = "n/a — no fitted parameters"
 
 [input]
 format = "packed sRGB8"
 normalisation = "v/255 -> [0,1]; upstream's input_norm defaults to off"
 resize = "prepare_image_adt: if min(h,w) > 128, PIL-bilinear resize short side to max(floor(min/48)*32, 128), long side int(new*long/short); <=128 images pass through. The port reproduces Pillow's fixed-point BILINEAR bit-exactly (resize_bilinear_pil_u8 — zenresize has no Pillow-exactness knob: i16@2^14 largest-remainder vs Pillow's 2^22 last-tap fold)"
+max_side = 4096
+max_pixels_64bit = 16777216
+max_pixels_32bit = 1048576
+max_aspect_ratio = 32
 min_size = 128                        # taps smaller than one 16x16 patch cannot be scored
 
 [export]
@@ -31,11 +38,12 @@ opset = 17
 notes = "dmm_trunk.onnx: [1,3,h,w] -> t3 [1,256,h/4,w/4] (relu3_3), t4 [1,512,h/8,w/8] (relu4_3), both under L2 pooling. Self-checks at export: trunk taps == upstream FeaturesExtractor <1e-6; the chunked head replica == upstream DMM() <1e-5. Goldens are upstream DMM() scores under prepare_image_adt (CPU, fp32)."
 
 [parity]
+regression_floor_policy = "Regenerating per-row residual floors requires owner approval. Never increase an existing tolerance or move a jnd row to pinned without explicit approval. Candidate generation: just nn-dmm-netlib-goldens; goldens in this directory are reviewed source artifacts."
 oracle = "Baoliang93/DMM upstream DMM(), CPU fp32, prepare_image_adt — MKL sgesdd draws"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = "0.191420 (KonJND-1k 1008 pairs, ort-cuda, 2026-10-16; JPEG 0.167535 / BPG 0.218804 — benchmarks/nn_konjnd_scale_2026-10-15.md)"
-results = "Gate is `just nn-parity-dmm` vs dmm_goldens_netlib_<engine>.tsv (scipy sgesdd-f32 head on THIS engine's taps, models/dmm/gen_netlib_goldens.py): the score consumes the SVD basis draw inside degenerate clusters — implementation-defined — and amplifies tap noise ~100x, so torch-tap and MKL-draw goldens are both structurally unmatched at 1e-3 JND. Netlib-tracked rows gate at 1e-3 JND; solver-drift rows pin at their measured residual (+5% floor). Recorded, not gated, vs MKL goldens: rten median |d| 1.77e-3 / max 5.7e-2 (1/24 rows <= 1.9142e-4); ort-cuda median 8.1e-4 / max 0.176 (2/24). Upstream's own torch.svd CPU(MKL)-vs-CUDA(cuSolver) spread on the same pipeline reaches 1.73 abs ~ 9 JND (2207_128: 31.513 vs 33.237). Worst degenerate patch: MKL wt 3.090, scipy sgesdd 3.8179, ours 3.8181 — ours tracks netlib. benchmarks/dmm_aic_probe/; DIVERGENCES.md ### dmm."
+results = "The reviewed engine panels contain 24 rows each: revision-1 classifications are rten 6 JND + 18 pinned and ort-cuda 7 JND + 17 pinned. A JND row is bounded by 1e-3 JND; a pinned row is an owner-approved regression floor at its recorded residual +5%, not a parity claim. Both use SciPy SGESDD on the engine's own ONNX taps. Revision-1 comparisons against upstream MKL are recorded separately: rten median 0.0016733615 / max 0.05674388 (1/24 within 1e-3 JND), ort-cuda median 0.00073373545 / max 0.17642495 (2/24). The corrected score-revision-2 measurements are being qualified in benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md. Single-patch agreement does not establish whole-panel parity."
 
 [aic4]
-convention = "AIC-4 2026 publishes a DMM column (metrics_subset.csv); its eval pipeline is not upstream's and is undetermined here."
-results = "NOT reproduced by the upstream convention — native port vs published on the 61-pair crop set: median |d| 7.47e-2, max 0.417 (benchmarks/dmm_aic_probe/aic_dmm.tsv)."
+convention = "AIC-4 2026 publishes a DMM column (metrics_subset.csv); the column is not reproduced here and its evaluation pipeline remains undetermined."
+results = "Historical score-revision-1 comparison, not reproduced by the upstream convention — native port vs published on the 61-pair crop set: median |d| 7.47e-2, max 0.417 (benchmarks/dmm_aic_probe/aic_dmm.tsv)."

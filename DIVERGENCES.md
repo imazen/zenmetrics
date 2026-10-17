@@ -623,12 +623,13 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   orthonormal basis is chosen by the LAPACK build's deflation path, not
   by the math. Upstream's oracle is MKL `sgesdd` (`torch.svd` CPU);
   our port is a pure-Rust f32 transliteration of the netlib
-  `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` path and matches *that* draw —
+  `dgebd2→dorg2r→dbdsqr→dlasdq→dbdsdc` path in score revision 1;
+  agreement on one patch is not whole-panel parity —
   on the worst degenerate ladder patch (rank-1, 15-dim null space) MKL
   draws `wt=3.090`, scipy `sgesdd` 3.8179, ours 3.8181.
-- Measured spreads on the 24-row ladder (score units; 1 JND = 0.191420):
-  ours vs MKL-goldens: rten median 1.77e-3 / max 5.7e-2, ort-cuda median
-  8.1e-4 / max 0.176. Upstream's *own* CPU-vs-CUDA (`torch.svd` MKL vs
+- Historical score-revision-1 spreads on the 24-row ladder (score units; 1 JND = 0.191420):
+  ours vs MKL-goldens: rten median 1.67336e-3 / max 5.7e-2, ort-cuda median
+  7.33735e-4 / max 0.176. Upstream's *own* CPU-vs-CUDA (`torch.svd` MKL vs
   cuSolver, same pipeline): up to **1.73 absolute (~9 JND)** on
   `2207_128`, +1.7% on `2207_256`, +3.3% on `2406_128` — the published
   variation is larger than any port gap we introduce.

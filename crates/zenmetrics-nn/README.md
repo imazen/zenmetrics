@@ -31,14 +31,13 @@ of each column on KonJND-1k pairs at the observers' just-noticeable threshold
 ¹ CKDN, A-FINE, AHIQ and WaDIQaM-FR have image-dependent identical-pair scores, so
 their JND is the pooled median over score(pair) − score(reference vs itself): |delta|
 for CKDN, AHIQ and WaDIQaM-FR, signed for A-FINE.
-² DMM's score depends on which orthonormal basis the patch SVD *draws* inside
-degenerate singular clusters (~90% of tap elements are exact zeros post-ReLU) —
-implementation-defined per LAPACK build, not a porting bug. Our head transliterates
-netlib `sgesdd` in f32 and is gated against netlib goldens scored on the same
-engine taps (`just nn-parity-dmm`); upstream's own CPU (MKL) vs CUDA (cuSolver)
-backends differ up to ~9 JND on degenerate-heavy pairs (`2207_128`: 31.51 vs
-33.24), and MKL's draw is unreachable from pure Rust — the MKL-golden comparison
-is recorded, not gated. Details: [`DIVERGENCES.md`](../../DIVERGENCES.md) `### dmm`.
+² DMM uses singular-vector bases inside degenerate clusters, so its score
+can depend on the solver and floating-point operation order. `nn-parity-dmm`
+compares against SciPy SGESDD on the engine's own taps. Each reviewed row
+has either the canonical JND limit or an owner-approved pinned residual
+limit; these are distinct forms of evidence. Upstream MKL comparisons are
+recorded separately. Counts and measurements: [`DIVERGENCES.md`](../../DIVERGENCES.md)
+`### dmm` and the [model card](models/dmm/card.toml).
 
 Engines (`Engine`): `rten` (default feature, pure Rust, CPU); `ort` feature:
 ONNX Runtime 1.31 with the CUDA provider, TF32 off, deterministic compute,
