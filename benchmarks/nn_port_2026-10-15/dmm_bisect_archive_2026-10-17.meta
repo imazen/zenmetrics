@@ -1,0 +1,15 @@
+DMM individual-change study archive, observed 2026-10-17
+Status: PARTIAL. Baseline plus four of eight arithmetic changes are complete.
+Missing: orm2r_order, right_sger_order, f64_norm, reference_norm.
+Cases: baseline, epsilon, small_n_scaling, org2r_order, lartg.
+Archive: dev:/mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/dmm-bisect-complete-5-2026-10-17.tar.gz
+Bytes: 23784
+SHA256: b8aab94792411c0baf570cb4eaf98de7b70331707437a93095d6c983e8ddc303
+Verified by independent remote sha256sum after transfer.
+Contents: all three native logs/score TSVs/summaries and the resource receipt
+for each complete case; source manifest, per-change table, source-isolation
+receipt and oracle-library identity. No model weights or image data included.
+Command: just nn-dmm-bisect-pack <study-directory> <fresh-archive> baseline,epsilon,small_n_scaling,org2r_order,lartg
+Copy: just nn-dmm-bisect-copy <archive> dev:/mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/
+Resolve: ssh dev sha256sum /mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/dmm-bisect-complete-5-2026-10-17.tar.gz
+The complete study will have a separate archive; preserve this observation.

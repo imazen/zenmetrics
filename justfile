@@ -792,6 +792,36 @@ nn-dmm-bisect-progress directory:
         fi
     done < benchmarks/nn_port_2026-10-15/dmm_bisect_sources_2026-10-17.tsv
 
+# Package explicitly selected completed measurements; preserve earlier archives.
+nn-dmm-bisect-pack directory output cases:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -o noclobber
+    files=()
+    IFS=, read -ra selected <<< '{{cases}}'
+    for change in "${selected[@]}"; do
+        [[ "$change" =~ ^[a-z][a-z0-9_]*$ ]]
+        rg -q "^$change"$'\t' benchmarks/nn_port_2026-10-15/dmm_bisect_sources_2026-10-17.tsv
+        rg -q '^run-heavy: done ' '{{directory}}'/$change.runner.log
+        files+=("$change.runner.log")
+        for engine in rten ort-cuda ort-cuda-repeat; do
+            rg -q '^Pinned rows eligible for promotion:' '{{directory}}'/$change-$engine.summary
+            for suffix in log tsv summary; do
+                test -s '{{directory}}'/$change-$engine.$suffix
+                files+=("$change-$engine.$suffix")
+            done
+        done
+    done
+    tar -cz -C '{{directory}}' "${files[@]}" -C '{{justfile_directory()}}' \
+        benchmarks/nn_port_2026-10-15/dmm_bisect_sources_2026-10-17.tsv \
+        benchmarks/nn_port_2026-10-15/dmm_bisect_results_2026-10-17.md \
+        benchmarks/nn_port_2026-10-15/dmm_bisect_isolation_2026-10-17.txt \
+        benchmarks/nn_port_2026-10-15/dmm_oracle_info_2026-10-17.txt > '{{output}}'
+    sha256sum '{{output}}'
+
+nn-dmm-bisect-copy archive destination:
+    rsync -a --ignore-existing -- '{{archive}}' '{{destination}}'
+
 nn-dmm-bisect-isolation:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_isolation.py
 
