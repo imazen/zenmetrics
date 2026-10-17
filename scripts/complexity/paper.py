@@ -233,6 +233,41 @@ def main():
     else:
         lines += ['', f'Materialization is annotated for {len(resid)} measured metrics so far; the residual-vs-materialization '
                   'figure appears once at least four are annotated.', '']
+    lines += ['## Math', '',
+              'For metric m at shape W×H, each tallied stage s processes n_s elements per image, i_s images, over its '
+              'pyramid levels, with c_{s,o,p} operations of class o at precision p per element. Per original pixel:', '',
+              '    N_{o,p}(m) = Σ_s Σ_levels i_s · n_s · c_{s,o,p} / (W·H)', '',
+              'A weight table assigns w_{o,p} (cycles, LLVM cost units or declared relative cost; integer precisions use '
+              'the table\'s integer entry, other unlisted precisions its `*` entry, classes without a weight are '
+              'listed as unweighted and contribute nothing):', '',
+              '    C(m) = Σ_{o,p} w_{o,p} · N_{o,p}(m)', '',
+              'Halo factors: pad = (W + 2h_x)(H + 2h_y) / (W·H); strip64 = 1 + 2h_y / 64, where h_x, h_y are the '
+              'cumulative per-axis halo radii from the tallies.', '',
+              'Measured time per pixel: t(m) = median over repeats of (T(1+K calls) − T(1 call)) / K / (W·H), with T the '
+              '`perf stat` task-clock (CPU time) or wall time of the process.', '',
+              'Fit: one scale k = exp(median_m(ln t(m) − ln C(m))). Residual r(m) = t(m) / (k·C(m)). Typical error = '
+              'exp(median_m |ln r(m)|). Residual spread = max_m r(m) / min_m r(m). Spearman ρ = Pearson correlation of '
+              'the ranks of ln C and ln t (average ranks for ties); "Pearson log" = Pearson correlation of ln C and ln t. '
+              'Intervals: 2,000 bootstrap resamples of metrics with a fixed seed, 2.5th and 97.5th percentiles.', '']
+    lines += ['## Weight tables used', '',
+              'Per-operation weights exactly as used above (`scripts/complexity/weights_*.json`; each file records its '
+              'source and mapping). Columns are precisions; `int` covers integer precisions; `*` is the fallback.', '']
+    ops_order = ['add', 'mul', 'fma', 'div', 'rcp', 'sqrt', 'rsqrt', 'exp', 'log', 'pow', 'trig', 'cmp', 'abs', 'cvt',
+                 'int', 'load', 'store']
+    for stem, label in TABLES:
+        wt = json.loads((HERE/f'weights_{stem}.json').read_text())
+        cols = ['f32', 'f64', 'int', '*']
+        lines += [f'### {label}', '', f"Source: {wt.get('source', 'not recorded')}", '',
+                  '| op | ' + ' | '.join(cols) + ' |', '|---|' + '---:|' * len(cols)]
+        for op in ops_order:
+            if op in wt['weights']:
+                row = wt['weights'][op]
+                lines.append(f'| {op} | ' + ' | '.join(f'{row[c]:g}' if c in row else '–' for c in cols) + ' |')
+        missing_ops = [op for op in ops_order if op not in wt['weights']]
+        if missing_ops:
+            lines.append('')
+            lines.append('No weight (contributes nothing): ' + ', '.join(missing_ops) + '.')
+        lines.append('')
     lines += ['## Limits', '',
               '- One host, one shape, one content pair. Nothing here ranks metrics across hosts.',
               '- The rank correlations are dominated by the three-decade spread between the cheapest and most expensive '

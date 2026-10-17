@@ -214,6 +214,214 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 
 Materialization is annotated for 0 measured metrics so far; the residual-vs-materialization figure appears once at least four are annotated.
 
+## Math
+
+For metric m at shape W×H, each tallied stage s processes n_s elements per image, i_s images, over its pyramid levels, with c_{s,o,p} operations of class o at precision p per element. Per original pixel:
+
+    N_{o,p}(m) = Σ_s Σ_levels i_s · n_s · c_{s,o,p} / (W·H)
+
+A weight table assigns w_{o,p} (cycles, LLVM cost units or declared relative cost; integer precisions use the table's integer entry, other unlisted precisions its `*` entry, classes without a weight are listed as unweighted and contribute nothing):
+
+    C(m) = Σ_{o,p} w_{o,p} · N_{o,p}(m)
+
+Halo factors: pad = (W + 2h_x)(H + 2h_y) / (W·H); strip64 = 1 + 2h_y / 64, where h_x, h_y are the cumulative per-axis halo radii from the tallies.
+
+Measured time per pixel: t(m) = median over repeats of (T(1+K calls) − T(1 call)) / K / (W·H), with T the `perf stat` task-clock (CPU time) or wall time of the process.
+
+Fit: one scale k = exp(median_m(ln t(m) − ln C(m))). Residual r(m) = t(m) / (k·C(m)). Typical error = exp(median_m |ln r(m)|). Residual spread = max_m r(m) / min_m r(m). Spearman ρ = Pearson correlation of the ranks of ln C and ln t (average ranks for ties); "Pearson log" = Pearson correlation of ln C and ln t. Intervals: 2,000 bootstrap resamples of metrics with a fixed seed, 2.5th and 97.5th percentiles.
+
+## Weight tables used
+
+Per-operation weights exactly as used above (`scripts/complexity/weights_*.json`; each file records its source and mapping). Columns are precisions; `int` covers integer precisions; `*` is the fallback.
+
+### flop count
+
+Source: unweighted: one per arithmetic operation, two per fma; loads, stores, conversions and integer ops excluded
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | – | – | – | 1 |
+| mul | – | – | – | 1 |
+| fma | – | – | – | 2 |
+| div | – | – | – | 1 |
+| rcp | – | – | – | 1 |
+| sqrt | – | – | – | 1 |
+| rsqrt | – | – | – | 1 |
+| exp | – | – | – | 1 |
+| log | – | – | – | 1 |
+| pow | – | – | – | 1 |
+| trig | – | – | – | 1 |
+| cmp | – | – | – | 0 |
+| abs | – | – | – | 0 |
+| cvt | – | – | – | 0 |
+| int | – | – | – | 0 |
+| load | – | – | – | 0 |
+| store | – | – | – | 0 |
+
+### Pedzisz draft weights
+
+Source: M. Pedzisz (Nokia), "Complexity Assessment of Full-Reference Image Quality Metrics", JPEG AIC-4 contribution, preliminary draft dated 2026-10-07, Table 1 (cited with the owner's permission). Mapping here: fma = mul + add = 2; rcp and rsqrt take the division and square-root weights; softplus (25) has no class in our tallies; int ops take weight 1 as baseline scalar operations; loads, stores and conversions 0 (the draft gives element copies weight 0).
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | – | – | – | 1 |
+| mul | – | – | – | 1 |
+| fma | – | – | – | 2 |
+| div | – | – | – | 6 |
+| rcp | – | – | – | 6 |
+| sqrt | – | – | – | 4 |
+| rsqrt | – | – | – | 4 |
+| exp | – | – | – | 20 |
+| log | – | – | – | 20 |
+| pow | – | – | – | 40 |
+| trig | – | – | – | 20 |
+| cmp | – | – | – | 1 |
+| abs | – | – | – | 1 |
+| cvt | – | – | – | 0 |
+| int | – | – | – | 1 |
+| load | – | – | – | 0 |
+| store | – | – | – | 0 |
+
+### measured i265 P-core throughput
+
+Source: benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv; median of 5 perf cycle slopes; mapping add/f32=vaddss, add/f64=vaddsd, mul/f32=vmulss, mul/f64=vmulsd, fma/f32=vfmadd231ss, fma/f64=vfmadd231sd, div/f32=vdivss, div/f64=vdivsd, sqrt/f32=vsqrtss, sqrt/f64=vsqrtsd, rcp/f32=vrcpss, rsqrt/f32=vrsqrtss, cmp/f32=vminss, cmp/f64=vminsd, abs/f32=vandps_x, abs/f64=vandpd_x, cvt/f32=vcvtss2sd, cvt/f64=vcvtsd2ss, exp/f32=expf, exp/f64=exp, log/f32=logf, log/f64=log, pow/f32=powf, pow/f64=pow, trig/f32=cosf, add/integer=vpaddd_x, cmp/integer=vpaddd_x, int/integer=vpaddd_x, abs/integer=vpaddd_x, mul/integer=vpmulld_x, cvt/integer=vpmovzxbd_xx
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 0.4215 | 0.4212 | 0.1715 | 0.4215 |
+| mul | 0.4221 | 0.4251 | 0.942 | 0.4221 |
+| fma | 0.4331 | 0.4351 | – | 0.4331 |
+| div | 1.9421 | 3.451 | – | 1.9421 |
+| rcp | 0.9293 | – | – | 0.9293 |
+| sqrt | 3.4598 | 5.9681 | – | 3.4598 |
+| rsqrt | 0.9299 | – | – | 0.9299 |
+| exp | 6.8654 | 9.0984 | – | 6.8654 |
+| log | 7.4334 | 8.4508 | – | 7.4334 |
+| pow | 12.9917 | 25.3061 | – | 12.9917 |
+| trig | 5.4972 | – | – | 5.4972 |
+| cmp | 0.4326 | 0.432 | 0.1715 | 0.4326 |
+| abs | 0.17 | 0.171 | 0.1715 | 0.17 |
+| cvt | 0.5795 | 0.5902 | 0.4222 | 0.5795 |
+| int | – | – | 0.1715 | 0.1715 |
+
+No weight (contributes nothing): load, store.
+
+### measured i265 P-core latency
+
+Source: benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv; median of 5 perf cycle slopes; mapping add/f32=vaddss, add/f64=vaddsd, mul/f32=vmulss, mul/f64=vmulsd, fma/f32=vfmadd231ss, fma/f64=vfmadd231sd, div/f32=vdivss, div/f64=vdivsd, sqrt/f32=vsqrtss, sqrt/f64=vsqrtsd, rcp/f32=vrcpss, rsqrt/f32=vrsqrtss, cmp/f32=vminss, cmp/f64=vminsd, abs/f32=vandps_x, abs/f64=vandpd_x, cvt/f32=vcvtss2sd, cvt/f64=vcvtsd2ss, exp/f32=expf, exp/f64=exp, log/f32=logf, log/f64=log, pow/f32=powf, pow/f64=pow, trig/f32=cosf, add/integer=vpaddd_x, cmp/integer=vpaddd_x, int/integer=vpaddd_x, abs/integer=vpaddd_x, mul/integer=vpmulld_x, cvt/integer=vpmovzxbd_xx
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 2.007 | 2.0064 | 1.0172 | 2.007 |
+| mul | 3.0152 | 3.0127 | 6.2475 | 3.0152 |
+| fma | 4.0398 | 4.0274 | – | 4.0398 |
+| div | 7.0126 | 10.058 | – | 7.0126 |
+| rcp | 4.8162 | – | – | 4.8162 |
+| sqrt | 10.0761 | 15.0869 | – | 10.0761 |
+| rsqrt | 4.7976 | – | – | 4.7976 |
+| exp | 35.6973 | 37.3771 | – | 35.6973 |
+| log | 45.9796 | 47.6085 | – | 45.9796 |
+| pow | 36.0225 | 41.7208 | – | 36.0225 |
+| trig | 26.5504 | – | – | 26.5504 |
+| cmp | 4.0167 | 4.0317 | 1.0172 | 4.0167 |
+| abs | 1.0034 | 1.011 | 1.0172 | 1.0034 |
+| cvt | 5.0148 | 5.024 | 1.0164 | 5.0148 |
+| int | – | – | 1.0172 | 1.0172 |
+
+No weight (contributes nothing): load, store.
+
+### LLVM cost model arrowlake throughput
+
+Source: opt -passes='print<cost-model>' -cost-kind=throughput, one scalar instruction per class (scripts/complexity/llvm_cost_tables.py); abstract TTI units, libcalls use generic costs
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 1 | 1 | 1 | 1 |
+| mul | 1 | 1 | 1 | 1 |
+| fma | 1 | 1 | – | 1 |
+| div | 7 | 14 | – | 7 |
+| sqrt | 7 | 14 | – | 7 |
+| exp | 10 | 10 | – | 10 |
+| log | 10 | 10 | – | 10 |
+| pow | 10 | 10 | – | 10 |
+| trig | 10 | 10 | – | 10 |
+| cmp | 2 | 2 | 1 | 2 |
+| abs | 2 | 2 | 1 | 2 |
+| cvt | 1 | 1 | 0 | 1 |
+| int | – | – | – | 1 |
+| load | 1 | 1 | – | 1 |
+| store | 1 | 1 | – | 1 |
+
+No weight (contributes nothing): rcp, rsqrt.
+
+### LLVM cost model arrowlake latency
+
+Source: opt -passes='print<cost-model>' -cost-kind=latency, one scalar instruction per class (scripts/complexity/llvm_cost_tables.py); abstract TTI units, libcalls use generic costs
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 4 | 4 | 1 | 4 |
+| mul | 5 | 5 | 4 | 5 |
+| fma | 1 | 1 | – | 1 |
+| div | 13 | 20 | – | 13 |
+| sqrt | 15 | 21 | – | 15 |
+| exp | 10 | 10 | – | 10 |
+| log | 10 | 10 | – | 10 |
+| pow | 10 | 10 | – | 10 |
+| trig | 10 | 10 | – | 10 |
+| cmp | 7 | 7 | 1 | 7 |
+| abs | 2 | 2 | 2 | 2 |
+| cvt | 1 | 1 | 0 | 1 |
+| int | – | – | – | 1 |
+| load | 4 | 4 | – | 4 |
+| store | 1 | 1 | – | 1 |
+
+No weight (contributes nothing): rcp, rsqrt.
+
+### llvm-mca arrowlake (ADLP) throughput
+
+Source: benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv; scalar instruction per class; libm calls absent from mca
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 0.5 | 0.5 | 0.33 | 0.5 |
+| mul | 0.5 | 0.5 | 1 | 0.5 |
+| fma | 0.5 | 0.5 | – | 0.5 |
+| div | 1 | 1 | – | 1 |
+| rcp | 1 | – | – | 1 |
+| sqrt | 1 | 1 | – | 1 |
+| rsqrt | 1 | – | – | 1 |
+| cmp | 0.5 | 0.5 | 0.33 | 0.5 |
+| abs | – | – | 0.33 | 0.33 |
+| cvt | 1 | 1 | 0.5 | 1 |
+| int | – | – | 0.33 | 0.33 |
+
+No weight (contributes nothing): exp, log, pow, trig, load, store.
+
+### LLVM cost model znver5 throughput (other CPU)
+
+Source: opt -passes='print<cost-model>' -cost-kind=throughput, one scalar instruction per class (scripts/complexity/llvm_cost_tables.py); abstract TTI units, libcalls use generic costs
+
+| op | f32 | f64 | int | * |
+|---|---:|---:|---:|---:|
+| add | 1 | 1 | 1 | 1 |
+| mul | 1 | 1 | 1 | 1 |
+| fma | 1 | 1 | – | 1 |
+| div | 3 | 4 | – | 3 |
+| sqrt | 3 | 6 | – | 3 |
+| exp | 10 | 10 | – | 10 |
+| log | 10 | 10 | – | 10 |
+| pow | 10 | 10 | – | 10 |
+| trig | 10 | 10 | – | 10 |
+| cmp | 2 | 2 | 1 | 2 |
+| abs | 2 | 2 | 1 | 2 |
+| cvt | 1 | 1 | 0 | 1 |
+| int | – | – | – | 1 |
+| load | 1 | 1 | – | 1 |
+| store | 1 | 1 | – | 1 |
+
+No weight (contributes nothing): rcp, rsqrt.
+
 ## Limits
 
 - One host, one shape, one content pair. Nothing here ranks metrics across hosts.
