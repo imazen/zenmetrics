@@ -1653,3 +1653,15 @@ The [real interruption control](benchmarks/iqa_compete_2026-10-16/timeout-recove
 keeps interrupted samples unqualified; OS-backed controls protect live groups,
 other owners and locked guards. This is benchmark scheduling state, not a metric
 score discrepancy.
+
+### Known Bugs: IQA benchmark ORT worker budgets (2026-10-17)
+
+The initial compete harness set thread environment variables but left ORT session
+pools at their default. The installed runtime's default pool used twenty native
+threads and expanded worker affinities beyond the requested one-CPU mask. The
+benchmark snapshot now sets every session's intra-op budget explicitly, with one
+inter-op thread. ORT's full telemetry opt-out also removes its import-time helper
+and background I/O from this study. The original exact one/twenty-worker controls
+pass without assertion changes. Earlier ORT rows remain diagnostics; corrected
+runs have their own ledger and configured-session receipts. See the
+[measured control](benchmarks/iqa_compete_2026-10-16/ort-budget-control.json).

@@ -1,0 +1,161 @@
+{
+  "cases": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/ort-thread-control-v2-cases.json",
+      "sha256": "12d09ff261213109034f02ab70d2ca381c28d52f4b84d003d6fe139227851a2a",
+      "cases": [
+        {
+          "configuration": "default",
+          "package_version": "1.31.0",
+          "telemetry_environment": null,
+          "baseline_native_threads": 2,
+          "observed_native_threads": 21,
+          "requested_intra_threads": 0,
+          "requested_inter_threads": 0,
+          "affinity_mask_counts": {
+            "2": 3,
+            "1": 1,
+            "8": 1,
+            "9": 1,
+            "10": 1,
+            "11": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "12": 1,
+            "13": 1,
+            "14": 1,
+            "15": 1,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "19": 1,
+            "6": 1,
+            "7": 1
+          }
+        },
+        {
+          "configuration": "1",
+          "package_version": "1.31.0",
+          "telemetry_environment": null,
+          "baseline_native_threads": 2,
+          "observed_native_threads": 2,
+          "requested_intra_threads": 1,
+          "requested_inter_threads": 1,
+          "affinity_mask_counts": {
+            "2": 2
+          }
+        },
+        {
+          "configuration": "20",
+          "package_version": "1.31.0",
+          "telemetry_environment": null,
+          "baseline_native_threads": 2,
+          "observed_native_threads": 21,
+          "requested_intra_threads": 20,
+          "requested_inter_threads": 1,
+          "affinity_mask_counts": {
+            "0-19": 21
+          }
+        }
+      ]
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/ort-thread-control-v3.json",
+      "sha256": "e4d54cfc11e2733380de94aae4f03df7af9edc0f835e7de1b331164ffc9fe034",
+      "cases": [
+        {
+          "configuration": "default",
+          "package_version": "1.31.0",
+          "telemetry_environment": "1",
+          "baseline_native_threads": 1,
+          "observed_native_threads": 20,
+          "requested_intra_threads": 0,
+          "requested_inter_threads": 0,
+          "affinity_mask_counts": {
+            "2": 2,
+            "1": 1,
+            "8": 1,
+            "9": 1,
+            "10": 1,
+            "11": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "12": 1,
+            "13": 1,
+            "14": 1,
+            "15": 1,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "19": 1,
+            "6": 1,
+            "7": 1
+          }
+        },
+        {
+          "configuration": "1",
+          "package_version": "1.31.0",
+          "telemetry_environment": "1",
+          "baseline_native_threads": 1,
+          "observed_native_threads": 1,
+          "requested_intra_threads": 1,
+          "requested_inter_threads": 1,
+          "affinity_mask_counts": {
+            "2": 1
+          }
+        },
+        {
+          "configuration": "20",
+          "package_version": "1.31.0",
+          "telemetry_environment": "1",
+          "baseline_native_threads": 1,
+          "observed_native_threads": 20,
+          "requested_intra_threads": 20,
+          "requested_inter_threads": 1,
+          "affinity_mask_counts": {
+            "0-19": 20
+          }
+        }
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/ort-thread-control-v2.log",
+      "sha256": "48d3af697feb59926ca85c317b21b022d38fd1fa899059aa96de7ce341874eb6",
+      "resource": {
+        "exit_code": 1,
+        "seconds": 1,
+        "peak_rss_gib": 0.07,
+        "min_available_mib": 25354,
+        "peak_load": 1.54
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/ort-thread-control-v3.log",
+      "sha256": "70725b9bec34fa27746ed18efb0adb6ed741671cea1b9367fe4671ee56cc313b",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 1,
+        "peak_rss_gib": 0.06,
+        "min_available_mib": 25182,
+        "peak_load": 1.5
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/clippy-gpu-v13.log",
+      "sha256": "0b775ba5e11a1acd1d7ee5aa552a3749316a4adc81e1b86638f5548357c40de8",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 3,
+        "peak_rss_gib": 0.3,
+        "min_available_mib": 25044,
+        "peak_load": 1.54
+      }
+    }
+  ],
+  "assertions": "Unchanged exact native counts: explicit one thread and twenty threads; 1T affinity remains CPU 2",
+  "scope": "CPU-provider worker control for installed ORT distribution, plus source-only benchmark session configuration. CUDA observations retain configured session headers separately."
+}
