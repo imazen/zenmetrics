@@ -1,4 +1,23 @@
 DMM individual-change study archive, observed 2026-10-17
+Status: COMPLETE. Baseline plus all eight isolated arithmetic changes.
+Cases: baseline, epsilon, small_n_scaling, org2r_order, lartg, orm2r_order, right_sger_order, f64_norm, reference_norm.
+Archive: dev:/mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/dmm-bisect-complete-9-2026-10-17.tar.gz
+Bytes: 42487
+SHA256: f18a3143e6a755cf1b4805b0b980a1dbbc66b36626bada56724c1f4d08fe09db
+Verified by independent remote sha256sum after transfer.
+Contents: 90 case files (three native logs, score TSVs and summaries plus
+one resource/runner log per case); four provenance files (source manifest,
+complete per-change table, source-isolation receipt and oracle-library identity).
+All 94 archive members verified. No model weights or image data included.
+Table source: a8491811879d; model-card qualification: 95c75da7aa3a.
+Command: just nn-dmm-bisect-pack <study-directory> <fresh-archive> baseline,epsilon,small_n_scaling,org2r_order,lartg,orm2r_order,right_sger_order,f64_norm,reference_norm
+Copy: just nn-dmm-bisect-copy <archive> dev:/mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/
+Resolve: ssh dev sha256sum /mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/dmm-bisect-complete-9-2026-10-17.tar.gz
+Local originals and the earlier partial archive are retained.
+
+Earlier partial observation (unchanged archive):
+
+DMM individual-change study archive, observed 2026-10-17
 Status: PARTIAL. Baseline plus four of eight arithmetic changes are complete.
 Missing: orm2r_order, right_sger_order, f64_norm, reference_norm.
 Cases: baseline, epsilon, small_n_scaling, org2r_order, lartg.
@@ -12,4 +31,4 @@ receipt and oracle-library identity. No model weights or image data included.
 Command: just nn-dmm-bisect-pack <study-directory> <fresh-archive> baseline,epsilon,small_n_scaling,org2r_order,lartg
 Copy: just nn-dmm-bisect-copy <archive> dev:/mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/
 Resolve: ssh dev sha256sum /mnt/v/benchmarks/zenmetrics/nn-port-fix-2026-10-17-66bb9860/dmm-bisect-complete-5-2026-10-17.tar.gz
-The complete study will have a separate archive; preserve this observation.
+This earlier partial capture is preserved alongside the complete archive above.
