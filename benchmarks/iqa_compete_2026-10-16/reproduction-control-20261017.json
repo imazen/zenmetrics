@@ -1,0 +1,162 @@
+{
+  "rows": 24,
+  "timed": 20,
+  "unsupported": 4,
+  "raw": {
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/i265.jsonl": "c2d79b8e3973ced3e87505a22867565f54cdd645fca5e7c486d8e61012df79cf",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/i265.jsonl": "0e5f08713aff1d19922feff546bece971c546064be4f3d5fd989b325b863f4e3"
+  },
+  "cells": [
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-aic-small-1t-score-0958ffefde83-commands.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-aic-small-1t-score-0958ffefde83.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-aic-small-20t-score-405750c556f9-commands.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-aic-small-20t-score-405750c556f9.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-cid22-1t-score-c73948d21aec-commands.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-cid22-1t-score-c73948d21aec.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-cid22-20t-score-cc1b716bae74-commands.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/libjxl/cells/ssim2-cid22-20t-score-cc1b716bae74.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/gmsd-aic-small-1t-895e8d27a1bf.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/gmsd-aic-small-20t-f721e9d3ae54.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/gmsd-cid22-1t-e64d59ec1ffd.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/gmsd-cid22-20t-3e1e9908f1dd.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/ssim2-aic-small-1t-b97ada4da1d5.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/ssim2-aic-small-20t-c42b27017568.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/ssim2-cid22-1t-3bd58dee679b.json",
+    "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/rust/cells/ssim2-cid22-20t-52b952d9c96f.json"
+  ],
+  "second_run_skipped_all_cells": true,
+  "new_attempts": 0,
+  "first_log": "/home/lilith/tmp/iqa-compete/round17-clean-first-v2.log",
+  "second_log": "/home/lilith/tmp/iqa-compete/round17-clean-second.log",
+  "clean_workspace_revision": "d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6",
+  "content_key": "e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b",
+  "dashboard": {
+    "registered_sources": {
+      "benchmarks/iqa_compete_2026-10-16/repro-evidence/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/cells-0000.json": 8,
+      "benchmarks/iqa_compete_2026-10-16/repro-evidence/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/cells-0001.json": 8,
+      "benchmarks/iqa_compete_2026-10-16/repro-evidence/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/cells-0002.json": 8,
+      "benchmarks/iqa_compete_2026-10-16/repro-evidence/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/run.meta": 0
+    },
+    "rows": 24,
+    "build_log": "/home/lilith/tmp/iqa-compete/round17-dashboard-build-v4.log"
+  },
+  "tests": {
+    "harness": 98,
+    "dashboard": 19,
+    "inventory": 10
+  },
+  "verification_scope": "Linux i265; Python explicitly excluded with --skip-python; no macOS/Windows runtime measurement",
+  "raw_metadata": "/home/lilith/tmp/iqa-compete/round17-cache/results/e881cfae6a3e7ba2ddb39027aaee80a04ad8c9eefc39d456d39acdbd00e8738b/run.meta",
+  "historical_failure": "Earlier descriptor-inheritance attempt failed before any metric evaluation; preserved in round17-clean-first.log and the bee8dd cohort; repaired and covered by a real-supervisor test",
+  "stage_logs": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/rust-build-20261017T105509775901.log",
+      "sha256": "4443c9f1cda8bef89c47318a97b0b3313f0800bcd130bc7d7f208c84acc61063",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 16,
+        "peak_rss_gib": 1.28,
+        "min_available_mib": 20501,
+        "peak_load": 1.83
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/libjxl-build-20261017T105525555851.log",
+      "sha256": "4800e1e4fb950ad72b57a19cb995b2a79e23cd258c43ff91aec547abce95c30d",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 18,
+        "peak_rss_gib": 0.84,
+        "min_available_mib": 14492,
+        "peak_load": 5.92
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/libvmaf-build-20261017T105543394169.log",
+      "sha256": "d2157896d7f93dbd46438327e9f680a691ed9d955998a577d0b9ff168a0761ae",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 1,
+        "peak_rss_gib": 0.1,
+        "min_available_mib": 20667,
+        "peak_load": 5.92
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/prepare-20261017T105545086363.log",
+      "sha256": "46201d8fba02e383fea55099674cc29f94c14d7537df0a5df1a95ad7b5ad9e75",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 0,
+        "peak_rss_gib": 0.18,
+        "min_available_mib": 20831,
+        "peak_load": 7.21
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/rust-cells-20261017T105547051176.log",
+      "sha256": "cb9529c17bd281f4f51e230942b818d2580bcbbb62dfebc3347d8e13efa6ae55",
+      "resource": null
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/planes-20261017T105606005562.log",
+      "sha256": "bbc062c6163bb1edcb773603efb40c6c5153e6c45cdf7239c65f88efeb605d9d",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 4,
+        "peak_rss_gib": 0.31,
+        "min_available_mib": 21833,
+        "peak_load": 5.39
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/libjxl-cells-20261017T105610491649.log",
+      "sha256": "b428a1cc5c0ddde0d7f15ea63cc2d041917a8bce6df73e80fdfeef1e81ae772c",
+      "resource": null
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/rust-build-20261017T105814088257.log",
+      "sha256": "c02b635e9276d131b7f43007524a361fe91d517f6b6ad3aa48185876675c34b4",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 15,
+        "peak_rss_gib": 1.31,
+        "min_available_mib": 20215,
+        "peak_load": 2.65
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/rust-cells-20261017T105830163896.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "resource": null
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-cache/logs/d7f2a75b8d7b92d5098c43a464b9082ed18a7ec6/libjxl-cells-20261017T105830253232.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "resource": null
+    }
+  ],
+  "test_logs": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-harness-final.log",
+      "sha256": "350a0ba58b318e1cf5be00e4c63490786fc542f8c892cf65034d85daea5d101a",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 2,
+        "peak_rss_gib": 0.03,
+        "min_available_mib": 22075,
+        "peak_load": 0.53
+      }
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-dashboard-tests-final2.log",
+      "sha256": "c044afa4fbf6e7bf177bcb1581965e35e1136f59ba5edec7c4b593340a882847",
+      "resource": null
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/round17-study-check.log",
+      "sha256": "ecedabca1dd99183ab232bda157314e899025d0ff4f6d1d450d8c0e37a62c672",
+      "resource": null
+    }
+  ]
+}

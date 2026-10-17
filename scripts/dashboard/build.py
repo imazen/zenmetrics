@@ -88,6 +88,16 @@ def provenance(path, spec):
 
 def adapt(path, spec):
     adapter = spec['adapter']
+    if adapter == 'competition-meta':
+        text = path.read_text()
+        start = 0 if text.startswith('{') else text.index('\n{') + 1
+        metadata = json.loads(text[start:])
+        for field in ['identity', 'build_commit', 'command', 'host', 'hardware', 'toolchains', 'competitors']:
+            if field not in metadata:
+                raise ValueError(f'missing competition metadata: {field}')
+        if metadata['build_commit'] != metadata['identity']['commit']:
+            raise ValueError('competition metadata commit differs')
+        return
     if adapter == 'libjxl-samples':
         import statistics
         for row in table(path, spec['columns']):
