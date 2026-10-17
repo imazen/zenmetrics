@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export TMPDIR="$HOME/tmp/iqa-compete/build-scratch"
+mkdir -p "$TMPDIR"
 source_dir=$1 output=$2
 test ! -e "$output/iqa-jxl" # Never overwrite a retained reference executable.
 cmake -S benchmarks/iqa_compete_2026-10-16 -B "$output" -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIBJXL_SOURCE="$source_dir"

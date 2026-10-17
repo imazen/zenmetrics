@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Caller owns run-heavy and the bounded shared lock. Cache source is read-only.
 set -euo pipefail
+export TMPDIR="$HOME/tmp/iqa-compete/build-scratch"
+mkdir -p "$TMPDIR"
 source_dir=$1
 output=$2
 mkdir "$output"

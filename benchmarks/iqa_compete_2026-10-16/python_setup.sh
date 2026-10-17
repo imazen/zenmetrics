@@ -2,6 +2,8 @@
 # Create an owned adapter environment; existing oracle environments stay read-only.
 # No automatic dependency resolution: only these named public packages install.
 set -euo pipefail
+export TMPDIR="$HOME/tmp/iqa-compete/build-scratch"
+mkdir -p "$TMPDIR"
 out=$1
 uv venv --python "$HOME/tmp/nnrt-research/venv/bin/python" "$out"
 site=$(printf '%s\n' "$out"/lib/python*/site-packages)
