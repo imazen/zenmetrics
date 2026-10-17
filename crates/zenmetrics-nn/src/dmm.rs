@@ -7,7 +7,7 @@
 //! input. The exported trunk (`models/dmm/export.py`) is that VGG; the head
 //! is host-side Rust because ONNX has no SVD: for each tap, 16×16 patches at
 //! stride 4 are unfolded per channel and compared with
-//! `torch.svd`-equivalent decompositions — the squared singular-value
+//! host SVD decompositions — the squared singular-value
 //! distance weighted by the base-angle consistency `wt`, gated by an
 //! SSIM-like channel-mean term `glb`, summed over the two taps.
 //!
