@@ -1,0 +1,32 @@
+{
+  "observed_utc": "2026-10-17T04:39:23.325849+00:00",
+  "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v1/raw.jsonl",
+  "raw_sha256": "1f594f85c72292bb9a4c0a78c14025fd6583e94d642f7dead0d3c9980290df68",
+  "rows": 440,
+  "by_host": {
+    "mac": {
+      "rows": 234,
+      "statuses": {
+        "ok": 144,
+        "unsupported": 80,
+        "skipped": 10
+      },
+      "timing_quality": {
+        "contaminated": 234
+      }
+    },
+    "r7900x": {
+      "rows": 206,
+      "statuses": {
+        "ok": 126,
+        "unsupported": 70,
+        "skipped": 10
+      },
+      "timing_quality": {
+        "clean": 126,
+        "contaminated": 80
+      }
+    }
+  },
+  "scope": "Partial receipts from the independently owned Task 4 lane; no remote job or checkout changed; source protocol classification preserved, not independently remeasured."
+}

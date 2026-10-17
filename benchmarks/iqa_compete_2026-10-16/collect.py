@@ -13,6 +13,10 @@ for ledger in a.ledgers:
   admission=prior_admission_reason(row)
   if admission:
    admission_refusals.append(dict(ledger=str(ledger),line=index,reason=admission));continue
+  if 'contamination_classification' in row:
+   quality=row['contamination_classification']
+   if quality not in ['clean','contaminated'] or row.get('contaminated')!=(quality=='contaminated'):raise ValueError('Inconsistent external host protocol quality')
+   row['timing_quality']=quality
   normalize_nomap(row);key=tuple(row.get(k) for k in ['host','os','metric_name','impl','device','threads','mode','size_name'])
   if row['impl']=='zenmetrics':
    row['original_engine']=row.get('engine')
