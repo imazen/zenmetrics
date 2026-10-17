@@ -59,13 +59,14 @@ def main():
                     if not isinstance(r[k],(int,float)) or not math.isfinite(r[k]) or r[k]<=0:raise ValueError((key,k))
                 if r['n']<10 and r.get('timed_seconds',0)<3:raise ValueError((key,'insufficient sampling'))
             rows.append(r)
-    fields=['host_protocol','host_observation_receipts','host_protocol_attempts','timing_quality','contention_peak_cores','contention_receipt','contention_attempts','host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','declared_columns','reference_declared_columns','native_api_note','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_kind','reference_source_status','reference_log_sha256','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
+    fields=['host_protocol','host_observation_receipts','timing_quality','contention_peak_cores','contention_receipt','contention_attempts','host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','declared_columns','reference_declared_columns','native_api_note','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_kind','reference_source_status','reference_log_sha256','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
     byhost=collections.defaultdict(list)
     for r in rows:byhost[(r['host'],r['os'])].append({k:r.get(k) for k in fields})
     for (host,system),values in byhost.items():
         host=host+'-'+system.split('-')[0]+'-'+hashlib.sha256(system.encode()).hexdigest()[:8]
         chunk=[];index=0
         for r in values:
+            if len((json.dumps([r],indent=2)+'\n').encode())>29000:raise ValueError('Single summary row exceeds the file budget; retain detail in the linked raw receipt')
             candidate=chunk+[r]
             if len((json.dumps(candidate,indent=2)+'\n').encode())>29000:
                 (a.output/f'{host}-{index:03}.json').write_text(json.dumps(chunk,indent=2)+'\n');chunk=[];index+=1
