@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Declare hash-bound derived-data views through a strict private CLI adapter; bound versioned E36 ladder watchdogs without changing existing job identities or public Rust types.
+
 - Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits (`afd81b53`).
 
 - Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.

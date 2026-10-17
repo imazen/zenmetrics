@@ -827,3 +827,24 @@ removes the retained artifact. Relative paths, unhashed filenames and changed
 bytes fail explicitly. Source paths and metric/display selections retain their
 existing contracts. This uses the same `jobexec` scoring/map owners as stored
 object inputs (`3594eff9`).
+
+
+### Derived-data view declarations
+
+`zenfleet-ctl declare-views --spec views.json --out manifest.json` uses the
+existing `Bake { view }` job kind and normal worker/ledger/resource admission.
+The schema1 spec contains nonempty `views`, each with `view`, `cell`, hashed
+`inputs`, explicit nonzero `hint` resources and `requires` capability tokens.
+The adapter refuses duplicate job identities: `CellId` metadata does not enter
+JobId, so bind every result-affecting codec/quality/recipe choice in the view
+or its hashed inputs. No fit-job kind or new public Rust API is introduced.
+
+The private `e36-native-ladder-v1:` JSON view protocol carries a bounded
+`deadline_seconds` (120..14400). Invalid bounds receive the short120s watchdog;
+other bake views retain the existing cost-based watchdog. This lets a derived
+view materialize a whole registered quality ladder without treating one scalar
+operation's cost hint as its timeout. The executor still owns strict schema/
+source/build validation and the worker owns scheduling, results and retries.
+If an executor returns a small receipt for separately persisted expensive
+artifacts, that receipt must bind their canonical content hashes and verified
+locations; receipt regenerability never authorizes deleting those artifacts.

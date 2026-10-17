@@ -1080,3 +1080,10 @@ e36-native-build snapshot target:
 
 e36-native-local-test snapshot target:
     cd {{quote(snapshot)}} && cargo test --release --locked -p zenmetrics-cli --no-default-features --features png,jpeg,webp,avif,avif-svt,jxl,cpu-metrics,cpu-cvvdp,sweep,jobexec --target-dir {{quote(target)}} --bin zenmetrics local_variant_requires_content_hash_and_remains_borrowed
+
+# Private derived-data executor admission; no fitting or new public Rust API.
+e36-tools-check source target:
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-ctl --bin zenfleet-ctl derived_declare --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo test --locked --release -p zenfleet-worker --lib e36_ladder_deadline_tests --target-dir {{quote(target)}}
+    cd {{quote(source)}} && cargo clippy --locked --release -p zenfleet-ctl -p zenfleet-worker --bins --target-dir {{quote(target)}} -- -D warnings
+    cd {{quote(source)}} && cargo build --locked --release -p zenfleet-ctl --bin zenfleet-ctl -p zenfleet-worker --bin zenfleet-worker --target-dir {{quote(target)}}
