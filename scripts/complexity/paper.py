@@ -369,6 +369,9 @@ def main():
               'metrics; the residual spread is the within-range error.',
               '- Per-pixel estimates ignore vectorization, cache behaviour and threading, which the measured times include.',
               '- Halo factors are modelling assumptions, not measured overheads.',
+              '- Several neural tallies fail a physical bound: their counted flops divided by measured single-thread time '
+              'exceed one P-core\'s peak of about 176 GFLOP/s (LPIPS-VGG, DISTS, DeepDC, LIQE), while MUSIQ\'s count '
+              'is far too low; those tallies are being recounted, and the neural points are provisional until then.',
               '- Tallies counted by one lane are provisional until the swapped recounts reconcile them.', '']
     files['IQA_COMPLEXITY_VS_RUNTIME.md'] = '\n'.join(lines)
     stale = []

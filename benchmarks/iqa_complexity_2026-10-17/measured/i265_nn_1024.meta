@@ -1,0 +1,12 @@
+commit=6539f60fc981 (metric source identical to the default-build run; neural crates at master)
+binary=complexity-reps --features zenmetrics-cli/nn,zenmetrics-cli/nr sha256=371188f89f165ed078ed283507ce45fb6bb2312922d320634670458d4f98da39
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+engine=rten (zenmetrics-nn default CPU engine); threads 1 pinned cpu 6, threads 8 pinned cpus 0-7; RAYON/RTEN/OMP thread counts set to the same value
+models=frozen exported ONNX sets under ~/tmp/iqa-compete/models-frozen-v1 (symlinked into one directory); weights consent ZENMETRICS_NN_ACCEPT_WEIGHTS=ckdn,afine,dreamsim,liqe,hyperiqa,paq2piq,pieapp (same list as benchmarks/iqa_compete_2026-10-16/run.py; timing only)
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled, 1024x1024
+method=perf_deltas.py, 2 repeats, 1 extra call per repeat, per-call timeout 120 s (process group killed on timeout)
+failed=ahiq (weights with no stated licence are not in the consent list), pieapp at 1 thread (exceeded 120 s per call)
+start_utc=2026-10-17T14:34:00Z load=1.36 4.51 6.30
+end_utc=2026-10-17T14:59:06Z load=1.12 1.68 3.48
+first_pass=8-thread rows for 16 models came from an earlier pass at 14:29Z with the same binary and settings
+run_heavy=run-heavy: done rc=0 1506s | peak-RSS 1.81GiB | min-avail 18989MiB | peak-load 7.63

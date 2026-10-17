@@ -1578,3 +1578,13 @@ engine = "native, metrics-parallel build"
 metadata = ["benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta"]
 columns = ["metric", "shape", "threads", "repeat", "extra_reps", "task_clock_ms_per_call", "cycles_per_call", "instructions_per_call", "fp_vec128_inst_per_call", "fp_vec256_inst_per_call", "loads_per_call", "stores_per_call", "fpdiv_active_cycles_per_call", "wall_ms_per_call", "score"]
 note = "Controlled run (2026-10-17) of a build with the metric crates' threading enabled, 1 and 8 threads on P-cores, same binary."
+
+[[dataset]]
+glob = "benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.tsv"
+family = "speed"
+adapter = "perf-deltas"
+host = "i265"
+engine = "rten, CLI feature nn"
+metadata = ["benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta"]
+columns = ["metric", "shape", "threads", "repeat", "extra_reps", "task_clock_ms_per_call", "cycles_per_call", "instructions_per_call", "fp_vec128_inst_per_call", "fp_vec256_inst_per_call", "loads_per_call", "stores_per_call", "fpdiv_active_cycles_per_call", "wall_ms_per_call", "score"]
+note = "Controlled run (2026-10-17) of the neural metrics on the rten CPU engine, 1 and 8 threads, 1024x1024."

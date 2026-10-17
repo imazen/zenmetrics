@@ -36,6 +36,48 @@
  ],
  "metrics": [
   {
+   "metric": "afine",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 414768.4654,
+   "halo_px": 2.0,
+   "estimate": {
+    "flops": 414768.465353,
+    "pedzisz_2026_draft": 414769.221631,
+    "i265_P_rthroughput": 89827.84591,
+    "i265_P_latency": 837815.708725,
+    "llvm_tti_arrowlake_throughput": 207419.804709,
+    "llvm_tti_arrowlake_latency": 207600.441342,
+    "llvm_mca_arrowlake_rthroughput": 103703.664292,
+    "llvm_tti_znver5_throughput": 207419.673969
+   },
+   "cpu_1t": 3647.389411926269,
+   "wall_1t": 3640.193939208985,
+   "cpu_8t": 4065.2513504028325,
+   "wall_8t": 590.3768539428712
+  },
+  {
+   "metric": "arniqa",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 39225.2287,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 39225.228705,
+    "pedzisz_2026_draft": 39341.366439,
+    "i265_P_rthroughput": 8593.852394,
+    "i265_P_latency": 79767.588246,
+    "llvm_tti_arrowlake_throughput": 19962.449484,
+    "llvm_tti_arrowlake_latency": 21342.793982,
+    "llvm_mca_arrowlake_rthroughput": 9922.780866,
+    "llvm_tti_znver5_throughput": 19956.629133
+   },
+   "cpu_1t": 1299.2286682128909,
+   "wall_1t": 1298.818588256836,
+   "cpu_8t": 1636.2190246582031,
+   "wall_8t": 233.57629776000977
+  },
+  {
    "metric": "brisque",
    "counter": "swe2",
    "kind": "classic-nr",
@@ -88,15 +130,36 @@
     "pedzisz_2026_draft": 2846.0,
     "i265_P_rthroughput": 1211.9477,
     "i265_P_latency": 6945.572,
-    "llvm_tti_arrowlake_throughput": 4410.0,
-    "llvm_tti_arrowlake_latency": 17587.0,
+    "llvm_tti_arrowlake_throughput": 4422.0,
+    "llvm_tti_arrowlake_latency": 17599.0,
     "llvm_mca_arrowlake_rthroughput": 1414.26,
-    "llvm_tti_znver5_throughput": 4286.0
+    "llvm_tti_znver5_throughput": 4298.0
    },
    "cpu_1t": 288.97762298583984,
    "wall_1t": 295.6857681274414,
    "cpu_8t": 284.94834899902344,
    "wall_8t": 284.95121002197266
+  },
+  {
+   "metric": "cambi",
+   "counter": "swe",
+   "kind": "classic-nr",
+   "flops_per_px": 32.3164,
+   "halo_px": 228.0,
+   "estimate": {
+    "flops": 32.316421,
+    "pedzisz_2026_draft": 172.855507,
+    "i265_P_rthroughput": 41.634718,
+    "i265_P_latency": 267.272367,
+    "llvm_tti_arrowlake_throughput": 228.980545,
+    "llvm_tti_arrowlake_latency": 427.836076,
+    "llvm_mca_arrowlake_rthroughput": 66.76747,
+    "llvm_tti_znver5_throughput": 228.980497
+   },
+   "cpu_1t": 11.725044250488281,
+   "wall_1t": 11.812305450439453,
+   "cpu_8t": 15.734100341796875,
+   "wall_8t": 9.691524505615234
   },
   {
    "metric": "ciede2000",
@@ -120,6 +183,27 @@
    "wall_8t": 105.10921478271484
   },
   {
+   "metric": "ckdn",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 10433.9313,
+   "halo_px": 2.0,
+   "estimate": {
+    "flops": 10433.931297,
+    "pedzisz_2026_draft": 11756.85648,
+    "i265_P_rthroughput": 2786.244513,
+    "i265_P_latency": 22428.106867,
+    "llvm_tti_arrowlake_throughput": 7120.631354,
+    "llvm_tti_arrowlake_latency": 9784.240562,
+    "llvm_mca_arrowlake_rthroughput": 2893.83643,
+    "llvm_tti_znver5_throughput": 6069.763096
+   },
+   "cpu_1t": 73.74763488769531,
+   "wall_1t": 73.9713191986084,
+   "cpu_8t": 103.22570800781251,
+   "wall_8t": 20.380592346191406
+  },
+  {
    "metric": "cvvdp",
    "counter": "swe",
    "kind": "classic-fr",
@@ -130,10 +214,10 @@
     "pedzisz_2026_draft": 2093.893135,
     "i265_P_rthroughput": 739.588998,
     "i265_P_latency": 3168.432898,
-    "llvm_tti_arrowlake_throughput": 1627.918349,
-    "llvm_tti_arrowlake_latency": 4944.410369,
+    "llvm_tti_arrowlake_throughput": 1683.248305,
+    "llvm_tti_arrowlake_latency": 5159.730559,
     "llvm_mca_arrowlake_rthroughput": 375.320846,
-    "llvm_tti_znver5_throughput": 1499.924697
+    "llvm_tti_znver5_throughput": 1555.254653
    },
    "cpu_1t": 75.95300674438477,
    "wall_1t": 76.09519958496094,
@@ -160,6 +244,111 @@
    "wall_1t": 91.92047119140625,
    "cpu_8t": 89.83850479125977,
    "wall_8t": 90.1249885559082
+  },
+  {
+   "metric": "deepdc",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 3112106.0266,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 3112106.026594,
+    "pedzisz_2026_draft": 3113822.026594,
+    "i265_P_rthroughput": 675011.348054,
+    "i265_P_latency": 6293681.595386,
+    "llvm_tti_arrowlake_throughput": 1560302.026195,
+    "llvm_tti_arrowlake_latency": 1574596.11668,
+    "llvm_mca_arrowlake_rthroughput": 779287.013098,
+    "llvm_tti_znver5_throughput": 1560254.026195
+   },
+   "cpu_1t": 12806.320190429688,
+   "wall_1t": 12815.90461730957,
+   "cpu_8t": 13769.48356628418,
+   "wall_8t": 2053.217887878418
+  },
+  {
+   "metric": "dists",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 2454080.8244,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 2454080.824433,
+    "pedzisz_2026_draft": 2517794.803403,
+    "i265_P_rthroughput": 553374.160254,
+    "i265_P_latency": 5018056.192918,
+    "llvm_tti_arrowlake_throughput": 1246899.036184,
+    "llvm_tti_arrowlake_latency": 1264869.132507,
+    "llvm_mca_arrowlake_rthroughput": 614596.929763,
+    "llvm_tti_znver5_throughput": 1246370.095495
+   },
+   "cpu_1t": 9961.509704589844,
+   "wall_1t": 9983.44421386719,
+   "cpu_8t": 10969.066619873049,
+   "wall_8t": 1824.4123458862302
+  },
+  {
+   "metric": "dmm",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 480362.7935,
+   "halo_px": 1.0,
+   "estimate": {
+    "flops": 480362.793465,
+    "pedzisz_2026_draft": 484424.816902,
+    "i265_P_rthroughput": 105544.558933,
+    "i265_P_latency": 974677.633656,
+    "llvm_tti_arrowlake_throughput": 241997.066902,
+    "llvm_tti_arrowlake_latency": 245011.001984,
+    "llvm_mca_arrowlake_rthroughput": 120336.20142,
+    "llvm_tti_znver5_throughput": 241900.598152
+   },
+   "cpu_1t": 7646.231651306153,
+   "wall_1t": 7662.911415100098,
+   "cpu_8t": 8082.385063171386,
+   "wall_8t": 4489.922523498535
+  },
+  {
+   "metric": "dreamsim",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 101222.191,
+   "halo_px": 2.0,
+   "estimate": {
+    "flops": 101222.191012,
+    "pedzisz_2026_draft": 102943.210519,
+    "i265_P_rthroughput": 22649.412687,
+    "i265_P_latency": 207683.157596,
+    "llvm_tti_arrowlake_throughput": 51851.694333,
+    "llvm_tti_arrowlake_latency": 54058.49007,
+    "llvm_mca_arrowlake_rthroughput": 25450.202107,
+    "llvm_tti_znver5_throughput": 51795.132806
+   },
+   "cpu_1t": 1551.0463714599607,
+   "wall_1t": 1526.947021484375,
+   "cpu_8t": 1853.0035018920896,
+   "wall_8t": 243.1483268737793
+  },
+  {
+   "metric": "dssim",
+   "counter": "swe",
+   "kind": "classic-fr",
+   "flops_per_px": 772.5547,
+   "halo_px": 94.0,
+   "estimate": {
+    "flops": 772.554707,
+    "pedzisz_2026_draft": 906.42973,
+    "i265_P_rthroughput": 263.701295,
+    "i265_P_latency": 1937.749661,
+    "llvm_tti_arrowlake_throughput": 1177.480545,
+    "llvm_tti_arrowlake_latency": 3598.984494,
+    "llvm_mca_arrowlake_rthroughput": 292.018095,
+    "llvm_tti_znver5_throughput": 1108.214872
+   },
+   "cpu_1t": 26.05752944946289,
+   "wall_1t": 26.10940933227539,
+   "cpu_8t": 34.52415466308594,
+   "wall_8t": 7.779188156127929
   },
   {
    "metric": "flip",
@@ -393,20 +582,41 @@
    "wall_8t": 2.2818565368652344
   },
   {
+   "metric": "hyperiqa",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 205140.8343,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 205140.834318,
+    "pedzisz_2026_draft": 205415.010487,
+    "i265_P_rthroughput": 44654.597305,
+    "i265_P_latency": 415665.972557,
+    "llvm_tti_arrowlake_throughput": 103393.951658,
+    "llvm_tti_arrowlake_latency": 106620.384357,
+    "llvm_mca_arrowlake_rthroughput": 51559.629025,
+    "llvm_tti_znver5_throughput": 103393.951658
+   },
+   "cpu_1t": 8401.298522949219,
+   "wall_1t": 8422.393798828125,
+   "cpu_8t": 9820.36590576172,
+   "wall_8t": 2140.47908782959
+  },
+  {
    "metric": "iwssim",
    "counter": "swe",
    "kind": "classic-fr",
-   "flops_per_px": 996.5816,
+   "flops_per_px": 1005.3064,
    "halo_px": 126.0,
    "estimate": {
-    "flops": 996.581643,
-    "pedzisz_2026_draft": 1276.494447,
-    "i265_P_rthroughput": 354.199163,
-    "i265_P_latency": 2794.99084,
-    "llvm_tti_arrowlake_throughput": 1016.704583,
-    "llvm_tti_arrowlake_latency": 2182.769855,
-    "llvm_mca_arrowlake_rthroughput": 300.211517,
-    "llvm_tti_znver5_throughput": 1006.10241
+    "flops": 1005.306447,
+    "pedzisz_2026_draft": 1285.219251,
+    "i265_P_rthroughput": 356.099893,
+    "i265_P_latency": 2812.669143,
+    "llvm_tti_arrowlake_throughput": 1026.18567,
+    "llvm_tti_arrowlake_latency": 2205.476479,
+    "llvm_mca_arrowlake_rthroughput": 302.406551,
+    "llvm_tti_znver5_throughput": 1015.583497
    },
    "cpu_1t": 35.66741943359375,
    "wall_1t": 35.640907287597656,
@@ -417,22 +627,148 @@
    "metric": "iwssim-piq",
    "counter": "swe",
    "kind": "classic-fr",
-   "flops_per_px": 996.5816,
+   "flops_per_px": 1005.3064,
    "halo_px": 126.0,
    "estimate": {
-    "flops": 996.581643,
-    "pedzisz_2026_draft": 1276.494447,
-    "i265_P_rthroughput": 353.040163,
-    "i265_P_latency": 2784.96124,
-    "llvm_tti_arrowlake_throughput": 1014.704583,
-    "llvm_tti_arrowlake_latency": 2180.769855,
-    "llvm_mca_arrowlake_rthroughput": 298.211517,
-    "llvm_tti_znver5_throughput": 1004.10241
+    "flops": 1005.306447,
+    "pedzisz_2026_draft": 1285.219251,
+    "i265_P_rthroughput": 354.940893,
+    "i265_P_latency": 2802.639543,
+    "llvm_tti_arrowlake_throughput": 1024.18567,
+    "llvm_tti_arrowlake_latency": 2203.476479,
+    "llvm_mca_arrowlake_rthroughput": 300.406551,
+    "llvm_tti_znver5_throughput": 1013.583497
    },
    "cpu_1t": 33.42390060424805,
    "wall_1t": 33.54682922363281,
    "cpu_8t": 47.52950668334961,
    "wall_8t": 25.024795532226562
+  },
+  {
+   "metric": "liqe",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 126710.4002,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 126710.400153,
+    "pedzisz_2026_draft": 127320.03611,
+    "i265_P_rthroughput": 27761.691305,
+    "i265_P_latency": 257281.618051,
+    "llvm_tti_arrowlake_throughput": 63934.841742,
+    "llvm_tti_arrowlake_latency": 65816.595753,
+    "llvm_mca_arrowlake_rthroughput": 31804.431598,
+    "llvm_tti_znver5_throughput": 63926.198923
+   },
+   "cpu_1t": 154.6001434326172,
+   "wall_1t": 152.08196640014646,
+   "cpu_8t": 250.65898895263675,
+   "wall_8t": 23.791713714599606
+  },
+  {
+   "metric": "lpips-alex",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 104940.8247,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 104940.82472,
+    "pedzisz_2026_draft": 107552.379497,
+    "i265_P_rthroughput": 23651.129406,
+    "i265_P_latency": 214698.610101,
+    "llvm_tti_arrowlake_throughput": 53690.939368,
+    "llvm_tti_arrowlake_latency": 55424.259457,
+    "llvm_mca_arrowlake_rthroughput": 26374.278632,
+    "llvm_tti_znver5_throughput": 53486.927562
+   },
+   "cpu_1t": 467.33379364013666,
+   "wall_1t": 469.1596031188965,
+   "cpu_8t": 505.4330825805664,
+   "wall_8t": 75.20346641540527
+  },
+  {
+   "metric": "lpips-squeeze",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 43405.1768,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 43405.176761,
+    "pedzisz_2026_draft": 52328.649746,
+    "i265_P_rthroughput": 12599.766074,
+    "i265_P_latency": 97383.140869,
+    "llvm_tti_arrowlake_throughput": 25942.903335,
+    "llvm_tti_arrowlake_latency": 32641.493991,
+    "llvm_mca_arrowlake_rthroughput": 11389.692296,
+    "llvm_tti_znver5_throughput": 25358.561809
+   },
+   "cpu_1t": 419.8741912841797,
+   "wall_1t": 422.40190505981445,
+   "cpu_8t": 575.0370025634766,
+   "wall_8t": 153.58448028564456
+  },
+  {
+   "metric": "lpips-vgg",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 2451905.9696,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 2451905.96965,
+    "pedzisz_2026_draft": 2484529.954035,
+    "i265_P_rthroughput": 542550.504248,
+    "i265_P_latency": 4987803.677815,
+    "llvm_tti_arrowlake_throughput": 1240989.938411,
+    "llvm_tti_arrowlake_latency": 1263382.480399,
+    "llvm_mca_arrowlake_rthroughput": 614785.648888,
+    "llvm_tti_znver5_throughput": 1238968.625904
+   },
+   "cpu_1t": 9656.171798706055,
+   "wall_1t": 9668.111801147461,
+   "cpu_8t": 10696.220397949219,
+   "wall_8t": 1578.531265258789
+  },
+  {
+   "metric": "mad",
+   "counter": "swe",
+   "kind": "classic-fr",
+   "flops_per_px": 5211.2756,
+   "halo_px": 1024.0,
+   "estimate": {
+    "flops": 5211.275625,
+    "pedzisz_2026_draft": 5341.527119,
+    "i265_P_rthroughput": 2324.297384,
+    "i265_P_latency": 13550.782795,
+    "llvm_tti_arrowlake_throughput": 6077.835732,
+    "llvm_tti_arrowlake_latency": 25976.642715,
+    "llvm_mca_arrowlake_rthroughput": 2632.638206,
+    "llvm_tti_znver5_throughput": 5917.835732
+   },
+   "cpu_1t": 927.9775619506836,
+   "wall_1t": 926.8026351928711,
+   "cpu_8t": 1174.6597290039062,
+   "wall_8t": 183.37726593017578
+  },
+  {
+   "metric": "maniqa",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 260146.4468,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 260146.446785,
+    "pedzisz_2026_draft": 262510.240017,
+    "i265_P_rthroughput": 57360.609525,
+    "i265_P_latency": 530045.486721,
+    "llvm_tti_arrowlake_throughput": 131853.643076,
+    "llvm_tti_arrowlake_latency": 135437.592765,
+    "llvm_mca_arrowlake_rthroughput": 65271.56839,
+    "llvm_tti_znver5_throughput": 131743.275885
+   },
+   "cpu_1t": 3923.344612121581,
+   "wall_1t": 3934.5216751098637,
+   "cpu_8t": 4600.086212158203,
+   "wall_8t": 674.6864318847656
   },
   {
    "metric": "mdctpsnr",
@@ -708,6 +1044,27 @@
    "wall_8t": 19.37389373779297
   },
   {
+   "metric": "musiq",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 302.8155,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 302.815454,
+    "pedzisz_2026_draft": 304.662969,
+    "i265_P_rthroughput": 66.739016,
+    "i265_P_latency": 615.564387,
+    "llvm_tti_arrowlake_throughput": 160.735522,
+    "llvm_tti_arrowlake_latency": 179.681124,
+    "llvm_mca_arrowlake_rthroughput": 76.311911,
+    "llvm_tti_znver5_throughput": 160.735185
+   },
+   "cpu_1t": 2286.3101959228516,
+   "wall_1t": 2276.4825820922847,
+   "cpu_8t": 3176.8226623535156,
+   "wall_8t": 682.0282936096191
+  },
+  {
    "metric": "niqe",
    "counter": "swe2",
    "kind": "classic-nr",
@@ -729,6 +1086,27 @@
    "wall_8t": 162.34779357910156
   },
   {
+   "metric": "nlpd",
+   "counter": "swe",
+   "kind": "classic-fr",
+   "flops_per_px": 397.9043,
+   "halo_px": 318.0,
+   "estimate": {
+    "flops": 397.904325,
+    "pedzisz_2026_draft": 469.887239,
+    "i265_P_rthroughput": 116.586343,
+    "i265_P_latency": 939.665732,
+    "llvm_tti_arrowlake_throughput": 589.862097,
+    "llvm_tti_arrowlake_latency": 1425.668341,
+    "llvm_mca_arrowlake_rthroughput": 132.529848,
+    "llvm_tti_znver5_throughput": 557.869806
+   },
+   "cpu_1t": 15.11373519897461,
+   "wall_1t": 15.193939208984375,
+   "cpu_8t": 24.995803833007812,
+   "wall_8t": 8.389005661010742
+  },
+  {
    "metric": "nlpd-iqa",
    "counter": "swe2",
    "kind": "classic-fr",
@@ -748,6 +1126,48 @@
    "wall_1t": 5.011491775512695,
    "cpu_8t": 7.792711257934571,
    "wall_8t": 2.958040237426758
+  },
+  {
+   "metric": "paq2piq",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 72732.7622,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 72732.762207,
+    "pedzisz_2026_draft": 72819.39082,
+    "i265_P_rthroughput": 15801.182652,
+    "i265_P_latency": 147310.018271,
+    "llvm_tti_arrowlake_throughput": 36576.239648,
+    "llvm_tti_arrowlake_latency": 37264.480371,
+    "llvm_mca_arrowlake_rthroughput": 18242.84751,
+    "llvm_tti_znver5_throughput": 36576.239648
+   },
+   "cpu_1t": 1240.687370300293,
+   "wall_1t": 1242.5470352172852,
+   "cpu_8t": 1425.1136779785159,
+   "wall_8t": 234.82036590576172
+  },
+  {
+   "metric": "pieapp",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 765788887.6673,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 765788887.667314,
+    "pedzisz_2026_draft": 765852399.427211,
+    "i265_P_rthroughput": 165875977.045878,
+    "i265_P_latency": 1547071220.493043,
+    "llvm_tti_arrowlake_throughput": 383063348.512784,
+    "llvm_tti_arrowlake_latency": 383629663.068932,
+    "llvm_mca_arrowlake_rthroughput": 191499614.614725,
+    "llvm_tti_znver5_throughput": 383063348.315022
+   },
+   "cpu_1t": null,
+   "wall_1t": null,
+   "cpu_8t": 547559.7381591797,
+   "wall_8t": 93299.10278320312
   },
   {
    "metric": "piqe",
@@ -853,6 +1273,69 @@
    "wall_1t": 1.8541908264160156,
    "cpu_8t": 1.8439388275146484,
    "wall_8t": 1.8245124816894531
+  },
+  {
+   "metric": "psnr-y-libvmaf",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 20.0,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 20.000005,
+    "pedzisz_2026_draft": 56.000033,
+    "i265_P_rthroughput": 32.246216,
+    "i265_P_latency": 144.793274,
+    "llvm_tti_arrowlake_throughput": 120.00004,
+    "llvm_tti_arrowlake_latency": 244.000064,
+    "llvm_mca_arrowlake_rthroughput": 21.660003,
+    "llvm_tti_znver5_throughput": 60.000021
+   },
+   "cpu_1t": 5.876350402832031,
+   "wall_1t": 5.875616073608398,
+   "cpu_8t": 5.8071136474609375,
+   "wall_8t": 5.749607086181641
+  },
+  {
+   "metric": "psnr-y-studio601",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 16.0,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 16.000005,
+    "pedzisz_2026_draft": 32.000033,
+    "i265_P_rthroughput": 18.442216,
+    "i265_P_latency": 104.561274,
+    "llvm_tti_arrowlake_throughput": 64.00004,
+    "llvm_tti_arrowlake_latency": 164.000064,
+    "llvm_mca_arrowlake_rthroughput": 17.660003,
+    "llvm_tti_znver5_throughput": 44.000021
+   },
+   "cpu_1t": 5.555963516235352,
+   "wall_1t": 5.549221038818359,
+   "cpu_8t": 5.479669570922852,
+   "wall_8t": 5.4210662841796875
+  },
+  {
+   "metric": "psnr-y601",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 13.0,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 13.000005,
+    "pedzisz_2026_draft": 13.000033,
+    "i265_P_rthroughput": 9.044116,
+    "i265_P_latency": 63.271374,
+    "llvm_tti_arrowlake_throughput": 25.00004,
+    "llvm_tti_arrowlake_latency": 89.000064,
+    "llvm_mca_arrowlake_rthroughput": 12.500003,
+    "llvm_tti_znver5_throughput": 25.000021
+   },
+   "cpu_1t": 1.8818950653076172,
+   "wall_1t": 1.8777847290039062,
+   "cpu_8t": 1.8515777587890625,
+   "wall_8t": 1.8350982666015625
   },
   {
    "metric": "psnr-ycbcr611",
@@ -1138,10 +1621,10 @@
     "pedzisz_2026_draft": 1493.637694,
     "i265_P_rthroughput": 452.476618,
     "i265_P_latency": 3278.754432,
-    "llvm_tti_arrowlake_throughput": 1411.669434,
-    "llvm_tti_arrowlake_latency": 4041.047537,
+    "llvm_tti_arrowlake_throughput": 1399.672363,
+    "llvm_tti_arrowlake_latency": 3993.059256,
     "llvm_mca_arrowlake_rthroughput": 530.69122,
-    "llvm_tti_znver5_throughput": 1379.67625
+    "llvm_tti_znver5_throughput": 1367.67918
    },
    "cpu_1t": 97.78976440429688,
    "wall_1t": 98.04630279541016,
@@ -1299,22 +1782,64 @@
    "metric": "ssimulacra1",
    "counter": "swe2",
    "kind": "classic-fr",
-   "flops_per_px": 886.7993,
+   "flops_per_px": 3846.0767,
    "halo_px": 480.0,
    "estimate": {
-    "flops": 886.799318,
-    "pedzisz_2026_draft": 1178.04194,
-    "i265_P_rthroughput": 348.533698,
-    "i265_P_latency": 2221.291016,
-    "llvm_tti_arrowlake_throughput": 1181.506671,
-    "llvm_tti_arrowlake_latency": 3342.540503,
-    "llvm_mca_arrowlake_rthroughput": 315.979542,
-    "llvm_tti_znver5_throughput": 1157.512521
+    "flops": 3846.076662,
+    "pedzisz_2026_draft": 4137.319283,
+    "i265_P_rthroughput": 1104.205163,
+    "i265_P_latency": 8352.785703,
+    "llvm_tti_arrowlake_throughput": 4460.70589,
+    "llvm_tti_arrowlake_latency": 12540.294409,
+    "llvm_mca_arrowlake_rthroughput": 1195.764698,
+    "llvm_tti_znver5_throughput": 4436.71174
    },
    "cpu_1t": 482.8500747680664,
    "wall_1t": 483.1972122192383,
    "cpu_8t": 484.53807830810547,
    "wall_8t": 484.71546173095703
+  },
+  {
+   "metric": "stlpips-alex",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 176473.9805,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 176473.98049,
+    "pedzisz_2026_draft": 176540.088829,
+    "i265_P_rthroughput": 38246.105975,
+    "i265_P_latency": 356527.475956,
+    "llvm_tti_arrowlake_throughput": 88348.768596,
+    "llvm_tti_arrowlake_latency": 88558.61512,
+    "llvm_mca_arrowlake_rthroughput": 44137.327179,
+    "llvm_tti_znver5_throughput": 88300.399654
+   },
+   "cpu_1t": 3176.555633544922,
+   "wall_1t": 3171.200752258301,
+   "cpu_8t": 3530.268669128418,
+   "wall_8t": 745.584487915039
+  },
+  {
+   "metric": "stlpips-vgg",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 314470.9418,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 314470.941826,
+    "pedzisz_2026_draft": 332333.56013,
+    "i265_P_rthroughput": 74651.565967,
+    "i265_P_latency": 655738.878175,
+    "llvm_tti_arrowlake_throughput": 166961.734556,
+    "llvm_tti_arrowlake_latency": 183705.576934,
+    "llvm_mca_arrowlake_rthroughput": 80109.999134,
+    "llvm_tti_znver5_throughput": 165873.284301
+   },
+   "cpu_1t": 10596.609115600586,
+   "wall_1t": 10612.726211547852,
+   "cpu_8t": 11810.111999511719,
+   "wall_8t": 2093.8873291015625
   },
   {
    "metric": "vif",
@@ -1369,15 +1894,36 @@
     "pedzisz_2026_draft": 343.945549,
     "i265_P_rthroughput": 74.79223,
     "i265_P_latency": 447.533486,
-    "llvm_tti_arrowlake_throughput": 464.069744,
-    "llvm_tti_arrowlake_latency": 875.332338,
+    "llvm_tti_arrowlake_throughput": 464.725994,
+    "llvm_tti_arrowlake_latency": 875.988588,
     "llvm_mca_arrowlake_rthroughput": 98.061521,
-    "llvm_tti_znver5_throughput": 464.069744
+    "llvm_tti_znver5_throughput": 464.725994
    },
    "cpu_1t": 28.69701385498047,
    "wall_1t": 28.66525650024414,
    "cpu_8t": 28.768539428710938,
    "wall_8t": 28.82089614868164
+  },
+  {
+   "metric": "vmaf-4k",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 43.6602,
+   "halo_px": 16.0,
+   "estimate": {
+    "flops": 43.660172,
+    "pedzisz_2026_draft": 619.906291,
+    "i265_P_rthroughput": 136.533229,
+    "i265_P_latency": 759.775472,
+    "llvm_tti_arrowlake_throughput": 956.851604,
+    "llvm_tti_arrowlake_latency": 1905.000106,
+    "llvm_mca_arrowlake_rthroughput": 210.202118,
+    "llvm_tti_znver5_throughput": 890.210969
+   },
+   "cpu_1t": 29.48474884033203,
+   "wall_1t": 29.778194427490234,
+   "cpu_8t": 28.62262725830078,
+   "wall_8t": 28.765869140625
   },
   {
    "metric": "vmaf-neg",
@@ -1390,15 +1936,78 @@
     "pedzisz_2026_draft": 343.945549,
     "i265_P_rthroughput": 74.79223,
     "i265_P_latency": 447.533486,
-    "llvm_tti_arrowlake_throughput": 464.069744,
-    "llvm_tti_arrowlake_latency": 875.332338,
+    "llvm_tti_arrowlake_throughput": 464.725994,
+    "llvm_tti_arrowlake_latency": 875.988588,
     "llvm_mca_arrowlake_rthroughput": 98.061521,
-    "llvm_tti_znver5_throughput": 464.069744
+    "llvm_tti_znver5_throughput": 464.725994
    },
    "cpu_1t": 29.479026794433594,
    "wall_1t": 29.859066009521484,
    "cpu_8t": 29.44469451904297,
    "wall_8t": 29.6875
+  },
+  {
+   "metric": "vmaf-neg-studio601",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 43.6602,
+   "halo_px": 16.0,
+   "estimate": {
+    "flops": 43.660172,
+    "pedzisz_2026_draft": 619.906291,
+    "i265_P_rthroughput": 136.533229,
+    "i265_P_latency": 759.775472,
+    "llvm_tti_arrowlake_throughput": 956.851604,
+    "llvm_tti_arrowlake_latency": 1905.000106,
+    "llvm_mca_arrowlake_rthroughput": 210.202118,
+    "llvm_tti_znver5_throughput": 890.210969
+   },
+   "cpu_1t": 29.852867126464844,
+   "wall_1t": 30.09328842163086,
+   "cpu_8t": 29.664039611816406,
+   "wall_8t": 29.942989349365234
+  },
+  {
+   "metric": "vmaf-studio601",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 43.6602,
+   "halo_px": 16.0,
+   "estimate": {
+    "flops": 43.660172,
+    "pedzisz_2026_draft": 619.906291,
+    "i265_P_rthroughput": 136.533229,
+    "i265_P_latency": 759.775472,
+    "llvm_tti_arrowlake_throughput": 956.851604,
+    "llvm_tti_arrowlake_latency": 1905.000106,
+    "llvm_mca_arrowlake_rthroughput": 210.202118,
+    "llvm_tti_znver5_throughput": 890.210969
+   },
+   "cpu_1t": 30.313491821289062,
+   "wall_1t": 30.738735198974613,
+   "cpu_8t": 29.100894927978516,
+   "wall_8t": 29.025650024414062
+  },
+  {
+   "metric": "vmaf-v1",
+   "counter": "swe2",
+   "kind": "classic-fr",
+   "flops_per_px": 162.5625,
+   "halo_px": 16.0,
+   "estimate": {
+    "flops": 162.562517,
+    "pedzisz_2026_draft": 339.464886,
+    "i265_P_rthroughput": 120.337181,
+    "i265_P_latency": 644.420477,
+    "llvm_tti_arrowlake_throughput": 497.597698,
+    "llvm_tti_arrowlake_latency": 1320.445423,
+    "llvm_mca_arrowlake_rthroughput": 141.982314,
+    "llvm_tti_znver5_throughput": 436.269564
+   },
+   "cpu_1t": 24.379920959472656,
+   "wall_1t": 24.297523498535156,
+   "cpu_8t": 22.296905517578125,
+   "wall_8t": 22.13287353515625
   },
   {
    "metric": "vsi",
@@ -1504,6 +2113,111 @@
    "wall_1t": 100.77285766601562,
    "cpu_8t": 106.21070861816406,
    "wall_8t": 32.13214874267578
+  },
+  {
+   "metric": "wadiqam-fr-live",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 140992.0029,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 140992.00293,
+    "pedzisz_2026_draft": 141179.008789,
+    "i265_P_rthroughput": 30612.716942,
+    "i265_P_latency": 285540.878391,
+    "llvm_tti_arrowlake_throughput": 70882.010742,
+    "llvm_tti_arrowlake_latency": 71835.027344,
+    "llvm_mca_arrowlake_rthroughput": 35341.502441,
+    "llvm_tti_znver5_throughput": 70882.006836
+   },
+   "cpu_1t": 7479.20036315918,
+   "wall_1t": 7463.82713317871,
+   "cpu_8t": 8267.393112182617,
+   "wall_8t": 1096.816062927246
+  },
+  {
+   "metric": "wadiqam-fr-tid",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 140992.0029,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 140992.00293,
+    "pedzisz_2026_draft": 141179.008789,
+    "i265_P_rthroughput": 30612.716942,
+    "i265_P_latency": 285540.878391,
+    "llvm_tti_arrowlake_throughput": 70882.010742,
+    "llvm_tti_arrowlake_latency": 71835.027344,
+    "llvm_mca_arrowlake_rthroughput": 35341.502441,
+    "llvm_tti_znver5_throughput": 70882.006836
+   },
+   "cpu_1t": 4864.40658569336,
+   "wall_1t": 4856.715202331543,
+   "cpu_8t": 5503.544807434082,
+   "wall_8t": 750.5407333374023
+  },
+  {
+   "metric": "wadiqam-nr-live",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 131825.0127,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 131825.012695,
+    "pedzisz_2026_draft": 131965.518555,
+    "i265_P_rthroughput": 28617.123958,
+    "i265_P_latency": 266837.09184,
+    "llvm_tti_arrowlake_throughput": 66223.020508,
+    "llvm_tti_arrowlake_latency": 67075.566406,
+    "llvm_mca_arrowlake_rthroughput": 33038.257324,
+    "llvm_tti_znver5_throughput": 66223.016602
+   },
+   "cpu_1t": 9910.106658935547,
+   "wall_1t": 9919.83413696289,
+   "cpu_8t": 10709.810256958008,
+   "wall_8t": 1411.2281799316406
+  },
+  {
+   "metric": "wadiqam-nr-tid",
+   "counter": "swe2",
+   "kind": "nn-nr",
+   "flops_per_px": 131825.0127,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 131825.012695,
+    "pedzisz_2026_draft": 131965.518555,
+    "i265_P_rthroughput": 28617.123958,
+    "i265_P_latency": 266837.09184,
+    "llvm_tti_arrowlake_throughput": 66223.020508,
+    "llvm_tti_arrowlake_latency": 67075.566406,
+    "llvm_mca_arrowlake_rthroughput": 33038.257324,
+    "llvm_tti_znver5_throughput": 66223.016602
+   },
+   "cpu_1t": 6136.507987976073,
+   "wall_1t": 6121.363639831543,
+   "cpu_8t": 6784.372329711914,
+   "wall_8t": 917.6368713378906
+  },
+  {
+   "metric": "wd",
+   "counter": "swe2",
+   "kind": "nn-fr",
+   "flops_per_px": 1113586.0,
+   "halo_px": 0.0,
+   "estimate": {
+    "flops": 1113586.000008,
+    "pedzisz_2026_draft": 1114338.000008,
+    "i265_P_rthroughput": 241626.897003,
+    "i265_P_latency": 2252345.209615,
+    "llvm_tti_arrowlake_throughput": 558686.000008,
+    "llvm_tti_arrowlake_latency": 564728.000031,
+    "llvm_mca_arrowlake_rthroughput": 278961.000004,
+    "llvm_tti_znver5_throughput": 558686.000008
+   },
+   "cpu_1t": 12161.874771118164,
+   "wall_1t": 12173.032760620117,
+   "cpu_8t": 13693.618774414062,
+   "wall_8t": 2384.324073791504
   },
   {
    "metric": "ws-hv",

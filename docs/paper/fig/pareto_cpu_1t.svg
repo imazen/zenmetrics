@@ -2,83 +2,109 @@
 <rect width="700" height="460" fill="white"/>
 <text x="350" y="20" text-anchor="middle" font-size="13">Agreement with subjective JND (AIC2026, preliminary) vs CPU time (i265, 1 thread, 1024²)</text>
 <path d="M70 40V400H630" fill="none" stroke="#333"/>
-<path d="M127.7 400v5" stroke="#333"/><text x="127.7" y="418" text-anchor="middle">1</text>
-<path d="M296.1 400v5" stroke="#333"/><text x="296.1" y="418" text-anchor="middle">10</text>
-<path d="M464.6 400v5" stroke="#333"/><text x="464.6" y="418" text-anchor="middle">100</text>
-<path d="M65 379.7h5" stroke="#333"/><text x="62" y="383.7" text-anchor="end">0.30</text>
-<path d="M65 354.3h5" stroke="#333"/><text x="62" y="358.3" text-anchor="end">0.35</text>
-<path d="M65 328.8h5" stroke="#333"/><text x="62" y="332.8" text-anchor="end">0.40</text>
-<path d="M65 303.4h5" stroke="#333"/><text x="62" y="307.4" text-anchor="end">0.45</text>
-<path d="M65 277.9h5" stroke="#333"/><text x="62" y="281.9" text-anchor="end">0.50</text>
-<path d="M65 252.4h5" stroke="#333"/><text x="62" y="256.4" text-anchor="end">0.55</text>
-<path d="M65 227.0h5" stroke="#333"/><text x="62" y="231.0" text-anchor="end">0.60</text>
-<path d="M65 201.5h5" stroke="#333"/><text x="62" y="205.5" text-anchor="end">0.65</text>
-<path d="M65 176.1h5" stroke="#333"/><text x="62" y="180.1" text-anchor="end">0.70</text>
-<path d="M65 150.6h5" stroke="#333"/><text x="62" y="154.6" text-anchor="end">0.75</text>
-<path d="M65 125.1h5" stroke="#333"/><text x="62" y="129.1" text-anchor="end">0.80</text>
-<path d="M65 99.7h5" stroke="#333"/><text x="62" y="103.7" text-anchor="end">0.85</text>
-<path d="M65 74.2h5" stroke="#333"/><text x="62" y="78.2" text-anchor="end">0.90</text>
-<path d="M65 48.8h5" stroke="#333"/><text x="62" y="52.8" text-anchor="end">0.95</text>
-<path d="M99.7 67.4L245.2 64.1L319.9 53.6L463.0 50.0" fill="none" stroke="#bf5825" stroke-width="1.5"/>
-<path d="M463.0 55.5V45.1" stroke="#9ab"/>
-<circle cx="463.0" cy="50.0" r="4.5" fill="#bf5825"><title>ssim2</title></circle><text x="468.0" y="46.0" font-size="9" fill="#444">ssim2</text>
-<path d="M319.9 61.7V46.6" stroke="#9ab"/>
-<circle cx="319.9" cy="53.6" r="4.5" fill="#bf5825"><title>haarpsi</title></circle><text x="324.9" y="49.6" font-size="9" fill="#444">haarpsi</text>
-<path d="M487.2 63.5V49.7" stroke="#9ab"/>
-<circle cx="487.2" cy="55.9" r="3.2" fill="#2179ac"><title>butteraugli</title></circle><text x="492.2" y="51.9" font-size="9" fill="#444">butteraugli</text>
-<path d="M366.2 65.9V47.7" stroke="#9ab"/>
-<circle cx="366.2" cy="56.0" r="3.2" fill="#2179ac"><title>dssim</title></circle><text x="371.2" y="52.0" font-size="9" fill="#444">dssim</text>
-<path d="M384.7 65.0V48.5" stroke="#9ab"/>
-<circle cx="384.7" cy="56.1" r="3.2" fill="#2179ac"><title>psnrhvs-daala</title></circle><text x="389.7" y="52.1" font-size="9" fill="#444">psnrhvs-daala</text>
-<path d="M245.2 78.0V53.0" stroke="#9ab"/>
-<circle cx="245.2" cy="64.1" r="4.5" fill="#bf5825"><title>nlpd-iqa</title></circle><text x="250.2" y="60.1" font-size="9" fill="#444">nlpd-iqa</text>
-<path d="M509.5 72.6V58.3" stroke="#9ab"/>
-<circle cx="509.5" cy="65.1" r="3.2" fill="#2179ac"><title>flip-v17</title></circle><text x="514.5" y="61.1" font-size="9" fill="#444">flip-v17</text>
-<path d="M99.7 79.9V58.1" stroke="#9ab"/>
-<circle cx="99.7" cy="67.4" r="4.5" fill="#bf5825"><title>gmsd</title></circle><text x="104.7" y="63.4" font-size="9" fill="#444">gmsd</text>
-<path d="M329.6 77.0V60.2" stroke="#9ab"/>
-<circle cx="329.6" cy="68.0" r="3.2" fill="#2179ac"><title>fsim</title></circle><text x="334.6" y="64.0" font-size="9" fill="#444">fsim</text>
-<path d="M384.4 84.0V56.6" stroke="#9ab"/>
-<circle cx="384.4" cy="69.3" r="3.2" fill="#2179ac"><title>iwssim-piq</title></circle><text x="389.4" y="65.3" font-size="9" fill="#444">iwssim-piq</text>
-<path d="M444.5 85.2V55.8" stroke="#9ab"/>
-<circle cx="444.5" cy="69.6" r="3.2" fill="#2179ac"><title>cvvdp</title></circle><text x="449.5" y="65.6" font-size="9" fill="#444">cvvdp</text>
-<path d="M402.8 80.8V60.8" stroke="#9ab"/>
-<circle cx="402.8" cy="69.8" r="3.2" fill="#2179ac"><title>vsi</title></circle><text x="407.8" y="65.8" font-size="9" fill="#444">vsi</text>
-<path d="M600.3 83.1V59.6" stroke="#9ab"/>
-<circle cx="600.3" cy="70.3" r="3.2" fill="#2179ac"><title>mdctpsnr</title></circle><text x="605.3" y="66.3" font-size="9" fill="#444">mdctpsnr</text>
-<path d="M361.9 86.6V58.7" stroke="#9ab"/>
-<circle cx="361.9" cy="71.4" r="3.2" fill="#2179ac"><title>ssim-pyiqa</title></circle><text x="366.9" y="67.4" font-size="9" fill="#444">ssim-pyiqa</text>
-<path d="M394.3 87.0V59.5" stroke="#9ab"/>
-<circle cx="394.3" cy="72.3" r="3.2" fill="#2179ac"><title>msssim-libvmaf</title></circle><text x="399.3" y="68.3" font-size="9" fill="#444">msssim-libvmaf</text>
-<path d="M323.0 82.3V64.1" stroke="#9ab"/>
-<circle cx="323.0" cy="72.6" r="3.2" fill="#2179ac"><title>fsim-y</title></circle><text x="328.0" y="68.6" font-size="9" fill="#444">fsim-y</text>
-<path d="M377.4 89.0V60.5" stroke="#9ab"/>
-<circle cx="377.4" cy="73.6" r="3.2" fill="#2179ac"><title>ms-ssim-pyiqa</title></circle><text x="382.4" y="69.6" font-size="9" fill="#444">ms-ssim-pyiqa</text>
-<path d="M375.2 82.8V65.8" stroke="#9ab"/>
-<circle cx="375.2" cy="73.7" r="3.2" fill="#2179ac"><title>vmaf-neg</title></circle><text x="380.2" y="69.7" font-size="9" fill="#444">vmaf-neg</text>
-<path d="M411.3 88.9V64.1" stroke="#9ab"/>
-<circle cx="411.3" cy="75.6" r="3.2" fill="#2179ac"><title>ssimc</title></circle><text x="416.3" y="71.6" font-size="9" fill="#444">ssimc</text>
-<path d="M373.3 87.8V70.0" stroke="#9ab"/>
-<circle cx="373.3" cy="78.1" r="3.2" fill="#2179ac"><title>vmaf</title></circle><text x="378.3" y="74.1" font-size="9" fill="#444">vmaf</text>
-<path d="M283.9 92.4V67.0" stroke="#9ab"/>
-<circle cx="283.9" cy="78.6" r="3.2" fill="#2179ac"><title>ssim-libvmaf</title></circle><text x="288.9" y="74.6" font-size="9" fill="#444">ssim-libvmaf</text>
-<path d="M295.2 97.1V65.7" stroke="#9ab"/>
-<circle cx="295.2" cy="80.2" r="3.2" fill="#2179ac"><title>psnr-ycbcr611</title></circle><text x="300.2" y="76.2" font-size="9" fill="#444">psnr-ycbcr611</text>
-<path d="M471.1 100.7V62.5" stroke="#9ab"/>
-<circle cx="471.1" cy="80.2" r="3.2" fill="#2179ac"><title>vifvec</title></circle><text x="476.1" y="76.2" font-size="9" fill="#444">vifvec</text>
-<path d="M253.1 100.1V66.5" stroke="#9ab"/>
-<circle cx="253.1" cy="81.9" r="3.2" fill="#2179ac"><title>psnr-y-studio601</title></circle><text x="258.1" y="77.9" font-size="9" fill="#444">psnr-y-studio601</text>
-<path d="M467.8 93.5V78.3" stroke="#9ab"/>
-<circle cx="467.8" cy="85.4" r="3.2" fill="#2179ac"><title>ciede2000</title></circle><text x="472.8" y="81.4" font-size="9" fill="#444">ciede2000</text>
-<path d="M157.4 99.5V73.7" stroke="#9ab"/>
-<circle cx="157.4" cy="85.7" r="3.2" fill="#2179ac"><title>psnr</title></circle><text x="162.4" y="81.7" font-size="9" fill="#444">psnr</text>
-<path d="M459.3 157.3V113.3" stroke="#9ab"/>
-<circle cx="459.3" cy="133.3" r="3.2" fill="#2179ac"><title>cw-ssim</title></circle><text x="464.3" y="129.3" font-size="9" fill="#444">cw-ssim</text>
-<path d="M224.7 157.4V128.3" stroke="#9ab"/>
-<circle cx="224.7" cy="141.9" r="3.2" fill="#2179ac"><title>psnr-cr</title></circle><text x="229.7" y="137.9" font-size="9" fill="#444">psnr-cr</text>
-<path d="M227.8 177.4V147.6" stroke="#9ab"/>
-<circle cx="227.8" cy="162.3" r="3.2" fill="#2179ac"><title>psnr-cb</title></circle><text x="232.8" y="158.3" font-size="9" fill="#444">psnr-cb</text>
-<path d="M307.8 389.8V299.4" stroke="#9ab"/>
-<circle cx="307.8" cy="343.4" r="3.2" fill="#2179ac"><title>cambi</title></circle><text x="312.8" y="339.4" font-size="9" fill="#444">cambi</text>
+<path d="M111.4 400v5" stroke="#333"/><text x="111.4" y="418" text-anchor="middle">1</text>
+<path d="M232.5 400v5" stroke="#333"/><text x="232.5" y="418" text-anchor="middle">10</text>
+<path d="M353.6 400v5" stroke="#333"/><text x="353.6" y="418" text-anchor="middle">100</text>
+<path d="M474.6 400v5" stroke="#333"/><text x="474.6" y="418" text-anchor="middle">1000</text>
+<path d="M595.7 400v5" stroke="#333"/><text x="595.7" y="418" text-anchor="middle">10000</text>
+<path d="M65 400.0h5" stroke="#333"/><text x="62" y="404.0" text-anchor="end">0.00</text>
+<path d="M65 381.4h5" stroke="#333"/><text x="62" y="385.4" text-anchor="end">0.05</text>
+<path d="M65 362.8h5" stroke="#333"/><text x="62" y="366.8" text-anchor="end">0.10</text>
+<path d="M65 344.2h5" stroke="#333"/><text x="62" y="348.2" text-anchor="end">0.15</text>
+<path d="M65 325.6h5" stroke="#333"/><text x="62" y="329.6" text-anchor="end">0.20</text>
+<path d="M65 306.9h5" stroke="#333"/><text x="62" y="310.9" text-anchor="end">0.25</text>
+<path d="M65 288.3h5" stroke="#333"/><text x="62" y="292.3" text-anchor="end">0.30</text>
+<path d="M65 269.7h5" stroke="#333"/><text x="62" y="273.7" text-anchor="end">0.35</text>
+<path d="M65 251.1h5" stroke="#333"/><text x="62" y="255.1" text-anchor="end">0.40</text>
+<path d="M65 232.5h5" stroke="#333"/><text x="62" y="236.5" text-anchor="end">0.45</text>
+<path d="M65 213.9h5" stroke="#333"/><text x="62" y="217.9" text-anchor="end">0.50</text>
+<path d="M65 195.3h5" stroke="#333"/><text x="62" y="199.3" text-anchor="end">0.55</text>
+<path d="M65 176.7h5" stroke="#333"/><text x="62" y="180.7" text-anchor="end">0.60</text>
+<path d="M65 158.1h5" stroke="#333"/><text x="62" y="162.1" text-anchor="end">0.65</text>
+<path d="M65 139.5h5" stroke="#333"/><text x="62" y="143.5" text-anchor="end">0.70</text>
+<path d="M65 120.8h5" stroke="#333"/><text x="62" y="124.8" text-anchor="end">0.75</text>
+<path d="M65 102.2h5" stroke="#333"/><text x="62" y="106.2" text-anchor="end">0.80</text>
+<path d="M65 83.6h5" stroke="#333"/><text x="62" y="87.6" text-anchor="end">0.85</text>
+<path d="M65 65.0h5" stroke="#333"/><text x="62" y="69.0" text-anchor="end">0.90</text>
+<path d="M65 46.4h5" stroke="#333"/><text x="62" y="50.4" text-anchor="end">0.95</text>
+<path d="M91.3 60.1L195.9 57.6L249.6 49.9L352.4 47.3" fill="none" stroke="#bf5825" stroke-width="1.5"/>
+<path d="M352.4 51.4V43.7" stroke="#9ab"/>
+<circle cx="352.4" cy="47.3" r="4.5" fill="#bf5825"><title>ssim2</title></circle><text x="357.4" y="43.3" font-size="9" fill="#444">ssim2</text>
+<path d="M249.6 55.9V44.8" stroke="#9ab"/>
+<circle cx="249.6" cy="49.9" r="4.5" fill="#bf5825"><title>haarpsi</title></circle><text x="254.6" y="45.9" font-size="9" fill="#444">haarpsi</text>
+<path d="M369.8 57.2V47.1" stroke="#9ab"/>
+<circle cx="369.8" cy="51.7" r="3.2" fill="#2179ac"><title>butteraugli</title></circle><text x="374.8" y="47.7" font-size="9" fill="#444">butteraugli</text>
+<path d="M282.8 58.9V45.6" stroke="#9ab"/>
+<circle cx="282.8" cy="51.7" r="3.2" fill="#2179ac"><title>dssim</title></circle><text x="287.8" y="47.7" font-size="9" fill="#444">dssim</text>
+<path d="M296.1 58.2V46.2" stroke="#9ab"/>
+<circle cx="296.1" cy="51.8" r="3.2" fill="#2179ac"><title>psnrhvs-daala</title></circle><text x="301.1" y="47.8" font-size="9" fill="#444">psnrhvs-daala</text>
+<path d="M581.6 58.6V49.8" stroke="#9ab"/>
+<circle cx="581.6" cy="54.0" r="3.2" fill="#2179ac"><title>dmm</title></circle><text x="586.6" y="50.0" font-size="9" fill="#444">dmm</text>
+<path d="M195.9 67.8V49.5" stroke="#9ab"/>
+<circle cx="195.9" cy="57.6" r="4.5" fill="#bf5825"><title>nlpd-iqa</title></circle><text x="200.9" y="53.6" font-size="9" fill="#444">nlpd-iqa</text>
+<path d="M385.8 63.8V53.4" stroke="#9ab"/>
+<circle cx="385.8" cy="58.3" r="3.2" fill="#2179ac"><title>flip-v17</title></circle><text x="390.8" y="54.3" font-size="9" fill="#444">flip-v17</text>
+<path d="M91.3 69.2V53.2" stroke="#9ab"/>
+<circle cx="91.3" cy="60.1" r="4.5" fill="#bf5825"><title>gmsd</title></circle><text x="96.3" y="56.1" font-size="9" fill="#444">gmsd</text>
+<path d="M256.5 67.0V54.8" stroke="#9ab"/>
+<circle cx="256.5" cy="60.5" r="3.2" fill="#2179ac"><title>fsim</title></circle><text x="261.5" y="56.5" font-size="9" fill="#444">fsim</text>
+<path d="M295.9 72.2V52.1" stroke="#9ab"/>
+<circle cx="295.9" cy="61.4" r="3.2" fill="#2179ac"><title>iwssim-piq</title></circle><text x="300.9" y="57.4" font-size="9" fill="#444">iwssim-piq</text>
+<path d="M339.1 73.0V51.5" stroke="#9ab"/>
+<circle cx="339.1" cy="61.7" r="3.2" fill="#2179ac"><title>cvvdp</title></circle><text x="344.1" y="57.7" font-size="9" fill="#444">cvvdp</text>
+<path d="M309.2 69.9V55.2" stroke="#9ab"/>
+<circle cx="309.2" cy="61.8" r="3.2" fill="#2179ac"><title>vsi</title></circle><text x="314.2" y="57.8" font-size="9" fill="#444">vsi</text>
+<path d="M451.1 71.5V54.3" stroke="#9ab"/>
+<circle cx="451.1" cy="62.2" r="3.2" fill="#2179ac"><title>mdctpsnr</title></circle><text x="456.1" y="58.2" font-size="9" fill="#444">mdctpsnr</text>
+<path d="M279.7 74.1V53.7" stroke="#9ab"/>
+<circle cx="279.7" cy="62.9" r="3.2" fill="#2179ac"><title>ssim-pyiqa</title></circle><text x="284.7" y="58.9" font-size="9" fill="#444">ssim-pyiqa</text>
+<path d="M303.1 74.4V54.2" stroke="#9ab"/>
+<circle cx="303.1" cy="63.6" r="3.2" fill="#2179ac"><title>msssim-libvmaf</title></circle><text x="308.1" y="59.6" font-size="9" fill="#444">msssim-libvmaf</text>
+<path d="M251.8 70.9V57.6" stroke="#9ab"/>
+<circle cx="251.8" cy="63.9" r="3.2" fill="#2179ac"><title>fsim-y</title></circle><text x="256.8" y="59.9" font-size="9" fill="#444">fsim-y</text>
+<path d="M290.9 75.8V55.0" stroke="#9ab"/>
+<circle cx="290.9" cy="64.5" r="3.2" fill="#2179ac"><title>ms-ssim-pyiqa</title></circle><text x="295.9" y="60.5" font-size="9" fill="#444">ms-ssim-pyiqa</text>
+<path d="M289.3 71.3V58.9" stroke="#9ab"/>
+<circle cx="289.3" cy="64.6" r="3.2" fill="#2179ac"><title>vmaf-neg</title></circle><text x="294.3" y="60.6" font-size="9" fill="#444">vmaf-neg</text>
+<path d="M315.3 75.8V57.6" stroke="#9ab"/>
+<circle cx="315.3" cy="66.1" r="3.2" fill="#2179ac"><title>ssimc</title></circle><text x="320.3" y="62.1" font-size="9" fill="#444">ssimc</text>
+<path d="M287.9 74.9V62.0" stroke="#9ab"/>
+<circle cx="287.9" cy="67.9" r="3.2" fill="#2179ac"><title>vmaf</title></circle><text x="292.9" y="63.9" font-size="9" fill="#444">vmaf</text>
+<path d="M223.7 78.3V59.7" stroke="#9ab"/>
+<circle cx="223.7" cy="68.2" r="3.2" fill="#2179ac"><title>ssim-libvmaf</title></circle><text x="228.7" y="64.2" font-size="9" fill="#444">ssim-libvmaf</text>
+<path d="M535.4 75.8V61.4" stroke="#9ab"/>
+<circle cx="535.4" cy="68.3" r="3.2" fill="#2179ac"><title>stlpips-alex</title></circle><text x="540.4" y="64.3" font-size="9" fill="#444">stlpips-alex</text>
+<path d="M434.6 78.6V59.8" stroke="#9ab"/>
+<circle cx="434.6" cy="68.7" r="3.2" fill="#2179ac"><title>lpips-alex</title></circle><text x="439.6" y="64.7" font-size="9" fill="#444">lpips-alex</text>
+<path d="M231.8 81.8V58.8" stroke="#9ab"/>
+<circle cx="231.8" cy="69.4" r="3.2" fill="#2179ac"><title>psnr-ycbcr611</title></circle><text x="236.8" y="65.4" font-size="9" fill="#444">psnr-ycbcr611</text>
+<path d="M358.3 84.4V56.4" stroke="#9ab"/>
+<circle cx="358.3" cy="69.4" r="3.2" fill="#2179ac"><title>vifvec</title></circle><text x="363.3" y="65.4" font-size="9" fill="#444">vifvec</text>
+<path d="M201.6 84.0V59.4" stroke="#9ab"/>
+<circle cx="201.6" cy="70.6" r="3.2" fill="#2179ac"><title>psnr-y-studio601</title></circle><text x="206.6" y="66.6" font-size="9" fill="#444">psnr-y-studio601</text>
+<path d="M598.7 81.4V63.0" stroke="#9ab"/>
+<circle cx="598.7" cy="71.4" r="3.2" fill="#2179ac"><title>stlpips-vgg</title></circle><text x="603.7" y="67.4" font-size="9" fill="#444">stlpips-vgg</text>
+<path d="M355.9 79.1V68.0" stroke="#9ab"/>
+<circle cx="355.9" cy="73.2" r="3.2" fill="#2179ac"><title>ciede2000</title></circle><text x="360.9" y="69.2" font-size="9" fill="#444">ciede2000</text>
+<path d="M132.8 83.5V64.6" stroke="#9ab"/>
+<circle cx="132.8" cy="73.4" r="3.2" fill="#2179ac"><title>psnr</title></circle><text x="137.8" y="69.4" font-size="9" fill="#444">psnr</text>
+<path d="M595.5 84.6V65.2" stroke="#9ab"/>
+<circle cx="595.5" cy="74.4" r="3.2" fill="#2179ac"><title>dists</title></circle><text x="600.5" y="70.4" font-size="9" fill="#444">dists</text>
+<path d="M593.8 89.2V65.5" stroke="#9ab"/>
+<circle cx="593.8" cy="76.9" r="3.2" fill="#2179ac"><title>lpips-vgg</title></circle><text x="598.8" y="72.9" font-size="9" fill="#444">lpips-vgg</text>
+<path d="M608.7 92.9V71.3" stroke="#9ab"/>
+<circle cx="608.7" cy="81.6" r="3.2" fill="#2179ac"><title>deepdc</title></circle><text x="613.7" y="77.6" font-size="9" fill="#444">deepdc</text>
+<path d="M349.7 125.8V93.6" stroke="#9ab"/>
+<circle cx="349.7" cy="108.2" r="3.2" fill="#2179ac"><title>cw-ssim</title></circle><text x="354.7" y="104.2" font-size="9" fill="#444">cw-ssim</text>
+<path d="M181.2 125.8V104.6" stroke="#9ab"/>
+<circle cx="181.2" cy="114.5" r="3.2" fill="#2179ac"><title>psnr-cr</title></circle><text x="186.2" y="110.5" font-size="9" fill="#444">psnr-cr</text>
+<path d="M497.7 130.7V108.9" stroke="#9ab"/>
+<circle cx="497.7" cy="119.8" r="3.2" fill="#2179ac"><title>dreamsim</title></circle><text x="502.7" y="115.8" font-size="9" fill="#444">dreamsim</text>
+<path d="M183.4 140.4V118.7" stroke="#9ab"/>
+<circle cx="183.4" cy="129.4" r="3.2" fill="#2179ac"><title>psnr-cb</title></circle><text x="188.4" y="125.4" font-size="9" fill="#444">psnr-cb</text>
+<path d="M240.9 295.7V229.6" stroke="#9ab"/>
+<circle cx="240.9" cy="261.8" r="3.2" fill="#2179ac"><title>cambi</title></circle><text x="245.9" y="257.8" font-size="9" fill="#444">cambi</text>
+<path d="M337.5 439.4V362.7" stroke="#9ab"/>
+<circle cx="337.5" cy="402.0" r="3.2" fill="#2179ac"><title>ckdn</title></circle><text x="342.5" y="398.0" font-size="9" fill="#444">ckdn</text>
 <text x="350" y="448" text-anchor="middle">measured CPU ns per pixel (log)</text>
 <text x="18" y="220" text-anchor="middle" transform="rotate(-90 18 220)">within-source Spearman with subjective JND</text></svg>

@@ -38,6 +38,14 @@ def normalize(path,spec,table,number):
         for r in rows:groups.setdefault((r['metric'],r['shape'],r['threads']),[]).append(r)
         for (metric,shape,threads),rs in sorted(groups.items()):
             w,h=(int(v) for v in shape.split('x'))
+            ok=[r for r in rs if r['task_clock_ms_per_call']!='error']
+            if not ok:
+                # Timeouts and refusals stay visible as unavailable observations with their reason.
+                yield dict(metric=metric,implementation='zenmetrics',backend='CPU',host=spec['host'],os='Linux',threads=int(threads),
+                           mode='score',phase='warm',width=w,height=h,ms=None,status='unavailable',content='photo',
+                           engine=spec.get('engine','native'),details=rs[0]['score'][:200])
+                continue
+            rs=ok
             wall=sorted(number(r['wall_ms_per_call']) for r in rs);cpu=sorted(number(r['task_clock_ms_per_call']) for r in rs)
             yield dict(metric=metric,implementation='zenmetrics',backend='CPU',host=spec['host'],os='Linux',threads=int(threads),
                        mode='score',phase='warm',width=w,height=h,ms=wall[len(wall)//2],cpu_ms=cpu[len(cpu)//2],
