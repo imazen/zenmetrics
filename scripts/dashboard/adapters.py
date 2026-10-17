@@ -29,6 +29,21 @@ def normalize(path,spec,table,number):
     strict_number=number
     number=lambda value:None if missing(value) else strict_number(value)
     adapter=spec['adapter']
+    if adapter=='perf-deltas':
+        # scripts/complexity/perf_deltas.py: per-call counter deltas, one row per repeat.
+        lines=[l for l in path.read_text().splitlines() if l and not l.startswith('#')]
+        rows=list(csv.DictReader(lines,delimiter='\t'))
+        if rows and set(rows[0])!=set(spec['columns']):raise ValueError(f'{path}: perf-deltas schema mismatch')
+        groups={}
+        for r in rows:groups.setdefault((r['metric'],r['shape'],r['threads']),[]).append(r)
+        for (metric,shape,threads),rs in sorted(groups.items()):
+            w,h=(int(v) for v in shape.split('x'))
+            wall=sorted(number(r['wall_ms_per_call']) for r in rs);cpu=sorted(number(r['task_clock_ms_per_call']) for r in rs)
+            yield dict(metric=metric,implementation='zenmetrics',backend='CPU',host=spec['host'],os='Linux',threads=int(threads),
+                       mode='score',phase='warm',width=w,height=h,ms=wall[len(wall)//2],cpu_ms=cpu[len(cpu)//2],
+                       min_ms=wall[0],max_ms=wall[-1],repeats=len(rs),content='photo',engine='native',status='ok',
+                       details='Per-call delta between 1 and 1+K calls in one process; decode, setup and process start excluded; pinned P-core.')
+        return
     if adapter=='complexity':
         # Source-code operation tallies (not measurements); docs/IQA_COMPLEXITY.md.
         import importlib.util

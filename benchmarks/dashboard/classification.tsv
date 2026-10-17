@@ -978,3 +978,4 @@ benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_dev.json	ignored	Aggr
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_i265.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.

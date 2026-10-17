@@ -1,0 +1,11 @@
+commit=eb10a6fa8e0d619d8b303ea0640c69f7539e1b78
+binary=complexity-reps sha256=a02b4b7e104d4e836386593871886e78093c26ce03cae2007ef6cea402aba92c built from tracked snapshot of ttstqtlw+cpu-profile bin (lead workspace), cargo --release, default features, no target-cpu
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K pinned_cpu=6 (P-core) RAYON_NUM_THREADS=1
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled; sRGB8; default options; cvvdp display standard_fhd
+start_utc=2026-10-17T12:56:04Z load=3.47 2.27 2.01
+note=driver source was reformatted (rustfmt, layout only) after this binary was built
+end_utc=2026-10-17T12:59:00Z load=2.72 2.33 2.07
+commit_note=eb10a6fa is the pre-rebase id of the lead change landed as 194d8462 (same tree for all metric source)
+failed=brisque niqe piqe (CLI feature nr not in this build; measured separately), hdrvdp hdrvdp3 (HDR routes; not in this SDR panel)
+command=flock ~/tmp/i265-heavy.lock run-heavy --mem 8G --jobs 1 -- python3 scripts/complexity/perf_deltas.py --bin complexity-reps --shapes 1024x1024 --metrics <85 CPU CLI metrics> --repeats 3 --cpu 6
+run_heavy=rc=0 168s peak-RSS 0.27GiB min-avail 11182MiB peak-load 3.08

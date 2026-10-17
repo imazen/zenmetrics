@@ -1549,3 +1549,12 @@ family = "complexity"
 adapter = "complexity"
 metadata = ["benchmarks/iqa_complexity_2026-10-17/README.md"]
 note = "Provisional source-code operation tallies per original pixel; not measurements. Method: docs/IQA_COMPLEXITY.md."
+
+[[dataset]]
+glob = "benchmarks/iqa_complexity_2026-10-17/measured/i265_*_1024.tsv"
+family = "speed"
+adapter = "perf-deltas"
+host = "i265"
+metadata = ["benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta"]
+columns = ["metric", "shape", "threads", "repeat", "extra_reps", "task_clock_ms_per_call", "cycles_per_call", "instructions_per_call", "fp_vec128_inst_per_call", "fp_vec256_inst_per_call", "loads_per_call", "stores_per_call", "fpdiv_active_cycles_per_call", "wall_ms_per_call", "score"]
+note = "Controlled single-host run (2026-10-17): per-call deltas under perf stat, pinned P-core, warm calls in one process."
