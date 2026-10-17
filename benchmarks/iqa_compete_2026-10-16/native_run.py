@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
 import argparse, atexit, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
-from batch import BatchLease
+from batch import BatchLease,yield_after_release
 from references import load_references, same_pair_reference
 from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, native_input_refusal, admission_reason, prior_admission_reason
 P=pathlib.Path
@@ -75,6 +75,7 @@ def main():
       if lease:cmd=cmd[2:]
       with attempt_log.open('x') as output_log:
        completed=subprocess.run(cmd,env=env,stdout=output_log,stderr=subprocess.STDOUT,pass_fds=(lease.fd,) if lease else ())
+      if not lease:yield_after_release(P.home()/'tmp/i265-heavy.lock')
       result=subprocess.CompletedProcess(cmd,completed.returncode,attempt_log.read_text(),'')
       if admission_reason(result.stdout+result.stderr):
        if lease:lease.close()

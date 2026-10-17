@@ -18,7 +18,7 @@ from chunks import combine
 from admission_recovery import recover
 from references import load_references
 from parity import qualify_rows
-from batch import BatchLease
+from batch import BatchLease,yield_after_release
 
 THREAD_ENV = ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
               'RTEN_NUM_THREADS', 'OPENBLAS_NUM_THREADS']
@@ -230,6 +230,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         with log.open('x') as f:
             process = subprocess.run(command, env=env, stdout=f, stderr=subprocess.STDOUT,
                                      check=False,pass_fds=(lease.fd,) if lease else ())
+        if not lease:yield_after_release(Path.home()/f'tmp/{host}-heavy.lock')
         text = log.read_text()
         recovery=[]
         if process.returncode and platform.system()=='Linux':

@@ -3,7 +3,10 @@
 import argparse,concurrent.futures,datetime,json,pathlib,subprocess
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('manifest',type=P);p.add_argument('output',type=P);p.add_argument('--label',required=True);a=p.parse_args()
-record=json.loads(a.manifest.read_text());jobs={r['lane']:r['command'] for r in record['rust']};jobs['native']=record['native']['command']
+record=json.loads(a.manifest.read_text())
+if isinstance(record,list):jobs={r['lane']:r['command'] for r in record}
+else:
+ jobs={r['lane']:r['command'] for r in record['rust']};jobs['native']=record['native']['command']
 a.output.mkdir(parents=True,exist_ok=True)
 def run(item):
  name,command=item;log=a.output/f'{name}-{a.label}.log'

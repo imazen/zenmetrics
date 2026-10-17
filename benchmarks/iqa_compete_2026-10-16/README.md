@@ -186,3 +186,8 @@ records all four missing mode/thread cells with n=1 and clean contention
 receipts. The [build receipt](cuda-v17-build-control.json) binds the executable.
 No completed timing or CID22 comparison was repeated. Chart summaries retain
 `coverage_first`, `required_samples` and `parity_checked`; bar labels show n.
+
+After releasing the shared i265 lock, controllers sleep 45 seconds whenever
+`pgrep -x flock` reports more than one process. This applies to batch and
+per-cell releases. [Controls](lock-cooldown-control.json) verify that the wait
+happens after unlocking and is omitted without multiple flock processes.

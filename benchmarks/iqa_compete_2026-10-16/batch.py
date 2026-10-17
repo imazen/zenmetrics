@@ -1,5 +1,12 @@
 """Optional bounded lock holds spanning several separately supervised cells."""
-import json,math,os,pathlib,time
+import json,math,os,pathlib,time,subprocess
+
+def yield_after_release(path):
+    """Give other flock waiters a window after releasing the shared host lock."""
+    if pathlib.Path(path).name!='i265-heavy.lock':return
+    result=subprocess.run(['pgrep','-x','flock'],capture_output=True,text=True)
+    if result.returncode not in (0,1):raise RuntimeError(result.stderr)
+    if len(result.stdout.splitlines())>1:time.sleep(45)
 
 class BatchLease:
     def __init__(self,path,seconds,events,reserve=120):
@@ -28,8 +35,9 @@ class BatchLease:
         if self.fd is not None:
             # Close our reference, never explicitly unlock the shared OFD.
             # A supervised child inheriting it keeps the lock if its parent dies.
-            fd=self.fd;self.fd=None
+            fd=self.fd;self.fd=None;held=self.started is not None
             try:
                 if self.started is not None:self.event('parent_reference_closed')
             finally:
                 os.close(fd);self.started=None
+                if held:yield_after_release(self.path)

@@ -1,6 +1,7 @@
 """Real-lock controls for bounded holds and inherited-child ownership."""
 import fcntl,json,os,pathlib,subprocess,sys,tempfile,unittest
-from batch import BatchLease
+from unittest.mock import patch
+from batch import BatchLease,yield_after_release
 P=pathlib.Path
 class Batches(unittest.TestCase):
     def setUp(self):
@@ -42,4 +43,22 @@ class Batches(unittest.TestCase):
     def test_oversized_holds_are_refused(self):
         for seconds in [0,1101]:
             with self.assertRaises(ValueError):BatchLease(self.path,seconds,self.root/'events.jsonl')
+    def test_contended_release_yields_after_unlock(self):
+        path=self.root/'i265-heavy.lock';lease=BatchLease(path,1100,self.root/'fair-events.jsonl')
+        lease.prepare(1100)
+        def sleeping(seconds):
+            self.assertEqual(seconds,45)
+            fd=os.open(path,os.O_RDWR)
+            try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            finally:os.close(fd)
+        with patch('batch.subprocess.run',return_value=subprocess.CompletedProcess([],0,'11\n12\n','')) as probe,patch('batch.time.sleep',side_effect=sleeping) as sleep:
+            lease.close();sleep.assert_called_once_with(45)
+            probe.assert_called_once_with(['pgrep','-x','flock'],capture_output=True,text=True)
+    def test_no_yield_without_multiple_flock_processes(self):
+        for stdout,code in [('',1),('11\n',0)]:
+            with patch('batch.subprocess.run',return_value=subprocess.CompletedProcess([],code,stdout,'')),patch('batch.time.sleep') as sleep:
+                yield_after_release(self.root/'i265-heavy.lock');sleep.assert_not_called()
+    def test_other_host_locks_do_not_probe(self):
+        with patch('batch.subprocess.run') as probe:
+            yield_after_release(self.path);probe.assert_not_called()
 if __name__=='__main__':unittest.main()
