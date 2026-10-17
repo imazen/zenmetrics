@@ -1196,3 +1196,7 @@ iqa-compete-check-map-repairs raw baseline output:
 # Process accounting controls for the owner-authorized shared-host protocol.
 iqa-compete-contention-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_contention.py
+
+# Read-only retention of observation files referenced by the other host lane.
+iqa-compete-retain-host-scopes raw output:
+    python3 benchmarks/iqa_compete_2026-10-16/merge_host_scopes.py '{{raw}}' '{{output}}'
