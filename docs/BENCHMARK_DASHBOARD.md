@@ -198,3 +198,16 @@ The ORT WebGPU receipt includes RTEN and CUDA timing controls and an exported-
 golden panel. Explicit backend labels distinguish GPU WebGPU from CPU RTEN;
 reported default thread counts stay unknown. LOADFAIL and OOM outcomes remain
 failed rows with missing numeric results, separate from successful goldens.
+
+## Priority list, stars and reproduction commands
+
+`scripts/dashboard/favorites.json` is the owner's priority list (2026-10-17),
+ordered by first implementation in zenmetrics: the earliest of the crate's
+`Cargo.toml` being added, the `MetricKind` variant appearing, or the CLI name
+appearing on master. It needs git history, so it is committed; regenerate it
+with `python3 scripts/dashboard/favorites.py` and verify with `--check`, which
+recomputes it at its recorded revision. The Models view filters and orders by
+it. Stars are per-viewer and live only in that browser's storage. Model
+records carry CLI reproduction commands derived by `scripts/dashboard/repro.py`
+from the CLI's feature gates. `benchmarks/dashboard/unimplemented.toml` lists
+planned or declined methods with the source line that records each status.

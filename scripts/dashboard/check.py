@@ -76,6 +76,14 @@ def check(directory, screenshots, port=3387):
             assert page.locator('.model-cell .model-card').count()==1 and page.locator('.unimplemented-card').count()==0
             page.locator('.model-cell [data-star="ssim2"]').click()
             page.wait_for_function('document.querySelectorAll(".model-cell .model-card").length===0')
+            favorites=json.loads((directory/'data/favorites.json').read_text())
+            page.goto(f'http://127.0.0.1:{port}/#models?priority=1');page.wait_for_function('window.dashboardReady==="models" && location.hash.includes("priority=1")')
+            expected=[n for f in favorites['favorites'] for n in f['cli_names'] if n in implemented]
+            shown=page.locator('.model-cell .model-card').evaluate_all('(cards)=>cards.map(c=>c.dataset.model)')
+            assert sorted(shown)==sorted(expected), (shown, expected)
+            ranks=[next(i for i,f in enumerate(favorites['favorites']) if m in f['cli_names']) for m in shown]
+            assert ranks==sorted(ranks), 'priority order'
+            assert page.locator('.model-badge.priority').count()==len(shown)
             page.goto(f'http://127.0.0.1:{port}/#models');page.wait_for_function('window.dashboardReady==="models"')
             assert page.locator('.model-export a').count()==3
             if screenshots:page.screenshot(path=str(screenshots/'models.png'))

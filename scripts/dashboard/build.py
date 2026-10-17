@@ -290,6 +290,7 @@ def build(output):
     for family, rows in families.items():
         (data/f'{family}.json').write_text(json.dumps(rows, allow_nan=False, separators=(',', ':')))
     for name,content in card_exports(families['models']).items():(data/name).write_text(content)
+    shutil.copyfile(ROOT/'scripts/dashboard/favorites.json', data/'favorites.json')
     (data/'unimplemented.json').write_text(json.dumps(unimplemented_methods(), separators=(',', ':')))
     unregistered=validate_inventory(ROOT,registered)
     manifest = dict(schema=2, counts={k:len(v) for k,v in families.items()}, sources=sources,

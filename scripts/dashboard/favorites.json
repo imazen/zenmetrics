@@ -1,0 +1,311 @@
+{
+ "schema": 1,
+ "note": "Owner priority list (2026-10-17), ordered by first implementation in zenmetrics; first = earliest of crate added, MetricKind variant, or CLI name on the stated revision. Code that predates this repository (for example sibling crates) is not dated here.",
+ "revision": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "favorites": [
+  {
+   "label": "Butteraugli",
+   "cli_names": [
+    "butteraugli"
+   ],
+   "first": {
+    "commit": "37e6ea0a071f",
+    "date": "2026-05-03T10:05:11-06:00"
+   },
+   "basis": "cli_name:butteraugli"
+  },
+  {
+   "label": "SSIMULACRA2",
+   "cli_names": [
+    "ssim2"
+   ],
+   "first": {
+    "commit": "37e6ea0a071f",
+    "date": "2026-05-03T10:05:11-06:00"
+   },
+   "basis": "cli_name:ssim2"
+  },
+  {
+   "label": "DSSIM",
+   "cli_names": [
+    "dssim"
+   ],
+   "first": {
+    "commit": "918add0e09be",
+    "date": "2026-05-03T10:48:58-06:00"
+   },
+   "basis": "cli_name:dssim"
+  },
+  {
+   "label": "CVVDP",
+   "cli_names": [
+    "cvvdp"
+   ],
+   "first": {
+    "commit": "a8ee544039bf",
+    "date": "2026-05-14T13:48:39-06:00"
+   },
+   "basis": "cli_name:cvvdp"
+  },
+  {
+   "label": "IW-SSIM",
+   "cli_names": [
+    "iwssim",
+    "iwssim-piq"
+   ],
+   "first": {
+    "commit": "c0353e1c59c1",
+    "date": "2026-05-17T17:14:37-06:00"
+   },
+   "basis": "cli_name:iwssim"
+  },
+  {
+   "label": "HDR-VDP-2 / -3",
+   "cli_names": [
+    "hdrvdp",
+    "hdrvdp3"
+   ],
+   "first": {
+    "commit": "db0b1e8af769",
+    "date": "2026-08-28T19:01:21-06:00"
+   },
+   "basis": "crate:hdrvdp"
+  },
+  {
+   "label": "GMSD",
+   "cli_names": [
+    "gmsd"
+   ],
+   "first": {
+    "commit": "53a497159114",
+    "date": "2026-09-22T17:53:26-06:00"
+   },
+   "basis": "cli_name:gmsd"
+  },
+  {
+   "label": "VMAF",
+   "cli_names": [
+    "vmaf",
+    "vmaf-neg"
+   ],
+   "first": {
+    "commit": "5896c9fec6ac",
+    "date": "2026-09-24T21:31:57Z"
+   },
+   "basis": "crate:vmaf"
+  },
+  {
+   "label": "PSNR-HVS",
+   "cli_names": [
+    "psnrhvs-y",
+    "psnrhvs"
+   ],
+   "first": {
+    "commit": "f3217e045fb4",
+    "date": "2026-09-25T00:23:00Z"
+   },
+   "basis": "cli_name:psnrhvs-y"
+  },
+  {
+   "label": "HaarPSI",
+   "cli_names": [
+    "haarpsi-y",
+    "haarpsi"
+   ],
+   "first": {
+    "commit": "e935a65e2fd1",
+    "date": "2026-09-25T01:10:49Z"
+   },
+   "basis": "cli_name:haarpsi-y"
+  },
+  {
+   "label": "FSIM / FSIMc",
+   "cli_names": [
+    "fsim-y",
+    "fsim",
+    "fsim-k4"
+   ],
+   "first": {
+    "commit": "75829f8e39ba",
+    "date": "2026-09-25T01:24:18Z"
+   },
+   "basis": "cli_name:fsim-y"
+  },
+  {
+   "label": "VSI",
+   "cli_names": [
+    "vsi",
+    "vsi-k4"
+   ],
+   "first": {
+    "commit": "284bbe72afc3",
+    "date": "2026-09-25T01:49:31Z"
+   },
+   "basis": "cli_name:vsi"
+  },
+  {
+   "label": "SSIM",
+   "cli_names": [
+    "ssim",
+    "ssim-libvmaf"
+   ],
+   "first": {
+    "commit": "aee81d19273a",
+    "date": "2026-09-25T02:00:01Z"
+   },
+   "basis": "crate:msssim"
+  },
+  {
+   "label": "MS-SSIM",
+   "cli_names": [
+    "msssim",
+    "msssim-libvmaf"
+   ],
+   "first": {
+    "commit": "aee81d19273a",
+    "date": "2026-09-25T02:00:01Z"
+   },
+   "basis": "cli_name:msssim"
+  },
+  {
+   "label": "VIF",
+   "cli_names": [
+    "vif"
+   ],
+   "first": {
+    "commit": "8acff821f953",
+    "date": "2026-09-25T02:03:29Z"
+   },
+   "basis": "cli_name:vif"
+  },
+  {
+   "label": "MAD",
+   "cli_names": [
+    "mad"
+   ],
+   "first": {
+    "commit": "2383f9ae49f8",
+    "date": "2026-09-25T02:40:30Z"
+   },
+   "basis": "cli_name:mad"
+  },
+  {
+   "label": "mDCT-PSNR",
+   "cli_names": [
+    "mdctpsnr"
+   ],
+   "first": {
+    "commit": "43d2723e8843",
+    "date": "2026-09-25T11:18:54Z"
+   },
+   "basis": "cli_name:mdctpsnr"
+  },
+  {
+   "label": "PSNR",
+   "cli_names": [
+    "psnr",
+    "psnr-y"
+   ],
+   "first": {
+    "commit": "ffb05237e602",
+    "date": "2026-09-25T17:07:09-06:00"
+   },
+   "basis": "cli_name:psnr"
+  },
+  {
+   "label": "NLPD",
+   "cli_names": [
+    "nlpd"
+   ],
+   "first": {
+    "commit": "ffb05237e602",
+    "date": "2026-09-25T17:07:09-06:00"
+   },
+   "basis": "cli_name:nlpd"
+  },
+  {
+   "label": "CIEDE2000",
+   "cli_names": [
+    "ciede2000"
+   ],
+   "first": {
+    "commit": "99f9309841a4",
+    "date": "2026-10-15T05:45:56Z"
+   },
+   "basis": "cli_name:ciede2000"
+  },
+  {
+   "label": "CW-SSIM",
+   "cli_names": [
+    "cw-ssim"
+   ],
+   "first": {
+    "commit": "636f6b2c84dc",
+    "date": "2026-10-15T16:01:51Z"
+   },
+   "basis": "cli_name:cw-ssim"
+  },
+  {
+   "label": "SSIMULACRA",
+   "cli_names": [
+    "ssimulacra1"
+   ],
+   "first": {
+    "commit": "34e963b34e2b",
+    "date": "2026-10-15T16:57:19Z"
+   },
+   "basis": "cli_name:ssimulacra1"
+  },
+  {
+   "label": "CAMBI",
+   "cli_names": [
+    "cambi"
+   ],
+   "first": {
+    "commit": "34e963b34e2b",
+    "date": "2026-10-15T16:57:19Z"
+   },
+   "basis": "cli_name:cambi"
+  },
+  {
+   "label": "WS-HV",
+   "cli_names": [
+    "ws-hv"
+   ],
+   "first": {
+    "commit": "34e963b34e2b",
+    "date": "2026-10-15T16:57:19Z"
+   },
+   "basis": "cli_name:ws-hv"
+  },
+  {
+   "label": "Wasserstein Distortion",
+   "cli_names": [
+    "wd"
+   ],
+   "first": {
+    "commit": "0e89c64a0efc",
+    "date": "2026-10-16T04:42:23Z"
+   },
+   "basis": "cli_name:wd"
+  },
+  {
+   "label": "PieAPP",
+   "cli_names": [
+    "pieapp"
+   ],
+   "first": {
+    "commit": "3a3bdc28b567",
+    "date": "2026-10-16T06:47:25Z"
+   },
+   "basis": "cli_name:pieapp"
+  }
+ ],
+ "not_implemented": [
+  "XPSNR",
+  "DVIFM",
+  "IDFIQA",
+  "TOPIQ",
+  "HaarXYB / HaarYCoCg / HaarY delta-L variants"
+ ]
+}
