@@ -99,7 +99,7 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=afine as for ckdn.
 
 ## ahiq
 
-FR · Classical · CPU · Not documented
+FR · Learned · CPU · Not documented
 
 **Paper: citation needed.**
 
@@ -111,7 +111,7 @@ FR · Classical · CPU · Not documented
 
 **Reference code license:** not recorded
 
-**Rust license:** no evidence
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
 
 **Weights license:** not applicable
 
@@ -2011,7 +2011,7 @@ As lpips-alex.
 
 ## dmm
 
-FR · Classical · CPU · Not documented
+FR · Learned · CPU · Not documented
 
 **Paper: citation needed.**
 
@@ -2023,7 +2023,7 @@ FR · Classical · CPU · Not documented
 
 **Reference code license:** not recorded
 
-**Rust license:** no evidence
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
 
 **Weights license:** not applicable
 
