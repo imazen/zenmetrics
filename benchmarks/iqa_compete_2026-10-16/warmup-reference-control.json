@@ -1,0 +1,34 @@
+{
+  "source": "/home/lilith/tmp/iqa-compete/i265-progress-20261017-0347.jsonl",
+  "source_sha256": "3771b13ee9616e2cd8123c52f810bbd17cf2335ccc48e426b68de86f49c036eb",
+  "comparison_raw": "/home/lilith/tmp/iqa-compete/refresh-0347/raw.jsonl",
+  "comparison_raw_sha256": "192b280e9f144f3153108ceee1458eb97f4ed1776e22f6505029ed1f545fa1fd",
+  "cpu_measurements_unchanged": true,
+  "collection_provenance_repoints_to_immutable_input": true,
+  "cpu_timed_rounds": 0,
+  "cpu_status": "skipped:timeout_1100s",
+  "cpu_log": "/home/lilith/tmp/iqa-compete/pieapp-cpu-bounded/logs/pieapp-2k-1t-761b3540045c.log",
+  "cpu_log_sha256": "3fda3c0a01e362da143390c0cab1c9758c8120d25be809318a19bf047652bc9e",
+  "resource": {
+    "exit_code": 124,
+    "min_available_mib": 19431,
+    "peak_load": 4.21,
+    "peak_rss_gib": 0.51,
+    "seconds": 1100
+  },
+  "comparison": {
+    "metric_name": "pieapp",
+    "size_name": "2k",
+    "threads": 1,
+    "score": 0.21893226954324646,
+    "ref_score": 0.2189322806478667,
+    "abs_delta": 1.1104620251112252e-08,
+    "status": "ok",
+    "reference_kind": "completed_untimed_warmup",
+    "reference_source_status": "skipped:timeout_1100s",
+    "reference_log_sha256": "3fda3c0a01e362da143390c0cab1c9758c8120d25be809318a19bf047652bc9e"
+  },
+  "reference_controls": 10,
+  "parity_controls": 6,
+  "qualification": "Completed untimed CPU score only; no CPU latency promoted; all GPU measurement fields unchanged during refresh"
+}
