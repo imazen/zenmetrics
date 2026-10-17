@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Publish the DVIFM baseline/fast-math/native panel (four C++ reference variants in five builds, Rust ports and dvifmish presets, with exact-match labels) as dashboard speed rows (`3d04f08c0e04`).
+
 - Add opt-in external DVIFM benchmarking with per-implementation unavailable statuses, hashed resume identities and private output excluded from dashboard projections (`ec906165`).
 
 - Add `just bench-iqa` to rebuild the checked-out IQA harness and pinned competitors, verify corpus hashes, resume content-keyed cells and export registered dashboard rows (`7ef1c4b1`).
