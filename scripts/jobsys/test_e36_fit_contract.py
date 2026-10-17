@@ -16,6 +16,22 @@ import pack_fit_program
 
 
 class E36Contract(unittest.TestCase):
+    def test_execution_authorization_comes_from_native_contract(self):
+        full=dict(schema='e36-research-fit-contract-v1',execution_contract='registered-fit',
+                  epochs=120,pairs_per_epoch=50000,selected_epoch=119,e36=dict(arm='tv10-c'),route='production',seed_index=0)
+        kind=dict(argv_sha='a'*64)
+        with mock.patch.object(q,'trusted_contract',return_value=full):
+            result=e.execution_environment(kind,Path('program'))
+        self.assertEqual(result['ZEN_E36_MEMORY_SMOKE'],'')
+        smoke=full|dict(execution_contract='local-smoke',epochs=2,pairs_per_epoch=128,selected_epoch=1,e36_memory_smoke=e.SMOKE)
+        with mock.patch.object(q,'trusted_contract',return_value=smoke):
+            result=e.execution_environment(kind,Path('program'))
+        self.assertEqual(result['ZEN_E36_MEMORY_SMOKE'],'2:128')
+        self.assertEqual(result['ZEN_E36_ARGV_SHA'],'a'*64)
+        for mutation in [dict(seed_index=1),dict(epochs=3),dict(route='kadid'),dict(e36_memory_smoke=None),dict(execution_contract='registered-fit')]:
+            with mock.patch.object(q,'trusted_contract',return_value=smoke|mutation):
+                with self.assertRaises(ValueError):e.execution_environment(kind,Path('program'))
+
     def test_diagnostic_smoke_requires_distinct_frozen_variant(self):
         base=dict(epochs=120,pairs_per_epoch=50000,selected_epoch=119,
             e36=dict(arm='tv10-c',contract_sha256='b'*64,base_filter_sha256='c'*64,trainer_sha256='a'*64))

@@ -9,6 +9,25 @@ ARMS = {'tv0-c': 0., 'tv1-c': 1., 'tv10-c': 10.}
 SMOKE = {'schema':'e36-memory-smoke-v1','epochs':2,'pairs_per_epoch':128,'wall_cap_sec':900,'installable':False,'pack_production':False}
 
 
+def execution_environment(kind, program):
+    """Export authorization only from the archive-bound native contract."""
+    from qualified_fit_contract import trusted_contract
+    expected=trusted_contract(kind,program.parent/'program.tar.gz',program/'bin/inspect_qualified_checkpoint')
+    diagnostic=expected.get('execution_contract')=='local-smoke'
+    if expected.get('schema')!='e36-research-fit-contract-v1':
+        raise ValueError('native E36 execution contract required')
+    if diagnostic:
+        if (expected.get('e36_memory_smoke')!=SMOKE or expected.get('route')!='production'
+            or expected.get('seed_index')!=0 or expected['e36']['arm']!='tv10-c'
+            or [expected.get(k) for k in ['epochs','pairs_per_epoch','selected_epoch']]!=[2,128,1]):
+            raise ValueError('exact archive-bound diagnostic authorization required')
+    elif (expected.get('execution_contract')!='registered-fit' or expected.get('e36_memory_smoke') is not None
+          or [expected.get(k) for k in ['epochs','pairs_per_epoch','selected_epoch']]!=[120,50000,119]):
+        raise ValueError('unchanged full scientific budget required')
+    return dict(ZEN_E36_EXECUTION_CONTRACT='local-smoke' if diagnostic else 'registered-fit',
+                ZEN_E36_MEMORY_SMOKE='2:128' if diagnostic else '',ZEN_E36_ARGV_SHA=kind['argv_sha'])
+
+
 def smoke_policy(argv,contract):
     """Only a distinct archive-bound diagnostic variant permits a smoke."""
     from qualified_fit_contract import argument

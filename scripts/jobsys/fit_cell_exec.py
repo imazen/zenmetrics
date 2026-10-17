@@ -360,6 +360,8 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
                 return output_bytes(dest, old)
         shutil.rmtree(dest)
     env = dict(os.environ)
+    for key in ['ZEN_E36_EXECUTION_CONTRACT','ZEN_E36_MEMORY_SMOKE']:
+        env.pop(key,None)
     env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1",
                PYTHONHASHSEED="0", RAYON_NUM_THREADS=os.environ.get("ZEN_FIT_RAYON_THREADS", "4"),
                PYTHONPYCACHEPREFIX="/scratch/pycache", ZEN_PANEL_BIN=str(PROGRAM / "bin/panel"),
@@ -367,6 +369,9 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    if (PROGRAM / 'benchmarks/e36_fit_contract_2026-10-17.json').is_file():
+        from e36_fit_contract import execution_environment
+        env.update(execution_environment(kind,PROGRAM))
     if measure_resources(argv, PROGRAM) and argv[0] != 'steer_exact_smoke.py' and '--local-smoke-budget' not in argv:
         env['ZEN_E36_ARGV_SHA' if (PROGRAM / 'benchmarks/e36_fit_contract_2026-10-17.json').is_file() else 'ZEN_STEER_ARGV_SHA'] = argv_sha
     command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
