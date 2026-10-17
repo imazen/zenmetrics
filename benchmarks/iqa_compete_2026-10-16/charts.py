@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate competition rows, split compact summaries, draw standalone SVG/HTML."""
 import argparse, collections, hashlib, html, json, math, pathlib, re, statistics
+from run import coverage_samples
 P=pathlib.Path
 
 def plot_svg(figure):
@@ -24,7 +25,7 @@ def svg_bars(title,rows):
     labels=[f"{r['metric_name']} / {r['impl']} ({r.get('engine','native')}/{r['device']}) / {r['threads']}T / {r['mode']}" for r in rows]
     labels=[label+(" / returns "+', '.join(re.sub(r'_imazen_v[0-9_]+$', '', column) for column in r['declared_columns']) if len(r.get('declared_columns') or [])>1 else '') for label,r in zip(labels,rows)]
     labels=[label+(' / CPU reference: untimed warmup' if r.get('reference_kind')=='completed_untimed_warmup' else '') for label,r in zip(labels,rows)]
-    labels=[label+(' / CONTAMINATED' if r.get('timing_quality')=='contaminated' else '') for label,r in zip(labels,rows)]
+    labels=[label+f" / n={r['n']}"+(' / CONTAMINATED' if r.get('timing_quality')=='contaminated' else '') for label,r in zip(labels,rows)]
     values=[r['median_ns']/1e6 for r in rows]
     colors=['#cf702c' if r['status']=='variant_mismatch' else ('#2166ac' if r['impl']=='zenmetrics' else '#4f9e79') for r in rows]
     bars=axis.barh(range(len(rows)),values,color=colors)
@@ -57,9 +58,13 @@ def main():
             if r['status'] in ['ok','variant_mismatch']:
                 for k in ['median_ns','mean_ns','p10_ns','p90_ns']:
                     if not isinstance(r[k],(int,float)) or not math.isfinite(r[k]) or r[k]<=0:raise ValueError((key,k))
-                if r['n']<10 and r.get('timed_seconds',0)<3:raise ValueError((key,'insufficient sampling'))
+                if r.get('coverage_first'):
+                    required=coverage_samples(r['size_name'])
+                    if r.get('required_samples')!=required or r['n']<required:raise ValueError((key,'insufficient coverage sampling'))
+                elif r['n']<10 and r.get('timed_seconds',0)<3:raise ValueError((key,'insufficient sampling'))
             rows.append(r)
     fields=['host_protocol','host_observation_receipts','timing_quality','contention_peak_cores','contention_receipt','contention_attempts','host','os','cpu_model','arch','simd_tier','gpu','metric_family','metric_name','declared_columns','reference_declared_columns','native_api_note','impl','impl_binary_sha','impl_version','engine','adapter_sha256','device','threads','mode','size_name','width','height','pair_sha256','n','median_ns','p10_ns','p90_ns','mean_ns','score','ref_score','abs_delta','relative_delta','status','comparison_status','parity_abs_bound','parity_rel_bound','parity_source','reference_kind','reference_source_status','reference_log_sha256','reference_binary_sha','reference_pair_sha256','reference_threads','ort_intra_threads_configured','ort_inter_threads_configured','ort_shared_library_sha256','ort_disable_telemetry','diagnostic_source_status','reproduction_required','load_before','load_after','resource','resource_memory_method']
+    fields+=['coverage_first','required_samples','parity_checked','self_warmup_score','scalar_comparison_status']
     byhost=collections.defaultdict(list)
     for r in rows:byhost[(r['host'],r['os'])].append({k:r.get(k) for k in fields})
     for (host,system),values in byhost.items():
