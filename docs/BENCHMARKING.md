@@ -62,7 +62,7 @@ macOS Intel was not tested and is outside this smoke matrix.
 
 ## Windows
 
-Runtime test status: pending GitHub Actions windows-latest smoke; untested.
+Tested on `windows-latest` 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: CPU build and execution passed twice, each with 8 successful n>=5 rows. **Resume failed**: the two invocations produced different worker-binary hashes and separate content keys. The recipe now uses one Cargo build configuration and executes the coordinator directly; its Windows rerun is pending. Do not treat the failed resume check as passed.
 The following clean-install commands are untested; the workflow uses its
 preprovisioned C++ toolchain and explicit Rust/just setup actions. Install
 Visual Studio 2022 Build Tools with **Desktop development with C++**,

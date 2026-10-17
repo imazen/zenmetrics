@@ -1,6 +1,6 @@
 # Round 18 portability receipts — 2026-10-17
 
-MISSING: the Rust-only entry requires explicit `--skip-native`; a CMake-only native competitor build is not implemented. Manual clean-machine install commands are labelled untested. Windows Actions is still running and macOS Actions is queued at this receipt update.
+MISSING: the Rust-only entry requires explicit `--skip-native`; a CMake-only native competitor build is not implemented. Manual clean-machine install commands are labelled untested. Windows CPU execution passed twice but its resume assertion failed because the worker hashes differed. A single-build-configuration recipe correction is implemented; Windows verification of that correction is pending. macOS Actions remains queued.
 
 Implementation tested: `f95192aaa39986cc5438fda68716a1d95cee706c`.
 
@@ -25,3 +25,7 @@ Private raw retention: `~/tmp/iqa-compete/round18-linux-final/`, `~/tmp/iqa-comp
 - `round18-feature-tree.log`: SHA-256 `a82bba2da718319eb32acd079224491e88eb8eda54ceda4d9fb5cd1529b6a252`.
 - `round18-actionlint-final.log`: SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
 - `round18-mac/smoke.log`: SHA-256 `b7495192638bd80b4d9ca12f16ca60046b6cd2f5fd38046cdcc72199b1279dc2`.
+
+## Windows result and correction
+
+Downloaded Windows artifact: two cohorts, each with 8 successful n>=5 rows, source f95192aa. Worker hashes: `2eb19ac32026cc46f7cddccfc02e91754ea3804a5c8e894b50a055e676feadbd` and `257b7c1247d3bd0122bb5075cc86ed325906c1f146c52b11306d5f218f9368c6`. The resume gate failed and remains recorded as failure. The recipe correction invokes the built executable directly after one Cargo build configuration, preserving the strict binary-hash content key and unchanged zero-new-cells assertion. Windows rerun pending.
