@@ -2,6 +2,8 @@
 set -euo pipefail
 repo=$PWD
 : "${LOCK_SNAP_DIR:?dedicated benchmark snapshot required}"
+export TMPDIR="$HOME/tmp/iqa-compete/build-scratch"
+mkdir -p "$TMPDIR"
 # Export and lock-check FIRST, then modify only the owned snapshot, not the repo.
 bash scripts/ci/lock.sh --check
 mode=${1:-cached}
@@ -9,6 +11,7 @@ args=()
 if [ "$mode" = reference ]; then args+=(--reference); fi
 python3 benchmarks/iqa_compete_2026-10-16/patch_model_load.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/model-preload.meta.json" "${args[@]}"
 python3 benchmarks/iqa_compete_2026-10-16/patch_ort_threads.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/ort-threads.meta.json"
+python3 benchmarks/iqa_compete_2026-10-16/patch_luma_maps.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/luma-maps.meta.json"
 cd "$LOCK_SNAP_DIR/work/zenmetrics"
 export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg iqa_compete_ingress"
 if [ "$mode" = cached ]; then RUSTFLAGS+=" --cfg iqa_compete_cached"; fi

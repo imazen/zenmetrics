@@ -1186,3 +1186,13 @@ iqa-compete-competitor-coverage raw pairs output sizes="cid22,2k" implementation
 
 iqa-compete-competitor-coverage-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_competitor_coverage.py
+
+iqa-compete-luma-map-patch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_luma_maps_patch.py
+
+iqa-compete-check-map-repairs raw baseline output:
+    python3 benchmarks/iqa_compete_2026-10-16/check_map_repairs.py '{{raw}}' '{{baseline}}' '{{output}}'
+
+# Process accounting controls for the owner-authorized shared-host protocol.
+iqa-compete-contention-tests:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_contention.py

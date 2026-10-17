@@ -50,6 +50,21 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
     if name == "cvvdp" {
         return cvvdp_score(r, d, true).ok();
     }
+    #[cfg(iqa_compete_ingress)]
+    if matches!(name, "fsim-y" | "haarpsi-y") {
+        let fsim = name == "fsim-y";
+        return Some(Box::new(move || {
+            let (score, map) = if fsim {
+                fsim::iqa_compete_luma_map(&r.pixels, &d.pixels, w, h, w * 3)
+                    .map_err(|e| e.to_string())?
+            } else {
+                haarpsi::iqa_compete_luma_map(&r.pixels, &d.pixels, w, h, w * 3)
+                    .map_err(|e| e.to_string())?
+            };
+            std::hint::black_box(&map);
+            Ok(score)
+        }));
+    }
     if matches!(name, "flip" | "flip-v17" | "butteraugli-original") {
         let name = name.to_owned();
         return Some(Box::new(move || {
@@ -168,6 +183,10 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
         "mdctpsnr" => Box::new(mdctpsnr::MdctPsnr),
         "mad" => Box::new(mad_iqa::Mad),
         "iwssim" => Box::new(iwssim::Iwssim::new(r.width, r.height).ok()?),
+        "iwssim-piq" => Box::new(
+            iwssim::Iwssim::with_params(r.width, r.height, iwssim::IwssimParams::piq_luma())
+                .ok()?,
+        ),
         "vif" => Box::new(vif::Vif),
         "vifvec" => Box::new(vif::Vifvec),
         _ => return None,
