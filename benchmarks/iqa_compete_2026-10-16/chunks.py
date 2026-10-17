@@ -20,6 +20,11 @@ def combine(pieces):
     out['zenbench_samples']=[sample for row in pieces for sample in row['zenbench_samples']]
     out['gpu_call_bit_variation_count']=sum(p.get('gpu_call_bit_variation_count',0) for p in pieces)
     if out['gpu_call_bit_variation_count'] and out['status']!='partial':out['status']='variant_mismatch'
+    monitored=[p.get('contention') for p in pieces]
+    if all(monitored):
+        out['contention']=dict(monitored[-1],max_competing_mean_cores=max(p['max_competing_mean_cores'] for p in monitored),max_competing_interval_cores=max(p['max_competing_interval_cores'] for p in monitored),contaminated=any(p['contaminated'] for p in monitored))
+        out['timing_quality']='contaminated' if out['contention']['contaminated'] else 'clean'
+    else:out['timing_quality']='legacy_unmonitored'
     out['chunks']=[{k:row.get(k) for k in ['attempt','n','score','log_path','log_sha256','load_before','load_after','resource']} for row in pieces]
     out['zenbench_chunk_samples']=[dict(arm_index=row['zenbench_arm_index'],samples=row['zenbench_samples']) for row in pieces]
     receipts=[row['resource'] for row in pieces if row.get('resource')]

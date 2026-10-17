@@ -261,3 +261,19 @@ The adapter does not change feature-extractor attributes or register replacement
 normalization buffers. Any difference from the Rust port’s normalization
 convention is retained under the existing variant-mismatch gate. This replaces
 an unmeasured adapter configuration; no Python timing rows were changed.
+
+### Shared-host process accounting (2026-10-17)
+
+The owner replaced the load-average-only admission limit for the shared i265
+run. Linux cells opt into `locked_process_accounting` only when launched under
+the shared heavy-job lock. Load remains recorded before and after each cell.
+The independent supervisor samples process CPU ticks every second, excludes
+its child tree and the driver-published process group, and retains the top
+competing processes before/after, whole-cell means and interval peaks. PID
+start time distinguishes reused PIDs. A competitor exceeding one core in any
+observed interval marks the attempt contaminated. The controller retains all
+attempts, tries at most three times, and selects the smallest competing
+interval peak; an unsuccessful cleanup remains explicitly contaminated.
+One-thread cells retain their explicit CPU affinity. Historical cells without
+this accounting remain historical measurements; they are not relabeled clean.
+The monitor is process accounting, not a metric hotspot profiler.

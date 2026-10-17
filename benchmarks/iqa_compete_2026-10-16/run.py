@@ -13,6 +13,7 @@ import socket
 import subprocess
 import time
 import uuid
+import sys
 from chunks import combine
 from admission_recovery import recover
 from references import load_references
@@ -130,7 +131,8 @@ def resource(text):
     return dict(exit_code=int(match[1]), seconds=int(match[2]), peak_rss_gib=float(match[3]),
                 min_available_mib=int(match[4]), peak_load=float(match[5]))
 
-def run_cell(args, row, models, *, restore_chunks=True):
+def _run_cell(args, row, models, *, restore_chunks=True):
+    row["locked_process_accounting"] = platform.system() == "Linux"
     count, name = row['threads'], row['metric_name']
     env = os.environ.copy()
     env.update({key: str(count) for key in THREAD_ENV})
@@ -202,6 +204,9 @@ def run_cell(args, row, models, *, restore_chunks=True):
         command = [str(Path.home()/'work/claudehints/scripts/run-heavy'),
                    '--mem',memory,'--jobs',str(max(1,(os.cpu_count() or 1)-4)),
                    '--',timeout,'--kill-after=20s',f'{actual_scope}s',*command]
+        contention_receipt=args.root/'logs'/f'{stem}-{attempt}.contention.json'
+        if system=='Linux':
+            command=[sys.executable,str(Path(__file__).with_name('contention.py').resolve()),str(contention_receipt.resolve()),str(log.resolve()),'--',*command]
         if not lease:command=['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),*command]
         print('SUBMIT', stem, attempt, flush=True)
         with log.open('x') as f:
@@ -252,6 +257,10 @@ def run_cell(args, row, models, *, restore_chunks=True):
         for value in rows:
             value['initialization_diagnostics']=[json.loads(s[len('IQA_WARMUP '):]) for s in text.splitlines() if s.startswith('IQA_WARMUP ')]
             value['admission_recovery']=recovery
+            if contention_receipt.exists():
+                value['contention']=json.loads(contention_receipt.read_text())
+                value['timing_quality']='contaminated' if value['contention']['contaminated'] else 'clean'
+                value['contention_receipt']=str(contention_receipt)
             value['resource']=resource(text)
             value['resource_memory_method']=('macOS monitored process-tree RSS; no hard cgroup cap; availability is free+inactive+speculative page proxy' if platform.system()=='Darwin' else 'Linux run-heavy cgroup MemoryMax=16G when available; wrapper log states actual scope support')
             value['log_sha256']=sha(log);value['log_path']=str(log)
@@ -262,6 +271,24 @@ def run_cell(args, row, models, *, restore_chunks=True):
         print('CHUNK_CONTINUE',stem,{mode:sum(v['n'] for v in values) for mode,values in pieces.items()},flush=True)
         # The scope and lock have both ended. A fresh admitted, warmed process
         # contributes further actual rounds; no duration is extrapolated.
+
+def run_cell(args, row, models, *, restore_chunks=True):
+    attempts=[]
+    for index in range(3):
+        rows=_run_cell(args,dict(row),models,restore_chunks=restore_chunks if index==0 else False)
+        attempts.append(rows)
+        for value in rows:
+            append(args.root/'contention-attempts.jsonl',dict(value,contention_try=index+1))
+        if all(value.get('timing_quality')!='contaminated' for value in rows):break
+        print('CONTENTION_RETRY',row['metric_name'],row['size_name'],index+1,flush=True)
+        lease=getattr(args,'batch_lease',None)
+        if lease:lease.close()
+    def rank(rows):
+        return max((value.get('contention',{}).get('max_competing_interval_cores',float('inf')) for value in rows),default=float('inf'))
+    selected=min(attempts,key=rank)
+    for value in selected:
+        value['contention_attempts']=[dict(attempt=values[0].get('attempt'),max_competing_interval_cores=(rank(values) if rank(values)!=float('inf') else None)) for values in attempts]
+    return selected
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)

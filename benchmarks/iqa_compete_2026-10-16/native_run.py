@@ -49,15 +49,26 @@ def main():
      # Rust outside its timer. Neither process start nor reference scoring is timed.
      env=os.environ.copy();env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
      commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,[str(a.rust.resolve()),str(config.resolve())]]))
+     contention_tries=[]
      while True:
       before=os.getloadavg()
-      if before[0]>4:print('ADMISSION_WAIT',stem,before,flush=True);time.sleep(30);continue
       child=[sys.executable,str(P(__file__).resolve()),'--child',str(commands_file.resolve())]
       cpus=sorted(os.sched_getaffinity(0));chosen=[2 if 2 in cpus else cpus[0]] if threads==1 else cpus
       cmd=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s','1100s','taskset','-c',','.join(map(str,chosen)),'env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
-      result=subprocess.run(cmd,env=env,capture_output=True,text=True)
+      attempt_id=uuid.uuid4().hex[:12]
+      monitor=a.root/'logs'/f'{stem}-{attempt_id}.contention.json'
+      attempt_log=a.root/'logs'/f'{stem}-{attempt_id}.log'
+      cmd=cmd[:2]+[sys.executable,str(P(__file__).with_name('contention.py').resolve()),str(monitor.resolve()),str(attempt_log.resolve()),'--']+cmd[2:]
+      with attempt_log.open('x') as output_log:
+       completed=subprocess.run(cmd,env=env,stdout=output_log,stderr=subprocess.STDOUT)
+      result=subprocess.CompletedProcess(cmd,completed.returncode,attempt_log.read_text(),'')
       if admission_reason(result.stdout+result.stderr):
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
+      accounting=json.loads(monitor.read_text())
+      contention_tries.append((accounting,result,attempt_log))
+      if accounting['contaminated'] and len(contention_tries)<3:continue
+      accounting,result,selected_log=min(contention_tries,key=lambda item:item[0]['max_competing_interval_cores'])
+      row.update(contention=accounting,timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
       break
      log=a.root/'logs'/f'{stem}.log';log.write_text(result.stdout+result.stderr)
      native_loads={s.split(' ',1)[0]:json.loads(s.split(' ',1)[1]) for s in result.stdout.splitlines() if s.startswith(('IQA_LOAD_BEFORE ','IQA_LOAD_AFTER '))}
@@ -79,10 +90,9 @@ def main():
      append(output,row);print('RESULT',stem,row['status'],delta,flush=True)
 if __name__=='__main__':
  if len(sys.argv)>1 and sys.argv[1]=='--child':
+  print('IQA_PROCESS '+json.dumps(dict(pid=os.getpid(),pgid=os.getpgrp(),unix_s=int(time.time()))),flush=True)
   commands=json.loads(P(sys.argv[2]).read_text())
   before=list(os.getloadavg())
-  if before[0]>4:
-   print('IQA_BUSY '+json.dumps(before),flush=True);sys.exit(75)
   print('IQA_LOAD_BEFORE '+json.dumps(before),flush=True)
   subprocess.run(commands[0],check=True)
   print('IQA_LOAD_AFTER '+json.dumps(list(os.getloadavg())),flush=True)

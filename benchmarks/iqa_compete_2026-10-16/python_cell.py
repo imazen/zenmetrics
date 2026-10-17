@@ -14,13 +14,14 @@ sys.meta_path.insert(0,_NoPyIQA())
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('config',type=P);p.add_argument('--mode',choices=['score','score+map']);a=p.parse_args();c=json.loads(a.config.read_text())
 if a.mode is None:
+ print('IQA_PROCESS '+json.dumps(dict(pid=os.getpid(),pgid=os.getpgrp(),unix_s=int(time.time()))),flush=True)
  for selected in ['score','score+map']:
   result=subprocess.run([sys.executable,str(P(__file__).absolute()),str(a.config.absolute()),'--mode',selected])
   if result.returncode:raise SystemExit(result.returncode)
  raise SystemExit
 c['mode']=a.mode
 before=list(os.getloadavg()) if hasattr(os,'getloadavg') else []
-if before and before[0]>4:print('IQA_BUSY '+json.dumps(before),flush=True);raise SystemExit(75)
+if before and before[0]>4 and not c.get('locked_process_accounting'):print('IQA_BUSY '+json.dumps(before),flush=True);raise SystemExit(75)
 # Package choices are explicit; PyIQA is excluded.
 package=c['package'];metric=c['metric_name'];mode=c['mode'];device=c.get('device','cpu');threads=c['threads']
 import numpy as np

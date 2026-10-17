@@ -209,7 +209,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::io::Write::flush(&mut std::io::stdout())?;
     }
     let before = load();
-    if !config["probe_only"].as_bool().unwrap_or(false) && before.first().is_some_and(|v| *v > 4.) {
+    if !config["probe_only"].as_bool().unwrap_or(false)
+        && !config["locked_process_accounting"]
+            .as_bool()
+            .unwrap_or(false)
+        && before.first().is_some_and(|v| *v > 4.)
+    {
         return Err(format!("busy load {before:?}").into());
     }
     let mut score: maps::Call = if name.ends_with("-gpu") {
