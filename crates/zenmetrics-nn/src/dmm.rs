@@ -539,52 +539,23 @@ fn dlapy2(x: f32, y: f32) -> f32 {
     }
 }
 
-/// Reference-LAPACK 3.12.0 BLAS SNRM2: three f32 accumulators.
-/// Thresholds are the IEEE binary32 instances of LA_CONSTANTS' formulas.
+// Retain the classic scaled-f32 BLAS norm convention used by the
+// qualified baseline. The f64 and modern three-accumulator experiments
+// reassign degenerate bases and fail existing JND rows; see the receipt.
 fn dnrm2(x: &[f32]) -> f32 {
-    const TSML: f32 = f32::from_bits(64 << 23); // 2^-63
-    const TBIG: f32 = f32::from_bits(179 << 23); // 2^52
-    const SSML: f32 = f32::from_bits(202 << 23); // 2^75
-    const SBIG: f32 = f32::from_bits(51 << 23); // 2^-76
-    let (mut abig, mut amed, mut asml) = (0.0f32, 0.0f32, 0.0f32);
-    let mut notbig = true;
+    let (mut scale, mut ssq) = (0.0f32, 1.0f32);
     for &xi in x {
-        let ax = xi.abs();
-        if ax > TBIG {
-            let scaled = ax * SBIG;
-            abig += scaled * scaled;
-            notbig = false;
-        } else if ax < TSML {
-            if notbig {
-                let scaled = ax * SSML;
-                asml += scaled * scaled;
-            }
-        } else {
-            amed += ax * ax;
-        }
-    }
-    if abig > 0.0 {
-        if amed > 0.0 || amed.is_nan() {
-            abig += (amed * SBIG) * SBIG;
-        }
-        (1.0 / SBIG) * abig.sqrt()
-    } else if asml > 0.0 {
-        if amed > 0.0 || amed.is_nan() {
-            let amed = amed.sqrt();
-            let asml = asml.sqrt() / SSML;
-            let (ymin, ymax) = if asml > amed {
-                (amed, asml)
+        if xi != 0.0 {
+            let a = xi.abs();
+            if scale < a {
+                ssq = 1.0 + ssq * (scale / a) * (scale / a);
+                scale = a;
             } else {
-                (asml, amed)
-            };
-            let ratio = ymin / ymax;
-            (ymax * ymax * (1.0 + ratio * ratio)).sqrt()
-        } else {
-            (1.0 / SSML) * asml.sqrt()
+                ssq += (a / scale) * (a / scale);
+            }
         }
-    } else {
-        amed.sqrt()
     }
+    scale * ssq.sqrt()
 }
 
 /// DLARFG: householder reflector on (alpha; x). Returns (beta, tau); the

@@ -1,6 +1,6 @@
 OpenBLAS SNRM2 kernel notice
 Source: https://github.com/OpenMathLib/OpenBLAS/blob/v0.3.30/kernel/x86_64/nrm2_sse.S
-Referenced for the norm accumulation convention in src/dmm.rs.
+Referenced by the historical norm-precision experiment in commit 3ed5c251.
 
 /*********************************************************************/
 /* Copyright 2009, 2010 The University of Texas at Austin.           */
