@@ -3,11 +3,13 @@
 import argparse,json,os,pathlib,signal,time
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('pid',type=int);p.add_argument('script',type=P);p.add_argument('root',type=P);p.add_argument('proof',type=P);p.add_argument('--waiting-supervisor',action='store_true');a=p.parse_args()
+p.add_argument('pid',type=int);p.add_argument('script',type=P);p.add_argument('root',type=P);p.add_argument('proof',type=P);p.add_argument('--batch-waiter',action='store_true');p.add_argument('--waiting-supervisor',action='store_true');a=p.parse_args()
 proc=P(f'/proc/{a.pid}');argv=[x.decode() for x in (proc/'cmdline').read_bytes().split(b'\0') if x]
 script=P(argv[1]);script=script if script.is_absolute() else (proc/'cwd').resolve()/script
 if script.resolve()!=a.script.resolve() or str(a.root.resolve()) not in argv:raise RuntimeError('PID does not match the explicit controller identity')
 if a.proof.exists():raise FileExistsError(a.proof)
+waiting_channel=(proc/'wchan').read_text().strip()
+if a.batch_waiter and ('--batch-seconds' not in argv or 'locks_lock_inode_wait' not in waiting_channel):raise RuntimeError('Process is not waiting for its batch lock')
 stopped=[]
 def freeze(pid):
  os.kill(pid,signal.SIGSTOP);stopped.append(pid)
@@ -18,9 +20,9 @@ def freeze(pid):
 try:
  freeze(a.pid);children=(proc/'task'/str(a.pid)/'children').read_text().split()
  if not children:
-  if not a.waiting_supervisor or a.script.name!='coverage_competitors.py':raise RuntimeError('Expected one queued flock child')
+  if not a.batch_waiter and (not a.waiting_supervisor or a.script.name!='coverage_competitors.py'):raise RuntimeError('Expected one queued flock child')
  elif len(children)!=1:raise RuntimeError('Controller has multiple children; unchanged')
- proof=dict(pid=a.pid,argv=argv,children=[])
+ proof=dict(pid=a.pid,argv=argv,waiting_channel=waiting_channel,batch_waiter=a.batch_waiter,children=[])
  for child in children:
   child=int(child);q=P(f'/proc/{child}');args=[x.decode() for x in (q/'cmdline').read_bytes().split(b'\0') if x]
   if P(args[0]).name!='flock' or not any(v.startswith(str(a.root.resolve())+'/') for v in args):raise RuntimeError('Child is not this controller queued flock')

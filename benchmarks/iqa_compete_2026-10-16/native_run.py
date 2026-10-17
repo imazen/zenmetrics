@@ -83,7 +83,7 @@ def main():
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
       accounting=json.loads(monitor.read_text());accounting['actual_scope_seconds']=actual_scope
       contention_tries.append((accounting,result,attempt_log))
-      if accounting['contaminated'] and len(contention_tries)<(2 if a.coverage_first else 3) and (not a.coverage_first or result.returncode==0):continue
+      if accounting['contaminated'] and len(contention_tries)<(1 if a.coverage_first else 3) and (not a.coverage_first or result.returncode==0):continue
       accounting,result,selected_log=min(contention_tries,key=lambda item:(int(item[1].returncode!=0 or sum(s.startswith('SAMPLE ') for s in item[1].stdout.splitlines())<target) if a.coverage_first else 0,item[0]['max_competing_interval_cores']))
       row['actual_scope_seconds']=accounting['actual_scope_seconds']
       row.update(contention=accounting,contention_peak_cores=accounting['max_competing_interval_cores'],contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])

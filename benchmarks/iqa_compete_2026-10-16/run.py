@@ -293,7 +293,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
 
 def run_cell(args, row, models, *, restore_chunks=True):
     attempts=[]
-    for index in range(2 if getattr(args,"coverage_first",False) else 3):
+    for index in range(1 if getattr(args,"coverage_first",False) else 3):
         rows=_run_cell(args,dict(row),models,restore_chunks=restore_chunks if index==0 else False)
         attempts.append(rows)
         for value in rows:

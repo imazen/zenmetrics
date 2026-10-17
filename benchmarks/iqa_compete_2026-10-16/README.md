@@ -150,8 +150,9 @@ The explicit first score/map call warms each route, with no additional zenbench
 warmup interval in this pass. Partial cells do not continue in another scope.
 A cell below its sample target records `skipped:scope_sample_limit` with its
 actual samples and retained log. Each scope retains the existing 1100-second
-limit and 16 GiB Linux memory cap. Contamination permits at most two attempts
-in total; the cleanest attempt is retained with its label.
+limit and 16 GiB Linux memory cap. The coverage pass retains the first completed attempt with its contamination
+label. Automatic contamination reruns are disabled until coverage is complete;
+the owner allows at most one rerun per cell.
 
 Score comparisons run at CID22 once per metric, using the first thread budget.
 Larger sizes and the other thread budget carry timings without another parity
