@@ -1136,3 +1136,6 @@ iqa-compete-coverage raw inventory pairs output *options:
 
 iqa-compete-coverage-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_coverage.py
+
+iqa-compete-dispatch-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_dispatch_failure.py

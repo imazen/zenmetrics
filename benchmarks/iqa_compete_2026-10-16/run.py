@@ -49,6 +49,11 @@ def admission_reason(text):
         return 'zenbench_orphaned_reservation'
     return None
 
+def gpu_dispatch_failure(text):
+    return (('DSD-' in text and 'panicked at' in text)
+            or 'wgpu error: Validation Error' in text
+            or ('cubecl-wgpu:' in text and ('storage buffer binding' in text or 'workgroup' in text)))
+
 def prior_admission_reason(row):
     status=row.get('source_status',row.get('status',''))
     if not status.startswith('skipped:process_exit_'):
@@ -136,7 +141,9 @@ def run_cell(args, row, models, *, restore_chunks=True):
     identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256']
     def retain(value):
         mode=value['mode']
-        if value['status']=='partial':
+        if value['status'] not in ['ok','partial','variant_mismatch']:
+            completed[mode]=value
+        elif value['status']=='partial':
             pieces[mode].append(value)
             aggregate=combine(pieces[mode])
             if aggregate['status']!='partial':completed[mode]=aggregate
@@ -200,7 +207,11 @@ def run_cell(args, row, models, *, restore_chunks=True):
         for line in text.splitlines():
             if line.startswith('IQA_ROW '):rows.append(json.loads(line[8:]))
             elif line.startswith('IQA_PARTIAL '):rows.append(json.loads(line[len('IQA_PARTIAL '):]))
+        dispatch_failed=row['device']!='cpu' and gpu_dispatch_failure(text)
         for value in rows:
+            if dispatch_failed and value['status'] in ['ok','partial','variant_mismatch']:
+                value['diagnostic_source_status']=value['status']
+                value.update(status='skipped:gpu_dispatch_failure',notes=value.get('notes','')+'; Device-service panic or WGPU validation error in retained log; score is unqualified')
             value['ort_intra_threads_configured']=ort_budgets or None
             value['ort_inter_threads_configured']=1 if ort_budgets else None
         modes={value['mode'] for value in rows}

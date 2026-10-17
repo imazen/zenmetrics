@@ -4,7 +4,7 @@ from references import same_pair_reference
 def qualify_rows(results,references,inventory,scales,python_package=None):
     mismatch=False
     for value in results:
-        if value['status']=='skipped:nonfinite_score':mismatch=True;continue
+        if value['status'] in ['skipped:nonfinite_score','skipped:gpu_dispatch_failure']:mismatch=True;continue
         if value['status'] not in ['ok','variant_mismatch']:continue
         if value.get('gpu_call_bit_variation_count',0)>0 or value.get('score_consistency_issue',False) or value.get('map_score_matches_scalar_bits') is False:
             value['status']='variant_mismatch';mismatch=True

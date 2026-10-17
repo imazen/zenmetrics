@@ -168,3 +168,10 @@ process failures, missing GPU/CPU comparisons and pending reproductions.
 Explicit supported input/build/resource refusals count as attempts, never as
 timings. The receipt lists all missing/pending cells and reports extra routes
 separately; testing this audit does not establish matrix completion.
+
+GPU logs containing a device-service-thread panic or WGPU validation/binding
+rejection cannot qualify a returned score. The controller preserves the returned
+samples as diagnostic data, marks the score unqualified and requests a separate
+repeat. Failed dispatch rows cannot be combined with successful partial rounds.
+This handles the documented asynchronous WGPU failure mode before other-host
+runtime qualification; pattern controls are not a substitute for running there.
