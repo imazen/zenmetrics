@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Register reviewed RTEN/CUDA/WebGPU LPIPS timings and exported-golden outcomes, preserving default-thread uncertainty and LOADFAIL/OOM rows; land dashboard regeneration on master (`8ecda1d2`).
+
 - Regenerate dashboard catalog and markdown extracts during deployment, report committed-copy drift, and retain strict local currentness and unclassified-upload gates (`9a24096b`).
 
 - Require E36 native decoded-checkpoint qualification before export, retain its program archive/resource receipts, and refuse owner-blocked or mixed-smoke variants before launch.

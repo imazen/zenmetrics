@@ -180,3 +180,21 @@ files for the inventory gate to inspect.
 Use `just dashboard-regenerate` to follow the deploy preparation locally.
 `just dashboard-generated-check` and each generator's `--check` remain strict
 local currentness checks. The clean-snapshot smoke follows deploy regeneration.
+
+## Chart implementation and data updates
+
+The browser renders reusable SVG plotting functions in `plots.js` and
+`ranking.js`, without a third-party chart library. These are descriptive views
+of registered observations; source conditions and sampling caveats limit their
+comparability. A chart does not qualify a metric or a backend by itself.
+
+Pushes to master touching registered benchmark locations, metric/catalog inputs,
+source documents or dashboard code trigger assembly and deployment. Newly added
+benchmark files require an explicit schema registration or an explicit reviewed
+classification; unknown files fail assembly. Existing registered files are read
+afresh on every build. No benchmark is rerun automatically by this workflow.
+
+The ORT WebGPU receipt includes RTEN and CUDA timing controls and an exported-
+golden panel. Explicit backend labels distinguish GPU WebGPU from CPU RTEN;
+reported default thread counts stay unknown. LOADFAIL and OOM outcomes remain
+failed rows with missing numeric results, separate from successful goldens.
