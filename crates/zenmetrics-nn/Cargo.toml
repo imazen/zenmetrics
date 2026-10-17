@@ -42,3 +42,7 @@ required-features = ["model-tests"]
 [[example]]
 name = "afine_aic_dump"
 required-features = ["model-tests"]
+
+[[example]]
+name = "dmm_tap_dump"
+required-features = ["model-tests"]

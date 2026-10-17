@@ -25,12 +25,38 @@ use crate::engine::{self, Tap};
 use crate::preprocess::rgb8_to_planar_u8;
 use crate::resize::resize_bilinear_pil_u8;
 use crate::{Engine, Error, za};
+use za::ResultMetricExt as _;
 
 const COLUMN: &str = "dmm";
-const SCORE_REVISION: u32 = 1;
+const SCORE_REVISION: u32 = 2;
 /// Patch kernel and stride of upstream's `nn.Unfold(16, stride=4)`.
 const PATCH: usize = 16;
 const STRIDE: usize = 4;
+// Bound ingress before preprocessing or inference. The 4096² ladder remains
+// supported; aspect ratios above 32:1 are refused before allocating planes.
+const MAX_SIDE: usize = 4096;
+const MAX_PIXELS: usize = if usize::BITS >= 64 {
+    16_777_216
+} else {
+    1_048_576
+};
+const MAX_ASPECT: usize = 32;
+
+fn validate_geometry(w: usize, h: usize) -> Result<(), Error> {
+    if w.max(h) > MAX_SIDE {
+        return Err(Error::TooLarge { limit: MAX_SIDE });
+    }
+    if w.checked_mul(h).is_none_or(|n| n > MAX_PIXELS) {
+        return Err(Error::TooLarge { limit: MAX_PIXELS });
+    }
+    if w.min(h) == 0 || w.max(h) > w.min(h).saturating_mul(MAX_ASPECT) {
+        return Err(Error::TooLarge { limit: MAX_ASPECT });
+    }
+    if w.min(h) < 128 {
+        return Err(Error::TooSmall { min: 128 });
+    }
+    Ok(())
+}
 
 /// DMM (see module docs).
 pub struct Dmm {
@@ -105,12 +131,13 @@ impl Dmm {
     /// that `nn-parity-dmm` gates on must be scored on the *same* taps
     /// this engine produces — the head amplifies tap noise ~100x into
     /// score units, so torch-tap goldens cannot be matched at gate.
+    #[cfg(feature = "model-tests")]
     #[doc(hidden)]
     pub fn taps_for_export(
         &self,
         img: &za::Rgb8In<'_>,
     ) -> Result<Vec<(usize, usize, usize, Vec<f32>)>, Error> {
-        let (planar, h, w) = Self::prep(img);
+        let (planar, h, w) = Self::prep(img)?;
         Ok(self
             .taps(planar, h, w)?
             .into_iter()
@@ -120,7 +147,8 @@ impl Dmm {
 
     /// `prepare_image_adt`: conditional short-side PIL-bilinear resize, then
     /// `[0,1]`. Returns `(planar, h, w)` of the *resized* image.
-    fn prep(img: &za::Rgb8In<'_>) -> (Vec<f32>, usize, usize) {
+    fn prep(img: &za::Rgb8In<'_>) -> Result<(Vec<f32>, usize, usize), Error> {
+        validate_geometry(img.width, img.height)?;
         let (h, w) = (img.height, img.width);
         let msize = h.min(w);
         let (planar, rh, rw) = if msize > 128 {
@@ -144,7 +172,7 @@ impl Dmm {
             .iter()
             .map(|&v| f32::from(v) / 255.0)
             .collect::<Vec<f32>>();
-        (f32, rh, rw)
+        Ok((f32, rh, rw))
     }
 
     /// Trunk taps of a prepped image; checks the channel widths from the meta.
@@ -179,12 +207,21 @@ impl Dmm {
     /// Upstream's `transpose(2,4)` makes its patch `Mᵀ` of ours, so its
     /// `u` is our `v`: `PatchSvd.u` holds the *right* singular vectors
     /// (see `svd16`).
-    fn decompose(tap: &Tap) -> TapDecomp {
+    fn decompose(tap: &Tap, opts: za::EvalOpts<'_>) -> za::MetricResult<TapDecomp> {
         let (c, h, w) = (tap.c, tap.h, tap.w);
         let (ny, nx) = patch_grid(h, w);
         let pt = ny * nx;
-        let mut patches = Vec::with_capacity(c * pt);
+        let mut patches = Vec::new();
+        let count = c
+            .checked_mul(pt)
+            .ok_or(Error::TooLarge { limit: MAX_PIXELS })
+            .metric_err_with(COLUMN, Error::kind)?;
+        patches
+            .try_reserve_exact(count)
+            .map_err(|e| Error::Engine(format!("DMM reference allocation: {e}")))
+            .metric_err_with(COLUMN, Error::kind)?;
         for ch in 0..c {
+            opts.checkpoint()?;
             let plane = &tap.data[ch * tap.plane()..(ch + 1) * tap.plane()];
             for py in 0..ny {
                 for px in 0..nx {
@@ -192,19 +229,25 @@ impl Dmm {
                 }
             }
         }
-        TapDecomp {
-            patches,
-            means: channel_means(tap),
-            pt,
-        }
+        let mut means = Vec::new();
+        means
+            .try_reserve_exact(c)
+            .map_err(|e| Error::Engine(format!("DMM means allocation: {e}")))
+            .metric_err_with(COLUMN, Error::kind)?;
+        means.extend((0..c).map(|ch| {
+            let plane = &tap.data[ch * tap.plane()..(ch + 1) * tap.plane()];
+            plane.iter().map(|&v| f64::from(v)).sum::<f64>() as f32 / plane.len() as f32
+        }));
+        Ok(TapDecomp { patches, means, pt })
     }
 
     /// One tap's contribution with both sides streamed: `mean_{c,pt}(diff_s·wt)·glb`.
-    fn tap_score_cold(r: &Tap, d: &Tap) -> f64 {
+    fn tap_score_cold(r: &Tap, d: &Tap, opts: za::EvalOpts<'_>) -> za::MetricResult<f64> {
         let (ny, nx) = patch_grid(r.h, r.w);
         let n = ny * nx * r.c;
         let mut acc = 0.0f64;
         for ch in 0..r.c {
+            opts.checkpoint()?;
             let (pr, pd) = channel_planes(r, d, ch);
             for py in 0..ny {
                 for px in 0..nx {
@@ -215,17 +258,18 @@ impl Dmm {
             }
         }
         let s1 = s1_gate(&channel_means(r), &channel_means(d));
-        acc / n as f64 * (-2.0 * s1).exp()
+        Ok(acc / n as f64 * (-2.0 * s1).exp())
     }
 
     /// One tap's contribution against a cached reference decomp.
-    fn tap_score_warm(r: &TapDecomp, d: &Tap) -> f64 {
+    fn tap_score_warm(r: &TapDecomp, d: &Tap, opts: za::EvalOpts<'_>) -> za::MetricResult<f64> {
         let (ny, nx) = patch_grid(d.h, d.w);
         debug_assert_eq!(ny * nx, r.pt);
         let c = r.means.len();
         let n = r.pt * c;
         let mut acc = 0.0f64;
         for ch in 0..c {
+            opts.checkpoint()?;
             let pd = &d.data[ch * d.plane()..(ch + 1) * d.plane()];
             for py in 0..ny {
                 for px in 0..nx {
@@ -236,53 +280,60 @@ impl Dmm {
             }
         }
         let s1 = s1_gate(&r.means, &channel_means(d));
-        acc / n as f64 * (-2.0 * s1).exp()
+        Ok(acc / n as f64 * (-2.0 * s1).exp())
     }
 
-    fn score_taps(r: &[TapDecomp], d: &[Tap]) -> f64 {
+    fn score_taps(r: &[TapDecomp], d: &[Tap], opts: za::EvalOpts<'_>) -> za::MetricResult<f64> {
         r.iter()
             .zip(d)
-            .map(|(rt, dt)| Self::tap_score_warm(rt, dt))
+            .map(|(rt, dt)| Self::tap_score_warm(rt, dt, opts))
             .sum()
     }
 
-    fn score_pair(&self, r: &za::Rgb8In<'_>, d: &za::Rgb8In<'_>) -> Result<f64, Error> {
-        if (r.width, r.height) != (d.width, d.height) {
-            return Err(Error::SizeMismatch);
-        }
-        if r.width.min(r.height) < self.min_size {
-            return Err(Error::TooSmall { min: self.min_size });
-        }
-        let (pr, rh, rw) = Self::prep(r);
-        let (pd, _, _) = Self::prep(d);
-        let Backend::Trunk(t) = &self.backend else {
-            return Err(Error::Engine("no trunk graph on this engine".into()));
-        };
-        let (tr, td) = t.run_pair(pr, pd, rh, rw)?;
-        if tr.len() != self.channels.len() {
-            return Err(Error::BadModel(format!(
-                "{} taps, expected {}",
-                tr.len(),
-                self.channels.len()
-            )));
-        }
-        for (t, &c) in tr.iter().zip(&self.channels) {
-            if t.c != c || t.data.len() != t.c * t.plane() {
-                return Err(Error::BadModel(format!(
-                    "tap channel {}, expected {c}",
-                    t.c
-                )));
+    fn score_pair(
+        &self,
+        r: &za::Rgb8In<'_>,
+        d: &za::Rgb8In<'_>,
+        opts: za::EvalOpts<'_>,
+    ) -> za::MetricResult<f64> {
+        let (tr, td) = (|| -> Result<_, Error> {
+            if (r.width, r.height) != (d.width, d.height) {
+                return Err(Error::SizeMismatch);
             }
-            if t.h < PATCH || t.w < PATCH {
+            if r.width.min(r.height) < self.min_size {
                 return Err(Error::TooSmall { min: self.min_size });
             }
-        }
-        let s = tr
-            .iter()
+            let (pr, rh, rw) = Self::prep(r)?;
+            let (pd, _, _) = Self::prep(d)?;
+            let Backend::Trunk(t) = &self.backend else {
+                return Err(Error::Engine("no trunk graph on this engine".into()));
+            };
+            let (tr, td) = t.run_pair(pr, pd, rh, rw)?;
+            if tr.len() != self.channels.len() {
+                return Err(Error::BadModel(format!(
+                    "{} taps, expected {}",
+                    tr.len(),
+                    self.channels.len()
+                )));
+            }
+            for (t, &c) in tr.iter().zip(&self.channels) {
+                if t.c != c || t.data.len() != t.c * t.plane() {
+                    return Err(Error::BadModel(format!(
+                        "tap channel {}, expected {c}",
+                        t.c
+                    )));
+                }
+                if t.h < PATCH || t.w < PATCH {
+                    return Err(Error::TooSmall { min: self.min_size });
+                }
+            }
+            Ok((tr, td))
+        })()
+        .metric_err_with(COLUMN, Error::kind)?;
+        tr.iter()
             .zip(&td)
-            .map(|(rt, dt)| Self::tap_score_cold(rt, dt))
-            .sum();
-        Ok(s)
+            .map(|(rt, dt)| Self::tap_score_cold(rt, dt, opts))
+            .sum()
     }
 }
 
@@ -309,13 +360,10 @@ impl za::Metric for Dmm {
         d: za::Image<'_>,
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
-        use za::ResultMetricExt as _;
         opts.checkpoint()?;
         opts.refuse_map(COLUMN)?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
-        let s = self
-            .score_pair(&r, &d)
-            .metric_err_with(COLUMN, Error::kind)?;
+        let s = self.score_pair(&r, &d, opts)?;
         Ok(Box::new(za::ScalarEval::single(COLUMN, s)))
     }
 
@@ -324,16 +372,18 @@ impl za::Metric for Dmm {
         r: za::Image<'_>,
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::WarmReference + 'm>> {
-        use za::ResultMetricExt as _;
         opts.checkpoint()?;
         let view = za::rgb8_view(&r)?;
         if view.width.min(view.height) < self.min_size {
             return Err(Error::TooSmall { min: self.min_size })
                 .metric_err_with(COLUMN, Error::kind);
         }
-        let (pr, rh, rw) = Self::prep(&view);
+        let (pr, rh, rw) = Self::prep(&view).metric_err_with(COLUMN, Error::kind)?;
         let taps = self.taps(pr, rh, rw).metric_err_with(COLUMN, Error::kind)?;
-        let reference = taps.iter().map(Self::decompose).collect::<Vec<TapDecomp>>();
+        let reference = taps
+            .iter()
+            .map(|t| Self::decompose(t, opts))
+            .collect::<za::MetricResult<Vec<TapDecomp>>>()?;
         Ok(Box::new(WarmDmm {
             metric: self,
             reference,
@@ -355,7 +405,6 @@ impl za::WarmReference for WarmDmm<'_> {
         d: za::Image<'_>,
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Box<dyn za::Evaluation>> {
-        use za::ResultMetricExt as _;
         opts.checkpoint()?;
         opts.refuse_map(COLUMN)?;
         let d = za::rgb8_view(&d)?;
@@ -368,12 +417,12 @@ impl za::WarmReference for WarmDmm<'_> {
             })
             .metric_err_with(COLUMN, Error::kind);
         }
-        let (pd, dh, dw) = Dmm::prep(&d);
-        let s = (|| -> Result<f64, Error> {
-            let dd = self.metric.taps(pd, dh, dw)?;
-            Ok(Dmm::score_taps(&self.reference, &dd))
-        })()
-        .metric_err_with(COLUMN, Error::kind)?;
+        let (pd, dh, dw) = Dmm::prep(&d).metric_err_with(COLUMN, Error::kind)?;
+        let dd = self
+            .metric
+            .taps(pd, dh, dw)
+            .metric_err_with(COLUMN, Error::kind)?;
+        let s = Dmm::score_taps(&self.reference, &dd, opts)?;
         Ok(Box::new(za::ScalarEval::single(COLUMN, s)))
     }
 
@@ -456,31 +505,26 @@ fn s1_gate(means_r: &[f32], means_d: &[f32]) -> f64 {
     s1 / means_r.len() as f64
 }
 
-// ---- LAPACK-faithful 16x16 SVD ------------------------------------------
+// ---- LAPACK-based 16x16 SVD ------------------------------------------
 //
 // Upstream runs `torch.svd` on `unfold().view(a,b,k,k,-1).transpose(2,4)` —
 // the `.transpose(2,4)` swaps the two k axes, so its patch matrix is `Mᵀ`
 // and its `u` is *this* patch's V factor. The head therefore contracts
 // `|v_r ∘ v_d|`, not `|u_r ∘ u_d|`.
 //
-// The score's `wt` term is sensitive to the *draw*: which orthonormal
-// basis the solver emits inside degenerate (near-tied or exact-zero)
-// singular clusters. Measured on ladder pairs: a cyclic-Jacobi
-// eigendecomposition of `MᵀM` deviates ~+11% while a faithful port of
-// LAPACK's `dgebd2 -> dorg2r -> dbdsqr -> dlasdq -> dbdsdc` pipeline (the
-// path `gesdd` takes for n=16 < SMLSIZ) lands in-family. Running the
-// solver in f32 matches upstream's `sgesdd` numerical domain: the f32
-// eps/threshold constants steer the same deflation decisions, which
-// tightened the measured ensemble `wt`-statistic deviation from ~0.4%
-// (f64 port) to ~0.03% vs the MKL draw on identical taps (np.svd/
-// OpenBLAS sits ~+15% off — the draw is implementation-defined, and
-// reference `dbdsdc` tracks MKL closely). Only the left (U) factor is
-// accumulated — the head never reads `v`.
+// The score's `wt` term consumes the basis inside degenerate singular
+// clusters. Solver implementations may choose different bases. This head
+// follows the reference-LAPACK small-N SGESDD path in f32, but agreement
+// is established per golden row, not inferred from the algorithm's name.
+// See models/dmm/card.toml for the measured JND/pinned-row counts.
+// Only the left (U) factor of the transposed patch is accumulated.
 //
 // `svd16(m)` therefore transposes `m` first (matching upstream's
 // `transpose(2,4)`) and returns `u` of the transposed patch.
 
-const D_EPS: f32 = f32::EPSILON;
+// SLAMCH('E') assumes rounding: EPSILON(0.0) / 2 = 2^-24.
+// Reference-LAPACK v3.12.0 INSTALL/slamch.f, lines 97-104.
+const D_EPS: f32 = f32::EPSILON * 0.5;
 const D_SAFMIN: f32 = f32::MIN_POSITIVE;
 
 fn dlapy2(x: f32, y: f32) -> f32 {
@@ -824,9 +868,12 @@ fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
                 for r in (i + 1)..16 {
                     w += a[r * 16 + i] * a[r * 16 + c];
                 }
-                a[i * 16 + c] -= tau * w;
+                // SGER forms TEMP = (-tau) * w before X(r) * TEMP.
+                // Keeping that grouping matters in degenerate SVD clusters.
+                let temp = -tau * w;
+                a[i * 16 + c] += temp;
                 for r in (i + 1)..16 {
-                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
+                    a[r * 16 + c] += a[r * 16 + i] * temp;
                 }
             }
         }
@@ -1243,25 +1290,10 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
     dgebd2(&mut a, &mut d, &mut e, &mut tq);
     // a now holds reflector tails below diag; build Q1 in place
     dorg2r_q(&mut a, &tq); // a <- Q1
-    // dbdsdc scale
-    let orgnrm = d
-        .iter()
-        .fold(0.0f32, |m, &x| m.max(x.abs()))
-        .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
-    if orgnrm == 0.0 {
-        let mut s = [0f32; 16];
-        let u = a; // Q1 (identity for zero matrix)
-        s.copy_from_slice(&d);
-        return (u, s);
-    }
-    let mut ds = [0f32; 16];
-    let mut es = [0f32; 15];
-    for i in 0..16 {
-        ds[i] = d[i] / orgnrm;
-    }
-    for i in 0..15 {
-        es[i] = e[i] / orgnrm;
-    }
+    // SBDSDC takes the N <= SMLSIZ (25) SLASDQ path BEFORE scaling.
+    // At N=16 its bidiagonal must therefore remain unscaled.
+    let mut ds = d;
+    let mut es = e;
     let mut ub = [0f32; 256];
     for i in 0..16 {
         ub[i * 16 + i] = 1.0;
@@ -1285,7 +1317,7 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             }
         }
     }
-    // U = Q1 @ Ub ; s = ds * orgnrm
+    // U = Q1 @ Ub; singular values already have their original scale.
     let mut u = [0f32; 256];
     for i in 0..16 {
         for j in 0..16 {
@@ -1296,16 +1328,94 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             u[i * 16 + j] = acc;
         }
     }
-    let mut s = [0f32; 16];
-    for i in 0..16 {
-        s[i] = ds[i] * orgnrm;
-    }
-    (u, s)
+    (u, ds)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oversized_inputs_refuse_before_reading_pixels() {
+        for (w, h) in [(4097, 128), (usize::MAX, 128), (4096, 127), (128, 4097)] {
+            let img = za::Rgb8In {
+                pixels: &[],
+                width: w,
+                height: h,
+                stride: 0,
+            };
+            assert!(matches!(Dmm::prep(&img), Err(Error::TooLarge { .. })));
+        }
+        assert!(matches!(
+            validate_geometry(0, 128),
+            Err(Error::TooLarge { .. })
+        ));
+        assert!(matches!(
+            validate_geometry(127, 128),
+            Err(Error::TooSmall { .. })
+        ));
+        assert_eq!(validate_geometry(4096, 4096).is_ok(), usize::BITS >= 64);
+        assert!(validate_geometry(1024, 1024).is_ok());
+    }
+
+    #[test]
+    fn decomposition_reservation_overflow_is_an_error() {
+        let tap = Tap {
+            c: usize::MAX,
+            h: 32,
+            w: 32,
+            data: Vec::new(),
+        };
+        let err = Dmm::decompose(&tap, za::EvalOpts::new())
+            .err()
+            .expect("overflow must refuse");
+        assert_eq!(err.error().kind(), za::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn channel_work_observes_cancellation() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use za::how_far::{Stop, StopOnly, StopReason};
+        struct StopAfterFirst(AtomicUsize);
+        impl Stop for StopAfterFirst {
+            fn check(&self) -> Result<(), StopReason> {
+                if self.0.fetch_add(1, Ordering::Relaxed) >= 1 {
+                    Err(StopReason::Cancelled)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        let tap = Tap {
+            c: 2,
+            h: 16,
+            w: 16,
+            data: vec![0.0; 512],
+        };
+        let stop = StopOnly::new(StopAfterFirst(AtomicUsize::new(0)));
+        let err = Dmm::decompose(&tap, za::EvalOpts::new().with_pulse(&stop))
+            .err()
+            .expect("stop on second channel");
+        assert_eq!(
+            err.error().kind(),
+            za::ErrorKind::Stopped(StopReason::Cancelled)
+        );
+        let stop = StopOnly::new(StopAfterFirst(AtomicUsize::new(0)));
+        let err =
+            Dmm::tap_score_cold(&tap, &tap, za::EvalOpts::new().with_pulse(&stop)).unwrap_err();
+        assert_eq!(
+            err.error().kind(),
+            za::ErrorKind::Stopped(StopReason::Cancelled)
+        );
+        let reference = Dmm::decompose(&tap, za::EvalOpts::new()).unwrap();
+        let stop = StopOnly::new(StopAfterFirst(AtomicUsize::new(0)));
+        let err = Dmm::tap_score_warm(&reference, &tap, za::EvalOpts::new().with_pulse(&stop))
+            .unwrap_err();
+        assert_eq!(
+            err.error().kind(),
+            za::ErrorKind::Stopped(StopReason::Cancelled)
+        );
+    }
 
     /// np.linalg.svd references on a fixed full-rank 16×16 matrix —
     /// singular values are convention-free, so the f64 references
