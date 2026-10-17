@@ -1,0 +1,81 @@
+{
+  "observed_utc": "2026-10-17T04:58:34.069432+00:00",
+  "binary": {
+    "binary": "/home/lilith/tmp/iqa-compete/bin/iqa-compete-cuda-v15",
+    "binary_sha256": "cbb127fd96e6561957ee599b59c58e5058c39992b23b39685a29c9bc370d10db",
+    "bytes": 101757520,
+    "build_log": "/home/lilith/tmp/iqa-compete/build-gpu-v15.log",
+    "build_log_sha256": "25c2f14367cf627294a45ad67e5f66ef864f65db8b08df9c9a2c77417ea5bb71",
+    "created_utc": "2026-10-17T04:57:29.824272+00:00",
+    "model_adapter": {
+      "adapter_sha256": "3397c445d44e96c9991bcc85e212b1213ecef012a9ca9ce10c3c472496806485",
+      "scope": "benchmark-only owned snapshot; immutable model parsing cached; model cloning stays timed",
+      "files": [
+        {
+          "path": "crates/vmaf/src/lib.rs",
+          "original_sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+          "adapted_sha256": "109d0d689cc8cbdea1a833c2ecdafd49130a90345ec72dcce09c4945865754a6"
+        },
+        {
+          "path": "crates/vmaf/src/v0.rs",
+          "original_sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+          "adapted_sha256": "db7df675b2318912cb05414c019c2456516a8ea7f4072ef231d1157a84db4a67"
+        },
+        {
+          "path": "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+          "original_sha256": "cf72c05bf6e6f090ccea17aec5f2fdada95dcc3458ed907e5c87da0545fbee80",
+          "adapted_sha256": "c19071ac772f3a4267dd04ff8f19ae022b20d7b6aca347a317e6bbad1128be81",
+          "reason": "reuse exact existing ingress in the benchmark source module"
+        }
+      ],
+      "reference": false
+    },
+    "ort_threads": {
+      "adapter_sha256": "801214b683099a82b412dd5c1122ea168bc582c9e870faf2a6b8991a0c19efe2",
+      "path": "crates/zenmetrics-nn/src/engine.rs",
+      "original_sha256": "ffa6750b248340c8e92856f5e210e024e9dee9a47cf726d4be5c700e85ce201c",
+      "adapted_sha256": "fa0fe2beffff4e356b5b29478ba254745480de00a5ee3695436ef17686667a80",
+      "builders": 3,
+      "scope": "Benchmark snapshot only; explicit intra-op cell budget, inter-op one; graph operations, providers and deterministic-compute options unchanged"
+    },
+    "luma_maps": {
+      "adapter_sha256": "caa5f520260c6cb9b7e1c359ceab76af07e0dadbd3bdb9b2982f1d9c472ffa8e",
+      "files": [
+        {
+          "path": "crates/fsim/src/lib.rs",
+          "original_sha256": "efed034527ac60a9189f80311bfc2ae5f3a162d3fc4ab21a9e18ceb3161e95cb",
+          "adapted_sha256": "9d68f65c6cd7a0ec769b2e149858d3b33136decdeaf081230669d5d48db49c5c"
+        },
+        {
+          "path": "crates/haarpsi/src/lib.rs",
+          "original_sha256": "f60e9fc66086039b4b21f40a1d3b2b16d6603efdd3fe11c1827e90fbe0f60b2d",
+          "adapted_sha256": "0fa9805a48f85090bfcc1eff006d4d52a951610e4a140edf0cf89ae7757d6b61"
+        }
+      ],
+      "scope": "Owned snapshot only; existing luma ingress and native map kernels reused. No shipped API or scoring arithmetic changed."
+    },
+    "admission": "Owner-authorized locked process accounting; load averages recorded without load-only refusal"
+  },
+  "build_resource": {
+    "exit_code": 0,
+    "seconds": 26,
+    "peak_rss_gib": 1.37,
+    "min_available_mib": 20677,
+    "peak_load": 6.58
+  },
+  "quality": {
+    "log": "/home/lilith/tmp/iqa-compete/quality-snapshot-v4.log",
+    "log_sha256": "b3c813ce54ac1795412cb627e095ce029fc16696455226894dfee2cd3ff18b76",
+    "resource": {
+      "exit_code": 0,
+      "seconds": 63,
+      "peak_rss_gib": 0.83,
+      "min_available_mib": 19883,
+      "peak_load": 5.78
+    },
+    "fmt": "clean",
+    "clippy_warning_census": 4111,
+    "scope": "Workspace advisory census; same count as previous qualified quality sweep; other advisory findings remain in full log"
+  },
+  "runtime_qualification": "Pending first admitted v15 cells; controllers started, waiting for shared lock"
+}
