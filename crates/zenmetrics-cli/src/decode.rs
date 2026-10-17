@@ -242,6 +242,7 @@ fn decode_png_with_policy(
 }
 
 #[cfg(feature = "png")]
+#[cfg(test)]
 fn decode_png(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_png_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -255,6 +256,7 @@ fn decode_png_with_policy(
 }
 
 #[cfg(not(feature = "png"))]
+#[cfg(test)]
 fn decode_png(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("PNG decoding is disabled (compile with `--features png`)".into())
 }
@@ -270,6 +272,7 @@ fn decode_jpeg_with_policy(
 }
 
 #[cfg(feature = "jpeg")]
+#[cfg(test)]
 fn decode_jpeg(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_jpeg_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -283,6 +286,7 @@ fn decode_jpeg_with_policy(
 }
 
 #[cfg(not(feature = "jpeg"))]
+#[cfg(test)]
 fn decode_jpeg(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("JPEG decoding is disabled (compile with `--features jpeg`)".into())
 }
@@ -302,6 +306,7 @@ fn decode_webp_with_policy(
 }
 
 #[cfg(feature = "webp")]
+#[cfg(test)]
 fn decode_webp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_webp_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -315,6 +320,7 @@ fn decode_webp_with_policy(
 }
 
 #[cfg(not(feature = "webp"))]
+#[cfg(test)]
 fn decode_webp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("WebP decoding is disabled (compile with `--features webp`)".into())
 }
@@ -339,6 +345,7 @@ fn hdr_transfer_name(transfer_characteristics: u8) -> Option<&'static str> {
 }
 
 #[cfg(feature = "avif")]
+#[cfg(test)]
 fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_avif_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -374,6 +381,7 @@ fn decode_avif_with_policy(
 }
 
 #[cfg(feature = "avif")]
+#[cfg(test)]
 fn decode_avif_default(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_avif_default_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -443,6 +451,7 @@ fn decode_avif_default_with_policy(
 }
 
 #[cfg(feature = "avif")]
+#[cfg(test)]
 fn decode_avif_zencodec(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_avif_zencodec_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -534,11 +543,13 @@ fn decode_avif_with_policy(
 }
 
 #[cfg(not(feature = "avif"))]
+#[cfg(test)]
 fn decode_avif(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("AVIF decoding is disabled (compile with `--features avif`)".into())
 }
 
 #[cfg(feature = "jxl")]
+#[cfg(test)]
 fn decode_jxl(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_jxl_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -564,11 +575,13 @@ fn decode_jxl_with_policy(
 }
 
 #[cfg(not(feature = "jxl"))]
+#[cfg(test)]
 fn decode_jxl(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("JPEG XL decoding is disabled (compile with `--features jxl`)".into())
 }
 
 #[cfg(feature = "gif")]
+#[cfg(test)]
 fn decode_gif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_gif_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -614,11 +627,13 @@ fn decode_gif_with_policy(
 }
 
 #[cfg(not(feature = "gif"))]
+#[cfg(test)]
 fn decode_gif(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("GIF decoding is disabled (compile with `--features gif`)".into())
 }
 
 #[cfg(feature = "tiff")]
+#[cfg(test)]
 fn decode_tiff(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_tiff_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -649,11 +664,13 @@ fn decode_tiff_with_policy(
 }
 
 #[cfg(not(feature = "tiff"))]
+#[cfg(test)]
 fn decode_tiff(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("TIFF decoding is disabled (compile with `--features tiff`)".into())
 }
 
 #[cfg(feature = "bmp")]
+#[cfg(test)]
 fn decode_bmp(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     decode_bmp_with_policy(data, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -841,6 +858,7 @@ fn decode_bmp_with_policy(
 }
 
 #[cfg(not(feature = "bmp"))]
+#[cfg(test)]
 fn decode_bmp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("BMP decoding is disabled (compile with `--features bmp`)".into())
 }
@@ -882,6 +900,7 @@ fn pixel_buffer_to_rgb8_with_policy(
     feature = "jxl",
     feature = "tiff"
 ))]
+#[cfg(test)]
 fn pixel_buffer_to_rgb8(
     buf: &zenpixels::PixelBuffer,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
@@ -975,6 +994,7 @@ pub fn pixel_slice_to_rgb8_with_policy(
     feature = "jxl",
     feature = "tiff"
 ))]
+#[cfg(test)]
 fn pixel_slice_to_rgb8(
     pixels: &zenpixels::PixelSlice<'_>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {

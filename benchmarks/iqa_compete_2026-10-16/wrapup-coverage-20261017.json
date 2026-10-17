@@ -1,0 +1,196 @@
+{
+  "observed_utc": "2026-10-17T10:36:48.551472+00:00",
+  "completed_scope_resources": {
+    "observed_unique_scopes": 389,
+    "peak_rss_gib": 11.06,
+    "min_available_mib": 11767,
+    "peak_load": 17.08,
+    "method": "Actual run-heavy receipts; maximum/minimum over unique observed scopes, not an extrapolation"
+  },
+  "per_size": {
+    "cid22": {
+      "rust": {
+        "requested": 540,
+        "present": 540,
+        "timed": 326,
+        "unsupported": 190,
+        "refused": 24,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "aic-small": {
+      "rust": {
+        "requested": 540,
+        "present": 212,
+        "timed": 109,
+        "unsupported": 94,
+        "refused": 9,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "aic-medium": {
+      "rust": {
+        "requested": 540,
+        "present": 116,
+        "timed": 55,
+        "unsupported": 52,
+        "refused": 9,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "aic-large": {
+      "rust": {
+        "requested": 540,
+        "present": 28,
+        "timed": 14,
+        "unsupported": 8,
+        "refused": 6,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "2k": {
+      "rust": {
+        "requested": 540,
+        "present": 540,
+        "timed": 330,
+        "unsupported": 196,
+        "refused": 14,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "4k": {
+      "rust": {
+        "requested": 540,
+        "present": 28,
+        "timed": 14,
+        "unsupported": 8,
+        "refused": 6,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 26,
+        "unsupported": 22,
+        "refused": 0,
+        "partial": 0
+      }
+    },
+    "8k": {
+      "rust": {
+        "requested": 540,
+        "present": 24,
+        "timed": 14,
+        "unsupported": 6,
+        "refused": 4,
+        "partial": 0
+      },
+      "competitors": {
+        "requested": 164,
+        "present": 48,
+        "timed": 24,
+        "unsupported": 22,
+        "refused": 2,
+        "partial": 0
+      }
+    }
+  },
+  "sources": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl",
+      "complete_rows": 1128,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-00.jsonl",
+      "snapshot_sha256": "87141136844bd3030f1884da3994c7ac05d835d8c67702bd5330a78eeac4ee98"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl",
+      "complete_rows": 2,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-01.jsonl",
+      "snapshot_sha256": "c1ae486c1c2e8f76ef49adf4d0c1a548f6ff46b6784ba46bff8d0189587d6300"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/cpu/i265.jsonl",
+      "complete_rows": 96,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-02.jsonl",
+      "snapshot_sha256": "86c62126d1013fc4dc7d9a2daaf9529c7521282c6ac26c836b52b158b259ea1d"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/cuda/i265.jsonl",
+      "complete_rows": 120,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-03.jsonl",
+      "snapshot_sha256": "464be13c0b7b7166c98fa4d2cdf3e0cfa52ca84762509e3b46fb6a5e7e191e1c"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/nn-cuda/i265.jsonl",
+      "complete_rows": 176,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-04.jsonl",
+      "snapshot_sha256": "4cec1030364aa2f4e3fc89174af4917127402f3577da530078075f495a032137"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/i265.jsonl",
+      "complete_rows": 16,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-05.jsonl",
+      "snapshot_sha256": "6c6cc8bf7536a0b9a65e7d44623cc2e16b3a670d04c00e83d8fa6f76addd50d3"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-native-vmaf/i265.jsonl",
+      "complete_rows": 280,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-06.jsonl",
+      "snapshot_sha256": "2f66bc321ee9972c8d47a68c9ef7e1ab538c1175f897704da04c571992e51a42"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-competitors-v16/libjxl/i265.jsonl",
+      "complete_rows": 56,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-07.jsonl",
+      "snapshot_sha256": "603d44a85af0cb8d55be7b01aa401e5b6721c190a57fcce14bee3d9d59e802ff"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/coverage-butter8k-isolated-v17/i265.jsonl",
+      "complete_rows": 4,
+      "snapshot": "/home/lilith/tmp/iqa-compete/wrapup-20261017/source-08.jsonl",
+      "snapshot_sha256": "a0c2a5267c9f75fcce124497c7f070feb42b78310e9eae25115123e2ad5d3f7e"
+    }
+  ],
+  "pending_ledgers": [],
+  "contract": "Observed rows only; existing status/contamination labels retained; no metric calls or parity qualification"
+}
