@@ -767,6 +767,9 @@ nn-dmm-bisect-panel revision output model_dir ladder:
 nn-dmm-bisect-all model_dir ladder output:
     bash benchmarks/nn_port_2026-10-15/dmm_bisect_run.sh '{{model_dir}}' '{{ladder}}' '{{output}}'
 
+nn-dmm-bisect-summary directory output *flags:
+    python3 benchmarks/nn_port_2026-10-15/dmm_bisect_summary.py '{{directory}}' '{{output}}' {{flags}}
+
 nn-dmm-bisect-sources output:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_sources.py '{{output}}'
 
