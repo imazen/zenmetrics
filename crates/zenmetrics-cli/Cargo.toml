@@ -44,8 +44,12 @@ default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr", "alpha"]
 # pure-Rust rten engine; models load from ZENMETRICS_NN_MODEL_DIR. `nn-ort`
 # adds the ONNX Runtime CUDA engine (ZENMETRICS_NN_ENGINE=ort-cuda).
 nn = ["dep:zenmetrics-nn", "dep:zenmetrics-abstractions"]
-nn-ort = ["nn", "zenmetrics-nn/ort"]
+nn-ort = ["nn", "zenmetrics-nn/ort", "zenmetrics-pyiqa-ports?/ort"]
 nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
+# Ports whose only reference is pyiqa (crates/zenmetrics-pyiqa-ports): code and
+# weights under non-commercial terms, so never on by default. Metrics
+# `topiq-fr`, `topiq-fr-pipal`; with `nn-ort` also ZENMETRICS_NN_ENGINE=ort-cpu.
+pyiqa-ports = ["nn", "dep:zenmetrics-pyiqa-ports"]
 # Classical no-reference metrics (piqe, niqe, brisque) — in-tree ports
 # scored through `zenmetrics-abstractions::PairedNoReference`, so batch /
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).
@@ -628,6 +632,7 @@ vmaf = { workspace = true, optional = true, features = ["simd", "parallel"] }
 nlpd = { path = "../nlpd", optional = true, features = ["avx512", "parallel"] }
 zenmetrics-nn = { path = "../zenmetrics-nn", optional = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", optional = true, default-features = false }
+zenmetrics-pyiqa-ports = { path = "../zenmetrics-pyiqa-ports", optional = true }
 piqe = { workspace = true, optional = true, features = ["std"] }
 niqe = { workspace = true, optional = true, features = ["std"] }
 brisque = { workspace = true, optional = true, features = ["std"] }

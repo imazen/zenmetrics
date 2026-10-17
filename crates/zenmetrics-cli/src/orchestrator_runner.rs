@@ -558,6 +558,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Pieapp
             | CliMetricKind::Ahiq
             | CliMetricKind::Dmm
+            // pyiqa-ports
+            | CliMetricKind::TopiqFr
+            | CliMetricKind::TopiqFrPipal
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
             // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ,
             // WaDIQaM-NR) are routed through `nr::score`/`nn::score` +

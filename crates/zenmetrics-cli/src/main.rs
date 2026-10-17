@@ -1627,6 +1627,11 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // A-FINE is an unbounded signed quality score; no characterised
         // mean bounds or constant identity exist for this check.
         MetricKind::Afine | MetricKind::Ahiq | MetricKind::Dmm => None,
+        // pyiqa-ports. TOPIQ: linear MOS head (no sigmoid), measured
+        // 0.45-0.96 over 82 gate pairs and 0.58-0.96 over 1,008 KonJND-1k
+        // pairs (both checkpoints); identical pairs score 0.61-0.95
+        // depending on the image, so zero is only a default-failure sentinel.
+        MetricKind::TopiqFr | MetricKind::TopiqFrPipal => Some((-0.5, 1.5, 0.0)),
         // WD is a nonnegative, unbounded feature distortion; identical
         // inputs score exactly 0 in every column. Measured maxima: 1.50
         // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens
