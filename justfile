@@ -316,6 +316,15 @@ snap-cargo rev +args:
     if [ "{{rev}}" = "@" ]; then bash scripts/ci/lock.sh --check; else bash scripts/ci/lock.sh --check --rev {{rev}}; fi
     cd "${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/work/zenmetrics" && CARGO_TERM_COLOR=never CARGO_TARGET_DIR="${LOCK_SNAP_DIR:-$HOME/tmp/zenmetrics-lock-snap}/target" cargo --locked {{args}}
 
+# Metadata-only operator tool; scientific worker images remain unchanged.
+stopped-claim-release-check:
+    just snap-cargo @ test -p zenfleet-worker --example release_owned_claim
+    just snap-cargo @ test -p zenfleet-worker --lib release
+    just snap-cargo @ clippy -p zenfleet-worker --example release_owned_claim -- -D warnings
+
+stopped-claim-release-build:
+    just snap-cargo @ build -p zenfleet-worker --example release_owned_claim
+
 # zenmetrics-cli feature-combination matrix: 12 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
 # `--no-default-features` build, plus the default build. Prints a PASS/FAIL

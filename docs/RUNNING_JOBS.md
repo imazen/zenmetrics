@@ -94,6 +94,17 @@ to TTL reclaim. Release also validates the timestamp as u64. The ownership check
 and DELETE are separate storage operations: a steal between them can still be
 deleted.
 
+For an already stopped allocation, `release_owned_claim` exposes that same native
+ownership guard as an operator tool. Set `ZEN_WORKER` to its unique identity and
+use `just stopped-claim-release-build`, then run the built example with
+`--run <run> --key <chunk-SHA> --expected-worker "$ZEN_WORKER" --confirm-stopped
+--all-workers-quiesced`. The endpoint comes from `ZEN_R2_ENDPOINT` or `EP` and
+credentials remain in the environment. Inspect the stopped container and exact
+claim owner immediately beforehand, and quiesce every claimer for that run: the
+existing release protocol is best-effort GET-then-DELETE, not conditional DELETE.
+Verify disappearance afterward. This removes only the lease; it preserves all
+ledger history, including failed attempts, and does not reset the retry limit.
+
 **Drain caveat.** `drain: true` only stops workers from *starting* new passes; a pass that is already
 running keeps claiming cells (fit jobsets that were drained still produced new DONE cells). To move
 work to a newer jobset, declare the remaining cells there and let the old jobset's workers finish, and
@@ -113,7 +124,7 @@ per cell: a local original is rescued, an installed fleet copy is never replaced
 copy from another jobset must agree on the science fields or the install aborts.
 `fit_grid_coverage.py --grid-manifest <registered grid> --jobset ...` proves the union of DONE cells
 across jobsets equals the grid (960 P0 / 960 P2 / 210 D2) and lists every missing cell with its claim
-owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so nothing re-runs it until it is re-declared). Its exit 0 is the precondition
+owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so it needs re-declaration or an eligible native retry after stopped-owner release). Its exit 0 is the precondition
 for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls for both scripts.
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 

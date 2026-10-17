@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits.
+
 - Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
 
 - Verify bounded S smoke exports carry the archive-bound native smooth activation, without changing registered fit admission.
