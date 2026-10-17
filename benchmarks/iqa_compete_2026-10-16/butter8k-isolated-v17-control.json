@@ -1,0 +1,87 @@
+{
+  "source": "/home/lilith/tmp/iqa-compete/coverage-butter8k-isolated-v17/i265.jsonl",
+  "source_sha256": "a0c2a5267c9f75fcce124497c7f070feb42b78310e9eae25115123e2ad5d3f7e",
+  "scope": "Four missing 8K cells, one isolated scorer per process; no CID22 qualification repeated",
+  "rows": [
+    {
+      "threads": 1,
+      "mode": "score",
+      "status": "ok",
+      "n": 1,
+      "required_samples": 1,
+      "median_ns": 101873623.0,
+      "timing_quality": "clean",
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 15475,
+        "peak_load": 1.76,
+        "peak_rss_gib": 9.23,
+        "seconds": 9
+      },
+      "parity_checked": false,
+      "scalar_comparison_status": null,
+      "impl_binary_sha": "a87d7cf07c913f73da21e8e093a975a803488031531e4f9bbb2227cafc4996bc",
+      "pair_sha256": "c77981079dbe26fd96d9581706c2c42a962a8ff97d418a409adb78cbc287cf22"
+    },
+    {
+      "threads": 1,
+      "mode": "score+map",
+      "status": "ok",
+      "n": 1,
+      "required_samples": 1,
+      "median_ns": 162850864.0,
+      "timing_quality": "clean",
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 15451,
+        "peak_load": 1.7,
+        "peak_rss_gib": 9.22,
+        "seconds": 9
+      },
+      "parity_checked": false,
+      "scalar_comparison_status": "Not repeated in isolated map process",
+      "impl_binary_sha": "a87d7cf07c913f73da21e8e093a975a803488031531e4f9bbb2227cafc4996bc",
+      "pair_sha256": "c77981079dbe26fd96d9581706c2c42a962a8ff97d418a409adb78cbc287cf22"
+    },
+    {
+      "threads": 20,
+      "mode": "score",
+      "status": "ok",
+      "n": 1,
+      "required_samples": 1,
+      "median_ns": 100698665.0,
+      "timing_quality": "clean",
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 15132,
+        "peak_load": 1.62,
+        "peak_rss_gib": 9.23,
+        "seconds": 8
+      },
+      "parity_checked": false,
+      "scalar_comparison_status": null,
+      "impl_binary_sha": "a87d7cf07c913f73da21e8e093a975a803488031531e4f9bbb2227cafc4996bc",
+      "pair_sha256": "c77981079dbe26fd96d9581706c2c42a962a8ff97d418a409adb78cbc287cf22"
+    },
+    {
+      "threads": 20,
+      "mode": "score+map",
+      "status": "ok",
+      "n": 1,
+      "required_samples": 1,
+      "median_ns": 154759120.0,
+      "timing_quality": "clean",
+      "resource": {
+        "exit_code": 0,
+        "min_available_mib": 15051,
+        "peak_load": 1.61,
+        "peak_rss_gib": 9.22,
+        "seconds": 9
+      },
+      "parity_checked": false,
+      "scalar_comparison_status": "Not repeated in isolated map process",
+      "impl_binary_sha": "a87d7cf07c913f73da21e8e093a975a803488031531e4f9bbb2227cafc4996bc",
+      "pair_sha256": "c77981079dbe26fd96d9581706c2c42a962a8ff97d418a409adb78cbc287cf22"
+    }
+  ]
+}

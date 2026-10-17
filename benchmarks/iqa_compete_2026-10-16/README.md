@@ -180,3 +180,9 @@ For coverage rows without a repeated CPU comparison, collection clears
 libvmaf CAMBI refuses 8K with `window_size 131 too large for reciprocal LUT`.
 That exact public-entry-point error is an explicit input refusal; the remaining
 native cells continue. Other unexpected native errors still stop that stage.
+
+The [isolated Butteraugli 8K receipt](butter8k-isolated-v17-control.json)
+records all four missing mode/thread cells with n=1 and clean contention
+receipts. The [build receipt](cuda-v17-build-control.json) binds the executable.
+No completed timing or CID22 comparison was repeated. Chart summaries retain
+`coverage_first`, `required_samples` and `parity_checked`; bar labels show n.

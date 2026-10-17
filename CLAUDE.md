@@ -1683,6 +1683,9 @@ The grouped IQA benchmark keeps independent scalar and map GPU scorers alive.
 At 7680×4320, Butteraugli CUDA completes its initial scalar warmup, then fails
 a 1,045,012,480-byte device allocation during map warmup. Both requested thread
 budgets exit 101 without qualified timing rows. The isolated-mode benchmark
-path keeps one scorer per process; its coverage measurements are pending.
+path keeps one scorer per process. All four missing mode/thread cells then
+complete with one retained sample each and clean contention receipts. The
+[measured receipt](benchmarks/iqa_compete_2026-10-16/butter8k-isolated-v17-control.json)
+records 8–9-second scopes and 9.22–9.23 GiB peak host RSS; these are not VRAM measurements.
 The original attempt logs remain under `~/tmp/iqa-compete/coverage-rust-v16/cuda/logs/`.
 No metric algorithm or allocation limit is changed.
