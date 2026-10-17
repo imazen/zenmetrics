@@ -508,6 +508,8 @@ fn s1_gate(means_r: &[f32], means_d: &[f32]) -> f64 {
 }
 
 // ---- LAPACK-based 16x16 SVD ------------------------------------------
+// Adapted from Reference-LAPACK (BSD-3-Clause). Full copyright notices
+// and licence terms are in LICENSE-lapack at the crate root.
 //
 // Upstream runs `torch.svd` on `unfold().view(a,b,k,k,-1).transpose(2,4)` —
 // the `.transpose(2,4)` swaps the two k axes, so its patch matrix is `Mᵀ`
@@ -791,10 +793,12 @@ fn dlarf_right(r0: usize, c0: usize, x: &[f32], tau: f32, a: &mut [f32; 256]) {
         for (i, &xi) in x.iter().enumerate() {
             w += a[r * 16 + c0 + 1 + i] * xi;
         }
-        let tw = tau * w;
-        a[r * 16 + c0] -= tw;
+        // SLARF('Right') calls SGER with X=work and Y=v: each
+        // column forms TEMP=(-tau)*v[c] before work[r]*TEMP.
+        a[r * 16 + c0] += w * -tau;
         for (i, &xi) in x.iter().enumerate() {
-            a[r * 16 + c0 + 1 + i] -= tw * xi;
+            let temp = -tau * xi;
+            a[r * 16 + c0 + 1 + i] += w * temp;
         }
     }
 }
