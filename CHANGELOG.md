@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add an opt-in Linux local queue with memory-aware backfill, checked atomic singleton publication, retained failure reconciliation and unchanged default/distributed execution (`52634234e395`).
+
 - Dashboard: bars (default) or bars with whiskers replace every scatter plot through one mode switch; resolutions show dimensions; a notice marks timings provisional pending cleaner controlled runs; model records give CLI reproduction commands, can be starred, and unimplemented planned methods are listed and flagged; a provisional method-complexity view and tally evaluator (`docs/IQA_COMPLEXITY.md`) (252c7432, d7847275)
 
 - Publish the DVIFM baseline/fast-math/native panel (four C++ reference variants in five builds, Rust ports and dvifmish presets, with exact-match labels) as dashboard speed rows (`3d04f08c0e04`).
