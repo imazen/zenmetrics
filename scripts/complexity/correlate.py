@@ -128,8 +128,11 @@ def main():
         for t, a_, b_ in zip(ok, x, y):
             t[key.replace('ns_per_px', 'residual')] = math.exp(b_ - a_ - k)
         flag = 'POOR' if sp < 0.7 else 'moderate' if sp < 0.9 else 'strong'
+        res = [t[key.replace('ns_per_px', 'residual')] for t in ok]
+        far = sorted((t['metric'] for t in ok if not 1 / 3 <= t[key.replace('ns_per_px', 'residual')] <= 3))
         out.append(f'{label}: n={len(ok)} spearman={sp:.3f} [{lo_s:.3f},{hi_s:.3f}] '
-                   f'pearson_log={pe:.3f} [{lo_p:.3f},{hi_p:.3f}] -> {flag}')
+                   f'pearson_log={pe:.3f} [{lo_p:.3f},{hi_p:.3f}] -> {flag} (rank agreement over the whole cost range); '
+                   f'residual spread max/min={max(res) / min(res):.1f}x; outside 3x of the fit: {", ".join(far) or "none"}')
     cols = ['metric', 'counter', 'flops_per_px', 'weighted', 'cpu_ns_per_px', 'wall_ns_per_px', 'cpu_residual',
             'wall_residual', 'repeats', 'unweighted_ops']
     lines = out + ['\t'.join(cols)] + ['\t'.join(f'{t.get(c, ""):.4g}' if isinstance(t.get(c), float) else str(t.get(c, ''))

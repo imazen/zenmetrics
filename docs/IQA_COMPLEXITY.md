@@ -175,6 +175,27 @@ is instead bounded by the tallies' work/span and barrier counts (section
 "Halo, span and parallel structure"); the two answer different questions and
 are reported side by side, never substituted.
 
+### First predicted-vs-measured comparison (n = 15, provisional)
+
+Tallies landed so far (one counter each, swap recounts pending) against the
+single-thread 1024×1024 run, `analysis/correlation_1t_1024_*.tsv`:
+
+| weights | Spearman (95 % bootstrap) | Pearson of logs | residual spread | outside 3× of the fit |
+|---|---|---|---:|---|
+| flop count | 0.93 (0.74–0.99) | 0.91 | 17.6× | ciede2000, mdctpsnr, nlpd-iqa, ssimulacra1 |
+| i265 P-core scalar reciprocal throughput | 0.94 (0.73–0.99) | 0.93 | 26.4× | mdctpsnr, ssimulacra1 |
+| i265 P-core scalar latency | 0.93 (0.75–1.00) | 0.92 | 20.4× | ciede2000, ssimulacra1 |
+
+CPU time and wall time agree at one thread, as they should. The high rank
+correlation comes mostly from the three-decade spread in cost between PSNR
+and mDCT-PSNR; within a decade, measured time departs from the tally by up to
+a factor of 26. Those residuals are where implementation choices dominate:
+mDCT-PSNR runs about 3.5× faster than its count predicts (FMA-cloned,
+vectorized kernels), SSIMULACRA1 about 7.5× slower (its count and its code
+path are both on the recount list). Weighting by measured instruction costs
+does not change the picture. The comparison will be redone when all tallies
+are reconciled; n = 15 of 115 CLI names.
+
 ## Optimization effort
 
 Question: how many optimization iterations, and how much agent time, went

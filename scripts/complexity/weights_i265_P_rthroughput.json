@@ -1,0 +1,73 @@
+{
+ "name": "i265 P-core scalar rthroughput (measured cycles)",
+ "source": "benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv; median of 5 perf cycle slopes; mapping add/f32=vaddss, add/f64=vaddsd, mul/f32=vmulss, mul/f64=vmulsd, fma/f32=vfmadd231ss, fma/f64=vfmadd231sd, div/f32=vdivss, div/f64=vdivsd, sqrt/f32=vsqrtss, sqrt/f64=vsqrtsd, rcp/f32=vrcpss, rsqrt/f32=vrsqrtss, cmp/f32=vminss, cmp/f64=vminsd, abs/f32=vandps_x, abs/f64=vandpd_x, cvt/f32=vcvtss2sd, cvt/f64=vcvtsd2ss, exp/f32=expf, exp/f64=exp, log/f32=logf, log/f64=log, pow/f32=powf, pow/f64=pow, trig/f32=cosf",
+ "weights": {
+  "add": {
+   "f32": 0.4215,
+   "f64": 0.4212,
+   "mixed": 0.4215
+  },
+  "mul": {
+   "f32": 0.4221,
+   "f64": 0.4251,
+   "mixed": 0.4221
+  },
+  "fma": {
+   "f32": 0.4331,
+   "f64": 0.4351,
+   "mixed": 0.4331
+  },
+  "div": {
+   "f32": 1.9421,
+   "f64": 3.451,
+   "mixed": 1.9421
+  },
+  "sqrt": {
+   "f32": 3.4598,
+   "f64": 5.9681,
+   "mixed": 3.4598
+  },
+  "rcp": {
+   "f32": 0.9293,
+   "mixed": 0.9293
+  },
+  "rsqrt": {
+   "f32": 0.9299,
+   "mixed": 0.9299
+  },
+  "cmp": {
+   "f32": 0.4326,
+   "f64": 0.432,
+   "mixed": 0.4326
+  },
+  "abs": {
+   "f32": 0.17,
+   "f64": 0.171,
+   "mixed": 0.17
+  },
+  "cvt": {
+   "f32": 0.5795,
+   "f64": 0.5902,
+   "mixed": 0.5795
+  },
+  "exp": {
+   "f32": 6.8654,
+   "f64": 9.0984,
+   "mixed": 6.8654
+  },
+  "log": {
+   "f32": 7.4334,
+   "f64": 8.4508,
+   "mixed": 7.4334
+  },
+  "pow": {
+   "f32": 12.9917,
+   "f64": 25.3061,
+   "mixed": 12.9917
+  },
+  "trig": {
+   "f32": 5.4972,
+   "mixed": 5.4972
+  }
+ }
+}

@@ -1,0 +1,87 @@
+# weights=flop count (unweighted: one per arithmetic operation, two per fma; loads, stores, conversions and integer ops excluded) shape=1024x1024 measured=benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024*.tsv
+CPU time: n=15 spearman=0.928 [0.738,0.993] pearson_log=0.913 [0.794,0.984] -> strong (rank agreement over the whole cost range); residual spread max/min=17.6x; outside 3x of the fit: ciede2000, mdctpsnr, nlpd-iqa, ssimulacra1
+wall time: n=15 spearman=0.928 [0.738,0.993] pearson_log=0.913 [0.794,0.984] -> strong (rank agreement over the whole cost range); residual spread max/min=17.7x; outside 3x of the fit: ciede2000, mdctpsnr, nlpd-iqa, ssimulacra1
+metric	counter	flops_per_px	weighted	cpu_ns_per_px	wall_ns_per_px	cpu_residual	wall_residual	repeats	unweighted_ops
+mdsi	swe2	8.938	8.938	1.478	1.471	1.236	1.228	3	
+psnr	lead	9	9	1.502	1.512	1.248	1.253	3	
+psnr-y	swe2	13	13	1.853	1.854	1.066	1.064	3	
+haarpsi-y	swe2	57.53	57.53	7.697	7.714	1	1	3	
+haarpsi	swe2	85.28	85.28	13.85	13.85	1.214	1.211	3	
+nlpd-iqa	swe2	125.3	125.3	4.989	5.011	0.2976	0.2983	3	
+ms-gmsd	swe2	127	127	11.72	11.64	0.6898	0.6837	3	
+ms-gmsdc	swe2	127	127	11.98	11.84	0.7053	0.6956	3	
+ciede2000	swe2	150	150	104.5	104.6	5.209	5.199	3	
+vsi	swe2	163.9	163.9	43.01	43.19	1.961	1.965	3	
+cvvdp	swe	680	680	75.95	76.1	0.8349	0.8346	3	
+ssimulacra1	swe2	886.8	886.8	482.9	483.2	4.07	4.064	3	
+vif	swe2	1013	1013	51.62	51.57	0.3808	0.3796	3	
+vifvec	swe2	1657	1657	109.4	109.1	0.4932	0.4908	3	
+mdctpsnr	swe2	1.619e+04	1.619e+04	639.4	637.8	0.2953	0.2939	3	
+# missing	brisque	no tally
+# missing	butteraugli	no tally
+# missing	butteraugli-original	no tally
+# missing	cambi	no tally
+# missing	cw-ssim	no tally
+# missing	dssim	no tally
+# missing	flip	no tally
+# missing	flip-v17	no tally
+# missing	fsim	no tally
+# missing	fsim-k2	no tally
+# missing	fsim-k3	no tally
+# missing	fsim-k4	no tally
+# missing	fsim-nodownscale	no tally
+# missing	fsim-y	no tally
+# missing	gmsd	no tally
+# missing	iwssim	no tally
+# missing	iwssim-piq	no tally
+# missing	mad	no tally
+# missing	ms-ssim-pyiqa	no tally
+# missing	ms-ssim-pyiqa-f32	no tally
+# missing	ms-ssim-pyiqa-f32-k2	no tally
+# missing	ms-ssim-pyiqa-f32-k3	no tally
+# missing	ms-ssim-pyiqa-f32-k4	no tally
+# missing	ms-ssim-pyiqa-f32-k5	no tally
+# missing	ms-ssim-pyiqa-f32-k6	no tally
+# missing	msssim	no tally
+# missing	msssim-libvmaf	no tally
+# missing	niqe	no tally
+# missing	nlpd	no tally
+# missing	piqe	no tally
+# missing	psnr-cb	no tally
+# missing	psnr-cr	no tally
+# missing	psnr-y-libvmaf	no tally
+# missing	psnr-y-studio601	no tally
+# missing	psnr-y601	no tally
+# missing	psnr-ycbcr611	no tally
+# missing	psnrhvs	no tally
+# missing	psnrhvs-daala	no tally
+# missing	psnrhvs-y	no tally
+# missing	ssim	no tally
+# missing	ssim-libvmaf	no tally
+# missing	ssim-pyiqa	no tally
+# missing	ssim-pyiqa-f32	no tally
+# missing	ssim-pyiqa-f32-k2	no tally
+# missing	ssim-pyiqa-f32-k3	no tally
+# missing	ssim-pyiqa-f32-k4	no tally
+# missing	ssim-pyiqa-f32-k5	no tally
+# missing	ssim-pyiqa-f32-k6	no tally
+# missing	ssim2	no tally
+# missing	ssimc	no tally
+# missing	ssimc-pyiqa-f32	no tally
+# missing	ssimc-pyiqa-f32-k2	no tally
+# missing	ssimc-pyiqa-f32-k3	no tally
+# missing	ssimc-pyiqa-f32-k4	no tally
+# missing	ssimc-pyiqa-f32-k5	no tally
+# missing	ssimc-pyiqa-f32-k6	no tally
+# missing	vmaf	no tally
+# missing	vmaf-4k	no tally
+# missing	vmaf-neg	no tally
+# missing	vmaf-neg-studio601	no tally
+# missing	vmaf-studio601	no tally
+# missing	vmaf-v1	no tally
+# missing	vsi-k2	no tally
+# missing	vsi-k3	no tally
+# missing	vsi-k4	no tally
+# missing	vsi-nodownscale	no tally
+# missing	ws-hv	no tally
+# missing	zensim	no tally

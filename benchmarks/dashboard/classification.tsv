@@ -985,3 +985,6 @@ benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv	ignored	Operation-c
 benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_flops.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_latency.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_rthroughput.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
