@@ -539,20 +539,14 @@ fn dlapy2(x: f32, y: f32) -> f32 {
     }
 }
 
+// SciPy's OpenBLAS SNRM2 kernel accumulates f32 squares in f64 and
+// rounds once at the return (nrm2_sse.S). The port's former f32 scaled
+// norm rounded each addition/division; that can change a degenerate basis.
 fn dnrm2(x: &[f32]) -> f32 {
-    let (mut scale, mut ssq) = (0.0f32, 1.0f32);
-    for &xi in x {
-        if xi != 0.0 {
-            let a = xi.abs();
-            if scale < a {
-                ssq = 1.0 + ssq * (scale / a) * (scale / a);
-                scale = a;
-            } else {
-                ssq += (a / scale) * (a / scale);
-            }
-        }
-    }
-    scale * ssq.sqrt()
+    x.iter()
+        .map(|&v| f64::from(v) * f64::from(v))
+        .sum::<f64>()
+        .sqrt() as f32
 }
 
 /// DLARFG: householder reflector on (alpha; x). Returns (beta, tau); the
