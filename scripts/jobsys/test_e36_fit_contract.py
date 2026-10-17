@@ -135,6 +135,16 @@ class E36Contract(unittest.TestCase):
             self.assertEqual(receipt['raw_checkpoint_sha256'],q.sha(raw))
             self.assertEqual(receipt['model_binding_sha256'],q.sha(dest/'e36-model-binding.json'))
             self.assertEqual(receipt['result_sha256'],q.sha(dest/'result.json'))
+            # A separately declared diagnostic can export only with its native
+            # local-smoke classification and its actual last diagnostic epoch.
+            (dest/'e36-qualified-checkpoint.json').unlink()
+            binding['selected_epoch']=1;(dest/'e36-model-binding.json').write_text(json.dumps(binding))
+            diagnostic=expected|dict(e36_memory_smoke=copy.deepcopy(e.SMOKE))
+            with mock.patch.object(q,'trusted_contract',return_value=diagnostic),mock.patch.object(q,'verify_training',return_value='registered-fit'):
+                with self.assertRaisesRegex(ValueError,'checkpoint qualification'):e.qualify_output(program,dest,kind,'cell',result)
+            with mock.patch.object(q,'trusted_contract',return_value=diagnostic),mock.patch.object(q,'verify_training',return_value='local-smoke'):
+                e.qualify_output(program,dest,kind,'cell',result)
+            self.assertEqual(json.loads((dest/'e36-qualified-checkpoint.json').read_text())['execution_contract'],'local-smoke')
 
     def test_e36_source_inventory_requires_native_import_closure(self):
         names=['v2_lodo_mlp.py','v2_confirm_fit.py','v2_common.py','v2_teacher.py','v2c_wide.py',
