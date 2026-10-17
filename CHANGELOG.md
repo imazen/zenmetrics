@@ -41,10 +41,9 @@ None.
 
 - VMAF frame and streaming scorers retain their CAMBI thread budget, including single-frame private-pool calls (`1ab9cb0d`).
 - CAMBI schedules independent column regions (`0ffb7674`), preserving every original histogram update and floating-point pooling order; each non-final region ends with eight scalar `c_value_pixel` columns; [CPU and bit-parity evidence](benchmarks/aic_perf_big_2026-10-16/README.md).
-
 - With `parallel` enabled, `cambi_from_luma`, `cambi_v1_from_luma`, and `cambi_v1_maps` use the caller’s current Rayon pool (the global pool outside an installed pool), including the metric map path; this changes scheduling behavior (`0ffb7674`).
-- VMAF multi-frame scoring keeps CAMBI serial inside frame workers; single-frame and streaming calls retain their private-pool column budget (`3b3e81de`).
-- CAMBI AVX2 rows zero active out-of-band lanes, matching the scalar point evaluator; direct row and 512-square frame-scheduling controls cover the review findings (`3b3e81de`).
+- VMAF multi-frame scoring keeps CAMBI column work serial inside frame workers; a private-pool call with two frames on 16 workers uses two threads for CAMBI. This avoids nested column scheduling but leaves other workers unused during that work. Single-frame and streaming calls retain their private-pool column budget (`3b3e81de`).
+- CAMBI AVX2 rows zero active out-of-band lanes, matching the scalar point evaluator; the mask changes no score or map for any real input because the production bands are `[67,564)` for VMAF v1 and `[0,564)` for standalone CAMBI. Only direct row-kernel calls with a narrower band differ. Direct row and 512-square frame-scheduling controls cover the review findings (`3b3e81de`).
 - CAMBI column regions borrow disjoint output-row slices, removing the temporary c-value plane and copy (`24fe54f8`).
 
 - CAMBI consumes stride in its existing normalization copy (`c4c3c43e`), avoiding an intermediate full-frame allocation; scalar and SIMD stride controls retain identical scores.

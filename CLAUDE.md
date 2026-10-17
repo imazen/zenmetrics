@@ -1637,7 +1637,8 @@ empty/nonfinite checks remain active. The sweep-feature binary regression
 A direct nine-column row control found AVX2 bits `402aaaab` for an active
 pixel below the histogram band, while `c_value_pixel` returned zero. Gather
 index clamping now has a separate in-band output mask (`3b3e81de`). The row
-control covers vector groups, scalar tails, masked pixels and both band edges.
+control covers vector groups, scalar tails and masked pixels; only the low
+band edge has a predicate-true out-of-band pixel.
 A two-frame 512×512 control observed two column splits inside parallel frame
 workers. Those workers now keep CAMBI serial; the single-frame control still
 uses columns, and all feature/score bits match the serial scorer. Both new
