@@ -208,6 +208,8 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         if system=='Linux':
             command=[sys.executable,str(Path(__file__).with_name('contention.py').resolve()),str(contention_receipt.resolve()),str(log.resolve()),'--',*command]
         if not lease:command=['flock',str(Path.home()/f'tmp/{host}-heavy.lock'),*command]
+        if lease:env['IQA_HEAVY_LOCK_FD']=str(lease.fd)
+        else:env.pop('IQA_HEAVY_LOCK_FD',None)
         print('SUBMIT', stem, attempt, flush=True)
         with log.open('x') as f:
             process = subprocess.run(command, env=env, stdout=f, stderr=subprocess.STDOUT,

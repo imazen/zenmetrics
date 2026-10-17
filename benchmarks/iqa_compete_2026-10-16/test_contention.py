@@ -1,4 +1,5 @@
 import unittest
+import os,subprocess,sys,json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,6 +14,18 @@ class Accounting(unittest.TestCase):
   self.assertEqual(interval((0,{(1,2):row}),(2,{(1,2):last}),100)[0]['cores'],2)
  def test_backward_ticks_never_negative(self):
   self.assertEqual(interval((0,{(1,2):{'ticks':5}}),(1,{(1,2):{'ticks':0}}),100)[0]['cores'],0)
+class LockInheritance(unittest.TestCase):
+ def test_supervised_child_keeps_inherited_lock_descriptor(self):
+  with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+   root=Path(directory);fd=os.open(root/'lock',os.O_CREAT|os.O_RDWR,0o600)
+   try:
+    command=[sys.executable,str(Path(__file__).with_name('contention.py')),str(root/'receipt.json'),str(root/'log'),
+     '--',sys.executable,'-c',"import os;os.fstat(int(os.environ['IQA_HEAVY_LOCK_FD']))"]
+    result=subprocess.run(command,env=dict(os.environ,IQA_HEAVY_LOCK_FD=str(fd)),pass_fds=(fd,),capture_output=True,text=True)
+    self.assertEqual(result.returncode,0,result.stderr)
+    self.assertEqual(json.loads((root/'receipt.json').read_text())['exit_code'],0)
+   finally:os.close(fd)
+
 class Retry(unittest.TestCase):
  def check(self,peaks):
   with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as root:

@@ -39,7 +39,8 @@ def main():
     command=args.command[1:] if args.command[:1]==['--'] else args.command
     hz=os.sysconf('SC_CLK_TCK');view_before=process_view();before=snapshot();load_before=list(os.getloadavg())
     owned={os.getpid()};samples=[];durations=[];previous=before
-    process=subprocess.Popen(command)
+    inherited=(int(os.environ['IQA_HEAVY_LOCK_FD']),) if os.environ.get('IQA_HEAVY_LOCK_FD') else ()
+    process=subprocess.Popen(command,pass_fds=inherited)
     while True:
         try:code=process.wait(timeout=1)
         except subprocess.TimeoutExpired:code=None
