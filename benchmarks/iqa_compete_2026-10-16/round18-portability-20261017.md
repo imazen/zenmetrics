@@ -1,6 +1,6 @@
 # Round 18 portability receipts — 2026-10-17
 
-MISSING: the Rust-only entry requires explicit `--skip-native`; a CMake-only native competitor build is not implemented. Manual clean-machine install commands are labelled untested. Windows CPU execution passed twice but its resume assertion failed because the worker hashes differed. A single-build-configuration recipe correction is implemented; Windows verification of that correction is pending. macOS Actions remains queued.
+MISSING: the Rust-only entry requires explicit `--skip-native`; a CMake-only native competitor build is not implemented. Manual clean-machine install commands remain labelled untested. The Windows resume fix is verified on all three Actions OSes below.
 
 Implementation tested: `f95192aaa39986cc5438fda68716a1d95cee706c`.
 
@@ -28,7 +28,7 @@ Private raw retention: `~/tmp/iqa-compete/round18-linux-final/`, `~/tmp/iqa-comp
 
 ## Windows result and correction
 
-Downloaded Windows artifact: two cohorts, each with 8 successful n>=5 rows, source f95192aa. Worker hashes: `2eb19ac32026cc46f7cddccfc02e91754ea3804a5c8e894b50a055e676feadbd` and `257b7c1247d3bd0122bb5075cc86ed325906c1f146c52b11306d5f218f9368c6`. The resume gate failed and remains recorded as failure. The recipe correction invokes the built executable directly after one Cargo build configuration, preserving the strict binary-hash content key and unchanged zero-new-cells assertion. Windows rerun pending.
+Downloaded Windows artifact: two cohorts, each with 8 successful n>=5 rows, source f95192aa. Worker hashes: `2eb19ac32026cc46f7cddccfc02e91754ea3804a5c8e894b50a055e676feadbd` and `257b7c1247d3bd0122bb5075cc86ed325906c1f146c52b11306d5f218f9368c6`. The resume gate failed and remains recorded as failure. The recipe correction invokes the built executable directly after one Cargo build configuration, preserving the strict binary-hash content key and unchanged zero-new-cells assertion. That rerun also failed; the measured metadata fix and successful final run are recorded below.
 
 ## Windows resume investigation
 
@@ -63,3 +63,28 @@ The timestamp-only candidate failed the Windows repeat; that failure led to
 the complete byte comparison above. The first diagnostic capture also failed
 artifact upload because it mixed Windows drives; subsequent captures keep all
 files beneath the checkout.
+
+
+## Final resume verification
+
+[Run 39033906478](https://github.com/imazen/zenmetrics/actions/runs/39033906478),
+source `20df8b7d8155a29765e902538e410fd4a7331b39`, completed **success** on
+2026-10-17. All three jobs passed normalization tests, the first benchmark,
+the unchanged zero-new-timed-cells assertion and artifact upload.
+
+| Runner | Threads | Timed rows | Minimum n | Repeat |
+| --- | --- | --- | --- | --- |
+| ubuntu-latest | 1/4 | 8 | 5 | added=0 skipped=8 |
+| macos-latest ARM64 | 1/3 | 8 | 5 | added=0 skipped=8 |
+| windows-latest | 1/4 | 8 | 5 | added=0 skipped=8 |
+
+Downloaded raw artifacts each contain one cohort, the expected source SHA,
+and `pe-relink-metadata-v1`. The final captured Windows executables differ
+bytewise but normalize identically with the Rust implementation. Exact file
+hashes remain in the receipts. Linux/macOS hashes are not normalized.
+
+The landing tree was rebased onto master and passed fmt, CLI/coordinator
+clippy, all 14 CLI feature cells, 108 Python harness tests, all 4 Rust
+coordinator tests and hygiene (5429 tracked files). Resource wrapper: rc=0,
+52 s, peak RSS 0.41 GiB, min available 13005 MiB, peak load 2.15.
+Actionlint 1.7.12 passed. These are correctness/resume controls, not speed claims.

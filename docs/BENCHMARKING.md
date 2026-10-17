@@ -39,11 +39,13 @@ bash scripts/ci/clone-siblings.sh
 just bench-iqa smoke ssim2,gmsd --host i265 --fixture synthetic-v1 --skip-native
 ```
 
-The `ubuntu-latest` job in [run 39029766690](https://github.com/imazen/zenmetrics/actions/runs/39029766690), source `f95192aaa39986cc5438fda68716a1d95cee706c`, also passed on 2026-10-17. Its downloaded artifact contains one content key and 8 timed n>=5 rows; the workflow's repeat check passed. This validates the runner setup, not a fresh apt/rustup manual install.
+Tested on `ubuntu-latest` 2026-10-17, commit `20df8b7d8155a29765e902538e410fd4a7331b39`, in [run 39033906478](https://github.com/imazen/zenmetrics/actions/runs/39033906478): normalization tests, two-metric smoke (8 rows, n≥5), and repeat (`added=0 skipped=8`) passed. This validates the runner setup, not a fresh apt/rustup manual install.
 
 ## macOS ARM64
 
 Tested on mac (Apple M4 Pro, ARM64) 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: the documented two-metric smoke and repeat passed with 8 rows, then `added=0 skipped=8`. Rust 1.99.0, just 1.57.0 and CMake 4.4.3 were present. The 12 GiB wrapper recorded 0.95 GiB peak RSS over the complete clone/build/two-run command. This was not a clean Homebrew installation test.
+Tested on `macos-latest` (ARM64) 2026-10-17, commit `20df8b7d8155a29765e902538e410fd4a7331b39`, in [run 39033906478](https://github.com/imazen/zenmetrics/actions/runs/39033906478): normalization tests, two-metric smoke (8 rows, n≥5), and repeat (`added=0 skipped=8`) passed.
+
 Install Apple's command-line tools and Homebrew first, then:
 
 ```sh
@@ -62,7 +64,7 @@ macOS Intel was not tested and is outside this smoke matrix.
 
 ## Windows
 
-Tested on `windows-latest` 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: CPU build and execution passed twice, each with 8 successful n>=5 rows. **Resume failed**: the two invocations produced different worker-binary hashes and separate content keys. The recipe now uses one Cargo build configuration and executes the coordinator directly; its Windows rerun is pending. Do not treat the failed resume check as passed.
+Tested on `windows-latest` 2026-10-17, commit `20df8b7d8155a29765e902538e410fd4a7331b39`, in [run 39033906478](https://github.com/imazen/zenmetrics/actions/runs/39033906478): normalization tests, two-metric smoke (8 rows, n≥5), and repeat (`added=0 skipped=8`) passed. The captured executables differ only in normalized linker metadata. The earlier resume failure and measured fix are recorded in the [portability receipt](../benchmarks/iqa_compete_2026-10-16/round18-portability-20261017.md).
 The following clean-install commands are untested; the workflow uses its
 preprovisioned C++ toolchain and explicit Rust/just setup actions. Install
 Visual Studio 2022 Build Tools with **Desktop development with C++**,
@@ -111,7 +113,7 @@ The manual `Portable IQA benchmark smoke` workflow runs Linux, macOS ARM64 and
 Windows with two metrics at one small size, checks resume and uploads artifacts.
 No full benchmark matrix is started by that workflow.
 
-Smoke run and artifacts: [three-OS workflow, f95192aa](https://github.com/imazen/zenmetrics/actions/runs/39029766690). Runner outcomes are recorded below only after completion. CI artifacts use the `ci` label and are smoke diagnostics, not published CPU-host performance rows.
+Smoke run and artifacts: [three-OS workflow, 20df8b7d](https://github.com/imazen/zenmetrics/actions/runs/39033906478), all three jobs green. Each downloaded artifact has one cohort with 8 successful n≥5 rows; each repeat added zero rows. CI artifacts use the `ci` label and are smoke diagnostics, not published CPU-host performance rows.
 
 ## Optional external DVIFM panel
 
