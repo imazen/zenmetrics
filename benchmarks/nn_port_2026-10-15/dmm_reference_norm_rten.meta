@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Algorithm source: 288c2c69 (reference-f32 SNRM2 experiment)
+Command: just nn-parity-dmm <models> <ladder> rten model-tests
+Inputs: unchanged dmm_goldens.tsv and committed same-engine netlib panel.
+Derivation: dmm_fix_summary.py; full precision scores from parity stdout.
+Outcome: existing limits fail; no golden score or tolerance changes. This norm variant is not retained.
+Log: ~/tmp/nn-port-scratch/fix-dmm-rten4.log
+lock.sh: exported tracked tree 358aa4646c45 (Cargo output excluded)
+run-heavy: done rc=101 261s | peak-RSS 8.29GiB | min-avail 15699MiB | peak-load 5.44
+TSV SHA256: b868cdab6e52b91062936e8eed0bcf60c849794ae9fa3b8e7021008f82100369

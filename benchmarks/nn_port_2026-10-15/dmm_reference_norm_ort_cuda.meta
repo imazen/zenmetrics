@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Algorithm source: 288c2c69 (reference-f32 SNRM2 experiment)
+Command: just nn-parity-dmm <models> <ladder> ort-cuda model-tests,ort
+Inputs: unchanged dmm_goldens.tsv and committed same-engine netlib panel.
+Derivation: dmm_fix_summary.py; full precision scores from parity stdout.
+Outcome: existing limits fail; no golden score or tolerance changes. This norm variant is not retained.
+Log: ~/tmp/nn-port-scratch/fix-dmm-ort3.log
+lock.sh: exported tracked tree 426e026b8e6e (Cargo output excluded)
+run-heavy: done rc=101 239s | peak-RSS 2.99GiB | min-avail 22565MiB | peak-load 8.00
+TSV SHA256: 649327008ed5d10a929ea4747c30fce18073889de485005fbbfb3215ab55eb27
