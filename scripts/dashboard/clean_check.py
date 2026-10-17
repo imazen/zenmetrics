@@ -15,9 +15,10 @@ with tempfile.TemporaryDirectory(prefix='dashboard-clean-',dir=Path.home()/'tmp'
     archive=base/'source.tar'
     with archive.open('wb') as f:
         subprocess.run(['git','--git-dir='+git_dir,'archive',revision,'scripts/dashboard','web/dashboard',
-                        'benchmarks','docs/METRIC_PROVENANCE.md','crates/zenmetrics-cli/src/metrics/mod.rs',
-                        'crates/zenmetrics-nn/models'],stdout=f,check=True)
+                        'benchmarks','docs/METRIC_PROVENANCE.md','scripts/ci/check_hygiene.py','scripts/lib/hygiene_patterns.txt','Cargo.toml','DIVERGENCES.md','docs/AIC2026_METRICS_AND_FITTING.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','crates'],stdout=f,check=True)
     with tarfile.open(archive) as f:f.extractall(source,filter='data')
+    subprocess.run([sys.executable,str(source/'scripts/dashboard/catalog.py'),'--check'],check=True)
+    subprocess.run([sys.executable,str(source/'scripts/dashboard/extract_markdown.py'),'--check'],check=True)
     subprocess.run([sys.executable,str(source/'scripts/dashboard/build.py'),'--output',str(base/'site')],check=True)
     subprocess.run([sys.executable,str(source/'scripts/dashboard/check.py'),str(base/'site')],check=True)
     print('Clean tracked-source build and browser verification passed:',revision)

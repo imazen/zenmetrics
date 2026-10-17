@@ -1093,3 +1093,13 @@ dashboard-smoke output="target/dashboard":
 
 dashboard-clean-check:
     TMPDIR="$HOME/tmp" python3 scripts/dashboard/clean_check.py
+
+dashboard-plot-check:
+    node scripts/dashboard/test-plots.mjs
+
+dashboard-generated-check:
+    python3 scripts/dashboard/catalog.py --check
+    python3 scripts/dashboard/extract_markdown.py --check
+
+dashboard-correlations source output="benchmarks/dashboard/quality":
+    python3 scripts/dashboard/correlate.py --source {{quote(source)}} --output-dir {{quote(output)}} --draws 1000 --seed 20261017
