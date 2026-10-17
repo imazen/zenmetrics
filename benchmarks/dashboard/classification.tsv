@@ -106,6 +106,9 @@ benchmarks/brisque_review_2026-10-15/multiply-summary.json	ignored	Historical ex
 benchmarks/brisque_review_2026-10-15/oracle_environment.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/brisque_review_2026-10-15/table-storage-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/brisque_review_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/browser_nn_2026-10-17/native-rten.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
+benchmarks/browser_nn_2026-10-17/parity-i265-rtx4080.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
+benchmarks/browser_nn_2026-10-17/parity-i265-swiftshader.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
 benchmarks/butter_multires_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/butter_multires_strip_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/butter_strip_drift_2026-08-28.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -340,6 +343,20 @@ benchmarks/iqa_compete_2026-10-16/untimed-reference-chart-control.json	ignored	H
 benchmarks/iqa_compete_2026-10-16/v13-preparation.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/warmup-reference-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/wrapup-coverage-20261017.json	ignored	Coverage/landing control with external immutable receipt pointers; not a latency row.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_flops.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_latency.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_rthroughput.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_dev.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_i265.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
+benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_cuda_deployment_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_cuda_deployment_i134_partial_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -974,17 +991,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_dev.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
-benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_i265.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
-benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
-benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
-benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_flops.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_latency.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
-benchmarks/iqa_complexity_2026-10-17/analysis/correlation_1t_1024_i265_P_rthroughput.tsv	ignored	Derived analysis output of scripts/complexity/correlate.py; summarized in docs/IQA_COMPLEXITY.md.
