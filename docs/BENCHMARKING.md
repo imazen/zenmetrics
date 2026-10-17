@@ -107,3 +107,19 @@ Windows with two metrics at one small size, checks resume and uploads artifacts.
 No full benchmark matrix is started by that workflow.
 
 Smoke run and artifacts: [three-OS workflow, f95192aa](https://github.com/imazen/zenmetrics/actions/runs/39029766690). Runner outcomes are recorded below only after completion. CI artifacts use the `ci` label and are smoke diagnostics, not published CPU-host performance rows.
+
+## Optional external DVIFM panel
+
+`--with-dvifmish` probes an optional checkout at `DVIFMISH_DIR`, otherwise
+`../dvifmish` relative to this checkout, and C++ builds at `DVIFM_CPP_DIR`.
+Build its `bench_pair` release example and C++ benchmark workers using that
+checkout's own recipes first. The external driver owns presets and agreement
+labels. Missing implementations each produce an explicit `unavailable` line
+and entry in the raw `run.meta`, without failing the ordinary CPU panel.
+Synthetic smoke inputs cannot enter this canonical-input-only external panel.
+An available worker failure remains an error.
+
+The panel requires Python 3 and runs under the configured resource wrapper when
+available. It writes a separate `private-dvifm` directory within the raw output;
+its results and optional metadata never enter dashboard projections. Keep that
+raw output private. The default command does not invoke the optional panel.

@@ -13,6 +13,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+#[path = "../optional_dvifm.rs"]
+mod optional_dvifm;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 fn sha(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
@@ -133,7 +135,7 @@ fn main() -> Result<()> {
     }
     if args.iter().any(|s| s == "--help") {
         println!(
-            "just bench-iqa [sizes] [metrics] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
+            "just bench-iqa [sizes] [metrics] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR] [--with-dvifmish]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
         );
         return Ok(());
     }
@@ -152,10 +154,12 @@ fn main() -> Result<()> {
     let mut corpus = None;
     let mut output = PathBuf::from("target/bench-iqa");
     let mut skip_native = false;
+    let mut with_dvifmish = false;
     let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
             "--skip-native" => skip_native = true,
+            "--with-dvifmish" => with_dvifmish = true,
             "--host" | "--fixture" | "--corpus" | "--output" => {
                 let flag = &args[i];
                 i += 1;
@@ -215,7 +219,13 @@ fn main() -> Result<()> {
     }
     let all = thread::available_parallelism()?.get();
     let threads: BTreeSet<usize> = [1, all].into_iter().collect();
-    let identity = json!({"commit":source,"binary_sha256":sha(&bytes),"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1"});
+    let repo = env::current_dir()?;
+    let optional_fingerprint = if with_dvifmish {
+        Some(optional_dvifm::fingerprint(&repo)?)
+    } else {
+        None
+    };
+    let identity = json!({"commit":source,"binary_sha256":sha(&bytes),"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
     let content = sha(&serde_json::to_vec(&identity)?);
     let root = output.join(&content);
     fs::create_dir_all(&root)?;
@@ -369,8 +379,25 @@ fn main() -> Result<()> {
             }
         }
     }
+    let optional = if with_dvifmish {
+        optional_dvifm::run(
+            &repo,
+            &inputs.join("aic"),
+            &root.join("private-dvifm"),
+            sizes,
+            corpus.is_some(),
+        )?
+    } else {
+        Vec::new()
+    };
     let meta = json!({"identity":identity,"build_commit":source,"command":env::args().collect::<Vec<_>>(),"host":host,"hardware":{"os":env::consts::OS,"arch":env::consts::ARCH,"threads":all},"toolchains":{"rustc":version("rustc"),"cargo":version("cargo"),"cmake":version("cmake")},"competitors":{"native":"explicitly skipped","python":"not enabled"},"resource_policy":"Configured/local run-heavy per cell when present; otherwise plain portable child timeout, 1100 s; no plain-path memory cap claimed"});
     fs::write(root.join("run.meta"), serde_json::to_vec_pretty(&meta)?)?;
+    let mut private_meta = meta.clone();
+    private_meta["optional_dvifm"] = json!(optional);
+    fs::write(
+        root.join("run.meta"),
+        serde_json::to_vec_pretty(&private_meta)?,
+    )?;
     // Dashboard projection deliberately excludes raw paths and sample arrays.
     let fields = [
         "host",

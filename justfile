@@ -1616,3 +1616,7 @@ bench-iqa-advanced sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics
 
 bench-iqa-check:
     bash benchmarks/iqa_compete_2026-10-16/check_portable.sh
+
+# Optional adapter contract checks; no external checkout or C++ source required.
+bench-iqa-optional-check:
+    just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel --bin bench-iqa optional_dvifm
