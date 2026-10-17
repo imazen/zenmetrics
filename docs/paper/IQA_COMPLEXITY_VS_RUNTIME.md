@@ -107,7 +107,7 @@ Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of F
 
 ### The draft's own totals against our measured time
 
-10 metrics overlap. Spearman 0.83 (0.38–0.99), typical error 1.51×, spread 127.9×. The draft counted other implementations at 840×944, so this compares two independent things: his counts of reference code, and our runtime of our code.
+10 metrics overlap. Spearman 0.83 (0.38–0.99), typical error 1.51×, spread 127.9×. The draft counted third-party reference or production implementations (libvmaf, Google butteraugli, the FSIM MATLAB code, HaarPSI Python, ColorVideoVDP PyTorch) at 840×944; DVIFM, the only one written by its author, has no zenmetrics counterpart here. So this compares two independent things: counts of reference code, and the runtime of zenmetrics code.
 
 ## Where the work is
 

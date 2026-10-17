@@ -152,7 +152,7 @@ def main():
     dstats = stats([p[0] for p in dpts], [p[1] for p in dpts]) if len(dpts) >= 4 else None
     if dstats:
         files['fig/scatter_pedzisz_draft_totals.svg'] = svg_scatter(
-            dpts, 'Pedzisz draft totals (840x944, his implementations) vs our CPU time', 'draft weighted ops per pixel',
+            dpts, 'Pedzisz draft totals (840x944, reference implementations) vs our CPU time', 'draft weighted ops per pixel',
             'measured CPU ns per pixel (zenmetrics, i265, 1 thread, 1024²)', dstats['scale'])
     n_tally = len(tal)
     lines = [
@@ -194,9 +194,11 @@ def main():
     if dstats:
         lines += ['### The draft\'s own totals against our measured time', '',
                   f"{dstats['n']} metrics overlap. Spearman {dstats['spearman']:.2f} ({dstats['lo']:.2f}–{dstats['hi']:.2f}), "
-                  f"typical error {dstats['mad']:.2f}×, spread {dstats['spread']:.1f}×. The draft counted other "
-                  'implementations at 840×944, so this compares two independent things: his counts of reference '
-                  'code, and our runtime of our code.', '']
+                  f"typical error {dstats['mad']:.2f}×, spread {dstats['spread']:.1f}×. The draft counted third-party "
+                  'reference or production implementations (libvmaf, Google butteraugli, the FSIM MATLAB code, HaarPSI '
+                  'Python, ColorVideoVDP PyTorch) at 840×944; DVIFM, the only one written by its author, has no '
+                  'zenmetrics counterpart here. So this compares two independent things: counts of reference code, '
+                  'and the runtime of zenmetrics code.', '']
     # Where the work is: separable vs 2D stencils, transforms, network layers; and full materialization.
     groups = {'separable passes': ('sep_stencil',), '2D stencils': ('stencil2d',), 'transforms': ('transform',),
               'network layers': ('conv', 'matmul'), 'pointwise / reductions': ('pointwise', 'reduction'),
