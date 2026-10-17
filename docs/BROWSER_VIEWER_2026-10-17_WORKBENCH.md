@@ -19,11 +19,13 @@ shipped file disagrees:
   256×256 fixture (1024×1024 for metrics that refuse the smaller size), and
   for `score+map` also returned the metric's own native map. The listed map
   names are the ones that evaluation published.
-- `unavailable`: the module was asked to score the name and refused it; the
-  reason quotes that refusal.
+- `nn-webgpu` / `nn-cpu-wasm`: the learned metric ran on that provider and
+  met its card's parity gate (below).
+- `unavailable`: the module was asked to score the name and refused it (the
+  reason quotes the refusal), or, for a learned metric, the reason states
+  its weights licence class or the missing route.
 
-Counts at this commit: 19 score+map, 64 score-only,
-32 unavailable (learned metrics are covered below).
+Counts at this commit: 19 score+map, 64 score-only, 14 nn-webgpu, 1 nn-cpu-wasm and 17 unavailable.
 
 ## Native comparison of every browser score
 
@@ -84,6 +86,113 @@ Choosing a row or point loads that encode as the distorted image, so the
 viewer shows its map. The Images panel also takes an explicit JPEG XL
 distance, and `?codec=jxl&distance=2` encodes the demo at distance 2.
 
+## Learned metrics on WebGPU
+
+The page runs 15 of the CLI's 24 learned metrics with
+[onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) 1.30.0
+(MIT), on its WebGPU provider unless the user picks the WebAssembly CPU
+provider. `scripts/checkpoint/vendor-ort.py` fetches the npm tarball, checks
+its sha512 integrity value, and ships only the JSPI build: its wasm is
+16,758,545 bytes, under Cloudflare Pages' 25 MiB file limit, while the
+asyncify build behind `ort.webgpu` (26,781,914 bytes) and the JSEP build
+(28,312,028 bytes) are over it.
+
+**Weights** are the qualified exports in the frozen sets
+`models-df35ce6e87bbf1af`, `models-0fa5b37cc1c9f860` (WaDIQaM) and
+`models-5c30c9e175858c15` (WD), uploaded unchanged to R2 (bucket `zentrain`,
+public domain `zentrain.r2.imazen.org`, key
+`zenmetrics-web/nn/<sha256>/<file>`, `Cache-Control: immutable`, CORS `*`),
+not to GitHub. Only models whose card says `licence_class = "permissive"`
+are published. `web/metrics/nn-models.json` lists each graph's URL, size and
+sha256; the page checks the sha256 after download and keeps the bytes in
+Cache Storage.
+
+**Inputs** are built in the full module by zenmetrics-nn's own
+`preprocess.rs`, `resize.rs` and `tfresize.rs`, included by path
+(`crates/zenmetrics-browser/src/nn_prep.rs`), with each model's eval
+transform restated from its source file (cited per model). The graphs are
+the models' whole-metric `*_full` exports, except WaDIQaM (trunk and head
+over ≤2000-patch chunks, the upstream concat and `Σya/Σa` pooling in the
+page) and WD (its VGG16 trunk, then the statistics head from `wd.rs`,
+restated in `nn_prep.rs` and run per tap). No-reference models score the
+distorted image and then the reference under `<column>_ref`, as the CLI's
+`PairedNoReference` does.
+
+**Parity.** `crates/zenmetrics-browser/examples/nn_oracle.rs` scores the
+same two fixed pairs (the 256×256 scalar fixture and the 480×352 map
+fixture) natively on the rten engine (trunk graphs and Rust heads, an
+independent path from the browser's fused graphs); its output is committed
+as `benchmarks/browser_nn_2026-10-17/native-rten.json` (two runs were bit
+identical). `check-pages.py` runs every model on both providers and compares
+with the card gate, `tolerance_jnd = 1e-3` JND per column (`jnd_scale.tsv`).
+A WebGPU result outside the gate is rerun once (i265's GPU flips bits) and
+both runs are kept. On i265's RTX 4080 (Vulkan adapter `nvidia lovelace`,
+headless Chromium 153 with `--enable-unsafe-webgpu --enable-features=Vulkan
+--use-vulkan=native --use-angle=vulkan`), worst deviation per model in JND:
+
+| Metric | Graph bytes | WebGPU | WASM CPU | Status |
+| --- | ---: | ---: | ---: | --- |
+| lpips-alex | 9,898,333 | 8.4e-08 | 8.4e-08 | nn-webgpu |
+| lpips-vgg | 58,886,773 | 5.9e-08 | 3.0e-06 | nn-webgpu |
+| lpips-squeeze | 2,942,223 | 6.8e-08 | 2.1e-08 | nn-webgpu |
+| stlpips-alex | 9,923,995 | 3.2e-07 | 1.6e-06 | nn-webgpu |
+| stlpips-vgg | 58,943,547 | 2.9e-07 | 8.4e-07 | nn-webgpu |
+| dists | 58,944,709 | 6.9e-06 | 1.5e-04 | nn-webgpu |
+| deepdc | 80,205,613 | 2.8e-06 | 1.0e-03 (9.99e-4) | nn-webgpu |
+| arniqa | 93,983,732 | 2.8e-06 | 3.3e-06 | nn-webgpu |
+| maniqa | 456,965,919 | 5.6e-06 | 3.3e-05 | nn-webgpu |
+| musiq | 108,645,665 | 1.22e-03 | 1.7e-05 | nn-cpu-wasm |
+| wadiqam-fr-live | 25,154,281 | 5.4e-07 | 4.9e-07 | nn-webgpu |
+| wadiqam-fr-tid | 25,154,281 | 4.3e-07 | 2.3e-06 | nn-webgpu |
+| wadiqam-nr-live | 20,960,992 | 3.9e-08 | 5.7e-08 | nn-webgpu |
+| wadiqam-nr-tid | 20,960,992 | 6.8e-06 | 3.1e-06 | nn-webgpu |
+| wd | 30,545,316 | 2.4e-07 | 1.6e-07 | nn-webgpu |
+
+MUSIQ's WebGPU result on the 480×352 pair is 1.22e-3 JND from native on
+every run (rerun identical, ORT graph optimisation `all`, `basic` and
+`disabled` identical), while its WASM-provider result is within 1.7e-5 JND,
+so the preprocessing matches and the difference is in the WebGPU kernels.
+The gate is not widened: the page runs MUSIQ on the CPU unless WebGPU is
+chosen, and its coverage entry says why. Chromium's SwiftShader adapter
+(`--enable-unsafe-webgpu` without a GPU, the CI configuration) gives the same
+classification for all 15 models.
+
+**CI.** GitHub's runners have no GPU, so the Pages workflow runs the
+learned metrics on Chromium's SwiftShader WebGPU adapter. SwiftShader is
+slow: the whole check with all 15 models took 12 min 44 s on i265 (20
+threads), the default CI subset (LPIPS-alex and -squeeze, ST-LPIPS-alex,
+MUSIQ, WaDIQaM FR and NR live, WD: every model kind) 242 s. The full set
+runs on manual dispatch (`nn_models=all`); its GPU receipt is committed. The
+post-deploy check of the live site runs LPIPS-squeeze end to end.
+
+**Placement.** The WebGPU provider can leave nodes it does not implement on
+ORT's CPU kernels. The page profiles each session's first run and reports
+how many nodes each provider ran; the check requires WebGPU-run nodes in
+every WebGPU session and none in WASM sessions. On the RTX 4080, three
+WebGPU sessions also ran nodes on ORT's CPU kernels: DeepDC (450 WebGPU, 150
+CPU), ARNIQA (205, 7) and MUSIQ (624, 92); the other twelve ran every node on
+WebGPU. Receipt: `benchmarks/browser_nn_2026-10-17/parity-i265-rtx4080.json`.
+
+**Never a silent fallback.** A session gets only the requested provider. In
+Chromium without a WebGPU adapter the request fails with "WebGPU
+unavailable: requestAdapter() returned no adapter"; the WASM provider is a
+separate choice (`ep=wasm`, or the menu), and the result names the provider,
+the adapter and the node placement.
+
+**Checked failures and recovery:** transparent input, an image below the
+model's minimum and an unknown provider are refused; an aborted weight
+download ("Weight download failed … Failed to fetch") and a truncated one are
+reported, and the same worker downloads the weights afterwards; cancelling
+an in-flight inference emits no score, and the new worker gives the same
+score again.
+
+**Not in the browser (measured reasons in `coverage.json`):** CKDN, DreamSim,
+LIQE, HyperIQA and AHIQ have weights licence class `unknown`; A-FINE,
+PaQ-2-PiQ and PieAPP are `noncommercial`. Their weights are not
+redistributed. DMM's weights are permissive, but its score needs a 16×16 SVD
+per patch over two VGG16 taps (`dmm.rs`, a LAPACK port whose residual floors
+are owner-gated); the browser does not restate that solver.
+
 ## Links
 
 The URL contract and the coverage schema are in
@@ -125,30 +234,30 @@ name and requires its reason with no score, and requires refusals naming
 | `ssim` | score-only | full | – | – |
 | `nlpd` | score+map | full | diffmap, level_0, level_1 (+4) | – |
 | `nlpd-iqa` | score-only | full | – | – |
-| `lpips-alex` | unavailable | – | – | Browser refusal: Error: metric 'lpips-alex' is disabled (rebuild with `--features nn`) |
-| `lpips-vgg` | unavailable | – | – | Browser refusal: Error: metric 'lpips-vgg' is disabled (rebuild with `--features nn`) |
-| `lpips-squeeze` | unavailable | – | – | Browser refusal: Error: metric 'lpips-squeeze' is disabled (rebuild with `--features nn`) |
-| `dists` | unavailable | – | – | Browser refusal: Error: metric 'dists' is disabled (rebuild with `--features nn`) |
-| `stlpips-alex` | unavailable | – | – | Browser refusal: Error: metric 'stlpips-alex' is disabled (rebuild with `--features nn`) |
-| `stlpips-vgg` | unavailable | – | – | Browser refusal: Error: metric 'stlpips-vgg' is disabled (rebuild with `--features nn`) |
-| `deepdc` | unavailable | – | – | Browser refusal: Error: metric 'deepdc' is disabled (rebuild with `--features nn`) |
-| `ckdn` | unavailable | – | – | Browser refusal: Error: metric 'ckdn' is disabled (rebuild with `--features nn`) |
-| `afine` | unavailable | – | – | Browser refusal: Error: metric 'afine' is disabled (rebuild with `--features nn`) |
-| `dreamsim` | unavailable | – | – | Browser refusal: Error: metric 'dreamsim' is disabled (rebuild with `--features nn`) |
-| `arniqa` | unavailable | – | – | Browser refusal: Error: metric 'arniqa' is disabled (rebuild with `--features nn`) |
-| `maniqa` | unavailable | – | – | Browser refusal: Error: metric 'maniqa' is disabled (rebuild with `--features nn`) |
-| `liqe` | unavailable | – | – | Browser refusal: Error: metric 'liqe' is disabled (rebuild with `--features nn`) |
-| `musiq` | unavailable | – | – | Browser refusal: Error: metric 'musiq' is disabled (rebuild with `--features nn`) |
-| `hyperiqa` | unavailable | – | – | Browser refusal: Error: metric 'hyperiqa' is disabled (rebuild with `--features nn`) |
-| `paq2piq` | unavailable | – | – | Browser refusal: Error: metric 'paq2piq' is disabled (rebuild with `--features nn`) |
-| `pieapp` | unavailable | – | – | Browser refusal: Error: metric 'pieapp' is disabled (rebuild with `--features nn`) |
-| `wadiqam-fr-live` | unavailable | – | – | Browser refusal: Error: metric 'wadiqam-fr-live' is disabled (rebuild with `--features nn`) |
-| `wadiqam-fr-tid` | unavailable | – | – | Browser refusal: Error: metric 'wadiqam-fr-tid' is disabled (rebuild with `--features nn`) |
-| `wadiqam-nr-live` | unavailable | – | – | Browser refusal: Error: metric 'wadiqam-nr-live' is disabled (rebuild with `--features nn`) |
-| `wadiqam-nr-tid` | unavailable | – | – | Browser refusal: Error: metric 'wadiqam-nr-tid' is disabled (rebuild with `--features nn`) |
-| `wd` | unavailable | – | – | Browser refusal: Error: metric 'wd' is disabled (rebuild with `--features nn`) |
-| `ahiq` | unavailable | – | – | Browser refusal: Error: metric 'ahiq' is disabled (rebuild with `--features nn`) |
-| `dmm` | unavailable | – | – | Browser refusal: Error: metric 'dmm' is disabled (rebuild with `--features nn`) |
+| `lpips-alex` | nn-webgpu | nn | – | – |
+| `lpips-vgg` | nn-webgpu | nn | – | – |
+| `lpips-squeeze` | nn-webgpu | nn | – | – |
+| `dists` | nn-webgpu | nn | – | – |
+| `stlpips-alex` | nn-webgpu | nn | – | – |
+| `stlpips-vgg` | nn-webgpu | nn | – | – |
+| `deepdc` | nn-webgpu | nn | – | – |
+| `ckdn` | unavailable | – | – | Weights licence class "unknown" ([weights] in crates/zenmetrics-nn/models/ckdn/card.toml): the browser does not redistribute these weights. |
+| `afine` | unavailable | – | – | Weights licence class "noncommercial" ([weights] in crates/zenmetrics-nn/models/afine/card.toml): the browser does not redistribute these weights. |
+| `dreamsim` | unavailable | – | – | Weights licence class "unknown" ([weights] in crates/zenmetrics-nn/models/dreamsim/card.toml): the browser does not redistribute these weights. |
+| `arniqa` | nn-webgpu | nn | – | – |
+| `maniqa` | nn-webgpu | nn | – | – |
+| `liqe` | unavailable | – | – | Weights licence class "unknown" ([weights] in crates/zenmetrics-nn/models/liqe/card.toml): the browser does not redistribute these weights. |
+| `musiq` | nn-cpu-wasm | nn | – | The WebGPU provider differs from the native rten score by 0.00122 JND at unified480x352/musiq (rerun 0.00122), over the card gate of 0.001 JND; the WASM provider is within 1.74e-05 JND, so the page runs this metric on the CPU unless WebGPU is chosen. |
+| `hyperiqa` | unavailable | – | – | Weights licence class "unknown" ([weights] in crates/zenmetrics-nn/models/hyperiqa/card.toml): the browser does not redistribute these weights. |
+| `paq2piq` | unavailable | – | – | Weights licence class "noncommercial" ([weights] in crates/zenmetrics-nn/models/paq2piq/card.toml): the browser does not redistribute these weights. |
+| `pieapp` | unavailable | – | – | Weights licence class "noncommercial" ([weights] in crates/zenmetrics-nn/models/pieapp/card.toml): the browser does not redistribute these weights. |
+| `wadiqam-fr-live` | nn-webgpu | nn | – | – |
+| `wadiqam-fr-tid` | nn-webgpu | nn | – | – |
+| `wadiqam-nr-live` | nn-webgpu | nn | – | – |
+| `wadiqam-nr-tid` | nn-webgpu | nn | – | – |
+| `wd` | nn-webgpu | nn | – | – |
+| `ahiq` | unavailable | – | – | Weights licence class "unknown" ([weights] in crates/zenmetrics-nn/models/ahiq/card.toml): the browser does not redistribute these weights. |
+| `dmm` | unavailable | – | – | Permissive weights ([weights] in crates/zenmetrics-nn/models/dmm/card.toml), but the score needs a 16×16 SVD per patch over two VGG16 taps (crates/zenmetrics-nn/src/dmm.rs, a LAPACK port whose residual floors are owner-gated); the browser has no graph or route for it and does not restate the solver. |
 | `ssim2` | score+map | full | diffmap, ssim_y_0, ssim_x_0 (+52) | – |
 | `ssim2-gpu` | unavailable | – | – | GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric ssim2 here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable |
 | `butteraugli` | score+map | full | diffmap | – |

@@ -36,12 +36,15 @@ async function startModule(name, api, init) {
   modules[name]=module;
   return module;
 }
-let fullLoading=null;
+let fullLoading=null,fullAttempts=0;
 async function full(announce=true) {
   if(modules.full)return modules.full;
   if(announce)postMessage({type:'progress',message:'Loading the full metric module…'});
   fullLoading??=(async()=>{
-    const api=await import(new URL('./pkg-full/zenmetrics_browser.js', import.meta.url));
+    // A failed dynamic import stays failed for its URL, so a retry names
+    // the same module with a distinct query.
+    const retry=fullAttempts++?`?retry=${fullAttempts}`:'';
+    const api=await import(new URL(`./pkg-full/zenmetrics_browser.js${retry}`, import.meta.url));
     const module=await startModule('full',api,api.default);
     postMessage({type:'module',name:'full',startup:module.startup,metrics:module.metrics,maps:module.maps});
     return module;
@@ -84,6 +87,15 @@ self.onmessage = async ({data}) => {
       const loaded=await full();
       postMessage({type:'catalog',id:data.id,modules:Object.fromEntries(Object.values(modules).filter(Boolean).map(m=>[m.name,{metrics:m.metrics,maps:m.maps,startup:m.startup}])),
         all:JSON.parse(loaded.api.all_metric_names())});
+      return;
+    }
+    if (data.type === 'nn') {
+      // Learned metrics: tensors from the full module, inference in nn.js.
+      const module=await full(false);
+      const nn=await import(new URL('./nn.js', import.meta.url));
+      const start=performance.now();
+      const result=await nn.score({...data,prepare:module.api.nn_prepare,wdLayer:module.api.nn_wd_layer,progress:message=>postMessage({type:'progress',message})});
+      postMessage({type:'result',id:data.id,...result,map:null,mapWidth:0,mapHeight:0,mapMetric:null,mapNames:[],milliseconds:performance.now()-start});
       return;
     }
     // Each module a request runs in gets its own shared cancellation words.

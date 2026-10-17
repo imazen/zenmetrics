@@ -20,7 +20,11 @@ build_module() { # <features> <pkg dir>
 }
 build_module core pkg
 build_module full pkg-full
-cp web/metrics/*.html web/metrics/*.js "$CHECKPOINT_OUT/"
+cp web/metrics/*.html web/metrics/*.js web/metrics/nn-models.json "$CHECKPOINT_OUT/"
+# onnxruntime-web for the learned metrics, pinned by version and npm integrity
+# hash. Only the JSPI build (WebGPU and WASM providers) is shipped: its wasm
+# fits Cloudflare Pages' 25 MiB file limit, the asyncify and JSEP builds do not.
+python3 scripts/checkpoint/vendor-ort.py "$CHECKPOINT_OUT/ort"
 # The encoder modules: a separate, single-threaded build (web/codecs).
 bash scripts/checkpoint/build-codecs.sh
 cp Cargo.lock ci/sibling-pins.tsv LICENSE-AGPL3 "$CHECKPOINT_OUT/"

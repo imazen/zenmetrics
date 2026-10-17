@@ -1,0 +1,332 @@
+{
+ "schema": 1,
+ "runtime": {
+  "package": "onnxruntime-web",
+  "version": "1.30.0",
+  "bundle": "ort.jspi.min.mjs"
+ },
+ "weights": "zentrain R2 bucket, public domain zentrain.r2.imazen.org, key zenmetrics-web/nn/<sha256>/<file>; uploaded from the frozen export sets models-df35ce6e87bbf1af, models-0fa5b37cc1c9f860 and models-5c30c9e175858c15 (sha256 matched against their locations.json)",
+ "tolerance_jnd": 0.001,
+ "models": {
+  "lpips-alex": {
+   "kind": "pair",
+   "prep": "lpips",
+   "min_size": 31,
+   "output": "lpips",
+   "columns": [
+    "lpips_alex"
+   ],
+   "jnd": 0.06522,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/1eb785b387156e34497a76db77a7444f98a49ce674b14d42e006a05d9e33a9c5/lpips_alex_full.onnx",
+    "sha256": "1eb785b387156e34497a76db77a7444f98a49ce674b14d42e006a05d9e33a9c5",
+    "bytes": 9898333
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/a559ea2f904e65fded707806fa87bb8c0455dd75ddec99ad9c8e945b0be6be85/lpips_alex_export.meta",
+   "licence": "BSD-2-Clause",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/lpips/card.toml"
+  },
+  "lpips-vgg": {
+   "kind": "pair",
+   "prep": "lpips",
+   "min_size": 16,
+   "output": "lpips",
+   "columns": [
+    "lpips_vgg"
+   ],
+   "jnd": 0.193925,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/40600b264a7f792a90f3be24b28d87a2e4d94e5053e982e91dfc1cfb98b6246f/lpips_vgg_full.onnx",
+    "sha256": "40600b264a7f792a90f3be24b28d87a2e4d94e5053e982e91dfc1cfb98b6246f",
+    "bytes": 58886773
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/31cb0946baa3240203556582c81101d34780db4de30b13fdb148fdfc975f9faa/lpips_vgg_export.meta",
+   "licence": "BSD-2-Clause",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/lpips/card.toml"
+  },
+  "lpips-squeeze": {
+   "kind": "pair",
+   "prep": "lpips",
+   "min_size": 17,
+   "output": "lpips",
+   "columns": [
+    "lpips_squeeze"
+   ],
+   "jnd": 0.079601,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/d8dee9e64da49220848f7e9e383c464bdb64f009c81fdef7a14211be195f13da/lpips_squeeze_full.onnx",
+    "sha256": "d8dee9e64da49220848f7e9e383c464bdb64f009c81fdef7a14211be195f13da",
+    "bytes": 2942223
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/95667a74199d3592f53f2cdbdae3cc7a9440291e8ad36b9600e3482c41e074d8/lpips_squeeze_export.meta",
+   "licence": "BSD-2-Clause",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/lpips/card.toml"
+  },
+  "stlpips-alex": {
+   "kind": "pair",
+   "prep": "lpips",
+   "min_size": 21,
+   "output": "lpips",
+   "columns": [
+    "stlpips_alex"
+   ],
+   "jnd": 0.023365,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/3473b3f5aae667f54fabf41a72cedbf40aca7cebc69fb36ed856f644eda9fff8/stlpips_alex_full.onnx",
+    "sha256": "3473b3f5aae667f54fabf41a72cedbf40aca7cebc69fb36ed856f644eda9fff8",
+    "bytes": 9923995
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/1b1ce6a2cbac349c7bc06c43714f4714ce63bd827cd782ac27cff884a38e9fde/stlpips_alex_export.meta",
+   "licence": "BSD-2-Clause",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/stlpips/card.toml"
+  },
+  "stlpips-vgg": {
+   "kind": "pair",
+   "prep": "lpips",
+   "min_size": 18,
+   "output": "lpips",
+   "columns": [
+    "stlpips_vgg"
+   ],
+   "jnd": 0.065762,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/d9fc94cf7774be721eb920fc22c8bda46ddff35e1590417c90ca86a4319c6a19/stlpips_vgg_full.onnx",
+    "sha256": "d9fc94cf7774be721eb920fc22c8bda46ddff35e1590417c90ca86a4319c6a19",
+    "bytes": 58943547
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/d42cc164a5b45584cd21c5436562520ebcb83cdf938a2bf018612ed4967e31cb/stlpips_vgg_export.meta",
+   "licence": "BSD-2-Clause",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/stlpips/card.toml"
+  },
+  "dists": {
+   "kind": "pair",
+   "prep": "planar01",
+   "min_size": 1,
+   "output": "dists",
+   "columns": [
+    "dists"
+   ],
+   "jnd": 0.094498,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/98cca09325412fae6408931f180e74f6a64a517ee7aea99e3fe34603c94fa63f/dists_full.onnx",
+    "sha256": "98cca09325412fae6408931f180e74f6a64a517ee7aea99e3fe34603c94fa63f",
+    "bytes": 58944709
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/8f59d85556751eff78955f80cafcdab50645be26907d0bd9df5f7dbe9ad9bd26/dists_export.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/dists/card.toml"
+  },
+  "deepdc": {
+   "kind": "pair",
+   "prep": "planar01",
+   "min_size": 16,
+   "output": "deepdc",
+   "columns": [
+    "deepdc"
+   ],
+   "jnd": 0.064153,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/3a537e819c4a8895d68b777259fb4cab82dc37ac8315bdd5873264f4bf781603/deepdc_full.onnx",
+    "sha256": "3a537e819c4a8895d68b777259fb4cab82dc37ac8315bdd5873264f4bf781603",
+    "bytes": 80205613
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/802ca87f8dab3427e59c9abe688a0a041d0adb4d1569f0dbbfe095f7dc5faad6/deepdc_export.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/deepdc/card.toml"
+  },
+  "arniqa": {
+   "kind": "image",
+   "prep": "arniqa",
+   "min_size": 2,
+   "output": "arniqa",
+   "columns": [
+    "arniqa",
+    "arniqa_ref"
+   ],
+   "jnd": 0.053838,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/9a518779087e94913b8da796bcd871752b2aafcf41e76b7508e610d333e03e29/arniqa_full.onnx",
+    "sha256": "9a518779087e94913b8da796bcd871752b2aafcf41e76b7508e610d333e03e29",
+    "bytes": 93983732
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/0e412cb2249b09f0acef7eb9b309f62e819a9fad677c64b4960333358bb070d6/arniqa_export.meta",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/arniqa/card.toml"
+  },
+  "maniqa": {
+   "kind": "image",
+   "prep": "maniqa",
+   "min_size": 1,
+   "output": "maniqa",
+   "columns": [
+    "maniqa",
+    "maniqa_ref"
+   ],
+   "jnd": 0.021396,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/cdad46caebdbe7ae81b36da262823b71fcd0469059662fb0a20b1e23580be5ce/maniqa_full.onnx",
+    "sha256": "cdad46caebdbe7ae81b36da262823b71fcd0469059662fb0a20b1e23580be5ce",
+    "bytes": 456965919
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/be241ee6b60163d2e67db3957c1ed142f0c77ec72877b99c809046aac5f4e2aa/maniqa_export.meta",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/maniqa/card.toml"
+  },
+  "musiq": {
+   "kind": "image",
+   "prep": "musiq",
+   "min_size": 1,
+   "output": "musiq",
+   "columns": [
+    "musiq",
+    "musiq_ref"
+   ],
+   "jnd": 1.968925,
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/26f6bae026b21ec91dc66dc8f6f0dce6170f46da23b9f3d674acfd036ea5d823/musiq.onnx",
+    "sha256": "26f6bae026b21ec91dc66dc8f6f0dce6170f46da23b9f3d674acfd036ea5d823",
+    "bytes": 108645665
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/82746591b607eafef689a0e66d6f5e8e6d76e374cda79156016e74da3c764e26/musiq_export.meta",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/musiq/card.toml"
+  },
+  "wadiqam-fr-live": {
+   "kind": "wadiqam-fr",
+   "prep": "wadiqam",
+   "min_size": 32,
+   "output": "ya",
+   "columns": [
+    "wadiqam_fr_live"
+   ],
+   "jnd": 29.93291,
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/4b8102ee15a0999cc742c74faa41f8e193ed372028fcc4a9feb9a5b76336c93e/wadiqam_export.meta",
+   "meta": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/8264be2d7cfb67bd3bf4e4d1596deab6a91b586976de5e748d0c38227c181da3/wadiqam_fr_live.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/wadiqam/card.toml",
+   "graphs": {
+    "trunk": {
+     "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/16a65f1ceaaa118869d58010176b2299a97a4160e225467d05c929b6bd1f0f0c/wadiqam_fr_live_trunk.onnx",
+     "sha256": "16a65f1ceaaa118869d58010176b2299a97a4160e225467d05c929b6bd1f0f0c",
+     "bytes": 18852795
+    },
+    "head": {
+     "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/cb47ae35181a502053a552e435f812844711c143324b81160a4be85dc1e04736/wadiqam_fr_live_head.onnx",
+     "sha256": "cb47ae35181a502053a552e435f812844711c143324b81160a4be85dc1e04736",
+     "bytes": 6301486
+    }
+   }
+  },
+  "wadiqam-nr-live": {
+   "kind": "wadiqam-nr",
+   "prep": "wadiqam",
+   "min_size": 32,
+   "output": "ya",
+   "columns": [
+    "wadiqam_nr_live",
+    "wadiqam_nr_live_ref"
+   ],
+   "jnd": 23.551063,
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/4b8102ee15a0999cc742c74faa41f8e193ed372028fcc4a9feb9a5b76336c93e/wadiqam_export.meta",
+   "meta": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/44fe013aaaaebd1cd82bb796beb3a6c4a9fc4fba379de62ce1625407b6e01fa0/wadiqam_nr_live.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/wadiqam/card.toml",
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/d322b59e532175f0bf2cab94cd05f4633497a5fa6ab73c530197651d9fd480d6/wadiqam_nr_live.onnx",
+    "sha256": "d322b59e532175f0bf2cab94cd05f4633497a5fa6ab73c530197651d9fd480d6",
+    "bytes": 20960992
+   }
+  },
+  "wadiqam-fr-tid": {
+   "kind": "wadiqam-fr",
+   "prep": "wadiqam",
+   "min_size": 32,
+   "output": "ya",
+   "columns": [
+    "wadiqam_fr_tid"
+   ],
+   "jnd": 5.209576,
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/4b8102ee15a0999cc742c74faa41f8e193ed372028fcc4a9feb9a5b76336c93e/wadiqam_export.meta",
+   "meta": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/119773a25b52d45b2dd526d52982930487f0565ff912ff1d4df85e6b64adf46b/wadiqam_fr_tid.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/wadiqam/card.toml",
+   "graphs": {
+    "trunk": {
+     "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/046f36094a62c4dd1b5c887e5747f2a8845b2b926cf74b0eca9c5197a3bc645e/wadiqam_fr_tid_trunk.onnx",
+     "sha256": "046f36094a62c4dd1b5c887e5747f2a8845b2b926cf74b0eca9c5197a3bc645e",
+     "bytes": 18852795
+    },
+    "head": {
+     "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/0483ab330028c15d33b705c3c6435375b4e374cb9f6346b2f8215fea8b6c734e/wadiqam_fr_tid_head.onnx",
+     "sha256": "0483ab330028c15d33b705c3c6435375b4e374cb9f6346b2f8215fea8b6c734e",
+     "bytes": 6301486
+    }
+   }
+  },
+  "wadiqam-nr-tid": {
+   "kind": "wadiqam-nr",
+   "prep": "wadiqam",
+   "min_size": 32,
+   "output": "ya",
+   "columns": [
+    "wadiqam_nr_tid",
+    "wadiqam_nr_tid_ref"
+   ],
+   "jnd": 2.757295,
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/4b8102ee15a0999cc742c74faa41f8e193ed372028fcc4a9feb9a5b76336c93e/wadiqam_export.meta",
+   "meta": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/2a5fb12c0270d247d4abf0c6e745753b5bff784065774ac0512f072676a351b9/wadiqam_nr_tid.meta",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/wadiqam/card.toml",
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/b6d06d54f7b19adf330069633765ef4ac479440d4ef41500ee5fe1075141a725/wadiqam_nr_tid.onnx",
+    "sha256": "b6d06d54f7b19adf330069633765ef4ac479440d4ef41500ee5fe1075141a725",
+    "bytes": 20960992
+   }
+  },
+  "wd": {
+   "kind": "wd",
+   "prep": "wd",
+   "min_size": 8,
+   "output": "tap0..tap3",
+   "columns": [
+    "wd_s1",
+    "wd_s2",
+    "wd_s3",
+    "wd_s4",
+    "wd_s5"
+   ],
+   "jnd": {
+    "wd_s1": 0.3821742832660675,
+    "wd_s2": 0.24773499369621277,
+    "wd_s3": 0.1602388098835945,
+    "wd_s4": 0.10384972020983696,
+    "wd_s5": 0.06744955480098724
+   },
+   "graph": {
+    "url": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/1b410b51bafefcae2cf70c9fe1f4202d7001585d1fdb77768cf2a593f866b935/wd_trunk.onnx",
+    "sha256": "1b410b51bafefcae2cf70c9fe1f4202d7001585d1fdb77768cf2a593f866b935",
+    "bytes": 30545316
+   },
+   "provenance": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/2db9b54d4b34372838bda0c5490f4ea982de9b7c8dd5718ea522c74fcfa8425e/wd_export.json",
+   "meta": "https://zentrain.r2.imazen.org/zenmetrics-web/nn/4ba4bf70792f1c1d648932a299e849615fac9b5738b79d440802390db508b2a9/wd.meta",
+   "licence": "BSD-3-Clause (code); torchvision VGG16 IMAGENET1K_V1 weights",
+   "licence_class": "permissive",
+   "card": "crates/zenmetrics-nn/models/wd/card.toml",
+   "host": "statistics head restated from crates/zenmetrics-nn/src/wd.rs in crates/zenmetrics-browser/src/nn_prep.rs"
+  }
+ }
+}

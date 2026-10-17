@@ -30,7 +30,7 @@ def main():
         if not (args.build/'pkg/zenmetrics_browser_bg.wasm').is_file():
             parser.error('Compiled browser module required')
         args.out.mkdir(parents=True)
-        for name in ('pkg','pkg-full','codecs','index.html','app.js','worker.js','LICENSE-AGPL3'):
+        for name in ('pkg','pkg-full','codecs','ort','index.html','app.js','worker.js','nn.js','nn-models.json','LICENSE-AGPL3'):
             source=args.build/name
             if source.is_dir(): shutil.copytree(source,args.out/name)
             else: shutil.copyfile(source,args.out/name)
@@ -73,7 +73,7 @@ def main():
     generation = Path('assets') / args.source
     destination = args.out / generation
     destination.mkdir(parents=True)
-    for name in ('app.js', 'worker.js', 'pkg', 'pkg-full', 'codecs'):
+    for name in ('app.js', 'worker.js', 'nn.js', 'nn-models.json', 'pkg', 'pkg-full', 'codecs', 'ort'):
         if (args.out / name).exists():
             shutil.move(str(args.out / name), destination / name)
     text = text.replace('src="app.js"', f'src="{generation}/app.js"')

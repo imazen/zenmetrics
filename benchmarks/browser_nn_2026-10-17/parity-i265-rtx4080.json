@@ -1,0 +1,713 @@
+{
+ "what": "Browser learned-metric parity against benchmarks/browser_nn_2026-10-17/native-rten.json, from scripts/checkpoint/check-pages.py --webgpu gpu (report key \"learned\")",
+ "host": "i265, NVIDIA RTX 4080 through Vulkan, headless Chromium 153.0.8010.12",
+ "adapter": {
+  "vendor": "nvidia",
+  "architecture": "lovelace",
+  "device": "",
+  "description": "",
+  "fallback": false
+ },
+ "gate_jnd": 0.001,
+ "statuses": {
+  "lpips-alex": [
+   "nn-webgpu",
+   null
+  ],
+  "lpips-vgg": [
+   "nn-webgpu",
+   null
+  ],
+  "lpips-squeeze": [
+   "nn-webgpu",
+   null
+  ],
+  "stlpips-alex": [
+   "nn-webgpu",
+   null
+  ],
+  "stlpips-vgg": [
+   "nn-webgpu",
+   null
+  ],
+  "dists": [
+   "nn-webgpu",
+   null
+  ],
+  "deepdc": [
+   "nn-webgpu",
+   null
+  ],
+  "arniqa": [
+   "nn-webgpu",
+   null
+  ],
+  "maniqa": [
+   "nn-webgpu",
+   null
+  ],
+  "musiq": [
+   "nn-cpu-wasm",
+   "The WebGPU provider differs from the native rten score by 0.00122 JND at unified480x352/musiq (rerun 0.00122), over the card gate of 0.001 JND; the WASM provider is within 1.74e-05 JND, so the page runs this metric on the CPU unless WebGPU is chosen."
+  ],
+  "wadiqam-fr-live": [
+   "nn-webgpu",
+   null
+  ],
+  "wadiqam-nr-live": [
+   "nn-webgpu",
+   null
+  ],
+  "wadiqam-fr-tid": [
+   "nn-webgpu",
+   null
+  ],
+  "wadiqam-nr-tid": [
+   "nn-webgpu",
+   null
+  ],
+  "wd": [
+   "nn-webgpu",
+   null
+  ]
+ },
+ "parity_jnd": {
+  "lpips-alex": {
+   "webgpu": {
+    "fixture256/lpips_alex": 3.569390001584066e-08,
+    "unified480x352/lpips_alex": 8.3794028736388e-08
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/lpips_alex": 3.0506349738938954e-08,
+    "unified480x352/lpips_alex": 8.3794028736388e-08
+   }
+  },
+  "lpips-vgg": {
+   "webgpu": {
+    "fixture256/lpips_vgg": 5.876906713413531e-08,
+    "unified480x352/lpips_vgg": 5.4311552462206814e-08
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/lpips_vgg": 4.1960357523955216e-08,
+    "unified480x352/lpips_vgg": 2.974224536173492e-06
+   }
+  },
+  "lpips-squeeze": {
+   "webgpu": {
+    "fixture256/lpips_squeeze": 6.9018476373698725e-09,
+    "unified480x352/lpips_squeeze": 6.829324235404003e-08
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/lpips_squeeze": 3.7011734709739596e-09,
+    "unified480x352/lpips_squeeze": 2.149370091031553e-08
+   }
+  },
+  "stlpips-alex": {
+   "webgpu": {
+    "fixture256/stlpips_alex": 1.2432946511376793e-08,
+    "unified480x352/stlpips_alex": 3.198934403267838e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/stlpips_alex": 2.0009079890080887e-09,
+    "unified480x352/stlpips_alex": 1.5954047772707304e-06
+   }
+  },
+  "stlpips-vgg": {
+   "webgpu": {
+    "fixture256/stlpips_vgg": 1.9765602774874824e-09,
+    "unified480x352/stlpips_vgg": 2.89889955877629e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/stlpips_vgg": 2.19784179612084e-09,
+    "unified480x352/stlpips_vgg": 8.430714195251611e-07
+   }
+  },
+  "dists": {
+   "webgpu": {
+    "fixture256/dists": 6.93825364059871e-06,
+    "unified480x352/dists": 3.7845019857811146e-06
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/dists": 1.892250992890557e-05,
+    "unified480x352/dists": 0.00015327233042413513
+   }
+  },
+  "deepdc": {
+   "webgpu": {
+    "fixture256/deepdc": 2.7873043244458074e-06,
+    "unified480x352/deepdc": 1.8582028829638715e-06
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/deepdc": 0.000998784049593081,
+    "unified480x352/deepdc": 0.000808318254089284
+   }
+  },
+  "arniqa": {
+   "webgpu": {
+    "fixture256/arniqa": 0.0,
+    "fixture256/arniqa_ref": 2.767777628041097e-06,
+    "unified480x352/arniqa": 8.995277291133564e-07,
+    "unified480x352/arniqa_ref": 7.611388477113016e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/arniqa": 2.2142221024328773e-06,
+    "fixture256/arniqa_ref": 3.321333153649316e-06,
+    "unified480x352/arniqa": 1.2800971529690073e-06,
+    "unified480x352/arniqa_ref": 3.0445553908452065e-06
+   }
+  },
+  "maniqa": {
+   "webgpu": {
+    "fixture256/maniqa": 5.5715689638615286e-06,
+    "fixture256/maniqa_ref": 0.0,
+    "unified480x352/maniqa": 0.0,
+    "unified480x352/maniqa_ref": 2.7857844819307643e-06
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/maniqa": 1.950049137351535e-05,
+    "fixture256/maniqa_ref": 3.342941378316917e-05,
+    "unified480x352/maniqa": 1.392892240965382e-05,
+    "unified480x352/maniqa_ref": 0.0
+   }
+  },
+  "musiq": {
+   "webgpu": {
+    "fixture256/musiq": 0.00018599537183996344,
+    "fixture256/musiq_ref": 4.456139116999124e-05,
+    "unified480x352/musiq": 0.0012225320794897595,
+    "unified480x352/musiq_ref": 0.001185720495479767
+   },
+   "webgpu_rerun": {
+    "fixture256/musiq": 0.00018599537183996344,
+    "fixture256/musiq_ref": 4.456139116999124e-05,
+    "unified480x352/musiq": 0.0012225320794897595,
+    "unified480x352/musiq_ref": 0.001185720495479767
+   },
+   "wasm": {
+    "fixture256/musiq": 0.0,
+    "fixture256/musiq_ref": 1.3562162529997334e-05,
+    "unified480x352/musiq": 1.7437066109996572e-05,
+    "unified480x352/musiq_ref": 1.937451789999619e-06
+   }
+  },
+  "wadiqam-fr-live": {
+   "webgpu": {
+    "fixture256/wadiqam_fr_live": 5.376441545227466e-07,
+    "unified480x352/wadiqam_fr_live": 4.154553408314142e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/wadiqam_fr_live": 4.948317496255649e-07,
+    "unified480x352/wadiqam_fr_live": 3.3846231621754454e-07
+   }
+  },
+  "wadiqam-nr-live": {
+   "webgpu": {
+    "fixture256/wadiqam_nr_live": 3.88609348901302e-08,
+    "fixture256/wadiqam_nr_live_ref": 2.3918396895798725e-08,
+    "unified480x352/wadiqam_nr_live": 1.5745329663511658e-09,
+    "unified480x352/wadiqam_nr_live_ref": 1.3721082667783998e-08
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/wadiqam_nr_live": 7.477279072620806e-09,
+    "fixture256/wadiqam_nr_live_ref": 5.68385113591212e-08,
+    "unified480x352/wadiqam_nr_live": 3.034441585360552e-08,
+    "unified480x352/wadiqam_nr_live_ref": 2.2061417687184634e-08
+   }
+  },
+  "wadiqam-fr-tid": {
+   "webgpu": {
+    "fixture256/wadiqam_fr_tid": 4.3223709551112023e-07,
+    "unified480x352/wadiqam_fr_tid": 4.2124565757688895e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/wadiqam_fr_tid": 2.302962635929161e-06,
+    "unified480x352/wadiqam_fr_tid": 8.977452173869155e-08
+   }
+  },
+  "wadiqam-nr-tid": {
+   "webgpu": {
+    "fixture256/wadiqam_nr_tid": 1.3462184037122464e-06,
+    "fixture256/wadiqam_nr_tid_ref": 6.756256352775309e-06,
+    "unified480x352/wadiqam_nr_tid": 6.886369621620204e-07,
+    "unified480x352/wadiqam_nr_tid_ref": 3.669004221128832e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/wadiqam_nr_tid": 3.033862645306057e-07,
+    "fixture256/wadiqam_nr_tid_ref": 3.1191800213762245e-06,
+    "unified480x352/wadiqam_nr_tid": 1.7396147323738686e-07,
+    "unified480x352/wadiqam_nr_tid_ref": 5.0092382196440545e-08
+   }
+  },
+  "wd": {
+   "webgpu": {
+    "fixture256/wd_s1": 4.934733434911348e-08,
+    "fixture256/wd_s2": 5.545041405181311e-08,
+    "fixture256/wd_s3": 8.86343905899175e-08,
+    "fixture256/wd_s4": 9.528482441065013e-08,
+    "fixture256/wd_s5": 1.001057558628006e-07,
+    "unified480x352/wd_s1": 0.0,
+    "unified480x352/wd_s2": 2.405984067332908e-07,
+    "unified480x352/wd_s3": 0.0,
+    "unified480x352/wd_s4": 0.0,
+    "unified480x352/wd_s5": 2.2092304742135306e-07
+   },
+   "webgpu_rerun": null,
+   "wasm": {
+    "fixture256/wd_s1": 1.0966074299802996e-08,
+    "fixture256/wd_s2": 2.537561321015176e-08,
+    "fixture256/wd_s3": 2.3248364744896392e-08,
+    "fixture256/wd_s4": 3.587193389577417e-08,
+    "fixture256/wd_s5": 3.538220681357608e-08,
+    "unified480x352/wd_s1": 1.559619455971982e-07,
+    "unified480x352/wd_s2": 0.0,
+    "unified480x352/wd_s3": 0.0,
+    "unified480x352/wd_s4": 1.4348773558309667e-07,
+    "unified480x352/wd_s5": 0.0
+   }
+  }
+ },
+ "placement_first_run_nodes": {
+  "lpips-alex": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 96
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 93
+    }
+   }
+  },
+  "lpips-vgg": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 116
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 113
+    }
+   }
+  },
+  "lpips-squeeze": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 184
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 181
+    }
+   }
+  },
+  "stlpips-alex": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 108
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 105
+    }
+   }
+  },
+  "stlpips-vgg": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 132
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 129
+    }
+   }
+  },
+  "dists": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 255
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 250
+    }
+   }
+  },
+  "deepdc": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 450,
+     "CPUExecutionProvider": 150
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 528
+    }
+   }
+  },
+  "arniqa": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 205,
+     "CPUExecutionProvider": 7
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 141
+    }
+   }
+  },
+  "maniqa": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 799
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 733
+    }
+   }
+  },
+  "musiq": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 624,
+     "CPUExecutionProvider": 92
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 676
+    }
+   }
+  },
+  "wadiqam-fr-live": {
+   "webgpu": {
+    "trunk": {
+     "WebGpuExecutionProvider": 18
+    },
+    "head": {
+     "WebGpuExecutionProvider": 13
+    }
+   },
+   "wasm": {
+    "trunk": {
+     "CPUExecutionProvider": 16
+    },
+    "head": {
+     "CPUExecutionProvider": 10
+    }
+   }
+  },
+  "wadiqam-nr-live": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 31
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 26
+    }
+   }
+  },
+  "wadiqam-fr-tid": {
+   "webgpu": {
+    "trunk": {
+     "WebGpuExecutionProvider": 18
+    },
+    "head": {
+     "WebGpuExecutionProvider": 13
+    }
+   },
+   "wasm": {
+    "trunk": {
+     "CPUExecutionProvider": 16
+    },
+    "head": {
+     "CPUExecutionProvider": 10
+    }
+   }
+  },
+  "wadiqam-nr-tid": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 31
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 26
+    }
+   }
+  },
+  "wd": {
+   "webgpu": {
+    "graph": {
+     "WebGpuExecutionProvider": 18
+    }
+   },
+   "wasm": {
+    "graph": {
+     "CPUExecutionProvider": 13
+    }
+   }
+  }
+ },
+ "timings_ms_480x352": {
+  "lpips-alex": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 6.174999952316284,
+    "run": 16.4200000166893
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 5.1049999594688416,
+    "run": 53.43000000715256
+   }
+  },
+  "lpips-vgg": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.75,
+    "run": 25.805000007152557
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.7799999713897705,
+    "run": 1058.3950000405312
+   }
+  },
+  "lpips-squeeze": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 5.090000033378601,
+    "run": 14.299999952316284
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.950000047683716,
+    "run": 29.25499999523163
+   }
+  },
+  "stlpips-alex": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.245000004768372,
+    "run": 16.540000021457672
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.875,
+    "run": 273.6050000190735
+   }
+  },
+  "stlpips-vgg": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.294999957084656,
+    "run": 186.9000000357628
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 5.245000004768372,
+    "run": 1126.550000011921
+   }
+  },
+  "dists": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.459999978542328,
+    "run": 85.22500002384186
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.85999995470047,
+    "run": 1073.8500000238419
+   }
+  },
+  "deepdc": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.810000002384186,
+    "run": 134.06999999284744
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 5.0450000166893005,
+    "run": 1372.3349999785423
+   }
+  },
+  "arniqa": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 15.985000014305115,
+    "run": 84.06499999761581
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 16.394999980926514,
+    "run": 1212.4599999785423
+   }
+  },
+  "maniqa": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.35999995470047,
+    "run": 137.49499994516373
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 2.8600000143051147,
+    "run": 2881.3199999928474
+   }
+  },
+  "musiq": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 12.685000002384186,
+    "run": 73.67500001192093
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 12.629999995231628,
+    "run": 378.72000002861023
+   }
+  },
+  "wadiqam-fr-live": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 2.98499995470047,
+    "run": 57.35000002384186
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.310000002384186,
+    "run": 609.2699999809265
+   }
+  },
+  "wadiqam-nr-live": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.009999990463257,
+    "run": 42.889999985694885
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.259999990463257,
+    "run": 879.4900000095367
+   }
+  },
+  "wadiqam-fr-tid": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.314999997615814,
+    "run": 50.7049999833107
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.2350000143051147,
+    "run": 487.19499999284744
+   }
+  },
+  "wadiqam-nr-tid": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.2199999690055847,
+    "run": 43.14000004529953
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 3.2950000166893005,
+    "run": 529.4850000143051
+   }
+  },
+  "wd": {
+   "webgpu": {
+    "weights": null,
+    "session": null,
+    "prepare": 7.955000042915344,
+    "run": 1113.699999988079
+   },
+   "wasm": {
+    "weights": null,
+    "session": null,
+    "prepare": 4.430000007152557,
+    "run": 1763.7849999666214
+   }
+  }
+ },
+ "refusals": {
+  "refusedAlpha": "Error: opaque sRGB8 required; choose an explicit alpha composite before scoring",
+  "refusedSmall": "Error: image is too small: needs at least 31\u00d731",
+  "unknownEp": "Error: Unknown execution provider webgl"
+ },
+ "no_webgpu": {
+  "refused": "Error: WebGPU unavailable: requestAdapter() returned no adapter",
+  "cpu": {
+   "ep": "wasm",
+   "adapter": null,
+   "values": [
+    {
+     "column": "lpips_squeeze",
+     "value": 0.00018633097351994365
+    }
+   ]
+  }
+ },
+ "weight_fetch_failure_recovery": {
+  "aborted": "Error: Weight download failed (https://zentrain.r2.imazen.org/zenmetrics-web/nn/d8dee9e64da49220848f7e9e383c464bdb64f009c81fdef7a14211be195f13da/lpips_squeeze_full.onnx): Failed to fetch",
+  "truncated": "Error: Weight download truncated: 17 of 2942223 bytes"
+ }
+}

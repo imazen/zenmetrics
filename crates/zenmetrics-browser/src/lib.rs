@@ -8,6 +8,40 @@ use wasm_bindgen::prelude::*;
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod decode;
 mod loop_map;
+// Learned-metric input tensors, built with zenmetrics-nn's own conversion
+// and resize sources. Those files address `crate::par`, `crate::za` and
+// `crate::engine::workers`, so they sit at this crate's root.
+#[cfg(feature = "nn-prep")]
+mod nn_prep;
+#[cfg(feature = "nn-prep")]
+pub use nn_prep::{NnPrepared, nn_prepare, nn_wd_layer, prepare as nn_prepare_native, wd_layer};
+#[cfg(feature = "nn-prep")]
+#[path = "../../zenmetrics-nn/src/par.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod par;
+#[cfg(feature = "nn-prep")]
+#[path = "../../zenmetrics-nn/src/preprocess.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod preprocess;
+#[cfg(feature = "nn-prep")]
+#[path = "../../zenmetrics-nn/src/resize.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod resize;
+#[cfg(feature = "nn-prep")]
+#[path = "../../zenmetrics-nn/src/tfresize.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod tfresize;
+#[cfg(feature = "nn-prep")]
+use zenmetrics_abstractions as za;
+/// zenmetrics-nn's worker cap for its scoped-thread helpers. The browser
+/// module has no `std::thread`, so its preprocessing runs on one thread;
+/// zenmetrics-nn states each element's value is independent of the split.
+#[cfg(feature = "nn-prep")]
+mod engine {
+    pub(crate) fn workers() -> usize {
+        1
+    }
+}
 #[path = "../../zenmetrics-cli/src/metrics/mod.rs"]
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod metrics;

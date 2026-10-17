@@ -224,6 +224,7 @@ $('compare').onclick=compare;
 function syncMetric(){
   const metric=$('metric').value;
   $('display-row').hidden=metric!=='cvvdp';
+  $('ep-row').hidden=!S.coverage.get(metric)?.status?.startsWith('nn-');$('ep').value=epFor(metric);
   buildMenus();snippet();syncLoopSteer(true);metricLinks();writeUrl();
 }
 // The Map menu (top bar) and the loop's Steer menu both list every metric's
@@ -277,6 +278,7 @@ function chooseSteering(){
 $('metric').onchange=()=>{S.map=null;S.mapName='';S.mapMetric=null;S.requestedMap=undefined;syncMetric();S.revision++;paint();schedule();chooseSteering();};
 $('zensim-model').onchange=()=>{snippet();S.map=null;S.revision++;paint();schedule();};
 $('display').onchange=()=>{snippet();S.revision++;schedule();};
+$('ep').onchange=()=>{S.ep=$('ep').value;writeUrl();S.revision++;schedule();};
 $('live').onchange=()=>{if($('live').checked)compare();};
 $('map-name').onchange=()=>{chooseMap($('map-name').value);chooseSteering();};
 async function showCachedMap(name){
@@ -391,7 +393,8 @@ else startWorker();
 function snippet(){const metric=$('metric').value;
   $('zensim-model-row').hidden=metric!=='zensim';
   $('zensim-model-note').hidden=$('zensim-model-row').hidden||$('zensim-model').value!=='c';
-  $('cli-snippet').textContent=`zenmetrics${metric==='zensim'?` --zensim-profile ${$('zensim-model').value}`:''} score --metric ${metric} --reference reference.png --distorted distorted.${codecInfo[S.encodedCodec||'jpeg'].ext}${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`;
+  const learned=S.coverage.get(metric)?.status?.startsWith('nn-');
+  $('cli-snippet').textContent=`${learned?'ZENMETRICS_NN_MODEL_DIR=<exported models> ':''}zenmetrics${metric==='zensim'?` --zensim-profile ${$('zensim-model').value}`:''} score --metric ${metric} --reference reference.png --distorted distorted.${codecInfo[S.encodedCodec||'jpeg'].ext}${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`+(learned?'   # zenmetrics-cli built with --features nn':'');
 }
 $('copy-cli').onclick=async()=>{try{await navigator.clipboard.writeText($('cli-snippet').textContent);status('CLI command copied.');}catch(error){status(error.message,true);}};
 $('download-jpeg').onclick=()=>{if(S.encoded){const info=codecInfo[S.encodedCodec];save(S.encoded,info.mime,`distorted.${info.ext}`);}};
@@ -727,6 +730,7 @@ function renderJxlTable(){
   $('jxl-score-head').textContent=J.rows[0]?.column||'Score';
   for(const r of J.rows){
     const tr=body.insertRow();tr.className='pick'+(r===J.selected?' on':'');tr.onclick=()=>pickJxl(r);
+    if(Number.isFinite(r.value))tr.dataset.value=String(r.value);
     for(const v of [r.distance,r.bytes,r.bpp.toFixed(3),r.error?'error':r.value.toPrecision(6)])tr.insertCell().textContent=v;
     if(r.error)tr.title=r.error;
   }
@@ -772,6 +776,45 @@ async function runJxlSweep(){
 $('jxl-sweep-run').onclick=runJxlSweep;
 $('jxl-sweep-cancel').onclick=()=>{J.stop=true;};
 
-// Learned (NN) metrics run in nn.js, imported on first use.
-async function learnedScore(){throw new Error('The learned-metric runtime is not part of this build');}
-async function compareLearned(metric){status(`${metric}: the learned-metric runtime is not part of this build`,true);}
+// Learned (NN) metrics run in the worker's nn.js with onnxruntime-web, on
+// the provider in S.ep (WebGPU unless the link or the menu says wasm). A
+// missing WebGPU adapter is an error, never a switch to another provider.
+// A chosen provider (link or menu) wins; otherwise WebGPU, or the CPU for a
+// metric whose WebGPU run missed the parity gate in the Pages check.
+function epFor(metric){return S.ep||(S.coverage.get(metric)?.status==='nn-cpu-wasm'?'wasm':'webgpu');}
+// Nodes each ORT provider ran in the session's first (profiled) run.
+function placementLabel(placement){
+  const total={};for(const graph of Object.values(placement||{}))for(const [k,v] of Object.entries(graph||{}))total[k]=(total[k]||0)+v;
+  const short={WebGpuExecutionProvider:'WebGPU',CPUExecutionProvider:'CPU',JsExecutionProvider:'JS'};
+  return Object.keys(total).length?` · nodes: ${Object.entries(total).map(([k,v])=>`${v} ${short[k]||k}`).join(', ')}`:'';
+}
+function providerLabel(score){
+  const a=score.adapter;
+  return `${score.runtime} · ${score.ep==='webgpu'?`WebGPU${a?` (${[a.vendor,a.architecture].filter(Boolean).join(' ')}${a.fallback?', fallback adapter':''})`:''}`:'WASM CPU'}${placementLabel(score.placement)}`;
+}
+async function learnedScore(metric,reference,distorted,width,height){
+  const result=await rpc({type:'nn',metric,ep:epFor(metric),reference,distorted,width,height},900);
+  return result.score;
+}
+async function compareLearned(metric,entry){
+  if(!S.ready||S.pending||!S.reference||!S.distorted)return;
+  const r=S.reference,d=S.distorted;
+  if(r.width!==d.width||r.height!==d.height){status(`Sizes differ: ${r.width}×${r.height} vs ${d.width}×${d.height}. Images are never resized for scoring.`,true);return;}
+  const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';
+  $('compute-timing').textContent='Computing…';status(`Running ${metric} (${epFor(metric)})…`);
+  try{
+    const result=await rpc({type:'nn',metric,ep:epFor(metric),reference:r.data,distorted:d.data,width:r.width,height:r.height},900);
+    if(revision!==S.revision)return;
+    S.map=null;S.mapMetric=null;S.mapNames=[];S.mapName='';buildMenus();
+    document.body.dataset.firstScoreMs??=performance.now().toFixed(1);
+    const values=result.score.values;
+    $('score').textContent=values.map(v=>v.value.toPrecision(7)).join(' / ');$('score-label').textContent=metric;
+    $('bar-label').textContent=metric;$('bar-score').textContent=$('score').textContent;
+    $('score-info').textContent=`${values.map(v=>v.column).join(' / ')} · ${providerLabel(result.score)}`;
+    const t=result.timings;
+    $('elapsed').textContent=`${result.milliseconds.toFixed(1)} ms total`;
+    $('compute-timing').textContent=`${t.weights?`Weights ${t.weights.source} ${t.weights.milliseconds.toFixed(0)} ms (${(t.weights.bytes/1048576).toFixed(1)} MiB) · Session ${t.session.toFixed(0)} ms · `:'Session reused · '}Tensors ${t.prepare.toFixed(1)} ms · Inference ${t.run.toFixed(1)} ms`;
+    status(`${r.width}×${r.height} · ${providerLabel(result.score)} · learned metrics publish no map here`);paint();
+  }catch(error){S.map=null;$('compute-timing').textContent=error.message==='Cancelled'?'Comparison cancelled':'Comparison failed';status(error.message,true);paint();}
+  finally{S.pending=false;$('compare').disabled=!S.ready;if(S.dirty&&$('live').checked)compare();}
+}

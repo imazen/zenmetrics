@@ -89,8 +89,12 @@ the page), `full` (the CPU metric module, imported on demand), `nn` (the
 learned-metric runtime and that model's weights, fetched on demand), or
 `null` when unavailable. Every status
 other than `unavailable` is executed in headless Chromium by
-`scripts/checkpoint/check-pages.py` on every deployment; the check fails if
-the file and the measured behaviour disagree.
+`scripts/checkpoint/check-pages.py` before deployment, and the check fails
+if the file and the measured behaviour disagree. Learned metrics run on a
+WebGPU adapter there (SwiftShader in CI, a subset covering every model kind
+by default; the full set's GPU receipt is in
+`benchmarks/browser_nn_2026-10-17/`). An `nn-cpu-wasm` entry also carries a
+`reason`: its WebGPU result missed the parity gate.
 
 ## Links from the workbench
 

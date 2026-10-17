@@ -15,6 +15,14 @@ parser.add_argument('site', type=Path)
 parser.add_argument('--url', help='Check an already deployed HTTPS site instead')
 parser.add_argument('--oracle', type=Path, help='Independent native map outputs')
 parser.add_argument('--report', type=Path, help='Measured browser results')
+parser.add_argument('--webgpu', choices=('swiftshader', 'gpu'), default='swiftshader',
+                    help="WebGPU adapter for learned metrics: Chromium's SwiftShader fallback adapter "
+                         "(no GPU needed) or the host GPU through Vulkan")
+parser.add_argument('--nn-golden', type=Path,
+                    default=Path(__file__).resolve().parents[2] / 'benchmarks/browser_nn_2026-10-17/native-rten.json',
+                    help='Native rten scores of the learned metrics on the fixed pairs')
+parser.add_argument('--nn-models', default='all',
+                    help='Comma-separated learned metrics to run (default all); a subset skips their coverage statuses')
 parser.add_argument('--write-coverage', type=Path,
                     help='Write the measured coverage file here instead of checking the site copy against it')
 args = parser.parse_args()
@@ -52,6 +60,222 @@ def unavailable_reason(name, refusal):
     return f'Browser refusal: {refusal}'
 
 
+REPO = Path(__file__).resolve().parents[2]
+WEBGPU_ARGS = {
+    'swiftshader': ['--enable-unsafe-webgpu'],
+    'gpu': ['--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-vulkan=native', '--use-angle=vulkan'],
+}
+# The fixed pairs of the learned-metric check, with the formulas of
+# crates/zenmetrics-browser/examples/nn_oracle.rs.
+NN_PAIRS_JS = r"""
+  const pairs={};
+  {const s=256,r=new Uint8Array(s*s*4),d=new Uint8Array(r.length);
+   for(let i=0;i<r.length;i++){r[i]=i%4===3?255:(i*13+Math.floor(i/(s*4))*17)%256;d[i]=i%4===3?255:Math.max(0,r[i]-7);}
+   pairs.fixture256={width:s,height:s,reference:r,distorted:d};}
+  {const w=480,h=352,r=new Uint8Array(w*h*4),d=new Uint8Array(r.length);
+   for(let y=0;y<h;y++)for(let x=0;x<w;x++)for(let c=0;c<4;c++){const i=(y*w+x)*4+c;if(c===3){r[i]=d[i]=255;continue;}
+     const v=(x*7+y*5+c*61+(x*y)%23)%256;r[i]=v;d[i]=Math.floor(y/24)%3===0?Math.floor(v/4)*3+32:(c===2&&Math.floor(x/32)%3===0?v>>1:v);}
+   pairs.unified480x352={width:w,height:h,reference:r,distorted:d};}
+"""
+NN_WORKER_JS = r"""
+  const worker=new Worker(new URL('./worker.js',location.href),{type:'module'});
+  let nextId=0;
+  const call=(message,deadline=600000)=>new Promise((resolve,reject)=>{
+    const id=++nextId,timer=setTimeout(()=>reject(new Error('deadline '+message.type)),deadline);
+    worker.onmessage=({data})=>{
+      if(['control','score','progress','module','prefetch-failed'].includes(data.type))return;
+      clearTimeout(timer);resolve(data);
+    };
+    worker.postMessage({...message,id});
+  });
+  await call({type:'init',threads:2});
+"""
+# The CLI's learned metrics (zenmetrics-nn): the CPU modules refuse them.
+LEARNED = {'lpips-alex', 'lpips-vgg', 'lpips-squeeze', 'dists', 'stlpips-alex', 'stlpips-vgg', 'deepdc', 'ckdn',
+           'afine', 'dreamsim', 'arniqa', 'maniqa', 'liqe', 'musiq', 'hyperiqa', 'paq2piq', 'pieapp',
+           'wadiqam-fr-live', 'wadiqam-fr-tid', 'wadiqam-nr-live', 'wadiqam-nr-tid', 'wd', 'ahiq', 'dmm'}
+
+
+NN_MODELS = set(json.loads((REPO / 'web/metrics/nn-models.json').read_text())['models'])
+
+
+def card_of(name):
+    for prefix in ('stlpips', 'lpips', 'wadiqam'):
+        if name.startswith(prefix + '-'):
+            return prefix
+    return name
+
+
+def learned_blocker(name, models):
+    """Why a learned metric has no browser route: its weights' licence class
+    (card.toml), or the absence of a whole-graph export the browser can run."""
+    import tomllib
+    card = REPO / 'crates/zenmetrics-nn/models' / card_of(name) / 'card.toml'
+    meta = tomllib.loads(card.read_text())
+    weights = meta.get('weights', {})
+    licence_class = weights.get('licence_class', 'unknown')
+    rel = card.relative_to(REPO)
+    if licence_class != 'permissive':
+        return (f'Weights licence class "{licence_class}" ([weights] in {rel}): '
+                'the browser does not redistribute these weights.')
+    assert name not in models
+    if name == 'dmm':
+        return (f'Permissive weights ([weights] in {rel}), but the score needs a 16×16 SVD per patch over '
+                'two VGG16 taps (crates/zenmetrics-nn/src/dmm.rs, a LAPACK port whose residual floors are '
+                'owner-gated); the browser has no graph or route for it and does not restate the solver.')
+    return (f'Permissive weights ([weights] in {rel}), but the frozen export set has no whole-graph '
+            'export for it: its score needs zenmetrics-nn host code between graph runs, '
+            'which the browser does not run.')
+
+
+def check_learned(playwright, browser, url, result):
+    """Every learned metric in nn-models.json on WebGPU against the native
+    rten scores, then the refusals and recoveries of the learned route."""
+    models = json.loads((REPO / 'web/metrics/nn-models.json').read_text())
+    golden = json.loads(args.nn_golden.read_text())['scores']
+    tolerance = models['tolerance_jnd']
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(url)
+    run_js = 'async ([metrics, eps]) => {' + NN_PAIRS_JS + NN_WORKER_JS + r"""
+      const out={};
+      for(const metric of metrics)for(const ep of eps){
+        out[metric]??={};out[metric][ep]={};
+        for(const [name,pair] of Object.entries(pairs)){
+          const got=await call({type:'nn',metric,ep,...pair});
+          if(got.type!=='result')throw new Error(metric+' '+ep+' '+name+': '+got.message);
+          out[metric][ep][name]={values:got.score.values,ep:got.score.ep,adapter:got.score.adapter,placement:got.score.placement,timings:got.timings,runtime:got.score.runtime};
+        }
+      }
+      worker.terminate();return out;
+    }"""
+    selected = list(models['models']) if args.nn_models == 'all' else args.nn_models.split(',')
+    assert set(selected) <= set(models['models']), selected
+    learned = page.evaluate(run_js, [selected, ['webgpu', 'wasm']])
+
+    def deviations(metric, runs):
+        """Per pair/column |browser − native| in JND units."""
+        jnd = models['models'][metric]['jnd']
+        scale = lambda column: jnd[column] if isinstance(jnd, dict) else jnd
+        return {f"{pair}/{v['column']}": abs(v['value'] - golden[metric][pair][v['column']]) / scale(v['column'])
+                for pair, got in runs.items() for v in got['values']}
+
+    # i265's GPU flips a bit every few minutes (CLAUDE.md Known Bugs): a
+    # WebGPU result outside the gate is rerun once and both runs are kept.
+    reruns = {}
+    for metric in selected:
+        if max(deviations(metric, learned[metric]['webgpu']).values()) > tolerance:
+            reruns[metric] = page.evaluate(run_js, [[metric], ['webgpu']])[metric]['webgpu']
+    statuses, parity = {}, {}
+    for metric, by_ep in learned.items():
+        for runs in by_ep.values():
+            for got in runs.values():
+                assert all(math.isfinite(v['value']) for v in got['values']), (metric, got)
+        assert all(g['ep'] == 'webgpu' and g['adapter'] for g in by_ep['webgpu'].values()), metric
+        assert all(g['ep'] == 'wasm' and g['adapter'] is None for g in by_ep['wasm'].values()), metric
+        # ORT's profile of each session's first run: WebGPU sessions ran nodes
+        # on WebGPU (ORT may keep some on its CPU kernels); WASM ones none.
+        nodes = lambda runs, provider: sum(graph.get(provider, 0) for got in runs.values()
+                                           for graph in got['placement'].values() if graph)
+        assert nodes(by_ep['webgpu'], 'WebGpuExecutionProvider') > 0, (metric, 'no WebGPU nodes profiled')
+        assert nodes(by_ep['wasm'], 'WebGpuExecutionProvider') == 0, (metric, 'WebGPU nodes in a WASM session')
+        gpu, cpu = deviations(metric, by_ep['webgpu']), deviations(metric, by_ep['wasm'])
+        again = deviations(metric, reruns[metric]) if metric in reruns else None
+        parity[metric] = {'webgpu': gpu, 'webgpu_rerun': again, 'wasm': cpu,
+                          'placement': {ep: next(iter(runs.values()))['placement'] for ep, runs in by_ep.items()}}
+        worst = lambda d: max(d.values())
+        if worst(gpu) <= tolerance or (again and worst(again) <= tolerance):
+            statuses[metric] = ('nn-webgpu', None)
+        elif worst(cpu) <= tolerance:
+            pair = max(gpu, key=gpu.get)
+            statuses[metric] = ('nn-cpu-wasm',
+                f'The WebGPU provider differs from the native rten score by {worst(gpu):.3g} JND at {pair} '
+                f'(rerun {worst(again):.3g}), over the card gate of {tolerance:g} JND; the WASM provider is '
+                f'within {worst(cpu):.3g} JND, so the page runs this metric on the CPU unless WebGPU is chosen.')
+        else:
+            statuses[metric] = ('unavailable',
+                f'Neither provider meets the card gate of {tolerance:g} JND against the native rten score '
+                f'(WebGPU {worst(gpu):.3g}, WASM {worst(cpu):.3g}).')
+    adapter = next(iter(learned[next(iter(learned))]['webgpu'].values()))['adapter']
+    result['learned'] = {'adapter': adapter, 'statuses': statuses, 'parity': parity, 'runs': learned, 'reruns': reruns}
+    refusals = page.evaluate('async () => {' + NN_PAIRS_JS + NN_WORKER_JS + r"""
+      // Bad input: transparent pixels, an image below the model's minimum
+      // and an unknown provider.
+      const alpha=new Uint8Array(64*64*4).fill(100);
+      const refusedAlpha=await call({type:'nn',metric:'lpips-squeeze',ep:'webgpu',reference:alpha,distorted:alpha,width:64,height:64});
+      const tiny=new Uint8Array(16*16*4);for(let i=0;i<tiny.length;i++)tiny[i]=i%4===3?255:i%251;
+      const refusedSmall=await call({type:'nn',metric:'lpips-alex',ep:'webgpu',reference:tiny,distorted:tiny,width:16,height:16});
+      const unknownEp=await call({type:'nn',metric:'lpips-squeeze',ep:'webgl',...pairs.fixture256});
+      worker.terminate();
+      return {refusedAlpha:refusedAlpha.message||null,refusedSmall:refusedSmall.message||null,unknownEp:unknownEp.message||null};
+    }""")
+    assert refusals['refusedAlpha'] and 'opaque' in refusals['refusedAlpha'], refusals
+    assert refusals['refusedSmall'] and 'too small' in refusals['refusedSmall'], refusals
+    assert refusals['unknownEp'] and 'execution provider' in refusals['unknownEp'], refusals
+    result['learned']['refusals'] = refusals
+    context.close()
+
+    # Recovery: a failed or truncated weight download is reported, and the
+    # same worker downloads the weights once the network allows it.
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(url)
+    page.route('https://zentrain.r2.imazen.org/**', lambda route: route.abort())
+    failed = page.evaluate('async () => {' + NN_PAIRS_JS + NN_WORKER_JS + r"""
+      window.nnCall=call;window.nnPairs=pairs;
+      return (await call({type:'nn',metric:'lpips-squeeze',ep:'webgpu',...pairs.fixture256})).message||null;
+    }""")
+    assert failed and 'Weight download failed' in failed, failed
+    page.unroute('https://zentrain.r2.imazen.org/**')
+    page.route('https://zentrain.r2.imazen.org/**', lambda route: route.fulfill(status=200, body=b'not an onnx graph'))
+    truncated = page.evaluate("async () => (await nnCall({type:'nn',metric:'lpips-squeeze',ep:'webgpu',...nnPairs.fixture256})).message||null")
+    assert truncated and 'truncated' in truncated, truncated
+    page.unroute('https://zentrain.r2.imazen.org/**')
+    recovered = page.evaluate("async () => (await nnCall({type:'nn',metric:'lpips-squeeze',ep:'webgpu',...nnPairs.fixture256})).score?.values||null")
+    assert recovered and recovered[0]['value'] == learned['lpips-squeeze']['webgpu']['fixture256']['values'][0]['value'], recovered
+    context.close()
+    result['learned']['weight_fetch_failure_recovery'] = {'aborted': failed, 'truncated': truncated}
+
+    # No WebGPU adapter: Chromium without the WebGPU flags has none here. The
+    # WebGPU request fails and names it; the WASM provider is a separate,
+    # explicit choice that still matches the native scores.
+    plain = playwright.chromium.launch()
+    page = plain.new_page()
+    page.goto(url)
+    no_gpu = page.evaluate('async () => {' + NN_PAIRS_JS + NN_WORKER_JS + r"""
+      const refused=await call({type:'nn',metric:'lpips-squeeze',ep:'webgpu',...pairs.fixture256});
+      const cpu=await call({type:'nn',metric:'lpips-squeeze',ep:'wasm',...pairs.fixture256});
+      return {refused:refused.message||null,cpu:cpu.score?{ep:cpu.score.ep,adapter:cpu.score.adapter,values:cpu.score.values}:cpu.message};
+    }""")
+    plain.close()
+    assert no_gpu['refused'] and 'WebGPU unavailable' in no_gpu['refused'], no_gpu
+    cpu = no_gpu['cpu']
+    assert cpu['ep'] == 'wasm' and cpu['adapter'] is None, cpu
+    want = golden['lpips-squeeze']['fixture256']['lpips_squeeze']
+    assert abs(cpu['values'][0]['value'] - want) <= tolerance * models['models']['lpips-squeeze']['jnd'], (cpu, want)
+    result['learned']['no_webgpu'] = no_gpu
+
+
+
+def check_learned_ui(browser, url, result):
+    """The page: a learned-metric link names its provider; cancelling an
+    in-flight inference emits no score and the fresh worker scores again."""
+    ui = browser.new_page()
+    ui.goto(url + '?metric=lpips-squeeze')
+    ui.wait_for_function("document.getElementById('score-label').textContent==='lpips-squeeze' && document.getElementById('score-info').textContent.includes('WebGPU')", timeout=300000)
+    first_score = ui.locator('#score').inner_text()
+    ui.evaluate("() => {document.getElementById('compare').click();const c=document.getElementById('cancel');if(c.disabled)throw new Error('no active job');c.click();}")
+    ui.wait_for_function("document.getElementById('status').textContent.startsWith('Ready:')", timeout=60000)
+    assert ui.locator('#score').inner_text() == '–'
+    ui.locator('#compare').click()
+    ui.wait_for_function("/^[0-9]/.test(document.getElementById('score').textContent)", timeout=300000)
+    assert ui.locator('#score').inner_text() == first_score, (ui.locator('#score').inner_text(), first_score)
+    ui.locator('#ep').select_option('wasm')
+    ui.wait_for_function("document.getElementById('score-info').textContent.includes('WASM CPU') && new URL(location.href).searchParams.get('ep')==='wasm'", timeout=300000)
+    ui.close()
+    result['learned']['ui_cancel_recovery_and_provider'] = True
+
+
 def measured_coverage(result):
     core = set(result['modules']['core']['metrics'])
     entries = []
@@ -61,6 +285,15 @@ def measured_coverage(result):
             maps = result['mapNames'].get(name, [])
             entry.update(status='score+map' if maps else 'score-only', maps=maps,
                          module='core' if name in core else 'full')
+        elif name in result['learned']['statuses'] and result['learned']['statuses'][name][0] != 'unavailable':
+            status, reason = result['learned']['statuses'][name]
+            entry.update(status=status, module='nn', reason=reason)
+        elif name in result['learned']['statuses']:
+            entry['reason'] = result['learned']['statuses'][name][1]
+        elif name in LEARNED and args.nn_models != 'all' and name in NN_MODELS:
+            entry['not_run'] = True
+        elif name in LEARNED:
+            entry['reason'] = learned_blocker(name, result['learned']['statuses'])
         else:
             entry['reason'] = unavailable_reason(name, result['refused'][name])
         entries.append(entry)
@@ -86,9 +319,14 @@ def check_coverage(committed, measured):
                                      sorted(set(got) ^ set(want)))
     for name, w in want.items():
         g = got[name]
+        if w.get('not_run'):
+            # A learned metric outside --nn-models: its route was not executed.
+            assert g['status'] in ('nn-webgpu', 'nn-cpu-wasm') and g['module'] == 'nn', (name, g)
+            continue
         for key in ('status', 'module', 'maps'):
             assert g.get(key) == w[key], (name, key, g.get(key), w[key])
-        assert (g['status'] == 'unavailable') == bool(g.get('reason')), (name, 'reason')
+        # Unavailable entries and CPU-only learned entries carry their reason.
+        assert bool(g.get('reason')) == (g['status'] in ('unavailable', 'nn-cpu-wasm')), (name, 'reason')
 
 
 server = None
@@ -100,7 +338,7 @@ else:
     url = 'http://127.0.0.1:3319/'
 try:
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(args=WEBGPU_ARGS[args.webgpu])
         context = browser.new_context()
         source_file=args.site/'site-source.json'
         asset_prefix=json.loads(source_file.read_text()).get('asset_prefix','') if source_file.is_file() else ''
@@ -605,7 +843,10 @@ try:
         assert links.locator('#jxl-chart circle').count() == 2
         rows.nth(1).click()
         links.wait_for_function("document.getElementById('name-distorted').textContent.startsWith('jxl-encoder · distance 4 · ') && document.getElementById('map-info').textContent.startsWith('gmsd ·')", timeout=120000)
-        assert links.locator('#score').inner_text() == sweep[1][3] or abs(float(links.locator('#score').inner_text()) - float(sweep[1][3])) <= abs(float(sweep[1][3])) * 1e-6, (links.locator('#score').inner_text(), sweep[1])
+        # The viewer's comparison of the loaded row repeats the sweep's score.
+        row_value = float(rows.nth(1).get_attribute('data-value'))
+        shown = links.locator('#score').inner_text()
+        assert shown == links.evaluate('v => v.toPrecision(7)', row_value), (shown, row_value)
         result['jxl_impact_sweep'] = sweep
         links.close()
         # A metric with no browser route opens with its measured reason, no score.
@@ -624,13 +865,31 @@ try:
         assert bad.locator('#codec').input_value() == 'webp'
         bad.close()
         result['url_contract'] = True
+        # The full module's fetch fails: the page says so, scores nothing in
+        # its place, and loads it once the network allows.
+        lazy = context.new_page()
+        lazy.route('**/pkg-full/**', lambda route: route.abort())
+        lazy.goto(url + '?metric=psnr')
+        lazy.wait_for_function("document.getElementById('status').textContent.includes('Failed to fetch') || document.getElementById('status').textContent.includes('did not load')", timeout=120000)
+        assert lazy.locator('#score').inner_text() == '–', lazy.locator('#score').inner_text()
+        lazy.unroute('**/pkg-full/**')
+        lazy.locator('#compare').click()
+        lazy.wait_for_function("document.getElementById('score-label').textContent==='psnr' && /^[0-9]/.test(document.getElementById('score').textContent)", timeout=120000)
+        lazy.close()
+        result['full_module_fetch_failure_recovery'] = True
+        check_learned(playwright, browser, url, result)
         # Every CLI metric name's browser status, from the executions above.
         measured = measured_coverage(result)
         result['coverage'] = measured
         if args.write_coverage:
+            assert args.nn_models == 'all', 'coverage is written only from a run of every learned metric'
             args.write_coverage.write_text(coverage_text(measured))
+            if not args.url:
+                # The page reads its statuses from this file.
+                (args.site / 'coverage.json').write_text(coverage_text(measured))
         else:
             check_coverage(json.loads((args.site / 'coverage.json').read_text()), measured)
+        check_learned_ui(browser, url, result)
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']

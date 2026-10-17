@@ -7930,6 +7930,7 @@ dependencies = [
  "zenjxl",
  "zenmetrics-abstractions",
  "zenmetrics-api",
+ "zenmetrics-nn",
  "zenpixels",
  "zenpixels-convert",
  "zenpng 0.2.0",

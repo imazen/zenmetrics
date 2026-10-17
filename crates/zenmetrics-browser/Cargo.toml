@@ -56,11 +56,13 @@ rayon = "1.12.0"
 default = ["full"]
 # The full module: every CPU metric the browser scores. The viewer loads it
 # the first time a metric other than Zensim is chosen.
-full = ["cpu-metrics", "cpu-cvvdp", "cpu-iwssim", "cpu-gmsd", "cpu-psnrhvs", "cpu-haarpsi", "cpu-fsim", "cpu-vsi", "cpu-msssim", "cpu-vif", "cpu-vifvec", "cpu-iwssim-piq", "cpu-mad", "cpu-mdctpsnr", "cpu-vmaf", "nr", "png", "jpeg", "webp", "jxl"]
+full = ["cpu-metrics", "cpu-cvvdp", "cpu-iwssim", "cpu-gmsd", "cpu-psnrhvs", "cpu-haarpsi", "cpu-fsim", "cpu-vsi", "cpu-msssim", "cpu-vif", "cpu-vifvec", "cpu-iwssim-piq", "cpu-mad", "cpu-mdctpsnr", "cpu-vmaf", "nr", "nn-prep", "png", "jpeg", "webp", "jxl"]
 # The first-load module is built with `--no-default-features --features core`:
 # the JPEG decoder and encoder and Zensim. PNG, WebP and JPEG XL uploads
 # decode in the full module.
 core = ["jpeg"]
+# Input tensors for the learned metrics onnxruntime-web runs (nn_prep.rs).
+nn-prep = []
 # No-reference PIQE, NIQE and BRISQUE through the CLI's `nr` adapter.
 nr = ["dep:piqe", "dep:niqe", "dep:brisque"]
 cpu-metrics = ["dep:nlpd"]
@@ -95,10 +97,16 @@ imgref = { workspace = true }
 # archmage copy zensim links (registry 0.9.30), or the disable has no effect.
 archmage = "=0.9.30"
 jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }
+# nn_oracle scores the learned metrics natively on the rten engine.
+zenmetrics-nn = { path = "../zenmetrics-nn" }
 
 # The oracles exercise every metric, so they need the full module's features.
 [[example]]
 name = "browser_oracle"
+required-features = ["full"]
+
+[[example]]
+name = "nn_oracle"
 required-features = ["full"]
 
 [[example]]
