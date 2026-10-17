@@ -51,6 +51,7 @@ lines = ['# DMM individual-change acceptance, 2026-10-17', '',
          '|---|---|---:|---:|---:|---:|---|']
 pending = []
 baseline = None
+resources = []
 for entry in sources:
     name, revision = entry['change'], entry['commit']
     try:
@@ -65,6 +66,12 @@ for entry in sources:
         baseline = rows
     if baseline is None:
         raise AssertionError('Baseline must be complete before candidate comparison')
+    runner = (args.directory / f'{name}.runner.log').read_text()
+    receipts = [line for line in runner.splitlines() if line.startswith('run-heavy: done ')]
+    assert len(receipts) == 1, (name, 'missing or ambiguous resource receipt')
+    resources.append(f'{name}: {receipts[0]}')
+    controls_pass = all(f'PANEL_PASS {engine} {revision}' in runner
+                        for engine in ['rten', 'ort-cuda', 'ort-cuda-repeat'])
     assert rows.keys() == baseline.keys()
     for key in rows:
         assert rows[key]['kind'] == baseline[key]['kind'], (name, key, 'classification changed')
@@ -74,14 +81,18 @@ for entry in sources:
     improved = sum(float(rows[key]['netlib_error']) < float(baseline[key]['netlib_error']) for key in rows)
     worse = sum(float(rows[key]['netlib_error']) > float(baseline[key]['netlib_error']) for key in rows)
     equal = 48 - improved - worse
-    decision = 'baseline' if name == 'baseline' else ('keep' if passed == 48 and worse == 0 and not unstable else 'reject')
+    decision = 'baseline' if name == 'baseline' else ('keep' if passed == 48 and worse == 0 and not unstable and controls_pass else 'reject')
     if name == 'baseline':
-        assert passed == 48 and not unstable, 'Frozen baseline itself must qualify and reproduce'
+        assert passed == 48 and not unstable and controls_pass, 'Frozen baseline itself must qualify and reproduce'
     lines.append(f'| {name} | `{revision[:12]}` | {passed}/48 | {improved} / {equal} / {worse} | '
                  f'{statistics.median(errors):.9e} / {max(errors):.9e} | {24-len(unstable)}/24 identical | {decision} |')
     if unstable:
         lines.extend(['', f'Unstable CUDA observations for {name}: {unstable!r}. Repeat before treating them as findings.', ''])
+    if not controls_pass:
+        lines.extend(['', f'{name}: native panel controls did not all pass; this candidate cannot be retained.', ''])
 if pending:
     lines[2:2] = ['**Missing:** ' + ', '.join(pending) + '.', '']
+lines.extend(['', 'Resource receipts for the complete three-panel runs (parity, not speed benchmarks):',
+              '', '```text', *resources, '```'])
 args.output.write_text('\n'.join(lines) + '\n')
 print('\n'.join(lines))
