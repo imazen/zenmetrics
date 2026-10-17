@@ -1221,3 +1221,6 @@ iqa-compete-coverage-pass binary pairs output models model_map ort cuda:
 
 iqa-compete-adopt-scope config log contention output:
     python3 benchmarks/iqa_compete_2026-10-16/adopt_scope.py '{{config}}' '{{log}}' '{{contention}}' '{{output}}'
+
+iqa-compete-coverage-competitors rust jxl pairs planes python flip_python reference vmaf_ledger output wait_pid:
+    python3 benchmarks/iqa_compete_2026-10-16/coverage_competitors.py '{{rust}}' '{{jxl}}' '{{pairs}}' '{{planes}}' '{{python}}' '{{flip_python}}' '{{reference}}' '{{vmaf_ledger}}' '{{output}}' --wait-pid '{{wait_pid}}'
