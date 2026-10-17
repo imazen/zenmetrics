@@ -1,0 +1,802 @@
+path	classification	reason
+benchmarks/afine_aic_2026-10-16/bench_ort_postfix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/bench_ort_prefix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/candidates.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/candidates_ort_preproc.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/dump_native.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/dump_ort_full.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/dump_ort_partial.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/afine_aic_2026-10-16/dump_ort_prefix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_flip_2026-10-15/cw_grid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_flip_2026-10-15/cw_pyramid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_flip_2026-10-15/input_hashes.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
+benchmarks/aic_flip_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_more_2026-10-15/inventory_union.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_more_2026-10-15/ssim1_aic.tsv	ignored	Earlier Round 4 scores; Round 5 reviewed aic_review copy is canonical. Both remain retained.
+benchmarks/aic_more_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_perf_2026-10-16/ab_ciede2000_lut.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_cw_ssim_scratch_REJECTED.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_flip_lut.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_flip_lut_convolve.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_flipv17_lut_convolve.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_psnr_cb_plane.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_psnr_cr_plane.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_psnr_ycbcr611_control.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_ssimulacra1_blur.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_ssimulacra1_blurhoist_REJECTED.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_ssimulacra1_grid.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/ab_ws_hv_resize.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_2026-10-16/baseline.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/aic-parity-grouped-experiment.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/aic-parity.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/baseline-banded.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_perf_big_2026-10-16/baseline-noise.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_perf_big_2026-10-16/butter-kernels.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/cambi-grouped-experiment-kernels.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/cambi-ordered-kernels.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/measurements.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/qualification.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_perf_big_2026-10-16/residuals-grouped-experiment.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/residuals-grouped-experiment.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/residuals.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/review-gates.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/review-lint.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/review-memory.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/review-panel.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_perf_big_2026-10-16/summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/butter_aic.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/butter_ladder.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/cambi_aic.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/cambi_ladder.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/cambi_reference_invariance.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/oracle_pins.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/panel_invariance.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/pin_residuals.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/pin_sensitivity.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/ssim1_ladder.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/ssim_order_summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_review_2026-10-15/ws_aic.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_review_2026-10-15/ws_ladder.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_variants_2026-10-15/fsim.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_variants_2026-10-15/round2.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_variants_2026-10-15/round2_rounding.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_variants_2026-10-15/round2_rounding.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_variants_2026-10-15/round2_rounding.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_variants_2026-10-15/ssim.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic_variants_2026-10-15/ssim_gates.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_variants_2026-10-15/vsi.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/av1_compare_2026-09-08/automatic_reconstruction_validation.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_intra_edge_cells.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_intra_edge_matched.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_intra_edge_time_budgets.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_research_cells.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_research_matched.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_restoration_cells.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_restoration_matched.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_restoration_photo_budgets.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_restoration_provenance.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_restoration_screen_budgets.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/imazen26_training_scout_preparation.json	ignored	Training or encoder-picker experiment outside metric-observation dashboard scope.
+benchmarks/av1_compare_2026-09-08/pilot.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/av1_compare_2026-09-08/time_budgets_ssim2_80.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/avif_autotune_v1_2026-09-04.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_backend_selection_2026-09-03.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_chroma_split_2026-09-04.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_doe_stageA_2026-09-02.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_doe_stageB6_analysis_2026-09-02.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_eradelta_analysis_2026-09-03.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_hdr_rd_baseline_2026-09-03.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_hdr_t2_picks_k16_2026-09-02.manifest.json	ignored	Input identity or pair membership; does not supply standalone metric observations.
+benchmarks/avif_hdr_t2_picks_k16_2026-09-02.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/avif_jpeg_knobablation_firstcut_2026-06-28.data.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avif_subsample_picks_2026-09-01.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/avifaom_poison_planes_2026-08-30.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/avifaom_round3_2026-08-30_open.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/backend_parity_cpu_vs_cuda_2026-06-01.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/baseline-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/binary-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/computed-independent-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/computed-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/independent-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/libm-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/multiply-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/oracle_environment.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/table-storage-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/brisque_review_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/butter_multires_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/butter_multires_strip_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/butter_strip_drift_2026-08-28.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/butter_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/butter_strip_wall_task158_2026-05-31.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cpu_metrics_1t8t_2026-10-09/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cpu_metrics_1t8t_2026-10-09/serial_batch_2026-10-12/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cpu_metrics_1t8t_2026-10-11-i265/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cpu_metrics_1t8t_2026-10-12-i265/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cpu_metrics_1t8t_2026-10-12-i265b/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cpu_wall_2026-05-28.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cpu_wall_all_metrics_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_backfill_smoke_2026-05-15.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_cpu_alloc_profile.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_cpu_size_sweep_2026-05-24.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_cpu_size_sweep_2026-05-24.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_cpu_size_sweep_post_perf_2026-05-24.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_cpu_size_sweep_post_perf_2026-05-24.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_iphone14_parity_2026-05-25.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_iphone14_parity_gpu_2026-05-25.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_iphone14_parity_gpu_2026-05-25.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_bands_dis_shrink_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_bands_dis_shrink_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_mode_b_d_scratch_shrink_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_d_scratch_shrink_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_mode_b_lazy_dscratch_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_lazy_dscratch_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_mode_b_p21bc_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_p21bc_2026-05-27.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_mode_b_skip_full_alloc_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_mode_b_skip_full_alloc_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_mode_e_phase3_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_path_a_phase1b_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_path_a_phase1b_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_safesyn_2026-09-23.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_safesyn_2026-09-23.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_safesyn_2026-09-23_MANIFEST.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_shared_math_2026-10-11.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/cvvdp_shared_math_2026-10-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_walker_round2_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/cvvdp_walker_round2_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/extracts/sources.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/dense_corpus_2026-06-25.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/fleet-fits_v9_tier_timing_2026-09-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/fsim_fusion_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/fsim_fusion_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gainmap_zensim_ceiling_k7_2026-08-27.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gainmap_zensim_census_k2_2026-08-27.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gainmap_zensim_census_k3_2026-08-27.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gmsd-chroma_harness.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gmsd-chroma_mdsi_gate_bundle.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gmsd-chroma_oracle_archive.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gmsd_parity_2026-09-22.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gpu_coldstart_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gpu_inprocess_warmth_2026-05-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gpu_inprocess_warmth_2026-05-29.tsv.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gpu_memory_audit_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gpu_memory_audit_2026-05-27.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gpu_metrics_estimates_2026-05-28.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gpu_metrics_gap_2026-05-28.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/gpu_mps_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/gpu_mps_2026-05-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/hdr_sweep_smoke_2026-06-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/hdr_sweep_smoke_2026-06-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/hdr_sweep_smoke_sdr_control_2026-06-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/hdrvdp2_corpus_ladder_2026-08-28.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/hdrvdp3_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/hdrvdp3_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/hdrvdp_perf_2026-08-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/_superseded_2026-05-28/stats_pre-refresh.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/_superseded_2026-05-28/summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/_superseded_2026-05-28/summary_20260528T044930Z.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/_superseded_2026-05-28/summary_20260528T050218Z.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/baseline_phase9x/stats.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/baseline_phase9x/summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/gmsd_peak_2026-09-22.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/gmsd_peak_v2_2026-09-23.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/heaptrack/refresh_2026-05-28/heaptrack_peaks.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_cuda_deployment_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_cuda_deployment_i134_partial_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_cuda_deployment_i134_reboot_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_cuda_deployment_i134_vendor_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_cuda_deployment_i134_vendor_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_cuda_deployment_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_deployment_dct_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_deployment_dct_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_dct_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_expanded_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_deployment_expanded_2026-10-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_expanded_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_expanded_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_expanded_resources_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_refresh_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_deployment_refresh_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_refresh_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_rolling_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_deployment_rolling_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_deployment_rolling_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_cachedref_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_cachedref_strip_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_cachedref_strip_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_native_rgb_perf_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_native_rgb_perf_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_residual_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_residual_wall_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_rolling_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_rolling_wall_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_smallimg/iwssim_reflect.parquet	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_smallimg/iwssim_tile.parquet	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_smallimg/iwssim_upscale.parquet	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_smallimg/manifest_2026-05-17.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
+benchmarks/iwssim_smallimg/ssim2_gpu.parquet	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_strip_2026-05-28/results.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_strip_2026-05-28/results.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_strip_borrow_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_strip_cache_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iwssim_strip_cache_wall_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iwssim_strip_vs_whole_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/jxl_encode_ms_parasite_2026-09-09.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/jxl_encode_ms_parasite_2026-09-09.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/jxl_lossy_memval_2026-06-25.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/jxl_lossy_p0_2026-06-25.data.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/jxl_phone_highfreq_phase2_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/jxl_phone_highfreq_phase2_2026-05-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/jxl_phone_vs_desktop_rd_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/jxl_phone_vs_desktop_rd_2026-05-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo-2026-06-29/loo_zenjpeg_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo-2026-06-29/loo_zenjxl_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo-2026-06-29/loo_zenwebp_lossy_ssim2.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo_zenjpeg_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo_zenjxl_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loo_zenwebp_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/loop_norm_calibration_2026-10-15.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/margarine/margarine_aic2026_inventory_2026-09-25.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_avif_training_inventory_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_borrowed_rows_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_borrowed_rows_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_borrowed_rows_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_bounded_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_bounded_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_bounded_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_bounded_resources_2026-09-26_fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_box3_gate_diagnostic_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_box3_optimization_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_box3_timing_mac_2026-09-25.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_box3_timing_r5900_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_box3_timing_r5900_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_cluster_aic4_2026-09-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_cluster_aic4_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_cluster_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_cluster_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_coarse_control_and_profile_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_compact4_rejected_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_compact4_rejected_2026-09-26.timing.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_compact_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_compact_aic4_2026-09-26.timing.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_composite_worst_groups_aic4_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_composite_worst_groups_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_composites_aic4_2026-09-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_composites_cid22_2026-09-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_dense_jpeg_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_dense_references_pilot_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_direct_profiles_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_expand_lanes_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_expand_lanes_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_expand_lanes_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_expand_lanes_rows256_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_expand_lanes_rows256_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_extended_corpora_tower_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_features228_mac_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_features228_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_features228_strips_mac_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_features228_strips_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_features372_mac_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_features372_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_fir_lanes_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fir_lanes_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_fir_lanes_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fitted_resource_smoke_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fixed_max_diagnostics_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_fixed_max_diagnostics_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fixed_max_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_full_malta_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_full_malta_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_full_malta_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_full_malta_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fused_malta_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_fused_malta_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_fused_malta_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_heap_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_independent_scales_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_latest_full_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_latest_full_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_latest_rgb8_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_latest_rgb8_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_aic4_intervals_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_aic4_intervals_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_csiq_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_human_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_human_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_kadid_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_kadid_compression_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_kadid_participants_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_opt_1mp_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_quality_bands_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_lattice_quality_bands_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_whole_1mp_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_lattice_whole_1mp_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_live1_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_live1_ablation_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_live1_bounded_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_live1_originals_tower_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_controls_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_malta_rows256_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_rows256_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_malta_rows256_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_uniform_aic4_bootstrap_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_malta_uniform_aic4_bootstrap_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_uniform_cid22_kadid_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_malta_uniform_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_uniform_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_malta_uniform_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_malta_uniform_resources_fits_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_masked_rows_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_masked_rows_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_multirate_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_multirate_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_multirate_human_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_multirate_human_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_native_parity_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_optimized_1mp_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26_1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26_256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26_3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_multirate_resources_2026-09-26_64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_named_cli_macos_smoke_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_named_cli_replay_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_named_cli_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_named_cli_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native16_lut_cid22_replay_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native16_lut_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native16_lut_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native_gaussian_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native_gaussian_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_gaussian_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_gaussian_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native_mask_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_precision_baseline_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_precision_baseline_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native_uhf_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_uhf_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_uhf_live1_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_uhf_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_native_uhf_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_native_uhf_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_old_extractor_fit_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_opsin_full_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_opsin_full_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_opsin_lanes_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_opsin_lanes_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_opsin_lanes_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_peak_stratified_live1_rejected_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_perceptual_rejected_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_perceptual_rejected_2026-09-26_1mp.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_phase_rows_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_phase_rows_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_phase_rows_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_phase_tiles_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_phase_tiles_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_phase_tiles_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_physical_rejected_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_physical_rejected_2026-09-26_1mp.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_planar_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_planar_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_planar_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_planar_tiles_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_planar_tiles_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_rejected_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_pooled_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_qualification_report_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_reference_regions_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined1_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26_1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26_256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26_3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined1_resources_2026-09-26_64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined2_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined2_opt_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26_1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26_256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26_3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_opt_resources_2026-09-26_64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26_1024x1024.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26_256x256.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26_3355x2516.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined2_resources_2026-09-26_64x64.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refined_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_refined_aic4_2026-09-26_1mp.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_refreshed_fit_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_repository_migration_2026-09-27.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_edge_strips64_mac_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_edge_strips64_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_resource_edge_strips64_mac_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_edges_mac_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_edges_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_resource_edges_mac_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_scaling_mac_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_resource_scaling_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_resource_scaling_mac_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_reuse_1mp_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_reuse_parity_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_rgb8_mac_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_rgb8_mac_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_cache_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_cache_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_cache_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_malta_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_malta_resources_2026-09-26.fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_malta_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_malta_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_psycho_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_psycho_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_psycho_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_reduce_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_reduce_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_reduce_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_tiles_aic4_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_row_tiles_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_row_tiles_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_screen_geometry_controls_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_screen_geometry_controls_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_coarse_full_screen_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_malta_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_malta_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_simd_malta_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_row_malta_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_simd_row_malta_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_tiles1024_rows96_resources_2026_09_26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_simd_tiles1024_rows96_resources_2026_09_26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_simd_tiles768_rows128_resources_2026_09_26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_simd_tiles768_rows128_resources_2026_09_26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_single_region_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_single_region_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_sparse_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_sparse_aic4_2026-09-26.timing.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_sparse_aic4_2026-09-26.window-timing.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stable_peak_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_aic4_intervals_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_aic4_intervals_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stratified_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stratified_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_csiq_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_human_choices_cid22_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_human_choices_cid22_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stratified_kadid_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_kadid_participants_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stratified_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stratified_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stratified_resources_2026-09-26_fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_stream_blur_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stream_blur_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_stream_blur_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_student_human_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_student_human_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_teacher_feature_smoke_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_teacher_tower_2026-09-26.pointer.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_teacher_training_inventory_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_tiles_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_tiles_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_tiles_resources_2026-09-26_fits.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_full_streamed_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_row_aic4_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_aic4_bootstrap_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_aic4_bootstrap_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_row_aic4_intervals_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_aic4_intervals_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_row_kadid_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_kadid_participants_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_kadid_participants_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_row_live1_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_expand_row_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_expand_row_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_aic3_point_choices_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_aic3_point_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_cid22_bootstrap_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_cid22_bootstrap_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_cid22_point_choices_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_cid22_point_choices_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_content_resources_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_content_resources_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_corpora_tower_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_diagnostics_tower_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_pipal_quality_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_primary_comparison_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_primary_comparison_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_vector_row_quality_bands_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/margarine/margarine_vector_row_quality_bands_2026-09-26.tsv	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_x86_edge_tail_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
+benchmarks/margarine/margarine_zero_sigma_panels_2026-09-26.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/mem_per_metric_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/mem_per_metric_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/metric_loop_2026-08-30.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/metric_loop_batch_metal_2026-08-30.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/metric_loop_ssim2_corrected_2026-08-30.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/metric_mapping_2026-06-23.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/mode_wall_2026-05-31.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/mode_wall_2026-05-31.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/multiwarm_session_pool_2026-05-30.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nlpd_baseline_zenbench_1t_2026-10-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nlpd_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nlpd_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/dists.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/lpips-alex.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/lpips-vgg.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/pairs.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/stlpips-alex.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_aic2026_crosscheck_2026-10-15/stlpips-vgg.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_lpips_phase0_2026-10-15/lpips_vgg_export.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/nn_opt2_2026-10-15/ab_afine_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_afine_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_afine_new_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_afine_new_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_arniqa_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_arniqa_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_arniqa_new_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_arniqa_new_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_ckdn_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_ckdn_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_ckdn_new_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_ckdn_new_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_dreamsim_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_dreamsim_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_dreamsim_new_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_dreamsim_new_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_maniqa_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_maniqa_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_maniqa_new_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/ab_maniqa_new_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_afine.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_arniqa.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_ckdn.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_dreamsim.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_liqe.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/base_maniqa.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_bit_identity.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_contended_ckdn.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_bit_identity.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_ckdn.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_identity.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_identity_scores.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_perf.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_rss.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_final_rss.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_identity.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/review_identity_scores.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/t1_ckdn_base.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt2_2026-10-15/t1_ckdn_new.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_a_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_a_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_a_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_a_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_b_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_b_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/ab_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/host_stage_share.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt3_2026-10-16/host_stages_base.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_a_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_a_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_a_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_a_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_b_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_b_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_c_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_c_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_c_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_afine_c_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_a_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_a_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_a_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_a_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_b_base_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_b_base_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt4_2026-10-16/host_stage_share.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab2_dists_v1_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab2_dists_v1_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab2_dists_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab2_dists_v2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab3_alex_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab3_alex_v2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab3_alex_v3_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab3_alex_v3_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_alex_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_alex_v2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_alex_v4_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_alex_v4_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v2_c.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v4_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v4_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_dists_v4_c.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_vgg_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_vgg_v2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_vgg_v4_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab4_vgg_v4_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_alex_base_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_alex_base_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_alex_v1_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_alex_v1_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_dists_base_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_dists_base_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_dists_v1_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/ab_dists_v1_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/base_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/base_lpips_alex_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/base_lpips_squeeze_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/base_lpips_vgg_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r0_alex_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r0_alex_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r0_dists_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r0_dists_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_alex_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_alex_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_d2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_d2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_dists_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r1_dists_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_alex_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_alex_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_d2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_d2_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_d4_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_d4_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_vgg_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r2_vgg_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_alex_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_alex_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_d4_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_d4_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_vgg_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/rb_r4_vgg_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v1_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v1_lpips_alex_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v2_dists_1t.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v2_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v3_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v3_lpips_alex_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v3_lpips_vgg_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v4_alex_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v4_dists_1t.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v4_dists_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt_2026-10-15/v4_vgg_r16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nr_learned_review_2026-10-15.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/orchestrator_parity_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase771_run1.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase771_run2.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase771_run3.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase8c1b.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase8f.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase8g1.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_2026-05-27_phase9zb.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/orchestrator_parity_phase8i_freshcache.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/paq2piq_review_2026-10-16_export.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/paq2piq_review_2026-10-16_inputs.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/picker-pp-artifacts-2026-06-22.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/picker_projection_2026-06-30.json	ignored	Training or encoder-picker experiment outside metric-observation dashboard scope.
+benchmarks/picker_projection_2026-06-30.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/pieapp_2026-10-16_goldens.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_2026-10-16_inputs.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_2026-10-16_konjnd.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_2026-10-16_qualification.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/cap.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/pieapp_review_2026-10-16/cli.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/export-v3.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/head-positive.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/head.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/pieapp_review_2026-10-16/konjnd-comparison-v3.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/konjnd-shards.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/merged-gates.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/reconstruction-v3.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/shards.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/summary-v3.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/weight-identify.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/weight-sign-diagnostic.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/weight-sign-initial.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/pieapp_review_2026-10-16/weight-sign-joint.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenavif_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/planspec_smoke_zenavif_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenavif_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenjpeg_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/planspec_smoke_zenjpeg_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenjpeg_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenjxl_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/planspec_smoke_zenjxl_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenjxl_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenpng_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/planspec_smoke_zenpng_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenpng_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenwebp_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/planspec_smoke_zenwebp_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/planspec_smoke_zenwebp_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_candidate_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/psnrhvs_daala_baseline_zenbench_1t_2026-10-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_daala_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/psnrhvs_daala_qualification_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_daala_rounding_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/psnrhvs_daala_rounding_zenbench_1t_2026-10-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_daala_vector_dct_2026-10-12.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/psnrhvs_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/psnrhvs_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/rav1d_pin_66f58fa6_2026-08-29.tsv.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/router_models_2026-06-30.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/setref_clean_all_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/setref_clean_all_2026-05-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_after_3ch_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_after_3ch_2026-05-27.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/ssim2_aliasing_perf_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_baseline_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_baseline_2026-05-27.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/ssim2_final_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_final_2026-05-27.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/ssim2_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/ssim2_strip_vs_whole_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/v40r2_program_2026-10-07.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/v40r3_program_2026-10-08.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/v40r4_program_2026-10-08.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/vram_cleanup_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/vram_cleanup_2026-05-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/vsi_powf_pair_2026-10-14.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/vsi_powf_pair_2026-10-14.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/wd_port_2026-10-16/aic_receipt.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/wd_port_2026-10-16/aic_selection.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/wd_port_2026-10-16/cap_memory.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/wd_port_2026-10-16/export.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/wd_port_2026-10-16/konjnd_scales.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/zensim_cached_ref_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/zensim_cached_ref_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.

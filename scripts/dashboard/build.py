@@ -3,14 +3,14 @@
 import argparse
 import csv
 import hashlib
-import io
 import json
 import math
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import tomllib
+from adapters import normalize, normalize_status
+from catalog import rows as catalog_rows
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_SUFFIXES = {'.csv', '.tsv', '.json', '.jsonl', '.parquet', '.meta'}
@@ -18,12 +18,14 @@ DATA_SUFFIXES = {'.csv', '.tsv', '.json', '.jsonl', '.parquet', '.meta'}
 
 def inventory(root=ROOT):
     return sorted(p.relative_to(root).as_posix() for p in (root / 'benchmarks').rglob('*')
-                  if p.is_file() and (p.suffix in DATA_SUFFIXES or p.name.endswith('.pointer.md')))
+                  if p.is_file() and p.name != 'classification.tsv' and (p.suffix in DATA_SUFFIXES or p.name.endswith('.pointer.md')))
 
 
 def number(value):
     if value is None or value == '':
         return None
+    if value in ['NaN','nan','N/A','NA','--']:
+        raise ValueError(f'non-finite measurement: {value}')
     result = float(value)
     if not math.isfinite(result):
         raise ValueError(f'non-finite measurement: {value}')
@@ -33,11 +35,11 @@ def number(value):
 def table(path, columns):
     lines = [line for line in path.read_text().splitlines() if line.strip() and not line.startswith('#')]
     reader = csv.DictReader(lines, delimiter='\t' if path.suffix == '.tsv' else ',')
-    if set(reader.fieldnames or []) != set(columns):
+    if set(reader.fieldnames or []) != set(columns) or len(reader.fieldnames or []) != len(columns):
         raise ValueError(f'{path.name}: schema mismatch: {reader.fieldnames}')
     for row in reader:
         if None in row or any(v is None for v in row.values()):
-            raise ValueError(f'{path.name}: malformed row')
+            raise ValueError(f'{path}: malformed row')
         yield row
 
 
@@ -50,13 +52,27 @@ def provenance(path, spec):
     paths = [ROOT / p for p in spec.get('metadata', [])]
     paths += [path.with_suffix('.meta'), path.with_suffix('.meta.json')]
     paths += [path.parent / 'README.md']
+    paths += list(path.parents[0].glob('run.meta'))
+    if path.parent.parent.name.startswith('cpu_metrics_1t8t'): paths += [path.parent.parent/'run.meta']
     existing = list(dict.fromkeys(p for p in paths if p.is_file()))
     evidence = '\n'.join(p.read_text(errors='strict') for p in existing)
-    commits = re.findall(r'(?:build_commit|repo_commit[^:\n]*|commit_sha)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence)
-    commands = re.findall(r'^run:\s*(.+)$', evidence, re.MULTILINE)
+    commits = re.findall(r'(?:build_commit|repo_commit[^:\n]*|commit_sha|base_commit|^commit)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence,re.MULTILINE|re.IGNORECASE)
+    commands = re.findall(r'^(?:run|command|reproduce)\s*[:=]\s*(.+)$', evidence, re.MULTILINE)
+    for metadata in existing:
+        if metadata.suffix=='.json':
+            obj=json.loads(metadata.read_text())
+            if isinstance(obj,dict) and isinstance(obj.get('command'),str):commands.insert(0,obj['command'])
+    host=spec.get('host','missing')
+    if host=='missing':
+        found=re.search(r'^host\s*[:=]\s*([a-z0-9]+)',evidence,re.MULTILINE|re.IGNORECASE)
+        if found and valid_host(found[1]):host=found[1]
+        elif '7950X' in evidence:host='r7950x'
+        elif '7900X' in evidence:host='r7900x'
+        elif 'Apple M4' in evidence:host='mac'
+    if host!='missing' and not valid_host(host):raise ValueError('noncanonical registry host')
     dates = re.findall(r'20\d\d-\d\d-\d\d', str(path))
     return dict(source=path.relative_to(ROOT).as_posix(), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                commit=commits[0] if commits else 'missing', host=spec.get('host', 'missing'),
+                commit=commits[0] if commits else 'missing', host=host,
                 date=dates[0] if dates else 'missing', command=safe_text(spec.get('command', commands[0] if commands else 'missing')),
                 metadata=[p.relative_to(ROOT).as_posix() for p in existing],
                 note=spec.get('note', 'Historical observation; consult source conditions.'))
@@ -72,13 +88,17 @@ def adapt(path, spec):
                            width=int(row['w']), height=int(row['h']), ms=number(row[col]), status='ok')
     elif adapter == 'parity':
         for row in table(path, spec['columns']):
-            ours, ref = number(row['ours']), number(row['oracle'])
-            yield dict(metric=spec['metric'], pair=row['key'], ours=ours, reference=ref,
-                       abs_delta=abs(ours-ref), relative_delta=abs((ours-ref)/ref) if ref else None,
-                       jnd_delta=number(row['oracle_jnd_error']), size='missing', status='historical')
+            for series in ['oracle','published']:
+                if series not in row: continue
+                ours,ref=number(row['ours']),number(row[series])
+                yield dict(metric=spec['metric'],pair=row['key'],series=series,ours=ours,reference=ref,
+                           abs_delta=number(row.get(series+'_error')) if ours is not None and ref is not None else None,relative_delta=abs((ours-ref)/ref) if ref else None,
+                           jnd_delta=number(row.get(series+'_jnd_error')),size='missing',status='historical' if ours is not None and ref is not None else 'failed',details=safe_text(row.get(series+'_error','')) if ours is None or ref is None else 'observed delta',
+                           oracle_precision=spec.get('oracle_precision','not recorded'),
+                           reproduction=spec.get('reproduction','not qualified by this panel'))
     elif adapter == 'quality':
         for row in table(path, spec['columns']):
-            yield dict(metric=f"margarine/{row['arm']}/{row['norm']}", dataset=row['dataset'],
+            yield dict(metric=f"margarine/{row['arm']}/{row.get('norm',row.get('pooling','unspecified'))}",experiment=path.stem, dataset=row['dataset'],
                        scope=row['scope'], subset=row['key'], n=int(row['n']), status=row['status'],
                        srocc=number(row['srocc']), plcc=number(row['plcc']), krocc=number(row['krocc']),
                        ci='missing', mos=None, score=None)
@@ -112,49 +132,100 @@ def adapt(path, spec):
                           comparison_status=row.get('comparison_status', 'missing'),
                           reproduction_required=row.get('reproduction_required', False),
                           ours=number(row.get('score')), reference=number(row.get('ref_score')),
-                          abs_delta=number(row.get('abs_delta')), relative_delta=number(row.get('relative_delta')))
+                          abs_delta=number(row.get('abs_delta')), relative_delta=number(row.get('relative_delta')),
+                          pair=row.get('pair_sha256','missing'),series='competition reference',
+                          p10_ms=number(row.get('p10_ns'))/1e6 if row.get('p10_ns') is not None else None,
+                          p90_ms=number(row.get('p90_ns'))/1e6 if row.get('p90_ns') is not None else None,
+                          n=row.get('n'),peak_rss_gib=(row.get('resource') or {}).get('peak_rss_gib'),
+                          cpu=row.get('cpu_model'),gpu=row.get('gpu'),simd_tier=row.get('simd_tier'),
+                          parity_status=row.get('parity_status','missing'))
             yield result
     else:
-        raise ValueError(f'unknown adapter: {adapter}')
+        yield from normalize(path,spec,table,number)
 
 
 def catalog():
-    source = (ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
-    names = re.findall(r'MetricKind::\w+ => "([^"]+)"', source.split('pub fn name(self)')[1].split('pub fn backend')[0])
-    ledger = (ROOT/'docs/METRIC_PROVENANCE.md').read_text().splitlines()
-    cards = list((ROOT/'crates/zenmetrics-nn/models').glob('*/card.toml'))
-    for name in sorted(set(names)):
-        entries = [line for line in ledger if line.startswith('| ') and f'`{name}`' in line.split('|')[1]]
-        fields = entries[0].split('|') if entries else []
-        card = next((p for p in cards if p.parent.name == name.replace('-', '_')), None)
-        license_name = 'missing; see source'
-        if card:
-            parsed = tomllib.loads(card.read_text())
-            license_name = str(parsed.get('weights', {}).get('terms', parsed.get('weights', {}).get('licence_class', license_name)))
-        yield dict(metric=name, backend='GPU' if name.endswith('-gpu') else 'CPU (build features apply)',
-                   reference=safe_text(fields[4].strip()) if len(fields)>4 else 'missing',
-                   parity='Evidence linked; no qualification inferred' if entries else 'missing',
-                   license=license_name, docs='docs/METRIC_PROVENANCE.md')
+    yield from catalog_rows()
+
+
+def valid_host(host):
+    return host in {'dev','tower','mac'} or bool(re.fullmatch(r'[ri]\d+[a-z0-9]*',str(host)))
+
+
+def scan_output(output):
+    import importlib.util
+    file=ROOT/'scripts/ci/check_hygiene.py'
+    module_spec=importlib.util.spec_from_file_location('dashboard_hygiene',file)
+    module=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(module)
+    patterns=module.load_patterns()
+    if not patterns:raise ValueError('hygiene patterns missing')
+    for p in output.rglob('*'):
+        if not p.is_file():continue
+        text=p.read_text()
+        if any(rx.search(text) for _,rx in patterns):raise ValueError(f'hygiene class in output: {p.name}')
+        if re.search(r'/(?:home|mnt|Users)/',text):raise ValueError(f'local path in output: {p.name}')
+
+
+def validate_inventory(root,registered):
+    records=list(table(root/'benchmarks/dashboard/classification.tsv',['path','classification','reason']))
+    classified={r['path']:r for r in records}
+    if len(classified)!=len(records):raise ValueError('duplicate classifications')
+    unregistered=set(inventory(root))-registered
+    unknown=unregistered-set(classified)
+    if unknown:raise ValueError('unclassified benchmark uploads: '+str(sorted(unknown)))
+    stale=set(classified)-set(inventory(root))
+    if stale:raise ValueError('stale classifications: '+str(sorted(stale)))
+    if any(not r['reason'] or r['classification']!='ignored' for r in classified.values()):raise ValueError('invalid classification')
+    return unregistered
 
 
 def build(output):
     registry = tomllib.loads((ROOT/'benchmarks/dashboard/datasets.toml').read_text())
-    families = {k: [] for k in ['speed', 'agreement', 'quality', 'catalog']}
-    sources = {}; registered = set()
+    families = {k: [] for k in ['speed', 'agreement', 'quality', 'catalog', 'coverage', 'scales']}
+    sources = {}; registered = set(); matches=[];source_counts={};source_mode_counts={}
+    aliases={c:r['metric'] for r in catalog_rows() for c in r['columns'].split(';') if c};aliases['butter']='butteraugli';aliases['ms-ssim']='msssim'
     for spec in registry['dataset']:
         paths = sorted(ROOT.glob(spec['glob']))
         if not paths and not spec.get('allow_absent', False):
             raise ValueError(f"registered glob has no files: {spec['glob']}")
+        matches.append(dict(glob=spec['glob'],allow_absent=spec.get('allow_absent',False),matches=len(paths)))
         for path in paths:
             key = path.relative_to(ROOT).as_posix()
             if key in registered:
                 raise ValueError(f'duplicate registration: {key}')
             registered.add(key); sources[key] = provenance(path, spec)
-            for row in adapt(path, spec):
+            source_counts[key]=0;source_mode_counts[key]={}
+            runtime=dict(spec,host=sources[key]['host'])
+            for row in adapt(path, runtime):
                 row['source'] = key
+                if spec['family']=='speed' and row.get('metric') in aliases:
+                    row['metric_recorded']=row['metric'];row['metric']=aliases[row['metric']]
+                if 'status' in row:
+                    normalized,detail=normalize_status(row['status']);row['status']=normalized;row['details']=row.get('details',detail)
+                if spec['family']=='speed' and row.get('ms') is None and row['status'] in ['ok','historical']:
+                    row['status']='unavailable';row['details']='Missing timing or recorded refusal; '+row.get('details','')
+                if sources[key]['host']=='missing' and row.get('host') and valid_host(row['host']):sources[key]['host']=row['host']
+                if 'host' in row and row['host']!='missing' and not valid_host(row['host']):raise ValueError('noncanonical data host')
+                source_counts[key]+=1
+                if 'mode' in row:
+                    mode=str(row['mode']);source_mode_counts[key][mode]=source_mode_counts[key].get(mode,0)+1
                 families[spec['family']].append(row)
                 if spec['adapter']=='competition' and row.get('abs_delta') is not None:
                     families['agreement'].append(row.copy())
+                if spec.get('also_agreement'):
+                    for raw in table(path,spec['columns']):
+                        ours=raw['cuda_score'];ref=raw['vk_score']
+                        if ours not in ['NaN','nan',''] and ref not in ['NaN','nan','']:
+                            a=number(ours);b=number(ref)
+                            families['agreement'].append(dict(metric='ssim2-gpu',pair=raw['size'],size=raw['size'],series='CUDA vs Vulkan',ours=a,reference=b,abs_delta=abs(a-b),relative_delta=abs((a-b)/b) if b else None,source=key,status='historical'))
+                    # This linked panel is emitted once per file, below the row loop.
+                    spec['also_agreement']=False
+            if spec.get('also_pairs'):
+                for raw in json.loads(path.read_text()):
+                    for series in ['oracle','published']:
+                        if raw.get(series) is not None:
+                            a=number(raw['ours']);b=number(raw[series])
+                            families['agreement'].append(dict(metric=spec['metric'],pair=raw['key'],series=series,ours=a,reference=b,abs_delta=abs(a-b),relative_delta=abs((a-b)/b) if b else None,source=key,status='historical'))
     families['catalog'] = list(catalog())
     output.mkdir(parents=True, exist_ok=True)
     for path in (ROOT/'web/dashboard').iterdir():
@@ -162,13 +233,12 @@ def build(output):
     data = output/'data'; data.mkdir(exist_ok=True)
     for family, rows in families.items():
         (data/f'{family}.json').write_text(json.dumps(rows, allow_nan=False, separators=(',', ':')))
-    manifest = dict(schema=1, counts={k:len(v) for k,v in families.items()}, sources=sources,
-                    registered=sorted(registered), unregistered=sorted(set(inventory())-registered))
+    unregistered=validate_inventory(ROOT,registered)
+    manifest = dict(schema=2, counts={k:len(v) for k,v in families.items()}, sources=sources,
+                    registered=sorted(registered),unregistered_count=len(unregistered),
+                    glob_matches=matches,source_counts=source_counts,source_mode_counts=source_mode_counts)
     (data/'manifest.json').write_text(json.dumps(manifest, indent=2))
-    # No raw metadata, local paths or input-image identifiers are copied into the site.
-    for p in output.rglob('*'):
-        if p.is_file() and re.search(r'/home/|/mnt/v|/Users/|192\.168\.', p.read_text()):
-            raise ValueError(f'private location in public output: {p.name}')
+    scan_output(output)
     print(json.dumps(manifest['counts']))
     return manifest
 
