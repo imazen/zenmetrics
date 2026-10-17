@@ -1,0 +1,376 @@
+{
+ "schema": 1,
+ "host": "r7900x",
+ "gap_seconds": 300.0,
+ "generated_utc": "2026-10-17T12:47:45+00:00",
+ "host_sessions_in_scope": 9,
+ "host_sessions_touching_a_family": 9,
+ "host_sessions_by_agent": {
+  "claude": 3,
+  "codex": 3,
+  "devin": 3
+ },
+ "host_union_active_hours": 10.214,
+ "families": [
+  {
+   "family": "CVVDP",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 589,
+   "active_hours_nonadditive": 9.15,
+   "elapsed_hours_nonadditive": 182.23,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "IW-SSIM",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 229,
+   "active_hours_nonadditive": 8.028,
+   "elapsed_hours_nonadditive": 179.094,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "SSIM",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 214,
+   "active_hours_nonadditive": 9.489,
+   "elapsed_hours_nonadditive": 182.569,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "Butteraugli",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 4,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-09-26",
+   "last_day": "2026-09-26",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "SSIMULACRA2",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 4,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-09-26",
+   "last_day": "2026-09-26",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "DSSIM",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 5,
+   "active_hours_nonadditive": 0.001,
+   "elapsed_hours_nonadditive": 0.001,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-12",
+   "sessions_by_agent": {
+    "devin": 2
+   }
+  },
+  {
+   "family": "HDR-VDP-2 / -3",
+   "sessions": 5,
+   "shared_sessions": 5,
+   "edit_calls": 1114,
+   "active_hours_nonadditive": 7.689,
+   "elapsed_hours_nonadditive": 178.755,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "GMSD",
+   "sessions": 5,
+   "shared_sessions": 5,
+   "edit_calls": 86,
+   "active_hours_nonadditive": 7.689,
+   "elapsed_hours_nonadditive": 178.755,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "VMAF",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 595,
+   "active_hours_nonadditive": 9.15,
+   "elapsed_hours_nonadditive": 182.23,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "PSNR-HVS",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 144,
+   "active_hours_nonadditive": 5.996,
+   "elapsed_hours_nonadditive": 13.159,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "HaarPSI",
+   "sessions": 3,
+   "shared_sessions": 3,
+   "edit_calls": 41,
+   "active_hours_nonadditive": 5.995,
+   "elapsed_hours_nonadditive": 13.159,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "FSIM / FSIMc",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 180,
+   "active_hours_nonadditive": 6.713,
+   "elapsed_hours_nonadditive": 18.55,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "VSI",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 192,
+   "active_hours_nonadditive": 6.713,
+   "elapsed_hours_nonadditive": 18.55,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "MS-SSIM",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 157,
+   "active_hours_nonadditive": 7.796,
+   "elapsed_hours_nonadditive": 16.974,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "VIF",
+   "sessions": 5,
+   "shared_sessions": 4,
+   "edit_calls": 197,
+   "active_hours_nonadditive": 1.062,
+   "elapsed_hours_nonadditive": 5.736,
+   "first_day": "2026-09-26",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "MAD",
+   "sessions": 3,
+   "shared_sessions": 3,
+   "edit_calls": 569,
+   "active_hours_nonadditive": 0.34,
+   "elapsed_hours_nonadditive": 0.34,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "mDCT-PSNR",
+   "sessions": 3,
+   "shared_sessions": 3,
+   "edit_calls": 262,
+   "active_hours_nonadditive": 1.694,
+   "elapsed_hours_nonadditive": 165.596,
+   "first_day": "2026-10-09",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "NLPD",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 183,
+   "active_hours_nonadditive": 9.15,
+   "elapsed_hours_nonadditive": 182.23,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "PSNR",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 78,
+   "active_hours_nonadditive": 9.15,
+   "elapsed_hours_nonadditive": 182.23,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "CIEDE2000",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 78,
+   "active_hours_nonadditive": 9.15,
+   "elapsed_hours_nonadditive": 182.23,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-16",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 3
+   }
+  },
+  {
+   "family": "CW-SSIM",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "SSIMULACRA",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "CAMBI",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 84,
+   "active_hours_nonadditive": 7.456,
+   "elapsed_hours_nonadditive": 16.634,
+   "first_day": "2026-09-25",
+   "last_day": "2026-10-13",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "WS-HV",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "Wasserstein Distortion",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "PieAPP",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  }
+ ]
+}

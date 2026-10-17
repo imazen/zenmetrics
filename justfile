@@ -1620,3 +1620,8 @@ bench-iqa-check:
 # Optional adapter contract checks; no external checkout or C++ source required.
 bench-iqa-optional-check:
     just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel --bin bench-iqa optional_dvifm
+
+# IQA method-complexity tallies: evaluator tests and schema validation (docs/IQA_COMPLEXITY.md).
+complexity-check:
+    cd scripts/complexity && python3 -m unittest test_evaluate
+    python3 scripts/complexity/evaluate.py --check benchmarks/iqa_complexity_2026-10-17/tallies/*.json

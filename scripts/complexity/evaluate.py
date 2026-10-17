@@ -22,7 +22,8 @@ ACCESS = {'pointwise', 'sep_stencil', 'stencil2d', 'block', 'downsample', 'upsam
           'transform', 'reduction', 'gather', 'histogram', 'sort', 'data_dependent', 'matmul', 'conv'}
 STAGE_KEYS = {'id', 'name', 'source', 'images', 'elements', 'levels', 'precision', 'ops',
               'bytes_read', 'bytes_written', 'access', 'radius', 'scale', 'chain', 'span',
-              'depends_on', 'barrier', 'serial', 'shared_with', 'notes', 'logical_layer'}
+              'depends_on', 'barrier', 'serial', 'shared_with', 'notes', 'logical_layer', 'axis', 'class'}
+CLASSES = {'intrinsic', 'implementation'}  # implementation: work the method does not require (strip overlap recompute, padding copies)
 SAFE = {k: getattr(math, k) for k in ('ceil', 'floor', 'log2', 'log', 'sqrt', 'exp', 'pi')}
 SAFE.update(min=min, max=max, abs=abs, round=round, int=int, sum=sum, range=range)
 
@@ -72,6 +73,10 @@ def validate(tally):
         ids.add(sid)
         if s.get('precision') not in PRECISIONS:
             errs.append(f"{sid}: precision {s.get('precision')!r}")
+        if s.get('axis', 'xy') not in ('x', 'y', 'xy', 'none'):
+            errs.append(f"{sid}: axis {s.get('axis')!r}")
+        if s.get('class', 'intrinsic') not in CLASSES:
+            errs.append(f"{sid}: class {s.get('class')!r}")
         if s.get('access') not in ACCESS:
             errs.append(f"{sid}: access {s.get('access')!r}")
         bad = set(s.get('ops', {})) - set(OPS)
@@ -97,6 +102,7 @@ def evaluate(tally, w, h):
     P = w * h
     stages = {s['id']: s for s in tally['stages']}
     totals = {(op, s['precision']): 0.0 for s in tally['stages'] for op in OPS}
+    by_class = {c: 0.0 for c in CLASSES}
     per_stage, bytes_rw = [], [0.0, 0.0]
     span_of, halo_of, min_width = {}, {}, math.inf
     barriers = serial = 0
@@ -117,18 +123,23 @@ def evaluate(tally, w, h):
             sp = ev(s.get('span', 1), e)
             span = span + sp if chain else max(span, sp)
             halo_levels.append(ev(s.get('radius', 0), e) * ev(s.get('scale', 1), e))
-        own_halo = sum(halo_levels) if chain else max(halo_levels)
+        own = sum(halo_levels) if chain else max(halo_levels)
+        axis = s.get('axis', 'xy')
+        own_xy = (own if axis in ('x', 'xy') else 0.0, own if axis in ('y', 'xy') else 0.0)
         deps = s.get('depends_on', [])
         span_of[s['id']] = span + max((span_of[d] for d in deps), default=0.0)
-        halo_of[s['id']] = own_halo + max((halo_of[d] for d in deps), default=0.0)
+        base = (max((halo_of[d][0] for d in deps), default=0.0), max((halo_of[d][1] for d in deps), default=0.0))
+        halo_of[s['id']] = (base[0] + own_xy[0], base[1] + own_xy[1])
         barriers += bool(s.get('barrier'))
         serial += bool(s.get('serial'))
+        cls = s.get('class', 'intrinsic')
         for op in OPS:
             totals[(op, s['precision'])] += work[op]
-        per_stage.append({'id': s['id'], 'access': s['access'], 'precision': s['precision'],
+            by_class[cls] += FLOP_WEIGHT.get(op, 0) * work[op]
+        per_stage.append({'id': s['id'], 'access': s['access'], 'precision': s['precision'], 'class': cls,
                           'elements_per_px': elems_total / P,
                           'ops_per_px': {op: v / P for op, v in work.items() if v},
-                          'halo_px': halo_of[s['id']], 'span': span_of[s['id']]})
+                          'halo_px': max(halo_of[s['id']]), 'span': span_of[s['id']]})
     per_px = {}
     for (op, prec), v in totals.items():
         if v:
@@ -140,7 +151,11 @@ def evaluate(tally, w, h):
     return {'shape': f'{w}x{h}', 'ops_per_px': per_px, 'flops_per_px': flops / P,
             'arith_ops_per_px': arith / P, 'bytes_per_px': byt / P,
             'flops_per_byte': flops / byt if byt else None,
-            'halo_px': max(halo_of.values(), default=0.0), 'span': span_total,
+            'halo_px': max((max(h) for h in halo_of.values()), default=0.0),
+            'halo_x_px': max((h[0] for h in halo_of.values()), default=0.0),
+            'halo_y_px': max((h[1] for h in halo_of.values()), default=0.0),
+            'intrinsic_flops_per_px': by_class['intrinsic'] / P,
+            'implementation_flops_per_px': by_class['implementation'] / P, 'span': span_total,
             'work_over_span': arith / span_total if span_total else None,
             'min_stage_width': min_width, 'barriers': barriers, 'serial_stages': serial,
             'stages': per_stage}

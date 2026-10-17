@@ -1,0 +1,401 @@
+{
+ "schema": 1,
+ "host": "i265",
+ "gap_seconds": 300.0,
+ "generated_utc": "2026-10-17T12:47:28+00:00",
+ "host_sessions_in_scope": 18,
+ "host_sessions_touching_a_family": 11,
+ "host_sessions_by_agent": {
+  "claude": 3,
+  "codex": 9,
+  "devin": 6
+ },
+ "host_union_active_hours": 63.482,
+ "families": [
+  {
+   "family": "CVVDP",
+   "sessions": 8,
+   "shared_sessions": 8,
+   "edit_calls": 195,
+   "active_hours_nonadditive": 103.631,
+   "elapsed_hours_nonadditive": 296.939,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 3
+   }
+  },
+  {
+   "family": "IW-SSIM",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 91,
+   "active_hours_nonadditive": 88.926,
+   "elapsed_hours_nonadditive": 234.228,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 3,
+    "devin": 3
+   }
+  },
+  {
+   "family": "SSIM",
+   "sessions": 8,
+   "shared_sessions": 8,
+   "edit_calls": 159,
+   "active_hours_nonadditive": 103.439,
+   "elapsed_hours_nonadditive": 296.222,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 4
+   }
+  },
+  {
+   "family": "Butteraugli",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 106,
+   "active_hours_nonadditive": 114.107,
+   "elapsed_hours_nonadditive": 308.246,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 2
+   }
+  },
+  {
+   "family": "SSIMULACRA2",
+   "sessions": 5,
+   "shared_sessions": 5,
+   "edit_calls": 28,
+   "active_hours_nonadditive": 81.121,
+   "elapsed_hours_nonadditive": 251.21,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 1
+   }
+  },
+  {
+   "family": "DSSIM",
+   "sessions": 5,
+   "shared_sessions": 5,
+   "edit_calls": 24,
+   "active_hours_nonadditive": 81.121,
+   "elapsed_hours_nonadditive": 251.21,
+   "first_day": "2026-10-12",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 1
+   }
+  },
+  {
+   "family": "HDR-VDP-2 / -3",
+   "sessions": 8,
+   "shared_sessions": 8,
+   "edit_calls": 85,
+   "active_hours_nonadditive": 103.631,
+   "elapsed_hours_nonadditive": 296.939,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 3
+   }
+  },
+  {
+   "family": "GMSD",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 76,
+   "active_hours_nonadditive": 81.624,
+   "elapsed_hours_nonadditive": 251.713,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "VMAF",
+   "sessions": 8,
+   "shared_sessions": 8,
+   "edit_calls": 246,
+   "active_hours_nonadditive": 114.107,
+   "elapsed_hours_nonadditive": 308.246,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 3
+   }
+  },
+  {
+   "family": "PSNR-HVS",
+   "sessions": 5,
+   "shared_sessions": 5,
+   "edit_calls": 42,
+   "active_hours_nonadditive": 67.763,
+   "elapsed_hours_nonadditive": 165.37,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 2
+   }
+  },
+  {
+   "family": "HaarPSI",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 35,
+   "active_hours_nonadditive": 81.121,
+   "elapsed_hours_nonadditive": 251.21,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 2
+   }
+  },
+  {
+   "family": "FSIM / FSIMc",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 89,
+   "active_hours_nonadditive": 81.816,
+   "elapsed_hours_nonadditive": 252.431,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 2
+   }
+  },
+  {
+   "family": "VSI",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 87,
+   "active_hours_nonadditive": 81.121,
+   "elapsed_hours_nonadditive": 251.21,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 2
+   }
+  },
+  {
+   "family": "MS-SSIM",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 82,
+   "active_hours_nonadditive": 102.936,
+   "elapsed_hours_nonadditive": 295.719,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "VIF",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 54,
+   "active_hours_nonadditive": 36.619,
+   "elapsed_hours_nonadditive": 112.13,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "devin": 2
+   }
+  },
+  {
+   "family": "MAD",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 64,
+   "active_hours_nonadditive": 102.936,
+   "elapsed_hours_nonadditive": 295.719,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "mDCT-PSNR",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 80,
+   "active_hours_nonadditive": 16.038,
+   "elapsed_hours_nonadditive": 64.57,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "NLPD",
+   "sessions": 8,
+   "shared_sessions": 8,
+   "edit_calls": 64,
+   "active_hours_nonadditive": 103.631,
+   "elapsed_hours_nonadditive": 296.939,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 3
+   }
+  },
+  {
+   "family": "PSNR",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 61,
+   "active_hours_nonadditive": 81.624,
+   "elapsed_hours_nonadditive": 251.713,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "CIEDE2000",
+   "sessions": 7,
+   "shared_sessions": 7,
+   "edit_calls": 61,
+   "active_hours_nonadditive": 81.624,
+   "elapsed_hours_nonadditive": 251.713,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 2,
+    "devin": 3
+   }
+  },
+  {
+   "family": "CW-SSIM",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 15,
+   "active_hours_nonadditive": 45.849,
+   "elapsed_hours_nonadditive": 115.952,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1
+   }
+  },
+  {
+   "family": "SSIMULACRA",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 21,
+   "active_hours_nonadditive": 45.849,
+   "elapsed_hours_nonadditive": 115.952,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1
+   }
+  },
+  {
+   "family": "CAMBI",
+   "sessions": 6,
+   "shared_sessions": 6,
+   "edit_calls": 124,
+   "active_hours_nonadditive": 71.015,
+   "elapsed_hours_nonadditive": 214.956,
+   "first_day": "2026-10-11",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 2,
+    "codex": 3,
+    "devin": 1
+   }
+  },
+  {
+   "family": "WS-HV",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 10,
+   "active_hours_nonadditive": 45.849,
+   "elapsed_hours_nonadditive": 115.952,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 1
+   }
+  },
+  {
+   "family": "Wasserstein Distortion",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 20,
+   "active_hours_nonadditive": 75.311,
+   "elapsed_hours_nonadditive": 173.619,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "claude": 1,
+    "codex": 2,
+    "devin": 1
+   }
+  },
+  {
+   "family": "PieAPP",
+   "sessions": 4,
+   "shared_sessions": 4,
+   "edit_calls": 35,
+   "active_hours_nonadditive": 71.777,
+   "elapsed_hours_nonadditive": 123.434,
+   "first_day": "2026-10-15",
+   "last_day": "2026-10-17",
+   "sessions_by_agent": {
+    "codex": 3,
+    "devin": 1
+   }
+  }
+ ]
+}

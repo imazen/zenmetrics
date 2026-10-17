@@ -1,0 +1,170 @@
+{
+ "schema": 1,
+ "note": "Source path patterns per priority-list family for scripts/complexity/agent_effort.py and git_iterations; shared paths (classical.rs, msssim, vmaf.rs) attribute to several families and are reported as shared. Codec paths are never listed.",
+ "families": [
+  {
+   "family": "CVVDP",
+   "path_regex": [
+    "crates/cvvdp/",
+    "crates/cvvdp-gpu/",
+    "crates/zenmetrics-cli/src/metrics/cvvdp_"
+   ]
+  },
+  {
+   "family": "IW-SSIM",
+   "path_regex": [
+    "crates/iwssim/",
+    "crates/iwssim-gpu/"
+   ]
+  },
+  {
+   "family": "SSIM",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/classical\\.rs",
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa\\.rs",
+    "crates/msssim/"
+   ]
+  },
+  {
+   "family": "Butteraugli",
+   "path_regex": [
+    "crates/butteraugli-gpu/",
+    "crates/zenmetrics-cli/src/metrics/butter"
+   ]
+  },
+  {
+   "family": "SSIMULACRA2",
+   "path_regex": [
+    "crates/ssim2-gpu/"
+   ]
+  },
+  {
+   "family": "DSSIM",
+   "path_regex": [
+    "crates/dssim-gpu/"
+   ]
+  },
+  {
+   "family": "HDR-VDP-2 / -3",
+   "path_regex": [
+    "crates/hdrvdp/"
+   ]
+  },
+  {
+   "family": "GMSD",
+   "path_regex": [
+    "crates/gmsd/"
+   ]
+  },
+  {
+   "family": "VMAF",
+   "path_regex": [
+    "crates/vmaf/",
+    "crates/zenmetrics-cli/src/metrics/vmaf\\.rs"
+   ]
+  },
+  {
+   "family": "PSNR-HVS",
+   "path_regex": [
+    "crates/psnrhvs/"
+   ]
+  },
+  {
+   "family": "HaarPSI",
+   "path_regex": [
+    "crates/haarpsi/"
+   ]
+  },
+  {
+   "family": "FSIM / FSIMc",
+   "path_regex": [
+    "crates/fsim/"
+   ]
+  },
+  {
+   "family": "VSI",
+   "path_regex": [
+    "crates/vsi/"
+   ]
+  },
+  {
+   "family": "MS-SSIM",
+   "path_regex": [
+    "crates/msssim/"
+   ]
+  },
+  {
+   "family": "VIF",
+   "path_regex": [
+    "crates/vif/"
+   ]
+  },
+  {
+   "family": "MAD",
+   "path_regex": [
+    "crates/mad-iqa/"
+   ]
+  },
+  {
+   "family": "mDCT-PSNR",
+   "path_regex": [
+    "crates/mdctpsnr/"
+   ]
+  },
+  {
+   "family": "NLPD",
+   "path_regex": [
+    "crates/nlpd/"
+   ]
+  },
+  {
+   "family": "PSNR",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/classical\\.rs"
+   ]
+  },
+  {
+   "family": "CIEDE2000",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/classical\\.rs"
+   ]
+  },
+  {
+   "family": "CW-SSIM",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/cw_"
+   ]
+  },
+  {
+   "family": "SSIMULACRA",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/ssimulacra1\\.rs"
+   ]
+  },
+  {
+   "family": "CAMBI",
+   "path_regex": [
+    "crates/vmaf/src/cambi",
+    "crates/zenmetrics-cli/src/metrics/vmaf\\.rs"
+   ]
+  },
+  {
+   "family": "WS-HV",
+   "path_regex": [
+    "crates/zenmetrics-cli/src/metrics/ws_hv\\.rs"
+   ]
+  },
+  {
+   "family": "Wasserstein Distortion",
+   "path_regex": [
+    "crates/zenmetrics-nn/src/wd\\.rs"
+   ]
+  },
+  {
+   "family": "PieAPP",
+   "path_regex": [
+    "crates/zenmetrics-nn/src/pieapp\\.rs"
+   ]
+  }
+ ]
+}

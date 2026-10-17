@@ -86,6 +86,40 @@ stage against a memory roofline; it ignores cache reuse between stages.
 Measured thread scaling answers a different question again and is reported
 beside these bounds, not substituted for them.
 
+## Counting conventions (v2, after the pilot)
+
+The pilot (`ssim`, `gmsd`, `ssim2`, counted independently by two lanes) showed
+where unwritten conventions changed totals. These rules settle them:
+
+1. **Inline approximations are counted as written.** A transcendental the
+   source computes inline (fast-ssim2's cube root: bit manipulation plus
+   Newton steps) is its arithmetic; a library call (`f64::exp`, `powf`) is one
+   call of its class.
+2. **Implementation-only work is a separate class.** Strip-overlap
+   recomputation, padding or format copies and materialized intermediates the
+   method does not need are stages with `"class": "implementation"`. Totals
+   report intrinsic and implementation flops separately.
+3. **Bytes are compulsory traffic.** `bytes_read`/`bytes_written` per element
+   are the stage's input planes read once and output written once. Per-tap
+   reads of a stencil appear only in the `load` count.
+4. **Halo is per axis.** Each stage has `axis` (`x`, `y`, `xy`, `none`) and a
+   one-sided reach `radius` in its own grid; `scale` converts to original
+   pixels. A 2×2 box downsample reaches 1 sample. Only stages whose level `l`
+   consumes level `l−1` (pyramid downsampling) set `chain`; a blur applied at
+   each level does not chain across levels.
+5. **Recursive filters** record the effective support radius the
+   implementation uses for its warm-up as `radius`, are `serial`, and have a
+   span equal to the scanned row or column length.
+6. **Default path.** Counts follow the code path the CLI runs by default;
+   where a SIMD path fuses or blocks work differently from the scalar fallback
+   (fast-ssim2's horizontal blur is 4-way blocked: 3 mul + 10.5 fma + 3 add per
+   output; its vertical pass is the plain recurrence), the default path is
+   counted and the difference noted. These are therefore counts of an
+   implementation, not of the method in the abstract.
+
+Pilot reconciliation is recorded in
+`benchmarks/iqa_complexity_2026-10-17/reconcile/pilot.md`.
+
 ## Neural networks
 
 Neural methods are counted at the logical layer level from the exported ONNX
@@ -109,6 +143,47 @@ within one host, device, thread count, mode, ingress, shape and revision. Fits
 follow the repository's convention: intercept from small sizes, per-pixel slope
 from large sizes, never one line across the whole range. Poor correlations
 and large residuals are reported, not removed.
+
+## Optimization effort
+
+Question: how many optimization iterations, and how much agent time, went
+into each metric, so that speed can be read against effort. Codecs are
+excluded throughout.
+
+**Definitions.** An *optimization commit* changes a metric family's source and
+states a performance purpose or a measured speed change. An *iteration* is an
+optimization commit that also cites verification evidence (a benchmark file,
+or a measurement plus a parity or bit-identity check). Commit counts are not
+labor time. *Active agent time* is the sum of gaps of at most 300 s between
+consecutive events of one agent session; *elapsed* is last minus first event.
+Both describe agent activity, not human effort, and neither is estimated
+where records are missing.
+
+**Agent-session evidence (measured 2026-10-17,
+`scripts/complexity/agent_effort.py`).** Each host aggregates its own Claude
+Code, Codex and Devin records and emits counts only; no transcript content is
+published. Family source paths: `scripts/complexity/effort_families.json`.
+
+| host | sessions in a zenmetrics checkout | sessions touching a family | union active hours | sessions touching exactly one family | earliest touching session |
+|---|---:|---:|---:|---:|---|
+| i265 | 18 | 11 | 63.5 | 0 | 2026-10-11 |
+| dev | 12 | 9 | 29.8 | 3 (all CVVDP) | 2026-08-05 |
+| r7900x | 9 | 9 | 10.2 | 1 (VIF) | 2026-09-25 |
+| mac | 3 | 3 | 2.1 | 1 (VSI) | 2026-10-14 |
+
+Findings:
+
+- **Per-metric agent time is not recoverable from these records.** 27 of 32
+  touching sessions edited several metric families at once (coordinators,
+  sweeps, shared harnesses), so any split of their time between metrics would
+  be an estimate. Per-family numbers in the JSON files are non-additive.
+- **Most of the history is missing.** Records start in August on dev and in
+  October elsewhere, while most metric crates landed between 2026-05-03 and
+  2026-09-25 (`scripts/dashboard/favorites.json`); local Claude Code
+  transcripts are pruned over time. One further agent host had no in-scope
+  sessions; r5900xt refused the key and was not read.
+- Git-based iteration counts per family are tallied separately
+  (`benchmarks/iqa_complexity_2026-10-17/effort/`), with the same exclusions.
 
 ## Files
 

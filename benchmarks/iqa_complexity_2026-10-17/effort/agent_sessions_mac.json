@@ -1,0 +1,342 @@
+{
+ "schema": 1,
+ "host": "mac",
+ "gap_seconds": 300.0,
+ "generated_utc": "2026-10-17T12:47:40+00:00",
+ "host_sessions_in_scope": 3,
+ "host_sessions_touching_a_family": 3,
+ "host_sessions_by_agent": {
+  "claude": 2,
+  "devin": 1
+ },
+ "host_union_active_hours": 2.148,
+ "families": [
+  {
+   "family": "CVVDP",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 117,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "IW-SSIM",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 45,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "SSIM",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 51,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "Butteraugli",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 2,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "SSIMULACRA2",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "DSSIM",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "HDR-VDP-2 / -3",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 137,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "GMSD",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 54,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "VMAF",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 314,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "PSNR-HVS",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 35,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "HaarPSI",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 52,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "FSIM / FSIMc",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 81,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "VSI",
+   "sessions": 3,
+   "shared_sessions": 2,
+   "edit_calls": 90,
+   "active_hours_nonadditive": 2.148,
+   "elapsed_hours_nonadditive": 6.463,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 2,
+    "devin": 1
+   }
+  },
+  {
+   "family": "MS-SSIM",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 51,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "VIF",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 26,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "MAD",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 57,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "mDCT-PSNR",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 160,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "NLPD",
+   "sessions": 2,
+   "shared_sessions": 2,
+   "edit_calls": 40,
+   "active_hours_nonadditive": 2.114,
+   "elapsed_hours_nonadditive": 6.429,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "claude": 1,
+    "devin": 1
+   }
+  },
+  {
+   "family": "PSNR",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "CIEDE2000",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "CW-SSIM",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "SSIMULACRA",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "CAMBI",
+   "sessions": 1,
+   "shared_sessions": 1,
+   "edit_calls": 60,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": "2026-10-14",
+   "last_day": "2026-10-14",
+   "sessions_by_agent": {
+    "devin": 1
+   }
+  },
+  {
+   "family": "WS-HV",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "Wasserstein Distortion",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  },
+  {
+   "family": "PieAPP",
+   "sessions": 0,
+   "shared_sessions": 0,
+   "edit_calls": 0,
+   "active_hours_nonadditive": 0.0,
+   "elapsed_hours_nonadditive": 0.0,
+   "first_day": null,
+   "last_day": null,
+   "sessions_by_agent": {}
+  }
+ ]
+}
