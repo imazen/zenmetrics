@@ -1,0 +1,11 @@
+Date: 2026-10-17
+Host: i265
+Captured source: 33712a914efb
+Algorithm source: 4ed04e9c (classic scaled-f32 norm; corrected epsilon, small-N path, SLARTG, SORM2R, left/right SGER products).
+Command: just nn-parity-dmm <models> <ladder> rten model-tests
+Environment: pinned siblings; shared heavy lock; run-heavy --mem 16G; 1150-second outer timeout.
+Panel classification: original frozen six JND / eighteen pinned rows before the 1415/333x448 promotion. Golden scores and tolerance values are unchanged.
+Outcome: 5/24 inside canonical JND; nine original row-limit failures (two JND, seven pinned). Warm/cold and identity controls pass.
+Log (i265): ~/tmp/nn-port-scratch/fix-dmm-rten5.log
+Resource receipt: run-heavy: done rc=101 273s | peak-RSS 8.28GiB | min-avail 13978MiB | peak-load 9.75
+TSV SHA256: b07bfce21816b43fd3584e74923940b66cd0b7ef2cd0390e787ddd9db7e4fcb0
