@@ -750,17 +750,22 @@ nn-dmm-bisect-panel revision output model_dir ladder:
     set -uo pipefail
     failed=0
     mkdir -p "$(dirname '{{output}}')"
-    for engine in rten ort-cuda; do
+    for label in rten ort-cuda ort-cuda-repeat; do
+        engine=$label
+        if [ "$label" = ort-cuda-repeat ]; then engine=ort-cuda; fi
         features=model-tests
         if [ "$engine" = ort-cuda ]; then features=model-tests,ort; fi
-        if timeout --kill-after=10 900 {{just_executable()}} nn-parity-dmm '{{model_dir}}' '{{ladder}}' "$engine" "$features" '{{revision}}' > '{{output}}'-$engine.log 2>&1; then
-            echo "PANEL_PASS $engine {{revision}}"
+        if timeout --kill-after=10 900 {{just_executable()}} nn-parity-dmm '{{model_dir}}' '{{ladder}}' "$engine" "$features" '{{revision}}' > '{{output}}'-$label.log 2>&1; then
+            echo "PANEL_PASS $label {{revision}}"
         else
-            echo "PANEL_FAIL $engine {{revision}}"
+            echo "PANEL_FAIL $label {{revision}}"
             failed=1
         fi
     done
     exit "$failed"
+
+nn-dmm-bisect-all model_dir ladder output:
+    bash benchmarks/nn_port_2026-10-15/dmm_bisect_run.sh '{{model_dir}}' '{{ladder}}' '{{output}}'
 
 nn-dmm-bisect-sources output:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_sources.py '{{output}}'
