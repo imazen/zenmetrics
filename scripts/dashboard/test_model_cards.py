@@ -49,3 +49,9 @@ class ModelCards(unittest.TestCase):
         self.assertEqual(bibliography.count('@misc{'),len({c['citation']['url'] for c in self.items if c['citation']}))
         readme=readme_section(self.items)
         for metric in self.by_name:self.assertIn('`'+metric+'`',readme)
+
+    def test_historical_family_join_is_explicit_and_version_scoped(self):
+        from build import HISTORICAL_QUALITY_FAMILY
+        self.assertEqual(HISTORICAL_QUALITY_FAMILY['score_zensim_v0_16'],'zensim')
+        self.assertEqual(HISTORICAL_QUALITY_FAMILY['score_cvvdp'],'cvvdp')
+        self.assertNotIn('score_zensim_future',HISTORICAL_QUALITY_FAMILY)

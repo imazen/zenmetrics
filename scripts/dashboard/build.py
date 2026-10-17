@@ -210,6 +210,18 @@ def validate_inventory(root,registered):
     return unregistered
 
 
+# Explicit historical family joins: these do not qualify the current implementation.
+HISTORICAL_QUALITY_FAMILY = {
+    'score_butter_max':'butteraugli','score_butter_p3':'butteraugli',
+    'score_cvvdp':'cvvdp','score_dssim':'dssim','score_hdr_vdp_2':'hdrvdp',
+    'score_hdr_vdp_3':'hdrvdp3','score_iw_ssim':'iwssim','score_ms_ssim':'msssim',
+    'score_psnr_y':'psnr-y','score_ssim':'ssim','score_ssim2_gpu':'ssim2-gpu',
+    'score_ssim2_paper':'ssim2','score_vmaf_neg':'vmaf-neg',
+    **{name:'zensim' for name in ['score_zensim','score_zensim_v0_16','score_zensim_v0_17',
+       'score_zensim_v0_17_c14_s42','score_zensim_v0_17_c14_s7','score_zensim_v0_26',
+       'score_zensim_v0_31','score_zensim_v0_38','score_v0_2_linear']}}
+
+
 def build(output):
     registry = tomllib.loads((ROOT/'benchmarks/dashboard/datasets.toml').read_text())
     families = {k: [] for k in ['speed', 'agreement', 'quality', 'catalog', 'coverage', 'scales']}
@@ -267,8 +279,8 @@ def build(output):
         match=lambda row:row.get('metric') in names or str(row.get('metric','')).replace('_','-')==card['metric']
         card['speed_observations']=sum(match(row) for row in families['speed'] if row.get('ms') is not None)
         card['agreement_observations']=sum(match(row) for row in families['agreement'])
-        card['quality_panels']=[{k:row.get(k) for k in ['metric','dataset','scope','n','srocc','srocc_lo','srocc_hi','source']}
-                                for row in families['quality'] if match(row) and row.get('srocc') is not None
+        card['quality_panels']=[{k:row.get(k) for k in ['metric','dataset','scope','target','subset','n','srocc','signed_srocc','srocc_lo','srocc_hi','ci','source']}
+                                for row in families['quality'] if (match(row) or HISTORICAL_QUALITY_FAMILY.get(row.get('metric'))==card['metric']) and row.get('srocc') is not None
                                 and any(name in str(row.get('dataset','')).lower() for name in ['aic','cid22'])]
 
     output.mkdir(parents=True, exist_ok=True)
