@@ -559,6 +559,24 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-16 — ORT CUDA arena/memory-pattern accumulation across changing
+  input shapes. FIXED (`f48b71a0`).** The afine fused pair graph (`OrtCudaPair`) OOM'd the GPU
+  arena at pair 40/61 (S46) of the shape-varying AIC sweep (a ~2.4 GB `Softmax`
+  intermediate). WD's trunk had the same class fixed in `ae582a3b`
+  (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
+  is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
+  — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
+  `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
+  `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
+  paths. afine sweep scores are bit-identical before/after (357/357
+  shared rows) and ort-cuda ladder parity re-verified on afine,
+  lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim,
+  arniqa, maniqa, liqe, musiq, hyperiqa, paq2piq, wadiqam and wd;
+  lpips_vgg covered by the fixed-size nn_bench A/B in the same receipt
+  (lpips_squeeze shares lpips_alex's `OrtCudaPair` graph shape, weights
+  only — not separately probed). RSS numbers are in
+  `benchmarks/afine_aic_2026-10-16/README.md`.
+
 - **2026-10-16 — WD CUDA full-resolution host retention, fixed (`ae582a3b`).**
   A varying-size AIC control sequence reached its 16-GiB cap at 3355×2516.
   The WD trunk now disables its CPU arena and consumes output tensors individually.
