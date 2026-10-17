@@ -56,13 +56,22 @@ else:
   row.update(status='unsupported',notes='No qualified native-map output on this public metric entry point');print('IQA_ROW '+json.dumps(row));raise SystemExit
  if package=='piq':
   import piq
-  if metric=='ssimc-pyiqa-f32':fn=lambda:piq.ssim(x,y,data_range=1.,downsample=False)
+  if metric=='lpips-vgg':
+   model=piq.LPIPS(replace_pooling=False,distance='mse',reduction='mean').to(device).eval();fn=lambda:model(x,y)
+   row['native_api_note']='PIQ public LPIPS VGG16, default ImageNet normalization of resident RGB [0,1]; model construction excluded'
+  elif metric=='dists':
+   model=piq.DISTS(reduction='mean').to(device).eval();fn=lambda:model(x,y)
+   row['native_api_note']='PIQ public DISTS distance (1-DISTS), default ImageNet normalization; model construction excluded'
+  elif metric=='ssimc-pyiqa-f32':fn=lambda:piq.ssim(x,y,data_range=1.,downsample=False)
   elif metric=='ms-ssim-pyiqa-f32':
    # Public function accepts gray tensors. Wrapper luma conversion remains
    # inside timing, using the named unrounded 0.299/0.587/0.114 convention.
    weights=torch.tensor([.299,.587,.114],device=device).view(1,3,1,1)
    fn=lambda:piq.multi_scale_ssim((x*weights).sum(1,keepdim=True),(y*weights).sum(1,keepdim=True),data_range=1.)
-  elif metric in ['fsim','fsimc']:fn=lambda:piq.fsim(x,y,data_range=1.,chromatic=metric=='fsimc')
+  elif metric in ['fsim','fsimc']:
+   fn=lambda:piq.fsim(x,y,data_range=1.,chromatic=metric=='fsimc')
+   row['reference_declared_columns']=c.get('declared_columns');row['declared_columns']=[metric]
+   row['native_api_note']='PIQ returns the requested scalar; the Rust fsim call also computes/returns FSIMc. This API workload difference is retained, not hidden by reimplementing either library.'
   elif metric=='iwssim-piq':fn=lambda:piq.information_weighted_ssim(x,y,data_range=1.)
   elif metric=='vif':fn=lambda:piq.vif_p(x,y,data_range=1.)
   elif metric=='ms-gmsd':fn=lambda:piq.multi_scale_gmsd(x,y,data_range=1.)

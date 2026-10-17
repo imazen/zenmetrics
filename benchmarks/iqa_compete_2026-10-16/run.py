@@ -321,7 +321,7 @@ def main():
     excluded=set(filter(None,args.exclude_metrics.split(',')))
     if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
     if args.python_package and not args.metrics:
-        selected = set({'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}[args.python_package])
+        selected = set({'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque','lpips-vgg','dists'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}[args.python_package])
     if args.gpu_runtime and not args.metrics:
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:

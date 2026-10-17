@@ -17,6 +17,6 @@ sys.modules.setdefault('IPython',stub);sys.modules.setdefault('imp',types.Module
 names=['torch','torchvision','piq','skimage','torchmetrics','pytorch_msssim','lpips','DISTS_pytorch','stlpips_pytorch.stlpips','DeepDC_PyTorch','pycvvdp']
 modules={name:importlib.import_module(name) for name in names}
 records=[]
-for name,member in [('piq','ssim'),('piq','multi_scale_ssim'),('piq','information_weighted_ssim'),('piq','fsim'),('pycvvdp','cvvdp')]:
+for name,member in [('piq','LPIPS'),('piq','DISTS'),('piq','ssim'),('piq','multi_scale_ssim'),('piq','information_weighted_ssim'),('piq','fsim'),('pycvvdp','cvvdp')]:
  records.append(dict(module=name,member=member,signature=str(inspect.signature(getattr(modules[name],member)))))
 print(json.dumps(dict(imported=names,public_apis=records),indent=2))

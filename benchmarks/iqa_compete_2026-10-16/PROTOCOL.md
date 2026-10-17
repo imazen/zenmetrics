@@ -200,3 +200,11 @@ as scheduling evidence and retried in a fresh hold. Load/memory admission refusa
 release the hold before waiting. The lock descriptor is inherited by supervised
 children, so losing the controller cannot release the lock around a live child.
 Explicit one/twenty-thread budgets and the ten-round minimum are unchanged.
+
+The PIQ panel includes its public VGG16 LPIPS and DISTS classes as well as
+its classical functions. Their model construction is untimed and inputs retain
+PIQ's documented RGB [0,1] convention with internal ImageNet normalization.
+See [PIQ class APIs](https://piq.readthedocs.io/en/latest/modules.html).
+PIQ's FSIM scalar call and the Rust CLI call have different output workloads:
+the latter also computes FSIMc. Rows retain that distinction explicitly instead
+of substituting an implementation with a different public interface.
