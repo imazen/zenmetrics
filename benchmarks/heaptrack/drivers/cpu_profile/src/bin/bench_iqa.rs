@@ -227,7 +227,7 @@ fn main() -> Result<()> {
     } else {
         None
     };
-    let identity = json!({"commit":source,"binary_sha256":sha(&executable_identity::normalized(&bytes)?),"binary_identity":"pe-coff-timestamp-v1","host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
+    let identity = json!({"commit":source,"binary_sha256":sha(&executable_identity::normalized(&bytes)?),"binary_identity":"pe-relink-metadata-v1","host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
     let content = sha(&serde_json::to_vec(&identity)?);
     let root = output.join(&content);
     fs::create_dir_all(&root)?;
