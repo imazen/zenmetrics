@@ -1139,3 +1139,6 @@ iqa-compete-coverage-tests:
 
 iqa-compete-dispatch-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_dispatch_failure.py
+
+iqa-compete-ort-thread-control-no-telemetry python output:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/check_ort_threads.py '{{output}}' --disable-telemetry

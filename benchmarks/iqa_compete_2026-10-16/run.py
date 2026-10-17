@@ -121,6 +121,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
                TMPDIR=str(args.root / 'scratch'), ZENMETRICS_NN_ENGINE=args.engine,
                ZENMETRICS_NN_ACCEPT_WEIGHTS='ckdn,afine,dreamsim,liqe,hyperiqa,paq2piq,pieapp')
     Path(env['TMPDIR']).mkdir(exist_ok=True)
+    if args.engine=='ort-cuda':env['ORT_DISABLE_TELEMETRY']='1'
     if args.model_root:
         env['ZENMETRICS_NN_MODEL_DIR'] = str(args.model_root)
     if name in models:
@@ -138,7 +139,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
     pieces={mode:[] for mode in MODES}
     completed={}
     chunk_ledger=args.root/'chunk-attempts.jsonl'
-    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256']
+    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256','ort_disable_telemetry']
     def retain(value):
         mode=value['mode']
         if value['status'] not in ['ok','partial','variant_mismatch']:
@@ -282,6 +283,7 @@ def main():
     meta = metadata(args.binary)
     meta.update(device=args.gpu_runtime or ('cuda' if args.engine == 'ort-cuda' else 'cpu'), engine=args.engine, gpu_runtime=args.gpu_runtime)
     if args.ort_library:
+        meta['ort_disable_telemetry']=True
         meta.update(ort_shared_library=str(args.ort_library.resolve()),ort_shared_library_sha256=sha(args.ort_library))
     if args.cuda_libraries:meta['cuda_library_dirs']=args.cuda_libraries.split(':')
     if args.host:

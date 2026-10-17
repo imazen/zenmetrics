@@ -20,7 +20,7 @@ for ledger in a.ledgers:
   row.update(metric_family=family(row['metric_name']),source_ledger=str(ledger),source_ledger_sha256=digest,source_line=index)
   if row['impl']=='zenmetrics' and row['metric_name'].startswith('vmaf') and row['status']=='ok' and not row.get('model_preload_adapter'):
    row['status']='skipped:diagnostic_model_parsing_inside_timer'
-  if row['impl']=='zenmetrics' and row.get('engine')=='ort-cuda' and row['status'] in ['ok','variant_mismatch'] and not row.get('ort_intra_threads_configured'):
+  if row['impl']=='zenmetrics' and row.get('engine')=='ort-cuda' and row['status'] in ['ok','variant_mismatch'] and (not row.get('ort_intra_threads_configured') or row.get('ort_disable_telemetry') is not True):
    row['diagnostic_source_status']=row['status']
    row['status']='skipped:diagnostic_unverified_ort_thread_budget'
   selected[key]=row

@@ -175,3 +175,12 @@ samples as diagnostic data, marks the score unqualified and requests a separate
 repeat. Failed dispatch rows cannot be combined with successful partial rounds.
 This handles the documented asynchronous WGPU failure mode before other-host
 runtime qualification; pattern controls are not a substitute for running there.
+
+ORT-CUDA benchmark children set `ORT_DISABLE_TELEMETRY=1` before loading the
+runtime. ORT 1.31's [full opt-out](https://github.com/microsoft/onnxruntime/blob/v1.31.0/onnxruntime/core/platform/telemetry_environment.h)
+avoids initializing the background uploader, rather than merely suppressing
+individual events through the runtime API. The collector requires this opt-out
+and the explicit session-budget receipt. Its setting is part of chunk identity.
+The worker control retains exact one/twenty-thread assertions; default-telemetry
+and opt-out diagnostic runs remain separate. Attribution of any extra thread
+requires the measured per-thread cases, not this configuration alone.
