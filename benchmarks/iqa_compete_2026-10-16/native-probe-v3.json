@@ -1,0 +1,278 @@
+{
+  "not_a_timing_panel": true,
+  "cases": [
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "4b0dd09d26b76ed27700b05ed7123b0f3668f2b4ba74dc58360128d203f9a706",
+      "native_distorted_sha256": "88eb1562e72211c450300a5489083abbc0345814695c8c60fbdd41fc653bd8e1",
+      "convention": "709-420",
+      "reference_column": "vmaf",
+      "score": 96.93782423245081,
+      "ref_score": 96.9375423007055,
+      "abs_delta": 0.00028193174530599663,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-neg",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "4b0dd09d26b76ed27700b05ed7123b0f3668f2b4ba74dc58360128d203f9a706",
+      "native_distorted_sha256": "88eb1562e72211c450300a5489083abbc0345814695c8c60fbdd41fc653bd8e1",
+      "convention": "709-420",
+      "reference_column": "vmaf_neg",
+      "score": 95.46284622356977,
+      "ref_score": 95.46259800688875,
+      "abs_delta": 0.0002482166810153785,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-studio601",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "f231c3bfd378a54dda2cc4a3dd10e8105e98edc30ef61f2e51e372c28ccc22bb",
+      "native_distorted_sha256": "cd74df578d6e88b1c3974d0865ff444c8a4f9308de7e794b2b888913329deaad",
+      "convention": "601-420",
+      "reference_column": "vmaf_studio601",
+      "score": 97.00933790260859,
+      "ref_score": 97.0093306376516,
+      "abs_delta": 7.264956991548388e-06,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vmaf-neg-studio601",
+      "rc": 0,
+      "parity_abs_bound": 0.02,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "f231c3bfd378a54dda2cc4a3dd10e8105e98edc30ef61f2e51e372c28ccc22bb",
+      "native_distorted_sha256": "cd74df578d6e88b1c3974d0865ff444c8a4f9308de7e794b2b888913329deaad",
+      "convention": "601-420",
+      "reference_column": "vmaf_neg_studio601",
+      "score": 95.6430272898061,
+      "ref_score": 95.64302005113838,
+      "abs_delta": 7.238667720343983e-06,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "ssim-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "64ef6e8e3604d938f7dc64cc95408743f3ef2a2b506fcf6a15ba3a68ef56ce86",
+      "native_distorted_sha256": "1824b9c98fbc73592ac25b178444861390d77c8ea8b7a60f8e7eaef47832e6c9",
+      "convention": "601-y",
+      "reference_column": "ssim_libvmaf",
+      "score": 0.9985487461090088,
+      "ref_score": 0.998548686504364,
+      "abs_delta": 5.960464477539063e-08,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "msssim-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "64ef6e8e3604d938f7dc64cc95408743f3ef2a2b506fcf6a15ba3a68ef56ce86",
+      "native_distorted_sha256": "1824b9c98fbc73592ac25b178444861390d77c8ea8b7a60f8e7eaef47832e6c9",
+      "convention": "601-y",
+      "reference_column": "msssim_libvmaf",
+      "score": 0.9992085608515893,
+      "ref_score": 0.999208714590978,
+      "abs_delta": 1.537393887751648e-07,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "psnr-y-libvmaf",
+      "rc": 0,
+      "parity_abs_bound": 1e-10,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "40818d2801b5dd7ec34795ff1b28f66b8916a13a8dab7950e6ab7175629f3009",
+      "native_distorted_sha256": "8fdff44e0fefebd6410e61b4b2f9da835be947114a0335ee1eb8855ae47008c7",
+      "convention": "709-y",
+      "reference_column": "psnr_y_libvmaf",
+      "score": 50.18971984535896,
+      "ref_score": 50.18971984535896,
+      "abs_delta": 0.0,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "psnrhvs-daala",
+      "rc": 0,
+      "parity_abs_bound": 0.0002,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "de0b5728fa0f9db8fe40212e109bab1f1b0db5b3ef433069b9ddca4a68ea409c",
+      "native_distorted_sha256": "69477fddb20791fe0f861ac355f77acf85e294110a8c6975f971fbe30a4ce01a",
+      "convention": "601-444",
+      "reference_column": "psnrhvs_daala_y",
+      "score": 51.99053644380571,
+      "ref_score": 51.99053644380571,
+      "abs_delta": 0.0,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "cambi",
+      "rc": 0,
+      "parity_abs_bound": 0.0001,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "f231c3bfd378a54dda2cc4a3dd10e8105e98edc30ef61f2e51e372c28ccc22bb",
+      "native_distorted_sha256": "cd74df578d6e88b1c3974d0865ff444c8a4f9308de7e794b2b888913329deaad",
+      "convention": "601-420",
+      "reference_column": "cambi",
+      "score": 0.0,
+      "ref_score": 0.0,
+      "abs_delta": 0.0,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    },
+    {
+      "engine": "libvmaf",
+      "metric": "vif",
+      "rc": 0,
+      "parity_abs_bound": 5e-13,
+      "impl_binary_sha": "73689edbeb3cb10f94c4b53fbc8c2a0ccee675b281e79e2abfa3b517efbf5617",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "64ef6e8e3604d938f7dc64cc95408743f3ef2a2b506fcf6a15ba3a68ef56ce86",
+      "native_distorted_sha256": "1824b9c98fbc73592ac25b178444861390d77c8ea8b7a60f8e7eaef47832e6c9",
+      "convention": "601-y",
+      "reference_column": "vif_imazen_v0_1_0",
+      "score": 0.9371014251183368,
+      "ref_score": 0.9366953694121637,
+      "abs_delta": 0.00040605570617313624,
+      "parity_rel_bound": 0.0,
+      "within_bound": false
+    },
+    {
+      "engine": "libjxl",
+      "metric": "butteraugli",
+      "rc": 0,
+      "parity_abs_bound": 0.0,
+      "impl_binary_sha": "f9da3e8b1901e08c31ae3b2cc12c857e510b08ed77a200d144b29c232f6cf8eb",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "native_distorted_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "convention": "rgb",
+      "reference_column": "butteraugli_max",
+      "score": 1.2085671424865723,
+      "ref_score": 1.208517074584961,
+      "abs_delta": 5.0067901611328125e-05,
+      "parity_rel_bound": 0.001,
+      "within_bound": true
+    },
+    {
+      "engine": "libjxl",
+      "metric": "ssim2",
+      "rc": 0,
+      "parity_abs_bound": 0.0,
+      "impl_binary_sha": "f9da3e8b1901e08c31ae3b2cc12c857e510b08ed77a200d144b29c232f6cf8eb",
+      "ref_binary_sha": "695f4c52807659bcb8e1c86c0d531d6962bd628385d7b0fa827f65f919bf3bd5",
+      "pair_sha256": "354890ff1a6cecacc6a3ff383b0c3ebb47584770a634fa63a14e39cdcce74d50",
+      "input_sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      },
+      "native_reference_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "native_distorted_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "convention": "rgb",
+      "reference_column": "ssim2",
+      "score": 91.77586213860482,
+      "ref_score": 91.77586213860482,
+      "abs_delta": 0.0,
+      "parity_rel_bound": 0.0,
+      "within_bound": true
+    }
+  ],
+  "resource": {
+    "exit_code": 0,
+    "seconds": 2,
+    "peak_rss_gib": 0.12,
+    "min_available_mib": 22772,
+    "peak_load": 16.91
+  },
+  "log": "~/tmp/iqa-compete/native-probe-v3.log",
+  "log_sha256": "7a008bfe25989b8ab1a9fa04e43c591e691569c9548d9ea7c0c9a42795351e33"
+}

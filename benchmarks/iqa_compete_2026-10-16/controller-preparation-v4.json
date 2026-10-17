@@ -1,0 +1,40 @@
+{
+  "records": [
+    {
+      "log": "/home/lilith/tmp/iqa-compete/quality-snapshot-v3.log",
+      "sha256": "3b53419d1acd2de9e6c8952b26b5d39702cb5766a9fab8d40cd243ccb3fda9f1",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 150,
+        "peak_rss_gib": 0.83,
+        "min_available_mib": 23075,
+        "peak_load": 4.65
+      }
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/python-preflight-guarded.log",
+      "sha256": "3fd7029ef1df0214b64e1236f9a37b0353d3229d1859b95725020b8c6edbc006",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 4,
+        "peak_rss_gib": 0.5,
+        "min_available_mib": 24507,
+        "peak_load": 3.61
+      }
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/charts-platform-panels-v1.log",
+      "sha256": "be76caa7f3f3b5fa9c9afe70b9f097997930c7aa2db5a72a9d2726249c5354e4",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 1,
+        "peak_rss_gib": 0.07,
+        "min_available_mib": 25534,
+        "peak_load": 1.72
+      }
+    }
+  ],
+  "quality": "Advisory: fmt clean, workspace clippy census 4111 warnings unchanged; not a clean all-workspace clippy pass",
+  "python_guard": "Required competitor imports succeed with a PyIQA meta-path blocker installed before imports",
+  "coverage": "All-size and competitor timing stages remain incomplete"
+}

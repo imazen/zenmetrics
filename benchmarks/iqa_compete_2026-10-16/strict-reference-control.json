@@ -1,0 +1,17 @@
+{
+  "source": "/home/lilith/tmp/iqa-compete/i265-progress-20261017-0347.jsonl",
+  "source_sha256": "3771b13ee9616e2cd8123c52f810bbd17cf2335ccc48e426b68de86f49c036eb",
+  "qualified_counts_unchanged": true,
+  "status_counts": {
+    "ok": 627,
+    "unsupported": 385,
+    "variant_mismatch": 4,
+    "skipped": 38
+  },
+  "refreshed_gpu_rows": 224,
+  "pending_count": 14,
+  "missing_count": 26,
+  "controller_log": "/home/lilith/tmp/iqa-compete/controller-tests-strict-refs-v1.log",
+  "reference_controls": 12,
+  "policy": "Reject insufficient/nonfinite CPU timings; completed finite timeout warmups remain explicitly untimed references."
+}

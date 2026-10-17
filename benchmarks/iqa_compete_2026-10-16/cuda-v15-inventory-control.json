@@ -1,0 +1,9 @@
+{
+  "binary": "/home/lilith/tmp/iqa-compete/bin/iqa-compete-cuda-v15",
+  "binary_sha256": "cbb127fd96e6561957ee599b59c58e5058c39992b23b39685a29c9bc370d10db",
+  "metric_names": 113,
+  "inventory_semantically_identical": true,
+  "frozen_inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "actual_inventory_stdout_sha256": "56149fd3f21f4455a00cef2443981fbf30c1cbac68899ff42c69351f966870e1",
+  "scope": "Inventory query only; no metric timing or parity claim"
+}

@@ -1,0 +1,37 @@
+{
+  "sources": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/cpu-first/i265.jsonl",
+      "sha256": "7252d56c086064fa1a5c77a8158ed6697d4f14852924c61567eb80d69482843d"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/extra-map-smoke/i265.jsonl",
+      "sha256": "07826d528ddf9fc0a7fe1581539537d4ddacee4f527695c7d2391e6deb708f9a"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl",
+      "sha256": "0add6dd46ec30e813eaa79ed31c7a05a4ae64d61c3cb7e1f72e4ac66c014f741"
+    },
+    {
+      "path": "/home/lilith/tmp/iqa-compete/pieapp-first/i265.jsonl",
+      "sha256": "63d066a4639c47d63ffe2de5ca3b483a1f9d2af4234f245f899f33fa343c5b2e"
+    }
+  ],
+  "selection": "Last supplied ledger wins per cell; last row wins within ledger. Source attempts remain retained.",
+  "rows": 540,
+  "statuses": {
+    "unsupported": 180,
+    "ok": 313,
+    "skipped": 47
+  },
+  "output_sha256": "212015a7e4e2b2ab7d65e9db449082b18767056e72a0118df9efef5523bba678",
+  "scope": "CID22 CPU progress only; not full timing qualification",
+  "metric_names": 113,
+  "cells": 452,
+  "qualified_timed_cells": 261,
+  "unsupported_map_rows": 146,
+  "other_refusals": 45,
+  "cid22_raw_path": "~/tmp/iqa-compete/cpu-cid22-progress-v2.jsonl",
+  "cid22_raw_sha256": "86bcef9b53dcab153e4a2765bf2408f1f2ef186a01bafcb9b45cdd5662ae2fec",
+  "missing": "PieAPP 1T lacks ten rounds; remaining resolutions and competitor timing panels remain incomplete"
+}

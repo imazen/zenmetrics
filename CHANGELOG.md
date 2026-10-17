@@ -92,6 +92,8 @@ None.
 
 ### Added
 
+- Compute-only IQA competition harness with separate score/map cells, recorded sample counts, bounded resource scopes, explicit refusals and retained per-host observations (`6bedb666`); [protocol and current coverage](benchmarks/iqa_compete_2026-10-16/README.md).
+
 - zenmetrics-nn `PieApp` (PR #81 follow-up, reviewed) (`0c4a78c3`, `dd70e5e1`, `2bae077c`): independent paper/tensor-metadata
   reconstruction, streamed stride-6 patch scoring on rten and ONNX Runtime
   CUDA, explicit noncommercial weight consent, and CLI `pieapp` (`3a3bdc28`).

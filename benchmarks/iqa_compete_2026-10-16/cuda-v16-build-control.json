@@ -1,0 +1,29 @@
+{
+  "binary": "/home/lilith/tmp/iqa-compete/bin/iqa-compete-cuda-v16",
+  "binary_sha256": "a29f58057511fb9e40db3fbabadbde1cca3b04a5b0508ab7d7df9c3959dc4376",
+  "bytes": 101755424,
+  "created_utc": "2026-10-17T05:48:42.661673+00:00",
+  "build_log": "/home/lilith/tmp/iqa-compete/build-gpu-v16.log",
+  "build_log_sha256": "27351be86de2cfba54368c025f313f9d77564a6f0b4b334dd3886d6e16c0205b",
+  "driver_source_sha256": "98b0aa4e3d0b9cb8a529324c70175b3cfbafade51c5d151c7dedbee4585329c7",
+  "admission": "Owner coverage-first: locked process accounting; load recorded without load-only refusal",
+  "sampling": "5 at CID22/AIC-small/AIC-medium, 3 at AIC-large/2K/4K, 1 at 8K; one bounded scope; at most one contamination rerun",
+  "metadata": "/home/lilith/tmp/iqa-compete/bin/cuda-v16.meta.json",
+  "metadata_sha256": "c75749e1338a0f2e400107e20d935c358636f1635e83fe92afdc814aade6c592",
+  "actual_rustflags": [
+    "--cfg",
+    "iqa_compete_ingress",
+    "--cfg",
+    "iqa_compete_cached"
+  ],
+  "resource": {
+    "exit_code": 0,
+    "seconds": 27,
+    "peak_rss_gib": 1.37,
+    "min_available_mib": 20549,
+    "peak_load": 5.14
+  },
+  "launch": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/launch.json",
+  "launch_sha256": "fa058629ed8aefc0cb3c61d6730cc312f354ca82c9b36f090bc8a319380fe965",
+  "note": "Build and publication provenance only; no parity requalification calls"
+}

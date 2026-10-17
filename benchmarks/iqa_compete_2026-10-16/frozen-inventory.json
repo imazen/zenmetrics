@@ -1,0 +1,935 @@
+[
+  {
+    "metric_name": "vmaf",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf"
+    ]
+  },
+  {
+    "metric_name": "vmaf-neg",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf_neg"
+    ]
+  },
+  {
+    "metric_name": "vmaf-4k",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf_4k"
+    ]
+  },
+  {
+    "metric_name": "vmaf-v1",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf_v1"
+    ]
+  },
+  {
+    "metric_name": "vmaf-studio601",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf_studio601"
+    ]
+  },
+  {
+    "metric_name": "vmaf-neg-studio601",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vmaf_neg_studio601"
+    ]
+  },
+  {
+    "metric_name": "psnr",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr"
+    ]
+  },
+  {
+    "metric_name": "psnr-y",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_y"
+    ]
+  },
+  {
+    "metric_name": "psnr-y601",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_y601"
+    ]
+  },
+  {
+    "metric_name": "psnr-y-studio601",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_y_studio601"
+    ]
+  },
+  {
+    "metric_name": "psnr-y-libvmaf",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_y_libvmaf"
+    ]
+  },
+  {
+    "metric_name": "psnr-ycbcr611",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_ycbcr611"
+    ]
+  },
+  {
+    "metric_name": "psnr-cb",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_cb"
+    ]
+  },
+  {
+    "metric_name": "psnr-cr",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnr_cr"
+    ]
+  },
+  {
+    "metric_name": "ciede2000",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ciede2000"
+    ]
+  },
+  {
+    "metric_name": "ssimc",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc"
+    ]
+  },
+  {
+    "metric_name": "flip",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "flip"
+    ]
+  },
+  {
+    "metric_name": "flip-v17",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "flip_v17"
+    ]
+  },
+  {
+    "metric_name": "cw-ssim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "cw_ssim"
+    ]
+  },
+  {
+    "metric_name": "cambi",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "cambi"
+    ]
+  },
+  {
+    "metric_name": "butteraugli-original",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "butteraugli_original"
+    ]
+  },
+  {
+    "metric_name": "ssimulacra1",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimulacra1"
+    ]
+  },
+  {
+    "metric_name": "ws-hv",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ws_hv"
+    ]
+  },
+  {
+    "metric_name": "ssim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim"
+    ]
+  },
+  {
+    "metric_name": "nlpd",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "nlpd"
+    ]
+  },
+  {
+    "metric_name": "nlpd-iqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "nlpd_iqa"
+    ]
+  },
+  {
+    "metric_name": "lpips-alex",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "lpips_alex"
+    ]
+  },
+  {
+    "metric_name": "lpips-vgg",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "lpips_vgg"
+    ]
+  },
+  {
+    "metric_name": "lpips-squeeze",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "lpips_squeeze"
+    ]
+  },
+  {
+    "metric_name": "dists",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "dists"
+    ]
+  },
+  {
+    "metric_name": "stlpips-alex",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "stlpips_alex"
+    ]
+  },
+  {
+    "metric_name": "stlpips-vgg",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "stlpips_vgg"
+    ]
+  },
+  {
+    "metric_name": "deepdc",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "deepdc"
+    ]
+  },
+  {
+    "metric_name": "ckdn",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ckdn"
+    ]
+  },
+  {
+    "metric_name": "afine",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "afine"
+    ]
+  },
+  {
+    "metric_name": "dreamsim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "dreamsim"
+    ]
+  },
+  {
+    "metric_name": "arniqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "arniqa",
+      "arniqa_ref"
+    ]
+  },
+  {
+    "metric_name": "maniqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "maniqa",
+      "maniqa_ref"
+    ]
+  },
+  {
+    "metric_name": "liqe",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "liqe",
+      "liqe_ref"
+    ]
+  },
+  {
+    "metric_name": "musiq",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "musiq",
+      "musiq_ref"
+    ]
+  },
+  {
+    "metric_name": "hyperiqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "hyperiqa",
+      "hyperiqa_ref"
+    ]
+  },
+  {
+    "metric_name": "paq2piq",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "paq2piq",
+      "paq2piq_ref"
+    ]
+  },
+  {
+    "metric_name": "wadiqam-fr-live",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "wadiqam_fr_live"
+    ]
+  },
+  {
+    "metric_name": "wadiqam-fr-tid",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "wadiqam_fr_tid"
+    ]
+  },
+  {
+    "metric_name": "wadiqam-nr-live",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "wadiqam_nr_live",
+      "wadiqam_nr_live_ref"
+    ]
+  },
+  {
+    "metric_name": "wadiqam-nr-tid",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "wadiqam_nr_tid",
+      "wadiqam_nr_tid_ref"
+    ]
+  },
+  {
+    "metric_name": "pieapp",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "pieapp"
+    ]
+  },
+  {
+    "metric_name": "wd",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "wd_s1",
+      "wd_s2",
+      "wd_s3",
+      "wd_s4",
+      "wd_s5"
+    ]
+  },
+  {
+    "metric_name": "ssim2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim2"
+    ]
+  },
+  {
+    "metric_name": "ssim2-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "ssim2_gpu"
+    ]
+  },
+  {
+    "metric_name": "butteraugli",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "butteraugli_max",
+      "butteraugli_pnorm3"
+    ]
+  },
+  {
+    "metric_name": "butteraugli-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "butteraugli_max_gpu",
+      "butteraugli_pnorm3_gpu"
+    ]
+  },
+  {
+    "metric_name": "dssim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "dssim"
+    ]
+  },
+  {
+    "metric_name": "dssim-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "dssim_gpu"
+    ]
+  },
+  {
+    "metric_name": "iwssim-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "iwssim_gpu"
+    ]
+  },
+  {
+    "metric_name": "zensim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "zensim"
+    ]
+  },
+  {
+    "metric_name": "zensim-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "zensim_gpu"
+    ]
+  },
+  {
+    "metric_name": "cvvdp",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "cvvdp_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "cvvdp-gpu",
+    "gpu": true,
+    "compiled": true,
+    "columns": [
+      "cvvdp_gpu"
+    ]
+  },
+  {
+    "metric_name": "iwssim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "iwssim_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "iwssim-piq",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "iwssim_piq_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "gmsd",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "gmsd_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "mdsi",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "mdsi_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "ms-gmsd",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_gmsd_paper_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "ms-gmsdc",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_gmsdc_paper_cpu_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "hdrvdp",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "hdrvdp_imazen_v0_0_1"
+    ]
+  },
+  {
+    "metric_name": "hdrvdp3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "hdrvdp3_jod_imazen_v0_0_1"
+    ]
+  },
+  {
+    "metric_name": "psnrhvs",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnrhvs_imazen_v0_1_0",
+      "psnrhvsm_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "psnrhvs-y",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnrhvsy_imazen_v0_1_0",
+      "psnrhvsym_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "haarpsi",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "haarpsi_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "haarpsi-y",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "haarpsiy_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "fsim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsim_imazen_v0_1_0",
+      "fsimc_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32-k2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32_k2"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32-k3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32_k3"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32-k4",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32_k4"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32-k5",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32_k5"
+    ]
+  },
+  {
+    "metric_name": "ssim-pyiqa-f32-k6",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_pyiqa_f32_k6"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32-k2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32_k2"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32-k3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32_k3"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32-k4",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32_k4"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32-k5",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32_k5"
+    ]
+  },
+  {
+    "metric_name": "ssimc-pyiqa-f32-k6",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssimc_pyiqa_f32_k6"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32-k2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32_k2"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32-k3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32_k3"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32-k4",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32_k4"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32-k5",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32_k5"
+    ]
+  },
+  {
+    "metric_name": "ms-ssim-pyiqa-f32-k6",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ms_ssim_pyiqa_f32_k6"
+    ]
+  },
+  {
+    "metric_name": "fsim-k2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsim_imazen_v0_1_0_k2",
+      "fsimc_imazen_v0_1_0_k2"
+    ]
+  },
+  {
+    "metric_name": "fsim-k3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsim_imazen_v0_1_0_k3",
+      "fsimc_imazen_v0_1_0_k3"
+    ]
+  },
+  {
+    "metric_name": "fsim-k4",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsim_imazen_v0_1_0_k4",
+      "fsimc_imazen_v0_1_0_k4"
+    ]
+  },
+  {
+    "metric_name": "fsim-nodownscale",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsim_imazen_v0_1_0_nodownscale",
+      "fsimc_imazen_v0_1_0_nodownscale"
+    ]
+  },
+  {
+    "metric_name": "fsim-y",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "fsimy_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "vsi",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vsi_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "vsi-k2",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vsi_imazen_v0_1_0_k2"
+    ]
+  },
+  {
+    "metric_name": "vsi-k3",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vsi_imazen_v0_1_0_k3"
+    ]
+  },
+  {
+    "metric_name": "vsi-k4",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vsi_imazen_v0_1_0_k4"
+    ]
+  },
+  {
+    "metric_name": "vsi-nodownscale",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vsi_imazen_v0_1_0_nodownscale"
+    ]
+  },
+  {
+    "metric_name": "msssim",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "msssim_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "vif",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vif_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "vifvec",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "vifvec_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "mad",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "mad_imazen_v0_1_0",
+      "mad_hi_imazen_v0_1_0",
+      "mad_lo_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "ssim-libvmaf",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "ssim_libvmaf"
+    ]
+  },
+  {
+    "metric_name": "msssim-libvmaf",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "msssim_libvmaf"
+    ]
+  },
+  {
+    "metric_name": "psnrhvs-daala",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "psnrhvs_daala_y",
+      "psnrhvs_daala_cb",
+      "psnrhvs_daala_cr",
+      "psnrhvs_daala"
+    ]
+  },
+  {
+    "metric_name": "mdctpsnr",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "mdctpsnr_imazen_v0_1_0"
+    ]
+  },
+  {
+    "metric_name": "piqe",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "piqe",
+      "piqe_ref"
+    ]
+  },
+  {
+    "metric_name": "niqe",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "niqe",
+      "niqe_ref"
+    ]
+  },
+  {
+    "metric_name": "brisque",
+    "gpu": false,
+    "compiled": true,
+    "columns": [
+      "brisque",
+      "brisque_ref"
+    ]
+  }
+]

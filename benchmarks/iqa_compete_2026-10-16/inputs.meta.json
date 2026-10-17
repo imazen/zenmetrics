@@ -1,0 +1,102 @@
+{
+  "source": {
+    "reference": "S67_Ref_00.png",
+    "distorted": "S67_CCM_15.png",
+    "dimensions": [
+      3355,
+      2516
+    ],
+    "encoded_sha256": {
+      "S67_Ref_00.png": "25ea1f7c7e393dd4f076537a38677960827ac9f542f5441cbc4df4037e82af08",
+      "S67_CCM_15.png": "57d49cc0444378ee637bdf94d53ddcf8b84ad4881930fd8a7b2032197ee49e40"
+    }
+  },
+  "derivatives": [
+    {
+      "size_name": "cid22",
+      "width": 512,
+      "height": 512,
+      "reference": "cid22-reference.rgb",
+      "distorted": "cid22-distorted.rgb",
+      "method": "zenresize Lanczos RGB8 sRGB",
+      "sha256": {
+        "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+        "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+      }
+    },
+    {
+      "size_name": "aic-small",
+      "width": 840,
+      "height": 944,
+      "reference": "aic-small-reference.rgb",
+      "distorted": "aic-small-distorted.rgb",
+      "method": "zenresize Lanczos RGB8 sRGB",
+      "sha256": {
+        "reference": "752ecf2cbd7da34f11110a7fa4efee498e4a6e8f345e7f8810079a7325b4598b",
+        "distorted": "4401cecaec10efe0a825837eb518108acc6d89ee9e42b425107b51a751d9f5e9"
+      }
+    },
+    {
+      "size_name": "aic-medium",
+      "width": 1680,
+      "height": 1888,
+      "reference": "aic-medium-reference.rgb",
+      "distorted": "aic-medium-distorted.rgb",
+      "method": "zenresize Lanczos RGB8 sRGB",
+      "sha256": {
+        "reference": "a0b8f76ea11647ec057fe1b838187dc1580e3d202af63953f972f15b2581b447",
+        "distorted": "2ce5cf7a7072257c27ae3ba4b1ba586d9627d9562143152829dc45dd06301b43"
+      }
+    },
+    {
+      "size_name": "aic-large",
+      "width": 3355,
+      "height": 2516,
+      "reference": "aic-large-reference.rgb",
+      "distorted": "aic-large-distorted.rgb",
+      "method": "zenresize Lanczos RGB8 sRGB",
+      "sha256": {
+        "reference": "d26f2db52c78525d62b23d7f6649fb5aa4ee6b75a19c2b9b1c73f79be1570b33",
+        "distorted": "59f0489144f71f0ffb4d68ab196d3d102a2bc58a8e2377083c9ae9d1301afe3a"
+      }
+    },
+    {
+      "size_name": "2k",
+      "width": 2048,
+      "height": 1080,
+      "reference": "2k-reference.rgb",
+      "distorted": "2k-distorted.rgb",
+      "method": "zenresize Lanczos RGB8 sRGB",
+      "sha256": {
+        "reference": "d5d183c7dfe899dc7558625a6551327730ed8b7b38529822f6827454cf954c9a",
+        "distorted": "0a291f50340712738e04f24369c7494df6fee6dfea25da9eac1ab92c51b4cc76"
+      }
+    },
+    {
+      "size_name": "4k",
+      "width": 3840,
+      "height": 2160,
+      "reference": "4k-reference.rgb",
+      "distorted": "4k-distorted.rgb",
+      "method": "mirror-tile largest real pair",
+      "sha256": {
+        "reference": "0c27d6336788760b50b03589a64a00a86869f14cc638a2ea24c59a6161c57951",
+        "distorted": "7b49af0b68961d157ee00083c02ad73f82cbf50cf56aa6feaa36ff5b6e66e7eb"
+      }
+    },
+    {
+      "size_name": "8k",
+      "width": 7680,
+      "height": 4320,
+      "reference": "8k-reference.rgb",
+      "distorted": "8k-distorted.rgb",
+      "method": "mirror-tile largest real pair",
+      "sha256": {
+        "reference": "1677b580c66ed8f0955707bfe1da1e4a89e84b282264e37941f379934af9b5a5",
+        "distorted": "392a57cec67715aa44a1add99a9cc98d4ecda5c5b384b799af1d6f8f05cde2bb"
+      }
+    }
+  ],
+  "preparation_log": "i265:~/tmp/iqa-compete/prepare.log",
+  "independent_decode_control": "Pillow RGB8 source bytes equal both aic-large raw files exactly; preparation decoded through zenmetrics PNG decoder."
+}

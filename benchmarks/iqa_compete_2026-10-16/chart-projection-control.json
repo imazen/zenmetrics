@@ -1,0 +1,14 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/gpu-cid22-2k-progress-v1.jsonl",
+  "raw_sha256": "7755e314d4479c3b88b29d61fe1669ec2f1ad87dd0df3848c5e02b47bc9ee451",
+  "rows_unchanged": 48,
+  "parseable_svgs": 30,
+  "bar_panels": 20,
+  "required_bar_label": "",
+  "chart_directory": "/home/lilith/tmp/iqa-compete/gpu-metric-panels-v1",
+  "negative_control": {
+    "expected_refusal": "Missing bar label: /home/lilith/tmp/iqa-compete/fsim-chart-columns-v1/bars-i265-Linux-7.0.0-38-generic-x86_64-with-glibc2.43-2k-score-ok.svg",
+    "reason": "Historical render input lacked output-column metadata; required label absent"
+  },
+  "qualification": "Saved artifacts only: exact summary projection, SVG parse, and missing-label refusal. No metric execution or timing claim."
+}

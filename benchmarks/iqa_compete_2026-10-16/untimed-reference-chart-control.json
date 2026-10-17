@@ -1,0 +1,17 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/untimed-reference-chart-source-v1.jsonl",
+  "raw_sha256": "7c0545dd0dee3e203b4a41b2629215504684770b597ae895a95c7fb28ed41c0c",
+  "rows_unchanged": 1,
+  "parseable_svgs": 3,
+  "bar_panels": 2,
+  "required_bar_label": "CPU reference: untimed warmup",
+  "chart_directory": "/home/lilith/tmp/iqa-compete/untimed-reference-chart-v1",
+  "render_log": "/home/lilith/tmp/iqa-compete/charts-untimed-reference-v1.log",
+  "resource": {
+    "seconds": 0,
+    "peak_rss_gib": 0.07,
+    "min_available_mib": 22422,
+    "peak_load": 14.01
+  },
+  "qualification": "One existing measured CUDA row unchanged; both bar panels explicitly label its completed untimed CPU reference. Rendering only, not inference timing."
+}

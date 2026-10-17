@@ -1,0 +1,17 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/fsim-chart-source-v2.jsonl",
+  "raw_sha256": "b1ea487e019d7dbf4f3e91122f322a935d08c12997a140971a595120d27643a5",
+  "rows_unchanged": 2,
+  "parseable_svgs": 5,
+  "bar_panels": 4,
+  "required_bar_label": "returns fsim, fsimc",
+  "chart_directory": "/home/lilith/tmp/iqa-compete/fsim-chart-columns-v2",
+  "render_log": "/home/lilith/tmp/iqa-compete/charts-fsim-columns-v2.log",
+  "resource": {
+    "seconds": 1,
+    "peak_rss_gib": 0.07,
+    "min_available_mib": 22251,
+    "peak_load": 9.75
+  },
+  "qualification": "Actual two-row FSIM score/map render; five parsed SVGs, all four bar panels disclose both returned columns. Preparation under shared load, not metric timing."
+}

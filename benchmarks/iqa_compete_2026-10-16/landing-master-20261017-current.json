@@ -1,0 +1,95 @@
+{
+  "observed_utc": "2026-10-17T09:45:14.852830+00:00",
+  "merged_master": "9b0e827c9559a112b94bff8764b48e69219dd48a",
+  "previous_qualified_merge": "42e122a62892ba44169399605236421cc843b326",
+  "gates": {
+    "fmt": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v2/fmt.log",
+      "log_sha256": "6905d6f4b03cf1445f0b0f5f3095b4121049d8e82881018238d8846ce8389aa3",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 6,
+        "peak_rss_gib": 0.15,
+        "min_available_mib": 21651,
+        "peak_load": 1.36
+      },
+      "exported_source_revisions": [
+        "983260a1d4cc"
+      ]
+    },
+    "cli_clippy": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v3/clippy.log",
+      "log_sha256": "759c36daf8f98b020f0a2f676734c410d17c56a655364d6caf212de1e1eb4590",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 5,
+        "peak_rss_gib": 0.52,
+        "min_available_mib": 21230,
+        "peak_load": 0.82
+      },
+      "exported_source_revisions": [
+        "bef71462a79c"
+      ]
+    },
+    "cli_feature_matrix": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v3/matrix.log",
+      "log_sha256": "7651cb788de41cb96ccb1a74e3353b4f0b08bcb4e070dfa4f98ac7fbff617e80",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 29,
+        "peak_rss_gib": 0.36,
+        "min_available_mib": 21160,
+        "peak_load": 1.15
+      },
+      "combinations_passed": 14,
+      "exported_source_revisions": []
+    },
+    "driver_clippy": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v3/driver.log",
+      "log_sha256": "b92f9821bd74eef90166f8db78a8b658256aaae2892943691efcb6ad102b88ea",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 14,
+        "peak_rss_gib": 0.54,
+        "min_available_mib": 19516,
+        "peak_load": 3.96
+      },
+      "exported_source_revisions": [
+        "4c1ca38f46da"
+      ]
+    },
+    "harness_tests": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/harness-latest-master.log",
+      "log_sha256": "0a510a0bcd734867ee757ef929cac4d5219ab73e646888b29e154f4be4cabed2",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 2,
+        "peak_rss_gib": 0.03,
+        "min_available_mib": 19374,
+        "peak_load": 1.21
+      },
+      "tests_passed": 93,
+      "exported_source_revisions": []
+    },
+    "benchmark_study_tests": {
+      "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/benchmark-study-latest-master.log",
+      "log_sha256": "6e1096b29148faee00bea88ded74601c231116f1946013d69c3c3151a12b34b1",
+      "tests_passed": 10,
+      "exported_source_revisions": []
+    }
+  },
+  "ort_adapter": {
+    "adapter_sha256": "c3a8c50cc84645eb80619f88e5258e89048a167f03c222b0ea2799284990084d",
+    "path": "crates/zenmetrics-nn/src/engine.rs",
+    "original_sha256": "48a6f37777dffdfbf17e057a429a8c4733d7ce138017a4a21b65e5c686a66d5e",
+    "adapted_sha256": "450c22c5ee66c02b0c4d618ede5a564018a604b4480bd1ef4df5344787d4baa5",
+    "builders": 2,
+    "session_call_sites": 3,
+    "scope": "Benchmark snapshot only; explicit intra-op cell budget, inter-op one; graph operations, providers and deterministic-compute options unchanged"
+  },
+  "prior_feature_invocation": {
+    "log": "/home/lilith/tmp/iqa-compete/merge-master-20261017/gates-v2/clippy.log",
+    "outcome": "Cargo rejected an incorrect feature name before compilation; corrected to manifest nn-webgpu and passed"
+  },
+  "timing_cohorts": "Preserved timing rows remain bound to their frozen binary/source provenance. No parity evaluations repeated for this merge."
+}

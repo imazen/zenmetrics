@@ -1,0 +1,22 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/i265-progress-20261017-0112.jsonl",
+  "raw_sha256": "5f9d85bc5aa69f8e20cb15feaaffafb83c154c1e5d098a6b9810c7bec2197448",
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+  "expected_cells": 1080,
+  "present_requested_cells": 669,
+  "status_counts": {
+    "ok": 339,
+    "unsupported": 252,
+    "skipped": 74,
+    "variant_mismatch": 4
+  },
+  "extra_cells": 24,
+  "complete": false,
+  "contract": "CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings",
+  "missing_count": 411,
+  "pending_count": 60,
+  "full_receipt": "/home/lilith/tmp/iqa-compete/coverage-cid22-2k-0112.json",
+  "full_receipt_sha256": "f267120f98cb7b3f674a183019a20bcb806085a44ac40fed0f22adb9aa5bb08e",
+  "scope": "Historical CID22/2K progress snapshot, not all sizes or completed stages"
+}

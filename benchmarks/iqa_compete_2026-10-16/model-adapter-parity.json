@@ -1,0 +1,271 @@
+{
+  "reference_sha256": "c1e14cf7f0de20d40d42147a95775e911e65ce8267f6d9e89f2b4f3b82e14beb",
+  "candidate_sha256": "5fd9b605ab08613320e42c9f768a740a53652360a7f91a08a2732f7ec3854c66",
+  "cases": [
+    {
+      "key": "vmaf-cid22-1t",
+      "scores": [
+        [
+          "vmaf",
+          "40583c00b16c0964"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-cid22-1t",
+      "scores": [
+        [
+          "vmaf_neg",
+          "4057dd9b34abb20c"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-4k-cid22-1t",
+      "scores": [
+        [
+          "vmaf_4k",
+          "4059000000000000"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-v1-cid22-1t",
+      "scores": [
+        [
+          "vmaf_v1",
+          "4058aa25d2b71fcb"
+        ]
+      ],
+      "native_map_count": 43,
+      "identical": true
+    },
+    {
+      "key": "vmaf-studio601-cid22-1t",
+      "scores": [
+        [
+          "vmaf_studio601",
+          "40584098df87e420"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-studio601-cid22-1t",
+      "scores": [
+        [
+          "vmaf_neg_studio601",
+          "4057e9273d9293f1"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-cid22-20t",
+      "scores": [
+        [
+          "vmaf",
+          "40583c00b16c0964"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-cid22-20t",
+      "scores": [
+        [
+          "vmaf_neg",
+          "4057dd9b34abb20c"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-4k-cid22-20t",
+      "scores": [
+        [
+          "vmaf_4k",
+          "4059000000000000"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-v1-cid22-20t",
+      "scores": [
+        [
+          "vmaf_v1",
+          "4058aa25d2b71fcb"
+        ]
+      ],
+      "native_map_count": 43,
+      "identical": true
+    },
+    {
+      "key": "vmaf-studio601-cid22-20t",
+      "scores": [
+        [
+          "vmaf_studio601",
+          "40584098df87e420"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-studio601-cid22-20t",
+      "scores": [
+        [
+          "vmaf_neg_studio601",
+          "4057e9273d9293f1"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-2k-1t",
+      "scores": [
+        [
+          "vmaf",
+          "4057cb9e24d9da0b"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-2k-1t",
+      "scores": [
+        [
+          "vmaf_neg",
+          "405751161ce820b2"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-4k-2k-1t",
+      "scores": [
+        [
+          "vmaf_4k",
+          "40589e4caab7edb5"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-v1-2k-1t",
+      "scores": [
+        [
+          "vmaf_v1",
+          "40582fe9b9370376"
+        ]
+      ],
+      "native_map_count": 43,
+      "identical": true
+    },
+    {
+      "key": "vmaf-studio601-2k-1t",
+      "scores": [
+        [
+          "vmaf_studio601",
+          "4057dc77cc1ba0c7"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-studio601-2k-1t",
+      "scores": [
+        [
+          "vmaf_neg_studio601",
+          "40576a32361dbbeb"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-2k-20t",
+      "scores": [
+        [
+          "vmaf",
+          "4057cb9e24d9da0b"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-2k-20t",
+      "scores": [
+        [
+          "vmaf_neg",
+          "405751161ce820b2"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-4k-2k-20t",
+      "scores": [
+        [
+          "vmaf_4k",
+          "40589e4caab7edb5"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-v1-2k-20t",
+      "scores": [
+        [
+          "vmaf_v1",
+          "40582fe9b9370376"
+        ]
+      ],
+      "native_map_count": 43,
+      "identical": true
+    },
+    {
+      "key": "vmaf-studio601-2k-20t",
+      "scores": [
+        [
+          "vmaf_studio601",
+          "4057dc77cc1ba0c7"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    },
+    {
+      "key": "vmaf-neg-studio601-2k-20t",
+      "scores": [
+        [
+          "vmaf_neg_studio601",
+          "40576a32361dbbeb"
+        ]
+      ],
+      "native_map_count": 0,
+      "identical": true
+    }
+  ],
+  "all_identical": true
+}

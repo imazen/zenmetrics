@@ -1,0 +1,10 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/task4-merge-v1/raw.jsonl",
+  "raw_sha256": "1f594f85c72292bb9a4c0a78c14025fd6583e94d642f7dead0d3c9980290df68",
+  "rows_verified": 440,
+  "scopes_retained": 220,
+  "scope": "Read-only transfer of selected immutable scope/config receipts; classification and configuration bindings verified, no independent remeasurement",
+  "manifest": "/home/lilith/tmp/iqa-compete/task4-scopes-v1/manifest.json",
+  "manifest_sha256": "36c087c4cdd11d6a63b1d1767562656667e2f3864f600dc9f9351ad90c7f78e7",
+  "bytes_retained": 4788264
+}

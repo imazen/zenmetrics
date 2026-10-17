@@ -1,0 +1,40 @@
+{
+  "metric_name": "vmaf",
+  "size_name": "aic-small",
+  "threads": 1,
+  "mode": "score",
+  "status": "ok",
+  "n": 5,
+  "required_samples": 5,
+  "coverage_first": true,
+  "impl_binary_sha": "a29f58057511fb9e40db3fbabadbde1cca3b04a5b0508ab7d7df9c3959dc4376",
+  "median_ns": 22414487.0,
+  "p10_ns": 22273147.2,
+  "p90_ns": 22533605.2,
+  "mean_ns": 22403988.6,
+  "score": 96.33797299929867,
+  "resource": {
+    "exit_code": 0,
+    "min_available_mib": 21743,
+    "peak_load": 1.43,
+    "peak_rss_gib": 0.06,
+    "seconds": 1
+  },
+  "timing_quality": "clean",
+  "contention_peak_cores": 0.10276548426168447,
+  "contention_receipt": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/cpu/logs/vmaf-aic-small-1t-88fea05bb1ad.contention.json",
+  "load_before": [
+    1.43,
+    1.84,
+    3.05
+  ],
+  "load_after": [
+    1.48,
+    1.84,
+    3.04
+  ],
+  "log_path": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/cpu/logs/vmaf-aic-small-1t-88fea05bb1ad.log",
+  "log_sha256": "915ce24cf36b8f69c4c1239aa45c617d878f2a4b68e5e1f40bc6740789b8b2de",
+  "raw": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/cpu/i265.jsonl",
+  "note": "First actual missing-size cell under owner coverage policy; no additional metric or parity invocation"
+}

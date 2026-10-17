@@ -1,0 +1,33 @@
+{
+  "observed_utc": "2026-10-17T06:13:39.440764+00:00",
+  "host": "i265",
+  "pid": 2891478,
+  "requested_threads": 1,
+  "taskset_cpu": 2,
+  "all_observed_threads_pinned": true,
+  "threads": [
+    {
+      "tid": 2891478,
+      "cpus_allowed_list": "2",
+      "status_sha256": "d9b126445ab0ed9472bc7a713db2f66fe3f1a3f482244a2b8514b899c1f29ab0"
+    },
+    {
+      "tid": 2891479,
+      "cpus_allowed_list": "2",
+      "status_sha256": "98476716bf79d0b25a6191266dfa29557a70e75510f6de18348ab36276e14ddf"
+    },
+    {
+      "tid": 2897573,
+      "cpus_allowed_list": "2",
+      "status_sha256": "d32e250f73ccc0e8525fe58ebdedb063fa9633d6a7e94049e4b58030877cd229"
+    },
+    {
+      "tid": 2897575,
+      "cpus_allowed_list": "2",
+      "status_sha256": "aefea2017ddb0a360f1fafa384e3538e218d4eafba962e92646967cc74a11439"
+    }
+  ],
+  "log": "/home/lilith/tmp/iqa-compete/coverage-rust-v16/pieapp/logs/pieapp-aic-small-1t-23df729ac4cb.log",
+  "scope_attempt": "23df729ac4cb",
+  "method": "Read /proc/<pid>/task/<tid>/status Cpus_allowed_list for every live thread. No metric calls. Zenbench reports the permitted cgroup CPU set separately from this process affinity."
+}

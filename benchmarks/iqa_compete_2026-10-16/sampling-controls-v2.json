@@ -1,0 +1,7 @@
+{
+  "command": "just iqa-compete-chunk-tests",
+  "tests_passed": 6,
+  "exit_code": 0,
+  "scope": "Sampling count, actual round means, input/binary identity, runtime/model identity, score bits and map/scalar disagreement; not a performance measurement",
+  "end_to_end_status": "pending shared-lock admission"
+}

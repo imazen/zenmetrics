@@ -22,9 +22,10 @@ path = "src/bin/cpu_wall.rs"
 # reaches the CLI's copies, so `new-metrics-wall` then measures the same
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
+compete = ["zenmetrics-cli/nn-ort", "zenmetrics-cli/nr", "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
 heap-phases = ["zenbench/heap-profiling"]
 study-gpu-wgpu = ["zenmetrics-api/all-metrics", "zenmetrics-api/wgpu", "dep:cubecl", "cubecl/wgpu"]
-study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc"]
+study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc", "dep:cubecl", "cubecl/cuda"]
 metrics-parallel = [
     "cvvdp/parallel", "iwssim/parallel", "fast-ssim2/rayon",
     "dep:fsim", "fsim/parallel", "dep:haarpsi", "haarpsi/parallel",
@@ -35,6 +36,9 @@ metrics-parallel = [
 ]
 
 [dependencies]
+nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel"] }
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
+zenmetrics-abstractions = { path = "../../../../crates/zenmetrics-abstractions", optional = true }
 cubecl = { workspace = true, optional = true }
 cudarc = { version = "0.19.10", default-features = false, features = ["std", "driver", "fallback-dynamic-loading", "cuda-version-from-build-system", "fallback-latest"], optional = true }
 zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"] }
@@ -63,6 +67,7 @@ zensim       = { path = "../../../../../zensim/zensim" }
 # more threads there — do not extrapolate either way. Keep the feature set
 # identical to production consumers so the harness measures what ships.
 fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
+fast-ssim2-current = { package = "fast-ssim2", path = "../../../../../fast-ssim2/fast-ssim2", optional = true }
 # Inherit the workspace spec (3.5 + `threads`). The local dssim-core pin's
 # no-`threads` path doesn't compile (its zero-dep rayon fallback is a WIP
 # stub), and dssim-core's parallelism is what we profile anyway.
@@ -125,3 +130,8 @@ path = "src/bin/new_metrics_wall.rs"
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "iqa-compete"
+path = "src/bin/iqa_compete.rs"
+required-features = ["compete"]

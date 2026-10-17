@@ -1,0 +1,77 @@
+{
+  "raw": "/home/lilith/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl",
+  "raw_sha256": "87141136844bd3030f1884da3994c7ac05d835d8c67702bd5330a78eeac4ee98",
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "pairs_manifest_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+  "expected_cells": 3780,
+  "present_requested_cells": 1080,
+  "per_size": {
+    "cid22": {
+      "expected": 540,
+      "present": 540,
+      "timed": 326,
+      "statuses": {
+        "unsupported": 190,
+        "ok": 322,
+        "skipped": 24,
+        "variant_mismatch": 4
+      }
+    },
+    "aic-small": {
+      "expected": 540,
+      "present": 0,
+      "timed": 0,
+      "statuses": {}
+    },
+    "aic-medium": {
+      "expected": 540,
+      "present": 0,
+      "timed": 0,
+      "statuses": {}
+    },
+    "aic-large": {
+      "expected": 540,
+      "present": 0,
+      "timed": 0,
+      "statuses": {}
+    },
+    "2k": {
+      "expected": 540,
+      "present": 540,
+      "timed": 330,
+      "statuses": {
+        "ok": 330,
+        "unsupported": 196,
+        "skipped": 14
+      }
+    },
+    "4k": {
+      "expected": 540,
+      "present": 0,
+      "timed": 0,
+      "statuses": {}
+    },
+    "8k": {
+      "expected": 540,
+      "present": 0,
+      "timed": 0,
+      "statuses": {}
+    }
+  },
+  "status_counts": {
+    "ok": 652,
+    "unsupported": 386,
+    "variant_mismatch": 4,
+    "skipped": 38
+  },
+  "timing_quality_counts": {
+    "legacy_unmonitored": 1028,
+    "clean": 52
+  },
+  "coverage_first": true,
+  "audit": "/home/lilith/tmp/iqa-compete/coverage-initial-v16.json",
+  "audit_sha256": "5ec98ed0d64a86c2208a39e831984ca78b5f54a74818656a52fbf1c23db5d4b6",
+  "missing_cells": 2700,
+  "pending_qualification": 0,
+  "note": "Baseline retained observations before the five missing sizes; no metric calls or parity reruns performed"
+}

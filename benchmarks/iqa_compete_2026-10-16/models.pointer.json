@@ -1,0 +1,8 @@
+{
+  "host": "i265",
+  "path": "/home/lilith/tmp/iqa-compete/models-manifest.json",
+  "sha256": "a6acc15f46447b43985327857d24416b2e8246f3bf66a47a66be22db1b9dc884",
+  "artifacts": 98,
+  "receipt": "/home/lilith/tmp/iqa-compete/model-manifest.log",
+  "note": "Exact graph, owned head-table and metadata hashes; weights are external and not committed"
+}

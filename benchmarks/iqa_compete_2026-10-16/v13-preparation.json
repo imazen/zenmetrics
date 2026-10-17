@@ -1,0 +1,42 @@
+{
+  "binary": "/home/lilith/tmp/iqa-compete/bin/iqa-compete-cuda-v13",
+  "binary_sha256": "1b1e27416b9d6af3eb75a6bafced740a83d143e1b3ae1e34420cf3df74ae78e9",
+  "records": [
+    {
+      "log": "/home/lilith/tmp/iqa-compete/build-gpu-v13.log",
+      "sha256": "9772f8968e06911496f2c605809dc62b2b193727475b6f9e059f7ebcebef4a21",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 27,
+        "peak_rss_gib": 1.33,
+        "min_available_mib": 24430,
+        "peak_load": 5.04
+      }
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/workspace-fmt-scoped.log",
+      "sha256": "a04759267667896538cb62157985cda3552c43ce4546d26593225f2cf41ef5ae",
+      "resource": {
+        "exit_code": 0,
+        "seconds": 67,
+        "peak_rss_gib": 0.15,
+        "min_available_mib": 25973,
+        "peak_load": 4.27
+      }
+    },
+    {
+      "log": "/home/lilith/tmp/iqa-compete/ort-thread-control.log",
+      "sha256": "49d95403cbad38252efdfd7ee059d67c322986c35044f6477e1f8f54f28b449d",
+      "resource": {
+        "exit_code": 1,
+        "seconds": 1,
+        "peak_rss_gib": 0.07,
+        "min_available_mib": 25874,
+        "peak_load": 4.64
+      }
+    }
+  ],
+  "ort_thread_control": "FAILED: native worker count assertion; per-thread diagnostic rerun queued, assertion unchanged",
+  "clippy": "pending",
+  "scope": "Build/formatter/control receipts only; no ORT performance qualification claimed"
+}

@@ -1,0 +1,59 @@
+{
+  "host": "i265",
+  "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+  "build_command": "just iqa-compete-build (pinned snapshot; --release; compete,metrics-parallel)",
+  "rustflags": null,
+  "receipts": {
+    "build-third": {
+      "path": "/home/lilith/tmp/iqa-compete/build-third.log",
+      "sha256": "b3c82a1ba6065582b2d5788cb5fd165b1d2d308709e2a1ad0ca2c8b522e40da5",
+      "exit_code": 0,
+      "seconds": 15,
+      "peak_rss_gib": 1.1,
+      "min_available_mib": 21999,
+      "peak_load": 3.01
+    },
+    "build-maps-third": {
+      "path": "/home/lilith/tmp/iqa-compete/build-maps-third.log",
+      "sha256": "382bb53b4382c2e5b7038d579cc0154d83ba108fddcb63941697b67f5ad36096",
+      "exit_code": 0,
+      "seconds": 15,
+      "peak_rss_gib": 1.1,
+      "min_available_mib": 22063,
+      "peak_load": 2.9
+    },
+    "build-maps-cvvdp": {
+      "path": "/home/lilith/tmp/iqa-compete/build-maps-cvvdp.log",
+      "sha256": "37fac05127f864fa692467074e469ee3282bd49ef172a0fe5dbe0079befafefc",
+      "exit_code": 0,
+      "seconds": 15,
+      "peak_rss_gib": 1.12,
+      "min_available_mib": 22140,
+      "peak_load": 3.23
+    },
+    "clippy-native": {
+      "path": "/home/lilith/tmp/iqa-compete/clippy-native.log",
+      "sha256": "5b99acea348000b6361b6ea0c0e3ca43edd1f87c1e6e439f5753894b7d0d818c",
+      "exit_code": 0,
+      "seconds": 9,
+      "peak_rss_gib": 0.53,
+      "min_available_mib": 21816,
+      "peak_load": 2.75
+    },
+    "prepare": {
+      "path": "/home/lilith/tmp/iqa-compete/prepare.log",
+      "sha256": "6c1503d42ce4d24fba5235c8189bc85f6c42e67154d90402d5e8279216dc8608",
+      "exit_code": 0,
+      "seconds": 1,
+      "peak_rss_gib": 0.17,
+      "min_available_mib": 23428,
+      "peak_load": 2.55
+    }
+  },
+  "raw_smoke_paths": [
+    "/home/lilith/tmp/iqa-compete/smoke-placement/i265.jsonl",
+    "/home/lilith/tmp/iqa-compete/native-smoke/i265.jsonl",
+    "/home/lilith/tmp/iqa-compete/cvvdp-smoke/i265.jsonl"
+  ],
+  "raw_cpu_in_progress": "/home/lilith/tmp/iqa-compete/cpu-first/i265.jsonl"
+}

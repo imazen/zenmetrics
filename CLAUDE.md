@@ -1680,3 +1680,51 @@ The private E36 mask changes base table identities. Do not qualify these with an
 unchanged E34 package. Use the native E36 profile and exact metadata derivation
 before the existing checkpoint gate; see [transport](docs/E36_FIT_TRANSPORT.md).
 `just e36-fit-contract-check` uses invented metadata and never trains.
+
+### Known Bugs: Linux IQA benchmark timeout admission (2026-10-17)
+
+The competition harness's killed Rust scopes could leave zenbench running
+reservations, causing later cells to refuse admission. The Linux controller now
+records each child's PID/process group and recovers only its matching dead
+reservation after verifying the whole group has exited and acquiring the guard.
+It archives the original bytes and retains a backup in the admission directory.
+The [real interruption control](benchmarks/iqa_compete_2026-10-16/timeout-recovery-control.json)
+keeps interrupted samples unqualified; OS-backed controls protect live groups,
+other owners and locked guards. This is benchmark scheduling state, not a metric
+score discrepancy.
+
+### Known Bugs: IQA benchmark ORT worker budgets (2026-10-17)
+
+The initial compete harness set thread environment variables but left ORT session
+pools at their default. The installed runtime's default pool used twenty native
+threads and expanded worker affinities beyond the requested one-CPU mask. The
+benchmark snapshot now sets every session's intra-op budget explicitly, with one
+inter-op thread. ORT's full telemetry opt-out also removes its import-time helper
+and background I/O from this study. The original exact one/twenty-worker controls
+pass without assertion changes. Earlier ORT rows remain diagnostics; corrected
+runs have their own ledger and configured-session receipts. See the
+[measured control](benchmarks/iqa_compete_2026-10-16/ort-budget-control.json).
+
+### Known Bugs: IQA competition native-map adapter omissions (2026-10-17)
+
+The initial competition harness recorded `fsim-y`, `haarpsi-y` and
+`iwssim-piq` maps as unsupported despite existing native-map kernels. Those
+historical rows remain preserved and do not establish map unavailability. The
+coverage gate now treats unsupported rows for known native CPU map routes as
+pending adapter work. Snapshot adapters and replacement attempts are pending
+runtime qualification; the [audit receipt](benchmarks/iqa_compete_2026-10-16/coverage-known-map-omissions.json)
+records the affected first-panel cells. No metric arithmetic or shipped API is
+changed by this benchmark work.
+
+### Known Bugs: benchmark GPU scorer residency at 8K (2026-10-17)
+
+The grouped IQA benchmark keeps independent scalar and map GPU scorers alive.
+At 7680×4320, Butteraugli CUDA completes its initial scalar warmup, then fails
+a 1,045,012,480-byte device allocation during map warmup. Both requested thread
+budgets exit 101 without qualified timing rows. The isolated-mode benchmark
+path keeps one scorer per process. All four missing mode/thread cells then
+complete with one retained sample each and clean contention receipts. The
+[measured receipt](benchmarks/iqa_compete_2026-10-16/butter8k-isolated-v17-control.json)
+records 8–9-second scopes and 9.22–9.23 GiB peak host RSS; these are not VRAM measurements.
+The original attempt logs remain under `~/tmp/iqa-compete/coverage-rust-v16/cuda/logs/`.
+No metric algorithm or allocation limit is changed.
