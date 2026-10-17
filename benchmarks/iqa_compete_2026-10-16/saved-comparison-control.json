@@ -1,0 +1,16 @@
+{
+  "input": "/home/lilith/tmp/iqa-compete/gpu-cid22-2k-progress-v1.jsonl",
+  "input_sha256": "7755e314d4479c3b88b29d61fe1669ec2f1ad87dd0df3848c5e02b47bc9ee451",
+  "references": [
+    {
+      "path": "/home/lilith/tmp/iqa-compete/cpu-cid22-progress-v2.jsonl",
+      "sha256": "86bcef9b53dcab153e4a2765bf2408f1f2ef186a01bafcb9b45cdd5662ae2fec"
+    }
+  ],
+  "inventory_sha256": "0284727456b1c3deeba8c9a6d75c3084fbdd2d13f1e6bbbf8481fb64f0e42d63",
+  "jnd_scale_sha256": "65f66faede35df12f4079d170cb5524a036c97713a23ef9f25a6e853e27fb761",
+  "output_sha256": "27d669e52dc622158f1e932096b3a3f04193c581d43b813fc483945f35cd9fe4",
+  "rows": 48,
+  "reproduction_required": [],
+  "policy": "Only comparison fields updated; no timed calls executed; new mismatches require independent reproduction"
+}
