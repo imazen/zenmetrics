@@ -15,7 +15,9 @@ been tuned.
 The approach follows M. Pedzisz (Nokia), *Complexity Assessment of
 Full-Reference Image Quality Metrics*, a JPEG AIC-4 contribution circulated
 as a preliminary draft dated 2026-10-07 (cited with the owner's permission;
-later revisions may differ). That draft counts primitive scalar operations
+later revisions may differ). Only part of that draft was seen, as screenshots;
+the description and numbers below are transcribed from those and no accuracy
+is claimed for them. That draft counts primitive scalar operations
 along each metric's source-grounded path from input pair to score, before
 SIMD, FMA fusion, threading and compiler transforms, weights them by
 declared relative costs (add/sub/mul 1, comparison/abs/negation 1, sqrt 4,
@@ -24,7 +26,10 @@ division 6, exp/log/trig 20, softplus 25, general power 40, element copies
 reports from about 3 weighted operations per pixel (PSNR-Y) to about 4,265
 (Butteraugli, RGB), and recommends weighted counts tied to identified
 implementations over runtime for comparing complexity. Its declared weights
-are available here as `scripts/complexity/weights_pedzisz_2026_draft.json`.
+are available here as `scripts/complexity/weights_pedzisz_2026_draft.json` and
+its per-metric totals as `scripts/complexity/pedzisz_2026_draft_values.json`;
+`scripts/complexity/compare_draft.py` sets our tallies beside them (different
+implementations, so differences are expected).
 
 This repository extends that approach with halo radius and access pattern
 (the owner's request), per-precision classes, a work/span view of parallel

@@ -53,5 +53,6 @@
   "int": {
    "*": 1
   }
- }
+ },
+ "caveat": "Transcribed from partial screenshots of a preliminary draft; only part of the draft was seen, and no accuracy is claimed for these values, their weights or how they map to zenmetrics metrics."
 }

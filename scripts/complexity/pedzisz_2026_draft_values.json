@@ -1,0 +1,91 @@
+{
+ "source": "M. Pedzisz (Nokia), Complexity Assessment of Full-Reference Image Quality Metrics, JPEG AIC-4 contribution, preliminary draft dated 2026-10-07: Figure 1 and its table, weighted multiply-equivalent operations per input pixel at 840x944 under the draft's declared weights. Cited with the owner's permission; later revisions may differ.",
+ "shape": "840x944",
+ "values": [
+  {
+   "draft_name": "Butteraugli_RGB",
+   "value": 4265.0,
+   "implementation": "Google C++ butteraugli",
+   "zenmetrics": "butteraugli-original"
+  },
+  {
+   "draft_name": "CVVDP_RGB",
+   "value": 1596.22,
+   "implementation": "ColorVideoVDP Python/PyTorch",
+   "zenmetrics": "cvvdp"
+  },
+  {
+   "draft_name": "FSIMc_RGB",
+   "value": 1031.38,
+   "implementation": "FSIM.m MATLAB",
+   "zenmetrics": "fsim"
+  },
+  {
+   "draft_name": "FSIM_Y",
+   "value": 925.37,
+   "implementation": "FSIM.m MATLAB",
+   "zenmetrics": "fsim-y"
+  },
+  {
+   "draft_name": "VMAF_Y",
+   "value": 708.46,
+   "implementation": "libvmaf",
+   "zenmetrics": "vmaf"
+  },
+  {
+   "draft_name": "MS-SSIM_Y",
+   "value": 461.41,
+   "implementation": "libvmaf",
+   "zenmetrics": "msssim-libvmaf"
+  },
+  {
+   "draft_name": "HaarPSI_Y",
+   "value": 212.5,
+   "implementation": "HaarPSI Python",
+   "zenmetrics": "haarpsi-y"
+  },
+  {
+   "draft_name": "PSNR-HVS-Y",
+   "value": 89.5073,
+   "implementation": "libvmaf",
+   "zenmetrics": "psnrhvs-y"
+  },
+  {
+   "draft_name": "SSIM_Y",
+   "value": 32.8537,
+   "implementation": "libvmaf",
+   "zenmetrics": "ssim-libvmaf"
+  },
+  {
+   "draft_name": "PSNR_Y",
+   "value": 3.0012,
+   "implementation": "libvmaf integer path",
+   "zenmetrics": "psnr-y-libvmaf"
+  },
+  {
+   "draft_name": "DVIFM_RGB",
+   "value": 485.49,
+   "implementation": "contributed C++",
+   "zenmetrics": null
+  },
+  {
+   "draft_name": "DVIFM_Y",
+   "value": 149.8314,
+   "implementation": "contributed C++",
+   "zenmetrics": null
+  },
+  {
+   "draft_name": "DVIFM_2D_Y",
+   "value": 115.8828,
+   "implementation": "contributed C++",
+   "zenmetrics": null
+  },
+  {
+   "draft_name": "DVIFM_MIN_Y",
+   "value": 9.8506,
+   "implementation": "contributed C++",
+   "zenmetrics": null
+  }
+ ],
+ "caveat": "Transcribed from partial screenshots of a preliminary draft; only part of the draft was seen, and no accuracy is claimed for these values, their weights or how they map to zenmetrics metrics."
+}
