@@ -1,5 +1,5 @@
 """Linux process accounting inside the shared benchmark lock (not a profiler)."""
-import argparse,json,os,subprocess,time
+import argparse,hashlib,json,os,subprocess,time
 from pathlib import Path
 
 
@@ -61,7 +61,7 @@ def main():
     total=sorted(accumulated.values(),key=lambda v:v['cores'],reverse=True)
     # Retry if a competitor exceeds one core in any sampled interval.
     worst=max((v['cores'] for v in total),default=0)
-    result=dict(protocol='locked-process-accounting-v1',load_before=load_before,load_after=list(os.getloadavg()),
+    result=dict(protocol='locked-process-accounting-v1',supervisor_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),load_before=load_before,load_after=list(os.getloadavg()),
         elapsed_seconds=previous[0]-before[0],cpu_tick_hz=hz,top_competing_processes=total[:20],
         top_competing_processes_before=competing(samples[0])[:20],top_competing_processes_after=competing(samples[-1])[:20],
         interval_peak_cores=[dict(pid=k[0],name=k[1],cores=v) for k,v in sorted(peaks.items(),key=lambda item:item[1],reverse=True)[:20]],
