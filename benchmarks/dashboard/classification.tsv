@@ -364,6 +364,7 @@ benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_dev.json	ignored	Aggr
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_i265.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_mac.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
 benchmarks/iqa_complexity_2026-10-17/effort/agent_sessions_r7900x.json	ignored	Aggregate agent-session counts (no transcript content); summarized in docs/IQA_COMPLEXITY.md until a dashboard adapter is reviewed.
+benchmarks/iqa_complexity_2026-10-17/effort/git_iterations.swe2.tsv	ignored	Aggregate per-family optimization commit/iteration counts consumed by scripts/complexity/git_iterations.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/engines/i265_nn_ort-cuda_1024.tsv	ignored	Complexity-study engine timing table consumed by scripts/complexity/nn_engines.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/engines/i265_nn_ort-webgpu_1024.tsv	ignored	Complexity-study engine timing table consumed by scripts/complexity/nn_engines.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -831,6 +832,11 @@ benchmarks/nn_opt4_2026-10-16/ab_liqe_b_base_t16.tsv	ignored	Historical experime
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/host_stage_share.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_opt5_2026-10-16/ab.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
+benchmarks/nn_opt5_2026-10-16/ab_256_reps12.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
+benchmarks/nn_opt5_2026-10-16/ab_t1_1024_2048_cap.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
+benchmarks/nn_opt5_2026-10-16/cap_memory.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
+benchmarks/nn_opt5_2026-10-16/host_stage_share.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
 benchmarks/nn_opt_2026-10-15/ab2_dists_v1_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt_2026-10-15/ab2_dists_v1_b.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt_2026-10-15/ab2_dists_v2_a.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
