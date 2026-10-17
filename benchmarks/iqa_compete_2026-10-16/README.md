@@ -164,3 +164,7 @@ The CPU, CUDA, native and Python coverage controllers can group short cells into
 less than 1000 seconds remain. Each row records its actual scope, between
 1000 and 1100 seconds; partial cells still do not continue. This reduces lock
 queue overhead between short cells. PieAPP keeps its independent per-cell lock.
+
+The permitted cgroup CPU set in zenbench's metadata is separate from process
+CPU affinity. The [live one-thread snapshot](coverage-active-pinning-control.json)
+records every thread restricted to CPU 2, without another metric invocation.
