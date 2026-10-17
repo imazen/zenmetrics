@@ -1,0 +1,4 @@
+{"name": "flop count", "source": "unweighted: one per arithmetic operation, two per fma; loads, stores, conversions and integer ops excluded",
+ "weights": {"add": {"*": 1}, "mul": {"*": 1}, "fma": {"*": 2}, "div": {"*": 1}, "rcp": {"*": 1}, "sqrt": {"*": 1},
+             "rsqrt": {"*": 1}, "exp": {"*": 1}, "log": {"*": 1}, "pow": {"*": 1}, "trig": {"*": 1}, "cmp": {"*": 0},
+             "abs": {"*": 0}, "cvt": {"*": 0}, "int": {"*": 0}, "load": {"*": 0}, "store": {"*": 0}}}

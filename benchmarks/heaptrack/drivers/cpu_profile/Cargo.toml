@@ -130,6 +130,12 @@ path = "src/bin/loop_wall.rs"
 name = "new-metrics-wall"
 path = "src/bin/new_metrics_wall.rs"
 
+# Repeats one metric on one prepared pair for perf-counter deltas
+# (docs/IQA_COMPLEXITY.md, scripts/complexity/perf_deltas.py).
+[[bin]]
+name = "complexity-reps"
+path = "src/bin/complexity_reps.rs"
+
 [lints]
 workspace = true
 
