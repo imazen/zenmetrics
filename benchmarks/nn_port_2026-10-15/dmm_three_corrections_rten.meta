@@ -1,0 +1,13 @@
+Date: 2026-10-17
+Host: i265
+Algorithm source commit: 1e67c476
+Stage: initial three LAPACK corrections, BEFORE the SLARTG and SORM2R follow-up.
+Command: just nn-parity-dmm <models> <ladder> rten model-tests
+Environment: pinned siblings; LOCK_SNAP_DIR; shared heavy lock; run-heavy --mem 16G; 1150-second outer timeout.
+Inputs: unchanged dmm_goldens.tsv and committed models/dmm/dmm_goldens_netlib_rten.tsv.
+Derivation: dmm_fix_summary.py; original score output rounded to nine decimal places, so the TSV error columns carry that display precision. The log's full-precision aggregate median is 1.610805350e-3; max 5.543188383e-2 vs MKL.
+Outcome: full panel fails four unchanged pinned limits; warm/cold identity passes. No tolerances were increased.
+Log (i265): ~/tmp/nn-port-scratch/fix-dmm-rten2.log
+Resource receipt: run-heavy: done rc=101 307s | peak-RSS 8.29GiB | min-avail 14719MiB | peak-load 5.09
+lock.sh: exported tracked tree 26bac7db0abf (Cargo output excluded)
+TSV SHA256: bbdbdc8198d19bd3921d5abf76e746e531168548ae480f0f0e927ec9adae16ef
