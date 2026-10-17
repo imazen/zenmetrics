@@ -1,6 +1,6 @@
 # DMM individual-change acceptance, 2026-10-17
 
-**Missing:** f64_norm, reference_norm.
+**Missing:** reference_norm.
 
 Each candidate starts from the frozen solver, with one numerical change. Acceptance requires all 48 frozen row limits, no increase in any row residual against the measured baseline, and identical complete CUDA repeat scores.
 
@@ -13,7 +13,7 @@ Each candidate starts from the frozen solver, with one numerical change. Accepta
 | lartg | `c105b75b215b` | 48/48 | 22 / 0 / 26 | 7.954556295e-04 / 5.544746776e-02 | 24/24 identical | reject |
 | orm2r_order | `2de0604521bf` | 40/48 | 23 / 0 / 25 | 7.614877929e-04 / 5.529337334e-02 | 24/24 identical | reject |
 | right_sger_order | `9d9132a22d77` | 28/48 | 22 / 0 / 26 | 7.327735206e-04 / 1.291220382e-01 | 24/24 identical | reject |
-| f64_norm | `6f825d9096d1` | unmeasured | unmeasured | unmeasured | unmeasured | pending |
+| f64_norm | `6f825d9096d1` | 29/48 | 26 / 0 / 22 | 5.087865108e-04 / 4.494167999e-02 | 24/24 identical | reject |
 | reference_norm | `5ea8c65b0582` | unmeasured | unmeasured | unmeasured | unmeasured | pending |
 
 small_n_scaling: native panel controls did not all pass; this candidate cannot be retained.
@@ -21,6 +21,8 @@ small_n_scaling: native panel controls did not all pass; this candidate cannot b
 orm2r_order: native panel controls did not all pass; this candidate cannot be retained.
 
 right_sger_order: native panel controls did not all pass; this candidate cannot be retained.
+
+f64_norm: native panel controls did not all pass; this candidate cannot be retained.
 
 Resource receipts for the complete three-panel runs (parity, not speed benchmarks):
 
@@ -32,4 +34,5 @@ org2r_order: run-heavy: done rc=0 830s | peak-RSS 8.32GiB | min-avail 13577MiB |
 lartg: run-heavy: done rc=0 844s | peak-RSS 8.27GiB | min-avail 13874MiB | peak-load 5.23
 orm2r_order: run-heavy: done rc=1 757s | peak-RSS 8.30GiB | min-avail 13434MiB | peak-load 14.31
 right_sger_order: run-heavy: done rc=1 1036s | peak-RSS 8.31GiB | min-avail 13527MiB | peak-load 5.46
+f64_norm: run-heavy: done rc=1 850s | peak-RSS 8.32GiB | min-avail 13851MiB | peak-load 5.94
 ```
