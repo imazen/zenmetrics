@@ -1,4 +1,4 @@
-//! Isolated bisection experiment: orm2r_order; not qualified for shipping.
+//! Isolated bisection experiment: right_sger_order; not qualified for shipping.
 //! DMM (Chen et al., "Debiased Mapping for Full-Reference Image Quality
 //! Assessment", IEEE TIP 2025; upstream `Baoliang93/DMM`, MIT, pip
 //! `DMM_PyTorch`). Parity target: the upstream package, CPU, fp32.
@@ -816,10 +816,12 @@ fn dlarf_right(r0: usize, c0: usize, x: &[f32], tau: f32, a: &mut [f32; 256]) {
         for (i, &xi) in x.iter().enumerate() {
             w += a[r * 16 + c0 + 1 + i] * xi;
         }
-        let tw = tau * w;
-        a[r * 16 + c0] -= tw;
+        // SLARF('Right') calls SGER with X=work and Y=v: each
+        // column forms TEMP=(-tau)*v[c] before work[r]*TEMP.
+        a[r * 16 + c0] += w * -tau;
         for (i, &xi) in x.iter().enumerate() {
-            a[r * 16 + c0 + 1 + i] -= tw * xi;
+            let temp = -tau * xi;
+            a[r * 16 + c0 + 1 + i] += w * temp;
         }
     }
 }
@@ -860,25 +862,30 @@ fn dgebd2(a: &mut [f32; 256], d: &mut [f32; 16], e: &mut [f32; 15], tq: &mut [f3
     }
 }
 
-/// SORMBR('Q','L','N') -> SORM2R: apply the stored GEBD2 reflectors
-/// directly to the bidiagonal left vectors. SGESDD uses this path rather
-/// than materializing Q and multiplying Q*Ub, which rounds differently.
-fn sorm2r_q(a: &[f32; 256], tq: &[f32; 16], u: &mut [f32; 256]) {
+/// DORG2R/dorgbr 'Q': build Q1 = H_0·...·H_15 in place, column-wise.
+/// `a` holds the dgebd2 storage (reflector tails below the diagonal).
+fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
     for i in (0..16).rev() {
         let tau = tq[i];
-        if tau == 0.0 {
-            continue;
+        if i < 15 {
+            a[i * 16 + i] = 1.0;
+            for c in (i + 1)..16 {
+                let mut w = a[i * 16 + c];
+                for r in (i + 1)..16 {
+                    w += a[r * 16 + i] * a[r * 16 + c];
+                }
+                a[i * 16 + c] -= tau * w;
+                for r in (i + 1)..16 {
+                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
+                }
+            }
         }
-        for c in 0..16 {
-            let mut w = u[i * 16 + c];
-            for r in (i + 1)..16 {
-                w += a[r * 16 + i] * u[r * 16 + c];
-            }
-            let temp = -tau * w;
-            u[i * 16 + c] += temp;
-            for r in (i + 1)..16 {
-                u[r * 16 + c] += a[r * 16 + i] * temp;
-            }
+        for r in (i + 1)..16 {
+            a[r * 16 + i] *= -tau;
+        }
+        a[i * 16 + i] = 1.0 - tau;
+        for r in 0..i {
+            a[r * 16 + i] = 0.0;
         }
     }
 }
@@ -1284,7 +1291,8 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
     let mut e = [0f32; 15];
     let mut tq = [0f32; 16];
     dgebd2(&mut a, &mut d, &mut e, &mut tq);
-    // Retain reflectors for direct SORM2R application.
+    // a now holds reflector tails below diag; build Q1 in place
+    dorg2r_q(&mut a, &tq); // a <- Q1
     // dbdsdc scale
     let orgnrm = d
         .iter()
@@ -1292,11 +1300,7 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
         .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
     if orgnrm == 0.0 {
         let mut s = [0f32; 16];
-        let mut u = [0.0; 256];
-        for i in 0..16 {
-            u[i * 16 + i] = 1.0;
-        }
-        sorm2r_q(&a, &tq, &mut u);
+        let u = a; // Q1 (identity for zero matrix)
         s.copy_from_slice(&d);
         return (u, s);
     }
@@ -1331,8 +1335,17 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             }
         }
     }
-    sorm2r_q(&a, &tq, &mut ub);
-    let u = ub;
+    // U = Q1 @ Ub ; s = ds * orgnrm
+    let mut u = [0f32; 256];
+    for i in 0..16 {
+        for j in 0..16 {
+            let mut acc = 0.0;
+            for r in 0..16 {
+                acc += a[i * 16 + r] * ub[r * 16 + j];
+            }
+            u[i * 16 + j] = acc;
+        }
+    }
     let mut s = [0f32; 16];
     for i in 0..16 {
         s[i] = ds[i] * orgnrm;
