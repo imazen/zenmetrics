@@ -55,13 +55,14 @@ class E36Contract(unittest.TestCase):
                 optimizer='pre-update gradient addition; one existing primary Adam boundary; no TV-only Adam', **{'lambda': 1.})
             with mock.patch.object(q.subprocess, 'run', side_effect=lambda *a, **k: SimpleNamespace(stdout=json.dumps(decoded))):
                 self.assertEqual(q.verify_training(result, root/'checkpoint', cell.kind, expected, fixture.inspector), 'registered-fit')
-                for mutation in ('row_mask', 'targets', 'weight', 'epoch', 'tv_lambda', 'input_hash'):
+                for mutation in ('row_mask', 'targets', 'weight', 'epoch', 'tv_lambda', 'input_hash', 'seed'):
                     bad = copy.deepcopy(result); prior = copy.deepcopy(decoded)
                     if mutation == 'row_mask': bad['selection']['e36_base_filter']['groups'][0]['stored_manifest']['row_selection_sha256']='0'*64
                     if mutation == 'targets': bad['selection']['e36_base_filter']['targets_changed']=1
                     if mutation == 'weight': decoded['repro']['inputs'][0]['train_w']=31.
                     if mutation == 'epoch': decoded['repro']['checkpoint_epoch']='118'
                     if mutation == 'tv_lambda': decoded['repro']['e36_tv']['lambda']=10.
+                    if mutation == 'seed': decoded['repro']['sample_seed']=102
                     if mutation == 'input_hash': decoded['repro']['inputs'][0]['sha256']='0'*64
                     with self.assertRaises(ValueError, msg=mutation):
                         q.verify_training(bad, root/'checkpoint', cell.kind, expected, fixture.inspector)
@@ -74,16 +75,49 @@ class E36Contract(unittest.TestCase):
             variants=[]
             for arm in e.ARMS:
                 variants.append(dict(root='/base', spec='fixed', data_sha='d'*64, routes={'kadid': []},
-                    epochs=120, pairs_per_epoch=50000, selected_epoch=119, wall_cap_sec=86400,
+                    schema='e36-research-fit-contract-v1',launchable=True,epochs=120, pairs_per_epoch=50000, selected_epoch=119, wall_cap_sec=86400,
                     e36=dict(arm=arm, contract_sha256='c'*64, base_filter_sha256='b'*64, trainer_sha256='a'*64)))
             (root/e.PACKAGE).write_text(json.dumps(dict(schema='e36-research-fit-package-v1', variants=variants)))
             (root/'build_meta.json').write_text(json.dumps(dict(files={'bin/zensim_mlp_train':'a'*64})))
             argv=['v2_lodo_mlp.py','--root','/base','--spec','fixed','--heldout','kadid',
                   '--e36-arm','tv1-c','--e36-tv-contract-sha256','c'*64,'--e36-base-filter-sha256','b'*64]
             self.assertEqual(fit_cell_exec.registered_wall_cap(argv,'d'*64,root),86400)
+            package_path=root/e.PACKAGE
+            for field,badvalue in [('launchable',False),('launchable',None),('schema','other')]:
+                bad=copy.deepcopy(variants);bad[1][field]=badvalue
+                package_path.write_text(json.dumps(dict(schema='e36-research-fit-package-v1',variants=bad)))
+                with self.assertRaisesRegex(ValueError,'owner-blocked'):fit_cell_exec.registered_wall_cap(argv,'d'*64,root)
+            package_path.write_text(json.dumps(dict(schema='e36-research-fit-package-v1',variants=variants)))
+            policy=root/'bounded_smoke_policy.json';policy.write_text('{}')
+            with self.assertRaisesRegex(ValueError,'mixed smoke'):fit_cell_exec.registered_wall_cap(argv,'d'*64,root)
+            policy.unlink()
+
             for bad in (argv+['--local-smoke-budget','1:1'], [v if v!='tv1-c' else 'unknown' for v in argv],
                         [v if v!='b'*64 else '0'*64 for v in argv]):
                 with self.assertRaises(ValueError): fit_cell_exec.registered_wall_cap(bad,'d'*64,root)
+
+    def test_executor_cannot_export_unqualified_model_projection(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);program=root/'program';program.mkdir();(program/'bin').mkdir()
+            dest=root/'cell';dest.mkdir();(dest/'refit').mkdir()
+            raw=dest/'refit/last.bin';raw.write_bytes(b'invented checkpoint')
+            for p in [program/'bin/inspect_qualified_checkpoint',program/'qualified_fit_contract.py',program/'e36_fit_contract.py']:
+                p.write_bytes(b'invented public owner')
+            kind=dict(program_sha='a'*64,data_sha='b'*64,argv_sha='c'*64)
+            binding=dict(raw_checkpoint_sha256=q.sha(raw),packed_model_sha256=None,program_sha256='a'*64,arm='tv0-c',selected_epoch=119)
+            (dest/'e36-model-binding.json').write_text(json.dumps(binding))
+            result=dict(selected_bake=str(raw),selected_bake_sha256=q.sha(raw))
+            (dest/'result.json').write_text(json.dumps(result))
+            expected=dict(route='kadid',e36=dict(arm='tv0-c'))
+            with mock.patch.object(q,'trusted_contract',return_value=expected),mock.patch.object(q,'verify_training',side_effect=ValueError('decoded seed differs')):
+                with self.assertRaisesRegex(ValueError,'decoded seed'):e.qualify_output(program,dest,kind,'cell',result)
+            self.assertFalse((dest/'e36-qualified-checkpoint.json').exists())
+            with mock.patch.object(q,'trusted_contract',return_value=expected),mock.patch.object(q,'verify_training',return_value='registered-fit'):
+                e.qualify_output(program,dest,kind,'cell',result)
+            receipt=json.loads((dest/'e36-qualified-checkpoint.json').read_text())
+            self.assertEqual(receipt['raw_checkpoint_sha256'],q.sha(raw))
+            self.assertEqual(receipt['model_binding_sha256'],q.sha(dest/'e36-model-binding.json'))
+            self.assertEqual(receipt['result_sha256'],q.sha(dest/'result.json'))
 
     def test_e36_source_inventory_requires_native_import_closure(self):
         names=['v2_lodo_mlp.py','v2_confirm_fit.py','v2_common.py','v2_teacher.py','v2c_wide.py',

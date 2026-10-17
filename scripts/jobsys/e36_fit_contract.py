@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+from pathlib import Path
 
 PACKAGE = 'benchmarks/e36_fit_contract_2026-10-17.json'
 ARMS = {'tv0-c': 0., 'tv1-c': 1., 'tv10-c': 10.}
@@ -74,4 +75,41 @@ def derive(result, decoded, expected):
         table.update({k: declaration[k] for k in ('table_sha256', 'keys_sha256', 'row_keys_sha256', 'row_selection_sha256')})
         table['manifest_sha256'] = r['manifest_sha256']
         changed['input_contracts'][expected['route']][table['name']]['rows'] = declaration['rows_kept']
+        declarations = changed.get('table_declarations', {})
+        if r['source_table_sha256'] in declarations:
+            declarations[actual_sha] = copy.deepcopy(declarations[r['source_table_sha256']])
     return changed
+
+
+def qualify_output(program, dest, kind, cell, result):
+    """Run native decoded-checkpoint admission INSIDE fit-cell-exec."""
+    from qualified_fit_contract import trusted_contract, verify_training, sha
+    inspector = program / 'bin/inspect_qualified_checkpoint'
+    expected = trusted_contract(kind, program.parent / 'program.tar.gz', inspector)
+    checkpoint = Path(result['selected_bake'])
+    if checkpoint.parent != dest/'refit' or sha(checkpoint) != result['selected_bake_sha256']:
+        raise ValueError('E36 raw checkpoint path/hash differs')
+    if verify_training(result, checkpoint, kind, expected, inspector) != 'registered-fit':
+        raise ValueError('E36 checkpoint qualification failed')
+    binding_path = dest/'e36-model-binding.json'
+    binding = json.loads(binding_path.read_text())
+    packed_sha = result.get('packed_model_sha256')
+    if expected['route'] == 'production':
+        packed = Path(result['packed_model'])
+        if not packed.is_relative_to(dest) or sha(packed) != packed_sha:
+            raise ValueError('E36 packed checkpoint path/hash differs')
+    elif packed_sha is not None:
+        raise ValueError('E36 withheld fit unexpectedly exports a packed pilot')
+    if (binding['raw_checkpoint_sha256'] != sha(checkpoint) or binding['packed_model_sha256'] != packed_sha
+            or binding['program_sha256'] != kind['program_sha']
+            or binding['arm'] != expected['e36']['arm'] or binding['selected_epoch'] != 119):
+        raise ValueError('E36 packed/raw projection differs from qualified checkpoint')
+    receipt = dict(schema='e36-qualified-checkpoint-v1', execution_contract='registered-fit',
+        cell=cell, program_sha256=kind['program_sha'], data_sha256=kind['data_sha'], argv_sha256=kind['argv_sha'],
+        result_sha256=sha(dest/'result.json'), raw_checkpoint_sha256=sha(checkpoint), packed_model_sha256=packed_sha,
+        model_binding_sha256=sha(binding_path), inspector_sha256=sha(inspector),
+        qualification_owner_sha256=sha(program/'qualified_fit_contract.py'),
+        e36_owner_sha256=sha(program/'e36_fit_contract.py'), qualified=True,
+        contains_labels=False, label_payload_read_by_projection=False)
+    with (dest/'e36-qualified-checkpoint.json').open('x') as f:
+        json.dump(receipt, f, indent=2); f.write('\n')

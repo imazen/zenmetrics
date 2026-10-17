@@ -24,3 +24,12 @@ retain their existing admission rules.
 
 `just e36-fit-contract-check` exercises invented metadata, malformed derivations
 and unchanged legacy admission. It performs no training or real label reads.
+
+Before any E36 training process starts, the executor refuses owner-blocked or
+unknown variants and mixed smoke policies. After training, inside fit-cell-exec,
+it runs the existing decoded-checkpoint qualification against the retained,
+hash-bound program archive. A label-free qualification projection binds result,
+raw checkpoint, packed model, model projection and qualification owners. The
+fleet receipt includes this projection; worker success alone cannot admit a
+model to TRAIN selection. E36 images retain their program archive for this
+check. Every E36 fit retains a GNU time resource receipt.
