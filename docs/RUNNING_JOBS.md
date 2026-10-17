@@ -94,6 +94,17 @@ to TTL reclaim. Release also validates the timestamp as u64. The ownership check
 and DELETE are separate storage operations: a steal between them can still be
 deleted.
 
+For an already stopped allocation, `release_owned_claim` exposes that same native
+ownership guard as an operator tool. Set `ZEN_WORKER` to its unique identity and
+use `just stopped-claim-release-build`, then run the built example with
+`--run <run> --key <chunk-SHA> --expected-worker "$ZEN_WORKER" --confirm-stopped
+--all-workers-quiesced`. The endpoint comes from `ZEN_R2_ENDPOINT` or `EP` and
+credentials remain in the environment. Inspect the stopped container and exact
+claim owner immediately beforehand, and quiesce every claimer for that run: the
+existing release protocol is best-effort GET-then-DELETE, not conditional DELETE.
+Verify disappearance afterward. This removes only the lease; it preserves all
+ledger history, including failed attempts, and does not reset the retry limit.
+
 **Drain caveat.** `drain: true` only stops workers from *starting* new passes; a pass that is already
 running keeps claiming cells (fit jobsets that were drained still produced new DONE cells). To move
 work to a newer jobset, declare the remaining cells there and let the old jobset's workers finish, and
@@ -113,7 +124,7 @@ per cell: a local original is rescued, an installed fleet copy is never replaced
 copy from another jobset must agree on the science fields or the install aborts.
 `fit_grid_coverage.py --grid-manifest <registered grid> --jobset ...` proves the union of DONE cells
 across jobsets equals the grid (960 P0 / 960 P2 / 210 D2) and lists every missing cell with its claim
-owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so nothing re-runs it until it is re-declared). Its exit 0 is the precondition
+owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so it needs re-declaration or an eligible native retry after stopped-owner release). Its exit 0 is the precondition
 for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls for both scripts.
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
@@ -805,3 +816,46 @@ ReLU export or a scientific execution contract is refused on that path.
 The `steer` fit-program profile binds an explicit source/data inventory and full120×50,000 budget. Its archive-bound activation declaration is checked against the native loader for both ReLU controls and fixed tau1/8 smooth models. Every such fit exports GNU-time resources beside the fresh destination; historical programs retain their prior path. This prepares artifacts only; registration freeze and launch remain separate coordinator actions.
 
 The LAN launcher forwards `ZEN_NO_NEW_AFTER_EPOCH` to the worker container. A caller using this field must bind a worker whose pre-claim deadline guard is verified; the launcher does not infer a deadline or reboot a host. The STEER scientific image preserves the previously verified deadline-aware worker binary.
+
+### Local content-addressed variants
+
+For single-host preparation, existing encode-independent job kinds can take a
+variant input such as `file:///data/artifacts/<sha256>.avif`. The path must be
+absolute and the filename stem must match the SHA256 of the bytes. The native
+executor verifies that binding before decoding and borrows the file; it never
+removes the retained artifact. Relative paths, unhashed filenames and changed
+bytes fail explicitly. Source paths and metric/display selections retain their
+existing contracts. This uses the same `jobexec` scoring/map owners as stored
+object inputs (`3594eff9`).
+
+
+### Derived-data view declarations
+
+`zenfleet-ctl declare-views --spec views.json --out manifest.json` uses the
+existing `Bake { view }` job kind and normal worker/ledger/resource admission.
+The schema1 spec contains nonempty `views`, each with `view`, `cell`, hashed
+`inputs`, explicit nonzero `hint` resources and `requires` capability tokens.
+The adapter refuses duplicate job identities: `CellId` metadata does not enter
+JobId, so bind every result-affecting codec/quality/recipe choice in the view
+or its hashed inputs. No fit-job kind or new public Rust API is introduced.
+
+The private `e36-native-ladder-v1:` JSON view protocol carries a bounded
+`deadline_seconds` (120..14400). Invalid bounds receive the short120s watchdog;
+other bake views retain the existing cost-based watchdog. This lets a derived
+view materialize a whole registered quality ladder without treating one scalar
+operation's cost hint as its timeout. The executor still owns strict schema/
+source/build validation and the worker owns scheduling, results and retries.
+If an executor returns a small receipt for separately persisted expensive
+artifacts, that receipt must bind their canonical content hashes and verified
+locations; receipt regenerability never authorizes deleting those artifacts.
+
+### Separately bound entrypoint
+
+`lan_score_launch.sh` accepts paired `ZEN_ENTRYPOINT_HOST_PATH` and
+`ZEN_ENTRYPOINT_SHA256` for an explicitly approved execution amendment. The
+remote launcher verifies a canonical absolute executable regular file and its
+SHA-256 before any Docker mutation, then mounts it read-only at
+`/usr/local/bin/fleet-entrypoint.sh`. The image reference is unchanged. An
+operator must bind the amendment separately and verify the created container
+before releasing paused work. `just lan-entrypoint-test` exercises admission
+and rejects missing, changed, non-executable and symlink inputs.

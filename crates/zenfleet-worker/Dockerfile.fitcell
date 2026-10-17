@@ -31,7 +31,7 @@ RUN echo "${FIT_PROGRAM_SHA}  /opt/fleet-fits/program.tar.gz" | sha256sum -c - &
     mkdir -p /opt/fleet-fits/program && \
     tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program && \
     install -m 0755 /opt/fleet-fits/program/fit_cell_exec.py /usr/local/bin/fit-cell-exec && \
-    rm /opt/fleet-fits/program.tar.gz
+    if [ ! -f /opt/fleet-fits/program/benchmarks/e36_fit_contract_2026-10-17.json ]; then rm /opt/fleet-fits/program.tar.gz; fi
 ENV ZEN_EXEC=/usr/local/bin/fit-cell-exec
 ENV ZEN_FIT_PROGRAM_SHA=${FIT_PROGRAM_SHA}
 ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]

@@ -1,0 +1,398 @@
+document	table	row	column	value
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	max |Δ|	0.0035
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	max |Δ| in JND	0.000532
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	note	numpy probe reproduces: (6·MSE_Y+MSE_Cb+MSE_Cr)/8 on rounded studio-601 YCbCr, then dB (PSNR-average form is 0.65 dB off)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	name	PSNR-Cb (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	zenmetrics metric	missing (no CLI chroma PSNR)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	median |Δ|	0.00192
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	max |Δ|	0.0169
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	max |Δ| in JND	0.00197
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	note	numpy probe: rounded studio-601 Cb at full resolution reproduces
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	name	PSNR-Cr (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	zenmetrics metric	missing (no CLI chroma PSNR)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	median |Δ|	0.00211
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ|	0.0573
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ| in JND	0.00882
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	note	as PSNR-Cb; one pair 0.057 dB off
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	name	PSNR-HVS-vmaf (= dataset PSNR-HVS)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	zenmetrics metric	psnrhvs-daala (psnrhvs_daala)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	median |Δ|	0.000871
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ|	0.0154
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ| in JND	0.00449
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	note	dataset PSNR-HVS is the same column (identical values)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	name	PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	median |Δ|	0.00121
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ|	0.0261
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ| in JND	0.00659
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	name	PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	median |Δ|	0.00264
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ|	0.0382
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	note	max 0.038 dB of a 27 dB range
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	name	PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	median |Δ|	0.00306
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ|	0.0691
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	note	max 0.069 dB of a 24 dB range
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	name	SSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	zenmetrics metric	ssim-libvmaf
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	median |Δ|	1e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	max |Δ|	3.2e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	max |Δ| in JND	0.00618
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	note	libvmaf float_ssim on studio-601 Y
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	name	MS-SSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	zenmetrics metric	msssim-libvmaf
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	median |Δ|	1e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	max |Δ|	0.000141
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	max |Δ| in JND	0.0119
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	10	note	libvmaf float_ms_ssim; worst pair 0.012 JND
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	name	SSIM-pyiqa / pyiqa-SSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	zenmetrics metric	missing (ssim is a different variant: max 0.074)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	median |Δ|	3.31e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	max |Δ|	3.86e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	max |Δ| in JND	5.63e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	11	note	numpy probe reproduces (3.9e-6 max): SSIM on round(0.299R+0.587G+0.114B), 11×11 σ1.5 Gaussian, valid region, cs≥0, no downscale
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	name	SSIMc / pyiqa-SSIMc
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	zenmetrics metric	ssim (close); exact form not in CLI (lane commit 0a7fa500 ssimc, unlanded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	median |Δ|	0.0002
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	max |Δ|	0.00542
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	max |Δ| in JND	0.0681
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	12	note	ssim med 2e-4, max 5.4e-3 (0.07 JND). numpy probe (per-RGB SSIM, valid region, cs≥0) reproduces to 4.4e-7
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	name	MS-SSIM-pyiqa / pyiqa-MS-SSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	zenmetrics metric	msssim (house luma)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	median |Δ|	0.000116
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	max |Δ|	0.00497
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	max |Δ| in JND	0.398
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	13	note	med 1.2e-4; worst S53_JAIB_07 (odd-size source) 5e-3 = 0.40 JND: odd-dimension pooling differs. --luma-ingress yuv601-studio is worse (med 1.7e-3)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	name	IW-SSIM / IW-SSIM-piq
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	zenmetrics metric	iwssim-piq
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	median |Δ|	6.92e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	max |Δ|	0.000666
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	max |Δ| in JND	0.132
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	14	note	med 6.9e-6; one near-lossless pair (S70_VVC_03) 6.7e-4 = 0.13 JND; next worst 2.7e-4
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	name	SSIMULACRA2
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	zenmetrics metric	ssim2
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	median |Δ|	2.6e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	max |Δ|	4.9e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	max |Δ| in JND	3.63e-08
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	15	note	max 4.9e-7 (output rounding); the old 6e-3 drift is gone
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	name	GMSD / pyiqa-GMSD
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	zenmetrics metric	gmsd
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	median |Δ|	3.87e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	max |Δ|	5.36e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	max |Δ| in JND	0.000365
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	16	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	name	HaarPSI / pyiqa-HaarPSI
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	zenmetrics metric	haarpsi
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	median |Δ|	7.9e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	max |Δ|	0.000182
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	max |Δ| in JND	0.00414
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	17	note	max 1.8e-4 = 0.004 JND
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	name	VIF / pyiqa-VIF
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	zenmetrics metric	vifvec
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	median |Δ|	2.56e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	max |Δ|	5.61e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	max |Δ| in JND	0.00026
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	18	note	vif (VIFp) is a different metric: max 0.37
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	name	NLPD / pyiqa-NLPD
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	zenmetrics metric	nlpd-iqa
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	median |Δ|	0.00234
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	max |Δ|	0.0118
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	max |Δ| in JND	0.231
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	19	note	med 2.3e-3, max 1.2e-2 (6% of range, 0.23 JND); nlpd is the RGB/Laparra variant
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	name	FSIM / pyiqa-FSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	zenmetrics metric	fsim (fsim_)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	median |Δ|	2.3e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	max |Δ|	0.00649
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	max |Δ| in JND	0.941
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	20	note	med 2.3e-5; S55_JPG_07 6.5e-3 and S54_JPG_07 4.8e-3 = 0.94 JND each; all others ≤2.4e-4
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	name	FSIMc / pyiqa-FSIMc
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	zenmetrics metric	fsim (fsimc_)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	median |Δ|	2.96e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	max |Δ|	0.00645
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	max |Δ| in JND	0.925
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	21	note	same two JPG_07 pairs (0.92 JND)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	name	VSI / pyiqa-VSI
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	zenmetrics metric	vsi
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	median |Δ|	1.81e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	max |Δ|	0.00185
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	max |Δ| in JND	0.654
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	status	close
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	22	note	med 1.8e-5; S15_PNG_15 1.9e-3 = 0.65 JND; next worst 1.4e-4
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	name	DSSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	zenmetrics metric	dssim
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	median |Δ|	2.3e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	max |Δ|	2.33e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	max |Δ| in JND	0.000691
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	23	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	name	CIEDE2000
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	zenmetrics metric	missing on master (lane commit ac757d73 ciede2000, unlanded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	median |Δ|	3.02e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	max |Δ|	0.000296
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	max |Δ| in JND	0.000157
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	24	note	numpy probe reproduces (max 3e-4): sRGB→linear→XYZ D65→Lab, mean ΔE00, kL=kC=kH=1
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	name	mDCT-PSNR / mDCTpsnr
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	zenmetrics metric	mdctpsnr
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	median |Δ|	1.9e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	max |Δ|	1.17e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	max |Δ| in JND	5.86e-07
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	25	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	name	CVVDP
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	zenmetrics metric	cvvdp --display-model standard_fhd
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	median |Δ|	0.000108
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	max |Δ|	0.000887
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	max |Δ| in JND	0.00229
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	26	note	max 8.9e-4 JOD = 0.002 JND
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	name	Butteraugli-max
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	zenmetrics metric	butteraugli (butteraugli_max)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	median |Δ|	4e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	max |Δ|	5.1e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	max |Δ| in JND	9.96e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	27	note	libjxl butteraugli, max-norm
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	name	Butteraugli-3norm
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	zenmetrics metric	butteraugli (butteraugli_pnorm3)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	median |Δ|	2e-06
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	max |Δ|	9.6e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	max |Δ| in JND	7.41e-05
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	28	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	name	Butteraugli-original
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	median |Δ|	1.09
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	max |Δ|	11.7
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	max |Δ| in JND	2.03
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	29	note	vs our libjxl max: med |Δ| 1.09, Pearson 0.87: a different implementation (presumably the pre-libjxl google/butteraugli tool); not identified further
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	name	SSIMULACRA1
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	30	note	site values only (0.004–0.12, lower better); no implementation anywhere in the workspace
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	name	WS-HV
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	31	note	unidentified (0.45–0.98, higher better)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	name	CW-SSIM
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	32	note	complex steerable pyramid; conventions not pinned (see AIC2026_COLUMN_IDENTIFICATION)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	name	FLIP
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	33	note	NVIDIA FLIP (BSD-3 reference exists)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	name	MAD (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	zenmetrics metric	mad
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	status	unverified
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	34	note	excluded on the site; no published values to compare. Site map has only a, b
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	name	HDR_VDP_2 / HDR-VDP-2 Q
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	zenmetrics metric	hdrvdp (HDR-nits input only)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	status	differs
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	35	note	not re-measured here (CLI needs --hdr sources). Docs: published column misses our v2.2.2 at ppd 30 and 64 by up to 5.7 → unknown display config
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	name	HDR_VDP_3 / HDR-VDP-3 Q
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	zenmetrics metric	hdrvdp3 (HDR-nits input only)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	status	differs
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	36	note	not re-measured here. Docs: ours = MATLAB 3.0.7 bit-for-bit, but published reads 0.36–0.92 JOD lower → different run config
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	name	PSNR-HVS-ref, PSNR-HVS-M-ref
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	zenmetrics metric	psnrhvs / psnrhvs-y (Ponomarenko psnrhvsm.m port) — probably
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	status	unverified
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	37	note	"excluded; no values; site map is a placeholder (a=1, c≈50.8/64.1). ""ref"" reads as the authors' MATLAB; ours ports it"
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	name	PSNR-HVS-vqmt, PSNR-HVS-M-vqmt
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	zenmetrics metric	missing (MSU VQMT implementation)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	status	unverified
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	38	note	excluded; no values; placeholder maps
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	name	HaarXYB-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	39	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	name	HaarXYB-hmask-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	40	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	name	HaarXYB-mask-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	41	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	name	HaarXYB-SSIM-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	42	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	name	HaarXYB-SSIM-hmask-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	43	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	name	HaarXYB-SSIM-mask-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	44	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	name	HaarXYB-SSIM-mask-edge-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	45	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	name	HaarY-deltaL1248 (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	in CSV?	neither
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	46	max |Δ|	

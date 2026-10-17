@@ -1673,3 +1673,10 @@ controls fail before the fix and pass after it without assertion changes.
 Column regions also borrow disjoint output-row slices instead of allocating
 and copying a second c-value plane (`24fe54f8`). Review measurements belong in
 [the perf receipt](benchmarks/aic_perf_big_2026-10-16/README.md).
+
+### E36 fit qualification (2026-10-17)
+
+The private E36 mask changes base table identities. Do not qualify these with an
+unchanged E34 package. Use the native E36 profile and exact metadata derivation
+before the existing checkpoint gate; see [transport](docs/E36_FIT_TRANSPORT.md).
+`just e36-fit-contract-check` uses invented metadata and never trains.

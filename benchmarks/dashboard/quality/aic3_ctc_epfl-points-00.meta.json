@@ -1,0 +1,16 @@
+{
+  "source_basename": "aic3_ctc_epfl.parquet",
+  "source_sha256": "96bc0ebbfc35df57d6eddb60a8a065b42d5f0ea820a3771535ce1a43d4fd51a4",
+  "generator_sha256": "4467cfd3f7d9ec5d13e96dec8d48ffa5cb89b5fd77785bcb59d89ae707e3fec8",
+  "host": "i265",
+  "build_commit": "fc8bf18481c3039b504fa71eb8571691a5512f7c",
+  "seed": 20261017,
+  "draws": 1000,
+  "target": "human_jnd",
+  "input_rows": 600,
+  "metrics": 13,
+  "method": "Raw unremapped Spearman, Pearson, Kendall tau-b; magnitudes in leaderboard, signed statistics retained. 95% percentile intervals from resampling reference-image clusters with replacement. Fixed images; not observer uncertainty. Historical snapshot; original scoring commits are not recoverable from this parquet.",
+  "command": "python scripts/dashboard/correlate.py --source <read-only-source> --output-dir benchmarks/dashboard/quality --draws 1000 --seed 20261017",
+  "scatter": "24 finite actual rows per metric, selected by SHA-256(row index + source hash); identity hashes only, original paths are not published",
+  "generated_date_utc": "2026-10-17"
+}
