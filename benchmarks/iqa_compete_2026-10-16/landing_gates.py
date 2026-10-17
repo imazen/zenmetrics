@@ -11,7 +11,7 @@ env=dict(os.environ,LOCK_SNAP_DIR=str(a.snapshot.resolve()),TMPDIR=str(P.home()/
 P(env['TMPDIR']).mkdir(parents=True,exist_ok=True)
 commands={
  'fmt':['just','iqa-compete-fmt-check'],
- 'clippy':['just','snap-cargo','@','clippy','-p','zenmetrics-cli','--no-default-features','--features','png,sweep,cpu-metrics,nn-ort,nr','--bin','zenmetrics','--','-D','warnings','-A','deprecated','-A','clippy::excessive_precision','-A','clippy::approx_constant','-A','clippy::erasing_op','-A','clippy::identity_op','-A','clippy::too_many_arguments','-A','clippy::doc_lazy_continuation','-A','clippy::if_same_then_else','-A','clippy::doc_overindented_list_items'],
+ 'clippy':['just','snap-cargo','@','clippy','-p','zenmetrics-cli','--no-default-features','--features','png,sweep,cpu-metrics,nn-ort,nn-webgpu,nr','--bin','zenmetrics','--','-D','warnings','-A','deprecated','-A','clippy::excessive_precision','-A','clippy::approx_constant','-A','clippy::erasing_op','-A','clippy::identity_op','-A','clippy::too_many_arguments','-A','clippy::doc_lazy_continuation','-A','clippy::if_same_then_else','-A','clippy::doc_overindented_list_items'],
  'matrix':['just','cli-feature-matrix'],
  'harness':[sys.executable,'-m','unittest','discover','-s','benchmarks/iqa_compete_2026-10-16','-p','test_*.py'],
  'driver':['env','IQA_GPU_RUNTIME=cuda','just','iqa-compete-clippy'],

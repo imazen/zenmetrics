@@ -7,7 +7,7 @@ p.add_argument('snapshot',type=P);p.add_argument('original',type=P);p.add_argume
 relative='crates/zenmetrics-nn/src/engine.rs';path=a.snapshot/relative
 if path.samefile(a.original/relative):raise ValueError('snapshot aliases the source checkout')
 original=path.read_bytes();s=original.decode()
-assert s.count('Session::builder(env)') in (1,3),'Every ORT image/pair/trunk builder must be configured'
+assert s.count('Session::builder(env)') in (1,2,3),'Every ORT image/pair/trunk builder must be configured'
 needle='''            let session = Session::builder(env)
                 .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))'''
 replacement='''            // BENCHMARK SNAPSHOT ONLY: explicitly configure the cell budget.
@@ -19,6 +19,26 @@ replacement='''            // BENCHMARK SNAPSHOT ONLY: explicitly configure the 
                 .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))'''
 if s.count(needle)==3:
     s=s.replace(needle,replacement);builders=3
+elif 'fn gpu_session(' in s:
+    call='            let session = gpu_session(environment()?, path, ep)?;'
+    shared='''        Session::builder(env)
+            .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))'''
+    assert s.count(call)==3 and s.count(shared)==2,'Every ORT image/pair/trunk builder must be configured'
+    for name in ['cuda_session','webgpu_session']:
+        signature=f'fn {name}(env: &Environment, path: &Path) -> Result<Session, Error>'
+        assert s.count(signature)==1,'Every ORT image/pair/trunk builder must be configured'
+        s=s.replace(signature,signature.replace('path: &Path','path: &Path, budget: usize'))
+        s=s.replace(f'{name}(env, path)',f'{name}(env, path, budget)')
+    signature='fn gpu_session(env: &Environment, path: &Path, ep: Ep) -> Result<Session, Error>'
+    assert s.count(signature)==1,'Every ORT image/pair/trunk builder must be configured'
+    s=s.replace(signature,signature.replace('ep: Ep','ep: Ep, budget: usize'))
+    prefix=replacement.split('            let session = Session::builder(env)')[0]
+    s=s.replace(call,prefix+call.replace('path, ep)?','path, ep, budget)?'))
+    s=s.replace(shared,'''        Session::builder(env)
+            .and_then(|b| b.with_intra_threads(budget).map_err(Into::into))
+            .and_then(|b| b.with_inter_threads(1).map_err(Into::into))
+            .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))''')
+    builders=2
 else:
     signature='fn cuda_session(env: &Environment, path: &Path) -> Result<Session, Error>'
     call='            let session = cuda_session(environment()?, path)?;'

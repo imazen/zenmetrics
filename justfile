@@ -325,9 +325,9 @@ stopped-claim-release-check:
 stopped-claim-release-build:
     just snap-cargo @ build -p zenfleet-worker --example release_owned_claim
 
-# zenmetrics-cli feature-combination matrix: 12 rows — every supported
+# CLI/NN feature-combination matrix: 14 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
-# `--no-default-features` build, plus the default build. Prints a PASS/FAIL
+# `--no-default-features` build, the default build, and standalone NN WebGPU. Prints a PASS/FAIL
 # row per combination and exits nonzero if any fails. CI runs the same list
 # as plain `cargo --locked check` (ci.yml, `cli-feature-matrix` job) — keep
 # the two lists in sync.
@@ -350,9 +350,10 @@ cli-feature-matrix:
         fi
     }
     for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
-             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu nn-webgpu; do
         run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
     done
+    run_combo "zenmetrics-nn/ort-webgpu" -p zenmetrics-nn --features ort-webgpu
     run_combo bare -p zenmetrics-cli --no-default-features
     run_combo default -p zenmetrics-cli
     printf '%s\n' "---- $((total - fails))/$total combinations passed ----"

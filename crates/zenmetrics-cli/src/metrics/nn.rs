@@ -3,8 +3,10 @@
 //!
 //! Each model loads once per process from `ZENMETRICS_NN_MODEL_DIR` (a
 //! directory written by `crates/zenmetrics-nn/models/*/export.py`) on the
-//! engine in `ZENMETRICS_NN_ENGINE`: `rten` (default, CPU) or `ort-cuda`
-//! (needs the `nn-ort` feature and `ORT_DYLIB_PATH`). Models whose weights are
+//! engine in `ZENMETRICS_NN_ENGINE`: `rten` (default, CPU), `ort-cuda`
+//! (needs the `nn-ort` feature and `ORT_DYLIB_PATH`) or `ort-webgpu`
+//! (needs the `nn-webgpu` feature, `ORT_DYLIB_PATH` and
+//! `ZENMETRICS_NN_WEBGPU_EP_LIB`). Models whose weights are
 //! not permissively licensed also need `ZENMETRICS_NN_ACCEPT_WEIGHTS=<col>` —
 //! a refusal names the terms' URL.
 
@@ -29,12 +31,23 @@ fn engine() -> Result<Engine, Box<dyn std::error::Error>> {
         Err(_) | Ok("rten") => Ok(Engine::Rten),
         #[cfg(feature = "nn-ort")]
         Ok("ort-cuda") => Ok(Engine::OrtCuda),
+        #[cfg(feature = "nn-webgpu")]
+        Ok("ort-webgpu") => Ok(Engine::OrtWebgpu),
         Ok(other) => Err(format!(
-            "ZENMETRICS_NN_ENGINE={other}: expected `rten`{}",
-            if cfg!(feature = "nn-ort") {
-                " or `ort-cuda`"
+            "ZENMETRICS_NN_ENGINE={other}: expected {}{}",
+            [
+                Some("`rten`"),
+                cfg!(feature = "nn-ort").then_some("`ort-cuda`"),
+                cfg!(feature = "nn-webgpu").then_some("`ort-webgpu`"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" or "),
+            if cfg!(feature = "nn-ort") || cfg!(feature = "nn-webgpu") {
+                ""
             } else {
-                " (build with `nn-ort` for `ort-cuda`)"
+                " (build with `nn-ort` or `nn-webgpu` for the ORT engines)"
             }
         )
         .into()),

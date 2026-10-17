@@ -198,3 +198,9 @@ independent builders and master's shared builder across three constructors.
 Its tests recover the source byte for byte after removing the adapter edits.
 Existing timing rows retain their frozen binary and source provenance across
 master merges; merged-source validation has its own receipt.
+
+[Current landing validation](landing-master-20261017-current.json) includes
+master's NN WebGPU changes, both provider builders across three constructors,
+14 feature-matrix rows, CLI/driver clippy and the full harness controls.
+At each round end, including data updates, merge current master and provide
+the verified branch landing SHA to the coordinator.

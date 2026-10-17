@@ -32,7 +32,7 @@ use std::path::Path;
 
 use crate::common::read_meta;
 #[cfg(feature = "ort")]
-use crate::engine::ort_engine::OrtCudaImage;
+use crate::engine::ort_engine::OrtGpuImage;
 use crate::engine::{self, ImageGraph, NamedInput};
 use crate::{Engine, Error, WeightsLicence, WeightsTerms, za};
 
@@ -195,7 +195,7 @@ fn load_graph(
     match engine {
         Engine::Rten => engine::load_image(&path),
         #[cfg(feature = "ort")]
-        Engine::OrtCuda => OrtCudaImage::load(&path, output).map(|g| Box::new(g) as _),
+        gpu => OrtGpuImage::load(&path, output, gpu).map(|g| Box::new(g) as _),
     }
 }
 

@@ -122,9 +122,10 @@ impl Lpips {
                 channels.len(),
             )?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join(format!("{p}_full.onnx")),
                 "lpips",
+                gpu,
             )?)),
         };
         Ok(Self {

@@ -179,9 +179,10 @@ impl Dists {
                 channels.len() - 1,
             )?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join("dists_full.onnx"),
                 "dists",
+                gpu,
             )?)),
         };
         Ok(Self {

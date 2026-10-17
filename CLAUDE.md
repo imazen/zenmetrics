@@ -574,9 +574,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
   intermediate). WD's trunk had the same class fixed in `ae582a3b`
   (memory-pattern off, CPU arena disabled, outputs consumed by move). The fix
   is now shared by every ort-cuda session in `engine::ort_engine::cuda_session`
-  — `OrtCudaPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
-  `OrtCudaImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
-  `OrtCudaTrunk` (wd) — plus `take_output` move-consume on the pair/image
+  — `OrtGpuPair` (afine, ckdn, deepdc, dists, dreamsim, lpips/stlpips),
+  `OrtGpuImage` (arniqa, hyperiqa, maniqa, liqe, musiq, paq2piq) and
+  `OrtGpuTrunk` (wd) — plus `take_output` move-consume on the pair/image
   paths. afine sweep scores are bit-identical before/after (357/357
   shared rows) and ort-cuda ladder parity re-verified on afine,
   lpips_alex, stlpips_alex, stlpips_vgg, dists, deepdc, ckdn, dreamsim,

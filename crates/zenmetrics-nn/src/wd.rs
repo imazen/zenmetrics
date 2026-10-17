@@ -194,9 +194,7 @@ impl WassersteinDistortion {
         let trunk = match engine {
             Engine::Rten => engine::load(&path, 4)?,
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => {
-                Box::new(engine::ort_engine::OrtCudaTrunk::load(&path)?) as Box<dyn Trunk>
-            }
+            gpu => Box::new(engine::ort_engine::OrtGpuTrunk::load(&path, gpu)?) as Box<dyn Trunk>,
         };
         Ok(Self { trunk })
     }

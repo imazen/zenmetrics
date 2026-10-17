@@ -88,9 +88,10 @@ impl Hyperiqa {
         let backend = match engine {
             Engine::Rten => Backend::Image(engine::load_image(&dir.join("hyperiqa.onnx"))?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Image(Box::new(engine::ort_engine::OrtCudaImage::load(
+            gpu => Backend::Image(Box::new(engine::ort_engine::OrtGpuImage::load(
                 &dir.join("hyperiqa.onnx"),
                 "hyperiqa",
+                gpu,
             )?)),
         };
         Ok(Self { backend, min_size })

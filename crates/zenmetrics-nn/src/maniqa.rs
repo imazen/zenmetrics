@@ -76,9 +76,10 @@ impl Maniqa {
         let backend = match engine {
             Engine::Rten => Backend::Trunk(engine::load(&dir.join("maniqa_full.onnx"), 1)?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Image(Box::new(engine::ort_engine::OrtCudaImage::load(
+            gpu => Backend::Image(Box::new(engine::ort_engine::OrtGpuImage::load(
                 &dir.join("maniqa_full.onnx"),
                 "maniqa",
+                gpu,
             )?)),
         };
         Ok(Self { backend, min_size })
