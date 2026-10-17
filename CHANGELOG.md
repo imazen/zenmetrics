@@ -25,6 +25,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Native job execution accepts absolute `file://` variant inputs named `<sha256>.<ext>`, verifies their bytes and borrows them without deleting the artifact (`3594eff9`).
+
 - Apply the owner-authorized question 15 short-class contract with canonical pool-authority verification, role/count guards and a bound declaration digest (`98a0edca`).
 
 - Effective palette dispatch receipts pinned to merged zenquant `8ec37ee2`, including target-tier overrides, exact bypass, quality-floor observations and explicit paired-adapter quantization cost (`9e72deea`, `821e1b43`).

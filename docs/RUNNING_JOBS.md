@@ -805,3 +805,14 @@ ReLU export or a scientific execution contract is refused on that path.
 The `steer` fit-program profile binds an explicit source/data inventory and full120×50,000 budget. Its archive-bound activation declaration is checked against the native loader for both ReLU controls and fixed tau1/8 smooth models. Every such fit exports GNU-time resources beside the fresh destination; historical programs retain their prior path. This prepares artifacts only; registration freeze and launch remain separate coordinator actions.
 
 The LAN launcher forwards `ZEN_NO_NEW_AFTER_EPOCH` to the worker container. A caller using this field must bind a worker whose pre-claim deadline guard is verified; the launcher does not infer a deadline or reboot a host. The STEER scientific image preserves the previously verified deadline-aware worker binary.
+
+### Local content-addressed variants
+
+For single-host preparation, existing encode-independent job kinds can take a
+variant input such as `file:///data/artifacts/<sha256>.avif`. The path must be
+absolute and the filename stem must match the SHA256 of the bytes. The native
+executor verifies that binding before decoding and borrows the file; it never
+removes the retained artifact. Relative paths, unhashed filenames and changed
+bytes fail explicitly. Source paths and metric/display selections retain their
+existing contracts. This uses the same `jobexec` scoring/map owners as stored
+object inputs (`3594eff9`).
