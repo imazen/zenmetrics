@@ -1,0 +1,54 @@
+# TOPIQ full-reference (pyiqa CFANet, ResNet50), the AIC2026 `TOPIQ` and
+# `TOPIQ-PIPAL` columns: pyiqa `topiq_fr` (KADID-10k checkpoint) and
+# `topiq_fr-pipal` (PIPAL checkpoint).
+name = "topiq"
+kind = "full-reference"
+direction = "higher-is-closer"        # MOS-like linear head (dist_to_mos = x*1); score(ref, ref) is image-dependent (0.61-0.95), not 1
+columns = ["topiq_fr", "topiq_fr_pipal"]
+cli_names = ["topiq-fr", "topiq-fr-pipal"]
+paper = "Chen, Mo, Hou, Wu, Liao, Sun, Yan, Lin. TOPIQ: A Top-down Approach from Semantics to Distortions for Image Quality Assessment. IEEE TIP 2024"
+
+[code]
+source = "pyiqa 0.1.16"               # head reimplemented from pyiqa archs/topiq_arch.py CFANet.forward_cross_attention
+upstream = "https://github.com/chaofengc/IQA-PyTorch"
+upstream_package = "pyiqa 0.1.16 (torch 2.14.1+cpu)"
+licence = "PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab)"
+
+[weights]
+licence_class = "nc"
+terms = "https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE"
+# Both checkpoints carry fine-tuned trunk (semantic_model) weights, so each
+# variant exports its own trunk graph.
+topiq_fr = "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_kadid_res50-2c4cc61d.pth"
+topiq_fr_sha256 = "2c4cc61d1377b16d3ae85e19b7c0bb46ab70f285aada61a42692ef7908765c5e"
+topiq_fr_pipal = "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_pipal_res50-69bbe5ba.pth"
+topiq_fr_pipal_sha256 = "69bbe5ba7a5a890343a717fa88ae422ed2c440f1821f99f038a73eaef7d532d3"
+
+[input]
+format = "packed sRGB8 (8-bit PNG, as PIL convert('RGB'))"
+normalisation = "v / 255 in Rust (engine::rgb8_to_planar_01); ImageNet mean/std inside the trunk graph"
+resize = "none (pyiqa topiq_fr: num_crop=1, no test-time resize); cost grows with the head's attention token count"
+min_size = 1                          # export.py probe: every tap is non-empty down to 1x1
+max_pixels = 8388608                  # 8 Mi px: the finest level's attention scores reach ~1 GiB; larger inputs return Error::TooLarge
+
+[export]
+script = "export.py"
+outputs = "<col>_trunk.onnx (x[1,3,H,W] -> 5 taps 64/256/512/1024/2048 ch), <col>_head.onnx, <col>_posemb.f32 ([256,32,32]), topiq.meta, topiq_goldens.tsv, topiq_export.meta"
+opset = 17
+dynamic_hw = true
+host_side = "adaptive_avg_pool as matmuls with host-built pooling matrices (ph, pw); positional-embedding bicubic resize (A = -0.75, align_corners=False, f32) on the host, since rten has no cubic Resize"
+notes = "No <col>_full.onnx: every engine (rten, ort-cpu, ort-cuda) runs trunk + head, so warm_reference reuses the reference taps everywhere. export.py replays every golden through onnxruntime CPU: worst |onnx - pyiqa| 5.4e-7 (topiq_fr), 7.2e-7 (topiq_fr_pipal)."
+
+[parity]
+oracle = "pyiqa 0.1.16 on CPU, fp32: metric(dist_path, ref_path)"
+pairs = "82 gate pairs: 61 AIC2026 crop pairs (images not distributed) + 21 ladder pairs (3 images at 64, 256, 1024 and 2048x1536, 6 aspect-ratio crops, 3 identical pairs)"
+tolerance_jnd = 1e-3                  # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
+jnd_topiq_fr = 0.030642               # median |score - score(same-ref identical pair)| over 1,008 KonJND-1k pairs, pyiqa itself
+jnd_topiq_fr_pipal = 0.072797
+results_topiq_fr = "worst |d| rten 5.96e-7, ort-cpu 4.17e-7, ort-cuda 9.54e-7 (at most 3.1e-5 JND); warm == cold bitwise on every engine"
+results_topiq_fr_pipal = "worst |d| rten 7.15e-7, ort-cpu 5.96e-7, ort-cuda 3.58e-7 (at most 9.8e-6 JND); warm == cold bitwise on every engine"
+konjnd_notes = "topiq_fr scores the distorted image above its own identical-pair score in 77 of 1,008 KonJND pairs; topiq_fr_pipal in 0. Per-codec median JND: topiq_fr JPEG 0.0407, BPG 0.0206; topiq_fr_pipal JPEG 0.0802, BPG 0.0673."
+
+[aic4]
+columns = ["TOPIQ", "TOPIQ-PIPAL"]
+results = "this port vs the published columns, 61 crop pairs, all three engines: TOPIQ median |d| 3.5e-5, max 2.73e-4, Spearman 1.0000; TOPIQ-PIPAL median 2.4e-5, max 1.54e-4, Spearman 1.0000. pyiqa 0.1.16 itself on the same pairs: 3.6e-5 / 2.7e-4 and 2.4e-5 / 1.5e-4, so the residual is the published run's, not the port's."

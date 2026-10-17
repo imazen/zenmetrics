@@ -8007,6 +8007,7 @@ dependencies = [
  "zenmetrics-api",
  "zenmetrics-nn",
  "zenmetrics-orchestrator",
+ "zenmetrics-pyiqa-ports",
  "zenpixels",
  "zenpixels-convert",
  "zenpng 0.2.0",
@@ -8084,11 +8085,13 @@ dependencies = [
 name = "zenmetrics-pyiqa-ports"
 version = "0.1.0"
 dependencies = [
+ "enough",
  "ort",
  "rten",
  "rten-tensor",
  "zenmetrics-abstractions",
  "zenmetrics-nn",
+ "zenpng 0.2.0",
 ]
 
 [[package]]

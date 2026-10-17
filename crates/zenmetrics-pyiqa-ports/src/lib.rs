@@ -8,10 +8,10 @@
 //! constructor takes a [`zenmetrics_nn::WeightsConsent`].
 #![forbid(unsafe_code)]
 
-// Used by the model modules; until the first one lands nothing calls it.
-#[allow(dead_code)]
 mod engine;
+mod topiq;
 
 pub use engine::Engine;
+pub use topiq::{Topiq, TopiqVariant};
 
 use zenmetrics_abstractions as za;

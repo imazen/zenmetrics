@@ -108,6 +108,8 @@ pub(crate) trait Graph: Send + Sync {
 
 /// Worker count for host-side passes and the ONNX Runtime CPU provider:
 /// `RTEN_NUM_THREADS` when set, else available parallelism.
+// Without `ort` only the host-side passes call it, and not every build has one.
+#[cfg_attr(not(feature = "ort"), allow(dead_code))]
 pub(crate) fn workers() -> usize {
     std::env::var("RTEN_NUM_THREADS")
         .ok()

@@ -20,8 +20,8 @@ parity gates), except that the code source is pyiqa.
 
 | Model | Column | Status |
 |---|---|---|
-| TOPIQ-FR (KADID) | `TOPIQ` | in progress |
-| TOPIQ-FR (PIPAL) | `TOPIQ-PIPAL` | in progress |
+| TOPIQ-FR (KADID) | `TOPIQ` | `topiq-fr`: parity within 1e-3 JND on rten, ort-cpu, ort-cuda; matches the column (median 3.5e-5, Spearman 1.0) |
+| TOPIQ-FR (PIPAL) | `TOPIQ-PIPAL` | `topiq-fr-pipal`: parity within 1e-3 JND on rten, ort-cpu, ort-cuda; matches the column (median 2.4e-5, Spearman 1.0) |
 | WaDIQaM-FR (KADID checkpoint) | `WaDIQaM` | in progress |
 | AHIQ (pyiqa convention) | `AHIQ` | in progress |
 | CW-SSIM (pyiqa convention) | `CW-SSIM` | in progress |

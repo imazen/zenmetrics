@@ -1,0 +1,11 @@
+# One estimated just-noticeable difference per score column, in that column's units.
+# Source: KonJND-1k (1,008 pairs, 640x480, 504 JPEG + 504 BPG, distorted level at each image's
+# mean picture-wise JND threshold, round-half-up; method in benchmarks/nn_konjnd_scale_2026-10-15.md),
+# scored by pyiqa 0.1.16 itself (CPU fp32; models/topiq/konjnd_score.py, 2026-10-17, i265);
+# value = pooled median over the 1,008 pairs (models/topiq/konjnd_summary.py).
+# topiq_fr and topiq_fr_pipal are higher-is-better with an image-dependent identical-pair score,
+# so their JND is the median of |score(ref, dist) - score(ref, ref)|.
+# Used by tests/parity.rs to express engine tolerance in JND units (TOL_JND = 1e-3).
+column	jnd
+topiq_fr	0.030642
+topiq_fr_pipal	0.072797

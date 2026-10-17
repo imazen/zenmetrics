@@ -19,6 +19,9 @@ default = ["rten"]
 rten = ["dep:rten", "dep:rten-tensor", "zenmetrics-nn/rten"]
 # ONNX Runtime (CPU and CUDA providers), loaded at run time from ORT_DYLIB_PATH.
 ort = ["dep:ort", "zenmetrics-nn/ort"]
+# Parity tests against pyiqa goldens (tests/parity.rs); they need exported
+# models, see the test's header.
+model-tests = []
 
 [dependencies]
 zenmetrics-nn = { path = "../zenmetrics-nn", default-features = false }
@@ -27,3 +30,11 @@ zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-feature
 rten = { version = "0.27.0", optional = true, default-features = false, features = ["onnx_format"] }
 rten-tensor = { version = "0.27.0", optional = true }
 ort = { version = "=2.0.0-rc.14", optional = true, default-features = false, features = ["std", "load-dynamic", "cuda", "api-31"] }
+
+[dev-dependencies]
+zenpng = { path = "../../../zenpng" }
+enough = "0.4.4"
+
+[[test]]
+name = "parity"
+required-features = ["model-tests"]
