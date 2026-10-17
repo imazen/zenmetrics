@@ -66,7 +66,9 @@ def main():
      probes=[json.loads(s[len('IQA_PROBE '):]) for s in result.stdout.splitlines() if s.startswith('IQA_PROBE ')]
      version=next((s[8:] for s in result.stdout.splitlines() if s.startswith('VERSION ')),None);row['impl_version']=version
      if result.returncode or not probes or (len(samples)<10 and sum(t for t,_ in samples)<3e9):
-      row.update(status=f'skipped:process_exit_{result.returncode}; samples={len(samples)}',n=len(samples));append(output,row);print('REFUSED',stem,row['status'],flush=True);continue
+      row.update(status=f'skipped:process_exit_{result.returncode}; samples={len(samples)}',n=len(samples));append(output,row);print('REFUSED',stem,row['status'],flush=True)
+      if result.returncode not in [124,137]:raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
+      continue
      import struct
      reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0]
      values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference)
