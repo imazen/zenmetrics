@@ -415,9 +415,8 @@ fn dmm_panel_rejects_coverage_and_floor_changes() {
 /// scored on this engine's own taps (`models/dmm/gen_netlib_goldens.py` +
 /// `examples/dmm_tap_dump.rs`). The score's `wt` term consumes the
 /// orthonormal basis the SVD draws inside degenerate singular clusters —
-/// implementation-defined per LAPACK build — and amplifies tap noise
-/// ~100x into score units, so only same-taps netlib-draw goldens are
-/// matchable; even then our transliteration drifts past 1e-3 JND on
+/// implementation-defined per LAPACK build. The same-tap goldens separate
+/// host-solver residuals from trunk differences. The transliteration drifts past 1e-3 JND on
 /// deep-null-heavy rows, which the golden file pins at their measured
 /// residual (`kind=pinned`, tol = residual·1.05) as a regression floor.
 /// The MKL-draw `dmm_goldens.tsv` oracle is printed per row as a recorded

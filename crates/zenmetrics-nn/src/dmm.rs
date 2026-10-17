@@ -128,9 +128,9 @@ impl Dmm {
     ///
     /// Tooling surface for `examples/dmm_tap_dump.rs`, which feeds
     /// `models/dmm/gen_netlib_goldens.py`: the netlib-`sgesdd` goldens
-    /// that `nn-parity-dmm` gates on must be scored on the *same* taps
-    /// this engine produces — the head amplifies tap noise ~100x into
-    /// score units, so torch-tap goldens cannot be matched at gate.
+    /// that `nn-parity-dmm` gates on use the *same* taps this engine
+    /// produces. This separates host-solver residuals from trunk differences;
+    /// the upstream torch-tap comparison is recorded separately.
     #[cfg(feature = "model-tests")]
     #[doc(hidden)]
     pub fn taps_for_export(
