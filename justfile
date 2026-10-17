@@ -1151,7 +1151,7 @@ iqa-compete-platform-tests:
 
 # Reuse qualified smoke/maps and retain every diagnostic attempt in its source ledger.
 iqa-compete-collect-i265 output:
-    python3 benchmarks/iqa_compete_2026-10-16/collect.py --output '{{output}}' "$HOME/tmp/iqa-compete/native-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/smoke-placement/i265.jsonl" "$HOME/tmp/iqa-compete/cvvdp-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-first/i265.jsonl" "$HOME/tmp/iqa-compete/extra-map-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-first/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-cpu-bounded/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-admission-repairs/i265.jsonl" "$HOME/tmp/iqa-compete/gpu-extended/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-first/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-budgeted/i265.jsonl"
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py --output '{{output}}' "$HOME/tmp/iqa-compete/native-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/smoke-placement/i265.jsonl" "$HOME/tmp/iqa-compete/cvvdp-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-first/i265.jsonl" "$HOME/tmp/iqa-compete/extra-map-smoke/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-qualified-reruns/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-first/i265.jsonl" "$HOME/tmp/iqa-compete/pieapp-cpu-bounded/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-admission-repairs/i265.jsonl" "$HOME/tmp/iqa-compete/gpu-extended/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-first/i265.jsonl" "$HOME/tmp/iqa-compete/nn-cuda-budgeted/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-accounted-v15/i265.jsonl" "$HOME/tmp/iqa-compete/cpu-map-repairs/i265.jsonl"
 
 iqa-compete-batch-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_batch.py
@@ -1200,3 +1200,7 @@ iqa-compete-contention-tests:
 # Read-only retention of observation files referenced by the other host lane.
 iqa-compete-retain-host-scopes raw output:
     python3 benchmarks/iqa_compete_2026-10-16/merge_host_scopes.py '{{raw}}' '{{output}}'
+
+# Explicit immutable cohort export before appending newer continuation results.
+iqa-compete-collect-binary raw output binary_sha:
+    python3 benchmarks/iqa_compete_2026-10-16/collect.py '{{raw}}' --output '{{output}}' --only-binary-sha '{{binary_sha}}'
