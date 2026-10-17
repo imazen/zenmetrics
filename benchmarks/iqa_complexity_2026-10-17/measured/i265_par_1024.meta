@@ -1,0 +1,10 @@
+commit=2fab671a4324 (lead tree at run time; metric source identical to master 2fab671a)
+binary=complexity-reps --features metrics-parallel,zenmetrics-cli/nr sha256=67890f926d9b7613933b5743a335f8ca7c46497717aabd7c1bf2f5b9351bae01; metric crates' own threading enabled (differs from the default CLI build)
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+runs=threads 1 pinned cpu 6; threads 8 pinned cpus 0-7 (P-cores); same binary
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled; sRGB8; default options; cvvdp display standard_fhd
+start_utc=2026-10-17T13:01:55Z load=2.54 2.43 2.15
+end_utc=2026-10-17T13:07:16Z load=2.65 2.36 2.17
+run_heavy=run-heavy: done rc=0 321s | peak-RSS 0.74GiB | min-avail 12930MiB | peak-load 3.49
+command=flock ~/tmp/i265-heavy.lock run-heavy --mem 8G --jobs 8 -- ~/tmp/iqa-cx-lead/run-scaling.sh (perf_deltas.py, 3 repeats, adaptive extra reps)
+excluded=hdrvdp hdrvdp3 (HDR routes)

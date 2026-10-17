@@ -41,7 +41,7 @@ def normalize(path,spec,table,number):
             wall=sorted(number(r['wall_ms_per_call']) for r in rs);cpu=sorted(number(r['task_clock_ms_per_call']) for r in rs)
             yield dict(metric=metric,implementation='zenmetrics',backend='CPU',host=spec['host'],os='Linux',threads=int(threads),
                        mode='score',phase='warm',width=w,height=h,ms=wall[len(wall)//2],cpu_ms=cpu[len(cpu)//2],
-                       min_ms=wall[0],max_ms=wall[-1],repeats=len(rs),content='photo',engine='native',status='ok',
+                       min_ms=wall[0],max_ms=wall[-1],repeats=len(rs),content='photo',engine=spec.get('engine','native'),status='ok',
                        details='Per-call delta between 1 and 1+K calls in one process; decode, setup and process start excluded; pinned P-core.')
         return
     if adapter=='complexity':
