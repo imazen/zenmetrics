@@ -815,6 +815,8 @@ nn-port-compile-gate:
     gate nn-test timeout --kill-after=10 900 {{just_executable()}} snap-cargo @ test -p zenmetrics-nn
     gate browser-list {{just_executable()}} snap-cargo @ test -p zenmetrics-browser --lib listed_metrics_are_compiled_in
     gate benchmark-study python3 scripts/jobsys/test_benchmark_study.py
+    gate python {{just_executable()}} nn-port-python-check
+    gate dmm-source-isolation {{just_executable()}} nn-dmm-bisect-isolation
     gate matrix {{just_executable()}} cli-feature-matrix
     exit "$failed"
 
