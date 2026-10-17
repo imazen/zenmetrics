@@ -621,7 +621,6 @@ panel the worst gap is 1.88 JND (`2207_2048`), median 0.44 JND, and 10/24
 pairs exceed 1 JND. See [model provenance](crates/zenmetrics-nn/models/pieapp/PROVENANCE.md)
 and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
 
-
 ## `wd` — Cool-Chic Wasserstein Distortion (2026-10-16)
 
 - **RESOLVED:** RTen and CUDA VGG16 trunk plus Rust statistics pass 25 upstream
@@ -641,7 +640,6 @@ and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
   three pairs; all-61 verification gives column median site errors
   0.2310363687–0.3724274401 JND, worst 2.4017891693 JND. No AIC match is claimed;
   the shipped metric retains Cool-Chic's pre-pool raw-input convention.
-
 
 ## `wadiqam` — deepIQA WaDIQaM FR+NR (2026-10-16)
 

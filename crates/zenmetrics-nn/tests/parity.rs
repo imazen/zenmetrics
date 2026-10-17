@@ -11,6 +11,9 @@
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
 //! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
 //!   and `ORT_DYLIB_PATH`).
+//!
+//! PieAPP goldens use the official CUDA model with TF32 disabled; the CPU
+//! control differs by at most 4.8e-7 native units. Other models use CPU fp32.
 
 use std::path::{Path, PathBuf};
 
@@ -21,8 +24,6 @@ use zenmetrics_nn::{
     Musiq, Paq2piq, PieApp, WadiqamFr, WadiqamKind, WadiqamNr, WeightsConsent,
 };
 
-/// PieAPP goldens use the official CUDA model with TF32 disabled; the CPU
-/// control differs by at most 4.8e-7 native units. Other models use CPU fp32.
 /// Tolerance in JND units (owner,
 /// 2026-10-15: "should be in estimated jnd units, could be looser"): each
 /// model may differ from upstream by 1/1000 of its estimated just-noticeable
@@ -379,6 +380,7 @@ fn warm_reference_equals_cold() {
         if let Some(cold_same) = cold_same {
             assert_eq!(same.to_bits(), cold_same.to_bits(), "{col}");
             if col == "pieapp" {
+                // Recorded as parity.identical_patch_oracle in models/pieapp/card.toml.
                 const ORACLE_IDENTICAL: f64 = -3.725_290_298_461_914e-9;
                 assert!((same - ORACLE_IDENTICAL).abs() <= tol(col), "{col}");
             }
