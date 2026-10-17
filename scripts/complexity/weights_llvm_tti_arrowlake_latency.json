@@ -1,0 +1,80 @@
+{
+ "name": "LLVM cost model (Optimized build.) -mcpu=arrowlake latency",
+ "source": "opt -passes='print<cost-model>' -cost-kind=latency, one scalar instruction per class (scripts/complexity/llvm_cost_tables.py); abstract TTI units, libcalls use generic costs",
+ "weights": {
+  "add": {
+   "f32": 4.0,
+   "f64": 4.0,
+   "mixed": 4.0
+  },
+  "mul": {
+   "f32": 5.0,
+   "f64": 5.0,
+   "mixed": 5.0
+  },
+  "div": {
+   "f32": 13.0,
+   "f64": 20.0,
+   "mixed": 13.0
+  },
+  "fma": {
+   "f32": 1.0,
+   "f64": 1.0,
+   "mixed": 1.0
+  },
+  "sqrt": {
+   "f32": 15.0,
+   "f64": 21.0,
+   "mixed": 15.0
+  },
+  "cmp": {
+   "f32": 7.0,
+   "f64": 7.0,
+   "mixed": 7.0
+  },
+  "abs": {
+   "f32": 2.0,
+   "f64": 2.0,
+   "mixed": 2.0
+  },
+  "exp": {
+   "f32": 10.0,
+   "f64": 10.0,
+   "mixed": 10.0
+  },
+  "log": {
+   "f32": 10.0,
+   "f64": 10.0,
+   "mixed": 10.0
+  },
+  "pow": {
+   "f32": 10.0,
+   "f64": 10.0,
+   "mixed": 10.0
+  },
+  "trig": {
+   "f32": 10.0,
+   "f64": 10.0,
+   "mixed": 10.0
+  },
+  "load": {
+   "f32": 4.0,
+   "f64": 4.0,
+   "mixed": 4.0
+  },
+  "store": {
+   "f32": 1.0,
+   "f64": 1.0,
+   "mixed": 1.0
+  },
+  "cvt": {
+   "f32": 1.0,
+   "f64": 1.0,
+   "mixed": 1.0
+  },
+  "int": {
+   "*": 1.0,
+   "mixed": 1.0
+  }
+ }
+}

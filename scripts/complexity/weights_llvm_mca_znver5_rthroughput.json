@@ -1,0 +1,49 @@
+{
+ "name": "llvm-mca -mcpu=znver5 (znver5/Zn4 model) rthroughput",
+ "source": "benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv; scalar instruction per class; libm calls absent from mca",
+ "weights": {
+  "add": {
+   "f32": 0.5,
+   "f64": 0.5,
+   "mixed": 0.5
+  },
+  "mul": {
+   "f32": 0.5,
+   "f64": 0.5,
+   "mixed": 0.5
+  },
+  "fma": {
+   "f32": 1.0,
+   "f64": 1.0,
+   "mixed": 1.0
+  },
+  "div": {
+   "f32": 3.0,
+   "f64": 5.0,
+   "mixed": 3.0
+  },
+  "sqrt": {
+   "f32": 5.0,
+   "f64": 9.0,
+   "mixed": 5.0
+  },
+  "rcp": {
+   "f32": 0.5,
+   "mixed": 0.5
+  },
+  "rsqrt": {
+   "f32": 1.0,
+   "mixed": 1.0
+  },
+  "cmp": {
+   "f32": 1.0,
+   "f64": 1.0,
+   "mixed": 1.0
+  },
+  "cvt": {
+   "f32": 0.5,
+   "f64": 0.5,
+   "mixed": 0.5
+  }
+ }
+}

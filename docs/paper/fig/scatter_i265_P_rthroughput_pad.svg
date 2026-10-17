@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 460" font-family="sans-serif" font-size="11">
+<rect width="700" height="460" fill="white"/>
+<text x="350" y="20" text-anchor="middle" font-size="13">measured i265 P-core throughput, halo pad: estimate vs CPU time (i265, 1 thread, 1024²)</text>
+<path d="M70 40V400H630" fill="none" stroke="#333"/>
+<path d="M118.5 400v5" stroke="#333"/><text x="118.5" y="418" text-anchor="middle">10</text>
+<path d="M274.9 400v5" stroke="#333"/><text x="274.9" y="418" text-anchor="middle">100</text>
+<path d="M431.4 400v5" stroke="#333"/><text x="431.4" y="418" text-anchor="middle">1000</text>
+<path d="M587.8 400v5" stroke="#333"/><text x="587.8" y="418" text-anchor="middle">10000</text>
+<path d="M65 394.3h5" stroke="#333"/><text x="62" y="398.3" text-anchor="end">1</text>
+<path d="M65 293.7h5" stroke="#333"/><text x="62" y="297.7" text-anchor="end">10</text>
+<path d="M65 193.1h5" stroke="#333"/><text x="62" y="197.1" text-anchor="end">100</text>
+<path d="M65 92.6h5" stroke="#333"/><text x="62" y="96.6" text-anchor="end">1000</text>
+<path d="M70.0 400.0L630.0 40.0" stroke="#bf5825" stroke-dasharray="5 4"/>
+<circle cx="362.6" cy="191.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ciede2000</title></circle><text x="367.6" y="187.2" font-size="9" fill="#444">ciede2000</text>
+<circle cx="570.7" cy="205.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cvvdp</title></circle><text x="575.7" y="201.2" font-size="9" fill="#444">cvvdp</text>
+<circle cx="241.7" cy="279.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi</title></circle><text x="246.7" y="275.5" font-size="9" fill="#444">haarpsi</text>
+<circle cx="207.6" cy="305.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi-y</title></circle><text x="212.6" y="301.1" font-size="9" fill="#444">haarpsi-y</text>
+<circle cx="602.5" cy="112.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdctpsnr</title></circle><text x="607.5" y="108.1" font-size="9" fill="#444">mdctpsnr</text>
+<circle cx="105.5" cy="377.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdsi</title></circle><text x="110.5" y="373.2" font-size="9" fill="#444">mdsi</text>
+<circle cx="261.8" cy="286.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsd</title></circle><text x="266.8" y="282.8" font-size="9" fill="#444">ms-gmsd</text>
+<circle cx="261.8" cy="285.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsdc</title></circle><text x="266.8" y="281.8" font-size="9" fill="#444">ms-gmsdc</text>
+<circle cx="294.5" cy="324.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>nlpd-iqa</title></circle><text x="299.5" y="320.1" font-size="9" fill="#444">nlpd-iqa</text>
+<circle cx="97.5" cy="376.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr</title></circle><text x="102.5" y="372.5" font-size="9" fill="#444">psnr</text>
+<circle cx="111.7" cy="367.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y</title></circle><text x="116.7" y="363.3" font-size="9" fill="#444">psnr-y</text>
+<circle cx="449.0" cy="124.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimulacra1</title></circle><text x="454.0" y="120.4" font-size="9" fill="#444">ssimulacra1</text>
+<circle cx="391.1" cy="222.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vif</title></circle><text x="396.1" y="218.0" font-size="9" fill="#444">vif</text>
+<circle cx="429.0" cy="189.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vifvec</title></circle><text x="434.0" y="185.2" font-size="9" fill="#444">vifvec</text>
+<circle cx="290.1" cy="230.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi</title></circle><text x="295.1" y="226.0" font-size="9" fill="#444">vsi</text>
+<text x="350" y="448" text-anchor="middle">estimated cost per pixel (table units)</text>
+<text x="18" y="220" text-anchor="middle" transform="rotate(-90 18 220)">measured CPU ns per pixel</text></svg>

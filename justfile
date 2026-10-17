@@ -1628,3 +1628,10 @@ bench-iqa-optional-check:
 complexity-check:
     cd scripts/complexity && python3 -m unittest test_evaluate
     python3 scripts/complexity/evaluate.py --check benchmarks/iqa_complexity_2026-10-17/tallies/*.json
+    python3 scripts/complexity/coverage.py --check
+    python3 scripts/complexity/paper.py --check
+
+# Regenerate the complexity README coverage table and the draft paper from committed inputs.
+complexity-regenerate:
+    python3 scripts/complexity/coverage.py
+    python3 scripts/complexity/paper.py
