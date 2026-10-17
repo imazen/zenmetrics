@@ -1,0 +1,368 @@
+document	table	row	column	value
+docs/METRIC_PROVENANCE.md	0	0	--metric	pieapp
+docs/METRIC_PROVENANCE.md	0	0	crate	in-tree zenmetrics-nn
+docs/METRIC_PROVENANCE.md	0	0	metric paper	Prashnani et al., CVPR 2018 (https://arxiv.org/abs/1806.02067)
+docs/METRIC_PROVENANCE.md	0	0	reference impl (validation oracle)	Official v0.1 public compute_score, release 0513613d1f575136ea52418e35f2cebc5a49f783
+docs/METRIC_PROVENANCE.md	0	0	provenance	Independent paper/checkpoint-metadata reconstruction, black-box qualification
+docs/METRIC_PROVENANCE.md	0	0	input convention	Valid 64-square BGR code-value patches, explicit stride-six grid
+docs/METRIC_PROVENANCE.md	0	0	output	Learned error; card and provenance (../crates/zenmetrics-nn/models/pieapp/PROVENANCE.md); demo CLI sampling differs
+docs/METRIC_PROVENANCE.md	0	1	--metric	wd
+docs/METRIC_PROVENANCE.md	0	1	crate	in-tree zenmetrics-nn
+docs/METRIC_PROVENANCE.md	0	1	metric paper	Qiu, Wagner, Ballé, Theis, Wasserstein Distortion, CISS 2024 (https://arxiv.org/abs/2310.03629)
+docs/METRIC_PROVENANCE.md	0	1	reference impl (validation oracle)	Cool-Chic WassersteinLoss (https://github.com/Orange-OpenSource/Cool-Chic/blob/main/coolchic/training/metrics/wasserstein.py), SHA-256 ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43
+docs/METRIC_PROVENANCE.md	0	1	provenance	reference reimplementation; RTen/CUDA VGG16 trunk, Rust statistics
+docs/METRIC_PROVENANCE.md	0	1	input convention	raw sRGB8 / 255, four pre-pool taps, no resize/normalization
+docs/METRIC_PROVENANCE.md	0	1	output	five nonnegative distances, wd_s1…wd_s5; 25-pair both-engine gates and 1008-pair JND calibration (../benchmarks/wd_port_2026-10-16/README.md)
+docs/METRIC_PROVENANCE.md	0	2	--metric	ssim2
+docs/METRIC_PROVENANCE.md	0	2	crate	sibling fast-ssim2 (path ../fast-ssim2/fast-ssim2, imgref) — not crates.io ssimulacra2, which is a third-party crate we do not maintain; that dep exists only inside ssim2-gpu for reference checks
+docs/METRIC_PROVENANCE.md	0	2	metric paper	SSIMULACRA 2, Jon Sneyers (Cloudinary) (2022+, no paper)
+docs/METRIC_PROVENANCE.md	0	2	reference impl (validation oracle)	Cloudinary ssimulacra2 C++ (v2 lineage)
+docs/METRIC_PROVENANCE.md	0	2	provenance	sibling crate (algorithm reimplemented in that repo, SIMD-native)
+docs/METRIC_PROVENANCE.md	0	2	input convention	sRGB8
+docs/METRIC_PROVENANCE.md	0	2	output	~0–100, higher better
+docs/METRIC_PROVENANCE.md	0	3	--metric	ssim2-gpu
+docs/METRIC_PROVENANCE.md	0	3	crate	ssim2-gpu (in-tree GPU twin)
+docs/METRIC_PROVENANCE.md	0	3	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	3	reference impl (validation oracle)	fast-ssim2 (CPU) + third-party crates.io ssimulacra2 for parity
+docs/METRIC_PROVENANCE.md	0	3	provenance	in-tree GPU reimplementation
+docs/METRIC_PROVENANCE.md	0	3	input convention	sRGB8
+docs/METRIC_PROVENANCE.md	0	3	output	""""
+docs/METRIC_PROVENANCE.md	0	4	--metric	dssim
+docs/METRIC_PROVENANCE.md	0	4	crate	crates.io dssim-core ^3.4
+docs/METRIC_PROVENANCE.md	0	4	metric paper	Wang et al. MS-SSIM 2003 (porneL's variant)
+docs/METRIC_PROVENANCE.md	0	4	reference impl (validation oracle)	dssim-core itself (the canonical impl)
+docs/METRIC_PROVENANCE.md	0	4	provenance	third-party crate
+docs/METRIC_PROVENANCE.md	0	4	input convention	sRGB8
+docs/METRIC_PROVENANCE.md	0	4	output	0 best, unbounded
+docs/METRIC_PROVENANCE.md	0	5	--metric	dssim-gpu
+docs/METRIC_PROVENANCE.md	0	5	crate	dssim-gpu (in-tree twin)
+docs/METRIC_PROVENANCE.md	0	5	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	5	reference impl (validation oracle)	dssim-core
+docs/METRIC_PROVENANCE.md	0	5	provenance	in-tree GPU
+docs/METRIC_PROVENANCE.md	0	5	input convention	""""
+docs/METRIC_PROVENANCE.md	0	5	output	""""
+docs/METRIC_PROVENANCE.md	0	6	--metric	butteraugli
+docs/METRIC_PROVENANCE.md	0	6	crate	sibling butteraugli
+docs/METRIC_PROVENANCE.md	0	6	metric paper	Jyrki Alakuijala, Google — no paper; google/butteraugli (https://github.com/google/butteraugli)
+docs/METRIC_PROVENANCE.md	0	6	reference impl (validation oracle)	libjxl butteraugli v0.9.2 / 0.9.4
+docs/METRIC_PROVENANCE.md	0	6	provenance	sibling crate (wraps the libjxl implementation)
+docs/METRIC_PROVENANCE.md	0	6	input convention	sRGB8
+docs/METRIC_PROVENANCE.md	0	6	output	distance; emits _max + _pnorm3
+docs/METRIC_PROVENANCE.md	0	7	--metric	butteraugli-gpu
+docs/METRIC_PROVENANCE.md	0	7	crate	butteraugli-gpu
+docs/METRIC_PROVENANCE.md	0	7	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	7	reference impl (validation oracle)	same
+docs/METRIC_PROVENANCE.md	0	7	provenance	in-tree GPU
+docs/METRIC_PROVENANCE.md	0	7	input convention	""""
+docs/METRIC_PROVENANCE.md	0	7	output	""""
+docs/METRIC_PROVENANCE.md	0	8	--metric	cvvdp
+docs/METRIC_PROVENANCE.md	0	8	crate	in-tree crates/cvvdp
+docs/METRIC_PROVENANCE.md	0	8	metric paper	Mantiuk et al., ColorVideoVDP, ACM SIGGRAPH 2024
+docs/METRIC_PROVENANCE.md	0	8	reference impl (validation oracle)	pycvvdp v0.5.7 (PyPI)
+docs/METRIC_PROVENANCE.md	0	8	provenance	reference reimplementation (native SIMD CPU)
+docs/METRIC_PROVENANCE.md	0	8	input convention	sRGB8 + display preset (default standard_4k)
+docs/METRIC_PROVENANCE.md	0	8	output	JOD 0–10
+docs/METRIC_PROVENANCE.md	0	9	--metric	cvvdp-gpu
+docs/METRIC_PROVENANCE.md	0	9	crate	cvvdp-gpu twin
+docs/METRIC_PROVENANCE.md	0	9	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	9	reference impl (validation oracle)	pycvvdp v0.5.7 + CPU twin
+docs/METRIC_PROVENANCE.md	0	9	provenance	in-tree GPU
+docs/METRIC_PROVENANCE.md	0	9	input convention	""""
+docs/METRIC_PROVENANCE.md	0	9	output	""""
+docs/METRIC_PROVENANCE.md	0	10	--metric	hdrvdp
+docs/METRIC_PROVENANCE.md	0	10	crate	in-tree crates/hdrvdp
+docs/METRIC_PROVENANCE.md	0	10	metric paper	Mantiuk et al., HDR-VDP-2, ACM TOG 30(4) 2011
+docs/METRIC_PROVENANCE.md	0	10	reference impl (validation oracle)	official HDR-VDP 2.2.2 MATLAB release (ISC-licensed)
+docs/METRIC_PROVENANCE.md	0	10	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	10	input convention	absolute luminance cd/m² + display params — not sRGB8
+docs/METRIC_PROVENANCE.md	0	10	output	JOD / P_det / Q
+docs/METRIC_PROVENANCE.md	0	11	--metric	hdrvdp3
+docs/METRIC_PROVENANCE.md	0	11	crate	in-tree crates/hdrvdp (v3 module)
+docs/METRIC_PROVENANCE.md	0	11	metric paper	same HDR-VDP lineage — Mantiuk et al., ACM TOG 30(4) 2011, doi:10.1145/2010324.1964935 (v3 is the display-adaptive revision; upstream asks to cite the 2011 paper + version number)
+docs/METRIC_PROVENANCE.md	0	11	reference impl (validation oracle)	official HDR-VDP 3.0.7 MATLAB release + jpeg-ai-qaf VDP3/ numpy port @ 0628a6b (verified equal — see DIVERGENCES)
+docs/METRIC_PROVENANCE.md	0	11	provenance	reference reimplementation (f64 end-to-end)
+docs/METRIC_PROVENANCE.md	0	11	input convention	absolute luminance cd/m², explicit required viewing conditions — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age
+docs/METRIC_PROVENANCE.md	0	11	output	q_jod 0–10 (10 = identical) + P_map
+docs/METRIC_PROVENANCE.md	0	12	--metric	vmaf (lib only)
+docs/METRIC_PROVENANCE.md	0	12	crate	in-tree crates/vmaf
+docs/METRIC_PROVENANCE.md	0	12	metric paper	Li et al., Netflix VMAF, 2016
+docs/METRIC_PROVENANCE.md	0	12	reference impl (validation oracle)	libvmaf 3.2.1 via FFI oracle
+docs/METRIC_PROVENANCE.md	0	12	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	12	input convention	YUV420 planes (studio-swing ingress); v0 models luma-only
+docs/METRIC_PROVENANCE.md	0	12	output	VMAF 0–100 + features (adm2, motion2, vif×4)
+docs/METRIC_PROVENANCE.md	0	13	--metric	vif
+docs/METRIC_PROVENANCE.md	0	13	crate	in-tree crates/vif
+docs/METRIC_PROVENANCE.md	0	13	metric paper	Sheikh & Bovik, IEEE TIP 15(2) 2006
+docs/METRIC_PROVENANCE.md	0	13	reference impl (validation oracle)	authors' vifp_mscale.m (MATLAB)
+docs/METRIC_PROVENANCE.md	0	13	provenance	reference reimplementation (f64 pipeline)
+docs/METRIC_PROVENANCE.md	0	13	input convention	sRGB8 → MATLAB-weights gray
+docs/METRIC_PROVENANCE.md	0	13	output	[0,∞), 1 ≈ identical
+docs/METRIC_PROVENANCE.md	0	14	--metric	vifvec
+docs/METRIC_PROVENANCE.md	0	14	crate	in-tree crates/vif (vifvec module)
+docs/METRIC_PROVENANCE.md	0	14	metric paper	Sheikh & Bovik, IEEE TIP 15(2) 2006 — the original vector-GSM formulation, a different algorithm from vifp
+docs/METRIC_PROVENANCE.md	0	14	reference impl (validation oracle)	authors' vifvec.m + matlabPyrTools sp5Filters/buildSpyr/corrDn/vifsub_est_M/ind2wtree — the implementation behind pyiqa/IQA_pytorch VIFs and the AIC-4 VIF column
+docs/METRIC_PROVENANCE.md	0	14	provenance	reference reimplementation (f64, row-major-transcribed SP5 filters)
+docs/METRIC_PROVENANCE.md	0	14	input convention	sRGB8 → u8-rounded round(0.299R+0.587G+0.114B) gray (cv2/MATLAB convention); vifvec_plane_f64 for raw planes
+docs/METRIC_PROVENANCE.md	0	14	output	[0,∞), 1 = identical
+docs/METRIC_PROVENANCE.md	0	15	--metric	msssim
+docs/METRIC_PROVENANCE.md	0	15	crate	in-tree crates/msssim
+docs/METRIC_PROVENANCE.md	0	15	metric paper	Wang, Simoncelli, Bovik 2003 (ACSSC)
+docs/METRIC_PROVENANCE.md	0	15	reference impl (validation oracle)	authors' ssim_mscale_new.m
+docs/METRIC_PROVENANCE.md	0	15	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	15	input convention	sRGB8 → BT.601 luma
+docs/METRIC_PROVENANCE.md	0	15	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	16	--metric	ssim-libvmaf
+docs/METRIC_PROVENANCE.md	0	16	crate	in-tree crates/msssim (libvmaf module)
+docs/METRIC_PROVENANCE.md	0	16	metric paper	Wang et al., IEEE TIP 2004 (as implemented by Z. Li / tdistler iqa)
+docs/METRIC_PROVENANCE.md	0	16	reference impl (validation oracle)	libvmaf float_ssim @ f85a8536 — FFI oracle (vmaf-head-sys dev-dep)
+docs/METRIC_PROVENANCE.md	0	16	provenance	reference reimplementation (integer-accumulating decimate + f32/f64 rounding points preserved)
+docs/METRIC_PROVENANCE.md	0	16	input convention	sRGB8 → studio-swing BT.601 luma — the YUV Y plane libvmaf consumes; NOT the MATLAB rgb2gray luma
+docs/METRIC_PROVENANCE.md	0	16	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	17	--metric	msssim-libvmaf
+docs/METRIC_PROVENANCE.md	0	17	crate	in-tree crates/msssim (libvmaf module)
+docs/METRIC_PROVENANCE.md	0	17	metric paper	Wang/Simoncelli/Bovik 2003 (libvmaf's 5-scale variant)
+docs/METRIC_PROVENANCE.md	0	17	reference impl (validation oracle)	libvmaf float_ms_ssim @ f85a8536 — FFI oracle
+docs/METRIC_PROVENANCE.md	0	17	provenance	reference reimplementation (9/7 LPF pyramid, per-scale f32 means, double pow)
+docs/METRIC_PROVENANCE.md	0	17	input convention	""""
+docs/METRIC_PROVENANCE.md	0	17	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	18	--metric	iwssim
+docs/METRIC_PROVENANCE.md	0	18	crate	in-tree crates/iwssim
+docs/METRIC_PROVENANCE.md	0	18	metric paper	Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2092435
+docs/METRIC_PROVENANCE.md	0	18	reference impl (validation oracle)	Python-IW-SSIM f9de37c (the Python port linked from the authors' IW-SSIM page; not yet compared directly with the authors' MATLAB release)
+docs/METRIC_PROVENANCE.md	0	18	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	18	input convention	sRGB8 → u8-rounded BT.601 gray (0.2989/0.5870/0.1140, LumaConvention::Bt601Rounded)
+docs/METRIC_PROVENANCE.md	0	18	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	19	--metric	iwssim-piq
+docs/METRIC_PROVENANCE.md	0	19	crate	in-tree crates/iwssim (piq_luma params)
+docs/METRIC_PROVENANCE.md	0	19	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	19	reference impl (validation oracle)	jpeg-ai-qaf IW_SSIM (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 IW-SSIM column; upstream mirror [local path] @ 0628a6b
+docs/METRIC_PROVENANCE.md	0	19	provenance	same code path, LumaConvention::YiqUnrounded ingress
+docs/METRIC_PROVENANCE.md	0	19	input convention	sRGB8 → unrounded 0.299R+0.587G+0.114B
+docs/METRIC_PROVENANCE.md	0	19	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	20	--metric	iwssim-gpu
+docs/METRIC_PROVENANCE.md	0	20	crate	iwssim-gpu twin
+docs/METRIC_PROVENANCE.md	0	20	metric paper	""""
+docs/METRIC_PROVENANCE.md	0	20	reference impl (validation oracle)	CPU twin
+docs/METRIC_PROVENANCE.md	0	20	provenance	in-tree GPU
+docs/METRIC_PROVENANCE.md	0	20	input convention	""""
+docs/METRIC_PROVENANCE.md	0	20	output	""""
+docs/METRIC_PROVENANCE.md	0	21	--metric	gmsd
+docs/METRIC_PROVENANCE.md	0	21	crate	in-tree crates/gmsd
+docs/METRIC_PROVENANCE.md	0	21	metric paper	Xue et al., IEEE TIP 23(2) 2014
+docs/METRIC_PROVENANCE.md	0	21	reference impl (validation oracle)	libgmsd de646c9a (C)
+docs/METRIC_PROVENANCE.md	0	21	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	21	input convention	sRGB8 → luma
+docs/METRIC_PROVENANCE.md	0	21	output	0 best, unbounded
+docs/METRIC_PROVENANCE.md	0	22	--metric	psnrhvs / psnrhvs-y
+docs/METRIC_PROVENANCE.md	0	22	crate	in-tree crates/psnrhvs
+docs/METRIC_PROVENANCE.md	0	22	metric paper	Ponomarenko/Egiazarian PSNR-HVS-M (VPQM 2007)
+docs/METRIC_PROVENANCE.md	0	22	reference impl (validation oracle)	authors' psnrhvsm.m
+docs/METRIC_PROVENANCE.md	0	22	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	22	input convention	RGB per-channel 8×8 DCT (-y = luma plane)
+docs/METRIC_PROVENANCE.md	0	22	output	dB, higher better
+docs/METRIC_PROVENANCE.md	0	23	--metric	psnrhvs-daala
+docs/METRIC_PROVENANCE.md	0	23	crate	in-tree crates/psnrhvs (daala module)
+docs/METRIC_PROVENANCE.md	0	23	metric paper	Daala/Xiph PSNR-HVS (integer bin-DCT variant adopted by libvmaf; distinct from the Ponomarenko MATLAB psnrhvs)
+docs/METRIC_PROVENANCE.md	0	23	reference impl (validation oracle)	libvmaf psnr_hvs feature @ f85a8536 — FFI oracle
+docs/METRIC_PROVENANCE.md	0	23	provenance	reference reimplementation (column-first od_bin_fdct8x8, CSF tables csf_y/cb420/cr420, integer-product mask accumulation, f32 ret)
+docs/METRIC_PROVENANCE.md	0	23	input convention	sRGB8 → studio-swing BT.601 YUV444 planes — the AIC-4 convention (psnr_hvs_daala_yuv420 also exposed for YUV420 pictures)
+docs/METRIC_PROVENANCE.md	0	23	output	dB; emits psnrhvs_daala_{y,cb,cr} + combined
+docs/METRIC_PROVENANCE.md	0	24	--metric	haarpsi / haarpsi-y
+docs/METRIC_PROVENANCE.md	0	24	crate	in-tree crates/haarpsi
+docs/METRIC_PROVENANCE.md	0	24	metric paper	Reisenhofer, Bosse, Kutyniok & Wiegand, Signal Processing: Image Communication 61 (2018) 33–43, doi:10.1016/j.image.2017.11.001
+docs/METRIC_PROVENANCE.md	0	24	reference impl (validation oracle)	authors' haarpsi.m
+docs/METRIC_PROVENANCE.md	0	24	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	24	input convention	RGB (YIQ chroma) / luma (-y)
+docs/METRIC_PROVENANCE.md	0	24	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	25	--metric	fsim / fsim-y
+docs/METRIC_PROVENANCE.md	0	25	crate	in-tree crates/fsim
+docs/METRIC_PROVENANCE.md	0	25	metric paper	Zhang et al., IEEE TIP 20(8) 2011, doi:10.1109/TIP.2011.2109730
+docs/METRIC_PROVENANCE.md	0	25	reference impl (validation oracle)	authors' FR_FSIMc.m
+docs/METRIC_PROVENANCE.md	0	25	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	25	input convention	sRGB8 (FSIMc chroma terms) / luma (-y)
+docs/METRIC_PROVENANCE.md	0	25	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	26	--metric	vsi
+docs/METRIC_PROVENANCE.md	0	26	crate	in-tree crates/vsi
+docs/METRIC_PROVENANCE.md	0	26	metric paper	Zhang et al., IEEE TIP 23(10) 2014
+docs/METRIC_PROVENANCE.md	0	26	reference impl (validation oracle)	authors' VSI.m
+docs/METRIC_PROVENANCE.md	0	26	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	26	input convention	sRGB8 (SDSP colour saliency)
+docs/METRIC_PROVENANCE.md	0	26	output	[0,1]
+docs/METRIC_PROVENANCE.md	0	27	--metric	mad
+docs/METRIC_PROVENANCE.md	0	27	crate	in-tree crates/mad-iqa
+docs/METRIC_PROVENANCE.md	0	27	metric paper	Larson & Chandler, JEI 19(1) 2010
+docs/METRIC_PROVENANCE.md	0	27	reference impl (validation oracle)	official MATLAB release (larschandler.com)
+docs/METRIC_PROVENANCE.md	0	27	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	27	input convention	sRGB8 → luma
+docs/METRIC_PROVENANCE.md	0	27	output	distance; emits mad, mad_hi, mad_lo
+docs/METRIC_PROVENANCE.md	0	28	--metric	mdctpsnr
+docs/METRIC_PROVENANCE.md	0	28	crate	in-tree crates/mdctpsnr
+docs/METRIC_PROVENANCE.md	0	28	metric paper	"Richter, ""On the mDCT-PSNR image quality index"", QoMEX 2009, doi:10.1109/QOMEX.2009.5246978 (authored impl)"
+docs/METRIC_PROVENANCE.md	0	28	reference impl (validation oracle)	author's official C++ thorfdbg/mDCTpsnr (Thomas Richter; contributor Jon Sneyers) (zlib-style license), built GCC -O3 -ffast-math AVX2 + glibc libmvec
+docs/METRIC_PROVENANCE.md	0	28	provenance	reference reimplementation — parity target is the compiled binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics
+docs/METRIC_PROVENANCE.md	0	28	input convention	sRGB8 → linear → BT.601 YCbCr
+docs/METRIC_PROVENANCE.md	0	28	output	dB, higher better; +inf identical
+docs/METRIC_PROVENANCE.md	0	29	--metric	nlpd
+docs/METRIC_PROVENANCE.md	0	29	crate	in-tree crates/nlpd
+docs/METRIC_PROVENANCE.md	0	29	metric paper	Laparra et al., normalized Laplacian pyramid distance (laparra16a-preprint)
+docs/METRIC_PROVENANCE.md	0	29	reference impl (validation oracle)	Valerolaparra/NLPD_Pytorch (the authors' PyTorch reference; PyTorch 2.5.1 oracle)
+docs/METRIC_PROVENANCE.md	0	29	provenance	reference reimplementation
+docs/METRIC_PROVENANCE.md	0	29	input convention	sRGB8 → RGB planes [0,1]; six levels, (Σ rms^0.6)^(1/0.6) pooling
+docs/METRIC_PROVENANCE.md	0	29	output	distance; 0 = identical
+docs/METRIC_PROVENANCE.md	0	30	--metric	nlpd-iqa
+docs/METRIC_PROVENANCE.md	0	30	crate	in-tree crates/nlpd (iqa module)
+docs/METRIC_PROVENANCE.md	0	30	metric paper	""" — the dingkeyan93 IQA_pytorch configuration (NLPD(channels=1), alexhepburn nlpd-tensorflow lineage), NOT pyiqa and NOT the Laparra RGB reference"
+docs/METRIC_PROVENANCE.md	0	30	reference impl (validation oracle)	IQA_pytorch source mirrored at [local path] semantics replicated to med |Δ| 0.0026 / max 0.0067 vs the AIC-4 NLPD column (n=53)
+docs/METRIC_PROVENANCE.md	0	30	provenance	reference reimplementation (f32, pad-2 downsample phase, bilinear align_corners upsample, mean-of-RMS pooling)
+docs/METRIC_PROVENANCE.md	0	30	input convention	sRGB8 → BT.709 Y [0,1] re-quantized to the 8-bit grid (iqa::score_rgb_u8); iqa::score_y_f32 for caller-supplied planes
+docs/METRIC_PROVENANCE.md	0	30	output	distance; 0 = identical
+docs/METRIC_PROVENANCE.md	0	31	--metric	zensim
+docs/METRIC_PROVENANCE.md	0	31	crate	sibling zensim crate
+docs/METRIC_PROVENANCE.md	0	31	metric paper	—
+docs/METRIC_PROVENANCE.md	0	31	reference impl (validation oracle)	—
+docs/METRIC_PROVENANCE.md	0	31	provenance	in-house (ML-trained; not a reproduction target)
+docs/METRIC_PROVENANCE.md	0	31	input convention	sRGB8
+docs/METRIC_PROVENANCE.md	0	31	output	0–100
+docs/METRIC_PROVENANCE.md	0	32	--metric	zensim-gpu
+docs/METRIC_PROVENANCE.md	0	32	crate	zensim-gpu twin
+docs/METRIC_PROVENANCE.md	0	32	metric paper	—
+docs/METRIC_PROVENANCE.md	0	32	reference impl (validation oracle)	—
+docs/METRIC_PROVENANCE.md	0	32	provenance	in-house
+docs/METRIC_PROVENANCE.md	0	32	input convention	""""
+docs/METRIC_PROVENANCE.md	0	32	output	""""
+docs/METRIC_PROVENANCE.md	1	0	metric	cvvdp
+docs/METRIC_PROVENANCE.md	1	0	oracle	pycvvdp 0.5.7
+docs/METRIC_PROVENANCE.md	1	0	golden parity gate	≤ 1e-3 JOD
+docs/METRIC_PROVENANCE.md	1	0	observed worst	~1e-4 rel / 1e-3 JOD
+docs/METRIC_PROVENANCE.md	1	0	dataset reproduction (AIC-4, n=53 subset unless noted)	med 1.1e-4 / max 1.3e-3 JOD @ standard_fhd (n=53)
+docs/METRIC_PROVENANCE.md	1	1	metric	hdrvdp
+docs/METRIC_PROVENANCE.md	1	1	oracle	HDR-VDP 2.2.2 MATLAB
+docs/METRIC_PROVENANCE.md	1	1	golden parity gate	P_det 1e-4; JOD ~1e-2 cases
+docs/METRIC_PROVENANCE.md	1	1	observed worst	1.4e-5 P_det
+docs/METRIC_PROVENANCE.md	1	1	dataset reproduction (AIC-4, n=53 subset unless noted)	not reproduced (needs abs-nits config)
+docs/METRIC_PROVENANCE.md	1	2	metric	hdrvdp3
+docs/METRIC_PROVENANCE.md	1	2	oracle	HDR-VDP-3.0.7 MATLAB + jpeg-ai-qaf VDP3/ port
+docs/METRIC_PROVENANCE.md	1	2	golden parity gate	21-case golden corpus
+docs/METRIC_PROVENANCE.md	1	2	observed worst	1.6e-13 JOD worst |Q_JOD|
+docs/METRIC_PROVENANCE.md	1	2	dataset reproduction (AIC-4, n=53 subset unless noted)	published HDR_VDP_3 col NOT reproduced — we match MATLAB 3.0.7 exactly (3 pairs bit-equal at print precision); the column is an unrecovered run config — see DIVERGENCES
+docs/METRIC_PROVENANCE.md	1	3	metric	vmaf
+docs/METRIC_PROVENANCE.md	1	3	oracle	libvmaf 3.2.1 FFI
+docs/METRIC_PROVENANCE.md	1	3	golden parity gate	feats 1e-4, score 0.02
+docs/METRIC_PROVENANCE.md	1	3	observed worst	≪ gate
+docs/METRIC_PROVENANCE.md	1	3	dataset reproduction (AIC-4, n=53 subset unless noted)	VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 (S01 pt)
+docs/METRIC_PROVENANCE.md	1	4	metric	vif
+docs/METRIC_PROVENANCE.md	1	4	oracle	vifp_mscale.m
+docs/METRIC_PROVENANCE.md	1	4	golden parity gate	goldens f64
+docs/METRIC_PROVENANCE.md	1	4	observed worst	5e-13
+docs/METRIC_PROVENANCE.md	1	4	dataset reproduction (AIC-4, n=53 subset unless noted)	n/a (VIF col = vifvec — different algo, med 0.06)
+docs/METRIC_PROVENANCE.md	1	5	metric	vifvec
+docs/METRIC_PROVENANCE.md	1	5	oracle	vifvec.m via Octave
+docs/METRIC_PROVENANCE.md	1	5	golden parity gate	10 goldens < 1e-9
+docs/METRIC_PROVENANCE.md	1	5	observed worst	within gate
+docs/METRIC_PROVENANCE.md	1	5	dataset reproduction (AIC-4, n=53 subset unless noted)	med 1.9e-6 / max 6.3e-6 vs VIF col (n=54)
+docs/METRIC_PROVENANCE.md	1	6	metric	msssim
+docs/METRIC_PROVENANCE.md	1	6	oracle	ssim_mscale_new.m
+docs/METRIC_PROVENANCE.md	1	6	golden parity gate	15 Octave goldens
+docs/METRIC_PROVENANCE.md	1	6	observed worst	8.8e-6
+docs/METRIC_PROVENANCE.md	1	6	dataset reproduction (AIC-4, n=53 subset unless noted)	med 4e-4 vs libvmaf col / 1.2e-3 vs pyiqa col (n=53)
+docs/METRIC_PROVENANCE.md	1	7	metric	ssim-libvmaf
+docs/METRIC_PROVENANCE.md	1	7	oracle	libvmaf float_ssim FFI
+docs/METRIC_PROVENANCE.md	1	7	golden parity gate	≤ 2e-4 (vs vendored f85a8536, 5 cases 8b+10b)
+docs/METRIC_PROVENANCE.md	1	7	observed worst	≪ gate
+docs/METRIC_PROVENANCE.md	1	7	dataset reproduction (AIC-4, n=53 subset unless noted)	med 1.0e-6 / max 1.8e-5 vs SSIM col (n=53)
+docs/METRIC_PROVENANCE.md	1	8	metric	msssim-libvmaf
+docs/METRIC_PROVENANCE.md	1	8	oracle	libvmaf float_ms_ssim FFI
+docs/METRIC_PROVENANCE.md	1	8	golden parity gate	≤ 2e-4 (same harness)
+docs/METRIC_PROVENANCE.md	1	8	observed worst	≪ gate
+docs/METRIC_PROVENANCE.md	1	8	dataset reproduction (AIC-4, n=53 subset unless noted)	med 1.0e-6 / max 1.6e-5 vs MS-SSIM col (n=53)
+docs/METRIC_PROVENANCE.md	1	9	metric	iwssim
+docs/METRIC_PROVENANCE.md	1	9	oracle	Python-IW-SSIM f9de37c
+docs/METRIC_PROVENANCE.md	1	9	golden parity gate	~1e-4
+docs/METRIC_PROVENANCE.md	1	9	observed worst	within gate
+docs/METRIC_PROVENANCE.md	1	9	dataset reproduction (AIC-4, n=53 subset unless noted)	parent-band bug fixed 2026-09-26 — column reproduction now owned by iwssim-piq below
+docs/METRIC_PROVENANCE.md	1	10	metric	iwssim-piq
+docs/METRIC_PROVENANCE.md	1	10	oracle	jpeg-ai-qaf IW_SSIM ingress
+docs/METRIC_PROVENANCE.md	1	10	golden parity gate	— (same code path)
+docs/METRIC_PROVENANCE.md	1	10	observed worst	—
+docs/METRIC_PROVENANCE.md	1	10	dataset reproduction (AIC-4, n=53 subset unless noted)	med 3.9e-6 / max 2.6e-5 vs IW-SSIM col (n=54)
+docs/METRIC_PROVENANCE.md	1	11	metric	gmsd
+docs/METRIC_PROVENANCE.md	1	11	oracle	libgmsd de646c9a
+docs/METRIC_PROVENANCE.md	1	11	golden parity gate	1e-12 rel (map), 1e-14 mean
+docs/METRIC_PROVENANCE.md	1	11	observed worst	~1e-12
+docs/METRIC_PROVENANCE.md	1	11	dataset reproduction (AIC-4, n=53 subset unless noted)	mean 3.5e-7 / max 1.9e-6 (n=53)
+docs/METRIC_PROVENANCE.md	1	12	metric	psnrhvs
+docs/METRIC_PROVENANCE.md	1	12	oracle	psnrhvsm.m
+docs/METRIC_PROVENANCE.md	1	12	golden parity gate	1e-3 dB
+docs/METRIC_PROVENANCE.md	1	12	observed worst	≤ 4e-4 dB
+docs/METRIC_PROVENANCE.md	1	12	dataset reproduction (AIC-4, n=53 subset unless noted)	~7.6dB off (Daala variant — different algo, n=53)
+docs/METRIC_PROVENANCE.md	1	13	metric	psnrhvs-daala
+docs/METRIC_PROVENANCE.md	1	13	oracle	libvmaf psnr_hvs FFI
+docs/METRIC_PROVENANCE.md	1	13	golden parity gate	≤ 2e-4 dB (420 + 444 cases)
+docs/METRIC_PROVENANCE.md	1	13	observed worst	≪ gate
+docs/METRIC_PROVENANCE.md	1	13	dataset reproduction (AIC-4, n=53 subset unless noted)	combined med 1.1e-3 / max 4.5e-2 dB; Y med 1.3e-3 / max 8.6e-3; Cb 1.3e-2/8.0e-2; Cr 2.6e-3/1.3e-1 dB (n=53)
+docs/METRIC_PROVENANCE.md	1	14	metric	haarpsi
+docs/METRIC_PROVENANCE.md	1	14	oracle	haarpsi.m
+docs/METRIC_PROVENANCE.md	1	14	golden parity gate	5e-5
+docs/METRIC_PROVENANCE.md	1	14	observed worst	~1e-5
+docs/METRIC_PROVENANCE.md	1	14	dataset reproduction (AIC-4, n=53 subset unless noted)	med 8.4e-6 / max 5.3e-5 (n=53)
+docs/METRIC_PROVENANCE.md	1	15	metric	fsim/-y
+docs/METRIC_PROVENANCE.md	1	15	oracle	FR_FSIMc.m
+docs/METRIC_PROVENANCE.md	1	15	golden parity gate	5e-5
+docs/METRIC_PROVENANCE.md	1	15	observed worst	within gate
+docs/METRIC_PROVENANCE.md	1	15	dataset reproduction (AIC-4, n=53 subset unless noted)	med 2.5e-5 / max 1.7e-3 (n=53)
+docs/METRIC_PROVENANCE.md	1	16	metric	vsi
+docs/METRIC_PROVENANCE.md	1	16	oracle	VSI.m
+docs/METRIC_PROVENANCE.md	1	16	golden parity gate	1e-4
+docs/METRIC_PROVENANCE.md	1	16	observed worst	within gate
+docs/METRIC_PROVENANCE.md	1	16	dataset reproduction (AIC-4, n=53 subset unless noted)	med 9.6e-6 / max 1.1e-4 (n=53)
+docs/METRIC_PROVENANCE.md	1	17	metric	mad-iqa
+docs/METRIC_PROVENANCE.md	1	17	oracle	official MATLAB
+docs/METRIC_PROVENANCE.md	1	17	golden parity gate	13 goldens
+docs/METRIC_PROVENANCE.md	1	17	observed worst	rel: hi 2.4e-7, lo 1.8e-6
+docs/METRIC_PROVENANCE.md	1	17	dataset reproduction (AIC-4, n=53 subset unless noted)	not in AIC-4
+docs/METRIC_PROVENANCE.md	1	18	metric	mdctpsnr
+docs/METRIC_PROVENANCE.md	1	18	oracle	built dctpsnr binary (GCC -O3 -ffast-math, glibc 2.43, AVX2)
+docs/METRIC_PROVENANCE.md	1	18	golden parity gate	≤ 2e-4 dB on x86_64+GNU goldens (64×48 + all 8 (w−13)%8 classes), 1e-2 off-platform
+docs/METRIC_PROVENANCE.md	1	18	observed worst	≤ ~4e-6 dB
+docs/METRIC_PROVENANCE.md	1	18	dataset reproduction (AIC-4, n=53 subset unless noted)	med 4.0e-7 / max 1.13e-5 dB vs mDCT-PSNR col (n=53)
+docs/METRIC_PROVENANCE.md	1	19	metric	ssim2
+docs/METRIC_PROVENANCE.md	1	19	oracle	fast-ssim2 ↔ C++
+docs/METRIC_PROVENANCE.md	1	19	golden parity gate	bit-parity SIMD tiers
+docs/METRIC_PROVENANCE.md	1	19	observed worst	—
+docs/METRIC_PROVENANCE.md	1	19	dataset reproduction (AIC-4, n=53 subset unless noted)	med 6.3e-3 / max 5.5e-2 — version drift (n=53)
+docs/METRIC_PROVENANCE.md	1	20	metric	dssim
+docs/METRIC_PROVENANCE.md	1	20	oracle	dssim-core
+docs/METRIC_PROVENANCE.md	1	20	golden parity gate	upstream
+docs/METRIC_PROVENANCE.md	1	20	observed worst	—
+docs/METRIC_PROVENANCE.md	1	20	dataset reproduction (AIC-4, n=53 subset unless noted)	mean 2.5e-7 / max 6.5e-7 (n=53)
+docs/METRIC_PROVENANCE.md	1	21	metric	nlpd
+docs/METRIC_PROVENANCE.md	1	21	oracle	NLPD_Pytorch (authors' PyTorch)
+docs/METRIC_PROVENANCE.md	1	21	golden parity gate	1e-5 golden (97×99 pair)
+docs/METRIC_PROVENANCE.md	1	21	observed worst	within gate
+docs/METRIC_PROVENANCE.md	1	21	dataset reproduction (AIC-4, n=53 subset unless noted)	n/a — RGB/0.6-norm variant, ≈20.5× the NLPD column (different algo)
+docs/METRIC_PROVENANCE.md	1	22	metric	nlpd-iqa
+docs/METRIC_PROVENANCE.md	1	22	oracle	IQA_pytorch NLPD(channels=1) via numpy replica
+docs/METRIC_PROVENANCE.md	1	22	golden parity gate	1e-4 golden (f64 replica → f32 ops)
+docs/METRIC_PROVENANCE.md	1	22	observed worst	~4e-6
+docs/METRIC_PROVENANCE.md	1	22	dataset reproduction (AIC-4, n=53 subset unless noted)	med 2.6e-3 / max 6.7e-3 vs NLPD col, med-rel 2.63% (n=53) — residual is f32 op-order + torch bilinear edge detail
+docs/METRIC_PROVENANCE.md	2	0	AIC-4 column	CVVDP (standard_fhd)
+docs/METRIC_PROVENANCE.md	2	0	published impl	pycvvdp
+docs/METRIC_PROVENANCE.md	2	0	med|Δ|	1.1e-4
+docs/METRIC_PROVENANCE.md	2	0	max|Δ|	1.3e-3
+docs/METRIC_PROVENANCE.md	2	0	status	✅ strong at full quality range
+docs/METRIC_PROVENANCE.md	2	1	AIC-4 column	VMAF, VMAF-neg, ADM2, VIF_vmaf
+docs/METRIC_PROVENANCE.md	2	1	published impl	libvmaf v0.6.1
+docs/METRIC_PROVENANCE.md	2	1	med|Δ|	≤0.002 (S01 pt)
+docs/METRIC_PROVENANCE.md	2	1	max|Δ|	—
+docs/METRIC_PROVENANCE.md	2	1	status	✅
+docs/METRIC_PROVENANCE.md	2	2	AIC-4 column	PSNR, PSNR-Y, PSNR-YCbCr611
+docs/METRIC_PROVENANCE.md	2	2	published impl	RGB-MSE / rounded studio-Y / 6:1:1
+docs/METRIC_PROVENANCE.md	2	2	med|Δ|	≤0.006 (S01 pt)
+docs/METRIC_PROVENANCE.md	2	2	max|Δ|	—
+docs/METRIC_PROVENANCE.md	2	2	status	✅
+docs/METRIC_PROVENANCE.md	2	3	AIC-4 column	GMSD
+docs/METRIC_PROVENANCE.md	2	3	published impl	libgmsd lineage
+docs/METRIC_PROVENANCE.md	2	3	med|Δ|	2.8e-7
+docs/METRIC_PROVENANCE.md	2	3	max|Δ|	1.9e-6
+docs/METRIC_PROVENANCE.md	2	3	status	✅ essentially exact
+docs/METRIC_PROVENANCE.md	2	4	AIC-4 column	DSSIM
