@@ -1618,7 +1618,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Dreamsim => Some((-0.001, 1.001, 0.0)),
         // A-FINE is an unbounded signed quality score; no characterised
         // mean bounds or constant identity exist for this check.
-        MetricKind::Afine => None,
+        MetricKind::Afine | MetricKind::Ahiq | MetricKind::Dmm => None,
         // WD is a nonnegative, unbounded feature distortion; identical
         // inputs score exactly 0 in every column. Measured maxima: 1.50
         // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens

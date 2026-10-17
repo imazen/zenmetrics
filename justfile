@@ -1085,3 +1085,10 @@ palette-dispatch-receipts out:
 # Invented metadata only: sealed palette pool validation and declaration contracts.
 palette-pool-check:
     PYTHONPATH=scripts/jobsys python3 -m unittest scripts/jobsys/test_palette_plan.py scripts/jobsys/test_palette_pool_authority.py scripts/jobsys/test_budget_preflight.py
+
+# A source-closed E36 executor, built in the CI sibling-pin snapshot.
+e36-native-build snapshot target:
+    cd {{quote(snapshot)}} && cargo build --release --locked -p zenmetrics-cli --no-default-features --features png,jpeg,webp,avif,avif-svt,jxl,cpu-metrics,cpu-cvvdp,sweep,jobexec --target-dir {{quote(target)}} --message-format=json
+
+e36-native-local-test snapshot target:
+    cd {{quote(snapshot)}} && cargo test --release --locked -p zenmetrics-cli --no-default-features --features png,jpeg,webp,avif,avif-svt,jxl,cpu-metrics,cpu-cvvdp,sweep,jobexec --target-dir {{quote(target)}} --bin zenmetrics local_variant_requires_content_hash_and_remains_borrowed

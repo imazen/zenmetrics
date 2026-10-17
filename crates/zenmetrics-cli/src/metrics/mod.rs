@@ -1027,6 +1027,8 @@ impl MetricKind {
                 | MetricKind::Ckdn
                 | MetricKind::Afine
                 | MetricKind::Dreamsim
+                | MetricKind::Ahiq
+                | MetricKind::Dmm
                 | MetricKind::Arniqa
                 | MetricKind::Maniqa
                 | MetricKind::Liqe

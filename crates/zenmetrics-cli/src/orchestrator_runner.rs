@@ -556,6 +556,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::NlpdIqa
             // PieAPP uses its learned full-reference adapter directly.
             | CliMetricKind::Pieapp
+            | CliMetricKind::Ahiq
+            | CliMetricKind::Dmm
             // No-reference metrics (PIQE, NIQE, BRISQUE, and the learned
             // ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ,
             // WaDIQaM-NR) are routed through `nr::score`/`nn::score` +
