@@ -350,9 +350,10 @@ cli-feature-matrix:
         fi
     }
     for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
-             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+             gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu nn-webgpu; do
         run_combo "$f" -p zenmetrics-cli --no-default-features --features "$f"
     done
+    run_combo "zenmetrics-nn/ort-webgpu" -p zenmetrics-nn --features ort-webgpu
     run_combo bare -p zenmetrics-cli --no-default-features
     run_combo default -p zenmetrics-cli
     printf '%s\n' "---- $((total - fails))/$total combinations passed ----"
@@ -895,7 +896,10 @@ nn-port-compile-gate:
     gate fmt format_check
     gate ci-clippy {{just_executable()}} snap-cargo @ clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings -A deprecated -A clippy::excessive_precision -A clippy::approx_constant -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments -A clippy::doc_lazy_continuation -A clippy::if_same_then_else -A clippy::doc_overindented_list_items
     gate cli-clippy {{just_executable()}} snap-cargo @ clippy --keep-going -p zenmetrics-cli --features sweep,orchestrator,nn,nr -- -D warnings
+    gate cli-ort-clippy {{just_executable()}} snap-cargo @ clippy --keep-going -p zenmetrics-cli --features sweep,orchestrator,nn,nr,nn-ort -- -D warnings
+    gate cli-webgpu-clippy {{just_executable()}} snap-cargo @ clippy --keep-going -p zenmetrics-cli --features sweep,orchestrator,nn,nr,nn-webgpu -- -D warnings
     gate nn-clippy {{just_executable()}} snap-cargo @ clippy -p zenmetrics-nn --all-targets --features model-tests,ort -- -D warnings
+    gate nn-webgpu-clippy {{just_executable()}} snap-cargo @ clippy -p zenmetrics-nn --all-targets --features model-tests,ort-webgpu -- -D warnings
     gate browser {{just_executable()}} snap-cargo @ check -p zenmetrics-browser --all-targets
     gate nn-test timeout --kill-after=10 900 {{just_executable()}} snap-cargo @ test -p zenmetrics-nn
     gate browser-list {{just_executable()}} snap-cargo @ test -p zenmetrics-browser --lib listed_metrics_are_compiled_in

@@ -10,8 +10,9 @@
 //!   `wadiqam_fr_tid`, `wadiqam_nr_live`, `wadiqam_nr_tid`, and `dmm` (its own
 //!   gate — see `dmm_netlib_goldens`).
 //! - `ZENMETRICS_NN_LADDER`: the ladder PNGs the goldens were computed on.
-//! - `ZENMETRICS_NN_ENGINE`: `rten` or `ort-cuda` (needs the `ort` feature
-//!   and `ORT_DYLIB_PATH`).
+//! - `ZENMETRICS_NN_ENGINE`: `rten`, `ort-cuda` (needs the `ort` feature
+//!   and `ORT_DYLIB_PATH`) or `ort-webgpu` (needs the `ort-webgpu`
+//!   feature, `ORT_DYLIB_PATH` and `ZENMETRICS_NN_WEBGPU_EP_LIB`).
 //!
 //! PieAPP goldens use the official CUDA model with TF32 disabled; the CPU
 //! control differs by at most 4.8e-7 native units. Other models use CPU fp32.
@@ -65,6 +66,8 @@ fn engine() -> Engine {
         Ok("rten") => Engine::Rten,
         #[cfg(feature = "ort")]
         Ok("ort-cuda") => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        Ok("ort-webgpu") => Engine::OrtWebgpu,
         other => panic!("ZENMETRICS_NN_ENGINE must name a built engine, got {other:?}"),
     }
 }

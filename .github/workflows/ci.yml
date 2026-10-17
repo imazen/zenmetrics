@@ -418,7 +418,7 @@ jobs:
   # zenmetrics-cli feature-combination matrix: every supported
   # `--no-default-features --features <F>` shape, the bare
   # `--no-default-features` build, and the default build must `cargo check`.
-  # The local twin is `just cli-feature-matrix` (same 12-row list — keep the
+  # The local twin is `just cli-feature-matrix` (same 14-row list — keep the
   # two in sync). Plain `cargo --locked check` because CI has no lock
   # snapshot. Ubuntu-only, check-only (no tests), one job looping the rows.
   cli-feature-matrix:
@@ -442,7 +442,7 @@ jobs:
           set -uo pipefail
           fails=0
           for f in cpu-metrics sweep sweep,png sweep,hdr jobexec jobexec,hdr orchestrator \
-                   gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu; do
+                   gpu,gpu-cuda sweep,png,gpu,gpu-cuda gpu,gpu-wgpu nn-webgpu; do
             if cargo check --locked -p zenmetrics-cli --no-default-features --features "$f"; then
               printf 'PASS  %s\n' "$f"
             else
@@ -450,6 +450,12 @@ jobs:
               fails=$((fails + 1))
             fi
           done
+          if cargo check --locked -p zenmetrics-nn --features ort-webgpu; then
+            printf 'PASS  zenmetrics-nn/ort-webgpu\n'
+          else
+            printf 'FAIL  zenmetrics-nn/ort-webgpu\n'
+            fails=$((fails + 1))
+          fi
           if cargo check --locked -p zenmetrics-cli --no-default-features; then
             printf 'PASS  bare\n'
           else
@@ -462,5 +468,5 @@ jobs:
             printf 'FAIL  default\n'
             fails=$((fails + 1))
           fi
-          printf '%s\n' "---- $((12 - fails))/12 combinations passed ----"
+          printf '%s\n' "---- $((14 - fails))/14 combinations passed ----"
           [ "$fails" -eq 0 ]

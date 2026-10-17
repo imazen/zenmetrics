@@ -81,9 +81,10 @@ impl Arniqa {
         let backend = match engine {
             Engine::Rten => Backend::Trunk(engine::load(&dir.join("arniqa_trunk.onnx"), 1)?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Image(Box::new(engine::ort_engine::OrtCudaImage::load(
+            gpu => Backend::Image(Box::new(engine::ort_engine::OrtGpuImage::load(
                 &dir.join("arniqa_full.onnx"),
                 "arniqa",
+                gpu,
             )?)),
         };
         Ok(Self {

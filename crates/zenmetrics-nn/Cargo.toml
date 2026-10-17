@@ -17,6 +17,10 @@ rten = ["dep:rten", "dep:rten-tensor"]
 # ONNX Runtime (C++), loaded at run time from ORT_DYLIB_PATH. CUDA execution
 # provider with TF32 off. Fleet throughput engine; off by default.
 ort = ["dep:ort"]
+# ORT's WebGPU plugin execution provider (onnxruntime-ep-webgpu). The
+# provider shared library is registered at run time from
+# ZENMETRICS_NN_WEBGPU_EP_LIB; sessions forbid CPU fallback. Off by default.
+ort-webgpu = ["ort"]
 # Parity tests against upstream goldens. They need exported models in
 # ZENMETRICS_NN_MODEL_DIR; run them through `just nn-parity`.
 model-tests = []

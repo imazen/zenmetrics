@@ -11,8 +11,10 @@
 //! cargo run --release -p zenmetrics-nn --example nn_bench -- \
 //!     <model_dir> <ladder_dir> <out.tsv> [image=1415] [sizes=64,...,2048] [budget_s=4]
 //! ```
-//! Engine: `ZENMETRICS_NN_ENGINE` = `rten` (default) or `ort-cuda` (feature
-//! `ort`, needs `ORT_DYLIB_PATH`). Thread count: rten's pool (`RTEN_NUM_THREADS`).
+//! Engine: `ZENMETRICS_NN_ENGINE` = `rten` (default), `ort-cuda` (feature
+//! `ort`, needs `ORT_DYLIB_PATH`) or `ort-webgpu` (feature `ort-webgpu`,
+//! needs `ORT_DYLIB_PATH` + `ZENMETRICS_NN_WEBGPU_EP_LIB`). Thread count:
+//! rten's pool (`RTEN_NUM_THREADS`).
 
 use std::io::Write as _;
 use std::path::Path;
@@ -93,6 +95,8 @@ fn main() {
         "rten" => Engine::Rten,
         #[cfg(feature = "ort")]
         "ort-cuda" => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        "ort-webgpu" => Engine::OrtWebgpu,
         other => panic!("unknown or unbuilt engine {other}"),
     };
     let col: &'static str = match std::env::var("ZENMETRICS_NN_MODEL").as_deref() {

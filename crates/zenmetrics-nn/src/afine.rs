@@ -355,9 +355,10 @@ impl Afine {
         let backend = match engine {
             Engine::Rten => Backend::Trunk(engine::load(&dir.join("afine_trunk.onnx"), TAPS)?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join("afine_full.onnx"),
                 "afine",
+                gpu,
             )?)),
         };
         Ok(Self {

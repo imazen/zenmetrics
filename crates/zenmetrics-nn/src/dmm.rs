@@ -102,13 +102,12 @@ impl Dmm {
                 Backend::Trunk(engine::load(&dir.join("dmm_trunk.onnx"), channels.len())?)
             }
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => {
-                Backend::Trunk(Box::new(engine::ort_engine::OrtCudaTrunk::load_named(
-                    &dir.join("dmm_trunk.onnx"),
-                    "x",
-                    vec!["t3", "t4"],
-                )?))
-            }
+            gpu => Backend::Trunk(Box::new(engine::ort_engine::OrtGpuTrunk::load_named(
+                &dir.join("dmm_trunk.onnx"),
+                gpu,
+                "x",
+                vec!["t3", "t4"],
+            )?)),
         };
         Ok(Self {
             backend,

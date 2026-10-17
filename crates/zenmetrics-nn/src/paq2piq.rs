@@ -89,9 +89,9 @@ impl Paq2piq {
         let (body, head): (Box<dyn ImageGraph>, Box<dyn ImageGraph>) = match engine {
             Engine::Rten => (engine::load_image(&body)?, engine::load_image(&head)?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => (
-                Box::new(engine::ort_engine::OrtCudaImage::load(&body, "feats")?),
-                Box::new(engine::ort_engine::OrtCudaImage::load(&head, "score")?),
+            gpu => (
+                Box::new(engine::ort_engine::OrtGpuImage::load(&body, "feats", gpu)?),
+                Box::new(engine::ort_engine::OrtGpuImage::load(&head, "score", gpu)?),
             ),
         };
         Ok(Self {

@@ -143,9 +143,10 @@ impl Ahiq {
                 head: engine::load(&dir.join("ahiq_head.onnx"), 1)?,
             },
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join("ahiq_full.onnx"),
                 "ahiq",
+                gpu,
             )?)),
         };
         Ok(Self {

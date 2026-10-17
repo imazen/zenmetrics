@@ -725,6 +725,54 @@ and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
   upstream's batch size; chunk-vs-whole equivalence is unit-tested, scores are
   bit-identical by construction (concatenated inputs, per-patch outputs).
 
+## ort-webgpu engine (`Engine::OrtWebgpu`, feature `ort-webgpu`)
+
+A second ORT engine, running the same exported graphs on ONNX Runtime's
+WebGPU plugin EP (`libonnxruntime_providers_webgpu.so` from the
+version-matched `onnxruntime-ep-webgpu` package, registered from
+`ZENMETRICS_NN_WEBGPU_EP_LIB` — like `ORT_DYLIB_PATH`, the variable names
+trusted code that is dlopen'd into the process). Sessions set
+deterministic compute and forbid CPU fallback: a graph that leaves a
+node on the CPU fails to commit. Memory pattern stays ON — the CUDA-side
+arena-retention bug it is disabled for does not exist in this EP;
+measured identical peaks either way (receipt below).
+Full receipt:
+[`benchmarks/ort_webgpu_2026-10-17/`](benchmarks/ort_webgpu_2026-10-17/README.md).
+
+- **DIVERGES (capability):** five models cannot commit a session at all
+  because their graphs carry CPU-assigned host ops — `Cast`,
+  `ConstantOfShape`, `EyeLike`, `Gather`, `SequenceAt` shape/metadata
+  housekeeping that ORT will not place on the WebGPU EP and
+  `session.disable_cpu_ep_fallback` then rejects: **afine, arniqa, ckdn,
+  deepdc, musiq**. `from_dir` fails loudly at load — `Error::Engine` for
+  environment/registration problems, `Error::BadModel` when the graph
+  cannot commit.
+- **DIVERGES (capacity):** the fused pair graphs for **dists, lpips_vgg,
+  stlpips_vgg** exhaust a 16 GB RTX 4080's device memory at 2048² under
+  the WebGPU EP's allocation model (`vkAllocateMemory` →
+  `VK_ERROR_OUT_OF_DEVICE_MEMORY`) — **PARTIAL** support. Every scored
+  pair at ≤1024² matches the goldens: dists worst 1.132e-6 abs (1.2e-5
+  JND over printed pairs), lpips_vgg 5.96e-8 abs (3.1e-7 JND),
+  stlpips_vgg 2.96e-8 abs (4.5e-7 JND). The same graphs complete the full
+  64–2048² ladder on ort-cuda, whose allocator pools and reuses device
+  memory.
+- **PASS at the 1e-3-JND gate with bit-identical repeats (18 columns):**
+  lpips_alex 2.28e-6, lpips_squeeze 1.50e-6, stlpips_alex 2.57e-6,
+  dreamsim 1.35e-5, maniqa 8.35e-6, liqe 4.42e-5, hyperiqa 5.98e-6,
+  paq2piq 3.13e-5, wadiqam_fr_live 2.37e-6, wadiqam_fr_tid 5.09e-6,
+  wadiqam_nr_live 2.02e-7, wadiqam_nr_tid 6.81e-6, pieapp 9.19e-7,
+  wd_s1..s5 ≤ 2.5e-6 JND (2026-10-17, i265, RTX 4080 via Vulkan).
+  Together with the three PARTIAL columns and five LOADFAIL columns that
+  is the full 26-column inventory; per-pair receipts:
+  [`parity.tsv`](benchmarks/ort_webgpu_2026-10-17/parity.tsv).
+- **DIVERGES (selection):** the adapter is `ZENMETRICS_NN_WEBGPU_DEVICE`
+  (index into the EP's GPU-device list) else the best vendor-name rank
+  (NVIDIA > AMD/ATI > other); more than one equally-ranked GPU without
+  the pin is an `Error::Engine` naming every candidate, since a silent
+  pick between equals is not reproducible. The safe ort API exposes no
+  per-adapter discreteness flag — the rank and the pin are the
+  resolution.
+
 ## Maintenance rule
 
 Every metric port or reference-version bump updates this file **in the

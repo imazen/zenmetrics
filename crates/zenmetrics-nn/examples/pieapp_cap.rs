@@ -12,6 +12,8 @@ fn main() {
         "rten" => Engine::Rten,
         #[cfg(feature = "ort")]
         "ort-cuda" => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        "ort-webgpu" => Engine::OrtWebgpu,
         _ => panic!("unbuilt engine"),
     };
     let start = Instant::now();
