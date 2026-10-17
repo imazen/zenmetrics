@@ -1,4 +1,4 @@
-//! Isolated bisection experiment: right_sger_order; not qualified for shipping.
+//! Isolated bisection experiment: f64_norm; not qualified for shipping.
 //! DMM (Chen et al., "Debiased Mapping for Full-Reference Image Quality
 //! Assessment", IEEE TIP 2025; upstream `Baoliang93/DMM`, MIT, pip
 //! `DMM_PyTorch`). Parity target: the upstream package, CPU, fp32.
@@ -542,19 +542,10 @@ fn dlapy2(x: f32, y: f32) -> f32 {
 }
 
 fn dnrm2(x: &[f32]) -> f32 {
-    let (mut scale, mut ssq) = (0.0f32, 1.0f32);
-    for &xi in x {
-        if xi != 0.0 {
-            let a = xi.abs();
-            if scale < a {
-                ssq = 1.0 + ssq * (scale / a) * (scale / a);
-                scale = a;
-            } else {
-                ssq += (a / scale) * (a / scale);
-            }
-        }
-    }
-    scale * ssq.sqrt()
+    x.iter()
+        .map(|&v| f64::from(v) * f64::from(v))
+        .sum::<f64>()
+        .sqrt() as f32
 }
 
 /// DLARFG: householder reflector on (alpha; x). Returns (beta, tau); the
@@ -816,12 +807,10 @@ fn dlarf_right(r0: usize, c0: usize, x: &[f32], tau: f32, a: &mut [f32; 256]) {
         for (i, &xi) in x.iter().enumerate() {
             w += a[r * 16 + c0 + 1 + i] * xi;
         }
-        // SLARF('Right') calls SGER with X=work and Y=v: each
-        // column forms TEMP=(-tau)*v[c] before work[r]*TEMP.
-        a[r * 16 + c0] += w * -tau;
+        let tw = tau * w;
+        a[r * 16 + c0] -= tw;
         for (i, &xi) in x.iter().enumerate() {
-            let temp = -tau * xi;
-            a[r * 16 + c0 + 1 + i] += w * temp;
+            a[r * 16 + c0 + 1 + i] -= tw * xi;
         }
     }
 }
