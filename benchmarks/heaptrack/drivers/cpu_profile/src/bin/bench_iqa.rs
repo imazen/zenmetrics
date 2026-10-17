@@ -13,6 +13,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+#[path = "../executable_identity.rs"]
+mod executable_identity;
 #[path = "../optional_dvifm.rs"]
 mod optional_dvifm;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -225,7 +227,7 @@ fn main() -> Result<()> {
     } else {
         None
     };
-    let identity = json!({"commit":source,"binary_sha256":sha(&bytes),"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
+    let identity = json!({"commit":source,"binary_sha256":sha(&executable_identity::normalized(&bytes)?),"binary_identity":"pe-coff-timestamp-v1","host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
     let content = sha(&serde_json::to_vec(&identity)?);
     let root = output.join(&content);
     fs::create_dir_all(&root)?;
@@ -325,7 +327,7 @@ fn main() -> Result<()> {
                     skipped += 2;
                     continue;
                 }
-                let config = json!({"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"cpu_model":env::var("PROCESSOR_IDENTIFIER").unwrap_or_else(|_|env::consts::ARCH.into()),"gpu":null,"device":"cpu","impl":"zenmetrics","impl_version":source,"impl_binary_sha":identity["binary_sha256"],"engine":"native","metric_family":metric,"metric_name":metric,"size_name":size,"width":w,"height":h,"threads":count,"reference":fs::canonicalize(&r)?,"distorted":fs::canonicalize(&d)?,"pair_sha256":pair_sha,"input_sha256":hashes,"coverage_first":true,"required_samples":required(size),"sample_target_ns":1000000,"chunk_budget_ms":850000,"locked_process_accounting":true,"notes":"Portable CPU smoke; no OS affinity pin or contention qualification claimed"});
+                let config = json!({"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"cpu_model":env::var("PROCESSOR_IDENTIFIER").unwrap_or_else(|_|env::consts::ARCH.into()),"gpu":null,"device":"cpu","impl":"zenmetrics","impl_version":source,"impl_binary_sha":sha(&bytes),"engine":"native","metric_family":metric,"metric_name":metric,"size_name":size,"width":w,"height":h,"threads":count,"reference":fs::canonicalize(&r)?,"distorted":fs::canonicalize(&d)?,"pair_sha256":pair_sha,"input_sha256":hashes,"coverage_first":true,"required_samples":required(size),"sample_target_ns":1000000,"chunk_budget_ms":850000,"locked_process_accounting":true,"notes":"Portable CPU smoke; no OS affinity pin or contention qualification claimed"});
                 let attempt = root.join(format!("{metric}-{size}-{count}-{}.json", rows.len()));
                 fs::write(&attempt, serde_json::to_vec_pretty(&config)?)?;
                 let log = attempt.with_extension("log");
@@ -390,7 +392,7 @@ fn main() -> Result<()> {
     } else {
         Vec::new()
     };
-    let meta = json!({"identity":identity,"build_commit":source,"command":env::args().collect::<Vec<_>>(),"host":host,"hardware":{"os":env::consts::OS,"arch":env::consts::ARCH,"threads":all},"toolchains":{"rustc":version("rustc"),"cargo":version("cargo"),"cmake":version("cmake")},"competitors":{"native":"explicitly skipped","python":"not enabled"},"resource_policy":"Configured/local run-heavy per cell when present; otherwise plain portable child timeout, 1100 s; no plain-path memory cap claimed"});
+    let meta = json!({"identity":identity,"build_commit":source,"binary_file_sha256":sha(&bytes),"command":env::args().collect::<Vec<_>>(),"host":host,"hardware":{"os":env::consts::OS,"arch":env::consts::ARCH,"threads":all},"toolchains":{"rustc":version("rustc"),"cargo":version("cargo"),"cmake":version("cmake")},"competitors":{"native":"explicitly skipped","python":"not enabled"},"resource_policy":"Configured/local run-heavy per cell when present; otherwise plain portable child timeout, 1100 s; no plain-path memory cap claimed"});
     fs::write(root.join("run.meta"), serde_json::to_vec_pretty(&meta)?)?;
     let mut private_meta = meta.clone();
     private_meta["optional_dvifm"] = json!(optional);
