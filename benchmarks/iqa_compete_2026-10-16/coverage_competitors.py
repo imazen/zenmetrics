@@ -21,7 +21,7 @@ rows=[json.loads(s) for s in a.vmaf_ledger.read_text().splitlines()]
 actual={(r['metric_name'],r['size_name'],r['threads'],r['mode']) for r in rows}
 if actual!=expected:raise RuntimeError(f'libvmaf coverage controller stopped with {len(expected-actual)} cells missing; inspect its retained log')
 folder=P(__file__).resolve().parent
-commands={'libjxl':[sys.executable,str(folder/'native_run.py'),'libjxl',str(a.jxl.resolve()),str(a.rust.resolve()),str(a.pairs.resolve()),str(a.planes.resolve()),str((a.root/'libjxl').resolve()),'--sizes',','.join(sizes),'--coverage-first']}
+commands={'libjxl':[sys.executable,str(folder/'native_run.py'),'libjxl',str(a.jxl.resolve()),str(a.rust.resolve()),str(a.pairs.resolve()),str(a.planes.resolve()),str((a.root/'libjxl').resolve()),'--sizes',','.join(sizes),'--coverage-first','--reference-jsonl',str(a.references.resolve())]}
 for package in PYTHON_METRICS:
  interpreter=a.flip_python if package=='flip-evaluator' else a.python
  commands[package]=[sys.executable,str(folder/'run.py'),str(a.rust.resolve()),str(a.pairs.resolve()),str((a.root/package).resolve()),'--host','i265','--threads','1,all','--sizes',','.join(sizes),'--python-package',package,'--python-executable',str(interpreter.absolute()),'--reference-jsonl',str(a.references.resolve()),'--coverage-first']

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
 import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
+from references import load_references, same_pair_reference
 from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, admission_reason, prior_admission_reason
 P=pathlib.Path
 # Bounds are the existing parity gates, never fitted to these observations.
@@ -18,9 +19,11 @@ RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity
 def percentile(s,p):
  s=sorted(s);i=(len(s)-1)*p;lo=int(i);hi=min(lo+1,len(s)-1);return s[lo]+(s[hi]-s[lo])*(i-lo)
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--host',default='i265');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--reference-jsonl',type=P);p.add_argument('--host',default='i265');a=p.parse_args()
  a.root.mkdir(parents=True,exist_ok=True);(a.root/'logs').mkdir(exist_ok=True);(a.root/'cells').mkdir(exist_ok=True)
  meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine,impl_version={'libvmaf':'3.2.0 (vmaf-head-sys 0.2.0 vendored source)','libjxl':'0.12.0'}[a.engine])
+ if a.coverage_first and not a.reference_jsonl:raise ValueError('Coverage pass requires retained CPU references; no new Rust reference calls')
+ references=load_references([a.reference_jsonl]) if a.reference_jsonl else {}
  output=a.root/f'{a.host}.jsonl';done=set()
  if output.exists():
   for s in output.read_text().splitlines():
@@ -40,7 +43,8 @@ def main():
       row['notes']='Public in-process adapter does not expose native map buffers; no file-based map output is timed';append(output,row);continue
      target=coverage_samples(pair['size_name']) if a.coverage_first else 10
      compare=not a.coverage_first or (pair['size_name']=='cid22' and threads==int(a.threads.split(',')[0]) and mode=='score')
-     row.update(coverage_first=a.coverage_first,required_samples=target,parity_checked=compare)
+     cached=same_pair_reference(references,row) if a.coverage_first and compare else None
+     row.update(coverage_first=a.coverage_first,required_samples=target,parity_checked=compare,reference_jsonl=str(a.reference_jsonl) if a.reference_jsonl else None,reference_jsonl_sha256=sha(a.reference_jsonl) if a.reference_jsonl else None)
      native=pair if convention=='rgb' else next(r for r in planes if r['size_name']==pair['size_name'] and r['convention']==convention)
      base=a.pairs.parent if convention=='rgb' else a.planes.parent
      inputs={k:str((base/native[k]).resolve()) for k in paths}
@@ -51,7 +55,7 @@ def main():
      # One bounded process warms/times the native implementation, then probes
      # Rust outside its timer. Neither process start nor reference scoring is timed.
      env=os.environ.copy();env['IQA_HEAVY_LOCK_PATH']=str(P.home()/'tmp/i265-heavy.lock');env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
-     commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,*([[str(a.rust.resolve()),str(config.resolve())]] if compare else [])]))
+     commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,*([[str(a.rust.resolve()),str(config.resolve())]] if compare and not a.coverage_first else [])]))
      contention_tries=[]
      while True:
       before=os.getloadavg()
@@ -79,14 +83,17 @@ def main():
      samples=[(int(s.split()[1]),float(s.split()[2])) for s in result.stdout.splitlines() if s.startswith('SAMPLE ')]
      probes=[json.loads(s[len('IQA_PROBE '):]) for s in result.stdout.splitlines() if s.startswith('IQA_PROBE ')]
      version=next((s[8:] for s in result.stdout.splitlines() if s.startswith('VERSION ')),None);row['impl_version']=version
-     if result.returncode or (compare and not probes) or (len(samples)<target if a.coverage_first else (len(samples)<10 and sum(t for t,_ in samples)<3e9)):
+     if result.returncode or (compare and not probes and not a.coverage_first) or (len(samples)<target if a.coverage_first else (len(samples)<10 and sum(t for t,_ in samples)<3e9)):
       row.update(status=f'skipped:process_exit_{result.returncode}; samples={len(samples)}',n=len(samples));append(output,row);print('REFUSED',stem,row['status'],flush=True)
       if result.returncode not in [124,137]:raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
       continue
      import struct
-     reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0] if compare else None
-     values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference) if compare else None
-     row.update(reference_column=probes[0]["scores"][0][0] if compare else None,native_feature=adapter,n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if not compare or delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; the recorded required number of individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
+     available=compare and (cached is not None or bool(probes))
+     reference=cached['score'] if cached is not None else (struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0] if available else None)
+     column=cached.get('headline_declared_column') if cached is not None else (probes[0]['scores'][0][0] if available else None)
+     row.update(parity_checked=available,reference_kind='retained_cpu_timing' if cached is not None else ('fresh_probe' if available else 'not_requalified_in_coverage_pass'),reference_binary_sha=cached.get('impl_binary_sha') if cached is not None else None)
+     values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference) if available else None
+     row.update(reference_column=column,native_feature=adapter,n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if not available or delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; the recorded required number of individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
      if a.engine=='libjxl' and metric=='ssim2':row['notes']+=' ComputeSSIMULACRA2 has no worker-pool argument; the thread count is the declared budget, not a claim that this entry point uses all workers.'
      if metric=='psnrhvs-daala':row['notes']+=' Both APIs process full-size studio-601 YUV444 and compute all three channels; Y headline is compared.'
      if metric=='vif':row['notes']+=' libvmaf float_vif and MATLAB vifp are distinct variants; 8-bit studio-luma ingress also differs. Retain as variant comparison.';row['status']='variant_mismatch'
