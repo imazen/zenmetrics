@@ -135,7 +135,7 @@ def resource(text):
                 min_available_mib=int(match[4]), peak_load=float(match[5]))
 
 def _run_cell(args, row, models, *, restore_chunks=True):
-    if args.coverage_first:
+    if getattr(args,"coverage_first",False):
         row.update(coverage_first=True, required_samples=coverage_samples(row["size_name"]))
         restore_chunks=False
     row["locked_process_accounting"] = platform.system() == "Linux"
@@ -170,7 +170,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         mode=value['mode']
         if value['status'] not in ['ok','partial','variant_mismatch']:
             completed[mode]=value
-        elif value['status']=='partial' and args.coverage_first:
+        elif value['status']=='partial' and getattr(args,"coverage_first",False):
             value.update(status='skipped:scope_sample_limit', notes=value.get('notes','')+'; Coverage pass: single scope ended below required samples; no continuation')
             completed[mode]=value
         elif value['status']=='partial':
@@ -235,7 +235,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         if lease and process.returncode==124 and not fresh_hold:
             admission='batch_budget_exhausted'
         if lease and admission:lease.close()
-        if admission and args.coverage_first:
+        if admission and getattr(args,"coverage_first",False):
             refused=[]
             for mode in MODES:
                 value=dict(row,mode=mode,status='skipped:admission_'+admission,n=0,log_path=str(log),log_sha256=sha(log),resource=resource(text),notes='Coverage pass: resource admission refused this bounded cell')
@@ -293,13 +293,13 @@ def _run_cell(args, row, models, *, restore_chunks=True):
 
 def run_cell(args, row, models, *, restore_chunks=True):
     attempts=[]
-    for index in range(2 if args.coverage_first else 3):
+    for index in range(2 if getattr(args,"coverage_first",False) else 3):
         rows=_run_cell(args,dict(row),models,restore_chunks=restore_chunks if index==0 else False)
         attempts.append(rows)
         for value in rows:
             append(args.root/'contention-attempts.jsonl',dict(value,contention_try=index+1))
         if all(value.get('timing_quality')!='contaminated' for value in rows):break
-        if args.coverage_first and not any(value['status'] in ['ok','variant_mismatch'] and value.get('n',0)>=value.get('required_samples',10) for value in rows):break
+        if getattr(args,"coverage_first",False) and not any(value['status'] in ['ok','variant_mismatch'] and value.get('n',0)>=value.get('required_samples',10) for value in rows):break
         print('CONTENTION_RETRY',row['metric_name'],row['size_name'],index+1,flush=True)
         lease=getattr(args,'batch_lease',None)
         if lease:lease.close()
@@ -390,7 +390,7 @@ def main():
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:
         selected &= LEARNED
-    if args.coverage_first and not args.metrics and not args.gpu_runtime and args.engine != "ort-cuda" and not args.python_package:
+    if getattr(args,"coverage_first",False) and not args.metrics and not args.gpu_runtime and args.engine != "ort-cuda" and not args.python_package:
         selected -= {r["metric_name"] for r in inventory if r["gpu"]}
     selected-=excluded
     if not selected <= {r['metric_name'] for r in inventory}:
@@ -422,8 +422,8 @@ def main():
                         row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')
                     row.update({key: None for key in TIMING})
                     results=run_cell(args, row, models)
-                    mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) and (not args.coverage_first or (pair['size_name']=='cid22' and count==threads[0])) else False
-                    if meta['device']!='cpu' and mismatch and not args.coverage_first:
+                    mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) and (not getattr(args,"coverage_first",False) or (pair['size_name']=='cid22' and count==threads[0])) else False
+                    if meta['device']!='cpu' and mismatch and not getattr(args,"coverage_first",False):
                         # i265 requires reproduction: preserve the entire first
                         # attempt and rerun the same bounded cell, including timing.
                         for value in results:append(args.root/'gpu-mismatch-attempts.jsonl',value)
@@ -432,7 +432,7 @@ def main():
                         qualify(results)
                         for value in results:value['mismatch_first_attempt']=first_attempts
                     for result in results:
-                        if args.coverage_first:
+                        if getattr(args,"coverage_first",False):
                             result["parity_checked"] = bool((meta["device"]!="cpu" or args.python_package) and pair["size_name"]=="cid22" and count==threads[0])
                         append(output, result)
                         done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
