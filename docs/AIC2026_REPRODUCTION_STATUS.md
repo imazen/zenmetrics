@@ -28,6 +28,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `CAMBI` | `cambi` | native median 1.3e-4, max 0.178; settings unresolved | CAMBI options (window, top-k, thresholds, EOTF, bit depth, any scaling or crop) | [aic_more_2026-10-15](../benchmarks/aic_more_2026-10-15/README.md) |
 | `CW-SSIM` | `cw-ssim` | median 2.9e-7, max 1.1e-4, but no pair matches exactly (20 of 61 off by more than 1e-6); variant chosen in-sample | implementation (pyrtools version), levels, orientations, K, window | AIC2026_METRICS_AND_FITTING.md |
 | `WaDIQaM` | `wadiqam-fr-live`, `-fr-tid`, `-nr-live`, `-nr-tid` (official deepIQA weights) | none of the four checkpoints reproduces the column: published values lie in −0.039…0.018, ours on the checkpoints' own DMOS scales; best rank agreement is FR-LIVE at Spearman −0.74 (sign expected, ours is higher-is-worse); NR variants and NR dist−ref differences are weaker (61 crop pairs, 2026-10-17) | which WaDIQaM model and implementation produced the column (a retrained model such as pyiqa's?), its training set and output normalisation | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
+| `proposal-DVIFM`, `proposal-DVIFM-0.2`, `proposal-DVIFM-0.2-use_chroma` | `dvifmish` port mode (unpublished; ports of the author's four released C++ variants) | no released variant reproduces any column: best Spearman 0.941 (`port-lap-v0.3` vs `proposal-DVIFM-0.2`), 0.751 vs `proposal-DVIFM`, 0.865 vs `-use_chroma` (61 crop pairs, 2026-10-17); the releases were retuned on AIC2026 after the columns were computed | which DVIFM build, constants and JND map produced each column | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
 
 ## Close but not exact (minor; ask only if convenient)
 
@@ -54,8 +55,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `TOPIQ`, `TOPIQ-PIPAL` | weights are non-commercial and distributed through pyiqa, which this project does not use | an alternative source of the weights and their terms |
 | `MSSWD` | no upstream licence; weights only through pyiqa | licence and a weights source |
 | `AIMOS` | not identified in any public source | what AIMOS is, and its reference |
-| `proposal-IDFIQA` | code public without a licence | a licence for the reference code |
-| `proposal-DVIFM` (all variants) | the author's builds are not public; a private reimplementation is not wired into zenmetrics | which DVIFM version and options each column used |
+| `proposal-IDFIQA` | reference code has no licence. The authors' AIC-4 evaluation script reproduces the column (61 crop pairs: median \|Δ\| 4.7e-6, max 3.3e-4 JND, Spearman 1.0; 2026-10-17); a port is being written outside this repository | a licence for the reference code |
 | `HaarXYB-*`, `HaarY-*`, `HaarYCoCg-* deltaL1248` (site-only names) | unidentified, no published values | what these are |
 | `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (site-only names) | MSU VQMT implementation, no published values | none unless the values are published |
 
