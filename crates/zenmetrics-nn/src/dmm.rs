@@ -539,14 +539,52 @@ fn dlapy2(x: f32, y: f32) -> f32 {
     }
 }
 
-// SciPy's OpenBLAS SNRM2 kernel accumulates f32 squares in f64 and
-// rounds once at the return (nrm2_sse.S). The port's former f32 scaled
-// norm rounded each addition/division; that can change a degenerate basis.
+/// Reference-LAPACK 3.12.0 BLAS SNRM2: three f32 accumulators.
+/// Thresholds are the IEEE binary32 instances of LA_CONSTANTS' formulas.
 fn dnrm2(x: &[f32]) -> f32 {
-    x.iter()
-        .map(|&v| f64::from(v) * f64::from(v))
-        .sum::<f64>()
-        .sqrt() as f32
+    const TSML: f32 = f32::from_bits(64 << 23); // 2^-63
+    const TBIG: f32 = f32::from_bits(179 << 23); // 2^52
+    const SSML: f32 = f32::from_bits(202 << 23); // 2^75
+    const SBIG: f32 = f32::from_bits(51 << 23); // 2^-76
+    let (mut abig, mut amed, mut asml) = (0.0f32, 0.0f32, 0.0f32);
+    let mut notbig = true;
+    for &xi in x {
+        let ax = xi.abs();
+        if ax > TBIG {
+            let scaled = ax * SBIG;
+            abig += scaled * scaled;
+            notbig = false;
+        } else if ax < TSML {
+            if notbig {
+                let scaled = ax * SSML;
+                asml += scaled * scaled;
+            }
+        } else {
+            amed += ax * ax;
+        }
+    }
+    if abig > 0.0 {
+        if amed > 0.0 || amed.is_nan() {
+            abig += (amed * SBIG) * SBIG;
+        }
+        (1.0 / SBIG) * abig.sqrt()
+    } else if asml > 0.0 {
+        if amed > 0.0 || amed.is_nan() {
+            let amed = amed.sqrt();
+            let asml = asml.sqrt() / SSML;
+            let (ymin, ymax) = if asml > amed {
+                (amed, asml)
+            } else {
+                (asml, amed)
+            };
+            let ratio = ymin / ymax;
+            (ymax * ymax * (1.0 + ratio * ratio)).sqrt()
+        } else {
+            (1.0 / SSML) * asml.sqrt()
+        }
+    } else {
+        amed.sqrt()
+    }
 }
 
 /// DLARFG: householder reflector on (alpha; x). Returns (beta, tau); the
