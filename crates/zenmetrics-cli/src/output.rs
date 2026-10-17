@@ -411,4 +411,3 @@ fn render_folder_scores_json(
     writeln!(w)?;
     Ok(())
 }
-

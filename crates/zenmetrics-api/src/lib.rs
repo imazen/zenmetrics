@@ -113,12 +113,12 @@ pub mod zensim_profile;
 #[cfg(feature = "cubecl-types")]
 pub mod context;
 
+pub use alpha::{AlphaError, AlphaPolicy, AlphaStats};
 /// The cooperative-cancellation token crate the `*_with_stop` entry points
 /// take (`&dyn enough::Stop`; `enough::Unstoppable` for the uncancellable
 /// form) — re-exported so callers can name the trait without a direct
 /// dependency (zenmetrics#30).
 pub use enough;
-pub use alpha::{AlphaError, AlphaPolicy, AlphaStats};
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
 #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]

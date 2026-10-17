@@ -2718,8 +2718,7 @@ fn score_folder_tsv_and_json() {
         .expect("run cli");
 
     assert!(out_json.status.success());
-    let json_val: serde_json::Value =
-        serde_json::from_slice(&out_json.stdout).expect("valid json");
+    let json_val: serde_json::Value = serde_json::from_slice(&out_json.stdout).expect("valid json");
     assert_eq!(json_val["total_pairs"], 1);
     assert_eq!(json_val["successful_pairs"], 1);
     assert!(json_val["summary"]["ssim"]["mean"].is_f64());
@@ -2759,8 +2758,7 @@ fn score_folder_stem_matching_different_extensions() {
         "stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let json_val: serde_json::Value =
-        serde_json::from_slice(&out.stdout).expect("valid json");
+    let json_val: serde_json::Value = serde_json::from_slice(&out.stdout).expect("valid json");
     assert_eq!(json_val["successful_pairs"], 1);
 }
 
@@ -2786,7 +2784,11 @@ fn score_folder_mismatch_error() {
 
     assert!(!out.status.success());
     let err_str = String::from_utf8_lossy(&out.stderr);
-    assert!(err_str.contains("both --reference and --distorted must be files, or both must be directories"));
+    assert!(
+        err_str.contains(
+            "both --reference and --distorted must be files, or both must be directories"
+        )
+    );
 }
 
 #[test]
