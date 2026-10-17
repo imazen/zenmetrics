@@ -92,3 +92,11 @@ adapter = "competition"
 allow_absent = true
 columns = ["host", "os", "cpu_model", "arch", "simd_tier", "gpu", "metric_family", "metric_name", "impl", "impl_binary_sha", "impl_version", "engine", "adapter_sha256", "device", "threads", "mode", "size_name", "width", "height", "pair_sha256", "n", "median_ns", "p10_ns", "p90_ns", "mean_ns", "score", "ref_score", "abs_delta", "relative_delta", "status", "comparison_status", "parity_status", "reproduction_required", "load_before", "load_after", "resource", "resource_memory_method", "timed_seconds", "warmup_seconds", "parity_abs_bound", "parity_rel_bound", "parity_source", "reference_binary_sha", "reference_pair_sha256", "reference_threads", "ort_intra_threads_configured", "ort_inter_threads_configured", "ort_shared_library_sha256", "ort_disable_telemetry", "diagnostic_source_status"]
 note = "Progress snapshot; missing and refused cells retained."
+
+# Optional incoming public per-image observations. Values must be measured.
+[[dataset]]
+glob = "benchmarks/dashboard/quality-points/*.tsv"
+family = "quality"
+adapter = "quality-points"
+allow_absent = true
+columns = ["metric", "dataset", "pair", "mos", "score"]

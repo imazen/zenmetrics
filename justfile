@@ -1090,3 +1090,6 @@ dashboard-data-check:
 
 dashboard-smoke output="target/dashboard":
     python3 scripts/dashboard/check.py {{quote(output)}}
+
+dashboard-clean-check:
+    TMPDIR="$HOME/tmp" python3 scripts/dashboard/clean_check.py

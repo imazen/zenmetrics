@@ -32,6 +32,15 @@ class Contracts(unittest.TestCase):
             row['unexpected']=1;p.write_text(json.dumps([row]))
             with self.assertRaisesRegex(ValueError,'unknown competition'):list(adapt(p,dict(adapter='competition',columns=[k for k in row if k!='unexpected'])))
 
+    def test_quality_scatter_uses_measured_values(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'points.tsv'
+            p.write_text('metric\tdataset\tpair\tmos\tscore\nmetric\tpanel\timage1\t3.5\t0.25\n')
+            result=list(adapt(p,dict(adapter='quality-points',columns=['metric','dataset','pair','mos','score'])))[0]
+            self.assertEqual(result['mos'],3.5)
+            self.assertEqual(result['score'],0.25)
+            self.assertNotIn('srocc',result)
+
     def test_catalog_names_unique(self):
         rows=list(catalog());self.assertGreater(len(rows),100)
         self.assertEqual(len(rows),len({r['metric'] for r in rows}))

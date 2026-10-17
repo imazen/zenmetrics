@@ -22,7 +22,10 @@ The dashboard deploys after reviewed changes reach `master`.
 
 Unknown columns, malformed rows, invalid numbers, missing required registered
 inputs, and unknown adapters fail the build. New schemas require an adapter and
-rejection controls. Competitor progress schemas are registered in anticipation of
+rejection controls. Public per-image quality observations can use the registered
+`benchmarks/dashboard/quality-points/*.tsv` contract: exactly `metric`, `dataset`,
+`pair`, `mos`, `score`. Its measured rows populate the MOS scatter; the adapter
+does not invent aggregate correlations. Competitor progress schemas are registered in anticipation of
 that lane landing; no other lane's unreviewed data is copied into this branch.
 
 ## Stack and publication boundary

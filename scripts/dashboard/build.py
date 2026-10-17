@@ -52,11 +52,12 @@ def provenance(path, spec):
     paths += [path.parent / 'README.md']
     existing = list(dict.fromkeys(p for p in paths if p.is_file()))
     evidence = '\n'.join(p.read_text(errors='strict') for p in existing)
-    commits = re.findall(r'(?:build_commit|repo_commit[^:\n]*|commit_sha)[\"\s]*[:=][\"\s]*([0-9a-f]{40})', evidence)
+    commits = re.findall(r'(?:build_commit|repo_commit[^:\n]*|commit_sha)[\"\s]*[:=][\"\s]*([0-9a-f]{7,40})\b', evidence)
+    commands = re.findall(r'^run:\s*(.+)$', evidence, re.MULTILINE)
     dates = re.findall(r'20\d\d-\d\d-\d\d', str(path))
     return dict(source=path.relative_to(ROOT).as_posix(), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
                 commit=commits[0] if commits else 'missing', host=spec.get('host', 'missing'),
-                date=dates[0] if dates else 'missing', command=spec.get('command', 'missing'),
+                date=dates[0] if dates else 'missing', command=safe_text(spec.get('command', commands[0] if commands else 'missing')),
                 metadata=[p.relative_to(ROOT).as_posix() for p in existing],
                 note=spec.get('note', 'Historical observation; consult source conditions.'))
 
@@ -81,6 +82,11 @@ def adapt(path, spec):
                        scope=row['scope'], subset=row['key'], n=int(row['n']), status=row['status'],
                        srocc=number(row['srocc']), plcc=number(row['plcc']), krocc=number(row['krocc']),
                        ci='missing', mos=None, score=None)
+    elif adapter == 'quality-points':
+        for row in table(path, spec['columns']):
+            yield dict(metric=row['metric'], dataset=row['dataset'], pair=row['pair'],
+                       mos=number(row['mos']), score=number(row['score']), status='measured',
+                       scope='per-image', subset='all', ci='missing')
     elif adapter == 'competition':
         rows = json.loads(path.read_text()) if path.suffix == '.json' else [json.loads(l) for l in path.read_text().splitlines()]
         if not isinstance(rows, list):
