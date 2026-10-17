@@ -18,6 +18,8 @@ sample panels; an AIC sample is never labelled the full AIC2026 corpus. Original
 metric-scoring commits are not recoverable from those parquets. Their hashes,
 recorded columns and bootstrap method qualify the historical observations only.
 
+[Dataset citations](../README.md#datasets) apply to the statistics below.
+
 The quality view also includes all Margarine tables with SROCC/PLCC/KROCC,
 retaining experiment, normalization, arm, scope and subset. These are distinct
 conditions. Heatmap cells with conflicting values say `multiple scopes`; filter
@@ -57,7 +59,10 @@ color identifies thread count and square marks identify warm calls. Competition
 adapters retain sample count, p10/p90, peak RSS, CPU/GPU/SIMD identity and parity
 status. Status is an enum plus details; failed or unsupported observations remain
 rows with missing timings. Historical NaN/refusal tokens are explicit missing
-measurements, not zero-cost points.
+measurements, not zero-cost points. Two 2026-10-12 timing files contain an
+extra leading metric label on one row: their explicit adapter removes it only
+when it repeats the row metric. Other malformed rows fail. The rounded analysis
+file has a separate mixed-table/diagnostic adapter; raw inputs remain unchanged.
 
 Cost fits group by metric, implementation, host, OS, backend, engine, threads,
 mode, phase and content across sources. Repeated observations at each measured

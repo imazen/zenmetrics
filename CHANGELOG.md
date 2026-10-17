@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Qualify dashboard oracle/published comparisons, derive catalog evidence, classify uploads and normalize historical timing/parity panels (`e0ef83c7`, `844fb671`).
+
 - Add a registry-driven GitHub Pages benchmark dashboard with timing, agreement, historical human-quality panels and a CLI metric catalog (`97732303`).
 
 - Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits (`afd81b53`).
