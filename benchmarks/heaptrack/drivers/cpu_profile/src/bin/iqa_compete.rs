@@ -482,7 +482,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         if samples.len() < required_samples {
             row["status"] = json!("partial");
-            row["partial_reason"] = json!("chunk time budget reached before required zenbench rounds");
+            row["partial_reason"] =
+                json!("chunk time budget reached before required zenbench rounds");
             println!("IQA_PARTIAL {}", serde_json::to_string(&row)?);
         } else {
             println!("IQA_ROW {}", serde_json::to_string(&row)?);
