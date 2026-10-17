@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
-import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
+import argparse, atexit, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
+from batch import BatchLease
 from references import load_references, same_pair_reference
 from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, admission_reason, prior_admission_reason
 P=pathlib.Path
@@ -19,10 +20,12 @@ RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity
 def percentile(s,p):
  s=sorted(s);i=(len(s)-1)*p;lo=int(i);hi=min(lo+1,len(s)-1);return s[lo]+(s[hi]-s[lo])*(i-lo)
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--reference-jsonl',type=P);p.add_argument('--host',default='i265');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--reference-jsonl',type=P);p.add_argument('--batch-seconds',type=int,default=0);p.add_argument('--batch-reserve-seconds',type=int,default=120);p.add_argument('--host',default='i265');a=p.parse_args()
  a.root.mkdir(parents=True,exist_ok=True);(a.root/'logs').mkdir(exist_ok=True);(a.root/'cells').mkdir(exist_ok=True)
  meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine,impl_version={'libvmaf':'3.2.0 (vmaf-head-sys 0.2.0 vendored source)','libjxl':'0.12.0'}[a.engine])
  if a.coverage_first and not a.reference_jsonl:raise ValueError('Coverage pass requires retained CPU references; no new Rust reference calls')
+ lease=BatchLease(P.home()/'tmp/i265-heavy.lock',a.batch_seconds,a.root/'batch-holds.jsonl',reserve=a.batch_reserve_seconds) if a.batch_seconds else None
+ if lease:atexit.register(lease.close)
  references=load_references([a.reference_jsonl]) if a.reference_jsonl else {}
  output=a.root/f'{a.host}.jsonl';done=set()
  if output.exists():
@@ -58,18 +61,25 @@ def main():
      commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,*([[str(a.rust.resolve()),str(config.resolve())]] if compare and not a.coverage_first else [])]))
      contention_tries=[]
      while True:
+      actual_scope,_=lease.prepare(1100) if lease else (1100,True)
+      row.update(scope_seconds=1100,actual_scope_seconds=actual_scope,batch_hold_seconds=a.batch_seconds)
+      if lease:env['IQA_HEAVY_LOCK_FD']=str(lease.fd)
       before=os.getloadavg()
       child=[sys.executable,str(P(__file__).resolve()),'--child',str(commands_file.resolve())]
       cpus=sorted(os.sched_getaffinity(0));chosen=[2 if 2 in cpus else cpus[0]] if threads==1 else cpus
-      cmd=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s','1100s','taskset','-c',','.join(map(str,chosen)),'env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
+      cmd=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s',f'{actual_scope}s','taskset','-c',','.join(map(str,chosen)),'env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
       attempt_id=uuid.uuid4().hex[:12]
       monitor=a.root/'logs'/f'{stem}-{attempt_id}.contention.json'
       attempt_log=a.root/'logs'/f'{stem}-{attempt_id}.log'
       cmd=cmd[:2]+[sys.executable,str(P(__file__).with_name('contention.py').resolve()),str(monitor.resolve()),str(attempt_log.resolve()),'--']+cmd[2:]
+      if lease:cmd=cmd[2:]
       with attempt_log.open('x') as output_log:
-       completed=subprocess.run(cmd,env=env,stdout=output_log,stderr=subprocess.STDOUT)
+       completed=subprocess.run(cmd,env=env,stdout=output_log,stderr=subprocess.STDOUT,pass_fds=(lease.fd,) if lease else ())
       result=subprocess.CompletedProcess(cmd,completed.returncode,attempt_log.read_text(),'')
       if admission_reason(result.stdout+result.stderr):
+       if lease:lease.close()
+       if a.coverage_first:
+        accounting=json.loads(monitor.read_text());contention_tries.append((accounting,result,attempt_log));break
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
       accounting=json.loads(monitor.read_text())
       contention_tries.append((accounting,result,attempt_log))
@@ -84,8 +94,9 @@ def main():
      probes=[json.loads(s[len('IQA_PROBE '):]) for s in result.stdout.splitlines() if s.startswith('IQA_PROBE ')]
      version=next((s[8:] for s in result.stdout.splitlines() if s.startswith('VERSION ')),None);row['impl_version']=version
      if result.returncode or (compare and not probes and not a.coverage_first) or (len(samples)<target if a.coverage_first else (len(samples)<10 and sum(t for t,_ in samples)<3e9)):
-      row.update(status=f'skipped:process_exit_{result.returncode}; samples={len(samples)}',n=len(samples));append(output,row);print('REFUSED',stem,row['status'],flush=True)
-      if result.returncode not in [124,137]:raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
+      reason=admission_reason(result.stdout) or {124:f'timeout_{actual_scope}s',137:'memory_guard_or_limit',0:'scope_sample_limit'}.get(result.returncode,f'process_exit_{result.returncode}')
+      row.update(status=f'skipped:{reason}',n=len(samples),samples_ns=[t for t,_ in samples],sample_scores=[v for _,v in samples]);append(output,row);print('REFUSED',stem,row['status'],flush=True)
+      if result.returncode not in [0,124,137] and not admission_reason(result.stdout):raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
       continue
      import struct
      available=compare and (cached is not None or bool(probes))
