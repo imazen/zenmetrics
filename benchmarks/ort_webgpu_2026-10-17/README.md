@@ -125,9 +125,6 @@ than rten at 256² and ~8× at 1024², and cannot reach 2048² on the 16 GB
 adapter for this fused-pair graph. `warm` shows no benefit on either ort
 engine (whole graph per call, as documented).
 
-Bench TSVs committed beside this receipt, plus `parity_summary.tsv`
-(per model × size rollup of the parity run). The full 568-row per-pair
-receipt is over the generated-data commit cap — `parity.pointer.md`
-records the host/path/sha256 on i265. Campaign logs:
+Bench TSVs committed beside this receipt. Campaign logs:
 `~/tmp/webgpu-campaign/{parity-*,loadfail-*,bench-*}.log` +
 `~/tmp/webgpu-campaign/status` on i265.
