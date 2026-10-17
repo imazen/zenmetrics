@@ -7,6 +7,7 @@ source = "upstream-port"
 upstream = "https://github.com/Baoliang93/DMM"
 upstream_package = "pip `DMM_PyTorch` (DMM_PyTorch/DMM.py)"
 licence = "MIT (Baoliang Chen 2024)"
+numerical_licence = "BSD-3-Clause (LAPACK routines; ../../LICENSE-lapack)"
 notes = "Debiased Mapping for FR-IQA: VGG16 with L2 pooling, taps relu3_3/relu4_3 and unfold-16/stride-4 SVD head. The Rust head follows LAPACK's small-N SGESDD path in f32. Its basis-dependent wt term means algorithm correspondence alone does not establish score parity; per-row JND and pinned-floor coverage are recorded below."
 
 [weights]
@@ -42,7 +43,7 @@ regression_floor_policy = "Regenerating per-row residual floors requires owner a
 oracle = "Baoliang93/DMM upstream DMM(), CPU fp32, prepare_image_adt — MKL sgesdd draws"
 tolerance_jnd = 1e-3                 # TOL_JND: fraction of the KonJND-measured JND (jnd_scale.tsv)
 jnd = "0.191420 (KonJND-1k 1008 pairs, ort-cuda, 2026-10-16; JPEG 0.167535 / BPG 0.218804 — benchmarks/nn_konjnd_scale_2026-10-15.md)"
-results = "The reviewed engine panels contain 24 rows each: revision-1 classifications are rten 6 JND + 18 pinned and ort-cuda 7 JND + 17 pinned. A JND row is bounded by 1e-3 JND; a pinned row is an owner-approved regression floor at its recorded residual +5%, not a parity claim. Both use SciPy SGESDD on the engine's own ONNX taps. Revision-1 comparisons against upstream MKL are recorded separately: rten median 0.0016733615 / max 0.05674388 (1/24 within 1e-3 JND), ort-cuda median 0.00073373545 / max 0.17642495 (2/24). The corrected score-revision-2 measurements are being qualified in benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md. Single-patch agreement does not establish whole-panel parity."
+results = "The reviewed engine panels contain 24 rows each: revision-1 classifications are rten 6 JND + 18 pinned and ort-cuda 7 JND + 17 pinned. A JND row is bounded by 1e-3 JND; a pinned row is an owner-approved regression floor at its recorded residual +5%, not a parity claim. Both use SciPy SGESDD on the engine's own ONNX taps. Revision-1 comparisons against upstream MKL are recorded separately: rten median 0.0016733615 / max 0.05674388 (1/24 within 1e-3 JND), ort-cuda median 0.00073373545 / max 0.17642495 (2/24). Score revision 2 is currently unqualified against the frozen panels: rten 5/24 within canonical JND, 9 row-limit failures (2 classified JND); ort-cuda 3/24 within canonical JND, 12 failures (4 classified JND), all CUDA failures reproduced exactly. Newly qualifying rten 1415/333x448 is promoted with a tighter limit; no limit is increased or JND row demoted. Current MKL median/max: rten 0.0009349170242 / 0.07076929051, ort-cuda 0.0007776489317 / 0.1675974295. Evidence: benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md. Single-patch agreement does not establish whole-panel parity."
 
 [aic4]
 convention = "AIC-4 2026 publishes a DMM column (metrics_subset.csv); the column is not reproduced here and its evaluation pipeline remains undetermined."

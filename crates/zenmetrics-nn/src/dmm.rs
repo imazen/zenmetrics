@@ -33,7 +33,7 @@ const SCORE_REVISION: u32 = 2;
 const PATCH: usize = 16;
 const STRIDE: usize = 4;
 // Bound ingress before preprocessing or inference. The 4096² ladder remains
-// supported; aspect ratios above 32:1 are refused before allocating planes.
+// supported on 64-bit targets; aspect ratios above 32:1 are refused before allocating planes.
 const MAX_SIDE: usize = 4096;
 const MAX_PIXELS: usize = if usize::BITS >= 64 {
     16_777_216
