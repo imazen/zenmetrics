@@ -1388,6 +1388,13 @@ iqa-compete-landing-gates output snapshot *options:
 dashboard-regenerate:
     python3 scripts/dashboard/regenerate.py
 
-# Rebuild this commit, verify AIC inputs, run selected cells, and resume by content key.
+# Rust-only CPU path. Advanced GPU/NN/Python experiments are explicit opt-ins below.
 bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
+    cargo build --locked --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete --bin bench-iqa
+    cargo run --locked --release -p cpu-profile --features compete,metrics-parallel --bin bench-iqa -- '{{sizes}}' '{{metrics}}' {{options}}
+
+bench-iqa-advanced sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
     python3 benchmarks/iqa_compete_2026-10-16/bench.py '{{sizes}}' '{{metrics}}' {{options}}
+
+bench-iqa-check:
+    bash benchmarks/iqa_compete_2026-10-16/check_portable.sh

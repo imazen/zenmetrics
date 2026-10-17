@@ -262,11 +262,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             values.iter().map(|(_, v)| v.to_bits()).collect::<Vec<_>>(),
             "probe changed after model warmup"
         );
-        let mut probe = json!({"metric_name":name,"scores":values.iter().map(|(k,v)|(*k,format!("{:016x}",v.to_bits()))).collect::<Vec<_>>(),"model_preload_adapter":MODEL_PRELOAD_ADAPTER});
+        let probe = json!({"metric_name":name,"scores":values.iter().map(|(k,v)|(*k,format!("{:016x}",v.to_bits()))).collect::<Vec<_>>(),"model_preload_adapter":MODEL_PRELOAD_ADAPTER});
         #[cfg(iqa_compete_ingress)]
-        if let Some(path) = config["map_dump_dir"].as_str() {
-            probe["maps"] = maps::vmaf_probe_dump(r, d, Path::new(path))?;
-        }
+        let probe = if let Some(path) = config["map_dump_dir"].as_str() {
+            let mut value = probe;
+            value["maps"] = maps::vmaf_probe_dump(r, d, Path::new(path))?;
+            value
+        } else {
+            probe
+        };
         println!("IQA_PROBE {}", serde_json::to_string(&probe)?);
         return Ok(());
     }

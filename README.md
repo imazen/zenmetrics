@@ -1,5 +1,6 @@
 # zenmetrics [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenmetrics/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenmetrics/actions/workflows/ci.yml) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
 
+[Reproducible CPU benchmarks and per-OS installation](docs/BENCHMARKING.md).
 zenmetrics is a pure-Rust collection of full-reference image-quality metrics,
 with one CLI that scores any `(reference, distorted)` pair with any of them.
 
