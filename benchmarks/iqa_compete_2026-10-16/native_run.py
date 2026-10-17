@@ -68,7 +68,7 @@ def main():
       contention_tries.append((accounting,result,attempt_log))
       if accounting['contaminated'] and len(contention_tries)<3:continue
       accounting,result,selected_log=min(contention_tries,key=lambda item:item[0]['max_competing_interval_cores'])
-      row.update(contention=accounting,contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
+      row.update(contention=accounting,contention_peak_cores=accounting['max_competing_interval_cores'],contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
       break
      log=a.root/'logs'/f'{stem}.log';log.write_text(result.stdout+result.stderr)
      native_loads={s.split(' ',1)[0]:json.loads(s.split(' ',1)[1]) for s in result.stdout.splitlines() if s.startswith(('IQA_LOAD_BEFORE ','IQA_LOAD_AFTER '))}

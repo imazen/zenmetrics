@@ -261,6 +261,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
                 value['contention']=json.loads(contention_receipt.read_text())
                 value['timing_quality']='contaminated' if value['contention']['contaminated'] else 'clean'
                 value['contention_receipt']=str(contention_receipt)
+                value['contention_peak_cores']=value['contention']['max_competing_interval_cores']
             value['resource']=resource(text)
             value['resource_memory_method']=('macOS monitored process-tree RSS; no hard cgroup cap; availability is free+inactive+speculative page proxy' if platform.system()=='Darwin' else 'Linux run-heavy cgroup MemoryMax=16G when available; wrapper log states actual scope support')
             value['log_sha256']=sha(log);value['log_path']=str(log)

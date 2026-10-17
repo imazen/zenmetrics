@@ -23,6 +23,7 @@ def combine(pieces):
     monitored=[p.get('contention') for p in pieces]
     if all(monitored):
         out['contention']=dict(monitored[-1],max_competing_mean_cores=max(p['max_competing_mean_cores'] for p in monitored),max_competing_interval_cores=max(p['max_competing_interval_cores'] for p in monitored),contaminated=any(p['contaminated'] for p in monitored))
+        out['contention_peak_cores']=out['contention']['max_competing_interval_cores']
         out['timing_quality']='contaminated' if out['contention']['contaminated'] else 'clean'
     else:out['timing_quality']='legacy_unmonitored'
     out['chunks']=[{k:row.get(k) for k in ['attempt','n','score','log_path','log_sha256','load_before','load_after','resource']} for row in pieces]
