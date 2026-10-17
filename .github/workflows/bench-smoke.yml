@@ -31,11 +31,13 @@ jobs:
           echo "TMPDIR=$HOME/tmp/bench-smoke" >> "$GITHUB_ENV"
       - name: Clone pinned workspace dependencies
         run: bash scripts/ci/clone-siblings.sh
+      - name: Executable identity regression tests
+        run: cargo test --locked --release -p cpu-profile --features compete,metrics-parallel --bin bench-iqa executable_identity
       - name: Build and run two CPU metrics
         run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native
       - name: Preserve first Windows executable
         if: runner.os == 'Windows'
-        run: cp target/release/iqa-compete.exe "$HOME/tmp/bench-smoke/first.exe"
+        run: cp target/release/iqa-compete.exe target/first-iqa-compete.exe
       - name: Verify resume
         run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native | tee "$HOME/tmp/bench-smoke/resume.log"
       - name: Require no new timed cells
@@ -49,7 +51,7 @@ jobs:
         with:
           name: bench-smoke-${{ matrix.os }}
           path: |
-            ~/tmp/bench-smoke/first.exe
+            target/first-iqa-compete.exe
             target/release/iqa-compete.exe
             target/bench-iqa/**
             benchmarks/iqa_compete_2026-10-16/repro-results/**
