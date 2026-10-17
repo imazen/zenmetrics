@@ -28,7 +28,7 @@ use crate::{Engine, Error, za};
 use za::ResultMetricExt as _;
 
 const COLUMN: &str = "dmm";
-const SCORE_REVISION: u32 = 2;
+const SCORE_REVISION: u32 = 1;
 /// Patch kernel and stride of upstream's `nn.Unfold(16, stride=4)`.
 const PATCH: usize = 16;
 const STRIDE: usize = 4;
@@ -518,17 +518,16 @@ fn s1_gate(means_r: &[f32], means_d: &[f32]) -> f64 {
 //
 // The score's `wt` term consumes the basis inside degenerate singular
 // clusters. Solver implementations may choose different bases. This head
-// follows the reference-LAPACK small-N SGESDD path in f32, but agreement
-// is established per golden row, not inferred from the algorithm's name.
+// retains the arithmetic qualified by the frozen same-tap netlib panels.
+// Reference-source changes are accepted only after per-row measurement.
 // See models/dmm/card.toml for the measured JND/pinned-row counts.
 // Only the left (U) factor of the transposed patch is accumulated.
 //
 // `svd16(m)` therefore transposes `m` first (matching upstream's
 // `transpose(2,4)`) and returns `u` of the transposed patch.
 
-// SLAMCH('E') assumes rounding: EPSILON(0.0) / 2 = 2^-24.
-// Reference-LAPACK v3.12.0 INSTALL/slamch.f, lines 97-104.
-const D_EPS: f32 = f32::EPSILON * 0.5;
+// Frozen solver constant; changing it requires passing the full panels.
+const D_EPS: f32 = f32::EPSILON;
 const D_SAFMIN: f32 = f32::MIN_POSITIVE;
 
 fn dlapy2(x: f32, y: f32) -> f32 {
@@ -541,9 +540,6 @@ fn dlapy2(x: f32, y: f32) -> f32 {
     }
 }
 
-// Retain the classic scaled-f32 BLAS norm convention used by the
-// qualified baseline. The f64 and modern three-accumulator experiments
-// reassign degenerate bases and fail existing JND rows; see the receipt.
 fn dnrm2(x: &[f32]) -> f32 {
     let (mut scale, mut ssq) = (0.0f32, 1.0f32);
     for &xi in x {
@@ -598,32 +594,58 @@ fn dlarfg(alpha: f32, x: &mut [f32]) -> (f32, f32) {
     (beta, tau)
 }
 
-/// SLARTG, reference-LAPACK 3.12.0: nonnegative cosine and r signed
-/// like f. SLARTGP instead forces r positive and is not SBDSQR's routine.
-fn dlartg(f: f32, g: f32) -> (f32, f32, f32) {
-    let f1 = f.abs();
-    let g1 = g.abs();
+/// DLARTGP: scaled safe Givens rotation. Returns (cs, sn, r).
+fn dlartgp(f: f32, g: f32) -> (f32, f32, f32) {
+    let safmn2 = 2f32.powi(((D_SAFMIN / D_EPS).ln() / 2f32.ln() / 2.0) as i32);
+    let safmx2 = 1.0 / safmn2;
     if g == 0.0 {
-        return (1.0, 0.0, f);
+        return (1.0f32.copysign(f), 0.0, f.abs());
     }
     if f == 0.0 {
-        return (0.0, 1.0f32.copysign(g), g1);
+        return (0.0, 1.0f32.copysign(g), g.abs());
     }
-    let safmax = 1.0 / D_SAFMIN;
-    let rtmin = D_SAFMIN.sqrt();
-    let rtmax = (safmax / 2.0).sqrt();
-    if f1 > rtmin && f1 < rtmax && g1 > rtmin && g1 < rtmax {
-        let d = (f * f + g * g).sqrt();
-        let r = d.copysign(f);
-        (f1 / d, g / r, r)
+    let (mut f1, mut g1) = (f, g);
+    let scale = f1.abs().max(g1.abs());
+    let (cs, sn, mut r);
+    if scale >= safmx2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale >= safmx2 && count < 20 {
+            count += 1;
+            f1 *= safmn2;
+            g1 *= safmn2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmx2;
+        }
+    } else if scale <= safmn2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale <= safmn2 {
+            count += 1;
+            f1 *= safmx2;
+            g1 *= safmx2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmn2;
+        }
     } else {
-        let u = safmax.min(D_SAFMIN.max(f1).max(g1));
-        let fs = f / u;
-        let gs = g / u;
-        let d = (fs * fs + gs * gs).sqrt();
-        let r = d.copysign(f);
-        (fs.abs() / d, gs / r, r * u)
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
     }
+    if r < 0.0 {
+        return (-cs, -sn, -r);
+    }
+    (cs, sn, r)
 }
 
 /// DLAS2: singular values of the 2x2 lower-triangular [f 0; g h].
@@ -793,12 +815,10 @@ fn dlarf_right(r0: usize, c0: usize, x: &[f32], tau: f32, a: &mut [f32; 256]) {
         for (i, &xi) in x.iter().enumerate() {
             w += a[r * 16 + c0 + 1 + i] * xi;
         }
-        // SLARF('Right') calls SGER with X=work and Y=v: each
-        // column forms TEMP=(-tau)*v[c] before work[r]*TEMP.
-        a[r * 16 + c0] += w * -tau;
+        let tw = tau * w;
+        a[r * 16 + c0] -= tw;
         for (i, &xi) in x.iter().enumerate() {
-            let temp = -tau * xi;
-            a[r * 16 + c0 + 1 + i] += w * temp;
+            a[r * 16 + c0 + 1 + i] -= tw * xi;
         }
     }
 }
@@ -839,25 +859,30 @@ fn dgebd2(a: &mut [f32; 256], d: &mut [f32; 16], e: &mut [f32; 15], tq: &mut [f3
     }
 }
 
-/// SORMBR('Q','L','N') -> SORM2R: apply the stored GEBD2 reflectors
-/// directly to the bidiagonal left vectors. SGESDD uses this path rather
-/// than materializing Q and multiplying Q*Ub, which rounds differently.
-fn sorm2r_q(a: &[f32; 256], tq: &[f32; 16], u: &mut [f32; 256]) {
+/// DORG2R/dorgbr 'Q': build Q1 = H_0·...·H_15 in place, column-wise.
+/// `a` holds the dgebd2 storage (reflector tails below the diagonal).
+fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
     for i in (0..16).rev() {
         let tau = tq[i];
-        if tau == 0.0 {
-            continue;
+        if i < 15 {
+            a[i * 16 + i] = 1.0;
+            for c in (i + 1)..16 {
+                let mut w = a[i * 16 + c];
+                for r in (i + 1)..16 {
+                    w += a[r * 16 + i] * a[r * 16 + c];
+                }
+                a[i * 16 + c] -= tau * w;
+                for r in (i + 1)..16 {
+                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
+                }
+            }
         }
-        for c in 0..16 {
-            let mut w = u[i * 16 + c];
-            for r in (i + 1)..16 {
-                w += a[r * 16 + i] * u[r * 16 + c];
-            }
-            let temp = -tau * w;
-            u[i * 16 + c] += temp;
-            for r in (i + 1)..16 {
-                u[r * 16 + c] += a[r * 16 + i] * temp;
-            }
+        for r in (i + 1)..16 {
+            a[r * 16 + i] *= -tau;
+        }
+        a[i * 16 + i] = 1.0 - tau;
+        for r in 0..i {
+            a[r * 16 + i] = 0.0;
         }
     }
 }
@@ -1063,12 +1088,12 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 let mut oldcs = 1.0;
                 let mut oldsn = 1.0;
                 for i in (ll - 1)..(m - 1) {
-                    let (csn, sn, r) = dlartg(d[i] * cs, e[i]);
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i]);
                     cs = csn;
                     if i > ll - 1 {
                         e[i - 1] = oldsn * r;
                     }
-                    let (ocs, osn, dd) = dlartg(oldcs * r, d[i + 1] * sn);
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i + 1] * sn);
                     oldcs = ocs;
                     oldsn = osn;
                     d[i] = dd;
@@ -1096,12 +1121,12 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 let mut oldsn = 1.0;
                 for i in (ll..m).rev() {
                     // i 0-based from m-1 down to ll
-                    let (csn, sn, r) = dlartg(d[i] * cs, e[i - 1]);
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i - 1]);
                     cs = csn;
                     if i < m - 1 {
                         e[i] = oldsn * r;
                     }
-                    let (ocs, osn, dd) = dlartg(oldcs * r, d[i - 1] * sn);
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i - 1] * sn);
                     oldcs = ocs;
                     oldsn = osn;
                     d[i] = dd;
@@ -1129,7 +1154,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 (d[ll - 1].abs() - shift) * (1.0f32.copysign(d[ll - 1]) + shift / d[ll - 1]);
             let mut g = e[ll - 1];
             for i in (ll - 1)..(m - 1) {
-                let (cosr, sinr, r) = dlartg(f, g);
+                let (cosr, sinr, r) = dlartgp(f, g);
                 if i > ll - 1 {
                     e[i - 1] = r;
                 }
@@ -1137,7 +1162,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 e[i] = cosr * e[i] - sinr * d[i];
                 g = sinr * d[i + 1];
                 d[i + 1] *= cosr;
-                let (cosl, sinl, r) = dlartg(f, g);
+                let (cosl, sinl, r) = dlartgp(f, g);
                 d[i] = r;
                 f = cosl * e[i] + sinl * d[i + 1];
                 d[i + 1] = cosl * d[i + 1] - sinl * e[i];
@@ -1165,7 +1190,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
             let mut f = (d[m - 1].abs() - shift) * (1.0f32.copysign(d[m - 1]) + shift / d[m - 1]);
             let mut g = e[m - 2];
             for i in (ll..m).rev() {
-                let (cosr, sinr, r) = dlartg(f, g);
+                let (cosr, sinr, r) = dlartgp(f, g);
                 if i < m - 1 {
                     e[i] = r;
                 }
@@ -1173,7 +1198,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 e[i - 1] = cosr * e[i - 1] - sinr * d[i];
                 g = sinr * d[i - 1];
                 d[i - 1] *= cosr;
-                let (cosl, sinl, r) = dlartg(f, g);
+                let (cosl, sinl, r) = dlartgp(f, g);
                 d[i] = r;
                 f = cosl * e[i - 1] + sinl * d[i - 1];
                 d[i - 1] = cosl * d[i - 1] - sinl * e[i - 1];
@@ -1248,8 +1273,8 @@ fn dlasdq(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
     }
 }
 
-/// SVD of a 16×16 patch matrix via LAPACK GEBD2/BDSDC/ORM2R
-/// stages (the `gesdd` path for n=16). `m` is the patch in natural
+/// SVD of a 16×16 patch matrix via the LAPACK dgebd2/dorg2r/dbdsqr
+/// pipeline (the `gesdd` path for n=16). `m` is the patch in natural
 /// (y,x) layout; upstream feeds `Mᵀ` to `torch.svd`, so this transposes
 /// first and returns `u` of the transposed matrix — the patch's own V.
 fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
@@ -1263,11 +1288,27 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
     let mut e = [0f32; 15];
     let mut tq = [0f32; 16];
     dgebd2(&mut a, &mut d, &mut e, &mut tq);
-    // Keep the reflector tails for SORMBR after the bidiagonal solve.
-    // SBDSDC takes the N <= SMLSIZ (25) SLASDQ path BEFORE scaling.
-    // At N=16 its bidiagonal must therefore remain unscaled.
-    let mut ds = d;
-    let mut es = e;
+    // a now holds reflector tails below diag; build Q1 in place
+    dorg2r_q(&mut a, &tq); // a <- Q1
+    // dbdsdc scale
+    let orgnrm = d
+        .iter()
+        .fold(0.0f32, |m, &x| m.max(x.abs()))
+        .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
+    if orgnrm == 0.0 {
+        let mut s = [0f32; 16];
+        let u = a; // Q1 (identity for zero matrix)
+        s.copy_from_slice(&d);
+        return (u, s);
+    }
+    let mut ds = [0f32; 16];
+    let mut es = [0f32; 15];
+    for i in 0..16 {
+        ds[i] = d[i] / orgnrm;
+    }
+    for i in 0..15 {
+        es[i] = e[i] / orgnrm;
+    }
     let mut ub = [0f32; 256];
     for i in 0..16 {
         ub[i * 16 + i] = 1.0;
@@ -1291,8 +1332,22 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             }
         }
     }
-    sorm2r_q(&a, &tq, &mut ub);
-    (ub, ds)
+    // U = Q1 @ Ub ; s = ds * orgnrm
+    let mut u = [0f32; 256];
+    for i in 0..16 {
+        for j in 0..16 {
+            let mut acc = 0.0;
+            for r in 0..16 {
+                acc += a[i * 16 + r] * ub[r * 16 + j];
+            }
+            u[i * 16 + j] = acc;
+        }
+    }
+    let mut s = [0f32; 16];
+    for i in 0..16 {
+        s[i] = ds[i] * orgnrm;
+    }
+    (u, s)
 }
 
 #[cfg(test)]
@@ -1408,14 +1463,6 @@ mod tests {
             err.error().kind(),
             za::ErrorKind::Stopped(StopReason::Cancelled)
         );
-    }
-
-    #[test]
-    fn lartg_preserves_reference_sign_convention() {
-        assert_eq!(dlartg(-3.0, 4.0), (0.6, -0.8, -5.0));
-        assert_eq!(dlartg(-3.0, 0.0), (1.0, 0.0, -3.0));
-        assert_eq!(dlartg(0.0, -4.0), (0.0, -1.0, 4.0));
-        assert_eq!(D_EPS, 2f32.powi(-24));
     }
 
     /// np.linalg.svd references on a fixed full-rank 16×16 matrix —

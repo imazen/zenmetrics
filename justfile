@@ -712,9 +712,9 @@ nn-parity model_dir ladder engine="rten" features="model-tests" models="lpips_al
 # (models/dmm/dmm_goldens_netlib_<engine>.tsv via examples/dmm_tap_dump +
 # models/dmm/gen_netlib_goldens.py); the MKL-draw dmm_goldens.tsv deltas
 # are printed as a recorded measurement, not asserted.
-nn-parity-dmm model_dir ladder engine="rten" features="model-tests":
+nn-parity-dmm model_dir ladder engine="rten" features="model-tests" revision="@":
     ZENMETRICS_NN_MODEL_DIR="$(realpath '{{model_dir}}')" ZENMETRICS_NN_LADDER="$(realpath '{{ladder}}')" ZENMETRICS_NN_ENGINE='{{engine}}' ZENMETRICS_NN_MODELS='dmm' \
-        {{just_executable()}} snap-cargo @ test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
+        {{just_executable()}} snap-cargo '{{revision}}' test --release -p zenmetrics-nn --features '{{features}}' --test parity -- --nocapture --test-threads=1
 
 # Produces candidate floors in model_dir; reviewing/committing a replacement
 # of models/dmm/dmm_goldens_netlib_*.tsv requires owner approval.
@@ -742,6 +742,25 @@ nn-dmm-tap-identity model_dir ladder baseline output:
         done
     done
     echo 'DMM tap identity: all eight NPY files are byte-identical'
+
+# One immutable source, both native engines, all 48 frozen golden rows.
+# Outer caller supplies the shared lock and a sub-20-minute run-heavy limit.
+nn-dmm-bisect-panel revision output model_dir ladder:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    failed=0
+    mkdir -p "$(dirname '{{output}}')"
+    for engine in rten ort-cuda; do
+        features=model-tests
+        if [ "$engine" = ort-cuda ]; then features=model-tests,ort; fi
+        if timeout --kill-after=10 900 {{just_executable()}} nn-parity-dmm '{{model_dir}}' '{{ladder}}' "$engine" "$features" '{{revision}}' > '{{output}}'-$engine.log 2>&1; then
+            echo "PANEL_PASS $engine {{revision}}"
+        else
+            echo "PANEL_FAIL $engine {{revision}}"
+            failed=1
+        fi
+    done
+    exit "$failed"
 
 nn-dmm-oracle-info python:
     '{{python}}' -I benchmarks/nn_port_2026-10-15/dmm_oracle_info.py
