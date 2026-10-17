@@ -61,7 +61,7 @@ class WallCapExceeded(RuntimeError):
 def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
     """The registered per-cell wall cap in seconds, or None for a program with no E33 package."""
     e36_path = program / "benchmarks/e36_fit_contract_2026-10-17.json"
-    if e36_path.is_file() and ("--local-smoke-budget" in argv or (program / "bounded_smoke_policy.json").exists()
+    if e36_path.is_file() and ((program / "bounded_smoke_policy.json").exists()
                                or argv[0] not in ("v2_lodo_mlp.py", "v2_confirm_fit.py")):
         raise ValueError("E36 mixed smoke policy/request refused before launch")
     policy_path = program / "bounded_smoke_policy.json"
@@ -111,6 +111,9 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
         from e36_fit_contract import bind
         meta = json.loads((program / "build_meta.json").read_text())
         bind(argv, matches[0], meta["files"])
+        from e36_fit_contract import smoke_policy
+        smoke=smoke_policy(argv,matches[0])
+        if smoke is not None:return smoke['wall_cap_sec']
     cap = matches[0].get("wall_cap_sec")
     if type(cap) is not int or cap <= 0:
         raise ValueError("E33 variant lacks a registered positive wall cap")

@@ -6,13 +6,28 @@ from pathlib import Path
 
 PACKAGE = 'benchmarks/e36_fit_contract_2026-10-17.json'
 ARMS = {'tv0-c': 0., 'tv1-c': 1., 'tv10-c': 10.}
+SMOKE = {'schema':'e36-memory-smoke-v1','epochs':2,'pairs_per_epoch':128,'wall_cap_sec':900,'installable':False}
+
+
+def smoke_policy(argv,contract):
+    """Only a distinct archive-bound diagnostic variant permits a smoke."""
+    from qualified_fit_contract import argument
+    policy=contract.get('e36_memory_smoke')
+    requested='--local-smoke-budget' in argv
+    if policy is None:
+        if requested:raise ValueError('E36 full-budget variant refuses smoke')
+        return None
+    if policy!=SMOKE or not requested or argument(argv,'--local-smoke-budget')!='2:128':
+        raise ValueError('E36 diagnostic smoke policy/budget differs')
+    return policy
 
 
 def bind(argv, contract, files):
     from qualified_fit_contract import argument
     e = contract['e36']
+    smoke_policy(argv,contract)
     if (argument(argv, '--e36-arm') != e['arm'] or e['arm'] not in ARMS
-            or '--local-smoke-budget' in argv or contract['epochs'] != 120
+            or contract['epochs'] != 120
             or contract['pairs_per_epoch'] != 50000 or contract['selected_epoch'] != 119
             or argument(argv, '--e36-tv-contract-sha256') != e['contract_sha256']
             or argument(argv, '--e36-base-filter-sha256') != e['base_filter_sha256']
@@ -89,7 +104,8 @@ def qualify_output(program, dest, kind, cell, result):
     checkpoint = Path(result['selected_bake'])
     if checkpoint.parent != dest/'refit' or sha(checkpoint) != result['selected_bake_sha256']:
         raise ValueError('E36 raw checkpoint path/hash differs')
-    if verify_training(result, checkpoint, kind, expected, inspector) != 'registered-fit':
+    execution='local-smoke' if expected.get('e36_memory_smoke')==SMOKE else 'registered-fit'
+    if verify_training(result, checkpoint, kind, expected, inspector) != execution:
         raise ValueError('E36 checkpoint qualification failed')
     binding_path = dest/'e36-model-binding.json'
     binding = json.loads(binding_path.read_text())
@@ -102,9 +118,9 @@ def qualify_output(program, dest, kind, cell, result):
         raise ValueError('E36 withheld fit unexpectedly exports a packed pilot')
     if (binding['raw_checkpoint_sha256'] != sha(checkpoint) or binding['packed_model_sha256'] != packed_sha
             or binding['program_sha256'] != kind['program_sha']
-            or binding['arm'] != expected['e36']['arm'] or binding['selected_epoch'] != 119):
+            or binding['arm'] != expected['e36']['arm'] or binding['selected_epoch'] != (1 if execution=='local-smoke' else 119)):
         raise ValueError('E36 packed/raw projection differs from qualified checkpoint')
-    receipt = dict(schema='e36-qualified-checkpoint-v1', execution_contract='registered-fit',
+    receipt = dict(schema='e36-qualified-checkpoint-v1', execution_contract=execution,
         cell=cell, program_sha256=kind['program_sha'], data_sha256=kind['data_sha'], argv_sha256=kind['argv_sha'],
         result_sha256=sha(dest/'result.json'), raw_checkpoint_sha256=sha(checkpoint), packed_model_sha256=packed_sha,
         model_binding_sha256=sha(binding_path), inspector_sha256=sha(inspector),

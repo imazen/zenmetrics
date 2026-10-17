@@ -16,6 +16,23 @@ import pack_fit_program
 
 
 class E36Contract(unittest.TestCase):
+    def test_diagnostic_smoke_requires_distinct_frozen_variant(self):
+        base=dict(epochs=120,pairs_per_epoch=50000,selected_epoch=119,
+            e36=dict(arm='tv10-c',contract_sha256='b'*64,base_filter_sha256='c'*64,trainer_sha256='a'*64))
+        argv=['v2_confirm_fit.py','--e36-arm','tv10-c','--e36-tv-contract-sha256','b'*64,'--e36-base-filter-sha256','c'*64]
+        files={'bin/zensim_mlp_train':'a'*64}
+        smoke=argv+['--local-smoke-budget','2:128']
+        with self.assertRaises(ValueError):e.bind(smoke,base,files)
+        diagnostic=base|dict(e36_memory_smoke=copy.deepcopy(e.SMOKE))
+        e.bind(smoke,diagnostic,files)
+        with self.assertRaises(ValueError):e.bind(argv,diagnostic,files)
+        for field,bad in [('epochs',3),('pairs_per_epoch',129),('wall_cap_sec',901),('installable',True)]:
+            changed=copy.deepcopy(diagnostic);changed['e36_memory_smoke'][field]=bad
+            with self.assertRaises(ValueError):e.bind(smoke,changed,files)
+        with self.assertRaises(ValueError):e.bind(smoke[:-1]+['1:128'],diagnostic,files)
+        # A diagnostic policy does not excuse a different final scientific recipe.
+        with self.assertRaises(ValueError):e.bind(smoke,diagnostic|dict(selected_epoch=118),files)
+
     def test_mask_derivation_preserves_existing_checkpoint_checks(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d); fixture = test_strict_fit_harvest.StrictHarvest(); cell = fixture.cell(root)
