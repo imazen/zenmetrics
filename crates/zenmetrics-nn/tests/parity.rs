@@ -347,6 +347,70 @@ fn matches_upstream() {
     }
 }
 
+/// Validate the entire reviewed panel before any inference starts.
+fn validate_dmm_panel<'a>(
+    netlib: &'a str,
+    mkl: &std::collections::HashMap<(String, String), f64>,
+) -> Vec<&'a str> {
+    let mut lines = netlib
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'));
+    assert_eq!(lines.next(), Some("image\tsize\tdmm\ttol\tkind\tresidual"));
+    let rows: Vec<_> = lines.collect();
+    let mut seen = std::collections::HashSet::new();
+    for &line in &rows {
+        let f: Vec<_> = line.split('\t').collect();
+        assert_eq!(f.len(), 6);
+        let key = (f[0].to_string(), f[1].to_string());
+        assert!(mkl.contains_key(&key), "extra netlib row {key:?}");
+        assert!(seen.insert(key), "duplicate netlib row");
+        let score: f64 = f[2].parse().unwrap();
+        let tol: f64 = f[3].parse().unwrap();
+        let residual: f64 = f[5].parse().unwrap();
+        assert!(score.is_finite() && tol.is_finite() && tol >= 0.0);
+        assert!(residual.is_finite() && residual >= 0.0);
+        match f[4] {
+            "jnd" => assert!(tol <= 1e-3 * jnd("dmm")),
+            "pinned" => assert!(tol <= 1.05 * residual + 1e-12),
+            other => panic!("unknown DMM golden kind {other}"),
+        }
+    }
+    assert!(!rows.is_empty());
+    assert_eq!(
+        seen.len(),
+        mkl.len(),
+        "missing netlib rows from dmm_goldens.tsv"
+    );
+    rows
+}
+
+#[test]
+fn dmm_panel_rejects_coverage_and_floor_changes() {
+    let mkl = std::collections::HashMap::from([(("sample".into(), "128".into()), 1.0)]);
+    let header = "image\tsize\tdmm\ttol\tkind\tresidual\n";
+    let row = "sample\t128\t1.0\t0.0001\tjnd\t0.00001\n";
+    assert_eq!(validate_dmm_panel(&format!("{header}{row}"), &mkl).len(), 1);
+    for bad in [
+        String::new(),         // missing row
+        format!("{row}{row}"), // duplicate row
+        row.replace("sample", "extra"),
+        row.replace("0.0001", "0.001"), // JND budget growth
+        row.replace("jnd", "pinned"),   // residual budget growth
+        row.replace("0.0001", "NaN"),
+        row.replace("0.0001", "inf"),
+        row.replace("0.00001", "NaN"),
+        row.replace("jnd", "unknown"),
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                validate_dmm_panel(&format!("{header}{bad}"), &mkl);
+            })
+            .is_err(),
+            "accepted invalid panel: {bad}"
+        );
+    }
+}
+
 /// DMM's gate: `dmm_goldens_netlib_<engine>.tsv` — scipy `sgesdd` f32 head
 /// scored on this engine's own taps (`models/dmm/gen_netlib_goldens.py` +
 /// `examples/dmm_tap_dump.rs`). The score's `wt` term consumes the
@@ -364,22 +428,20 @@ fn dmm_netlib_goldens() {
     let list = std::env::var("ZENMETRICS_NN_MODELS")
         .expect("ZENMETRICS_NN_MODELS must be set (run via `just nn-parity-dmm`)");
     if !list.split(',').any(|s| s.trim() == "dmm") {
+        eprintln!("dmm_netlib_goldens: skipped (dmm not selected in ZENMETRICS_NN_MODELS)");
         return;
     }
     let model_dir = env_dir("ZENMETRICS_NN_MODEL_DIR");
     let ladder = env_dir("ZENMETRICS_NN_LADDER");
     let ladder_ns = PathBuf::from(format!("{}-nonsquare", ladder.display()));
     let mut m = Dmm::from_dir(&model_dir, engine()).expect("load dmm");
-    let eng = std::env::var("ZENMETRICS_NN_ENGINE")
-        .unwrap()
-        .replace('-', "_");
-    let netlib_path = model_dir.join(format!("dmm_goldens_netlib_{eng}.tsv"));
-    let netlib = std::fs::read_to_string(&netlib_path).unwrap_or_else(|e| {
-        panic!(
-            "{}: {e} — run examples/dmm_tap_dump + models/dmm/gen_netlib_goldens.py",
-            netlib_path.display()
-        )
-    });
+    // Regression floors are reviewed source artifacts, not mutable model-dir files.
+    let netlib = match engine() {
+        Engine::Rten => include_str!("../models/dmm/dmm_goldens_netlib_rten.tsv"),
+        #[cfg(feature = "ort")]
+        Engine::OrtCuda => include_str!("../models/dmm/dmm_goldens_netlib_ort_cuda.tsv"),
+        other => panic!("no reviewed DMM goldens for {other:?}"),
+    };
     // Same row set as the netlib file: MKL draws are the recorded oracle.
     let mkl: std::collections::HashMap<(String, String), f64> =
         std::fs::read_to_string(model_dir.join("dmm_goldens.tsv"))
@@ -397,15 +459,19 @@ fn dmm_netlib_goldens() {
     // measured solver-drift residual (+5% floor) because even same-tap
     // scipy-vs-transliteration draws diverge past the gate on
     // deep-null-heavy inputs.
+    let mut seen = std::collections::HashSet::new();
     let mut checked = 0;
+    let mut failures = Vec::new();
     let mut pinned = 0;
     let mut worst_jnd = 0.0f64;
-    for line in netlib
-        .lines()
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .skip(1)
-    {
+    let mut mkl_errors = Vec::new();
+    for line in validate_dmm_panel(netlib, &mkl) {
         let f: Vec<&str> = line.split('\t').collect();
+        assert_eq!(
+            f.len(),
+            6,
+            "DMM golden schema must include recorded residual"
+        );
         let (stem, size, want, row_tol, kind): (&str, &str, f64, f64, &str) = (
             f[0],
             f[1],
@@ -413,6 +479,23 @@ fn dmm_netlib_goldens() {
             f[3].parse().unwrap(),
             f[4],
         );
+        let residual: f64 = f[5].parse().expect("recorded residual");
+        assert!(want.is_finite() && row_tol.is_finite() && row_tol >= 0.0);
+        assert!(residual.is_finite() && residual >= 0.0);
+        match kind {
+            "jnd" => assert!(
+                row_tol <= 1e-3 * jnd("dmm"),
+                "jnd tolerance exceeds canonical gate"
+            ),
+            "pinned" => assert!(
+                row_tol <= 1.05 * residual + 1e-12,
+                "pinned tolerance exceeds approved residual +5%"
+            ),
+            _ => panic!("unknown DMM golden kind {kind}"),
+        }
+        let key = (stem.to_string(), size.to_string());
+        assert!(mkl.contains_key(&key), "extra netlib row {key:?}");
+        assert!(seen.insert(key), "duplicate netlib row {stem} {size}");
         let dir = if size.contains('x') {
             &ladder_ns
         } else {
@@ -429,26 +512,41 @@ fn dmm_netlib_goldens() {
         let mkl_err = mkl
             .get(&(stem.to_string(), size.to_string()))
             .map(|m| (got - m).abs());
+        mkl_errors.push(mkl_err.expect("matching MKL golden"));
         if kind == "jnd" {
             worst_jnd = worst_jnd.max(err);
         } else {
             pinned += 1;
         }
         eprintln!(
-            "dmm {stem} {size}: got {got:.9} netlib {want:.9} |d| {err:.3e} ({kind}, tol {row_tol:.3e}) vs-mkl {:?}",
+            "dmm {stem} {size}: got {got:.17e} netlib {want:.17e} |d| {err:.3e} ({kind}, tol {row_tol:.3e}) vs-mkl {:?}",
             mkl_err
         );
-        assert!(
-            err <= row_tol,
-            "dmm {stem} {size}: |{got} - {want}| = {err:e} > {row_tol:e} ({kind})"
-        );
+        if !err.is_finite() || err > row_tol {
+            failures.push(format!(
+                "dmm {stem} {size}: |{got} - {want}| = {err:e} > {row_tol:e} ({kind})"
+            ));
+        }
         checked += 1;
     }
-    assert!(checked > 0, "{} had no rows", netlib_path.display());
-    eprintln!(
-        "dmm: {checked} pairs vs netlib-sgesdd — {} at 1e-3 JND (worst {worst_jnd:.3e}), {pinned} pinned solver-drift rows",
-        checked - pinned
+    assert!(checked > 0, "netlib goldens had no rows");
+    assert_eq!(
+        seen.len(),
+        mkl.len(),
+        "missing netlib rows from dmm_goldens.tsv"
     );
+    mkl_errors.sort_by(f64::total_cmp);
+    let median = (mkl_errors[(checked - 1) / 2] + mkl_errors[checked / 2]) / 2.0;
+    eprintln!(
+        "dmm vs MKL: median |d| {median:.9e}, max {:.9e}",
+        mkl_errors[checked - 1]
+    );
+    eprintln!(
+        "dmm: {checked} pairs vs netlib-sgesdd — {} at 1e-3 JND (worst {worst_jnd:.3e} = {:.3e} JND), {pinned} pinned solver-drift rows",
+        checked - pinned,
+        worst_jnd / jnd("dmm")
+    );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
