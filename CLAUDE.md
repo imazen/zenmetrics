@@ -1693,7 +1693,9 @@ Epsilon and ORG2R-order changes pass all limits but worsen 18 and 24 of the
 48 residuals, respectively; removing small-N scaling fails eight frozen limits. Those
 three changes are rejected. SLARTG passes every limit but worsens 26 of
 the 48 residuals and is also rejected. Direct SORM2R fails eight limits
-and worsens 25 residuals; it is rejected. Three candidates remain unmeasured.
+and worsens 25 residuals; it is rejected. Right-SGER order fails twenty
+limits, including five original JND rows, and worsens 26 residuals. It is
+also rejected. Only the two norm candidates remain unmeasured.
 Source identities, complete rows, resource receipts and historical experiments
 are linked from [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md)
 and [the per-change table](benchmarks/nn_port_2026-10-15/dmm_bisect_results_2026-10-17.md).
