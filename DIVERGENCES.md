@@ -638,8 +638,8 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   `just nn-parity-dmm` asserts the port against per-engine
   netlib-`sgesdd` goldens (`dmm_goldens_netlib_{rten,ort_cuda}.tsv`,
   `models/dmm/gen_netlib_goldens.py` on `examples/dmm_tap_dump`
-  same-engine taps — the ~100x tap-noise amplification rules out
-  torch-tap goldens). Rows the transliteration tracks at 1e-3 JND gate
+  same-engine taps, isolating the solver from trunk differences).
+  Rows the transliteration tracks at 1e-3 JND gate
   there; rows whose netlib-vs-port draws drift past the gate are pinned
   at their measured residual +5% (`kind=pinned` in the TSV) — a
   regression floor, not a parity claim. The MKL comparison is printed
@@ -652,7 +652,7 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   with the candidate. The active arithmetic and classifications are restored
   to the frozen revision-1 baseline; individual changes are being measured.
   No original limit is increased and no original JND row is demoted. See
-  [the correction audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md),
+  [the solver audit](benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md),
   `models/dmm/card.toml`, and `benchmarks/dmm_aic_probe/`.
 
 ## PieAPP sampling and official entry point (2026-10-16)
