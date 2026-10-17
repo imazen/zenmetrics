@@ -1,0 +1,9 @@
+Date: 2026-10-17
+Host: i265
+Captured source: 16af89c1fb81 (restored frozen solver; score revision 1).
+Command: just nn-dmm-tap-identity <models> <ladder> <original-taps> <fresh-output>
+Case: 1415/128, both native engines, reference/distorted, both VGG taps.
+Outcome: all eight NPY files byte-identical to the original oracle inputs.
+Log: ~/tmp/nn-port-scratch/fix-tap-identity.log
+Resource receipt: run-heavy: done rc=0 9s | peak-RSS 0.97GiB | min-avail 21284MiB | peak-load 5.89
+This input control does not claim whole-panel score parity.

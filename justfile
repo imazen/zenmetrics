@@ -817,7 +817,7 @@ nn-port-compile-gate:
 
 # Syntax-check portable Python probes without importing their model dependencies.
 nn-port-python-check:
-    PYTHONPYCACHEPREFIX="$HOME/tmp/nn-port-scratch/pycache" python3 -m py_compile benchmarks/ahiq_aic_probe/ahiq_aic_probe.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants2.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench_gpu.py benchmarks/dmm_aic_probe/dmm_aic_probe.py benchmarks/nn_port_2026-10-15/dmm_fix_summary.py benchmarks/nn_port_2026-10-15/dmm_oracle_info.py crates/zenmetrics-nn/models/dmm/gen_netlib_goldens.py
+    PYTHONPYCACHEPREFIX="$HOME/tmp/nn-port-scratch/pycache" python3 -m py_compile benchmarks/nn_port_2026-10-15/dmm_bisect_sources.py benchmarks/nn_port_2026-10-15/dmm_bisect_summary.py benchmarks/ahiq_aic_probe/ahiq_aic_probe.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants.py benchmarks/nn_aic2026_crosscheck_2026-10-15/deepdc_variants2.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench.py benchmarks/nn_runtime_shootout_2026-10-14/scripts/bench_gpu.py benchmarks/dmm_aic_probe/dmm_aic_probe.py benchmarks/nn_port_2026-10-15/dmm_fix_summary.py benchmarks/nn_port_2026-10-15/dmm_oracle_info.py crates/zenmetrics-nn/models/dmm/gen_netlib_goldens.py
 
 # Advisory quality scan against pinned siblings, using the installed ignored kit.
 # Run under the same shared lock and bounded run-heavy wrapper as compile gates.
