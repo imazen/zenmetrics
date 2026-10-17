@@ -8,10 +8,10 @@ def load_references(paths):
             value=json.loads(line)
             if (value['impl']=='zenmetrics' and value['device']=='cpu'
                     and value['mode']=='score' and value['status']=='ok'):
-                key=(value['metric_name'],value['size_name'],value['threads'],value['pair_sha256'])
+                key=(value['host'],value['os'],value['metric_name'],value['size_name'],value['threads'],value['pair_sha256'])
                 references[key]=value
     return references
 
 def same_pair_reference(references,row):
-    return references.get((row['metric_name'].removesuffix('-gpu'),row['size_name'],
+    return references.get((row['host'],row['os'],row['metric_name'].removesuffix('-gpu'),row['size_name'],
                            row['threads'],row['pair_sha256']))

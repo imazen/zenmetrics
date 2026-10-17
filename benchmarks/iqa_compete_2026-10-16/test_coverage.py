@@ -6,7 +6,7 @@ class Coverage(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory(dir=P.home()/'tmp');self.addCleanup(self.temp.cleanup);self.root=P(self.temp.name)
         (self.root/'inventory.json').write_text(json.dumps([dict(metric_name='fixture',gpu=False)]))
         (self.root/'pairs.json').write_text(json.dumps([dict(size_name='fixture',width=2,height=2)]))
-        row=dict(impl='zenmetrics',metric_name='fixture',device='cpu',size_name='fixture',threads=1,width=2,height=2,pair_sha256='pixels')
+        row=dict(host='fixture',os='Linux-fixture',impl='zenmetrics',metric_name='fixture',device='cpu',size_name='fixture',threads=1,width=2,height=2,pair_sha256='pixels')
         self.options=[]
         self.rows=[row|dict(mode='score',status='ok',n=10),row|dict(mode='score+map',status='unsupported',notes='No map API')]
     def run_gate(self):

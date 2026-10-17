@@ -139,7 +139,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
     pieces={mode:[] for mode in MODES}
     completed={}
     chunk_ledger=args.root/'chunk-attempts.jsonl'
-    identity=['metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256','ort_disable_telemetry']
+    identity=['host','os','metric_name','size_name','threads','device','pair_sha256','impl_binary_sha','engine','model_dir','scope_seconds','chunk_budget_ms','sample_target_ns','ort_shared_library_sha256','ort_disable_telemetry']
     def retain(value):
         mode=value['mode']
         if value['status'] not in ['ok','partial','variant_mismatch']:
@@ -304,7 +304,7 @@ def main():
     if output.exists():
         for line in output.read_text().splitlines():
             r = json.loads(line)
-            if not prior_admission_reason(r):done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device']))
+            if not prior_admission_reason(r):done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device'],r['os']))
     selected = set(args.metrics.split(',')) if args.metrics else {r['metric_name'] for r in inventory}
     excluded=set(filter(None,args.exclude_metrics.split(',')))
     if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
@@ -331,7 +331,7 @@ def main():
                 name = metric['metric_name']
                 if name not in selected:
                     continue
-                if all((name, pair['size_name'], count, mode, meta['device']) in done for mode in MODES):
+                if all((name, pair['size_name'], count, mode, meta['device'],meta['os']) in done for mode in MODES):
                     continue
                 row = dict(meta | pair | paths, scope_seconds=args.scope_seconds, chunk_budget_ms=args.chunk_budget_ms, sample_target_ns=args.sample_target_ns, metric_name=name, metric_family=family(name), declared_columns=metric["columns"],
                            threads=count, mode='score', pair_sha256=pair_sha, input_sha256=hashes)
@@ -350,7 +350,7 @@ def main():
                     for value in results:value['mismatch_first_attempt']=first_attempts
                 for result in results:
                     append(output, result)
-                    done.add((name, pair['size_name'], count, result['mode'], meta['device']))
+                    done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
                 if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):
                     raise RuntimeError('Competitor adapter failed; inspect retained logs before proceeding')
 

@@ -18,7 +18,7 @@ class Aggregation(unittest.TestCase):
         a,b=piece([1.]*6),piece([1.]*4);b['pair_sha256']='other'
         with self.assertRaisesRegex(ValueError,'identity'):combine([a,b])
     def test_different_runtime_or_model_cannot_merge(self):
-        for key in ['engine','model_dir','ort_shared_library_sha256','ort_disable_telemetry']:
+        for key in ['host','os','engine','model_dir','ort_shared_library_sha256','ort_disable_telemetry']:
             a,b=piece([1.]*6),piece([1.]*4);a[key]='first';b[key]='second'
             with self.assertRaisesRegex(ValueError,'identity'):combine([a,b])
     def test_score_bits_and_map_score_disagreement_are_preserved(self):

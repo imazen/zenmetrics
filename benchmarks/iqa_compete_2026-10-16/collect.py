@@ -13,7 +13,7 @@ for ledger in a.ledgers:
   admission=prior_admission_reason(row)
   if admission:
    admission_refusals.append(dict(ledger=str(ledger),line=index,reason=admission));continue
-  normalize_nomap(row);key=tuple(row.get(k) for k in ['host','metric_name','impl','device','threads','mode','size_name'])
+  normalize_nomap(row);key=tuple(row.get(k) for k in ['host','os','metric_name','impl','device','threads','mode','size_name'])
   if row['impl']=='zenmetrics':
    row['original_engine']=row.get('engine')
    row['engine']='cubecl' if row.get('gpu_runtime') and row['metric_name'].endswith('-gpu') else ('rten' if row['metric_name'] in LEARNED and row['device']=='cpu' else ('ort-cuda' if row['metric_name'] in LEARNED else 'native'))

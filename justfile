@@ -1142,3 +1142,6 @@ iqa-compete-dispatch-tests:
 
 iqa-compete-ort-thread-control-no-telemetry python output:
     '{{python}}' benchmarks/iqa_compete_2026-10-16/check_ort_threads.py '{{output}}' --disable-telemetry
+
+iqa-compete-platform-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_collect_platforms.py

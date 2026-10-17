@@ -184,3 +184,9 @@ and the explicit session-budget receipt. Its setting is part of chunk identity.
 The worker control retains exact one/twenty-thread assertions; default-telemetry
 and opt-out diagnostic runs remain separate. Attribution of any extra thread
 requires the measured per-thread cases, not this configuration alone.
+
+Host and complete OS identity now participate in result collection, CPU-reference
+matching, resume keys and chunk identity. Windows/Linux observations on the same
+machine cannot replace one another. Coverage audits handle one host/OS at a time;
+charts and compact summary names retain the distinction. Remaining native-host
+supervisor and qualification work is described in [portability](PORTABILITY.md).

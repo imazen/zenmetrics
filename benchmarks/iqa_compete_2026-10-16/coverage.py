@@ -24,10 +24,12 @@ def main():
         if name in LEARNED and a.nn_cuda:devices.append('cuda')
         for device,size,count,mode in itertools.product(devices,sizes,threads,['score','score+map']):
             expected.add((name,device,size,count,mode))
-    actual={};pair_hashes=collections.defaultdict(set)
+    actual={};testbeds=set();pair_hashes=collections.defaultdict(set)
     for line in raw.decode().splitlines():
         row=json.loads(line)
         if row['impl']!='zenmetrics':continue
+        testbeds.add((row['host'],row['os']))
+        if len(testbeds)>1:raise ValueError('Audit one host/OS testbed per invocation')
         key=tuple(row[k] for k in ['metric_name','device','size_name','threads','mode'])
         if key in actual:raise ValueError('Collect duplicate attempts before coverage checking: '+str(key))
         if row['size_name'] in sizes:

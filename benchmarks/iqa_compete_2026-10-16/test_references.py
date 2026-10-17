@@ -7,7 +7,7 @@ class References(unittest.TestCase):
         self.directory=tempfile.TemporaryDirectory(dir=pathlib.Path.home()/'tmp')
         self.addCleanup(self.directory.cleanup)
         self.path=pathlib.Path(self.directory.name)/'cpu.jsonl'
-        self.cpu=dict(impl='zenmetrics',device='cpu',mode='score',status='ok',
+        self.cpu=dict(host='fixture',os='Linux-fixture',impl='zenmetrics',device='cpu',mode='score',status='ok',
                       metric_name='ssim2',size_name='cid22',threads=1,pair_sha256='pair-a',score=91.)
         self.path.write_text(json.dumps(self.cpu)+'\n')
         self.gpu=self.cpu|dict(metric_name='ssim2-gpu',device='cuda')
@@ -20,6 +20,9 @@ class References(unittest.TestCase):
     def test_competitor_cannot_be_a_rust_reference(self):
         self.path.write_text(json.dumps(self.cpu|dict(impl='piq'))+'\n')
         self.assertIsNone(same_pair_reference(load_references([self.path]),self.gpu))
+    def test_other_host_or_os_does_not_match(self):
+        for field in ['host','os']:
+            self.assertIsNone(same_pair_reference(load_references([self.path]),self.gpu|{field:'another'}))
     def test_newly_appended_reference_is_seen(self):
         before=load_references([self.path])
         with self.path.open('a') as f:f.write(json.dumps(self.cpu|dict(score=92.))+'\n')

@@ -4,11 +4,11 @@ from parity import qualify_rows
 
 class Parity(unittest.TestCase):
     def setUp(self):
-        self.row=dict(metric_name='butteraugli-gpu',size_name='cid22',threads=1,
+        self.row=dict(host='fixture',os='Linux-fixture',metric_name='butteraugli-gpu',size_name='cid22',threads=1,
                       pair_sha256='a',status='ok',score=1.2,n=10,median_ns=10.,
                       comparison_status='unavailable:no qualified same-pair CPU reference')
         self.ref=dict(score=1.2,impl_binary_sha='rust',pair_sha256='a',threads=1)
-        self.references={('butteraugli','cid22',1,'a'):self.ref}
+        self.references={('fixture','Linux-fixture','butteraugli','cid22',1,'a'):self.ref}
     def test_matching_reference_clears_unavailable_status(self):
         self.assertFalse(qualify_rows([self.row],self.references,[],{}))
         self.assertEqual(self.row['comparison_status'],'same-pair CPU reference available')
