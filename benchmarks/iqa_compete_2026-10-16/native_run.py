@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
 import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
-from run import metadata, sha, family, append, resource, THREAD_ENV
+from run import metadata, sha, family, append, resource, THREAD_ENV, admission_reason, prior_admission_reason
 P=pathlib.Path
 # Bounds are the existing parity gates, never fitted to these observations.
 # Sources: docs/METRIC_PROVENANCE.md parity table; fast-ssim2 requires tier
@@ -24,7 +24,8 @@ def main():
  output=a.root/f'{a.host}.jsonl';done=set()
  if output.exists():
   for s in output.read_text().splitlines():
-   r=json.loads(s);done.add((r['metric_name'],r['size_name'],r['threads'],r['mode']))
+   r=json.loads(s)
+   if not prior_admission_reason(r):done.add((r['metric_name'],r['size_name'],r['threads'],r['mode']))
  planes=json.loads(a.planes.read_text());pairs=json.loads(a.pairs.read_text())
  for pair in pairs:
   if pair['size_name'] not in a.sizes.split(','):continue
@@ -55,7 +56,7 @@ def main():
       cpus=sorted(os.sched_getaffinity(0));chosen=[2 if 2 in cpus else cpus[0]] if threads==1 else cpus
       cmd=['flock',str(P.home()/'tmp/i265-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','16G','--jobs','16','--','timeout','--kill-after=20s','1100s','taskset','-c',','.join(map(str,chosen)),'env',*[f'{k}={v}' for k,v in env.items() if k in THREAD_ENV],*child]
       result=subprocess.run(cmd,env=env,capture_output=True,text=True)
-      if 'IQA_BUSY ' in result.stdout:
+      if admission_reason(result.stdout+result.stderr):
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
       break
      log=a.root/'logs'/f'{stem}.log';log.write_text(result.stdout+result.stderr)

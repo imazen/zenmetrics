@@ -37,6 +37,27 @@ def normalize_nomap(row):
     row.update(status='unsupported', notes=row.get('notes', '') +
                '; This learned/NR CLI route has no native-map API; score startup outcome is separate')
 
+
+def admission_reason(text):
+    if 'busy load' in text or 'IQA_BUSY ' in text:
+        return 'host_load'
+    if re.search(r'run-heavy: only [0-9]+ MiB [^\n]*refusing to launch', text):
+        return 'host_memory'
+    if 'benchmark admission failed' in text and 'orphaned running reservation' in text:
+        return 'zenbench_orphaned_reservation'
+    return None
+
+def prior_admission_reason(row):
+    status=row.get('source_status',row.get('status',''))
+    if not status.startswith('skipped:process_exit_'):
+        return None
+    log=row.get('log_path') or row.get('log')
+    if not log:
+        legacy=re.search(r'(?:full log|retained attempt log) (.+)$',row.get('notes',''))
+        if not legacy:raise ValueError('Refusal row lacks its log pointer')
+        log=legacy[1]
+    return admission_reason(Path(log).read_text())
+
 def sha(path):
     h = hashlib.sha256()
     with Path(path).open('rb') as f:
@@ -123,7 +144,7 @@ def run_cell(args, row, models, *, restore_chunks=True):
     if restore_chunks and chunk_ledger.exists():
         for line in chunk_ledger.read_text().splitlines():
             value=json.loads(line)
-            if all(value.get(k)==row.get(k) for k in identity):retain(value)
+            if all(value.get(k)==row.get(k) for k in identity) and not prior_admission_reason(value):retain(value)
     if set(completed)==set(MODES):return list(completed.values())
     while True:
         attempt = uuid.uuid4().hex[:12]
@@ -161,10 +182,11 @@ def run_cell(args, row, models, *, restore_chunks=True):
             if len(proofs)>1:raise ValueError('Multiple process proofs in one Rust cell')
             if proofs:recovery=recover(proofs[0],args.root/'recovered-admission')
             for record in recovery:append(args.root/'admission-recovery.jsonl',record)
-        if 'busy load' in text or 'IQA_BUSY ' in text:
+        admission=admission_reason(text)
+        if admission:
             append(args.root / 'admission.jsonl', dict(metric=name, size=row['size_name'],
                    threads=count, attempt=attempt, log=str(log), log_sha256=sha(log),
-                   reason='host load refused; no metric timing admitted'))
+                   reason=admission+'; no metric timing admitted'))
             print('ADMISSION_WAIT', stem, log, flush=True)
             time.sleep(30)
             continue
@@ -203,6 +225,7 @@ def main():
     p.add_argument('--host', help='Public CPU-derived host alias, independent of local hostname')
     p.add_argument('--sizes', default='cid22,2k')
     p.add_argument('--metrics')
+    p.add_argument('--exclude-metrics',default='')
     p.add_argument('--gpu-runtime', choices=['cuda','wgpu'])
     p.add_argument('--engine', choices=['rten','ort-cuda'], default='rten')
     p.add_argument('--ort-library', type=Path)
@@ -292,14 +315,17 @@ def main():
     if output.exists():
         for line in output.read_text().splitlines():
             r = json.loads(line)
-            done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device']))
+            if not prior_admission_reason(r):done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device']))
     selected = set(args.metrics.split(',')) if args.metrics else {r['metric_name'] for r in inventory}
+    excluded=set(filter(None,args.exclude_metrics.split(',')))
+    if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
     if args.python_package and not args.metrics:
         selected = set({'scikit-image':['psnr','ssimc'], 'piq':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32','gmsd','ms-gmsd','fsim','vsi','haarpsi','mdsi','vif','iwssim-piq','brisque'], 'torchmetrics':['psnr','ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'pytorch-msssim':['ssimc-pyiqa-f32','ms-ssim-pyiqa-f32'], 'lpips':['lpips-alex','lpips-vgg','lpips-squeeze'], 'DISTS-pytorch':['dists'],'stlpips-pytorch':['stlpips-alex','stlpips-vgg'],'DeepDC-PyTorch':['deepdc'],'flip-evaluator':['flip-v17'],'cvvdp':['cvvdp']}[args.python_package])
     if args.gpu_runtime and not args.metrics:
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:
         selected &= LEARNED
+    selected-=excluded
     if not selected <= {r['metric_name'] for r in inventory}:
         raise ValueError('selected metric absent from executable inventory')
     available = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()

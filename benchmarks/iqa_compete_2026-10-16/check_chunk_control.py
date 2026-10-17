@@ -3,7 +3,8 @@ import argparse,json,pathlib,socket
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('root',type=P);a=p.parse_args()
 rows=[json.loads(s) for s in (a.root/(socket.gethostname().split('.')[0]+'.jsonl')).read_text().splitlines()]
-score=next(r for r in rows if r['mode']=='score')
+# Append-only logs retain failed admission history; inspect the latest result.
+score={r['mode']:r for r in rows}['score']
 assert score['status']=='ok','bounded rounds did not qualify'
 assert score['n']>=10 and len(score['round_means_ns'])==score['n'],'ten actual rounds required'
 assert len(score['chunks'])>=2,'control must exercise independent scopes'

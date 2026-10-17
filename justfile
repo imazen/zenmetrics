@@ -978,8 +978,9 @@ iqa-compete-charts raw output python=(env_var_or_default("IQA_COMPETE_PYTHON", e
 iqa-compete-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
 
-iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k":
-    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --threads 1,20 --sizes '{{sizes}}' --model-root '{{models}}' --models-json '{{model_map}}'
+# PieAPP uses its own slow-cell lane; both lanes contribute to the full inventory.
+iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --exclude-metrics pieapp
 
 iqa-compete-libvmaf-build source output:
     bash benchmarks/iqa_compete_2026-10-16/build_libvmaf.sh '{{source}}' '{{output}}'
@@ -1096,3 +1097,8 @@ iqa-compete-linux-timeout-control binary pairs output:
 # Capability metadata is independent of a model's startup or scope outcome.
 iqa-compete-capability-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_nomap_metadata.py
+
+# Retry host admission refusals without accepting or discarding partial samples.
+iqa-compete-admission-classification-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_admission_classification.py
+

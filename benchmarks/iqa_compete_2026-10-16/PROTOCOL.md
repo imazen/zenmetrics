@@ -123,3 +123,10 @@ Learned and no-reference CLI routes without native maps record `unsupported`
 for that mode independently of score startup, consent, geometry or scope
 failures. Reclassification retains the original status in raw metadata.
 Competitor map capabilities remain specific to each public entry point.
+
+Host load or low available-memory launch refusals are admission attempts, not
+metric outcomes. They wait outside the shared lock and do not replace valid
+partial rounds. Resume and collection inspect retained failure logs, including
+legacy log pointers, to exclude those attempts from completed cells. A real
+control resumed four saved rounds across an admission refusal and combined
+4 + 5 + 5 actual rounds; the ten-round minimum remains unchanged.
