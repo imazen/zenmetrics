@@ -3,7 +3,7 @@
 import argparse, atexit, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
 from batch import BatchLease
 from references import load_references, same_pair_reference
-from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, admission_reason, prior_admission_reason
+from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, native_input_refusal, admission_reason, prior_admission_reason
 P=pathlib.Path
 # Bounds are the existing parity gates, never fitted to these observations.
 # Sources: docs/METRIC_PROVENANCE.md parity table; fast-ssim2 requires tier
@@ -95,9 +95,10 @@ def main():
      probes=[json.loads(s[len('IQA_PROBE '):]) for s in result.stdout.splitlines() if s.startswith('IQA_PROBE ')]
      version=next((s[8:] for s in result.stdout.splitlines() if s.startswith('VERSION ')),None);row['impl_version']=version
      if result.returncode or (compare and not probes and not a.coverage_first) or (len(samples)<target if a.coverage_first else (len(samples)<10 and sum(t for t,_ in samples)<3e9)):
-      reason=admission_reason(result.stdout) or {124:f'timeout_{actual_scope}s',137:'memory_guard_or_limit',0:'scope_sample_limit'}.get(result.returncode,f'process_exit_{result.returncode}')
+      refusal=native_input_refusal(metric,result.stdout)
+      reason=refusal or admission_reason(result.stdout) or {124:f'timeout_{actual_scope}s',137:'memory_guard_or_limit',0:'scope_sample_limit'}.get(result.returncode,f'process_exit_{result.returncode}')
       row.update(status=f'skipped:{reason}',n=len(samples),samples_ns=[t for t,_ in samples],sample_scores=[v for _,v in samples]);append(output,row);print('REFUSED',stem,row['status'],flush=True)
-      if result.returncode not in [0,124,137] and not admission_reason(result.stdout):raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
+      if result.returncode not in [0,124,137] and not admission_reason(result.stdout) and not refusal:raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
       continue
      import struct
      available=compare and (cached is not None or bool(probes))

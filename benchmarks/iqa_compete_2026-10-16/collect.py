@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Choose explicitly ordered qualified attempts; never discard source ledgers."""
 import argparse,hashlib,json,pathlib,collections
-from run import family, LEARNED, normalize_nomap, prior_admission_reason
+from run import family, LEARNED, normalize_nomap, prior_admission_reason, native_input_refusal
 P=pathlib.Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('ledgers',nargs='+',type=P);p.add_argument('--output',type=P,required=True);p.add_argument('--only-binary-sha');a=p.parse_args()
 assert not a.output.exists(),'Choose a new output or preserve the prior collection first'
@@ -20,6 +20,10 @@ for ledger in a.ledgers:
    row['timing_quality']=quality
   if row.get('coverage_first') and row.get('parity_checked') is False and (row['impl']!='zenmetrics' or row['device']!='cpu'):
    row.update(ref_score=None,abs_delta=None,relative_delta=None,comparison_status='Not requalified in coverage-first pass; self_warmup_score is separate')
+  if row['impl']=='libvmaf' and row['status'].startswith('skipped:process_exit_'):
+   refusal=native_input_refusal(row['metric_name'],P(row['log']).read_text())
+   if refusal:
+    row.update(source_status=row['status'],status='skipped:'+refusal,notes=row.get('notes','')+'; Public libvmaf entry point refuses its derived CAMBI window geometry; original log retained')
   normalize_nomap(row);key=tuple(row.get(k) for k in ['host','os','metric_name','impl','device','threads','mode','size_name'])
   if row['impl']=='zenmetrics':
    row['original_engine']=row.get('engine')

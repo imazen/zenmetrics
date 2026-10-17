@@ -67,6 +67,11 @@ def admission_reason(text):
         return 'zenbench_orphaned_reservation'
     return None
 
+def native_input_refusal(metric,text):
+    if metric=='cambi' and re.search(r'libvmaf ERROR cambi: window_size [0-9]+ too large for reciprocal LUT',text):
+        return 'unsupported_cambi_window_geometry'
+    return None
+
 def gpu_dispatch_failure(text):
     return (('DSD-' in text and 'panicked at' in text)
             or 'wgpu error: Validation Error' in text

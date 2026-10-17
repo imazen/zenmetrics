@@ -176,3 +176,7 @@ the same time. The missing 8K Butteraugli cells use this path after the grouped
 scorers hit device allocation failures; completed observations are retained.
 For coverage rows without a repeated CPU comparison, collection clears
 `ref_score` and deltas; `self_warmup_score` remains separate.
+
+libvmaf CAMBI refuses 8K with `window_size 131 too large for reciprocal LUT`.
+That exact public-entry-point error is an explicit input refusal; the remaining
+native cells continue. Other unexpected native errors still stop that stage.
