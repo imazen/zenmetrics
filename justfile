@@ -769,7 +769,7 @@ nn-dmm-bisect-all model_dir ladder output:
 
 # Explicit unmeasured cases only; their heavy panels still share one global lock.
 nn-dmm-bisect-queue model_dir ladder output cases:
-    bash benchmarks/nn_port_2026-10-15/dmm_bisect_run.sh '{{model_dir}}' '{{ladder}}' '{{output}}' '{{cases}}'
+    bash benchmarks/nn_port_2026-10-15/dmm_bisect_queue.sh '{{model_dir}}' '{{ladder}}' '{{output}}' '{{cases}}'
 
 nn-dmm-bisect-summary directory output *flags:
     python3 benchmarks/nn_port_2026-10-15/dmm_bisect_summary.py '{{directory}}' '{{output}}' {{flags}}
