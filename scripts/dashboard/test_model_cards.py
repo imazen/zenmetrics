@@ -15,6 +15,8 @@ class ModelCards(unittest.TestCase):
     def test_cli_membership_and_missing_citations(self):
         self.assertEqual(set(self.by_name),{r['metric'] for r in catalog_rows()})
         self.assertEqual(len(self.by_name),len(self.items))
+        for row in catalog_rows():
+            if row['nn']=='true':self.assertEqual(self.by_name[row['metric']]['family'],'Learned')
         psnr=self.by_name['psnr']
         self.assertIsNone(psnr['citation'])
         self.assertEqual(psnr['citation_status'],'citation needed')

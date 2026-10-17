@@ -88,7 +88,7 @@ def cards():
         reference=code.get('upstream',parity.get('oracle',row['reference']))
         record_path=path.relative_to(ROOT).as_posix() if path else 'docs/METRIC_PROVENANCE.md'
         implementation_license=row['license']
-        manifest=ROOT/'crates'/('zenmetrics-nn' if model else metric)/'Cargo.toml'
+        manifest=ROOT/'crates'/('zenmetrics-nn' if row['nn']=='true' or model else metric)/'Cargo.toml'
         if manifest.is_file():
             license_value=tomllib.loads(manifest.read_text()).get('package',{}).get('license')
             if isinstance(license_value,str):implementation_license=license_value
@@ -115,7 +115,7 @@ def cards():
             weights={'notice':'Static trained/statistical parameters; consult the linked crate README and licence notices. Exact checkpoint terms are not normalized in this card.'}
         licenses=sorted(p.relative_to(ROOT).as_posix() for directory in ([path.parent,ROOT/'crates/zenmetrics-nn'] if path else [ROOT/'crates'/metric]) for p in directory.glob('LICENSE*') if not model or p.name.lower()=='license-'+model.get('name','').lower())
         yield clean(dict(metric=metric,name=cite.get('full_name',metric) if cite else metric,
-             family='Learned' if model or metric=='brisque' else 'Classical',
+             family='Learned' if row['nn']=='true' or model or metric=='brisque' else 'Classical',
              kind='NR' if ('no-reference' in model.get('kind','') and 'full-reference' not in model.get('kind','')) or 'wadiqam-nr-' in metric or metric in ['niqe','piqe','brisque','cambi'] else 'FR',
              backend=row['backend'],backends=['CPU','GPU'] if model else [row['backend']],engines=model.get('execution',{}).get('engines',['rten','ort-cuda'] if model else [row['backend']]),
              citation=cite,citation_status='Verified primary metadata' if cite else 'citation needed',
