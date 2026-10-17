@@ -1,5 +1,6 @@
 # Reproduce IQA CPU benchmarks
 
+Replace the example `i265` host label with your public CPU-derived machine label.
 The portable CPU command uses Rust stable, just and the checked-out workspace's
 pinned sibling dependencies. It enables CPU metrics and threading, with no ORT,
 CUDA, neural models or Python. Use a C/C++ toolchain and CMake for native build
@@ -7,7 +8,7 @@ prerequisites. Git is needed to clone this workspace and its pinned siblings.
 
 ```sh
 bash scripts/ci/clone-siblings.sh
-just bench-iqa smoke ssim2,gmsd --host mycpu --fixture synthetic-v1 --skip-native
+just bench-iqa smoke ssim2,gmsd --host i265 --fixture synthetic-v1 --skip-native
 ```
 
 `synthetic-v1` is a deterministic integer RGB fixture, not a photograph quality
@@ -26,7 +27,7 @@ below for that existing panel. This is a remaining portability gap.
 
 ## Linux
 
-Runtime test status: pending Round 18 smoke; not yet claimed tested.
+Tested on i265 (Linux) 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: two CPU metrics at 64×64, 1/all threads, both modes; 8 rows, then `added=0 skipped=8`. Existing tools were used; the package-install commands below were not rerun on a clean machine.
 
 ```sh
 sudo apt-get update
@@ -35,19 +36,20 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profil
 . "$HOME/.cargo/env"
 cargo install just --locked
 bash scripts/ci/clone-siblings.sh
-just bench-iqa smoke ssim2,gmsd --host linuxcpu --fixture synthetic-v1 --skip-native
+just bench-iqa smoke ssim2,gmsd --host i265 --fixture synthetic-v1 --skip-native
 ```
 
 ## macOS ARM64
 
-Runtime test status: pending Round 18 smoke; not yet claimed tested.
+Tested on mac (Apple M4 Pro, ARM64) 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: the documented two-metric smoke and repeat passed with 8 rows, then `added=0 skipped=8`. Rust 1.99.0, just 1.57.0 and CMake 4.4.3 were present. The 12 GiB wrapper recorded 0.95 GiB peak RSS over the complete clone/build/two-run command. This was not a clean Homebrew installation test.
 Install Apple's command-line tools and Homebrew first, then:
 
 ```sh
 xcode-select --install
-brew install rustup-init just cmake pkg-config
-rustup-init -y --profile minimal
-. "$HOME/.cargo/env"
+brew install rustup just cmake pkg-config
+export PATH="$(brew --prefix rustup)/bin:$PATH"
+rustup toolchain install stable --profile minimal
+rustup default stable
 bash scripts/ci/clone-siblings.sh
 just bench-iqa smoke ssim2,gmsd --host mac --fixture synthetic-v1 --skip-native
 ```
@@ -59,7 +61,9 @@ macOS Intel was not tested and is outside this smoke matrix.
 ## Windows
 
 Runtime test status: pending GitHub Actions windows-latest smoke; untested.
-Install Visual Studio 2022 Build Tools with **Desktop development with C++**,
+The following clean-install commands are untested; the workflow uses its
+preprovisioned C++ toolchain and explicit Rust/just setup actions. Install
+Visual Studio 2022 Build Tools with **Desktop development with C++**,
 Git for Windows (including Git Bash), Rust stable and CMake. In PowerShell:
 
 ```powershell
@@ -67,10 +71,10 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools --exact
 winget install --id Git.Git --exact
 winget install --id Rustlang.Rustup --exact
 winget install --id Kitware.CMake --exact
-cargo install just --locked
 ```
 
-Select the C++ workload in Visual Studio Installer; then open Git Bash in the
+Open a new PowerShell so Rustup's PATH changes are visible, then run
+`cargo install just --locked`. Select the C++ workload in Visual Studio Installer; then open Git Bash in the
 checkout and run the two commands at the top. Windows smoke uses native MSVC;
 WSL is a separate Linux testbed. The portable worker has an 1100-second child
 kill/wait bound. The plain Windows path has no Job-object memory ceiling or
@@ -99,3 +103,5 @@ needed by the portable CPU smoke.
 The manual `Portable IQA benchmark smoke` workflow runs Linux, macOS ARM64 and
 Windows with two metrics at one small size, checks resume and uploads artifacts.
 No full benchmark matrix is started by that workflow.
+
+Smoke run and artifacts: [three-OS workflow, f95192aa](https://github.com/imazen/zenmetrics/actions/runs/39029766690). Runner outcomes are recorded below only after completion. CI artifacts use the `ci` label and are smoke diagnostics, not published CPU-host performance rows.
