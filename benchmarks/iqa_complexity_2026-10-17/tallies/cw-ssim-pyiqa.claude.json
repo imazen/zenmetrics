@@ -1,0 +1,382 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "cw-ssim-pyiqa",
+ "cli_names": [
+  "cw-ssim-pyiqa"
+ ],
+ "counter": "claude",
+ "source_commit": "PENDING",
+ "kind": "classic-fr",
+ "params": {},
+ "derived": {
+  "W2": "ceil(W/2)",
+  "H2": "ceil(H/2)",
+  "W3": "ceil(W2/2)",
+  "H3": "ceil(H2/2)",
+  "BW": "ceil(W3/2)",
+  "BH": "ceil(H3/2)"
+ },
+ "assumptions": [
+  "Cold pair (CwSsimPyiqa cold evaluate (warm + score_warm)): warm_reference builds the size plan (frequency grid, every f32 mask, Gaussian weight; images 1) and the reference bands; score_warm builds the distorted bands and the similarity. A warm reference removes one image from every images-2 stage and the plan stages.",
+  "Only pyiqa's scored level is computed: the full-size spectrum, three crop+lomask rounds, and the eight level-4 bands. pyiqa also builds the finer levels' bands, the high-pass and the low-pass residual (unused by the score); they are not counted.",
+  "FFT: rustfft mixed radix, counted as radix-2 equivalent: per element per log2 level 2 mul + 3 add (one complex multiply per butterfly pair plus two complex adds), log2(W)+log2(H) levels for the 2-D transform; Bluestein sizes counted the same. Loads/stores 4 each (row pass in place, column pass gathered).",
+  "np.interp: binary search counted as ceil(log2(table)) compares (259-entry radial table: 9; 3,075-entry angular table: 12) plus 2 range compares; 4 add/sub, 1 mul, 1 div; rounding to f32 as cvt.",
+  "Negation (multiply by i, conj) counted as abs-class.",
+  "box7 as written: 49 (k*v) multiplies and 49 adds per output, three planes per orientation."
+ ],
+ "stages": [
+  {
+   "id": "luma",
+   "name": "u8/255 f32 -> f64, YIQ luma (f32 weights), x255, round half even",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:327-342"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "mixed",
+   "ops": {
+    "load": 3,
+    "cvt": 7,
+    "div": 3,
+    "mul": 4,
+    "add": 2,
+    "store": 2
+   },
+   "bytes_read": 3,
+   "bytes_written": 16,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "grid",
+   "name": "frequency grid (atan2, radius, log2) + lo0mask interp",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:199-222"
+   ],
+   "images": 1,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "trig": 1,
+    "mul": 3,
+    "add": 5,
+    "sqrt": 1,
+    "log": 1,
+    "store": 3,
+    "cmp": 11,
+    "div": 1,
+    "cvt": 1,
+    "load": 4
+   },
+   "bytes_read": 0,
+   "bytes_written": 24,
+   "access": "pointwise",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "fft",
+   "name": "2-D forward FFT (rows, then gathered columns)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:295-311",
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:346-347"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "mul": "2*(log2(W)+log2(H))",
+    "add": "3*(log2(W)+log2(H))",
+    "load": 4,
+    "store": 4
+   },
+   "bytes_read": 16,
+   "bytes_written": 16,
+   "access": "transform",
+   "axis": "xy",
+   "radius": 0,
+   "span": "max(W,H)",
+   "barrier": true,
+   "depends_on": [
+    "luma"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "shift_lo0",
+   "name": "fftshift roll + lo0mask multiply",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:313-324",
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:348-352"
+   ],
+   "images": 2,
+   "elements": "W*H",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "mul": 2,
+    "store": 2
+   },
+   "bytes_read": 24,
+   "bytes_written": 16,
+   "access": "gather",
+   "radius": 0,
+   "span": "1",
+   "depends_on": [
+    "fft",
+    "grid"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "rounds_plan",
+   "name": "3 crops of log_rad/angle + f32 lomask interp",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:224-240"
+   ],
+   "images": 1,
+   "elements": "W2*H2+W3*H3+BW*BH",
+   "precision": "f64",
+   "ops": {
+    "load": 6,
+    "store": 3,
+    "cmp": 11,
+    "add": 4,
+    "mul": 1,
+    "div": 1,
+    "cvt": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 24,
+   "access": "gather",
+   "radius": 0,
+   "scale": 2,
+   "span": "1",
+   "depends_on": [
+    "grid"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "rounds",
+   "name": "3 centre crops of the spectrum x lomask",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:353-364"
+   ],
+   "images": 2,
+   "elements": "W2*H2+W3*H3+BW*BH",
+   "precision": "f64",
+   "ops": {
+    "load": 3,
+    "mul": 2,
+    "store": 2
+   },
+   "bytes_read": 24,
+   "bytes_written": 16,
+   "access": "gather",
+   "radius": 0,
+   "scale": 2,
+   "span": "1",
+   "depends_on": [
+    "shift_lo0",
+    "rounds_plan"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "band_plan",
+   "name": "level-4 himask + 8 angle masks (f32)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:241-248"
+   ],
+   "images": 1,
+   "elements": "BW*BH",
+   "precision": "f64",
+   "ops": {
+    "cmp": 123,
+    "add": 36,
+    "mul": 9,
+    "div": 9,
+    "cvt": 9,
+    "load": 36,
+    "store": 9
+   },
+   "bytes_read": 16,
+   "bytes_written": 72,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 8,
+   "span": "1",
+   "depends_on": [
+    "rounds_plan"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "gauss",
+   "name": "fspecial Gaussian weight (exp, threshold, pairwise sum, normalise, f32)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:249-274"
+   ],
+   "images": 1,
+   "elements": "(BW-6)*(BH-6)",
+   "precision": "f64",
+   "ops": {
+    "mul": 3,
+    "add": 3,
+    "div": 2,
+    "exp": 1,
+    "cmp": 2,
+    "cvt": 1,
+    "store": 1
+   },
+   "bytes_read": 0,
+   "bytes_written": 8,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 8,
+   "span": "log2((BW-6)*(BH-6))",
+   "barrier": true,
+   "materialize": "full"
+  },
+  {
+   "id": "bands",
+   "name": "x8: spectrum x angle x himask, x i, ifftshift, inverse FFT, 1/n",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:365-388",
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:295-324"
+   ],
+   "images": 2,
+   "elements": "8*BW*BH",
+   "precision": "f64",
+   "ops": {
+    "mul": "6+2*(log2(BW)+log2(BH))",
+    "add": "3*(log2(BW)+log2(BH))",
+    "abs": 1,
+    "load": "7+4",
+    "store": "2+4"
+   },
+   "bytes_read": 32,
+   "bytes_written": 16,
+   "access": "transform",
+   "axis": "xy",
+   "radius": 0,
+   "scale": 8,
+   "span": "max(BW,BH)",
+   "barrier": true,
+   "depends_on": [
+    "rounds",
+    "band_plan"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "products",
+   "name": "x8: corr = b1*conj(b2), |b1|^2+|b2|^2 (with 1e-12 under sqrt)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:465-480"
+   ],
+   "images": 1,
+   "elements": "8*BW*BH",
+   "precision": "f64",
+   "ops": {
+    "mul": 10,
+    "add": 7,
+    "sqrt": 2,
+    "abs": 1,
+    "load": 4,
+    "store": 3
+   },
+   "bytes_read": 32,
+   "bytes_written": 24,
+   "access": "pointwise",
+   "radius": 0,
+   "scale": 8,
+   "span": "1",
+   "depends_on": [
+    "bands"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "box7",
+   "name": "x8 x3 planes: valid 7x7 box sums, weight f32(1/49)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:391-409",
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:482"
+   ],
+   "images": 1,
+   "elements": "24*(BW-6)*(BH-6)",
+   "precision": "f64",
+   "ops": {
+    "mul": 49,
+    "add": 49,
+    "load": 49,
+    "store": 1
+   },
+   "bytes_read": 8,
+   "bytes_written": 8,
+   "access": "stencil2d",
+   "axis": "xy",
+   "radius": 3,
+   "scale": 8,
+   "span": "1",
+   "depends_on": [
+    "products"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "pool",
+   "name": "x8: 2|corr|/varr x Gaussian, summed",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:483-488"
+   ],
+   "images": 1,
+   "elements": "8*(BW-6)*(BH-6)",
+   "precision": "f64",
+   "ops": {
+    "mul": 4,
+    "add": 5,
+    "sqrt": 1,
+    "div": 1,
+    "load": 4
+   },
+   "bytes_read": 32,
+   "bytes_written": 0,
+   "access": "reduction",
+   "radius": 0,
+   "scale": 8,
+   "span": "log2((BW-6)*(BH-6))",
+   "barrier": true,
+   "depends_on": [
+    "box7",
+    "gauss"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "final",
+   "name": "mean of the 8 band scores",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/cw_ssim.rs:489-492"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "add": 8,
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "pool"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

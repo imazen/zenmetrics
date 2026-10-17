@@ -48,7 +48,8 @@ nn-ort = ["nn", "zenmetrics-nn/ort", "zenmetrics-pyiqa-ports?/ort"]
 nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
 # Ports whose only reference is pyiqa (crates/zenmetrics-pyiqa-ports): code and
 # weights under non-commercial terms, so never on by default. Metrics
-# `topiq-fr`, `topiq-fr-pipal`; with `nn-ort` also ZENMETRICS_NN_ENGINE=ort-cpu.
+# `topiq-fr`, `topiq-fr-pipal`, `wadiqam-pyiqa`, `ahiq-pyiqa`, `cw-ssim-pyiqa`,
+# `dmm-pyiqa`, `pieapp-pyiqa`; with `nn-ort` also ZENMETRICS_NN_ENGINE=ort-cpu.
 pyiqa-ports = ["nn", "dep:zenmetrics-pyiqa-ports"]
 # Classical no-reference metrics (piqe, niqe, brisque) — in-tree ports
 # scored through `zenmetrics-abstractions::PairedNoReference`, so batch /

@@ -30,6 +30,8 @@ zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-feature
 rten = { version = "0.27.0", optional = true, default-features = false, features = ["onnx_format"] }
 rten-tensor = { version = "0.27.0", optional = true }
 ort = { version = "=2.0.0-rc.14", optional = true, default-features = false, features = ["std", "load-dynamic", "cuda", "api-31"] }
+# cw_ssim: f64 FFT for the steerable pyramid.
+rustfft = "6.4.1"
 
 [dev-dependencies]
 zenpng = { path = "../../../zenpng" }

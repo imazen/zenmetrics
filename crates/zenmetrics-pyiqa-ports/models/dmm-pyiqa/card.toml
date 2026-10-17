@@ -1,0 +1,37 @@
+# DMM as pyiqa 0.1.16 `dmm` scores it (the AIC2026 `DMM` column is close to it, not exact).
+name = "dmm-pyiqa"
+kind = "full-reference"
+direction = "lower-is-better"         # identical images score 0
+columns = ["dmm_pyiqa"]
+paper = "Chen, Zhu, Zhu, Wang, Pan, Wang. Debiased Mapping for Full-Reference Image Quality Assessment. IEEE TMM 2025"
+
+[code]
+source = "pyiqa 0.1.16"               # pyiqa/archs/dmm_arch.py; head and 16x16 SVD as zenmetrics-nn's dmm (LAPACK-based)
+licence = "PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); LAPACK routines BSD-3-Clause (../../LICENSE-lapack)"
+module = "src/dmm.rs, src/dmm_svd.rs"
+
+[weights]
+licence_class = "permissive"          # torchvision VGG16; DMM has no fitted parameters
+checkpoint = "https://download.pytorch.org/models/vgg16-397923af.pth"
+
+[input]
+format = "packed sRGB8"
+resize = "min(h,w) > 128: F.interpolate bilinear (align_corners False, no antialias) to a SQUARE tar x tar, tar = max(floor(min/48)*32, 128). zenmetrics-nn's dmm keeps the aspect ratio (PIL short-side resize): that is the convention difference behind the AIC2026 column."
+min_size = 128                        # pyiqa refuses smaller (relu4_3 tap below one 16x16 patch)
+
+[export]
+script = "export.py"
+outputs = "dmm_pyiqa_trunk.onnx (x[1,3,H,W] in [0,1] -> t3 relu3_3, t4 relu4_3), dmm_pyiqa.meta, dmm_pyiqa_export.meta"
+opset = 17
+
+[parity]
+oracle = "pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref)"
+goldens = "goldens_ladder.tsv (common/ladder.py; pyiqa refuses the three 64x64 pairs: nan)"
+# 1 JND: pooled median score over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.145006, BPG 0.225096).
+jnd = 0.178438
+tolerance_jnd = 1e-3
+measured_ladder_rten = "12 pairs scored, 3 refused (64x64, as pyiqa); worst 1.26e-2 (0.071 JND) at 2207_256x256; 256x256 pairs 4.5e-3..1.26e-2, larger sizes 3e-5..1.9e-3: does not meet 1e-3 JND"
+measured_aic2026_61_rten = "median 2.17e-4, p90 1.36e-3, max 1.94e-3 (0.011 JND): does not meet 1e-3 JND"
+measured_vs_published_column = "port median 8.77e-3 / max 0.115, Spearman 0.9975; pyiqa CPU itself median 9.05e-3 / max 0.114; zenmetrics-nn dmm median 0.075"
+blocker = "SVD solver basis. models/dmm-pyiqa/solver_spread.py, 6 AIC2026 pairs, pyiqa's own taps: torch.svd (MKL) vs SciPy gesdd f32 differ by up to 2.4e-4 (1.3e-3 JND), vs gesvd f32 by up to 5.7e-3 (0.032 JND), vs torch f64 by up to 1.5e-4. On the three 256x256 ladder pairs (160x160 after the resize, 4 patches per relu4_3 channel) the spread is larger: gesdd vs MKL up to 4.3e-3, f64 vs MKL up to 2.4e-2, gesvd up to 0.37; the port deltas there (4.5e-3, 1.26e-2, 7.2e-3) lie inside the f64-vs-MKL spread. The port's residual on those pairs (<= 2.1e-4) lies inside the gesdd-vs-MKL spread. wt consumes the singular basis inside degenerate clusters (see zenmetrics-nn models/dmm/card.toml)."
+warm_reference = "caches every reference patch SVD; the cold path streams them; bit-identical"

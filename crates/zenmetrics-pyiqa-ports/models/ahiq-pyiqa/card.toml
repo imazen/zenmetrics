@@ -1,0 +1,43 @@
+# AHIQ as pyiqa 0.1.16 `ahiq` scores it (the AIC2026 `AHIQ` column).
+name = "ahiq-pyiqa"
+kind = "full-reference"
+direction = "higher-is-better"
+columns = ["ahiq_pyiqa"]
+paper = "Lao, Gong, Shi, Yang, Wu, Wang, Xia, Yang. Attentions Help CNNs See Better: Attention-based Hybrid Image Quality Assessment Network. CVPRW 2022"
+
+[code]
+source = "pyiqa 0.1.16"              # pyiqa/archs/ahiq_arch.py, timm 1.0.30
+licence = "PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)"
+module = "src/ahiq.rs"
+differs_from_zenmetrics_nn_ahiq = "ViT tag augreg2 (timm 1.0.30's default for pyiqa's bare name; zenmetrics-nn pins upstream's augreg), epoch-33 head (not 32), ImageNet mean/std (not [-1,1]), 20 uniform crops step (d-224)//4 (not nine five-point crops), bilinear upscale to 225 when min(h,w) <= 224"
+
+[weights]
+licence_class = "nc"
+checkpoint = "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/AHIQ_vit_p8_epoch33-da3ea303.pth"
+sha256 = "da3ea303b365ef71f4bbe41eba56f0ab3371c697d9c959649904dc9dd0a08b85"
+backbones = "timm vit_base_patch8_224.augreg2_in21k_ft_in1k and resnet50.a1_in1k (Apache-2.0 via timm)"
+consent = "AhiqPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq_pyiqa"
+
+[input]
+format = "packed sRGB8"
+normalisation = "v / 255, ImageNet mean/std inside the trunk graph"
+crops = "uniform_crop(224, 20): rows i < 4, cols j < 5 of a 5x5 grid, origin (i*step_h, j*step_w)"
+min_size = 1                         # min(h,w) <= 224 is upscaled by 225/min first
+
+[export]
+script = "export.py"
+outputs = "ahiq_pyiqa_trunk.onnx (crop -> vit[1,3840,28,28], cnn[1,768,56,56]), ahiq_pyiqa_ref.onnx (vit_r, cnn_r -> offset, f_ref), ahiq_pyiqa_dist.onnx (vit_d, cnn_d, offset, f_ref -> score), ahiq_pyiqa.meta, ahiq_pyiqa_export.meta"
+opset = 17
+deform_conv = "nine bilinear grid_sample taps + 1x1 conv (vs torchvision DeformConv2d: 7e-6 on random inputs)"
+onnx_replay = "split head vs pyiqa regress_score on one crop: 3e-8; onnxruntime CPU on 2 ladder pairs vs pyiqa: 3.1e-7"
+
+[parity]
+oracle = "pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref)"
+goldens = "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)"
+# 1 JND: pooled median |score(pair) - score(ref, ref)| over the 1,008 KonJND-1k pairs, scored by this
+# port on ort-cuda (pyiqa needs ~80 s per pair on CPU): JPEG 0.037184, BPG 0.050104.
+jnd = 0.043353
+tolerance_jnd = 1e-3
+measured_ladder = "rten 5.1e-8 (1.2e-6 JND), ort-cuda 4.0e-7 (9.3e-6 JND); ort-cpu on 3 of the 15 pairs (64x64, 840x944, 2048x1536: AHIQ costs 20 crops x 2 images whatever the size, and ort-cpu runs > 65 s per score here, so the full ladder does not fit one heavy-lock hold) 4.0e-7 (9.1e-6 JND)"
+measured_aic2026_61 = "ort-cuda 5.2e-7 (1.2e-5 JND); pyiqa vs the published column: median 2.5e-6, max 1.0e-5"
+warm_reference = "caches the 20 crops' deform offsets and reduced reference features (~8.5 MB); bit-identical to cold"

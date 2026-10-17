@@ -373,6 +373,32 @@ pub enum MetricKind {
     /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal`.
     #[value(name = "topiq-fr-pipal")]
     TopiqFrPipal,
+    /// WaDIQaM-FR as pyiqa scores it (KADID checkpoint, pyiqa's 32×32 patch
+    /// grid; the AIC2026 `WaDIQaM` column, **higher** is better). Needs
+    /// feature `pyiqa-ports` and `ZENMETRICS_NN_ACCEPT_WEIGHTS=wadiqam_pyiqa`.
+    #[value(name = "wadiqam-pyiqa")]
+    WadiqamPyiqa,
+    /// AHIQ as pyiqa scores it (20 uniform crops, timm 1.0.30 backbones,
+    /// epoch-33 head; the AIC2026 `AHIQ` column, **higher** is better). Needs
+    /// feature `pyiqa-ports` and `ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq_pyiqa`.
+    #[value(name = "ahiq-pyiqa")]
+    AhiqPyiqa,
+    /// CW-SSIM as pyiqa computes it (coarsest of 4 levels, 8 orientations,
+    /// f32 masks; the AIC2026 `CW-SSIM` column, **higher** is better, ≥ 64²).
+    /// Needs feature `pyiqa-ports`; no model files.
+    #[value(name = "cw-ssim-pyiqa")]
+    CwSsimPyiqa,
+    /// DMM as pyiqa scores it (square bilinear resize; close to the AIC2026
+    /// `DMM` column, **lower** is better, ≥ 128²). Needs feature
+    /// `pyiqa-ports`; torchvision VGG16 weights, no consent gate.
+    #[value(name = "dmm-pyiqa")]
+    DmmPyiqa,
+    /// PieAPP as pyiqa scores it (64×64 patches at stride 27; the AIC2026
+    /// `PieAPP` column, **lower** is better, ≥ 64²). Reads zenmetrics-nn's
+    /// `pieapp.onnx`. Needs feature `pyiqa-ports` and
+    /// `ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp_pyiqa`.
+    #[value(name = "pieapp-pyiqa")]
+    PieappPyiqa,
     /// SSIMULACRA2 — CPU implementation via Imazen's `fast-ssim2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -819,6 +845,11 @@ impl MetricKind {
             // pyiqa-ports
             MetricKind::TopiqFr,
             MetricKind::TopiqFrPipal,
+            MetricKind::WadiqamPyiqa,
+            MetricKind::AhiqPyiqa,
+            MetricKind::CwSsimPyiqa,
+            MetricKind::DmmPyiqa,
+            MetricKind::PieappPyiqa,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -942,6 +973,11 @@ impl MetricKind {
             // pyiqa-ports
             MetricKind::TopiqFr => "topiq-fr",
             MetricKind::TopiqFrPipal => "topiq-fr-pipal",
+            MetricKind::WadiqamPyiqa => "wadiqam-pyiqa",
+            MetricKind::AhiqPyiqa => "ahiq-pyiqa",
+            MetricKind::CwSsimPyiqa => "cw-ssim-pyiqa",
+            MetricKind::DmmPyiqa => "dmm-pyiqa",
+            MetricKind::PieappPyiqa => "pieapp-pyiqa",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -1068,7 +1104,16 @@ impl MetricKind {
             MetricKind::Piqe | MetricKind::Niqe | MetricKind::Brisque
         );
         // pyiqa-ports
-        let pyiqa = matches!(self, MetricKind::TopiqFr | MetricKind::TopiqFrPipal);
+        let pyiqa = matches!(
+            self,
+            MetricKind::TopiqFr
+                | MetricKind::TopiqFrPipal
+                | MetricKind::WadiqamPyiqa
+                | MetricKind::AhiqPyiqa
+                | MetricKind::CwSsimPyiqa
+                | MetricKind::DmmPyiqa
+                | MetricKind::PieappPyiqa
+        );
         !((nn && !cfg!(feature = "nn"))
             || (nr && !cfg!(feature = "nr"))
             || (pyiqa && !cfg!(feature = "pyiqa-ports")))
@@ -1173,6 +1218,11 @@ impl MetricKind {
             // pyiqa-ports
             MetricKind::TopiqFr => &["topiq_fr"],
             MetricKind::TopiqFrPipal => &["topiq_fr_pipal"],
+            MetricKind::WadiqamPyiqa => &["wadiqam_pyiqa"],
+            MetricKind::AhiqPyiqa => &["ahiq_pyiqa"],
+            MetricKind::CwSsimPyiqa => &["cw_ssim_pyiqa"],
+            MetricKind::DmmPyiqa => &["dmm_pyiqa"],
+            MetricKind::PieappPyiqa => &["pieapp_pyiqa"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -2523,13 +2573,21 @@ pub fn run_metric(
         | MetricKind::Dmm => Err(disabled_msg(kind.name(), "nn")),
         // pyiqa-ports
         #[cfg(feature = "pyiqa-ports")]
-        MetricKind::TopiqFr | MetricKind::TopiqFrPipal => {
-            pyiqa_ports::score(kind, reference, distorted)
-        }
+        MetricKind::TopiqFr
+        | MetricKind::TopiqFrPipal
+        | MetricKind::WadiqamPyiqa
+        | MetricKind::AhiqPyiqa
+        | MetricKind::CwSsimPyiqa
+        | MetricKind::DmmPyiqa
+        | MetricKind::PieappPyiqa => pyiqa_ports::score(kind, reference, distorted),
         #[cfg(not(feature = "pyiqa-ports"))]
-        MetricKind::TopiqFr | MetricKind::TopiqFrPipal => {
-            Err(disabled_msg(kind.name(), "pyiqa-ports"))
-        }
+        MetricKind::TopiqFr
+        | MetricKind::TopiqFrPipal
+        | MetricKind::WadiqamPyiqa
+        | MetricKind::AhiqPyiqa
+        | MetricKind::CwSsimPyiqa
+        | MetricKind::DmmPyiqa
+        | MetricKind::PieappPyiqa => Err(disabled_msg(kind.name(), "pyiqa-ports")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",

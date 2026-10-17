@@ -1632,6 +1632,16 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // pairs (both checkpoints); identical pairs score 0.61-0.95
         // depending on the image, so zero is only a default-failure sentinel.
         MetricKind::TopiqFr | MetricKind::TopiqFrPipal => Some((-0.5, 1.5, 0.0)),
+        // CW-SSIM (pyiqa): identical images score 1 - O(1e-9).
+        MetricKind::CwSsimPyiqa => Some((-0.001, 1.001, 0.0)),
+        // WaDIQaM-KADID: pyiqa scores -0.038..0.017 over the KonJND pairs and
+        // -0.122..-0.023 on the parity ladder; AHIQ: unbounded regressor;
+        // DMM: unbounded distance, 0 = identical; PieAPP: learned error head,
+        // unbounded. No characterised bounds.
+        MetricKind::WadiqamPyiqa
+        | MetricKind::AhiqPyiqa
+        | MetricKind::DmmPyiqa
+        | MetricKind::PieappPyiqa => None,
         // WD is a nonnegative, unbounded feature distortion; identical
         // inputs score exactly 0 in every column. Measured maxima: 1.50
         // over the 1008 KonJND pairs, 6.83 over the 25 ladder goldens

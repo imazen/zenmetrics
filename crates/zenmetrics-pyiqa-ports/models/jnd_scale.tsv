@@ -6,6 +6,16 @@
 # topiq_fr and topiq_fr_pipal are higher-is-better with an image-dependent identical-pair score,
 # so their JND is the median of |score(ref, dist) - score(ref, ref)|.
 # Used by tests/parity.rs to express engine tolerance in JND units (TOL_JND = 1e-3).
+# *_pyiqa columns (2026-10-17/18, i265, models/common/konjnd_score.py): wadiqam_pyiqa and ahiq_pyiqa
+# use |score(ref, dist) - score(ref, ref)| (image-dependent identical-pair score); cw_ssim_pyiqa
+# |1 - score|; dmm_pyiqa and pieapp_pyiqa the score itself (identical pairs ~0). ahiq_pyiqa's scores
+# come from this crate's port on ort-cuda (pyiqa needs ~80 s per pair on CPU; the port matches pyiqa
+# within 1.2e-5 JND); the others from pyiqa itself.
 column	jnd
 topiq_fr	0.030642
 topiq_fr_pipal	0.072797
+wadiqam_pyiqa	0.009666
+ahiq_pyiqa	0.043353
+cw_ssim_pyiqa	0.004347
+dmm_pyiqa	0.178438
+pieapp_pyiqa	0.514383

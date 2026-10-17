@@ -1,0 +1,153 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "ahiq-pyiqa",
+ "cli_names": [
+  "ahiq-pyiqa"
+ ],
+ "counter": "claude",
+ "source_commit": "PENDING",
+ "kind": "nn-fr",
+ "params": {
+  "NC": 20,
+  "CROP": 224
+ },
+ "assumptions": [
+  "Cold pair (score_cold = warm + score_warm): 20 crops x 2 images through the trunk; the ref head on the reference crops, the dist head on the distorted crops. A warm reference removes the 20 reference trunk passes and the ref heads.",
+  "MACs from models/common/count_macs.py (onnx shape inference; agrees exactly with zenmetrics--cxswe2 scripts/complexity/onnx_macs.py on ahiq_pyiqa_ref/dist, which onnx_macs.py can read; it fails on the trunk graph): trunk 33,414,880,768 per 224^2 crop (ViT-B/8 blocks 0-4 MatMul 32,513,318,400; ResNet-50 stem + layer1 Conv 901,562,368); ref head 25,071,943,680; dist head 33,294,786,560. Constant per crop whatever W,H (fixed-NN convention: elements = crops).",
+  "Element ops counted: GridSample 21,676,032 bilinear taps per head call (4 mul + 3 add each), Relu, Sigmoid (exp+add+div), from onnx_macs.py on the heads. Trunk element ops (LayerNorm, softmax, GELU) are not counted (onnx_macs.py cannot parse the trunk graph); a lower bound.",
+  "Images with min(W,H) <= 224 are first bilinear-upscaled to 225 on the short side; not modelled in the elements formulas (stage upscale is 0 for the evaluated shapes)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "u8 -> f32 /255 planar",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:64-80"
+   ],
+   "images": 2,
+   "elements": "W*H*3",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "crops",
+   "name": "20 crops 224x224 copied",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:124-133"
+   ],
+   "images": 2,
+   "elements": "NC*3*CROP*CROP",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "block",
+   "span": "1",
+   "depends_on": [
+    "ingress"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "trunk",
+   "name": "ViT-B/8 blocks 0-4 + ResNet-50 layer1 per crop [conv+matmul]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:167-195"
+   ],
+   "images": 2,
+   "elements": "NC",
+   "precision": "f32",
+   "ops": {
+    "fma": 33414880768
+   },
+   "access": "matmul",
+   "axis": "xy",
+   "span": "224",
+   "depends_on": [
+    "crops"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "ref_head",
+   "name": "deform offsets + reduced reference features per crop",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:207-226"
+   ],
+   "images": 1,
+   "elements": "NC",
+   "precision": "f32",
+   "ops": {
+    "fma": 25071943680,
+    "mul": 86704128,
+    "add": 65028096,
+    "cmp": 401408
+   },
+   "access": "conv",
+   "span": "56",
+   "depends_on": [
+    "trunk"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "dist_head",
+   "name": "deformed distorted features, fused regressor, pooled crop score",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:232-246"
+   ],
+   "images": 1,
+   "elements": "NC",
+   "precision": "f32",
+   "ops": {
+    "fma": 33294786560,
+    "mul": 86704128,
+    "add": 65151536,
+    "cmp": 1404928,
+    "exp": 784,
+    "div": 785
+   },
+   "access": "conv",
+   "span": "56",
+   "depends_on": [
+    "ref_head"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "pool",
+   "name": "mean of 20 crop scores",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/ahiq.rs:247-247"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "add": 20,
+    "div": 1,
+    "cvt": 20
+   },
+   "access": "reduction",
+   "span": "log2(20)",
+   "barrier": true,
+   "depends_on": [
+    "dist_head"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

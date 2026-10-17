@@ -1,0 +1,116 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "pieapp-pyiqa",
+ "cli_names": [
+  "pieapp-pyiqa"
+ ],
+ "counter": "claude",
+ "source_commit": "PENDING",
+ "kind": "nn-fr",
+ "params": {
+  "P": 64,
+  "S": 27
+ },
+ "derived": {
+  "GY": "floor((H-64)/27)+1",
+  "GX": "floor((W-64)/27)+1",
+  "NP": "GY*GX"
+ },
+ "assumptions": [
+  "Cold pair: every patch pair through zenmetrics-nn's pieapp.onnx (both patches per call), so warm references save no network work.",
+  "MACs from models/common/count_macs.py and onnx_macs.py (agree): 945,292,288 per patch pair (Conv 882,376,704 over both patches, Gemm 62,915,584); element ops 3,224,585 per patch pair from onnx_macs.py (Relu 1,668,096, MaxPool 901,120 inputs at 3 compares per 2x2 output, Concat/Flatten copies excluded).",
+  "pyiqa's grid: 64x64 patches at stride 27, no padding (NP = GY*GX)."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "u8 -> f32 /255 planar",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/pieapp.rs:47-63"
+   ],
+   "images": 2,
+   "elements": "W*H*3",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "patches",
+   "name": "patch gather [n,3,64,64]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/pieapp.rs:66-77"
+   ],
+   "images": 2,
+   "elements": "NP*3*P*P",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "store": 1
+   },
+   "bytes_read": 4,
+   "bytes_written": 4,
+   "access": "gather",
+   "span": "1",
+   "depends_on": [
+    "ingress"
+   ],
+   "materialize": "strip"
+  },
+  {
+   "id": "net",
+   "name": "PieAPP net per patch pair [conv+gemm]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/pieapp.rs:152-162"
+   ],
+   "images": 1,
+   "elements": "NP",
+   "precision": "f32",
+   "ops": {
+    "fma": 945292288,
+    "cmp": 2343936,
+    "add": 122882,
+    "mul": 24577,
+    "div": 1
+   },
+   "access": "conv",
+   "axis": "xy",
+   "span": "64",
+   "depends_on": [
+    "patches"
+   ],
+   "materialize": "strip"
+  },
+  {
+   "id": "pool",
+   "name": "sum(e*w)/sum(w)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/pieapp.rs:163-176"
+   ],
+   "images": 1,
+   "elements": "NP",
+   "precision": "f64",
+   "ops": {
+    "mul": 1,
+    "add": 2,
+    "cvt": 2,
+    "cmp": 2
+   },
+   "access": "reduction",
+   "span": "log2(NP)",
+   "barrier": true,
+   "depends_on": [
+    "net"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

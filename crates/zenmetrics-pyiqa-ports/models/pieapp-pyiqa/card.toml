@@ -1,0 +1,40 @@
+# PieAPP as pyiqa 0.1.16 `pieapp` scores it (the AIC2026 `PieAPP` column).
+name = "pieapp-pyiqa"
+kind = "full-reference"
+direction = "lower-is-better"         # identical pairs score ~0 (-1.9e-9 on KonJND)
+columns = ["pieapp_pyiqa"]
+paper = "Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018"
+
+[code]
+source = "pyiqa 0.1.16"               # pyiqa/archs/pieapp_arch.py (eval path: extract_2d_patches, weighted pool)
+licence = "PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)"
+module = "src/pieapp.rs"
+differs_from_zenmetrics_nn_pieapp = "patch stride 27 (pyiqa's PieAPP(stride=27) default) instead of the official release's dense stride 6; same network, same checkpoint"
+
+[weights]
+licence_class = "nc"
+checkpoint = "PieAPPv0.1 (pyiqa: https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/PieAPPv0.1-0937b014.pth; official: https://web.ece.ucsb.edu/~ekta/projects/PieAPPv0.1/weights/PieAPPv0.1.pth)"
+sha256 = "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0"
+terms_url = "https://github.com/prashnani/PerceptualImageError/blob/master/LICENSE.txt"
+consent = "PieAppPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp_pyiqa"
+
+[input]
+format = "packed sRGB8"
+graph = "zenmetrics-nn's pieapp.onnx unchanged (crates/zenmetrics-nn/models/pieapp/export.py): reference, distorted [n,3,64,64] RGB in [0,1] -> [n,2] = error, weight + 1e-6"
+patches = "64x64 at stride 27, no padding: origins 0, 27, ... <= d - 64"
+min_size = 64
+
+[export]
+script = "none: reuses zenmetrics-nn's export; replay.py checks graph + pyiqa grid against pyiqa"
+onnx_replay = "onnxruntime CPU on 6 AIC2026 pairs (957 patches each) vs pyiqa: worst |d| 5.3e-8"
+
+[parity]
+oracle = "pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref)"
+goldens = "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)"
+# 1 JND: pooled median score over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.517011, BPG 0.509688).
+jnd = 0.514383
+tolerance_jnd = 1e-3
+measured_ladder = "rten 1.19e-6 (2.3e-6 JND), ort-cpu 7.2e-7 (1.4e-6 JND), ort-cuda 4.8e-7 (9.3e-7 JND)"
+measured_aic2026_61 = "ort-cuda 3.5e-7 (6.8e-7 JND); pyiqa vs the published column: median 2.3e-5, max 1.9e-4"
+goldens_note = "pyiqa runs all patches of an image in one batch (> 14 GiB at 2048x1536); goldens.py with PIQA_FEATURE_CHUNK=256 runs compute_features 256 patches at a time. Chunked and unchunked goldens are bit-identical on the four pairs both computed (64x64 .. 1024x1024)."
+warm_reference = "keeps the reference's planar copy only (the network runs both patches of every pair); bit-identical to cold"

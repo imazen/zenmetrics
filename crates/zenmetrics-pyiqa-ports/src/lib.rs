@@ -8,10 +8,22 @@
 //! constructor takes a [`zenmetrics_nn::WeightsConsent`].
 #![forbid(unsafe_code)]
 
+mod ahiq;
+mod cw_ssim;
+mod dmm;
+mod dmm_svd;
 mod engine;
+mod pieapp;
+mod port;
 mod topiq;
+mod wadiqam;
 
+pub use ahiq::AhiqPyiqa;
+pub use cw_ssim::CwSsimPyiqa;
+pub use dmm::DmmPyiqa;
 pub use engine::Engine;
+pub use pieapp::PieAppPyiqa;
 pub use topiq::{Topiq, TopiqVariant};
+pub use wadiqam::WadiqamPyiqa;
 
 use zenmetrics_abstractions as za;

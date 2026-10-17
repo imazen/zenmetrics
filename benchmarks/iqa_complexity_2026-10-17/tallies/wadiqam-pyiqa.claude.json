@@ -1,0 +1,176 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "wadiqam-pyiqa",
+ "cli_names": [
+  "wadiqam-pyiqa"
+ ],
+ "counter": "claude",
+ "source_commit": "PENDING",
+ "kind": "nn-fr",
+ "params": {},
+ "derived": {
+  "GH": "0 if H <= 32 else ceil((H-32)/32)",
+  "GW": "0 if W <= 32 else ceil((W-32)/32)",
+  "NP": "GH*GW"
+ },
+ "assumptions": [
+  "Cold pair (WadiqamPyiqa cold evaluate): both images' patches go through the trunk (images 2); concat, head and pooling combine the pair once. A warm reference removes one image from the patch and trunk stages.",
+  "Patch grid is pyiqa's range(0, d-32, 32) per axis (NP = GH*GW patches of 32x32); pixels outside the grid are never read.",
+  "trunk = wadiqam_pyiqa_trunk.onnx at [1,3,32,32]; onnx_macs.py (zenmetrics--cxswe2 scripts/complexity): Conv 66,945,024 MACs per patch, Relu 126,976 elements, MaxPool 63,488 input elements (3 compares per 2x2 output); conv bias adds counted as one add per conv output (126,976).",
+  "head = wadiqam_pyiqa_head.onnx per patch: Gemm 1,573,888 MACs (fc_q and fc_w, 1536->512->1 each), 1,026 bias adds, 1,025 Relu compares, +1e-8 one add."
+ ],
+ "stages": [
+  {
+   "id": "patches",
+   "name": "u8 -> f32 /255 into [P,3,32,32]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:103-139"
+   ],
+   "images": 2,
+   "elements": "NP*3072",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "block",
+   "axis": "xy",
+   "radius": 0,
+   "span": "1",
+   "materialize": "strip"
+  },
+  {
+   "id": "trunk_conv",
+   "name": "VGG-ish trunk per patch [conv]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:132-137"
+   ],
+   "images": 2,
+   "elements": "NP",
+   "precision": "f32",
+   "ops": {
+    "fma": 66945024,
+    "add": 126976
+   },
+   "access": "conv",
+   "axis": "xy",
+   "radius": 16,
+   "span": "32",
+   "depends_on": [
+    "patches"
+   ],
+   "materialize": "strip",
+   "notes": "10 conv3x3 at 32,16,8,4,2 px"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "trunk per patch [relu, maxpool]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:132-137"
+   ],
+   "images": 2,
+   "elements": "NP",
+   "precision": "f32",
+   "ops": {
+    "cmp": 174592
+   },
+   "access": "conv",
+   "axis": "xy",
+   "span": "1",
+   "depends_on": [
+    "trunk_conv"
+   ],
+   "materialize": "strip"
+  },
+  {
+   "id": "concat",
+   "name": "cat(f_ref, f_dist, f_dist - f_ref)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:177-184"
+   ],
+   "images": 1,
+   "elements": "NP*512",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "load": 2,
+    "store": 3
+   },
+   "bytes_read": 8,
+   "bytes_written": 12,
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "trunk_pointwise"
+   ],
+   "materialize": "strip"
+  },
+  {
+   "id": "head",
+   "name": "fc_q, fc_w (+1e-8) per patch",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:185-192"
+   ],
+   "images": 1,
+   "elements": "NP",
+   "precision": "f32",
+   "ops": {
+    "fma": 1573888,
+    "add": 1027,
+    "cmp": 1025
+   },
+   "access": "matmul",
+   "span": "log2(1536)",
+   "depends_on": [
+    "concat"
+   ],
+   "materialize": "strip"
+  },
+  {
+   "id": "pool",
+   "name": "sum(q*w)/sum(w)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:193-199"
+   ],
+   "images": 1,
+   "elements": "NP",
+   "precision": "mixed",
+   "ops": {
+    "mul": 1,
+    "add": 2,
+    "cvt": 2,
+    "load": 2
+   },
+   "access": "reduction",
+   "span": "log2(NP)",
+   "barrier": true,
+   "depends_on": [
+    "head"
+   ],
+   "materialize": "fused"
+  },
+  {
+   "id": "final",
+   "name": "divide",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/wadiqam.rs:199-199"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "span": "1",
+   "depends_on": [
+    "pool"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

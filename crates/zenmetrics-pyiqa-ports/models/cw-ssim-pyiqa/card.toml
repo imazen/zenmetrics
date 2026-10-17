@@ -1,0 +1,31 @@
+# CW-SSIM as pyiqa 0.1.16 `cw_ssim` computes it (the AIC2026 `CW-SSIM` column).
+name = "cw-ssim-pyiqa"
+kind = "full-reference"
+direction = "higher-is-better"       # identical images score 1 - O(1e-9): pyiqa adds 1e-12 under each |z|
+columns = ["cw_ssim_pyiqa"]
+paper = "Sampat, Wang, Gupta, Bovik, Markey. Complex Wavelet Structural Similarity: A New Image Similarity Index. IEEE TIP 2009"
+
+[code]
+source = "pyiqa 0.1.16"              # archs/ssim_arch.py CW_SSIM; matlab_utils/{scfpyr_util,math_util,functions}.py
+licence = "PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)"
+module = "src/cw_ssim.rs"
+fft = "rustfft 6.4.1, f64"
+
+[weights]
+licence_class = "none"               # no weights or model files
+
+[input]
+format = "packed sRGB8"
+luma = "YIQ Y with f32 weights (0.299, 0.587, 0.114) on f32 v/255 widened to f64, x255, round half to even"
+pyramid = "SCFpyr height 4, 8 orientations; only the coarsest oriented level is scored, every FFT mask rounded to f32 as pyiqa does"
+min_size = 64
+
+[parity]
+oracle = "pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref)"
+goldens = "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)"
+# 1 JND: pooled median |1 - score| over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.003649, BPG 0.005758).
+jnd = 0.004347
+tolerance_jnd = 1e-3
+measured_ladder = "1.3e-15 (3.1e-13 JND)"
+measured_aic2026_61 = "2.3e-15 (5.4e-13 JND); pyiqa vs the published column: max 2.2e-16"
+warm_reference = "caches the size plan (masks, Gaussian) and the reference's bands; bit-identical to cold"

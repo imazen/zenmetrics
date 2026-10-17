@@ -1,0 +1,41 @@
+# WaDIQaM-FR as pyiqa 0.1.16 `wadiqam_fr` scores it (the AIC2026 `WaDIQaM` column).
+name = "wadiqam-pyiqa"
+kind = "full-reference"
+direction = "higher-is-better"       # identical pairs score an image-dependent value
+columns = ["wadiqam_pyiqa"]
+paper = "Bosse, Maniry, Mueller, Wiegand, Samek. Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment. IEEE TIP 2018"
+
+[code]
+source = "pyiqa 0.1.16"              # pyiqa/archs/wadiqam_arch.py, eval path
+licence = "PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)"
+module = "src/wadiqam.rs"
+
+[weights]
+licence_class = "nc"
+checkpoint = "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/WaDIQaM-kadid-f7541ea5.pth"
+sha256 = "f7541ea5dd4d742559e689889a0f3035bdff22fc444e5602a3082ed426ef20a8"
+trained_on = "KADID-10k"
+consent = "WadiqamPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=wadiqam_pyiqa"
+
+[input]
+format = "packed sRGB8"
+normalisation = "v / 255 (ToTensor), no mean/std"
+patches = "32x32 at stride 32, origins range(0, d-32, 32) per axis: a side that is a multiple of 32 drops its last full patch (deepIQA keeps it)"
+min_size = 33
+
+[export]
+script = "export.py"
+outputs = "wadiqam_pyiqa_trunk.onnx (x[P,3,32,32] -> h[P,512]), wadiqam_pyiqa_head.onnx (f[P,1536] -> q, w incl. +1e-8), wadiqam_pyiqa.meta, wadiqam_pyiqa_goldens_ladder.tsv, wadiqam_pyiqa_export.meta"
+opset = 17
+onnx_replay = "onnxruntime CPU on the ladder vs pyiqa: worst |d| 1.12e-7"
+
+[parity]
+oracle = "pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref)"
+goldens = "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)"
+# 1 JND: pooled median |score(pair) - score(ref, ref)| over the 1,008 KonJND-1k pairs, pyiqa CPU
+# (JPEG 0.008107, BPG 0.011477; distorted below its identical-pair score in 1006 of 1008).
+jnd = 0.009666
+tolerance_jnd = 1e-3
+measured_ladder = "rten 5.7e-8 (5.9e-6 JND), ort-cpu 1.10e-7 (1.1e-5 JND), ort-cuda 3.4e-8 (3.5e-6 JND)"
+measured_aic2026_61 = "rten 1.19e-8, ort-cpu 1.27e-8, ort-cuda 2.59e-8 (<= 2.7e-6 JND); pyiqa vs the published column: median 1.7e-6, max 1.2e-5"
+warm_reference = "caches the reference's patch features; bit-identical to cold on every pair"

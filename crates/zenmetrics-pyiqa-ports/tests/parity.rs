@@ -8,9 +8,18 @@
 //! - `ZENMETRICS_PYIQA_ENGINE`: `rten`, `ort-cpu` or `ort-cuda` (the last
 //!   two need the `ort` feature and `ORT_DYLIB_PATH`).
 //! - `ZENMETRICS_PYIQA_MODELS`: comma-separated score columns to check
-//!   (`topiq_fr`, `topiq_fr_pipal`).
+//!   (`topiq_fr`, `topiq_fr_pipal`, `wadiqam_pyiqa`, `ahiq_pyiqa`,
+//!   `cw_ssim_pyiqa`, `dmm_pyiqa`, `pieapp_pyiqa`).
 //!
-//! Goldens are pyiqa `metric(dist, ref)` on CPU fp32.
+//! Optional: `ZENMETRICS_PYIQA_GOLDENS`, a goldens file used instead of each
+//! model's own (for a pair set other than the one its goldens cover; check one
+//! model per run).
+//!
+//! Goldens are pyiqa `metric(dist, ref)` on CPU fp32. The `*_pyiqa` models'
+//! goldens are committed (`models/<name>/goldens_ladder.tsv`, on the
+//! `models/common/ladder.py` pairs); a `nan` golden marks a pair pyiqa
+//! refuses, which the port must refuse too. pieapp-pyiqa reads
+//! zenmetrics-nn's `pieapp.onnx` from the model directory.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -18,7 +27,9 @@ use std::path::{Path, PathBuf};
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric};
 use zenmetrics_nn::WeightsConsent;
-use zenmetrics_pyiqa_ports::{Engine, Topiq, TopiqVariant};
+use zenmetrics_pyiqa_ports::{
+    AhiqPyiqa, CwSsimPyiqa, DmmPyiqa, Engine, PieAppPyiqa, Topiq, TopiqVariant, WadiqamPyiqa,
+};
 
 /// Tolerance in JND units, as zenmetrics-nn's parity gate: 1/1000 of the
 /// column's estimated just-noticeable difference.
@@ -119,8 +130,51 @@ fn goldens(dir: &Path, file: &str, col: &str) -> HashMap<String, f64> {
         .collect()
 }
 
-/// The model for score column `col`, and its goldens file.
+/// The model for score column `col`, and its goldens file (relative to the
+/// model directory, or absolute).
 fn model(dir: &Path, col: &str) -> (Box<dyn Metric>, &'static str) {
+    macro_rules! committed {
+        ($name:literal) => {
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/models/",
+                $name,
+                "/goldens_ladder.tsv"
+            )
+        };
+    }
+    let consent = WeightsConsent::new()
+        .accept(WadiqamPyiqa::WEIGHTS)
+        .accept(AhiqPyiqa::WEIGHTS)
+        .accept(PieAppPyiqa::WEIGHTS);
+    match col {
+        "wadiqam_pyiqa" => {
+            return (
+                Box::new(WadiqamPyiqa::from_dir(dir, engine(), &consent).expect("load")),
+                committed!("wadiqam-pyiqa"),
+            );
+        }
+        "ahiq_pyiqa" => {
+            return (
+                Box::new(AhiqPyiqa::from_dir(dir, engine(), &consent).expect("load")),
+                committed!("ahiq-pyiqa"),
+            );
+        }
+        "cw_ssim_pyiqa" => return (Box::new(CwSsimPyiqa::new()), committed!("cw-ssim-pyiqa")),
+        "dmm_pyiqa" => {
+            return (
+                Box::new(DmmPyiqa::from_dir(dir, engine()).expect("load")),
+                committed!("dmm-pyiqa"),
+            );
+        }
+        "pieapp_pyiqa" => {
+            return (
+                Box::new(PieAppPyiqa::from_dir(dir, engine(), &consent).expect("load")),
+                committed!("pieapp-pyiqa"),
+            );
+        }
+        _ => {}
+    }
     let variant = TopiqVariant::ALL
         .into_iter()
         .find(|v| v.column() == col)
@@ -142,7 +196,8 @@ fn parity() {
         .filter(|c| !c.is_empty())
     {
         let (mut m, file) = model(&dir, col);
-        let gold = goldens(&dir, file, col);
+        let file = std::env::var("ZENMETRICS_PYIQA_GOLDENS").unwrap_or_else(|_| file.to_string());
+        let gold = goldens(&dir, &file, col);
         let (j, tol) = (jnd(col), TOL_JND * jnd(col));
         let (mut worst, mut worst_name, mut warm_checked) = (0.0f64, String::new(), 0);
         for (rp, dp, name) in &pairs {
@@ -152,6 +207,14 @@ fn parity() {
             let (r, w, h) = load_rgb8(rp);
             let (d, w2, h2) = load_rgb8(dp);
             assert_eq!((w, h), (w2, h2), "{name}");
+            if g.is_nan() {
+                assert!(
+                    m.evaluate(image(&r, w, h), image(&d, w, h), EvalOpts::new())
+                        .is_err(),
+                    "{col} {name}: pyiqa refuses this pair, the port scored it"
+                );
+                continue;
+            }
             let cold = score(
                 &*m.evaluate(image(&r, w, h), image(&d, w, h), EvalOpts::new())
                     .unwrap_or_else(|e| panic!("{col} {name}: {e}")),
@@ -169,7 +232,9 @@ fn parity() {
             // Warm reference: bit-identical to the cold score, reused twice.
             if warm_checked < 3 && w * h <= 1024 * 1024 {
                 let mut warm = m.warm_reference(image(&r, w, h), EvalOpts::new()).unwrap();
-                assert!(warm.reuses_reference_work());
+                // pieapp-pyiqa keeps only the reference's planar copy: its
+                // network runs on both patches of every pair.
+                assert_eq!(warm.reuses_reference_work(), col != "pieapp_pyiqa");
                 for _ in 0..2 {
                     let s = score(
                         &*warm.evaluate(image(&d, w, h), EvalOpts::new()).unwrap(),
