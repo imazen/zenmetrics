@@ -24,7 +24,7 @@ def load_references(paths):
             value=json.loads(line)
             if (value['impl']=='zenmetrics' and value['device']=='cpu' and value['mode']=='score'):
                 if value['status']=='ok':
-                    if value.get('n',0)<10 or not isinstance(value.get('score'),(int,float)) or not math.isfinite(value['score']):continue
+                    if value.get('n',0)<(value.get('required_samples',10) if value.get('coverage_first') else 10) or not isinstance(value.get('score'),(int,float)) or not math.isfinite(value['score']):continue
                 else:
                     value=completed_warmup(value)
                     if value is None:continue

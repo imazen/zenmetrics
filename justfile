@@ -1204,3 +1204,13 @@ iqa-compete-retain-host-scopes raw output:
 # Explicit immutable cohort export before appending newer continuation results.
 iqa-compete-collect-binary raw output binary_sha:
     python3 benchmarks/iqa_compete_2026-10-16/collect.py '{{raw}}' --output '{{output}}' --only-binary-sha '{{binary_sha}}'
+
+# Owner coverage pass: one pair per size, n=5/3/1, one bounded scope per cell.
+iqa-compete-coverage-rust binary pairs output models model_map sizes="aic-small,aic-medium,aic-large,4k,8k":
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads 1,all --model-root '{{models}}' --models-json '{{model_map}}' --coverage-first
+
+iqa-compete-coverage-native engine binary rust pairs planes output:
+    python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --coverage-first
+
+iqa-compete-coverage-python package python binary pairs output reference:
+    python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads 1,all --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --coverage-first

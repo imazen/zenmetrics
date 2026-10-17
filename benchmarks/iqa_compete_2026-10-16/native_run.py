@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded in-process competitor cells. C/C++ shims perform timing internally."""
 import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, time, uuid
-from run import metadata, sha, family, append, resource, THREAD_ENV, admission_reason, prior_admission_reason
+from run import metadata, sha, family, append, resource, THREAD_ENV, coverage_samples, admission_reason, prior_admission_reason
 P=pathlib.Path
 # Bounds are the existing parity gates, never fitted to these observations.
 # Sources: docs/METRIC_PROVENANCE.md parity table; fast-ssim2 requires tier
@@ -18,7 +18,7 @@ RELATIVE_BOUNDS={'butteraugli':.001} # pinned butteraugli/tests/reference_parity
 def percentile(s,p):
  s=sorted(s);i=(len(s)-1)*p;lo=int(i);hi=min(lo+1,len(s)-1);return s[lo]+(s[hi]-s[lo])*(i-lo)
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--host',default='i265');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('engine',choices=ADAPTERS);p.add_argument('binary',type=P);p.add_argument('rust',type=P);p.add_argument('pairs',type=P);p.add_argument('planes',type=P);p.add_argument('root',type=P);p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20');p.add_argument('--coverage-first',action='store_true');p.add_argument('--host',default='i265');a=p.parse_args()
  a.root.mkdir(parents=True,exist_ok=True);(a.root/'logs').mkdir(exist_ok=True);(a.root/'cells').mkdir(exist_ok=True)
  meta=metadata(a.binary);meta.update(host=a.host,impl=a.engine,impl_version={'libvmaf':'3.2.0 (vmaf-head-sys 0.2.0 vendored source)','libjxl':'0.12.0'}[a.engine])
  output=a.root/f'{a.host}.jsonl';done=set()
@@ -38,17 +38,20 @@ def main():
      row=dict(meta|pair,metric_name=metric,metric_family=family(metric),threads=threads,mode=mode,pair_sha256=pair_hash,input_sha256=hashes,parity_abs_bound=bound,parity_source='docs/METRIC_PROVENANCE.md; pinned butteraugli/tests/reference_parity.rs (relative 0.001); exact where no cross-version bound is specified',n=0,status='unsupported')
      if mode=='score+map' and (a.engine=='libvmaf' or metric=='ssim2'):
       row['notes']='Public in-process adapter does not expose native map buffers; no file-based map output is timed';append(output,row);continue
+     target=coverage_samples(pair['size_name']) if a.coverage_first else 10
+     compare=not a.coverage_first or (pair['size_name']=='cid22' and threads==int(a.threads.split(',')[0]) and mode=='score')
+     row.update(coverage_first=a.coverage_first,required_samples=target,parity_checked=compare)
      native=pair if convention=='rgb' else next(r for r in planes if r['size_name']==pair['size_name'] and r['convention']==convention)
      base=a.pairs.parent if convention=='rgb' else a.planes.parent
      inputs={k:str((base/native[k]).resolve()) for k in paths}
      stem=f'{metric}-{pair["size_name"]}-{threads}t-{mode.replace("+","_")}-{uuid.uuid4().hex[:12]}'
      config=a.root/'cells'/f'{stem}.json';config.write_text(json.dumps(dict(pair|paths,metric_name=metric,probe_only=True)))
      command=[str(a.binary.resolve()),adapter,str(native['width']),str(native['height']),inputs['reference'],inputs['distorted'],str(threads)]
-     command+=([mode,'10'] if a.engine=='libjxl' else ['10','400' if convention.endswith('-y') else ('444' if convention.endswith('-444') else '420')])
+     command+=([mode,str(target)] if a.engine=='libjxl' else [str(target),'400' if convention.endswith('-y') else ('444' if convention.endswith('-444') else '420')])
      # One bounded process warms/times the native implementation, then probes
      # Rust outside its timer. Neither process start nor reference scoring is timed.
      env=os.environ.copy();env['IQA_HEAVY_LOCK_PATH']=str(P.home()/'tmp/i265-heavy.lock');env.update({k:str(threads) for k in THREAD_ENV});env['TMPDIR']=str(a.root/'scratch');P(env['TMPDIR']).mkdir(exist_ok=True)
-     commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,[str(a.rust.resolve()),str(config.resolve())]]))
+     commands_file=a.root/'cells'/f'{stem}-commands.json';commands_file.write_text(json.dumps([command,*([[str(a.rust.resolve()),str(config.resolve())]] if compare else [])]))
      contention_tries=[]
      while True:
       before=os.getloadavg()
@@ -66,7 +69,7 @@ def main():
        attempt_log=a.root/'logs'/f'{stem}-busy-{uuid.uuid4().hex[:8]}.log';attempt_log.write_text(result.stdout+result.stderr);time.sleep(30);continue
       accounting=json.loads(monitor.read_text())
       contention_tries.append((accounting,result,attempt_log))
-      if accounting['contaminated'] and len(contention_tries)<3:continue
+      if accounting['contaminated'] and len(contention_tries)<(2 if a.coverage_first else 3):continue
       accounting,result,selected_log=min(contention_tries,key=lambda item:item[0]['max_competing_interval_cores'])
       row.update(contention=accounting,contention_peak_cores=accounting['max_competing_interval_cores'],contention_receipt=str(selected_log.with_suffix('.contention.json')),timing_quality='contaminated' if accounting['contaminated'] else 'clean',contention_attempts=[dict(log=str(item[2]),max_competing_interval_cores=item[0]['max_competing_interval_cores']) for item in contention_tries])
       break
@@ -76,14 +79,14 @@ def main():
      samples=[(int(s.split()[1]),float(s.split()[2])) for s in result.stdout.splitlines() if s.startswith('SAMPLE ')]
      probes=[json.loads(s[len('IQA_PROBE '):]) for s in result.stdout.splitlines() if s.startswith('IQA_PROBE ')]
      version=next((s[8:] for s in result.stdout.splitlines() if s.startswith('VERSION ')),None);row['impl_version']=version
-     if result.returncode or not probes or (len(samples)<10 and sum(t for t,_ in samples)<3e9):
+     if result.returncode or (compare and not probes) or (len(samples)<target if a.coverage_first else (len(samples)<10 and sum(t for t,_ in samples)<3e9)):
       row.update(status=f'skipped:process_exit_{result.returncode}; samples={len(samples)}',n=len(samples));append(output,row);print('REFUSED',stem,row['status'],flush=True)
       if result.returncode not in [124,137]:raise RuntimeError('Native competitor adapter blocked; inspect retained log before proceeding: '+str(log))
       continue
      import struct
-     reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0]
-     values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference)
-     row.update(reference_column=probes[0]["scores"][0][0],native_feature=adapter,n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; ten individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
+     reference=struct.unpack('>d',bytes.fromhex(probes[0]['scores'][0][1]))[0] if compare else None
+     values=[t for t,_ in samples];scores=[v for _,v in samples];score=scores[-1];delta=abs(score-reference) if compare else None
+     row.update(reference_column=probes[0]["scores"][0][0] if compare else None,native_feature=adapter,n=len(samples),median_ns=statistics.median(values),mean_ns=statistics.mean(values),p10_ns=percentile(values,.1),p90_ns=percentile(values,.9),timed_seconds=sum(values)/1e9,score=score,ref_score=reference,abs_delta=delta,relative_delta=delta/abs(reference) if reference else None,status='ok' if not compare or delta<=max(bound,abs(reference)*RELATIVE_BOUNDS.get(metric,0.)) else 'variant_mismatch',parity_rel_bound=RELATIVE_BOUNDS.get(metric,0.),samples_ns=values,sample_scores=scores,notes='Warmup one call; the recorded required number of individual timed calls. Native picture/input setup, context/model initialization and Rust reference probe excluded. Per-call metric work and native map release included. Input planes/normalized RGB are the C implementation input type; Rust RGB-to-component conversion remains inside its call.')
      if a.engine=='libjxl' and metric=='ssim2':row['notes']+=' ComputeSSIMULACRA2 has no worker-pool argument; the thread count is the declared budget, not a claim that this entry point uses all workers.'
      if metric=='psnrhvs-daala':row['notes']+=' Both APIs process full-size studio-601 YUV444 and compute all three channels; Y headline is compared.'
      if metric=='vif':row['notes']+=' libvmaf float_vif and MATLAB vifp are distinct variants; 8-bit studio-luma ingress also differs. Retain as variant comparison.';row['status']='variant_mismatch'
@@ -94,7 +97,8 @@ if __name__=='__main__':
   commands=json.loads(P(sys.argv[2]).read_text())
   before=list(os.getloadavg())
   print('IQA_LOAD_BEFORE '+json.dumps(before),flush=True)
-  subprocess.run(commands[0],check=True)
+  result=subprocess.run(commands[0])
+  if result.returncode:raise SystemExit(result.returncode if result.returncode>0 else 128-result.returncode)
   print('IQA_LOAD_AFTER '+json.dumps(list(os.getloadavg())),flush=True)
-  subprocess.run(commands[1],check=True)
+  if len(commands)>1:subprocess.run(commands[1],check=True)
  else:main()

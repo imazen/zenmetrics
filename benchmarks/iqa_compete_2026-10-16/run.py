@@ -116,6 +116,9 @@ def metadata(binary):
                 impl='zenmetrics', impl_version='zenmetrics-cli 0.6.0',
                 impl_binary_sha=sha(binary), device='cpu', simd_tier=tier)
 
+def coverage_samples(size):
+    return 1 if size == "8k" else (3 if size in {"2k", "4k"} else 5)
+
 def family(name):
     for prefix in ['ms-ssim', 'ms-gmsd', 'stlpips', 'lpips', 'cw-ssim', 'vmaf', 'psnrhvs',
                    'psnr', 'ssimc', 'ssim', 'fsim', 'vsi', 'haarpsi', 'wadiqam']:
@@ -132,6 +135,9 @@ def resource(text):
                 min_available_mib=int(match[4]), peak_load=float(match[5]))
 
 def _run_cell(args, row, models, *, restore_chunks=True):
+    if args.coverage_first:
+        row.update(coverage_first=True, required_samples=coverage_samples(row["size_name"]))
+        restore_chunks=False
     row["locked_process_accounting"] = platform.system() == "Linux"
     count, name = row['threads'], row['metric_name']
     env = os.environ.copy()
@@ -163,6 +169,9 @@ def _run_cell(args, row, models, *, restore_chunks=True):
     def retain(value):
         mode=value['mode']
         if value['status'] not in ['ok','partial','variant_mismatch']:
+            completed[mode]=value
+        elif value['status']=='partial' and args.coverage_first:
+            value.update(status='skipped:scope_sample_limit', notes=value.get('notes','')+'; Coverage pass: single scope ended below required samples; no continuation')
             completed[mode]=value
         elif value['status']=='partial':
             pieces[mode].append(value)
@@ -226,6 +235,12 @@ def _run_cell(args, row, models, *, restore_chunks=True):
         if lease and process.returncode==124 and not fresh_hold:
             admission='batch_budget_exhausted'
         if lease and admission:lease.close()
+        if admission and args.coverage_first:
+            refused=[]
+            for mode in MODES:
+                value=dict(row,mode=mode,status='skipped:admission_'+admission,n=0,log_path=str(log),log_sha256=sha(log),resource=resource(text),notes='Coverage pass: resource admission refused this bounded cell')
+                normalize_nomap(value);refused.append(value)
+            return refused
         if admission:
             append(args.root / 'admission.jsonl', dict(metric=name, size=row['size_name'],
                    threads=count, attempt=attempt, log=str(log), log_sha256=sha(log),
@@ -278,7 +293,7 @@ def _run_cell(args, row, models, *, restore_chunks=True):
 
 def run_cell(args, row, models, *, restore_chunks=True):
     attempts=[]
-    for index in range(3):
+    for index in range(2 if args.coverage_first else 3):
         rows=_run_cell(args,dict(row),models,restore_chunks=restore_chunks if index==0 else False)
         attempts.append(rows)
         for value in rows:
@@ -299,6 +314,7 @@ def main():
     p.add_argument('binary', type=Path)
     p.add_argument('pairs', type=Path)
     p.add_argument('root', type=Path)
+    p.add_argument('--coverage-first', action='store_true', help='Owner coverage pass: 5 samples below 2K, 3 at 2K/4K, 1 at 8K; one scope, at most one contamination rerun')
     p.add_argument('--host', help='Public CPU-derived host alias, independent of local hostname')
     p.add_argument('--sizes', default='cid22,2k')
     p.add_argument('--metrics')
@@ -373,6 +389,8 @@ def main():
         selected = {r['metric_name'] for r in inventory if r['gpu']}
     if args.engine == 'ort-cuda' and not args.metrics:
         selected &= LEARNED
+    if args.coverage_first and not args.metrics and not args.gpu_runtime and args.engine != "ort-cuda" and not args.python_package:
+        selected -= {r["metric_name"] for r in inventory if r["gpu"]}
     selected-=excluded
     if not selected <= {r['metric_name'] for r in inventory}:
         raise ValueError('selected metric absent from executable inventory')
@@ -403,8 +421,8 @@ def main():
                         row['engine']=args.engine if name in LEARNED else ('cubecl' if args.gpu_runtime else 'native')
                     row.update({key: None for key in TIMING})
                     results=run_cell(args, row, models)
-                    mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) else False
-                    if meta['device']!='cpu' and mismatch:
+                    mismatch=qualify(results) if (meta['device']!='cpu' or args.python_package) and (not args.coverage_first or (pair['size_name']=='cid22' and count==threads[0])) else False
+                    if meta['device']!='cpu' and mismatch and not args.coverage_first:
                         # i265 requires reproduction: preserve the entire first
                         # attempt and rerun the same bounded cell, including timing.
                         for value in results:append(args.root/'gpu-mismatch-attempts.jsonl',value)
@@ -413,6 +431,8 @@ def main():
                         qualify(results)
                         for value in results:value['mismatch_first_attempt']=first_attempts
                     for result in results:
+                        if args.coverage_first:
+                            result["parity_checked"] = bool((meta["device"]!="cpu" or args.python_package) and pair["size_name"]=="cid22" and count==threads[0])
                         append(output, result)
                         done.add((name, pair['size_name'], count, result['mode'], meta['device'],meta['os']))
                     if args.python_package and any(r['status'].startswith('skipped:process_exit_') for r in results):

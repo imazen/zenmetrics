@@ -136,15 +136,15 @@ else:
  torch.set_grad_enabled(False)
 sync();warm=fn();sync();row['warmup_score']=score(warm);del warm
 samples=[];scores=[];before=list(os.getloadavg()) if hasattr(os,'getloadavg') else []
-for _ in range(10):
+for _ in range(c.get("required_samples",10)):
  sync();start=time.perf_counter_ns();value=fn();sync();observed=score(value);del value;elapsed=time.perf_counter_ns()-start
  samples.append(elapsed);scores.append(observed)
  print('IQA_SAMPLE '+json.dumps({'ns':elapsed,'score':observed}),flush=True)
- if len(samples)>=3 and sum(samples)>=3_000_000_000:break
+ if not c.get("coverage_first") and len(samples)>=3 and sum(samples)>=3_000_000_000:break
 # Scalar extraction and output destruction are included, as on the Rust
 # adapters returning f64 after releasing their native outputs.
 sorted_samples=sorted(samples)
 def percentile(p):
  i=p*(len(samples)-1);lo=int(i);hi=min(lo+1,len(samples)-1);return sorted_samples[lo]+(sorted_samples[hi]-sorted_samples[lo])*(i-lo)
-row.update(status='ok',n=len(samples),timed_seconds=sum(samples)/1e9,median_ns=statistics.median(samples),mean_ns=statistics.mean(samples),p10_ns=percentile(.1),p90_ns=percentile(.9),score=scores[-1],sample_scores=scores,samples_ns=samples,load_before=before,load_after=list(os.getloadavg()) if hasattr(os,'getloadavg') else [],notes='Resident native ndarray/tensors. Imports, model load, normalization/upload excluded. Callable including its internal color conversion + device synchronization timed; scalar extraction/output destruction included. One warmup; ten calls or at least three calls totaling three seconds.')
+row.update(status='ok',n=len(samples),timed_seconds=sum(samples)/1e9,median_ns=statistics.median(samples),mean_ns=statistics.mean(samples),p10_ns=percentile(.1),p90_ns=percentile(.9),score=scores[-1],sample_scores=scores,samples_ns=samples,load_before=before,load_after=list(os.getloadavg()) if hasattr(os,'getloadavg') else [],notes='Resident native ndarray/tensors. Imports, model load, normalization/upload excluded. Callable including its internal color conversion + device synchronization timed; scalar extraction/output destruction included. One warmup; coverage pass uses recorded required_samples, otherwise ten calls or at least three calls totaling three seconds.')
 print('IQA_ROW '+json.dumps(row,allow_nan=False),flush=True)

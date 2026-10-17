@@ -343,13 +343,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(first),
         ),
     ]));
+    let required_samples = config["required_samples"].as_u64().unwrap_or(10) as usize;
+    if !(1..=10).contains(&required_samples) {
+        return Err("required_samples must be within 1..=10".into());
+    }
+    let coverage_first = config["coverage_first"].as_bool().unwrap_or(false);
     let result = zenbench::run(|suite| {
         suite.group(name, |g| {
             g.config()
-                .min_rounds(10)
-                .max_rounds(10)
+                .min_rounds(required_samples)
+                .max_rounds(required_samples)
                 .auto_rounds(false)
-                .warmup_time(Duration::from_millis(100))
+                .warmup_time(if coverage_first {
+                    Duration::ZERO
+                } else {
+                    Duration::from_millis(100)
+                })
                 .sample_target_ns(sample_target_ns)
                 .max_time(Duration::from_millis(chunk_budget_ms))
                 .max_wall_time(Duration::from_millis(chunk_budget_ms));
@@ -471,9 +480,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         row["notes"] = json!(
             "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles"
         );
-        if samples.len() < 10 {
+        if samples.len() < required_samples {
             row["status"] = json!("partial");
-            row["partial_reason"] = json!("chunk time budget reached before ten zenbench rounds");
+            row["partial_reason"] = json!("chunk time budget reached before required zenbench rounds");
             println!("IQA_PARTIAL {}", serde_json::to_string(&row)?);
         } else {
             println!("IQA_ROW {}", serde_json::to_string(&row)?);

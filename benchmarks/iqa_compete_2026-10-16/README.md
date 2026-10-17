@@ -139,3 +139,22 @@ The [second progress snapshot](cid22-cpu-progress-v2.meta.json) covers
 sampling still lacks ten rounds and needs its chunked rerun. This inventory
 coverage does not complete the timing panel or the larger-size matrix.
 Split compact observations: [CID22 progress v2](cid22-cpu-progress-v2/).
+
+## Owner coverage pass (2026-10-17)
+
+The coverage-first pass supersedes the earlier depth requirements for new cells.
+It uses the existing single pair per resolution: five actual samples at CID22
+and the three AIC sizes, three at 2K/4K, and one at 8K. Rows record
+`coverage_first` and `required_samples`; the legacy controller default stays ten.
+The explicit first score/map call warms each route, with no additional zenbench
+warmup interval in this pass. Partial cells do not continue in another scope.
+A cell below its sample target records `skipped:scope_sample_limit` with its
+actual samples and retained log. Each scope retains the existing 1100-second
+limit and 16 GiB Linux memory cap. Contamination permits at most two attempts
+in total; the cleanest attempt is retained with its label.
+
+Score comparisons run at CID22 once per metric, using the first thread budget.
+Larger sizes and the other thread budget carry timings without another parity
+qualification or mismatch rerun. Existing completed observations are retained.
+The final coverage audit reports requested, present and timed cells per size;
+unsupported routes and bounded refusals are counted separately from timings.

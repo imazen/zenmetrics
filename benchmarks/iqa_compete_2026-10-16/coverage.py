@@ -42,9 +42,9 @@ def main():
         row=actual[key];status=row['status'];counts[status.split(':',1)[0]]+=1
         reason=None
         if status in ['ok','variant_mismatch']:
-            if row.get('n',0)<10:reason='fewer than ten actual Rust rounds'
+            if row.get('n',0)<(row.get('required_samples',10) if row.get('coverage_first') else 10):reason='fewer than required actual Rust rounds'
             elif row.get('reproduction_required'):reason='GPU mismatch reproduction pending'
-            elif key[1]!='cpu' and row.get('ref_score') is None:reason='same-pair CPU comparison missing'
+            elif key[1]!='cpu' and row.get('ref_score') is None and (not row.get('coverage_first') or (key[2]=='cid22' and key[3]==threads[0])):reason='same-pair CPU comparison missing'
         elif status=='partial':reason='sampling incomplete'
         elif status.startswith('skipped:process_exit_'):reason='unexpected process failure requires investigation'
         elif 'diagnostic_' in status:reason='diagnostic adapter does not qualify'
@@ -55,6 +55,7 @@ def main():
     receipt=dict(raw=str(a.raw),raw_sha256=hashlib.sha256(raw).hexdigest(),inventory_sha256=hashlib.sha256(a.inventory.read_bytes()).hexdigest(),
         pairs_manifest_sha256=hashlib.sha256(a.pairs.read_bytes()).hexdigest(),expected_cells=len(expected),present_requested_cells=len(expected&actual.keys()),
         missing_cells=missing,pending_qualification=pending,status_counts=dict(counts),
+        per_size={size:dict(expected=sum(k[2]==size for k in expected),present=sum(k[2]==size for k in expected&actual.keys()),timed=sum(k[2]==size and actual[k]['status'] in ['ok','variant_mismatch'] for k in expected&actual.keys()),statuses=dict(collections.Counter(actual[k]['status'].split(':',1)[0] for k in expected&actual.keys() if k[2]==size))) for size in sizes},
         timing_quality_counts=dict(collections.Counter(r.get("timing_quality","legacy_unmonitored") for k,r in actual.items() if k in expected)),extra_cells=len(actual.keys()-expected),
         complete=not missing and not pending,
         contract='CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings')

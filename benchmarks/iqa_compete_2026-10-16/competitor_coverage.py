@@ -30,8 +30,8 @@ def audit(rows,pairs,sizes,threads,implementations):
     for key in sorted(expected&actual.keys()):
         row=actual[key];status=row['status'];counts[status.split(':',1)[0]]+=1;reason=None
         if status in ['ok','variant_mismatch']:
-            if not (row.get('n',0)>=10 or (row.get('n',0)>=3 and row.get('timed_seconds',0)>=3)):reason='insufficient actual samples'
-            elif row.get('ref_score') is None:reason='same-pair Rust reference missing'
+            if not (row.get('n',0)>=row.get('required_samples',10) if row.get('coverage_first') else (row.get('n',0)>=10 or (row.get('n',0)>=3 and row.get('timed_seconds',0)>=3))):reason='insufficient actual samples'
+            elif row.get('ref_score') is None and (not row.get('coverage_first') or (key[3]=='cid22' and key[4]==threads[0] and key[5]=='score')):reason='same-pair Rust reference missing'
             elif row.get('reproduction_required'):reason='mismatch reproduction pending'
         elif status.startswith('skipped:missing_same-pair_'):reason='same-pair Rust reference missing'
         elif status.startswith('skipped:process_exit_'):reason='unexpected adapter failure requires investigation'
